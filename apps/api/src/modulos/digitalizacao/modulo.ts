@@ -21,11 +21,7 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import type { ContextoModulo } from '../registro.js';
-import {
-  ARMAZEM_DIGITALIZACAO,
-  type ArmazemDigitalizacao,
-  criarArmazemDigitalizacao,
-} from './armazem.js';
+import { ARMAZEM_DIGITALIZACAO, type ArmazemDigitalizacao, criarArmazemDigitalizacao } from './armazem.js';
 import { ServicoAssinaturaDigitalizacao } from './assinatura.js';
 import { DigitalizacaoController, SERVICO_ASSINATURA_DIGITALIZACAO } from './digitalizacao.controller.js';
 import { PORTA_DIGITALIZACAO, type PortaDigitalizacao } from './porta.js';
@@ -80,7 +76,11 @@ export async function portaDaDigitalizacao(ctx: ContextoModulo): Promise<PortaDi
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
     const cadastro = new PortaCadastroMemoria();
     return new PortaDigitalizacaoMemoria(async (c, pront) => {
-      const r = await cadastro.buscarDireto(c as ContextoPorta, { tipo: 'prontuario', prontuario: pront }, false);
+      const r = await cadastro.buscarDireto(
+        c as ContextoPorta,
+        { tipo: 'prontuario', prontuario: pront },
+        false,
+      );
       const p = r.pacientes[0];
       return p ? { id: p.id, prontuario: p.prontuario, nome: p.nome, nomeSocial: p.nomeSocial } : null;
     });

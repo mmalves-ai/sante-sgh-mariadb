@@ -66,7 +66,9 @@ export interface NucleoAdministracao {
     contexto: { readonly cliente: string; readonly correlacao: string },
     fn: (l: Leitor) => Promise<T>,
   ): Promise<T>;
-  criarExecutor(opcoes?: { readonly log?: (mensagem: string, campos: Record<string, unknown>) => void }): Executor;
+  criarExecutor(opcoes?: {
+    readonly log?: (mensagem: string, campos: Record<string, unknown>) => void;
+  }): Executor;
 }
 
 export interface OpcoesFonteAdministracaoPropria {
@@ -78,7 +80,8 @@ export interface OpcoesFonteAdministracaoPropria {
 
 const TETO = 10_000;
 const num = (v: unknown): number => Number(v);
-const numOuNull = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+const numOuNull = (v: unknown): number | null =>
+  v === null || v === undefined || v === '' ? null : Number(v);
 const txt = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 const txtOuNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 const bool = (v: unknown): boolean => v === true || Number(v) === 1;
@@ -139,10 +142,15 @@ export const OPERACOES_IMPLEMENTADAS = [
 export const MOTIVO_PENDENTE =
   'Esta operação ainda não tem implementação no banco próprio (pendência registrada da F2.2): nada foi gravado.';
 
-const entradaLogin = z.object({ login: z.string().trim().min(1).max(60), motivo: z.string().max(500).optional() }).strict();
+const entradaLogin = z
+  .object({ login: z.string().trim().min(1).max(60), motivo: z.string().max(500).optional() })
+  .strict();
 
 /** A conta pelo login, travada, com o vínculo vigente ao estabelecimento do contexto. */
-async function contaTravada(tx: TxOperacao, login: string): Promise<{ id: number; situacao: string; versao: number }> {
+async function contaTravada(
+  tx: TxOperacao,
+  login: string,
+): Promise<{ id: number; situacao: string; versao: number }> {
   const [u] = await tx.consultarParaAtualizar(
     'SELECT id, situacao, versao FROM usuario WHERE login = ? AND excluido_em IS NULL',
     [login],
@@ -160,9 +168,12 @@ async function contaTravada(tx: TxOperacao, login: string): Promise<{ id: number
 }
 
 const ACAO_BLOQUEAR = PERMISSOES_M10_CODIGOS.usuarioBloquear;
-const VIGENTE_UE = 'ue.excluido_em IS NULL AND ue.vigencia_inicio <= CURRENT_DATE AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= CURRENT_DATE)';
-const VIGENTE_UP = 'up.excluido_em IS NULL AND up.vigencia_inicio <= CURRENT_DATE AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= CURRENT_DATE)';
-const VIGENTE_UPS = 'ups.excluido_em IS NULL AND ups.vigencia_inicio <= CURRENT_DATE AND (ups.vigencia_fim IS NULL OR ups.vigencia_fim >= CURRENT_DATE)';
+const VIGENTE_UE =
+  'ue.excluido_em IS NULL AND ue.vigencia_inicio <= CURRENT_DATE AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= CURRENT_DATE)';
+const VIGENTE_UP =
+  'up.excluido_em IS NULL AND up.vigencia_inicio <= CURRENT_DATE AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= CURRENT_DATE)';
+const VIGENTE_UPS =
+  'ups.excluido_em IS NULL AND ups.vigencia_inicio <= CURRENT_DATE AND (ups.vigencia_fim IS NULL OR ups.vigencia_fim >= CURRENT_DATE)';
 
 /**
  * O bloqueio vale para a conta inteira: confere (1) que o operador pode bloquear usuários em cada OUTRO estabelecimento
@@ -171,9 +182,13 @@ const VIGENTE_UPS = 'ups.excluido_em IS NULL AND ups.vigencia_inicio <= CURRENT_
  */
 async function conferirAlcanceDoBloqueio(tx: TxOperacao, idAlvo: number, login: string): Promise<void> {
   const ests = (
-    await tx.consultar(`SELECT DISTINCT ue.estabelecimento_id AS id FROM usuario_estabelecimento ue WHERE ue.usuario_id = ? AND ${VIGENTE_UE}`, [idAlvo], {
-      teto: 1000,
-    })
+    await tx.consultar(
+      `SELECT DISTINCT ue.estabelecimento_id AS id FROM usuario_estabelecimento ue WHERE ue.usuario_id = ? AND ${VIGENTE_UE}`,
+      [idAlvo],
+      {
+        teto: 1000,
+      },
+    )
   ).map((x) => num(x['id']));
   const operador = tx.contexto.usuario;
   const outros = ests.filter((e) => e !== tx.contexto.estabelecimento);
@@ -216,7 +231,9 @@ async function conferirAlcanceDoBloqueio(tx: TxOperacao, idAlvo: number, login: 
         login: txt(g['login']),
         grupoAcessoTotal: false,
         papelGestor: num(g['papel_gestor']) > 0,
-        concessoes: txt(g['concessoes']).split(',').filter((x) => x !== ''),
+        concessoes: txt(g['concessoes'])
+          .split(',')
+          .filter((x) => x !== ''),
       })),
       acao,
     );
@@ -252,7 +269,10 @@ function operacaoBloqueio(bloquear: boolean) {
     },
     alvo: (_e, r) => ({ tabela: 'usuario', id: r.idUsuario }),
     eventos: (_e, r) => [
-      { tipo: bloquear ? 'acesso.usuario.bloqueado' : 'acesso.usuario.desbloqueado', carga: { idUsuario: r.idUsuario } },
+      {
+        tipo: bloquear ? 'acesso.usuario.bloqueado' : 'acesso.usuario.desbloqueado',
+        carga: { idUsuario: r.idUsuario },
+      },
     ],
     trilha: (e) => ({ motivo: e.motivo ?? null }),
   });
@@ -272,7 +292,8 @@ const operacaoAceitarTermo = definirOperacao({
   async gravar(tx, e, ctx) {
     if (ctx.usuario === null) throw recusa('sem-usuario', 'A conta da sessão não aceita termo neste banco.');
     const t = await tx.uma(SQL_TERMO_VIGENTE, [ctx.estabelecimento]);
-    if (!t || num(t['id']) !== e.termo) throw recusa('termo-desatualizado', 'O termo mudou desde que a tela abriu.');
+    if (!t || num(t['id']) !== e.termo)
+      throw recusa('termo-desatualizado', 'O termo mudou desde que a tela abriu.');
     const ja = await tx.uma(
       `SELECT id FROM aceite_termo_uso WHERE termo_uso_versao_id = ? AND usuario_id = ? AND valido
          AND revogado_em IS NULL`,
@@ -320,13 +341,18 @@ const operacaoPublicarTermo = definirOperacao({
     const atual = await tx.uma(SQL_TERMO_VIGENTE, [ctx.estabelecimento]);
     const idAtual = atual ? num(atual['id']) : null;
     if ((e.termoAnterior ?? null) !== idAtual)
-      throw recusa('termo-desatualizado', 'Outra versão do termo foi publicada desde que a tela abriu; recarregue.');
+      throw recusa(
+        'termo-desatualizado',
+        'Outra versão do termo foi publicada desde que a tela abriu; recarregue.',
+      );
     const texto = normalizarTexto(e.texto);
     if (atual && texto === normalizarTexto(atual['texto']))
       throw recusa('texto-igual', 'O texto é igual ao da versão vigente: nada a publicar.');
     // A versão nova vale SÓ no estabelecimento de quem publica: o termo geral da rede nunca é trocado por aqui (exige
     // gestão da rede; pedido registrado). Fecha-se só a vigência da versão do próprio estabelecimento, travada.
-    const [proprio] = await tx.consultarParaAtualizar(SQL_TERMO_DO_ESTABELECIMENTO, [ctx.estabelecimento], { teto: 1 });
+    const [proprio] = await tx.consultarParaAtualizar(SQL_TERMO_DO_ESTABELECIMENTO, [ctx.estabelecimento], {
+      teto: 1,
+    });
     const [n] = await tx.consultar(
       `SELECT COALESCE(MAX(CAST(numero_versao AS UNSIGNED)), 0) AS n FROM termo_uso_versao
         WHERE publico = 'sistema' AND estabelecimento_id = ?`,
@@ -334,7 +360,10 @@ const operacaoPublicarTermo = definirOperacao({
     );
     const numeroVersao = String(num(n?.['n'] ?? 0) + 1);
     const agora = new Date();
-    if (proprio) await tx.alterar('termo_uso_versao', num(proprio['id']), num(proprio['versao']), { vigencia_fim: agora });
+    if (proprio)
+      await tx.alterar('termo_uso_versao', num(proprio['id']), num(proprio['versao']), {
+        vigencia_fim: agora,
+      });
     const id = await tx.incluir('termo_uso_versao', {
       estabelecimento_id: ctx.estabelecimento,
       publico: 'sistema',
@@ -352,7 +381,10 @@ const operacaoPublicarTermo = definirOperacao({
   },
   alvo: (_e, r) => ({ tabela: 'termo_uso_versao', id: r.id }),
   eventos: (_e, r) => [{ tipo: 'acesso.termo.publicado', carga: { termo: r.id, anterior: r.anterior } }],
-  trilha: (e, r) => ({ motivo: e.motivo, dados: { anterior: r.anterior, fechada: r.fechada, numeroVersao: r.numeroVersao } }),
+  trilha: (e, r) => ({
+    motivo: e.motivo,
+    dados: { anterior: r.anterior, fechada: r.fechada, numeroVersao: r.numeroVersao },
+  }),
 });
 
 const OPERACOES = {
@@ -412,7 +444,10 @@ const operacaoRegistrarPedido = definirOperacao({
     .strict(),
   async gravar(tx, e, ctx) {
     if (!CANAIS_DO_MODELO.has(e.canal))
-      throw recusa('canal-indisponivel', 'Este canal de recebimento ainda não é aceito: escolha outro canal.');
+      throw recusa(
+        'canal-indisponivel',
+        'Este canal de recebimento ainda não é aceito: escolha outro canal.',
+      );
     const pac = await tx.uma(
       `SELECT pa.id, pf.nome, pf.cpf FROM paciente pa JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
         WHERE pa.excluido_em IS NULL AND ${e.idPaciente !== undefined ? 'pa.id = ?' : 'pa.numero_prontuario = ?'}
@@ -471,7 +506,8 @@ function operacaoTratarPedido(conferir: (p: PedidoTitularLido) => string | null)
       const [l] = await tx.consultarParaAtualizar(`${SQL_PEDIDO} AND p.id = ?`, [ctx.estabelecimento, e.id], {
         teto: 1,
       });
-      if (!l) throw new ErroOperacao(404, 'pedido-inexistente', 'Pedido não encontrado', 'Pedido não encontrado.');
+      if (!l)
+        throw new ErroOperacao(404, 'pedido-inexistente', 'Pedido não encontrado', 'Pedido não encontrado.');
       const lido = pedidoDaLinha(l);
       const r = conferir(lido);
       if (r) throw recusa('transicao-recusada', r);
@@ -481,7 +517,12 @@ function operacaoTratarPedido(conferir: (p: PedidoTitularLido) => string | null)
         e.acao === 'confirmar-identidade'
           ? { identidade_confirmada: true, identidade_confirmada_em: agora, situacao: 'em_analise' }
           : e.acao === 'atender'
-            ? { situacao: 'atendido', resposta: e.resposta, respondido_em: agora, responsavel_usuario_id: ctx.usuario }
+            ? {
+                situacao: 'atendido',
+                resposta: e.resposta,
+                respondido_em: agora,
+                responsavel_usuario_id: ctx.usuario,
+              }
             : {
                 situacao: 'indeferido',
                 motivo_indeferimento: e.fundamento ?? 'outro',
@@ -520,7 +561,12 @@ const operacaoRevisarQuebra = definirOperacao({
       { teto: 1 },
     );
     if (!a)
-      throw new ErroOperacao(404, 'emergencia-inexistente', 'Acesso de emergência não encontrado', 'Não encontrado.');
+      throw new ErroOperacao(
+        404,
+        'emergencia-inexistente',
+        'Acesso de emergência não encontrado',
+        'Não encontrado.',
+      );
     if (num(a['usuario_id']) === ctx.usuario)
       throw recusa('a-si-mesmo', 'Ninguém revisa o próprio acesso de emergência (segregação de funções).');
     if (await tx.uma('SELECT id FROM revisao_acesso_emergencial WHERE acesso_emergencial_id = ?', [e.id]))
@@ -618,10 +664,16 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
 
   /** Lê (ou relê) os estabelecimentos do cliente (a lista da rede e o mapa código → id). */
   async carregar(): Promise<void> {
-    const ls = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'administracao-estabelecimentos' }, (l) =>
-      l.consultar('SELECT id, codigo, nome_fantasia, fuso_horario FROM estabelecimento WHERE excluido_em IS NULL AND ativo', [], {
-        teto: TETO,
-      }),
+    const ls = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'administracao-estabelecimentos' },
+      (l) =>
+        l.consultar(
+          'SELECT id, codigo, nome_fantasia, fuso_horario FROM estabelecimento WHERE excluido_em IS NULL AND ativo',
+          [],
+          {
+            teto: TETO,
+          },
+        ),
     );
     this.estabelecimentos = ls.map((x) => ({
       id: num(x['id']),
@@ -633,19 +685,30 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
   }
 
   private ler<T>(c: Ctx, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.traceId.slice(0, 64) || 'administracao' }, async (l) =>
-      fn(l, await this.idEstabelecimento(l, c.hospital)),
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.traceId.slice(0, 64) || 'administracao' },
+      async (l) => fn(l, await this.idEstabelecimento(l, c.hospital)),
     );
   }
 
   private async idEstabelecimento(l: Leitor, codigo: string): Promise<number> {
-    const x = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [codigo]);
+    const x = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+      codigo,
+    ]);
     if (!x) throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento não encontrado');
     return num(x['id']);
   }
 
-  private async contexto(hospital: string, correlacao: string, usuario: number | null, chave: string, reaut?: number): Promise<ContextoOperacao> {
-    const est = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao }, (l) => this.idEstabelecimento(l, hospital));
+  private async contexto(
+    hospital: string,
+    correlacao: string,
+    usuario: number | null,
+    chave: string,
+    reaut?: number,
+  ): Promise<ContextoOperacao> {
+    const est = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao }, (l) =>
+      this.idEstabelecimento(l, hospital),
+    );
     return {
       cliente: this.cliente,
       estabelecimento: est,
@@ -783,7 +846,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         { teto: 100 },
       );
       const escopo = async (sql: string, p: unknown[]): Promise<ItemEscopo[]> =>
-        (await l.consultar(sql, p, { teto: TETO })).map((x) => ({ valor: txt(x['valor']), rotulo: txt(x['rotulo']) }));
+        (await l.consultar(sql, p, { teto: TETO })).map((x) => ({
+          valor: txt(x['valor']),
+          rotulo: txt(x['rotulo']),
+        }));
       const escopos: Record<string, ItemEscopo[]> = {
         unidade: await escopo(
           `SELECT ua.id AS valor, ua.nome AS rotulo FROM usuario_unidade x JOIN unidade_assistencial ua ON ua.id = x.unidade_assistencial_id
@@ -846,7 +912,8 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         cpf: opcoes?.cpf === true ? txtOuNull(u['cpf']) : null,
         senhaDefinida: num(u['credenciais']) > 0,
         versao: [String(num(u['versao']))],
-        grupoAtivo: u['grupo_ativo'] === null || u['grupo_ativo'] === undefined ? null : bool(u['grupo_ativo']),
+        grupoAtivo:
+          u['grupo_ativo'] === null || u['grupo_ativo'] === undefined ? null : bool(u['grupo_ativo']),
         papeis: papeis.map((x) => ({ papel: num(x['id']), nome: txt(x['nome']), ativo: bool(x['vigente']) })),
         escopos,
         escoposConsulta: {
@@ -859,7 +926,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         flags: [],
         conexoes: conexao?.['ultima'] ? [{ modulo: 0, nome: 'Sistema', ultima: iso(conexao['ultima']) }] : [],
         termo: { aceitouVigente: aceite !== null, aceitoEm: aceite ? iso(aceite['ocorrido_em']) : null },
-        historicoSenha: { trocas: num(senha?.['trocas'] ?? 0), ultima: senha?.['ultima'] ? iso(senha['ultima']) : null },
+        historicoSenha: {
+          trocas: num(senha?.['trocas'] ?? 0),
+          ultima: senha?.['ultima'] ? iso(senha['ultima']) : null,
+        },
         profissionalVinculado: prof ? { id: num(prof['id']), nome: txt(prof['nome']) } : null,
       };
     });
@@ -867,7 +937,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
   opcoesEscopo: FonteAdministracao['opcoesEscopo'] = (c) =>
     this.ler(c, async (l, est) => {
       const q = async (sql: string, p: unknown[]): Promise<ItemEscopo[]> =>
-        (await l.consultar(sql, p, { teto: TETO })).map((x) => ({ valor: txt(x['valor']), rotulo: txt(x['rotulo']) }));
+        (await l.consultar(sql, p, { teto: TETO })).map((x) => ({
+          valor: txt(x['valor']),
+          rotulo: txt(x['rotulo']),
+        }));
       return {
         unidade: await q(
           'SELECT id AS valor, nome AS rotulo FROM unidade_assistencial WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY nome',
@@ -882,7 +955,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
           "SELECT id AS valor, nome AS rotulo FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
           [],
         ),
-        tipoProntuario: await q('SELECT id AS valor, descricao AS rotulo FROM tipo_documento_clinico WHERE ativo ORDER BY descricao', []),
+        tipoProntuario: await q(
+          'SELECT id AS valor, descricao AS rotulo FROM tipo_documento_clinico WHERE ativo ORDER BY descricao',
+          [],
+        ),
       };
     });
 
@@ -930,16 +1006,32 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
       throw new ErroProblema('recusa-de-negocio', 409, 'Operação indisponível', MOTIVO_PENDENTE, {
         codigo: 'operacao-pendente',
       });
-    const contexto = await this.contexto(ctx.hospital, ctx.correlacao, ctx.usuario, ctx.chaveIdempotencia, ctx.reautenticadoEm);
+    const contexto = await this.contexto(
+      ctx.hospital,
+      ctx.correlacao,
+      ctx.usuario,
+      ctx.chaveIdempotencia,
+      ctx.reautenticadoEm,
+    );
     const r = await this.executor.executar(op as never, this.cliente, entrada, contexto);
     return { ...r.resultado };
   }
 
-  async setor(c: Ctx, p: Parameters<FonteAdministracao['setor']>[1], acao: 'conceder' | 'retirar', t: Parameters<FonteAdministracao['setor']>[3]) {
+  async setor(
+    c: Ctx,
+    p: Parameters<FonteAdministracao['setor']>[1],
+    acao: 'conceder' | 'retirar',
+    t: Parameters<FonteAdministracao['setor']>[3],
+  ) {
     const usuario = await this.idDoLogin(c, t.usuario);
     const chave = `setor-${createHash('sha256').update(`${t.correlacao}|${p.login}|${p.bloco}|${acao}`).digest('hex').slice(0, 40)}`;
     const ctx = await this.contexto(c.hospital, t.correlacao, usuario, chave);
-    await this.executor.executar(operacaoSetor(acao === 'conceder'), this.cliente, { idUsuario: p.idUsuario, bloco: p.bloco }, ctx);
+    await this.executor.executar(
+      operacaoSetor(acao === 'conceder'),
+      this.cliente,
+      { idUsuario: p.idUsuario, bloco: p.bloco },
+      ctx,
+    );
   }
 
   arvore: FonteAdministracao['arvore'] = (c) =>
@@ -950,9 +1042,13 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         [],
         { teto: 100_000 },
       );
-      const modulos = await l.consultar('SELECT id, codigo, descricao FROM modulo_sistema WHERE ativo ORDER BY ordem, id', [], {
-        teto: TETO,
-      });
+      const modulos = await l.consultar(
+        'SELECT id, codigo, descricao FROM modulo_sistema WHERE ativo ORDER BY ordem, id',
+        [],
+        {
+          teto: TETO,
+        },
+      );
       const porModulo = new Map<number, number>();
       return {
         opcoes: acoes.map((x): AcaoMenu => {
@@ -970,7 +1066,12 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
             titulo: txt(x['descricao']),
           };
         }),
-        modulos: modulos.map((x) => ({ id: num(x['id']), sistema: txt(x['codigo']), executavel: null, nome: txt(x['descricao']) })),
+        modulos: modulos.map((x) => ({
+          id: num(x['id']),
+          sistema: txt(x['codigo']),
+          executavel: null,
+          nome: txt(x['descricao']),
+        })),
       };
     });
 
@@ -1012,12 +1113,20 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
           [],
           { teto: 1000 },
         )
-      ).map((x) => ({ papel: num(x['id']), nome: txt(x['nome']), usuariosAtivos: num(x['usuarios']), opcoes: num(x['acoes']) })),
+      ).map((x) => ({
+        papel: num(x['id']),
+        nome: txt(x['nome']),
+        usuariosAtivos: num(x['usuarios']),
+        opcoes: num(x['acoes']),
+      })),
     );
 
   politica: FonteAdministracao['politica'] = (c) =>
     this.ler(c, async (l, est): Promise<PoliticaLogin> => {
-      const p = await l.uma('SELECT * FROM politica_senha WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1', [est]);
+      const p = await l.uma(
+        'SELECT * FROM politica_senha WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1',
+        [est],
+      );
       return {
         senha: {
           minimoCaracteres: p ? numOuNull(p['tamanho_minimo']) : null,
@@ -1031,7 +1140,8 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         },
         tempo: {
           inatividadeSegundos: p ? num(p['inatividade_sessao_minutos']) * 60 : null,
-          avisoSegundos: p && p['aviso_fim_sessao_minutos'] !== null ? num(p['aviso_fim_sessao_minutos']) * 60 : null,
+          avisoSegundos:
+            p && p['aviso_fim_sessao_minutos'] !== null ? num(p['aviso_fim_sessao_minutos']) * 60 : null,
         },
         limiteTentativas: p ? numOuNull(p['tentativas_ate_bloqueio']) : null,
         termoPeriodico: p ? bool(p['exige_aceite_periodico']) : false,
@@ -1042,9 +1152,13 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
 
   tiposAcessoProntuario: FonteAdministracao['tiposAcessoProntuario'] = (c) =>
     this.ler(c, async (l) =>
-      (await l.consultar('SELECT id, descricao FROM tipo_documento_clinico WHERE ativo ORDER BY ordem, descricao', [], { teto: TETO })).map(
-        (x) => ({ id: num(x['id']), descricao: txt(x['descricao']) }),
-      ),
+      (
+        await l.consultar(
+          'SELECT id, descricao FROM tipo_documento_clinico WHERE ativo ORDER BY ordem, descricao',
+          [],
+          { teto: TETO },
+        )
+      ).map((x) => ({ id: num(x['id']), descricao: txt(x['descricao']) })),
     );
 
   termoVigente: FonteAdministracao['termoVigente'] = (c) =>
@@ -1052,7 +1166,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
       const t = await l.uma(SQL_TERMO_VIGENTE, [est]);
       if (!t) return null;
       const id = num(t['id']);
-      const [n] = await l.consultar('SELECT COUNT(*) AS n FROM aceite_termo_uso WHERE termo_uso_versao_id = ? AND valido AND revogado_em IS NULL', [id]);
+      const [n] = await l.consultar(
+        'SELECT COUNT(*) AS n FROM aceite_termo_uso WHERE termo_uso_versao_id = ? AND valido AND revogado_em IS NULL',
+        [id],
+      );
       const ult = await l.consultar(
         `SELECT u.login, a.ocorrido_em FROM aceite_termo_uso a JOIN usuario u ON u.id = a.usuario_id
           WHERE a.termo_uso_versao_id = ? AND a.valido AND a.revogado_em IS NULL ORDER BY a.ocorrido_em DESC, a.id DESC LIMIT 10`,
@@ -1068,12 +1185,14 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
     });
 
   termoAceito: FonteAdministracao['termoAceito'] = (c, login, termo) =>
-    this.ler(c, async (l) =>
-      (await l.uma(
-        `SELECT a.id FROM aceite_termo_uso a JOIN usuario u ON u.id = a.usuario_id
+    this.ler(
+      c,
+      async (l) =>
+        (await l.uma(
+          `SELECT a.id FROM aceite_termo_uso a JOIN usuario u ON u.id = a.usuario_id
           WHERE a.termo_uso_versao_id = ? AND u.login = ? AND a.valido AND a.revogado_em IS NULL LIMIT 1`,
-        [termo, login],
-      )) !== null,
+          [termo, login],
+        )) !== null,
     );
 
   versoesTermo: FonteAdministracao['versoesTermo'] = (c) =>
@@ -1107,7 +1226,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
       );
       if (!t) return null;
       const vigente = await l.uma(SQL_TERMO_VIGENTE, [est]);
-      const [n] = await l.consultar('SELECT COUNT(*) AS n FROM aceite_termo_uso WHERE termo_uso_versao_id = ? AND valido', [id]);
+      const [n] = await l.consultar(
+        'SELECT COUNT(*) AS n FROM aceite_termo_uso WHERE termo_uso_versao_id = ? AND valido',
+        [id],
+      );
       const itens = await l.consultar(
         `SELECT u.login, a.ocorrido_em FROM aceite_termo_uso a JOIN usuario u ON u.id = a.usuario_id
           WHERE a.termo_uso_versao_id = ? AND a.valido ORDER BY a.ocorrido_em DESC, a.id DESC LIMIT 50 OFFSET ?`,
@@ -1158,7 +1280,11 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
       })),
     );
 
-  async revisarQuebra(c: Ctx, r: Parameters<FonteAdministracao['revisarQuebra']>[1], t: Parameters<FonteAdministracao['revisarQuebra']>[2]) {
+  async revisarQuebra(
+    c: Ctx,
+    r: Parameters<FonteAdministracao['revisarQuebra']>[1],
+    t: Parameters<FonteAdministracao['revisarQuebra']>[2],
+  ) {
     const usuario = r.idUsuario > 0 ? r.idUsuario : await this.idDoLogin(c, r.login);
     const chave = `revisao-${createHash('sha256').update(`${r.idEmergencia}|${r.classificacao}`).digest('hex').slice(0, 40)}`;
     const ctx = await this.contexto(c.hospital, t.correlacao, usuario, chave);
@@ -1191,7 +1317,9 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         { teto: TETO },
       );
       return {
-        empresa: e ? { codigo: est, nome: txt(e['razao_social']), cnpj: txtOuNull(e['cnpj']), ativa: bool(e['ativo']) } : null,
+        empresa: e
+          ? { codigo: est, nome: txt(e['razao_social']), cnpj: txtOuNull(e['cnpj']), ativa: bool(e['ativo']) }
+          : null,
         hospital: e
           ? {
               codigo: est,
@@ -1205,7 +1333,12 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
               fusoHorario: txtOuNull(e['fuso_horario']),
             }
           : null,
-        unidades: us.map((u) => ({ codigo: num(u['id']), nome: txt(u['nome']), cnes: numOuNull(u['codigo_cnes']), ativa: bool(u['ativo']) })),
+        unidades: us.map((u) => ({
+          codigo: num(u['id']),
+          nome: txt(u['nome']),
+          cnes: numOuNull(u['codigo_cnes']),
+          ativa: bool(u['ativo']),
+        })),
       };
     });
 
@@ -1240,11 +1373,19 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         { teto: TETO },
       );
       // Categoria de acomodação é cadastro do cliente inteiro (sem estabelecimento_id).
-      const categorias = await l.consultar('SELECT id, descricao FROM categoria_acomodacao WHERE ativo ORDER BY descricao', [], {
-        teto: TETO,
-      });
+      const categorias = await l.consultar(
+        'SELECT id, descricao FROM categoria_acomodacao WHERE ativo ORDER BY descricao',
+        [],
+        {
+          teto: TETO,
+        },
+      );
       return {
-        blocos: blocos.map((b) => ({ bloco: txt(b['codigo']), nome: txt(b['nome']), andares: numOuNull(b['quantidade_andares']) })),
+        blocos: blocos.map((b) => ({
+          bloco: txt(b['codigo']),
+          nome: txt(b['nome']),
+          andares: numOuNull(b['quantidade_andares']),
+        })),
         acomodacoes: acs.map((a) => ({
           bloco: txt(a['bloco']),
           acomodacao: txt(a['codigo']),
@@ -1396,7 +1537,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
             uf: txtOuNull(e['uf']),
             // Da mantenedora (dado fiscal dela). Sem mantenedora cadastrada, o contrato (z.boolean) obriga um valor:
             // sai false e o pedido de contrato anulável está em saida/02-05.json.
-            optanteSimples: e['mantenedora'] !== null && e['mantenedora'] !== undefined ? bool(e['optante_simples']) : false,
+            optanteSimples:
+              e['mantenedora'] !== null && e['mantenedora'] !== undefined
+                ? bool(e['optante_simples'])
+                : false,
             registroAns: numOuNull(e['registro_ans']),
             tipoEmpresa: null,
             cooperativa: null,
@@ -1504,9 +1648,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
   pacientesDoProntuario: FonteAdministracao['pacientesDoProntuario'] = (c, prontuario) =>
     this.ler(c, async (l) =>
       (
-        await l.consultar('SELECT id FROM paciente WHERE numero_prontuario = ? AND excluido_em IS NULL ORDER BY id LIMIT 2', [
-          String(prontuario),
-        ])
+        await l.consultar(
+          'SELECT id FROM paciente WHERE numero_prontuario = ? AND excluido_em IS NULL ORDER BY id LIMIT 2',
+          [String(prontuario)],
+        )
       ).map((x) => num(x['id'])),
     );
 
@@ -1526,7 +1671,11 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
       return {
         tipos: tipos.map((x) => {
           const r = registroDaChave(txt(x['entidade']));
-          return { chave: txt(x['entidade']), rotulo: r?.rotulo ?? txt(x['entidade']), quantidade: num(x['n']) };
+          return {
+            chave: txt(x['entidade']),
+            rotulo: r?.rotulo ?? txt(x['entidade']),
+            quantidade: num(x['n']),
+          };
         }),
         conexoes: [{ modulo: 0, nome: 'Sistema', usuarios: num(cx?.['n'] ?? 0) }],
       };
@@ -1564,16 +1713,32 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         [...p, f.porPagina + 1, (f.pagina - 1) * f.porPagina],
         { teto: f.porPagina + 1 },
       );
-      return ls.map((x) => ({ dataHora: isoSeg(x['ocorrido_em']), usuario: txt(x['login']), modulo: 0, nome: 'Sistema' }));
+      return ls.map((x) => ({
+        dataHora: isoSeg(x['ocorrido_em']),
+        usuario: txt(x['login']),
+        modulo: 0,
+        nome: 'Sistema',
+      }));
     });
 
   pedidos: FonteAdministracao['pedidos'] = (c) =>
     this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_PEDIDO} ORDER BY p.recebido_em DESC, p.id DESC`, [est], { teto: TETO })).map(pedidoDaLinha),
+      (await l.consultar(`${SQL_PEDIDO} ORDER BY p.recebido_em DESC, p.id DESC`, [est], { teto: TETO })).map(
+        pedidoDaLinha,
+      ),
     );
 
-  async registrarPedido(c: Ctx, p: Parameters<FonteAdministracao['registrarPedido']>[1], t: Parameters<FonteAdministracao['registrarPedido']>[2]) {
-    const ctx = await this.contexto(c.hospital, t.correlacao, p.usuario ?? null, p.chave ?? `pedido-${t.correlacao}`);
+  async registrarPedido(
+    c: Ctx,
+    p: Parameters<FonteAdministracao['registrarPedido']>[1],
+    t: Parameters<FonteAdministracao['registrarPedido']>[2],
+  ) {
+    const ctx = await this.contexto(
+      c.hospital,
+      t.correlacao,
+      p.usuario ?? null,
+      p.chave ?? `pedido-${t.correlacao}`,
+    );
     const r = await this.executor.executar(
       operacaoRegistrarPedido,
       this.cliente,
@@ -1590,8 +1755,17 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
     return { id: String(r.resultado.id), protocolo: String(r.resultado.protocolo) };
   }
 
-  async tratarPedido(c: Ctx, d: Parameters<FonteAdministracao['tratarPedido']>[1], t: Parameters<FonteAdministracao['tratarPedido']>[2]) {
-    const ctx = await this.contexto(c.hospital, t.correlacao, d.usuario ?? null, d.chave ?? `tratar-${t.correlacao}`);
+  async tratarPedido(
+    c: Ctx,
+    d: Parameters<FonteAdministracao['tratarPedido']>[1],
+    t: Parameters<FonteAdministracao['tratarPedido']>[2],
+  ) {
+    const ctx = await this.contexto(
+      c.hospital,
+      t.correlacao,
+      d.usuario ?? null,
+      d.chave ?? `tratar-${t.correlacao}`,
+    );
     const r = await this.executor.executar(
       operacaoTratarPedido(d.conferir),
       this.cliente,

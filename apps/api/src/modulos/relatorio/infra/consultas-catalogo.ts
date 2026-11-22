@@ -120,7 +120,9 @@ function variantesDaRegua(colunas: (r: Regua) => string, filtro: string): Record
 const varianteDaRegua = (v: ValoresDoRelatorio) =>
   `${v['regua'] === 'data-do-item' ? 'data-do-item' : 'competencia'}${conv(v) === null ? '' : '-convenio'}`;
 const parametrosDaRegua = (v: ValoresDoRelatorio, variante: string, x: ContextoConsulta) => [
-  ...(variante.startsWith('data-do-item') ? mesesUtc(v, x) : [mesIni(v['mesInicio']), mesFimExcl(v['mesFim'])]),
+  ...(variante.startsWith('data-do-item')
+    ? mesesUtc(v, x)
+    : [mesIni(v['mesInicio']), mesFimExcl(v['mesFim'])]),
   ...(variante.endsWith('-convenio') ? [conv(v)] : []),
 ];
 
@@ -148,17 +150,20 @@ const variantesContas = (): Record<string, string> => {
   const r: Record<string, string> = {};
   for (const [tipo, filtro] of Object.entries(TIPO_CONTA)) {
     r[tipo] = `${SQL_CONTAS_NAO_FECHADAS} ${filtro} ORDER BY a.saida_em, c.id`;
-    r[`${tipo}-convenio`] = `${SQL_CONTAS_NAO_FECHADAS} ${filtro} AND c.fonte_pagadora_id = ? ORDER BY a.saida_em, c.id`;
+    r[`${tipo}-convenio`] =
+      `${SQL_CONTAS_NAO_FECHADAS} ${filtro} AND c.fonte_pagadora_id = ? ORDER BY a.saida_em, c.id`;
   }
   return r;
 };
 
 // ── Estoque: o consumo é o movimento de tipo que gera consumo; a saída soma, a devolução (entrada) desconta ────
-const CONSUMO_QTD = "SUM(CASE WHEN t.sentido = 'saida' THEN me.quantidade_estoque ELSE -me.quantidade_estoque END)";
+const CONSUMO_QTD =
+  "SUM(CASE WHEN t.sentido = 'saida' THEN me.quantidade_estoque ELSE -me.quantidade_estoque END)";
 const CONSUMO_VALOR = "SUM(CASE WHEN t.sentido = 'saida' THEN me.valor_total ELSE -me.valor_total END)";
 const CONSUMO_BASE = `FROM movimento_estoque me
   JOIN tipo_movimento_estoque t ON t.id = me.tipo_movimento_estoque_id AND t.gera_consumo AND t.sentido <> 'neutro'`;
-const CONSUMO_CORTE = 'me.estabelecimento_id = ? AND me.excluido_em IS NULL AND me.competencia >= ? AND me.competencia < ?';
+const CONSUMO_CORTE =
+  'me.estabelecimento_id = ? AND me.excluido_em IS NULL AND me.competencia >= ? AND me.competencia < ?';
 
 /**
  * Curva ABC (consumo por item): ordem decrescente de valor, percentual acumulado e a classe — A até 80% do valor,
@@ -195,7 +200,9 @@ export function vagasDaEscala(e: {
   vagasPorHorario: number;
 }): number | null {
   if (!e.duracaoMin) return null;
-  return Math.max(0, Math.floor((e.fimMin - e.inicioMin - e.intervaloMin) / e.duracaoMin)) * e.vagasPorHorario;
+  return (
+    Math.max(0, Math.floor((e.fimMin - e.inicioMin - e.intervaloMin) / e.duracaoMin)) * e.vagasPorHorario
+  );
 }
 
 const DIAS_DA_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
@@ -265,7 +272,8 @@ export const CONSULTAS_PROPRIAS: Readonly<Record<string, ConsultaPropria>> = {
   faturamentoPorConvenio: {
     codigo: 'faturamentoPorConvenio',
     sql: variantesDaRegua(
-      (r) => `${CONTAS[r]} AS contas, COUNT(*) AS itens, SUM(i.valor_total) AS cobrado, SUM(i.valor_pago) AS pago`,
+      (r) =>
+        `${CONTAS[r]} AS contas, COUNT(*) AS itens, SUM(i.valor_total) AS cobrado, SUM(i.valor_pago) AS pago`,
       '',
     ),
     variante: varianteDaRegua,
@@ -311,8 +319,12 @@ export const CONSULTAS_PROPRIAS: Readonly<Record<string, ConsultaPropria>> = {
   contasNaoFechadas: {
     codigo: 'contasNaoFechadas',
     sql: variantesContas(),
-    variante: (v) => `${TIPO_CONTA[String(v['tipo'])] === undefined ? 'todas' : String(v['tipo'])}${conv(v) === null ? '' : '-convenio'}`,
-    parametros: (v, variante, x) => [...periodoUtc(v, x), ...(variante.endsWith('-convenio') ? [conv(v)] : [])],
+    variante: (v) =>
+      `${TIPO_CONTA[String(v['tipo'])] === undefined ? 'todas' : String(v['tipo'])}${conv(v) === null ? '' : '-convenio'}`,
+    parametros: (v, variante, x) => [
+      ...periodoUtc(v, x),
+      ...(variante.endsWith('-convenio') ? [conv(v)] : []),
+    ],
     mapear: (ls, _v, x) =>
       ls.map((r) => ({
         conta: numN(r['conta']),

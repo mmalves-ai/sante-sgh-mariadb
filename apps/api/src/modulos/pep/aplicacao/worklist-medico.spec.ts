@@ -8,7 +8,14 @@ import type { PortaPrescricao } from '../prescricao-porta.js';
 import type { PortaWorklist } from '../worklist-porta.js';
 import { ServicoWorklistMedico } from './worklist-medico.js';
 
-const c = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'rede-teste', hospital: 'aa' };
+const c = {
+  cliente: 'teste',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede: 'rede-teste',
+  hospital: 'aa',
+};
 const AGORA = '2026-10-22T12:00:00.000';
 
 const linha = (paciente: number, tipo: 'internacao' | 'externo', entrada: string, leito: string) => ({

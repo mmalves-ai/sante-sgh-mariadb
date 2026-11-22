@@ -47,7 +47,12 @@ import { type ContextoPortaM18, portaIndisponivel, type TrilhaDaGravacao } from 
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { idNaChave } from '../arquivos-locais.js';
 import { chaveFotoVisitante } from './fotos.js';
-import { type ContextoPortaria, type GravadorPortaria, METODOS_PORTA_PORTARIA, type PortaPortaria } from './porta.js';
+import {
+  type ContextoPortaria,
+  type GravadorPortaria,
+  METODOS_PORTA_PORTARIA,
+  type PortaPortaria,
+} from './porta.js';
 import {
   type AcompanhanteRegistrado,
   type BloqueioRelido,
@@ -245,7 +250,9 @@ function documentoDe(r: Linha): { tipo: VisitanteRegistrado['tipoDocumento']; nu
   if (r['cpf']) return { tipo: 'cpf', numero: texto(r['cpf']) };
   const t = texto(r['tipo_documento']);
   return {
-    tipo: (TIPOS_DOCUMENTO as readonly string[]).includes(t) ? (t as VisitanteRegistrado['tipoDocumento']) : 'outro',
+    tipo: (TIPOS_DOCUMENTO as readonly string[]).includes(t)
+      ? (t as VisitanteRegistrado['tipoDocumento'])
+      : 'outro',
     numero: texto(r['numero_documento']),
   };
 }
@@ -259,7 +266,7 @@ function janelaDe(horarios: unknown): { inicio: string; fim: string } {
     lista = [];
   }
   const j = Array.isArray(lista)
-    ? (lista as Linha[]).find((x) => texto(x['publico']) !== 'acompanhante') ?? (lista as Linha[])[0]
+    ? ((lista as Linha[]).find((x) => texto(x['publico']) !== 'acompanhante') ?? (lista as Linha[])[0])
     : undefined;
   return {
     inicio: texto(j?.['inicio']).slice(0, 5) || REGRA_PADRAO.horaInicio,
@@ -275,7 +282,8 @@ function validadeDerivada(
   papel: VisitaRegistrada['papel'],
   excecao: boolean,
 ): string {
-  if (unidade === null) return validadeDoCracha(entrada, { horaFim: '23:59', duracaoMaxMin: 120 }, 'visitante', false);
+  if (unidade === null)
+    return validadeDoCracha(entrada, { horaFim: '23:59', duracaoMaxMin: 120 }, 'visitante', false);
   return validadeDoCracha(entrada, regraDaUnidade(regras, unidade).regra, papel, excecao);
 }
 
@@ -291,7 +299,9 @@ function chaveDaGravacao(c: ContextoPortaM18): string {
   if (!pedido) return `portaria:${randomUUID()}`;
   const ordem = (GRAVACOES_DO_PEDIDO.get(c) ?? 0) + 1;
   GRAVACOES_DO_PEDIDO.set(c, ordem);
-  return ordem === 1 ? pedido : `portaria:${createHash('sha256').update(`${pedido}#${ordem}`).digest('hex').slice(0, 64)}`;
+  return ordem === 1
+    ? pedido
+    : `portaria:${createHash('sha256').update(`${pedido}#${ordem}`).digest('hex').slice(0, 64)}`;
 }
 
 export class PortaPortariaPropria implements PortaPortaria {
@@ -352,15 +362,22 @@ export class PortaPortariaPropria implements PortaPortaria {
       trilha: () => {
         const depois = linha()?.dadosDepois;
         const dados =
-          depois && typeof depois === 'object' ? { ...(depois as object), ...extras.dados } : (depois ?? extras.dados);
+          depois && typeof depois === 'object'
+            ? { ...(depois as object), ...extras.dados }
+            : (depois ?? extras.dados);
         return { dados, motivo: extras.motivo ?? linha()?.motivo ?? null };
       },
     });
     const chave = chaveDaGravacao(c);
-    const r = await this.executor.executar(op, c.cliente, { chave }, {
-      ...contextoDe(c),
-      chaveIdempotencia: chave,
-    });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      {
+        ...contextoDe(c),
+        chaveIdempotencia: chave,
+      },
+    );
     if (r.repetida) {
       const anterior = JSON.parse(String(r.resultado['valor'] ?? 'null')) as T;
       // A visita repetida avisa a tela ("esta entrada já estava registrada").
@@ -385,18 +402,28 @@ export class PortaPortariaPropria implements PortaPortaria {
     // Os domínios são da rede inteira (sem estabelecimento).
     return this.ler(c, async (l) => {
       const [tv, td, fi, sa, mt] = await Promise.all([
-        l.consultar('SELECT id, descricao, ativo FROM tipo_visitante ORDER BY descricao, id', [], { teto: 200 }),
-        l.consultar('SELECT id, descricao, alvo FROM tipo_visitado WHERE ativo = TRUE ORDER BY descricao, id', [], {
+        l.consultar('SELECT id, descricao, ativo FROM tipo_visitante ORDER BY descricao, id', [], {
           teto: 200,
         }),
+        l.consultar(
+          'SELECT id, descricao, alvo FROM tipo_visitado WHERE ativo = TRUE ORDER BY descricao, id',
+          [],
+          {
+            teto: 200,
+          },
+        ),
         l.consultar(
           'SELECT id, descricao, biometrica FROM forma_identificacao_visitante WHERE ativo = TRUE ORDER BY descricao, id',
           [],
           { teto: 200 },
         ),
-        l.consultar('SELECT id, descricao FROM situacao_acesso_visitante WHERE ativo = TRUE ORDER BY id', [], {
-          teto: 200,
-        }),
+        l.consultar(
+          'SELECT id, descricao FROM situacao_acesso_visitante WHERE ativo = TRUE ORDER BY id',
+          [],
+          {
+            teto: 200,
+          },
+        ),
         l.consultar(
           `SELECT m.id, m.descricao, m.ativo, f.id AS fabricante, f.descricao AS fabricante_nome
              FROM modelo_terminal_acesso m JOIN fabricante_terminal_acesso f ON f.id = m.fabricante_terminal_acesso_id
@@ -406,7 +433,11 @@ export class PortaPortariaPropria implements PortaPortaria {
         ),
       ]);
       return {
-        tiposVisitante: tv.map((r) => ({ codigo: n(r['id']), nome: texto(r['descricao']), ativo: verdadeiro(r['ativo']) })),
+        tiposVisitante: tv.map((r) => ({
+          codigo: n(r['id']),
+          nome: texto(r['descricao']),
+          ativo: verdadeiro(r['ativo']),
+        })),
         tiposVisitado: td.map((r) => ({
           codigo: n(r['id']),
           nome: texto(r['descricao']),
@@ -444,9 +475,11 @@ export class PortaPortariaPropria implements PortaPortaria {
 
   internados(c: ContextoPortaria): Promise<InternadoPortaria[]> {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_INTERNADOS} ORDER BY pf.nome, i.id`, [est], { teto: TETO_INTERNADOS_PORTARIA })).map(
-        internadoDe,
-      ),
+      (
+        await l.consultar(`${SQL_INTERNADOS} ORDER BY pf.nome, i.id`, [est], {
+          teto: TETO_INTERNADOS_PORTARIA,
+        })
+      ).map(internadoDe),
     );
   }
 
@@ -510,18 +543,20 @@ export class PortaPortariaPropria implements PortaPortaria {
         const linhas =
           b.documento.tipo === 'cpf'
             ? await l.consultar(`${SQL_VISITANTE} AND pp.cpf = ?`, [digitos(b.documento.numero)], { teto: 5 })
-            : await l.consultar(`${SQL_VISITANTE} AND td.codigo = ? AND pp.numero_documento = ?`, [
-                b.documento.tipo,
-                b.documento.numero,
-              ], { teto: 5 });
+            : await l.consultar(
+                `${SQL_VISITANTE} AND td.codigo = ? AND pp.numero_documento = ?`,
+                [b.documento.tipo, b.documento.numero],
+                { teto: 5 },
+              );
         return linhas.map((r) => visitanteDe(r, fuso));
       }
       if (!b.nomeBusca || b.nomeBusca.length < 3) return [];
       // A comparação do banco ignora caixa e acento: o começo do nome basta.
       return (
-        await l.consultar(`${SQL_VISITANTE} AND pp.nome LIKE ? ORDER BY pp.nome, pp.id LIMIT ${TETO_BUSCA_VISITANTE}`, [
-          `${b.nomeBusca.replace(/[%_\\]/g, '')}%`,
-        ])
+        await l.consultar(
+          `${SQL_VISITANTE} AND pp.nome LIKE ? ORDER BY pp.nome, pp.id LIMIT ${TETO_BUSCA_VISITANTE}`,
+          [`${b.nomeBusca.replace(/[%_\\]/g, '')}%`],
+        )
       ).map((r) => visitanteDe(r, fuso));
     });
   }
@@ -565,7 +600,12 @@ export class PortaPortariaPropria implements PortaPortaria {
 
   visitasDoPeriodo(
     c: ContextoPortaria,
-    f: { readonly internacao: number | null; readonly unidade: string | null; readonly de: string; readonly ate: string },
+    f: {
+      readonly internacao: number | null;
+      readonly unidade: string | null;
+      readonly de: string;
+      readonly ate: string;
+    },
   ): Promise<VisitaRegistrada[]> {
     return this.ler(c, async (l, est, fuso) => {
       const de = instante(`${f.de}T00:00`, fuso);
@@ -681,12 +721,17 @@ export class PortaPortariaPropria implements PortaPortaria {
 
 /** A chave da foto vista pelo módulo (`visitante/arquivo-<id>.<ext>`), pelo id e tipo do registro em `arquivo`. */
 const chaveDaFoto = (r: Linha): string | null =>
-  r['foto_id'] === null || r['foto_id'] === undefined ? null : chaveFotoVisitante(n(r['foto_id']), texto(r['foto_tipo']));
+  r['foto_id'] === null || r['foto_id'] === undefined
+    ? null
+    : chaveFotoVisitante(n(r['foto_id']), texto(r['foto_tipo']));
 
 // ── Leituras comuns ─────────────────────────────────────────────────────────────────────────────────
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -806,9 +851,13 @@ function gravadorSobre(
       [codigo],
     );
     if (!r)
-      throw recusa('dominio-nao-configurado', `O tipo de documento "${codigo}" não está cadastrado no estabelecimento.`, {
-        campos: ['tipoDocumento'],
-      });
+      throw recusa(
+        'dominio-nao-configurado',
+        `O tipo de documento "${codigo}" não está cadastrado no estabelecimento.`,
+        {
+          campos: ['tipoDocumento'],
+        },
+      );
     return n(r.id);
   };
 
@@ -823,13 +872,15 @@ function gravadorSobre(
   };
 
   const pessoaDe = async (id: number) =>
-    (await tx.consultarParaAtualizar<Linha>(
-      `SELECT pp.id, pp.nome, pp.cpf, pp.numero_documento, td.codigo AS tipo_documento, pp.telefone,
+    (
+      await tx.consultarParaAtualizar<Linha>(
+        `SELECT pp.id, pp.nome, pp.cpf, pp.numero_documento, td.codigo AS tipo_documento, pp.telefone,
               pp.tipo_visitante_id, pp.pessoa_fisica_id, pp.situacao
          FROM pessoa_portaria pp LEFT JOIN tipo_documento_identificacao td ON td.id = pp.tipo_documento_identificacao_id
         WHERE pp.id = ? AND pp.excluido_em IS NULL AND pp.situacao <> 'inativo'`,
-      [id],
-    ))[0] ?? null;
+        [id],
+      )
+    )[0] ?? null;
 
   const visitasAbertas = (filtro: string, p: unknown[]) =>
     tx.consultarParaAtualizar<Linha>(
@@ -861,20 +912,23 @@ function gravadorSobre(
       situacao: 'encerrada',
     });
     if (v['cracha_visitante_id']) {
-      const [cr] = await tx.consultarParaAtualizar<Linha>('SELECT id, versao FROM cracha_visitante WHERE id = ?', [
-        v['cracha_visitante_id'],
-      ]);
+      const [cr] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT id, versao FROM cracha_visitante WHERE id = ?',
+        [v['cracha_visitante_id']],
+      );
       // A etiqueta é de uso único: devolvida, sai de circulação.
       if (cr) await tx.alterar('cracha_visitante', n(cr['id']), n(cr['versao']), { situacao: 'inativo' });
     }
   };
 
   const acompanhanteVigente = async (internacao: number) =>
-    (await tx.consultarParaAtualizar<Linha>(
-      `SELECT id, versao, tipo_documento, numero_documento, direito_legal FROM acompanhante_internacao
+    (
+      await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, versao, tipo_documento, numero_documento, direito_legal FROM acompanhante_internacao
         WHERE internacao_id = ? AND fim_em IS NULL AND excluido_em IS NULL ORDER BY inicio_em DESC, id DESC`,
-      [internacao],
-    ))[0] ?? null;
+        [internacao],
+      )
+    )[0] ?? null;
 
   /** O visitante (pessoa_portaria) do acompanhante, pelo documento (pendência: a ligação direta no modelo). */
   const pessoaDoAcompanhante = async (a: Linha): Promise<number | null> => {
@@ -900,13 +954,19 @@ function gravadorSobre(
       let numero: string | null = null;
       if (v.tipoDocumento === 'cpf') {
         cpf = digitos(v.documento);
-        if (cpf.length !== 11) throw recusa('documento-invalido', 'O CPF tem 11 dígitos.', { campos: ['documento'] });
+        if (cpf.length !== 11)
+          throw recusa('documento-invalido', 'O CPF tem 11 dígitos.', { campos: ['documento'] });
       } else {
         tipoDoc = await tipoDocumento(v.tipoDocumento);
         numero = v.documento.trim().slice(0, 30);
       }
-      const tipo = await tx.uma('SELECT id FROM tipo_visitante WHERE id = ? AND ativo = TRUE', [v.tipoVisitante]);
-      if (!tipo) throw recusa('tipo-visitante-invalido', 'Escolha um tipo de visitante ativo.', { campos: ['tipoVisitante'] });
+      const tipo = await tx.uma('SELECT id FROM tipo_visitante WHERE id = ? AND ativo = TRUE', [
+        v.tipoVisitante,
+      ]);
+      if (!tipo)
+        throw recusa('tipo-visitante-invalido', 'Escolha um tipo de visitante ativo.', {
+          campos: ['tipoVisitante'],
+        });
       const [ja] = await tx.consultarParaAtualizar<Linha>(
         cpf
           ? `SELECT pp.id, pp.versao, a.id AS foto_id, a.tipo_mime AS foto_tipo FROM pessoa_portaria pp
@@ -928,12 +988,19 @@ function gravadorSobre(
               [fid, est, v.foto.hash],
             )
           : [];
-        if (!a) throw recusa('foto-inexistente', 'A foto não foi guardada: envie a foto de novo.', { campos: ['foto'] });
+        if (!a)
+          throw recusa('foto-inexistente', 'A foto não foi guardada: envie a foto de novo.', {
+            campos: ['foto'],
+          });
         foto = { id: n(a['id']), versao: n(a['versao']) };
       }
       const fotoId = foto?.id ?? null;
       const ligarFoto = async (pessoa: number) => {
-        if (foto) await tx.alterar('arquivo', foto.id, foto.versao, { entidade: 'pessoa_portaria', entidade_id: pessoa });
+        if (foto)
+          await tx.alterar('arquivo', foto.id, foto.versao, {
+            entidade: 'pessoa_portaria',
+            entidade_id: pessoa,
+          });
       };
       const valores = {
         nome: v.nome.slice(0, 150),
@@ -947,7 +1014,11 @@ function gravadorSobre(
         await tx.alterar('pessoa_portaria', id, n(ja['versao']), valores);
         await ligarFoto(id);
         const anterior = chaveDaFoto(ja);
-        return { id, novo: false, fotoAnterior: v.foto && anterior && anterior !== v.foto.chave ? anterior : null };
+        return {
+          id,
+          novo: false,
+          fotoAnterior: v.foto && anterior && anterior !== v.foto.chave ? anterior : null,
+        };
       }
       let id: number;
       try {
@@ -959,7 +1030,10 @@ function gravadorSobre(
         });
       } catch (x) {
         if (restricaoViolada(x)?.tipo === 'unica')
-          throw recusa('visitante-em-uso', 'Outro cadastro com este documento acabou de ser gravado: busque o visitante.');
+          throw recusa(
+            'visitante-em-uso',
+            'Outro cadastro com este documento acabou de ser gravado: busque o visitante.',
+          );
         throw x;
       }
       await ligarFoto(id);
@@ -1006,7 +1080,10 @@ function gravadorSobre(
       const pessoa = await pessoaDe(v.visitante);
       if (!pessoa) throw recusa('visitante-nao-encontrado', 'Visitante não encontrado: cadastre de novo.');
       if (pessoa['tipo_visitante_id'] === null)
-        throw recusa('tipo-visitante-ausente', 'Informe o tipo de visitante no cadastro antes de registrar a visita.');
+        throw recusa(
+          'tipo-visitante-ausente',
+          'Informe o tipo de visitante no cadastro antes de registrar a visita.',
+        );
       const entrada = instante(v.entrada, fuso);
       // O visitante barrado no cadastro (bloqueado ou restrito) ou por bloqueio da pessoa no estabelecimento não entra.
       if (['bloqueado', 'restrito'].includes(texto(pessoa['situacao'])))
@@ -1048,7 +1125,10 @@ function gravadorSobre(
         const validade = validadeDaLinha(x, regras);
         if (validade <= v.entrada.slice(0, 16)) {
           await fecharVisita(x, instante(validade, fuso));
-          extras.dados = { ...extras.dados, expiradas: [...((extras.dados['expiradas'] as number[]) ?? []), n(x['id'])] };
+          extras.dados = {
+            ...extras.dados,
+            expiradas: [...((extras.dados['expiradas'] as number[]) ?? []), n(x['id'])],
+          };
         }
       }
       let papel: VisitaRegistrada['papel'] = 'visitante';
@@ -1075,7 +1155,9 @@ function gravadorSobre(
             (x) => !x['acompanhante_internacao_id'] && validadeDaLinha(x, regras) > v.entrada.slice(0, 16),
           ).length,
           acompanhante: acomp ? await pessoaDoAcompanhante(acomp) : null,
-          acompanhanteFundamento: acomp ? (FUNDAMENTO_DO_DIREITO[texto(acomp['direito_legal'])] ?? 'autorizado') : null,
+          acompanhanteFundamento: acomp
+            ? (FUNDAMENTO_DO_DIREITO[texto(acomp['direito_legal'])] ?? 'autorizado')
+            : null,
           visitanteEmVisita: (await visitasAbertas('AND v.pessoa_portaria_id = ?', [v.visitante])).length > 0,
         };
         const a = avaliar(relido);
@@ -1090,7 +1172,10 @@ function gravadorSobre(
         [est],
       );
       if (!ponto)
-        throw recusa('sem-ponto-acesso', 'Cadastre a portaria (ponto de acesso) do estabelecimento antes de registrar a visita.');
+        throw recusa(
+          'sem-ponto-acesso',
+          'Cadastre a portaria (ponto de acesso) do estabelecimento antes de registrar a visita.',
+        );
       let cracha: number;
       try {
         cracha = await tx.incluir('cracha_visitante', {
@@ -1101,7 +1186,8 @@ function gravadorSobre(
           situacao: 'em_uso',
         });
       } catch (x) {
-        if (restricaoViolada(x)?.tipo === 'unica') throw recusa('cracha-em-uso', 'Este crachá já foi emitido: emita outro.');
+        if (restricaoViolada(x)?.tipo === 'unica')
+          throw recusa('cracha-em-uso', 'Este crachá já foi emitido: emita outro.');
         throw x;
       }
       const id = await tx.incluir('visita', {
@@ -1136,7 +1222,8 @@ function gravadorSobre(
       if (!v) throw recusa('nao-encontrado', 'Visita não encontrada.');
       if (v['saida_em'] !== null) throw recusa('visita-encerrada', 'A saída desta visita já foi registrada.');
       const saida = instante(x.saida, fuso);
-      const ent = v['entrada_em'] instanceof Date ? (v['entrada_em'] as Date) : new Date(String(v['entrada_em']));
+      const ent =
+        v['entrada_em'] instanceof Date ? (v['entrada_em'] as Date) : new Date(String(v['entrada_em']));
       await fecharVisita(v, saida < ent ? ent : saida);
       extras.dados = { ...extras.dados, origemSaida: x.origem };
       return x.id;
@@ -1149,7 +1236,10 @@ function gravadorSobre(
           'SELECT id FROM unidade_internacao WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
           [est, r.unidade],
         );
-        if (!u) throw recusa('unidade-desconhecida', 'Unidade de internação não encontrada.', { campos: ['unidade'] });
+        if (!u)
+          throw recusa('unidade-desconhecida', 'Unidade de internação não encontrada.', {
+            campos: ['unidade'],
+          });
         unidade = n(u.id);
       }
       const [ja] = await tx.consultarParaAtualizar<Linha>(
@@ -1157,7 +1247,8 @@ function gravadorSobre(
           WHERE estabelecimento_id = ? AND unidade_internacao_id <=> ? AND ativo = TRUE ORDER BY id LIMIT 1`,
         [est, unidade],
       );
-      const mudou = () => recusa('regra-mudou', 'A regra desta unidade mudou depois que você abriu: abra de novo.');
+      const mudou = () =>
+        recusa('regra-mudou', 'A regra desta unidade mudou depois que você abriu: abra de novo.');
       const valores = {
         maximo_visitantes: r.maxSimultaneos,
         idade_minima_anos: r.idadeMinima,
@@ -1165,7 +1256,12 @@ function gravadorSobre(
         conduta_isolamento: r.isolamento,
         observacao: r.observacao ?? null,
         horarios: JSON.stringify(
-          [1, 2, 3, 4, 5, 6, 7].map((d) => ({ dia_semana: d, publico: 'visitante', inicio: r.horaInicio, fim: r.horaFim })),
+          [1, 2, 3, 4, 5, 6, 7].map((d) => ({
+            dia_semana: d,
+            publico: 'visitante',
+            inicio: r.horaInicio,
+            fim: r.horaFim,
+          })),
         ),
       };
       if (r.versao === null) {
@@ -1185,9 +1281,13 @@ function gravadorSobre(
 
     async bloquear(b) {
       if ((b.abrangencia === 'limite') !== (b.limite !== null))
-        throw recusa('limite-invalido', 'O limite de visitantes vale só para o bloqueio por limite, e ele o exige.', {
-          campos: ['limite'],
-        });
+        throw recusa(
+          'limite-invalido',
+          'O limite de visitantes vale só para o bloqueio por limite, e ele o exige.',
+          {
+            campos: ['limite'],
+          },
+        );
       const i = await travarInternacao(b.internacao);
       if (!i) throw recusa('sem-internacao', 'O paciente não está mais internado.');
       const motivo = await tx.uma<{ id: unknown }>(
@@ -1235,7 +1335,10 @@ function gravadorSobre(
           'Aqui só o bloqueio por decisão clínica: o sigilo, a ordem judicial e o pedido são revogados pela supervisão.',
         );
       if (motivo === 'clinico' && !x.podeClinico)
-        throw recusa('bloqueio-clinico', 'O bloqueio por decisão clínica só é revogado pela enfermagem ou pelo médico.');
+        throw recusa(
+          'bloqueio-clinico',
+          'O bloqueio por decisão clínica só é revogado pela enfermagem ou pelo médico.',
+        );
       await tx.alterar('bloqueio_visitante', n(b['id']), n(b['versao']), {
         ativo: false,
         inativado_em: new Date(),
@@ -1255,7 +1358,10 @@ function gravadorSobre(
       if (mesmaPessoa(vigente, pessoa))
         throw recusa('ja-acompanhante', 'Esta pessoa já é o acompanhante vigente deste paciente.');
       const inicio = instante(a.inicio, fuso);
-      if (vigente) await tx.alterar('acompanhante_internacao', n(vigente['id']), n(vigente['versao']), { fim_em: inicio });
+      if (vigente)
+        await tx.alterar('acompanhante_internacao', n(vigente['id']), n(vigente['versao']), {
+          fim_em: inicio,
+        });
       const cpf = textoN(pessoa['cpf']);
       const id = await tx.incluir('acompanhante_internacao', {
         internacao_id: a.internacao,
@@ -1283,8 +1389,11 @@ function gravadorSobre(
       if (!a) throw recusa('nao-encontrado', 'Acompanhante não encontrado.');
       if (a['fim_em'] !== null) throw recusa('ja-encerrado', 'Este acompanhamento já foi encerrado.');
       const fim = instante(x.fim, fuso);
-      const inicio = a['inicio_em'] instanceof Date ? (a['inicio_em'] as Date) : new Date(String(a['inicio_em']));
-      await tx.alterar('acompanhante_internacao', n(a['id']), n(a['versao']), { fim_em: fim < inicio ? inicio : fim });
+      const inicio =
+        a['inicio_em'] instanceof Date ? (a['inicio_em'] as Date) : new Date(String(a['inicio_em']));
+      await tx.alterar('acompanhante_internacao', n(a['id']), n(a['versao']), {
+        fim_em: fim < inicio ? inicio : fim,
+      });
       extras.motivo = x.motivo.slice(0, 500);
       return { id: n(a['id']), internacao: n(a['internacao_id']) };
     },
@@ -1294,7 +1403,8 @@ function gravadorSobre(
         'SELECT id, tipo, fabricante_terminal_acesso_id FROM modelo_terminal_acesso WHERE id = ?',
         [t.tipoTerminal],
       );
-      if (!modelo) throw recusa('tipo-terminal-invalido', 'Escolha o tipo de terminal.', { campos: ['tipoTerminal'] });
+      if (!modelo)
+        throw recusa('tipo-terminal-invalido', 'Escolha o tipo de terminal.', { campos: ['tipoTerminal'] });
       const local = t.local.trim().slice(0, 150);
       const pa = await tx.uma<{ id: unknown }>(
         'SELECT id FROM ponto_acesso WHERE estabelecimento_id = ? AND nome = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
@@ -1333,7 +1443,9 @@ function gravadorSobre(
         return { id: t.id, versao };
       } catch (x) {
         if (restricaoViolada(x)?.tipo === 'unica')
-          throw recusa('terminal-duplicado', 'Já existe um terminal com este nome nesta portaria.', { campos: ['nome'] });
+          throw recusa('terminal-duplicado', 'Já existe um terminal com este nome nesta portaria.', {
+            campos: ['nome'],
+          });
         throw x;
       }
     },
@@ -1389,7 +1501,9 @@ function gravadorSobre(
           sentido: texto(t['sentido']) as SentidoTerminal,
           ativo: verdadeiro(t['ativo']),
         },
-        visita: v ? { id: n(v['id']), validoAte: validadeDaLinha(v, regras), saida: local(v['saida_em'], fuso) } : null,
+        visita: v
+          ? { id: n(v['id']), validoAte: validadeDaLinha(v, regras), saida: local(v['saida_em'], fuso) }
+          : null,
       });
       const ocorrido = instante(ev.ocorridoEm, fuso);
       let id: number;
@@ -1417,7 +1531,8 @@ function gravadorSobre(
         throw x;
       }
       if (a.encerra && v && v['saida_em'] === null) {
-        const ent = v['entrada_em'] instanceof Date ? (v['entrada_em'] as Date) : new Date(String(v['entrada_em']));
+        const ent =
+          v['entrada_em'] instanceof Date ? (v['entrada_em'] as Date) : new Date(String(v['entrada_em']));
         await fecharVisita(v, ocorrido < ent ? ent : ocorrido);
         extras.dados = { ...extras.dados, origemSaida: 'catraca' };
       }

@@ -46,7 +46,12 @@ import {
 } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { type ExtrasGravacaoFarmacia, gravadorAvaliacao, TABELAS_AVALIACAO } from './gravador-avaliacao.js';
-import { ENTREGA_DO_NUMERO, gravadorDispensacao, NUMERO_DA_ENTREGA, TABELAS_DISPENSACAO } from './gravador-dispensacao.js';
+import {
+  ENTREGA_DO_NUMERO,
+  gravadorDispensacao,
+  NUMERO_DA_ENTREGA,
+  TABELAS_DISPENSACAO,
+} from './gravador-dispensacao.js';
 import { ENTRADAS_FARMACIA } from './operacoes.js';
 import {
   type ContextoFarmacia,
@@ -102,7 +107,11 @@ const CODIGO_DA_CHECAGEM: Readonly<Record<string, string>> = {
   adiado: 'P',
 };
 /** O documento de estoque no livro e nos movimentos do controlado: S saída, D devolução, P perda; A ambulatorial. */
-const PREFIXO_DOCUMENTO: Readonly<Record<string, string>> = { saida_paciente: 'S ', devolucao_interna: 'D ', baixa: 'P ' };
+const PREFIXO_DOCUMENTO: Readonly<Record<string, string>> = {
+  saida_paciente: 'S ',
+  devolucao_interna: 'D ',
+  baixa: 'P ',
+};
 const PREFIXO_DISPENSACAO = 'A ';
 
 function dataCivil(v: unknown, fuso: string): string {
@@ -172,24 +181,36 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   }
 
   private async fuso(l: Leitor, est: number): Promise<string> {
-    const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-      est,
-    ]);
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
     return r?.fuso_horario || FUSO_PADRAO;
   }
 
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
 
   async podeGravar(_c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
-    if (!ENTRADAS_FARMACIA[op]) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
+    if (!ENTRADAS_FARMACIA[op])
+      return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
     return { pode: true, codigo: null, motivo: null };
   }
 
   /** As operações das telas (suprimentos.*) numa operação do Executor, com a entrada conferida pelo mesmo Zod. */
-  async executar(c: ContextoPortaM18, op: string, entrada: unknown, ctx: ContextoOperacao): Promise<GravacaoFeita> {
+  async executar(
+    c: ContextoPortaM18,
+    op: string,
+    entrada: unknown,
+    ctx: ContextoOperacao,
+  ): Promise<GravacaoFeita> {
     const esquema = ENTRADAS_FARMACIA[op];
     if (!esquema)
-      throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+      throw new ErroOperacao(
+        400,
+        'operacao-desconhecida',
+        'Operação desconhecida',
+        `A operação ${op} não existe.`,
+      );
     const a = esquema.safeParse(entrada);
     if (!a.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
@@ -202,7 +223,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     const reautenticadoEm = ctx.reautenticadoEm ?? null;
     const extras: ExtrasGravacaoFarmacia = { alvo: null, eventos: [] };
     const operacao = definirOperacao({
-      nome: `farmacia.${op.replace(/^suprimentos\./, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`,
+      nome: `farmacia.${op
+        .replace(/^suprimentos\./, '')
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .toLowerCase()}`,
       tabelas: [...TABELAS_DISPENSACAO, ...TABELAS_AVALIACAO],
       entrada: esquema as ZodType<Record<string, unknown>>,
       gravar: async (tx, e): Promise<ResultadoOperacao> => {
@@ -221,7 +245,12 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
           case 'suprimentos.avaliarPrescricao':
             return avaliarPeloHorario(tx, est, usuario, extras, e as AvaliarPrescricaoEntrada);
           default:
-            throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+            throw new ErroOperacao(
+              400,
+              'operacao-desconhecida',
+              'Operação desconhecida',
+              `A operação ${op} não existe.`,
+            );
         }
       },
       alvo: () => extras.alvo ?? { tabela: 'dispensacao', id: null },
@@ -284,7 +313,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   // ── Leituras ──────────────────────────────────────────────────────────────────────────────────────────────
 
   relogio(c: ContextoFarmacia) {
-    return this.ler(c, async (l, est) => ({ agora: new Date(), hoje: relogioNoFuso(await this.fuso(l, est)).hoje }));
+    return this.ler(c, async (l, est) => ({
+      agora: new Date(),
+      hoje: relogioNoFuso(await this.fuso(l, est)).hoje,
+    }));
   }
 
   /** As unidades de internação do estabelecimento, com quantos internados (internação ativa) cada uma tem. */
@@ -300,7 +332,11 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
             ORDER BY u.descricao LIMIT ${TETO}`,
           [est],
         )
-      ).map((r) => ({ unidade: texto(r['codigo']), nome: texto(r['descricao']), internados: n(r['internados']) })),
+      ).map((r) => ({
+        unidade: texto(r['codigo']),
+        nome: texto(r['descricao']),
+        internados: n(r['internados']),
+      })),
     );
   }
 
@@ -410,10 +446,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       return (
-        await l.consultar(`${SQL_INTERVENCAO} AND iv.prescricao_item_id IN (${lista(ids.length)}) ORDER BY iv.realizada_em, iv.id`, [
-          est,
-          ...ids,
-        ])
+        await l.consultar(
+          `${SQL_INTERVENCAO} AND iv.prescricao_item_id IN (${lista(ids.length)}) ORDER BY iv.realizada_em, iv.id`,
+          [est, ...ids],
+        )
       ).map((r) => intervencaoDe(r, fuso));
     });
   }
@@ -532,7 +568,12 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
             texto(r['prescricao_situacao']) === 'suspensa',
           tipo: texto(r['categoria']),
           descricao: texto(r['descricao']),
-          dose: r['quantidade_prevista'] !== null ? n(r['quantidade_prevista']) : r['item_quantidade'] !== null ? n(r['item_quantidade']) : null,
+          dose:
+            r['quantidade_prevista'] !== null
+              ? n(r['quantidade_prevista'])
+              : r['item_quantidade'] !== null
+                ? n(r['item_quantidade'])
+                : null,
           unidadeDose: textoOuNulo(r['unidade_dose']),
           via: textoOuNulo(r['via']),
           produto: n(r['insumo_id']),
@@ -549,7 +590,8 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
           dispensada: verdadeiro(r['dispensada']),
           validadaAntes: verdadeiro(r['validada']),
           urgente:
-            ['urgente', 'agora'].includes(texto(r['item_prioridade'])) || texto(r['prescricao_prioridade']) === 'urgente',
+            ['urgente', 'agora'].includes(texto(r['item_prioridade'])) ||
+            texto(r['prescricao_prioridade']) === 'urgente',
         };
       });
       return { doses, cortada: linhas.length > TETO };
@@ -559,7 +601,8 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   /** O item prescrito: a justificativa de alergia registrada e o produto de estoque. */
   itensPrescritos(c: ContextoFarmacia, lancamentos: readonly number[]) {
     const ids = [...new Set(lancamentos)].filter((x) => x > 0).slice(0, TETO);
-    if (ids.length === 0) return Promise.resolve(new Map<number, { alergiaJustificada: boolean; produto: number | null }>());
+    if (ids.length === 0)
+      return Promise.resolve(new Map<number, { alergiaJustificada: boolean; produto: number | null }>());
     return this.ler(c, async (l, est) => {
       const linhas = await l.consultar(
         `SELECT pi.id, pi.justificativa_alergia, ip.insumo_id
@@ -571,7 +614,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
       return new Map(
         linhas.map((r) => [
           n(r['id']),
-          { alergiaJustificada: !!textoOuNulo(r['justificativa_alergia']), produto: r['insumo_id'] === null ? null : n(r['insumo_id']) },
+          {
+            alergiaJustificada: !!textoOuNulo(r['justificativa_alergia']),
+            produto: r['insumo_id'] === null ? null : n(r['insumo_id']),
+          },
         ]),
       );
     });
@@ -582,11 +628,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       return (
-        await l.consultar(`${SQL_DOSE} AND d.atendimento_id = ? AND d.dispensado_em >= ? ORDER BY d.dispensado_em, dd.id LIMIT ${TETO}`, [
-          est,
-          atendimento,
-          desde,
-        ])
+        await l.consultar(
+          `${SQL_DOSE} AND d.atendimento_id = ? AND d.dispensado_em >= ? ORDER BY d.dispensado_em, dd.id LIMIT ${TETO}`,
+          [est, atendimento, desde],
+        )
       ).map((r) => doseDe(r, fuso));
     });
   }
@@ -610,7 +655,9 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
           return [
             n(r['id']),
             {
-              situacao: suspenso ? SITUACAO_SUSPENSO : (CODIGO_DA_CHECAGEM[texto(r['categoria'])] ?? texto(r['categoria'])),
+              situacao: suspenso
+                ? SITUACAO_SUSPENSO
+                : (CODIGO_DA_CHECAGEM[texto(r['categoria'])] ?? texto(r['categoria'])),
               em: quando ? minutoCivil(quando, fuso) : null,
             },
           ] as const;
@@ -623,7 +670,9 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   entregas(c: ContextoFarmacia, o: { situacao: number; centroCusto?: number }): Promise<EntregaRegistrada[]> {
     const situacao = ENTREGA_DO_NUMERO[o.situacao];
     if (!situacao)
-      return Promise.reject(recusa('situacao-invalida', 'Situação de entrega inválida (7, 8 ou 9).', { campos: ['situacao'] }));
+      return Promise.reject(
+        recusa('situacao-invalida', 'Situação de entrega inválida (7, 8 ou 9).', { campos: ['situacao'] }),
+      );
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       const linhas = await l.consultar(
@@ -643,7 +692,12 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
         o.centroCusto ? [est, situacao, o.centroCusto] : [est, situacao],
       );
       return linhas.map((r) => {
-        const desde = situacao === 'entregue' ? r['entregue_em'] : situacao === 'estornada' ? r['estornado_em'] : r['saida_em'];
+        const desde =
+          situacao === 'entregue'
+            ? r['entregue_em']
+            : situacao === 'estornada'
+              ? r['estornado_em']
+              : r['saida_em'];
         return {
           controle: n(r['id']),
           situacao: o.situacao,
@@ -662,10 +716,20 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   dosesDaSaida(c: ContextoFarmacia, saida: number) {
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
-      return (await l.consultar(`${SQL_DOSE} AND de.id = ? ORDER BY dd.id LIMIT ${TETO}`, [est, saida])).map((r) => {
-        const d = doseDe(r, fuso);
-        return { dose: d.dose, item: d.item, descricao: d.descricao, quantidade: d.quantidade, barras: d.barras, lote: d.lote, validade: d.validade };
-      });
+      return (await l.consultar(`${SQL_DOSE} AND de.id = ? ORDER BY dd.id LIMIT ${TETO}`, [est, saida])).map(
+        (r) => {
+          const d = doseDe(r, fuso);
+          return {
+            dose: d.dose,
+            item: d.item,
+            descricao: d.descricao,
+            quantidade: d.quantidade,
+            barras: d.barras,
+            lote: d.lote,
+            validade: d.validade,
+          };
+        },
+      );
     });
   }
 
@@ -683,14 +747,17 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
           WHERE a.id IN (${lista(ids.length)}) AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
         [...ids, est],
       );
-      return new Map(linhas.map((r) => [n(r['id']), { leito: texto(r['leito']), iniciais: iniciais(r['nome']) }] as const));
+      return new Map(
+        linhas.map((r) => [n(r['id']), { leito: texto(r['leito']), iniciais: iniciais(r['nome']) }] as const),
+      );
     });
   }
 
   /** O aceite de cada entrega recebida: quem recebeu, quando e o modo (leitura da etiqueta ou tablet). */
   aceites(c: ContextoFarmacia, controles: readonly number[]) {
     const ids = [...new Set(controles)].filter((x) => x > 0).slice(0, TETO);
-    if (ids.length === 0) return Promise.resolve(new Map<number, { autor: string; em: string; modo: string }>());
+    if (ids.length === 0)
+      return Promise.resolve(new Map<number, { autor: string; em: string; modo: string }>());
     return this.ler(c, async (l, est) => {
       const fuso = await this.fuso(l, est);
       const linhas = await l.consultar(
@@ -700,10 +767,17 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
         [...ids, est],
       );
       return new Map(
-        linhas.map((r) => [
-          n(r['id']),
-          { autor: texto(r['login']), em: minutoCivil(r['entregue_em'], fuso), modo: texto(r['modo_confirmacao']) },
-        ] as const),
+        linhas.map(
+          (r) =>
+            [
+              n(r['id']),
+              {
+                autor: texto(r['login']),
+                em: minutoCivil(r['entregue_em'], fuso),
+                modo: texto(r['modo_confirmacao']),
+              },
+            ] as const,
+        ),
       );
     });
   }
@@ -744,7 +818,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   }
 
   /** Os lançamentos do razão do estoque dos controlados no período (o dia final inteiro), no estabelecimento. */
-  movimentos(c: ContextoFarmacia, o: { itens: readonly number[]; inicio: Date; fim: Date }): Promise<MovimentoControlado[]> {
+  movimentos(
+    c: ContextoFarmacia,
+    o: { itens: readonly number[]; inicio: Date; fim: Date },
+  ): Promise<MovimentoControlado[]> {
     const ids = [...new Set(o.itens)].filter((x) => x > 0).slice(0, TETO);
     if (ids.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l, est) => {
@@ -764,7 +841,12 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
             AND m.ocorrido_em >= ? AND m.ocorrido_em < ?
           ORDER BY m.ocorrido_em, m.id LIMIT 5000`,
         // A janela vai da meia-noite do dia inicial à do dia seguinte ao final, no fuso do estabelecimento.
-        [est, ...ids, instanteCivil(dataLocal(o.inicio), '00:00', fuso), instanteCivil(diaSeguinte(dataLocal(o.fim)), '00:00', fuso)],
+        [
+          est,
+          ...ids,
+          instanteCivil(dataLocal(o.inicio), '00:00', fuso),
+          instanteCivil(diaSeguinte(dataLocal(o.fim)), '00:00', fuso),
+        ],
       );
       return linhas.map((r) => {
         const entrada = texto(r['natureza']) === 'entrada';
@@ -852,7 +934,10 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
   /** Desde quando a fila de entregas olha: a primeira saída para o setor do estabelecimento. */
   janelaEntregas(c: ContextoFarmacia) {
     return this.ler(c, async (l, est) => {
-      const r = await l.uma('SELECT MIN(saida_em) AS desde FROM entrega_setor WHERE estabelecimento_id = ? AND excluido_em IS NULL', [est]);
+      const r = await l.uma(
+        'SELECT MIN(saida_em) AS desde FROM entrega_setor WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+        [est],
+      );
       return { desde: r?.['desde'] ? minutoCivil(r['desde'], await this.fuso(l, est)) : null };
     });
   }
@@ -908,7 +993,15 @@ async function avaliarPeloHorario(
     decisao: e.decisao,
     justificativa: e.justificativa,
     farmaceutico: '',
-    triagem: { item, horario: e.horario, classe: 'comum', destino: 'humana', prioridade: 0, achados: [], regra: 'avaliacao-pelo-horario' },
+    triagem: {
+      item,
+      horario: e.horario,
+      classe: 'comum',
+      destino: 'humana',
+      prioridade: 0,
+      achados: [],
+      regra: 'avaliacao-pelo-horario',
+    },
   });
   return { id: r.id, item, decisao: e.decisao };
 }
@@ -931,7 +1024,12 @@ const SQL_DOSE = `
 function documentoDe(r: Linha, fuso: string): DocumentoSaida | null {
   if (r['doc_id'] === null || r['doc_id'] === undefined) return null;
   const data = dataCivil(r['movimentado_em'], fuso);
-  return { id: n(r['doc_id']), ano: Number(data.slice(0, 4)), mes: Number(data.slice(5, 7)), doc: n(r['doc_numero']) };
+  return {
+    id: n(r['doc_id']),
+    ano: Number(data.slice(0, 4)),
+    mes: Number(data.slice(5, 7)),
+    doc: n(r['doc_numero']),
+  };
 }
 
 function doseDe(r: Linha, fuso: string): DoseDispensada {

@@ -7,7 +7,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaSadtMemoria } from '../porta-memoria.js';
 import type { PortaSadt } from '../porta.js';
 import { PortaSadtPropria } from '../porta-propria.js';
-import { contexto, limparMassaSadt, type MassaSadt, montarMassaSadt, SEM_BANCO } from '../aplicacao/copia.spec-util.js';
+import {
+  contexto,
+  limparMassaSadt,
+  type MassaSadt,
+  montarMassaSadt,
+  SEM_BANCO,
+} from '../aplicacao/copia.spec-util.js';
 
 describe.skipIf(SEM_BANCO)('parâmetros do setor sem segredo', () => {
   let nucleo: NucleoProprio;

@@ -440,10 +440,12 @@ describe('agência transfusional (etapa 2) pela HTTP', () => {
   // do config (lote 01-03) expõe as tabelas de domínio pelo nome da tabela (sadt/tipoReacaoTransfusional) e, na memória,
   // só os domínios sintéticos: sem o domínio da agência no catálogo da app, estes três testes ficam pendentes, com o
   // pedido ao dono do config registrado na saída do lote 02-04. Voltam a rodar sozinhos quando o domínio existir.
-  const PENDENTE_CATALOGO = 'pendente: o catálogo de domínios do config não tem os cadastros da agência (pedido do 02-04)';
+  const PENDENTE_CATALOGO =
+    'pendente: o catálogo de domínios do config não tem os cadastros da agência (pedido do 02-04)';
 
   it('com a chave, os cadastros da agência não ficam em consulta pela chave', async (ctx) => {
-    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404) return ctx.skip(PENDENTE_CATALOGO);
+    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404)
+      return ctx.skip(PENDENTE_CATALOGO);
     const ok = await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao');
     expect(ok.statusCode, ok.body).toBe(200);
     expect(ok.json().recusadas?.criar ?? '').not.toContain('ainda não foi liberado para gravar');
@@ -451,7 +453,8 @@ describe('agência transfusional (etapa 2) pela HTTP', () => {
   });
 
   it('a gravação dos cadastros da agência exige também a sadt.agenciaCadastro.editar (a da tela da ficha)', async (ctx) => {
-    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404) return ctx.skip(PENDENTE_CATALOGO);
+    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404)
+      return ctx.skip(PENDENTE_CATALOGO);
     // A biomédica tem a permissão de cada cadastro (pelas opções), mas não a de editar os cadastros da agência.
     const d = await a.get(bio, '/cadastros/dominios/sadt/agenciaReacao');
     expect(d.statusCode, d.body).toBe(200);
@@ -467,7 +470,8 @@ describe('agência transfusional (etapa 2) pela HTTP', () => {
   });
 
   it('recolher: desligada de novo, a gravação volta a recusar', async (ctx) => {
-    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404) return ctx.skip(PENDENTE_CATALOGO);
+    if ((await a.get(hemo, '/cadastros/dominios/sadt/agenciaReacao')).statusCode === 404)
+      return ctx.skip(PENDENTE_CATALOGO);
     await liberacao(admin, false);
     const r = await a.post(bio, '/sadt/agencia/bolsas', {
       numero: `${numero}R`,

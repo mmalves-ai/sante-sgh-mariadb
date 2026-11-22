@@ -17,7 +17,13 @@ import {
 import { PortaTransfusaoPropria } from './transfusao-porta-propria.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
-const recusada = async (p: Promise<unknown>) => codigoDe(await p.then(() => null, (e: unknown) => e));
+const recusada = async (p: Promise<unknown>) =>
+  codigoDe(
+    await p.then(
+      () => null,
+      (e: unknown) => e,
+    ),
+  );
 const SINAIS = { pas: 120, pad: 80, fc: 80, temperatura: 36.5 };
 
 describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, cliente f22_o2)', () => {
@@ -102,7 +108,10 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
   it('lê os itens de hemoterapia da prescrição vigente, a tipagem e a pessoa', async () => {
     const r = await porta.itensAAtender(c(), { agora: agora() });
     expect(r.itens.map((i) => i.item).sort()).toEqual([...m!.itens].sort());
-    expect(r.itens[0]).toMatchObject({ hemocomponente: { codigo: 'CH', classe: 'hemacias' }, atendimento: m!.atendimento });
+    expect(r.itens[0]).toMatchObject({
+      hemocomponente: { codigo: 'CH', classe: 'hemacias' },
+      atendimento: m!.atendimento,
+    });
     expect(await porta.tipagem(c(), m!.paciente)).toEqual({ abo: 'O', rh: 'positivo' });
     expect((await porta.pessoa(c(), m!.paciente)).sexo).toBe('F');
     expect((await porta.horarios(c(), m!.itens[0])).map((h) => h.situacao)).toEqual(['P']);
@@ -111,7 +120,9 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
   });
 
   it('requisita: linhas, versão, trilha e idempotência; a repetição devolve a mesma; a segunda em aberto é recusada', async () => {
-    const r = await novaRequisicao(m!.itens[0], chave, (x) => linhaTela('L0205_REQUISITADA', 'SGH_SADT_HEMO_REQ', x.id));
+    const r = await novaRequisicao(m!.itens[0], chave, (x) =>
+      linhaTela('L0205_REQUISITADA', 'SGH_SADT_HEMO_REQ', x.id),
+    );
     expect(r.repetida).toBe(false);
     requisicao = r.id;
     // A linha da tela montada pelo resultado chega à trilha da operação: o evento e o paciente.
@@ -119,19 +130,34 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     const q = await linha('SELECT situacao, versao, numero FROM requisicao_transfusao WHERE id = ?', [r.id]);
     expect(q).toMatchObject({ situacao: 'requisitada', versao: 1 });
     expect(String(q?.['numero'])).toMatch(/^L0205T-\d+$/);
-    expect(await contar('SELECT COUNT(*) AS n FROM requisicao_transfusao_item WHERE requisicao_transfusao_id = ?', [r.id])).toBe(1);
     expect(
-      await contar("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'requisicao_transfusao' AND entidade_id = ?", [r.id]),
+      await contar(
+        'SELECT COUNT(*) AS n FROM requisicao_transfusao_item WHERE requisicao_transfusao_id = ?',
+        [r.id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'requisicao_transfusao' AND entidade_id = ?",
+        [r.id],
+      ),
     ).toBeGreaterThanOrEqual(1);
     expect(await novaRequisicao(m!.itens[0], chave)).toEqual({ id: r.id, repetida: true });
     expect(await porta.gravadoPorChave(c(), { tipo: 'requisicao', chave, usuario: m!.login })).toBe(r.id);
     expect(await recusada(novaRequisicao(m!.itens[0], null))).toBe('requisicao-em-aberto');
     const lida = await porta.requisicao(c(), r.id, agora());
-    expect(lida).toMatchObject({ estado: 'requisitada', urgencia: 'rotina', item: m!.itens[0], reacaoAnterior: 'naoSabe' });
+    expect(lida).toMatchObject({
+      estado: 'requisitada',
+      urgencia: 'rotina',
+      item: m!.itens[0],
+      reacaoAnterior: 'naoSabe',
+    });
     expect(lida?.prazo).not.toBeNull();
     expect(await porta.requisicao(contextoDe(m!, m!.outroEst), r.id, agora())).toBeNull();
     // Já requisitado: o item sai da lista a atender.
-    expect((await porta.itensAAtender(c(), { agora: agora() })).itens.map((i) => i.item)).toEqual([m!.itens[1]]);
+    expect((await porta.itensAAtender(c(), { agora: agora() })).itens.map((i) => i.item)).toEqual([
+      m!.itens[1],
+    ]);
   });
 
   it('amostra: a etiqueta, a requisição passa a amostra coletada (versão 2)', async () => {
@@ -148,7 +174,9 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
       }),
     );
     expect(a.codigo).toMatch(/^HT\d{10}$/);
-    expect(await linha('SELECT situacao, versao FROM requisicao_transfusao WHERE id = ?', [requisicao])).toMatchObject({
+    expect(
+      await linha('SELECT situacao, versao FROM requisicao_transfusao WHERE id = ?', [requisicao]),
+    ).toMatchObject({
       situacao: 'amostra_coletada',
       versao: 2,
     });
@@ -178,7 +206,8 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     expect(await recusada(inicio(m!.login2, 'L0205T-NAOEXISTE', null))).toBe('bolsa-nao-recebida');
     // A bolsa reservada (prova cruzada) para outra requisição não é transfundida; a vencida no estoque também não.
     requisicao2 = (await novaRequisicao(m!.itens[1], null)).id;
-    const b2 = 'UPDATE bolsa_hemocomponente SET situacao = ?, reservada_requisicao_transfusao_id = ?, validade_em = ? WHERE numero = ? AND estabelecimento_id = ?';
+    const b2 =
+      'UPDATE bolsa_hemocomponente SET situacao = ?, reservada_requisicao_transfusao_id = ?, validade_em = ? WHERE numero = ? AND estabelecimento_id = ?';
     const futuro = new Date(Date.now() + 20 * 86_400_000);
     await executar(b2, ['reservada', requisicao2, futuro, m!.bolsas[1], m!.est]);
     expect(await recusada(inicio(m!.login2, m!.bolsas[1], null))).toBe('bolsa-reservada-outra-requisicao');
@@ -186,12 +215,19 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     expect(await recusada(inicio(m!.login2, m!.bolsas[1], null))).toBe('bolsa-vencida');
     await executar(b2, ['liberada', null, futuro, m!.bolsas[1], m!.est]);
     // O bloqueio da dupla checagem (regra 11): sem escrita, a linha vai à trilha numa operação só de trilha.
-    await porta.gravarSgh(c(), linhaTela('L0205_BLOQUEADA', 'SGH_SADT_HEMO_REQ', requisicao), async () => ({ ok: false }));
+    await porta.gravarSgh(c(), linhaTela('L0205_BLOQUEADA', 'SGH_SADT_HEMO_REQ', requisicao), async () => ({
+      ok: false,
+    }));
     expect(await trilhaDoEvento('requisicao_transfusao', requisicao, 'L0205_BLOQUEADA')).toBe(1);
     const k = `l0205-ato-${Date.now()}`;
     const r = await inicio(m!.login2, m!.bolsas[0], k);
     ato = r.id;
-    expect(await linha('SELECT situacao, executor_profissional_id, conferente_profissional_id, etiqueta_receptor_conferida, inspecao_visual_aprovada FROM ato_transfusional WHERE id = ?', [ato])).toMatchObject({
+    expect(
+      await linha(
+        'SELECT situacao, executor_profissional_id, conferente_profissional_id, etiqueta_receptor_conferida, inspecao_visual_aprovada FROM ato_transfusional WHERE id = ?',
+        [ato],
+      ),
+    ).toMatchObject({
       situacao: 'em_andamento',
       executor_profissional_id: m!.profissional,
       conferente_profissional_id: m!.profissional2,
@@ -200,14 +236,31 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
       inspecao_visual_aprovada: 0,
     });
     // O horário pendente do hemocomponente foi checado (administrado) na mesma operação, com o evento do horário.
-    expect(await linha('SELECT sc.categoria, h.administrado_por_profissional_id FROM horario_administracao h JOIN situacao_checagem sc ON sc.id = h.situacao_checagem_id WHERE h.id = ?', [m!.horario])).toMatchObject({
+    expect(
+      await linha(
+        'SELECT sc.categoria, h.administrado_por_profissional_id FROM horario_administracao h JOIN situacao_checagem sc ON sc.id = h.situacao_checagem_id WHERE h.id = ?',
+        [m!.horario],
+      ),
+    ).toMatchObject({
       categoria: 'administrado',
       administrado_por_profissional_id: m!.profissional,
     });
-    expect(await contar("SELECT COUNT(*) AS n FROM horario_administracao_evento WHERE horario_administracao_id = ? AND evento = 'checagem'", [m!.horario])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM horario_administracao_evento WHERE horario_administracao_id = ? AND evento = 'checagem'",
+        [m!.horario],
+      ),
+    ).toBe(1);
     expect((await porta.horarios(c(), m!.itens[0])).map((h) => h.situacao)).toEqual(['A']);
-    expect(await contar("SELECT COUNT(*) AS n FROM monitoramento_transfusao WHERE ato_transfusional_id = ? AND momento = 'antes'", [ato])).toBe(1);
-    expect((await linha('SELECT situacao FROM requisicao_transfusao WHERE id = ?', [requisicao]))?.['situacao']).toBe('em_atendimento');
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM monitoramento_transfusao WHERE ato_transfusional_id = ? AND momento = 'antes'",
+        [ato],
+      ),
+    ).toBe(1);
+    expect(
+      (await linha('SELECT situacao FROM requisicao_transfusao WHERE id = ?', [requisicao]))?.['situacao'],
+    ).toBe('em_atendimento');
     expect(await porta.bolsaUsada(c(), m!.bolsas[0])).toBe(true);
     expect(await porta.gravadoPorChave(c(), { tipo: 'ato', chave: k, usuario: m!.login })).toBe(ato);
     expect(await recusada(inicio(m!.login2, m!.bolsas[1], null))).toBe('ato-em-curso');
@@ -216,7 +269,15 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
   it('sinais durante (uma vez), conclusão: requisição atendida e bolsa transfundida', async () => {
     const sinais = () =>
       g().then((x) =>
-        x.sinais({ ato, momento: 'durante', sinais: SINAIS, medidoEm: agora(), foraJanela: false, usuario: m!.login, chave: null }),
+        x.sinais({
+          ato,
+          momento: 'durante',
+          sinais: SINAIS,
+          medidoEm: agora(),
+          foraJanela: false,
+          usuario: m!.login,
+          chave: null,
+        }),
       );
     await sinais();
     expect(await recusada(sinais())).toBe('sinais-ja-registrados');
@@ -224,29 +285,75 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     const kc = `l0205-concluir-${Date.now()}`;
     const concluir = () =>
       g().then((x) =>
-        x.concluir({ ato, terminoEm: agora(), volumeTransfundidoMl: 280, interrompida: false, motivoInterrupcao: null, usuario: m!.login, janelaBalanco: janela, chave: kc }),
+        x.concluir({
+          ato,
+          terminoEm: agora(),
+          volumeTransfundidoMl: 280,
+          interrompida: false,
+          motivoInterrupcao: null,
+          usuario: m!.login,
+          janelaBalanco: janela,
+          chave: kc,
+        }),
       );
     const r = await concluir();
     expect(r.estadoRequisicao).toBe('atendida');
     // O volume transfundido entra como ganho no balanço hídrico da janela, na mesma transação.
     expect(r.ganho).not.toBeNull();
-    expect(Number((await linha('SELECT volume_ml FROM balanco_lancamento WHERE id = ?', [r.ganho]))?.['volume_ml'])).toBe(280);
+    expect(
+      Number(
+        (await linha('SELECT volume_ml FROM balanco_lancamento WHERE id = ?', [r.ganho]))?.['volume_ml'],
+      ),
+    ).toBe(280);
     // O reenvio com a mesma chave é reconhecido (não volta como "ato encerrado" nem lança outro ganho).
     expect((await concluir()).id).toBe(ato);
-    expect(await contar("SELECT COUNT(*) AS n FROM balanco_lancamento l JOIN balanco_hidrico_paciente b ON b.id = l.balanco_hidrico_paciente_id WHERE b.atendimento_id = ? AND l.sentido = 'ganho'", [m!.atendimento])).toBe(1);
-    expect((await linha('SELECT situacao FROM bolsa_hemocomponente WHERE numero = ? AND estabelecimento_id = ?', [m!.bolsas[0], m!.est]))?.['situacao']).toBe('transfundida');
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM balanco_lancamento l JOIN balanco_hidrico_paciente b ON b.id = l.balanco_hidrico_paciente_id WHERE b.atendimento_id = ? AND l.sentido = 'ganho'",
+        [m!.atendimento],
+      ),
+    ).toBe(1);
+    expect(
+      (
+        await linha('SELECT situacao FROM bolsa_hemocomponente WHERE numero = ? AND estabelecimento_id = ?', [
+          m!.bolsas[0],
+          m!.est,
+        ])
+      )?.['situacao'],
+    ).toBe('transfundida');
     const [lido] = await porta.atos(c(), { requisicao });
-    expect(lido).toMatchObject({ estado: 'concluido', profissional: m!.login, segundoProfissional: m!.login2 });
+    expect(lido).toMatchObject({
+      estado: 'concluido',
+      profissional: m!.login,
+      segundoProfissional: m!.login2,
+    });
     expect(lido?.sinais.map((s) => s.momento)).toEqual(['antes', 'durante']);
     // O adendo corrige a medida digitada errado sem mudá-la; momento sem medida é recusado.
     const adendo = (momento: 'durante' | 'depois') =>
-      g().then((x) => x.adendo({ ato, momento, sinais: { ...SINAIS, fc: 88 }, motivo: 'Frequência digitada errado', usuario: m!.login }));
+      g().then((x) =>
+        x.adendo({
+          ato,
+          momento,
+          sinais: { ...SINAIS, fc: 88 },
+          motivo: 'Frequência digitada errado',
+          usuario: m!.login,
+        }),
+      );
     const d = await adendo('durante');
     expect(await recusada(adendo('depois'))).toBe('momento-sem-medida');
     expect(await porta.adendos(c(), [ato])).toMatchObject([
-      { id: d.id, ato, momento: 'durante', sinais: { fc: 88 }, motivo: 'Frequência digitada errado', usuario: m!.login },
+      {
+        id: d.id,
+        ato,
+        momento: 'durante',
+        sinais: { fc: 88 },
+        motivo: 'Frequência digitada errado',
+        usuario: m!.login,
+      },
     ]);
-    expect((await porta.atos(c(), { requisicao }))[0]?.sinais.find((s) => s.momento === 'durante')?.fc).toBe(SINAIS.fc);
+    expect((await porta.atos(c(), { requisicao }))[0]?.sinais.find((s) => s.momento === 'durante')?.fc).toBe(
+      SINAIS.fc,
+    );
   });
 
   it('reação e notificação: uma vez; outro estabelecimento não acha', async () => {
@@ -271,7 +378,12 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     );
     expect(r.interrompeu).toBe(false);
     const [lida] = await porta.reacoes(c(), { reacao: r.id });
-    expect(lida).toMatchObject({ tipo: 'febrilNaoHemolitica', destinoBolsa: 'naoSeAplica', condutas: ['comunicarMedico'], requisicao });
+    expect(lida).toMatchObject({
+      tipo: 'febrilNaoHemolitica',
+      destinoBolsa: 'naoSeAplica',
+      condutas: ['comunicarMedico'],
+      requisicao,
+    });
     const notificar = (cx = c()) =>
       porta.gravarSgh(cx, null, (x) => x.notificada({ reacao: r.id, enviadaEm: agora() }));
     expect(await recusada(notificar(contextoDe(m!, m!.outroEst)))).toBe('nao-encontrada');
@@ -285,7 +397,14 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
       x.iniciar({
         requisicao: requisicao2,
         horario: null,
-        bolsa: { numero: m!.bolsas[1], hemocomponente: 'CH', abo: 4, rh: 1, validade: agora(), volumeMl: 280 },
+        bolsa: {
+          numero: m!.bolsas[1],
+          hemocomponente: 'CH',
+          abo: 4,
+          rh: 1,
+          validade: agora(),
+          volumeMl: 280,
+        },
         inicioEm: agora(),
         pulseiraLida: true,
         motivoSemPulseira: null,
@@ -300,7 +419,12 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
         inspecaoVisualAprovada: true,
       }),
     );
-    expect(await linha('SELECT etiqueta_receptor_conferida, inspecao_visual_aprovada FROM ato_transfusional WHERE id = ?', [a.id])).toMatchObject({
+    expect(
+      await linha(
+        'SELECT etiqueta_receptor_conferida, inspecao_visual_aprovada FROM ato_transfusional WHERE id = ?',
+        [a.id],
+      ),
+    ).toMatchObject({
       etiqueta_receptor_conferida: 1,
       inspecao_visual_aprovada: 1,
     });
@@ -320,12 +444,22 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
         usuario: m!.login,
         chave: null,
         sinais: null,
-        interromper: { terminoEm: agora(), volumeTransfundidoMl: 40, motivoInterrupcao: 'Reação febril', janelaBalanco: null },
+        interromper: {
+          terminoEm: agora(),
+          volumeTransfundidoMl: 40,
+          motivoInterrupcao: 'Reação febril',
+          janelaBalanco: null,
+        },
       }),
     );
     expect(r.interrompeu).toBe(true);
-    expect(await linha('SELECT situacao FROM ato_transfusional WHERE id = ?', [a.id])).toMatchObject({ situacao: 'interrompido' });
-    const b = await linha('SELECT situacao, destino_em FROM bolsa_hemocomponente WHERE numero = ? AND estabelecimento_id = ?', [m!.bolsas[1], m!.est]);
+    expect(await linha('SELECT situacao FROM ato_transfusional WHERE id = ?', [a.id])).toMatchObject({
+      situacao: 'interrompido',
+    });
+    const b = await linha(
+      'SELECT situacao, destino_em FROM bolsa_hemocomponente WHERE numero = ? AND estabelecimento_id = ?',
+      [m!.bolsas[1], m!.est],
+    );
     expect(b?.['situacao']).toBe('devolvida');
     expect(b?.['destino_em']).not.toBeNull();
   });
@@ -334,27 +468,68 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
     const r = await novaRequisicao(m!.itens[1], null);
     const alterar = (volumeMl: number) =>
       g().then((x) =>
-        x.alterar({ requisicao: r.id, hemocomponente: 'CH', volumeMl, urgencia: 2, programadaPara: null, prazo: null, motivo: 'Volume corrigido sintético', usuario: m!.login }),
+        x.alterar({
+          requisicao: r.id,
+          hemocomponente: 'CH',
+          volumeMl,
+          urgencia: 2,
+          programadaPara: null,
+          prazo: null,
+          motivo: 'Volume corrigido sintético',
+          usuario: m!.login,
+        }),
       );
     expect(await alterar(300)).toMatchObject({ id: r.id, versao: 2 });
     expect(await recusada(alterar(300))).toBe('requisicao-sem-mudanca');
     expect(await porta.versoesRequisicao(c(), r.id)).toMatchObject([
-      { versao: 1, hemocomponente: 'CH', volumeMl: 280, urgencia: 'rotina', motivo: 'Volume corrigido sintético', alteradaPor: m!.login },
+      {
+        versao: 1,
+        hemocomponente: 'CH',
+        volumeMl: 280,
+        urgencia: 'rotina',
+        motivo: 'Volume corrigido sintético',
+        alteradaPor: m!.login,
+      },
     ]);
-    expect(Number((await linha('SELECT volume_ml FROM requisicao_transfusao_item WHERE requisicao_transfusao_id = ?', [r.id]))?.['volume_ml'])).toBe(300);
+    expect(
+      Number(
+        (
+          await linha('SELECT volume_ml FROM requisicao_transfusao_item WHERE requisicao_transfusao_id = ?', [
+            r.id,
+          ])
+        )?.['volume_ml'],
+      ),
+    ).toBe(300);
     const kx = `l0205-cancelar-${Date.now()}`;
     const cancelarComChave = () =>
-      g().then((x) => x.cancelar({ requisicao: r.id, motivo: 'Pedido em duplicidade sintético', usuario: m!.login, chave: kx }));
-    const cancelar = () => g().then((x) => x.cancelar({ requisicao: r.id, motivo: 'Pedido em duplicidade sintético', usuario: m!.login }));
+      g().then((x) =>
+        x.cancelar({
+          requisicao: r.id,
+          motivo: 'Pedido em duplicidade sintético',
+          usuario: m!.login,
+          chave: kx,
+        }),
+      );
+    const cancelar = () =>
+      g().then((x) =>
+        x.cancelar({ requisicao: r.id, motivo: 'Pedido em duplicidade sintético', usuario: m!.login }),
+      );
     await cancelarComChave();
     // O reenvio com a mesma chave é reconhecido (sem erro); outro pedido é recusado pela situação.
     expect((await cancelarComChave()).id).toBe(r.id);
-    expect(await linha('SELECT situacao, versao, observacao_cancelamento FROM requisicao_transfusao WHERE id = ?', [r.id])).toMatchObject({
+    expect(
+      await linha(
+        'SELECT situacao, versao, observacao_cancelamento FROM requisicao_transfusao WHERE id = ?',
+        [r.id],
+      ),
+    ).toMatchObject({
       situacao: 'cancelada',
       versao: 3,
     });
     expect(await recusada(cancelar())).toBe('ja-cancelada');
-    expect((await porta.requisicoes(c(), { agora: agora(), estado: 'cancelada' })).itens.map((x) => x.id)).toContain(r.id);
+    expect(
+      (await porta.requisicoes(c(), { agora: agora(), estado: 'cancelada' })).itens.map((x) => x.id),
+    ).toContain(r.id);
     expect(await recusada(alterar(320))).toBe('requisicao-ja-atendida');
     expect(await porta.versoesRequisicao(c(), r.id)).toHaveLength(1);
   });

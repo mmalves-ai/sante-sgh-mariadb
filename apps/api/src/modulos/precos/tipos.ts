@@ -62,17 +62,96 @@ export type TipoModificador =
   | 'pacotes'
   | 'entregas';
 /** Modificadores por convênio (ou globais): as colunas da tela, com o rótulo; paginados no servidor. */
-export const MODIFICADORES: Readonly<Record<TipoModificador, { readonly colunas: readonly (readonly [string, string])[] }>> = {
-  honorarios: { colunas: [['tabela', 'Tabela'], ['procedimento', 'Procedimento'], ['data', 'Vigência'], ['tipoPaciente', 'Tipo de paciente'], ['percCh', '% CH'], ['percCusto', '% custo operacional'], ['percAnestesia', '% anestesia'], ['percFilme', '% filme'], ['percForaHorario', '% fora do horário'], ['percNaoCredenciado', '% não credenciado']] },
-  matmed: { colunas: [['item', 'Item mat/med'], ['tabela', 'Tabela'], ['data', 'Vigência'], ['tipoConta', 'Tipo de conta'], ['percentual', '%'], ['valorFixo', 'Valor fixo'], ['quantidadeFixa', 'Quantidade fixa']] },
-  referencia: { colunas: [['classificacao', 'Classe'], ['descontoCodigo', 'Código/descrição'], ['referenciaCodigo', 'Usa código da referência'], ['referenciaDescricao', 'Usa descrição da referência'], ['referenciaValor', 'Usa valor da referência'], ['pf', 'Preço de fábrica'], ['pmc', 'Preço máximo ao consumidor']] },
-  referenciaItem: { colunas: [['item', 'Item mat/med'], ['pf', 'Preço de fábrica'], ['pmc', 'Preço máximo ao consumidor']] },
-  pacotes: { colunas: [['pacote', 'Pacote (procedimento)'], ['contas', 'Contas'], ['tipo', 'Tipo'], ['tabela', 'Tabela'], ['procedimento', 'Item incluso'], ['nome', 'Descrição'], ['quantidade', 'Quantidade'], ['ato', 'Ato']] },
-  entregas: { colunas: [['entrega', 'Entrega das contas'], ['pagamento', 'Pagamento previsto']] },
-  planos: { colunas: [['plano', 'Tipo de plano'], ['diaria', 'Diária do plano'], ['local', 'Local']] },
-  formulas: { colunas: [['codigo', 'Código'], ['nome', 'Fórmula'], ['percentual', '%'], ['considerar', 'Considera (3 todos, 2 só C.O.)'], ['ativo', 'Ativo']] },
+export const MODIFICADORES: Readonly<
+  Record<TipoModificador, { readonly colunas: readonly (readonly [string, string])[] }>
+> = {
+  honorarios: {
+    colunas: [
+      ['tabela', 'Tabela'],
+      ['procedimento', 'Procedimento'],
+      ['data', 'Vigência'],
+      ['tipoPaciente', 'Tipo de paciente'],
+      ['percCh', '% CH'],
+      ['percCusto', '% custo operacional'],
+      ['percAnestesia', '% anestesia'],
+      ['percFilme', '% filme'],
+      ['percForaHorario', '% fora do horário'],
+      ['percNaoCredenciado', '% não credenciado'],
+    ],
+  },
+  matmed: {
+    colunas: [
+      ['item', 'Item mat/med'],
+      ['tabela', 'Tabela'],
+      ['data', 'Vigência'],
+      ['tipoConta', 'Tipo de conta'],
+      ['percentual', '%'],
+      ['valorFixo', 'Valor fixo'],
+      ['quantidadeFixa', 'Quantidade fixa'],
+    ],
+  },
+  referencia: {
+    colunas: [
+      ['classificacao', 'Classe'],
+      ['descontoCodigo', 'Código/descrição'],
+      ['referenciaCodigo', 'Usa código da referência'],
+      ['referenciaDescricao', 'Usa descrição da referência'],
+      ['referenciaValor', 'Usa valor da referência'],
+      ['pf', 'Preço de fábrica'],
+      ['pmc', 'Preço máximo ao consumidor'],
+    ],
+  },
+  referenciaItem: {
+    colunas: [
+      ['item', 'Item mat/med'],
+      ['pf', 'Preço de fábrica'],
+      ['pmc', 'Preço máximo ao consumidor'],
+    ],
+  },
+  pacotes: {
+    colunas: [
+      ['pacote', 'Pacote (procedimento)'],
+      ['contas', 'Contas'],
+      ['tipo', 'Tipo'],
+      ['tabela', 'Tabela'],
+      ['procedimento', 'Item incluso'],
+      ['nome', 'Descrição'],
+      ['quantidade', 'Quantidade'],
+      ['ato', 'Ato'],
+    ],
+  },
+  entregas: {
+    colunas: [
+      ['entrega', 'Entrega das contas'],
+      ['pagamento', 'Pagamento previsto'],
+    ],
+  },
+  planos: {
+    colunas: [
+      ['plano', 'Tipo de plano'],
+      ['diaria', 'Diária do plano'],
+      ['local', 'Local'],
+    ],
+  },
+  formulas: {
+    colunas: [
+      ['codigo', 'Código'],
+      ['nome', 'Fórmula'],
+      ['percentual', '%'],
+      ['considerar', 'Considera (3 todos, 2 só C.O.)'],
+      ['ativo', 'Ativo'],
+    ],
+  },
   horarios: { colunas: [['tabela', 'Janela']] },
-  subgrupos: { colunas: [['grupo', 'Grupo'], ['subgrupo', 'Subgrupo'], ['nome', 'Nome'], ['contabil', 'Conta contábil'], ['desconto', 'Desconto']] },
+  subgrupos: {
+    colunas: [
+      ['grupo', 'Grupo'],
+      ['subgrupo', 'Subgrupo'],
+      ['nome', 'Nome'],
+      ['contabil', 'Conta contábil'],
+      ['desconto', 'Desconto'],
+    ],
+  },
 };
 
 export interface PlanoConvenio {

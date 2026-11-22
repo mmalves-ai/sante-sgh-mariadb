@@ -314,7 +314,8 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
 
   private ler<T>(c: ContextoFinanceiro, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
@@ -367,9 +368,19 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       trilha: () => ({ dados: linha().dadosDepois ?? null, motivo: linha().motivo ?? null }),
     });
     if (!c.chaveIdempotencia)
-      throw new ErroOperacao(400, 'entrada-invalida', 'Pedido incompleto', 'Falta a Idempotency-Key do pedido de gravação.');
+      throw new ErroOperacao(
+        400,
+        'entrada-invalida',
+        'Pedido incompleto',
+        'Falta a Idempotency-Key do pedido de gravação.',
+      );
     const chave = `direta:${c.chaveIdempotencia}`.slice(0, 100);
-    const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      { ...contextoDe(c), chaveIdempotencia: chave },
+    );
     if (!r.repetida) {
       if (!saida) throw new Error('Gravação direta sem resultado.');
       return (saida as { valor: T }).valor;
@@ -381,10 +392,13 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
 
   hoje(c: ContextoFinanceiro): Promise<string> {
     return this.ler(c, async (l, est) => {
-      const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-        est,
-      ]);
-      return new Intl.DateTimeFormat('en-CA', { timeZone: r?.fuso_horario || 'America/Sao_Paulo' }).format(new Date());
+      const r = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
+      return new Intl.DateTimeFormat('en-CA', { timeZone: r?.fuso_horario || 'America/Sao_Paulo' }).format(
+        new Date(),
+      );
     });
   }
 
@@ -439,7 +453,11 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
         await l.consultar(
           "SELECT id, descricao, esfera FROM tributo WHERE ativo = TRUE AND incidencia IN ('retido','ambos') ORDER BY descricao",
         )
-      ).map((r) => ({ codigo: numero(r['id']), descricao: texto(r['descricao']), tipo: TIPO_DA_ESFERA[texto(r['esfera'])] ?? 0 })),
+      ).map((r) => ({
+        codigo: numero(r['id']),
+        descricao: texto(r['descricao']),
+        tipo: TIPO_DA_ESFERA[texto(r['esfera'])] ?? 0,
+      })),
     );
   }
 
@@ -518,7 +536,9 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
         'SELECT id, sequencia, vencimento, valor, situacao FROM parcela_pagar WHERE titulo_pagar_id = ? AND excluido_em IS NULL ORDER BY sequencia',
         [titulo],
       );
-      const nat = await l.uma('SELECT codigo, descricao FROM natureza_financeira WHERE id = ?', [r['natureza_financeira_id']]);
+      const nat = await l.uma('SELECT codigo, descricao FROM natureza_financeira WHERE id = ?', [
+        r['natureza_financeira_id'],
+      ]);
       const k = classificacaoDoCodigo(nat?.['codigo']);
       const retencoes = await l.consultar(
         `SELECT tr.id, tr.descricao, tr.esfera, r.valor_retido FROM retencao_titulo r
@@ -605,7 +625,10 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       for (const x of pares)
         m.set(
           numero(x['id']),
-          (ap.get(numero(x['titulo_pagar_id'])) ?? []).map((a) => ({ aprovador: a.aprovador, faixa: a.faixa })),
+          (ap.get(numero(x['titulo_pagar_id'])) ?? []).map((a) => ({
+            aprovador: a.aprovador,
+            faixa: a.faixa,
+          })),
         );
       return m;
     });
@@ -696,7 +719,9 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
     c: ContextoFinanceiro,
     id: number,
     hoje: string,
-  ): Promise<(Omit<DetalheTituloReceberResposta, 'saldo' | 'recebivelRecurso'> & { recursoDeferido: number }) | null> {
+  ): Promise<
+    (Omit<DetalheTituloReceberResposta, 'saldo' | 'recebivelRecurso'> & { recursoDeferido: number }) | null
+  > {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(`${SQL_TITULOS_RECEBER} AND t.id = ?`, [est, id]);
       if (!r) return null;
@@ -876,7 +901,11 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
     );
   }
 
-  linhasExtrato(c: ContextoFinanceiro, conta: number, situacao: string | null): Promise<LinhaExtratoResposta[]> {
+  linhasExtrato(
+    c: ContextoFinanceiro,
+    conta: number,
+    situacao: string | null,
+  ): Promise<LinhaExtratoResposta[]> {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
@@ -983,7 +1012,10 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
         )
       ).map((r) => ({
         convenio: numero(r['fonte_pagadora_id']),
-        taxaGlosa: numero(r['bruto']) > 0 ? Math.round((numero(r['glosa']) / numero(r['bruto'])) * 10_000) / 10_000 : 0,
+        taxaGlosa:
+          numero(r['bruto']) > 0
+            ? Math.round((numero(r['glosa']) / numero(r['bruto'])) * 10_000) / 10_000
+            : 0,
         atrasoMedioDias: Math.round(numero(r['atraso'])),
       })),
     );
@@ -1205,7 +1237,10 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
           ORDER BY t.id`,
         [est, inicioDoMes(ano, mes)],
       );
-      const porTitulo = new Map<number, { -readonly [K in keyof RetencaoReinfPorta]: RetencaoReinfPorta[K] }>();
+      const porTitulo = new Map<
+        number,
+        { -readonly [K in keyof RetencaoReinfPorta]: RetencaoReinfPorta[K] }
+      >();
       for (const r of linhas) {
         const id = numero(r['id']);
         const x = porTitulo.get(id) ?? {
@@ -1278,51 +1313,60 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
               REGUA: texto(o['regua']),
               LANCAMENTOS: numero(r['quantidade_lancamentos']),
               SOMA_DEBITOS: numero(r['valor_total']),
-              SOMA_CREDITOS: o['somaCreditos'] === undefined ? numero(r['valor_total']) : numero(o['somaCreditos']),
+              SOMA_CREDITOS:
+                o['somaCreditos'] === undefined ? numero(r['valor_total']) : numero(o['somaCreditos']),
               SEM_DE_PARA: numero(o['semDePara']),
               SITUACAO: texto(r['situacao']),
               EXPORTADO_EM: instanteIso(r['gerado_em']),
             };
           });
         case 'nfse':
-          return juntarPorData('EMITIDO_EM', await nfseGeradas(l, est), (
-            await l.consultar(
-              `SELECT id, numero_nota, titulo_receber_id, valor_servicos, valor_iss, valor_liquido, ambiente, situacao,
+          return juntarPorData(
+            'EMITIDO_EM',
+            await nfseGeradas(l, est),
+            (
+              await l.consultar(
+                `SELECT id, numero_nota, titulo_receber_id, valor_servicos, valor_iss, valor_liquido, ambiente, situacao,
                       data_emissao
                  FROM nota_servico WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY data_emissao DESC LIMIT 500`,
-              [est],
-            )
-          ).map((r) => ({
-            ID: numero(r['id']),
-            NUMERO: texto(r['numero_nota']),
-            TITULO_RECEBER: numeroOuNulo(r['titulo_receber_id']),
-            MOMENTO: '',
-            VALOR_SERVICOS: numero(r['valor_servicos']),
-            VALOR_ISS: numero(r['valor_iss']),
-            VALOR_IBS: 0,
-            VALOR_CBS: 0,
-            VALOR_LIQUIDO: numero(r['valor_liquido']),
-            DESTINO: texto(r['ambiente']) === 'producao' ? 'prefeitura' : 'simulador',
-            SITUACAO: texto(r['situacao']),
-            EMITIDO_EM: instanteIso(r['data_emissao']),
-          })));
+                [est],
+              )
+            ).map((r) => ({
+              ID: numero(r['id']),
+              NUMERO: texto(r['numero_nota']),
+              TITULO_RECEBER: numeroOuNulo(r['titulo_receber_id']),
+              MOMENTO: '',
+              VALOR_SERVICOS: numero(r['valor_servicos']),
+              VALOR_ISS: numero(r['valor_iss']),
+              VALOR_IBS: 0,
+              VALOR_CBS: 0,
+              VALOR_LIQUIDO: numero(r['valor_liquido']),
+              DESTINO: texto(r['ambiente']) === 'producao' ? 'prefeitura' : 'simulador',
+              SITUACAO: texto(r['situacao']),
+              EMITIDO_EM: instanteIso(r['data_emissao']),
+            })),
+          );
         case 'declaracao':
-          return juntarPorData('GERADO_EM', await declaracoesGeradas(l, est), (
-            await l.consultar(
-              `SELECT id, ano_calendario, codigo_leiaute, situacao, gerada_em FROM declaracao_dmed
+          return juntarPorData(
+            'GERADO_EM',
+            await declaracoesGeradas(l, est),
+            (
+              await l.consultar(
+                `SELECT id, ano_calendario, codigo_leiaute, situacao, gerada_em FROM declaracao_dmed
                 WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY ano_calendario DESC LIMIT 500`,
-              [est],
-            )
-          ).map((r) => ({
-            ID: numero(r['id']),
-            TIPO: 'dmed',
-            PERIODO: String(numero(r['ano_calendario'])),
-            LEIAUTE: texto(r['codigo_leiaute']),
-            REGISTROS: null,
-            VALOR_TOTAL: null,
-            SITUACAO: texto(r['situacao']),
-            GERADO_EM: instanteIso(r['gerada_em']),
-          })));
+                [est],
+              )
+            ).map((r) => ({
+              ID: numero(r['id']),
+              TIPO: 'dmed',
+              PERIODO: String(numero(r['ano_calendario'])),
+              LEIAUTE: texto(r['codigo_leiaute']),
+              REGISTROS: null,
+              VALOR_TOTAL: null,
+              SITUACAO: texto(r['situacao']),
+              GERADO_EM: instanteIso(r['gerada_em']),
+            })),
+          );
       }
     });
   }
@@ -1330,13 +1374,33 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
 
 // ── Arquivos fiscais gerados (NFS-e simulada, DMED, EFD-REINF): o registro com o hash, ao lado das notas e declarações ──
 
-const SITUACAO_NFSE_GERADA: Readonly<Record<string, string>> = { simulado: 'simulada', autorizado: 'autorizada', rejeitado: 'rejeitada' };
-const SITUACAO_ARQUIVO_DA_NFSE: Readonly<Record<string, string>> = { simulada: 'simulado', autorizada: 'autorizado', rejeitada: 'rejeitado' };
-const TIPO_DECLARACAO_GERADA: Readonly<Record<string, string>> = { dmed: 'dmed', reinf_r2000: 'reinf-r2000', reinf_r4000: 'reinf-r4000' };
-const TIPO_ARQUIVO_DA_DECLARACAO: Readonly<Record<string, string>> = { dmed: 'dmed', 'reinf-r2000': 'reinf_r2000', 'reinf-r4000': 'reinf_r4000' };
+const SITUACAO_NFSE_GERADA: Readonly<Record<string, string>> = {
+  simulado: 'simulada',
+  autorizado: 'autorizada',
+  rejeitado: 'rejeitada',
+};
+const SITUACAO_ARQUIVO_DA_NFSE: Readonly<Record<string, string>> = {
+  simulada: 'simulado',
+  autorizada: 'autorizado',
+  rejeitada: 'rejeitado',
+};
+const TIPO_DECLARACAO_GERADA: Readonly<Record<string, string>> = {
+  dmed: 'dmed',
+  reinf_r2000: 'reinf-r2000',
+  reinf_r4000: 'reinf-r4000',
+};
+const TIPO_ARQUIVO_DA_DECLARACAO: Readonly<Record<string, string>> = {
+  dmed: 'dmed',
+  'reinf-r2000': 'reinf_r2000',
+  'reinf-r4000': 'reinf_r4000',
+};
 
 /** As duas origens na mesma lista, da mais recente para a mais antiga (o teto da tela continua 500). */
-function juntarPorData(campo: string, a: readonly RegistroFiscalResposta[], b: readonly RegistroFiscalResposta[]): RegistroFiscalResposta[] {
+function juntarPorData(
+  campo: string,
+  a: readonly RegistroFiscalResposta[],
+  b: readonly RegistroFiscalResposta[],
+): RegistroFiscalResposta[] {
   const chave = (x: RegistroFiscalResposta) => String((x as Record<string, unknown>)[campo] ?? '');
   return [...a, ...b].sort((x, y) => chave(y).localeCompare(chave(x))).slice(0, 500);
 }
@@ -1394,7 +1458,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
   const agora = () => new Date();
   const login = () => loginDe(tx, usuario);
   const foraDoEscopo = () =>
-    new ErroOperacao(403, 'fora-do-escopo', 'Fora do escopo', 'A conta bancária não está no seu escopo de contas.');
+    new ErroOperacao(
+      403,
+      'fora-do-escopo',
+      'Fora do escopo',
+      'A conta bancária não está no seu escopo de contas.',
+    );
   // ADR 0004: o arquivo guardado no disco é registrado em `arquivo` na mesma transação da tabela dona (hash, tamanho,
   // tipo, imutável e guarda legal de 5 anos), e é esse registro que o vigia do worker confere.
   const registrar = (
@@ -1420,7 +1489,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       : Promise.resolve(null);
 
   async function tipoAprovacao(): Promise<number> {
-    const r = await tx.uma('SELECT id FROM tipo_documento_aprovacao WHERE codigo = ?', [TIPO_APROVACAO_TITULO]);
+    const r = await tx.uma('SELECT id FROM tipo_documento_aprovacao WHERE codigo = ?', [
+      TIPO_APROVACAO_TITULO,
+    ]);
     if (r) return numero(r['id']);
     return tx.incluir('tipo_documento_aprovacao', {
       codigo: TIPO_APROVACAO_TITULO,
@@ -1450,7 +1521,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       if (d.id !== null && !atuais.some((f) => f.id === d.id))
         throw recusa('faixa-inexistente', 'A faixa de alçada não existe.');
       recusar(conferirFaixas([...atuais.filter((f) => f.id !== d.id), nova]));
-      if (d.centroCusto !== null && !(await tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ?', [d.centroCusto, est])))
+      if (
+        d.centroCusto !== null &&
+        !(await tx.uma('SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ?', [
+          d.centroCusto,
+          est,
+        ]))
+      )
         throw recusa('centro-custo-inexistente', 'O centro de custo não existe neste estabelecimento.', {
           campos: ['centroCusto'],
         });
@@ -1464,11 +1541,19 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         ativo: d.ativa,
         descricao: `Alçada do título a pagar: ${d.valorDe.toFixed(2)} a ${d.valorAte === null ? 'sem teto' : d.valorAte.toFixed(2)}`,
       };
-      const etapa = { quantidade_minima_aprovadores: d.aprovacoes, regra_quorum: 'minimo', condicao_entrada: condicao };
+      const etapa = {
+        quantidade_minima_aprovadores: d.aprovacoes,
+        regra_quorum: 'minimo',
+        condicao_entrada: condicao,
+      };
       if (d.id !== null) {
-        const [f] = await tx.consultarParaAtualizar('SELECT id, versao FROM fluxo_aprovacao WHERE id = ?', [d.id], {
-          teto: 1,
-        });
+        const [f] = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM fluxo_aprovacao WHERE id = ?',
+          [d.id],
+          {
+            teto: 1,
+          },
+        );
         await tx.alterar('fluxo_aprovacao', d.id, numero(f?.['versao']), fluxo);
         const [e] = await tx.consultarParaAtualizar(
           'SELECT id, versao FROM etapa_fluxo_aprovacao WHERE fluxo_aprovacao_id = ? AND sequencia = 1 AND excluido_em IS NULL',
@@ -1476,10 +1561,20 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
           { teto: 1 },
         );
         if (e) await tx.alterar('etapa_fluxo_aprovacao', numero(e['id']), numero(e['versao']), etapa);
-        else await tx.incluir('etapa_fluxo_aprovacao', { fluxo_aprovacao_id: d.id, sequencia: 1, nome: 'Aprovação', ...etapa });
+        else
+          await tx.incluir('etapa_fluxo_aprovacao', {
+            fluxo_aprovacao_id: d.id,
+            sequencia: 1,
+            nome: 'Aprovação',
+            ...etapa,
+          });
         return { id: d.id };
       }
-      await garantirSequencia(tx, { tipo: 'fluxo_aprovacao', estabelecimento: est, prefixo: `ALC${est}-` }, { usuario, agora: agora() });
+      await garantirSequencia(
+        tx,
+        { tipo: 'fluxo_aprovacao', estabelecimento: est, prefixo: `ALC${est}-` },
+        { usuario, agora: agora() },
+      );
       const num = await tx.proximoNumero('fluxo_aprovacao');
       const id = await tx.incluir('fluxo_aprovacao', {
         estabelecimento_id: est,
@@ -1488,7 +1583,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         prioridade: 1,
         ...fluxo,
       });
-      await tx.incluir('etapa_fluxo_aprovacao', { fluxo_aprovacao_id: id, sequencia: 1, nome: 'Aprovação', ...etapa });
+      await tx.incluir('etapa_fluxo_aprovacao', {
+        fluxo_aprovacao_id: id,
+        sequencia: 1,
+        nome: 'Aprovação',
+        ...etapa,
+      });
       return { id };
     },
 
@@ -1562,8 +1662,15 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         valor_aprovado: numero(p['valor_bruto']),
         ocorrido_em: agora(),
       });
-      const sit = situacaoAprovacao(faixa, [...daFaixa, { aprovador, ordem: ordem === 2 ? 2 : 1, faixa: faixa?.id ?? 0, em: '' }]);
-      const [pv] = await tx.consultarParaAtualizar('SELECT versao FROM pedido_aprovacao WHERE id = ?', [pedidoId], { teto: 1 });
+      const sit = situacaoAprovacao(faixa, [
+        ...daFaixa,
+        { aprovador, ordem: ordem === 2 ? 2 : 1, faixa: faixa?.id ?? 0, em: '' },
+      ]);
+      const [pv] = await tx.consultarParaAtualizar(
+        'SELECT versao FROM pedido_aprovacao WHERE id = ?',
+        [pedidoId],
+        { teto: 1 },
+      );
       await tx.alterar('pedido_aprovacao', pedidoId, numero(pv?.['versao']), {
         nivel_atual: sit.aprovado ? ordem : ordem + 1,
         situacao: sit.aprovado ? 'aprovado' : 'em_aprovacao',
@@ -1615,7 +1722,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         recusar(conferirItemGlosado(item ? itemGlosavelDe(item) : null, d.valor));
       }
       const regra = efeitoDaGlosa(d.situacao);
-      const disponivel = centavos(numero(t['valor_liquido']) - numero(t['valor_recebido']) - numero(t['valor_glosa_aceita']));
+      const disponivel = centavos(
+        numero(t['valor_liquido']) - numero(t['valor_recebido']) - numero(t['valor_glosa_aceita']),
+      );
       if (regra.aceita && d.valor > disponivel + 0.005)
         throw recusa('glosa-acima-do-saldo', 'A glosa passa do saldo do título.', { campos: ['valor'] });
       const soma = (a: unknown) => centavos(numero(a) + d.valor);
@@ -1641,10 +1750,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     },
 
     async importarExtrato(d) {
-      const conta = await tx.uma('SELECT id FROM conta_bancaria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [
-        d.conta,
-        est,
-      ]);
+      const conta = await tx.uma(
+        'SELECT id FROM conta_bancaria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [d.conta, est],
+      );
       if (!conta) throw foraDoEscopo();
       const ja = await tx.uma(
         'SELECT id, quantidade_linhas FROM extrato_bancario WHERE conta_bancaria_id = ? AND hash_conteudo = ? AND excluido_em IS NULL',
@@ -1697,7 +1806,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       if (texto(x['situacao_conciliacao']) !== 'pendente')
         throw recusa('linha-conciliada', 'A linha do extrato já foi tratada: releia.');
       if (d.alvo.tipo === 'credito-pendente') {
-        if (!(numero(x['valor']) > 0)) throw recusa('nao-e-credito', 'Só um crédito vai à fila de crédito não identificado.');
+        if (!(numero(x['valor']) > 0))
+          throw recusa('nao-e-credito', 'Só um crédito vai à fila de crédito não identificado.');
         const credito = await tx.incluir('credito_nao_identificado', {
           estabelecimento_id: est,
           conta_bancaria_id: conta,
@@ -1740,8 +1850,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         if (r?.['movimento_bancario_id'])
           mov = await tx.uma(SQL_MOVIMENTO_CONCILIAVEL, [r['movimento_bancario_id'], conta]);
       }
-      if (!mov) throw recusa('alvo-sem-movimento', 'O alvo escolhido não tem movimento nesta conta bancária.');
-      if (Number(mov['conciliado'] ?? 0)) throw recusa('movimento-conciliado', 'O movimento já foi conciliado.');
+      if (!mov)
+        throw recusa('alvo-sem-movimento', 'O alvo escolhido não tem movimento nesta conta bancária.');
+      if (Number(mov['conciliado'] ?? 0))
+        throw recusa('movimento-conciliado', 'O movimento já foi conciliado.');
       // Quem lançou o movimento (ou registrou o pagamento ou o recebimento que o gerou) não o concilia.
       pagou ??= mov['criado_por'] ?? null;
       recusar(
@@ -1750,7 +1862,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
           valor: numero(mov['valor']),
         }),
       );
-      recusar(conferirSegregacao('conciliar', (await login()) ?? '', { lancou: null, aprovaram: [], pagou: await loginDe(tx, pagou) }));
+      recusar(
+        conferirSegregacao('conciliar', (await login()) ?? '', {
+          lancou: null,
+          aprovaram: [],
+          pagou: await loginDe(tx, pagou),
+        }),
+      );
       const [aberta] = await tx.consultarParaAtualizar(
         "SELECT id FROM conciliacao_bancaria WHERE extrato_bancario_id = ? AND situacao IN ('aberta','reaberta') AND excluido_em IS NULL",
         [x['extrato']],
@@ -1798,7 +1916,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       if (!d.contasEscopo.includes(numero(cr['conta_bancaria_id']))) throw foraDoEscopo();
       if (!(await contasDoEscopo(tx, est, usuario, 'movimentar')).includes(numero(cr['conta_bancaria_id'])))
         throw foraDoEscopo();
-      if (texto(cr['situacao']) !== 'pendente') throw recusa('credito-identificado', 'O crédito já foi identificado.');
+      if (texto(cr['situacao']) !== 'pendente')
+        throw recusa('credito-identificado', 'O crédito já foi identificado.');
       const t = await tx.uma(
         "SELECT id FROM titulo_receber WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao IN ('aberto','recebido_parcial')",
         [d.tituloReceber, est],
@@ -1829,7 +1948,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
           ORDER BY id DESC LIMIT 1`,
         [d.conta, est, d.hashArquivo],
       );
-      if (jaRemessa) return { id: numero(jaRemessa['id']), sequencial: numero(jaRemessa['sequencia_arquivo']) };
+      if (jaRemessa)
+        return { id: numero(jaRemessa['id']), sequencial: numero(jaRemessa['sequencia_arquivo']) };
       const leiaute = await tx.uma(
         `SELECT id FROM leiaute_bancario WHERE banco_id = ? AND padrao = ? AND servico = 'pagamento' AND ativo = TRUE
             AND sentido IN ('remessa','ambos') ORDER BY id DESC LIMIT 1`,
@@ -1842,7 +1962,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         );
       const sequencial = numero(conta['sequencia_remessa']) + 1;
       await tx.alterar('conta_bancaria', d.conta, numero(conta['versao']), { sequencia_remessa: sequencial });
-      await garantirSequencia(tx, { tipo: 'remessa_bancaria', estabelecimento: est, prefixo: 'RM-' }, { usuario, agora: agora() });
+      await garantirSequencia(
+        tx,
+        { tipo: 'remessa_bancaria', estabelecimento: est, prefixo: 'RM-' },
+        { usuario, agora: agora() },
+      );
       const num = await tx.proximoNumero('remessa_bancaria');
       const arquivo = await registrar(d.arquivo, 'remessa_bancaria', 'remessa_bancaria', d.hashArquivo);
       const id = await tx.incluir('remessa_bancaria', {
@@ -1967,4 +2091,3 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
 export function portaFinanceiroIndisponivel(): PortaFinanceiro {
   return portaIndisponivel<PortaFinanceiro>(METODOS_PORTA_FINANCEIRO);
 }
-

@@ -143,7 +143,8 @@ export class PortaPacsPropria implements PortaPacs {
 
   private ler<T>(c: ContextoPacs, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
@@ -155,7 +156,10 @@ export class PortaPacsPropria implements PortaPacs {
 
   executar(): Promise<never> {
     return Promise.reject(
-      recusa('operacao-desconhecida', 'A lista de trabalho DICOM grava pelas ações próprias (enviar, reenviar e status).'),
+      recusa(
+        'operacao-desconhecida',
+        'A lista de trabalho DICOM grava pelas ações próprias (enviar, reenviar e status).',
+      ),
     );
   }
 
@@ -183,7 +187,12 @@ export class PortaPacsPropria implements PortaPacs {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = c.chaveIdempotencia ? `pacs:${c.chaveIdempotencia}` : `pacs:${randomUUID()}`;
-    const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      { ...contextoDe(c), chaveIdempotencia: chave },
+    );
     if (!saida) return valorDe<T>(r.resultado);
     return (saida as { valor: T }).valor;
   }
@@ -192,9 +201,10 @@ export class PortaPacsPropria implements PortaPacs {
 
   relogio(c: ContextoPacs) {
     return this.ler(c, async (l, est) => {
-      const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [
-        est,
-      ]);
+      const r = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
       const x = relogioNoFuso(r?.fuso_horario || FUSO_PADRAO);
       return { hoje: x.hoje, agora: `${x.hoje}T${x.hora}:00` };
     });
@@ -251,9 +261,9 @@ export class PortaPacsPropria implements PortaPacs {
   modalidades(c: ContextoPacs): Promise<ModalidadeLida[]> {
     // Catálogo DICOM da rede inteira (modalidade_imagem não tem estabelecimento).
     return this.ler(c, async (l) =>
-      (await l.consultar('SELECT id, sigla_padrao, ativo FROM modalidade_imagem ORDER BY sigla_padrao, id')).map(
-        (r) => ({ id: n(r['id']), sigla: texto(r['sigla_padrao']), ativa: Boolean(n(r['ativo'])) }),
-      ),
+      (
+        await l.consultar('SELECT id, sigla_padrao, ativo FROM modalidade_imagem ORDER BY sigla_padrao, id')
+      ).map((r) => ({ id: n(r['id']), sigla: texto(r['sigla_padrao']), ativa: Boolean(n(r['ativo'])) })),
     );
   }
 
@@ -310,9 +320,11 @@ export class PortaPacsPropria implements PortaPacs {
 
   itensDoPaciente(c: ContextoPacs, paciente: number) {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_ITEM} AND r.paciente_id = ? ORDER BY i.id DESC`, [est, paciente], { teto: 500 })).map(
-        itemDe,
-      ),
+      (
+        await l.consultar(`${SQL_ITEM} AND r.paciente_id = ? ORDER BY i.id DESC`, [est, paciente], {
+          teto: 500,
+        })
+      ).map(itemDe),
     );
   }
 
@@ -429,7 +441,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorPacs {
         entidade: 'item_lista_trabalho_imagem',
         entidadeId: r.id,
         chave: `mwl:${est}:${r.exame}:${envios}`,
-        carga: { item: r.id, exame: r.exame, accession: texto(i['numero_acesso']), modalidade: r.modalidade, envio: envios },
+        carga: {
+          item: r.id,
+          exame: r.exame,
+          accession: texto(i['numero_acesso']),
+          modalidade: r.modalidade,
+          envio: envios,
+        },
         usuario,
         agora: agora(),
       });

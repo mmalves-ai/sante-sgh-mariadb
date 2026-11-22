@@ -88,7 +88,17 @@ import {
 } from './montagem.js';
 import type { ContextoSus, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
 import { SeloSolicitanteApac } from './selo-solicitante.js';
-import { type ApacRegistro, type ArquivoSus, type CompetenciaSusRegistro, type CriticaSus, type EquivalenciaSusNomeada, ErroSus, type LinhaTrilhaSus, type MudancaApac, type NovaCriticaSus } from './tipos.js';
+import {
+  type ApacRegistro,
+  type ArquivoSus,
+  type CompetenciaSusRegistro,
+  type CriticaSus,
+  type EquivalenciaSusNomeada,
+  ErroSus,
+  type LinhaTrilhaSus,
+  type MudancaApac,
+  type NovaCriticaSus,
+} from './tipos.js';
 
 /**
  * A equivalência SIGTAP do item faturável vale para a rede inteira (equivalencia_sigtap_item e item_faturavel não têm
@@ -152,12 +162,12 @@ type RecusaApacServico =
 
 export const MENSAGENS_RECUSA_SUS: Readonly<
   Record<
-          | RecusaCompetenciaSus
-      | RecusaApacServico
-      | 'escopo-parcial'
-      | 'equivalencia-sem-acesso-rede'
-      | 'versao-alterada'
-      | 'bpa-sem-producao',
+    | RecusaCompetenciaSus
+    | RecusaApacServico
+    | 'escopo-parcial'
+    | 'equivalencia-sem-acesso-rede'
+    | 'versao-alterada'
+    | 'bpa-sem-producao',
     string
   >
 > = {

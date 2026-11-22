@@ -6,10 +6,23 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { ErroOperacao } from '@sgh/nucleo';
-import { ctxBanco, encerrarMassaQualidade, type MassaQualidade, prepararMassaQualidade, SEM_BANCO_QUA } from './massa.spec-util.js';
+import {
+  ctxBanco,
+  encerrarMassaQualidade,
+  type MassaQualidade,
+  prepararMassaQualidade,
+  SEM_BANCO_QUA,
+} from './massa.spec-util.js';
 import { PortaQualidadePropria } from './porta-propria.js';
 
-const T: TrilhaDaGravacao = { estabelecimento: null, usuario: null, acao: 'operacao', entidade: 'notificacao_incidente', entidadeId: null, correlacao: 't' };
+const T: TrilhaDaGravacao = {
+  estabelecimento: null,
+  usuario: null,
+  acao: 'operacao',
+  entidade: 'notificacao_incidente',
+  entidadeId: null,
+  correlacao: 't',
+};
 
 describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22_o4)', () => {
   let m: MassaQualidade;
@@ -23,7 +36,11 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
 
   it('conta as notificações do período no estabelecimento da sessão', async () => {
     const c = ctxBanco(m.est, m.codigoEst, m.usuario);
-    for (const [tipo, anonima] of [['queda', false], ['queda', false], ['medicacao', true]] as const)
+    for (const [tipo, anonima] of [
+      ['queda', false],
+      ['queda', false],
+      ['medicacao', true],
+    ] as const)
       await porta.gravarSgh(anonima ? { ...c, usuario: null } : c, T, (g) =>
         g.notificar({
           agora: '2026-11-20T10:00:00',
@@ -53,7 +70,9 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
     expect(total('queda')).toBe(2);
     expect(total('medicacao')).toBe(1);
     expect(p.find((x) => x.tipo === 'medicacao')?.anonima).toBe(true);
-    expect(await porta.painelNotificacoes(ctxBanco(m.outro, m.codigoOutro, m.usuario), '2026-11-01', '2026-12-01')).toEqual([]);
+    expect(
+      await porta.painelNotificacoes(ctxBanco(m.outro, m.codigoOutro, m.usuario), '2026-11-01', '2026-12-01'),
+    ).toEqual([]);
     expect(await porta.painelNotificacoes(c, '2026-12-01', '2027-01-01')).toEqual([]);
   });
 
@@ -84,24 +103,59 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
       }),
     );
     await porta.gravarSgh(c, T, (g) =>
-      g.distribuir({ id, versao: 1, usuario: m.login, agora: '2026-11-20T10:05:00', gestor: m.loginGestor, unidade: m.setor, prazoAnalise: '2026-11-10', orientacao: null }),
+      g.distribuir({
+        id,
+        versao: 1,
+        usuario: m.login,
+        agora: '2026-11-20T10:05:00',
+        gestor: m.loginGestor,
+        unidade: m.setor,
+        prazoAnalise: '2026-11-10',
+        orientacao: null,
+      }),
     );
-    expect(await porta.painelAnalises(c, '2026-11-01', '2026-12-01', '2026-11-21')).toEqual({ comPrazo: 1, concluidas: 0, noPrazo: 0, vencidas: 1 });
-    expect(await porta.painelAnalises(c, '2026-11-01', '2026-12-01', '2026-11-09')).toEqual({ comPrazo: 1, concluidas: 0, noPrazo: 0, vencidas: 0 });
-    expect(await porta.painelAnalises(ctxBanco(m.outro, m.codigoOutro, m.usuario), '2026-11-01', '2026-12-01', '2026-11-21')).toEqual({ comPrazo: 0, concluidas: 0, noPrazo: 0, vencidas: 0 });
+    expect(await porta.painelAnalises(c, '2026-11-01', '2026-12-01', '2026-11-21')).toEqual({
+      comPrazo: 1,
+      concluidas: 0,
+      noPrazo: 0,
+      vencidas: 1,
+    });
+    expect(await porta.painelAnalises(c, '2026-11-01', '2026-12-01', '2026-11-09')).toEqual({
+      comPrazo: 1,
+      concluidas: 0,
+      noPrazo: 0,
+      vencidas: 0,
+    });
+    expect(
+      await porta.painelAnalises(
+        ctxBanco(m.outro, m.codigoOutro, m.usuario),
+        '2026-11-01',
+        '2026-12-01',
+        '2026-11-21',
+      ),
+    ).toEqual({ comPrazo: 0, concluidas: 0, noPrazo: 0, vencidas: 0 });
   });
 
   it('as leituras de outro módulo ainda sem mapeamento falham fechadas (503 modelo-pendente)', async () => {
     const c = ctxBanco(m.est, m.codigoEst, m.usuario);
-    for (const p of [porta.candidatos(c, m.login, '2026-11-01'), porta.painelAdesao(c, '2026-11-01', '2026-12-01', '2026-11-20T10:00:00'), porta.itens(c, 'luva')]) {
-      const e = await p.then(() => null, (x: unknown) => x);
+    for (const p of [
+      porta.candidatos(c, m.login, '2026-11-01'),
+      porta.painelAdesao(c, '2026-11-01', '2026-12-01', '2026-11-20T10:00:00'),
+      porta.itens(c, 'luva'),
+    ]) {
+      const e = await p.then(
+        () => null,
+        (x: unknown) => x,
+      );
       expect(e).toBeInstanceOf(ErroOperacao);
       expect((e as ErroOperacao).problema).toMatchObject({ status: 503, codigo: 'modelo-pendente' });
     }
   });
 
   // O fluxo da etapa 2 que o sistema anterior fazia aguarda o mapeamento (pedido em saida/04-03.json): pendente nomeado.
-  it.todo('notificação → análise → plano 5W2H → conclusão (analise_incidente, plano_acao_qualidade, acao_plano_qualidade)');
+  it.todo(
+    'notificação → análise → plano 5W2H → conclusão (analise_incidente, plano_acao_qualidade, acao_plano_qualidade)',
+  );
   it.todo('a sugestão de notificação resolvida pelo resumo (sugestao_notificacao_incidente)');
   it.todo('a vigilância de produto com os expostos (queixa_tecnica_produto)');
 });

@@ -45,7 +45,10 @@ export interface PortaConselho {
 }
 
 export interface NucleoConselhoProprio {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
   criarExecutor(): Executor;
 }
 
@@ -141,13 +144,23 @@ export class PortaConselhoPropria implements PortaConselho {
         { ativa: ['ativa', 'provisoria'].includes(String(x['situacao'])), validade: dia(x['validade']) },
         porInscricao.get(registro) ?? [],
       );
-      return { registro, profissional: Number(x['profissional_id']), ativo: vigente.ativo, validade: vigente.validade };
+      return {
+        registro,
+        profissional: Number(x['profissional_id']),
+        ativo: vigente.ativo,
+        validade: vigente.validade,
+      };
     });
   }
 
   async janelaDias(agora: Date): Promise<number | null> {
     const v = await this.ler((l) =>
-      valorDoParametro(l, 'pessoas.alertaConselhoDias', { cliente: this.cliente, estabelecimento: null }, agora),
+      valorDoParametro(
+        l,
+        'pessoas.alertaConselhoDias',
+        { cliente: this.cliente, estabelecimento: null },
+        agora,
+      ),
     );
     return typeof v === 'number' && Number.isFinite(v) ? v : null;
   }
@@ -155,13 +168,15 @@ export class PortaConselhoPropria implements PortaConselho {
   async gravarRetrato(r: RetratoConselho): Promise<boolean> {
     // Sem a tabela do retrato (DDL pedido), não grava e diz que não gravou.
     const existe = await this.ler((l) =>
-      l.uma('SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', [
-        TABELA_RETRATO_CONSELHO,
-      ]),
+      l.uma(
+        'SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+        [TABELA_RETRATO_CONSELHO],
+      ),
     );
     if (!existe || Number(existe['n']) === 0) return false;
     const sede = await this.ler(idDaSede);
-    if (sede === null) throw recusa('cliente-sem-estabelecimento', 'O cliente não tem estabelecimento cadastrado.');
+    if (sede === null)
+      throw recusa('cliente-sem-estabelecimento', 'O cliente não tem estabelecimento cadastrado.');
     const op = definirOperacao<z.infer<typeof ENTRADA>, ResultadoOperacao>({
       nome: 'pessoas.registrar_retrato_conselho',
       tabelas: [TABELA_RETRATO_CONSELHO],

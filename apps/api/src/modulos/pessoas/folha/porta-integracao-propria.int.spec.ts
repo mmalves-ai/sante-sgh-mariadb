@@ -170,20 +170,45 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
 
   it('de-para: grava a vigência com os destinos, relê, recusa a repetida e a conta sugerida sem coluna', async () => {
     const conta = await nucleo.lerSomente(ctx(), (l) =>
-      l.uma<{ id: number; login: string }>('SELECT id, login FROM usuario WHERE excluido_em IS NULL ORDER BY id LIMIT 1'),
+      l.uma<{ id: number; login: string }>(
+        'SELECT id, login FROM usuario WHERE excluido_em IS NULL ORDER BY id LIMIT 1',
+      ),
     );
     const login = String(conta?.login ?? '');
     expect(login).not.toBe('');
     // A auditoria (quem criou) é a conta da sessão.
-    const cc = () => ({ cliente: CLIENTE, estabelecimento: est, usuario: Number(conta?.id), correlacao: 'teste-03-07' });
+    const cc = () => ({
+      cliente: CLIENTE,
+      estabelecimento: est,
+      usuario: Number(conta?.id),
+      correlacao: 'teste-03-07',
+    });
     // O teste dos credores inativa o fornecedor sintético: o de-para precisa dele ativo.
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'ativar-03-07' }, (e) =>
       e.executar("UPDATE empresa_fornecedora SET situacao = 'ativo' WHERE id = ?", [credor]),
     );
-    const classificacao = { grupo: Number(COD.grupo), subgrupo: Number(COD.subgrupo), item: Number(COD.natureza) };
+    const classificacao = {
+      grupo: Number(COD.grupo),
+      subgrupo: Number(COD.subgrupo),
+      item: Number(COD.natureza),
+    };
     const destinos = [
-      { destino: 'liquido-mensal' as const, credor, classificacao, diaVencimento: 5, mesesDepois: 1, contaContabil: '' },
-      { destino: 'fgts' as const, credor, classificacao, diaVencimento: 20, mesesDepois: 0, contaContabil: '' },
+      {
+        destino: 'liquido-mensal' as const,
+        credor,
+        classificacao,
+        diaVencimento: 5,
+        mesesDepois: 1,
+        contaContabil: '',
+      },
+      {
+        destino: 'fgts' as const,
+        credor,
+        classificacao,
+        diaVencimento: 20,
+        mesesDepois: 0,
+        contaContabil: '',
+      },
     ];
     const trilha = (r: number): TrilhaDaGravacao => ({
       estabelecimento: null,
@@ -229,7 +254,9 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
           g.incluirIntegracao({
             empresa: est,
             inicio: '2099-09-01',
-            destinos: [{ ...destinos[0]!, classificacao: { ...classificacao, item: classificacao.item + 1 } }],
+            destinos: [
+              { ...destinos[0]!, classificacao: { ...classificacao, item: classificacao.item + 1 } },
+            ],
             por: login,
           }),
         ),

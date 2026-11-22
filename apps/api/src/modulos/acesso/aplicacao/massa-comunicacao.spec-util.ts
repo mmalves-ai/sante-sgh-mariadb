@@ -65,10 +65,10 @@ export async function montarMassaComunicacao(sufixo: string): Promise<MassaComun
         "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
         [login[k], `Conta de teste ${k}`, agora],
       );
-      await e.executar(
-        "UPDATE usuario SET situacao = ?, expira_em = NULL, excluido_em = NULL WHERE id = ?",
-        [k === 'inativo' ? 'inativo' : 'ativo', id[k]],
-      );
+      await e.executar('UPDATE usuario SET situacao = ?, expira_em = NULL, excluido_em = NULL WHERE id = ?', [
+        k === 'inativo' ? 'inativo' : 'ativo',
+        id[k],
+      ]);
       const vinculo = k === 'outro' ? estB : estA;
       await garantir(
         e,
@@ -116,34 +116,39 @@ export async function montarMassaComunicacao(sufixo: string): Promise<MassaComun
     ctx,
     octx: (quem, chave) => ({ ...ctx(quem), chaveIdempotencia: chave, login: login[quem] }),
     ler: (sql, p) =>
-      nucleo.lerSomente({ cliente: CLIENTE_COMUNICACAO, correlacao: 'f2201-conta' }, (l) => l.consultar(sql, p)),
+      nucleo.lerSomente({ cliente: CLIENTE_COMUNICACAO, correlacao: 'f2201-conta' }, (l) =>
+        l.consultar(sql, p),
+      ),
     async limpar() {
-      await nucleo.escrever({ cliente: CLIENTE_COMUNICACAO, correlacao: `f2201-${sufixo}-limpa` }, async (e) => {
-        const ests = [estA, estB];
-        const us = usuarios();
-        const em = (xs: number[]) => xs.map(() => '?').join(', ');
-        await e.executar(
-          `DELETE ci FROM comunicado_ciencia ci JOIN comunicado k ON k.id = ci.comunicado_id WHERE k.estabelecimento_id IN (${em(ests)})`,
-          ests,
-        );
-        await e.executar(
-          `DELETE cd FROM comunicado_destinatario cd JOIN comunicado k ON k.id = cd.comunicado_id WHERE k.estabelecimento_id IN (${em(ests)})`,
-          ests,
-        );
-        await e.executar(`DELETE FROM comunicado WHERE estabelecimento_id IN (${em(ests)})`, ests);
-        await e.executar(
-          `DELETE d FROM mensagem_interna_destinatario d JOIN mensagem_interna m ON m.id = d.mensagem_interna_id WHERE m.estabelecimento_id IN (${em(ests)})`,
-          ests,
-        );
-        await e.executar(`DELETE FROM mensagem_interna WHERE estabelecimento_id IN (${em(ests)})`, ests);
-        await e.executar(`DELETE FROM notificacao_usuario WHERE estabelecimento_id IN (${em(ests)})`, ests);
-        await e.executar(`DELETE FROM dicionario_usuario WHERE usuario_id IN (${em(us)})`, us);
-        await e.executar(
-          `DELETE FROM idempotencia_operacao WHERE (operacao LIKE 'acesso.%' OR operacao IN (?, ?))
+      await nucleo.escrever(
+        { cliente: CLIENTE_COMUNICACAO, correlacao: `f2201-${sufixo}-limpa` },
+        async (e) => {
+          const ests = [estA, estB];
+          const us = usuarios();
+          const em = (xs: number[]) => xs.map(() => '?').join(', ');
+          await e.executar(
+            `DELETE ci FROM comunicado_ciencia ci JOIN comunicado k ON k.id = ci.comunicado_id WHERE k.estabelecimento_id IN (${em(ests)})`,
+            ests,
+          );
+          await e.executar(
+            `DELETE cd FROM comunicado_destinatario cd JOIN comunicado k ON k.id = cd.comunicado_id WHERE k.estabelecimento_id IN (${em(ests)})`,
+            ests,
+          );
+          await e.executar(`DELETE FROM comunicado WHERE estabelecimento_id IN (${em(ests)})`, ests);
+          await e.executar(
+            `DELETE d FROM mensagem_interna_destinatario d JOIN mensagem_interna m ON m.id = d.mensagem_interna_id WHERE m.estabelecimento_id IN (${em(ests)})`,
+            ests,
+          );
+          await e.executar(`DELETE FROM mensagem_interna WHERE estabelecimento_id IN (${em(ests)})`, ests);
+          await e.executar(`DELETE FROM notificacao_usuario WHERE estabelecimento_id IN (${em(ests)})`, ests);
+          await e.executar(`DELETE FROM dicionario_usuario WHERE usuario_id IN (${em(us)})`, us);
+          await e.executar(
+            `DELETE FROM idempotencia_operacao WHERE (operacao LIKE 'acesso.%' OR operacao IN (?, ?))
               AND estabelecimento_id IN (${em(ests)})`,
-          [OPERACOES_DICIONARIO.incluir, OPERACOES_DICIONARIO.excluir, ...ests],
-        );
-      });
+            [OPERACOES_DICIONARIO.incluir, OPERACOES_DICIONARIO.excluir, ...ests],
+          );
+        },
+      );
     },
   };
 }

@@ -2,7 +2,11 @@
 // fica "sem regra" (nada é lançado); o teto de lotes por ciclo para o laço; sem candidato, não grava nada.
 import type { AcaoContabilizacao } from '@sgh/dominio-contabil';
 import { describe, expect, it } from 'vitest';
-import { type AcessoContabilizacao, contabilizarPendentes, type LeituraContabilizacao } from './contabilizacao.js';
+import {
+  type AcessoContabilizacao,
+  contabilizarPendentes,
+  type LeituraContabilizacao,
+} from './contabilizacao.js';
 
 const fato = (idFato: number) => ({
   idFato,

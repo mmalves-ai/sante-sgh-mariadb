@@ -893,7 +893,12 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         );
         const doc = this.numerar(s, 'movimento', r.ano, r.mes);
         for (const it of e.itens) this.baixar(s, it.item, e.local, it.quantidade, []);
-        return { id: doc, doc, itens: e.itens.length, ...(e.atendimento ? { atendimento: e.atendimento } : {}) };
+        return {
+          id: doc,
+          doc,
+          itens: e.itens.length,
+          ...(e.atendimento ? { atendimento: e.atendimento } : {}),
+        };
       }
       case 'suprimentos.registrarBalanco': {
         const inv = s.inventarios.find((x) => x.id === e.inventario);
@@ -976,10 +981,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         return { kit: k.id, itens: e.itens.length };
       }
       case 'suprimentos.desconsolidarDocumento': {
-        const d = s.documentos.find(
-          (x) =>
-            x.tipo === e.tipo && x.id === e.documento,
-        );
+        const d = s.documentos.find((x) => x.tipo === e.tipo && x.id === e.documento);
         if (!d) throw recusa('documento-inexistente', 'O documento não existe.');
         if (e.tipo !== 'nota')
           throw recusa('so-nota', 'Só a nota fiscal é desconsolidada aqui: para saída, use a devolução.');
@@ -1091,10 +1093,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     let req: DocumentoM | null = null;
     const chaveReq = e.requisicao;
     if (chaveReq) {
-      req =
-        s.documentos.find(
-          (d) => d.requisicao && d.id === chaveReq,
-        ) ?? null;
+      req = s.documentos.find((d) => d.requisicao && d.id === chaveReq) ?? null;
       if (!req)
         throw recusa('requisicao-atendida', 'A requisição já foi atendida ou não existe mais.', {
           campos: ['requisicao'],
@@ -1179,12 +1178,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
   ) {
     this.exigirMesAberto(s, r);
     recusar(conferirLocal(escopo, e.local, 'devolucao'));
-    const saida = s.documentos.find(
-      (d) =>
-        d.tipo === 'saida' &&
-        !d.requisicao &&
-        d.id === e.saida,
-    );
+    const saida = s.documentos.find((d) => d.tipo === 'saida' && !d.requisicao && d.id === e.saida);
     if (!saida || !saida.consolidado)
       throw recusa('saida-inexistente', 'A saída não existe ou não foi consolidada.', { campos: ['saida'] });
     if (saida.destino === 5)

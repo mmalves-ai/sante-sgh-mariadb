@@ -24,7 +24,12 @@ import {
   USO_INDISPONIVEL,
 } from './porta-propria.js';
 import type { TrilhaSaneamento } from './porta.js';
-import { type AtorSaneamento, type ContextoExecucaoSaneamento, OPERACOES_SANEAMENTO, ServicoSaneamento } from './servico.js';
+import {
+  type AtorSaneamento,
+  type ContextoExecucaoSaneamento,
+  OPERACOES_SANEAMENTO,
+  ServicoSaneamento,
+} from './servico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const BANCO = `cliente_${CLIENTE}`;
@@ -64,7 +69,9 @@ function ddlsDoPedido(): Map<string, string> {
   const p = `${RAIZ}docs/obra/fatias/f22/saida/02-04.json`;
   const r = new Map<string, string>();
   if (!existsSync(p)) return r;
-  const d = JSON.parse(readFileSync(p, 'utf8')) as { pedidos?: { tipo?: string; tabela?: string; ddl?: string }[] };
+  const d = JSON.parse(readFileSync(p, 'utf8')) as {
+    pedidos?: { tipo?: string; tabela?: string; ddl?: string }[];
+  };
   for (const x of d.pedidos ?? []) if (x.tipo === 'ddl' && x.tabela && x.ddl) r.set(x.tabela, x.ddl);
   return r;
 }
@@ -100,7 +107,13 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
   const usu: Record<string, number> = {};
   let marco = new Date();
 
-  async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
+  async function garantir(
+    e: Escritor,
+    sel: string,
+    p: unknown[],
+    ins: string,
+    pi: unknown[],
+  ): Promise<number> {
     const l = await e.uma<{ id: number }>(sel, p);
     return l ? Number(l.id) : e.inserir(ins, pi);
   }
@@ -115,13 +128,26 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
     if (!ids.est) return;
     const contas = Object.values(usu);
     if (await existe(e, TABELA_PLANO_SANEAMENTO))
-      await e.executar(`DELETE FROM ${TABELA_PLANO_SANEAMENTO} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outro]);
+      await e.executar(`DELETE FROM ${TABELA_PLANO_SANEAMENTO} WHERE estabelecimento_id IN (?, ?)`, [
+        ids.est,
+        ids.outro,
+      ]);
     if (await existe(e, TABELA_USO_ACOES))
-      await e.executar(`DELETE FROM ${TABELA_USO_ACOES} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outro]);
+      await e.executar(`DELETE FROM ${TABELA_USO_ACOES} WHERE estabelecimento_id IN (?, ?)`, [
+        ids.est,
+        ids.outro,
+      ]);
     await e.executar('DELETE FROM usuario_perfil WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outro]);
-    await e.executar('DELETE FROM perfil_acao WHERE perfil_acesso_id IN (?, ?, ?)', [ids.amplo, ids.trabalho, ids.amploOutro]);
+    await e.executar('DELETE FROM perfil_acao WHERE perfil_acesso_id IN (?, ?, ?)', [
+      ids.amplo,
+      ids.trabalho,
+      ids.amploOutro,
+    ]);
     if (contas.length) {
-      await e.executar(`DELETE FROM usuario_situacao_historico WHERE usuario_id IN (${contas.map(() => '?').join(', ')})`, contas);
+      await e.executar(
+        `DELETE FROM usuario_situacao_historico WHERE usuario_id IN (${contas.map(() => '?').join(', ')})`,
+        contas,
+      );
       await e.executar(
         `UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL WHERE id IN (${contas.map(() => '?').join(', ')})`,
         contas,
@@ -205,19 +231,24 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
       ids.amploRede = await perfil(null, AMPLO);
       ids.trabalho = await perfil(ids.est, TRABALHO);
       ids.amploOutro = await perfil(ids.outro, AMPLO);
-      const acoes = await e.consultar<{ id: number }>('SELECT id FROM acao_sistema WHERE ativo ORDER BY id LIMIT 3', []);
+      const acoes = await e.consultar<{ id: number }>(
+        'SELECT id FROM acao_sistema WHERE ativo ORDER BY id LIMIT 3',
+        [],
+      );
       expect(acoes.length).toBe(3);
       ids.acoes = acoes.map((x) => Number(x.id));
       await limpar(e);
       // O amplo do estabelecimento tem as três ações; o de trabalho, a primeira. A, B e C estão no amplo do
       // estabelecimento; E, no amplo da REDE com o mesmo código; C também no amplo do outro estabelecimento.
       for (const a of ids.acoes)
-        await e.executar('INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em) VALUES (?, ?, ?)', [ids.amplo, a, agora]);
-      await e.executar('INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em) VALUES (?, ?, ?)', [
-        ids.trabalho,
-        ids.acoes[0],
-        agora,
-      ]);
+        await e.executar(
+          'INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em) VALUES (?, ?, ?)',
+          [ids.amplo, a, agora],
+        );
+      await e.executar(
+        'INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em) VALUES (?, ?, ?)',
+        [ids.trabalho, ids.acoes[0], agora],
+      );
       const atribuir = (login: string, p: number, estab: number) =>
         e.executar(
           'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
@@ -251,7 +282,13 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
     const lista = await porta.usuarios(EST, AMPLO);
     expect(lista.map((u) => u.login)).toEqual([A, C, E, B]); // inativos por último
     expect(lista.find((u) => u.login === B)).toMatchObject({ ativo: false, bloqueado: false, grupo: AMPLO });
-    expect(await porta.usuario(EST, A)).toMatchObject({ login: A, idUsuario: usu[A], grupo: AMPLO, ativo: true, emOutroEstabelecimento: false });
+    expect(await porta.usuario(EST, A)).toMatchObject({
+      login: A,
+      idUsuario: usu[A],
+      grupo: AMPLO,
+      ativo: true,
+      emOutroEstabelecimento: false,
+    });
     expect(await porta.usuario(EST, E)).toMatchObject({ grupo: AMPLO, emOutroEstabelecimento: false });
     expect(await porta.usuario(EST, C)).toMatchObject({ grupo: AMPLO, emOutroEstabelecimento: true });
     expect(await porta.usuario(EST, 'teste.l0204.nao-existe')).toBeNull();
@@ -264,81 +301,113 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
     expect(await porta.pronto(EST)).toBe(PLANO_POSSIVEL);
   });
 
-  it.skipIf(USO_DO_BANCO)('sem a tabela do uso, a leitura do uso lança "uso indisponível" (nunca um mapa vazio)', async () => {
-    await expect(porta.uso(EST, AMPLO, marco)).rejects.toMatchObject({
-      problema: expect.objectContaining({ codigo: USO_INDISPONIVEL, status: 503 }),
-    });
-  });
+  it.skipIf(USO_DO_BANCO)(
+    'sem a tabela do uso, a leitura do uso lança "uso indisponível" (nunca um mapa vazio)',
+    async () => {
+      await expect(porta.uso(EST, AMPLO, marco)).rejects.toMatchObject({
+        problema: expect.objectContaining({ codigo: USO_INDISPONIVEL, status: 503 }),
+      });
+    },
+  );
 
-  it.skipIf(!USO_POSSIVEL)('com a tabela do uso: soma por conta e ação na janela, só das ativas do grupo; janela não coberta lança', async () => {
-    const criada = garantirTabela(TABELA_USO_ACOES);
-    try {
-      const hoje = new Date().toISOString().slice(0, 10);
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-uso' }, async (e) => {
-        const agora = new Date();
-        const usar = (estab: number, login: string, acao: number | undefined, n: number) =>
-          e.executar(
-            `INSERT INTO ${TABELA_USO_ACOES} (estabelecimento_id, usuario_id, acao_sistema_id, dia, quantidade,
+  it.skipIf(!USO_POSSIVEL)(
+    'com a tabela do uso: soma por conta e ação na janela, só das ativas do grupo; janela não coberta lança',
+    async () => {
+      const criada = garantirTabela(TABELA_USO_ACOES);
+      try {
+        const hoje = new Date().toISOString().slice(0, 10);
+        await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-uso' }, async (e) => {
+          const agora = new Date();
+          const usar = (estab: number, login: string, acao: number | undefined, n: number) =>
+            e.executar(
+              `INSERT INTO ${TABELA_USO_ACOES} (estabelecimento_id, usuario_id, acao_sistema_id, dia, quantidade,
                primeiro_uso_em, ultimo_uso_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [estab, usu[login], acao, hoje, n, agora, agora, agora],
-          );
-        await usar(ids.est, A, ids.acoes[0], 2);
-        await usar(ids.est, A, ids.acoes[1], 1);
-        await usar(ids.est, E, ids.acoes[2], 4); // perfil da rede com o mesmo código
-        await usar(ids.est, B, ids.acoes[0], 9); // inativa: fora
-        await usar(ids.outro, A, ids.acoes[2], 5); // outro estabelecimento: fora
+              [estab, usu[login], acao, hoje, n, agora, agora, agora],
+            );
+          await usar(ids.est, A, ids.acoes[0], 2);
+          await usar(ids.est, A, ids.acoes[1], 1);
+          await usar(ids.est, E, ids.acoes[2], 4); // perfil da rede com o mesmo código
+          await usar(ids.est, B, ids.acoes[0], 9); // inativa: fora
+          await usar(ids.outro, A, ids.acoes[2], 5); // outro estabelecimento: fora
+        });
+        const uso = await porta.uso(EST, AMPLO, marco);
+        expect(uso.get(A)).toEqual(
+          new Map([
+            [ids.acoes[0], 2],
+            [ids.acoes[1], 1],
+          ]),
+        );
+        expect(uso.get(E)).toEqual(new Map([[ids.acoes[2], 4]]));
+        expect(uso.has(B)).toBe(false);
+        // A contagem começou hoje: uma janela que começa antes não está coberta (uso não lido, falha fechada).
+        await expect(porta.uso(EST, AMPLO, new Date(Date.now() - 10 * 86_400_000))).rejects.toMatchObject({
+          problema: expect.objectContaining({ codigo: USO_INDISPONIVEL }),
+        });
+      } finally {
+        await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-uso-fim' }, (e) =>
+          e.executar(`DELETE FROM ${TABELA_USO_ACOES} WHERE estabelecimento_id IN (?, ?)`, [
+            ids.est,
+            ids.outro,
+          ]),
+        );
+        if (criada) apagarSeDoTeste(TABELA_USO_ACOES);
+      }
+    },
+  );
+
+  it.skipIf(!PLANO_POSSIVEL)(
+    'plano pela porta: inclui, reserva, conclui e descarta com a trilha; item que exige aprovação não segue sem ela',
+    async () => {
+      // Sem exigência: reserva (uma vez), não descarta reservado, conclui; três gravações na trilha.
+      const { id } = await porta.incluir(EST, nova(A, false), trilha());
+      expect(await porta.item(EST, id)).toMatchObject({
+        situacao: 'proposto',
+        login: A,
+        grupoDestino: TRABALHO,
+        criadoPor: GESTOR,
       });
-      const uso = await porta.uso(EST, AMPLO, marco);
-      expect(uso.get(A)).toEqual(new Map([[ids.acoes[0], 2], [ids.acoes[1], 1]]));
-      expect(uso.get(E)).toEqual(new Map([[ids.acoes[2], 4]]));
-      expect(uso.has(B)).toBe(false);
-      // A contagem começou hoje: uma janela que começa antes não está coberta (uso não lido, falha fechada).
-      await expect(porta.uso(EST, AMPLO, new Date(Date.now() - 10 * 86_400_000))).rejects.toMatchObject({
-        problema: expect.objectContaining({ codigo: USO_INDISPONIVEL }),
-      });
-    } finally {
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-uso-fim' }, (e) =>
-        e.executar(`DELETE FROM ${TABELA_USO_ACOES} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outro]),
+      expect(await porta.item(OUTRO, id)).toBeNull();
+      expect(await porta.reservar(EST, { id, por: GESTOR }, trilha())).toBe(true);
+      expect(await porta.reservar(EST, { id, por: GESTOR }, trilha())).toBe(false);
+      expect(await porta.descartar(EST, { id, por: GESTOR }, trilha())).toBe(false);
+      expect(
+        await porta.concluir(EST, { id, por: GESTOR, resultado: 'aplicado', erro: null }, trilha()),
+      ).toBe(true);
+      expect(await porta.item(EST, id)).toMatchObject({ situacao: 'aplicado', aplicadoPor: GESTOR });
+      // Só desta rodada: a trilha é só de inclusão e a tabela do teste, recriada, repete os ids.
+      const t = await linha(
+        'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? AND ocorrido_em >= ?',
+        [TABELA_PLANO_SANEAMENTO, Number(id), marco],
       );
-      if (criada) apagarSeDoTeste(TABELA_USO_ACOES);
-    }
-  });
+      expect(Number(t?.['n'])).toBe(3);
+      expect((await porta.plano(EST, AMPLO)).map((i) => i.id)).toContain(id);
 
-  it.skipIf(!PLANO_POSSIVEL)('plano pela porta: inclui, reserva, conclui e descarta com a trilha; item que exige aprovação não segue sem ela', async () => {
-    // Sem exigência: reserva (uma vez), não descarta reservado, conclui; três gravações na trilha.
-    const { id } = await porta.incluir(EST, nova(A, false), trilha());
-    expect(await porta.item(EST, id)).toMatchObject({ situacao: 'proposto', login: A, grupoDestino: TRABALHO, criadoPor: GESTOR });
-    expect(await porta.item(OUTRO, id)).toBeNull();
-    expect(await porta.reservar(EST, { id, por: GESTOR }, trilha())).toBe(true);
-    expect(await porta.reservar(EST, { id, por: GESTOR }, trilha())).toBe(false);
-    expect(await porta.descartar(EST, { id, por: GESTOR }, trilha())).toBe(false);
-    expect(await porta.concluir(EST, { id, por: GESTOR, resultado: 'aplicado', erro: null }, trilha())).toBe(true);
-    expect(await porta.item(EST, id)).toMatchObject({ situacao: 'aplicado', aplicadoPor: GESTOR });
-    // Só desta rodada: a trilha é só de inclusão e a tabela do teste, recriada, repete os ids.
-    const t = await linha(
-      'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? AND ocorrido_em >= ?',
-      [TABELA_PLANO_SANEAMENTO, Number(id), marco],
-    );
-    expect(Number(t?.['n'])).toBe(3);
-    expect((await porta.plano(EST, AMPLO)).map((i) => i.id)).toContain(id);
-
-    // Com exigência: o proponente não aprova; sem aprovação não reserva nem conclui; o banco recusa "aplicado" sem
-    // aprovador (CHECK do DDL); descarta.
-    const x = await porta.incluir(EST, nova(C, true), trilha());
-    await expect(
-      porta.aprovar(EST, { id: x.id, area: 'Faturamento', aprovadoPor: GESTOR, motivo: 'Aprovação sintética' }, trilha()),
-    ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'aprovacao-pelo-proponente' }) });
-    expect(await porta.reservar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(false);
-    expect(await porta.concluir(EST, { id: x.id, por: GESTOR, resultado: 'aplicado', erro: null }, trilha())).toBe(false);
-    await expect(
-      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-check' }, (e) =>
-        e.executar(`UPDATE ${TABELA_PLANO_SANEAMENTO} SET situacao = 'aplicado' WHERE id = ?`, [Number(x.id)]),
-      ),
-    ).rejects.toThrow();
-    expect(await porta.descartar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(true);
-    expect(await porta.descartar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(false);
-    expect(await porta.item(EST, x.id)).toMatchObject({ situacao: 'descartado' });
-  });
+      // Com exigência: o proponente não aprova; sem aprovação não reserva nem conclui; o banco recusa "aplicado" sem
+      // aprovador (CHECK do DDL); descarta.
+      const x = await porta.incluir(EST, nova(C, true), trilha());
+      await expect(
+        porta.aprovar(
+          EST,
+          { id: x.id, area: 'Faturamento', aprovadoPor: GESTOR, motivo: 'Aprovação sintética' },
+          trilha(),
+        ),
+      ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'aprovacao-pelo-proponente' }) });
+      expect(await porta.reservar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(false);
+      expect(
+        await porta.concluir(EST, { id: x.id, por: GESTOR, resultado: 'aplicado', erro: null }, trilha()),
+      ).toBe(false);
+      await expect(
+        nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0204-check' }, (e) =>
+          e.executar(`UPDATE ${TABELA_PLANO_SANEAMENTO} SET situacao = 'aplicado' WHERE id = ?`, [
+            Number(x.id),
+          ]),
+        ),
+      ).rejects.toThrow();
+      expect(await porta.descartar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(true);
+      expect(await porta.descartar(EST, { id: x.id, por: GESTOR }, trilha())).toBe(false);
+      expect(await porta.item(EST, x.id)).toMatchObject({ situacao: 'descartado' });
+    },
+  );
 
   it.skipIf(!PLANO_POSSIVEL || USO_DO_BANCO)(
     'serviço sobre a porta própria: uso não lido exige aprovação; aplica só depois de aprovado (conta do perfil da rede)',
@@ -361,10 +430,18 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
       });
       expect(item).toMatchObject({ situacao: 'proposto', exigeAprovacao: true, perdasTotal: 2 });
       const aplicar = () =>
-        servico.aplicar(ator(GESTOR), item.id, { chaveIdempotencia: `l0204-apl-${Date.now()}`, reautenticadoEm: Date.now() });
+        servico.aplicar(ator(GESTOR), item.id, {
+          chaveIdempotencia: `l0204-apl-${Date.now()}`,
+          reautenticadoEm: Date.now(),
+        });
       await expect(aplicar()).rejects.toMatchObject({ codigo: 'exige-aprovacao' });
       expect(await porta.reservar(EST, { id: item.id, por: GESTOR }, trilha())).toBe(false);
-      expect(await servico.aprovar(ator(AREA), item.id, { area: 'Faturamento', motivo: `Aprovação sintética, ${RODADA}` })).toMatchObject({
+      expect(
+        await servico.aprovar(ator(AREA), item.id, {
+          area: 'Faturamento',
+          motivo: `Aprovação sintética, ${RODADA}`,
+        }),
+      ).toMatchObject({
         situacao: 'aprovado',
         aprovacao: { area: 'Faturamento', por: AREA },
       });
@@ -381,7 +458,12 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
   );
 
   it('troca o perfil: encerra o amplo (ontem) e abre o de trabalho (hoje), com a trilha da operação', async () => {
-    await executor.executar(OPERACOES_SANEAMENTO.trocarGrupo, EST, { login: A, grupoOrigem: AMPLO, grupo: TRABALHO }, ctx('troca'));
+    await executor.executar(
+      OPERACOES_SANEAMENTO.trocarGrupo,
+      EST,
+      { login: A, grupoOrigem: AMPLO, grupo: TRABALHO },
+      ctx('troca'),
+    );
     const ontem = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
     expect(
       await linha(
@@ -403,8 +485,15 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
     expect(Number(t?.['n'])).toBeGreaterThanOrEqual(1);
     // De novo: a conta já não tem o amplo (recusa, nada gravado).
     await expect(
-      executor.executar(OPERACOES_SANEAMENTO.trocarGrupo, EST, { login: A, grupoOrigem: AMPLO, grupo: TRABALHO }, ctx('troca2')),
-    ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'usuario-fora-do-grupo', status: 409 }) });
+      executor.executar(
+        OPERACOES_SANEAMENTO.trocarGrupo,
+        EST,
+        { login: A, grupoOrigem: AMPLO, grupo: TRABALHO },
+        ctx('troca2'),
+      ),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'usuario-fora-do-grupo', status: 409 }),
+    });
   });
 
   it('recusa: perfil só de outro estabelecimento, entrada inválida e operação crítica sem reautenticação', async () => {
@@ -421,19 +510,40 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
       executor.executar(OPERACOES_SANEAMENTO.retirarOpcoes, EST, { grupo: AMPLO, opcoes: [] }, ctx('vazia')),
     ).rejects.toMatchObject({ problema: expect.objectContaining({ status: 400 }) });
     await expect(
-      executor.executar(OPERACOES_SANEAMENTO.bloquear, EST, { login: B, motivo: 'Sem reautenticar' }, ctx('sem-senha', false)),
+      executor.executar(
+        OPERACOES_SANEAMENTO.bloquear,
+        EST,
+        { login: B, motivo: 'Sem reautenticar' },
+        ctx('sem-senha', false),
+      ),
     ).rejects.toMatchObject({ problema: expect.objectContaining({ status: 401 }) });
-    expect(await linha('SELECT situacao FROM usuario WHERE id = ?', [usu[B]])).toEqual({ situacao: 'inativo' });
+    expect(await linha('SELECT situacao FROM usuario WHERE id = ?', [usu[B]])).toEqual({
+      situacao: 'inativo',
+    });
   });
 
   it('bloqueio: recusado a quem tem perfil em outro estabelecimento; grava a linha do tempo; retira ações (exclusão lógica)', async () => {
     await expect(
-      executor.executar(OPERACOES_SANEAMENTO.bloquear, EST, { login: C, motivo: 'Saneamento sintético' }, ctx('bloqueio-c')),
-    ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'conta-em-outro-estabelecimento' }) });
+      executor.executar(
+        OPERACOES_SANEAMENTO.bloquear,
+        EST,
+        { login: C, motivo: 'Saneamento sintético' },
+        ctx('bloqueio-c'),
+      ),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'conta-em-outro-estabelecimento' }),
+    });
     expect(await linha('SELECT situacao FROM usuario WHERE id = ?', [usu[C]])).toEqual({ situacao: 'ativo' });
 
-    await executor.executar(OPERACOES_SANEAMENTO.bloquear, EST, { login: B, motivo: 'Saneamento sintético' }, ctx('bloqueio'));
-    const u = await linha('SELECT situacao, bloqueado_em IS NOT NULL AS com_data FROM usuario WHERE id = ?', [usu[B]]);
+    await executor.executar(
+      OPERACOES_SANEAMENTO.bloquear,
+      EST,
+      { login: B, motivo: 'Saneamento sintético' },
+      ctx('bloqueio'),
+    );
+    const u = await linha('SELECT situacao, bloqueado_em IS NOT NULL AS com_data FROM usuario WHERE id = ?', [
+      usu[B],
+    ]);
     expect(u).toMatchObject({ situacao: 'bloqueado' });
     expect(Number(u?.['com_data'])).toBe(1);
     expect(
@@ -441,12 +551,27 @@ describe.skipIf(SEM_BANCO)('saneamento próprio contra o MariaDB (cliente f22_o2
         'SELECT situacao_anterior, situacao_nova, evento, responsavel_usuario_id FROM usuario_situacao_historico WHERE usuario_id = ?',
         [usu[B]],
       ),
-    ).toEqual({ situacao_anterior: 'inativo', situacao_nova: 'bloqueado', evento: 'bloqueio', responsavel_usuario_id: usu[GESTOR] });
+    ).toEqual({
+      situacao_anterior: 'inativo',
+      situacao_nova: 'bloqueado',
+      evento: 'bloqueio',
+      responsavel_usuario_id: usu[GESTOR],
+    });
     await expect(
-      executor.executar(OPERACOES_SANEAMENTO.bloquear, EST, { login: B, motivo: 'De novo' }, ctx('bloqueio2')),
+      executor.executar(
+        OPERACOES_SANEAMENTO.bloquear,
+        EST,
+        { login: B, motivo: 'De novo' },
+        ctx('bloqueio2'),
+      ),
     ).rejects.toMatchObject({ problema: expect.objectContaining({ codigo: 'ja-bloqueado' }) });
 
-    await executor.executar(OPERACOES_SANEAMENTO.retirarOpcoes, EST, { grupo: AMPLO, opcoes: ids.acoes.slice(0, 2) }, ctx('retirar'));
+    await executor.executar(
+      OPERACOES_SANEAMENTO.retirarOpcoes,
+      EST,
+      { grupo: AMPLO, opcoes: ids.acoes.slice(0, 2) },
+      ctx('retirar'),
+    );
     const [g] = await porta.grupos(EST, [AMPLO]);
     expect(g?.opcoes).toBe(1);
     const r = await linha(

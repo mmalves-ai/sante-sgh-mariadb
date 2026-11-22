@@ -46,25 +46,22 @@ const faixa = (
 // Evidências do W1-01 (acesso: senha, usuário, política, termo, sessões).
 const POLITICA = [
   'packages/dominio-acesso/src/politica-senha-sante.spec.ts',
-  'packages/legado/src/acesso/gravacao/politica-senha-sgh.spec.ts',
+  'apps/api/src/sessao/recusa-senha.spec.ts',
 ];
 const CICLO = [
   'apps/api/src/sessao/troca-senha.spec.ts',
   'apps/api/src/sessao/redefinir-senha.spec.ts',
   'apps/api/src/sessao/recuperacao-senha.spec.ts',
-  'packages/legado/src/acesso/gravacao/senha.spec.ts',
+  'apps/api/src/modulos/acesso/senha/porta-senha.spec.ts',
 ];
-const SESSOES = [
-  'apps/api/src/sessao/minhas-sessoes.spec.ts',
-  'packages/legado/src/acesso/gravacao/limite-sessao-sgh.spec.ts',
-];
+const SESSOES = ['apps/api/src/sessao/minhas-sessoes.spec.ts', 'apps/api/src/modulos/acesso/gestao.spec.ts'];
 const IDENTIDADE = [
   'apps/api/src/modulos/administracao/usuarios-cpf.spec.ts',
   'packages/dominio-acesso/src/usuario/painel-cpf.spec.ts',
-  'packages/legado/src/acesso/dependencias-acesso.spec.ts',
+  'apps/api/src/modulos/acesso/identidade/servico-identidade.spec.ts',
 ];
 const INATIVACAO = [
-  'packages/legado/src/acesso/gravacao/flags-usuario.spec.ts',
+  'apps/api/src/modulos/acesso/contas-dormentes.spec.ts',
   'packages/dominio-acesso/src/usuario/contas-dormentes.spec.ts',
   'apps/api/src/modulos/acesso/recertificacao.controller.spec.ts',
   'apps/api/src/modulos/acesso/pedido-acesso.controller.spec.ts',
@@ -76,7 +73,7 @@ export const REQUISITOS_NGS: readonly RequisitoNgs[] = [
   N('NGS1.01.01', 'Versão do software', 'SBIS-01'),
   N('NGS1.02.01', 'Método de autenticação validado no servidor', 'SBIS-02'),
   N('NGS1.02.02', 'Proteção de credenciais: hash com salt individual', 'SBIS-03', [
-    'packages/legado/src/acesso/gravacao/senha.spec.ts',
+    'apps/api/src/modulos/acesso/senha/porta-senha.spec.ts',
   ]),
   ...faixa('NGS1.02', 3, 5, 'Qualidade de senha parametrizável', 'SBIS-04', POLITICA),
   ...faixa(
@@ -134,7 +131,7 @@ export const REQUISITOS_NGS: readonly RequisitoNgs[] = [
   ...faixa('NGS1.07', 3, 4, 'Eventos auditáveis mínimos', 'SBIS-17'),
   ...faixa('NGS1.07', 5, 6, 'Conteúdo do registro de auditoria, sem dado sensível', 'SBIS-18', [
     'apps/api/src/sessao/recuperacao-senha.spec.ts',
-    'packages/legado/src/acesso/gravacao/politica-senha-sgh.spec.ts',
+    'apps/api/src/sessao/recusa-senha.spec.ts',
   ]),
   ...faixa('NGS1.07', 7, 8, 'Consulta e exportação da trilha', 'SBIS-19'),
   N('NGS1.08', 'Documentação (numeração dos itens a conferir no manual)', 'SBIS-20'),

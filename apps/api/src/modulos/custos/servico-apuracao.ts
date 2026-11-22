@@ -154,7 +154,10 @@ function resumoDe(a: ApuracaoCustosRegistrada): ResumoApuracao {
 
 const COMPLETUDE_VAZIA: SituacaoCompletude = { fontes: [], parcial: false, rotulo: null };
 
-export function apuracaoDe(a: ApuracaoCustosRegistrada, linhas: readonly LinhaCentroApuracao[]): ApuracaoCustos {
+export function apuracaoDe(
+  a: ApuracaoCustosRegistrada,
+  linhas: readonly LinhaCentroApuracao[],
+): ApuracaoCustos {
   return {
     id: a.id,
     competencia: a.competencia,
@@ -175,7 +178,8 @@ export function apuracaoDe(a: ApuracaoCustosRegistrada, linhas: readonly LinhaCe
   };
 }
 
-const vigenteDe = (as: readonly ApuracaoCustosRegistrada[]) => as.find((a) => a.situacao !== 'substituida') ?? null;
+const vigenteDe = (as: readonly ApuracaoCustosRegistrada[]) =>
+  as.find((a) => a.situacao !== 'substituida') ?? null;
 
 const ROTULO_TIPO_CONTA: Readonly<Record<string, string>> = {
   I: 'Internação',

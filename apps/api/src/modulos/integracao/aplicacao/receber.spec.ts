@@ -159,7 +159,9 @@ describe('monitor e fila de mortos (regras 9 e 10)', () => {
     expect(m.mortos).toHaveLength(1);
     expect(m.alertas[0]).toMatchObject({ parceiro: 'lab-apoio-sintetico' });
     expect(m.alertas[0].minutos).toBeGreaterThan(240);
-    expect(m.legado.filas.map((f: { fila: string }) => f.fila)).toContain('parceiro.lab-apoio-sintetico.saida');
+    expect(m.legado.filas.map((f: { fila: string }) => f.fila)).toContain(
+      'parceiro.lab-apoio-sintetico.saida',
+    );
     const id = m.mortos[0].id as string;
     expect(
       (await post(ti, `/integracoes/envios/${id}/tratar`, { acao: 'reprocessar', motivo: '' })).statusCode,

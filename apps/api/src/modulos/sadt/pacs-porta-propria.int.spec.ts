@@ -25,7 +25,8 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
   let nucleo: NucleoProprio;
   let porta: PortaPacsPropria;
   let m: MassaSadt | null = null;
-  const um = (sql: string, p: unknown[]) => nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s09pac' }, (l) => l.uma(sql, p));
+  const um = (sql: string, p: unknown[]) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-s09pac' }, (l) => l.uma(sql, p));
   const ctx = (est?: number) => contexto(m!, est) as ContextoPacs;
 
   beforeAll(async () => {
@@ -50,42 +51,65 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
     expect((await porta.modalidades(c)).some((x) => x.sigla === 'CT')).toBe(true);
 
     const registrar = () =>
-      porta.gravarSgh(c, (r: { id: number }) => linhaTela(m!, 'sadt.mwl.enviada', 'item_lista_trabalho_imagem', r.id), (g) =>
-        g.registrarItem({
-          exame: m!.itemImagem,
-          paciente: m!.base.paciente,
-          chaveNatural: 'x',
-          ato: 25,
-          modalidade: cad.get(m!.itemImagem)!,
-          accession: (n) => accessionDoItem(c.hospital, n),
-          chaveIdempotencia: chaveIdempotenciaMwl(c.hospital, m!.itemImagem),
-          origem: 'manual',
-          por: m!.base.login,
-        }),
+      porta.gravarSgh(
+        c,
+        (r: { id: number }) => linhaTela(m!, 'sadt.mwl.enviada', 'item_lista_trabalho_imagem', r.id),
+        (g) =>
+          g.registrarItem({
+            exame: m!.itemImagem,
+            paciente: m!.base.paciente,
+            chaveNatural: 'x',
+            ato: 25,
+            modalidade: cad.get(m!.itemImagem)!,
+            accession: (n) => accessionDoItem(c.hospital, n),
+            chaveIdempotencia: chaveIdempotenciaMwl(c.hospital, m!.itemImagem),
+            origem: 'manual',
+            por: m!.base.login,
+          }),
       );
     const r = await registrar();
     expect(r.accession).toBe(accessionDoItem(c.hospital, r.id));
-    expect(await um('SELECT numero_acesso, quantidade_envios, situacao, integracao_mensagem_id FROM item_lista_trabalho_imagem WHERE id = ?', [r.id])).toMatchObject({
+    expect(
+      await um(
+        'SELECT numero_acesso, quantidade_envios, situacao, integracao_mensagem_id FROM item_lista_trabalho_imagem WHERE id = ?',
+        [r.id],
+      ),
+    ).toMatchObject({
       numero_acesso: r.accession,
       quantidade_envios: 1,
       situacao: 'na_fila',
       integracao_mensagem_id: Number(r.outbox),
     });
-    expect(await um('SELECT direcao, situacao, ponto FROM integracao_mensagem WHERE id = ?', [Number(r.outbox)])).toMatchObject({
+    expect(
+      await um('SELECT direcao, situacao, ponto FROM integracao_mensagem WHERE id = ?', [Number(r.outbox)]),
+    ).toMatchObject({
       direcao: 'saida',
       situacao: 'pendente',
       ponto: 'imagem.mwl',
     });
     expect(codigoDe(await registrar().catch((e: unknown) => e))).toBe('ja-na-worklist');
     const [i] = await porta.itens(c, [m!.itemImagem]);
-    expect(i).toMatchObject({ id: r.id, modalidade: 'CT', ato: 25, envios: 1, entrega: { situacao: 'pendente' } });
+    expect(i).toMatchObject({
+      id: r.id,
+      modalidade: 'CT',
+      ato: 25,
+      envios: 1,
+      entrega: { situacao: 'pendente' },
+    });
     expect(await porta.itens(ctx(m!.base.outroEst), [m!.itemImagem])).toEqual([]);
     expect((await porta.item(c, { accession: r.accession }))?.id).toBe(r.id);
     expect((await porta.itensDoPaciente(c, m!.base.paciente)).map((x) => x.id)).toEqual([r.id]);
 
     const reenviar = (envios: number) =>
       porta.gravarSgh(c, linhaTela(m!, 'sadt.mwl.enviada', 'item_lista_trabalho_imagem', r.id), (g) =>
-        g.reenviar({ id: r.id, envios, exame: m!.itemImagem, accession: r.accession, modalidade: 'CT', por: m!.base.login }),
+        g.reenviar({
+          id: r.id,
+          envios,
+          exame: m!.itemImagem,
+          accession: r.accession,
+          modalidade: 'CT',
+          por: m!.base.login,
+        }),
       );
     expect(await reenviar(1)).toMatchObject({ id: r.id, envios: 2 });
     expect(codigoDe(await reenviar(1).catch((e: unknown) => e))).toBe('conflito-versao');
@@ -113,22 +137,44 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
     const semUsuario = await status('em-andamento', `${m!.marca}-m2`, { ...c, usuario: null });
     expect(semUsuario.repetida).toBe(false);
     expect(
-      await um("SELECT criado_por, direcao FROM integracao_mensagem WHERE ponto <> 'imagem.mwl' AND referencia_externa = ?", [`${m!.marca}-m2`]),
+      await um(
+        "SELECT criado_por, direcao FROM integracao_mensagem WHERE ponto <> 'imagem.mwl' AND referencia_externa = ?",
+        [`${m!.marca}-m2`],
+      ),
     ).toMatchObject({ criado_por: null, direcao: 'entrada' });
     expect(
-      Number((await um("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'integracao_mensagem' AND correlacao = ? AND usuario_id IS NULL", [c.correlacao.slice(0, 64)]))?.["n"]),
+      Number(
+        (
+          await um(
+            "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'integracao_mensagem' AND correlacao = ? AND usuario_id IS NULL",
+            [c.correlacao.slice(0, 64)],
+          )
+        )?.['n'],
+      ),
     ).toBeGreaterThan(0);
-    expect(await um('SELECT situacao_estudo, uid_estudo, estudo_imagem_id IS NOT NULL AS e FROM item_lista_trabalho_imagem WHERE id = ?', [r.id])).toMatchObject({
+    expect(
+      await um(
+        'SELECT situacao_estudo, uid_estudo, estudo_imagem_id IS NOT NULL AS e FROM item_lista_trabalho_imagem WHERE id = ?',
+        [r.id],
+      ),
+    ).toMatchObject({
       situacao_estudo: 'concluido',
       uid_estudo: '1.2.826.0.1.3680043.10.999',
       e: 1,
     });
-    expect(await um('SELECT situacao, numero_acesso FROM estudo_imagem WHERE exame_item_id = ?', [m!.itemImagem])).toMatchObject({
+    expect(
+      await um('SELECT situacao, numero_acesso FROM estudo_imagem WHERE exame_item_id = ?', [m!.itemImagem]),
+    ).toMatchObject({
       situacao: 'concluido',
       numero_acesso: r.accession,
     });
     const ss = await porta.status(c, [m!.itemImagem]);
     expect(ss.map((x) => x.status)).toEqual(['concluido', 'em-andamento']);
-    expect(ss[0]).toMatchObject({ mwl: r.id, exame: m!.itemImagem, origem: 'simulador', chaveMensagem: `${m!.marca}-m1` });
+    expect(ss[0]).toMatchObject({
+      mwl: r.id,
+      exame: m!.itemImagem,
+      origem: 'simulador',
+      chaveMensagem: `${m!.marca}-m1`,
+    });
   });
 });

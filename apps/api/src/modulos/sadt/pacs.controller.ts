@@ -72,7 +72,9 @@ export class PacsController {
   @Post('worklist/enviar')
   @HttpCode(201)
   @Permissao(P.reenviar)
-  @AuditadoNoHandler('sadt.enviarWorklist: item_lista_trabalho_imagem, a fila de integração e a trilha na mesma transação')
+  @AuditadoNoHandler(
+    'sadt.enviarWorklist: item_lista_trabalho_imagem, a fila de integração e a trilha na mesma transação',
+  )
   enviar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoWorklist> {
     const e = corpo(esquemaEnviarWorklist, b);
     return this.servico.enviar(sessaoDe(req), e.exames, 'manual');
@@ -81,7 +83,9 @@ export class PacsController {
   @Post('worklist/:id/reenviar')
   @HttpCode(201)
   @Permissao(P.reenviar)
-  @AuditadoNoHandler('sadt.enviarWorklist (reenvio): item_lista_trabalho_imagem, a fila de integração e a trilha juntos')
+  @AuditadoNoHandler(
+    'sadt.enviarWorklist (reenvio): item_lista_trabalho_imagem, a fila de integração e a trilha juntos',
+  )
   reenviar(
     @Param('id') id: string,
     @Body() b: unknown,

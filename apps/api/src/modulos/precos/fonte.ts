@@ -202,28 +202,12 @@ export interface FontePrecos {
     porPagina: number,
     comparacao: string | null,
   ): Promise<{ itens: LinhaCargaImportacao[]; total: number }>;
-  gravarCarga(
-    c: CtxPrecos,
-    nova: NovaCarga,
-    trilha: TrilhaPreco,
-  ): Promise<{ id: number }>;
-  mudarSituacaoCarga(
-    c: CtxPrecos,
-    m: MudancaCarga,
-    trilha: TrilhaPreco,
-  ): Promise<void>;
-  gravarPlano(
-    c: CtxPrecos,
-    p: NovoPlano,
-    trilha: TrilhaPreco,
-  ): Promise<{ id: number }>;
+  gravarCarga(c: CtxPrecos, nova: NovaCarga, trilha: TrilhaPreco): Promise<{ id: number }>;
+  mudarSituacaoCarga(c: CtxPrecos, m: MudancaCarga, trilha: TrilhaPreco): Promise<void>;
+  gravarPlano(c: CtxPrecos, p: NovoPlano, trilha: TrilhaPreco): Promise<{ id: number }>;
   /** Pré-conferência (só leitura) de todas as partes do desfazer, antes da primeira exclusão. */
   preConferirDesfazer(c: CtxPrecos, partes: readonly DesfazerReajusteEntrada[]): Promise<void>;
-  alterarPlano(
-    c: CtxPrecos,
-    a: AlteracaoPlano,
-    trilha: TrilhaPreco,
-  ): Promise<{ id: number; versao: number }>;
+  alterarPlano(c: CtxPrecos, a: AlteracaoPlano, trilha: TrilhaPreco): Promise<{ id: number; versao: number }>;
 }
 
 /** Fora de dev/ci sem o núcleo: falha fechada (503). */

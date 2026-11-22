@@ -6,7 +6,22 @@
 // Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
-import type { AtendimentoLido, CabecalhoDocumentoLido, CabecalhoRegistroLido, DefinicaoFormularioLida, DescarteRascunho, GravacaoEvolucao, GravacaoRascunho, LiberacaoConsultada, LinhaRespostaLida, ModeloDoRegistro, ProfissionalDoRegistro, RascunhoLido, RetratosAtuais, SuspensaoEvolucao } from './tipos-pep.js';
+import type {
+  AtendimentoLido,
+  CabecalhoDocumentoLido,
+  CabecalhoRegistroLido,
+  DefinicaoFormularioLida,
+  DescarteRascunho,
+  GravacaoEvolucao,
+  GravacaoRascunho,
+  LiberacaoConsultada,
+  LinhaRespostaLida,
+  ModeloDoRegistro,
+  ProfissionalDoRegistro,
+  RascunhoLido,
+  RetratosAtuais,
+  SuspensaoEvolucao,
+} from './tipos-pep.js';
 
 export const PORTA_REGISTRO = Symbol('PORTA_REGISTRO');
 

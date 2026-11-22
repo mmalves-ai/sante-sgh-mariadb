@@ -29,7 +29,13 @@ export async function ambienteM27(): Promise<AmbienteM27> {
   );
   if (!e) throw new Error('O cliente de teste não tem estabelecimento: monte a massa sintética antes.');
   const cod = String(e['codigo']);
-  return { nucleo, executor: nucleo.criarExecutor(), cliente: CLIENTE_TESTE, cod, c: { rede: CLIENTE_TESTE, hospital: cod } };
+  return {
+    nucleo,
+    executor: nucleo.criarExecutor(),
+    cliente: CLIENTE_TESTE,
+    cod,
+    c: { rede: CLIENTE_TESTE, hospital: cod },
+  };
 }
 
 const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v)).trim();
@@ -52,7 +58,12 @@ export async function usuariosAtivos(
     { teto: 1 },
   );
   if (us.length < 2 || !g) throw new Error('O cliente de teste não tem usuários ativos suficientes.');
-  return { a: txt(us[0]?.['login']), b: txt(us[1]?.['login']), grupo: txt(g['codigo']), doGrupo: Number(g['n']) };
+  return {
+    a: txt(us[0]?.['login']),
+    b: txt(us[1]?.['login']),
+    grupo: txt(g['codigo']),
+    doGrupo: Number(g['n']),
+  };
 }
 
 /** Percentil (0 a 100) dos tempos. */

@@ -290,7 +290,7 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
   - Abaixo de 100 GB, pare o que for pesado e avise o dono.
   - Antes de baixar, importar ou instalar algo grande (imagem, dump, `node_modules`, carga de catálogo), estime o tamanho.
   - Apague temporários assim que deixarem de servir.
-- **Gestão do MariaDB pelo browser (dono, 2026-11-21):** Adminer atrás de Caddy com HTTPS em `https://192.168.0.104:5320`.
+- **Gestão do MariaDB pelo browser (dono, 2026-11-21):** Adminer atrás de Caddy com HTTPS em `https://192.168.0.101:5320`.
   - Publicado na rede local, por pedido do dono. É exceção à regra 8 ("só loopback"); o MariaDB continua só no
     loopback.
   - Usuário `dono_leitura`, somente leitura. A senha está em `MARIADB_GESTAO_SENHA` no `.env`.

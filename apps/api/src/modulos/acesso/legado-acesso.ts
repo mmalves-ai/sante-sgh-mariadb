@@ -90,9 +90,10 @@ export class LeituraAcesso {
   }
 
   private async estabelecimento(l: Leitor, hospital: string): Promise<number | null> {
-    const r = await l.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-      hospital,
-    ]);
+    const r = await l.uma<{ id: number }>(
+      'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+      [hospital],
+    );
     return r ? Number(r.id) : null;
   }
 
@@ -168,7 +169,11 @@ export class LeituraAcesso {
       permissoesNovo: Number(p['permitidas'] ?? 0),
       destino: 'perfil',
       perfil: texto(p['codigo']),
-      nivel: verdadeiro(p['administrador']) ? 'administrador' : verdadeiro(p['privilegiado']) ? 'privilegiado' : 'padrao',
+      nivel: verdadeiro(p['administrador'])
+        ? 'administrador'
+        : verdadeiro(p['privilegiado'])
+          ? 'privilegiado'
+          : 'padrao',
       motivo: null,
       descricao: texto(p['descricao']) || texto(p['nome']) || null,
       descricaoVersao: p['versao'] === null || p['versao'] === undefined ? null : Number(p['versao']),
@@ -195,7 +200,11 @@ export class LeituraAcesso {
         nivel: 1,
         titulo: a.titulo || a.codigo,
         permissao: a.codigo,
-        exclusao: !a.ativa ? 'Ação inativa no catálogo' : !a.permissionavel ? 'Ação não permissionável' : null,
+        exclusao: !a.ativa
+          ? 'Ação inativa no catálogo'
+          : !a.permissionavel
+            ? 'Ação não permissionável'
+            : null,
       }));
   }
 }

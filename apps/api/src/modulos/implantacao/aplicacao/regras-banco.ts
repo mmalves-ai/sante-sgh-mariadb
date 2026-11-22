@@ -61,7 +61,8 @@ export function itemAutenticacao(c: ConexaoBanco, ambiente: string): ItemConfere
 
 export function itemCanal(c: ConexaoBanco, ambiente: string): ItemConferencia {
   const titulo = 'Canal cifrado entre o servidor e o banco';
-  if (c.canalCifrado === true) return item('canal-cifrado', titulo, 'ok', 'O canal com o banco está cifrado (TLS).');
+  if (c.canalCifrado === true)
+    return item('canal-cifrado', titulo, 'ok', 'O canal com o banco está cifrado (TLS).');
   return item(
     'canal-cifrado',
     titulo,

@@ -150,7 +150,9 @@ async function prepararBanco(): Promise<void> {
           'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
           [codigo, `Hospital sintético ${codigo}`, `Hospital sintético ${codigo} (fictício)`, agora],
         );
-    idEstab = Number((await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [H]))!.id);
+    idEstab = Number(
+      (await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [H]))!.id,
+    );
     const u = await e.uma<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [LOGIN]);
     idUsuario = u
       ? Number(u.id)
@@ -202,9 +204,9 @@ async function prepararBanco(): Promise<void> {
 async function limparBanco(): Promise<void> {
   if (!nucleo) return;
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f22-0202' }, async (e) => {
-    const est = (await e.consultar<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [H, OUTRO])).map(
-      (x) => Number(x.id),
-    );
+    const est = (
+      await e.consultar<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [H, OUTRO])
+    ).map((x) => Number(x.id));
     if (est.length) {
       const m = est.map(() => '?').join(', ');
       await e.executar(
@@ -226,13 +228,15 @@ async function limparBanco(): Promise<void> {
     }
     if (idUsuarioHttp) {
       // Só as linhas do teste (carga de catálogo): o usuário sintético pode ser usado por outro lote.
-      await e.executar("DELETE FROM idempotencia_operacao WHERE usuario_id = ? AND operacao LIKE 'catalogo.carga.%'", [
-        idUsuarioHttp,
-      ]);
+      await e.executar(
+        "DELETE FROM idempotencia_operacao WHERE usuario_id = ? AND operacao LIKE 'catalogo.carga.%'",
+        [idUsuarioHttp],
+      );
       await e.executar("DELETE FROM trilha_auditoria WHERE usuario_id = ? AND entidade = 'carga_catalogo'", [
         idUsuarioHttp,
       ]);
-      if (usuarioHttpCriado) await e.executar('DELETE FROM usuario WHERE id = ? AND login = ?', [idUsuarioHttp, LOGIN_HTTP]);
+      if (usuarioHttpCriado)
+        await e.executar('DELETE FROM usuario WHERE id = ? AND login = ?', [idUsuarioHttp, LOGIN_HTTP]);
     }
   });
 }
@@ -254,403 +258,544 @@ async function falha(p: Promise<unknown>): Promise<{ status: number; codigo: unk
   throw new Error('era para recusar');
 }
 
-describe.skipIf(SEM_BANCO)('catálogos: fonte própria no MariaDB (cliente f22_o2)', { timeout: 60_000 }, () => {
-  beforeAll(async () => {
-    await prepararBanco();
-    await limparBanco();
-    await prepararBanco();
-  });
-  afterAll(async () => {
-    await limparBanco();
-    await nucleo?.encerrar();
-    if (criadasPeloTeste) sql(`DROP TABLE IF EXISTS ${TABELAS.join(', ')}`);
-  });
-
-  const fabricas: [string, () => FonteCatalogos][] = [
-    ['memória', () => new FonteCatalogosMemoria()],
-    ['banco', () => new FonteCatalogosPropria(nucleo!, CLIENTE)],
-  ];
-
-  describe.each(fabricas)('área de preparação (%s)', (_nome, fabrica) => {
-    it('grava a carga com as linhas; lista, lê, pagina e filtra; reimportação só da publicada', async () => {
-      const f = fabrica();
-      const sha = SHA(Date.now());
-      const { id } = await f.gravarCarga(ctx(), preparo(sha), trilha());
-      const c = await f.carga(ctx(), id);
-      expect(c).toMatchObject({
-        id,
-        catalogo: 'cid',
-        situacao: 'comparada',
-        sha256: sha,
-        versao: 1,
-        totais: { linhas: 3, validas: 2, erros: 1, novos: 1, alterados: 1 },
-        lotes: { total: 1, publicados: 0, tamanho: 500 },
-        arquivoGuardado: false,
-      });
-      expect((await f.cargas(ctx(), 'cid'))?.map((x) => x.id)).toContain(id);
-      const pg = await f.linhas(ctx(), id, { pagina: 0, porPagina: 2 });
-      expect(pg.total).toBe(3);
-      expect(pg.itens.map((l) => l.linha)).toEqual([1, 2]);
-      expect(pg.itens[0]).toMatchObject({ entidade: 'cid10', comparacao: 'alterado', lote: 1 });
-      expect(pg.itens[0]?.depois).toEqual({ nome: 'DOENÇA SINTÉTICA 0 (revista)' });
-      const erros = await f.linhas(ctx(), id, { pagina: 0, porPagina: 50, resultado: 'erro' });
-      expect(erros.itens.map((l) => l.motivo)).toEqual(['código obrigatório']);
-      expect(await f.publicadaComHash(ctx(), 'cid', sha)).toBeNull();
-    });
-
-    it('aprovar com a versão lida; versão velha é conflito; situação que não permite é recusada', async () => {
-      const f = fabrica();
-      const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 1)), trilha());
-      const aprovar = (versao: number) =>
-        f.mudarSituacao(
-          ctx(),
-          { hospital: H, id, versao, de: ['comparada'], para: 'aprovada', aprovador: LOGIN, motivo: 'aprovação de teste' },
-          trilha('catalogo.carga.aprovada'),
-        );
-      await aprovar(1);
-      const c = await f.carga(ctx(), id);
-      expect(c).toMatchObject({ situacao: 'aprovada', versao: 2, motivo: 'aprovação de teste' });
-      expect(await falha(aprovar(1))).toEqual({ status: 409, codigo: 'conflito-concorrente' });
-      expect(await falha(aprovar(2))).toEqual({ status: 409, codigo: 'situacao-invalida' });
-      // Cancelar a aprovada (entre lotes), com o motivo.
-      await f.mudarSituacao(
-        ctx(),
-        { hospital: H, id, versao: 2, de: ['aprovada', 'publicando', 'falhou'], para: 'cancelada', aprovador: LOGIN, motivo: 'cancelada no teste' },
-        trilha('catalogo.carga.rejeitada'),
-      );
-      expect(await f.carga(ctx(), id)).toMatchObject({ situacao: 'cancelada', versao: 3 });
-    });
-  });
-
-  describe('contrato de efeito no banco', () => {
-    it('preparar: cabeçalho, linhas, versão 1, quem enviou, trilha e idempotência na mesma transação', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 2)), trilha());
-      const [cab, n, trilhas, idem] = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, async (l) => [
-        await l.uma('SELECT estabelecimento_id, criado_por, versao, situacao, linhas_erro FROM carga_catalogo WHERE id = ?', [id]),
-        await l.uma<{ n: number; lote: number }>(
-          'SELECT COUNT(*) AS n, SUM(lote IS NOT NULL) AS lote FROM carga_catalogo_linha WHERE carga_catalogo_id = ?',
-          [id],
-        ),
-        await l.consultar("SELECT acao FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ?", [id]),
-        await l.uma<{ n: number }>(
-          "SELECT COUNT(*) AS n FROM idempotencia_operacao WHERE operacao = 'catalogo.carga.preparar' AND usuario_id = ?",
-          [idUsuario],
-        ),
-      ]);
-      expect(cab).toMatchObject({ situacao: 'comparada', linhas_erro: 1 });
-      expect(Number(cab!['estabelecimento_id'])).toBe(idEstab);
-      expect(Number(cab!['criado_por'])).toBe(idUsuario);
-      expect(Number(cab!['versao'])).toBe(1);
-      expect(Number(n!.n)).toBe(3);
-      expect(Number(n!.lote)).toBe(2);
-      expect((trilhas as { acao: string }[]).map((x) => x.acao)).toEqual(['inclusao']);
-      expect(Number(idem!.n)).toBeGreaterThanOrEqual(1);
-      expect((await f.carga(ctx(), id))?.responsavel).toBe(LOGIN);
-    });
-
-    it('rejeitada na preparação nasce encerrada; aprovar grava aprovador, data e trilha de alteração', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const r = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 3), 'rejeitada'), trilha());
-      const rej = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, (l) =>
-        l.uma('SELECT encerrada_em, encerrada_por_usuario_id FROM carga_catalogo WHERE id = ?', [r.id]),
-      );
-      expect(rej!['encerrada_em']).not.toBeNull();
-      expect(Number(rej!['encerrada_por_usuario_id'])).toBe(idUsuario);
-      const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 4)), trilha());
-      await f.mudarSituacao(
-        ctx(),
-        { hospital: H, id, versao: 1, de: ['comparada'], para: 'aprovada', aprovador: LOGIN, motivo: 'aprovada' },
-        trilha('catalogo.carga.aprovada'),
-      );
-      const [cab, acoes] = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, async (l) => [
-        await l.uma('SELECT versao, aprovada_em, aprovada_por_usuario_id, alterado_por FROM carga_catalogo WHERE id = ?', [id]),
-        await l.consultar(
-          "SELECT acao FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ? ORDER BY id",
-          [id],
-        ),
-      ]);
-      expect(Number(cab!['versao'])).toBe(2);
-      expect(cab!['aprovada_em']).not.toBeNull();
-      expect(Number(cab!['aprovada_por_usuario_id'])).toBe(idUsuario);
-      expect(Number(cab!['alterado_por'])).toBe(idUsuario);
-      expect((acoes as { acao: string }[]).map((x) => x.acao)).toEqual(['inclusao', 'alteracao']);
-      expect((await f.carga(ctx(), id))?.aprovador).toBe(LOGIN);
-    });
-
-    it('outro estabelecimento não vê nem muda a carga; entrada inválida não grava; restrição do banco segura', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 5)), trilha());
-      expect(await f.carga(ctx(OUTRO), id)).toBeNull();
-      expect((await f.linhas(ctx(OUTRO), id, { pagina: 0, porPagina: 10 })).total).toBe(0);
-      expect(
-        await falha(
-          f.mudarSituacao(
-            ctx(OUTRO),
-            { hospital: OUTRO, id, versao: 1, de: ['comparada'], para: 'rejeitada', aprovador: LOGIN, motivo: 'x' },
-            trilha(),
-          ),
-        ),
-      ).toMatchObject({ status: 404 });
-      expect((await f.carga(ctx(), id))?.situacao).toBe('comparada');
-      expect(await falha(f.gravarCarga(ctx(), { ...preparo('nao-e-hash'), sha256: 'nao-e-hash' }, trilha()))).toMatchObject({
-        status: 400,
-      });
-      // Totais que não fecham: o CHECK do banco recusa (nada gravado).
-      const antes = (await f.cargas(ctx(), 'cid'))?.length ?? 0;
-      const ruim = preparo(SHA(Date.now() + 6));
-      expect(
-        (await falha(f.gravarCarga(ctx(), { ...ruim, totais: { ...ruim.totais, validas: 9 } }, trilha()))).status,
-      ).toBeGreaterThanOrEqual(400);
-      expect((await f.cargas(ctx(), 'cid'))?.length ?? 0).toBe(antes);
-    });
-  });
-
-  describe('autor, idempotência e trilha', () => {
-    it('usuário que não existe no cliente: 403 e nada gravado (nunca carga sem autor)', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const antes = (await f.cargas(ctx(), 'cid'))?.length ?? 0;
-      expect(
-        await falha(f.gravarCarga(ctx(), preparo(SHA(Date.now() + 7)), trilha(undefined, { usuario: 'f22o202.inexistente' }))),
-      ).toEqual({ status: 403, codigo: 'usuario-sem-cadastro' });
-      const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 8)), trilha());
-      expect(
-        await falha(
-          f.mudarSituacao(
-            ctx(),
-            { hospital: H, id, versao: 1, de: ['comparada'], para: 'aprovada', aprovador: null, motivo: 'x' },
-            trilha('catalogo.carga.aprovada', { usuario: 'f22o202.inexistente' }),
-          ),
-        ),
-      ).toEqual({ status: 403, codigo: 'usuario-sem-cadastro' });
-      expect((await f.carga(ctx(), id))?.situacao).toBe('comparada');
-      expect((await f.cargas(ctx(), 'cid'))?.length ?? 0).toBe(antes + 1);
-      // O banco também recusa a aprovada sem aprovador (CHECK ck_carga_catalogo_aprovador).
-      expect(() =>
-        sql(`UPDATE carga_catalogo SET situacao = 'aprovada', aprovada_em = NOW(3) WHERE id = ${id}`),
-      ).toThrow();
-    });
-
-    it('o mesmo pedido repetido devolve o mesmo id sem duplicar; a trilha leva IP, estação e alvo', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const sha = SHA(Date.now() + 9);
-      const t = trilha();
-      const a = await f.gravarCarga(ctx(), preparo(sha), t);
-      const b = await f.gravarCarga(ctx(), preparo(sha), t);
-      expect(b.id).toBe(a.id);
-      const ap = trilha('catalogo.carga.aprovada', { operacao: 'catalogo.carga.aprovar', chaveNaturalAlvo: `CARGA:${a.id}` });
-      const m = { hospital: H, id: a.id, versao: 1, de: ['comparada'] as const, para: 'aprovada' as const, aprovador: LOGIN, motivo: 'ok' };
-      await f.mudarSituacao(ctx(), { ...m, de: [...m.de] }, ap);
-      await f.mudarSituacao(ctx(), { ...m, de: [...m.de] }, ap);
-      const [n, tr] = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, async (l) => [
-        await l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM carga_catalogo WHERE arquivo_sha256 = ?', [sha]),
-        await l.consultar(
-          "SELECT acao, endereco_ip, dados_depois FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ? ORDER BY id",
-          [a.id],
-        ),
-      ]);
-      expect(Number((n as { n: number }).n)).toBe(1);
-      expect((await f.carga(ctx(), a.id))?.versao).toBe(2);
-      const linhas = tr as { acao: string; endereco_ip: string; dados_depois: unknown }[];
-      expect(linhas.map((x) => x.acao)).toEqual(['inclusao', 'alteracao']);
-      expect(linhas.every((x) => x.endereco_ip === '127.0.0.1')).toBe(true);
-      const dados = (x: unknown) => (typeof x === 'string' ? JSON.parse(x) : x) as { dados: Record<string, unknown> };
-      expect(dados(linhas[0]!.dados_depois).dados).toMatchObject({ estacao: 'TESTE:127.0.0.1', chaveNaturalAlvo: 'CATALOGO:cid' });
-      expect(dados(linhas[1]!.dados_depois).dados).toMatchObject({
-        estacao: 'TESTE:127.0.0.1',
-        chaveNaturalAlvo: `CARGA:${a.id}`,
-        operacaoTela: 'catalogo.carga.aprovar',
-      });
-    });
-  });
-
-  describe('fluxo HTTP real: controller → serviço → fonte própria', () => {
-    let app: NestFastifyApplication;
-    let chave = 0;
-    const env: Record<string, string> = {
-      ...envTeste,
-      AMBIENTE: 'dev',
-      API_MODULOS: 'catalogos',
-      ESTABELECIMENTOS: H,
-    };
+describe.skipIf(SEM_BANCO)(
+  'catálogos: fonte própria no MariaDB (cliente f22_o2)',
+  { timeout: 60_000 },
+  () => {
     beforeAll(async () => {
-      const fonte = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const registro = {
-        ...REGISTRO_MODULOS,
-        catalogos: async () => ({ modulo: (c: ContextoModulo) => modulo(c, { fonte }) }),
-      } as typeof REGISTRO_MODULOS;
-      app = await criarApp(lerConfiguracao(env), null, env, { trilha: new RegistradorTrilhaMemoria(), registro });
-      await app.init();
-      await app.getHttpAdapter().getInstance().ready();
+      await prepararBanco();
+      await limparBanco();
+      await prepararBanco();
     });
     afterAll(async () => {
-      await app?.close();
+      await limparBanco();
+      await nucleo?.encerrar();
+      if (criadasPeloTeste) sql(`DROP TABLE IF EXISTS ${TABELAS.join(', ')}`);
     });
-    async function entrar(): Promise<{ cookie: string; csrf: string }> {
-      const r = await app.inject({
-        method: 'POST',
-        url: '/api/sessao',
-        payload: { estabelecimento: H, login: LOGIN_HTTP, senha: SENHA },
-      });
-      expect(r.statusCode).toBe(201);
-      const set = r.headers['set-cookie'] as string[];
-      return {
-        cookie: set.map((c) => c.split(';')[0]).join('; '),
-        csrf: set.find((c) => c.startsWith('sgh_csrf='))?.split(';')[0]?.slice(9) ?? '',
-      };
-    }
-    const post = (s: { cookie: string; csrf: string }, url: string, payload: unknown, k = `f22-0202-http-${++chave}-${Date.now()}`) =>
-      app.inject({
-        method: 'POST',
-        url,
-        headers: { cookie: s.cookie, 'x-csrf': s.csrf, 'idempotency-key': k },
-        payload: payload as Record<string, unknown>,
+
+    const fabricas: [string, () => FonteCatalogos][] = [
+      ['memória', () => new FonteCatalogosMemoria()],
+      ['banco', () => new FonteCatalogosPropria(nucleo!, CLIENTE)],
+    ];
+
+    describe.each(fabricas)('área de preparação (%s)', (_nome, fabrica) => {
+      it('grava a carga com as linhas; lista, lê, pagina e filtra; reimportação só da publicada', async () => {
+        const f = fabrica();
+        const sha = SHA(Date.now());
+        const { id } = await f.gravarCarga(ctx(), preparo(sha), trilha());
+        const c = await f.carga(ctx(), id);
+        expect(c).toMatchObject({
+          id,
+          catalogo: 'cid',
+          situacao: 'comparada',
+          sha256: sha,
+          versao: 1,
+          totais: { linhas: 3, validas: 2, erros: 1, novos: 1, alterados: 1 },
+          lotes: { total: 1, publicados: 0, tamanho: 500 },
+          arquivoGuardado: false,
+        });
+        expect((await f.cargas(ctx(), 'cid'))?.map((x) => x.id)).toContain(id);
+        const pg = await f.linhas(ctx(), id, { pagina: 0, porPagina: 2 });
+        expect(pg.total).toBe(3);
+        expect(pg.itens.map((l) => l.linha)).toEqual([1, 2]);
+        expect(pg.itens[0]).toMatchObject({ entidade: 'cid10', comparacao: 'alterado', lote: 1 });
+        expect(pg.itens[0]?.depois).toEqual({ nome: 'DOENÇA SINTÉTICA 0 (revista)' });
+        const erros = await f.linhas(ctx(), id, { pagina: 0, porPagina: 50, resultado: 'erro' });
+        expect(erros.itens.map((l) => l.motivo)).toEqual(['código obrigatório']);
+        expect(await f.publicadaComHash(ctx(), 'cid', sha)).toBeNull();
       });
 
-    it('SIGTAP: envio, detalhe, aprovação com a senha e reenvios idempotentes, gravados no banco', async () => {
-      const s = await entrar();
-      const ultima = (await new FonteCatalogosPropria(nucleo!, CLIENTE).leituraDoBanco(ctx(), 'sigtap').edicao()).ultima ?? '202609';
-      const a = Number(ultima.slice(0, 4));
-      const m = Number(ultima.slice(4, 6));
-      const competencia = m === 12 ? `${a + 1}01` : `${a}${String(m + 1).padStart(2, '0')}`;
-      const envio = {
-        catalogo: 'sigtap',
-        arquivos: [
+      it('aprovar com a versão lida; versão velha é conflito; situação que não permite é recusada', async () => {
+        const f = fabrica();
+        const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 1)), trilha());
+        const aprovar = (versao: number) =>
+          f.mudarSituacao(
+            ctx(),
+            {
+              hospital: H,
+              id,
+              versao,
+              de: ['comparada'],
+              para: 'aprovada',
+              aprovador: LOGIN,
+              motivo: 'aprovação de teste',
+            },
+            trilha('catalogo.carga.aprovada'),
+          );
+        await aprovar(1);
+        const c = await f.carga(ctx(), id);
+        expect(c).toMatchObject({ situacao: 'aprovada', versao: 2, motivo: 'aprovação de teste' });
+        expect(await falha(aprovar(1))).toEqual({ status: 409, codigo: 'conflito-concorrente' });
+        expect(await falha(aprovar(2))).toEqual({ status: 409, codigo: 'situacao-invalida' });
+        // Cancelar a aprovada (entre lotes), com o motivo.
+        await f.mudarSituacao(
+          ctx(),
           {
-            nome: 'tb_procedimento.txt',
-            conteudo: arquivoTbProcedimento([
-              { codigo: '9999990001', nome: 'CONSULTA SINTÉTICA REVISTA', competencia, valorSa: 13 },
-              { codigo: '9999990002', nome: 'NOVO SINTÉTICO', competencia, valorSa: 1 },
-            ]),
+            hospital: H,
+            id,
+            versao: 2,
+            de: ['aprovada', 'publicando', 'falhou'],
+            para: 'cancelada',
+            aprovador: LOGIN,
+            motivo: 'cancelada no teste',
           },
-        ],
+          trilha('catalogo.carga.rejeitada'),
+        );
+        expect(await f.carga(ctx(), id)).toMatchObject({ situacao: 'cancelada', versao: 3 });
+      });
+    });
+
+    describe('contrato de efeito no banco', () => {
+      it('preparar: cabeçalho, linhas, versão 1, quem enviou, trilha e idempotência na mesma transação', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 2)), trilha());
+        const [cab, n, trilhas, idem] = await nucleo!.lerSomente(
+          { cliente: CLIENTE, correlacao: 'conf-0202' },
+          async (l) => [
+            await l.uma(
+              'SELECT estabelecimento_id, criado_por, versao, situacao, linhas_erro FROM carga_catalogo WHERE id = ?',
+              [id],
+            ),
+            await l.uma<{ n: number; lote: number }>(
+              'SELECT COUNT(*) AS n, SUM(lote IS NOT NULL) AS lote FROM carga_catalogo_linha WHERE carga_catalogo_id = ?',
+              [id],
+            ),
+            await l.consultar(
+              "SELECT acao FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ?",
+              [id],
+            ),
+            await l.uma<{ n: number }>(
+              "SELECT COUNT(*) AS n FROM idempotencia_operacao WHERE operacao = 'catalogo.carga.preparar' AND usuario_id = ?",
+              [idUsuario],
+            ),
+          ],
+        );
+        expect(cab).toMatchObject({ situacao: 'comparada', linhas_erro: 1 });
+        expect(Number(cab!['estabelecimento_id'])).toBe(idEstab);
+        expect(Number(cab!['criado_por'])).toBe(idUsuario);
+        expect(Number(cab!['versao'])).toBe(1);
+        expect(Number(n!.n)).toBe(3);
+        expect(Number(n!.lote)).toBe(2);
+        expect((trilhas as { acao: string }[]).map((x) => x.acao)).toEqual(['inclusao']);
+        expect(Number(idem!.n)).toBeGreaterThanOrEqual(1);
+        expect((await f.carga(ctx(), id))?.responsavel).toBe(LOGIN);
+      });
+
+      it('rejeitada na preparação nasce encerrada; aprovar grava aprovador, data e trilha de alteração', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const r = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 3), 'rejeitada'), trilha());
+        const rej = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, (l) =>
+          l.uma('SELECT encerrada_em, encerrada_por_usuario_id FROM carga_catalogo WHERE id = ?', [r.id]),
+        );
+        expect(rej!['encerrada_em']).not.toBeNull();
+        expect(Number(rej!['encerrada_por_usuario_id'])).toBe(idUsuario);
+        const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 4)), trilha());
+        await f.mudarSituacao(
+          ctx(),
+          {
+            hospital: H,
+            id,
+            versao: 1,
+            de: ['comparada'],
+            para: 'aprovada',
+            aprovador: LOGIN,
+            motivo: 'aprovada',
+          },
+          trilha('catalogo.carga.aprovada'),
+        );
+        const [cab, acoes] = await nucleo!.lerSomente(
+          { cliente: CLIENTE, correlacao: 'conf-0202' },
+          async (l) => [
+            await l.uma(
+              'SELECT versao, aprovada_em, aprovada_por_usuario_id, alterado_por FROM carga_catalogo WHERE id = ?',
+              [id],
+            ),
+            await l.consultar(
+              "SELECT acao FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ? ORDER BY id",
+              [id],
+            ),
+          ],
+        );
+        expect(Number(cab!['versao'])).toBe(2);
+        expect(cab!['aprovada_em']).not.toBeNull();
+        expect(Number(cab!['aprovada_por_usuario_id'])).toBe(idUsuario);
+        expect(Number(cab!['alterado_por'])).toBe(idUsuario);
+        expect((acoes as { acao: string }[]).map((x) => x.acao)).toEqual(['inclusao', 'alteracao']);
+        expect((await f.carga(ctx(), id))?.aprovador).toBe(LOGIN);
+      });
+
+      it('outro estabelecimento não vê nem muda a carga; entrada inválida não grava; restrição do banco segura', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 5)), trilha());
+        expect(await f.carga(ctx(OUTRO), id)).toBeNull();
+        expect((await f.linhas(ctx(OUTRO), id, { pagina: 0, porPagina: 10 })).total).toBe(0);
+        expect(
+          await falha(
+            f.mudarSituacao(
+              ctx(OUTRO),
+              {
+                hospital: OUTRO,
+                id,
+                versao: 1,
+                de: ['comparada'],
+                para: 'rejeitada',
+                aprovador: LOGIN,
+                motivo: 'x',
+              },
+              trilha(),
+            ),
+          ),
+        ).toMatchObject({ status: 404 });
+        expect((await f.carga(ctx(), id))?.situacao).toBe('comparada');
+        expect(
+          await falha(f.gravarCarga(ctx(), { ...preparo('nao-e-hash'), sha256: 'nao-e-hash' }, trilha())),
+        ).toMatchObject({
+          status: 400,
+        });
+        // Totais que não fecham: o CHECK do banco recusa (nada gravado).
+        const antes = (await f.cargas(ctx(), 'cid'))?.length ?? 0;
+        const ruim = preparo(SHA(Date.now() + 6));
+        expect(
+          (await falha(f.gravarCarga(ctx(), { ...ruim, totais: { ...ruim.totais, validas: 9 } }, trilha())))
+            .status,
+        ).toBeGreaterThanOrEqual(400);
+        expect((await f.cargas(ctx(), 'cid'))?.length ?? 0).toBe(antes);
+      });
+    });
+
+    describe('autor, idempotência e trilha', () => {
+      it('usuário que não existe no cliente: 403 e nada gravado (nunca carga sem autor)', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const antes = (await f.cargas(ctx(), 'cid'))?.length ?? 0;
+        expect(
+          await falha(
+            f.gravarCarga(
+              ctx(),
+              preparo(SHA(Date.now() + 7)),
+              trilha(undefined, { usuario: 'f22o202.inexistente' }),
+            ),
+          ),
+        ).toEqual({ status: 403, codigo: 'usuario-sem-cadastro' });
+        const { id } = await f.gravarCarga(ctx(), preparo(SHA(Date.now() + 8)), trilha());
+        expect(
+          await falha(
+            f.mudarSituacao(
+              ctx(),
+              {
+                hospital: H,
+                id,
+                versao: 1,
+                de: ['comparada'],
+                para: 'aprovada',
+                aprovador: null,
+                motivo: 'x',
+              },
+              trilha('catalogo.carga.aprovada', { usuario: 'f22o202.inexistente' }),
+            ),
+          ),
+        ).toEqual({ status: 403, codigo: 'usuario-sem-cadastro' });
+        expect((await f.carga(ctx(), id))?.situacao).toBe('comparada');
+        expect((await f.cargas(ctx(), 'cid'))?.length ?? 0).toBe(antes + 1);
+        // O banco também recusa a aprovada sem aprovador (CHECK ck_carga_catalogo_aprovador).
+        expect(() =>
+          sql(`UPDATE carga_catalogo SET situacao = 'aprovada', aprovada_em = NOW(3) WHERE id = ${id}`),
+        ).toThrow();
+      });
+
+      it('o mesmo pedido repetido devolve o mesmo id sem duplicar; a trilha leva IP, estação e alvo', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const sha = SHA(Date.now() + 9);
+        const t = trilha();
+        const a = await f.gravarCarga(ctx(), preparo(sha), t);
+        const b = await f.gravarCarga(ctx(), preparo(sha), t);
+        expect(b.id).toBe(a.id);
+        const ap = trilha('catalogo.carga.aprovada', {
+          operacao: 'catalogo.carga.aprovar',
+          chaveNaturalAlvo: `CARGA:${a.id}`,
+        });
+        const m = {
+          hospital: H,
+          id: a.id,
+          versao: 1,
+          de: ['comparada'] as const,
+          para: 'aprovada' as const,
+          aprovador: LOGIN,
+          motivo: 'ok',
+        };
+        await f.mudarSituacao(ctx(), { ...m, de: [...m.de] }, ap);
+        await f.mudarSituacao(ctx(), { ...m, de: [...m.de] }, ap);
+        const [n, tr] = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, async (l) => [
+          await l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM carga_catalogo WHERE arquivo_sha256 = ?', [
+            sha,
+          ]),
+          await l.consultar(
+            "SELECT acao, endereco_ip, dados_depois FROM trilha_auditoria WHERE entidade = 'carga_catalogo' AND entidade_id = ? ORDER BY id",
+            [a.id],
+          ),
+        ]);
+        expect(Number((n as { n: number }).n)).toBe(1);
+        expect((await f.carga(ctx(), a.id))?.versao).toBe(2);
+        const linhas = tr as { acao: string; endereco_ip: string; dados_depois: unknown }[];
+        expect(linhas.map((x) => x.acao)).toEqual(['inclusao', 'alteracao']);
+        expect(linhas.every((x) => x.endereco_ip === '127.0.0.1')).toBe(true);
+        const dados = (x: unknown) =>
+          (typeof x === 'string' ? JSON.parse(x) : x) as { dados: Record<string, unknown> };
+        expect(dados(linhas[0]!.dados_depois).dados).toMatchObject({
+          estacao: 'TESTE:127.0.0.1',
+          chaveNaturalAlvo: 'CATALOGO:cid',
+        });
+        expect(dados(linhas[1]!.dados_depois).dados).toMatchObject({
+          estacao: 'TESTE:127.0.0.1',
+          chaveNaturalAlvo: `CARGA:${a.id}`,
+          operacaoTela: 'catalogo.carga.aprovar',
+        });
+      });
+    });
+
+    describe('fluxo HTTP real: controller → serviço → fonte própria', () => {
+      let app: NestFastifyApplication;
+      let chave = 0;
+      const env: Record<string, string> = {
+        ...envTeste,
+        AMBIENTE: 'dev',
+        API_MODULOS: 'catalogos',
+        ESTABELECIMENTOS: H,
       };
-      const k = `f22-0202-envio-${Date.now()}`;
-      const r = await post(s, '/api/catalogos/cargas', envio, k);
-      expect(r.statusCode, r.body).toBe(201);
-      expect(r.json()).toMatchObject({ situacao: 'comparada', lotes: 1, totais: { linhas: 2, novos: 1, alterados: 1 } });
-      const id = r.json().id as number;
-      const r2 = await post(s, '/api/catalogos/cargas', envio, k);
-      expect(r2.statusCode).toBe(201);
-      expect(r2.json().id).toBe(id);
-      const d = await app.inject({ method: 'GET', url: `/api/catalogos/cargas/${id}`, headers: { cookie: s.cookie } });
-      expect(d.statusCode).toBe(200);
-      expect(d.json().publicacao).toEqual({ pode: true, motivo: null });
-      const alterada = d.json().linhas.find((x: { comparacao: string }) => x.comparacao === 'alterado');
-      expect(alterada.antes).toMatchObject({ codigo: '9999990001', nome: 'Consulta sintética' });
-      expect(alterada.depois).toMatchObject({ nome: 'CONSULTA SINTÉTICA REVISTA' });
-      const corpo = { justificativa: 'competência sintética do teste', senha: SENHA, versao: d.json().versao as number };
-      const ka = `f22-0202-aprovar-${Date.now()}`;
-      const ap = await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo, ka);
-      expect(ap.statusCode, ap.body).toBe(200);
-      expect(ap.json()).toMatchObject({ id, situacao: 'aprovada' });
-      const ap2 = await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo, ka);
-      expect(ap2.statusCode, ap2.body).toBe(200);
-      expect(ap2.json()).toMatchObject({ id });
-      // Outro pedido com a versão velha: conflito.
-      expect((await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo)).statusCode).toBe(409);
-      const cab = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, (l) =>
-        l.uma(
-          `SELECT situacao, versao, aprovada_por_usuario_id, criado_por,
+      beforeAll(async () => {
+        const fonte = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const registro = {
+          ...REGISTRO_MODULOS,
+          catalogos: async () => ({ modulo: (c: ContextoModulo) => modulo(c, { fonte }) }),
+        } as typeof REGISTRO_MODULOS;
+        app = await criarApp(lerConfiguracao(env), null, env, {
+          trilha: new RegistradorTrilhaMemoria(),
+          registro,
+        });
+        await app.init();
+        await app.getHttpAdapter().getInstance().ready();
+      });
+      afterAll(async () => {
+        await app?.close();
+      });
+      async function entrar(): Promise<{ cookie: string; csrf: string }> {
+        const r = await app.inject({
+          method: 'POST',
+          url: '/api/sessao',
+          payload: { estabelecimento: H, login: LOGIN_HTTP, senha: SENHA },
+        });
+        expect(r.statusCode).toBe(201);
+        const set = r.headers['set-cookie'] as string[];
+        return {
+          cookie: set.map((c) => c.split(';')[0]).join('; '),
+          csrf:
+            set
+              .find((c) => c.startsWith('sgh_csrf='))
+              ?.split(';')[0]
+              ?.slice(9) ?? '',
+        };
+      }
+      const post = (
+        s: { cookie: string; csrf: string },
+        url: string,
+        payload: unknown,
+        k = `f22-0202-http-${++chave}-${Date.now()}`,
+      ) =>
+        app.inject({
+          method: 'POST',
+          url,
+          headers: { cookie: s.cookie, 'x-csrf': s.csrf, 'idempotency-key': k },
+          payload: payload as Record<string, unknown>,
+        });
+
+      it('SIGTAP: envio, detalhe, aprovação com a senha e reenvios idempotentes, gravados no banco', async () => {
+        const s = await entrar();
+        const ultima =
+          (await new FonteCatalogosPropria(nucleo!, CLIENTE).leituraDoBanco(ctx(), 'sigtap').edicao())
+            .ultima ?? '202609';
+        const a = Number(ultima.slice(0, 4));
+        const m = Number(ultima.slice(4, 6));
+        const competencia = m === 12 ? `${a + 1}01` : `${a}${String(m + 1).padStart(2, '0')}`;
+        const envio = {
+          catalogo: 'sigtap',
+          arquivos: [
+            {
+              nome: 'tb_procedimento.txt',
+              conteudo: arquivoTbProcedimento([
+                { codigo: '9999990001', nome: 'CONSULTA SINTÉTICA REVISTA', competencia, valorSa: 13 },
+                { codigo: '9999990002', nome: 'NOVO SINTÉTICO', competencia, valorSa: 1 },
+              ]),
+            },
+          ],
+        };
+        const k = `f22-0202-envio-${Date.now()}`;
+        const r = await post(s, '/api/catalogos/cargas', envio, k);
+        expect(r.statusCode, r.body).toBe(201);
+        expect(r.json()).toMatchObject({
+          situacao: 'comparada',
+          lotes: 1,
+          totais: { linhas: 2, novos: 1, alterados: 1 },
+        });
+        const id = r.json().id as number;
+        const r2 = await post(s, '/api/catalogos/cargas', envio, k);
+        expect(r2.statusCode).toBe(201);
+        expect(r2.json().id).toBe(id);
+        const d = await app.inject({
+          method: 'GET',
+          url: `/api/catalogos/cargas/${id}`,
+          headers: { cookie: s.cookie },
+        });
+        expect(d.statusCode).toBe(200);
+        expect(d.json().publicacao).toEqual({ pode: true, motivo: null });
+        const alterada = d.json().linhas.find((x: { comparacao: string }) => x.comparacao === 'alterado');
+        expect(alterada.antes).toMatchObject({ codigo: '9999990001', nome: 'Consulta sintética' });
+        expect(alterada.depois).toMatchObject({ nome: 'CONSULTA SINTÉTICA REVISTA' });
+        const corpo = {
+          justificativa: 'competência sintética do teste',
+          senha: SENHA,
+          versao: d.json().versao as number,
+        };
+        const ka = `f22-0202-aprovar-${Date.now()}`;
+        const ap = await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo, ka);
+        expect(ap.statusCode, ap.body).toBe(200);
+        expect(ap.json()).toMatchObject({ id, situacao: 'aprovada' });
+        const ap2 = await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo, ka);
+        expect(ap2.statusCode, ap2.body).toBe(200);
+        expect(ap2.json()).toMatchObject({ id });
+        // Outro pedido com a versão velha: conflito.
+        expect((await post(s, `/api/catalogos/cargas/${id}/aprovar`, corpo)).statusCode).toBe(409);
+        const cab = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conf-0202' }, (l) =>
+          l.uma(
+            `SELECT situacao, versao, aprovada_por_usuario_id, criado_por,
              (SELECT COUNT(*) FROM carga_catalogo x WHERE x.arquivo_sha256 = c.arquivo_sha256 AND x.estabelecimento_id = c.estabelecimento_id) AS iguais
              FROM carga_catalogo c WHERE id = ?`,
-          [id],
-        ),
-      );
-      expect(cab).toMatchObject({ situacao: 'aprovada' });
-      expect(Number(cab!['versao'])).toBe(2);
-      expect(Number(cab!['iguais'])).toBe(1);
-      expect(Number(cab!['aprovada_por_usuario_id'])).toBe(idUsuarioHttp);
-      expect(Number(cab!['criado_por'])).toBe(idUsuarioHttp);
-    });
-
-    it('linha gigante (chave muito maior que o código): carga gravada com a linha de erro e o corte no motivo', async () => {
-      const s = await entrar();
-      const conteudo = arquivoCodigoNome('CODIGO;TITULO', [
-        { codigo: '999901', nome: 'OCUPACAO SINTETICA' },
-        { codigo: '9'.repeat(5000), nome: 'LINHA FUNDIDA' },
-      ]);
-      const r = await post(s, '/api/catalogos/cargas', { catalogo: 'cbo', arquivos: [{ nome: 'CBO2002 - Ocupacao.csv', conteudo }] });
-      expect(r.statusCode, r.body).toBe(201);
-      expect(r.json().totais).toMatchObject({ linhas: 2, erros: 1 });
-      const id = r.json().id as number;
-      const d = await app.inject({
-        method: 'GET',
-        url: `/api/catalogos/cargas/${id}?resultado=erro`,
-        headers: { cookie: s.cookie },
+            [id],
+          ),
+        );
+        expect(cab).toMatchObject({ situacao: 'aprovada' });
+        expect(Number(cab!['versao'])).toBe(2);
+        expect(Number(cab!['iguais'])).toBe(1);
+        expect(Number(cab!['aprovada_por_usuario_id'])).toBe(idUsuarioHttp);
+        expect(Number(cab!['criado_por'])).toBe(idUsuarioHttp);
       });
-      expect(d.statusCode).toBe(200);
-      const [erro] = d.json().linhas as { chave: string; motivo: string }[];
-      expect(erro!.chave.length).toBe(200);
-      expect(erro!.motivo).toContain('chave cortada em 200');
-    });
 
-    it('sem Idempotency-Key: 400 e nada gravado', async () => {
-      const s = await entrar();
-      const r = await app.inject({
-        method: 'POST',
-        url: '/api/catalogos/cargas',
-        headers: { cookie: s.cookie, 'x-csrf': s.csrf },
-        payload: { catalogo: 'cbo', arquivos: [{ nome: 'CBO2002 - Ocupacao.csv', conteudo: 'CODIGO;TITULO\n999902;X' }] },
+      it('linha gigante (chave muito maior que o código): carga gravada com a linha de erro e o corte no motivo', async () => {
+        const s = await entrar();
+        const conteudo = arquivoCodigoNome('CODIGO;TITULO', [
+          { codigo: '999901', nome: 'OCUPACAO SINTETICA' },
+          { codigo: '9'.repeat(5000), nome: 'LINHA FUNDIDA' },
+        ]);
+        const r = await post(s, '/api/catalogos/cargas', {
+          catalogo: 'cbo',
+          arquivos: [{ nome: 'CBO2002 - Ocupacao.csv', conteudo }],
+        });
+        expect(r.statusCode, r.body).toBe(201);
+        expect(r.json().totais).toMatchObject({ linhas: 2, erros: 1 });
+        const id = r.json().id as number;
+        const d = await app.inject({
+          method: 'GET',
+          url: `/api/catalogos/cargas/${id}?resultado=erro`,
+          headers: { cookie: s.cookie },
+        });
+        expect(d.statusCode).toBe(200);
+        const [erro] = d.json().linhas as { chave: string; motivo: string }[];
+        expect(erro!.chave.length).toBe(200);
+        expect(erro!.motivo).toContain('chave cortada em 200');
       });
-      expect(r.statusCode).toBe(400);
-    });
-  });
 
-  describe('consultas, edição, histórico, licença e responsável', () => {
-    it('consulta no servidor pela tabela própria; fora do mapa, null; leiaute do produto', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const cid = await f.consultar(ctx(), 'cid10', { busca: 'U99X', pagina: 0, porPagina: 10 });
-      expect(cid?.itens).toEqual([{ codigo: 'U99X', nome: 'Doença sintética de consulta', ativo: 1 }]);
-      const trecho = await f.consultar(ctx(), 'cid10', { busca: 'sintetica de consul', pagina: 0, porPagina: 10 });
-      expect(trecho?.itens.map((x) => x['codigo'])).toContain('U99X');
-      const proc = await f.consultar(ctx(), 'procedimento', {
-        busca: '99.99.99.0001',
-        pagina: 0,
-        porPagina: 10,
-        competencia: '202609',
+      it('sem Idempotency-Key: 400 e nada gravado', async () => {
+        const s = await entrar();
+        const r = await app.inject({
+          method: 'POST',
+          url: '/api/catalogos/cargas',
+          headers: { cookie: s.cookie, 'x-csrf': s.csrf },
+          payload: {
+            catalogo: 'cbo',
+            arquivos: [{ nome: 'CBO2002 - Ocupacao.csv', conteudo: 'CODIGO;TITULO\n999902;X' }],
+          },
+        });
+        expect(r.statusCode).toBe(400);
       });
-      expect(proc?.itens.map((x) => x['codigo'])).toEqual(['9999990001']);
-      expect(await f.consultar(ctx(), 'motivoGlosa', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
-      expect(await f.consultar(ctx(), 'constructor', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
-      const leiaute = await f.consultar(ctx(), 'leiautePosicao', { busca: null, pagina: 0, porPagina: 500 });
-      expect(leiaute?.total).toBeGreaterThan(0);
-      expect((await f.leiauteCep()).length).toBeGreaterThan(0);
     });
 
-    it('histórico SIGTAP por competência; edição no banco; sem licença, catálogo licenciado fechado', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const h = await f.historico(ctx(), '9999990001');
-      expect(h?.nome).toBe('Consulta sintética');
-      expect(h?.competencias.map((c) => [c.competencia, c.valorSa])).toEqual([
-        ['202609', 12.5],
-        ['202608', 10],
-      ]);
-      expect(h?.competencias[0]?.atributos).toMatchObject({ sexo: 'ambos', idadeMinimaMeses: 0 });
-      expect(await f.historico(ctx(), '0000000000')).toBeNull();
-      const e = await f.edicao(ctx(), 'sigtap');
-      expect(e.descricao).toBe('competência');
-      expect(e.linhas).toBeGreaterThanOrEqual(1);
-      expect(await f.edicao(ctx(), 'brasindice')).toEqual({ ultima: null, descricao: 'sem tabela própria', linhas: 0 });
-      expect(await f.contrato(ctx(), 'brasindice')).toBe(false);
-      expect(await f.responsavel()).toBe('novo');
-    });
+    describe('consultas, edição, histórico, licença e responsável', () => {
+      it('consulta no servidor pela tabela própria; fora do mapa, null; leiaute do produto', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const cid = await f.consultar(ctx(), 'cid10', { busca: 'U99X', pagina: 0, porPagina: 10 });
+        expect(cid?.itens).toEqual([{ codigo: 'U99X', nome: 'Doença sintética de consulta', ativo: 1 }]);
+        const trecho = await f.consultar(ctx(), 'cid10', {
+          busca: 'sintetica de consul',
+          pagina: 0,
+          porPagina: 10,
+        });
+        expect(trecho?.itens.map((x) => x['codigo'])).toContain('U99X');
+        const proc = await f.consultar(ctx(), 'procedimento', {
+          busca: '99.99.99.0001',
+          pagina: 0,
+          porPagina: 10,
+          competencia: '202609',
+        });
+        expect(proc?.itens.map((x) => x['codigo'])).toEqual(['9999990001']);
+        expect(await f.consultar(ctx(), 'motivoGlosa', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
+        expect(await f.consultar(ctx(), 'constructor', { busca: null, pagina: 0, porPagina: 10 })).toBeNull();
+        const leiaute = await f.consultar(ctx(), 'leiautePosicao', {
+          busca: null,
+          pagina: 0,
+          porPagina: 500,
+        });
+        expect(leiaute?.total).toBeGreaterThan(0);
+        expect((await f.leiauteCep()).length).toBeGreaterThan(0);
+      });
 
-    it('leitura para a comparação: mapa ao modelo próprio no vocabulário do contrato; sem mapa, recusa com o motivo', async () => {
-      const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
-      const cid = f.leituraDoBanco(ctx(), 'cid');
-      expect([...(await cid.atuais('cid10', ['codigo=U99X', 'codigo=U99Y']))]).toEqual([
-        ['codigo=U99X', { codigo: 'U99X', nome: 'Doença sintética de consulta' }],
-      ]);
-      expect([...((await cid.existentes('cid10', new Map())) ?? [])]).toContain('codigo=U99X');
-      expect(await cid.referencias!('cid10', ['U99X', 'U99Y'])).toEqual(new Set(['U99X']));
-      expect(await falha(cid.atuais('ciap', ['codigo=A01']))).toEqual({ status: 409, codigo: 'catalogo-sem-mapa' });
-      const sus = f.leituraDoBanco(ctx(), 'sigtap');
-      expect((await sus.edicao()).ultima).toMatch(/^\d{6}$/);
-      const proc = await sus.atuais('procedimento', ['codigo=9999990001']);
-      expect(proc.get('codigo=9999990001')).toMatchObject({ codigo: '9999990001', nome: 'Consulta sintética', idadeMinima: 0 });
-      expect(await sus.referencias!('procedimentoSigtap', ['9999990001', '0000000000'])).toEqual(new Set(['9999990001']));
-      expect(await falha(f.leituraDoBanco(ctx(), 'tuss').edicao())).toEqual({ status: 409, codigo: 'catalogo-sem-mapa' });
+      it('histórico SIGTAP por competência; edição no banco; sem licença, catálogo licenciado fechado', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const h = await f.historico(ctx(), '9999990001');
+        expect(h?.nome).toBe('Consulta sintética');
+        expect(h?.competencias.map((c) => [c.competencia, c.valorSa])).toEqual([
+          ['202609', 12.5],
+          ['202608', 10],
+        ]);
+        expect(h?.competencias[0]?.atributos).toMatchObject({ sexo: 'ambos', idadeMinimaMeses: 0 });
+        expect(await f.historico(ctx(), '0000000000')).toBeNull();
+        const e = await f.edicao(ctx(), 'sigtap');
+        expect(e.descricao).toBe('competência');
+        expect(e.linhas).toBeGreaterThanOrEqual(1);
+        expect(await f.edicao(ctx(), 'brasindice')).toEqual({
+          ultima: null,
+          descricao: 'sem tabela própria',
+          linhas: 0,
+        });
+        expect(await f.contrato(ctx(), 'brasindice')).toBe(false);
+        expect(await f.responsavel()).toBe('novo');
+      });
+
+      it('leitura para a comparação: mapa ao modelo próprio no vocabulário do contrato; sem mapa, recusa com o motivo', async () => {
+        const f = new FonteCatalogosPropria(nucleo!, CLIENTE);
+        const cid = f.leituraDoBanco(ctx(), 'cid');
+        expect([...(await cid.atuais('cid10', ['codigo=U99X', 'codigo=U99Y']))]).toEqual([
+          ['codigo=U99X', { codigo: 'U99X', nome: 'Doença sintética de consulta' }],
+        ]);
+        expect([...((await cid.existentes('cid10', new Map())) ?? [])]).toContain('codigo=U99X');
+        expect(await cid.referencias!('cid10', ['U99X', 'U99Y'])).toEqual(new Set(['U99X']));
+        expect(await falha(cid.atuais('ciap', ['codigo=A01']))).toEqual({
+          status: 409,
+          codigo: 'catalogo-sem-mapa',
+        });
+        const sus = f.leituraDoBanco(ctx(), 'sigtap');
+        expect((await sus.edicao()).ultima).toMatch(/^\d{6}$/);
+        const proc = await sus.atuais('procedimento', ['codigo=9999990001']);
+        expect(proc.get('codigo=9999990001')).toMatchObject({
+          codigo: '9999990001',
+          nome: 'Consulta sintética',
+          idadeMinima: 0,
+        });
+        expect(await sus.referencias!('procedimentoSigtap', ['9999990001', '0000000000'])).toEqual(
+          new Set(['9999990001']),
+        );
+        expect(await falha(f.leituraDoBanco(ctx(), 'tuss').edicao())).toEqual({
+          status: 409,
+          codigo: 'catalogo-sem-mapa',
+        });
+      });
     });
-  });
-});
+  },
+);

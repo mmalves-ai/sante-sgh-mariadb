@@ -229,7 +229,20 @@ describe('texto formatado ilegível (regra 9)', () => {
       conteudo: async () => ({ rtf: `{\\rtf1 ${'x'.repeat(TETO_RTF + 1)}}`, xml: null, bytes: 0 }),
     } as unknown as PortaProntuario;
     const s = new ServicoProntuario(porta, new PortaCadastroMemoria());
-    const a = await s.aba({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r', hospital: 'aa' }, 1, 1, 'texto', { mostrarDocumentos: true });
+    const a = await s.aba(
+      {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        rede: 'r',
+        hospital: 'aa',
+      },
+      1,
+      1,
+      'texto',
+      { mostrarDocumentos: true },
+    );
     expect(a.aba).toBe('texto');
     if (a.aba !== 'texto') return;
     expect(a.conteudo.paragrafos).toEqual([]);
@@ -299,7 +312,14 @@ describe('documentos pessoais no registro (D-DOC-1)', () => {
     };
     base.respostas = respostasOriginais;
     const s = new ServicoProntuario(porta, new PortaCadastroMemoria());
-    const c = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r', hospital: 'aa' };
+    const c = {
+      cliente: 'teste',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 'teste',
+      rede: 'r',
+      hospital: 'aa',
+    };
     const sem = await s.aba(c, 1003, 900_001, 'layout', { mostrarDocumentos: false });
     const com = await s.aba(c, 1003, 900_001, 'layout', { mostrarDocumentos: true });
     expect(JSON.stringify(sem)).not.toContain('00000000191');

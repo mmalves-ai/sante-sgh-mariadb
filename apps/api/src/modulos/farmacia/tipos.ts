@@ -131,7 +131,8 @@ export interface ItemControlado {
 export interface MovimentoControlado {
   readonly item: number;
   readonly data: string;
-  readonly tipo: 'entrada' | 'saida' | 'devolucao' | 'perda' | 'transferencia-entrada' | 'transferencia-saida';
+  readonly tipo:
+    'entrada' | 'saida' | 'devolucao' | 'perda' | 'transferencia-entrada' | 'transferencia-saida';
   readonly quantidade: number;
   readonly documento: string;
   readonly documentoId: number;

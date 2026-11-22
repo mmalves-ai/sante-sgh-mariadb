@@ -221,20 +221,27 @@ describe('correção do M14: escopo do M06 nas consultas', () => {
       ...base,
       colunas: [
         ...base.colunas,
-        { coluna: 'fonte_pagadora_id', campo: 'fontePagadoraId', rotulo: 'Fonte pagadora', tipo: 'inteiro' as const },
+        {
+          coluna: 'fonte_pagadora_id',
+          campo: 'fontePagadoraId',
+          rotulo: 'Fonte pagadora',
+          tipo: 'inteiro' as const,
+        },
       ],
       escopos: { convenio: 'fonte_pagadora_id' },
     };
     const ctx = { rede: 'r', hospital: 'aa' };
-    await expect(f.pagina({ ...ctx, escopo: { convenio: ['1'] } }, semEscopo, [], null, 10)).rejects.toBeInstanceOf(
-      ErroEscopo,
-    );
+    await expect(
+      f.pagina({ ...ctx, escopo: { convenio: ['1'] } }, semEscopo, [], null, 10),
+    ).rejects.toBeInstanceOf(ErroEscopo);
     // Uma fonte nova (a memória guarda as linhas sintéticas por consulta, geradas das colunas da primeira leitura).
     const f2 = fonteConsultasMemoria();
     const p = await f2.pagina({ ...ctx, escopo: { convenio: ['2'] } }, comEscopo, [], null, 10);
     expect(p.linhas.length).toBeGreaterThan(0);
     expect(p.linhas.every((l) => String(l['fontePagadoraId']) === '2')).toBe(true);
-    expect((await f2.pagina({ ...ctx, escopo: { convenio: null } }, comEscopo, [], null, 10)).linhas.length).toBe(5);
+    expect(
+      (await f2.pagina({ ...ctx, escopo: { convenio: null } }, comEscopo, [], null, 10)).linhas.length,
+    ).toBe(5);
     expect(problemaDaConsulta(new ErroEscopo('x')).getStatus()).toBe(403);
   });
 

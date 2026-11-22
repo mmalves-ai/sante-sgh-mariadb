@@ -208,9 +208,7 @@ describe('fluxo do laboratório', () => {
     const sino = await entrar('SINT.MEDICO');
     const central = await get(sino, '/acesso/avisos');
     expect(central.statusCode, central.body).toBe(200);
-    const doCritico = central
-      .json()
-      .avisos.filter((a: { tipo: string }) => a.tipo === 'resultado-critico');
+    const doCritico = central.json().avisos.filter((a: { tipo: string }) => a.tipo === 'resultado-critico');
     expect(doCritico).toHaveLength(1);
     expect(doCritico[0]).toMatchObject({ modulo: 'sadt', gravidade: 'atencao', estado: 'novo' });
     expect(doCritico[0].link).toMatch(/^\/pep\/paciente\/\d+\/resultados$/);

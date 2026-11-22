@@ -242,11 +242,17 @@ export interface DadosRecemNascido {
  * que veio da migração sem esses campos); a classificação correspondente é null quando o valor falta (nunca uma
  * classificação clínica calculada sobre um zero inventado).
  */
-export interface RecemNascidoRegistrado
-  extends Omit<
-    DadosRecemNascido,
-    'pesoG' | 'apgar1' | 'apgar5' | 'igSemanas' | 'igDias' | 'classificacaoIg' | 'classificacaoPeso' | 'classificacaoApgar'
-  > {
+export interface RecemNascidoRegistrado extends Omit<
+  DadosRecemNascido,
+  | 'pesoG'
+  | 'apgar1'
+  | 'apgar5'
+  | 'igSemanas'
+  | 'igDias'
+  | 'classificacaoIg'
+  | 'classificacaoPeso'
+  | 'classificacaoApgar'
+> {
   readonly pesoG: number | null;
   readonly apgar1: number | null;
   readonly apgar5: number | null;

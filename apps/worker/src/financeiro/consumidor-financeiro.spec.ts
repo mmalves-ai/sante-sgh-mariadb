@@ -63,8 +63,15 @@ describe('consumidor do financeiro', () => {
   });
 
   it('a conta ainda sem título fica de fora (a glosa entra pela tela quando o título nascer)', async () => {
-    const ev = { chave: 'b'.repeat(64), tipo: 'faturamento.glosa.aceita', dados: { hospital: 'pc', item: 5 } };
-    expect(await consumirEventoFinanceiro(acesso, 'cliente', ev)).toEqual({ resultado: 'sem-titulo', id: null });
+    const ev = {
+      chave: 'b'.repeat(64),
+      tipo: 'faturamento.glosa.aceita',
+      dados: { hospital: 'pc', item: 5 },
+    };
+    expect(await consumirEventoFinanceiro(acesso, 'cliente', ev)).toEqual({
+      resultado: 'sem-titulo',
+      id: null,
+    });
     expect(banco.glosas.size).toBe(0);
   });
 
@@ -83,7 +90,11 @@ describe('consumidor do financeiro', () => {
       { chave: 'd', tipo: 'faturamento.lote.gerado', dados: { hospital: 'pc', lote: 1 } },
       { chave: 'e', tipo: 'faturamento.glosa.aceita', dados: { hospital: "pc'; --", item: 1 } },
       { chave: 'f', tipo: 'faturamento.glosa.aceita', dados: { hospital: 'pc', item: 'x' } },
-      { chave: 'g', tipo: 'faturamento.competencia.fechada', dados: { hospital: 'pc', convenio: 1, ano: 2026, mes: 13 } },
+      {
+        chave: 'g',
+        tipo: 'faturamento.competencia.fechada',
+        dados: { hospital: 'pc', convenio: 1, ano: 2026, mes: 13 },
+      },
     ];
     for (const ev of nada) expect(await consumirEventoFinanceiro(acesso, 'cliente', ev)).toBeNull();
     expect(banco.chamadas).toEqual([]);
@@ -92,8 +103,14 @@ describe('consumidor do financeiro', () => {
 
 describe('regra da glosa aceita no título', () => {
   it('soma a aceita em centavos e mantém a glosa total ≥ aceita', () => {
-    expect(aplicarGlosaAceita({ glosa: 0, glosaAceita: 0 }, 30.1)).toEqual({ glosa: 30.1, glosaAceita: 30.1 });
-    expect(aplicarGlosaAceita({ glosa: 100, glosaAceita: 10.2 }, 0.1)).toEqual({ glosa: 100, glosaAceita: 10.3 });
+    expect(aplicarGlosaAceita({ glosa: 0, glosaAceita: 0 }, 30.1)).toEqual({
+      glosa: 30.1,
+      glosaAceita: 30.1,
+    });
+    expect(aplicarGlosaAceita({ glosa: 100, glosaAceita: 10.2 }, 0.1)).toEqual({
+      glosa: 100,
+      glosaAceita: 10.3,
+    });
     expect(() => aplicarGlosaAceita({ glosa: 0, glosaAceita: 0 }, 0)).toThrow(RangeError);
     expect(() => aplicarGlosaAceita({ glosa: 0, glosaAceita: 0 }, Number.NaN)).toThrow(RangeError);
   });

@@ -46,7 +46,11 @@ import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
 import { CobrancaOperadoraController } from './cobranca.controller.js';
-import { METODOS_PORTA_COBRANCA, PORTA_COBRANCA_OPERADORA, type PortaCobrancaOperadora } from './cobranca-porta.js';
+import {
+  METODOS_PORTA_COBRANCA,
+  PORTA_COBRANCA_OPERADORA,
+  type PortaCobrancaOperadora,
+} from './cobranca-porta.js';
 import { PortaCobrancaOperadoraMemoria } from './cobranca-porta-memoria.js';
 import { PortaCobrancaOperadoraPropria } from './cobranca-porta-propria.js';
 import { ContasOperadoraController } from './contas.controller.js';
@@ -60,7 +64,11 @@ import { PortaOperadoraPropria } from './porta-propria.js';
 import { PortalPrestadorController } from './portal-prestador.controller.js';
 import { SERVICO_PORTAL_PRESTADOR, ServicoPortalPrestador } from './portal-prestador-servico.js';
 import { RedeOperadoraController } from './rede.controller.js';
-import { PORTA_REDE_OPERADORA, type PortaRedeOperadora, portaRedeOperadoraIndisponivel } from './rede-porta.js';
+import {
+  PORTA_REDE_OPERADORA,
+  type PortaRedeOperadora,
+  portaRedeOperadoraIndisponivel,
+} from './rede-porta.js';
 import { PortaRedeOperadoraMemoria } from './rede-porta-memoria.js';
 import { PortaRedeOperadoraPropria } from './rede-porta-propria.js';
 import { portaIndisponivel } from '../exames/public-api.js';
@@ -97,7 +105,9 @@ const semBuscaPorSenha = (): ErroOperacao =>
   );
 
 /** A busca das autorizações pela senha (as contas conferem a guia): a da porta da autorização, ou 503 sem ela. */
-function buscaPorSenha(a: PortaAutorizacaoOperadora): BuscaPorSenha & Pick<PortaAutorizacaoOperadora, 'designacoes'> {
+function buscaPorSenha(
+  a: PortaAutorizacaoOperadora,
+): BuscaPorSenha & Pick<PortaAutorizacaoOperadora, 'designacoes'> {
   return {
     designacoes: (c, login) => a.designacoes(c, login),
     autorizacoesPorSenha: temBuscaPorSenha(a)
@@ -107,7 +117,10 @@ function buscaPorSenha(a: PortaAutorizacaoOperadora): BuscaPorSenha & Pick<Porta
 }
 
 /** As portas pela regra do módulo: próprias com o núcleo; memória só em dev/ci sem núcleo; senão indisponíveis. */
-export async function portasDaOperadora(ctx: ContextoModulo, o: OpcoesModuloOperadora = {}): Promise<PortasOperadora> {
+export async function portasDaOperadora(
+  ctx: ContextoModulo,
+  o: OpcoesModuloOperadora = {},
+): Promise<PortasOperadora> {
   const cliente = ctx.configuracao.clientePadrao;
   if (ctx.nucleo && cliente) {
     const n = ctx.nucleo;
@@ -120,10 +133,16 @@ export async function portasDaOperadora(ctx: ContextoModulo, o: OpcoesModuloOper
       rede,
       autorizacao,
       cobranca: o.cobranca ?? new PortaCobrancaOperadoraPropria(n, cliente),
-      contas: o.contas ?? new PortaContasOperadoraPropria(n, cliente, operadora, rede, buscaPorSenha(autorizacao)),
+      contas:
+        o.contas ?? new PortaContasOperadoraPropria(n, cliente, operadora, rede, buscaPorSenha(autorizacao)),
       ans:
         o.ans ??
-        new PortaAnsOperadoraPropria(n, cliente, operadora, ambienteDe(ctx.env) === 'producao' ? 'ans' : 'simulador'),
+        new PortaAnsOperadoraPropria(
+          n,
+          cliente,
+          operadora,
+          ambienteDe(ctx.env) === 'producao' ? 'ans' : 'simulador',
+        ),
       atendimento: o.atendimento ?? new PortaAtendimentoOperadoraPropria(n, cliente, operadora, rede),
     };
   }
@@ -171,7 +190,10 @@ export async function portasDaOperadora(ctx: ContextoModulo, o: OpcoesModuloOper
 @Module({})
 export class ModuloOperadora {}
 
-export async function moduloOperadora(ctx: ContextoModulo, o: OpcoesModuloOperadora = {}): Promise<DynamicModule> {
+export async function moduloOperadora(
+  ctx: ContextoModulo,
+  o: OpcoesModuloOperadora = {},
+): Promise<DynamicModule> {
   const p = await portasDaOperadora(ctx, o);
   // Na memória sem o módulo config, a fonte sintética local (as chaves da operadora como a sessão de dev/ci tem); com
   // ele (API_MODULOS com config, ou todos), a fonte global dele, a mesma que a administração da liberação grava.

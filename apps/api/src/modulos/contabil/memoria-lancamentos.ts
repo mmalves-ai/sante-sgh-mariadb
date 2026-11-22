@@ -194,12 +194,7 @@ export class LancamentosMemoria {
     };
   }
 
-  pendentesConciliacao(
-    empresa: number,
-    conta: string,
-    ate: string | null,
-    teto: number,
-  ): PartidaPendente[] {
+  pendentesConciliacao(empresa: number, conta: string, ate: string | null, teto: number): PartidaPendente[] {
     return this.partidasDa(empresa, conta)
       .filter(({ l, p }) => (!ate || l.data <= ate) && this.conciliacaoDa(p.id) === null)
       .sort((a, b) => a.l.data.localeCompare(b.l.data) || a.p.id - b.p.id)
@@ -300,10 +295,7 @@ export class LancamentosMemoria {
     return { id, repetido: false };
   }
 
-  encerrarPeriodo(
-    x: SemHospital<PedidoEncerramento>,
-    fatos: readonly FatoRegistrado[],
-  ): DadosDoEncerramento {
+  encerrarPeriodo(x: SemHospital<PedidoEncerramento>, fatos: readonly FatoRegistrado[]): DadosDoEncerramento {
     const periodo = this.periodo(x.empresa, x.competencia);
     const porSituacao: Partial<Record<SituacaoFato, number>> = {};
     for (const f of fatos.filter((y) => y.empresa === x.empresa && y.competencia === x.competencia))

@@ -148,7 +148,9 @@ export class PortaFachadaPropria implements PortaFachada {
     return this.ler(c, async (l, est) =>
       est === null
         ? []
-        : (await l.consultar(`${SQL_CONVENIO} ORDER BY fp.nome, fp.id`, [est], { teto: 2_000 })).map(linhaConvenio),
+        : (await l.consultar(`${SQL_CONVENIO} ORDER BY fp.nome, fp.id`, [est], { teto: 2_000 })).map(
+            linhaConvenio,
+          ),
     );
   }
 
@@ -162,7 +164,9 @@ export class PortaFachadaPropria implements PortaFachada {
 
   saudeBanco(c: ContextoFachada): Promise<SaudeBancoFachada> {
     return this.ler(c, async (l) => {
-      const x = await l.uma<{ v: unknown; cs: unknown }>('SELECT VERSION() AS v, @@character_set_database AS cs');
+      const x = await l.uma<{ v: unknown; cs: unknown }>(
+        'SELECT VERSION() AS v, @@character_set_database AS cs',
+      );
       return {
         banco: x?.v === undefined || x.v === null ? null : `MariaDB ${String(x.v).split('-')[0]}`,
         colunaObs: null,
@@ -250,7 +254,10 @@ export class PortaFachadaPropria implements PortaFachada {
       );
       return { est, usuario: u ? Number(u.id) : null };
     });
-    const operacao = definirOperacao<EntradaSituacao, { convenio: number; vinculo: number; situacao: string }>({
+    const operacao = definirOperacao<
+      EntradaSituacao,
+      { convenio: number; vinculo: number; situacao: string }
+    >({
       nome: 'integracao.fachada.convenio-situacao',
       tabelas: ['fonte_pagadora_estabelecimento'],
       entrada: esquemaSituacao,
@@ -258,20 +265,29 @@ export class PortaFachadaPropria implements PortaFachada {
       gravar: async (tx, e) => {
         const est = tx.contexto.estabelecimento;
         const x = (await tx.consultarParaAtualizar(`${SQL_CONVENIO} AND fp.id = ?`, [est, e.convenio]))[0];
-        if (!x) throw recusa('situacao-desconhecida', 'O convênio não está vinculado a este estabelecimento.');
+        if (!x)
+          throw recusa('situacao-desconhecida', 'O convênio não está vinculado a este estabelecimento.');
         const origem = e.operacao === 'suspender' ? 'ativa' : 'suspensa';
         const alvo = e.operacao === 'suspender' ? 'suspensa' : 'ativa';
         if (x['situacao_vinculo'] !== origem)
           throw recusa('situacao-mudou', 'A situação do convênio mudou desde a proposta.');
         // O cadastro suspenso ou inativo para o cliente inteiro é o teto: reativar só o vínculo não libera o convênio.
         if (alvo === 'ativa' && x['situacao'] !== 'ativa')
-          throw recusa('situacao-mudou', 'O convênio está suspenso no cadastro de todos os estabelecimentos.');
+          throw recusa(
+            'situacao-mudou',
+            'O convênio está suspenso no cadastro de todos os estabelecimentos.',
+          );
         const vinculo = Number(x['vinculo_id']);
-        await tx.alterar('fonte_pagadora_estabelecimento', vinculo, Number(x['vinculo_versao']), { situacao: alvo });
+        await tx.alterar('fonte_pagadora_estabelecimento', vinculo, Number(x['vinculo_versao']), {
+          situacao: alvo,
+        });
         return { convenio: e.convenio, vinculo, situacao: alvo };
       },
       alvo: (_e, s) => ({ tabela: 'fonte_pagadora_estabelecimento', id: s.vinculo }),
-      trilha: (e) => ({ motivo: e.justificativa, dados: { operacao: e.operacao, convenio: e.convenio, canal: 'fachada-hal-ai' } }),
+      trilha: (e) => ({
+        motivo: e.justificativa,
+        dados: { operacao: e.operacao, convenio: e.convenio, canal: 'fachada-hal-ai' },
+      }),
     });
     try {
       if (quem.est === null) throw recusa('estabelecimento-desconhecido', 'Estabelecimento desconhecido.');

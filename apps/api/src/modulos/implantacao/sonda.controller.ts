@@ -95,7 +95,10 @@ export class SondaImplantacaoController {
     await medir('versao', async () => {
       const esperada = (process.env['SONDA_VERSAO_ESPERADA'] ?? '').trim();
       const ok = !esperada || esperada === versao.identificacao || esperada === versao.versao;
-      return { ok, detalhe: ok ? versao.identificacao : `esperada ${esperada}, no ar ${versao.identificacao}` };
+      return {
+        ok,
+        detalhe: ok ? versao.identificacao : `esperada ${esperada}, no ar ${versao.identificacao}`,
+      };
     });
     await medir('login-sonda', () => this.loginSonda(rede, hospital));
     await medir('painel-leitos', async () => {
@@ -104,14 +107,24 @@ export class SondaImplantacaoController {
         { rede, hospital, traceId: 'sonda-painel' },
         await this.m16.parametros({ rede, hospital }),
       );
-      return { ok: p.totais.leitos > 0, detalhe: `${p.totais.leitos} leito(s), ${p.totais.ocupados} ocupado(s)` };
+      return {
+        ok: p.totais.leitos > 0,
+        detalhe: `${p.totais.leitos} leito(s), ${p.totais.ocupados} ocupado(s)`,
+      };
     });
     await medir('recusa-negocio', async () => {
       const producao = this.cfg.ambiente === 'producao';
       const login = (process.env['SONDA_LOGIN'] ?? '').trim();
       const grava =
         producao && login
-          ? await operacaoLiberada(this.fonte, this.catalogo, rede, hospital, { pessoa: login }, OPERACAO_SONDA_NEGOCIO)
+          ? await operacaoLiberada(
+              this.fonte,
+              this.catalogo,
+              rede,
+              hospital,
+              { pessoa: login },
+              OPERACAO_SONDA_NEGOCIO,
+            )
           : false;
       return {
         ok: !grava,

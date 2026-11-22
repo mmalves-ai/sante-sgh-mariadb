@@ -85,7 +85,8 @@ const TABELA_MARCA = 'paciente';
 // ---- conversões (sem sentinela: ausente é null) ----
 
 const numero = (v: unknown): number => Number(v ?? 0);
-const textoOuNulo = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v));
+const textoOuNulo = (v: unknown): string | null =>
+  v === null || v === undefined || v === '' ? null : String(v);
 function carimbo(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const d = v instanceof Date ? v : new Date(String(v));
@@ -390,7 +391,10 @@ function gravadorSobre(tx: TxOperacao, estId: number): GravadorRede {
           mantidos++;
           continue;
         }
-        await tx.alterar('suspeita_duplicidade', numero(x['id']), numero(x['versao']), { escore, ...criterios });
+        await tx.alterar('suspeita_duplicidade', numero(x['id']), numero(x['versao']), {
+          escore,
+          ...criterios,
+        });
         atualizados++;
       }
       return { novos, atualizados, mantidos };
@@ -472,12 +476,14 @@ export class PortaRedePropria implements PortaRede {
    * um aviso no log (só os códigos e a contagem) a cada mudança da lista, e recusa explícita em `estId`.
    */
   async carregar(): Promise<void> {
-    const linhas = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'rede-estabelecimentos' }, (l) =>
-      l.consultar(
-        'SELECT id, codigo, nome_fantasia FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo',
-        [],
-        { teto: 10_000 },
-      ),
+    const linhas = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'rede-estabelecimentos' },
+      (l) =>
+        l.consultar(
+          'SELECT id, codigo, nome_fantasia FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo',
+          [],
+          { teto: 10_000 },
+        ),
     );
     const validos = linhas.filter((x) => CODIGO_CHAVE.test(String(x['codigo'])));
     const fora = linhas.map((x) => String(x['codigo'])).filter((k) => !CODIGO_CHAVE.test(k));
@@ -517,13 +523,9 @@ export class PortaRedePropria implements PortaRede {
         { codigo: 'codigo-fora-do-formato' },
       );
     if (!e)
-      throw new ErroProblema(
-        'sem-permissao',
-        403,
-        'Fora da rede',
-        'O estabelecimento não é deste cliente.',
-        { codigo: 'fora-da-rede' },
-      );
+      throw new ErroProblema('sem-permissao', 403, 'Fora da rede', 'O estabelecimento não é deste cliente.', {
+        codigo: 'fora-da-rede',
+      });
     return e.id;
   }
 
@@ -619,7 +621,10 @@ export class PortaRedePropria implements PortaRede {
 
   // ---- a fila (suspeita_duplicidade entre estabelecimentos) ----
 
-  private filtroFila(est: number, f: Partial<FiltroFilaRede> & RecorteFilaRede): { sql: string; p: unknown[] } {
+  private filtroFila(
+    est: number,
+    f: Partial<FiltroFilaRede> & RecorteFilaRede,
+  ): { sql: string; p: unknown[] } {
     const partes: string[] = [];
     const p: unknown[] = [];
     if (f.situacao) {
@@ -667,10 +672,7 @@ export class PortaRedePropria implements PortaRede {
         [est, est, ...w.p, porPagina, inicio],
         { teto: porPagina },
       );
-      const total = await l.uma(
-        `SELECT COUNT(*) AS n FROM (${SELECT_PAR}${w.sql}) x`,
-        [est, est, ...w.p],
-      );
+      const total = await l.uma(`SELECT COUNT(*) AS n FROM (${SELECT_PAR}${w.sql}) x`, [est, est, ...w.p]);
       return {
         itens: linhas.map((x) => parDaLinha(est, x)).filter((x): x is CandidatoRedeLido => x !== null),
         total: numero(total?.['n']),
@@ -678,7 +680,11 @@ export class PortaRedePropria implements PortaRede {
     });
   }
 
-  async filaPorFaixa(c: ContextoRede, situacao: CandidatoRedeLido['situacao'], recorte: RecorteFilaRede = {}) {
+  async filaPorFaixa(
+    c: ContextoRede,
+    situacao: CandidatoRedeLido['situacao'],
+    recorte: RecorteFilaRede = {},
+  ) {
     const est = await this.estId(c);
     const w = this.filtroFila(est, { situacao, ...recorte });
     const x = await this.ler((l) =>
@@ -830,7 +836,10 @@ export class PortaRedePropria implements PortaRede {
     );
     const vs = linhas.map((x) => vinculoDaLinha(est, x));
     const ultimoId = linhas.length ? numero(linhas[linhas.length - 1]?.['id']) : depoisDoId;
-    return { itens: vs.filter((v): v is VinculoRedeLido & { id: number } => v !== null).map(semId), ultimoId };
+    return {
+      itens: vs.filter((v): v is VinculoRedeLido & { id: number } => v !== null).map(semId),
+      ultimoId,
+    };
   }
 
   async marca(c: ContextoRede): Promise<MarcaRede | null> {
@@ -906,9 +915,11 @@ export class PortaRedePropria implements PortaRede {
       );
       if (!p) return [];
       const raiz = numero(p['raiz']);
-      const grupo = 'SELECT g.id FROM paciente g WHERE (g.id = ? OR g.sobrevivente_paciente_id = ?) AND g.excluido_em IS NULL';
-      return l.consultar(
-        `SELECT e.codigo, SUM(x.na) AS na, MAX(x.ua) AS ua, SUM(x.ni) AS ni, MAX(x.ui) AS ui FROM (
+      const grupo =
+        'SELECT g.id FROM paciente g WHERE (g.id = ? OR g.sobrevivente_paciente_id = ?) AND g.excluido_em IS NULL';
+      return l
+        .consultar(
+          `SELECT e.codigo, SUM(x.na) AS na, MAX(x.ua) AS ua, SUM(x.ni) AS ni, MAX(x.ui) AS ui FROM (
            SELECT a.estabelecimento_id AS est, COUNT(*) AS na, MAX(a.entrada_em) AS ua, 0 AS ni,
              CAST(NULL AS DATETIME(3)) AS ui
            FROM atendimento a
@@ -924,9 +935,10 @@ export class PortaRedePropria implements PortaRede {
          ) x
          JOIN estabelecimento e ON e.id = x.est AND e.excluido_em IS NULL
          GROUP BY e.id, e.codigo ORDER BY e.codigo`,
-        [raiz, raiz, est, raiz, raiz, est],
-        { teto: 1_000 },
-      ).then((xs) => xs.map((x): Linha => ({ ...x, raiz })));
+          [raiz, raiz, est, raiz, raiz, est],
+          { teto: 1_000 },
+        )
+        .then((xs) => xs.map((x): Linha => ({ ...x, raiz })));
     });
     return linhas
       .filter((x) => this.porCodigo.has(String(x['codigo'])))
@@ -952,7 +964,11 @@ export class PortaRedePropria implements PortaRede {
 
   // ---- gravação: uma operação do Executor por chamada (a decisão sobre um par é uma só) ----
 
-  async gravar<T>(c: ContextoRede, fn: (g: GravadorRede) => Promise<T>, trilha: TrilhaRede | null): Promise<T> {
+  async gravar<T>(
+    c: ContextoRede,
+    fn: (g: GravadorRede) => Promise<T>,
+    trilha: TrilhaRede | null,
+  ): Promise<T> {
     const est = await this.estId(c);
     let resultado: { valor: T } | null = null;
     const op = definirOperacao({

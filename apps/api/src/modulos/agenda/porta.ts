@@ -154,7 +154,12 @@ export interface PortaAgenda {
     f: { agendas: readonly number[] | null; de: string; ate: string; limite?: number },
   ): Promise<{ itens: Vaga[]; truncado: boolean }>;
   /** A primeira vaga de cada agenda depois da data. */
-  proximasVagas(c: ContextoAgenda, agendas: readonly number[], depoisDe: string, ate: string): Promise<Vaga[]>;
+  proximasVagas(
+    c: ContextoAgenda,
+    agendas: readonly number[],
+    depoisDe: string,
+    ate: string,
+  ): Promise<Vaga[]>;
   cancelamentos(
     c: ContextoAgenda,
     f: {
@@ -182,5 +187,9 @@ export interface PortaAgenda {
   ): Promise<ItemListaEspera[]>;
   vinculos(c: ContextoAgenda): Promise<Map<number, VinculoAgenda>>;
   profissionais(c: ContextoAgenda): Promise<{ id: number; nome: string }[]>;
-  cancelamentosPorMotivo(c: ContextoAgenda, de: string, ate: string): Promise<{ motivo: string; total: number }[]>;
+  cancelamentosPorMotivo(
+    c: ContextoAgenda,
+    de: string,
+    ate: string,
+  ): Promise<{ motivo: string; total: number }[]>;
 }

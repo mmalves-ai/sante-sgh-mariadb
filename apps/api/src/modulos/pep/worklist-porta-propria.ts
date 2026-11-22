@@ -59,7 +59,12 @@ const marcadores = (n: number): string => Array.from({ length: n }, () => '?').j
 export function instanteDoLocal(local: string, fuso: string): Date {
   const alvo = Date.parse(`${local.slice(0, 19)}Z`);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local) || Number.isNaN(alvo))
-    throw new ErroOperacao(422, 'data-invalida', 'Data inválida', 'A hora da janela não está no formato AAAA-MM-DDTHH:MM:SS.');
+    throw new ErroOperacao(
+      422,
+      'data-invalida',
+      'Data inválida',
+      'A hora da janela não está no formato AAAA-MM-DDTHH:MM:SS.',
+    );
   let t = alvo;
   for (let i = 0; i < 2; i++) {
     const visto = Date.parse(`${dataHora(new Date(t), fuso) ?? ''}Z`);
@@ -89,7 +94,11 @@ export class PortaWorklistPropria implements PortaWorklist {
     private readonly cliente: string,
   ) {}
 
-  private ler<T>(c: ContextoDocs, rotulo: string, fn: (l: Leitor, est: Estabelecimento) => Promise<T>): Promise<T> {
+  private ler<T>(
+    c: ContextoDocs,
+    rotulo: string,
+    fn: (l: Leitor, est: Estabelecimento) => Promise<T>,
+  ): Promise<T> {
     return this.nucleo.lerSomente(
       { cliente: c.cliente || this.cliente, correlacao: c.correlacao || `pep.worklist.${rotulo}` },
       async (l) => fn(l, await this.estabelecimento(l, c)),
@@ -133,7 +142,8 @@ export class PortaWorklistPropria implements PortaWorklist {
           [est.id, ...internacoes],
           { teto: TETO_IDS_WORKLIST },
         );
-        for (const x of linhas) previsoesAlta.push({ internacao: Number(x['id']), previsao: String(x['previsao']) });
+        for (const x of linhas)
+          previsoesAlta.push({ internacao: Number(x['id']), previsao: String(x['previsao']) });
       }
       const resultados: ResultadoDaFila[] = [];
       if (pacientes.length > 0) {

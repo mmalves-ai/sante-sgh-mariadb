@@ -14,13 +14,7 @@ export interface Relogio {
 
 /** Situação da marcação pelo significado (a "transferida" é a remarcada que manteve o horário antigo). */
 export type SituacaoMarcacao =
-  | 'marcada'
-  | 'confirmada'
-  | 'chegou'
-  | 'em_atendimento'
-  | 'realizada'
-  | 'falta'
-  | 'transferida';
+  'marcada' | 'confirmada' | 'chegou' | 'em_atendimento' | 'realizada' | 'falta' | 'transferida';
 
 export interface Agenda {
   readonly id: number;

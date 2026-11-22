@@ -58,7 +58,11 @@ export function rotuloSetor(n: Nomes, codigo: number): Rotulado<string> {
 const nomeDoUsuario = (n: Nomes, login: string | null): string | null =>
   login === null ? null : (n.usuarios.get(login.trim().toUpperCase()) ?? login);
 
-export function resumoEquipamento(e: EquipamentoManutencao, n: Nomes, planosVencidos: number): EquipamentoResumo {
+export function resumoEquipamento(
+  e: EquipamentoManutencao,
+  n: Nomes,
+  planosVencidos: number,
+): EquipamentoResumo {
   return {
     id: e.id,
     versao: e.versao,

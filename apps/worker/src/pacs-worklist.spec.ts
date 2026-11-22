@@ -4,7 +4,12 @@
 // dublê (nada conecta a banco); a prova sobre o banco é a pacs-worklist-propria.int.spec.ts.
 import { accessionDoItem } from '@sgh/dominio-sadt';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chaveDoPedido, OPERACAO_ITEM_WORKLIST, type ExameSemItem, type PortaWorklist } from './pacs-worklist-propria.js';
+import {
+  chaveDoPedido,
+  OPERACAO_ITEM_WORKLIST,
+  type ExameSemItem,
+  type PortaWorklist,
+} from './pacs-worklist-propria.js';
 import {
   cicloWorklist,
   geracaoPacsLigada,

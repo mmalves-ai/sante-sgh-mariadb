@@ -2,7 +2,26 @@
 // da produção (a internação, a conta, a trajetória, os leitos de UTI habilitados, os lotes da saída de estoque, a
 // SIGTAP e os valores) e as do faturamento SUS (faixa, AIH, linhas e retorno), e as gravações. As interfaces entram na
 // LeituraSus e na GravacaoSus (a mesma transação da competência, da crítica, do arquivo e da trilha).
-import { type AihRegistro, type CompatibilidadeSigtap, type FaixaAih, type FiltroAihsPorta, type FiltroRetornosPorta, type HistoricoSigtap, type InternacaoAih, type ItemAih, type ItemAihParaGravar, type ItemContaAih, type LoteSaida, type NovoArquivoSus, type PassagemLeito, type ProcedimentoSigtapRegra, type RegistroSigtap, type RetornoSus, type RetornoSusParaGravar, type ValorSigtap } from './tipos.js';
+import {
+  type AihRegistro,
+  type CompatibilidadeSigtap,
+  type FaixaAih,
+  type FiltroAihsPorta,
+  type FiltroRetornosPorta,
+  type HistoricoSigtap,
+  type InternacaoAih,
+  type ItemAih,
+  type ItemAihParaGravar,
+  type ItemContaAih,
+  type LoteSaida,
+  type NovoArquivoSus,
+  type PassagemLeito,
+  type ProcedimentoSigtapRegra,
+  type RegistroSigtap,
+  type RetornoSus,
+  type RetornoSusParaGravar,
+  type ValorSigtap,
+} from './tipos.js';
 
 /** O médico solicitante SUS do laudo (pela chave do cadastro): nome, CNS e CRM (o documento só vai ao arquivo). */
 export interface SolicitanteAihLido {

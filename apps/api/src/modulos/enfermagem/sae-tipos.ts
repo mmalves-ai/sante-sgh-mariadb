@@ -17,7 +17,6 @@ export const EVENTO_VACINA_CANCELADA = 'fato.vacina.cancelada';
 /** Evento do envio da vacina aplicada substituída (retificação). */
 export const EVENTO_VACINA_SUBSTITUIDA = 'fato.vacina.substituida';
 
-
 export interface AtividadeVigente extends AtividadeSaeLida {
   readonly atendimento: number;
   readonly sae: number;
@@ -225,7 +224,6 @@ export interface SaeDoAtendimento {
   } | null;
   readonly itens: readonly ItemSae[];
 }
-
 
 /** Versão do processo de enfermagem do atendimento. */
 export interface VersaoSae {

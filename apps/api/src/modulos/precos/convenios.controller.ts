@@ -256,9 +256,7 @@ export class ConveniosController {
   @Post(':cod/situacao')
   @HttpCode(200)
   @Permissao('convenio.situacao.alterar')
-  @AuditadoNoHandler(
-    'executor: trilha e autoria na mesma transação (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor: trilha e autoria na mesma transação (memória: registrador da API)')
   async situacao(
     @Param('cod') cod: string,
     @Body() corpo: unknown,
@@ -307,9 +305,7 @@ export class ConveniosController {
   @Put(':cod/contrato')
   @HttpCode(200)
   @Permissao('convenio.contrato.editar')
-  @AuditadoNoHandler(
-    'executor: trilha e autoria na mesma transação (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('executor: trilha e autoria na mesma transação (memória: registrador da API)')
   async alterarContrato(
     @Param('cod') cod: string,
     @Body() corpo: unknown,
@@ -365,9 +361,7 @@ export class ConveniosController {
   @Post(':cod/planos')
   @HttpCode(201)
   @Permissao('convenio.contrato.editar')
-  @AuditadoNoHandler(
-    'gravação do plano com a trilha junto (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('gravação do plano com a trilha junto (memória: registrador da API)')
   async plano(@Param('cod') cod: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const c = inteiro(cod, 'convênio', [0, 32767]);
     exigirNoEscopo(req, c);
@@ -427,9 +421,7 @@ export class ConveniosController {
   @Patch(':cod/planos/:id')
   @HttpCode(200)
   @Permissao('convenio.contrato.editar')
-  @AuditadoNoHandler(
-    'gravação do plano com a trilha junto (memória: registrador da API)',
-  )
+  @AuditadoNoHandler('gravação do plano com a trilha junto (memória: registrador da API)')
   async alterarPlano(
     @Param('cod') cod: string,
     @Param('id') id: string,

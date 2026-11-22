@@ -92,7 +92,15 @@ import {
   ufDoMunicipio,
   valorDevido,
 } from '@sgh/dominio-operadora';
-import { type DadosBeneficiarioSib, type DadosEnvioAns, type DadosEnvioAnsResumo, type DadosItemEnvioAns, type DadosOperadora, type EntradaGeracaoEnvio, type EntradaItemEnvio } from './dados-portas.js';
+import {
+  type DadosBeneficiarioSib,
+  type DadosEnvioAns,
+  type DadosEnvioAnsResumo,
+  type DadosItemEnvioAns,
+  type DadosOperadora,
+  type EntradaGeracaoEnvio,
+  type EntradaItemEnvio,
+} from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ArquivoGravado, ContextoAns, PortaAnsOperadora } from './ans-porta.js';
 

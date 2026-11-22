@@ -33,7 +33,9 @@ export interface OpcoesModuloRede {
 }
 
 /** As portas da Rede pela regra do módulo (sem as opções de teste). */
-export async function portasDaRede(ctx: ContextoModulo): Promise<{ mpi: PortaRede; servicos: PortaServicosRede }> {
+export async function portasDaRede(
+  ctx: ContextoModulo,
+): Promise<{ mpi: PortaRede; servicos: PortaServicosRede }> {
   const cliente = ctx.configuracao.clientePadrao;
   if (ctx.nucleo && cliente) {
     const mpi = new PortaRedePropria(ctx.nucleo, cliente, ctx.configuracao.rede);

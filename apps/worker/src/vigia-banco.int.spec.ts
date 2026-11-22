@@ -13,7 +13,14 @@ describe.skipIf(SEM_BANCO)('vigia do banco próprio sobre o MariaDB', () => {
 
   it('a rodada mede a plataforma e as transações sem falhar', async () => {
     const s = new VigiaBancoService();
-    s.usar({ saude: () => nucleo!.saude(), lerPlataforma: (c, fn) => nucleo!.lerPlataforma(c, fn), encerrar: async () => undefined }, async () => new Map());
+    s.usar(
+      {
+        saude: () => nucleo!.saude(),
+        lerPlataforma: (c, fn) => nucleo!.lerPlataforma(c, fn),
+        encerrar: async () => undefined,
+      },
+      async () => new Map(),
+    );
     const r = await s.ciclo();
     expect(r?.plataforma).toBe(true);
     if (r?.transacoes) {

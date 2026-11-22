@@ -160,7 +160,8 @@ export function conferirFechamentoConta(c: ContaParaFecharPropria): RecusaFatura
     return recusaFat('conta-apresentada', 'A conta já foi apresentada à operadora.');
   if (!contaAceitaLancamento(c.situacao))
     return recusaFat('situacao-invalida', 'A situação desta conta não permite fechar.');
-  if (c.itens <= 0) return recusaFat('conta-sem-itens', 'A conta não tem itens lançados: não há o que fechar.');
+  if (c.itens <= 0)
+    return recusaFat('conta-sem-itens', 'A conta não tem itens lançados: não há o que fechar.');
   if (c.pendenciasBloqueantes > 0)
     return recusaFat(
       'pendencia-bloqueante',
@@ -202,12 +203,14 @@ export function transicaoDaEtapa(
 ): { readonly nova: SituacaoConta } | RecusaFaturamento {
   const naEtapa: SituacaoConta = etapa === 'conferencia' ? 'em_conferencia' : 'em_auditoria';
   if (acao === 'iniciar') {
-    if (situacao === naEtapa) return recusaFat('etapa-em-andamento', 'A etapa já está em andamento nesta conta.');
+    if (situacao === naEtapa)
+      return recusaFat('etapa-em-andamento', 'A etapa já está em andamento nesta conta.');
     if (situacao !== 'aberta')
       return recusaFat('conta-nao-aberta', 'A etapa só começa na conta aberta, fora de outra etapa.');
     return { nova: naEtapa };
   }
-  if (situacao !== naEtapa) return recusaFat('etapa-nao-iniciada', 'A etapa não está em andamento nesta conta.');
+  if (situacao !== naEtapa)
+    return recusaFat('etapa-nao-iniciada', 'A etapa não está em andamento nesta conta.');
   return { nova: 'aberta' };
 }
 
@@ -239,7 +242,10 @@ export function competenciaFechada(daFonte: string | null, geral: string | null)
 }
 
 /** Fechar a conta e lançar item exigem a competência aberta (regra 9). */
-export function conferirCompetenciaDaConta(daFonte: string | null, geral: string | null): RecusaFaturamento | null {
+export function conferirCompetenciaDaConta(
+  daFonte: string | null,
+  geral: string | null,
+): RecusaFaturamento | null {
   return conferirCompetenciaAberta(competenciaFechada(daFonte, geral));
 }
 
@@ -256,7 +262,9 @@ export function pendenciaBloqueiaFechamento(controle: string, pedidoDaTela: bool
 /** Pendência nova só em conta viva: cancelada, enviada ou paga não recebe pendência. */
 export function conferirRegistroPendencia(situacao: string): RecusaFaturamento | null {
   return situacao === 'cancelada' || situacao === 'enviada' || situacao === 'paga'
-    ? recusaFat('conta-encerrada', 'A conta está cancelada, enviada ou paga: não recebe pendência nova.', ['conta'])
+    ? recusaFat('conta-encerrada', 'A conta está cancelada, enviada ou paga: não recebe pendência nova.', [
+        'conta',
+      ])
     : null;
 }
 
@@ -280,6 +288,7 @@ export const ESPECIE_DA_FORMA: Readonly<Record<FormaPagamento, string>> = {
 
 /** Espécie do caixa → forma da tela; as espécies que a tela não recebe (cheque, boleto, vale, outro) são 'outras'. */
 export function formaDaEspecie(especie: string): FormaPagamento | 'outras' {
-  for (const [forma, e] of Object.entries(ESPECIE_DA_FORMA)) if (e === especie) return forma as FormaPagamento;
+  for (const [forma, e] of Object.entries(ESPECIE_DA_FORMA))
+    if (e === especie) return forma as FormaPagamento;
   return 'outras';
 }

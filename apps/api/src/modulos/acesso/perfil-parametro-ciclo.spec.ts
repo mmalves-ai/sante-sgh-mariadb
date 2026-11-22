@@ -196,60 +196,63 @@ describe.skipIf(!ACESSO_REGISTRADO)('W0-09: perfil concedido com vigência e mot
   });
 });
 
-describe.skipIf(!ACESSO_REGISTRADO)('W0-09: parâmetro hierárquico — retirar a sobreposição volta a herdar', () => {
-  it('fecha a versão com quem e o motivo (nada se apaga), herda do padrão, 409 sem sobreposição', async () => {
-    const s = await entrar('SINT.ADMIN');
-    const url = '/api/administracao/parametros/cadastro.itensPorPagina';
-    const def = await app.inject({
-      method: 'PUT',
-      url,
-      headers: h(s),
-      payload: {
-        nivel: 'estabelecimento',
-        alvo: 'aa',
+describe.skipIf(!ACESSO_REGISTRADO)(
+  'W0-09: parâmetro hierárquico — retirar a sobreposição volta a herdar',
+  () => {
+    it('fecha a versão com quem e o motivo (nada se apaga), herda do padrão, 409 sem sobreposição', async () => {
+      const s = await entrar('SINT.ADMIN');
+      const url = '/api/administracao/parametros/cadastro.itensPorPagina';
+      const def = await app.inject({
+        method: 'PUT',
+        url,
+        headers: h(s),
+        payload: {
+          nivel: 'estabelecimento',
+          alvo: 'aa',
+          valor: '40',
+          justificativa: 'ajuste sintético de teste',
+        },
+      });
+      expect(def.statusCode).toBe(200);
+      const curta = await app.inject({
+        method: 'POST',
+        url: `${url}/retirada`,
+        headers: h(s),
+        payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'curta' },
+      });
+      expect(curta.statusCode).toBe(400);
+      const r = await app.inject({
+        method: 'POST',
+        url: `${url}/retirada`,
+        headers: h(s),
+        payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'volta ao padrão da rede' },
+      });
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({ valorAnterior: '40', fechadas: [def.json().id] });
+      expect(r.json().parametro.explicacao).toMatchObject({ valor: '25', origem: 'padrao' });
+      expect(trilha.eventos.some((x) => x.evento === EVENTOS_AUDITAVEIS.parametroRetirado.codigo)).toBe(true);
+      const um = (await app.inject({ method: 'GET', url, headers: h(s) })).json();
+      expect(um.versoes.find((v: { id: string }) => v.id === def.json().id)).toMatchObject({
         valor: '40',
-        justificativa: 'ajuste sintético de teste',
-      },
+        retiradaPor: 'SINT.ADMIN',
+        retiradaMotivo: 'volta ao padrão da rede',
+      });
+      expect(um.versoes.find((v: { id: string }) => v.id === def.json().id).vigenteAte).not.toBeNull();
+      const deNovo = await app.inject({
+        method: 'POST',
+        url: `${url}/retirada`,
+        headers: h(s),
+        payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'volta ao padrão da rede' },
+      });
+      expect(deNovo.statusCode).toBe(409);
+      expect(deNovo.json()).toMatchObject({ codigo: 'sem-sobreposicao' });
+      const crit = await app.inject({
+        method: 'POST',
+        url: '/api/administracao/parametros/acesso.emergenciaMinutos/retirada',
+        headers: h(s),
+        payload: { nivel: 'rede', alvo: 'rede-teste', justificativa: 'parâmetro crítico sem a senha' },
+      });
+      expect(crit.statusCode).toBe(401);
     });
-    expect(def.statusCode).toBe(200);
-    const curta = await app.inject({
-      method: 'POST',
-      url: `${url}/retirada`,
-      headers: h(s),
-      payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'curta' },
-    });
-    expect(curta.statusCode).toBe(400);
-    const r = await app.inject({
-      method: 'POST',
-      url: `${url}/retirada`,
-      headers: h(s),
-      payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'volta ao padrão da rede' },
-    });
-    expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ valorAnterior: '40', fechadas: [def.json().id] });
-    expect(r.json().parametro.explicacao).toMatchObject({ valor: '25', origem: 'padrao' });
-    expect(trilha.eventos.some((x) => x.evento === EVENTOS_AUDITAVEIS.parametroRetirado.codigo)).toBe(true);
-    const um = (await app.inject({ method: 'GET', url, headers: h(s) })).json();
-    expect(um.versoes.find((v: { id: string }) => v.id === def.json().id)).toMatchObject({
-      valor: '40',
-      retiradaPor: 'SINT.ADMIN',
-      retiradaMotivo: 'volta ao padrão da rede',
-    });
-    expect(um.versoes.find((v: { id: string }) => v.id === def.json().id).vigenteAte).not.toBeNull();
-    const deNovo = await app.inject({
-      method: 'POST',
-      url: `${url}/retirada`,
-      headers: h(s),
-      payload: { nivel: 'estabelecimento', alvo: 'aa', justificativa: 'volta ao padrão da rede' },
-    });
-    expect(deNovo.statusCode).toBe(409);
-    expect(deNovo.json()).toMatchObject({ codigo: 'sem-sobreposicao' });
-    const crit = await app.inject({
-      method: 'POST',
-      url: '/api/administracao/parametros/acesso.emergenciaMinutos/retirada',
-      headers: h(s),
-      payload: { nivel: 'rede', alvo: 'rede-teste', justificativa: 'parâmetro crítico sem a senha' },
-    });
-    expect(crit.statusCode).toBe(401);
-  });
-});
+  },
+);

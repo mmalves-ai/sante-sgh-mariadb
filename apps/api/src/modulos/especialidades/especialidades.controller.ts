@@ -752,7 +752,9 @@ export class EspecialidadesController {
   @Post('especialidades/oncologia/ciclos')
   @HttpCode(201)
   @Permissao(P.oncologiaRegistrar)
-  @AuditadoNoHandler('pep.registrarCicloOncologico (ciclo_quimioterapia) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'pep.registrarCicloOncologico (ciclo_quimioterapia) com a trilha de auditoria na mesma transação',
+  )
   async registrarCiclo(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1034,14 +1036,16 @@ export class EspecialidadesController {
   @Get('especialidades/obstetricia/internacoes/:reg')
   @Permissao(P.obstetriciaLer)
   @Auditar(E.especialidadeLida.codigo)
-  async obstetricia(
-    @Param('reg') reg: string,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<ObstetriciaLida> {
+  async obstetricia(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada): Promise<ObstetriciaLida> {
     const s = sessaoDe(req);
     const i = await this.internacaoLida(s, reg, P.obstetriciaLer);
     // A fase ativa do estabelecimento antes dos pontos: os alertas relidos usam o mesmo parâmetro da gravação.
-    const faseAtivaCm = await this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, FASE_ATIVA_CM_PADRAO);
+    const faseAtivaCm = await this.parametro(
+      s,
+      'obstetricia',
+      PARAMETRO_OBST_FASE_ATIVA,
+      FASE_ATIVA_CM_PADRAO,
+    );
     const [cab, pontos, rns, tipos, relogio] = await Promise.all([
       this.cabecalho(s, i),
       this.porta.partograma(s.porta, i.internacao, faseAtivaCm),
@@ -1064,7 +1068,9 @@ export class EspecialidadesController {
   @Post('especialidades/obstetricia/partograma')
   @HttpCode(201)
   @Permissao(P.obstetriciaRegistrar)
-  @AuditadoNoHandler('pep.registrarPartograma (partograma_registro) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'pep.registrarPartograma (partograma_registro) com a trilha de auditoria na mesma transação',
+  )
   async registrarPartograma(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1074,7 +1080,12 @@ export class EspecialidadesController {
     await this.apoio.obstetricia.exigirLiberacao(s);
     const v = await this.vinculoDa(s, 'obstetricia.registrar');
     const i = await this.internacaoAberta(s, e.internacao, P.obstetriciaRegistrar);
-    const faseAtivaCm = await this.parametro(s, 'obstetricia', PARAMETRO_OBST_FASE_ATIVA, FASE_ATIVA_CM_PADRAO);
+    const faseAtivaCm = await this.parametro(
+      s,
+      'obstetricia',
+      PARAMETRO_OBST_FASE_ATIVA,
+      FASE_ATIVA_CM_PADRAO,
+    );
     const [{ agora }, anteriores] = await Promise.all([
       this.porta.relogio(s.porta),
       this.porta.partograma(s.porta, i.internacao, faseAtivaCm),
@@ -1124,7 +1135,9 @@ export class EspecialidadesController {
   @Post('especialidades/obstetricia/recem-nascidos')
   @HttpCode(201)
   @Permissao(P.obstetriciaRegistrar)
-  @AuditadoNoHandler('pep.registrarRecemNascido (registro_nascimento) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'pep.registrarRecemNascido (registro_nascimento) com a trilha de auditoria na mesma transação',
+  )
   async registrarRecemNascido(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1617,7 +1630,11 @@ export class EspecialidadesController {
       s,
       E.protocoloOncologicoAlterado.codigo,
       P.oncologiaPublicarProtocolo,
-      (x: number) => ({ tabela: 'evento_tratamento_oncologico', id: String(x), chave: `${p.codigo}:${evento}` }),
+      (x: number) => ({
+        tabela: 'evento_tratamento_oncologico',
+        id: String(x),
+        chave: `${p.codigo}:${evento}`,
+      }),
       (g) =>
         g.registrarEventoOnco({
           evento,
@@ -1657,7 +1674,9 @@ export class EspecialidadesController {
   @Post('especialidades/oncologia/protocolos/:id/reativar')
   @HttpCode(200)
   @Permissao(P.oncologiaPublicarProtocolo)
-  @AuditadoNoHandler('pep.publicarProtocoloOncologico (a reativação em evento_tratamento_oncologico) com a trilha de auditoria')
+  @AuditadoNoHandler(
+    'pep.publicarProtocoloOncologico (a reativação em evento_tratamento_oncologico) com a trilha de auditoria',
+  )
   reativarProtocolo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.mudarProtocolo(req, id, b, 'protocolo-reativado');
   }

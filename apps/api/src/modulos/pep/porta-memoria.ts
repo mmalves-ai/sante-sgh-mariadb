@@ -6,7 +6,18 @@
 // cópia. Cada estabelecimento tem os seus registros (IDs próprios): não há prontuário cruzado (regra 14). O
 // registro de acesso lê a trilha em memória da API.
 import { deflateSync } from 'node:zlib';
-import { type AcessoLido, codificarCp1252, decodificarDocumentoEmitido, type DefinicaoFormularioLida, EVENTO_ALERTA_LEITURA, EVENTOS_LEITURA_PRONTUARIO, type ExcecaoAgregadaLida, type FontesLidas, type RegistroProntuarioLido, type RespostaLida } from './tipos-pep.js';
+import {
+  type AcessoLido,
+  codificarCp1252,
+  decodificarDocumentoEmitido,
+  type DefinicaoFormularioLida,
+  EVENTO_ALERTA_LEITURA,
+  EVENTOS_LEITURA_PRONTUARIO,
+  type ExcecaoAgregadaLida,
+  type FontesLidas,
+  type RegistroProntuarioLido,
+  type RespostaLida,
+} from './tipos-pep.js';
 import type { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import type { ContextoProntuario, PortaProntuario } from './porta.js';
 

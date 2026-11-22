@@ -56,7 +56,8 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
         if (r.parceiros > 0) logger.info({ cliente, tipo: ev.tipo, ...r }, 'integrações: evento distribuído');
         // M32: a glosa aceita no faturamento vira glosa no título; a competência fechada vai à fila de trabalho.
         const f = await consumirEventoFinanceiro(financeiro, cliente, ev);
-        if (f) logger.info({ cliente, tipo: ev.tipo, resultado: f.resultado }, 'financeiro: evento consumido');
+        if (f)
+          logger.info({ cliente, tipo: ev.tipo, resultado: f.resultado }, 'financeiro: evento consumido');
       }),
     };
     this.clientes.set(cliente, c);
@@ -73,7 +74,10 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
           const r = await cicloRelayOutbox(nucleo, cliente, this.doCliente(nucleo, cliente).fila.publicar);
           if (r.lidos > 0) logger.info({ cliente, ...r }, 'relay da outbox');
         } catch (e) {
-          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'relay da outbox: ciclo falhou');
+          logger.warn(
+            { cliente, erro: e instanceof Error ? e.name : 'erro' },
+            'relay da outbox: ciclo falhou',
+          );
         }
       }
     } catch (e) {

@@ -153,8 +153,7 @@ export class PortaAssinaturaMemoria implements PortaAssinaturaIcp {
       gravarProvedor: async (p, versao) => {
         const i = this.provs.findIndex((x) => x.hospital === p.hospital && x.codigo === p.codigo);
         if (versao === null) {
-          if (i >= 0)
-            throw new ErroAssinatura('provedor-repetido', 'Já existe um provedor com este código.');
+          if (i >= 0) throw new ErroAssinatura('provedor-repetido', 'Já existe um provedor com este código.');
           const id = this.novo();
           this.provs.push({ ...p, id, versao: 1, alteradoPor: p.por, alteradoEm: p.em.toISOString() });
           return { id, versao: 1 };

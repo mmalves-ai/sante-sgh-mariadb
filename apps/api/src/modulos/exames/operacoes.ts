@@ -41,7 +41,8 @@ const n = (v: unknown) => Number(v ?? 0);
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 
 function estabelecimentoDe(ctx: ContextoOperacao): number {
-  if (ctx.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (ctx.estabelecimento === null)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
 function usuarioDe(ctx: ContextoOperacao): number {
@@ -73,12 +74,15 @@ async function agendaDeExame(tx: TxOperacao, est: number, id: number): Promise<A
       WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL AND ca.natureza = 'exame'`,
     [id, est],
   );
-  if (!a) throw naoEncontrado('Agenda não encontrada', 'A agenda de exames não existe neste estabelecimento.');
+  if (!a)
+    throw naoEncontrado('Agenda não encontrada', 'A agenda de exames não existe neste estabelecimento.');
   return { id: n(a['id']), ativo: verdadeiro(a['ativo']), duracao: n(a['duracao_horario_minutos']) };
 }
 
 async function exigirFonteAceita(tx: TxOperacao, agenda: number, fonte: number): Promise<void> {
-  const f = await tx.uma('SELECT id, situacao FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [fonte]);
+  const f = await tx.uma('SELECT id, situacao FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [
+    fonte,
+  ]);
   if (!f) throw recusa('convenio-inexistente', 'O convênio não existe.', { campos: ['convenio'] });
   if (f['situacao'] !== 'ativa')
     throw recusa('convenio-inativo', 'O convênio está suspenso ou inativo: não aceita marcação.', {
@@ -142,13 +146,20 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
   if (h['situacao'] !== 'livre' || n(h['vagas_ocupadas']) >= n(h['vagas']))
     throw recusa('horario-ocupado', 'O horário já foi ocupado em outro terminal: escolha outro.');
   await exigirFonteAceita(tx, a.id, e.convenio);
-  const p = await tx.uma('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
+  const p = await tx.uma('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [
+    e.paciente,
+  ]);
   if (!p) throw naoEncontrado('Paciente não encontrado', 'O cadastro do paciente não existe.');
   if (!['ativo', 'provisorio'].includes(String(p['situacao'])))
     throw recusa('paciente-inativo', 'O cadastro do paciente está inativo, unificado ou em óbito.');
   if (e.exame !== null) {
-    const x = await tx.uma('SELECT id FROM exame WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL', [e.exame]);
-    if (!x) throw recusa('exame-inexistente', 'O exame não existe no catálogo ou está inativo.', { campos: ['exame'] });
+    const x = await tx.uma('SELECT id FROM exame WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL', [
+      e.exame,
+    ]);
+    if (!x)
+      throw recusa('exame-inexistente', 'O exame não existe no catálogo ou está inativo.', {
+        campos: ['exame'],
+      });
   }
   const tipo = await apoio(
     tx,
@@ -236,7 +247,12 @@ async function marcacaoTravada(tx: TxOperacao, est: number, id: number): Promise
 }
 
 /** Cancela a marcação travada e libera o horário; devolve o id do cancelamento. */
-async function desfazerMarcacao(tx: TxOperacao, ctx: ContextoOperacao, m: Linha, d: Desfazer): Promise<number> {
+async function desfazerMarcacao(
+  tx: TxOperacao,
+  ctx: ContextoOperacao,
+  m: Linha,
+  d: Desfazer,
+): Promise<number> {
   const est = estabelecimentoDe(ctx);
   const motivo = await apoio(
     tx,
@@ -292,7 +308,9 @@ export const agendarExame = definirOperacao<AgendarExameEntrada, ResultadoOperac
     });
     return { marcacao: id, agenda: e.agenda };
   },
-  eventos: (e, r) => [{ tipo: 'agenda.exame.marcado', carga: { marcacao: r['marcacao'] ?? null, agenda: e.agenda } }],
+  eventos: (e, r) => [
+    { tipo: 'agenda.exame.marcado', carga: { marcacao: r['marcacao'] ?? null, agenda: e.agenda } },
+  ],
   alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: n(r['marcacao']) }),
 });
 
@@ -388,7 +406,8 @@ async function vagasDaEscala(
       WHERE agenda_servico_id = ? AND ativo = TRUE AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
     [agenda, ate, de],
   );
-  const iso = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : v === null ? null : String(v).slice(0, 10));
+  const iso = (v: unknown) =>
+    v instanceof Date ? v.toISOString().slice(0, 10) : v === null ? null : String(v).slice(0, 10);
   return (data, horaInformada) => {
     const hora = normalizarHora(horaInformada);
     const semana = new Date(`${data}T00:00:00Z`).getUTCDay() + 1;
@@ -468,7 +487,12 @@ export const gerarGradeExame = definirOperacao<GerarGradeExameEntrada, Resultado
           teleatendimento: false,
         };
         const velho = excluidos.get(h.inicio.getTime());
-        if (velho) await tx.alterar('horario_agenda', n(velho['id']), n(velho['versao']), { ...valores, excluido_em: null, excluido_por: null });
+        if (velho)
+          await tx.alterar('horario_agenda', n(velho['id']), n(velho['versao']), {
+            ...valores,
+            excluido_em: null,
+            excluido_por: null,
+          });
         else
           await tx.incluir('horario_agenda', {
             ...valores,
@@ -509,7 +533,9 @@ export const definirCoberturaExame = definirOperacao<DefinirCoberturaExameEntrad
     const vigentes = linhas.filter((l) => l['excluido_em'] === null);
     const desta = linhas.find((l) => n(l['fonte_pagadora_id']) === e.convenio);
     if (e.acao === 'incluir') {
-      const f = await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [e.convenio]);
+      const f = await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [
+        e.convenio,
+      ]);
       if (!f) throw recusa('convenio-inexistente', 'O convênio não existe.', { campos: ['convenio'] });
       if (desta && desta['excluido_em'] === null) throw recusa('ja-coberto', 'O convênio já está na agenda.');
       const id = desta
@@ -525,7 +551,8 @@ export const definirCoberturaExame = definirOperacao<DefinirCoberturaExameEntrad
           });
       return { agenda: a.id, convenio: e.convenio, registro: id };
     }
-    if (!desta || desta['excluido_em'] !== null) throw recusa('nao-coberto', 'O convênio não está na agenda.');
+    if (!desta || desta['excluido_em'] !== null)
+      throw recusa('nao-coberto', 'O convênio não está na agenda.');
     if (vigentes.length === 1 && !e.confirmarAceitarTodos)
       throw recusa(
         'ultima-linha',

@@ -4,18 +4,7 @@
 // TOTP novo, uma única vez, no início do cadastro (o aplicativo autenticador precisa dele).
 // Removido (ADR 0003): a retirada da senha antiga (POST acesso/identidade/usuarios/:login/retirar-senha-antiga) e o
 //   executor dela; a credencial é uma só, e a não Argon2id volta pela redefinição do gestor.
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   esquemaAlterarPolitica2fa,
   esquemaEncerrarPolitica2fa,

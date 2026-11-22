@@ -64,7 +64,15 @@ import {
   situacaoPelosValores,
   valoresDaConta,
 } from '@sgh/dominio-operadora';
-import { type DadosAuditor, type DadosConta, type DadosContaResumo, type DadosElegibilidadeBeneficiario, type DadosGuiaConta, type EntradaGuiaRecebida, type EntradaRecebimentoConta } from './dados-portas.js';
+import {
+  type DadosAuditor,
+  type DadosConta,
+  type DadosContaResumo,
+  type DadosElegibilidadeBeneficiario,
+  type DadosGuiaConta,
+  type EntradaGuiaRecebida,
+  type EntradaRecebimentoConta,
+} from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContas, PortaContasOperadora } from './contas-porta.js';
 

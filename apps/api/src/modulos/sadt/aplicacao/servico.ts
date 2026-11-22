@@ -662,7 +662,9 @@ export class ServicoSadt {
     await this.apoios.orcamento.exigirLiberacao(s);
     const apoio = await this.porta.apoio(ctx(s), setorDoAto(o.ato) ?? undefined);
     const itens = o.itens.map((i) => {
-      const x = apoio.exames.find((y: { ato: number; codigo: string }) => y.ato === o.ato && y.codigo === i.exame);
+      const x = apoio.exames.find(
+        (y: { ato: number; codigo: string }) => y.ato === o.ato && y.codigo === i.exame,
+      );
       if (!x)
         return recusa(
           'Exame inativo',

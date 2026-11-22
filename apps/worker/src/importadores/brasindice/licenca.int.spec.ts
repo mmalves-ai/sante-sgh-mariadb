@@ -53,7 +53,10 @@ describe.skipIf(SEM_BANCO)('licença do Brasíndice (f22_o5)', () => {
     const porta = new PortaPublicacaoPropria(nucleo, CLIENTE, H);
     const c = await porta.carga(id);
     if (!c) throw new Error('carga não gravada');
-    return publicarCarga({ porta, janela: JANELA_PADRAO, agoraMinutos: () => 23 * 60, ignorarJanela: false, lotesPorCiclo: 1 }, c);
+    return publicarCarga(
+      { porta, janela: JANELA_PADRAO, agoraMinutos: () => 23 * 60, ignorarJanela: false, lotesPorCiclo: 1 },
+      c,
+    );
   };
 
   beforeAll(async () => {
@@ -77,7 +80,10 @@ describe.skipIf(SEM_BANCO)('licença do Brasíndice (f22_o5)', () => {
     expect(r.situacao).toBe('falhou');
     expect(r.motivo).toContain('sem-contrato');
     const c = await escrever(nucleo, (e) =>
-      e.uma<{ situacao: string; lotes_publicados: unknown }>('SELECT situacao, lotes_publicados FROM carga_catalogo WHERE id = ?', [id]),
+      e.uma<{ situacao: string; lotes_publicados: unknown }>(
+        'SELECT situacao, lotes_publicados FROM carga_catalogo WHERE id = ?',
+        [id],
+      ),
     );
     expect(c).toMatchObject({ situacao: 'falhou', lotes_publicados: 0 });
   });

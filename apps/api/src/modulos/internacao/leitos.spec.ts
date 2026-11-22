@@ -40,7 +40,11 @@ let base = '';
 beforeAll(async () => {
   // O canal de eventos é do estabelecimento por id: o mapa código → id do cliente de teste (sem banco).
   await ligarMapaEstabelecimentos('teste', {
-    lerSomente: async <T>() => [{ id: 11, codigo: 'aa' }, { id: 12, codigo: 'bb' }] as T,
+    lerSomente: async <T>() =>
+      [
+        { id: 11, codigo: 'aa' },
+        { id: 12, codigo: 'bb' },
+      ] as T,
   });
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,

@@ -21,7 +21,7 @@ import { RAIZ } from './privilegios.ts';
 
 export const CAMINHO_MATRIZ = 'planejamento/referencias/matriz-cobertura-1503-tabelas.tsv';
 export const CAMINHO_TABELAS_CLINICAS = 'packages/contratos/src/acesso/tabelas-clinicas.gerado.ts';
-export const NOME_PASSO_IMUTABILIDADE = '0002_imutabilidade_clinica';
+export const NOME_ETAPA_IMUTABILIDADE = '0002_imutabilidade_clinica';
 
 /** Tabelas clínicas do legado pela matriz (módulo clínico, tela do registro e natureza de registro), em ordem. */
 export function tabelasClinicasDaMatriz(tsv: string): string[] {
@@ -144,8 +144,9 @@ export function tabelasClinicasDoDdl(sql: string): string[] {
   const saida = new Set<string>();
   for (const m of sql.matchAll(CRIAR_TABELA)) {
     const corpo = m[2] ?? '';
-    if (COLUNAS_DO_PACIENTE.some((c) => new RegExp(`^\\s*\`?${c}\`?\\s`, 'm').test(corpo)))
-      saida.add((m[1] ?? '').toLowerCase());
+    // Coluna declarada no começo da linha (com ou sem crase), por nome de coluna lido como texto, sem montar RegExp.
+    const declaradas = corpo.split('\n').map((l) => /^\s*`?([a-z][a-z0-9_]*)`?\s/i.exec(l)?.[1]);
+    if (COLUNAS_DO_PACIENTE.some((c) => declaradas.includes(c))) saida.add((m[1] ?? '').toLowerCase());
   }
   return [...saida].sort();
 }

@@ -591,7 +591,17 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       const atendimento = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
            fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [estA, `F2423-AT${Date.now().toString(36)}`, paciente, categoria, carater, fonte, profissional, agora, agora],
+        [
+          estA,
+          `F2423-AT${Date.now().toString(36)}`,
+          paciente,
+          categoria,
+          carater,
+          fonte,
+          profissional,
+          agora,
+          agora,
+        ],
       );
       const tipo = await porCodigo('tipo_conta', 'F2423-INT', 'descricao, natureza', [
         'INTERNACAO F2423',
@@ -600,7 +610,16 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
       const conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
            tipo_conta_id, natureza, competencia, inicio_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-03-01', ?, ?)`,
-        [estA, `F2423-CH${Date.now().toString(36)}`, atendimento, paciente, fonte, tipo, '2026-03-02 08:00:00', agora],
+        [
+          estA,
+          `F2423-CH${Date.now().toString(36)}`,
+          atendimento,
+          paciente,
+          fonte,
+          tipo,
+          '2026-03-02 08:00:00',
+          agora,
+        ],
       );
       const grupo = await porCodigo('grupo_faturamento', 'F2423-GF', 'descricao, tipo_grupo', [
         'GRUPO F2423',

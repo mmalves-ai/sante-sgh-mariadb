@@ -35,9 +35,11 @@ const COLUNAS_PEDIDAS = [
   'assinado_em',
 ];
 
-const sql = (entrada: string) => execFileSync(resolve(RAIZ, 'tools/db/sql.sh'), [BANCO], { input: entrada, encoding: 'utf8' });
+const sql = (entrada: string) =>
+  execFileSync(resolve(RAIZ, 'tools/db/sql.sh'), [BANCO], { input: entrada, encoding: 'utf8' });
 /** O pedido de modelo do lote (sem a carga de domínio: o teste cadastra só os tipos que usa). */
-const PEDIDO_MODELO = () => readFileSync(resolve(RAIZ, 'docs/obra/fatias/f22/saida/03-02.sql'), 'utf8').split('-- Carga')[0]!;
+const PEDIDO_MODELO = () =>
+  readFileSync(resolve(RAIZ, 'docs/obra/fatias/f22/saida/03-02.sql'), 'utf8').split('-- Carga')[0]!;
 /** Desfaz o pedido aplicado pelo teste (o cliente de teste volta ao DDL das migrações). */
 const DESFAZER_MODELO = `ALTER TABLE documento_digitalizado
   DROP FOREIGN KEY fk_documento_digitalizado_lote_digitalizacao_id,
@@ -156,12 +158,17 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
       await e.executar(`DELETE FROM assinatura_icp WHERE estabelecimento_id IN (${ests})`, p);
       await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id IN (${ests})`, p);
       await e.executar(`DELETE FROM lote_digitalizacao WHERE estabelecimento_id IN (${ests})`, p);
-      await e.executar(`DELETE FROM sequencia_negocio WHERE tipo = 'lote_digitalizacao' AND estabelecimento_id IN (${ests})`, p);
+      await e.executar(
+        `DELETE FROM sequencia_negocio WHERE tipo = 'lote_digitalizacao' AND estabelecimento_id IN (${ests})`,
+        p,
+      );
       await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${ests})`, p);
       await e.executar('DELETE FROM paciente WHERE numero_prontuario = ?', [PRONT]);
       await e.executar('DELETE FROM pessoa_fisica WHERE nome = ?', [`PACIENTE ${MARCA}`]);
-      await e.executar("DELETE FROM certificado_usuario WHERE numero_serie = ?", [MARCA]);
-      await e.executar("DELETE FROM idempotencia_operacao WHERE chave LIKE 'digitalizacao:%' OR chave LIKE 'f22-0302-%'");
+      await e.executar('DELETE FROM certificado_usuario WHERE numero_serie = ?', [MARCA]);
+      await e.executar(
+        "DELETE FROM idempotencia_operacao WHERE chave LIKE 'digitalizacao:%' OR chave LIKE 'f22-0302-%'",
+      );
     });
   }
 
@@ -195,52 +202,108 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0302-preparo' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>
-        garantir(e, 'SELECT id FROM estabelecimento WHERE codigo = ?', [codigo],
+        garantir(
+          e,
+          'SELECT id FROM estabelecimento WHERE codigo = ?',
+          [codigo],
           'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
-          [codigo, `Hospital de teste ${codigo}`, `Hospital de teste ${codigo} (fictício)`, agora]);
+          [codigo, `Hospital de teste ${codigo}`, `Hospital de teste ${codigo} (fictício)`, agora],
+        );
       ids.est = await est('f22l0302');
       ids.outro = await est('f22l0302b');
       const usu = (login: string) =>
-        garantir(e, 'SELECT id FROM usuario WHERE login = ?', [login],
+        garantir(
+          e,
+          'SELECT id FROM usuario WHERE login = ?',
+          [login],
           "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, ?, 'pessoa', TRUE, ?)",
-          [login, `USUARIO ${MARCA}`, agora]);
+          [login, `USUARIO ${MARCA}`, agora],
+        );
       ids.capt = await usu('f22.l0302.captura');
       ids.conf = await usu('f22.l0302.confere');
-      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [`PACIENTE ${MARCA}`, agora]);
+      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        `PACIENTE ${MARCA}`,
+        agora,
+      ]);
       ids.paciente = await e.inserir(
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, nome_social, usa_nome_social, criado_em) VALUES (?, ?, ?, TRUE, ?)',
         [pf, PRONT, `NOME SOCIAL ${MARCA}`, agora],
       );
-      const categoria = await garantir(e, 'SELECT id FROM categoria_atendimento WHERE codigo = ?', ['consulta'],
+      const categoria = await garantir(
+        e,
+        'SELECT id FROM categoria_atendimento WHERE codigo = ?',
+        ['consulta'],
         'INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, ?, ?)',
-        ['consulta', 'Consulta ambulatorial', 'ambulatorio', agora]);
-      const carater = await garantir(e, 'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?', ['1'],
+        ['consulta', 'Consulta ambulatorial', 'ambulatorio', agora],
+      );
+      const carater = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+        ['1'],
         'INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?)',
-        ['1', 'Eletivo', 'teste', agora]);
-      const fonte = await garantir(e, 'SELECT id FROM fonte_pagadora WHERE codigo = ?', [MARCA],
+        ['1', 'Eletivo', 'teste', agora],
+      );
+      const fonte = await garantir(
+        e,
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        [MARCA],
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES (?, ?, 'particular', ?)",
-        [MARCA, `CONVENIO ${MARCA}`, agora]);
-      const pessoaProf = await garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [`MEDICA ${MARCA}`],
-        'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [`MEDICA ${MARCA}`, agora]);
-      const prof = await garantir(e, 'SELECT id FROM profissional WHERE pessoa_fisica_id = ?', [pessoaProf],
-        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)", [pessoaProf, agora]);
+        [MARCA, `CONVENIO ${MARCA}`, agora],
+      );
+      const pessoaProf = await garantir(
+        e,
+        'SELECT id FROM pessoa_fisica WHERE nome = ?',
+        [`MEDICA ${MARCA}`],
+        'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+        [`MEDICA ${MARCA}`, agora],
+      );
+      const prof = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pessoaProf],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pessoaProf, agora],
+      );
       const atend = (estab: number, numero: string) =>
         e.inserir(
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
              carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [estab, numero, ids.paciente, categoria, carater, fonte, prof, new Date('2019-04-01T12:00:00Z'), agora],
+          [
+            estab,
+            numero,
+            ids.paciente,
+            categoria,
+            carater,
+            fonte,
+            prof,
+            new Date('2019-04-01T12:00:00Z'),
+            agora,
+          ],
         );
       ids.atend = await atend(ids.est, `${MARCA}-1`);
       ids.atendOutro = await atend(ids.outro, `${MARCA}-2`);
       for (const codigo of ['evolucao', 'laudo'])
-        await garantir(e, 'SELECT id FROM tipo_documento_arquivo WHERE codigo = ?', [codigo],
+        await garantir(
+          e,
+          'SELECT id FROM tipo_documento_arquivo WHERE codigo = ?',
+          [codigo],
           "INSERT INTO tipo_documento_arquivo (codigo, descricao, grupo, prazo_guarda_anos, criado_em) VALUES (?, ?, 'prontuario', 20, ?)",
-          [codigo, `Tipo ${codigo} (teste)`, agora]);
+          [codigo, `Tipo ${codigo} (teste)`, agora],
+        );
       ids.cert = await e.inserir(
         `INSERT INTO certificado_usuario (usuario_id, midia, nome_titular, cpf_titular, emissor, numero_serie,
            impressao_digital, valido_de, valido_ate, criado_em) VALUES (?, 'a1', ?, '52998224725', ?, ?, ?, ?, ?, ?)`,
-        [ids.conf, `TITULAR ${MARCA}`, `AC TESTE ${MARCA}`, MARCA, hex(250), new Date('2026-01-01'), new Date('2027-01-01'), agora],
+        [
+          ids.conf,
+          `TITULAR ${MARCA}`,
+          `AC TESTE ${MARCA}`,
+          MARCA,
+          hex(250),
+          new Date('2026-01-01'),
+          new Date('2027-01-01'),
+          agora,
+        ],
       );
     });
   }, 60_000);
@@ -281,44 +344,75 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
   it('lote e resumo inexistentes; sem estabelecimento, recusa', async () => {
     expect(await porta.loteExiste(ctx(ids.capt), 999_999_999)).toBe(false);
     expect(await porta.hashExiste(ctx(ids.capt), hex(1))).toBe(false);
-    expect(await codigoDaRecusa(porta.fila({ ...ctx(ids.capt), estabelecimento: null }, null))).toBe('sem-estabelecimento');
+    expect(await codigoDaRecusa(porta.fila({ ...ctx(ids.capt), estabelecimento: null }, null))).toBe(
+      'sem-estabelecimento',
+    );
   });
 
   // ── Gravações e leituras do índice (o DDL do pedido) ──
 
   it('captura: documento, arquivo, lote numerado, ordem e trilha; o mesmo arquivo é recusado', async () => {
     const c = ctx(ids.capt);
-    const r = await porta.gravarSgh(c, (x: { id: number }) => trilha(c, x.id), (g) => g.capturar(captura(1)));
+    const r = await porta.gravarSgh(
+      c,
+      (x: { id: number }) => trilha(c, x.id),
+      (g) => g.capturar(captura(1)),
+    );
     expect(r.ordem).toBe(1);
-    const r2 = await porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(2, { lote: r.lote, paginas: 3 })));
+    const r2 = await porta.gravarSgh(c, trilha(c), (g) =>
+      g.capturar(captura(2, { lote: r.lote, paginas: 3 })),
+    );
     expect(r2).toMatchObject({ lote: r.lote, ordem: 2 });
     expect(await porta.loteExiste(c, r.lote)).toBe(true);
     expect(await porta.loteExiste(ctx(ids.capt, ids.outro), r.lote)).toBe(false);
     expect(await porta.hashExiste(c, hex(1))).toBe(true);
-    expect(await codigoDaRecusa(porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(1))))).toBe('ja-digitalizado');
+    expect(await codigoDaRecusa(porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(1))))).toBe(
+      'ja-digitalizado',
+    );
     // O tipo 'folha-sala' vem da carga de domínio (09_HOT/06_chaves.sql): inativo, conta como sem cadastro.
     sql("UPDATE tipo_documento_arquivo SET ativo = FALSE WHERE codigo = 'folha-sala'");
     try {
       expect(
-        await codigoDaRecusa(porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(3, { tipoDocumento: 'folha-sala' })))),
+        await codigoDaRecusa(
+          porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(3, { tipoDocumento: 'folha-sala' }))),
+        ),
       ).toBe('tipo-documento-sem-cadastro');
     } finally {
       sql("UPDATE tipo_documento_arquivo SET ativo = TRUE WHERE codigo = 'folha-sala'");
     }
-    const efeito = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0302-efeito' }, async (l) => ({
-      doc: await l.uma(
-        `SELECT d.situacao, d.versao, d.conferido, d.digitalizador_usuario_id, d.ordem_lote, a.hash_sha256, a.entidade,
+    const efeito = await nucleo.lerSomente(
+      { cliente: CLIENTE, correlacao: 'f22-0302-efeito' },
+      async (l) => ({
+        doc: await l.uma(
+          `SELECT d.situacao, d.versao, d.conferido, d.digitalizador_usuario_id, d.ordem_lote, a.hash_sha256, a.entidade,
                 a.entidade_id, a.imutavel, a.retencao_ate
            FROM documento_digitalizado d JOIN arquivo a ON a.id = d.arquivo_id WHERE d.id = ?`,
-        [r.id],
-      ),
-      lote: await l.uma('SELECT numero, quantidade_documentos, quantidade_paginas, operador_usuario_id FROM lote_digitalizacao WHERE id = ?', [r.lote]),
-      trilha: await l.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'documento_digitalizado' AND entidade_id = ?", [r.id]),
-    }));
-    expect(efeito.doc).toMatchObject({ situacao: 'pendente_conferencia', versao: 1, digitalizador_usuario_id: ids.capt, hash_sha256: hex(1), entidade: 'documento_digitalizado' });
+          [r.id],
+        ),
+        lote: await l.uma(
+          'SELECT numero, quantidade_documentos, quantidade_paginas, operador_usuario_id FROM lote_digitalizacao WHERE id = ?',
+          [r.lote],
+        ),
+        trilha: await l.uma(
+          "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'documento_digitalizado' AND entidade_id = ?",
+          [r.id],
+        ),
+      }),
+    );
+    expect(efeito.doc).toMatchObject({
+      situacao: 'pendente_conferencia',
+      versao: 1,
+      digitalizador_usuario_id: ids.capt,
+      hash_sha256: hex(1),
+      entidade: 'documento_digitalizado',
+    });
     expect(Number(efeito.doc?.['entidade_id'])).toBe(r.id);
     expect(String(efeito.lote?.['numero'])).toMatch(/^LD-\d+$/);
-    expect(efeito.lote).toMatchObject({ quantidade_documentos: 2, quantidade_paginas: 5, operador_usuario_id: ids.capt });
+    expect(efeito.lote).toMatchObject({
+      quantidade_documentos: 2,
+      quantidade_paginas: 5,
+      operador_usuario_id: ids.capt,
+    });
     expect(Number(efeito.trilha?.['n'])).toBeGreaterThanOrEqual(1);
   });
 
@@ -355,16 +449,29 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
     const [a, b] = (await porta.fila(ctx(ids.capt), 'capturado')).itens.sort((x, y) => x.ordem - y.ordem);
     const cc = ctx(ids.capt);
     const cf = ctx(ids.conf);
-    const conf = (id: number, situacao: 'conferido' | 'recusado', versao: number, motivo: string | null = null) =>
-      (g: Parameters<Parameters<typeof porta.gravarSgh>[2]>[0]) => g.conferir({ id, situacao, motivo, versao, usuario: '' });
-    expect(await codigoDaRecusa(porta.gravarSgh(cc, trilha(cc, a!.id), conf(a!.id, 'conferido', 1)))).toBe('conferente-capturou');
-    expect(await codigoDaRecusa(porta.gravarSgh(cf, trilha(cf, a!.id), conf(a!.id, 'conferido', 7)))).toBe('conflito-versao');
+    const conf =
+      (id: number, situacao: 'conferido' | 'recusado', versao: number, motivo: string | null = null) =>
+      (g: Parameters<Parameters<typeof porta.gravarSgh>[2]>[0]) =>
+        g.conferir({ id, situacao, motivo, versao, usuario: '' });
+    expect(await codigoDaRecusa(porta.gravarSgh(cc, trilha(cc, a!.id), conf(a!.id, 'conferido', 1)))).toBe(
+      'conferente-capturou',
+    );
+    expect(await codigoDaRecusa(porta.gravarSgh(cf, trilha(cf, a!.id), conf(a!.id, 'conferido', 7)))).toBe(
+      'conflito-versao',
+    );
     await porta.gravarSgh(cf, trilha(cf, a!.id), conf(a!.id, 'conferido', 1));
     await porta.gravarSgh(cf, trilha(cf, b!.id), conf(b!.id, 'recusado', 1, 'PAGINA ILEGIVEL'));
-    expect(await codigoDaRecusa(porta.gravarSgh(cf, trilha(cf, a!.id), conf(a!.id, 'conferido', 2)))).toBe('ja-conferido');
+    expect(await codigoDaRecusa(porta.gravarSgh(cf, trilha(cf, a!.id), conf(a!.id, 'conferido', 2)))).toBe(
+      'ja-conferido',
+    );
     const da = await porta.documento(cf, a!.id);
     const db = await porta.documento(cf, b!.id);
-    expect(da).toMatchObject({ situacao: 'conferido', conferidoPor: 'f22.l0302.confere', motivo: null, versao: 2 });
+    expect(da).toMatchObject({
+      situacao: 'conferido',
+      conferidoPor: 'f22.l0302.confere',
+      motivo: null,
+      versao: 2,
+    });
     expect(db).toMatchObject({ situacao: 'recusado', motivo: 'PAGINA ILEGIVEL', versao: 2 });
     expect((await porta.fila(cf, null)).contagens).toMatchObject({ capturado: 0, conferido: 1, recusado: 1 });
   });
@@ -376,7 +483,12 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
     expect(
       await codigoDaRecusa(
         porta.gravarSgh(cc, trilha(cc, d!.id), (g) =>
-          g.assinar({ id: d!.id, assinatura: assinatura(1, 'assinada'), validacao: validacao(true), usuario: '' }),
+          g.assinar({
+            id: d!.id,
+            assinatura: assinatura(1, 'assinada'),
+            validacao: validacao(true),
+            usuario: '',
+          }),
         ),
       ),
     ).toBe('versao-desatualizada');
@@ -385,10 +497,20 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
     );
     expect((await porta.documento(cf, d!.id))?.situacao).toBe('conferido');
     const id = await porta.gravarSgh(cf, trilha(cf, d!.id), (g) =>
-      g.assinar({ id: d!.id, assinatura: assinatura(1, 'assinada'), validacao: validacao(true), usuario: '' }),
+      g.assinar({
+        id: d!.id,
+        assinatura: assinatura(1, 'assinada'),
+        validacao: validacao(true),
+        usuario: '',
+      }),
     );
     const doc = await porta.documento(cf, d!.id);
-    expect(doc).toMatchObject({ situacao: 'assinado', assinatura: id, assinadoPor: 'f22.l0302.confere', versao: 3 });
+    expect(doc).toMatchObject({
+      situacao: 'assinado',
+      assinatura: id,
+      assinadoPor: 'f22.l0302.confere',
+      versao: 3,
+    });
     expect(doc?.carimboEm).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
     const efeito = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0302-efeito' }, (l) =>
       l.consultar(
@@ -397,14 +519,21 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
         [falha, id],
       ),
     );
-    expect(efeito.map((x) => [x['origem_assinatura'], x['situacao'], x['resultado'], Number(x['usuario_id'])])).toEqual([
+    expect(
+      efeito.map((x) => [x['origem_assinatura'], x['situacao'], x['resultado'], Number(x['usuario_id'])]),
+    ).toEqual([
       ['digitalizacao', 'falha', 'indeterminada', ids.conf],
       ['digitalizacao', 'assinada', 'valida', ids.conf],
     ]);
     expect(
       await codigoDaRecusa(
         porta.gravarSgh(cf, trilha(cf, d!.id), (g) =>
-          g.assinar({ id: d!.id, assinatura: assinatura(1, 'assinada'), validacao: validacao(true), usuario: '' }),
+          g.assinar({
+            id: d!.id,
+            assinatura: assinatura(1, 'assinada'),
+            validacao: validacao(true),
+            usuario: '',
+          }),
         ),
       ),
     ).toBe('versao-desatualizada');
@@ -412,8 +541,10 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
 
   it('o mesmo arquivo em outro estabelecimento do cliente entra; a chave do arquivo leva o estabelecimento', async () => {
     const c = ctx(ids.capt, ids.outro);
-    const r = await porta.gravarSgh(c, (x: { id: number }) => trilha(c, x.id), (g) =>
-      g.capturar(captura(1, { internacao: ids.atendOutro })),
+    const r = await porta.gravarSgh(
+      c,
+      (x: { id: number }) => trilha(c, x.id),
+      (g) => g.capturar(captura(1, { internacao: ids.atendOutro })),
     );
     expect(r.ordem).toBe(1);
     expect(await porta.hashExiste(c, hex(1))).toBe(true);
@@ -426,11 +557,15 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
       ),
     );
     expect(chaves.map((x) => String(x['chave_armazenamento']))).toEqual(
-      [ids.est, ids.outro].sort((a, b) => a - b).map((e) => `estabelecimento-${e}/teste/${MARCA}/${hex(1)}.pdf`),
+      [ids.est, ids.outro]
+        .sort((a, b) => a - b)
+        .map((e) => `estabelecimento-${e}/teste/${MARCA}/${hex(1)}.pdf`),
     );
-    expect(await codigoDaRecusa(porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(1, { internacao: ids.atendOutro }))))).toBe(
-      'ja-digitalizado',
-    );
+    expect(
+      await codigoDaRecusa(
+        porta.gravarSgh(c, trilha(c), (g) => g.capturar(captura(1, { internacao: ids.atendOutro }))),
+      ),
+    ).toBe('ja-digitalizado');
   });
 
   it('o pedido repetido (Idempotency-Key) devolve o resultado gravado; uma linha só; outros dados, 422', async () => {
@@ -440,23 +575,37 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
     });
     const c: ContextoGravacaoDigitalizacao = pedido(5);
     expect(await porta.repeticao(c)).toBeNull();
-    const r = await porta.gravarSgh(c, (x: { id: number }) => trilha(c, x.id), (g) => g.capturar(captura(5)));
-    const r2 = await porta.gravarSgh(c, (x: { id: number }) => trilha(c, x.id), (g) => g.capturar(captura(5)));
+    const r = await porta.gravarSgh(
+      c,
+      (x: { id: number }) => trilha(c, x.id),
+      (g) => g.capturar(captura(5)),
+    );
+    const r2 = await porta.gravarSgh(
+      c,
+      (x: { id: number }) => trilha(c, x.id),
+      (g) => g.capturar(captura(5)),
+    );
     expect(r2).toEqual(r);
     expect(await porta.repeticao(c)).toEqual({ valor: r });
-    const efeito = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0302-efeito' }, async (l) => ({
-      docs: await l.uma(
-        `SELECT COUNT(*) AS n FROM documento_digitalizado d JOIN arquivo a ON a.id = d.arquivo_id
+    const efeito = await nucleo.lerSomente(
+      { cliente: CLIENTE, correlacao: 'f22-0302-efeito' },
+      async (l) => ({
+        docs: await l.uma(
+          `SELECT COUNT(*) AS n FROM documento_digitalizado d JOIN arquivo a ON a.id = d.arquivo_id
           WHERE d.estabelecimento_id = ? AND a.hash_sha256 = ?`,
-        [ids.est, hex(5)],
-      ),
-      idem: await l.uma("SELECT COUNT(*) AS n FROM idempotencia_operacao WHERE operacao = 'digitalizacao.capturar' AND chave = ?", [
-        'f22-0302-idem-1:capturar',
-      ]),
-    }));
+          [ids.est, hex(5)],
+        ),
+        idem: await l.uma(
+          "SELECT COUNT(*) AS n FROM idempotencia_operacao WHERE operacao = 'digitalizacao.capturar' AND chave = ?",
+          ['f22-0302-idem-1:capturar'],
+        ),
+      }),
+    );
     expect(Number(efeito.docs?.['n'])).toBe(1);
     expect(Number(efeito.idem?.['n'])).toBe(1);
     expect(await codigoDaRecusa(porta.repeticao(pedido(6)))).toBe('idempotencia-divergente');
-    expect(await codigoDaRecusa(porta.repeticao({ ...c, usuario: ids.conf }))).toBe('idempotencia-divergente');
+    expect(await codigoDaRecusa(porta.repeticao({ ...c, usuario: ids.conf }))).toBe(
+      'idempotencia-divergente',
+    );
   });
 });

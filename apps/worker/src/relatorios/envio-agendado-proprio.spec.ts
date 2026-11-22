@@ -31,7 +31,9 @@ describe('envio agendado: conversões do banco para o domínio', () => {
     expect(() => horaDoDominio('x')).toThrow();
     expect(diaMesDoDominio(31)).toBe(28);
     expect(diaMesDoDominio(5)).toBe(5);
-    expect(agendaDaLinha({ periodicidade: 'semanal', hora_envio: '18:05:00', dia_semana: 2, dia_mes: null })).toEqual({
+    expect(
+      agendaDaLinha({ periodicidade: 'semanal', hora_envio: '18:05:00', dia_semana: 2, dia_mes: null }),
+    ).toEqual({
       periodicidade: 'semanal',
       hora: '18:05',
       diaSemana: 1,
@@ -49,7 +51,10 @@ describe('envio agendado: conversões do banco para o domínio', () => {
     expect(mascararEmails('envio recusado (550 <pessoa@exemplo.invalid> inexistente)')).toBe(
       'envio recusado (550 <***@***> inexistente)',
     );
-    expect(parametrosDe('{"mesFim":"mesAnterior","n":3,"x":{"y":1}}')).toEqual({ mesFim: 'mesAnterior', n: 3 });
+    expect(parametrosDe('{"mesFim":"mesAnterior","n":3,"x":{"y":1}}')).toEqual({
+      mesFim: 'mesAnterior',
+      n: 3,
+    });
     expect(parametrosDe('não é json')).toEqual({});
     expect(redeDaFila('f22_o5')).toBe('f22-o5');
   });
@@ -60,7 +65,9 @@ describe('envio agendado: conversões do banco para o domínio', () => {
     expect(k).toBe(chaveDaReserva(12, { tipo: 'vencido', previsto: new Date(previsto.getTime()) }));
     expect(k).not.toBe(chaveDaReserva(12, { tipo: 'vencido', previsto: new Date('2026-11-27T07:30:00Z') }));
     expect(k).not.toBe(chaveDaReserva(13, { tipo: 'vencido', previsto }));
-    expect(chaveDaReserva(12, { tipo: 'fila', job: 'j1' })).toBe(chaveDaReserva(12, { tipo: 'fila', job: 'j1' }));
+    expect(chaveDaReserva(12, { tipo: 'fila', job: 'j1' })).toBe(
+      chaveDaReserva(12, { tipo: 'fila', job: 'j1' }),
+    );
     expect(k).toMatch(/^[A-Za-z0-9._:-]{8,80}$/);
     expect(mascararEndereco('pessoa@exemplo.invalid')).toBe('p***@exemplo.invalid');
     expect(mascararEndereco('sem-arroba')).toBe('***');
@@ -73,7 +80,13 @@ describe('envio agendado: conversões do banco para o domínio', () => {
       'para',
     ]);
     expect(
-      pedidoDoCadastro({ entrega: 'anexo', formato: 'xlsx', validade_link_horas: null, enviar_sem_linhas: 0, condicao_envio: ' ' }),
+      pedidoDoCadastro({
+        entrega: 'anexo',
+        formato: 'xlsx',
+        validade_link_horas: null,
+        enviar_sem_linhas: 0,
+        condicao_envio: ' ',
+      }),
     ).toEqual({
       entregaPedida: 'anexo',
       entregaFeita: 'link',
@@ -95,7 +108,15 @@ describe('envio agendado: ciclo dos vencidos sobre porta dublê', () => {
       estabelecimentos: async () => ['aa'],
       nomeEstabelecimento: async () => 'Estabelecimento Teste',
       vencidos: async () => [
-        { id: 1, estabelecimento: 'aa', relatorio: 'naoExisteNoCatalogo', titulo: 'X', parametros: {}, dono: 9, proximoEnvioEm: previsto },
+        {
+          id: 1,
+          estabelecimento: 'aa',
+          relatorio: 'naoExisteNoCatalogo',
+          titulo: 'X',
+          parametros: {},
+          dono: 9,
+          proximoEnvioEm: previsto,
+        },
       ],
       destinatarios: async () => ({ destinatarios: ['a@exemplo.invalid'], dono: null }),
       falhasSeguidas: async () => 0,
@@ -110,7 +131,12 @@ describe('envio agendado: ciclo dos vencidos sobre porta dublê', () => {
         enviados.push(m);
       },
     };
-    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({ agendamentos: 1, processados: 0, ignorados: 1, repetidos: 0 });
+    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({
+      agendamentos: 1,
+      processados: 0,
+      ignorados: 1,
+      repetidos: 0,
+    });
     expect(enviados).toEqual([]);
     expect(registros).toEqual([]);
   });
@@ -125,7 +151,15 @@ describe('envio agendado: ciclo dos vencidos sobre porta dublê', () => {
       estabelecimentos: async () => ['aa'],
       nomeEstabelecimento: async () => 'Estabelecimento Teste',
       vencidos: async () => [
-        { id: 5, estabelecimento: 'aa', relatorio: relatorioDoCatalogoQualquer(), titulo: 'Mensal', parametros: {}, dono: 9, proximoEnvioEm: previsto },
+        {
+          id: 5,
+          estabelecimento: 'aa',
+          relatorio: relatorioDoCatalogoQualquer(),
+          titulo: 'Mensal',
+          parametros: {},
+          dono: 9,
+          proximoEnvioEm: previsto,
+        },
       ],
       destinatarios: async () => ({
         destinatarios: ['a@exemplo.invalid', 'b@exemplo.invalid'],
@@ -148,14 +182,24 @@ describe('envio agendado: ciclo dos vencidos sobre porta dublê', () => {
         enviados.push(m);
       },
     };
-    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({ agendamentos: 1, processados: 1, ignorados: 0, repetidos: 0 });
+    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({
+      agendamentos: 1,
+      processados: 1,
+      ignorados: 0,
+      repetidos: 0,
+    });
     expect(origens).toEqual([{ ag: 5, origem: { tipo: 'vencido', previsto } }]);
     expect(enviados).toHaveLength(2);
     expect(concluidos).toEqual([
       { envio: 77, situacao: 'enviado', destinatarios: 2, formas: { para: 1, copia: 0, copia_oculta: 1 } },
     ]);
     ganha = false;
-    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({ agendamentos: 1, processados: 0, ignorados: 0, repetidos: 1 });
+    expect(await enviarVencidos(porta, 'f22_o5', d)).toEqual({
+      agendamentos: 1,
+      processados: 0,
+      ignorados: 0,
+      repetidos: 1,
+    });
     expect(enviados).toHaveLength(2);
     expect(concluidos).toHaveLength(1);
   });

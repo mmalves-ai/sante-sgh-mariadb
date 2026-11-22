@@ -2,7 +2,12 @@
 // rápida, os dados do job e o ciclo sobre a fila comum de saída (núcleo falso: marca enviada, soma a tentativa com
 // espera crescente e, esgotadas, erro).
 import { describe, expect, it } from 'vitest';
-import { cicloRelayOutbox, esperaDaTentativa, MAX_TENTATIVAS_RELAY, type NucleoRelay } from './relay-outbox-proprio.js';
+import {
+  cicloRelayOutbox,
+  esperaDaTentativa,
+  MAX_TENTATIVAS_RELAY,
+  type NucleoRelay,
+} from './relay-outbox-proprio.js';
 import { conexaoValkey, dadosDoJobOutbox, filaDeEventos, type PendenteOutbox } from './relay-outbox.js';
 
 describe('relay da outbox no worker', () => {
@@ -46,13 +51,35 @@ describe('relay da outbox no worker', () => {
 
   it('ciclo: publicada vira enviada; a falha soma a tentativa com espera; esgotada vira erro', async () => {
     const linhas = [
-      { id: 1, ponto: 'a.b', referencia_externa: 'k1', conteudo: '{"exame":1}', tentativas: 0, estabelecimento: 'pc' },
-      { id: 2, ponto: 'a.b', referencia_externa: 'k2', conteudo: 'não é json', tentativas: 0, estabelecimento: null },
-      { id: 3, ponto: 'a.b', referencia_externa: null, conteudo: null, tentativas: MAX_TENTATIVAS_RELAY - 1, estabelecimento: 'pc' },
+      {
+        id: 1,
+        ponto: 'a.b',
+        referencia_externa: 'k1',
+        conteudo: '{"exame":1}',
+        tentativas: 0,
+        estabelecimento: 'pc',
+      },
+      {
+        id: 2,
+        ponto: 'a.b',
+        referencia_externa: 'k2',
+        conteudo: 'não é json',
+        tentativas: 0,
+        estabelecimento: null,
+      },
+      {
+        id: 3,
+        ponto: 'a.b',
+        referencia_externa: null,
+        conteudo: null,
+        tentativas: MAX_TENTATIVAS_RELAY - 1,
+        estabelecimento: 'pc',
+      },
     ];
     const comandos: unknown[][] = [];
     const nucleo: NucleoRelay = {
-      lerSomente: async (_c, fn) => fn({ cliente: 'f22_teste', consultar: async () => linhas, uma: async () => null } as never),
+      lerSomente: async (_c, fn) =>
+        fn({ cliente: 'f22_teste', consultar: async () => linhas, uma: async () => null } as never),
       escrever: async (_c, fn) =>
         fn({
           executar: async (_sql: string, p: unknown[] = []) => {
@@ -75,7 +102,14 @@ describe('relay da outbox no worker', () => {
     expect(r).toEqual({ lidos: 3, publicados: 1, falhas: 2, esgotados: 1 });
     expect(publicados[0]).toMatchObject({ chave: 'k1', hospital: 'pc', carga: { exame: 1 } });
     expect(comandos[0]).toEqual([agora, agora, 1]);
-    expect(comandos[1]).toEqual([1, new Date(agora.getTime() + esperaDaTentativa(1)), 'pendente', 'publicacao-falhou:Error', agora, 2]);
+    expect(comandos[1]).toEqual([
+      1,
+      new Date(agora.getTime() + esperaDaTentativa(1)),
+      'pendente',
+      'publicacao-falhou:Error',
+      agora,
+      2,
+    ]);
     expect(comandos[2]![2]).toBe('erro');
     expect(esperaDaTentativa(20)).toBe(600_000);
   });

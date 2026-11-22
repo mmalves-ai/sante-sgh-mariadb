@@ -131,7 +131,9 @@ const BASE_PEDIDO_PORTAL = 1_000_000_000_000;
 type ChaveAcessoPortal = { tipo: 'protocolo' | 'conta' | 'pedido'; id: number };
 export function chaveAcessoPortal(id: number): ChaveAcessoPortal {
   if (id > 0) return { tipo: 'protocolo', id };
-  return -id > BASE_PEDIDO_PORTAL ? { tipo: 'pedido', id: -id - BASE_PEDIDO_PORTAL } : { tipo: 'conta', id: -id };
+  return -id > BASE_PEDIDO_PORTAL
+    ? { tipo: 'pedido', id: -id - BASE_PEDIDO_PORTAL }
+    : { tipo: 'conta', id: -id };
 }
 /** conta_portal_profissional_externo.situacao → a situação do acesso que o portal confere. */
 const SITUACAO_ACESSO_CONTA: Readonly<Record<string, string>> = {
@@ -175,8 +177,10 @@ function acessoDoMedicoLido(r: Linha): AcessoPortalLido {
       ...base,
       id: -conta,
       solicitante: nn(r['profissional_id']),
-      senhaResumo: r['senha_conta'] === null || r['senha_conta'] === undefined ? null : texto(r['senha_conta']),
-      segundoFator: r['fator_conta'] === null || r['fator_conta'] === undefined ? null : texto(r['fator_conta']),
+      senhaResumo:
+        r['senha_conta'] === null || r['senha_conta'] === undefined ? null : texto(r['senha_conta']),
+      segundoFator:
+        r['fator_conta'] === null || r['fator_conta'] === undefined ? null : texto(r['fator_conta']),
       situacao: SITUACAO_ACESSO_CONTA[texto(r['situacao_conta'])] ?? 'encerrado',
       tentativas: n(r['tentativas_falhas']),
       bloqueadoAte: r['bloqueada_ate'] ? new Date(r['bloqueada_ate'] as string) : null,
@@ -185,8 +189,10 @@ function acessoDoMedicoLido(r: Linha): AcessoPortalLido {
     ...base,
     id: -(BASE_PEDIDO_PORTAL + n(r['pedido'])),
     solicitante: null,
-    senhaResumo: r['senha_pedido'] === null || r['senha_pedido'] === undefined ? null : texto(r['senha_pedido']),
-    segundoFator: r['fator_pedido'] === null || r['fator_pedido'] === undefined ? null : texto(r['fator_pedido']),
+    senhaResumo:
+      r['senha_pedido'] === null || r['senha_pedido'] === undefined ? null : texto(r['senha_pedido']),
+    segundoFator:
+      r['fator_pedido'] === null || r['fator_pedido'] === undefined ? null : texto(r['fator_pedido']),
     situacao: SITUACAO_ACESSO_PEDIDO[texto(r['situacao_pedido'])] ?? 'recusado',
     // O autocadastro conta as falhas e bloqueia como a conta: a senha do pedido passa à conta na aprovação.
     tentativas: n(r['tentativas_pedido']),
@@ -270,7 +276,10 @@ const SQL_EXAME = `
      AND sd.tipo IN ('laboratorio', 'imagem', 'metodos_graficos', 'endoscopia')`;
 
 function exameDe(r: Linha, hoje: string): ExameSadt {
-  const ato = atoDoExame(texto(r['tipo_setor']), r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']));
+  const ato = atoDoExame(
+    texto(r['tipo_setor']),
+    r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']),
+  );
   const amostra = r['amostra_id'] === null ? null : estadoDaAmostra(texto(r['amostra_situacao']));
   const estado = estadoDoItem({
     situacao: texto(r['situacao']),
@@ -315,14 +324,22 @@ function exameDe(r: Linha, hoje: string): ExameSadt {
     estado,
     estadoRotulo: rotuloEstadoExame(estado),
     urgente: verdadeiro(r['urgente']) || texto(r['prioridade']) !== 'rotina',
-    origem: tipo === 'pedido_prontuario' ? 'pedidoProntuario' : tipo === 'lancado_no_setor' ? 'lancadoNoSetor' : 'outro',
+    origem:
+      tipo === 'pedido_prontuario'
+        ? 'pedidoProntuario'
+        : tipo === 'lancado_no_setor'
+          ? 'lancadoNoSetor'
+          : 'outro',
     solicitante: texto(r['solicitante']),
     pedidoEm: instante(r['solicitado_em']).slice(0, 16) || null,
     previsaoColeta: r['previsto_em'] === null ? null : instante(r['previsto_em']).slice(0, 16),
     material: r['material'] === null ? null : texto(r['material']),
-    recipiente: r['recipiente_id'] === null ? null : { codigo: n(r['recipiente_id']), nome: texto(r['recipiente']) },
+    recipiente:
+      r['recipiente_id'] === null ? null : { codigo: n(r['recipiente_id']), nome: texto(r['recipiente']) },
     especialidade:
-      r['especialidade_id'] === null ? null : { codigo: n(r['especialidade_id']), nome: texto(r['especialidade']) },
+      r['especialidade_id'] === null
+        ? null
+        : { codigo: n(r['especialidade_id']), nome: texto(r['especialidade']) },
     amostra:
       amostra === null
         ? null
@@ -387,7 +404,9 @@ const rotuloDoSetor = (s: SetorSadt) => SETORES_SADT.find((x) => x.codigo === s)
 const LAUDO_ASSINADO = ['assinado', 'emitido', 'retificado'];
 /** O texto do laudo: o laudo assinado; sem ele, o texto do resultado; e a conclusão. */
 const linhasDoLaudo = (d: Linha | undefined): string[] =>
-  [d?.['laudo'] ?? d?.['texto_resultado'], d?.['conclusao']].filter((x) => x !== null && x !== undefined && texto(x) !== '').map(texto);
+  [d?.['laudo'] ?? d?.['texto_resultado'], d?.['conclusao']]
+    .filter((x) => x !== null && x !== undefined && texto(x) !== '')
+    .map(texto);
 /** O número de negócio (texto com prefixo) como número da tela. */
 const numeroDeNegocio = (v: unknown) => Number(texto(v).replace(/\D/g, '')) || 0;
 
@@ -432,7 +451,8 @@ function atendimentoDe(r: Linha, hoje: string): AtendimentoParaLancamento {
     atend: verdadeiro(r['internado']) ? 'I' : 'E',
     reg: n(r['id']),
     convenio: { codigo: n(r['fp_id']), nome: texto(r['fp_nome']) },
-    conta: r['conta_id'] === null ? null : { id: n(r['conta_id']), numero: numeroDeNegocio(r['conta_numero']) },
+    conta:
+      r['conta_id'] === null ? null : { id: n(r['conta_id']), numero: numeroDeNegocio(r['conta_numero']) },
     retratos: { htAtendimento: n(r['versao']), htPaciente: n(r['paciente_versao']) },
   };
 }
@@ -505,7 +525,8 @@ async function orcamentosLidos(l: Leitor, ls: readonly Linha[], hoje: string): P
       atoRotulo: rotuloDoAto(ato),
       data: dataIso(r['data_orcamento']) ?? '',
       validade,
-      situacao: sit === 'realizado' ? 'convertido' : sit === 'expirado' || validade < hoje ? 'vencido' : 'aberto',
+      situacao:
+        sit === 'realizado' ? 'convertido' : sit === 'expirado' || validade < hoje ? 'vencido' : 'aberto',
       itens: is.map(({ exame, nome, valor }) => ({ exame, nome, valor })),
       total: n(r['valor_total']),
       convertidoEm:
@@ -517,7 +538,10 @@ async function orcamentosLidos(l: Leitor, ls: readonly Linha[], hoje: string): P
 }
 
 /** Os valores dos resultados (resultado_analito), com a referência guardada na digitação e o sentido do desvio. */
-async function valoresDosResultados(l: Leitor, ids: readonly number[]): Promise<Map<number, ValorConferencia[]>> {
+async function valoresDosResultados(
+  l: Leitor,
+  ids: readonly number[],
+): Promise<Map<number, ValorConferencia[]>> {
   const m = new Map<number, ValorConferencia[]>();
   if (ids.length === 0) return m;
   for (const r of await l.consultar(
@@ -640,7 +664,8 @@ const SQL_LAUDO_PORTAL = `
    WHERE lp.estabelecimento_id = ? AND lp.situacao = 'liberado' AND lp.excluido_em IS NULL
      AND (lp.disponivel_ate IS NULL OR lp.disponivel_ate > ?)`;
 
-const atoDoPortal = (r: Linha) => atoDoExame(texto(r['tipo']), r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']));
+const atoDoPortal = (r: Linha) =>
+  atoDoExame(texto(r['tipo']), r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']));
 
 function laudoDoPortal(r: Linha, comPaciente: boolean): LaudoPortal {
   return {
@@ -663,11 +688,18 @@ async function laudosDoPortal(
   comPaciente: boolean,
 ): Promise<{ laudos: LaudoPortal[]; cortada: boolean }> {
   const ls = (
-    await l.consultar(`${SQL_LAUDO_PORTAL}${filtro} ORDER BY lp.liberado_em DESC, lp.id DESC LIMIT ${TETO_PORTAL * 5}`, p, {
-      teto: TETO_PORTAL * 5,
-    })
+    await l.consultar(
+      `${SQL_LAUDO_PORTAL}${filtro} ORDER BY lp.liberado_em DESC, lp.id DESC LIMIT ${TETO_PORTAL * 5}`,
+      p,
+      {
+        teto: TETO_PORTAL * 5,
+      },
+    )
   ).filter((r) => atos.includes(atoDoPortal(r)));
-  return { laudos: ls.slice(0, TETO_PORTAL).map((r) => laudoDoPortal(r, comPaciente)), cortada: ls.length > TETO_PORTAL };
+  return {
+    laudos: ls.slice(0, TETO_PORTAL).map((r) => laudoDoPortal(r, comPaciente)),
+    cortada: ls.length > TETO_PORTAL,
+  };
 }
 
 export class PortaSadtPropria implements PortaSadt {
@@ -683,12 +715,16 @@ export class PortaSadtPropria implements PortaSadt {
 
   private ler<T>(c: ContextoSadt, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
   private async hoje(l: Leitor, est: number): Promise<{ hoje: string; agora: string }> {
-    const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+    const r = await l.uma<{ fuso_horario: string | null }>(
+      'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+      [est],
+    );
     const x = relogioNoFuso(r?.fuso_horario || FUSO_PADRAO);
     return { hoje: x.hoje, agora: `${x.hoje}T${x.hora}:00` };
   }
@@ -697,7 +733,12 @@ export class PortaSadtPropria implements PortaSadt {
 
   async podeGravar(_c: ContextoSadt, op: string): Promise<LiberacaoGravacao> {
     const motivo = OPERACOES_SADT_PENDENTES[op];
-    if (motivo) return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Operação desligada no banco: ${motivo}.` };
+    if (motivo)
+      return {
+        pode: false,
+        codigo: 'operacao-nao-liberada',
+        motivo: `Operação desligada no banco: ${motivo}.`,
+      };
     return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida no SADT.' };
   }
 
@@ -731,7 +772,12 @@ export class PortaSadtPropria implements PortaSadt {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = c.chaveIdempotencia ? `sadt:${c.chaveIdempotencia}` : `sadt:${randomUUID()}`;
-    const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      { ...contextoDe(c), chaveIdempotencia: chave },
+    );
     // A mesma chave com a mesma entrada: o resultado da primeira execução, sem gravar de novo.
     if (!saida) return valorDe<T>(r.resultado);
     return (saida as { valor: T }).valor;
@@ -775,9 +821,13 @@ export class PortaSadtPropria implements PortaSadt {
           p.push(...siglas);
         }
       }
-      const ls = await l.consultar(`${sql} ORDER BY r.solicitado_em, ei.id LIMIT ${TETO_EXAMES_SADT + 1}`, p, {
-        teto: TETO_EXAMES_SADT + 1,
-      });
+      const ls = await l.consultar(
+        `${sql} ORDER BY r.solicitado_em, ei.id LIMIT ${TETO_EXAMES_SADT + 1}`,
+        p,
+        {
+          teto: TETO_EXAMES_SADT + 1,
+        },
+      );
       const todos = ls.map((r) => exameDe(r, hoje)).filter((x) => !f.ato || x.ato === f.ato);
       const itens = todos.slice(0, TETO_EXAMES_SADT);
       const contagens: Record<string, number> = {};
@@ -795,13 +845,16 @@ export class PortaSadtPropria implements PortaSadt {
     if (ids.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
-      return (await l.consultar(`${SQL_EXAME} AND ei.id IN (${lista(ids.length)}) ORDER BY ei.id`, [est, ...ids])).map(
-        (r) => exameDe(r, hoje),
-      );
+      return (
+        await l.consultar(`${SQL_EXAME} AND ei.id IN (${lista(ids.length)}) ORDER BY ei.id`, [est, ...ids])
+      ).map((r) => exameDe(r, hoje));
     });
   }
 
-  coleta(c: ContextoSadt, f: { inicio: string; fim: string; unidade?: number; deHora?: string; ateHora?: string }) {
+  coleta(
+    c: ContextoSadt,
+    f: { inicio: string; fim: string; unidade?: number; deHora?: string; ateHora?: string },
+  ) {
     return this.examesDoSetor(c, {
       setor: 'laboratorio',
       inicio: f.inicio,
@@ -833,7 +886,8 @@ export class PortaSadtPropria implements PortaSadt {
           exigePulseira: x.atendimento.tipo === 'I',
         };
         g.urgente = g.urgente || x.urgente;
-        const coletado = x.amostra !== null && x.amostra.estado !== 'rejeitada' && x.amostra.estado !== 'recoleta';
+        const coletado =
+          x.amostra !== null && x.amostra.estado !== 'rejeitada' && x.amostra.estado !== 'recoleta';
         g.exames.push({ id: x.id, codigo: x.exame.codigo, nome: x.exame.nome, coletado });
         grupos.set(k, g);
       }
@@ -850,7 +904,12 @@ export class PortaSadtPropria implements PortaSadt {
       (r) => ({
         // A bancada do exame (exame_setor_executante) entra com o pedido de leitura da bancada; até lá, uma só.
         bancadas: [
-          { codigo: null, nome: 'Sem bancada', urgentes: r.itens.filter((x) => x.urgente).length, exames: r.itens },
+          {
+            codigo: null,
+            nome: 'Sem bancada',
+            urgentes: r.itens.filter((x) => x.urgente).length,
+            exames: r.itens,
+          },
         ],
         cortada: r.cortada,
       }),
@@ -919,7 +978,9 @@ export class PortaSadtPropria implements PortaSadt {
             'analito_id',
           )
         : new Map<number, Linha>();
-      const grupos = [...new Set(els.filter((x) => x['grupo_resposta_id'] !== null).map((x) => n(x['grupo_resposta_id'])))];
+      const grupos = [
+        ...new Set(els.filter((x) => x['grupo_resposta_id'] !== null).map((x) => n(x['grupo_resposta_id']))),
+      ];
       const respostas = new Map<number, { codigo: number; texto: string }[]>();
       if (grupos.length)
         for (const x of await l.consultar(
@@ -930,7 +991,10 @@ export class PortaSadtPropria implements PortaSadt {
           { teto: 5000 },
         )) {
           const g = n(x['grupo_resposta_id']);
-          respostas.set(g, [...(respostas.get(g) ?? []), { codigo: n(x['id']), texto: texto(x['descricao']) }]);
+          respostas.set(g, [
+            ...(respostas.get(g) ?? []),
+            { codigo: n(x['id']), texto: texto(x['descricao']) },
+          ]);
         }
       const resultado = re ? n(re['id']) : null;
       const valores =
@@ -952,7 +1016,11 @@ export class PortaSadtPropria implements PortaSadt {
         const v = valores.get(n(x['id']));
         const cr = criticos.get(n(x['id']));
         // A referência guardada no resultado (a que valeu na digitação) vem antes da do cadastro.
-        const guardada = v && (v['referencia_minimo'] !== null || v['referencia_maximo'] !== null || v['referencia_texto'] !== null);
+        const guardada =
+          v &&
+          (v['referencia_minimo'] !== null ||
+            v['referencia_maximo'] !== null ||
+            v['referencia_texto'] !== null);
         const tipo = texto(x['tipo_resultado']);
         return {
           codigo: n(x['id']),
@@ -980,7 +1048,8 @@ export class PortaSadtPropria implements PortaSadt {
                   fonte: 'cadastro' as const,
                 }
               : { texto: null, minimo: null, maximo: null, versao: null, fonte: 'nenhuma' as const },
-          respostasPadrao: x['grupo_resposta_id'] === null ? [] : (respostas.get(n(x['grupo_resposta_id'])) ?? []),
+          respostasPadrao:
+            x['grupo_resposta_id'] === null ? [] : (respostas.get(n(x['grupo_resposta_id'])) ?? []),
           critico: cr
             ? {
                 abaixoDe: nn(cr['limite_inferior']),
@@ -989,7 +1058,11 @@ export class PortaSadtPropria implements PortaSadt {
               }
             : null,
           valor: v
-            ? { numerico: nn(v['valor_numerico']), alfa: v['alfa'] === null ? null : texto(v['alfa']), absoluta: nn(v['valor_absoluto']) }
+            ? {
+                numerico: nn(v['valor_numerico']),
+                alfa: v['alfa'] === null ? null : texto(v['alfa']),
+                absoluta: nn(v['valor_absoluto']),
+              }
             : null,
         };
       });
@@ -1050,7 +1123,10 @@ export class PortaSadtPropria implements PortaSadt {
         variaveis,
         observacoes,
         modelos,
-        laudo: textoLaudo === null ? null : { texto: texto(textoLaudo), html: texto(textoLaudo), emissor: texto(ld?.['emissor']) },
+        laudo:
+          textoLaudo === null
+            ? null
+            : { texto: texto(textoLaudo), html: texto(textoLaudo), emissor: texto(ld?.['emissor']) },
         alertaDataInvalida: false,
         bloqueado:
           ['liberado', 'emitido', 'visualizado'].includes(exame.estado) ||
@@ -1071,7 +1147,12 @@ export class PortaSadtPropria implements PortaSadt {
   }
 
   async filaLiberacao(c: ContextoSadt, f: { setor?: SetorSadt | undefined; inicio: string; fim: string }) {
-    const r = await this.examesDoSetor(c, { setor: f.setor, inicio: f.inicio, fim: f.fim, situacao: 'aLiberar' });
+    const r = await this.examesDoSetor(c, {
+      setor: f.setor,
+      inicio: f.inicio,
+      fim: f.fim,
+      situacao: 'aLiberar',
+    });
     const itens = await this.ler(c, (l) => itensDeLiberacao(l, r.itens));
     return { itens, cortada: r.cortada };
   }
@@ -1089,7 +1170,11 @@ export class PortaSadtPropria implements PortaSadt {
         [id, est],
       );
       return r
-        ? { id: n(r['id']), em: r['liberado_em'] === null ? null : instante(r['liberado_em']), visualizada: verdadeiro(r['visto']) }
+        ? {
+            id: n(r['id']),
+            em: r['liberado_em'] === null ? null : instante(r['liberado_em']),
+            visualizada: verdadeiro(r['visto']),
+          }
         : null;
     });
   }
@@ -1233,22 +1318,23 @@ export class PortaSadtPropria implements PortaSadt {
             ORDER BY e.codigo, an.nome, v.id`,
           [est, est, est, est],
         )
-      ).map(
-        (r): ValorCriticoLido => ({
-          id: n(r['id']),
-          ato: atoDoExame(texto(r['tipo']) || 'laboratorio', r['sigla_padrao'] === null ? null : texto(r['sigla_padrao'])),
-          exame: texto(r['codigo']),
-          exameNome: texto(r['exame_nome']),
-          elemento: n(r['analito']),
-          elementoNome: texto(r['analito_nome']),
-          abaixoDe: nn(r['limite_inferior']),
-          acimaDe: nn(r['limite_superior']),
-          prazoMinutos: n(r['prazo_comunicacao_minutos']),
-          aprovacao: `Vigente desde ${dataIso(r['vigencia_inicio']) ?? ''}`,
-          ativo: verdadeiro(r['ativo']),
-          atualizadoEm: instante(r['atualizado']),
-        }),
-      ),
+      ).map((r): ValorCriticoLido => ({
+        id: n(r['id']),
+        ato: atoDoExame(
+          texto(r['tipo']) || 'laboratorio',
+          r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']),
+        ),
+        exame: texto(r['codigo']),
+        exameNome: texto(r['exame_nome']),
+        elemento: n(r['analito']),
+        elementoNome: texto(r['analito_nome']),
+        abaixoDe: nn(r['limite_inferior']),
+        acimaDe: nn(r['limite_superior']),
+        prazoMinutos: n(r['prazo_comunicacao_minutos']),
+        aprovacao: `Vigente desde ${dataIso(r['vigencia_inicio']) ?? ''}`,
+        ativo: verdadeiro(r['ativo']),
+        atualizadoEm: instante(r['atualizado']),
+      })),
     );
   }
 
@@ -1266,7 +1352,11 @@ export class PortaSadtPropria implements PortaSadt {
             ORDER BY ea.ordem, an.id`,
           [exame],
         )
-      ).map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']), unidade: r['simbolo'] === null ? null : texto(r['simbolo']) })),
+      ).map((r) => ({
+        codigo: n(r['id']),
+        nome: texto(r['nome']),
+        unidade: r['simbolo'] === null ? null : texto(r['simbolo']),
+      })),
     );
   }
 
@@ -1311,7 +1401,8 @@ export class PortaSadtPropria implements PortaSadt {
           .filter((e) => n(e['amostra_biologica_id']) === id)
           .map((e) => ({ id: n(e['id']), codigo: texto(e['codigo']), nome: texto(e['nome']) })),
         pulseiraConferida: evs.some((e) => {
-          const d = typeof e['dados'] === 'string' ? (JSON.parse(e['dados']) as Linha) : (e['dados'] as Linha | null);
+          const d =
+            typeof e['dados'] === 'string' ? (JSON.parse(e['dados']) as Linha) : (e['dados'] as Linha | null);
           return verdadeiro(d?.['pulseiraConferida']);
         }),
         eventos: evs
@@ -1333,7 +1424,8 @@ export class PortaSadtPropria implements PortaSadt {
   amostras(c: ContextoSadt, o: { data: string; estado?: EstadoAmostra }) {
     return this.ler(c, async (l, est) => {
       const p: unknown[] = [o.data, o.data];
-      let f = 'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < DATE_ADD(?, INTERVAL 1 DAY)';
+      let f =
+        'AND COALESCE(am.coletada_em, am.criado_em) >= ? AND COALESCE(am.coletada_em, am.criado_em) < DATE_ADD(?, INTERVAL 1 DAY)';
       if (o.estado) {
         f += ' AND am.situacao = ?';
         p.push(SITUACAO_DA_AMOSTRA[o.estado].situacao);
@@ -1356,7 +1448,10 @@ export class PortaSadtPropria implements PortaSadt {
   }
 
   amostraPorCodigo(c: ContextoSadt, codigo: string) {
-    return this.ler(c, async (l, est) => (await this.amostrasDe(l, est, 'AND am.codigo_barras = ?', [codigo]))[0] ?? null);
+    return this.ler(
+      c,
+      async (l, est) => (await this.amostrasDe(l, est, 'AND am.codigo_barras = ?', [codigo]))[0] ?? null,
+    );
   }
 
   amostraPorId(c: ContextoSadt, id: number) {
@@ -1446,7 +1541,10 @@ export class PortaSadtPropria implements PortaSadt {
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
       const exames = (
-        await l.consultar(`${SQL_EXAME} AND ei.id IN (${lista(unicos.length)}) ORDER BY ei.id`, [est, ...unicos])
+        await l.consultar(`${SQL_EXAME} AND ei.id IN (${lista(unicos.length)}) ORDER BY ei.id`, [
+          est,
+          ...unicos,
+        ])
       ).map((r) => exameDe(r, hoje));
       // Um laudo é de um paciente só, e todos os exames são deste estabelecimento.
       if (exames.length !== unicos.length || new Set(exames.map((x) => x.paciente.id)).size > 1) return null;
@@ -1468,7 +1566,9 @@ export class PortaSadtPropria implements PortaSadt {
       const por = new Map(ls.map((x) => [n(x['id']), x]));
       // Exame com laudo ainda não assinado (rascunho, aguardando revisão) não sai impresso: nem o rascunho como laudo
       // oficial, nem o texto do resultado no lugar dele.
-      const semAssinatura = ls.filter((x) => x['laudo_situacao'] !== null && !LAUDO_ASSINADO.includes(texto(x['laudo_situacao'])));
+      const semAssinatura = ls.filter(
+        (x) => x['laudo_situacao'] !== null && !LAUDO_ASSINADO.includes(texto(x['laudo_situacao'])),
+      );
       if (semAssinatura.length > 0)
         throw recusa(
           'laudo-nao-assinado',
@@ -1559,7 +1659,9 @@ export class PortaSadtPropria implements PortaSadt {
   atendimento(c: ContextoSadt, atendimento: number): Promise<AtendimentoParaLancamento | null> {
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
-      const [r] = await l.consultar(`${SQL_ATENDIMENTO_LANCAMENTO} AND a.id = ?`, [est, atendimento], { teto: 1 });
+      const [r] = await l.consultar(`${SQL_ATENDIMENTO_LANCAMENTO} AND a.id = ?`, [est, atendimento], {
+        teto: 1,
+      });
       return r ? atendimentoDe(r, hoje) : null;
     });
   }
@@ -1569,14 +1671,21 @@ export class PortaSadtPropria implements PortaSadt {
     return this.ler(c, async (l, est) => {
       const { hoje } = await this.hoje(l, est);
       return (
-        await l.consultar(`${SQL_ATENDIMENTO_LANCAMENTO} AND (a.id = ? OR a.numero = ?) ORDER BY a.id`, [est, reg, String(reg)], {
-          teto: 20,
-        })
+        await l.consultar(
+          `${SQL_ATENDIMENTO_LANCAMENTO} AND (a.id = ? OR a.numero = ?) ORDER BY a.id`,
+          [est, reg, String(reg)],
+          {
+            teto: 20,
+          },
+        )
       ).map((r) => atendimentoDe(r, hoje));
     });
   }
 
-  orcamentos(c: ContextoSadt, o: { inicio: string; fim: string; hoje: string; termo?: string; validadeDias: number }) {
+  orcamentos(
+    c: ContextoSadt,
+    o: { inicio: string; fim: string; hoje: string; termo?: string; validadeDias: number },
+  ) {
     return this.ler(c, async (l, est) => {
       const p: unknown[] = [est, o.inicio, o.fim];
       let f = '';
@@ -1617,7 +1726,12 @@ export class PortaSadtPropria implements PortaSadt {
           [est, ...tipos],
           { teto: 500 },
         )
-      ).map((r) => ({ id: n(r['id']), ato: atoDoExame(texto(r['tipo']), null), codigo: n(r['id']), nome: texto(r['nome']) }));
+      ).map((r) => ({
+        id: n(r['id']),
+        ato: atoDoExame(texto(r['tipo']), null),
+        codigo: n(r['id']),
+        nome: texto(r['nome']),
+      }));
       // O setor do exame: o executante padrão deste estabelecimento; sem ele, o tipo de serviço do catálogo.
       const exames = (
         await l.consultar(
@@ -1650,14 +1764,22 @@ export class PortaSadtPropria implements PortaSadt {
         recipiente: r['recipiente'] === null ? null : texto(r['recipiente']),
       }));
       const kits = (
-        await l.consultar('SELECT id, nome FROM kit_exame WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id', [], {
-          teto: TETO_CATALOGO,
-        })
+        await l.consultar(
+          'SELECT id, nome FROM kit_exame WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id',
+          [],
+          {
+            teto: TETO_CATALOGO,
+          },
+        )
       ).map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
       const recipientes = (
-        await l.consultar('SELECT id, descricao FROM recipiente_coleta WHERE ativo = TRUE ORDER BY descricao, id', [], {
-          teto: TETO_CATALOGO,
-        })
+        await l.consultar(
+          'SELECT id, descricao FROM recipiente_coleta WHERE ativo = TRUE ORDER BY descricao, id',
+          [],
+          {
+            teto: TETO_CATALOGO,
+          },
+        )
       ).map((r) => ({ codigo: n(r['id']), nome: texto(r['descricao']) }));
       const convenios = (
         await l.consultar(
@@ -1822,7 +1944,10 @@ export class PortaSadtPropria implements PortaSadt {
    * primeiro evento "coletada" do rastreio) e da coleta à liberação, cada média com quantos exames entram nela; o
    * pendente há mais de 24 h pela hora do estabelecimento; e a visualização no portal das liberações publicadas.
    */
-  indicadores(c: ContextoSadt, o: { inicio: string; fim: string; setor?: SetorSadt | undefined; agora: Date }) {
+  indicadores(
+    c: ContextoSadt,
+    o: { inicio: string; fim: string; setor?: SetorSadt | undefined; agora: Date },
+  ) {
     return this.ler(c, async (l, est) => {
       const { agora } = await this.hoje(l, est);
       const tipos = o.setor ? TIPOS_DO_SETOR[o.setor] : TIPOS_SADT;
@@ -1889,7 +2014,10 @@ export class PortaSadtPropria implements PortaSadt {
 
   // ── Portal de resultados: os laudos publicados (liberacao_resultado_portal) ─────────────────────────────────
 
-  laudosPortalDoPaciente(c: ContextoSadt, o: { paciente: number; reg: number | null; atos: readonly number[] }) {
+  laudosPortalDoPaciente(
+    c: ContextoSadt,
+    o: { paciente: number; reg: number | null; atos: readonly number[] },
+  ) {
     return this.ler(c, async (l, est) => {
       const { agora } = await this.hoje(l, est);
       const p: unknown[] = [est, agora.replace('T', ' '), o.paciente];
@@ -1918,7 +2046,11 @@ export class PortaSadtPropria implements PortaSadt {
   laudoPortal(c: ContextoSadt, liberacao: number): Promise<LaudoPortalLido | null> {
     return this.ler(c, async (l, est) => {
       const { agora } = await this.hoje(l, est);
-      const [r] = await l.consultar(`${SQL_LAUDO_PORTAL} AND lp.id = ?`, [est, agora.replace('T', ' '), liberacao], { teto: 1 });
+      const [r] = await l.consultar(
+        `${SQL_LAUDO_PORTAL} AND lp.id = ?`,
+        [est, agora.replace('T', ' '), liberacao],
+        { teto: 1 },
+      );
       if (!r) return null;
       const valores = await valoresDosResultados(l, [n(r['resultado'])]);
       return {
@@ -1940,7 +2072,9 @@ export class PortaSadtPropria implements PortaSadt {
            JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE a.id = ? AND a.estabelecimento_id = ?`,
         [reg, est],
       );
-      return r ? { paciente: n(r['id']), nome: texto(r['nome']), nascimento: dataIso(r['data_nascimento']) } : null;
+      return r
+        ? { paciente: n(r['id']), nome: texto(r['nome']), nascimento: dataIso(r['data_nascimento']) }
+        : null;
     });
   }
 
@@ -1963,7 +2097,10 @@ export class PortaSadtPropria implements PortaSadt {
     });
   }
   /** A conta do médico externo pela inscrição (conselho, UF e número); sem conta, o autocadastro mais recente. */
-  acessoDoMedico(c: ContextoSadt, m: { conselho: string; uf: string; numero: string }): Promise<AcessoPortalLido | null> {
+  acessoDoMedico(
+    c: ContextoSadt,
+    m: { conselho: string; uf: string; numero: string },
+  ): Promise<AcessoPortalLido | null> {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
         `${SQL_ACESSO_MEDICO} AND cc.sigla = ? AND uf.sigla = ? AND pv.numero_conselho = ?
@@ -1979,7 +2116,10 @@ export class PortaSadtPropria implements PortaSadt {
       const r =
         k.tipo === 'protocolo'
           ? await l.uma(`${SQL_ACESSO_PROTOCOLO} AND pa.id = ?`, [est, k.id])
-          : await l.uma(`${SQL_ACESSO_MEDICO} AND ${k.tipo === 'conta' ? 'cp.id' : 'pv.id'} = ? LIMIT 1`, [est, k.id]);
+          : await l.uma(`${SQL_ACESSO_MEDICO} AND ${k.tipo === 'conta' ? 'cp.id' : 'pv.id'} = ? LIMIT 1`, [
+              est,
+              k.id,
+            ]);
       if (!r) return null;
       if (k.tipo === 'protocolo') return acessoDoProtocoloLido(r);
       const a = acessoDoMedicoLido(r);
@@ -2031,7 +2171,12 @@ export class PortaSadtPropria implements PortaSadt {
           conselho: texto(r['conselho']),
           uf: texto(r['uf']),
           numero: texto(r['numero_conselho']),
-          situacao: sit === 'aprovado' ? ('aprovado' as const) : sit === 'recusado' ? ('recusado' as const) : ('pendente' as const),
+          situacao:
+            sit === 'aprovado'
+              ? ('aprovado' as const)
+              : sit === 'recusado'
+                ? ('recusado' as const)
+                : ('pendente' as const),
           ...(conta === null ? {} : { situacaoConta: SITUACAO_DA_CONTA[conta] ?? conta }),
           pedidoEm: instante(r['solicitado_em']),
           origem: 'novo' as const,
@@ -2058,7 +2203,8 @@ export class PortaSadtPropria implements PortaSadt {
       const atos = new Set<number>();
       for (const r of ls) {
         const tipo = texto(r['tipo']);
-        if (tipo === 'imagem' && r['sigla_padrao'] === null) for (const a of [16, 24, 25, 26, 27, 42]) atos.add(a);
+        if (tipo === 'imagem' && r['sigla_padrao'] === null)
+          for (const a of [16, 24, 25, 26, 27, 42]) atos.add(a);
         else atos.add(atoDoExame(tipo, r['sigla_padrao'] === null ? null : texto(r['sigla_padrao'])));
       }
       return [...atos].sort((a, b) => a - b);
@@ -2116,7 +2262,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
             AND abe.exame_item_id IN (${lista(ids.length)}) LIMIT 1`,
         ids,
       );
-      if (ja) throw recusa('amostra-coletada', 'O exame já tem amostra coletada: rejeite a anterior para coletar de novo.');
+      if (ja)
+        throw recusa(
+          'amostra-coletada',
+          'O exame já tem amostra coletada: rejeite a anterior para coletar de novo.',
+        );
       const primeiro = itens[0]!;
       let material = nn(primeiro['material_biologico_id']);
       if (material === null) {
@@ -2149,7 +2299,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       for (const i of itens) {
         await tx.incluir('amostra_biologica_exame', { amostra_biologica_id: id, exame_item_id: n(i['id']) });
         if (['solicitado', 'autorizado', 'agendado'].includes(texto(i['situacao'])))
-          await tx.alterar('exame_item', n(i['id']), n(i['versao']), { situacao: 'coletado', coletado_em: coletada });
+          await tx.alterar('exame_item', n(i['id']), n(i['versao']), {
+            situacao: 'coletado',
+            coletado_em: coletada,
+          });
       }
       await tx.incluir('amostra_biologica_evento', {
         amostra_biologica_id: id,
@@ -2194,7 +2347,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
             WHERE abe.amostra_biologica_id = ? AND abe.excluido_em IS NULL AND ei.situacao IN ('solicitado', 'autorizado', 'agendado', 'coletado')`,
           [r.amostra],
         );
-        for (const i of itens) await tx.alterar('exame_item', n(i['id']), n(i['versao']), { situacao: 'em_analise' });
+        for (const i of itens)
+          await tx.alterar('exame_item', n(i['id']), n(i['versao']), { situacao: 'em_analise' });
       }
       // A amostra rejeitada (ou cancelada para recoleta) devolve o exame ainda sem resultado à coleta.
       if (r.para === 'rejeitada' || r.para === 'recoleta') {
@@ -2203,7 +2357,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
             WHERE abe.amostra_biologica_id = ? AND abe.excluido_em IS NULL AND ei.situacao IN ('coletado', 'em_analise')`,
           [r.amostra],
         );
-        for (const i of itens) await tx.alterar('exame_item', n(i['id']), n(i['versao']), { situacao: 'solicitado' });
+        for (const i of itens)
+          await tx.alterar('exame_item', n(i['id']), n(i['versao']), { situacao: 'solicitado' });
       }
     },
 
@@ -2221,7 +2376,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       // A regra vigente da unidade é encerrada (não apagada): o histórico da faixa fica. A regra da rede
       // (estabelecimento nulo) não é tocada: a nova regra da unidade a sobrepõe só nesta unidade.
       for (const a of anteriores)
-        await tx.alterar('regra_valor_critico', n(a['id']), n(a['versao']), { vigencia_fim: hoje, ativo: false });
+        await tx.alterar('regra_valor_critico', n(a['id']), n(a['versao']), {
+          vigencia_fim: hoje,
+          ativo: false,
+        });
       return tx.incluir('regra_valor_critico', {
         estabelecimento_id: est,
         exame_id: n(e['id']),
@@ -2316,7 +2474,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       if (!a) throw recusa('aviso-inexistente', 'O aviso não existe neste estabelecimento.');
       if (['comunicado', 'leitura_confirmada', 'cancelado'].includes(texto(a['situacao'])))
         throw recusa('aviso-comunicado', 'O aviso já foi comunicado.');
-      const canal = await tx.uma('SELECT id FROM canal_notificacao WHERE codigo = ? AND ativo = TRUE', [r.canal]);
+      const canal = await tx.uma('SELECT id FROM canal_notificacao WHERE codigo = ? AND ativo = TRUE', [
+        r.canal,
+      ]);
       if (!canal) throw recusa('canal-inexistente', 'O canal de comunicação não está cadastrado.');
       const [seq] = await tx.consultar(
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM aviso_valor_critico_tentativa WHERE aviso_valor_critico_id = ?',
@@ -2352,7 +2512,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       );
       if (!a || !['pendente', 'em_contato', 'escalonado'].includes(texto(a['situacao']))) return false;
       if (n(a['nivel_escalonamento']) >= r.nivel) return false;
-      await tx.alterar('aviso_valor_critico', r.aviso, n(a['versao']), { nivel_escalonamento: r.nivel, situacao: 'escalonado' });
+      await tx.alterar('aviso_valor_critico', r.aviso, n(a['versao']), {
+        nivel_escalonamento: r.nivel,
+        situacao: 'escalonado',
+      });
       return true;
     },
 
@@ -2392,12 +2555,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
           WHERE re.exame_item_id = ? AND q.estabelecimento_id = ? AND re.situacao = 'liberado' AND re.excluido_em IS NULL`,
         [r.exameItem, est],
       );
-      if (!re) throw recusa('resultado-inexistente', 'O resultado liberado não existe neste estabelecimento.');
+      if (!re)
+        throw recusa('resultado-inexistente', 'O resultado liberado não existe neste estabelecimento.');
       // Só a primeira abertura por usuário (uq_visualizacao_resultado_exame_usuario): a repetida não grava.
-      const ja = await tx.uma('SELECT id FROM visualizacao_resultado_exame WHERE resultado_exame_id = ? AND usuario_id = ?', [
-        n(re['id']),
-        usuario,
-      ]);
+      const ja = await tx.uma(
+        'SELECT id FROM visualizacao_resultado_exame WHERE resultado_exame_id = ? AND usuario_id = ?',
+        [n(re['id']), usuario],
+      );
       if (ja) return;
       await tx.incluir('visualizacao_resultado_exame', {
         estabelecimento_id: est,
@@ -2421,8 +2585,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         { teto: 1 },
       );
       // Só o orçamento do diagnóstico (com item de exame) se converte por aqui; o de internação ou outro não existe nesta porta.
-      if (!o) throw recusa('orcamento-inexistente', 'O orçamento de exames não existe neste estabelecimento.');
-      if (texto(o['situacao']) === 'realizado') throw recusa('orcamento-convertido', 'O orçamento já foi convertido.');
+      if (!o)
+        throw recusa('orcamento-inexistente', 'O orçamento de exames não existe neste estabelecimento.');
+      if (texto(o['situacao']) === 'realizado')
+        throw recusa('orcamento-convertido', 'O orçamento já foi convertido.');
       // O rascunho converte: no setor o orçamento é feito e aceito no balcão, e a conversão registra o aceite (aceito_em).
       // Vencido pela data (validade antes de hoje no fuso do estabelecimento) não converte, como a leitura o mostra.
       if (!['rascunho', 'emitido', 'aceito'].includes(texto(o['situacao'])) || verdadeiro(o['vencido']))
@@ -2453,7 +2619,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
           WHERE r.estabelecimento_id = ? AND ei.id IN (${lista(ids.length)})`,
         [est, ...ids],
       );
-      if (itens.length !== new Set(ids).size) throw recusa('exame-inexistente', 'Algum exame não é deste estabelecimento.');
+      if (itens.length !== new Set(ids).size)
+        throw recusa('exame-inexistente', 'Algum exame não é deste estabelecimento.');
       if (new Set(itens.map((i) => n(i['paciente_id']))).size > 1)
         throw recusa('pacientes-diferentes', 'O laudo reúne exames de um paciente só.');
       if (r.via > 1 && !r.motivo) throw recusa('motivo-obrigatorio', 'Informe o motivo da segunda via.');
@@ -2501,20 +2668,27 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
 
     /** Um protocolo ativo por atendimento: o novo revoga o anterior (o código impresso antes deixa de valer). */
     async criarProtocoloPortal(r) {
-      const at = await tx.uma('SELECT id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ?', [
-        r.reg,
-        est,
-        r.paciente,
-      ]);
-      if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento para este paciente.');
-      if (!/^[0-9a-f]{64}$/.test(r.protocoloResumo)) throw recusa('protocolo-invalido', 'O resumo do protocolo é inválido.');
+      const at = await tx.uma(
+        'SELECT id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ?',
+        [r.reg, est, r.paciente],
+      );
+      if (!at)
+        throw recusa(
+          'atendimento-inexistente',
+          'O atendimento não existe neste estabelecimento para este paciente.',
+        );
+      if (!/^[0-9a-f]{64}$/.test(r.protocoloResumo))
+        throw recusa('protocolo-invalido', 'O resumo do protocolo é inválido.');
       const quando = agora();
       for (const v of await tx.consultarParaAtualizar(
         `SELECT id, versao FROM protocolo_acesso_portal
           WHERE atendimento_id = ? AND estabelecimento_id = ? AND situacao = 'ativo' AND excluido_em IS NULL`,
         [r.reg, est],
       ))
-        await tx.alterar('protocolo_acesso_portal', n(v['id']), n(v['versao']), { situacao: 'revogado', revogado_em: quando });
+        await tx.alterar('protocolo_acesso_portal', n(v['id']), n(v['versao']), {
+          situacao: 'revogado',
+          revogado_em: quando,
+        });
       return tx.incluir('protocolo_acesso_portal', {
         estabelecimento_id: est,
         paciente_id: r.paciente,
@@ -2532,7 +2706,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
     async registrarAutocadastro(r) {
       const cc = await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ? LIMIT 1', [r.conselho]);
       const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ? LIMIT 1', [r.uf]);
-      if (!cc || !uf) throw recusa('inscricao-invalida', 'O conselho ou a UF da inscrição não existem no cadastro.');
+      if (!cc || !uf)
+        throw recusa('inscricao-invalida', 'O conselho ou a UF da inscrição não existem no cadastro.');
       const [aberto] = await tx.consultarParaAtualizar(
         `SELECT pv.id FROM pedido_vinculo_profissional_externo pv
            LEFT JOIN conta_portal_profissional_externo cp ON cp.id = pv.conta_portal_profissional_externo_id AND cp.excluido_em IS NULL
@@ -2543,7 +2718,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         [est, cc['id'], uf['id'], r.numero],
         { teto: 1 },
       );
-      if (aberto) throw recusa('autocadastro-repetido', 'Já há um cadastro em análise ou ativo para esta inscrição.');
+      if (aberto)
+        throw recusa('autocadastro-repetido', 'Já há um cadastro em análise ou ativo para esta inscrição.');
       return tx.incluir('pedido_vinculo_profissional_externo', {
         estabelecimento_id: est,
         nome: r.nome.slice(0, 150),
@@ -2582,13 +2758,19 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         return;
       }
       // A aprovação liga o pedido ao profissional do cadastro com a mesma inscrição (conselho, UF e número).
-      if (r.solicitante === null) throw recusa('solicitante-obrigatorio', 'Escolha o médico do cadastro que o pedido liga.');
+      if (r.solicitante === null)
+        throw recusa('solicitante-obrigatorio', 'Escolha o médico do cadastro que o pedido liga.');
       const pr = await tx.uma(
         `SELECT pr.id, pr.pessoa_fisica_id FROM profissional pr
            JOIN inscricao_conselho ic ON ic.profissional_id = pr.id AND ic.excluido_em IS NULL
           WHERE pr.id = ? AND pr.excluido_em IS NULL AND ic.conselho_classe_id = ? AND ic.unidade_federativa_id = ?
             AND ic.numero_inscricao = ? LIMIT 1`,
-        [r.solicitante, pv['conselho_classe_id'], pv['conselho_unidade_federativa_id'], pv['numero_conselho']],
+        [
+          r.solicitante,
+          pv['conselho_classe_id'],
+          pv['conselho_unidade_federativa_id'],
+          pv['numero_conselho'],
+        ],
       );
       if (!pr) throw recusa('solicitante-divergente', 'O médico escolhido não tem a inscrição do pedido.');
       const [ja] = await tx.consultarParaAtualizar(
@@ -2649,22 +2831,25 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
               { teto: 1 },
             )
           : k.tipo === 'protocolo'
-          ? await tx.consultarParaAtualizar(
-              'SELECT id, versao FROM protocolo_acesso_portal WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-              [k.id, est],
-              { teto: 1 },
-            )
-          : await tx.consultarParaAtualizar(
-              `SELECT cp.id, cp.versao FROM conta_portal_profissional_externo cp
+            ? await tx.consultarParaAtualizar(
+                'SELECT id, versao FROM protocolo_acesso_portal WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+                [k.id, est],
+                { teto: 1 },
+              )
+            : await tx.consultarParaAtualizar(
+                `SELECT cp.id, cp.versao FROM conta_portal_profissional_externo cp
                  JOIN pedido_vinculo_profissional_externo pv ON pv.conta_portal_profissional_externo_id = cp.id
                 WHERE cp.id = ? AND pv.estabelecimento_id = ? AND cp.excluido_em IS NULL LIMIT 1`,
-              [k.id, est],
-              { teto: 1 },
-            );
+                [k.id, est],
+                { teto: 1 },
+              );
       if (!a) throw recusa('acesso-inexistente', 'O acesso ao portal não existe neste estabelecimento.');
       const tentativas = Math.max(0, Math.min(65_535, Math.trunc(r.tentativas)));
       if (k.tipo === 'protocolo')
-        await tx.alterar('protocolo_acesso_portal', k.id, n(a['versao']), { tentativas_falhas: tentativas, bloqueado_ate: r.bloqueadoAte });
+        await tx.alterar('protocolo_acesso_portal', k.id, n(a['versao']), {
+          tentativas_falhas: tentativas,
+          bloqueado_ate: r.bloqueadoAte,
+        });
       else if (k.tipo === 'pedido')
         await tx.alterar('pedido_vinculo_profissional_externo', k.id, n(a['versao']), {
           tentativas_falhas: tentativas,
@@ -2682,10 +2867,15 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
 
 /** O nome da operação: o evento da tela (`dadosDepois.evento`) quando a trilha é fixa; senão, o genérico do módulo. */
 export function nomeDaGravacao(modulo: string, trilha: unknown): string {
-  const ev = typeof trilha === 'function' ? null : (trilha as { dadosDepois?: { evento?: unknown } } | null)?.dadosDepois?.evento;
+  const ev =
+    typeof trilha === 'function'
+      ? null
+      : (trilha as { dadosDepois?: { evento?: unknown } } | null)?.dadosDepois?.evento;
   if (typeof ev !== 'string') return `${modulo}.gravacao`;
   const nome = ev.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-  return /^[a-z][a-z0-9_.-]{2,119}$/.test(nome) && nome.startsWith(`${modulo.split('.')[0]}.`) ? nome : `${modulo}.gravacao`;
+  return /^[a-z][a-z0-9_.-]{2,119}$/.test(nome) && nome.startsWith(`${modulo.split('.')[0]}.`)
+    ? nome
+    : `${modulo}.gravacao`;
 }
 
 /** O valor da gravação guardado no resultado da operação (a repetida pela chave devolve o mesmo valor). */

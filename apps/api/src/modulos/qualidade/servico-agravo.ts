@@ -24,7 +24,16 @@ import {
   montarFilaAgravos,
   normalizarTexto,
 } from '@sgh/dominio-qualidade';
-import type { AtendimentoComCid, CasoAgravoRegistrado, CidNotificavelCadastro, GatilhoExameRegistrado, ObitoComCid, PacienteDoAgravo, ResultadoCandidato, UnidadeDoAgravo } from './tipos.js';
+import type {
+  AtendimentoComCid,
+  CasoAgravoRegistrado,
+  CidNotificavelCadastro,
+  GatilhoExameRegistrado,
+  ObitoComCid,
+  PacienteDoAgravo,
+  ResultadoCandidato,
+  UnidadeDoAgravo,
+} from './tipos.js';
 
 /** O cadastro de CID notificável como as regras puras o usam (só os de periodicidade conhecida). */
 export function cadastroDe(cids: readonly CidNotificavelCadastro[]): Map<string, CidCadastro> {

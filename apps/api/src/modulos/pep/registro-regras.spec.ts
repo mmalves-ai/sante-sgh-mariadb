@@ -35,7 +35,14 @@ import { EstadoProntuario } from './sessao-prontuario.js';
 import type { ProfissionalDoRegistro } from './tipos-pep.js';
 
 const PERMISSOES = ['pep.evolucao.ler', 'pep.evolucao.criar', 'pep.evolucao.suspender'];
-const C = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'rede-teste', hospital: 'aa' };
+const C = {
+  cliente: 'teste',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede: 'rede-teste',
+  hospital: 'aa',
+};
 
 const texto = (vinculo: number, t: string): RespostaRegistro => ({
   vinculo,
@@ -383,9 +390,39 @@ describe('liberação por modelo e cache da representação', () => {
       }
     }
     const servico = new ServicoRegistro(new Contadora());
-    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r1', hospital: 'aa' }, 61);
-    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r1', hospital: 'aa' }, 61);
-    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r2', hospital: 'aa' }, 61);
+    await servico.representacao(
+      {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        rede: 'r1',
+        hospital: 'aa',
+      },
+      61,
+    );
+    await servico.representacao(
+      {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        rede: 'r1',
+        hospital: 'aa',
+      },
+      61,
+    );
+    await servico.representacao(
+      {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        rede: 'r2',
+        hospital: 'aa',
+      },
+      61,
+    );
     expect(lidas).toBe(2);
   });
 });

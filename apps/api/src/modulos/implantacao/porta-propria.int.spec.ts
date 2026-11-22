@@ -32,7 +32,9 @@ describe.skipIf(SEM_BANCO)('porta própria da implantação (MariaDB, cliente f2
     expect(x.conta.length).toBeGreaterThan(0);
     expect(typeof x.canalCifrado).toBe('boolean');
     // Nenhum endereço nem host (o nome do método de autenticação pode conter "password": não é segredo).
-    expect(JSON.stringify({ ...x, autenticacao: null })).not.toMatch(/127\.0\.0\.1|localhost|@|senha|password/i);
+    expect(JSON.stringify({ ...x, autenticacao: null })).not.toMatch(
+      /127\.0\.0\.1|localhost|@|senha|password/i,
+    );
   });
 
   it('o relógio do banco em UTC, perto do relógio do servidor', async () => {

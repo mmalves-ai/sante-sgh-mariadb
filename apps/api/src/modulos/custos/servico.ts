@@ -39,7 +39,12 @@ import {
   sequenciaDoRateio,
   sugerirClasse,
 } from '@sgh/dominio-custos';
-import type { CentroCustoCadastrado, ColetaRegistrada, EstatisticaRegistrada, TrilhaCustos } from './tipos.js';
+import type {
+  CentroCustoCadastrado,
+  ColetaRegistrada,
+  EstatisticaRegistrada,
+  TrilhaCustos,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoCustos, PortaCustos } from './porta.js';
 

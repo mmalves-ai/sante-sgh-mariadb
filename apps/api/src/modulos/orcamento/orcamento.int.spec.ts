@@ -52,7 +52,9 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
           [ids.est, ids.outro],
         ),
       )
-      .then(() => e.executar('DELETE FROM versao_orcamento WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outro]));
+      .then(() =>
+        e.executar('DELETE FROM versao_orcamento WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outro]),
+      );
 
   function sessao(login: string, usuario: number, est = ids.est, hospital = `${P}A`): SessaoOrcamento {
     const porta: ContextoPorta = {
@@ -83,7 +85,9 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
   }
 
   const ler = <T>(sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'int-0211-orc-conferir' }, (l) => l.uma<T & Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'int-0211-orc-conferir' }, (l) =>
+      l.uma<T & Record<string, unknown>>(sql, p),
+    );
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -151,7 +155,9 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
 
   afterAll(async () => {
     if (!nucleo) return;
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-11-orc' }, limparVersoes).catch(() => undefined);
+    await nucleo
+      .escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-11-orc' }, limparVersoes)
+      .catch(() => undefined);
     await nucleo.encerrar();
   });
 
@@ -184,7 +190,11 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
 
   it('o ciclo: criar, lançar, versão velha recusada, consumo recusado, segregação, aprovar, revisão que substitui, descarte', async () => {
     // Criar (vazia): o cabeçalho, a versão 1 e a trilha da operação.
-    const v1 = await servico.criar(autor(), { ano: ANO, empresa: 1, descricao: 'Orcamento sintetico', base: { tipo: 'vazio' } }, EVENTOS);
+    const v1 = await servico.criar(
+      autor(),
+      { ano: ANO, empresa: 1, descricao: 'Orcamento sintetico', base: { tipo: 'vazio' } },
+      EVENTOS,
+    );
     expect(v1).toMatchObject({ numero: 1, linhas: 0, descartadas: 0 });
     const cab = await ler<{ situacao: string; versao: number; tipo_base: string; criado_por: number }>(
       'SELECT situacao, versao, tipo_base, criado_por, vigencia_inicio, vigencia_fim FROM versao_orcamento WHERE id = ?',
@@ -221,7 +231,10 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
       "SELECT dados_depois AS d FROM trilha_auditoria WHERE entidade = 'versao_orcamento' AND entidade_id = ? ORDER BY id DESC LIMIT 1",
       [v1.id],
     );
-    expect(json(tl1?.d)).toMatchObject({ operacao: 'orcamento.linhas.gravar', dados: { linhasIncluidas: 2 } });
+    expect(json(tl1?.d)).toMatchObject({
+      operacao: 'orcamento.linhas.gravar',
+      dados: { linhasIncluidas: 2 },
+    });
     const saida = await ler<{ n: number }>(
       "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE entidade = 'versao_orcamento' AND entidade_id = ?",
       [v1.id],
@@ -238,24 +251,35 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
     // A alteração sobe a versão da linha; a remoção é lógica (excluido_em/excluido_por), e as duas entram nas escritas
     // registradas da trilha.
     const brutas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'int-0211-orc-conferir' }, (l) =>
-      l.consultar<{ id: number; natureza: string; versao: number; excluido_em: unknown; excluido_por: unknown }>(
+      l.consultar<{
+        id: number;
+        natureza: string;
+        versao: number;
+        excluido_em: unknown;
+        excluido_por: unknown;
+      }>(
         'SELECT id, natureza, versao, excluido_em, excluido_por FROM linha_orcamento WHERE versao_orcamento_id = ? ORDER BY sequencia',
         [v1.id],
       ),
     );
-    expect(brutas.map((b) => [b.natureza, Number(b.versao), b.excluido_em !== null, b.excluido_por])).toEqual([
-      ['receita', 2, false, null],
-      ['despesa', 2, true, ids.autor],
-    ]);
+    expect(brutas.map((b) => [b.natureza, Number(b.versao), b.excluido_em !== null, b.excluido_por])).toEqual(
+      [
+        ['receita', 2, false, null],
+        ['despesa', 2, true, ids.autor],
+      ],
+    );
     const tl2 = await ler<{ d: unknown }>(
       "SELECT dados_depois AS d FROM trilha_auditoria WHERE entidade = 'versao_orcamento' AND entidade_id = ? ORDER BY id DESC LIMIT 1",
       [v1.id],
     );
     const d2 = json(tl2?.d) as { escritas: { acao: string; tabela: string; id: number }[] };
     expect(d2).toMatchObject({ dados: { linhasAlteradas: 1, linhasRemovidas: 1, linhasIncluidas: 0 } });
-    expect(d2.escritas.filter((x) => x.tabela === 'linha_orcamento').map((x) => [x.acao, x.id]).sort()).toEqual(
-      brutas.map((b) => ['alteracao', Number(b.id)]).sort(),
-    );
+    expect(
+      d2.escritas
+        .filter((x) => x.tabela === 'linha_orcamento')
+        .map((x) => [x.acao, x.id])
+        .sort(),
+    ).toEqual(brutas.map((b) => ['alteracao', Number(b.id)]).sort());
     expect((await porta.versao(autor().porta, v1.id))?.totaisPorNatureza).toEqual({
       receita: 2400_00,
       despesa: 0,
@@ -263,7 +287,12 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
     });
     // A versão lida velha: recusada pelo serviço e pela trava da porta (nada muda).
     await expect(
-      servico.gravarLinhas(autor(), v1.id, { versao: 2, linhas: [linha('despesa', ids.centro2, 1)] }, EVENTOS),
+      servico.gravarLinhas(
+        autor(),
+        v1.id,
+        { versao: 2, linhas: [linha('despesa', ids.centro2, 1)] },
+        EVENTOS,
+      ),
     ).rejects.toMatchObject({ status: 409 });
     await expect(
       porta.gravarLinhas(
@@ -271,7 +300,11 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
         v1.id,
         2,
         { incluir: [linha('despesa', ids.centro2, 1)], alterar: [], remover: [] },
-        { login: 'l0211o.autor', chaveIdempotencia: `t0211-${randomUUID()}`, trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id) },
+        {
+          login: 'l0211o.autor',
+          chaveIdempotencia: `t0211-${randomUUID()}`,
+          trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id),
+        },
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'conflito-versao' } });
     // Consumo sem insumo: recusado com a mensagem de negócio.
@@ -281,24 +314,47 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
         v1.id,
         3,
         {
-          incluir: [{ centro: ids.centro1, natureza: 'consumo', grupo: 0, subgrupo: 0, item: 0, meses: doze(1), observacao: null }],
+          incluir: [
+            {
+              centro: ids.centro1,
+              natureza: 'consumo',
+              grupo: 0,
+              subgrupo: 0,
+              item: 0,
+              meses: doze(1),
+              observacao: null,
+            },
+          ],
           alterar: [],
           remover: [],
         },
-        { login: 'l0211o.autor', chaveIdempotencia: `t0211-${randomUUID()}`, trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id) },
+        {
+          login: 'l0211o.autor',
+          chaveIdempotencia: `t0211-${randomUUID()}`,
+          trilha: autor().trilha('x', 'alterar', 'linha_orcamento', v1.id),
+        },
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'consumo-sem-insumo' } });
     expect((await porta.versao(autor().porta, v1.id))?.versao).toBe(3);
 
     // Segregação: quem montou não aprova; outra pessoa aprova (oficial, aprovador e observação).
-    await expect(servico.aprovar(autor(), v1.id, { versao: 3, observacao: null }, EVENTOS)).rejects.toMatchObject({
+    await expect(
+      servico.aprovar(autor(), v1.id, { versao: 3, observacao: null }, EVENTOS),
+    ).rejects.toMatchObject({
       status: 409,
     });
-    expect(await servico.aprovar(aprovador(), v1.id, { versao: 3, observacao: 'ok sintetico' }, EVENTOS)).toEqual({
+    expect(
+      await servico.aprovar(aprovador(), v1.id, { versao: 3, observacao: 'ok sintetico' }, EVENTOS),
+    ).toEqual({
       substituida: null,
     });
     const ap = await porta.versao(autor().porta, v1.id);
-    expect(ap).toMatchObject({ situacao: 'aprovado', aprovadoPor: 'l0211o.aprova', observacaoAprovacao: 'ok sintetico', versao: 4 });
+    expect(ap).toMatchObject({
+      situacao: 'aprovado',
+      aprovadoPor: 'l0211o.aprova',
+      observacaoAprovacao: 'ok sintetico',
+      versao: 4,
+    });
     const of = await ler<{ oficial: number; aprovador_usuario_id: number }>(
       'SELECT oficial, aprovador_usuario_id FROM versao_orcamento WHERE id = ?',
       [v1.id],
@@ -313,13 +369,21 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
     );
     expect(v2).toMatchObject({ numero: 2, linhas: 1 });
     expect((await porta.versao(autor().porta, v2.id))?.base).toBe(`cópia de ${ANO} v1`);
-    expect(await servico.aprovar(autor(), v2.id, { versao: 1, observacao: null }, EVENTOS)).toEqual({ substituida: v1.id });
+    expect(await servico.aprovar(autor(), v2.id, { versao: 1, observacao: null }, EVENTOS)).toEqual({
+      substituida: v1.id,
+    });
     expect((await porta.versao(autor().porta, v1.id))?.situacao).toBe('substituido');
-    const velha = await ler<{ oficial: number }>('SELECT oficial FROM versao_orcamento WHERE id = ?', [v1.id]);
+    const velha = await ler<{ oficial: number }>('SELECT oficial FROM versao_orcamento WHERE id = ?', [
+      v1.id,
+    ]);
     expect(Number(velha?.oficial)).toBe(0);
 
     // Descarte de um rascunho, com o motivo e quem descartou.
-    const v3 = await servico.criar(autor(), { ano: ANO, empresa: 1, descricao: 'Para descartar', base: { tipo: 'vazio' } }, EVENTOS);
+    const v3 = await servico.criar(
+      autor(),
+      { ano: ANO, empresa: 1, descricao: 'Para descartar', base: { tipo: 'vazio' } },
+      EVENTOS,
+    );
     await servico.descartar(autor(), v3.id, { versao: 1, motivo: 'teste de descarte' }, EVENTOS);
     expect(await porta.versao(autor().porta, v3.id)).toMatchObject({
       situacao: 'descartado',
@@ -338,7 +402,12 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
       EVENTOS,
     );
     expect((await porta.versao(autor().porta, v.id))?.base).toBe(`realizado de ${ANO - 1} +5,00%`);
-    const cmp = await servico.comparativo(autor(), v.id, { visao: 'linha' }, new Date(`${ANO}-06-01T00:00:00Z`));
+    const cmp = await servico.comparativo(
+      autor(),
+      v.id,
+      { visao: 'linha' },
+      new Date(`${ANO}-06-01T00:00:00Z`),
+    );
     expect(cmp.linhas).toEqual([]);
     expect(cmp.avisos[0]).toContain('Ainda não há realizado');
   });
@@ -352,84 +421,121 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
           'DELETE r FROM rateio_lancamento r JOIN titulo_pagar t ON t.id = r.titulo_pagar_id WHERE t.estabelecimento_id = ? AND t.numero LIKE ?',
           [ids.est, `${n}%`],
         )
-        .then(() => e.executar('DELETE FROM titulo_pagar WHERE estabelecimento_id = ? AND numero LIKE ?', [ids.est, `${n}%`]))
-        .then(() => e.executar('DELETE FROM consumo_centro_custo WHERE estabelecimento_id = ? AND ano = ?', [ids.est, ANO_R]));
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-11-orc-realizado' }, async (e) => {
-      const agora = new Date();
-      await limparRealizado(e);
-      const credor = await garantir(
-        e,
-        'SELECT id FROM tipo_credor WHERE codigo = ?',
-        [n],
-        "INSERT INTO tipo_credor (codigo, descricao, natureza, criado_em) VALUES (?, 'CREDOR SINTETICO', 'fornecedor', ?)",
-        [n, agora],
-      );
-      const doc = await garantir(
-        e,
-        'SELECT id FROM tipo_documento_financeiro WHERE codigo = ?',
-        [n],
-        "INSERT INTO tipo_documento_financeiro (codigo, descricao, criado_em) VALUES (?, 'DOCUMENTO SINTETICO', ?)",
-        [n, agora],
-      );
-      const forn = await garantir(
-        e,
-        'SELECT id FROM empresa_fornecedora WHERE razao_social = ?',
-        ['FORNECEDOR SINTETICO L0211O'],
-        "INSERT INTO empresa_fornecedora (tipo_pessoa, razao_social, cnpj, criado_em) VALUES ('juridica', ?, '00000000021101', ?)",
-        ['FORNECEDOR SINTETICO L0211O', agora],
-      );
-      const titulo = (sufixo: string, centro: number | null, data: string, cent: number, extra: { situacao?: string; tipo?: string } = {}) =>
-        e.inserir(
-          `INSERT INTO titulo_pagar (estabelecimento_id, numero, tipo_credor_id, empresa_fornecedora_id, tipo_documento_financeiro_id,
+        .then(() =>
+          e.executar('DELETE FROM titulo_pagar WHERE estabelecimento_id = ? AND numero LIKE ?', [
+            ids.est,
+            `${n}%`,
+          ]),
+        )
+        .then(() =>
+          e.executar('DELETE FROM consumo_centro_custo WHERE estabelecimento_id = ? AND ano = ?', [
+            ids.est,
+            ANO_R,
+          ]),
+        );
+    await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-02-11-orc-realizado' },
+      async (e) => {
+        const agora = new Date();
+        await limparRealizado(e);
+        const credor = await garantir(
+          e,
+          'SELECT id FROM tipo_credor WHERE codigo = ?',
+          [n],
+          "INSERT INTO tipo_credor (codigo, descricao, natureza, criado_em) VALUES (?, 'CREDOR SINTETICO', 'fornecedor', ?)",
+          [n, agora],
+        );
+        const doc = await garantir(
+          e,
+          'SELECT id FROM tipo_documento_financeiro WHERE codigo = ?',
+          [n],
+          "INSERT INTO tipo_documento_financeiro (codigo, descricao, criado_em) VALUES (?, 'DOCUMENTO SINTETICO', ?)",
+          [n, agora],
+        );
+        const forn = await garantir(
+          e,
+          'SELECT id FROM empresa_fornecedora WHERE razao_social = ?',
+          ['FORNECEDOR SINTETICO L0211O'],
+          "INSERT INTO empresa_fornecedora (tipo_pessoa, razao_social, cnpj, criado_em) VALUES ('juridica', ?, '00000000021101', ?)",
+          ['FORNECEDOR SINTETICO L0211O', agora],
+        );
+        const titulo = (
+          sufixo: string,
+          centro: number | null,
+          data: string,
+          cent: number,
+          extra: { situacao?: string; tipo?: string } = {},
+        ) =>
+          e.inserir(
+            `INSERT INTO titulo_pagar (estabelecimento_id, numero, tipo_credor_id, empresa_fornecedora_id, tipo_documento_financeiro_id,
              numero_documento, data_emissao, data_lancamento, valor_bruto, valor_liquido, natureza_financeira_id, centro_custo_id,
              situacao, tipo_titulo, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [ids.est, `${n}${sufixo}`, credor, forn, doc, `${n}${sufixo}`, data, data, (cent / 100).toFixed(2), (cent / 100).toFixed(2),
-            item.despesa.i, centro, extra.situacao ?? 'aberto', extra.tipo ?? 'normal', agora],
+            [
+              ids.est,
+              `${n}${sufixo}`,
+              credor,
+              forn,
+              doc,
+              `${n}${sufixo}`,
+              data,
+              data,
+              (cent / 100).toFixed(2),
+              (cent / 100).toFixed(2),
+              item.despesa.i,
+              centro,
+              extra.situacao ?? 'aberto',
+              extra.tipo ?? 'normal',
+              agora,
+            ],
+          );
+        await titulo('1', ids.centro1, `${ANO_R}-03-10`, 100_00);
+        const rateado = await titulo('2', null, `${ANO_R}-04-10`, 100_00);
+        for (const [seq, centro, cent] of [
+          [1, ids.centro1, 60_00],
+          [2, ids.centro2, 40_00],
+        ] as const)
+          await e.inserir(
+            'INSERT INTO rateio_lancamento (titulo_pagar_id, sequencia, natureza_financeira_id, centro_custo_id, percentual, valor, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [rateado, seq, item.despesa.i, centro, cent / 100, (cent / 100).toFixed(2), agora],
+          );
+        await titulo('3', ids.centro1, `${ANO_R}-05-10`, 500_00, { situacao: 'renegociado' });
+        await titulo('4', ids.centro1, `${ANO_R}-06-10`, 700_00, { tipo: 'previsao' });
+        const grupoInsumo = await garantir(
+          e,
+          'SELECT id FROM grupo_insumo WHERE codigo = ?',
+          [n],
+          "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'GRUPO SINTETICO', 'material', ?)",
+          [n, agora],
         );
-      await titulo('1', ids.centro1, `${ANO_R}-03-10`, 100_00);
-      const rateado = await titulo('2', null, `${ANO_R}-04-10`, 100_00);
-      for (const [seq, centro, cent] of [[1, ids.centro1, 60_00], [2, ids.centro2, 40_00]] as const)
+        const unidade = await garantir(
+          e,
+          'SELECT id FROM unidade_medida WHERE codigo = ?',
+          [n],
+          "INSERT INTO unidade_medida (codigo, descricao, sigla, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', ?)",
+          [n, agora],
+        );
+        const insumo = await garantir(
+          e,
+          'SELECT id FROM insumo WHERE codigo = ?',
+          [n],
+          "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em) VALUES (?, 'INSUMO SINTETICO', 'material', ?, ?, ?)",
+          [n, grupoInsumo, unidade, agora],
+        );
+        const local = await garantir(
+          e,
+          'SELECT id FROM local_estoque WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, n],
+          "INSERT INTO local_estoque (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'LOCAL SINTETICO', 'almoxarifado', ?)",
+          [ids.est, n, agora],
+        );
         await e.inserir(
-          'INSERT INTO rateio_lancamento (titulo_pagar_id, sequencia, natureza_financeira_id, centro_custo_id, percentual, valor, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [rateado, seq, item.despesa.i, centro, cent / 100, (cent / 100).toFixed(2), agora],
-        );
-      await titulo('3', ids.centro1, `${ANO_R}-05-10`, 500_00, { situacao: 'renegociado' });
-      await titulo('4', ids.centro1, `${ANO_R}-06-10`, 700_00, { tipo: 'previsao' });
-      const grupoInsumo = await garantir(
-        e,
-        'SELECT id FROM grupo_insumo WHERE codigo = ?',
-        [n],
-        "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'GRUPO SINTETICO', 'material', ?)",
-        [n, agora],
-      );
-      const unidade = await garantir(
-        e,
-        'SELECT id FROM unidade_medida WHERE codigo = ?',
-        [n],
-        "INSERT INTO unidade_medida (codigo, descricao, sigla, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', ?)",
-        [n, agora],
-      );
-      const insumo = await garantir(
-        e,
-        'SELECT id FROM insumo WHERE codigo = ?',
-        [n],
-        "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em) VALUES (?, 'INSUMO SINTETICO', 'material', ?, ?, ?)",
-        [n, grupoInsumo, unidade, agora],
-      );
-      const local = await garantir(
-        e,
-        'SELECT id FROM local_estoque WHERE estabelecimento_id = ? AND codigo = ?',
-        [ids.est, n],
-        "INSERT INTO local_estoque (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'LOCAL SINTETICO', 'almoxarifado', ?)",
-        [ids.est, n, agora],
-      );
-      await e.inserir(
-        `INSERT INTO consumo_centro_custo (estabelecimento_id, ocorrido_em, centro_custo_id, insumo_id, local_estoque_id, ano, mes,
+          `INSERT INTO consumo_centro_custo (estabelecimento_id, ocorrido_em, centro_custo_id, insumo_id, local_estoque_id, ano, mes,
            valor_liquido, criado_em) VALUES (?, ?, ?, ?, ?, ?, 7, 250.00, ?)`,
-        [ids.est, agora, ids.centro2, insumo, local, ANO_R, agora],
-      );
-    });
+          [ids.est, agora, ids.centro2, insumo, local, ANO_R, agora],
+        );
+      },
+    );
     try {
       const r = await porta.realizado(autor().porta, 1, ANO_R);
       const chave = (x: { natureza: string; codigoCentro: number | null; mes: number; centavos: number }) =>
@@ -446,14 +552,26 @@ describe.skipIf(SEM_BANCO)('porta própria do orçamento (MariaDB, cliente f22_o
       // A versão do realizado sai (o consumo por centro fica de fora até o modelo guardá-lo, contado nas descartadas).
       const v = await servico.criar(
         autor(),
-        { ano: ANO_R + 1, empresa: 1, descricao: 'Do realizado com movimento', base: { tipo: 'realizado', ajusteCentesimos: 0 } },
+        {
+          ano: ANO_R + 1,
+          empresa: 1,
+          descricao: 'Do realizado com movimento',
+          base: { tipo: 'realizado', ajusteCentesimos: 0 },
+        },
         EVENTOS,
       );
       expect(v).toMatchObject({ linhas: 2, consumoDeFora: 1 });
       expect(v.descartadas).toBeGreaterThanOrEqual(1);
-      expect((await porta.versao(autor().porta, v.id))?.totaisPorNatureza).toEqual({ despesa: 200_00, receita: 0, consumo: 0 });
+      expect((await porta.versao(autor().porta, v.id))?.totaisPorNatureza).toEqual({
+        despesa: 200_00,
+        receita: 0,
+        consumo: 0,
+      });
     } finally {
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-11-orc-realizado' }, limparRealizado);
+      await nucleo.escrever(
+        { cliente: CLIENTE, correlacao: 'limpeza-teste-02-11-orc-realizado' },
+        limparRealizado,
+      );
     }
   });
 

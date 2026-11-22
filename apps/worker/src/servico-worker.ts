@@ -8,7 +8,14 @@
 // Melhoria: só o estabelecimento em atividade entra na volta (ativo e sem fim de atividade vencido no fuso dele).
 import { recursoDesligado } from '@sgh/contratos';
 import { recursoLigadoNoEstabelecimento } from '@sgh/dominio-config';
-import { ErroOperacao, type Executor, ehTravaOcupada, errnoDe, type Leitor, restricaoUnicaViolada } from '@sgh/nucleo';
+import {
+  ErroOperacao,
+  type Executor,
+  ehTravaOcupada,
+  errnoDe,
+  type Leitor,
+  restricaoUnicaViolada,
+} from '@sgh/nucleo';
 import { clientesDoWorker, type NucleoClientes } from './clientes-worker.js';
 
 export const FUSO_PADRAO_WORKER = 'America/Sao_Paulo';
@@ -24,7 +31,11 @@ export function servicoLigado(env: NodeJS.ProcessEnv, variavel: string): boolean
 /** O que as portas próprias do worker usam do NucleoProprio (os testes trocam). */
 export interface NucleoWorker {
   lerSomente<T>(
-    contexto: { readonly cliente: string; readonly estabelecimento?: number | null; readonly correlacao: string },
+    contexto: {
+      readonly cliente: string;
+      readonly estabelecimento?: number | null;
+      readonly correlacao: string;
+    },
     fn: (l: Leitor) => Promise<T>,
   ): Promise<T>;
   criarExecutor(): Executor;
@@ -69,7 +80,8 @@ export async function estabelecimentosAtivos(
         cliente,
         id: Number(x['id']),
         codigo: String(x['codigo']),
-        fuso: typeof x['fuso_horario'] === 'string' && x['fuso_horario'] ? x['fuso_horario'] : FUSO_PADRAO_WORKER,
+        fuso:
+          typeof x['fuso_horario'] === 'string' && x['fuso_horario'] ? x['fuso_horario'] : FUSO_PADRAO_WORKER,
       },
       fim: diaIso(x['fim_atividade']),
     }))
@@ -81,7 +93,12 @@ type Chaves = Parameters<typeof recursoLigadoNoEstabelecimento>[0];
 type Registrados = Parameters<typeof recursoLigadoNoEstabelecimento>[2];
 
 /** O recurso ligado para o estabelecimento inteiro, com os pré-requisitos declarados cumpridos na hora. */
-export async function recursoLigadoAqui(l: Leitor, chave: string, estabelecimento: number, agora: Date): Promise<boolean> {
+export async function recursoLigadoAqui(
+  l: Leitor,
+  chave: string,
+  estabelecimento: number,
+  agora: Date,
+): Promise<boolean> {
   const chaves = await l.consultar(
     "SELECT escopo, valor, ligada FROM liberacao_chave WHERE estabelecimento_id = ? AND chave = ? AND tipo = 'recurso'",
     [estabelecimento, chave],
@@ -109,7 +126,10 @@ export async function recursoLigadoAqui(l: Leitor, chave: string, estabeleciment
 }
 
 /** Data civil (AAAA-MM-DD) e hora do dia "HH:MM" de um instante no fuso (a forma do contrato do movimento do censo). */
-export function diaEHoraLocal(v: Date, fuso: string): { readonly data: string; readonly dia: Date; readonly hora: string } {
+export function diaEHoraLocal(
+  v: Date,
+  fuso: string,
+): { readonly data: string; readonly dia: Date; readonly hora: string } {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', {
       timeZone: fuso,
@@ -154,7 +174,12 @@ export function instanteLocal(data: string, hora: number, fuso: string): Date {
 }
 
 /** Códigos do núcleo de gravação concorrente (a recusa de regra de negócio não entra). */
-const CODIGOS_CONCORRENCIA = new Set(['conflito-versao', 'registro-duplicado', 'registro-em-edicao', 'requisicao-em-andamento']);
+const CODIGOS_CONCORRENCIA = new Set([
+  'conflito-versao',
+  'registro-duplicado',
+  'registro-em-edicao',
+  'requisicao-em-andamento',
+]);
 
 /** Outro consumidor gravou antes ou está gravando (chave única, trava ocupada, impasse ou 409 do executor). */
 export function conflitoConcorrente(x: unknown): boolean {
@@ -179,7 +204,10 @@ export interface Volta<R> {
  * Uma volta do serviço: por cliente (a lista do ambiente ou os da plataforma) e por estabelecimento ativo. A falha de
  * um estabelecimento ou de um cliente vai ao `falhou` (só códigos) e não para os outros.
  */
-export async function voltaPorEstabelecimento<P extends { estabelecimentos(): Promise<AlvoEstabelecimento[]> }, R>(
+export async function voltaPorEstabelecimento<
+  P extends { estabelecimentos(): Promise<AlvoEstabelecimento[]> },
+  R,
+>(
   nucleo: NucleoClientes,
   env: NodeJS.ProcessEnv,
   correlacao: string,

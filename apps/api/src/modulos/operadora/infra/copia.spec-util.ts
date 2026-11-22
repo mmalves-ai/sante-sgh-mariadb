@@ -32,13 +32,24 @@ export interface MassaBase {
   readonly usuario: number;
 }
 
-async function garantir(e: Escritor, sel: string, p: readonly unknown[], ins: string, pi: readonly unknown[]): Promise<number> {
+async function garantir(
+  e: Escritor,
+  sel: string,
+  p: readonly unknown[],
+  ins: string,
+  pi: readonly unknown[],
+): Promise<number> {
   const l = await e.uma<{ id: unknown }>(sel, p);
   return l ? Number(l['id']) : e.inserir(ins, pi);
 }
 
 /** Garante uma linha de domínio pelo código (as colunas extras só na inclusão). */
-async function dominio(e: Escritor, tabela: string, codigo: string, extras: Record<string, unknown>): Promise<number> {
+async function dominio(
+  e: Escritor,
+  tabela: string,
+  codigo: string,
+  extras: Record<string, unknown>,
+): Promise<number> {
   const colunas = ['codigo', ...Object.keys(extras), 'criado_em'];
   return garantir(
     e,
@@ -73,11 +84,21 @@ export async function prepararBase(nucleo: NucleoProprio): Promise<MassaBase> {
       ),
     };
     // Rede credenciada: códigos do padrão da ANS (o contrato da tela usa os números).
-    for (const [c, d] of [['1', 'Consultório médico'], ['3', 'Hospital geral'], ['4', 'Laboratório']] as const)
+    for (const [c, d] of [
+      ['1', 'Consultório médico'],
+      ['3', 'Hospital geral'],
+      ['4', 'Laboratório'],
+    ] as const)
       await dominio(e, 'tipo_prestador_rede', c, { descricao: d });
-    for (const [c, d] of [['1', 'Rede contratada'], ['2', 'Rede própria']] as const)
+    for (const [c, d] of [
+      ['1', 'Rede contratada'],
+      ['2', 'Rede própria'],
+    ] as const)
       await dominio(e, 'natureza_prestador_rede', c, { descricao: d });
-    for (const [c, d, n] of [['1', 'Ambulatorial', 'ambulatorial'], ['2', 'Hospitalar', 'hospitalar']] as const)
+    for (const [c, d, n] of [
+      ['1', 'Ambulatorial', 'ambulatorial'],
+      ['2', 'Hospitalar', 'hospitalar'],
+    ] as const)
       await dominio(e, 'regime_atendimento_rede', c, { descricao: d, natureza: n });
     for (const c of ['inclusao', 'alteracao', 'exclusao', 'reinclusao'])
       await dominio(e, 'situacao_movimento_rede', c, { descricao: `Movimento ${c}` });
@@ -104,17 +125,33 @@ export async function prepararBase(nucleo: NucleoProprio): Promise<MassaBase> {
       ['3550308', 'São Paulo', uf, agora],
     );
     // Beneficiário e produto.
-    for (const [c, d, s] of [['F', 'Feminino', 'F'], ['M', 'Masculino', 'M']] as const) {
+    for (const [c, d, s] of [
+      ['F', 'Feminino', 'F'],
+      ['M', 'Masculino', 'M'],
+    ] as const) {
       const ja = await e.uma('SELECT id FROM sexo WHERE sigla = ?', [s]);
       if (!ja) await dominio(e, 'sexo', `l0210-${c}`, { descricao: d, sigla: s });
     }
-    for (const [c, d] of [['2', 'Responsável legal'], ['3', 'Cônjuge'], ['5', 'Filho ou filha']] as const)
+    for (const [c, d] of [
+      ['2', 'Responsável legal'],
+      ['3', 'Cônjuge'],
+      ['5', 'Filho ou filha'],
+    ] as const)
       await dominio(e, 'grau_parentesco_dependente', c, { descricao: d, tipo_beneficiario: 'dependente' });
-    for (const [c, d] of [['1', 'Apartamento'], ['2', 'Enfermaria'], ['3', 'Ambulatório']] as const)
+    for (const [c, d] of [
+      ['1', 'Apartamento'],
+      ['2', 'Enfermaria'],
+      ['3', 'Ambulatório'],
+    ] as const)
       await dominio(e, 'tipo_acomodacao_plano', c, { descricao: d });
     for (const t of ['individual_familiar', 'coletivo_empresarial', 'coletivo_adesao'])
-      if (!(await e.uma('SELECT id FROM classificacao_plano WHERE tipo_contratacao = ? AND ativo = TRUE', [t])))
-        await dominio(e, 'classificacao_plano', `l0210-${t}`.slice(0, 30), { descricao: t, tipo_contratacao: t });
+      if (
+        !(await e.uma('SELECT id FROM classificacao_plano WHERE tipo_contratacao = ? AND ativo = TRUE', [t]))
+      )
+        await dominio(e, 'classificacao_plano', `l0210-${t}`.slice(0, 30), {
+          descricao: t,
+          tipo_contratacao: t,
+        });
     for (const t of ['urgencia_emergencia', 'parto', 'outro', 'doenca_preexistente'])
       if (!(await e.uma('SELECT id FROM grupo_prazo_carencia WHERE tipo_carencia = ? AND ativo = TRUE', [t])))
         await dominio(e, 'grupo_prazo_carencia', `l0210-${t}`.slice(0, 30), {
@@ -124,7 +161,10 @@ export async function prepararBase(nucleo: NucleoProprio): Promise<MassaBase> {
           vigencia_inicio: '2000-01-01',
         });
     if (!(await e.uma("SELECT id FROM faixa_etaria_modelo WHERE tipo = 'dez_faixas' AND ativo = TRUE"))) {
-      const modelo = await dominio(e, 'faixa_etaria_modelo', 'l0210-rn63', { descricao: 'Dez faixas', tipo: 'dez_faixas' });
+      const modelo = await dominio(e, 'faixa_etaria_modelo', 'l0210-rn63', {
+        descricao: 'Dez faixas',
+        tipo: 'dez_faixas',
+      });
       const faixas = [0, 19, 24, 29, 34, 39, 44, 49, 54, 59];
       for (const [i, de] of faixas.entries())
         await e.inserir(
@@ -193,7 +233,9 @@ const registro: PrerequisitoRecurso = {
   alteradoEm: '2026-10-24T10:00:00',
 };
 /** Fonte de configuração com a operadora e as fatias pedidas ligadas (só no teste). */
-export function fonteLigada(chaves: readonly string[] = ['operadora', 'operadora.beneficiarios']): FonteConfiguracao {
+export function fonteLigada(
+  chaves: readonly string[] = ['operadora', 'operadora.beneficiarios'],
+): FonteConfiguracao {
   return {
     chaves: async () => chaves.map(chave),
     prerequisitos: async () => [registro],
@@ -201,13 +243,23 @@ export function fonteLigada(chaves: readonly string[] = ['operadora', 'operadora
 }
 
 /** A porta própria e o serviço da F1 sobre o banco do cliente de teste. */
-export function servicoNoBanco(nucleo: NucleoProprio): { porta: PortaOperadora; servico: ServicoBeneficiariosOperadora } {
+export function servicoNoBanco(nucleo: NucleoProprio): {
+  porta: PortaOperadora;
+  servico: ServicoBeneficiariosOperadora;
+} {
   const porta = new PortaOperadoraPropria(nucleo, CLIENTE);
-  return { porta, servico: new ServicoBeneficiariosOperadora(porta, new ServicoSituacaoOperadora(fonteLigada(), null)) };
+  return {
+    porta,
+    servico: new ServicoBeneficiariosOperadora(porta, new ServicoSituacaoOperadora(fonteLigada(), null)),
+  };
 }
 
 /** Sessão mínima do serviço (o gestor da operadora no estabelecimento de teste). */
-export function sessao(m: MassaBase, permissoes: readonly string[] | 'todas' = 'todas', outro = false): SessaoCadastro {
+export function sessao(
+  m: MassaBase,
+  permissoes: readonly string[] | 'todas' = 'todas',
+  outro = false,
+): SessaoCadastro {
   const req = {
     headers: {},
     ip: '127.0.0.1',
@@ -322,20 +374,32 @@ export async function limparMassa(nucleo: NucleoProprio, m: MassaBase): Promise<
     const ests = [m.est, m.outroEst];
     const em = '(?, ?)';
     // Rede credenciada.
-    await e.executar(`DELETE m FROM movimento_rede_ans m JOIN prestador_rede p ON p.id = m.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`, ests);
-    await e.executar(`DELETE h FROM prestador_rede_historico h JOIN prestador_rede p ON p.id = h.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`, ests);
+    await e.executar(
+      `DELETE m FROM movimento_rede_ans m JOIN prestador_rede p ON p.id = m.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`,
+      ests,
+    );
+    await e.executar(
+      `DELETE h FROM prestador_rede_historico h JOIN prestador_rede p ON p.id = h.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`,
+      ests,
+    );
     await e.executar(`DELETE FROM contrato_rede_prestador WHERE estabelecimento_id IN ${em}`, ests);
     await e.executar(`DELETE FROM prestador_rede WHERE estabelecimento_id IN ${em}`, ests);
     // Beneficiários e contratos.
     const benef = `SELECT b.id FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id WHERE cp.estabelecimento_id IN ${em}`;
-    await e.executar(`DELETE FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN (${benef})`, ests);
+    await e.executar(
+      `DELETE FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN (${benef})`,
+      ests,
+    );
     await e.executar(`DELETE FROM cartao_beneficiario WHERE beneficiario_plano_id IN (${benef})`, ests);
     await e.executar(
       `UPDATE beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id SET b.titular_beneficiario_plano_id = NULL,
           b.tipo = 'titular', b.grau_parentesco_dependente_id = NULL WHERE cp.estabelecimento_id IN ${em}`,
       ests,
     );
-    await e.executar(`DELETE b FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id WHERE cp.estabelecimento_id IN ${em}`, ests);
+    await e.executar(
+      `DELETE b FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id WHERE cp.estabelecimento_id IN ${em}`,
+      ests,
+    );
     const ctrs = await e.consultar<{ contratante_plano_id: unknown }>(
       `SELECT DISTINCT contratante_plano_id FROM contrato_plano WHERE estabelecimento_id IN ${em}`,
       ests,
@@ -363,7 +427,10 @@ export async function limparMassa(nucleo: NucleoProprio, m: MassaBase): Promise<
       { teto: 1_000 },
     );
     for (const o of opes) {
-      await e.executar('DELETE f FROM tabela_preco_plano_faixa f JOIN tabela_preco_plano t ON t.id = f.tabela_preco_plano_id WHERE t.operadora_saude_id = ?', [o['id']]);
+      await e.executar(
+        'DELETE f FROM tabela_preco_plano_faixa f JOIN tabela_preco_plano t ON t.id = f.tabela_preco_plano_id WHERE t.operadora_saude_id = ?',
+        [o['id']],
+      );
       await e.executar('DELETE FROM tabela_preco_plano WHERE operadora_saude_id = ?', [o['id']]);
       await e.executar('DELETE FROM operadora_saude_historico WHERE operadora_saude_id = ?', [o['id']]);
       await e.executar('DELETE FROM operadora_saude_estabelecimento WHERE operadora_saude_id = ?', [o['id']]);

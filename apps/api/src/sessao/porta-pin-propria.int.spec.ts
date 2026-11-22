@@ -20,7 +20,8 @@ const MARCA = '[teste 03-02]';
 const HOSPITAL = 'f22l0302p';
 const LOGIN = 'f22.l0302.pin';
 const ADMIN = 'f22.l0302.admin';
-const RESUMO = (k: number) => `$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNpbnRldGljbw$${String(k).padStart(43, 'A')}`;
+const RESUMO = (k: number) =>
+  `$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNpbnRldGljbw$${String(k).padStart(43, 'A')}`;
 
 const sql = (entrada: string, ...args: string[]) =>
   execFileSync(resolve(RAIZ, 'tools/db/sql.sh'), [BANCO, ...args], { input: entrada, encoding: 'utf8' });
@@ -57,7 +58,9 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
         'DELETE FROM pin_troca_rapida WHERE estabelecimento_id IN (SELECT id FROM estabelecimento WHERE codigo = ?)',
         [HOSPITAL],
       );
-      await e.executar("DELETE FROM idempotencia_operacao WHERE operacao LIKE 'acesso.pin.%' AND chave LIKE 'pin:%'");
+      await e.executar(
+        "DELETE FROM idempotencia_operacao WHERE operacao LIKE 'acesso.pin.%' AND chave LIKE 'pin:%'",
+      );
     });
   }
 
@@ -113,7 +116,10 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
   });
 
   const propria = () =>
-    new PortaPinPropria(nucleo, (_rede, h) => ({ cliente: CLIENTE, estabelecimento: h === HOSPITAL ? ids.est : null }));
+    new PortaPinPropria(nucleo, (_rede, h) => ({
+      cliente: CLIENTE,
+      estabelecimento: h === HOSPITAL ? ids.est : null,
+    }));
   const fabricas: [string, () => PortaPin][] = [
     ['memória', () => portaPinMemoria()],
     ['banco', propria],
@@ -131,9 +137,9 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
       if (nome === 'banco') await limpar();
       const porta = fabrica();
       expect(await porta.situacao('f22', HOSPITAL, LOGIN)).toMatchObject({ definido: false, falhas: 0 });
-      expect(await codigoDaRecusa(porta.definir('f22', HOSPITAL, { ...novo(1), hashPhc: 'claro' }, trilha('pin')))).toBe(
-        'pin-sem-cifra',
-      );
+      expect(
+        await codigoDaRecusa(porta.definir('f22', HOSPITAL, { ...novo(1), hashPhc: 'claro' }, trilha('pin'))),
+      ).toBe('pin-sem-cifra');
       expect((await porta.definir('f22', HOSPITAL, novo(1), trilha('pin.definir'))).anterior).toBe('nenhum');
       const segundo = await porta.definir('f22', HOSPITAL, novo(2), trilha('pin.definir'));
       expect(segundo.anterior).toBe('definido');
@@ -144,20 +150,36 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
         bloqueado: false,
       });
       const conf = (certo: boolean) =>
-        porta.conferencia('f22', HOSPITAL, { id: segundo.id, login: LOGIN, certo, teto: 3 }, trilha('pin.conferencia'));
+        porta.conferencia(
+          'f22',
+          HOSPITAL,
+          { id: segundo.id, login: LOGIN, certo, teto: 3 },
+          trilha('pin.conferencia'),
+        );
       expect(await conf(false)).toEqual({ aceito: false, falhas: 1, bloqueouAgora: false });
       expect(await conf(true)).toEqual({ aceito: true, falhas: 0, bloqueouAgora: false });
       expect(await conf(false)).toEqual({ aceito: false, falhas: 1, bloqueouAgora: false });
       expect(await conf(false)).toEqual({ aceito: false, falhas: 2, bloqueouAgora: false });
       expect(await conf(false)).toEqual({ aceito: false, falhas: 3, bloqueouAgora: true });
       expect(await conf(true)).toEqual({ aceito: false, falhas: null, bloqueouAgora: false });
-      expect(await porta.situacao('f22', HOSPITAL, LOGIN)).toMatchObject({ definido: true, bloqueado: true, falhas: 3 });
+      expect(await porta.situacao('f22', HOSPITAL, LOGIN)).toMatchObject({
+        definido: true,
+        bloqueado: true,
+        falhas: 3,
+      });
       expect(
-        await porta.retirar('f22', HOSPITAL, { login: LOGIN, por: ADMIN, motivo: 'teste' }, trilha('pin.retirar')),
+        await porta.retirar(
+          'f22',
+          HOSPITAL,
+          { login: LOGIN, por: ADMIN, motivo: 'teste' },
+          trilha('pin.retirar'),
+        ),
       ).toEqual({ id: segundo.id, anterior: 'bloqueado' });
       expect(await porta.vivo('f22', HOSPITAL, LOGIN)).toBeNull();
       expect(
-        await codigoDaRecusa(porta.retirar('f22', HOSPITAL, { login: LOGIN, por: ADMIN, motivo: 'x' }, trilha('pin'))),
+        await codigoDaRecusa(
+          porta.retirar('f22', HOSPITAL, { login: LOGIN, por: ADMIN, motivo: 'x' }, trilha('pin')),
+        ),
       ).toBe('sem-pin');
     });
   });
@@ -167,7 +189,12 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
     const porta = propria();
     const a = await porta.definir('f22', HOSPITAL, novo(1, 'troca'), trilha('pin.definir'));
     const b = await porta.definir('f22', HOSPITAL, novo(2, 'troca'), trilha('pin.definir'));
-    await porta.conferencia('f22', HOSPITAL, { id: b.id, login: LOGIN, certo: false, teto: 5 }, trilha('pin.conferencia'));
+    await porta.conferencia(
+      'f22',
+      HOSPITAL,
+      { id: b.id, login: LOGIN, certo: false, teto: 5 },
+      trilha('pin.conferencia'),
+    );
     const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0302-pin-efeito' }, (l) =>
       l.consultar(
         `SELECT id, situacao, resumo_pin IS NOT NULL AS com_resumo, tentativas_invalidas, versao,
@@ -201,10 +228,14 @@ describe.skipIf(SEM_BANCO)('PIN da troca rápida: memória e banco (cliente f22_
     expect(Number(trilhas?.['n'])).toBeGreaterThanOrEqual(3);
     expect(await codigoDaRecusa(porta.situacao('f22', 'outro-hospital', LOGIN))).toBe('sem-estabelecimento');
     expect(
-      await codigoDaRecusa(porta.definir('f22', HOSPITAL, { ...novo(3), idUsuario: ids.admin }, trilha('pin.definir'))),
+      await codigoDaRecusa(
+        porta.definir('f22', HOSPITAL, { ...novo(3), idUsuario: ids.admin }, trilha('pin.definir')),
+      ),
     ).toBe('usuario-inexistente');
     // O PIN não é conferido por outro login.
-    expect(await porta.conferencia('f22', HOSPITAL, { id: b.id, login: ADMIN, certo: true }, trilha('pin'))).toEqual({
+    expect(
+      await porta.conferencia('f22', HOSPITAL, { id: b.id, login: ADMIN, certo: true }, trilha('pin')),
+    ).toEqual({
       aceito: false,
       falhas: null,
       bloqueouAgora: false,

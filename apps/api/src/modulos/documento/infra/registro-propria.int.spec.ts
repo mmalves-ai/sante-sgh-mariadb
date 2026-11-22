@@ -67,14 +67,19 @@ async function bateria(r: RegistroEmissoes): Promise<void> {
   expect(await r.porQr(o.identificadorQr)).toBeNull();
   expect(await r.doOriginal(o.id)).toHaveLength(1);
   expect((await r.confirmar(o.id, 'v1')).versaoS3).toBe('v1');
-  expect(await r.porQr(o.identificadorQr)).toMatchObject({ id: o.id, versaoS3: 'v1', via: 1, autor: 'l0206.teste' });
+  expect(await r.porQr(o.identificadorQr)).toMatchObject({
+    id: o.id,
+    versaoS3: 'v1',
+    via: 1,
+    autor: 'l0206.teste',
+  });
   await expect(r.confirmar(o.id, 'v2')).rejects.toBeInstanceOf(ErroEmissao);
   await expect(r.reservar({ ...o, versaoS3: 'v9' })).rejects.toThrow(/sem versão/);
   const via2 = emissao({ via: 2, idOriginal: o.id, motivoReemissao: 'Extravio' });
   await r.reservar(via2);
-  await expect(r.reservar(emissao({ via: 2, idOriginal: o.id, motivoReemissao: 'Extravio' }))).rejects.toBeInstanceOf(
-    ErroViaOcupada,
-  );
+  await expect(
+    r.reservar(emissao({ via: 2, idOriginal: o.id, motivoReemissao: 'Extravio' })),
+  ).rejects.toBeInstanceOf(ErroViaOcupada);
   await r.reservar(emissao({ via: 3, idOriginal: o.id, motivoReemissao: 'Extravio' }));
   expect((await r.doOriginal(o.id)).map((x) => x.via).sort()).toEqual([1, 2, 3]);
   await r.confirmar(via2.id, 'v2');
@@ -84,7 +89,8 @@ async function bateria(r: RegistroEmissoes): Promise<void> {
 }
 
 describe('registro das emissões em memória', () => {
-  it('memória: reserva invisível até a confirmação única; via repetida recusada', () => bateria(new RegistroEmissoesMemoria()));
+  it('memória: reserva invisível até a confirmação única; via repetida recusada', () =>
+    bateria(new RegistroEmissoesMemoria()));
 });
 
 describe.skipIf(SEM_BANCO || SEM_TABELA)('registro das emissões no banco (MariaDB, cliente f22_o2)', () => {
@@ -151,12 +157,18 @@ describe.skipIf(SEM_BANCO || SEM_TABELA)('registro das emissões no banco (Maria
     await r.reservar(o);
     const ler = (sql: string, p: unknown[]) =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-06' }, (l) => l.uma(sql, p));
-    const antes = await ler('SELECT id, situacao, versao, versao_objeto, estabelecimento_id, autor_usuario_id FROM emissao_documento WHERE codigo = ?', [o.id]);
+    const antes = await ler(
+      'SELECT id, situacao, versao, versao_objeto, estabelecimento_id, autor_usuario_id FROM emissao_documento WHERE codigo = ?',
+      [o.id],
+    );
     expect(antes).toMatchObject({ situacao: 'reservada', versao: 1, versao_objeto: null });
     expect(Number(antes!['estabelecimento_id'])).toBe(ids.est);
     expect(Number(antes!['autor_usuario_id'])).toBe(ids.usuario);
     await r.confirmar(o.id, 'v-objeto-1');
-    const depois = await ler('SELECT situacao, versao, versao_objeto FROM emissao_documento WHERE codigo = ?', [o.id]);
+    const depois = await ler(
+      'SELECT situacao, versao, versao_objeto FROM emissao_documento WHERE codigo = ?',
+      [o.id],
+    );
     expect(depois).toMatchObject({ situacao: 'emitida', versao: 2, versao_objeto: 'v-objeto-1' });
     const trilha = await ler(
       `SELECT COUNT(*) AS n, MIN(usuario_id) AS u FROM trilha_auditoria
@@ -171,15 +183,15 @@ describe.skipIf(SEM_BANCO || SEM_TABELA)('registro das emissões no banco (Maria
     expect(await outro.doOriginal(o.id)).toEqual([]);
     expect(await outro.daOrigem('sintetico', 4242)).toEqual([]);
     expect(await outro.porQr(o.identificadorQr)).toMatchObject({ id: o.id });
-    await expect(outro.reservar(emissao({ via: 2, idOriginal: o.id, motivoReemissao: 'Extravio' }))).rejects.toThrow(
-      /original/i,
-    );
-    await expect(r.reservar(emissao({ via: 2, idOriginal: randomUUID(), motivoReemissao: 'Extravio' }))).rejects.toThrow(
-      /original/i,
-    );
+    await expect(
+      outro.reservar(emissao({ via: 2, idOriginal: o.id, motivoReemissao: 'Extravio' })),
+    ).rejects.toThrow(/original/i);
+    await expect(
+      r.reservar(emissao({ via: 2, idOriginal: randomUUID(), motivoReemissao: 'Extravio' })),
+    ).rejects.toThrow(/original/i);
     // Sem estabelecimento na sessão, a emissão é recusada.
-    await expect(new RegistroEmissoesPropria(nucleo, { ...ctx, estabelecimento: null }).reservar(emissao())).rejects.toThrow(
-      /estabelecimento/i,
-    );
+    await expect(
+      new RegistroEmissoesPropria(nucleo, { ...ctx, estabelecimento: null }).reservar(emissao()),
+    ).rejects.toThrow(/estabelecimento/i);
   });
 });

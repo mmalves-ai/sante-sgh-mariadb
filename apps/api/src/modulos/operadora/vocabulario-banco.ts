@@ -96,7 +96,11 @@ export const SITUACAO_CONTRATO = new Vocabulario<string>(
   { em_cancelamento: 'suspenso' },
 );
 export const TIPO_VIGENCIA = new Vocabulario<number>({ 1: 'determinada', 2: 'indeterminada' });
-export const TIPO_COPARTICIPACAO = new Vocabulario<number>({ 1: 'nenhuma', 2: 'percentual', 3: 'valor_fixo' });
+export const TIPO_COPARTICIPACAO = new Vocabulario<number>({
+  1: 'nenhuma',
+  2: 'percentual',
+  3: 'valor_fixo',
+});
 /** Carências do produto → tipo do grupo de prazo de carência (grupo_prazo_carencia.tipo_carencia). */
 export const CARENCIAS = {
   urgencia: 'urgencia_emergencia',

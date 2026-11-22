@@ -84,7 +84,11 @@ import {
 /** O que a fonte usa do NucleoProprio (os testes trocam). */
 export interface NucleoGestao {
   lerSomente<T>(
-    contexto: { readonly cliente: string; readonly correlacao: string; readonly estabelecimento?: number | null },
+    contexto: {
+      readonly cliente: string;
+      readonly correlacao: string;
+      readonly estabelecimento?: number | null;
+    },
     fn: (l: Leitor) => Promise<T>,
   ): Promise<T>;
   criarExecutor(): Executor;
@@ -101,12 +105,14 @@ const TETO = 5_000;
 
 /** As tabelas existem, mas o adaptador próprio ainda não foi escrito: recusa explícita, nunca lista vazia. */
 export function adaptadorPendenteGestao(recurso: string): Promise<never> {
-  return Promise.reject(new ErroOperacao(
-    409,
-    'adaptador-pendente',
-    `${recurso} indisponível`,
-    `${recurso} ainda não grava no banco próprio deste servidor: nada foi lido nem gravado.`,
-  ));
+  return Promise.reject(
+    new ErroOperacao(
+      409,
+      'adaptador-pendente',
+      `${recurso} indisponível`,
+      `${recurso} ainda não grava no banco próprio deste servidor: nada foi lido nem gravado.`,
+    ),
+  );
 }
 
 /**
@@ -152,7 +158,8 @@ function usuarioDaLinha(x: Linha): UsuarioGestao {
 // As entradas das gravações de perfil (planas, datas como dia ISO): vão ao Executor, que valida e calcula o hash da
 // idempotência sobre elas.
 const DIA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const fimDepoisDoInicio = (p: { inicio: string | null; fim: string | null }) => !p.fim || !p.inicio || p.fim >= p.inicio;
+const fimDepoisDoInicio = (p: { inicio: string | null; fim: string | null }) =>
+  !p.fim || !p.inicio || p.fim >= p.inicio;
 const ESQUEMA_CONCESSAO = z
   .object({
     login: esquemaLogin,
@@ -164,7 +171,9 @@ const ESQUEMA_CONCESSAO = z
   })
   .strict()
   .refine(fimDepoisDoInicio, { path: ['fim'] });
-const ESQUEMA_REVOGACAO = z.object({ id: z.number().int().positive(), motivo: z.string().trim().min(1).max(500) }).strict();
+const ESQUEMA_REVOGACAO = z
+  .object({ id: z.number().int().positive(), motivo: z.string().trim().min(1).max(500) })
+  .strict();
 const ESQUEMA_ALTERACAO = z
   .object({
     id: z.number().int().positive(),
@@ -189,7 +198,6 @@ function estadoConcessao(x: Linha, revogada: boolean): Readonly<Record<string, u
     ...(revogada ? { revogada: true } : {}),
   };
 }
-
 
 // ── Leituras e esquemas das tabelas de gestão (política de senha, limites, dormência, conselho e RH) ─────────────
 
@@ -217,7 +225,12 @@ const ESQUEMA_LIMITE_SESSAO = z
   .object({ perfil: z.string().trim().min(1).max(60), limite: z.number().int().nullable(), motivo: MOTIVO })
   .strict();
 const ESQUEMA_EXCECAO_DORMENCIA = z
-  .object({ login: esquemaLogin, ate: z.string().max(10).nullable(), retirar: z.boolean(), motivo: z.string().max(500) })
+  .object({
+    login: esquemaLogin,
+    ate: z.string().max(10).nullable(),
+    retirar: z.boolean(),
+    motivo: z.string().max(500),
+  })
   .strict();
 const ESQUEMA_CONFERENCIA_CONSELHO = z
   .object({
@@ -311,8 +324,10 @@ function registroConselhoDaLinha(x: Linha): RegistroConselhoUsuario {
 
 /** A referência da tarefa do RH no banco: o fato que a gerou (vínculo, mudança de cargo, férias ou afastamento). */
 function referenciaRh(tipo: string, ref: string, vinculo: number): { entidade: string; id: number } | null {
-  if (tipo === 'criar-acesso') return ref === REF_CRIAR_ACESSO ? { entidade: 'vinculo_trabalho', id: vinculo } : null;
-  if (tipo === 'revisar-acesso') return /^\d{1,18}$/.test(ref) ? { entidade: 'historico_cargo', id: Number(ref) } : null;
+  if (tipo === 'criar-acesso')
+    return ref === REF_CRIAR_ACESSO ? { entidade: 'vinculo_trabalho', id: vinculo } : null;
+  if (tipo === 'revisar-acesso')
+    return /^\d{1,18}$/.test(ref) ? { entidade: 'historico_cargo', id: Number(ref) } : null;
   const m = /^(ferias|afastamento):(\d{1,18})$/.exec(ref);
   if (tipo !== 'suspender-acesso' || !m) return null;
   return { entidade: m[1] === 'ferias' ? 'programacao_ferias' : 'afastamento', id: Number(m[2]) };
@@ -361,7 +376,12 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
   // A conta criada pela tarefa 'criar-acesso' feita é o usuário do vínculo enquanto o cadastro do colaborador não a liga.
   const criadas = new Map<number, { usuario: number; login: string }>();
   for (const r of resol)
-    if (txt(r['tipo']) === 'criar_acesso' && txt(r['decisao']) === 'atendida' && r['usuario_id'] !== null && r['usuario_id'] !== undefined)
+    if (
+      txt(r['tipo']) === 'criar_acesso' &&
+      txt(r['decisao']) === 'atendida' &&
+      r['usuario_id'] !== null &&
+      r['usuario_id'] !== undefined
+    )
       criadas.set(num(r['vinculo']), { usuario: num(r['usuario_id']), login: txt(r['login']) });
   const vinculos: VinculoRhLido[] = (
     await l.consultar(
@@ -376,7 +396,10 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
       { teto: TETO * 4 },
     )
   ).map((v) => {
-    const proprio = v['usuario_id'] === null || v['usuario_id'] === undefined ? null : { usuario: num(v['usuario_id']), login: txt(v['login']) };
+    const proprio =
+      v['usuario_id'] === null || v['usuario_id'] === undefined
+        ? null
+        : { usuario: num(v['usuario_id']), login: txt(v['login']) };
     const conta = proprio ?? criadas.get(num(v['id'])) ?? null;
     return {
       id: num(v['id']),
@@ -402,7 +425,8 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
   );
   const revisado = new Map<number, number>();
   for (const r of resolucoes)
-    if (r.tipo === 'revisar-acesso') revisado.set(r.vinculo, Math.max(revisado.get(r.vinculo) ?? 0, Number(r.ref)));
+    if (r.tipo === 'revisar-acesso')
+      revisado.set(r.vinculo, Math.max(revisado.get(r.vinculo) ?? 0, Number(r.ref)));
   const mudancas: MudancaRhLida[] = [];
   for (let i = 1; i < historico.length; i++) {
     const a = historico[i - 1] as Linha;
@@ -410,9 +434,15 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
     const vinculo = num(h['vinculo_trabalho_id']);
     if (num(a['vinculo_trabalho_id']) !== vinculo || num(h['id']) <= (revisado.get(vinculo) ?? 0)) continue;
     const base = { id: num(h['id']), vinculo, vigencia: txt(h['inicio']) };
-    if (num(a['cargo_id']) !== num(h['cargo_id'])) mudancas.push({ ...base, tipo: 'cargo', antes: txt(a['cargo']), depois: txt(h['cargo']) });
+    if (num(a['cargo_id']) !== num(h['cargo_id']))
+      mudancas.push({ ...base, tipo: 'cargo', antes: txt(a['cargo']), depois: txt(h['cargo']) });
     else if (txt(a['funcao_id']) !== txt(h['funcao_id']))
-      mudancas.push({ ...base, tipo: 'funcao', antes: txtOuNull(a['funcao']), depois: txtOuNull(h['funcao']) });
+      mudancas.push({
+        ...base,
+        tipo: 'funcao',
+        antes: txtOuNull(a['funcao']),
+        depois: txtOuNull(h['funcao']),
+      });
   }
   mudancas.sort((a, b) => a.id - b.id);
   const afastamentos: AfastamentoRhLido[] = [
@@ -426,7 +456,13 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
         [est],
         { teto: TETO * 4 },
       )
-    ).map((x) => ({ vinculo: num(x['vinculo']), ref: `ferias:${num(x['id'])}`, natureza: 'ferias' as const, inicio: txt(x['inicio']), fim: txtOuNull(x['fim']) })),
+    ).map((x) => ({
+      vinculo: num(x['vinculo']),
+      ref: `ferias:${num(x['id'])}`,
+      natureza: 'ferias' as const,
+      inicio: txt(x['inicio']),
+      fim: txtOuNull(x['fim']),
+    })),
     ...(
       await l.consultar(
         `SELECT a.id, a.vinculo_trabalho_id, DATE_FORMAT(a.data_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(a.data_fim, '%Y-%m-%d') AS fim
@@ -437,7 +473,13 @@ async function lerDadosRh(l: Leitor, est: number): Promise<DadosRhLidos> {
         [est],
         { teto: TETO * 4 },
       )
-    ).map((x) => ({ vinculo: num(x['vinculo_trabalho_id']), ref: `afastamento:${num(x['id'])}`, natureza: 'afastamento' as const, inicio: txt(x['inicio']), fim: txtOuNull(x['fim']) })),
+    ).map((x) => ({
+      vinculo: num(x['vinculo_trabalho_id']),
+      ref: `afastamento:${num(x['id'])}`,
+      natureza: 'afastamento' as const,
+      inicio: txt(x['inicio']),
+      fim: txtOuNull(x['fim']),
+    })),
   ];
   const perfisCargo: PerfilCargoRhLido[] = (
     await l.consultar(
@@ -476,7 +518,9 @@ class FonteGestaoPropria implements FonteGestao {
   }
 
   private async estabelecimento(l: Leitor, hospital: string): Promise<number> {
-    const r = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [hospital]);
+    const r = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+      hospital,
+    ]);
     if (!r) throw recusa('sem-estabelecimento', 'O estabelecimento da sessão não existe neste banco.');
     return num(r['id']);
   }
@@ -504,15 +548,27 @@ class FonteGestaoPropria implements FonteGestao {
       readonly dados?: (e: E) => Readonly<Record<string, unknown>>;
     },
     hospital: string,
-    quem: { readonly usuario: string; readonly correlacao: string; readonly chave?: string; readonly reautenticadoEm?: number },
+    quem: {
+      readonly usuario: string;
+      readonly correlacao: string;
+      readonly chave?: string;
+      readonly reautenticadoEm?: number;
+    },
     entrada: unknown,
-    fn: (tx: TxOperacao, e: E, est: number, operador: number) => Promise<{ resultado: R; antes?: Readonly<Record<string, unknown>> }>,
+    fn: (
+      tx: TxOperacao,
+      e: E,
+      est: number,
+      operador: number,
+    ) => Promise<{ resultado: R; antes?: Readonly<Record<string, unknown>> }>,
   ): Promise<R> {
     const [est, operador] = await this.nucleo.lerSomente(
       { cliente: this.cliente, correlacao: 'acesso-gestao' },
       async (l) => {
         const e = await this.estabelecimento(l, hospital);
-        const u = await l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [quem.usuario]);
+        const u = await l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [
+          quem.usuario,
+        ]);
         if (!u) throw recusa('operador-desconhecido', 'O usuário da sessão não existe neste banco.');
         return [e, num(u['id'])] as const;
       },
@@ -552,7 +608,13 @@ class FonteGestaoPropria implements FonteGestao {
       [login, est],
       { teto: 1 },
     );
-    if (!u) throw new ErroOperacao(404, 'nao-encontrado', 'Conta não encontrada', 'A conta não tem vínculo vigente com este estabelecimento.');
+    if (!u)
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Conta não encontrada',
+        'A conta não tem vínculo vigente com este estabelecimento.',
+      );
     return u;
   }
 
@@ -597,7 +659,11 @@ class FonteGestaoPropria implements FonteGestao {
       );
       return ls
         .filter((x) => PAPEL_DO_CODIGO.has(txt(x['codigo'])))
-        .map((x) => ({ papel: PAPEL_DO_CODIGO.get(txt(x['codigo'])) as number, nome: txt(x['nome']), ativo: bool(x['ativo']) }))
+        .map((x) => ({
+          papel: PAPEL_DO_CODIGO.get(txt(x['codigo'])) as number,
+          nome: txt(x['nome']),
+          ativo: bool(x['ativo']),
+        }))
         .sort((a, b) => a.papel - b.papel);
     });
   }
@@ -605,7 +671,13 @@ class FonteGestaoPropria implements FonteGestao {
   papeis(_rede: string, hospital: string) {
     // Só os cinco papéis da certificação; as ações de cada papel vêm de papel_seguranca_acao (não há "opções").
     return this.ler(hospital, async (l) =>
-      (await l.consultar('SELECT codigo, nome FROM papel_seguranca WHERE ativo AND excluido_em IS NULL ORDER BY codigo', [], { teto: 100 }))
+      (
+        await l.consultar(
+          'SELECT codigo, nome FROM papel_seguranca WHERE ativo AND excluido_em IS NULL ORDER BY codigo',
+          [],
+          { teto: 100 },
+        )
+      )
         .filter((x) => PAPEL_DO_CODIGO.has(txt(x['codigo'])))
         .map((x) => {
           const papel = PAPEL_DO_CODIGO.get(txt(x['codigo'])) as number;
@@ -657,9 +729,17 @@ class FonteGestaoPropria implements FonteGestao {
       areaAprovou: c.areaAprovou,
     };
     return this.gravar(
-      { nome: 'acesso.perfil.conceder', tabelas: ['usuario_perfil'], esquema: ESQUEMA_CONCESSAO, alvo: 'usuario_perfil',
-        motivo: (e) => e.motivo, dados: (e) => ({ perfil: e.perfil, areaAprovou: e.areaAprovou, inicio: e.inicio, fim: e.fim }) },
-      hospital, t, entrada,
+      {
+        nome: 'acesso.perfil.conceder',
+        tabelas: ['usuario_perfil'],
+        esquema: ESQUEMA_CONCESSAO,
+        alvo: 'usuario_perfil',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({ perfil: e.perfil, areaAprovou: e.areaAprovou, inicio: e.inicio, fim: e.fim }),
+      },
+      hospital,
+      t,
+      entrada,
       async (tx, e, est) => {
         const u = await this.contaTravada(tx, est, e.login);
         const p = await tx.uma(
@@ -667,7 +747,11 @@ class FonteGestaoPropria implements FonteGestao {
              AND ativo AND excluido_em IS NULL ORDER BY estabelecimento_id IS NULL LIMIT 1`,
           [e.perfil, est],
         );
-        if (!p) throw recusa('perfil-inexistente', 'O perfil não está cadastrado (ou está inativo) neste estabelecimento.');
+        if (!p)
+          throw recusa(
+            'perfil-inexistente',
+            'O perfil não está cadastrado (ou está inativo) neste estabelecimento.',
+          );
         const inicio = e.inicio ?? dia(new Date());
         // As concessões do mesmo perfil, pessoa e estabelecimento, travadas: nenhuma concessão vigente sobreposta.
         const linhas = await tx.consultarParaAtualizar(
@@ -679,7 +763,10 @@ class FonteGestaoPropria implements FonteGestao {
           { teto: TETO },
         );
         if (linhas.some((x) => bool(x['sobrepoe'])))
-          throw recusa('perfil-ja-concedido', 'A pessoa já tem este perfil em vigor (ou agendado) no período: altere a concessão existente.');
+          throw recusa(
+            'perfil-ja-concedido',
+            'A pessoa já tem este perfil em vigor (ou agendado) no período: altere a concessão existente.',
+          );
         // Revogada com o mesmo início (a chave única cobre as revogadas): reabre a mesma concessão; o anterior vai à trilha.
         const revogada = linhas.find((x) => bool(x['mesmo_inicio']) && bool(x['revogada']));
         if (revogada) {
@@ -716,14 +803,27 @@ class FonteGestaoPropria implements FonteGestao {
       { teto: 1 },
     );
     if (!x)
-      throw new ErroOperacao(404, 'nao-encontrado', 'Concessão não encontrada', 'A concessão não existe neste estabelecimento ou já foi revogada.');
+      throw new ErroOperacao(
+        404,
+        'nao-encontrado',
+        'Concessão não encontrada',
+        'A concessão não existe neste estabelecimento ou já foi revogada.',
+      );
     return x;
   }
 
   revogarPerfil(_rede: string, hospital: string, id: string, _por: string, t: TrilhaGestao, motivo: string) {
     return this.gravar(
-      { nome: 'acesso.perfil.revogar', tabelas: ['usuario_perfil'], esquema: ESQUEMA_REVOGACAO, alvo: 'usuario_perfil', motivo: (e) => e.motivo },
-      hospital, t, { id: Number(id), motivo },
+      {
+        nome: 'acesso.perfil.revogar',
+        tabelas: ['usuario_perfil'],
+        esquema: ESQUEMA_REVOGACAO,
+        alvo: 'usuario_perfil',
+        motivo: (e) => e.motivo,
+      },
+      hospital,
+      t,
+      { id: Number(id), motivo },
       async (tx, e, est, operador) => {
         const x = await this.concessaoTravada(tx, est, e.id);
         const inicio = data(x['vigencia_inicio']) as Date;
@@ -734,12 +834,20 @@ class FonteGestaoPropria implements FonteGestao {
           excluido_por: operador,
           revogado_motivo: e.motivo.slice(0, 500),
         });
-        return { resultado: { id: num(x['id']), login: txt(x['login']), perfil: txt(x['codigo']) }, antes: estadoConcessao(x, false) };
+        return {
+          resultado: { id: num(x['id']), login: txt(x['login']), perfil: txt(x['codigo']) },
+          antes: estadoConcessao(x, false),
+        };
       },
     ).then((r) => ({ login: r.login, perfil: r.perfil }));
   }
 
-  alterarPerfil(_rede: string, hospital: string, a: Parameters<FonteGestao['alterarPerfil']>[2], t: TrilhaGestao) {
+  alterarPerfil(
+    _rede: string,
+    hospital: string,
+    a: Parameters<FonteGestao['alterarPerfil']>[2],
+    t: TrilhaGestao,
+  ) {
     const entrada = {
       id: Number(a.id),
       inicio: dia(a.inicio),
@@ -750,12 +858,21 @@ class FonteGestaoPropria implements FonteGestao {
       ...(a.versao !== undefined ? { versao: a.versao } : {}),
     };
     return this.gravar(
-      { nome: 'acesso.perfil.alterar', tabelas: ['usuario_perfil', 'usuario_perfil_alteracao'], esquema: ESQUEMA_ALTERACAO, alvo: 'usuario_perfil',
-        motivo: (e) => e.justificativa, dados: (e) => ({ depois: { inicio: e.inicio, fim: e.fim, motivo: e.motivo } }) },
-      hospital, t, entrada,
+      {
+        nome: 'acesso.perfil.alterar',
+        tabelas: ['usuario_perfil', 'usuario_perfil_alteracao'],
+        esquema: ESQUEMA_ALTERACAO,
+        alvo: 'usuario_perfil',
+        motivo: (e) => e.justificativa,
+        dados: (e) => ({ depois: { inicio: e.inicio, fim: e.fim, motivo: e.motivo } }),
+      },
+      hospital,
+      t,
+      entrada,
       async (tx, e, est) => {
         const x = await this.concessaoTravada(tx, est, e.id);
-        if (txt(x['login']) === e.por) throw recusa('a-si-mesmo', 'Ninguém altera o próprio perfil (segregação de funções).');
+        if (txt(x['login']) === e.por)
+          throw recusa('a-si-mesmo', 'Ninguém altera o próprio perfil (segregação de funções).');
         // A versão que a tela leu (quando informada): outra, 409 conflito-versao e nada gravado.
         if (e.versao !== undefined && num(x['versao']) !== e.versao) throw erroConflitoVersao(['versao']);
         const versao = await tx.alterar('usuario_perfil', num(x['id']), num(x['versao']), {
@@ -775,7 +892,12 @@ class FonteGestaoPropria implements FonteGestao {
           justificativa: e.justificativa.slice(0, 500),
         });
         return {
-          resultado: { id: num(x['id']), login: txt(x['login']), perfil: txt(x['codigo']), alteracao: `${num(x['id'])}.${versao}` },
+          resultado: {
+            id: num(x['id']),
+            login: txt(x['login']),
+            perfil: txt(x['codigo']),
+            alteracao: `${num(x['id'])}.${versao}`,
+          },
           antes: estadoConcessao(x, false),
         };
       },
@@ -801,7 +923,9 @@ class FonteGestaoPropria implements FonteGestao {
           login: txt(x['login']),
           grupo: null,
           papelGestor: num(x['papel_gestor']) > 0,
-          concessoes: txt(x['concessoes']).split(',').filter((s) => s !== ''),
+          concessoes: txt(x['concessoes'])
+            .split(',')
+            .filter((s) => s !== ''),
         }))
         .filter((g) => g.papelGestor || g.concessoes.length > 0);
     });
@@ -849,7 +973,9 @@ class FonteGestaoPropria implements FonteGestao {
         ativo: true,
         bloqueado: false,
         setores: [],
-        perfis: txt(x['perfis']).split(',').filter((s) => s !== ''),
+        perfis: txt(x['perfis'])
+          .split(',')
+          .filter((s) => s !== ''),
       })),
     );
   }
@@ -865,80 +991,120 @@ class FonteGestaoPropria implements FonteGestao {
   async executar(nome: string, hospital: string, entrada: unknown, c: ContextoGestao): Promise<void> {
     if (!ehOperacaoConta(nome)) semGrupos();
     const op = nome as OperacaoConta;
-    const quem = { usuario: c.usuario, correlacao: c.correlacao, chave: c.chaveIdempotencia, ...(c.reautenticadoEm !== undefined ? { reautenticadoEm: c.reautenticadoEm } : {}) };
+    const quem = {
+      usuario: c.usuario,
+      correlacao: c.correlacao,
+      chave: c.chaveIdempotencia,
+      ...(c.reautenticadoEm !== undefined ? { reautenticadoEm: c.reautenticadoEm } : {}),
+    };
     // A entrada real (login, papel) vai ao Executor: esquema do contrato e hash da idempotência.
     const esquema = OPERACOES_CONTA[op] as unknown as ZodType<{ login: string; papel?: number }>;
     if (op === 'acesso.bloquearUsuario') {
-      await this.gravar({ nome: 'acesso.conta.bloquear', tabelas: ['usuario', 'usuario_situacao_historico'], esquema, alvo: 'usuario' }, hospital, quem, entrada, async (tx, e, est, operador) => {
-        const u = await this.contaTravada(tx, est, e.login);
-        const antes = txt(u['situacao']);
-        if (antes === 'bloqueado') throw recusa('ja-bloqueado', 'A conta já está bloqueada.');
-        if (antes === 'inativo') throw recusa('conta-inativa', 'A conta está desativada.');
-        const agora = new Date();
-        await tx.alterar('usuario', num(u['id']), num(u['versao']), { situacao: 'bloqueado', bloqueado_em: agora });
-        await tx.incluir('usuario_situacao_historico', {
-          usuario_id: num(u['id']),
-          operacao: 'alteracao',
-          situacao_anterior: antes,
-          situacao_nova: 'bloqueado',
-          evento: 'bloqueio',
-          ocorrido_em: agora,
-          responsavel_usuario_id: operador,
-        });
-        return { resultado: { id: num(u['id']) }, antes: { situacao: antes, versao: num(u['versao']) } };
-      });
+      await this.gravar(
+        {
+          nome: 'acesso.conta.bloquear',
+          tabelas: ['usuario', 'usuario_situacao_historico'],
+          esquema,
+          alvo: 'usuario',
+        },
+        hospital,
+        quem,
+        entrada,
+        async (tx, e, est, operador) => {
+          const u = await this.contaTravada(tx, est, e.login);
+          const antes = txt(u['situacao']);
+          if (antes === 'bloqueado') throw recusa('ja-bloqueado', 'A conta já está bloqueada.');
+          if (antes === 'inativo') throw recusa('conta-inativa', 'A conta está desativada.');
+          const agora = new Date();
+          await tx.alterar('usuario', num(u['id']), num(u['versao']), {
+            situacao: 'bloqueado',
+            bloqueado_em: agora,
+          });
+          await tx.incluir('usuario_situacao_historico', {
+            usuario_id: num(u['id']),
+            operacao: 'alteracao',
+            situacao_anterior: antes,
+            situacao_nova: 'bloqueado',
+            evento: 'bloqueio',
+            ocorrido_em: agora,
+            responsavel_usuario_id: operador,
+          });
+          return { resultado: { id: num(u['id']) }, antes: { situacao: antes, versao: num(u['versao']) } };
+        },
+      );
       return;
     }
-    const acao = op === 'acesso.concederPapelUsuario' ? 'conceder' : op === 'acesso.revogarPapelUsuario' ? 'revogar' : 'reativar';
-    await this.gravar({ nome: `acesso.papel.${acao}`, tabelas: ['usuario_papel_seguranca'], esquema, alvo: 'usuario_papel_seguranca', dados: (e) => ({ papel: e.papel ?? null }) }, hospital, quem, entrada, async (tx, e, est, operador) => {
-      const codigo = CODIGOS_PAPEL[e.papel ?? -1];
-      if (!codigo) throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Papel desconhecido.');
-      const u = await this.contaTravada(tx, est, e.login);
-      const papel = await tx.uma('SELECT id FROM papel_seguranca WHERE codigo = ? AND ativo AND excluido_em IS NULL', [codigo]);
-      if (!papel) throw recusa('papel-inexistente', 'O papel não está cadastrado neste banco.');
-      const linhas = await tx.consultarParaAtualizar(
-        `SELECT ups.id, ups.versao, ups.vigencia_inicio, ups.vigencia_fim, ups.excluido_em,
+    const acao =
+      op === 'acesso.concederPapelUsuario'
+        ? 'conceder'
+        : op === 'acesso.revogarPapelUsuario'
+          ? 'revogar'
+          : 'reativar';
+    await this.gravar(
+      {
+        nome: `acesso.papel.${acao}`,
+        tabelas: ['usuario_papel_seguranca'],
+        esquema,
+        alvo: 'usuario_papel_seguranca',
+        dados: (e) => ({ papel: e.papel ?? null }),
+      },
+      hospital,
+      quem,
+      entrada,
+      async (tx, e, est, operador) => {
+        const codigo = CODIGOS_PAPEL[e.papel ?? -1];
+        if (!codigo)
+          throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Papel desconhecido.');
+        const u = await this.contaTravada(tx, est, e.login);
+        const papel = await tx.uma(
+          'SELECT id FROM papel_seguranca WHERE codigo = ? AND ativo AND excluido_em IS NULL',
+          [codigo],
+        );
+        if (!papel) throw recusa('papel-inexistente', 'O papel não está cadastrado neste banco.');
+        const linhas = await tx.consultarParaAtualizar(
+          `SELECT ups.id, ups.versao, ups.vigencia_inicio, ups.vigencia_fim, ups.excluido_em,
                 (${PAPEL_VIGENTE}) AS vigente, (ups.vigencia_inicio = CURDATE()) AS de_hoje
            FROM usuario_papel_seguranca ups WHERE ups.usuario_id = ? AND ups.papel_seguranca_id = ? ORDER BY ups.id DESC`,
-        [num(u['id']), num(papel['id'])],
-        { teto: 100 },
-      );
-      const estado = (x: Linha) => ({
-        vigenciaInicio: dia(data(x['vigencia_inicio']) as Date),
-        vigenciaFim: data(x['vigencia_fim']) ? dia(data(x['vigencia_fim']) as Date) : null,
-        retirado: x['excluido_em'] !== null && x['excluido_em'] !== undefined,
-        versao: num(x['versao']),
-      });
-      const vigente = linhas.find((x) => bool(x['vigente']));
-      if (op === 'acesso.revogarPapelUsuario') {
-        if (!vigente) throw recusa('papel-nao-concedido', 'A conta não tem este papel em vigor.');
-        const inicio = data(vigente['vigencia_inicio']) as Date;
-        await tx.alterar('usuario_papel_seguranca', num(vigente['id']), num(vigente['versao']), {
-          vigencia_fim: dia(new Date(Math.max(Date.now(), inicio.getTime()))),
-          excluido_em: new Date(),
-          excluido_por: operador,
+          [num(u['id']), num(papel['id'])],
+          { teto: 100 },
+        );
+        const estado = (x: Linha) => ({
+          vigenciaInicio: dia(data(x['vigencia_inicio']) as Date),
+          vigenciaFim: data(x['vigencia_fim']) ? dia(data(x['vigencia_fim']) as Date) : null,
+          retirado: x['excluido_em'] !== null && x['excluido_em'] !== undefined,
+          versao: num(x['versao']),
         });
-        return { resultado: { id: num(vigente['id']) }, antes: estado(vigente) };
-      }
-      if (vigente) throw recusa('papel-ja-concedido', 'A conta já tem este papel em vigor.');
-      if (op === 'acesso.reativarPapelUsuario' && linhas.length === 0)
-        throw recusa('papel-nao-concedido', 'A conta nunca teve este papel: conceda-o.');
-      const deHoje = linhas.find((x) => bool(x['de_hoje']));
-      if (deHoje) {
-        await tx.alterar('usuario_papel_seguranca', num(deHoje['id']), num(deHoje['versao']), {
-          vigencia_fim: null,
-          excluido_em: null,
-          excluido_por: null,
+        const vigente = linhas.find((x) => bool(x['vigente']));
+        if (op === 'acesso.revogarPapelUsuario') {
+          if (!vigente) throw recusa('papel-nao-concedido', 'A conta não tem este papel em vigor.');
+          const inicio = data(vigente['vigencia_inicio']) as Date;
+          await tx.alterar('usuario_papel_seguranca', num(vigente['id']), num(vigente['versao']), {
+            vigencia_fim: dia(new Date(Math.max(Date.now(), inicio.getTime()))),
+            excluido_em: new Date(),
+            excluido_por: operador,
+          });
+          return { resultado: { id: num(vigente['id']) }, antes: estado(vigente) };
+        }
+        if (vigente) throw recusa('papel-ja-concedido', 'A conta já tem este papel em vigor.');
+        if (op === 'acesso.reativarPapelUsuario' && linhas.length === 0)
+          throw recusa('papel-nao-concedido', 'A conta nunca teve este papel: conceda-o.');
+        const deHoje = linhas.find((x) => bool(x['de_hoje']));
+        if (deHoje) {
+          await tx.alterar('usuario_papel_seguranca', num(deHoje['id']), num(deHoje['versao']), {
+            vigencia_fim: null,
+            excluido_em: null,
+            excluido_por: null,
+          });
+          return { resultado: { id: num(deHoje['id']) }, antes: estado(deHoje) };
+        }
+        const id = await tx.incluir('usuario_papel_seguranca', {
+          usuario_id: num(u['id']),
+          papel_seguranca_id: num(papel['id']),
+          vigencia_inicio: dia(new Date()),
         });
-        return { resultado: { id: num(deHoje['id']) }, antes: estado(deHoje) };
-      }
-      const id = await tx.incluir('usuario_papel_seguranca', {
-        usuario_id: num(u['id']),
-        papel_seguranca_id: num(papel['id']),
-        vigencia_inicio: dia(new Date()),
-      });
-      return { resultado: { id } };
-    });
+        return { resultado: { id } };
+      },
+    );
   }
 
   // ── Sem grupos no modelo próprio ────────────────────────────────────────────────────────────
@@ -997,9 +1163,13 @@ class FonteGestaoPropria implements FonteGestao {
 
   versoesPoliticaSenha(_rede: string, hospital: string): Promise<VersaoPoliticaSenhaLida[]> {
     return this.ler(hospital, async (l, est) =>
-      (await l.consultar(`${SQL_POLITICA_SENHA} WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL ORDER BY v.numero_versao DESC`, [est], { teto: TETO })).map(
-        politicaSenhaDaLinha,
-      ),
+      (
+        await l.consultar(
+          `${SQL_POLITICA_SENHA} WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL ORDER BY v.numero_versao DESC`,
+          [est],
+          { teto: TETO },
+        )
+      ).map(politicaSenhaDaLinha),
     );
   }
 
@@ -1019,13 +1189,22 @@ class FonteGestaoPropria implements FonteGestao {
       motivo: p.motivo,
     };
     return this.gravar(
-      { nome: 'acesso.politica-senha.publicar', tabelas: ['politica_senha_versao'], esquema: ESQUEMA_POLITICA_SENHA, alvo: 'politica_senha_versao',
-        motivo: (e) => e.motivo, dados: (e) => ({ vigenteDesde: e.vigenteDesde, proibidas: e.senhasProibidas.length }) },
-      hospital, t, entrada,
+      {
+        nome: 'acesso.politica-senha.publicar',
+        tabelas: ['politica_senha_versao'],
+        esquema: ESQUEMA_POLITICA_SENHA,
+        alvo: 'politica_senha_versao',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({ vigenteDesde: e.vigenteDesde, proibidas: e.senhasProibidas.length }),
+      },
+      hospital,
+      t,
+      entrada,
       async (tx, e, est) => {
         if (!SESSAO_APLICA_POLITICA_VERSIONADA) aplicacaoPendente('A nova versão da política de senha');
         const desde = new Date(e.vigenteDesde);
-        if (desde.getTime() < agora.getTime() - 60_000) throw recusa('vigencia-no-passado', 'A vigência começa agora ou no futuro.');
+        if (desde.getTime() < agora.getTime() - 60_000)
+          throw recusa('vigencia-no-passado', 'A vigência começa agora ou no futuro.');
         const versoes = await tx.consultarParaAtualizar(
           `${SQL_POLITICA_SENHA} WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL ORDER BY v.numero_versao DESC`,
           [est],
@@ -1034,10 +1213,14 @@ class FonteGestaoPropria implements FonteGestao {
         const ultimaLinha = versoes.find((x) => txt(x['situacao']) === 'publicada');
         const ultima = ultimaLinha ? politicaSenhaDaLinha(ultimaLinha) : null;
         if (ultima?.vigenteDesde && desde.getTime() < ultima.vigenteDesde.getTime())
-          throw recusa('vigencia-anterior', `A vigência não pode ser anterior à da versão ${ultima.versao}; cancele a versão agendada antes.`);
+          throw recusa(
+            'vigencia-anterior',
+            `A vigência não pode ser anterior à da versão ${ultima.versao}; cancele a versão agendada antes.`,
+          );
         // A diferença lê só as regras (campos da política e lista proibida); vigência e motivo não entram na comparação.
         const diferenca = diferencaPoliticaSenha(ultima, e);
-        if (ultima && diferenca.length === 0) throw recusa('sem-mudanca', 'As regras informadas são iguais às da última versão publicada.');
+        if (ultima && diferenca.length === 0)
+          throw recusa('sem-mudanca', 'As regras informadas são iguais às da última versão publicada.');
         const versao = Math.max(0, ...versoes.map((x) => num(x['numero_versao']))) + 1;
         const id = await tx.incluir('politica_senha_versao', {
           estabelecimento_id: est,
@@ -1058,15 +1241,36 @@ class FonteGestaoPropria implements FonteGestao {
           motivo: e.motivo.slice(0, 500),
           situacao: 'publicada',
         });
-        return { resultado: { id, versao, anterior: ultima?.versao ?? null, diferenca: diferenca.join('\n') } };
+        return {
+          resultado: { id, versao, anterior: ultima?.versao ?? null, diferenca: diferenca.join('\n') },
+        };
       },
-    ).then((r) => ({ id: String(r.id), versao: r.versao, anterior: r.anterior, diferenca: r.diferenca ? r.diferenca.split('\n') : [] }));
+    ).then((r) => ({
+      id: String(r.id),
+      versao: r.versao,
+      anterior: r.anterior,
+      diferenca: r.diferenca ? r.diferenca.split('\n') : [],
+    }));
   }
 
-  cancelarPoliticaSenha(_rede: string, hospital: string, c: { versao: number; motivo: string; por: string }, agora: Date, t: TrilhaGestao) {
+  cancelarPoliticaSenha(
+    _rede: string,
+    hospital: string,
+    c: { versao: number; motivo: string; por: string },
+    agora: Date,
+    t: TrilhaGestao,
+  ) {
     return this.gravar(
-      { nome: 'acesso.politica-senha.cancelar', tabelas: ['politica_senha_versao'], esquema: ESQUEMA_CANCELAR_POLITICA, alvo: 'politica_senha_versao', motivo: (e) => e.motivo },
-      hospital, t, { versao: c.versao, motivo: c.motivo },
+      {
+        nome: 'acesso.politica-senha.cancelar',
+        tabelas: ['politica_senha_versao'],
+        esquema: ESQUEMA_CANCELAR_POLITICA,
+        alvo: 'politica_senha_versao',
+        motivo: (e) => e.motivo,
+      },
+      hospital,
+      t,
+      { versao: c.versao, motivo: c.motivo },
       async (tx, e, est, operador) => {
         const [v] = await tx.consultarParaAtualizar(
           `SELECT id, versao, situacao, vigente_desde FROM politica_senha_versao
@@ -1075,17 +1279,24 @@ class FonteGestaoPropria implements FonteGestao {
           { teto: 1 },
         );
         if (!v) throw recusa('nao-encontrado', `A versão ${e.versao} da política não existe.`);
-        if (txt(v['situacao']) !== 'publicada') throw recusa('ja-cancelada', `A versão ${e.versao} já está cancelada.`);
+        if (txt(v['situacao']) !== 'publicada')
+          throw recusa('ja-cancelada', `A versão ${e.versao} já está cancelada.`);
         const desde = data(v['vigente_desde']);
         if (!desde || desde.getTime() <= agora.getTime())
-          throw recusa('ja-em-vigor', `A versão ${e.versao} já entrou em vigor e não se cancela: publique uma versão nova.`);
+          throw recusa(
+            'ja-em-vigor',
+            `A versão ${e.versao} já entrou em vigor e não se cancela: publique uma versão nova.`,
+          );
         await tx.alterar('politica_senha_versao', num(v['id']), num(v['versao']), {
           situacao: 'cancelada',
           cancelada_em: agora,
           cancelada_por_usuario_id: operador,
           motivo_cancelamento: e.motivo.slice(0, 500),
         });
-        return { resultado: { id: num(v['id']), versao: e.versao }, antes: { situacao: 'publicada', vigenteDesde: desde.toISOString() } };
+        return {
+          resultado: { id: num(v['id']), versao: e.versao },
+          antes: { situacao: 'publicada', vigenteDesde: desde.toISOString() },
+        };
       },
     ).then((r) => ({ id: String(r.id), versao: r.versao }));
   }
@@ -1121,12 +1332,21 @@ class FonteGestaoPropria implements FonteGestao {
 
   definirLimiteSessao(_rede: string, hospital: string, p: NovoLimiteSessao, t: TrilhaGestao) {
     return this.gravar(
-      { nome: 'acesso.limite-sessao.definir', tabelas: ['limite_sessao_perfil'], esquema: ESQUEMA_LIMITE_SESSAO, alvo: 'limite_sessao_perfil',
-        motivo: (e) => e.motivo, dados: (e) => ({ perfil: e.perfil, limite: e.limite }) },
-      hospital, t, { perfil: p.perfil, limite: p.limite, motivo: p.motivo },
+      {
+        nome: 'acesso.limite-sessao.definir',
+        tabelas: ['limite_sessao_perfil'],
+        esquema: ESQUEMA_LIMITE_SESSAO,
+        alvo: 'limite_sessao_perfil',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({ perfil: e.perfil, limite: e.limite }),
+      },
+      hospital,
+      t,
+      { perfil: p.perfil, limite: p.limite, motivo: p.motivo },
       async (tx, e, est) => {
         if (!SESSAO_APLICA_LIMITE_POR_PERFIL) aplicacaoPendente('O limite de sessões por perfil');
-        if (e.limite !== null && (e.limite < 1 || e.limite > 50)) throw recusa('limite-invalido', 'O limite vai de 1 a 50 sessões.');
+        if (e.limite !== null && (e.limite < 1 || e.limite > 50))
+          throw recusa('limite-invalido', 'O limite vai de 1 a 50 sessões.');
         const perfilId = e.perfil === TODOS_PERFIS ? null : await this.perfilId(tx, est, e.perfil);
         const [ultima] = await tx.consultarParaAtualizar(
           `SELECT id, limite FROM limite_sessao_perfil
@@ -1134,9 +1354,14 @@ class FonteGestaoPropria implements FonteGestao {
           [est, perfilId],
           { teto: 1 },
         );
-        const anterior = ultima && ultima['limite'] !== null && ultima['limite'] !== undefined ? num(ultima['limite']) : null;
-        if (e.limite === null && anterior === null) throw recusa('sem-limite', 'Este perfil não tem limite próprio para retirar.');
-        if (e.limite !== null && anterior === e.limite) throw recusa('sem-mudanca', 'O limite informado é igual ao que já vale para este perfil.');
+        const anterior =
+          ultima && ultima['limite'] !== null && ultima['limite'] !== undefined
+            ? num(ultima['limite'])
+            : null;
+        if (e.limite === null && anterior === null)
+          throw recusa('sem-limite', 'Este perfil não tem limite próprio para retirar.');
+        if (e.limite !== null && anterior === e.limite)
+          throw recusa('sem-mudanca', 'O limite informado é igual ao que já vale para este perfil.');
         const id = await tx.incluir('limite_sessao_perfil', {
           estabelecimento_id: est,
           perfil_acesso_id: perfilId,
@@ -1179,17 +1404,30 @@ class FonteGestaoPropria implements FonteGestao {
 
   registrarExcecaoDormencia(_rede: string, hospital: string, p: NovaExcecaoDormencia, t: TrilhaGestao) {
     return this.gravar(
-      { nome: 'acesso.dormencia.excecao', tabelas: ['excecao_conta_dormente'], esquema: ESQUEMA_EXCECAO_DORMENCIA, alvo: 'excecao_conta_dormente',
-        motivo: (e) => e.motivo, dados: (e) => ({ login: e.login, ate: e.retirar ? null : e.ate, retirar: e.retirar }) },
-      hospital, t, { login: p.login, ate: p.ate, retirar: p.retirar, motivo: p.motivo },
+      {
+        nome: 'acesso.dormencia.excecao',
+        tabelas: ['excecao_conta_dormente'],
+        esquema: ESQUEMA_EXCECAO_DORMENCIA,
+        alvo: 'excecao_conta_dormente',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({ login: e.login, ate: e.retirar ? null : e.ate, retirar: e.retirar }),
+      },
+      hospital,
+      t,
+      { login: p.login, ate: p.ate, retirar: p.retirar, motivo: p.motivo },
       async (tx, e, est) => {
         const motivo = e.motivo.trim();
-        if (motivo.length < 10) throw recusa('motivo-curto', 'Justifique a exceção (ao menos 10 caracteres).');
+        if (motivo.length < 10)
+          throw recusa('motivo-curto', 'Justifique a exceção (ao menos 10 caracteres).');
         // Melhor prática: toda exceção à rotina das contas dormentes tem prazo (no banco, a validade nula é a retirada).
-        if (!e.retirar && e.ate === null) throw recusa('prazo-obrigatorio', 'Informe até quando vale a exceção (AAAA-MM-DD).');
+        if (!e.retirar && e.ate === null)
+          throw recusa('prazo-obrigatorio', 'Informe até quando vale a exceção (AAAA-MM-DD).');
         if (!e.retirar && e.ate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(e.ate))
           throw recusa('prazo-invalido', 'Informe o prazo como data (AAAA-MM-DD).');
-        const u = await tx.uma(`SELECT u.id FROM usuario u WHERE u.login = ? AND u.excluido_em IS NULL AND ${VINCULO}`, [e.login, est]);
+        const u = await tx.uma(
+          `SELECT u.id FROM usuario u WHERE u.login = ? AND u.excluido_em IS NULL AND ${VINCULO}`,
+          [e.login, est],
+        );
         if (!u) throw recusa('usuario-inexistente', 'Usuário não encontrado.');
         const [ant] = await tx.consultarParaAtualizar(
           `SELECT id, DATE_FORMAT(valida_ate, '%Y-%m-%d') AS ate FROM excecao_conta_dormente
@@ -1198,8 +1436,10 @@ class FonteGestaoPropria implements FonteGestao {
           { teto: 1 },
         );
         const anterior = ant ? txtOuNull(ant['ate']) : null;
-        if (e.retirar && anterior === null) throw recusa('sem-excecao', 'Este usuário não tem exceção para retirar.');
-        if (!e.retirar && anterior === e.ate) throw recusa('sem-mudanca', 'A exceção informada é igual à que já vale para este usuário.');
+        if (e.retirar && anterior === null)
+          throw recusa('sem-excecao', 'Este usuário não tem exceção para retirar.');
+        if (!e.retirar && anterior === e.ate)
+          throw recusa('sem-mudanca', 'A exceção informada é igual à que já vale para este usuário.');
         const atual = e.retirar ? null : e.ate;
         const id = await tx.incluir('excecao_conta_dormente', {
           usuario_id: num(u['id']),
@@ -1215,7 +1455,9 @@ class FonteGestaoPropria implements FonteGestao {
   // ── Conferência do registro no conselho (conferencia_registro_conselho) ───────────────────────
 
   registrosConselho(_rede: string, hospital: string, login: string): Promise<RegistroConselhoUsuario[]> {
-    return this.ler(hospital, async (l, est) => (await l.consultar(SQL_REGISTROS_CONSELHO, [login, est], { teto: 50 })).map(registroConselhoDaLinha));
+    return this.ler(hospital, async (l, est) =>
+      (await l.consultar(SQL_REGISTROS_CONSELHO, [login, est], { teto: 50 })).map(registroConselhoDaLinha),
+    );
   }
 
   conferenciasConselho(_rede: string, hospital: string, login: string): Promise<ConferenciaConselhoLida[]> {
@@ -1245,21 +1487,51 @@ class FonteGestaoPropria implements FonteGestao {
   }
 
   registrarConferenciaConselho(_rede: string, hospital: string, p: NovaConferenciaConselho, t: TrilhaGestao) {
-    const entrada = { login: p.login, registro: p.registro, situacao: p.situacao, conferidoEm: p.conferidoEm, fonte: p.fonte, observacao: p.observacao, hoje: p.hoje };
+    const entrada = {
+      login: p.login,
+      registro: p.registro,
+      situacao: p.situacao,
+      conferidoEm: p.conferidoEm,
+      fonte: p.fonte,
+      observacao: p.observacao,
+      hoje: p.hoje,
+    };
     return this.gravar(
-      { nome: 'acesso.conselho.conferir', tabelas: ['conferencia_registro_conselho'], esquema: ESQUEMA_CONFERENCIA_CONSELHO, alvo: 'conferencia_registro_conselho',
-        dados: (e) => ({ login: e.login, registro: e.registro, situacao: e.situacao, conferidoEm: e.conferidoEm, fonte: e.fonte }) },
-      hospital, t, entrada,
+      {
+        nome: 'acesso.conselho.conferir',
+        tabelas: ['conferencia_registro_conselho'],
+        esquema: ESQUEMA_CONFERENCIA_CONSELHO,
+        alvo: 'conferencia_registro_conselho',
+        dados: (e) => ({
+          login: e.login,
+          registro: e.registro,
+          situacao: e.situacao,
+          conferidoEm: e.conferidoEm,
+          fonte: e.fonte,
+        }),
+      },
+      hospital,
+      t,
+      entrada,
       async (tx, e, est) => {
         const observacao = e.observacao.trim();
-        if (observacao.length < 10) throw recusa('observacao-curta', 'Descreva a conferência (ao menos 10 caracteres).');
-        if (!(SITUACOES_CONSELHO as readonly string[]).includes(e.situacao)) throw recusa('situacao-invalida', 'Situação no conselho fora da lista.');
-        if (!(FONTES_CONFERENCIA_CONSELHO as readonly string[]).includes(e.fonte)) throw recusa('fonte-invalida', 'Fonte da conferência fora da lista.');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(e.conferidoEm)) throw recusa('data-invalida', 'Informe o dia da consulta à fonte (AAAA-MM-DD).');
-        if (e.conferidoEm > e.hoje) throw recusa('data-futura', 'O dia da consulta à fonte não pode ser depois de hoje.');
+        if (observacao.length < 10)
+          throw recusa('observacao-curta', 'Descreva a conferência (ao menos 10 caracteres).');
+        if (!(SITUACOES_CONSELHO as readonly string[]).includes(e.situacao))
+          throw recusa('situacao-invalida', 'Situação no conselho fora da lista.');
+        if (!(FONTES_CONFERENCIA_CONSELHO as readonly string[]).includes(e.fonte))
+          throw recusa('fonte-invalida', 'Fonte da conferência fora da lista.');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(e.conferidoEm))
+          throw recusa('data-invalida', 'Informe o dia da consulta à fonte (AAAA-MM-DD).');
+        if (e.conferidoEm > e.hoje)
+          throw recusa('data-futura', 'O dia da consulta à fonte não pode ser depois de hoje.');
         const registros = await tx.consultar(SQL_REGISTROS_CONSELHO, [e.login, est], { teto: 50 });
         const reg = registros.find((x) => num(x['id']) === e.registro);
-        if (!reg) throw recusa('registro-nao-vinculado', 'Este registro de conselho não está ligado ao profissional da conta.');
+        if (!reg)
+          throw recusa(
+            'registro-nao-vinculado',
+            'Este registro de conselho não está ligado ao profissional da conta.',
+          );
         const [ant] = await tx.consultarParaAtualizar(
           `SELECT id, situacao, fonte, DATE_FORMAT(conferido_em, '%Y-%m-%d') AS conferido_dia FROM conferencia_registro_conselho
             WHERE usuario_id = ? AND estabelecimento_id = ? AND inscricao_conselho_id = ? AND excluido_em IS NULL
@@ -1269,7 +1541,10 @@ class FonteGestaoPropria implements FonteGestao {
         );
         const diaAnt = ant ? txt(ant['conferido_dia']) : null;
         if (diaAnt && diaAnt > e.conferidoEm)
-          throw recusa('conferencia-anterior', `Já há conferência mais recente deste registro (${diaAnt}): registre a consulta mais nova.`);
+          throw recusa(
+            'conferencia-anterior',
+            `Já há conferência mais recente deste registro (${diaAnt}): registre a consulta mais nova.`,
+          );
         const id = await tx.incluir('conferencia_registro_conselho', {
           usuario_id: num(reg['usuario_id']),
           estabelecimento_id: est,
@@ -1283,7 +1558,13 @@ class FonteGestaoPropria implements FonteGestao {
         return {
           resultado: {
             id,
-            anterior: ant ? rotulo(txt(ant['situacao']).replace(/_/g, '-'), diaAnt ?? '', txt(ant['fonte']).replace(/_/g, '-')) : null,
+            anterior: ant
+              ? rotulo(
+                  txt(ant['situacao']).replace(/_/g, '-'),
+                  diaAnt ?? '',
+                  txt(ant['fonte']).replace(/_/g, '-'),
+                )
+              : null,
             atual: rotulo(e.situacao, e.conferidoEm, e.fonte),
           },
         };
@@ -1299,13 +1580,25 @@ class FonteGestaoPropria implements FonteGestao {
 
   definirPerfilCargoRh(_rede: string, hospital: string, p: NovoPerfilCargoRh, t: TrilhaGestao) {
     return this.gravar(
-      { nome: 'acesso.rh.perfil-cargo', tabelas: ['perfil_cargo_rh'], esquema: ESQUEMA_PERFIL_CARGO, alvo: 'perfil_cargo_rh',
-        motivo: (e) => e.motivo, dados: (e) => ({ cargo: e.cargo, perfil: e.perfil }) },
-      hospital, t, { cargo: p.cargo, perfil: p.perfil, motivo: p.motivo },
+      {
+        nome: 'acesso.rh.perfil-cargo',
+        tabelas: ['perfil_cargo_rh'],
+        esquema: ESQUEMA_PERFIL_CARGO,
+        alvo: 'perfil_cargo_rh',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({ cargo: e.cargo, perfil: e.perfil }),
+      },
+      hospital,
+      t,
+      { cargo: p.cargo, perfil: p.perfil, motivo: p.motivo },
       async (tx, e, est) => {
-        if (!e.cargo.trim() || e.cargo.length > 60) throw recusa('cargo-invalido', 'Informe o cargo (até 60 caracteres).');
-        const cargo = (await tx.consultar('SELECT id, nome FROM cargo WHERE excluido_em IS NULL ORDER BY id', [], { teto: TETO }))
-          .find((x) => chaveCargoRh(txt(x['nome'])) === chaveCargoRh(e.cargo));
+        if (!e.cargo.trim() || e.cargo.length > 60)
+          throw recusa('cargo-invalido', 'Informe o cargo (até 60 caracteres).');
+        const cargo = (
+          await tx.consultar('SELECT id, nome FROM cargo WHERE excluido_em IS NULL ORDER BY id', [], {
+            teto: TETO,
+          })
+        ).find((x) => chaveCargoRh(txt(x['nome'])) === chaveCargoRh(e.cargo));
         if (!cargo) throw recusa('cargo-inexistente', 'O cargo não está cadastrado no RH.');
         const perfilId = e.perfil === null ? null : await this.perfilId(tx, est, e.perfil);
         const hoje = dia(new Date());
@@ -1318,16 +1611,26 @@ class FonteGestaoPropria implements FonteGestao {
           { teto: 1 },
         );
         const anterior = ultima ? txtOuNull(ultima['codigo']) : null;
-        if (e.perfil === null && anterior === null) throw recusa('sem-sugestao', 'Este cargo não tem perfil sugerido para retirar.');
-        if (e.perfil !== null && anterior === e.perfil) throw recusa('sem-mudanca', 'O perfil informado é igual ao que já se sugere para este cargo.');
+        if (e.perfil === null && anterior === null)
+          throw recusa('sem-sugestao', 'Este cargo não tem perfil sugerido para retirar.');
+        if (e.perfil !== null && anterior === e.perfil)
+          throw recusa('sem-mudanca', 'O perfil informado é igual ao que já se sugere para este cargo.');
         // Uma linha por dia de vigência: a mudança no mesmo dia altera a linha do dia (o anterior vai à trilha).
         if (ultima && bool(ultima['de_hoje'])) {
-          await tx.alterar('perfil_cargo_rh', num(ultima['id']), num(ultima['versao']), { perfil_acesso_id: perfilId, motivo: e.motivo.slice(0, 500) });
-          return { resultado: { id: num(ultima['id']), anterior, perfil: e.perfil }, antes: { perfil: anterior } };
+          await tx.alterar('perfil_cargo_rh', num(ultima['id']), num(ultima['versao']), {
+            perfil_acesso_id: perfilId,
+            motivo: e.motivo.slice(0, 500),
+          });
+          return {
+            resultado: { id: num(ultima['id']), anterior, perfil: e.perfil },
+            antes: { perfil: anterior },
+          };
         }
         if (ultima) {
           const ontem = dia(new Date(Date.now() - 86_400_000));
-          await tx.alterar('perfil_cargo_rh', num(ultima['id']), num(ultima['versao']), { vigencia_fim: ontem });
+          await tx.alterar('perfil_cargo_rh', num(ultima['id']), num(ultima['versao']), {
+            vigencia_fim: ontem,
+          });
         }
         const id = await tx.incluir('perfil_cargo_rh', {
           estabelecimento_id: est,
@@ -1341,17 +1644,53 @@ class FonteGestaoPropria implements FonteGestao {
     ).then((r) => ({ id: String(r.id), anterior: r.anterior, perfil: r.perfil }));
   }
 
-  resolverTarefaRh(_rede: string, hospital: string, p: NovaResolucaoRh, t: TrilhaGestao, validar: ValidarResolucaoRhMemoria) {
-    const entrada = { tipo: p.tipo, vinculo: p.vinculo, ref: p.ref, situacao: p.situacao, login: p.login, motivo: p.motivo };
+  resolverTarefaRh(
+    _rede: string,
+    hospital: string,
+    p: NovaResolucaoRh,
+    t: TrilhaGestao,
+    validar: ValidarResolucaoRhMemoria,
+  ) {
+    const entrada = {
+      tipo: p.tipo,
+      vinculo: p.vinculo,
+      ref: p.ref,
+      situacao: p.situacao,
+      login: p.login,
+      motivo: p.motivo,
+    };
     return this.gravar(
-      { nome: 'acesso.rh.resolver', tabelas: ['resolucao_tarefa_rh'], esquema: ESQUEMA_RESOLUCAO_RH, alvo: 'resolucao_tarefa_rh',
-        motivo: (e) => e.motivo, dados: (e) => ({ tipo: e.tipo, vinculo: e.vinculo, ref: e.ref, situacao: e.situacao, login: e.login }) },
-      hospital, t, entrada,
+      {
+        nome: 'acesso.rh.resolver',
+        tabelas: ['resolucao_tarefa_rh'],
+        esquema: ESQUEMA_RESOLUCAO_RH,
+        alvo: 'resolucao_tarefa_rh',
+        motivo: (e) => e.motivo,
+        dados: (e) => ({
+          tipo: e.tipo,
+          vinculo: e.vinculo,
+          ref: e.ref,
+          situacao: e.situacao,
+          login: e.login,
+        }),
+      },
+      hospital,
+      t,
+      entrada,
       async (tx, e, est, operador) => {
         const alvo = referenciaRh(e.tipo, e.ref, e.vinculo);
         if (!alvo) throw recusa('ref-invalida', 'A referência da tarefa não corresponde ao tipo.');
-        const v = await tx.uma('SELECT id FROM vinculo_trabalho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [e.vinculo, est]);
-        if (!v) throw new ErroOperacao(404, 'nao-encontrado', 'Vínculo não encontrado', 'O vínculo não existe neste estabelecimento.');
+        const v = await tx.uma(
+          'SELECT id FROM vinculo_trabalho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [e.vinculo, est],
+        );
+        if (!v)
+          throw new ErroOperacao(
+            404,
+            'nao-encontrado',
+            'Vínculo não encontrado',
+            'O vínculo não existe neste estabelecimento.',
+          );
         const [ja] = await tx.consultarParaAtualizar(
           `SELECT r.id, r.decisao, u.login FROM resolucao_tarefa_rh r LEFT JOIN usuario u ON u.id = r.resolvido_por_usuario_id
             WHERE r.estabelecimento_id = ? AND r.tipo = ? AND r.referencia_entidade = ? AND r.referencia_id = ?`,
@@ -1359,9 +1698,15 @@ class FonteGestaoPropria implements FonteGestao {
           { teto: 1 },
         );
         if (ja)
-          throw recusa('ja-resolvida', `Esta tarefa já foi resolvida por ${txt(ja['login'])} (${txt(ja['decisao']) === 'atendida' ? 'feita' : 'dispensada'}).`);
+          throw recusa(
+            'ja-resolvida',
+            `Esta tarefa já foi resolvida por ${txt(ja['login'])} (${txt(ja['decisao']) === 'atendida' ? 'feita' : 'dispensada'}).`,
+          );
         const problema = validar(await lerDadosRh(tx, est));
-        if (problema) throw new ErroOperacao(409, problema.codigo, 'Operação recusada', problema.mensagem, { campos: problema.campos ?? [] });
+        if (problema)
+          throw new ErroOperacao(409, problema.codigo, 'Operação recusada', problema.mensagem, {
+            campos: problema.campos ?? [],
+          });
         let usuarioId: number | null = null;
         if (e.login) {
           const u = await tx.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [e.login]);

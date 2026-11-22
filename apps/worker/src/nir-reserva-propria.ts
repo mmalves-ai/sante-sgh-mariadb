@@ -63,7 +63,10 @@ export class PortaNirPropria implements PortaNir {
   }
 
   private ler<T>(est: number | null, fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, estabelecimento: est, correlacao: 'nir-expiracao' }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, estabelecimento: est, correlacao: 'nir-expiracao' },
+      fn,
+    );
   }
 
   estabelecimentos(): Promise<AlvoEstabelecimento[]> {
@@ -82,7 +85,10 @@ export class PortaNirPropria implements PortaNir {
         )
       ).map((r) => ({
         id: n(r['id']),
-        solicitacao: r['pedido_leito_id'] === null || r['pedido_leito_id'] === undefined ? null : n(r['pedido_leito_id']),
+        solicitacao:
+          r['pedido_leito_id'] === null || r['pedido_leito_id'] === undefined
+            ? null
+            : n(r['pedido_leito_id']),
         leito: n(r['leito_hospitalar_id']),
         validaAte: iso(r['valida_ate']),
       })),
@@ -102,11 +108,17 @@ export class PortaNirPropria implements PortaNir {
           { teto: 1 },
         );
         if (!r) throw recusa('reserva-inexistente', 'A reserva de leito não existe.');
-        const daqui = await tx.uma('SELECT id FROM reserva_leito WHERE id = ? AND estabelecimento_id = ?', [e.reserva, e.estabelecimento]);
-        if (!daqui) throw recusa('reserva-outro-estabelecimento', 'A reserva de leito é de outro estabelecimento.');
+        const daqui = await tx.uma('SELECT id FROM reserva_leito WHERE id = ? AND estabelecimento_id = ?', [
+          e.reserva,
+          e.estabelecimento,
+        ]);
+        if (!daqui)
+          throw recusa('reserva-outro-estabelecimento', 'A reserva de leito é de outro estabelecimento.');
         const vigente = ['ativa', 'confirmada'].includes(String(r['situacao']));
-        const validaAte = r['valida_ate'] instanceof Date ? r['valida_ate'] : new Date(String(r['valida_ate']));
-        if (!vigente || validaAte.getTime() >= instante.getTime()) return { expirou: false, voltouAnalise: false };
+        const validaAte =
+          r['valida_ate'] instanceof Date ? r['valida_ate'] : new Date(String(r['valida_ate']));
+        if (!vigente || validaAte.getTime() >= instante.getTime())
+          return { expirou: false, voltouAnalise: false };
         await tx.alterar('reserva_leito', e.reserva, n(r['versao']), {
           situacao: 'expirada',
           encerrada_em: instante,
@@ -127,7 +139,11 @@ export class PortaNirPropria implements PortaNir {
           "SELECT id FROM situacao_pedido_leito WHERE estado = 'em_analise' AND ativo = TRUE ORDER BY ordem_exibicao, id LIMIT 1",
           [],
         );
-        if (!s) throw recusa('situacao-ausente', 'O cadastro não tem a situação de pedido de leito "em análise" ativa.');
+        if (!s)
+          throw recusa(
+            'situacao-ausente',
+            'O cadastro não tem a situação de pedido de leito "em análise" ativa.',
+          );
         await tx.alterar('pedido_leito', n(p['id']), n(p['versao']), {
           situacao_pedido_leito_id: n(s['id']),
           ...(n(p['reserva_leito_id']) === e.reserva ? { reserva_leito_id: null } : {}),

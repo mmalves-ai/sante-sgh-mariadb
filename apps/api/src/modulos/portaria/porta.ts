@@ -36,9 +36,7 @@ export type ContextoPortaria = ContextoPortaM18 & { readonly chavePedido?: strin
 
 /** Gravações diretas da porta, numa transação com a trilha junto. */
 export interface GravadorPortaria {
-  registrarVisitante(
-    v: NovoVisitante,
-  ): Promise<{ id: number; novo: boolean; fotoAnterior: string | null }>;
+  registrarVisitante(v: NovoVisitante): Promise<{ id: number; novo: boolean; fotoAnterior: string | null }>;
   expurgarVisitantes(x: {
     readonly hoje: string;
     readonly usuario: string;

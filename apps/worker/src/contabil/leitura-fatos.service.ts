@@ -99,7 +99,10 @@ export async function cicloDoCliente(
       r.push({ cliente, estabelecimento: est.codigo, pendentes: contagem.pendente, lancamentos, falha });
     } catch (e) {
       const falha = codigoDaFalha(e);
-      logger.warn({ cliente, estabelecimento: est.codigo, codigo: falha }, 'leitura dos fatos contábeis falhou');
+      logger.warn(
+        { cliente, estabelecimento: est.codigo, codigo: falha },
+        'leitura dos fatos contábeis falhou',
+      );
       r.push({ cliente, estabelecimento: est.codigo, pendentes: 0, lancamentos: 0, falha });
     }
   }

@@ -77,7 +77,9 @@ describe('ServicoContasBanco', () => {
     const r = await s.imutabilidade(C);
     expect(r.tabelasClinicas).toEqual({ legado: 0, sgh: 3500 });
     // A operação que apaga fora das exceções aparece; a da exceção aceita, não.
-    expect(r.operacoesComDelete).toEqual([{ operacao: 'administracao.escopo.retirar', tabela: 'USUARIO_ESCOPO' }]);
+    expect(r.operacoesComDelete).toEqual([
+      { operacao: 'administracao.escopo.retirar', tabela: 'USUARIO_ESCOPO' },
+    ]);
     expect(r.excecoes).toEqual([{ tabela: 'HORARIO_AGENDA', motivo: 'grade futura sem marcação' }]);
     expect(r.planoComDelete).toBe(0);
     expect(r.titulares).toEqual([{ titular: '(outras)', doSante: false, tabelas: '<5' }]);
@@ -180,8 +182,16 @@ describe('rotas /api/administracao/acesso/contas-banco', () => {
     expect((await get(cookie, '/api/administracao/acesso/contas-banco/desvios')).statusCode).toBe(404);
     const r = await get(cookie, '/api/administracao/acesso/contas-banco/imutabilidade');
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ hospital: 'aa', operacoesComDelete: [], planoComDelete: 0, concessaoVigente: true });
-    const n = await get(await entrar('SINT.RECEPCAO'), '/api/administracao/acesso/contas-banco/imutabilidade');
+    expect(r.json()).toMatchObject({
+      hospital: 'aa',
+      operacoesComDelete: [],
+      planoComDelete: 0,
+      concessaoVigente: true,
+    });
+    const n = await get(
+      await entrar('SINT.RECEPCAO'),
+      '/api/administracao/acesso/contas-banco/imutabilidade',
+    );
     expect(n.statusCode).toBe(403);
   });
 });

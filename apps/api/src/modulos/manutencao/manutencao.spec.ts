@@ -118,7 +118,9 @@ async function montar(o: { semManutencao?: boolean; parametros?: Record<string, 
     registro: registroDeTeste(
       {},
       {
-        configuracao_teste: configuracao ? configuracaoCom(configuracao) : (ctx) => moduloConfiguracaoDeTeste(ctx),
+        configuracao_teste: configuracao
+          ? configuracaoCom(configuracao)
+          : (ctx) => moduloConfiguracaoDeTeste(ctx),
         manutencao: (ctx) => moduloManutencao(ctx, { porta: manutencao, patrimonio: patrimonioFalso }),
       },
     ),

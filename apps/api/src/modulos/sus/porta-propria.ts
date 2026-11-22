@@ -71,7 +71,8 @@ export type NucleoSus = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 type Linha = Record<string, unknown>;
 const num = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v));
-const numOuNulo = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+const numOuNulo = (v: unknown): number | null =>
+  v === null || v === undefined || v === '' ? null : Number(v);
 const txt = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 const txtOuNulo = (v: unknown): string | null => {
   const t = txt(v).trim();
@@ -79,7 +80,12 @@ const txtOuNulo = (v: unknown): string | null => {
 };
 
 /** As tabelas que a operação de gravação do faturamento SUS declara (a transação recusa as outras). */
-export const TABELAS_SUS = ['competencia_sus', 'equivalencia_sigtap_item', 'critica_sus', 'faixa_numeracao_aih'] as const;
+export const TABELAS_SUS = [
+  'competencia_sus',
+  'equivalencia_sigtap_item',
+  'critica_sus',
+  'faixa_numeracao_aih',
+] as const;
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
 const INSTRUMENTOS: readonly InstrumentoSusPorta[] = ['ciha', 'bpa', 'apac', 'aih'];
@@ -281,7 +287,9 @@ export class LeituraSusPropria implements LeituraSus {
   // ── Competência ──
 
   async competencias(instrumento: InstrumentoSusPorta | null): Promise<CompetenciaSusRegistro[]> {
-    const filtro = instrumento ? ' AND c.instrumento = ?' : ` AND c.instrumento IN (${marcadores(INSTRUMENTOS.length)})`;
+    const filtro = instrumento
+      ? ' AND c.instrumento = ?'
+      : ` AND c.instrumento IN (${marcadores(INSTRUMENTOS.length)})`;
     const ls = await this.l.consultar(
       `${SQL_COMPETENCIA}${filtro} ORDER BY c.competencia DESC, c.instrumento`,
       [this.est, ...(instrumento ? [instrumento] : INSTRUMENTOS)],
@@ -332,7 +340,11 @@ export class LeituraSusPropria implements LeituraSus {
       filtro += ' AND k.gravidade = ?';
       pf.push(f.gravidade);
     }
-    const total = num((await this.l.uma(`SELECT COUNT(*) AS n FROM (${SQL_CRITICA}${escopo}${filtro}) t`, [...pe, ...pf]))?.['n']);
+    const total = num(
+      (await this.l.uma(`SELECT COUNT(*) AS n FROM (${SQL_CRITICA}${escopo}${filtro}) t`, [...pe, ...pf]))?.[
+        'n'
+      ],
+    );
     const porPagina = Math.max(1, Math.min(500, f.porPagina));
     const ls = await this.l.consultar(
       `${SQL_CRITICA}${escopo}${filtro} ORDER BY k.gravidade DESC, k.codigo_regra, k.id LIMIT ? OFFSET ?`,
@@ -380,7 +392,9 @@ export class LeituraSusPropria implements LeituraSus {
     return ls.map((x) => semNomes(equivalenciaDaLinha(x)));
   }
 
-  async paginaEquivalencias(f: FiltroEquivalenciasPorta): Promise<{ itens: EquivalenciaSusNomeada[]; total: number }> {
+  async paginaEquivalencias(
+    f: FiltroEquivalenciasPorta,
+  ): Promise<{ itens: EquivalenciaSusNomeada[]; total: number }> {
     let where = '';
     const p: unknown[] = [];
     if (!f.inativas) where += ' AND q.vigencia_fim IS NULL';
@@ -575,7 +589,12 @@ export class LeituraSusPropria implements LeituraSus {
       [like, like],
       { teto: 30 },
     );
-    return ls.map((x) => ({ id: num(x['id']), codigo: codigoDoItem(x['codigo']), nome: txt(x['descricao']), tabela: txt(x['tipo_item']) }));
+    return ls.map((x) => ({
+      id: num(x['id']),
+      codigo: codigoDoItem(x['codigo']),
+      nome: txt(x['descricao']),
+      tabela: txt(x['tipo_item']),
+    }));
   }
 
   async procedimentosHospital(ids: readonly number[]): Promise<ProcedimentoHospital[]> {
@@ -585,7 +604,12 @@ export class LeituraSusPropria implements LeituraSus {
       [...ids],
       { teto: ids.length },
     );
-    return ls.map((x) => ({ id: num(x['id']), codigo: codigoDoItem(x['codigo']), nome: txt(x['descricao']), tabela: txt(x['tipo_item']) }));
+    return ls.map((x) => ({
+      id: num(x['id']),
+      codigo: codigoDoItem(x['codigo']),
+      nome: txt(x['descricao']),
+      tabela: txt(x['tipo_item']),
+    }));
   }
 
   // ── Montagem: a produção da competência (a conta própria é do lote da conta; hoje vazia) ──
@@ -690,7 +714,12 @@ export class LeituraSusPropria implements LeituraSus {
     situacaoTransplante: never[];
     acessoVascular: never[];
   }> {
-    return { caracteristicaTratamento: [], contraindicacaoTransplante: [], situacaoTransplante: [], acessoVascular: [] };
+    return {
+      caracteristicaTratamento: [],
+      contraindicacaoTransplante: [],
+      situacaoTransplante: [],
+      acessoVascular: [],
+    };
   }
 
   async buscarSolicitantesApac(): Promise<never[]> {
@@ -745,9 +774,9 @@ export class LeituraSusPropria implements LeituraSus {
   }
 
   async faixasAih(): Promise<FaixaAih[]> {
-    return (await this.l.consultar(`${SQL_FAIXA} ORDER BY f.numero_inicial DESC`, [this.est], { teto: 2_000 })).map(
-      faixaDaLinha,
-    );
+    return (
+      await this.l.consultar(`${SQL_FAIXA} ORDER BY f.numero_inicial DESC`, [this.est], { teto: 2_000 })
+    ).map(faixaDaLinha);
   }
 
   async faixaAih(id: number, travar?: boolean): Promise<FaixaAih | null> {
@@ -841,16 +870,20 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
   }
 
   private async competenciaPorId(id: number): Promise<CompetenciaSusRegistro> {
-    await this.tx.consultarParaAtualizar('SELECT id FROM competencia_sus WHERE id = ? AND estabelecimento_id = ?', [
-      id,
-      this.est,
-    ]);
+    await this.tx.consultarParaAtualizar(
+      'SELECT id FROM competencia_sus WHERE id = ? AND estabelecimento_id = ?',
+      [id, this.est],
+    );
     const x = await this.tx.uma(`${SQL_COMPETENCIA} AND c.id = ?`, [this.est, id]);
     if (!x) throw new ErroSus('nao-encontrado', 'Competência não encontrada.');
     return competenciaDaLinha(x);
   }
 
-  async abrir(p: { instrumento: InstrumentoSusPorta; competencia: string; por: string }): Promise<CompetenciaSusRegistro> {
+  async abrir(p: {
+    instrumento: InstrumentoSusPorta;
+    competencia: string;
+    por: string;
+  }): Promise<CompetenciaSusRegistro> {
     if (await this.competencia(p.instrumento, p.competencia, true))
       throw new ErroSus('competencia-ja-aberta', 'A competência já foi aberta para o instrumento.');
     const { inicio, fim } = periodoDaCompetencia(p.competencia);
@@ -869,8 +902,10 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
 
   async fechar(c: { id: number; versao: number }): Promise<void> {
     const atual = await this.competenciaPorId(c.id);
-    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
-    if (atual.situacao !== 'aberta') throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
+    if (atual.versao !== c.versao)
+      throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'aberta')
+      throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
     await this.tx.alterar('competencia_sus', c.id, c.versao, {
       situacao: 'fechada',
       fechada_em: new Date(),
@@ -880,11 +915,16 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
 
   async reabrir(c: { id: number; versao: number }, _por: string, justificativa: string): Promise<void> {
     const atual = await this.competenciaPorId(c.id);
-    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
-    if (atual.situacao !== 'fechada') throw new ErroSus('competencia-nao-fechada', 'A competência não está fechada.');
+    if (atual.versao !== c.versao)
+      throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'fechada')
+      throw new ErroSus('competencia-nao-fechada', 'A competência não está fechada.');
     const x = await this.tx.uma('SELECT situacao FROM competencia_sus WHERE id = ?', [c.id]);
     if (txt(x?.['situacao']) !== 'fechada')
-      throw new ErroSus('competencia-nao-fechada', 'A competência enviada ou encerrada não reabre pela tela.');
+      throw new ErroSus(
+        'competencia-nao-fechada',
+        'A competência enviada ou encerrada não reabre pela tela.',
+      );
     await this.tx.alterar('competencia_sus', c.id, c.versao, {
       situacao: 'reaberta',
       reaberta_em: new Date(),
@@ -899,8 +939,10 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     contagens: { registros: number; cnes: string | null },
   ): Promise<ResultadoGravacaoCriticas> {
     const atual = await this.competenciaPorId(c.id);
-    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
-    if (atual.situacao !== 'aberta') throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
+    if (atual.versao !== c.versao)
+      throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'aberta')
+      throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
     const agora = new Date();
     const existentes = new Map<string, Linha>();
     for (const x of await this.tx.consultarParaAtualizar(
@@ -909,9 +951,12 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     ))
       existentes.set(txt(x['chave_critica']), x);
     let sequencia = num(
-      (await this.tx.uma('SELECT COALESCE(MAX(sequencia), 0) AS s FROM critica_sus WHERE competencia_sus_id = ?', [c.id]))?.[
-        's'
-      ],
+      (
+        await this.tx.uma(
+          'SELECT COALESCE(MAX(sequencia), 0) AS s FROM critica_sus WHERE competencia_sus_id = ?',
+          [c.id],
+        )
+      )?.['s'],
     );
     const vistas = new Set<string>();
     let novas = 0;
@@ -981,8 +1026,16 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
         WHERE k.id = ? AND k.excluido_em IS NULL`,
       [this.est, c.id],
     );
-    if (!x || num(x['versao']) !== c.versao || txt(x['situacao']) !== 'aberta' || txt(x['gravidade']) !== 'aviso')
-      throw new ErroSus('critica-nao-justificavel', 'Só o aviso aberto, na versão que a tela leu, pode ser justificado.');
+    if (
+      !x ||
+      num(x['versao']) !== c.versao ||
+      txt(x['situacao']) !== 'aberta' ||
+      txt(x['gravidade']) !== 'aviso'
+    )
+      throw new ErroSus(
+        'critica-nao-justificavel',
+        'Só o aviso aberto, na versão que a tela leu, pode ser justificado.',
+      );
     await this.tx.alterar('critica_sus', c.id, c.versao, {
       situacao: 'justificada',
       justificativa: justificativa.slice(0, 1000),
@@ -1033,12 +1086,15 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     por: string;
     versao?: number | undefined;
   }): Promise<{ antes: EquivalenciaSus | null; depois: EquivalenciaSus; mudou: boolean }> {
-    const item = await this.tx.uma('SELECT id FROM item_faturavel WHERE id = ? AND excluido_em IS NULL', [p.procedimento]);
+    const item = await this.tx.uma('SELECT id FROM item_faturavel WHERE id = ? AND excluido_em IS NULL', [
+      p.procedimento,
+    ]);
     const proc = await this.tx.uma('SELECT id FROM procedimento_sigtap WHERE id = ? AND codigo_sigtap = ?', [
       p.sigtap,
       p.codigo,
     ]);
-    if (!item || !proc) throw new ErroSus('nao-encontrado', 'Item do hospital ou procedimento SIGTAP não encontrado.');
+    if (!item || !proc)
+      throw new ErroSus('nao-encontrado', 'Item do hospital ou procedimento SIGTAP não encontrado.');
     const vigentes = await this.vigentesDoItem(p.procedimento);
     const antes = vigentes[0] ?? null;
     // Trava otimista: havendo equivalência vigente, o pedido tem de trazer a versão lida (ausente ou diferente é
@@ -1064,7 +1120,9 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
       );
       if (mesmoDia) {
         id = num(mesmoDia['id']);
-        await this.tx.alterar('equivalencia_sigtap_item', id, num(mesmoDia['versao']), { vigencia_fim: null });
+        await this.tx.alterar('equivalencia_sigtap_item', id, num(mesmoDia['versao']), {
+          vigencia_fim: null,
+        });
       } else
         id = await this.tx.incluir('equivalencia_sigtap_item', {
           item_faturavel_id: p.procedimento,
@@ -1075,7 +1133,11 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     }
     const depois = await this.tx.uma(`${SQL_EQUIVALENCIA} AND q.id = ?`, [id]);
     if (!depois) throw new ErroSus('nao-encontrado', 'Equivalência não encontrada.');
-    return { antes: antes ? semNomes(antes) : null, depois: semNomes(equivalenciaDaLinha(depois)), mudou: true };
+    return {
+      antes: antes ? semNomes(antes) : null,
+      depois: semNomes(equivalenciaDaLinha(depois)),
+      mudou: true,
+    };
   }
 
   async desativarEquivalencia(p: {
@@ -1086,8 +1148,10 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     const vigentes = await this.vigentesDoItem(p.procedimento);
     const antes = vigentes[0];
     if (!antes) throw new ErroSus('nao-encontrado', 'O item não tem equivalência vigente.');
-    if (antes.versao !== p.versao) throw new ErroSus('equivalencia-alterada', 'A equivalência mudou desde a leitura.');
-    for (const v of vigentes) await this.tx.alterar('equivalencia_sigtap_item', v.id, v.versao, { vigencia_fim: hojeIso() });
+    if (antes.versao !== p.versao)
+      throw new ErroSus('equivalencia-alterada', 'A equivalência mudou desde a leitura.');
+    for (const v of vigentes)
+      await this.tx.alterar('equivalencia_sigtap_item', v.id, v.versao, { vigencia_fim: hojeIso() });
     const depois = await this.tx.uma(`${SQL_EQUIVALENCIA} AND q.id = ?`, [antes.id]);
     if (!depois) throw new ErroSus('nao-encontrado', 'Equivalência não encontrada.');
     return { antes: semNomes(antes), depois: semNomes(equivalenciaDaLinha(depois)) };
@@ -1114,7 +1178,8 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
         WHERE estabelecimento_id = ? AND instrumento = 'aih' AND numero_inicial <= ? AND numero_final >= ? LIMIT 1`,
       [this.est, fim, inicio],
     );
-    if (cruza.length) throw new ErroAih('faixa-sobreposta', 'Já existe uma faixa que cobre parte destes números.');
+    if (cruza.length)
+      throw new ErroAih('faixa-sobreposta', 'Já existe uma faixa que cobre parte destes números.');
     return this.tx.incluir('faixa_numeracao_aih', {
       estabelecimento_id: this.est,
       instrumento: 'aih',
@@ -1251,7 +1316,8 @@ export class PortaSusPropria implements PortaSus {
           saida = { valor: await fn(g) };
         } catch (erro) {
           // A recusa de negócio (da porta ou do serviço) volta como é; o resto o núcleo traduz.
-          if (erro instanceof ErroSus || erro instanceof ErroAih || erro instanceof ErroProblema) recusada = erro;
+          if (erro instanceof ErroSus || erro instanceof ErroAih || erro instanceof ErroProblema)
+            recusada = erro;
           throw erro;
         }
         linhas = g.linhas;

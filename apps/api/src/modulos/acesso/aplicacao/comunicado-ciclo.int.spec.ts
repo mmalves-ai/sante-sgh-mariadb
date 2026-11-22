@@ -37,7 +37,9 @@ describe.skipIf(SEM_BANCO)('ciclo do comunicado sobre o banco próprio (f22_o2)'
     expect(await s.publicar(m.ctx('rem'), autor, e, pedido)).toMatchObject({ id: r.id, repetida: true });
     const [k] = await m.ler('SELECT situacao, exige_ciencia, versao FROM comunicado WHERE id = ?', [r.id]);
     expect(k).toMatchObject({ situacao: 'publicado', versao: 1 });
-    const pub = await m.ler('SELECT COUNT(*) AS n FROM comunicado_destinatario WHERE comunicado_id = ?', [r.id]);
+    const pub = await m.ler('SELECT COUNT(*) AS n FROM comunicado_destinatario WHERE comunicado_id = ?', [
+      r.id,
+    ]);
     expect(Number(pub[0]?.['n'])).toBe(2);
     const tr = await m.ler(
       "SELECT dados_depois FROM trilha_auditoria WHERE entidade = 'comunicado' AND entidade_id = ? ORDER BY id",
@@ -56,7 +58,9 @@ describe.skipIf(SEM_BANCO)('ciclo do comunicado sobre o banco próprio (f22_o2)'
     expect(d.eventos.map((x) => x.evento)).toEqual(['correcao']);
     expect(d.eventos[0]).toMatchObject({ motivo: 'Erro de digitação', por: m.login.rem });
     // A trilha é imutável: da versão anterior ficam só o tamanho e o resumo, nunca o assunto nem o texto.
-    expect(d.eventos[0]?.antes).toMatch(/^versão anterior: assunto com 19 caracteres, texto com 51 caracteres/);
+    expect(d.eventos[0]?.antes).toMatch(
+      /^versão anterior: assunto com 19 caracteres, texto com 51 caracteres/,
+    );
     const trCorrecao = await m.ler(
       "SELECT dados_depois FROM trilha_auditoria WHERE entidade = 'comunicado' AND entidade_id = ? ORDER BY id",
       [r.id],
@@ -90,17 +94,29 @@ describe.skipIf(SEM_BANCO)('ciclo do comunicado sobre o banco próprio (f22_o2)'
 
     // Encerra: some de d2 (não leu), continua para d1 (leu), sem ciência nova.
     d = await s.encerrarComunicado(m.ctx('rem'), autor, r.id, { motivo: 'Substituído' });
-    expect(d).toMatchObject({ encerradoPor: m.login.rem, motivoEncerramento: 'Substituído', podeCorrigir: false });
+    expect(d).toMatchObject({
+      encerradoPor: m.login.rem,
+      motivoEncerramento: 'Substituído',
+      podeCorrigir: false,
+    });
     expect(d.eventos.map((x) => x.evento)).toEqual(['correcao', 'vigencia', 'encerramento']);
-    expect((await s.caixa(m.ctx('d2'), m.login.d2)).recebidas.some((x) => x.id === r.id && x.tipo === 'comunicado')).toBe(
-      false,
+    expect(
+      (await s.caixa(m.ctx('d2'), m.login.d2)).recebidas.some(
+        (x) => x.id === r.id && x.tipo === 'comunicado',
+      ),
+    ).toBe(false);
+    const visto = (await s.caixa(m.ctx('d1'), m.login.d1)).recebidas.find(
+      (x) => x.id === r.id && x.tipo === 'comunicado',
     );
-    const visto = (await s.caixa(m.ctx('d1'), m.login.d1)).recebidas.find((x) => x.id === r.id && x.tipo === 'comunicado');
     expect(visto?.motivoEncerramento).toBe('Substituído');
-    await expect(s.ciencia(m.ctx('d1'), { ...autor, login: m.login.d1 }, r.id, 'comunicado')).rejects.toMatchObject({
+    await expect(
+      s.ciencia(m.ctx('d1'), { ...autor, login: m.login.d1 }, r.id, 'comunicado'),
+    ).rejects.toMatchObject({
       problema: { codigo: 'comunicado-encerrado' },
     });
-    await expect(s.encerrarComunicado(m.ctx('rem'), autor, r.id, { motivo: 'de novo' })).rejects.toMatchObject({
+    await expect(
+      s.encerrarComunicado(m.ctx('rem'), autor, r.id, { motivo: 'de novo' }),
+    ).rejects.toMatchObject({
       problema: { codigo: 'comunicado-encerrado' },
     });
   });

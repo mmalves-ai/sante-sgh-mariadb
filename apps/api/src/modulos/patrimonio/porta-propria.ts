@@ -103,7 +103,8 @@ const inteiro = (v: unknown): number => {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 };
-const inteiroOuNulo = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : inteiro(v));
+const inteiroOuNulo = (v: unknown): number | null =>
+  v === null || v === undefined || v === '' ? null : inteiro(v);
 const booleano = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 1n;
 /** DECIMAL do banco em centavos, sem erro de ponto flutuante. */
 function centavos(v: unknown): number {
@@ -153,7 +154,8 @@ const RESULTADO_DO_BANCO: Readonly<Record<string, string>> = Object.fromEntries(
 
 const desatualizado = (o = 'O bem') =>
   recusa('desatualizado', `${o} mudou depois que você abriu. Abra de novo.`);
-const naoEncontrado = (o: string) => new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
+const naoEncontrado = (o: string) =>
+  new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
 
 const SQL_LAUDO = `
   SELECT d.id, d.bem_patrimonial_id, d.nome_arquivo, d.descricao, d.chave_armazenamento, d.sha256, d.tamanho_bytes,
@@ -251,10 +253,16 @@ function bemDaLinha(x: Record<string, unknown>): BemRegistrado {
     residualCent: centavos(x['valor_residual']),
     vidaUtilMeses: inteiro(x['vida_util_meses']) || 1,
     coeficiente:
-      coef === null ? null : { id: coef, descricao: texto(x['kdesc']) ?? '', percentual: Number(x['kperc'] ?? 1) || 1 },
+      coef === null
+        ? null
+        : { id: coef, descricao: texto(x['kdesc']) ?? '', percentual: Number(x['kperc'] ?? 1) || 1 },
     inicioDepreciacao: (dataIso(x['inicio_depreciacao']) ?? '').slice(0, 7),
     depreciavel: booleano(x['depreciavel']),
-    centro: { id: inteiro(x['centro_custo_id']), codigo: codigoNumerico(x['ccod']), nome: texto(x['cnome']) ?? '' },
+    centro: {
+      id: inteiro(x['centro_custo_id']),
+      codigo: codigoNumerico(x['ccod']),
+      nome: texto(x['cnome']) ?? '',
+    },
     localDetalhe: texto(x['local_detalhe']),
     tipoResponsavel: tipo === null ? null : { id: tipo, nome: texto(x['tnome']) ?? '' },
     responsavel: texto(x['rnome']),
@@ -290,7 +298,11 @@ function movDaLinha(x: Record<string, unknown>): MovimentoRegistrado {
   const destino = inteiroOuNulo(x['destino_centro_custo_id']);
   return {
     id: inteiro(x['id']),
-    bem: { id: inteiro(x['bem_patrimonial_id']), plaqueta: texto(x['plaqueta']) ?? '', descricao: texto(x['descricao']) ?? '' },
+    bem: {
+      id: inteiro(x['bem_patrimonial_id']),
+      plaqueta: texto(x['plaqueta']) ?? '',
+      descricao: texto(x['descricao']) ?? '',
+    },
     tipo: texto(x['tipo_movimento']) ?? '',
     situacao: texto(x['situacao']) ?? '',
     data: dataIso(x['data_movimento']) ?? '',
@@ -300,7 +312,9 @@ function movDaLinha(x: Record<string, unknown>): MovimentoRegistrado {
       nome: texto(x['conome']) ?? '',
     },
     destino:
-      destino === null ? null : { id: destino, codigo: codigoNumerico(x['cdcod']), nome: texto(x['cdnome']) ?? '' },
+      destino === null
+        ? null
+        : { id: destino, codigo: codigoNumerico(x['cdcod']), nome: texto(x['cdnome']) ?? '' },
     destinoResponsavel: texto(x['destino_responsavel']),
     terceiro: texto(x['terceiro']),
     retornoPrevisto: dataIso(x['retorno_previsto']),
@@ -328,11 +342,15 @@ const DE_INV = `inventario_bem v
 
 function invDaLinha(x: Record<string, unknown>): InventarioRegistrado {
   const centro = inteiroOuNulo(x['centro_custo_id']);
-  const situacao = x['situacao'] === 'encerrado' ? 'encerrado' : x['situacao'] === 'cancelado' ? 'cancelado' : 'aberto';
+  const situacao =
+    x['situacao'] === 'encerrado' ? 'encerrado' : x['situacao'] === 'cancelado' ? 'cancelado' : 'aberto';
   return {
     id: inteiro(x['id']),
     descricao: texto(x['descricao']) ?? '',
-    centro: centro === null ? null : { id: centro, codigo: codigoNumerico(x['ccod']), nome: texto(x['cnome']) ?? '' },
+    centro:
+      centro === null
+        ? null
+        : { id: centro, codigo: codigoNumerico(x['ccod']), nome: texto(x['cnome']) ?? '' },
     situacao,
     // O número de esperados e o resumo do encerramento ainda não têm coluna (pedido): o serviço recalcula ao vivo.
     esperados: null,
@@ -387,7 +405,10 @@ function itemDaLinha(x: Record<string, unknown>): ItemDaNota {
 
 const dadosZ = z.unknown();
 const bemNovoZ = z.object({
-  plaqueta: z.string().regex(/^[A-Z0-9-]{1,20}$/).nullable(),
+  plaqueta: z
+    .string()
+    .regex(/^[A-Z0-9-]{1,20}$/)
+    .nullable(),
   descricao: z.string().trim().min(1).max(150),
   grupo: z.string().min(1).max(30),
   origem: z.number().int().positive(),
@@ -395,7 +416,10 @@ const bemNovoZ = z.object({
   nota: z.number().int().positive().nullable(),
   itemNota: z.number().int().positive().nullable(),
   termoNumero: z.string().max(40).nullable(),
-  termoData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  termoData: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
   termoDoador: z.string().max(120).nullable(),
   responsavelUsuario: z.number().int().positive().nullable(),
   dataAquisicao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -414,7 +438,13 @@ const bemNovoZ = z.object({
 });
 const cadastrarZ = z.object({
   bens: z.array(bemNovoZ).min(1).max(500),
-  item: z.object({ id: z.number().int().positive(), unidades: z.number().int().min(1), jaCadastrados: z.number().int().min(0) }).nullable(),
+  item: z
+    .object({
+      id: z.number().int().positive(),
+      unidades: z.number().int().min(1),
+      jaCadastrados: z.number().int().min(0),
+    })
+    .nullable(),
   dados: dadosZ,
 });
 const alterarZ = z.object({
@@ -445,12 +475,17 @@ const movimentoZ = z.object({
   destino: z.number().int().positive().nullable(),
   destinoResponsavel: z.string().max(80).nullable(),
   terceiro: z.string().max(120).nullable(),
-  retornoPrevisto: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  retornoPrevisto: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
   termoNumero: z.string().max(40).nullable(),
   motivo: z.string().max(400),
   motivoBaixa: z.number().int().positive().nullable().default(null),
   valorVendaCent: z.number().int().min(0).nullable(),
-  efeito: z.object({ situacao: z.enum(['ativo', 'emprestado', 'baixado']), baixadoEm: z.string().nullable() }).nullable(),
+  efeito: z
+    .object({ situacao: z.enum(['ativo', 'emprestado', 'baixado']), baixadoEm: z.string().nullable() })
+    .nullable(),
   dados: dadosZ,
 });
 const decidirZ = z.object({
@@ -460,8 +495,17 @@ const decidirZ = z.object({
   motivo: z.string().max(400).nullable(),
   dados: dadosZ,
 });
-const cancelarMovZ = z.object({ id: z.number().int().positive(), versao: z.number().int().min(0), motivo: z.string().max(400), dados: dadosZ });
-const abrirInvZ = z.object({ descricao: z.string().trim().min(1).max(150), centro: z.number().int().positive().nullable(), dados: dadosZ });
+const cancelarMovZ = z.object({
+  id: z.number().int().positive(),
+  versao: z.number().int().min(0),
+  motivo: z.string().max(400),
+  dados: dadosZ,
+});
+const abrirInvZ = z.object({
+  descricao: z.string().trim().min(1).max(150),
+  centro: z.number().int().positive().nullable(),
+  dados: dadosZ,
+});
 const leituraZ = z.object({
   inventario: z.number().int().positive(),
   codigo: z.string().trim().min(1).max(30),
@@ -471,7 +515,11 @@ const leituraZ = z.object({
   dados: dadosZ,
 });
 const encerrarInvZ = z.object({ id: z.number().int().positive(), dados: dadosZ });
-const cancelarInvZ = z.object({ id: z.number().int().positive(), motivo: z.string().trim().min(1).max(500), dados: dadosZ });
+const cancelarInvZ = z.object({
+  id: z.number().int().positive(),
+  motivo: z.string().trim().min(1).max(500),
+  dados: dadosZ,
+});
 const grupoZ = z.object({
   codigo: z.string().trim().min(1).max(30),
   nome: z.string().trim().min(1).max(150),
@@ -479,7 +527,10 @@ const grupoZ = z.object({
   conta: z.string().max(40).nullable(),
   dados: dadosZ,
 });
-const grupoVersaoZ = grupoZ.extend({ versaoVista: z.number().int().min(0), motivo: z.string().trim().min(1).max(500) });
+const grupoVersaoZ = grupoZ.extend({
+  versaoVista: z.number().int().min(0),
+  motivo: z.string().trim().min(1).max(500),
+});
 const situacaoGrupoZ = z.object({
   codigo: z.string().min(1).max(30),
   versaoVista: z.number().int().min(0),
@@ -487,7 +538,12 @@ const situacaoGrupoZ = z.object({
   ativo: z.boolean(),
   dados: dadosZ,
 });
-const excluirGrupoZ = z.object({ codigo: z.string().min(1).max(30), versaoVista: z.number().int().min(0), motivo: z.string().trim().min(1).max(500), dados: dadosZ });
+const excluirGrupoZ = z.object({
+  codigo: z.string().min(1).max(30),
+  versaoVista: z.number().int().min(0),
+  motivo: z.string().trim().min(1).max(500),
+  dados: dadosZ,
+});
 
 // ── Apoio das gravações ───────────────────────────────────────────────────────────────────────────────────────────
 
@@ -518,7 +574,8 @@ async function idDoGrupo(tx: TxOperacao | Leitor, codigo: string, ativo: boolean
     'SELECT id, ativo FROM grupo_bem WHERE codigo = ?',
     [codigo],
   );
-  if (!g || (ativo && !booleano(g.ativo))) throw recusa('grupo-inexistente', `O grupo ${codigo} não existe ou está inativo.`);
+  if (!g || (ativo && !booleano(g.ativo)))
+    throw recusa('grupo-inexistente', `O grupo ${codigo} não existe ou está inativo.`);
   return inteiro(g.id);
 }
 
@@ -653,7 +710,12 @@ const SQL_MARCO = `
    WHERE b.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.estornado_em IS NULL AND a.tipo <> 'reavaliacao'`;
 
 /** O marco vigente de um bem (o ajuste mais novo não estornado, fora a reavaliação), antes da competência se dada. */
-async function marcoDoBem(l: Leitor, est: number, bem: number, antesDe: string | null): Promise<MarcoDoAjuste | null> {
+async function marcoDoBem(
+  l: Leitor,
+  est: number,
+  bem: number,
+  antesDe: string | null,
+): Promise<MarcoDoAjuste | null> {
   const x = await l.uma(
     `${SQL_MARCO} AND a.bem_patrimonial_id = ? ${antesDe ? 'AND a.competencia_marco < ?' : ''} ORDER BY a.id DESC LIMIT 1`,
     antesDe ? [est, bem, primeiroDia(antesDe)] : [est, bem],
@@ -664,7 +726,10 @@ async function marcoDoBem(l: Leitor, est: number, bem: number, antesDe: string |
 /** Os marcos vigentes antes da competência, por bem (o mais novo de cada um). */
 async function marcosDaCompetencia(l: Leitor, est: number, dia: string): Promise<Map<number, MarcoDoAjuste>> {
   const m = new Map<number, MarcoDoAjuste>();
-  for (const x of await l.consultar(`${SQL_MARCO} AND a.competencia_marco < ? ORDER BY a.id DESC`, [est, dia])) {
+  for (const x of await l.consultar(`${SQL_MARCO} AND a.competencia_marco < ? ORDER BY a.id DESC`, [
+    est,
+    dia,
+  ])) {
     const bem = inteiro(x['bem_patrimonial_id']);
     if (!m.has(bem)) m.set(bem, marcoDaLinha(x));
   }
@@ -672,7 +737,11 @@ async function marcosDaCompetencia(l: Leitor, est: number, dia: string): Promise
 }
 
 /** Lotes contábeis do patrimônio já liberados na competência (AAAA-MM) ou no exercício (AAAA) da data. */
-async function lotesLiberados(l: Leitor, est: number, data: string): Promise<{ periodo: string; exportadoEm: string }[]> {
+async function lotesLiberados(
+  l: Leitor,
+  est: number,
+  data: string,
+): Promise<{ periodo: string; exportadoEm: string }[]> {
   const dia = primeiroDia(data);
   return (
     await l.consultar(
@@ -682,7 +751,10 @@ async function lotesLiberados(l: Leitor, est: number, data: string): Promise<{ p
       [est, dia],
     )
   )
-    .map((x) => ({ periodo: (dataIso(x['competencia']) ?? '').slice(0, 7), exportadoEm: instante(x['liberado_em']) ?? '' }))
+    .map((x) => ({
+      periodo: (dataIso(x['competencia']) ?? '').slice(0, 7),
+      exportadoEm: instante(x['liberado_em']) ?? '',
+    }))
     .filter((x) => x.periodo === dia.slice(0, 7))
     .concat([]);
 }
@@ -718,7 +790,8 @@ const opCalcular = definirOperacao({
     );
     if (ja) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
     const bens = [...new Set(x.cotas.map((k) => k.bem))];
-    if (bens.length !== x.cotas.length) throw recusa('calculo-impedido', 'O cálculo traz o mesmo bem duas vezes.');
+    if (bens.length !== x.cotas.length)
+      throw recusa('calculo-impedido', 'O cálculo traz o mesmo bem duas vezes.');
     if (bens.length > 0) {
       const achados = await tx.uma<{ n: unknown }>(
         `SELECT COUNT(*) AS n FROM bem_patrimonial WHERE estabelecimento_id = ? AND excluido_em IS NULL
@@ -745,7 +818,8 @@ const opCalcular = definirOperacao({
         situacao: 'vigente',
       });
     } catch (e) {
-      if (restricaoUnicaViolada(e)) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
+      if (restricaoUnicaViolada(e))
+        throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
       throw e;
     }
     for (const k of x.cotas) {
@@ -783,14 +857,19 @@ const opEstornarCalculo = definirOperacao({
     colunas: ['estabelecimento_id', 'competencia', 'situacao', 'excluido_em'],
   }),
   async conferir(_tx, _x, ctx, relido) {
-    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento || relido['excluido_em'] != null)
+    if (
+      !relido ||
+      Number(relido['estabelecimento_id']) !== ctx.estabelecimento ||
+      relido['excluido_em'] != null
+    )
       throw naoEncontrado('Cálculo');
     if (relido['situacao'] !== 'vigente') throw desatualizado('O cálculo');
   },
   async gravar(tx, x, ctx) {
-    const relido = await tx.uma<Record<string, unknown>>('SELECT competencia, versao FROM calculo_depreciacao WHERE id = ?', [
-      x.calculo,
-    ]);
+    const relido = await tx.uma<Record<string, unknown>>(
+      'SELECT competencia, versao FROM calculo_depreciacao WHERE id = ?',
+      [x.calculo],
+    );
     const competencia = dataIso(relido?.['competencia']) ?? '';
     const posteriores = await tx.consultar(
       `SELECT DISTINCT b.plaqueta FROM ajuste_valor_bem a JOIN bem_patrimonial b ON b.id = a.bem_patrimonial_id
@@ -909,9 +988,10 @@ const opEstornarAjuste = definirOperacao({
     if (relido['estornado_em'] != null) throw recusa('ja-estornado', 'Este ajuste já foi estornado.');
   },
   async gravar(tx, x, ctx) {
-    const relido = await tx.uma<Record<string, unknown>>('SELECT bem_patrimonial_id FROM ajuste_valor_bem WHERE id = ?', [
-      x.ajuste,
-    ]);
+    const relido = await tx.uma<Record<string, unknown>>(
+      'SELECT bem_patrimonial_id FROM ajuste_valor_bem WHERE id = ?',
+      [x.ajuste],
+    );
     await tx.alterar('ajuste_valor_bem', x.ajuste, x.versao, {
       estornado_em: new Date(),
       data_estorno: x.hoje,
@@ -950,96 +1030,115 @@ function formatoDaPlaqueta(gerar: (n: number) => string): { prefixo: string; lar
 /** Tentativas de pular plaqueta já usada (digitada à mão à frente da sequência) antes de recusar. */
 const TENTATIVAS_PLAQUETA = 200;
 
-const opCadastrar = (gerarPlaqueta: (n: number) => string) => definirOperacao({
-  nome: 'patrimonio.bem.cadastrar',
-  tabelas: ['bem_patrimonial', 'grupo_bem', 'sequencia_negocio'],
-  entrada: cadastrarZ,
-  async gravar(tx, x, ctx) {
-    await garantirSementeGrupos(tx);
-    if (x.item) {
-      const it = await tx.consultarParaAtualizar<{ id: unknown; nota_entrada_id: unknown }>(
-        `SELECT i.id, i.nota_entrada_id FROM nota_entrada_item i JOIN nota_entrada n ON n.id = i.nota_entrada_id
+const opCadastrar = (gerarPlaqueta: (n: number) => string) =>
+  definirOperacao({
+    nome: 'patrimonio.bem.cadastrar',
+    tabelas: ['bem_patrimonial', 'grupo_bem', 'sequencia_negocio'],
+    entrada: cadastrarZ,
+    async gravar(tx, x, ctx) {
+      await garantirSementeGrupos(tx);
+      if (x.item) {
+        const it = await tx.consultarParaAtualizar<{ id: unknown; nota_entrada_id: unknown }>(
+          `SELECT i.id, i.nota_entrada_id FROM nota_entrada_item i JOIN nota_entrada n ON n.id = i.nota_entrada_id
           WHERE i.id = ? AND n.estabelecimento_id = ? AND i.excluido_em IS NULL AND n.excluido_em IS NULL`,
-        [x.item.id, ctx.estabelecimento],
-      );
-      if (!it.length) throw recusa('item-nota', 'O item não existe mais na nota fiscal de entrada.');
-      const ja = await tx.uma<{ n: unknown }>(
-        'SELECT COUNT(*) AS n FROM bem_patrimonial WHERE nota_entrada_item_id = ? AND excluido_em IS NULL',
-        [x.item.id],
-      );
-      if (inteiro(ja?.n) !== x.item.jaCadastrados) throw desatualizado('O item da nota');
-      if (inteiro(ja?.n) + x.bens.length > x.item.unidades)
-        throw recusa('item-quantidade', 'O item da nota não tem mais unidades sem bem cadastrado.');
-    }
-    if (x.bens.some((b) => b.plaqueta === null)) {
-      // A sequência nasce depois da maior plaqueta já cadastrada no formato do domínio (cliente migrado sem colisão).
-      const f = formatoDaPlaqueta(gerarPlaqueta);
-      const maior = await tx.uma<{ m: unknown }>(
-        `SELECT MAX(CAST(SUBSTRING(plaqueta, ?) AS UNSIGNED)) AS m FROM bem_patrimonial
+          [x.item.id, ctx.estabelecimento],
+        );
+        if (!it.length) throw recusa('item-nota', 'O item não existe mais na nota fiscal de entrada.');
+        const ja = await tx.uma<{ n: unknown }>(
+          'SELECT COUNT(*) AS n FROM bem_patrimonial WHERE nota_entrada_item_id = ? AND excluido_em IS NULL',
+          [x.item.id],
+        );
+        if (inteiro(ja?.n) !== x.item.jaCadastrados) throw desatualizado('O item da nota');
+        if (inteiro(ja?.n) + x.bens.length > x.item.unidades)
+          throw recusa('item-quantidade', 'O item da nota não tem mais unidades sem bem cadastrado.');
+      }
+      if (x.bens.some((b) => b.plaqueta === null)) {
+        // A sequência nasce depois da maior plaqueta já cadastrada no formato do domínio (cliente migrado sem colisão).
+        const f = formatoDaPlaqueta(gerarPlaqueta);
+        const maior = await tx.uma<{ m: unknown }>(
+          `SELECT MAX(CAST(SUBSTRING(plaqueta, ?) AS UNSIGNED)) AS m FROM bem_patrimonial
           WHERE estabelecimento_id = ? AND LEFT(plaqueta, ?) = ? AND CHAR_LENGTH(plaqueta) >= ?
             AND SUBSTRING(plaqueta, ?) REGEXP '^[0-9]+$'`,
-        [f.prefixo.length + 1, ctx.estabelecimento, f.prefixo.length, f.prefixo, f.prefixo.length + f.largura, f.prefixo.length + 1],
-      );
-      await garantirSequencia(
-        tx,
-        { tipo: 'plaqueta_bem', estabelecimento: ctx.estabelecimento, prefixo: f.prefixo.slice(0, 10), inicio: inteiro(maior?.m) + 1 },
-        { usuario: ctx.usuario, agora: new Date() },
-      );
-    }
-    /** O próximo número da sequência no formato do domínio; a plaqueta já usada (até a excluída) é pulada. */
-    const proximaPlaqueta = async (): Promise<string> => {
-      for (let i = 0; i < TENTATIVAS_PLAQUETA; i++) {
-        const p = gerarPlaqueta((await tx.proximoNumero('plaqueta_bem')).valor);
-        const usada = await tx.uma('SELECT id FROM bem_patrimonial WHERE estabelecimento_id = ? AND plaqueta = ?', [ctx.estabelecimento, p]);
-        if (!usada) return p;
-      }
-      throw recusa('plaqueta-repetida', 'As próximas plaquetas da sequência já estão em uso: informe a plaqueta.');
-    };
-    const ids: number[] = [];
-    for (const b of x.bens) {
-      const plaqueta = b.plaqueta ?? (await proximaPlaqueta());
-      await centroDoEstabelecimento(tx, b.centro);
-      try {
-        ids.push(
-          await tx.incluir('bem_patrimonial', {
-            estabelecimento_id: ctx.estabelecimento,
-            plaqueta,
-            descricao: b.descricao,
-            grupo_bem_id: await idDoGrupo(tx, b.grupo, true),
-            origem_bem_id: b.origem,
-            centro_custo_id: b.centro,
-            local_detalhe: b.localDetalhe,
-            tipo_responsavel_bem_id: b.tipoResponsavel,
-            marca: b.marca,
-            modelo: b.modelo,
-            numero_serie: b.numeroSerie,
-            nota_entrada_id: b.documento === 'nota' ? b.nota : null,
-            nota_entrada_item_id: b.documento === 'nota' ? b.itemNota : null,
-            termo_doacao_numero: b.documento === 'termo' ? b.termoNumero : null,
-            termo_doacao_data: b.documento === 'termo' ? b.termoData : null,
-            termo_doacao_doador: b.documento === 'termo' ? b.termoDoador : null,
-            responsavel_usuario_id: b.responsavelUsuario,
-            data_aquisicao: b.dataAquisicao,
-            valor_aquisicao: decimal(b.valorCent),
-            valor_residual: decimal(b.residualCent),
-            depreciavel: b.depreciavel,
-            vida_util_meses: b.vidaUtilMeses,
-            coeficiente_turno_id: b.coeficiente,
-            inicio_depreciacao: primeiroDia(b.inicioDepreciacao),
-            situacao: 'ativo',
-          }),
+          [
+            f.prefixo.length + 1,
+            ctx.estabelecimento,
+            f.prefixo.length,
+            f.prefixo,
+            f.prefixo.length + f.largura,
+            f.prefixo.length + 1,
+          ],
         );
-      } catch (e) {
-        if (restricaoUnicaViolada(e) === 'uq_bem_patrimonial_estabelecimento_plaqueta')
-          throw recusa('plaqueta-repetida', `A plaqueta ${plaqueta} já é de outro bem.`);
-        throw e;
+        await garantirSequencia(
+          tx,
+          {
+            tipo: 'plaqueta_bem',
+            estabelecimento: ctx.estabelecimento,
+            prefixo: f.prefixo.slice(0, 10),
+            inicio: inteiro(maior?.m) + 1,
+          },
+          { usuario: ctx.usuario, agora: new Date() },
+        );
       }
-    }
-    return { ids: ids.join(',') };
-  },
-  alvo: (_x, r) => ({ tabela: 'bem_patrimonial', id: Number(r.ids.split(',')[0]) || null }),
-  trilha: (x) => ({ acao: 'inclusao', dados: x.dados }),
-});
+      /** O próximo número da sequência no formato do domínio; a plaqueta já usada (até a excluída) é pulada. */
+      const proximaPlaqueta = async (): Promise<string> => {
+        for (let i = 0; i < TENTATIVAS_PLAQUETA; i++) {
+          const p = gerarPlaqueta((await tx.proximoNumero('plaqueta_bem')).valor);
+          const usada = await tx.uma(
+            'SELECT id FROM bem_patrimonial WHERE estabelecimento_id = ? AND plaqueta = ?',
+            [ctx.estabelecimento, p],
+          );
+          if (!usada) return p;
+        }
+        throw recusa(
+          'plaqueta-repetida',
+          'As próximas plaquetas da sequência já estão em uso: informe a plaqueta.',
+        );
+      };
+      const ids: number[] = [];
+      for (const b of x.bens) {
+        const plaqueta = b.plaqueta ?? (await proximaPlaqueta());
+        await centroDoEstabelecimento(tx, b.centro);
+        try {
+          ids.push(
+            await tx.incluir('bem_patrimonial', {
+              estabelecimento_id: ctx.estabelecimento,
+              plaqueta,
+              descricao: b.descricao,
+              grupo_bem_id: await idDoGrupo(tx, b.grupo, true),
+              origem_bem_id: b.origem,
+              centro_custo_id: b.centro,
+              local_detalhe: b.localDetalhe,
+              tipo_responsavel_bem_id: b.tipoResponsavel,
+              marca: b.marca,
+              modelo: b.modelo,
+              numero_serie: b.numeroSerie,
+              nota_entrada_id: b.documento === 'nota' ? b.nota : null,
+              nota_entrada_item_id: b.documento === 'nota' ? b.itemNota : null,
+              termo_doacao_numero: b.documento === 'termo' ? b.termoNumero : null,
+              termo_doacao_data: b.documento === 'termo' ? b.termoData : null,
+              termo_doacao_doador: b.documento === 'termo' ? b.termoDoador : null,
+              responsavel_usuario_id: b.responsavelUsuario,
+              data_aquisicao: b.dataAquisicao,
+              valor_aquisicao: decimal(b.valorCent),
+              valor_residual: decimal(b.residualCent),
+              depreciavel: b.depreciavel,
+              vida_util_meses: b.vidaUtilMeses,
+              coeficiente_turno_id: b.coeficiente,
+              inicio_depreciacao: primeiroDia(b.inicioDepreciacao),
+              situacao: 'ativo',
+            }),
+          );
+        } catch (e) {
+          if (restricaoUnicaViolada(e) === 'uq_bem_patrimonial_estabelecimento_plaqueta')
+            throw recusa('plaqueta-repetida', `A plaqueta ${plaqueta} já é de outro bem.`);
+          throw e;
+        }
+      }
+      return { ids: ids.join(',') };
+    },
+    alvo: (_x, r) => ({ tabela: 'bem_patrimonial', id: Number(r.ids.split(',')[0]) || null }),
+    trilha: (x) => ({ acao: 'inclusao', dados: x.dados }),
+  });
 
 const opAlterar = definirOperacao({
   nome: 'patrimonio.bem.alterar',
@@ -1049,10 +1148,21 @@ const opAlterar = definirOperacao({
     tabela: 'bem_patrimonial',
     id: x.id,
     versaoEsperada: x.versao,
-    colunas: ['estabelecimento_id', 'descricao', 'grupo_bem_id', 'vida_util_meses', 'valor_residual', 'excluido_em'],
+    colunas: [
+      'estabelecimento_id',
+      'descricao',
+      'grupo_bem_id',
+      'vida_util_meses',
+      'valor_residual',
+      'excluido_em',
+    ],
   }),
   async conferir(tx, _x, ctx, relido) {
-    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento || relido['excluido_em'] != null)
+    if (
+      !relido ||
+      Number(relido['estabelecimento_id']) !== ctx.estabelecimento ||
+      relido['excluido_em'] != null
+    )
       throw naoEncontrado('Bem');
     void tx;
   },
@@ -1088,8 +1198,11 @@ const opMovimento = definirOperacao({
     const destino = x.destino === null ? null : await centroDoEstabelecimento(tx, x.destino);
     // A baixa leva o motivo do cadastro (ativo); os outros movimentos não têm motivo de baixa.
     if (x.tipo === 'baixa') {
-      if (x.motivoBaixa === null) throw recusa('motivo-baixa', 'Escolha o motivo da baixa no cadastro de motivos.');
-      const m = await tx.uma('SELECT id FROM motivo_baixa_bem WHERE id = ? AND ativo = TRUE', [x.motivoBaixa]);
+      if (x.motivoBaixa === null)
+        throw recusa('motivo-baixa', 'Escolha o motivo da baixa no cadastro de motivos.');
+      const m = await tx.uma('SELECT id FROM motivo_baixa_bem WHERE id = ? AND ativo = TRUE', [
+        x.motivoBaixa,
+      ]);
       if (!m) throw recusa('motivo-baixa', 'O motivo de baixa não existe ou está inativo.');
     } else if (x.motivoBaixa !== null) throw recusa('motivo-baixa', 'Só a baixa leva motivo de baixa.');
     if (x.tipo === 'transferencia' && destino?.setor == null)
@@ -1140,10 +1253,17 @@ const opDecidir = definirOperacao({
     tabela: 'movimento_bem',
     id: x.id,
     versaoEsperada: x.versao,
-    colunas: ['estabelecimento_id', 'situacao', 'bem_patrimonial_id', 'origem_centro_custo_id', 'destino_centro_custo_id'],
+    colunas: [
+      'estabelecimento_id',
+      'situacao',
+      'bem_patrimonial_id',
+      'origem_centro_custo_id',
+      'destino_centro_custo_id',
+    ],
   }),
   async conferir(_tx, _x, ctx, relido) {
-    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento) throw naoEncontrado('Pedido');
+    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento)
+      throw naoEncontrado('Pedido');
     if (relido['situacao'] !== 'pendente') throw desatualizado('O pedido');
   },
   async gravar(tx, x, ctx) {
@@ -1152,8 +1272,15 @@ const opDecidir = definirOperacao({
       [x.id],
     );
     const bemId = inteiro(m?.['bem_patrimonial_id']);
-    const b = await travarEConferir(tx, { tabela: 'bem_patrimonial', id: bemId, colunas: ['situacao', 'centro_custo_id'] });
-    if (x.aceitar && (b['situacao'] !== 'ativo' || inteiro(b['centro_custo_id']) !== inteiro(m?.['origem_centro_custo_id'])))
+    const b = await travarEConferir(tx, {
+      tabela: 'bem_patrimonial',
+      id: bemId,
+      colunas: ['situacao', 'centro_custo_id'],
+    });
+    if (
+      x.aceitar &&
+      (b['situacao'] !== 'ativo' || inteiro(b['centro_custo_id']) !== inteiro(m?.['origem_centro_custo_id']))
+    )
       throw recusa('bem-mudou', 'O bem não está mais em uso no setor de origem.');
     const versao = await tx.alterar('movimento_bem', x.id, x.versao, {
       situacao: x.aceitar ? 'aceito' : 'recusado',
@@ -1186,7 +1313,8 @@ const opCancelarMov = definirOperacao({
     colunas: ['estabelecimento_id', 'situacao', 'bem_patrimonial_id'],
   }),
   async conferir(_tx, _x, ctx, relido) {
-    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento) throw naoEncontrado('Pedido');
+    if (!relido || Number(relido['estabelecimento_id']) !== ctx.estabelecimento)
+      throw naoEncontrado('Pedido');
     if (relido['situacao'] !== 'pendente') throw desatualizado('O pedido');
   },
   async gravar(tx, x, ctx) {
@@ -1196,8 +1324,14 @@ const opCancelarMov = definirOperacao({
       decidido_por_usuario_id: ctx.usuario,
       motivo_decisao: x.motivo.slice(0, 400),
     });
-    const m = await tx.uma<{ b: unknown }>('SELECT bem_patrimonial_id AS b FROM movimento_bem WHERE id = ?', [x.id]);
-    const b = await travarEConferir(tx, { tabela: 'bem_patrimonial', id: inteiro(m?.b), colunas: ['situacao'] });
+    const m = await tx.uma<{ b: unknown }>('SELECT bem_patrimonial_id AS b FROM movimento_bem WHERE id = ?', [
+      x.id,
+    ]);
+    const b = await travarEConferir(tx, {
+      tabela: 'bem_patrimonial',
+      id: inteiro(m?.b),
+      colunas: ['situacao'],
+    });
     await tx.alterar('bem_patrimonial', inteiro(m?.b), inteiro(b['versao']), { situacao: b['situacao'] });
     return { versao };
   },
@@ -1268,10 +1402,14 @@ const opAbrirInv = definirOperacao({
   async gravar(tx, x, ctx) {
     if (ctx.usuario === null) throw recusa('sem-responsavel', 'O inventário pede o usuário responsável.');
     if (x.centro !== null) await centroDoEstabelecimento(tx, x.centro);
-    await garantirSequencia(tx, { tipo: 'inventario_bem', estabelecimento: ctx.estabelecimento }, {
-      usuario: ctx.usuario,
-      agora: new Date(),
-    });
+    await garantirSequencia(
+      tx,
+      { tipo: 'inventario_bem', estabelecimento: ctx.estabelecimento },
+      {
+        usuario: ctx.usuario,
+        agora: new Date(),
+      },
+    );
     const numero = await tx.proximoNumero('inventario_bem');
     const hoje = new Date().toISOString().slice(0, 10);
     const id = await tx.incluir('inventario_bem', {
@@ -1295,7 +1433,8 @@ async function travarInventarioAberto(tx: TxOperacao, id: number): Promise<Recor
     'SELECT id, versao, situacao, estabelecimento_id FROM inventario_bem WHERE id = ? AND excluido_em IS NULL',
     [id],
   );
-  if (!v || Number(v['estabelecimento_id']) !== tx.contexto.estabelecimento) throw naoEncontrado('Inventário');
+  if (!v || Number(v['estabelecimento_id']) !== tx.contexto.estabelecimento)
+    throw naoEncontrado('Inventário');
   if (v['situacao'] === 'cancelado') throw recusa('inventario-cancelado', 'O inventário foi cancelado.');
   if (v['situacao'] !== 'aberto') throw recusa('inventario-encerrado', 'O inventário já foi encerrado.');
   return v;
@@ -1390,7 +1529,8 @@ const opIncluirGrupo = definirOperacao({
       });
       return { id };
     } catch (e) {
-      if (restricaoUnicaViolada(e)) throw recusa('codigo-em-uso', `Já existe um grupo com o código ${x.codigo}.`);
+      if (restricaoUnicaViolada(e))
+        throw recusa('codigo-em-uso', `Já existe um grupo com o código ${x.codigo}.`);
       throw e;
     }
   },
@@ -1399,10 +1539,15 @@ const opIncluirGrupo = definirOperacao({
 });
 
 /** O grupo gravado pelo código, travado e na versão vista (a semente, versão 0, é gravada antes). */
-async function travarGrupo(tx: TxOperacao, codigo: string, versaoVista: number): Promise<Record<string, unknown>> {
+async function travarGrupo(
+  tx: TxOperacao,
+  codigo: string,
+  versaoVista: number,
+): Promise<Record<string, unknown>> {
   await garantirSementeGrupos(tx);
   const g = await tx.uma<{ id: unknown }>('SELECT id FROM grupo_bem WHERE codigo = ?', [codigo]);
-  if (!g) throw new ErroOperacao(404, 'nao-encontrado', 'Grupo não encontrado', 'Grupo do bem não encontrado.');
+  if (!g)
+    throw new ErroOperacao(404, 'nao-encontrado', 'Grupo não encontrado', 'Grupo do bem não encontrado.');
   const relido = await travarEConferir(tx, {
     tabela: 'grupo_bem',
     id: inteiro(g.id),
@@ -1429,7 +1574,11 @@ const opAlterarGrupo = definirOperacao({
     return { id: inteiro(g['id']), versao, ...retratoGrupo(g) };
   },
   alvo: (_x, r) => ({ tabela: 'grupo_bem', id: r.id }),
-  trilha: (x, r) => ({ acao: 'alteracao', motivo: x.motivo, dados: { ...asObjeto(x.dados), operacao: 'alteracao', antes: antesDoResultado(r) } }),
+  trilha: (x, r) => ({
+    acao: 'alteracao',
+    motivo: x.motivo,
+    dados: { ...asObjeto(x.dados), operacao: 'alteracao', antes: antesDoResultado(r) },
+  }),
 });
 
 const opSituacaoGrupo = definirOperacao({
@@ -1439,11 +1588,17 @@ const opSituacaoGrupo = definirOperacao({
   async gravar(tx, x) {
     const g = await travarGrupo(tx, x.codigo, x.versaoVista);
     if (booleano(g['ativo']) === x.ativo)
-      throw recusa(x.ativo ? 'ja-ativo' : 'ja-inativo', x.ativo ? 'O grupo do bem já está ativo.' : 'O grupo do bem já está inativo.');
+      throw recusa(
+        x.ativo ? 'ja-ativo' : 'ja-inativo',
+        x.ativo ? 'O grupo do bem já está ativo.' : 'O grupo do bem já está inativo.',
+      );
     if (!x.ativo) {
       const n = await tx.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM grupo_bem WHERE ativo = TRUE');
       if (inteiro(n?.n) <= 1)
-        throw recusa('ultimo-grupo', 'É o último grupo ativo: inclua ou reative outro grupo antes de inativar este.');
+        throw recusa(
+          'ultimo-grupo',
+          'É o último grupo ativo: inclua ou reative outro grupo antes de inativar este.',
+        );
     }
     const versao = await tx.alterar('grupo_bem', inteiro(g['id']), inteiro(g['versao']), { ativo: x.ativo });
     return { id: inteiro(g['id']), versao, ...retratoGrupo(g) };
@@ -1452,7 +1607,11 @@ const opSituacaoGrupo = definirOperacao({
   trilha: (x, r) => ({
     acao: 'alteracao',
     motivo: x.motivo,
-    dados: { ...asObjeto(x.dados), operacao: x.ativo ? 'reativacao' : 'inativacao', antes: antesDoResultado(r) },
+    dados: {
+      ...asObjeto(x.dados),
+      operacao: x.ativo ? 'reativacao' : 'inativacao',
+      antes: antesDoResultado(r),
+    },
   }),
 });
 
@@ -1467,25 +1626,40 @@ const opExcluirGrupo = definirOperacao({
       'SELECT plaqueta FROM bem_patrimonial WHERE grupo_bem_id = ? AND excluido_em IS NULL ORDER BY plaqueta LIMIT 5',
       [id],
     );
-    const nb = await tx.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM bem_patrimonial WHERE grupo_bem_id = ? AND excluido_em IS NULL', [id]);
+    const nb = await tx.uma<{ n: unknown }>(
+      'SELECT COUNT(*) AS n FROM bem_patrimonial WHERE grupo_bem_id = ? AND excluido_em IS NULL',
+      [id],
+    );
     if (inteiro(nb?.n) > 0) {
       const total = inteiro(nb?.n);
       throw recusa(
         'com-dependentes',
         `O grupo do bem tem ${total} ${total === 1 ? 'registro dependente' : 'registros dependentes'}: ${total} em Bens patrimoniais. Inative o grupo em vez de excluir.`,
         {
-          dependentes: [{ rotulo: 'Bens patrimoniais', quantidade: total, amostra: bens.map((b) => String(b.plaqueta)), origem: 'logica' }],
+          dependentes: [
+            {
+              rotulo: 'Bens patrimoniais',
+              quantidade: total,
+              amostra: bens.map((b) => String(b.plaqueta)),
+              origem: 'logica',
+            },
+          ],
           podeInativar: true,
         },
       );
     }
     const n = await tx.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM grupo_bem');
-    if (inteiro(n?.n) <= 1) throw recusa('ultimo-grupo', 'É o último grupo: inclua outro antes de excluir este.');
+    if (inteiro(n?.n) <= 1)
+      throw recusa('ultimo-grupo', 'É o último grupo: inclua outro antes de excluir este.');
     await tx.excluir('grupo_bem', id, inteiro(g['versao']));
     return { id, ...retratoGrupo(g) };
   },
   alvo: (_x, r) => ({ tabela: 'grupo_bem', id: r.id }),
-  trilha: (x, r) => ({ acao: 'exclusao', motivo: x.motivo, dados: { ...asObjeto(x.dados), antes: antesDoResultado(r) } }),
+  trilha: (x, r) => ({
+    acao: 'exclusao',
+    motivo: x.motivo,
+    dados: { ...asObjeto(x.dados), antes: antesDoResultado(r) },
+  }),
 });
 
 const asObjeto = (v: unknown): Record<string, unknown> =>
@@ -1531,19 +1705,26 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
   }
 
   private ler<T>(c: ContextoPatrimonio, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'patrimonio' }, async (l) =>
-      fn(l, await this.estabelecimento(c, l)),
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.correlacao || 'patrimonio' },
+      async (l) => fn(l, await this.estabelecimento(c, l)),
     );
   }
 
   /** O estabelecimento da sessão (pelo id, ou pelo código quando o mapa ainda não o tinha); sem ele, recusa. */
   private async estabelecimento(c: ContextoPatrimonio, l: Leitor): Promise<number> {
     if (c.estabelecimento !== null) return c.estabelecimento;
-    const x = await l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-      c.hospital,
-    ]);
+    const x = await l.uma<{ id: unknown }>(
+      'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+      [c.hospital],
+    );
     if (!x)
-      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento desconhecido', 'O estabelecimento da sessão não existe.');
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Estabelecimento desconhecido',
+        'O estabelecimento da sessão não existe.',
+      );
     return Number(x.id);
   }
 
@@ -1559,7 +1740,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
       estabelecimento: est,
       usuario: c.usuario,
       correlacao: trilha.correlacao ?? c.correlacao,
-      chaveIdempotencia: c.chaveIdempotencia ?? `patrimonio-${op.nome}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      chaveIdempotencia:
+        c.chaveIdempotencia ??
+        `patrimonio-${op.nome}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     };
     return (await this.executor.executar(op, this.cliente, entrada, contexto)).resultado;
   }
@@ -1570,8 +1753,16 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return this.ler(c, async (l, est) => {
       const t = { teto: TETO_DOMINIO };
       // Origem, tipo de responsável e coeficiente são cadastros do cliente (rede inteira).
-      const origens = await l.consultar('SELECT id, descricao, deprecia FROM origem_bem WHERE ativo = TRUE ORDER BY descricao', [], t);
-      const tipos = await l.consultar('SELECT id, descricao FROM tipo_responsavel_bem WHERE ativo = TRUE ORDER BY descricao', [], t);
+      const origens = await l.consultar(
+        'SELECT id, descricao, deprecia FROM origem_bem WHERE ativo = TRUE ORDER BY descricao',
+        [],
+        t,
+      );
+      const tipos = await l.consultar(
+        'SELECT id, descricao FROM tipo_responsavel_bem WHERE ativo = TRUE ORDER BY descricao',
+        [],
+        t,
+      );
       const coef = await l.consultar(
         'SELECT id, descricao, coeficiente FROM coeficiente_turno WHERE ativo = TRUE ORDER BY turnos',
         [],
@@ -1588,9 +1779,16 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
         [est],
         t,
       );
-      const e = await l.uma<{ nome_fantasia: unknown }>('SELECT nome_fantasia FROM estabelecimento WHERE id = ?', [est]);
+      const e = await l.uma<{ nome_fantasia: unknown }>(
+        'SELECT nome_fantasia FROM estabelecimento WHERE id = ?',
+        [est],
+      );
       return {
-        origens: origens.map((x) => ({ id: inteiro(x['id']), nome: texto(x['descricao']) ?? '', depreciar: booleano(x['deprecia']) })),
+        origens: origens.map((x) => ({
+          id: inteiro(x['id']),
+          nome: texto(x['descricao']) ?? '',
+          depreciar: booleano(x['deprecia']),
+        })),
         tiposResponsavel: tipos.map((x) => ({ id: inteiro(x['id']), nome: texto(x['descricao']) ?? '' })),
         coeficientes: coef.map((x) => ({
           id: inteiro(x['id']),
@@ -1611,7 +1809,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
         })),
         empresas: [{ id: EMPRESA_UNICA, nome: texto(e?.nome_fantasia) ?? '' }],
         // Os parâmetros da depreciação ainda não têm lugar no modelo (pedido): os padrões da regra.
-        parametros: [{ empresa: EMPRESA_UNICA, depreciar: true, aplicarCoeficiente: true, considerarResidual: true }],
+        parametros: [
+          { empresa: EMPRESA_UNICA, depreciar: true, aplicarCoeficiente: true, considerarResidual: true },
+        ],
       };
     });
   }
@@ -1634,7 +1834,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
       }
       const busca = f.busca?.trim();
       if (busca) {
-        w.push("(b.plaqueta LIKE CONCAT(?, '%') OR b.descricao LIKE CONCAT('%', ?, '%') OR b.numero_serie = ?)");
+        w.push(
+          "(b.plaqueta LIKE CONCAT(?, '%') OR b.descricao LIKE CONCAT('%', ?, '%') OR b.numero_serie = ?)",
+        );
         p.push(busca.toUpperCase(), busca, busca);
       }
       const tamanho = Math.max(1, Math.min(500, Math.trunc(f.tamanho)));
@@ -1654,7 +1856,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
 
   bem(c: ContextoPatrimonio, id: number): Promise<BemRegistrado | null> {
     return this.ler(c, async (l, est) => {
-      const x = await l.uma(`SELECT ${COLUNAS_BEM} FROM ${DE_BEM} WHERE b.id = ? AND b.estabelecimento_id = ? AND b.excluido_em IS NULL`, [id, est]);
+      const x = await l.uma(
+        `SELECT ${COLUNAS_BEM} FROM ${DE_BEM} WHERE b.id = ? AND b.estabelecimento_id = ? AND b.excluido_em IS NULL`,
+        [id, est],
+      );
       return x ? bemDaLinha(x) : null;
     });
   }
@@ -1669,7 +1874,12 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     });
   }
 
-  notas(c: ContextoPatrimonio, ano: number, mes: number, busca?: string): Promise<{ notas: NotaDeEntrada[]; truncado: boolean }> {
+  notas(
+    c: ContextoPatrimonio,
+    ano: number,
+    mes: number,
+    busca?: string,
+  ): Promise<{ notas: NotaDeEntrada[]; truncado: boolean }> {
     return this.ler(c, async (l, est) => {
       const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
       const b = busca?.trim() ?? '';
@@ -1722,7 +1932,11 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     });
   }
 
-  bensParaDepreciar(c: ContextoPatrimonio, _empresa: number, competencia: string): Promise<{ bens: BemDaCompetencia[]; truncado: boolean }> {
+  bensParaDepreciar(
+    c: ContextoPatrimonio,
+    _empresa: number,
+    competencia: string,
+  ): Promise<{ bens: BemDaCompetencia[]; truncado: boolean }> {
     return this.ler(c, async (l, est) => {
       const dia = primeiroDia(competencia);
       const ls = await l.consultar(
@@ -1771,8 +1985,14 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     competencia: string,
   ): Promise<{ daCompetencia: CalculoRegistrado | null; ultimo: CalculoRegistrado | null }> {
     return this.ler(c, async (l, est) => {
-      const da = await l.uma(`${SQL_CALCULO} AND k.situacao = 'vigente' AND k.competencia = ?`, [est, primeiroDia(competencia)]);
-      const ult = await l.uma(`${SQL_CALCULO} AND k.situacao = 'vigente' ORDER BY k.competencia DESC LIMIT 1`, [est]);
+      const da = await l.uma(`${SQL_CALCULO} AND k.situacao = 'vigente' AND k.competencia = ?`, [
+        est,
+        primeiroDia(competencia),
+      ]);
+      const ult = await l.uma(
+        `${SQL_CALCULO} AND k.situacao = 'vigente' ORDER BY k.competencia DESC LIMIT 1`,
+        [est],
+      );
       return { daCompetencia: da ? calculoDaLinha(da) : null, ultimo: ult ? calculoDaLinha(ult) : null };
     });
   }
@@ -1836,7 +2056,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
 
   ajustes(c: ContextoPatrimonio, bem: number): Promise<AjusteDoBem[]> {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_AJUSTE} AND a.bem_patrimonial_id = ? ORDER BY a.id DESC`, [est, bem])).map(ajusteDaLinha),
+      (await l.consultar(`${SQL_AJUSTE} AND a.bem_patrimonial_id = ? ORDER BY a.id DESC`, [est, bem])).map(
+        ajusteDaLinha,
+      ),
     );
   }
 
@@ -1873,7 +2095,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
           `Não há usuário com o login ou o nome "${n}", com vínculo vigente neste estabelecimento, para responder pelo bem.`,
         );
       if (us.length > 1)
-        throw recusa('responsavel-ambiguo', `Há mais de um usuário com o nome "${n}": informe o login do responsável.`);
+        throw recusa(
+          'responsavel-ambiguo',
+          `Há mais de um usuário com o nome "${n}": informe o login do responsável.`,
+        );
       return inteiro(us[0]?.['id']);
     });
   }
@@ -1891,7 +2116,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     });
   }
 
-  movimentos(c: ContextoPatrimonio, f: { situacao?: string | undefined; bem?: number | undefined }): Promise<MovimentoRegistrado[]> {
+  movimentos(
+    c: ContextoPatrimonio,
+    f: { situacao?: string | undefined; bem?: number | undefined },
+  ): Promise<MovimentoRegistrado[]> {
     return this.ler(c, async (l, est) => {
       const ls = await l.consultar(
         `SELECT ${COLUNAS_MOV} FROM ${DE_MOV}
@@ -1906,7 +2134,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
 
   movimento(c: ContextoPatrimonio, id: number): Promise<MovimentoRegistrado | null> {
     return this.ler(c, async (l, est) => {
-      const x = await l.uma(`SELECT ${COLUNAS_MOV} FROM ${DE_MOV} WHERE m.id = ? AND m.estabelecimento_id = ?`, [id, est]);
+      const x = await l.uma(
+        `SELECT ${COLUNAS_MOV} FROM ${DE_MOV} WHERE m.id = ? AND m.estabelecimento_id = ?`,
+        [id, est],
+      );
       return x ? movDaLinha(x) : null;
     });
   }
@@ -1936,15 +2167,18 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
 
   inventario(c: ContextoPatrimonio, id: number): Promise<InventarioRegistrado | null> {
     return this.ler(c, async (l, est) => {
-      const x = await l.uma(`SELECT ${COLUNAS_INV} FROM ${DE_INV} WHERE v.id = ? AND v.estabelecimento_id = ? AND v.excluido_em IS NULL`, [
-        id,
-        est,
-      ]);
+      const x = await l.uma(
+        `SELECT ${COLUNAS_INV} FROM ${DE_INV} WHERE v.id = ? AND v.estabelecimento_id = ? AND v.excluido_em IS NULL`,
+        [id, est],
+      );
       return x ? invDaLinha(x) : null;
     });
   }
 
-  leituras(c: ContextoPatrimonio, inventario: number): Promise<{ leituras: LeituraRegistrada[]; truncado: boolean }> {
+  leituras(
+    c: ContextoPatrimonio,
+    inventario: number,
+  ): Promise<{ leituras: LeituraRegistrada[]; truncado: boolean }> {
     return this.ler(c, async (l, est) => {
       const ls = await l.consultar(
         `SELECT i.id, i.plaqueta AS codigo, i.bem_patrimonial_id, b.plaqueta, b.descricao, b.centro_custo_id,
@@ -1966,7 +2200,12 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
             bem:
               bem === null
                 ? null
-                : { id: bem, plaqueta: texto(x['plaqueta']) ?? '', descricao: texto(x['descricao']) ?? '', centro: inteiro(x['centro_custo_id']) },
+                : {
+                    id: bem,
+                    plaqueta: texto(x['plaqueta']) ?? '',
+                    descricao: texto(x['descricao']) ?? '',
+                    centro: inteiro(x['centro_custo_id']),
+                  },
             // O centro onde a leitura foi feita ainda não tem coluna (pedido): vale o centro do bem lido.
             centroLido: inteiro(x['centro_custo_id']),
             resultado: RESULTADO_DO_BANCO[String(x['resultado'])] ?? String(x['resultado']),
@@ -1980,7 +2219,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     });
   }
 
-  esperados(c: ContextoPatrimonio, centro: number | null): Promise<{ bens: BemEsperado[]; truncado: boolean }> {
+  esperados(
+    c: ContextoPatrimonio,
+    centro: number | null,
+  ): Promise<{ bens: BemEsperado[]; truncado: boolean }> {
     return this.ler(c, async (l, est) => {
       const ls = await l.consultar(
         `SELECT id, plaqueta, descricao, centro_custo_id FROM bem_patrimonial
@@ -2081,14 +2323,19 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
       const contas = new Map<number, string>();
       const versoes: VersaoGrupoBem[] = [];
       for (const x of ls) {
-        const d = asObjeto(typeof x['dados_depois'] === 'string' ? JSON.parse(x['dados_depois']) : x['dados_depois']);
+        const d = asObjeto(
+          typeof x['dados_depois'] === 'string' ? JSON.parse(x['dados_depois']) : x['dados_depois'],
+        );
         const dados = asObjeto(d['dados']);
         const antes = asObjeto(dados['antes']);
         const op = dados['operacao'];
         if (op !== 'alteracao' && op !== 'inativacao' && op !== 'reativacao') continue;
         const conta = inteiroOuNulo(antes['conta']);
         if (conta !== null && !contas.has(conta)) {
-          const cc = await l.uma<{ classificacao: unknown }>('SELECT classificacao FROM conta_contabil WHERE id = ?', [conta]);
+          const cc = await l.uma<{ classificacao: unknown }>(
+            'SELECT classificacao FROM conta_contabil WHERE id = ?',
+            [conta],
+          );
           contas.set(conta, texto(cc?.classificacao) ?? '');
         }
         versoes.push({
@@ -2131,8 +2378,8 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
           nota: b.nota,
           itemNota: b.itemNota,
           termoNumero: b.termo?.numero ?? null,
-          termoData: b.documento === 'termo' ? (b.termo?.data || null) : null,
-          termoDoador: b.documento === 'termo' ? (b.termo?.doador.trim() || null) : null,
+          termoData: b.documento === 'termo' ? b.termo?.data || null : null,
+          termoDoador: b.documento === 'termo' ? b.termo?.doador.trim() || null : null,
           responsavelUsuario: responsaveis[i] ?? null,
           dataAquisicao: b.dataAquisicao,
           valorCent: b.valorCent,
@@ -2253,7 +2500,10 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
         motivoBaixa: x.motivoBaixa,
         valorVendaCent: x.valorVendaCent,
         efeito: x.efeito,
-        dados: { ...asObjeto(trilha.dadosDepois), ...(x.referencia !== null ? { referencia: x.referencia } : {}) },
+        dados: {
+          ...asObjeto(trilha.dadosDepois),
+          ...(x.referencia !== null ? { referencia: x.referencia } : {}),
+        },
       },
       trilha,
     );
@@ -2309,11 +2559,13 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
   ): Promise<{ calculo: CalculoRegistrado; plano: PlanoDepreciacao }> {
     const { bens, truncado } = await this.bensParaDepreciar(c, x.empresa, x.competencia);
     if (truncado)
-      throw recusa('calculo-impedido', `O estabelecimento tem mais de ${TETO_BENS_LEITURA} bens: o cálculo precisa ser feito em lote.`);
+      throw recusa(
+        'calculo-impedido',
+        `O estabelecimento tem mais de ${TETO_BENS_LEITURA} bens: o cálculo precisa ser feito em lote.`,
+      );
     const { ultimo, daCompetencia } = await this.calculos(c, x.empresa, x.competencia);
     const plano = montar({ bens, ultimo });
-    if (plano.impedimentos.length > 0)
-      throw recusa('calculo-impedido', plano.impedimentos.join(' '));
+    if (plano.impedimentos.length > 0) throw recusa('calculo-impedido', plano.impedimentos.join(' '));
     if (daCompetencia) throw recusa('ja-calculado', 'A depreciação desta competência já foi calculada.');
     if (plano.cotas.reduce((s, k) => s + k.valorCent, 0) !== plano.totalCent)
       throw new Error('O total do cálculo não é a soma das cotas.');
@@ -2379,7 +2631,9 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
       },
       trilha,
     );
-    const [estorno] = (await this.estornos(c, x.empresa, x.competencia)).filter((e) => e.calculo === daCompetencia.id);
+    const [estorno] = (await this.estornos(c, x.empresa, x.competencia)).filter(
+      (e) => e.calculo === daCompetencia.id,
+    );
     if (!estorno) throw naoEncontrado('Estorno');
     return { estorno, calculo: daCompetencia };
   }
@@ -2516,7 +2770,12 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     return (await this.gravar(c, opAbrirInv, { ...x, dados: trilha.dadosDepois }, trilha)).id;
   }
 
-  async registrarLeitura(c: ContextoPatrimonio, x: LeituraNova, _por: string, trilha: RegistroTrilhaTela): Promise<number> {
+  async registrarLeitura(
+    c: ContextoPatrimonio,
+    x: LeituraNova,
+    _por: string,
+    trilha: RegistroTrilhaTela,
+  ): Promise<number> {
     const r = await this.gravar(
       c,
       opLeitura,
@@ -2540,7 +2799,12 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
     trilha: RegistroTrilhaTela,
   ): Promise<boolean> {
     if (!(await this.inventario(c, x.id))) return false;
-    await this.gravar(c, opEncerrarInv, { id: x.id, dados: { ...asObjeto(trilha.dadosDepois), esperados: x.esperados } }, trilha);
+    await this.gravar(
+      c,
+      opEncerrarInv,
+      { id: x.id, dados: { ...asObjeto(trilha.dadosDepois), esperados: x.esperados } },
+      trilha,
+    );
     return true;
   }
 
@@ -2557,11 +2821,17 @@ export class PortaPatrimonioPropria implements PortaPatrimonio {
 
   private async grupoPeloCodigo(c: ContextoPatrimonio, codigo: string): Promise<GrupoDoBem> {
     const g = (await this.grupos(c)).find((x) => x.codigo === codigo);
-    if (!g) throw new ErroProblema('nao-encontrado', 404, 'Grupo não encontrado', 'Grupo do bem não encontrado.');
+    if (!g)
+      throw new ErroProblema('nao-encontrado', 404, 'Grupo não encontrado', 'Grupo do bem não encontrado.');
     return g;
   }
 
-  async incluirGrupo(c: ContextoPatrimonio, x: GrupoBemNovo, _por: string, trilha: RegistroTrilhaTela): Promise<GrupoDoBem> {
+  async incluirGrupo(
+    c: ContextoPatrimonio,
+    x: GrupoBemNovo,
+    _por: string,
+    trilha: RegistroTrilhaTela,
+  ): Promise<GrupoDoBem> {
     await this.gravar(c, opIncluirGrupo, { ...x, dados: trilha.dadosDepois }, trilha);
     return this.grupoPeloCodigo(c, x.codigo);
   }

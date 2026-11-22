@@ -86,7 +86,8 @@ export async function cicloVigiaFatos(
       const depoisDoId = Number(m.ultimoId) || 0;
       const av = await f.ler(l, hospital, m.ultimoCarimbo, lote, { depoisDoId });
       const inicio = inicioDaReleitura(m.ultimoCarimbo);
-      const re = inicio && m.ultimoCarimbo ? await f.ler(l, hospital, inicio, lote, { ate: m.ultimoCarimbo }) : [];
+      const re =
+        inicio && m.ultimoCarimbo ? await f.ler(l, hospital, inicio, lote, { ate: m.ultimoCarimbo }) : [];
       return { marca: m, linhas: unicas([...re, ...av]), avanco: av };
     });
     if (linhas.length === 0) {
@@ -101,12 +102,18 @@ export async function cicloVigiaFatos(
         let ignorados = 0;
         for (const x of linhas) {
           const tipo = x.evento === undefined ? f.evento : x.evento;
-          if (tipo === null || (tipo === EVENTO_RESULTADO_REVOGADO && !(await liberacaoPublicada(tx, x.exame)))) {
+          if (
+            tipo === null ||
+            (tipo === EVENTO_RESULTADO_REVOGADO && !(await liberacaoPublicada(tx, x.exame)))
+          ) {
             ignorados++;
             continue;
           }
           const chave = chaveEvento(chaveEventoFato(f.fato, hospital, x.id, x.carimbo));
-          if ((await outboxTemChave(tx, chave)) || (await fatoJaPublicado(tx, tipo, x.exame, x.carimbo, f.entidade))) {
+          if (
+            (await outboxTemChave(tx, chave)) ||
+            (await fatoJaPublicado(tx, tipo, x.exame, x.carimbo, f.entidade))
+          ) {
             repetidos++;
             continue;
           }

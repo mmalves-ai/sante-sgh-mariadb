@@ -4,9 +4,9 @@
 // @sgh/dominio-acesso quando a gestão de acessos for migrada.
 
 /** As exceções de dormência vigentes: a última linha de cada login, quando ela está "vigente"; em ordem de login. */
-export function excecoesDormenciaVigentes<T extends { readonly id: number | string; readonly login: string; readonly situacao: string }>(
-  historico: readonly T[],
-): T[] {
+export function excecoesDormenciaVigentes<
+  T extends { readonly id: number | string; readonly login: string; readonly situacao: string },
+>(historico: readonly T[]): T[] {
   const visto = new Set<string>();
   const r: T[] = [];
   for (const x of [...historico].sort((a, b) => Number(b.id) - Number(a.id))) {
@@ -18,10 +18,11 @@ export function excecoesDormenciaVigentes<T extends { readonly id: number | stri
 }
 
 /** A conferência vigente de cada registro no conselho: a linha mais recente por registro. */
-export function conferenciasConselhoVigentes<T extends { readonly id: number | string; readonly registro: number }>(
-  historico: readonly T[],
-): Map<number, T> {
+export function conferenciasConselhoVigentes<
+  T extends { readonly id: number | string; readonly registro: number },
+>(historico: readonly T[]): Map<number, T> {
   const r = new Map<number, T>();
-  for (const x of [...historico].sort((a, b) => Number(b.id) - Number(a.id))) if (!r.has(x.registro)) r.set(x.registro, x);
+  for (const x of [...historico].sort((a, b) => Number(b.id) - Number(a.id)))
+    if (!r.has(x.registro)) r.set(x.registro, x);
   return r;
 }

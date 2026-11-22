@@ -43,7 +43,17 @@ import {
   type ResultadoDecisao,
   situacaoGuiaTiss,
 } from '@sgh/dominio-operadora';
-import { type DadosAuditor, type DadosAutorizacao, type DadosAutorizacaoResumo, type DadosElegibilidadeBeneficiario, type DadosItemDominioAutorizacao, type DominioAutorizacao, type EntradaItemRegistro, type EntradaRegistroAutorizacao, type FiltroAutorizacoesPorta } from './dados-portas.js';
+import {
+  type DadosAuditor,
+  type DadosAutorizacao,
+  type DadosAutorizacaoResumo,
+  type DadosElegibilidadeBeneficiario,
+  type DadosItemDominioAutorizacao,
+  type DominioAutorizacao,
+  type EntradaItemRegistro,
+  type EntradaRegistroAutorizacao,
+  type FiltroAutorizacoesPorta,
+} from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAutorizacao, PortaAutorizacaoOperadora } from './autorizacao-porta.js';
 

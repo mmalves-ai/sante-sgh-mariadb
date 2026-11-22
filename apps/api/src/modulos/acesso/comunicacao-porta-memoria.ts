@@ -321,7 +321,12 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
     return { pode: true, codigo: null, motivo: null };
   }
 
-  async executar(c: ContextoComunicacao, op: string, entradaBruta: unknown, ctx: ContextoOperacaoComunicacao) {
+  async executar(
+    c: ContextoComunicacao,
+    op: string,
+    entradaBruta: unknown,
+    ctx: ContextoOperacaoComunicacao,
+  ) {
     const nome = operacaoDoDicionario(op);
     if (!nome) throw new Error(`Operação ${op} fora da comunicação.`);
     const analise = ENTRADA_DICIONARIO.safeParse(entradaBruta);
@@ -471,7 +476,12 @@ export class PortaComunicacaoMemoria implements PortaComunicacao {
       resolverAvisosDoObjeto: async ({ login, tabela, id }) => {
         let n = 0;
         for (const a of s.avisos)
-          if (a.login === login && a.objetoTabela === tabela && a.objetoChave === String(id) && a.estado !== 'resolvido') {
+          if (
+            a.login === login &&
+            a.objetoTabela === tabela &&
+            a.objetoChave === String(id) &&
+            a.estado !== 'resolvido'
+          ) {
             Object.assign(a, { estado: 'resolvido' });
             n++;
           }

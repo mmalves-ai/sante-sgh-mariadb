@@ -45,6 +45,8 @@ describe.skipIf(SEM_BANCO)('porta própria das contas do banco (information_sche
     const reais = await porta.lerPrivilegiosSgh();
     expect(reais.some((r) => r.acao === 'DELETE')).toBe(true);
     const del = await porta.lerDeleteClinico(C, nomesLegiveis(sgh));
-    expect(del.find((x) => x.titular?.toUpperCase() === sgh.aplicacao[0]?.toUpperCase())?.tabelas).toBe(tabelas);
+    expect(del.find((x) => x.titular?.toUpperCase() === sgh.aplicacao[0]?.toUpperCase())?.tabelas).toBe(
+      tabelas,
+    );
   });
 });

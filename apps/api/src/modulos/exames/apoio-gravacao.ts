@@ -67,7 +67,8 @@ export interface PortaGravacaoM18<G> {
 }
 
 /** Valor de `destino` no contrato das telas (o enum do contrato ainda chama o banco de 'legado'; pedido da onda). */
-export const destinoDoContrato = (d: DestinoPorta): 'legado' | 'memoria' => (d === 'memoria' ? 'memoria' : 'legado');
+export const destinoDoContrato = (d: DestinoPorta): 'legado' | 'memoria' =>
+  d === 'memoria' ? 'memoria' : 'legado';
 
 /** Alvo da linha da trilha de uma gravação direta da porta (tabela, id do registro e paciente). */
 export interface AlvoSgh {
@@ -246,11 +247,7 @@ export class ApoioGravacao<G> {
     await this.exigirLiberacao(s);
     const alvoDe = (r: T) => (typeof alvoOuFn === 'function' ? alvoOuFn(r) : alvoOuFn);
     const r = await this.porta
-      .gravarSgh(
-        s.porta,
-        (x: T): TrilhaDaGravacao => linhaTrilha(s, evento, recurso, evento, alvoDe(x)),
-        fn,
-      )
+      .gravarSgh(s.porta, (x: T): TrilhaDaGravacao => linhaTrilha(s, evento, recurso, evento, alvoDe(x)), fn)
       .catch((e: unknown) => {
         throw problemaDoCadastro(e);
       });

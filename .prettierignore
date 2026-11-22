@@ -38,5 +38,5 @@ tools/matriz/dados/codigos-em-uso.*.json
 # M60.2: anexo gerado por pnpm instalacao:gerar (conferido byte a byte no verificar).
 docs/implantacao/anexos/variaveis.md
 # Gerado por `pnpm privilegios:gerar` (M59-F1; o teste privilegios.spec.ts confere a igualdade com o gerador).
-packages/legado/src/acesso/privilegios/alcance.*.json
+infra/mariadb/privilegios/alcance.json
 tools/verificadores/dados/dependencias-gatilhos.*.json

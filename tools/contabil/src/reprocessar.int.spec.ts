@@ -12,12 +12,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { contextoDe, fonteDoBanco, reprocessar, SAIDA } from './reprocessar.ts';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
+// Sem MariaDB no ambiente (runner do CI): SGH_NUCLEO_SEM_BANCO=1, como nos demais .int.spec do núcleo e da instalação.
+const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const raiz = resolve(import.meta.dirname, '../../..');
 let nucleo: NucleoProprio;
 let estabelecimento = 0;
 let inexistente = 0;
 
 beforeAll(async () => {
+  if (SEM_BANCO) return;
   const lista = execFileSync('python3', ['-I', 'tools/db/criar_cliente.py', '--listar'], {
     cwd: raiz,
     encoding: 'utf8',
@@ -38,7 +41,7 @@ afterAll(async () => {
   await nucleo?.encerrar();
 });
 
-describe('contabil:reprocessar no banco próprio', () => {
+describe.skipIf(SEM_BANCO)('contabil:reprocessar no banco próprio', () => {
   it('estabelecimento inexistente no cliente: recusa com 64, nunca IDÊNTICO', async () => {
     expect(estabelecimento).toBeGreaterThan(0);
     const fonte = await fonteDoBanco(nucleo);

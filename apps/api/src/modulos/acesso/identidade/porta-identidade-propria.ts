@@ -90,7 +90,8 @@ const SQL_CLASSE_SENHA = `CASE WHEN c.id IS NULL THEN 'sem-senha' WHEN c.algorit
 
 function contaDe(r: Linha): ContaIdentidade {
   const login = texto(r['login']);
-  const anterior = r['credencial_id'] !== null && r['credencial_id'] !== undefined && texto(r['algoritmo']) !== FORTE;
+  const anterior =
+    r['credencial_id'] !== null && r['credencial_id'] !== undefined && texto(r['algoritmo']) !== FORTE;
   const situacao = texto(r['situacao']);
   const perfis = texto(r['perfis']).slice(0, 150);
   return {
@@ -172,9 +173,10 @@ export class PortaIdentidadePropria implements PortaIdentidade {
   private async idEstabelecimento(l: Leitor, h: string): Promise<number | null> {
     const guardado = this.estabelecimentos.get(h);
     if (guardado) return guardado;
-    const r = await l.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-      h,
-    ]);
+    const r = await l.uma<{ id: number }>(
+      'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+      [h],
+    );
     if (!r) return null;
     this.estabelecimentos.set(h, Number(r.id));
     return Number(r.id);
@@ -265,7 +267,9 @@ export class PortaIdentidadePropria implements PortaIdentidade {
    */
   gravarForte: PortaIdentidade['gravarForte'] = async (h, c, t) => {
     const atual = await this.ler((l) =>
-      l.uma('SELECT algoritmo FROM credencial_usuario WHERE usuario_id = ? AND excluido_em IS NULL', [c.idUsuario]),
+      l.uma('SELECT algoritmo FROM credencial_usuario WHERE usuario_id = ? AND excluido_em IS NULL', [
+        c.idUsuario,
+      ]),
     );
     if (!atual || texto(atual['algoritmo']) === FORTE) return;
     await this.gravar(
@@ -279,20 +283,29 @@ export class PortaIdentidadePropria implements PortaIdentidade {
           `SELECT u.id FROM usuario u WHERE u.id = ? AND u.login = ? AND u.excluido_em IS NULL AND ${SQL_VINCULO}`,
           [c.idUsuario, c.login, est],
         );
-        if (!alvo) throw recusa('fora-do-estabelecimento', 'A conta não tem vínculo vigente com este estabelecimento.');
+        if (!alvo)
+          throw recusa(
+            'fora-do-estabelecimento',
+            'A conta não tem vínculo vigente com este estabelecimento.',
+          );
         const [cred] = await tx.consultarParaAtualizar(
           'SELECT id, versao, algoritmo, excluido_em FROM credencial_usuario WHERE usuario_id = ?',
           [c.idUsuario],
         );
         if (!cred || (cred['excluido_em'] !== null && cred['excluido_em'] !== undefined))
-          throw recusa('credencial-excluida', 'A credencial da conta foi excluída: o acesso volta por redefinição.');
+          throw recusa(
+            'credencial-excluida',
+            'A credencial da conta foi excluída: o acesso volta por redefinição.',
+          );
         // Corrida com a porta da senha: já forte, nada a converter.
         if (texto(cred['algoritmo']) === FORTE) return { id: Number(cred['id']) };
         const troca = c.origem !== 'primeiro-login';
         await tx.alterar('credencial_usuario', Number(cred['id']), Number(cred['versao']), {
           algoritmo: FORTE,
           resumo_senha: c.hashPhc,
-          ...(troca ? { senha_alterada_em: new Date(), troca_obrigatoria: c.origem === 'senha-provisoria' } : {}),
+          ...(troca
+            ? { senha_alterada_em: new Date(), troca_obrigatoria: c.origem === 'senha-provisoria' }
+            : {}),
           tentativas_invalidas: 0,
           ultima_tentativa_invalida_em: null,
         });
@@ -409,7 +422,9 @@ export class PortaIdentidadePropria implements PortaIdentidade {
   marcar2fa: PortaIdentidade['marcar2fa'] = async (h, id, instante) => {
     if (!/^\d{1,18}$/.test(id)) return false;
     const dono = await this.ler((l) =>
-      l.uma<{ usuario_id: number }>('SELECT usuario_id FROM segundo_fator_usuario WHERE id = ?', [Number(id)]),
+      l.uma<{ usuario_id: number }>('SELECT usuario_id FROM segundo_fator_usuario WHERE id = ?', [
+        Number(id),
+      ]),
     );
     if (!dono) return false;
     const r = await this.gravar(
@@ -461,23 +476,22 @@ export class PortaIdentidadePropria implements PortaIdentidade {
         [est],
         { teto: 500 },
       );
-      const porOnda = ondas.map(
-        (r): LinhaPolitica2faRegistrada => ({
-          id: texto(r['id']),
-          hospital: h,
-          alvo: texto(r['alvo']) === 'todos' ? 'todos' : 'perfil',
-          valor: texto(r['alvo']) === 'todos' ? null : texto(r['codigo']),
-          onda: Number(r['onda']) === 2 ? 2 : 1,
-          inicio: texto(r['inicio']),
-          prazoAdesaoDias: Number(r['prazo_adesao_dias']),
-          motivo: texto(r['motivo']),
-          criadaPor: texto(r['criada_por']),
-          criadaEm: data(r['criado_em']),
-          encerradaEm: data(r['encerrada_em']),
-        }),
-      );
-      return [...porOnda, ...linhas.map(
-        (r): LinhaPolitica2faRegistrada => ({
+      const porOnda = ondas.map((r): LinhaPolitica2faRegistrada => ({
+        id: texto(r['id']),
+        hospital: h,
+        alvo: texto(r['alvo']) === 'todos' ? 'todos' : 'perfil',
+        valor: texto(r['alvo']) === 'todos' ? null : texto(r['codigo']),
+        onda: Number(r['onda']) === 2 ? 2 : 1,
+        inicio: texto(r['inicio']),
+        prazoAdesaoDias: Number(r['prazo_adesao_dias']),
+        motivo: texto(r['motivo']),
+        criadaPor: texto(r['criada_por']),
+        criadaEm: data(r['criado_em']),
+        encerradaEm: data(r['encerrada_em']),
+      }));
+      return [
+        ...porOnda,
+        ...linhas.map((r): LinhaPolitica2faRegistrada => ({
           id: `perfil-${texto(r['id'])}`,
           hospital: h,
           alvo: 'perfil',
@@ -490,20 +504,30 @@ export class PortaIdentidadePropria implements PortaIdentidade {
           criadaEm: data(r['criado_em']),
           encerradaEm: null,
           origem: 'cadastro-perfil',
-        }),
-      )];
+        })),
+      ];
     });
 
   /** O perfil do alvo da política (do estabelecimento ou da rede inteira); 'todos' não tem perfil; grupo não existe. */
-  private async perfilDaPolitica(tx: TxOperacao, est: number, alvo: string, valor: string | null): Promise<number | null> {
+  private async perfilDaPolitica(
+    tx: TxOperacao,
+    est: number,
+    alvo: string,
+    valor: string | null,
+  ): Promise<number | null> {
     if (alvo === 'todos') return null;
-    if (alvo !== 'perfil') throw recusa('sem-grupos', 'O modelo próprio não tem grupos: a política vale por perfil ou para todos.');
+    if (alvo !== 'perfil')
+      throw recusa(
+        'sem-grupos',
+        'O modelo próprio não tem grupos: a política vale por perfil ou para todos.',
+      );
     const p = await tx.uma<{ id: number }>(
       `SELECT id FROM perfil_acesso WHERE codigo = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
          AND excluido_em IS NULL ORDER BY estabelecimento_id IS NULL LIMIT 1`,
       [valor ?? '', est],
     );
-    if (!p) throw recusa('perfil-inexistente', 'O perfil da política não está cadastrado neste estabelecimento.');
+    if (!p)
+      throw recusa('perfil-inexistente', 'O perfil da política não está cadastrado neste estabelecimento.');
     return Number(p.id);
   }
 
@@ -536,7 +560,14 @@ export class PortaIdentidadePropria implements PortaIdentidade {
           motivo: p.motivo.slice(0, 500),
         }),
       }),
-      { evento: t.evento, alvo: p.alvo, valor: p.valor, onda: p.onda, inicio: p.inicio, prazoAdesaoDias: p.prazoAdesaoDias },
+      {
+        evento: t.evento,
+        alvo: p.alvo,
+        valor: p.valor,
+        onda: p.onda,
+        inicio: p.inicio,
+        prazoAdesaoDias: p.prazoAdesaoDias,
+      },
     );
     return { id: String(r.id) };
   };
@@ -628,7 +659,8 @@ export class PortaIdentidadePropria implements PortaIdentidade {
         return {
           ...contaDe(r),
           forteEm: forte ? data(r['senha_alterada_em']) : null,
-          forteAlgoritmo: r['credencial_id'] === null || r['credencial_id'] === undefined ? null : texto(r['algoritmo']),
+          forteAlgoritmo:
+            r['credencial_id'] === null || r['credencial_id'] === undefined ? null : texto(r['algoritmo']),
           segundoFator: r['f2'] === null || r['f2'] === undefined ? 'ausente' : situacao2fa(r['f2']),
         };
       });

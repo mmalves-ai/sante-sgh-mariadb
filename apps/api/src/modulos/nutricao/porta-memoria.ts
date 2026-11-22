@@ -188,7 +188,8 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   private readonly inicio: string;
   readonly triagensGravadas: (TriagemRegistrada & { hospital: string })[] = [];
   readonly metasGravadas: (MetaTerapiaRegistrada & { hospital: string; reg: number })[] = [];
-  readonly acompanhamentosGravados: (AcompanhamentoTerapiaRegistrado & { hospital: string; reg: number })[] = [];
+  readonly acompanhamentosGravados: (AcompanhamentoTerapiaRegistrado & { hospital: string; reg: number })[] =
+    [];
   readonly retratos: (RetratoMapa & {
     hospital: string;
     unidade: string;
@@ -659,11 +660,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     ];
   }
 
-  async checagens(
-    _c: ContextoNutricao,
-    itens: readonly number[],
-    desde: string,
-  ): Promise<ChecagemDieta[]> {
+  async checagens(_c: ContextoNutricao, itens: readonly number[], desde: string): Promise<ChecagemDieta[]> {
     const r: ChecagemDieta[] = [];
     const hoje = this.agora().slice(0, 10);
     for (const item of itens) {
@@ -695,7 +692,9 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   async terapia(c: ContextoNutricao, reg: number) {
     return {
       metas: this.metasGravadas.filter((m) => m.hospital === estabelecimentoDe(c) && m.reg === reg),
-      acompanhamentos: this.acompanhamentosGravados.filter((a) => a.hospital === estabelecimentoDe(c) && a.reg === reg),
+      acompanhamentos: this.acompanhamentosGravados.filter(
+        (a) => a.hospital === estabelecimentoDe(c) && a.reg === reg,
+      ),
     };
   }
 
@@ -729,7 +728,12 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   async barreirasSociais(c: ContextoNutricao, regs: readonly number[]) {
     const m = new Map<number, number>();
     for (const b of this.barreirasGravadas)
-      if (b.hospital === estabelecimentoDe(c) && regs.includes(b.reg) && b.tipo === 'social' && b.situacao === 'aberta')
+      if (
+        b.hospital === estabelecimentoDe(c) &&
+        regs.includes(b.reg) &&
+        b.tipo === 'social' &&
+        b.situacao === 'aberta'
+      )
         m.set(b.reg, (m.get(b.reg) ?? 0) + 1);
     return m;
   }
@@ -812,7 +816,8 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   async acompanhantesVigentes(c: ContextoNutricao, regs: readonly number[]) {
     const m = new Map<number, RefeicaoAcompanhanteRegistrada>();
     for (const a of this.acompanhantesGravados)
-      if (a.hospital === estabelecimentoDe(c) && regs.includes(a.reg) && a.situacao === 'ativa') m.set(a.reg, a);
+      if (a.hospital === estabelecimentoDe(c) && regs.includes(a.reg) && a.situacao === 'ativa')
+        m.set(a.reg, a);
     return m;
   }
 
@@ -864,7 +869,9 @@ export class PortaNutricaoMemoria implements PortaNutricao {
   }
 
   async alteracoesAcompanhante(c: ContextoNutricao, ids: readonly number[]) {
-    return this.alteracoesGravadas.filter((x) => x.hospital === estabelecimentoDe(c) && ids.includes(x.idRegistro));
+    return this.alteracoesGravadas.filter(
+      (x) => x.hospital === estabelecimentoDe(c) && ids.includes(x.idRegistro),
+    );
   }
 
   async acompanhantes(c: ContextoNutricao, reg: number) {
@@ -879,7 +886,10 @@ export class PortaNutricaoMemoria implements PortaNutricao {
     return (
       this.retratos.find(
         (r) =>
-          r.hospital === estabelecimentoDe(c) && r.unidade === unidade && r.refeicao === refeicao && r.data === data,
+          r.hospital === estabelecimentoDe(c) &&
+          r.unidade === unidade &&
+          r.refeicao === refeicao &&
+          r.data === data,
       ) ?? null
     );
   }

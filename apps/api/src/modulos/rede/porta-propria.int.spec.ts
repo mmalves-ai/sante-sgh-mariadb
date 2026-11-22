@@ -54,21 +54,36 @@ async function limpar(e: Escritor): Promise<void> {
     ])
   ).map((x) => Number(x.id));
   const ests = (
-    await e.consultar<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [EST_A, EST_B])
+    await e.consultar<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [
+      EST_A,
+      EST_B,
+    ])
   ).map((x) => Number(x.id));
   if (ests.length)
-    await e.executar(`DELETE FROM marca_sincronismo WHERE estabelecimento_id IN (${ests.map(() => '?').join(', ')})`, ests);
+    await e.executar(
+      `DELETE FROM marca_sincronismo WHERE estabelecimento_id IN (${ests.map(() => '?').join(', ')})`,
+      ests,
+    );
   if (ids.length === 0) return;
   const q = ids.map(() => '?').join(', ');
-  await e.executar(`DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id IN (${q}) OR segundo_paciente_id IN (${q})`, [...ids, ...ids]);
-  await e.executar(`DELETE FROM unificacao_cadastro WHERE mantido_paciente_id IN (${q}) OR absorvido_paciente_id IN (${q})`, [...ids, ...ids]);
+  await e.executar(
+    `DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id IN (${q}) OR segundo_paciente_id IN (${q})`,
+    [...ids, ...ids],
+  );
+  await e.executar(
+    `DELETE FROM unificacao_cadastro WHERE mantido_paciente_id IN (${q}) OR absorvido_paciente_id IN (${q})`,
+    [...ids, ...ids],
+  );
   await e.executar(`DELETE FROM chave_busca_nome WHERE entidade = 'paciente' AND registro_id IN (${q})`, ids);
   await e.executar(`DELETE FROM prontuario_estabelecimento WHERE paciente_id IN (${q})`, ids);
   await e.executar(`DELETE FROM atendimento WHERE paciente_id IN (${q})`, ids);
   const pessoas = (
     await e.consultar<{ p: unknown }>(`SELECT pessoa_fisica_id AS p FROM paciente WHERE id IN (${q})`, ids)
   ).map((x) => Number(x.p));
-  await e.executar(`UPDATE paciente SET sobrevivente_paciente_id = NULL, situacao = 'ativo' WHERE id IN (${q})`, ids);
+  await e.executar(
+    `UPDATE paciente SET sobrevivente_paciente_id = NULL, situacao = 'ativo' WHERE id IN (${q})`,
+    ids,
+  );
   await e.executar(`DELETE FROM paciente WHERE id IN (${q})`, ids);
   await e.executar(`DELETE FROM pessoa_fisica WHERE id IN (${pessoas.map(() => '?').join(', ')})`, pessoas);
 }
@@ -79,7 +94,9 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
   let m: Massa;
 
   const ler = <T>(sql: string, p: unknown[] = []) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f22l0213' }, (l) => l.consultar<T & Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f22l0213' }, (l) =>
+      l.consultar<T & Record<string, unknown>>(sql, p),
+    );
 
   function sessao(hospital: string, correlacao: string, extra: Partial<SessaoRede> = {}): SessaoRede {
     const est = hospital === EST_A ? m.estA : m.estB;
@@ -231,10 +248,14 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
     expect(porta.redeConfigurada()).toBe(REDE);
     const codigos = porta.estabelecimentos().map((e) => e.codigo);
     expect(codigos).toEqual(expect.arrayContaining([EST_A, EST_B]));
-    await expect(porta.cadastrosPorIds({ rede: 'outra', hospital: EST_A }, [m.p1a])).rejects.toBeInstanceOf(ErroProblema);
-    await expect(porta.cadastrosPorIds({ rede: REDE, hospital: 'naoexiste' }, [m.p1a])).rejects.toMatchObject({
-      extras: { codigo: 'fora-da-rede' },
-    });
+    await expect(porta.cadastrosPorIds({ rede: 'outra', hospital: EST_A }, [m.p1a])).rejects.toBeInstanceOf(
+      ErroProblema,
+    );
+    await expect(porta.cadastrosPorIds({ rede: REDE, hospital: 'naoexiste' }, [m.p1a])).rejects.toMatchObject(
+      {
+        extras: { codigo: 'fora-da-rede' },
+      },
+    );
   });
 
   it('cadastros: só os do estabelecimento do contexto, com a fonética do índice de busca e o unificado', async () => {
@@ -298,13 +319,26 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
     ]);
     // O prontuário da unidade (prontuario_estabelecimento), não o do cliente: mostrado e filtrado.
     expect(fa.itens.find((x) => x.chave === k)?.prontuarioRemoto).toBe(PRONT_UNIDADE_P2B);
-    const fb = await porta.fila(ctxB(), { situacao: 'aberto', pagina: 1, porPagina: 20, prontuarioLocal: PRONT_UNIDADE_P2B });
+    const fb = await porta.fila(ctxB(), {
+      situacao: 'aberto',
+      pagina: 1,
+      porPagina: 20,
+      prontuarioLocal: PRONT_UNIDADE_P2B,
+    });
     expect(fb.itens.map((x) => x.chave)).toEqual([k]);
     expect(fb.itens[0]?.prontuarioLocal).toBe(PRONT_UNIDADE_P2B);
     expect(fb.total).toBe(1);
-    expect((await porta.fila(ctxB(), { situacao: 'aberto', pagina: 1, porPagina: 20, prontuarioLocal: PRONT + 4 })).total).toBe(0);
+    expect(
+      (await porta.fila(ctxB(), { situacao: 'aberto', pagina: 1, porPagina: 20, prontuarioLocal: PRONT + 4 }))
+        .total,
+    ).toBe(0);
     expect((await porta.cadastrosPorIds(ctxB(), [m.p2b]))[0]?.prontuario).toBe(PRONT_UNIDADE_P2B);
-    const vazia = await porta.fila(ctxA(), { situacao: 'aberto', pagina: 1, porPagina: 20, estabelecimentosRemotos: [] });
+    const vazia = await porta.fila(ctxA(), {
+      situacao: 'aberto',
+      pagina: 1,
+      porPagina: 20,
+      estabelecimentosRemotos: [],
+    });
     expect(vazia.total).toBe(0);
     const faixas = await porta.filaPorFaixa(ctxA(), 'aberto', { estabelecimentoRemoto: EST_B });
     expect(faixas.alta).toBeGreaterThanOrEqual(1);
@@ -346,7 +380,12 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
       justificativa: 'Pessoas diferentes (teste sintético)',
     });
     expect(r.bancos.map((b) => b.situacao)).toEqual(['gravado', 'gravado']);
-    const [s] = await ler<{ situacao: string; versao: number; decidido_por_usuario_id: number; justificativa: string }>(
+    const [s] = await ler<{
+      situacao: string;
+      versao: number;
+      decidido_por_usuario_id: number;
+      justificativa: string;
+    }>(
       'SELECT situacao, versao, decidido_por_usuario_id, justificativa FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?',
       [Math.min(m.p2a, m.p2b), Math.max(m.p2a, m.p2b)],
     );
@@ -366,7 +405,10 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
     expect((await porta.situacoes(ctxB(), [k])).get(k)).toBe('outra_pessoa');
     // De novo: o par já decidido é recusado antes de gravar.
     await expect(
-      servico.decidir(sessao(EST_A, `f22l0213-outra2-${RODADA}`), k, { decisao: 'outra_pessoa', justificativa: 'De novo, teste' }),
+      servico.decidir(sessao(EST_A, `f22l0213-outra2-${RODADA}`), k, {
+        decisao: 'outra_pessoa',
+        justificativa: 'De novo, teste',
+      }),
     ).rejects.toMatchObject({ extras: { codigo: 'par-decidido' } });
   });
 
@@ -389,21 +431,24 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
         reabrir: false,
       }),
     ).rejects.toMatchObject({ extras: { codigo: 'unificar-no-cadastro' } });
-    const t = await ler<{ n: number }>('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao IN (?, ?)', [
-      `f22l0213-mesma-${RODADA}`,
-      `f22l0213-desfazer-${RODADA}`,
-    ]);
+    const t = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao IN (?, ?)',
+      [`f22l0213-mesma-${RODADA}`, `f22l0213-desfazer-${RODADA}`],
+    );
     expect(Number(t[0]?.n)).toBe(0);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f22l0213-par' }, (e) =>
-      e.executar('DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?', [
-        Math.min(m.p1a, m.p1b),
-        Math.max(m.p1a, m.p1b),
-      ]),
+      e.executar(
+        'DELETE FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?',
+        [Math.min(m.p1a, m.p1b), Math.max(m.p1a, m.p1b)],
+      ),
     );
   });
 
   it('ciclo de pareamento: o homônimo vai à fila (aberto), a marca de cada estabelecimento é gravada; repetir não duplica', async () => {
-    const servico = new ServicoMpiRede(porta, { agora: () => new Date('2026-11-21T12:00:00.000Z'), aviso: (x) => console.error(x) });
+    const servico = new ServicoMpiRede(porta, {
+      agora: () => new Date('2026-11-21T12:00:00.000Z'),
+      aviso: (x) => console.error(x),
+    });
     const s = sessao(EST_A, `f22l0213-ciclo-${RODADA}`, { liberados: new Set([EST_A, EST_B]) });
     const r = await servico.ciclo(s, 100);
     expect(r.lidos).toBeGreaterThanOrEqual(10);
@@ -449,15 +494,35 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
     const servico = new ServicoMpiRede(porta, { aviso: (x) => console.error(x) });
     const liberados = new Set([EST_A, EST_B]);
     const acesso = async () => ({ pode: false, motivo: null });
-    const a = await servico.avisoDoPaciente(sessao(EST_A, `f22l0213-aviso-${RODADA}`, { liberados }), m.p5a, acesso);
+    const a = await servico.avisoDoPaciente(
+      sessao(EST_A, `f22l0213-aviso-${RODADA}`, { liberados }),
+      m.p5a,
+      acesso,
+    );
     expect(a.situacao).toBe('com-atendimentos');
     expect(a.estabelecimentos).toEqual([
-      expect.objectContaining({ estabelecimento: EST_B, idRemoto: m.p5a, atendimentos: 1, ultimoAtendimento: '2026-11-10' }),
+      expect.objectContaining({
+        estabelecimento: EST_B,
+        idRemoto: m.p5a,
+        atendimentos: 1,
+        ultimoAtendimento: '2026-11-10',
+      }),
     ]);
-    const b = await servico.avisoDoPaciente(sessao(EST_B, `f22l0213-aviso-${RODADA}`, { liberados }), m.p5a, acesso);
+    const b = await servico.avisoDoPaciente(
+      sessao(EST_B, `f22l0213-aviso-${RODADA}`, { liberados }),
+      m.p5a,
+      acesso,
+    );
     expect(b.situacao).toBe('sem-vinculo');
     // A unificação efetivada entra como complemento: o p3b (absorvido pelo p3a) vê A, mesmo sem atendimento lá.
-    const u = await servico.avisoDoPaciente(sessao(EST_B, `f22l0213-aviso-${RODADA}`, { liberados }), m.p3b, acesso);
-    expect(u).toMatchObject({ situacao: 'sem-atendimentos', estabelecimentos: [expect.objectContaining({ estabelecimento: EST_A })] });
+    const u = await servico.avisoDoPaciente(
+      sessao(EST_B, `f22l0213-aviso-${RODADA}`, { liberados }),
+      m.p3b,
+      acesso,
+    );
+    expect(u).toMatchObject({
+      situacao: 'sem-atendimentos',
+      estabelecimentos: [expect.objectContaining({ estabelecimento: EST_A })],
+    });
   });
 });

@@ -18,4 +18,11 @@ export {
   CONFIGURACAO_M16,
   SERVICO_INTERNACAO,
 } from './simbolos.js';
-export { intervaloDoAmbiente, type LeituraCanal, MARCA_ZERO, type MarcaVigia, MOTOR_VIGIA, MotorVigia } from './vigia.js';
+export {
+  intervaloDoAmbiente,
+  type LeituraCanal,
+  MARCA_ZERO,
+  type MarcaVigia,
+  MOTOR_VIGIA,
+  MotorVigia,
+} from './vigia.js';

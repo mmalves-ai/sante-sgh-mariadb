@@ -117,7 +117,10 @@ export function gravadorAvaliacao(
         WHERE pi.id = ? AND p.estabelecimento_id = ? AND pi.excluido_em IS NULL AND p.excluido_em IS NULL`,
       [item, est],
     );
-    if (!r) throw recusa('item-inexistente', 'O item da prescrição não existe neste estabelecimento.', { campos: ['item'] });
+    if (!r)
+      throw recusa('item-inexistente', 'O item da prescrição não existe neste estabelecimento.', {
+        campos: ['item'],
+      });
     return {
       id: n(r['id']),
       prescricao: n(r['prescricao_id']),
@@ -164,7 +167,10 @@ export function gravadorAvaliacao(
     return { c: { id, situacao: 'pendente', versao: 1 }, novo: true };
   };
 
-  const proximaSequencia = async (tabela: 'avaliacao_farmaceutica_item' | 'intervencao_farmaceutica', cab: number) => {
+  const proximaSequencia = async (
+    tabela: 'avaliacao_farmaceutica_item' | 'intervencao_farmaceutica',
+    cab: number,
+  ) => {
     const r = await tx.uma<Linha>(
       tabela === 'avaliacao_farmaceutica_item'
         ? 'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM avaliacao_farmaceutica_item WHERE avaliacao_farmaceutica_id = ?'
@@ -269,7 +275,13 @@ export function gravadorAvaliacao(
         const { c, novo } = await garantirCabecalho(i);
         if (x.destino === 'automatica') {
           // A regra automática aprova o baixo risco (o parecer registra a regra que aprovou).
-          await registrarParecer(i, c, 'aprovado', `Aprovado pela regra automática (${x.regra}).`.slice(0, 500), farmaceutico);
+          await registrarParecer(
+            i,
+            c,
+            'aprovado',
+            `Aprovado pela regra automática (${x.regra}).`.slice(0, 500),
+            farmaceutico,
+          );
           novos += 1;
         } else if (novo) novos += 1;
         extras.alvo = { tabela: 'avaliacao_farmaceutica', id: c.id };
@@ -314,7 +326,9 @@ export function gravadorAvaliacao(
         [x.tipo, CATEGORIA_DO_TIPO[x.tipo], x.tipo],
       );
       if (!tipo)
-        throw recusa('dominio-nao-configurado', 'O tipo de intervenção não está cadastrado.', { campos: ['tipo'] });
+        throw recusa('dominio-nao-configurado', 'O tipo de intervenção não está cadastrado.', {
+          campos: ['tipo'],
+        });
       // A intervenção vai à avaliação da prescrição (a aberta, ou a mais recente; cria a pendente se não houver).
       const c = (await cabecalhoDa(i.prescricao, false)) ?? (await garantirCabecalho(i)).c;
       const id = await tx.incluir('intervencao_farmaceutica', {
@@ -329,7 +343,10 @@ export function gravadorAvaliacao(
         aceite: 'pendente',
       });
       extras.alvo = { tabela: 'intervencao_farmaceutica', id };
-      extras.eventos.push({ tipo: 'farmacia.intervencao.registrada', carga: { intervencao: id, item: i.id } });
+      extras.eventos.push({
+        tipo: 'farmacia.intervencao.registrada',
+        carga: { intervencao: id, item: i.id },
+      });
       return { id, prescritor: await loginDoProfissional(i.prescritor) };
     },
 
@@ -342,7 +359,8 @@ export function gravadorAvaliacao(
           WHERE iv.id = ? AND a.estabelecimento_id = ? AND iv.excluido_em IS NULL AND a.excluido_em IS NULL`,
         [r.id, est],
       );
-      if (!x) throw recusa('intervencao-inexistente', 'A intervenção não existe.', { campos: ['intervencao'] });
+      if (!x)
+        throw recusa('intervencao-inexistente', 'A intervenção não existe.', { campos: ['intervencao'] });
       const prescritor = await loginDoProfissional(
         x['prescritor_profissional_id'] === null ? null : n(x['prescritor_profissional_id']),
       );

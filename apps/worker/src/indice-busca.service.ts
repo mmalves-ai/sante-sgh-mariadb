@@ -68,7 +68,13 @@ export class IndiceBuscaService implements OnApplicationBootstrap, OnApplication
     if (!vigiaLigado(process.env)) return;
     try {
       const intervalo = lerInteiroAmbiente(process.env, 'BUSCA_VIGIA_MS', 5_000, 1_000, 600_000);
-      const conferencia = lerInteiroAmbiente(process.env, 'BUSCA_CONFERENCIA_MS', 3_600_000, 60_000, 86_400_000);
+      const conferencia = lerInteiroAmbiente(
+        process.env,
+        'BUSCA_CONFERENCIA_MS',
+        3_600_000,
+        60_000,
+        86_400_000,
+      );
       const nucleo = new NucleoProprio({ env: process.env });
       this.usar(nucleo, (cliente) => new PortaIndiceBuscaPropria(nucleo, cliente), conferencia);
       this.temporizador = setInterval(() => void this.ciclo(), intervalo);
@@ -100,19 +106,26 @@ export class IndiceBuscaService implements OnApplicationBootstrap, OnApplication
             r.push({ cliente, entidade, lidos: lidos.length, palavras, marca: nova.em });
             if (lidos.length > 0)
               logger.info({ cliente, entidade, lidos: lidos.length, palavras }, 'vigia do índice de busca');
-            const pacientes = entidade === 'paciente' ? lidos.filter((x) => !x.excluido).map((x) => x.id) : [];
+            const pacientes =
+              entidade === 'paciente' ? lidos.filter((x) => !x.excluido).map((x) => x.id) : [];
             if (pacientes.length > 0) {
               const novos = await porta.alimentarFila(pacientes, avaliarPar);
               if (novos > 0) logger.info({ cliente, novos }, 'fila de duplicidades: pares novos');
             }
           } catch (e) {
-            logger.warn({ cliente, entidade, erro: e instanceof Error ? e.name : 'erro' }, 'vigia do índice de busca: ciclo falhou');
+            logger.warn(
+              { cliente, entidade, erro: e instanceof Error ? e.name : 'erro' },
+              'vigia do índice de busca: ciclo falhou',
+            );
           }
         }
       }
       await this.conferir(clientes, fabrica);
     } catch (e) {
-      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'vigia do índice de busca: clientes indisponíveis');
+      logger.warn(
+        { erro: e instanceof Error ? e.name : 'erro' },
+        'vigia do índice de busca: clientes indisponíveis',
+      );
     } finally {
       this.rodando = false;
     }
@@ -135,7 +148,10 @@ export class IndiceBuscaService implements OnApplicationBootstrap, OnApplication
             'índice de busca divergia do cadastro: reparado',
           );
         } catch (e) {
-          logger.warn({ cliente, entidade, erro: e instanceof Error ? e.name : 'erro' }, 'conferência do índice de busca falhou');
+          logger.warn(
+            { cliente, entidade, erro: e instanceof Error ? e.name : 'erro' },
+            'conferência do índice de busca falhou',
+          );
         }
       }
     }

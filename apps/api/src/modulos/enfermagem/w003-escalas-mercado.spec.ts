@@ -28,9 +28,7 @@ interface Sessao {
 
 async function montar(o: { semChave?: boolean; trr?: string; medico?: string } = {}) {
   const trilha = new RegistradorTrilhaMemoria();
-  const enfermagem = new PortaEnfermagemMemoria(
-    { agora },
-  );
+  const enfermagem = new PortaEnfermagemMemoria({ agora });
   const escores = new PortaEscoresMemoria({ agora });
   const configuracao = o.semChave
     ? fonteConfiguracaoMemoria(trilha, {

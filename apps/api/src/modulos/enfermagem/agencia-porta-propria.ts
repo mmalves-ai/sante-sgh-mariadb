@@ -174,7 +174,9 @@ function imunoDe(r: Linha, fuso: string): ImunoHematologiaLida {
     liberadoPor: textoOuNulo(r['liberado_por']),
     liberadoEm: civilDe(r['liberado_em'], fuso),
     motivoInvalidacao:
-      r['situacao'] === 'invalidado' ? (textoOuNulo(r['motivo_invalidacao']) ?? textoOuNulo(d['motivoInvalidacao'])) : null,
+      r['situacao'] === 'invalidado'
+        ? (textoOuNulo(r['motivo_invalidacao']) ?? textoOuNulo(d['motivoInvalidacao']))
+        : null,
   };
 }
 
@@ -272,12 +274,26 @@ export class PortaAgenciaPropria implements PortaAgencia {
     return this.ler(c, async (l, est, fuso) => {
       const filtros: string[] = [];
       const p: unknown[] = [est];
-      if (f.id !== undefined) { filtros.push('t.id = ?'); p.push(f.id); }
-      if (f.estado !== undefined) { filtros.push('t.situacao = ?'); p.push(f.estado); }
-      if (f.tipo !== undefined)
-        { filtros.push('tt.codigo = ?'); p.push(CODIGO_TESTE[f.tipo as TipoExameImuno] ?? '-'); }
-      if (f.requisicao !== undefined) { filtros.push('t.requisicao_transfusao_id = ?'); p.push(f.requisicao); }
-      if (f.paciente !== undefined) { filtros.push('t.paciente_id = ?'); p.push(f.paciente); }
+      if (f.id !== undefined) {
+        filtros.push('t.id = ?');
+        p.push(f.id);
+      }
+      if (f.estado !== undefined) {
+        filtros.push('t.situacao = ?');
+        p.push(f.estado);
+      }
+      if (f.tipo !== undefined) {
+        filtros.push('tt.codigo = ?');
+        p.push(CODIGO_TESTE[f.tipo as TipoExameImuno] ?? '-');
+      }
+      if (f.requisicao !== undefined) {
+        filtros.push('t.requisicao_transfusao_id = ?');
+        p.push(f.requisicao);
+      }
+      if (f.paciente !== undefined) {
+        filtros.push('t.paciente_id = ?');
+        p.push(f.paciente);
+      }
       const rs = await l.consultar(
         `${SQL_IMUNO} ${filtros.length ? `AND ${filtros.join(' AND ')}` : ''} ORDER BY t.realizado_em DESC, t.id DESC LIMIT ?`,
         [...p, TETO + 1],
@@ -315,13 +331,30 @@ export class PortaAgenciaPropria implements PortaAgencia {
     return this.ler(c, async (l, est, fuso) => {
       const filtros: string[] = [];
       const p: unknown[] = [est];
-      if (f.situacao) { filtros.push('b.situacao = ?'); p.push(f.situacao); }
-      if (f.hemocomponente) { filtros.push('h.sigla = ?'); p.push(f.hemocomponente); }
-      if (f.abo) { filtros.push('gs.sigla = ?'); p.push(f.abo); }
-      if (f.rh) { filtros.push('fr.sinal = ?'); p.push(f.rh === 'positivo' ? '+' : '-'); }
-      if (f.numero) { filtros.push('b.numero = ?'); p.push(f.numero); }
-      if (f.venceEmDias !== undefined)
-        { filtros.push('b.validade_em <= ?'); p.push(new Date(instanteDe(f.agora, fuso).getTime() + f.venceEmDias * 86_400_000)); }
+      if (f.situacao) {
+        filtros.push('b.situacao = ?');
+        p.push(f.situacao);
+      }
+      if (f.hemocomponente) {
+        filtros.push('h.sigla = ?');
+        p.push(f.hemocomponente);
+      }
+      if (f.abo) {
+        filtros.push('gs.sigla = ?');
+        p.push(f.abo);
+      }
+      if (f.rh) {
+        filtros.push('fr.sinal = ?');
+        p.push(f.rh === 'positivo' ? '+' : '-');
+      }
+      if (f.numero) {
+        filtros.push('b.numero = ?');
+        p.push(f.numero);
+      }
+      if (f.venceEmDias !== undefined) {
+        filtros.push('b.validade_em <= ?');
+        p.push(new Date(instanteDe(f.agora, fuso).getTime() + f.venceEmDias * 86_400_000));
+      }
       if (!f.situacao) filtros.push("b.situacao IN ('quarentena', 'liberada', 'reservada')");
       const rs = await l.consultar(
         `${SQL_BOLSA} ${filtros.length ? `AND ${filtros.join(' AND ')}` : ''} ORDER BY b.validade_em, b.id LIMIT ?`,
@@ -495,7 +528,8 @@ function gravadorAgencia(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
           'SELECT paciente_id FROM requisicao_transfusao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [x.requisicao, est],
         );
-        if (!req) throw recusa('requisicao-inexistente', 'A requisição de transfusão não é deste estabelecimento.');
+        if (!req)
+          throw recusa('requisicao-inexistente', 'A requisição de transfusão não é deste estabelecimento.');
         if (Number(req.paciente_id) !== x.paciente)
           throw recusa('requisicao-de-outro-paciente', 'A requisição de transfusão é de outro paciente.');
       }

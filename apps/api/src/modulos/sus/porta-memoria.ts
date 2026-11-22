@@ -20,7 +20,23 @@ import type {
   LeituraSus,
   PortaSus,
 } from './porta.js';
-import { type ApacRegistro, type ArquivoSus, type CompetenciaSusRegistro, type ContaBpa, type ContaCiha, type CriticaSus, type EquivalenciaSus, ErroSus, type ItemBpa, type ItemContaSigtap, type LinhaApac, type LinhaBpa, type LinhaTrilhaSus, type ProcedimentoHospital, type SolicitanteApacCadastro } from './tipos.js';
+import {
+  type ApacRegistro,
+  type ArquivoSus,
+  type CompetenciaSusRegistro,
+  type ContaBpa,
+  type ContaCiha,
+  type CriticaSus,
+  type EquivalenciaSus,
+  ErroSus,
+  type ItemBpa,
+  type ItemContaSigtap,
+  type LinhaApac,
+  type LinhaBpa,
+  type LinhaTrilhaSus,
+  type ProcedimentoHospital,
+  type SolicitanteApacCadastro,
+} from './tipos.js';
 
 interface CriticaMemoria extends CriticaSus {
   readonly competencia: number;
@@ -616,10 +632,7 @@ export class PortaSusMemoria implements PortaSus {
       ...gravacaoAihMemoria(this.baseAih(s)),
       abrir: async (p) => {
         if (s.competencias.some((x) => x.instrumento === p.instrumento && x.competencia === p.competencia))
-          throw new ErroSus(
-            'competencia-ja-aberta',
-            'Esta competência já está aberta para o instrumento.',
-          );
+          throw new ErroSus('competencia-ja-aberta', 'Esta competência já está aberta para o instrumento.');
         const c: CompetenciaSusRegistro = {
           id: ++s.seq,
           instrumento: p.instrumento,
@@ -973,8 +986,7 @@ export class PortaSusMemoria implements PortaSus {
       },
       desativarEquivalencia: async (p) => {
         const antes = s.equivalencias.find((x) => x.procedimento === p.procedimento && x.ativa);
-        if (!antes)
-          throw new ErroSus('nao-encontrado', 'Não há equivalência ativa para este procedimento.');
+        if (!antes) throw new ErroSus('nao-encontrado', 'Não há equivalência ativa para este procedimento.');
         if (antes.versao !== p.versao)
           throw new ErroSus(
             'equivalencia-alterada',

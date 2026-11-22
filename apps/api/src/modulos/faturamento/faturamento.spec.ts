@@ -14,7 +14,11 @@ import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
 import { modulo } from './modulo.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,faturamento' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,faturamento',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const faturamento = new PortaFaturamentoMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;

@@ -140,7 +140,10 @@ export interface OpcoesPortariaMemoria {
   /** O relógio (padrão: o do processo). */
   readonly agora?: () => Date;
   /** Regras de visita sintéticas iniciais (padrão: o dia inteiro, para a sessão sintética rodar a qualquer hora). */
-  readonly regras?: readonly Omit<RegraVisitaRegistrada, 'id' | 'versao' | 'atualizadoPor' | 'atualizadoEm'>[];
+  readonly regras?: readonly Omit<
+    RegraVisitaRegistrada,
+    'id' | 'versao' | 'atualizadoPor' | 'atualizadoEm'
+  >[];
   /** Os internados sintéticos (padrão: INTERNADOS_PORTARIA_SINTETICOS; os testes que cruzam módulos trazem os seus). */
   readonly internados?: readonly InternadoPortaria[];
 }
@@ -628,8 +631,7 @@ export class PortaPortariaMemoria implements PortaPortaria {
   async bloqueios(c: ContextoPortaria, internacao?: number | null) {
     this.semear(est(c));
     return this.bloqueiosMem.filter(
-      (b) =>
-        b.hospital === est(c) && !b.revogadoEm && (internacao == null || b.internacao === internacao),
+      (b) => b.hospital === est(c) && !b.revogadoEm && (internacao == null || b.internacao === internacao),
     );
   }
   async visitante(c: ContextoPortaria, id: number) {

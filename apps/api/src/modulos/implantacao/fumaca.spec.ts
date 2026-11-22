@@ -19,7 +19,11 @@ import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import type { FonteConfiguracao } from '../config/public-api.js';
 import { impressaoDaEstrutura, ServicoFumacaServidor } from './aplicacao/fumaca.js';
 import { FilasBullmq, filasDoAmbiente, FilasSemValkey, type PortaFilasImplantacao } from './filas.js';
-import { chavesEsperadasDoAmbiente, estruturaHomologadaDoAmbiente, fusoDoProcesso } from './fumaca.controller.js';
+import {
+  chavesEsperadasDoAmbiente,
+  estruturaHomologadaDoAmbiente,
+  fusoDoProcesso,
+} from './fumaca.controller.js';
 import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
 import { modulo } from './modulo.js';
 import { PortaImplantacaoMemoria } from './porta-memoria.js';
@@ -39,7 +43,12 @@ const filasBoas = (): PortaFilasImplantacao => ({
     ),
 });
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', TZ: 'UTC', API_MODULOS: 'configuracao_teste,implantacao' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  TZ: 'UTC',
+  API_MODULOS: 'configuracao_teste,implantacao',
+};
 let app: NestFastifyApplication;
 
 beforeAll(async () => {

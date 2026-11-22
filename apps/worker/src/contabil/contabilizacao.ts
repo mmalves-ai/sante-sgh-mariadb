@@ -90,7 +90,16 @@ export async function contabilizarPendentes(
   const maxLotes = Math.max(1, c.maxLotes ?? LOTES_POR_CICLO);
   const lote = Math.max(1, c.lote ?? LOTE_CONTABILIZACAO);
   const competencia = c.competencia ?? null;
-  const total = { fatos: 0, lancamentos: 0, semRegra: 0, semConta: 0, movidos: 0, mudaram: 0, lotes: 0, restam: false };
+  const total = {
+    fatos: 0,
+    lancamentos: 0,
+    semRegra: 0,
+    semConta: 0,
+    movidos: 0,
+    mudaram: 0,
+    lotes: 0,
+    restam: false,
+  };
   for (let i = 0; i < maxLotes; i++) {
     const lido = await acesso.ler(c.estabelecimento, ['pendente'], competencia, lote);
     if (lido.candidatos.length === 0) {
@@ -103,10 +112,19 @@ export async function contabilizarPendentes(
       lancamentos: lido.lancamentos,
       publicadas: lido.publicadas.map((p) => ({ id: p.id, regra: p.regra })),
       ctx: contextoDeAplicacao(lido.plano, lido.dePara),
-      periodos: lido.periodos.map((p) => ({ empresa: p.empresa, competencia: p.competencia, situacao: p.situacao })),
+      periodos: lido.periodos.map((p) => ({
+        empresa: p.empresa,
+        competencia: p.competencia,
+        situacao: p.situacao,
+      })),
     });
     const r = resumoDaContabilizacao(acoes);
-    const g = await acesso.gravar(c.estabelecimento, competencia, acoes, diferencaDoLote(lido.candidatos.length, r));
+    const g = await acesso.gravar(
+      c.estabelecimento,
+      competencia,
+      acoes,
+      diferencaDoLote(lido.candidatos.length, r),
+    );
     total.mudaram += g.mudaram;
     total.fatos += lido.candidatos.length;
     total.lancamentos += r.lancamentos;

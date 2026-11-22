@@ -22,7 +22,8 @@ export type ContextoComPedido = { readonly pedido?: PedidoDaSessao | null };
 export function comPedido(s: SessaoCadastro): SessaoCadastro {
   const bruto = s.req.headers['idempotency-key'];
   const k = Array.isArray(bruto) ? bruto[0] : bruto;
-  const pedido: PedidoDaSessao | null = typeof k === 'string' && CHAVE.test(k) ? { chave: k, ordem: 0 } : null;
+  const pedido: PedidoDaSessao | null =
+    typeof k === 'string' && CHAVE.test(k) ? { chave: k, ordem: 0 } : null;
   return { ...s, porta: Object.assign({}, s.porta, { pedido }) };
 }
 

@@ -15,7 +15,11 @@ import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloEspecialidades } from './modulo.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,especialidades' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'config,documento,especialidades',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const especialidades = new PortaEspecialidadesMemoria(() => new Date(2026, 9, 25, 15, 0, 0));
 let app: NestFastifyApplication;

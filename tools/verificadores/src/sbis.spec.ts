@@ -59,6 +59,30 @@ describe('suíte de conformidade SBIS (pnpm sbis:verificar)', () => {
     expect(achados).toEqual([{ codigo: 'SBIS-02', motivo: 'teste falhou: a/y.spec.ts' }]);
   });
 
+  it('lacuna aberta: nunca "conforme", vira achado e aparece na matriz', () => {
+    const matriz = {
+      'SBIS-01': { funcionalidade: 'f', testes: ['a/x.spec.ts'], lacuna: 'falta a cadeia (pedido p)' },
+      'SBIS-02': { funcionalidade: 'f', testes: ['a/y.spec.ts'], lacuna: '  ' },
+    };
+    const r = montarMatrizSbis(
+      [req('SBIS-01'), req('SBIS-02')],
+      matriz,
+      () => true,
+      new Map([
+        ['a/x.spec.ts', 'passou'],
+        ['a/y.spec.ts', 'passou'],
+      ]),
+    );
+    expect(r.linhas.map((l) => [l.resultado, l.lacuna])).toEqual([
+      ['lacuna', 'falta a cadeia (pedido p)'],
+      ['conforme', null],
+    ]);
+    expect(r.achados).toEqual([{ codigo: 'SBIS-01', motivo: 'lacuna aberta: falta a cadeia (pedido p)' }]);
+    const md = matrizEmMarkdown(r.linhas, [], true);
+    expect(md).toContain('1 conformes, 1 com lacuna aberta.');
+    expect(md).toContain('**LACUNA**: falta a cadeia (pedido p)');
+  });
+
   it('sem a execução, a linha completa sai "sem execução", nunca "conforme"', () => {
     const matriz = { 'SBIS-01': { funcionalidade: 'f', testes: ['a/x.spec.ts'] } };
     const estatico = montarMatrizSbis([req('SBIS-01')], matriz, () => true);

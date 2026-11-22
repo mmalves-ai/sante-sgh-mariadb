@@ -6,7 +6,13 @@ import type { CanalVigia } from '@sgh/contratos';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { describe, expect, it, vi } from 'vitest';
 import { ArmazemMemoria, type ArmazemSessao } from '../../sessao/armazem.js';
-import { type AlvoVigia, intervaloDoAmbiente, type LeituraCanal, type MarcaVigia, MotorVigia } from './vigia.js';
+import {
+  type AlvoVigia,
+  intervaloDoAmbiente,
+  type LeituraCanal,
+  type MarcaVigia,
+  MotorVigia,
+} from './vigia.js';
 
 const PC: AlvoVigia = { cliente: 'c1', estabelecimento: 11 };
 const HS: AlvoVigia = { cliente: 'c1', estabelecimento: 12 };
@@ -114,7 +120,12 @@ describe('vigia de mudanças', () => {
     await m.cicloAgora(PC, 'senhas');
     expect(f.chamadas.map((c) => c.marca.maiorId)).toEqual([0, 1]);
     // A leitura recebe o contexto do núcleo do canal, sem sessão (processo).
-    expect(f.chamadas[0]?.ctx).toEqual({ cliente: 'c1', estabelecimento: 11, usuario: null, correlacao: 'vigia-senhas' });
+    expect(f.chamadas[0]?.ctx).toEqual({
+      cliente: 'c1',
+      estabelecimento: 11,
+      usuario: null,
+      correlacao: 'vigia-senhas',
+    });
     expect(await armazem.obter('sgh:c1:vigia:11:senhas')).toBe(
       JSON.stringify({ maiorId: 2, maiorId2: 0, janela: 0 }),
     );

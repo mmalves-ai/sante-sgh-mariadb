@@ -89,7 +89,10 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     );
     if (tem.length === 2) {
       const ests = (
-        await e.consultar<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [EST_A, EST_B])
+        await e.consultar<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [
+          EST_A,
+          EST_B,
+        ])
       ).map((x) => Number(x.id));
       if (ests.length) {
         const q = ests.map(() => '?').join(', ');
@@ -116,7 +119,14 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
           [codigo],
           `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, codigo_cnes, cnpj, criado_em)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [codigo, `Hospital sintético ${codigo}`, `Hospital sintético ${codigo} (fictício)`, cnes, null, agora],
+          [
+            codigo,
+            `Hospital sintético ${codigo}`,
+            `Hospital sintético ${codigo} (fictício)`,
+            cnes,
+            null,
+            agora,
+          ],
         );
       estA = await est(EST_A, '0020601');
       estB = await est(EST_B, '0020602');
@@ -137,7 +147,9 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
 
   afterAll(async () => {
     if (nucleo) {
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f22l0206' }, (e) => limpar(e)).catch(() => undefined);
+      await nucleo
+        .escrever({ cliente: CLIENTE, correlacao: 'limpeza-f22l0206' }, (e) => limpar(e))
+        .catch(() => undefined);
       await nucleo.encerrar();
     }
   });
@@ -154,9 +166,9 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     expect(c).toHaveLength(6);
     expect(c.every((x) => x.situacao === 'encerrada')).toBe(true);
     const t = trilha(LOGIN_A, 'reabrir');
-    expect(await codigo(porta.reabrir(EST_A, { codigo: 'privilegio-banco', motivo: 'teste', por: LOGIN_A }, t))).toBe(
-      'sem-convivencia',
-    );
+    expect(
+      await codigo(porta.reabrir(EST_A, { codigo: 'privilegio-banco', motivo: 'teste', por: LOGIN_A }, t)),
+    ).toBe('sem-convivencia');
     expect(
       await codigo(porta.prever(EST_A, { codigo: 'privilegio-banco', fimPrevisto: null, por: LOGIN_A }, t)),
     ).toBe('sem-convivencia');
@@ -183,15 +195,25 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
       },
       t,
     );
-    const [linha] = await ler<{ processo: string; situacao: string; versao: unknown; usuario_id: unknown; tamanho_bytes: unknown }>(
-      'SELECT processo, situacao, versao, usuario_id, tamanho_bytes FROM verificacao_backup WHERE id = ?',
-      [Number(id)],
-    );
+    const [linha] = await ler<{
+      processo: string;
+      situacao: string;
+      versao: unknown;
+      usuario_id: unknown;
+      tamanho_bytes: unknown;
+    }>('SELECT processo, situacao, versao, usuario_id, tamanho_bytes FROM verificacao_backup WHERE id = ?', [
+      Number(id),
+    ]);
     expect(linha).toMatchObject({ processo: 'restauracao', situacao: 'concluido' });
     expect(Number(linha?.versao)).toBe(1);
     expect(Number(linha?.usuario_id)).toBe(usuA);
     expect(Number(linha?.tamanho_bytes)).toBe(12 * 1_048_576);
-    const rastros = await ler<{ entidade: string; entidade_id: unknown; usuario_id: unknown; estabelecimento_id: unknown }>(
+    const rastros = await ler<{
+      entidade: string;
+      entidade_id: unknown;
+      usuario_id: unknown;
+      estabelecimento_id: unknown;
+    }>(
       'SELECT entidade, entidade_id, usuario_id, estabelecimento_id FROM trilha_auditoria WHERE correlacao = ?',
       [t.correlacao],
     );
@@ -251,10 +273,10 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     expect(await codigo(porta.registrarRestauracao('f0206zz', { por: LOGIN_A, pedido }, t2))).toBe(
       'estabelecimento-desconhecido',
     );
-    const n = await ler<{ n: unknown }>('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao IN (?, ?)', [
-      t1.correlacao,
-      t2.correlacao,
-    ]);
+    const n = await ler<{ n: unknown }>(
+      'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao IN (?, ?)',
+      [t1.correlacao, t2.correlacao],
+    );
     expect(Number(n[0]?.n)).toBe(0);
   });
 
@@ -293,13 +315,21 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     const tOutro = trilha(LOGIN_A, 'avaliar-outro', EST_B);
     recusadas.push(tOutro);
     expect(
-      await porta.avaliar(EST_B, { idCiclo: id, requisito: r1, por: LOGIN_A, pedido: { resultado: 'conforme' } }, tOutro),
+      await porta.avaliar(
+        EST_B,
+        { idCiclo: id, requisito: r1, por: LOGIN_A, pedido: { resultado: 'conforme' } },
+        tOutro,
+      ),
     ).toBe(false);
     expect(await porta.ciclo(EST_B, id)).toBeNull();
     expect(await porta.itens(EST_B, id)).toEqual([]);
     expect((await porta.itens(EST_A, id)).map((i) => i.requisito)).toEqual(requisitos);
     const av = (requisito: string, pedido: Parameters<PortaSbisPropria['avaliar']>[1]['pedido']) =>
-      porta.avaliar(EST_A, { idCiclo: id, requisito, por: LOGIN_A, pedido }, trilha(LOGIN_A, `avaliar-${requisito}-${pedido.resultado}`));
+      porta.avaliar(
+        EST_A,
+        { idCiclo: id, requisito, por: LOGIN_A, pedido },
+        trilha(LOGIN_A, `avaliar-${requisito}-${pedido.resultado}`),
+      );
     expect(await av(r1, { resultado: 'conforme' })).toBe(true);
     expect(await av(r2, { resultado: 'nao-aplicavel' })).toBe(true);
     expect(
@@ -309,17 +339,30 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
         (recusadas.push(trilha(LOGIN_A, 'concluir-pendente')), recusadas.at(-1)!),
       ),
     ).toBe(false);
-    expect(await av(r3, { resultado: 'nao-conforme', severidade: 'bloqueante', origem: 'defeito' })).toBe(true);
+    expect(await av(r3, { resultado: 'nao-conforme', severidade: 'bloqueante', origem: 'defeito' })).toBe(
+      true,
+    );
     expect(await av(r3, { resultado: 'conforme' })).toBe(false);
     const corr = { idCiclo: id, requisito: r3, por: LOGIN_A, descricao: 'Correção sintética' };
     expect(await porta.corrigir(EST_A, corr, trilha(LOGIN_A, 'corrigir'))).toBe(true);
     recusadas.push(trilha(LOGIN_A, 'verificar-a'));
-    expect(await porta.verificar(EST_A, { idCiclo: id, requisito: r3, por: LOGIN_A }, recusadas.at(-1)!)).toBe(false);
-    expect(await porta.verificar(EST_A, { idCiclo: id, requisito: r3, por: LOGIN_B }, trilha(LOGIN_B, 'verificar-b'))).toBe(
-      true,
-    );
+    expect(
+      await porta.verificar(EST_A, { idCiclo: id, requisito: r3, por: LOGIN_A }, recusadas.at(-1)!),
+    ).toBe(false);
+    expect(
+      await porta.verificar(
+        EST_A,
+        { idCiclo: id, requisito: r3, por: LOGIN_B },
+        trilha(LOGIN_B, 'verificar-b'),
+      ),
+    ).toBe(true);
     const item = (await porta.itens(EST_A, id)).find((i) => i.requisito === r3);
-    expect(item).toMatchObject({ resultado: 'nao-conforme', correcao: 'verificada', corrigidoPor: LOGIN_A, verificadoPor: LOGIN_B });
+    expect(item).toMatchObject({
+      resultado: 'nao-conforme',
+      correcao: 'verificada',
+      corrigidoPor: LOGIN_A,
+      verificadoPor: LOGIN_B,
+    });
     expect(
       await porta.concluir(
         EST_A,
@@ -328,11 +371,18 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
       ),
     ).toBe(true);
     const ciclo = await porta.ciclo(EST_A, id);
-    expect(ciclo).toMatchObject({ situacao: 'concluido', parecer: 'apto', abertoPor: LOGIN_A, concluidoPor: LOGIN_A });
+    expect(ciclo).toMatchObject({
+      situacao: 'concluido',
+      parecer: 'apto',
+      abertoPor: LOGIN_A,
+      concluidoPor: LOGIN_A,
+    });
     expect((await porta.ciclos(EST_A)).map((c) => c.id)).toContain(id);
     expect(await porta.ciclos(EST_B)).toEqual([]);
     recusadas.push(trilha(LOGIN_A, 'cancelar'));
-    expect(await porta.cancelar(EST_A, { id, motivo: 'tarde demais', por: LOGIN_A }, recusadas.at(-1)!)).toBe(false);
+    expect(await porta.cancelar(EST_A, { id, motivo: 'tarde demais', por: LOGIN_A }, recusadas.at(-1)!)).toBe(
+      false,
+    );
     // Contrato de efeito: as recusas não deixam linha na trilha; a versão do item subiu a cada gravação.
     expect(await trilhas(...recusadas)).toBe(0);
     expect(await trilhas(trilha(LOGIN_A, 'abrir'), trilha(LOGIN_B, 'verificar-b'))).toBe(2);

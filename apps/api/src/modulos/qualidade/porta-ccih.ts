@@ -3,7 +3,27 @@
 // gravações numa transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente
 // (porta-ccih-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
 import type { ChaveLeito, UnidadeNotificacao } from '@sgh/contratos';
-import type { BundleRegistrado, CompetenciaFechada, DependentesRegistro, TabelaCorrigivel, VersaoRegistro, AntimicrobianoPrescrito, CulturaDoPaciente, DispositivoInvasivoRegistrado, DispositivoInvasivoNovo, InternadoCcih, IrasNova, IrasRegistrada, ItemAntimicrobianoConfigurado, LiberacaoAntimicrobianoNova, LiberacaoAntimicrobianoRegistrada, ObservacaoMaosRegistrada, PrecaucaoNova, PrecaucaoRegistrada, SurtoRegistrado } from './tipos.js';
+import type {
+  BundleRegistrado,
+  CompetenciaFechada,
+  DependentesRegistro,
+  TabelaCorrigivel,
+  VersaoRegistro,
+  AntimicrobianoPrescrito,
+  CulturaDoPaciente,
+  DispositivoInvasivoRegistrado,
+  DispositivoInvasivoNovo,
+  InternadoCcih,
+  IrasNova,
+  IrasRegistrada,
+  ItemAntimicrobianoConfigurado,
+  LiberacaoAntimicrobianoNova,
+  LiberacaoAntimicrobianoRegistrada,
+  ObservacaoMaosRegistrada,
+  PrecaucaoNova,
+  PrecaucaoRegistrada,
+  SurtoRegistrado,
+} from './tipos.js';
 import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_CCIH = Symbol('PORTA_CCIH');
@@ -189,11 +209,7 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
     desde: string | null,
   ): Promise<{ itens: AntimicrobianoPrescrito[]; cortada: boolean }>;
   antimicrobianoPrescrito(c: C, itemPrescricao: number): Promise<AntimicrobianoPrescrito | null>;
-  vigencias(
-    c: C,
-    de: string,
-    ate: string,
-  ): Promise<{ itens: AntimicrobianoPrescrito[]; cortada: boolean }>;
+  vigencias(c: C, de: string, ate: string): Promise<{ itens: AntimicrobianoPrescrito[]; cortada: boolean }>;
   consumoDispensado(
     c: C,
     ano: number,
@@ -250,7 +266,11 @@ export interface PortaCcih extends PortaGravacaoM18<GravadorCcih> {
   surtos(c: C, desde: string): Promise<SurtoRegistrado[]>;
   // W0-04
   /** As sessões com as estornadas (a lista da tela; a adesão usa `observacoesMaos`, sem elas). */
-  sessoesMaos(c: C, de: string, ate: string): Promise<{ itens: ObservacaoMaosRegistrada[]; cortada: boolean }>;
+  sessoesMaos(
+    c: C,
+    de: string,
+    ate: string,
+  ): Promise<{ itens: ObservacaoMaosRegistrada[]; cortada: boolean }>;
   observacaoMaos(c: C, id: number): Promise<ObservacaoMaosRegistrada | null>;
   versoes(c: C, tabela: TabelaCorrigivel, id: number): Promise<VersaoRegistro[]>;
   competencias(c: C, competencias?: readonly string[]): Promise<CompetenciaFechada[]>;

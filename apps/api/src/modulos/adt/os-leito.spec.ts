@@ -52,7 +52,11 @@ interface LeitoMapa {
 }
 
 async function montar(ligado: boolean, nome: string) {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,manutencao,adt' };
+  const env: Record<string, string> = {
+    ...envTeste,
+    AMBIENTE: 'dev',
+    API_MODULOS: 'configuracao_teste,cadastro,manutencao,adt',
+  };
   const trilha = new RegistradorTrilhaMemoria();
   const cadastro = new PortaCadastroMemoria();
   const relogio = { hoje: HOJE, agora: `${HOJE}T09:00` };

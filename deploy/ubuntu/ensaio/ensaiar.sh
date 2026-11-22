@@ -170,7 +170,7 @@ cmd_servidor() {
   existe "$IMG" || docker build -q -t "$IMG" "$AQUI" >/dev/null
   log "subindo o Ubuntu 24.04 descartável com systemd (HTTPS em 127.0.0.1:$PORTA_HTTPS)"
   docker run -d -t --name "$SRV" --hostname servidor-ensaio --network "$REDE" -e container=docker \
-    --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock \
+    --user 0:0 --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock \
     -p "127.0.0.1:$PORTA_HTTPS:443" "$IMG" >/dev/null
   for _ in $(seq 1 30); do
     [ "$(docker exec "$SRV" systemctl is-system-running 2>/dev/null || true)" = running ] && break

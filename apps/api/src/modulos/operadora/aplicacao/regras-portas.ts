@@ -21,8 +21,11 @@ export function tipoDoAnexoResposta(b: Uint8Array): TipoAnexoResposta | null {
 /** O nome do arquivo sem caminho nem caractere de controle (até 120); vazio vira "anexo". */
 export function nomeDoAnexoResposta(nome: string): string {
   const base = nome.split(/[\\/]/).pop() ?? '';
-  // eslint-disable-next-line no-control-regex
-  const limpo = base.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
+  const limpo = base
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, 120);
   return limpo || 'anexo';
 }
 
@@ -33,9 +36,12 @@ export function conferirAnexoResposta(a: { nome: string; bytes: Uint8Array }): {
   tamanho: number;
   sha256: string;
 } {
-  if (a.bytes.length === 0) throw recusa('anexo-vazio', 'O arquivo anexado está vazio.', { campos: ['anexo'] });
+  if (a.bytes.length === 0)
+    throw recusa('anexo-vazio', 'O arquivo anexado está vazio.', { campos: ['anexo'] });
   if (a.bytes.length > ANEXO_RESPOSTA_MAX_BYTES)
-    throw recusa('anexo-grande', 'O anexo passa de 2 MB. Reduza o arquivo e envie de novo.', { campos: ['anexo'] });
+    throw recusa('anexo-grande', 'O anexo passa de 2 MB. Reduza o arquivo e envie de novo.', {
+      campos: ['anexo'],
+    });
   const tipo = tipoDoAnexoResposta(a.bytes);
   if (!tipo) throw recusa('anexo-tipo', 'O anexo precisa ser PDF, PNG ou JPEG.', { campos: ['anexo'] });
   return {

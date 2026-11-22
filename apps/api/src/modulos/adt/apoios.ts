@@ -102,7 +102,13 @@ export class ApoiosAdt {
     cache: CacheConfig | null,
   ) {
     const novo = (chave: string, nome: string, operacoes: Readonly<Record<string, string>>) =>
-      new ApoioGravacaoIdempotente<GravadorSghAdt>({ chave, nome, operacoes }, porta, trilha, configuracao, cache);
+      new ApoioGravacaoIdempotente<GravadorSghAdt>(
+        { chave, nome, operacoes },
+        porta,
+        trilha,
+        configuracao,
+        cache,
+      );
     this.adt = novo(CHAVE_ADT, 'a internação (admissão, transferência e alta)', OPERACOES_ADT);
     this.mapa = novo(CHAVE_MAPA, 'o mapa de leitos operacional', OPERACOES_MAPA);
     this.supervisor = novo(

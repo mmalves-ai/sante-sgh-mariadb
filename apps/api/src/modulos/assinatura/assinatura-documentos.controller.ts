@@ -171,7 +171,10 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Auditar('documento.pendencias.lidas')
   async fila(@Req() req: RequisicaoAutorizada): Promise<PendenciasIcpResposta> {
     const r = await this.servico.fila(sessaoDe(req));
-    req.sghAlvo = { tabelaAlvo: 'documento_prontuario', chaveNaturalAlvo: `pendencias-icp;n:${r.itens.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'documento_prontuario',
+      chaveNaturalAlvo: `pendencias-icp;n:${r.itens.length}`,
+    };
     return r;
   }
 
@@ -300,9 +303,7 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
   @Post('sncr')
   @HttpCode(200)
   @Permissao('documento.assinatura.assinar')
-  @AuditadoNoHandler(
-    'pedido_numeracao_receita (e o campo SNCR da receita) com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('pedido_numeracao_receita (e o campo SNCR da receita) com a trilha na mesma transação')
   sncr(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<SolicitacaoSncrResumo> {
     return this.servico.solicitarSncr(sessaoDe(req), corpo(esquemaSolicitarSncr, b).documento);
   }

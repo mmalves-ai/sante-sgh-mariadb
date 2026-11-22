@@ -63,9 +63,16 @@ export type { AlertaSuporteJob };
  * plataforma, o estabelecimento da sessão vai na carga) ou direto da fila (dev/ci). Conferido por
  * conferirAlertaSuporte (contratos), o mesmo formato que a API monta.
  */
-export function mensagemDoAlertaSuporte(d: unknown, para: string, de: string, cliente?: string): MensagemEmail {
+export function mensagemDoAlertaSuporte(
+  d: unknown,
+  para: string,
+  de: string,
+  cliente?: string,
+): MensagemEmail {
   // A carga da fila comum não leva a rede: é o cliente dono da fila (o relay publica uma fila por cliente).
-  const j = conferirAlertaSuporte(cliente && typeof d === 'object' && d !== null ? { rede: cliente, ...d } : d);
+  const j = conferirAlertaSuporte(
+    cliente && typeof d === 'object' && d !== null ? { rede: cliente, ...d } : d,
+  );
   return {
     de,
     para,
@@ -148,7 +155,13 @@ export class ErroDestinatarioNaoConfigurado extends Error {
 
 /** Os endereços válidos de um valor de parâmetro (separados por vírgula, ponto e vírgula ou espaço). */
 export function enderecosDoValor(valor: unknown): string[] {
-  return [...new Set(String(valor ?? '').split(/[,;\s]+/).filter((x) => EMAIL.test(x)))];
+  return [
+    ...new Set(
+      String(valor ?? '')
+        .split(/[,;\s]+/)
+        .filter((x) => EMAIL.test(x)),
+    ),
+  ];
 }
 
 /** Os destinatários configurados do cliente (parâmetros vigentes no nível da rede, o mais recente de cada chave). */
@@ -190,7 +203,10 @@ export function resolverDestino(
     for (const x of lista) r.add(x);
   }
   if (r.size === 0) {
-    if (producao) throw new ErroDestinatarioNaoConfigurado(`sem ${PARAMETROS_DESTINO[papeis[0] ?? 'auditoria']} no cliente`);
+    if (producao)
+      throw new ErroDestinatarioNaoConfigurado(
+        `sem ${PARAMETROS_DESTINO[papeis[0] ?? 'auditoria']} no cliente`,
+      );
     r.add(`auditoria@${dominio}.invalid`);
   }
   return [...r];
@@ -246,7 +262,8 @@ export function dominioDoCliente(cliente: string): string {
 
 @Injectable()
 export class EmailService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: (NucleoClientes & Pick<NucleoWorker, 'lerSomente'> & { encerrar(): Promise<void> }) | null = null;
+  private nucleo: (NucleoClientes & Pick<NucleoWorker, 'lerSomente'> & { encerrar(): Promise<void> }) | null =
+    null;
   private readonly consumidores = new Map<string, Worker>();
   private temporizador: NodeJS.Timeout | undefined;
 
@@ -305,17 +322,25 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
         if (!tipos.includes(job.name)) return;
         const cfg = await this.destinatarios(cliente);
         const auditoria = resolverDestino(cfg, process.env, dominio, ['auditoria']);
-        if (job.name === 'alerta-suporte') await enviar(auditoria, (para) => mensagemDoAlertaSuporte(job.data, para, de, cliente));
+        if (job.name === 'alerta-suporte')
+          await enviar(auditoria, (para) => mensagemDoAlertaSuporte(job.data, para, de, cliente));
         else if (job.name === 'alerta-emergencia')
           await enviar(auditoria, (para) => mensagemDoAlerta(job.data as AlertaEmergenciaJob, para, de));
         else if (job.name === 'alerta-leitura')
           await enviar(auditoria, (para) => mensagemDoAlertaLeitura(job.data as AlertaLeituraJob, para, de));
         else if (job.name === 'alerta-chamado') {
           const j = job.data as AlertaChamadoJob;
-          await enviar(destinoAlertaChamado(cfg, process.env, dominio, j.motivo), (para) => mensagemDoAlertaChamado(j, para, de));
+          await enviar(destinoAlertaChamado(cfg, process.env, dominio, j.motivo), (para) =>
+            mensagemDoAlertaChamado(j, para, de),
+          );
         }
         logger.info(
-          { fila: 'email', cliente, tipo: job.name, estabelecimento: (job.data as AlertaEmergenciaJob).hospital },
+          {
+            fila: 'email',
+            cliente,
+            tipo: job.name,
+            estabelecimento: (job.data as AlertaEmergenciaJob).hospital,
+          },
           'e-mail entregue',
         );
       },
@@ -323,7 +348,10 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
     );
     w.on('error', () => undefined);
     w.on('failed', (job, e) =>
-      logger.warn({ fila: 'email', cliente, tentativa: job?.attemptsMade ?? 0, erro: e.name }, 'e-mail não entregue'),
+      logger.warn(
+        { fila: 'email', cliente, tentativa: job?.attemptsMade ?? 0, erro: e.name },
+        'e-mail não entregue',
+      ),
     );
     return w;
   }

@@ -24,7 +24,12 @@ const registroContabil = (p: PortaContabil) => ({
 
 const GOTENBERG = process.env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318';
 const disponivel = await gotenbergDisponivel(GOTENBERG);
-const env: Record<string, string> = { ...envTeste, API_MODULOS: 'config,contabil', AMBIENTE: 'dev', GOTENBERG_URL: GOTENBERG };
+const env: Record<string, string> = {
+  ...envTeste,
+  API_MODULOS: 'config,contabil',
+  AMBIENTE: 'dev',
+  GOTENBERG_URL: GOTENBERG,
+};
 
 describe.skipIf(!disponivel)('demonstrações contábeis em PDF/A (veraPDF)', () => {
   let app: NestFastifyApplication;

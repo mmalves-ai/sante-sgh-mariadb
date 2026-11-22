@@ -11,7 +11,11 @@ import { AvisosAtendimento } from '../atendimento/avisos.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/configuracao-fonte.js';
 import type { ContextoModulo } from '../registro.js';
 import { AVISOS_INICIO, ComunicacaoController } from './comunicacao.controller.js';
-import { PORTA_COMUNICACAO, type PortaComunicacao, portaComunicacaoIndisponivel } from './comunicacao-porta.js';
+import {
+  PORTA_COMUNICACAO,
+  type PortaComunicacao,
+  portaComunicacaoIndisponivel,
+} from './comunicacao-porta.js';
 import { PortaComunicacaoMemoria } from './comunicacao-porta-memoria.js';
 import { PortaComunicacaoPropria } from './comunicacao-porta-propria.js';
 import { ConselhoGestaoController } from './conselho-gestao.controller.js';
@@ -55,7 +59,9 @@ export function parteComunicacaoDoAcesso(
     });
     const servico = new ServicoContasDormentes({ porta, responsavel: responsavelDaFonte(() => gestao) });
     // W1-01 (parte 11d): a conferência do conselho retira os atos privativos na hora, pelo parâmetro do estabelecimento.
-    ctx.servico?.servicoAutorizacao?.definirRegraConselho(parametrosConselhoPelaConfiguracao(() => fonteConfig));
+    ctx.servico?.servicoAutorizacao?.definirRegraConselho(
+      parametrosConselhoPelaConfiguracao(() => fonteConfig),
+    );
     const env = (ctx.env['ACESSO_CONTAS_DORMENTES_DESPERTAR'] ?? '').trim();
     const codigos = (ctx.env['ACESSO_CONTAS_DORMENTES_ESTABELECIMENTOS'] ?? '')
       .split(',')

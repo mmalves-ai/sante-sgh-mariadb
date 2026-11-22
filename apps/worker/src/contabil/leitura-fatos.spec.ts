@@ -91,7 +91,8 @@ describe('ciclo do cliente (lote 05-12)', () => {
     expect(contabilLigadaPor(LIGADA, agora)).toBe(true);
     expect(contabilLigadaPor({ chaves: [], prerequisitos: CUMPRIDOS }, agora)).toBe(false);
     // Pré-requisito declarado e não cumprido segura o recurso.
-    if (DECLARADOS.length > 0) expect(contabilLigadaPor({ chaves: CHAVE_LIGADA, prerequisitos: [] }, agora)).toBe(false);
+    if (DECLARADOS.length > 0)
+      expect(contabilLigadaPor({ chaves: CHAVE_LIGADA, prerequisitos: [] }, agora)).toBe(false);
   });
 
   it('recusa da contabilização: vai ao resultado com o código e o ciclo segue', async () => {
@@ -149,7 +150,9 @@ describe('ciclo do cliente (lote 05-12)', () => {
     });
     const r = await cicloDoCliente(porta, 'cli_a', new Date(), { CONTABIL_CONTABILIZAR: 'desligado' });
     expect(leituras).toBe(0);
-    expect(r).toEqual([{ cliente: 'cli_a', estabelecimento: 'h1', pendentes: 3, lancamentos: 0, falha: null }]);
+    expect(r).toEqual([
+      { cliente: 'cli_a', estabelecimento: 'h1', pendentes: 3, lancamentos: 0, falha: null },
+    ]);
   });
 
   it('o código da falha é o da recusa, ou o nome do erro', () => {
@@ -161,12 +164,13 @@ describe('ciclo do cliente (lote 05-12)', () => {
   it('o serviço sem núcleo ou fora da janela não roda', async () => {
     const s = new LeituraFatosContabeisService();
     expect(await s.ciclo(NOITE_DO_ULTIMO_DIA, PRODUCAO)).toEqual([]);
-    s.usar(
-      { lerPlataforma: async () => [] as never, encerrar: async () => undefined },
-      () => portaDubla({ ler: () => Promise.reject(new Error('x')), gravar: () => Promise.reject(new Error('x')) }),
+    s.usar({ lerPlataforma: async () => [] as never, encerrar: async () => undefined }, () =>
+      portaDubla({ ler: () => Promise.reject(new Error('x')), gravar: () => Promise.reject(new Error('x')) }),
     );
     expect(await s.ciclo(new Date('2026-10-29T22:30:00Z'), PRODUCAO)).toEqual([]);
     const r = await s.ciclo(NOITE_DO_ULTIMO_DIA, { ...PRODUCAO, WORKER_CLIENTES: 'cli_a' });
-    expect(r.map((x) => [x.cliente, x.estabelecimento, x.falha])).toEqual([['cli_a', 'h1', 'x']].map(([c, e]) => [c, e, 'Error']));
+    expect(r.map((x) => [x.cliente, x.estabelecimento, x.falha])).toEqual(
+      [['cli_a', 'h1', 'x']].map(([c, e]) => [c, e, 'Error']),
+    );
   });
 });

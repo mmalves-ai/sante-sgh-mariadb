@@ -8,7 +8,13 @@
 // antes de gravar. A dispensação, a entrega, a devolução e os controlados têm o seu teste
 // (porta-propria-dispensacao.int.spec.ts).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
-import { type ContextoNucleo, type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
+import {
+  type ContextoNucleo,
+  type ContextoOperacao,
+  type Escritor,
+  ErroOperacao,
+  NucleoProprio,
+} from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaFarmaciaPropria } from './porta-propria.js';
 
@@ -192,7 +198,13 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
         [`${P}-OP`, agora],
       );
       const pessoa = (nome: string) =>
-        garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [nome], 'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [nome, agora]);
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
       const pp = await pessoa(`PACIENTE SINTETICO ${P}`);
       const pm = await pessoa(`MEDICO SINTETICO ${P}`);
       const paciente = await garantir(
@@ -225,8 +237,17 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
         `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id,
            situacao, prescrito_em, vigencia_inicio_em, vigencia_fim_em, criado_em)
          VALUES (?, ?, ?, ?, ?, 'vigente', ?, ?, ?, ?)`,
-        [ids.est, 920_206_301, paciente, ids.atendimento, ids.profissional, entrada, entrada,
-          new Date('2026-11-21T09:00:00Z'), agora],
+        [
+          ids.est,
+          920_206_301,
+          paciente,
+          ids.atendimento,
+          ids.profissional,
+          entrada,
+          entrada,
+          new Date('2026-11-21T09:00:00Z'),
+          agora,
+        ],
       );
       // O farmacêutico: outro usuário, com vínculo a outro profissional.
       const pf = await pessoa(`FARMACEUTICO SINTETICO ${P}`);
@@ -292,8 +313,18 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
                farmaceutico_profissional_id, realizada_em, proposta, prescritor_profissional_id, aceite, aceite_em,
                criado_em, criado_por)
              VALUES (?, ?, ?, ?, ?, 'Reduzir a dose (texto sintético)', ?, ?, ?, ?, ?)`,
-            [ids.avaliacao, seq, tipo, ids.profissional, entrada, ids.profissional, aceite,
-              aceite === 'aceita' ? entrada : null, agora, ids.usuario],
+            [
+              ids.avaliacao,
+              seq,
+              tipo,
+              ids.profissional,
+              entrada,
+              ids.profissional,
+              aceite,
+              aceite === 'aceita' ? entrada : null,
+              agora,
+              ids.usuario,
+            ],
           ),
         );
     });
@@ -309,7 +340,9 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
   });
 
   it('unidades, locais que dispensam, lotes válidos com saldo, cadastro do item e controlados', async () => {
-    expect((await porta.unidades(ctx)).find((u) => u.unidade === 'UTI-SINT')).toMatchObject({ internados: 0 });
+    expect((await porta.unidades(ctx)).find((u) => u.unidade === 'UTI-SINT')).toMatchObject({
+      internados: 0,
+    });
     const locais = await porta.locais(ctx);
     expect(locais.map((l) => l.codigo)).toContain(ids.farmacia);
     expect(locais.map((l) => l.codigo)).not.toContain(ids.almox);
@@ -317,7 +350,9 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     expect(await porta.lotes(ctx, ids.insumo, ids.farmacia)).toEqual([
       { id: ids.loteBom, lote: 'MF-BOM', validade: '2099-12-31', quantidade: 30 },
     ]);
-    expect(await porta.lotes({ ...ctx, estabelecimento: ids.outroEst }, ids.insumo, ids.farmacia)).toEqual([]);
+    expect(await porta.lotes({ ...ctx, estabelecimento: ids.outroEst }, ids.insumo, ids.farmacia)).toEqual(
+      [],
+    );
     const itens = await porta.itens(ctx, [ids.insumo, 0]);
     expect(itens.get(ids.insumo)).toEqual({
       codigo: ids.insumo,
@@ -359,16 +394,20 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
   });
 
   const ler = (sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-06-far' }, (l) => l.uma<Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-02-06-far' }, (l) =>
+      l.uma<Record<string, unknown>>(sql, p),
+    );
   const contar = async (sql: string, p: unknown[]) => Number((await ler(sql, p))?.['n']);
   const trilhaDe = (entidade: string, id: number) =>
-    contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? AND estabelecimento_id = ?', [
-      entidade,
-      id,
+    contar(
+      'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? AND estabelecimento_id = ?',
+      [entidade, id, ids.est],
+    );
+  const outbox = (ponto: string) =>
+    contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = ? AND estabelecimento_id = ?', [
+      ponto,
       ids.est,
     ]);
-  const outbox = (ponto: string) =>
-    contar('SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = ? AND estabelecimento_id = ?', [ponto, ids.est]);
 
   it('triagem e decisão: parecer por item, cabeçalho em avaliação e concluído, trilha, outbox e recusas', async () => {
     const [item1, item2] = ids.itens as [number, number, number];
@@ -387,19 +426,30 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     // O automático ganha o parecer; o humano fica na avaliação que já estava pendente (não é novo).
     expect(t).toEqual({ novos: 1 });
     expect(
-      await ler('SELECT parecer, liberador_profissional_id, versao FROM avaliacao_farmaceutica_item WHERE prescricao_item_id = ?', [item1]),
+      await ler(
+        'SELECT parecer, liberador_profissional_id, versao FROM avaliacao_farmaceutica_item WHERE prescricao_item_id = ?',
+        [item1],
+      ),
     ).toMatchObject({ parecer: 'aprovado', versao: 1 });
-    expect(await ler('SELECT situacao, versao FROM avaliacao_farmaceutica WHERE id = ?', [ids.avaliacao])).toMatchObject({
+    expect(
+      await ler('SELECT situacao, versao FROM avaliacao_farmaceutica WHERE id = ?', [ids.avaliacao]),
+    ).toMatchObject({
       situacao: 'em_avaliacao',
       versao: 2,
     });
     expect(await trilhaDe('avaliacao_farmaceutica', ids.avaliacao)).toBe(1);
     expect(await outbox('farmacia.avaliacao.triada')).toBe(1);
     // Repetir a triagem não grava de novo.
-    expect(await porta.gravarSgh(ctxF, null, (g) => g.triar({ itens: [triagem(item1, 'automatica')] }))).toEqual({
+    expect(
+      await porta.gravarSgh(ctxF, null, (g) => g.triar({ itens: [triagem(item1, 'automatica')] })),
+    ).toEqual({
       novos: 0,
     });
-    const decidir = (c: ContextoNucleo, item: number, decisao: 'valido' | 'nao-aprovado' | 'pendencia-revisao-medica') =>
+    const decidir = (
+      c: ContextoNucleo,
+      item: number,
+      decisao: 'valido' | 'nao-aprovado' | 'pendencia-revisao-medica',
+    ) =>
       porta.gravarSgh(c, null, (g) =>
         g.decidir({
           item,
@@ -428,17 +478,27 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     expect(await trilhaDe('avaliacao_farmaceutica_item', d.id)).toBe(1);
     expect(await outbox('farmacia.avaliacao.decidida')).toBe(1);
     // A leitura vê a decisão; recusas: item já avaliado, outro estabelecimento.
-    expect((await porta.avaliacoes(ctx, [item2])).get(item2)).toMatchObject({ estado: 'decidido', decisao: 'nao-aprovado' });
+    expect((await porta.avaliacoes(ctx, [item2])).get(item2)).toMatchObject({
+      estado: 'decidido',
+      decisao: 'nao-aprovado',
+    });
     expect(codigoDe(await decidir(ctxF, item2, 'valido').catch((e: unknown) => e))).toBe('ja-avaliado');
     expect(
-      codigoDe(await decidir({ ...ctxF, estabelecimento: ids.outroEst }, item1, 'valido').catch((e: unknown) => e)),
+      codigoDe(
+        await decidir({ ...ctxF, estabelecimento: ids.outroEst }, item1, 'valido').catch((e: unknown) => e),
+      ),
     ).toBe('item-inexistente');
   });
 
   it('intervenção e resposta: linha, versao, trilha, outbox e as recusas', async () => {
     const [item1] = ids.itens as [number];
     const r = await porta.gravarSgh(ctxF, null, (g) =>
-      g.intervir({ item: item1, tipo: 'ajuste-dose', texto: 'Reduzir a dose (texto sintético)', autor: 'l0206f.farma' }),
+      g.intervir({
+        item: item1,
+        tipo: 'ajuste-dose',
+        texto: 'Reduzir a dose (texto sintético)',
+        autor: 'l0206f.farma',
+      }),
     );
     expect(r.prescritor).toBe('l0206f.teste');
     const iv = await ler(
@@ -465,14 +525,25 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
       porta
         .gravarSgh(c, null, (g) => g.responder({ id, resposta: 'recusada', justificativa, respondente }))
         .catch((e: unknown) => e);
-    expect(codigoDe(await responder(ctxF, 'l0206f.farma', 'Mantida a dose do protocolo'))).toBe('nao-e-o-prescritor');
-    expect(codigoDe(await responder(ctx, 'l0206f.teste', 'curta'))).toBe('sem-justificativa');
-    expect(codigoDe(await responder({ ...ctx, estabelecimento: ids.outroEst }, 'l0206f.teste', 'Mantida a dose do protocolo'))).toBe(
-      'intervencao-inexistente',
+    expect(codigoDe(await responder(ctxF, 'l0206f.farma', 'Mantida a dose do protocolo'))).toBe(
+      'nao-e-o-prescritor',
     );
+    expect(codigoDe(await responder(ctx, 'l0206f.teste', 'curta'))).toBe('sem-justificativa');
+    expect(
+      codigoDe(
+        await responder(
+          { ...ctx, estabelecimento: ids.outroEst },
+          'l0206f.teste',
+          'Mantida a dose do protocolo',
+        ),
+      ),
+    ).toBe('intervencao-inexistente');
     expect(await responder(ctx, 'l0206f.teste', 'Mantida a dose do protocolo')).toBeUndefined();
     expect(
-      await ler('SELECT aceite, versao, justificativa_recusa, aceite_em FROM intervencao_farmaceutica WHERE id = ?', [r.id]),
+      await ler(
+        'SELECT aceite, versao, justificativa_recusa, aceite_em FROM intervencao_farmaceutica WHERE id = ?',
+        [r.id],
+      ),
     ).toMatchObject({ aceite: 'recusada', versao: 2, justificativa_recusa: 'Mantida a dose do protocolo' });
     expect(await trilhaDe('intervencao_farmaceutica', r.id)).toBe(2);
     expect(await outbox('farmacia.intervencao.respondida')).toBe(1);
@@ -483,29 +554,41 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
       respondente: 'l0206f.teste',
     });
     // Já respondida: recusa; quem fez a intervenção (aberta, semeada pelo próprio prescritor) não a responde.
-    expect(codigoDe(await responder(ctx, 'l0206f.teste', 'Mantida a dose do protocolo'))).toBe('intervencao-respondida');
-    expect(codigoDe(await responder(ctx, 'l0206f.teste', 'Mantida a dose do protocolo', ids.intervencoes[1]))).toBe(
-      'resposta-do-autor',
+    expect(codigoDe(await responder(ctx, 'l0206f.teste', 'Mantida a dose do protocolo'))).toBe(
+      'intervencao-respondida',
     );
+    expect(
+      codigoDe(await responder(ctx, 'l0206f.teste', 'Mantida a dose do protocolo', ids.intervencoes[1])),
+    ).toBe('resposta-do-autor');
   });
 
   it('gravações: entrada inválida e operação desconhecida recusadas antes, sem gravar', async () => {
     const opCtx: ContextoOperacao = { ...ctx, chaveIdempotencia: 'teste-02-06-far-1' };
-    const antes = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]);
-    expect(codigoDe(await porta.executar(ctx, 'suprimentos.devolverDose', {}, opCtx).catch((e: unknown) => e))).toBe(
-      'entrada-invalida',
-    );
-    expect(codigoDe(await porta.executar(ctx, 'suprimentos.inexistente', {}, opCtx).catch((e: unknown) => e))).toBe(
-      'operacao-desconhecida',
-    );
-    expect(await porta.podeGravar(ctx, 'suprimentos.dispensarHorario')).toEqual({ pode: true, codigo: null, motivo: null });
+    const antes = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
+    expect(
+      codigoDe(await porta.executar(ctx, 'suprimentos.devolverDose', {}, opCtx).catch((e: unknown) => e)),
+    ).toBe('entrada-invalida');
+    expect(
+      codigoDe(await porta.executar(ctx, 'suprimentos.inexistente', {}, opCtx).catch((e: unknown) => e)),
+    ).toBe('operacao-desconhecida');
+    expect(await porta.podeGravar(ctx, 'suprimentos.dispensarHorario')).toEqual({
+      pode: true,
+      codigo: null,
+      motivo: null,
+    });
     expect((await porta.podeGravar(ctx, 'suprimentos.inexistente')).codigo).toBe('operacao-desconhecida');
     // Sem dispensação ambulatorial no período, a escrituração recusa sem gravar.
     const r = await porta
-      .gravarSgh(ctxF, null, (g) => g.escriturarSngpc({ inicio: '2026-11-01', fim: '2026-11-30', autor: 'l0206f.farma' }))
+      .gravarSgh(ctxF, null, (g) =>
+        g.escriturarSngpc({ inicio: '2026-11-01', fim: '2026-11-30', autor: 'l0206f.farma' }),
+      )
       .catch((e: unknown) => e);
     expect(codigoDe(r)).toBe('nada-a-escriturar');
-    expect(await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est])).toBe(antes);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(antes);
   });
   it('pendência de revisão médica: parecer revisao_medica com a justificativa, que não fecha o item', async () => {
     const [, , item3] = ids.itens as [number, number, number];
@@ -518,7 +601,11 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
       achados: [],
       regra: 'baixo-risco',
     });
-    const decidir = (c: ContextoNucleo, item: number, decisao: 'valido' | 'nao-aprovado' | 'pendencia-revisao-medica') =>
+    const decidir = (
+      c: ContextoNucleo,
+      item: number,
+      decisao: 'valido' | 'nao-aprovado' | 'pendencia-revisao-medica',
+    ) =>
       porta.gravarSgh(c, null, (g) =>
         g.decidir({
           item,
@@ -531,11 +618,15 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     // A pendência de revisão médica grava o parecer `revisao_medica` com a justificativa e não fecha o item: depois da
     // revisão do médico o farmacêutico decide de novo (e só então o item conta como avaliado).
     const rev = await decidir(ctxF, item3, 'pendencia-revisao-medica');
-    expect(await ler('SELECT parecer, justificativa FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id])).toMatchObject({
+    expect(
+      await ler('SELECT parecer, justificativa FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id]),
+    ).toMatchObject({
       parecer: 'revisao_medica',
       justificativa: 'Dose acima do teto do cadastro (texto sintético)',
     });
-    expect((await porta.avaliacoes(ctx, [item3])).get(item3)).toMatchObject({ decisao: 'pendencia-revisao-medica' });
+    expect((await porta.avaliacoes(ctx, [item3])).get(item3)).toMatchObject({
+      decisao: 'pendencia-revisao-medica',
+    });
     // O par avaliação + item é único: a decisão final altera a linha da pendência (a revisão fica na trilha).
     const cabecalhoDoParecer = (id: number) =>
       ler(
@@ -548,7 +639,9 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     const final = await decidir(ctxF, item3, 'valido');
     expect(final.id).toBe(rev.id);
     expect((await cabecalhoDoParecer(rev.id))?.['situacao']).not.toBe('em_avaliacao');
-    expect(await ler('SELECT parecer, versao FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id])).toMatchObject({
+    expect(
+      await ler('SELECT parecer, versao FROM avaliacao_farmaceutica_item WHERE id = ?', [rev.id]),
+    ).toMatchObject({
       parecer: 'aprovado',
       versao: 2,
     });

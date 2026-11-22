@@ -17,7 +17,12 @@
 // de marca de processamento no modelo); ao reiniciar, recomeça uma hora antes do último índice gravado. Os índices
 // das colunas de mudança estão no modelo (db/migracoes/03_CAD/30_tabelas.sql, onda 5d).
 import { randomUUID } from 'node:crypto';
-import { type CadastroComparavel, chaveFonetica, chavesDoNome, palavrasDoCadastro } from '@sgh/dominio-cadastro';
+import {
+  type CadastroComparavel,
+  chaveFonetica,
+  chavesDoNome,
+  palavrasDoCadastro,
+} from '@sgh/dominio-cadastro';
 import { definirOperacao, type Executor, type Leitor, recusa } from '@sgh/nucleo';
 import { z } from 'zod';
 import { idDaSede } from './clientes-worker.js';
@@ -72,7 +77,8 @@ interface Fonte {
   readonly faixas: readonly string[];
 }
 
-const MUDOU_PF = (x: string) => `GREATEST(COALESCE(${x}.alterado_em, ${x}.criado_em), COALESCE(pf.alterado_em, pf.criado_em))`;
+const MUDOU_PF = (x: string) =>
+  `GREATEST(COALESCE(${x}.alterado_em, ${x}.criado_em), COALESCE(pf.alterado_em, pf.criado_em))`;
 /** Lista branca das fontes por entidade (nomes literais, nunca da entrada). */
 const FONTES: Readonly<Record<EntidadeBusca, Fonte>> = {
   paciente: {
@@ -81,7 +87,8 @@ const FONTES: Readonly<Record<EntidadeBusca, Fonte>> = {
     mudou: MUDOU_PF('x'),
     excluido: 'x.excluido_em',
     de: 'paciente x JOIN pessoa_fisica pf ON pf.id = x.pessoa_fisica_id',
-    campos: 'pf.nome, COALESCE(x.nome_social, pf.nome_social) AS social, COALESCE(x.nome_mae, pf.nome_mae) AS mae',
+    campos:
+      'pf.nome, COALESCE(x.nome_social, pf.nome_social) AS social, COALESCE(x.nome_mae, pf.nome_mae) AS mae',
     faixas: ['x.criado_em', 'x.alterado_em', 'pf.criado_em', 'pf.alterado_em'],
   },
   profissional: {
@@ -104,7 +111,8 @@ const FONTES: Readonly<Record<EntidadeBusca, Fonte>> = {
   },
 };
 
-const selecao = (f: Fonte) => `SELECT ${f.id} AS id, ${f.campos}, ${f.excluido} AS excluido_em, ${f.mudou} AS mudou FROM ${f.de}`;
+const selecao = (f: Fonte) =>
+  `SELECT ${f.id} AS id, ${f.campos}, ${f.excluido} AS excluido_em, ${f.mudou} AS mudou FROM ${f.de}`;
 const n = (v: unknown) => Number(v ?? 0);
 const tn = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
 const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
@@ -126,7 +134,9 @@ function lido(r: Record<string, unknown>): CadastroLido {
 }
 
 /** As palavras e as chaves fonéticas de um cadastro (regra única da busca). */
-export function palavrasDoIndice(c: CadastroLido): { campo: 'nome' | 'social' | 'mae'; palavra: string; fonetica: string }[] {
+export function palavrasDoIndice(
+  c: CadastroLido,
+): { campo: 'nome' | 'social' | 'mae'; palavra: string; fonetica: string }[] {
   if (c.excluido) return [];
   const r: { campo: 'nome' | 'social' | 'mae'; palavra: string; fonetica: string }[] = [];
   for (const [campo, valor] of [
@@ -186,21 +196,29 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
 
   private ler<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
     // Dado do cliente inteiro: o cadastro de pessoas e o índice não têm estabelecimento.
-    return this.nucleo.lerSomente({ cliente: this.cliente, estabelecimento: null, correlacao: 'indice-busca' }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, estabelecimento: null, correlacao: 'indice-busca' },
+      fn,
+    );
   }
 
   private async sede(): Promise<number> {
     const s = await this.ler(idDaSede);
-    if (s === null) throw recusa('cliente-sem-estabelecimento', 'O cliente não tem estabelecimento cadastrado.');
+    if (s === null)
+      throw recusa('cliente-sem-estabelecimento', 'O cliente não tem estabelecimento cadastrado.');
     return s;
   }
 
   async marcaInicial(entidade: EntidadeBusca): Promise<string | null> {
     const r = await this.ler((l) =>
-      l.uma('SELECT MAX(COALESCE(alterado_em, criado_em)) AS m FROM chave_busca_nome WHERE entidade = ?', [entidade]),
+      l.uma('SELECT MAX(COALESCE(alterado_em, criado_em)) AS m FROM chave_busca_nome WHERE entidade = ?', [
+        entidade,
+      ]),
     );
     const m = r?.['m'];
-    return m === null || m === undefined ? null : new Date(new Date(iso(m)).getTime() - 3_600_000).toISOString();
+    return m === null || m === undefined
+      ? null
+      : new Date(new Date(iso(m)).getTime() - 3_600_000).toISOString();
   }
 
   mudados(entidade: EntidadeBusca, desde: MarcaIndice, teto: number): Promise<CadastroLido[]> {
@@ -208,9 +226,9 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
     const marca = desde.em ? new Date(desde.em) : INICIO;
     const t = Math.max(1, Math.min(2000, Math.trunc(teto)));
     return this.ler(async (l) =>
+      // Cada faixa usa o índice da sua coluna (o mudou de uma linha é uma dessas colunas: se ele passou da marca,
+      // a coluna também passou); a união tira as repetidas e só o resultado é filtrado pela marca e ordenado.
       (
-        // Cada faixa usa o índice da sua coluna (o mudou de uma linha é uma dessas colunas: se ele passou da marca,
-        // a coluna também passou); a união tira as repetidas e só o resultado é filtrado pela marca e ordenado.
         await l.consultar(
           `SELECT m.* FROM (${f.faixas.map((c) => `${selecao(f)} WHERE ${c} >= ?`).join(' UNION ')}) m
             WHERE m.mudou > ? OR (m.mudou = ? AND m.id > ?) ORDER BY m.mudou, m.id LIMIT ${t}`,
@@ -228,7 +246,11 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
       const r: CadastroLido[] = [];
       for (let i = 0; i < ids.length; i += 500) {
         const parte = ids.slice(i, i + 500);
-        r.push(...(await l.consultar(`${selecao(f)} WHERE ${f.id} IN (${em(parte.length)})`, parte, { teto: 500 })).map(lido));
+        r.push(
+          ...(
+            await l.consultar(`${selecao(f)} WHERE ${f.id} IN (${em(parte.length)})`, parte, { teto: 500 })
+          ).map(lido),
+        );
       }
       return r;
     });
@@ -242,10 +264,10 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
       tabelas: ['chave_busca_nome'],
       entrada: ENTRADA_INDICE,
       gravar: async (tx, e) => {
-        await tx.executar(`DELETE FROM chave_busca_nome WHERE entidade = ? AND registro_id IN (${em(e.ids.length)})`, [
-          e.entidade,
-          ...e.ids,
-        ]);
+        await tx.executar(
+          `DELETE FROM chave_busca_nome WHERE entidade = ? AND registro_id IN (${em(e.ids.length)})`,
+          [e.entidade, ...e.ids],
+        );
         const agora = new Date();
         for (let i = 0; i < e.palavras.length; i += 500) {
           const parte = e.palavras.slice(i, i + 500);
@@ -288,8 +310,16 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
   contagem(entidade: EntidadeBusca): Promise<{ readonly indice: number; readonly cadastro: number }> {
     const f = FONTES[entidade];
     return this.ler(async (l) => ({
-      indice: n((await l.uma('SELECT COUNT(DISTINCT registro_id) AS n FROM chave_busca_nome WHERE entidade = ?', [entidade]))?.['n']),
-      cadastro: n((await l.uma(`SELECT COUNT(*) AS n FROM ${f.tabela} WHERE excluido_em IS NULL`, []))?.['n']),
+      indice: n(
+        (
+          await l.uma('SELECT COUNT(DISTINCT registro_id) AS n FROM chave_busca_nome WHERE entidade = ?', [
+            entidade,
+          ])
+        )?.['n'],
+      ),
+      cadastro: n(
+        (await l.uma(`SELECT COUNT(*) AS n FROM ${f.tabela} WHERE excluido_em IS NULL`, []))?.['n'],
+      ),
     }));
   }
 
@@ -345,7 +375,10 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
             [...parte, ...TIPOS_TELEFONE_ESCORE],
             { teto: 5000 },
           ))
-            telefones.set(n(t['pessoa_fisica_id']), [...(telefones.get(n(t['pessoa_fisica_id'])) ?? []), String(t['telefone'])]);
+            telefones.set(n(t['pessoa_fisica_id']), [
+              ...(telefones.get(n(t['pessoa_fisica_id'])) ?? []),
+              String(t['telefone']),
+            ]);
           for (const r of await l.consultar(
             `SELECT p.id, p.pessoa_fisica_id, pf.nome, pf.data_nascimento, COALESCE(p.nome_mae, pf.nome_mae) AS mae, pf.cpf
                FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
@@ -359,7 +392,7 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
               nascimento:
                 r['data_nascimento'] instanceof Date
                   ? r['data_nascimento'].toISOString().slice(0, 10)
-                  : tn(r['data_nascimento'])?.slice(0, 10) ?? null,
+                  : (tn(r['data_nascimento'])?.slice(0, 10) ?? null),
               mae: tn(r['mae']),
               cpf: tn(r['cpf']),
               telefones: telefones.get(n(r['pessoa_fisica_id'])) ?? [],
@@ -385,7 +418,9 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
         ).map((r) => n(r['registro_id']));
         candidatos.set(c.id, ids);
       }
-      const outros = await comparaveis([...new Set([...candidatos.values()].flat())].filter((id) => !base.has(id)));
+      const outros = await comparaveis(
+        [...new Set([...candidatos.values()].flat())].filter((id) => !base.has(id)),
+      );
       const todos = new Map([...outros, ...base]);
       const vistos = new Set<string>();
       const r: { a: number; b: number; escore: number; criterios: string[] }[] = [];
@@ -398,7 +433,13 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
           if (vistos.has(`${a}:${b}`)) continue;
           vistos.add(`${a}:${b}`);
           const e = avaliar(x, y);
-          if (e) r.push({ a, b, escore: Math.max(0, Math.min(100, Math.round(e.escore))), criterios: [...e.criterios] });
+          if (e)
+            r.push({
+              a,
+              b,
+              escore: Math.max(0, Math.min(100, Math.round(e.escore))),
+              criterios: [...e.criterios],
+            });
         }
       }
       return r;
@@ -413,10 +454,10 @@ export class PortaIndiceBuscaPropria implements PortaIndiceBusca {
         let novos = 0;
         const agora = new Date();
         for (const p of e.pares) {
-          const ja = await tx.uma('SELECT id FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?', [
-            p.a,
-            p.b,
-          ]);
+          const ja = await tx.uma(
+            'SELECT id FROM suspeita_duplicidade WHERE primeiro_paciente_id = ? AND segundo_paciente_id = ?',
+            [p.a, p.b],
+          );
           if (ja) continue;
           await tx.incluir('suspeita_duplicidade', {
             primeiro_paciente_id: p.a,

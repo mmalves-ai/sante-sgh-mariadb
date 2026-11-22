@@ -287,9 +287,24 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
   async saudeFilas(): Promise<SaudeFilas> {
     return {
       filas: [
-        { fila: 'parceiro.lab-apoio-sintetico.saida', direcao: 'saida' as const, quantidade: 1, maisAntiga: null },
-        { fila: 'parceiro.oie-classificacao.saida', direcao: 'saida' as const, quantidade: 0, maisAntiga: null },
-        { fila: 'parceiro.lab-apoio-sintetico.entrada', direcao: 'entrada' as const, quantidade: 1, maisAntiga: null },
+        {
+          fila: 'parceiro.lab-apoio-sintetico.saida',
+          direcao: 'saida' as const,
+          quantidade: 1,
+          maisAntiga: null,
+        },
+        {
+          fila: 'parceiro.oie-classificacao.saida',
+          direcao: 'saida' as const,
+          quantidade: 0,
+          maisAntiga: null,
+        },
+        {
+          fila: 'parceiro.lab-apoio-sintetico.entrada',
+          direcao: 'entrada' as const,
+          quantidade: 1,
+          maisAntiga: null,
+        },
       ],
       bi: { pendentes: 12, maisAntiga: null },
       examesApoio: { marcados: '<5', exportados: 37, pendentes: '<5', maisAntigo: null },
@@ -353,7 +368,12 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
     const m = this.recebidasDe(c.hospital);
     const msg = r.recebida === null ? null : m.get(r.recebida);
     if (r.recebida !== null && (!msg || msg.situacao !== 'conferir'))
-      throw new ErroProblema('recusa-de-negocio', 409, 'O retorno mudou', 'O retorno não está mais na fila de conferência.');
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'O retorno mudou',
+        'O retorno não está mais na fila de conferência.',
+      );
     this.resultados.set(r.exame, { elementos: r.elementos.length, emissor: r.conferente });
     if (msg)
       m.set(msg.id, {

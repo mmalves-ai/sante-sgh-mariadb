@@ -132,7 +132,10 @@ export const CONSULTAS: Readonly<Record<string, ConsultaPropria>> = Object.freez
 });
 
 /** Entidades com consulta própria (as demais do contrato respondem 404). */
-export const ENTIDADES_PROPRIAS: readonly string[] = Object.freeze([...Object.keys(CONSULTAS), 'leiautePosicao']);
+export const ENTIDADES_PROPRIAS: readonly string[] = Object.freeze([
+  ...Object.keys(CONSULTAS),
+  'leiautePosicao',
+]);
 
 const valorDe = (v: unknown): string | number | null =>
   v === null || v === undefined
@@ -155,9 +158,7 @@ function consultaLeiaute(f: { busca: string | null; pagina: number; porPagina: n
     for (const [campo, [inicio, fim]] of Object.entries(s.campos))
       todas.push({ secao: s.cabecalho, campo, inicio, fim });
   const b = (f.busca ?? '').trim().toUpperCase();
-  const filtradas = b
-    ? todas.filter((x) => `${x['secao']} ${x['campo']}`.toUpperCase().includes(b))
-    : todas;
+  const filtradas = b ? todas.filter((x) => `${x['secao']} ${x['campo']}`.toUpperCase().includes(b)) : todas;
   return {
     titulo: 'Posições do leiaute de CEP',
     colunas: [
@@ -194,7 +195,11 @@ export async function consultaPropria(
   if (b) {
     const partes: string[] = [];
     const digitos = /^[\d.\-\s/]{1,20}$/.test(b) ? b.replace(/\D/g, '') : '';
-    const exato = q.soDigitos ? digitos : /^[0-9A-Za-z.\-/]{1,20}$/.test(b) ? b.toUpperCase().replace(/\./g, '') : '';
+    const exato = q.soDigitos
+      ? digitos
+      : /^[0-9A-Za-z.\-/]{1,20}$/.test(b)
+        ? b.toUpperCase().replace(/\./g, '')
+        : '';
     if (exato) {
       partes.push(`${q.codigo} = ?`);
       p.push(exato);
@@ -214,7 +219,9 @@ export async function consultaPropria(
   return {
     titulo: q.titulo,
     colunas: q.colunas.map(({ campo, rotulo }) => ({ campo, rotulo })),
-    itens: linhas.map((r: Linha) => Object.fromEntries(q.colunas.map((x, i) => [x.campo, valorDe(r[`c${i}`])]))),
+    itens: linhas.map((r: Linha) =>
+      Object.fromEntries(q.colunas.map((x, i) => [x.campo, valorDe(r[`c${i}`])])),
+    ),
     total: Number(t?.n ?? 0),
   };
 }
@@ -231,8 +238,14 @@ const EDICOES: Partial<Record<CodigoCatalogo, { readonly sql: string; readonly d
     sql: 'SELECT MAX(versao_fonte) AS ultima, COUNT(*) AS linhas FROM procedimento_sigtap',
     descricao: 'competência',
   },
-  cep: { sql: 'SELECT MAX(versao_fonte) AS ultima, COUNT(*) AS linhas FROM logradouro_cep', descricao: 'edição' },
-  cbo: { sql: 'SELECT MAX(versao_fonte) AS ultima, COUNT(*) AS linhas FROM ocupacao_cbo', descricao: 'edição' },
+  cep: {
+    sql: 'SELECT MAX(versao_fonte) AS ultima, COUNT(*) AS linhas FROM logradouro_cep',
+    descricao: 'edição',
+  },
+  cbo: {
+    sql: 'SELECT MAX(versao_fonte) AS ultima, COUNT(*) AS linhas FROM ocupacao_cbo',
+    descricao: 'edição',
+  },
 };
 
 export async function edicaoPropria(

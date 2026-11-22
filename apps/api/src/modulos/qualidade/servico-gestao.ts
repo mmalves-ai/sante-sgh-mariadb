@@ -66,7 +66,17 @@ import {
   temQuorum,
   valorPelasParcelas,
 } from '@sgh/dominio-qualidade';
-import type { AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, ManifestacaoRegistrada, NaoConformidadeRegistrada, ReuniaoComissaoRegistrada, RiscoRegistrado } from './tipos.js';
+import type {
+  AnaliseIndicadorRegistrada,
+  AuditoriaRegistrada,
+  ComissaoRegistrada,
+  DocumentoQualidadeRegistrado,
+  EnvioRegulatorioRegistrado,
+  ManifestacaoRegistrada,
+  NaoConformidadeRegistrada,
+  ReuniaoComissaoRegistrada,
+  RiscoRegistrado,
+} from './tipos.js';
 import { z } from 'zod';
 import type { IncidenteParaNotivisaLido } from './porta-gestao.js';
 

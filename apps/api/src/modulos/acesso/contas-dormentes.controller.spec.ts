@@ -33,7 +33,11 @@ const cab = () => ({
 
 beforeAll(async () => {
   reiniciarEstadoAcessoSintetico();
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, armazem: new ArmazemMemoria(), registro: REGISTRO_TESTE_ACESSO });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    armazem: new ArmazemMemoria(),
+    registro: REGISTRO_TESTE_ACESSO,
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   const r = await app.inject({

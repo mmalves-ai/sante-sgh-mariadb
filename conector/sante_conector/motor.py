@@ -146,7 +146,21 @@ def executar(trab, eid):
                                     % max(1, conf["divergentes"]))
             # L3: carga das entidades do mapa (mesmo snapshot; leitor reaberto depois do gstat), pelo usuário restrito
             # L5 a L8: carga dirigida pelo mapa (tabelas com colunas declaradas), depois do L3, mesmo snapshot
-            plano = carga_mapa.planejar(mapa_exec, set(tabelas))
+            # Carga em duas passadas (dono, 22/11): CONECTOR_ADIAR lista tabelas da origem (separadas por vírgula) que
+            # ficam para uma passada seguinte (ex.: trilhas de auditoria). A leitura, a contagem e o confronto com o
+            # gstat continuam sobre TODAS; só a carga delas é adiada, e o relatório diz quais ficaram.
+            adiar = {t.strip() for t in (os.environ.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
+            if adiar:
+                rel["adiadas"] = sorted(adiar & set(tabelas))
+                cont["adiadas"] = rel["adiadas"]
+            # Passada só de algumas tabelas (CONECTOR_SO, separadas por vírgula): reprocessa o que uma correção do
+            # mapa mudou, sem recarregar o resto (a carga é idempotente; o resto fica como está). Vazio: todas.
+            so = {t.strip() for t in (os.environ.get("CONECTOR_SO") or "").split(",") if t.strip()}
+            if so:
+                adiar = adiar | (set(tabelas) - so)
+                rel["so"] = sorted(so & set(tabelas))
+                cont["so"] = rel["so"]
+            plano = carga_mapa.planejar(mapa_exec, set(tabelas) - adiar)
             rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
@@ -157,7 +171,7 @@ def executar(trab, eid):
 
                         def prog_mapa(frac, etapa):
                             plataforma.progresso(conn, eid, 79 + 14 * frac, etapa)
-                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(set(tabelas), contagens) or {
+                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(set(tabelas) - adiar, contagens) or {
                             "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
                             "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
                         if plano:

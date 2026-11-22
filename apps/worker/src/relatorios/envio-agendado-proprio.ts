@@ -57,8 +57,7 @@ export interface DestinatariosEnvio {
 
 /** De onde vem o envio: o vencimento do agendamento ou o job "enviar agora" da fila. */
 export type OrigemEnvio =
-  | { readonly tipo: 'vencido'; readonly previsto: Date }
-  | { readonly tipo: 'fila'; readonly job: string };
+  { readonly tipo: 'vencido'; readonly previsto: Date } | { readonly tipo: 'fila'; readonly job: string };
 
 export interface ReservaEnvio {
   readonly envio: number;
@@ -82,13 +81,21 @@ export interface PortaEnvioRelatorio {
   destinatarios(estabelecimento: string, agendamento: number): Promise<DestinatariosEnvio>;
   falhasSeguidas(estabelecimento: string, agendamento: number): Promise<number>;
   /** Reserva o envio antes de mandar o e-mail; null quando outro (instância, ciclo ou tentativa) já o reservou. */
-  reservar(estabelecimento: string, agendamento: number, origem: OrigemEnvio, agoraParede: Date): Promise<ReservaEnvio | null>;
+  reservar(
+    estabelecimento: string,
+    agendamento: number,
+    origem: OrigemEnvio,
+    agoraParede: Date,
+  ): Promise<ReservaEnvio | null>;
   /** Grava o resultado na linha reservada (e o último envio do agendamento, se enviado). */
   concluir(estabelecimento: string, envio: number, r: ResultadoRegistroEnvio): Promise<void>;
 }
 
 export interface NucleoEnvioRelatorio {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
   criarExecutor(): Executor;
 }
 
@@ -109,7 +116,15 @@ export function agoraParede(agora: Date = new Date(), fuso = 'America/Sao_Paulo'
       .map((x) => [x.type, x.value]),
   );
   return new Date(
-    Date.UTC(Number(p['year']), Number(p['month']) - 1, Number(p['day']), Number(p['hour']), Number(p['minute']), Number(p['second']), agora.getMilliseconds()),
+    Date.UTC(
+      Number(p['year']),
+      Number(p['month']) - 1,
+      Number(p['day']),
+      Number(p['hour']),
+      Number(p['minute']),
+      Number(p['second']),
+      agora.getMilliseconds(),
+    ),
   );
 }
 
@@ -165,7 +180,11 @@ export function mascararEndereco(email: string): string {
 /** Forma de envio do banco no vocabulário único do worker. */
 export function formaDe(v: unknown): FormaEnvio {
   const x = String(v ?? 'para');
-  return x === 'cc' || x === 'copia' ? 'copia' : x === 'cco' || x === 'copia_oculta' ? 'copia_oculta' : 'para';
+  return x === 'cc' || x === 'copia'
+    ? 'copia'
+    : x === 'cco' || x === 'copia_oculta'
+      ? 'copia_oculta'
+      : 'para';
 }
 
 /** A chave de idempotência da reserva: determinística por agendamento e origem (vencimento ou job da fila). */
@@ -233,9 +252,15 @@ export function pedidoDoCadastro(a: Linha): Record<string, unknown> {
     entregaPedida: String(a['entrega'] ?? 'link'),
     entregaFeita: 'link',
     formatoPedido: String(a['formato'] ?? 'pdf'),
-    validadeLinkHoras: a['validade_link_horas'] === null || a['validade_link_horas'] === undefined ? null : Number(a['validade_link_horas']),
+    validadeLinkHoras:
+      a['validade_link_horas'] === null || a['validade_link_horas'] === undefined
+        ? null
+        : Number(a['validade_link_horas']),
     enviarSemLinhas: Boolean(Number(a['enviar_sem_linhas'] ?? 0)),
-    temCondicao: a['condicao_envio'] !== null && a['condicao_envio'] !== undefined && String(a['condicao_envio']).trim() !== '',
+    temCondicao:
+      a['condicao_envio'] !== null &&
+      a['condicao_envio'] !== undefined &&
+      String(a['condicao_envio']).trim() !== '',
     linhasAvaliadas: false,
   };
 }
@@ -263,7 +288,9 @@ export class PortaEnvioRelatorioPropria implements PortaEnvioRelatorio {
 
   async nomeEstabelecimento(estabelecimento: string): Promise<string | null> {
     const r = await this.ler((l) =>
-      l.uma('SELECT nome_fantasia FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [estabelecimento]),
+      l.uma('SELECT nome_fantasia FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        estabelecimento,
+      ]),
     );
     return r ? String(r['nome_fantasia']) : null;
   }
@@ -392,10 +419,17 @@ export class PortaEnvioRelatorioPropria implements PortaEnvioRelatorio {
             WHERE a.id = ? AND a.estabelecimento_id = ?`,
           [e.agendamento, e.estabelecimento],
         );
-        if (!a) throw recusa('agendamento-inexistente', 'Agendamento de relatório não encontrado no estabelecimento.');
+        if (!a)
+          throw recusa(
+            'agendamento-inexistente',
+            'Agendamento de relatório não encontrado no estabelecimento.',
+          );
         if (!Number(a['ativo'])) throw recusa('agendamento-inativo', 'O agendamento está desativado.');
         if (a['situacao_relatorio'] !== 'liberado')
-          throw recusa('relatorio-nao-liberado', 'O relatório não está liberado (rascunho, em conferência, suspenso ou descontinuado).');
+          throw recusa(
+            'relatorio-nao-liberado',
+            'O relatório não está liberado (rascunho, em conferência, suspenso ou descontinuado).',
+          );
         const atual = data(a['proximo_envio_em']);
         if (e.previsto !== null && (!atual || atual.toISOString() !== e.previsto))
           throw recusa('envio-ja-reservado', 'Este vencimento já foi reservado por outro envio.');
@@ -406,9 +440,15 @@ export class PortaEnvioRelatorioPropria implements PortaEnvioRelatorio {
           situacao: 'nao_enviado',
           quantidade_destinatarios: 0,
           mensagem_erro: 'Envio reservado; aguardando o resultado do envio.',
-          dados: JSON.stringify({ origem: e.origem, parametros: parametrosDe(a['parametros']), ...pedidoDoCadastro(a) }),
+          dados: JSON.stringify({
+            origem: e.origem,
+            parametros: parametrosDe(a['parametros']),
+            ...pedidoDoCadastro(a),
+          }),
         });
-        await tx.alterar('agendamento_relatorio', e.agendamento, Number(a['versao']), { proximo_envio_em: proximo });
+        await tx.alterar('agendamento_relatorio', e.agendamento, Number(a['versao']), {
+          proximo_envio_em: proximo,
+        });
         return { envio, proximoEnvio: proximo.toISOString() };
       },
       alvo: (_e, s) => ({ tabela: 'envio_relatorio', id: s.envio }),
@@ -466,7 +506,8 @@ export class PortaEnvioRelatorioPropria implements PortaEnvioRelatorio {
           [e.envio, e.estabelecimento],
         );
         if (!x) throw recusa('envio-inexistente', 'Envio de relatório não encontrado no estabelecimento.');
-        if (x['situacao'] !== 'nao_enviado') throw recusa('envio-ja-concluido', 'Este envio já tem resultado gravado.');
+        if (x['situacao'] !== 'nao_enviado')
+          throw recusa('envio-ja-concluido', 'Este envio já tem resultado gravado.');
         await tx.alterar('envio_relatorio', e.envio, Number(x['versao']), {
           situacao: e.situacao,
           mensagem_erro: e.falha,
@@ -474,9 +515,14 @@ export class PortaEnvioRelatorioPropria implements PortaEnvioRelatorio {
           dados: JSON.stringify({ ...objeto(x['dados']), ...objeto(e.dados) }),
         });
         if (e.situacao === 'enviado')
-          await tx.alterar('agendamento_relatorio', Number(x['agendamento']), Number(x['versao_agendamento']), {
-            ultimo_envio_em: data(x['ocorrido_em']),
-          });
+          await tx.alterar(
+            'agendamento_relatorio',
+            Number(x['agendamento']),
+            Number(x['versao_agendamento']),
+            {
+              ultimo_envio_em: data(x['ocorrido_em']),
+            },
+          );
         return { envio: e.envio };
       },
       alvo: (_e, s) => ({ tabela: 'envio_relatorio', id: s.envio }),

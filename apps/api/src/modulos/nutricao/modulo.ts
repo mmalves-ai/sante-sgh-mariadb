@@ -43,7 +43,10 @@ export async function portaDaNutricao(ctx: ContextoModulo): Promise<PortaNutrica
   return portaNutricaoIndisponivel();
 }
 
-export async function moduloNutricao(ctx: ContextoModulo, opcoes: OpcoesModuloNutricao = {}): Promise<DynamicModule> {
+export async function moduloNutricao(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloNutricao = {},
+): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDaNutricao(ctx));
   const portaria = opcoes.portaria !== undefined ? opcoes.portaria : await portaDaPortaria(ctx);
   const configuracao =

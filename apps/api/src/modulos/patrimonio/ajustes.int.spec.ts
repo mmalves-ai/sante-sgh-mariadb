@@ -72,9 +72,15 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
     const antes = (await porta.bem(c, bem))!;
     const trilha = trilhaPat(m!, 'patrimonio.ajuste.registrado', 'ajuste_valor_bem', bem);
     await expect(
-      porta.registrarAjuste(contextoPat(m!), { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' }, 't', () => ({
-        impedimento: { codigo: 'sem-conta', detalhe: 'Sem a conta da perda.' },
-      }), trilha),
+      porta.registrarAjuste(
+        contextoPat(m!),
+        { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' },
+        't',
+        () => ({
+          impedimento: { codigo: 'sem-conta', detalhe: 'Sem a conta da perda.' },
+        }),
+        trilha,
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'sem-conta' } });
     let vista: { bem: number; marco: unknown; contas: boolean } | null = null;
     const a = await porta.registrarAjuste(
@@ -103,31 +109,57 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
       trilha,
     );
     expect(vista).toEqual({ bem, marco: null, contas: expect.any(Boolean) });
-    expect(a).toMatchObject({ bem, tipo: 'impairment', competenciaMarco: '2025-12', perdaCent: 10_000_00, estorno: null });
+    expect(a).toMatchObject({
+      bem,
+      tipo: 'impairment',
+      competenciaMarco: '2025-12',
+      perdaCent: 10_000_00,
+      estorno: null,
+    });
     expect(a.registradoEm).not.toBe('');
     const depois = (await porta.bem(c, bem))!;
     expect(depois.versao).toBeGreaterThan(antes.versao);
     await expect(
-      porta.registrarAjuste(contextoPat(m!), { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' }, 't', () => {
-        throw new Error('não deveria planejar');
-      }, trilha),
+      porta.registrarAjuste(
+        contextoPat(m!),
+        { bem, versao: antes.versao, motivo: 'x', hoje: '2026-11-21' },
+        't',
+        () => {
+          throw new Error('não deveria planejar');
+        },
+        trilha,
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'desatualizado' } });
     expect((await porta.ajustes(c, bem)).map((x) => x.id)).toEqual([a.id]);
     // O marco vale para a depreciação das competências seguintes, não para a própria.
     const marco = (await porta.bensParaDepreciar(c, 1, '2026-01')).bens.find((b) => b.id === bem)?.marco;
-    expect(marco).toMatchObject({ ajuste: a.id, competencia: '2025-12', baseCent: 40_000_00, vidaRestanteMeses: 49 });
+    expect(marco).toMatchObject({
+      ajuste: a.id,
+      competencia: '2025-12',
+      baseCent: 40_000_00,
+      vidaRestanteMeses: 49,
+    });
     expect((await porta.bensParaDepreciar(c, 1, '2025-12')).bens.find((b) => b.id === bem)?.marco).toBeNull();
 
     const e = await porta.estornarAjuste(
       contextoPat(m!),
       { ajuste: a.id, motivo: 'Registrado por engano', origem: 'tela', hoje: '2026-11-21' },
       't',
-      (s) => (s.ultimoComMarco?.id === a.id && s.cotasPosteriores.length === 0 ? null : { codigo: 'x', detalhe: 'x' }),
+      (s) =>
+        s.ultimoComMarco?.id === a.id && s.cotasPosteriores.length === 0
+          ? null
+          : { codigo: 'x', detalhe: 'x' },
       trilha,
     );
     expect(e.estorno).toMatchObject({ data: '2026-11-21', motivo: 'Registrado por engano', origem: 'tela' });
     await expect(
-      porta.estornarAjuste(contextoPat(m!), { ajuste: a.id, motivo: 'de novo', origem: 'tela', hoje: '2026-11-21' }, 't', () => null, trilha),
+      porta.estornarAjuste(
+        contextoPat(m!),
+        { ajuste: a.id, motivo: 'de novo', origem: 'tela', hoje: '2026-11-21' },
+        't',
+        () => null,
+        trilha,
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'ja-estornado' } });
     expect((await porta.bensParaDepreciar(c, 1, '2026-01')).bens.find((b) => b.id === bem)?.marco).toBeNull();
   });
@@ -135,10 +167,23 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
   it('laudo: anexa ao bem, o mesmo PDF não duplica e as leituras devolvem o laudo', async () => {
     const c = contextoPat(m!);
     const sha256 = 'ab'.repeat(32);
-    const dados = { bem, nome: 'laudo-sintetico.pdf', descricao: 'Laudo de teste', chave: `teste/${sha256}`, sha256, tamanho: 1234 };
+    const dados = {
+      bem,
+      nome: 'laudo-sintetico.pdf',
+      descricao: 'Laudo de teste',
+      chave: `teste/${sha256}`,
+      sha256,
+      tamanho: 1234,
+    };
     const trilha = trilhaPat(m!, 'patrimonio.laudo.anexado', 'laudo_bem', bem);
     const l = await porta.anexarLaudo(c, dados, 'teste', trilha);
-    expect(l).toMatchObject({ bem, nome: 'laudo-sintetico.pdf', descricao: 'Laudo de teste', sha256, tamanho: 1234 });
+    expect(l).toMatchObject({
+      bem,
+      nome: 'laudo-sintetico.pdf',
+      descricao: 'Laudo de teste',
+      sha256,
+      tamanho: 1234,
+    });
     expect(l.enviadoEm).not.toBe('');
     expect((await porta.anexarLaudo(c, dados, 'teste', trilha)).id).toBe(l.id);
     expect(await porta.laudos(c, bem)).toEqual([l]);
@@ -151,7 +196,11 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
         [dados.chave],
       ),
     );
-    expect(registro).toMatchObject({ hash_sha256: sha256, finalidade: 'laudo', tipo_mime: 'application/pdf' });
+    expect(registro).toMatchObject({
+      hash_sha256: sha256,
+      finalidade: 'laudo',
+      tipo_mime: 'application/pdf',
+    });
     expect(Number(registro?.['tamanho_bytes'])).toBe(1234);
     expect(Number(registro?.['imutavel'])).toBe(1);
     const ate = registro?.['retencao_ate'];

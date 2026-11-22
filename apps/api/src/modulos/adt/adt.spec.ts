@@ -18,7 +18,11 @@ import { modulo as moduloAdt } from './modulo.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,adt',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/adt-spec');

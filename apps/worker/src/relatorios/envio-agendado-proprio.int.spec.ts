@@ -53,8 +53,14 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
       ids.dono = await garantirUsuario(e, `${marca}d`);
       ids.membro = await garantirUsuario(e, `${marca}m`);
       ids.inativo = await garantirUsuario(e, `${marca}i`);
-      await e.executar('UPDATE usuario SET email = ? WHERE id = ?', [`dono.${marca}@exemplo.invalid`, ids.dono]);
-      await e.executar('UPDATE usuario SET email = ? WHERE id = ?', [`membro.${marca}@exemplo.invalid`, ids.membro]);
+      await e.executar('UPDATE usuario SET email = ? WHERE id = ?', [
+        `dono.${marca}@exemplo.invalid`,
+        ids.dono,
+      ]);
+      await e.executar('UPDATE usuario SET email = ? WHERE id = ?', [
+        `membro.${marca}@exemplo.invalid`,
+        ids.membro,
+      ]);
       await e.executar("UPDATE usuario SET email = ?, situacao = 'inativo' WHERE id = ?", [
         `inativo.${marca}@exemplo.invalid`,
         ids.inativo,
@@ -101,7 +107,15 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
           `INSERT INTO agendamento_relatorio (estabelecimento_id, relatorio_id, nome, periodicidade, hora_envio, dia_semana,
              parametros, entrega, validade_link_horas, dono_usuario_id, proximo_envio_em, criado_em)
            VALUES (?, ?, ?, 'semanal', '07:30:00', 2, ?, 'link', 24, ?, ?, ?)`,
-          [est, relatorioId, nome, JSON.stringify({ mesFim: 'mesAnterior' }), ids.dono, new Date('2026-11-20T07:30:00Z'), new Date()],
+          [
+            est,
+            relatorioId,
+            nome,
+            JSON.stringify({ mesFim: 'mesAnterior' }),
+            ids.dono,
+            new Date('2026-11-20T07:30:00Z'),
+            new Date(),
+          ],
         );
       ids.ag = await agendar(ids.est, `${marca} a`);
       ids.agOutro = await agendar(ids.outro, `${marca} b`);
@@ -131,24 +145,41 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
     if (!nucleo) return;
     await escrever(nucleo, async (e) => {
       const ag = [ids.ag, ids.agOutro, ids.agSuspenso];
-      const envios = await e.consultar('SELECT id FROM envio_relatorio WHERE agendamento_relatorio_id IN (?, ?, ?)', ag);
+      const envios = await e.consultar(
+        'SELECT id FROM envio_relatorio WHERE agendamento_relatorio_id IN (?, ?, ?)',
+        ag,
+      );
       for (const x of envios)
-        await e.executar("DELETE FROM trilha_auditoria WHERE entidade = 'envio_relatorio' AND entidade_id = ?", [x['id']]).catch(
-          () => 0,
-        );
+        await e
+          .executar("DELETE FROM trilha_auditoria WHERE entidade = 'envio_relatorio' AND entidade_id = ?", [
+            x['id'],
+          ])
+          .catch(() => 0);
       await e.executar('DELETE FROM envio_relatorio WHERE agendamento_relatorio_id IN (?, ?, ?)', ag);
-      await e.executar('DELETE FROM agendamento_relatorio_destinatario WHERE agendamento_relatorio_id IN (?, ?, ?)', ag);
+      await e.executar(
+        'DELETE FROM agendamento_relatorio_destinatario WHERE agendamento_relatorio_id IN (?, ?, ?)',
+        ag,
+      );
       await e.executar('DELETE FROM agendamento_relatorio WHERE id IN (?, ?, ?)', ag);
-      await e.executar('DELETE FROM lista_distribuicao_email_membro WHERE lista_distribuicao_email_id IN (?, ?)', [
+      await e.executar(
+        'DELETE FROM lista_distribuicao_email_membro WHERE lista_distribuicao_email_id IN (?, ?)',
+        [ids.lista, ids.listaOutro],
+      );
+      await e.executar('DELETE FROM lista_distribuicao_email WHERE id IN (?, ?)', [
         ids.lista,
         ids.listaOutro,
       ]);
-      await e.executar('DELETE FROM lista_distribuicao_email WHERE id IN (?, ?)', [ids.lista, ids.listaOutro]);
       await e.executar('DELETE FROM relatorio WHERE id IN (?, ?)', [ids.relatorio, ids.suspenso]);
       await e.executar('DELETE FROM modulo_sistema WHERE id = ?', [ids.modulo]).catch(() => 0);
-      await e.executar('DELETE FROM usuario WHERE id IN (?, ?, ?)', [ids.dono, ids.membro, ids.inativo]).catch(() =>
-        e.executar('UPDATE usuario SET email = NULL WHERE id IN (?, ?, ?)', [ids.dono, ids.membro, ids.inativo]),
-      );
+      await e
+        .executar('DELETE FROM usuario WHERE id IN (?, ?, ?)', [ids.dono, ids.membro, ids.inativo])
+        .catch(() =>
+          e.executar('UPDATE usuario SET email = NULL WHERE id IN (?, ?, ?)', [
+            ids.dono,
+            ids.membro,
+            ids.inativo,
+          ]),
+        );
     });
     await nucleo.encerrar();
   });
@@ -156,32 +187,54 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
   it('o vencido é do estabelecimento e do relatório liberado; destinatários do cadastro, na fronteira', async () => {
     const v = await porta.vencidos(EST, agora);
     const meu = v.find((x) => x.id === ids.ag);
-    expect(meu).toMatchObject({ relatorio: marca, titulo: `${marca} a`, parametros: { mesFim: 'mesAnterior' }, dono: ids.dono });
+    expect(meu).toMatchObject({
+      relatorio: marca,
+      titulo: `${marca} a`,
+      parametros: { mesFim: 'mesAnterior' },
+      dono: ids.dono,
+    });
     expect(meu!.proximoEnvioEm).toBeInstanceOf(Date);
     expect(v.some((x) => x.id === ids.agOutro)).toBe(false);
     expect(v.some((x) => x.id === ids.agSuspenso)).toBe(false);
     expect((await porta.vencidos(OUTRO, agora)).some((x) => x.id === ids.agOutro)).toBe(true);
     const d = await porta.destinatarios(EST, ids.ag);
     expect([...d.destinatarios].sort()).toEqual(
-      [`avulso.${marca}@exemplo.invalid`, `lista.${marca}@exemplo.invalid`, `membro.${marca}@exemplo.invalid`].sort(),
+      [
+        `avulso.${marca}@exemplo.invalid`,
+        `lista.${marca}@exemplo.invalid`,
+        `membro.${marca}@exemplo.invalid`,
+      ].sort(),
     );
     expect(d.destinatarios).not.toContain(`vizinho.${marca}@exemplo.invalid`);
     expect(d.formas).toEqual({ para: 1, copia: 1, copia_oculta: 1 });
     expect(d.avisarFalha).toBe(true);
     expect(d.dono).toBe(`dono.${marca}@exemplo.invalid`);
-    expect(await porta.destinatarios(OUTRO, ids.ag)).toEqual({ destinatarios: [], dono: null, avisarFalha: true });
-    await escrever(nucleo, (e) => e.executar('UPDATE agendamento_relatorio SET avisar_falha = FALSE WHERE id = ?', [ids.ag]));
+    expect(await porta.destinatarios(OUTRO, ids.ag)).toEqual({
+      destinatarios: [],
+      dono: null,
+      avisarFalha: true,
+    });
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE agendamento_relatorio SET avisar_falha = FALSE WHERE id = ?', [ids.ag]),
+    );
     expect((await porta.destinatarios(EST, ids.ag)).avisarFalha).toBe(false);
-    await escrever(nucleo, (e) => e.executar('UPDATE agendamento_relatorio SET avisar_falha = TRUE WHERE id = ?', [ids.ag]));
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE agendamento_relatorio SET avisar_falha = TRUE WHERE id = ?', [ids.ag]),
+    );
     expect(await porta.nomeEstabelecimento(EST)).toBeTruthy();
   });
 
   it('reserva antes do envio: uma só entre concorrentes; repetida e vencimento velho não reservam', async () => {
     const lido = (await porta.vencidos(EST, agora)).find((x) => x.id === ids.ag)!;
-    const antes = await escrever(nucleo, (e) => e.uma('SELECT versao FROM agendamento_relatorio WHERE id = ?', [ids.ag]));
+    const antes = await escrever(nucleo, (e) =>
+      e.uma('SELECT versao FROM agendamento_relatorio WHERE id = ?', [ids.ag]),
+    );
     const origem = { tipo: 'vencido' as const, previsto: lido.proximoEnvioEm };
     const outraPorta = new PortaEnvioRelatorioPropria(nucleo, CLIENTE);
-    const [a, b] = await Promise.all([porta.reservar(EST, ids.ag, origem, agora), outraPorta.reservar(EST, ids.ag, origem, agora)]);
+    const [a, b] = await Promise.all([
+      porta.reservar(EST, ids.ag, origem, agora),
+      outraPorta.reservar(EST, ids.ag, origem, agora),
+    ]);
     const ganhas = [a, b].filter((x) => x !== null);
     expect(ganhas).toHaveLength(1);
     const reserva = ganhas[0]!;
@@ -191,8 +244,14 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
     );
     expect(linha).toMatchObject({ situacao: 'nao_enviado' });
     expect(String(linha!['mensagem_erro'])).toMatch(/reservado/);
-    const dados = typeof linha!['dados'] === 'string' ? JSON.parse(linha!['dados'] as string) : linha!['dados'];
-    expect(dados).toMatchObject({ origem: 'vencido', entregaPedida: 'link', linhasAvaliadas: false, parametros: { mesFim: 'mesAnterior' } });
+    const dados =
+      typeof linha!['dados'] === 'string' ? JSON.parse(linha!['dados'] as string) : linha!['dados'];
+    expect(dados).toMatchObject({
+      origem: 'vencido',
+      entregaPedida: 'link',
+      linhasAvaliadas: false,
+      parametros: { mesFim: 'mesAnterior' },
+    });
     const ag = await escrever(nucleo, (e) =>
       e.uma('SELECT versao, proximo_envio_em FROM agendamento_relatorio WHERE id = ?', [ids.ag]),
     );
@@ -213,21 +272,42 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
       formas: { para: 1, copia: 0, copia_oculta: 0 },
     });
     const fim = await escrever(nucleo, (e) =>
-      e.uma('SELECT situacao, quantidade_destinatarios, mensagem_erro, dados FROM envio_relatorio WHERE id = ?', [reserva.envio]),
+      e.uma(
+        'SELECT situacao, quantidade_destinatarios, mensagem_erro, dados FROM envio_relatorio WHERE id = ?',
+        [reserva.envio],
+      ),
     );
-    expect(fim).toMatchObject({ situacao: 'falhou', quantidade_destinatarios: 3, mensagem_erro: 'envio recusado (550 <***@***>)' });
+    expect(fim).toMatchObject({
+      situacao: 'falhou',
+      quantidade_destinatarios: 3,
+      mensagem_erro: 'envio recusado (550 <***@***>)',
+    });
     const dadosFim = typeof fim!['dados'] === 'string' ? JSON.parse(fim!['dados'] as string) : fim!['dados'];
-    expect(dadosFim).toMatchObject({ origem: 'vencido', falhasSeguidas: 1, destinatarios: ['m***@exemplo.invalid'] });
+    expect(dadosFim).toMatchObject({
+      origem: 'vencido',
+      falhasSeguidas: 1,
+      destinatarios: ['m***@exemplo.invalid'],
+    });
     expect(JSON.stringify(dadosFim)).not.toContain(marca);
     const trilha = await escrever(nucleo, (e) =>
-      e.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'envio_relatorio' AND entidade_id = ?", [reserva.envio]),
+      e.uma(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'envio_relatorio' AND entidade_id = ?",
+        [reserva.envio],
+      ),
     );
     expect(Number(trilha!['n'])).toBeGreaterThanOrEqual(2);
     expect(
-      (await escrever(nucleo, (e) => e.uma('SELECT ultimo_envio_em FROM agendamento_relatorio WHERE id = ?', [ids.ag])))!['ultimo_envio_em'],
+      (await escrever(nucleo, (e) =>
+        e.uma('SELECT ultimo_envio_em FROM agendamento_relatorio WHERE id = ?', [ids.ag]),
+      ))!['ultimo_envio_em'],
     ).toBeNull();
     await expect(
-      porta.concluir(EST, reserva.envio, { situacao: 'enviado', falha: null, falhasSeguidas: 0, destinatarios: 3 }),
+      porta.concluir(EST, reserva.envio, {
+        situacao: 'enviado',
+        falha: null,
+        falhasSeguidas: 0,
+        destinatarios: 3,
+      }),
     ).rejects.toMatchObject({ name: 'ErroOperacao' });
     expect(await porta.falhasSeguidas(EST, ids.ag)).toBe(1);
   });
@@ -237,9 +317,16 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
     const r = await porta.reservar(EST, ids.ag, origem, agora);
     expect(r).not.toBeNull();
     expect(await porta.reservar(EST, ids.ag, origem, agora)).toBeNull();
-    await porta.concluir(EST, r!.envio, { situacao: 'enviado', falha: null, falhasSeguidas: 0, destinatarios: 3 });
+    await porta.concluir(EST, r!.envio, {
+      situacao: 'enviado',
+      falha: null,
+      falhasSeguidas: 0,
+      destinatarios: 3,
+    });
     expect(await porta.falhasSeguidas(EST, ids.ag)).toBe(0);
-    const ag = await escrever(nucleo, (e) => e.uma('SELECT ultimo_envio_em FROM agendamento_relatorio WHERE id = ?', [ids.ag]));
+    const ag = await escrever(nucleo, (e) =>
+      e.uma('SELECT ultimo_envio_em FROM agendamento_relatorio WHERE id = ?', [ids.ag]),
+    );
     expect(ag!['ultimo_envio_em']).not.toBeNull();
   });
 

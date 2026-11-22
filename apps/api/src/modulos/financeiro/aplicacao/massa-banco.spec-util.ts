@@ -35,7 +35,9 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 }
 
 export function codigoDe(e: unknown): string {
-  return e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : `outro: ${(e as Error)?.name ?? ''}`;
+  return e instanceof ErroOperacao
+    ? String(e.problema['codigo'] ?? '')
+    : `outro: ${(e as Error)?.name ?? ''}`;
 }
 
 export async function codigoDaGravacao(p: Promise<unknown>): Promise<string> {
@@ -53,35 +55,61 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
   const q = ests.map(() => '?').join(', ');
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-07' }, async (e) => {
     const x = (sql: string) => e.executar(sql, [...ests]);
-    await x(`DELETE d FROM documento_origem_titulo d JOIN titulo_receber t ON t.id = d.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`);
-    await x(`DELETE c FROM conciliacao_bancaria_item c JOIN conciliacao_bancaria b ON b.id = c.conciliacao_bancaria_id WHERE b.estabelecimento_id IN (${q})`);
-    await x(`UPDATE movimento_bancario SET conciliado = FALSE, conciliacao_bancaria_id = NULL, baixa_titulo_id = NULL WHERE estabelecimento_id IN (${q})`);
-    await x(`UPDATE linha_extrato l JOIN extrato_bancario x ON x.id = l.extrato_bancario_id SET l.movimento_bancario_id = NULL WHERE x.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE d FROM documento_origem_titulo d JOIN titulo_receber t ON t.id = d.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `DELETE c FROM conciliacao_bancaria_item c JOIN conciliacao_bancaria b ON b.id = c.conciliacao_bancaria_id WHERE b.estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `UPDATE movimento_bancario SET conciliado = FALSE, conciliacao_bancaria_id = NULL, baixa_titulo_id = NULL WHERE estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `UPDATE linha_extrato l JOIN extrato_bancario x ON x.id = l.extrato_bancario_id SET l.movimento_bancario_id = NULL WHERE x.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM conciliacao_bancaria WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM credito_nao_identificado WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE l FROM linha_extrato l JOIN extrato_bancario x ON x.id = l.extrato_bancario_id WHERE x.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE l FROM linha_extrato l JOIN extrato_bancario x ON x.id = l.extrato_bancario_id WHERE x.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM extrato_bancario WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM recebimento WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE g FROM glosa_titulo_receber g JOIN titulo_receber t ON t.id = g.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE g FROM glosa_titulo_receber g JOIN titulo_receber t ON t.id = g.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM arquivo_fiscal_gerado WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE p FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE p FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM titulo_receber WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM baixa_titulo WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM movimento_bancario WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM bordero_pagamento WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM remessa_bancaria WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM lote_exportacao_contabil WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE d FROM decisao_aprovacao d JOIN pedido_aprovacao p ON p.id = d.pedido_aprovacao_id WHERE p.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE d FROM decisao_aprovacao d JOIN pedido_aprovacao p ON p.id = d.pedido_aprovacao_id WHERE p.estabelecimento_id IN (${q})`,
+    );
     await x(`UPDATE titulo_pagar SET pedido_aprovacao_id = NULL WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM pedido_aprovacao WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE r FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`);
-    await x(`DELETE r FROM rateio_lancamento r JOIN titulo_pagar t ON t.id = r.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`);
-    await x(`DELETE p FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE r FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `DELETE r FROM rateio_lancamento r JOIN titulo_pagar t ON t.id = r.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`,
+    );
+    await x(
+      `DELETE p FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id WHERE t.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM titulo_pagar WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE e FROM etapa_fluxo_aprovacao e JOIN fluxo_aprovacao f ON f.id = e.fluxo_aprovacao_id WHERE f.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE e FROM etapa_fluxo_aprovacao e JOIN fluxo_aprovacao f ON f.id = e.fluxo_aprovacao_id WHERE f.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM fluxo_aprovacao WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM permissao_conta_bancaria WHERE estabelecimento_id IN (${q})`);
-    await x(`DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id WHERE c.estabelecimento_id IN (${q})`);
+    await x(
+      `DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar c ON c.id = i.conta_hospitalar_id WHERE c.estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM conta_hospitalar WHERE estabelecimento_id IN (${q})`);
   });
 }
@@ -117,7 +145,10 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
       );
     const e1 = await est(P);
     const e2 = await est(`${P}B`);
-    const grupo = await porCodigo('grupo_natureza_financeira', '9207', 'nome, tipo', ['GRUPO SINTETICO L0207', 'ambos']);
+    const grupo = await porCodigo('grupo_natureza_financeira', '9207', 'nome, tipo', [
+      'GRUPO SINTETICO L0207',
+      'ambos',
+    ]);
     const sub = async (codigo: string, classificacao: string) =>
       g(
         'SELECT id FROM subgrupo_natureza_financeira WHERE grupo_natureza_financeira_id = ? AND codigo = ?',
@@ -138,7 +169,10 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
       'receita',
     ]);
     await porCodigo('tipo_credor', 'fornecedor', 'descricao, natureza', ['Fornecedor', 'fornecedor']);
-    await porCodigo('tipo_documento_financeiro', 'nota_fiscal', 'descricao, sentido', ['Nota fiscal', 'pagar']);
+    await porCodigo('tipo_documento_financeiro', 'nota_fiscal', 'descricao, sentido', [
+      'Nota fiscal',
+      'pagar',
+    ]);
     await porCodigo('tipo_documento_financeiro', 'fatura', 'descricao, sentido', ['Fatura', 'receber']);
     for (const [codigo, sentido] of [
       ['pagamento_titulo', 'debito'],
@@ -154,7 +188,10 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
         sentido,
         sentido === 'transferencia',
       ]);
-    await porCodigo('forma_recebimento', `${P}-TRF`, 'descricao, meio', ['TRANSFERENCIA L0207', 'transferencia']);
+    await porCodigo('forma_recebimento', `${P}-TRF`, 'descricao, meio', [
+      'TRANSFERENCIA L0207',
+      'transferencia',
+    ]);
     const tributo = await porCodigo('tributo', `${P}-IRRF`, 'descricao, esfera, forma_apuracao, incidencia', [
       'IRRF SINTETICO L0207',
       'federal',
@@ -228,7 +265,10 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
       "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('E9', 'CARATER L0207', 'teste', ?)",
       [agora],
     );
-    const categoria = await porCodigo('categoria_atendimento', `${P}-AMB`, 'descricao, tipo_base', ['AMBULATORIO L0207', 'externo']);
+    const categoria = await porCodigo('categoria_atendimento', `${P}-AMB`, 'descricao, tipo_base', [
+      'AMBULATORIO L0207',
+      'externo',
+    ]);
     const atendimento = await g(
       'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
       [e1, `${P}-AT1`],
@@ -236,8 +276,14 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
          fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [e1, `${P}-AT1`, paciente, categoria, tiss, convenio, profissional, agora, agora],
     );
-    const tipoExterna = await porCodigo('tipo_conta', `${P}-EXT`, 'descricao, natureza', ['EXTERNA L0207', 'externa']);
-    const tipoInternacao = await porCodigo('tipo_conta', `${P}-INT`, 'descricao, natureza', ['INTERNACAO L0207', 'internacao']);
+    const tipoExterna = await porCodigo('tipo_conta', `${P}-EXT`, 'descricao, natureza', [
+      'EXTERNA L0207',
+      'externa',
+    ]);
+    const tipoInternacao = await porCodigo('tipo_conta', `${P}-INT`, 'descricao, natureza', [
+      'INTERNACAO L0207',
+      'internacao',
+    ]);
     const lanca = await usuario('l0207.lanca');
     const aprova = await usuario('l0207.aprova');
     const paga = await usuario('l0207.paga');
@@ -264,22 +310,39 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
   });
   await limparMassa(nucleo, [ids.est, ids.outroEst]);
   // As contas hospitalares fechadas da competência, sem título: duas externas e uma de internação.
-  const contasHospitalares = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-07' }, async (e) => {
-    const agora = new Date();
-    const conta = (n: number, natureza: string, tipo: number, valor: number) =>
-      e.inserir(
-        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+  const contasHospitalares = await nucleo.escrever(
+    { cliente: CLIENTE, correlacao: 'preparo-teste-02-07' },
+    async (e) => {
+      const agora = new Date();
+      const conta = (n: number, natureza: string, tipo: number, valor: number) =>
+        e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
            tipo_conta_id, natureza, competencia, inicio_em, situacao, fechada_em, fechada_por_usuario_id, valor_itens,
            valor_total, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'fechada', ?, ?, ?, ?, ?)`,
-        [ids.est, `${P}-CH${n}`, ids.atendimento, ids.paciente, ids.convenio, tipo, natureza, COMPETENCIA, agora, agora,
-          ids.lanca, valor, valor, agora],
-      );
-    return [
-      await conta(1, 'ambulatorial', ids.tipoExterna, 100.1),
-      await conta(2, 'ambulatorial', ids.tipoExterna, 200.2),
-      await conta(3, 'internacao', ids.tipoInternacao, 1000.55),
-    ];
-  });
+          [
+            ids.est,
+            `${P}-CH${n}`,
+            ids.atendimento,
+            ids.paciente,
+            ids.convenio,
+            tipo,
+            natureza,
+            COMPETENCIA,
+            agora,
+            agora,
+            ids.lanca,
+            valor,
+            valor,
+            agora,
+          ],
+        );
+      return [
+        await conta(1, 'ambulatorial', ids.tipoExterna, 100.1),
+        await conta(2, 'ambulatorial', ids.tipoExterna, 200.2),
+        await conta(3, 'internacao', ids.tipoInternacao, 1000.55),
+      ];
+    },
+  );
   return {
     nucleo,
     est: ids.est,
@@ -296,7 +359,12 @@ export async function montarMassa(): Promise<MassaFinanceiro> {
     centro: ids.centro,
     convenio: ids.convenio,
     contasHospitalares,
-    ctx: (usuario, est = ids.est) => ({ cliente: CLIENTE, estabelecimento: est, usuario, correlacao: 'teste-02-07' }),
+    ctx: (usuario, est = ids.est) => ({
+      cliente: CLIENTE,
+      estabelecimento: est,
+      usuario,
+      correlacao: 'teste-02-07',
+    }),
   };
 }
 

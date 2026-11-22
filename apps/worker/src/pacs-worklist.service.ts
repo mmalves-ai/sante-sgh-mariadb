@@ -118,11 +118,16 @@ export class PacsWorklistService implements OnApplicationBootstrap, OnApplicatio
       this.temporizador = setInterval(() => void this.ciclo(), 60_000);
       this.temporizador.unref();
     } catch (e) {
-      logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'lista de trabalho de imagem não subiu');
+      logger.error(
+        { erro: e instanceof Error ? e.message : 'erro' },
+        'lista de trabalho de imagem não subiu',
+      );
     }
   }
 
-  async ciclo(agora: Date = new Date()): Promise<{ cliente: string; estabelecimento: string; criados: number }[]> {
+  async ciclo(
+    agora: Date = new Date(),
+  ): Promise<{ cliente: string; estabelecimento: string; criados: number }[]> {
     const nucleo = this.nucleo;
     const fabrica = this.fabrica;
     if (this.rodando || !nucleo || !fabrica) return [];
@@ -133,9 +138,15 @@ export class PacsWorklistService implements OnApplicationBootstrap, OnApplicatio
         const porta = fabrica(cliente);
         let ests: string[] = [];
         try {
-          ests = await nucleo.lerSomente({ cliente, correlacao: 'pacs-worklist' }, codigosDosEstabelecimentos);
+          ests = await nucleo.lerSomente(
+            { cliente, correlacao: 'pacs-worklist' },
+            codigosDosEstabelecimentos,
+          );
         } catch (e) {
-          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'lista de trabalho: cliente indisponível');
+          logger.warn(
+            { cliente, erro: e instanceof Error ? e.name : 'erro' },
+            'lista de trabalho: cliente indisponível',
+          );
         }
         for (const cod of ests) {
           try {
@@ -162,7 +173,10 @@ export class PacsWorklistService implements OnApplicationBootstrap, OnApplicatio
         }
       }
     } catch (e) {
-      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'lista de trabalho de imagem: clientes indisponíveis');
+      logger.warn(
+        { erro: e instanceof Error ? e.name : 'erro' },
+        'lista de trabalho de imagem: clientes indisponíveis',
+      );
     } finally {
       this.rodando = false;
     }

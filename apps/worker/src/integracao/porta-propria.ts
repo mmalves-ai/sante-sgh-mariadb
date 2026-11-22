@@ -31,7 +31,14 @@ import {
   SITUACOES_EXAME_SEM_PEDIDO,
   SITUACOES_REMESSA_COM_PEDIDO,
 } from '@sgh/dominio-integracao';
-import { erroConflitoVersao, gravarOutbox, type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  erroConflitoVersao,
+  gravarOutbox,
+  type Leitor,
+  type Linha,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
 
 // ---- conversões ----
 
@@ -94,7 +101,8 @@ const placeholders = (n: number) => Array.from({ length: n }, () => '?').join(',
 /** O estabelecimento da operação (o acesso resolve o código antes de abrir a transação). */
 function estabelecimentoDa(tx: TxOperacao): number {
   const est = tx.contexto.estabelecimento;
-  if (typeof est !== 'number') throw recusa('sem-estabelecimento', 'A gravação da integração exige o estabelecimento.');
+  if (typeof est !== 'number')
+    throw recusa('sem-estabelecimento', 'A gravação da integração exige o estabelecimento.');
   return est;
 }
 
@@ -137,7 +145,9 @@ export async function lerParceiros(l: Leitor): Promise<ParceiroEntrega[]> {
 /** Os códigos dos estabelecimentos do cliente (o ciclo do worker passa por todos). */
 export async function lerEstabelecimentos(l: Leitor): Promise<string[]> {
   return (
-    await l.consultar('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], { teto: 1000 })
+    await l.consultar('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY codigo', [], {
+      teto: 1000,
+    })
   ).map((x) => String(x['codigo']));
 }
 
@@ -209,7 +219,11 @@ export function categoriaDaFalha(
   if (r.includes('tempo esgotado')) return 'tempo_esgotado';
   if (/indispon|conexão recusada|http 5\d\d/.test(r)) return 'indisponibilidade';
   if (/^(ae|ar):|recusad|http 4\d\d/.test(r)) return 'regra_negocio';
-  if (/sem destino|sem canal|sem o |sem a |fora do loopback|não configurad|não encontrad|desligad|cancelad/.test(r))
+  if (
+    /sem destino|sem canal|sem o |sem a |fora do loopback|não configurad|não encontrad|desligad|cancelad/.test(
+      r,
+    )
+  )
     return 'validacao';
   return 'desconhecida';
 }
@@ -293,10 +307,12 @@ const CATEGORIA_DO_TIPO: Readonly<Record<string, string>> = {
 
 /** O sistema externo do parceiro (o parceiro carregado sem ele ganha um aqui, como na API). */
 async function sistemaDo(tx: TxOperacao, p: Linha): Promise<number> {
-  if (p['sistema_externo_id'] !== null && p['sistema_externo_id'] !== undefined) return Number(p['sistema_externo_id']);
-  const ja = await tx.uma<{ id: unknown }>('SELECT id FROM sistema_externo WHERE codigo = ? AND excluido_em IS NULL', [
-    String(p['codigo']),
-  ]);
+  if (p['sistema_externo_id'] !== null && p['sistema_externo_id'] !== undefined)
+    return Number(p['sistema_externo_id']);
+  const ja = await tx.uma<{ id: unknown }>(
+    'SELECT id FROM sistema_externo WHERE codigo = ? AND excluido_em IS NULL',
+    [String(p['codigo'])],
+  );
   const id =
     ja !== null
       ? Number(ja.id)
@@ -313,7 +329,11 @@ async function sistemaDo(tx: TxOperacao, p: Linha): Promise<number> {
 }
 
 /** O ponto de saída do parceiro no estabelecimento (criado na primeira mensagem; desativado, recusa). */
-async function pontoDeSaida(tx: TxOperacao, est: number, p: Linha): Promise<{ ponto: number; sistema: number }> {
+async function pontoDeSaida(
+  tx: TxOperacao,
+  est: number,
+  p: Linha,
+): Promise<{ ponto: number; sistema: number }> {
   const sistema = await sistemaDo(tx, p);
   const codigo = `parceiro.${String(p['codigo'])}.saida`;
   const ja = await tx.uma<{ id: unknown; ativo: unknown }>(
@@ -321,7 +341,8 @@ async function pontoDeSaida(tx: TxOperacao, est: number, p: Linha): Promise<{ po
     [est, codigo],
   );
   if (ja) {
-    if (!booleano(ja.ativo)) throw recusa('ponto-desativado', 'O ponto de integração do parceiro está desativado.');
+    if (!booleano(ja.ativo))
+      throw recusa('ponto-desativado', 'O ponto de integração do parceiro está desativado.');
     return { ponto: Number(ja.id), sistema };
   }
   const familia = FAMILIA_DO_TIPO[String(p['tipo'])] ?? 'proprio';
@@ -329,7 +350,8 @@ async function pontoDeSaida(tx: TxOperacao, est: number, p: Linha): Promise<{ po
     'SELECT id FROM padrao_troca WHERE familia = ? AND ativo ORDER BY id LIMIT 1',
     [familia],
   );
-  if (!padrao) throw recusa('padrao-troca-ausente', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
+  if (!padrao)
+    throw recusa('padrao-troca-ausente', `O padrão de troca "${familia}" não está cadastrado neste cliente.`);
   const ponto = await tx.incluir('ponto_integracao', {
     estabelecimento_id: est,
     codigo,
@@ -386,7 +408,11 @@ export async function registrarEnvio(tx: TxOperacao, n: NovoEnvio): Promise<bool
     formato: 'json',
     conteudo:
       texto(carga?.conteudo) ??
-      JSON.stringify({ evento: n.tipoEvento, chave, ...(idDe(versaoObjeto) !== null ? { versao: idDe(versaoObjeto) } : {}) }),
+      JSON.stringify({
+        evento: n.tipoEvento,
+        chave,
+        ...(idDe(versaoObjeto) !== null ? { versao: idDe(versaoObjeto) } : {}),
+      }),
     situacao: 'pendente',
     tentativas: 0,
     tentativas_maximas: Math.max(1, inteiro(p['limite_tentativas']) || 5),
@@ -413,7 +439,12 @@ async function travarEnvio(tx: TxOperacao, id: string, versao: number): Promise<
  * um processo que caiu (reserva vencida). Devolve a versão da reserva, ou null quando outro processo já a pegou ou a
  * tela a mudou desde a leitura (nada é enviado).
  */
-export async function reservarEnvio(tx: TxOperacao, id: string, versaoLida: number, agora: Date): Promise<number | null> {
+export async function reservarEnvio(
+  tx: TxOperacao,
+  id: string,
+  versaoLida: number,
+  agora: Date,
+): Promise<number | null> {
   if (!/^\d{1,15}$/.test(id)) return null;
   const [s] = await tx.consultarParaAtualizar(
     `SELECT id, versao, situacao, alterado_em FROM mensagem_integracao_saida
@@ -422,7 +453,8 @@ export async function reservarEnvio(tx: TxOperacao, id: string, versaoLida: numb
   );
   if (!s || Number(s['versao']) !== versaoLida) return null;
   const livre =
-    s['situacao'] === 'pendente' || (s['situacao'] === 'enviando' && reservaVencida(data(s['alterado_em']), agora));
+    s['situacao'] === 'pendente' ||
+    (s['situacao'] === 'enviando' && reservaVencida(data(s['alterado_em']), agora));
   if (!livre) return null;
   return tx.alterar('mensagem_integracao_saida', Number(s['id']), versaoLida, { situacao: 'enviando' });
 }
@@ -435,7 +467,12 @@ export interface ReciboEnvio {
 }
 
 /** A mensagem entregue: a situação, o recibo, a resposta curta e o resumo do conteúdo (trava pela versão da reserva). */
-export async function marcarEnviado(tx: TxOperacao, id: string, versao: number, r: ReciboEnvio): Promise<number> {
+export async function marcarEnviado(
+  tx: TxOperacao,
+  id: string,
+  versao: number,
+  r: ReciboEnvio,
+): Promise<number> {
   const s = await travarEnvio(tx, id, versao);
   if (!s) return 0;
   const recibo = r.recibo?.slice(0, 120) ?? null;
@@ -455,7 +492,12 @@ export async function marcarEnviado(tx: TxOperacao, id: string, versao: number, 
 export type FalhaEnvio = DepoisDaFalha & { readonly resposta: string; readonly hash: string | null };
 
 /** A falha do envio: a retentativa agendada ou, esgotado o limite, a mensagem com erro e a falha tratável aberta. */
-export async function marcarFalhaEnvio(tx: TxOperacao, id: string, versao: number, d: FalhaEnvio): Promise<number> {
+export async function marcarFalhaEnvio(
+  tx: TxOperacao,
+  id: string,
+  versao: number,
+  d: FalhaEnvio,
+): Promise<number> {
   const s = await travarEnvio(tx, id, versao);
   if (!s) return 0;
   const resposta = d.resposta.slice(0, 2000) || 'falha no envio';
@@ -510,7 +552,9 @@ export async function lerMarcaFato(l: Leitor, hospital: string, fato: string): P
   );
   const m = /^(\S+)\|(\d{1,20})$/.exec(texto(r?.valor_marca) ?? '');
   const carimbo = m ? new Date(m[1]!) : null;
-  return carimbo && !Number.isNaN(carimbo.getTime()) ? { ultimoId: m![2]!, ultimoCarimbo: carimbo } : { ultimoId: '0', ultimoCarimbo: null };
+  return carimbo && !Number.isNaN(carimbo.getTime())
+    ? { ultimoId: m![2]!, ultimoCarimbo: carimbo }
+    : { ultimoId: '0', ultimoCarimbo: null };
 }
 
 /** Grava a marca nova na transação dos eventos; sem mudança, nada grava. */
@@ -597,7 +641,8 @@ async function lerFatos(
     id: Number(x['id']),
     exame: Number(x['exame']),
     paciente: Number(x['paciente']),
-    atendimento: x['atendimento'] === null || x['atendimento'] === undefined ? null : Number(x['atendimento']),
+    atendimento:
+      x['atendimento'] === null || x['atendimento'] === undefined ? null : Number(x['atendimento']),
     carimbo: data(x['carimbo']) ?? new Date(0),
   }));
 }
@@ -768,7 +813,11 @@ export interface ExamePedido {
   readonly atendimento: number;
   readonly exame: { readonly codigo: string; readonly nome: string };
   /** O exame no catálogo do laboratório de apoio (de-para), quando o exame vai ao apoio. */
-  readonly apoio: { readonly codigo: string; readonly nome: string | null; readonly material: string | null } | null;
+  readonly apoio: {
+    readonly codigo: string;
+    readonly nome: string | null;
+    readonly material: string | null;
+  } | null;
   readonly modalidade: string | null;
   readonly solicitadoEm: Date | null;
   readonly agendadoPara: Date | null;
@@ -820,7 +869,11 @@ export async function examePedido(l: Leitor, hospital: string, id: number): Prom
     atendimento: numero && /^\d{1,15}$/.test(numero) ? Number(numero) : Number(x['atendimento_id']),
     exame: { codigo: String(x['exame_codigo']), nome: String(x['exame_nome']) },
     apoio: codigoApoio
-      ? { codigo: codigoApoio, nome: texto(x['nome_exame_apoio']), material: texto(x['codigo_material_apoio']) }
+      ? {
+          codigo: codigoApoio,
+          nome: texto(x['nome_exame_apoio']),
+          material: texto(x['codigo_material_apoio']),
+        }
       : null,
     modalidade: texto(x['modalidade']),
     solicitadoEm: data(x['solicitado_em']),
@@ -921,7 +974,11 @@ export interface PrerequisitoLido {
 }
 
 /** As linhas da chave de liberação no estabelecimento (todos os escopos). */
-export async function lerChavesLiberacao(l: Leitor, hospital: string, chave: string): Promise<ChaveRecursoLida[]> {
+export async function lerChavesLiberacao(
+  l: Leitor,
+  hospital: string,
+  chave: string,
+): Promise<ChaveRecursoLida[]> {
   return (
     await l.consultar(
       `SELECT c.chave, c.tipo, c.escopo, c.valor, c.ligada FROM liberacao_chave c
@@ -940,7 +997,11 @@ export async function lerChavesLiberacao(l: Leitor, hospital: string, chave: str
 }
 
 /** Os pré-requisitos externos registrados do recurso no estabelecimento. */
-export async function lerPrerequisitos(l: Leitor, hospital: string, recurso: string): Promise<PrerequisitoLido[]> {
+export async function lerPrerequisitos(
+  l: Leitor,
+  hospital: string,
+  recurso: string,
+): Promise<PrerequisitoLido[]> {
   return (
     await l.consultar(
       `SELECT p.recurso, p.tipo, p.situacao, p.validade FROM recurso_prerequisito p

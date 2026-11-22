@@ -49,7 +49,12 @@ import {
   planoDaApuracao,
   type PlanoApuracao,
 } from '@sgh/dominio-contabil';
-import type { ArquivoSpedRegistrado, ContaPlanoVersionada, FiltroSomasPorta, LancamentoParaGravar } from './tipos.js';
+import type {
+  ArquivoSpedRegistrado,
+  ContaPlanoVersionada,
+  FiltroSomasPorta,
+  LancamentoParaGravar,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContabil, PortaContabil } from './porta.js';
 

@@ -150,9 +150,7 @@ export class AssinaturaIcpController {
   @Post('certificados/:id/teste')
   @HttpCode(200)
   @Permissao('documento.certificado.vincular')
-  @AuditadoNoHandler(
-    'o pedido em pedido_assinatura; a assinatura e a validação na volta, com a trilha',
-  )
+  @AuditadoNoHandler('o pedido em pedido_assinatura; a assinatura e a validação na volta, com a trilha')
   teste(
     @Param('id') id: string,
     @Req() req: RequisicaoAutorizada,

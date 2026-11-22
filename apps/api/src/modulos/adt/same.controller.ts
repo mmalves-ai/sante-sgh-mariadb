@@ -121,7 +121,9 @@ export class SameController {
   @Post('registros')
   @HttpCode(201)
   @Permissao('same.movimento.criar')
-  @AuditadoNoHandler('registro do arquivo de prontuários (ocorrencia_arquivo_prontuario) com a trilha na mesma transação')
+  @AuditadoNoHandler(
+    'registro do arquivo de prontuários (ocorrencia_arquivo_prontuario) com a trilha na mesma transação',
+  )
   async registro(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistroSame, b);
@@ -156,7 +158,11 @@ export class SameController {
       s,
       EVENTOS_AUDITAVEIS.sameProtocolo.codigo,
       'same.movimento.criar',
-      (x: number) => ({ tabela: 'ocorrencia_arquivo_prontuario', id: String(x), chave: `${tipo}:${e.conta}` }),
+      (x: number) => ({
+        tabela: 'ocorrencia_arquivo_prontuario',
+        id: String(x),
+        chave: `${tipo}:${e.conta}`,
+      }),
       (g) =>
         g.gravarSameExt({
           movimento: e.movimento ?? null,

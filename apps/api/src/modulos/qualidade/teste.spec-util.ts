@@ -60,7 +60,16 @@ export function criarAppQualidade(
     ...envBase,
     API_MODULOS: `configuracao_teste,cadastro,qualidade${suporte ? ',suporte' : ''}`,
   } as NodeJS.ProcessEnv;
-  const { trilha, configuracao, armazem, plataforma, suporte: _s, vigia: _v, vigiaEnfermagem: _ve, ...portas } = o;
+  const {
+    trilha,
+    configuracao,
+    armazem,
+    plataforma,
+    suporte: _s,
+    vigia: _v,
+    vigiaEnfermagem: _ve,
+    ...portas
+  } = o;
   void _s;
   void _v;
   void _ve;
@@ -72,7 +81,9 @@ export function criarAppQualidade(
       ...registroDeTeste(
         {},
         {
-          configuracao_teste: configuracao ? configuracaoCom(configuracao) : (ctx) => moduloConfiguracaoDeTeste(ctx),
+          configuracao_teste: configuracao
+            ? configuracaoCom(configuracao)
+            : (ctx) => moduloConfiguracaoDeTeste(ctx),
           qualidade: (ctx) => moduloQualidade(ctx, portas),
         },
       ),
@@ -83,7 +94,13 @@ export function criarAppQualidade(
 
 /** O contexto sintético das chamadas diretas à porta em memória (o estabelecimento pelo código da sessão). */
 export function ctxTeste(hospital: string): ContextoNucleo {
-  return { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', hospital } as ContextoNucleo;
+  return {
+    cliente: 'teste',
+    estabelecimento: null,
+    usuario: null,
+    correlacao: 'teste',
+    hospital,
+  } as ContextoNucleo;
 }
 
 /** A linha de trilha das gravações diretas à porta em memória (a memória não grava trilha). */

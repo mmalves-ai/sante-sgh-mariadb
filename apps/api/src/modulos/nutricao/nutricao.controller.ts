@@ -190,9 +190,9 @@ const prazosDe = (r: Resolvedor, unidade: string | null) => ({
 const MOTIVO_CONTA_COMPARTILHADA =
   'Conta compartilhada: o login está ligado a vários cadastros de profissional, e a categoria não é reconhecida. Entre com o login pessoal.';
 
-
 /** A sessão com a Idempotency-Key do pedido no contexto da porta: o reenvio do mesmo pedido não grava de novo. */
-const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro => comPedido(sessaoCadastroDe(req));
+const sessaoDe = (req: Parameters<typeof sessaoCadastroDe>[0]): SessaoCadastro =>
+  comPedido(sessaoCadastroDe(req));
 
 @Controller()
 export class NutricaoController {
@@ -779,9 +779,7 @@ export class NutricaoController {
   @Post('nutricao/mapa/fechar')
   @HttpCode(201)
   @Permissao(P.mapaFechar)
-  @AuditadoNoHandler(
-    'internacao.fecharMapaDietas (mapa_dieta e as linhas) com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('internacao.fecharMapaDietas (mapa_dieta e as linhas) com a trilha na mesma transação')
   async fecharMapa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoMapa> {
     const s = sessaoDe(req);
     const e = corpo(esquemaFecharMapa, b);
@@ -1637,9 +1635,7 @@ export class NutricaoController {
   @Post('nutricao/terapias/metas/:id/avaliacao-npt')
   @HttpCode(201)
   @Permissao(P.terapiaAvaliarNpt)
-  @AuditadoNoHandler(
-    'pep.acompanharTerapiaNutricional (avaliacao_npt) com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('pep.acompanharTerapiaNutricional (avaliacao_npt) com a trilha na mesma transação')
   async avaliarNpt(
     @Param('id') idRota: string,
     @Body() b: unknown,

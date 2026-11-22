@@ -49,7 +49,10 @@ export class PortaImplantacaoPropria implements PortaImplantacao {
   ) {}
 
   private ler<T>(c: ContextoImplantacao, fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: `implantacao-${c.hospital}`.slice(0, 64) }, fn);
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: `implantacao-${c.hospital}`.slice(0, 64) },
+      fn,
+    );
   }
 
   conexao(c: ContextoImplantacao): Promise<ConexaoBanco> {
@@ -96,16 +99,23 @@ export class PortaImplantacaoPropria implements PortaImplantacao {
         [],
       );
       if (Number(t?.['n'] ?? 0) === 0) return null;
-      const linhas = await l.consultar<Linha>('SELECT numero, hash FROM migracao_aplicada ORDER BY numero', [], {
-        teto: 10_000,
-      });
+      const linhas = await l.consultar<Linha>(
+        'SELECT numero, hash FROM migracao_aplicada ORDER BY numero',
+        [],
+        {
+          teto: 10_000,
+        },
+      );
       return linhas.map((x) => ({ numero: Number(x['numero']), hash: texto(x['hash']) }));
     });
   }
 
   relogioBanco(c: ContextoImplantacao): Promise<string | null> {
     return this.ler(c, async (l) => {
-      const r = await l.uma<Linha>("SELECT DATE_FORMAT(UTC_TIMESTAMP(3), '%Y-%m-%dT%H:%i:%s.%f') AS agora", []);
+      const r = await l.uma<Linha>(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(3), '%Y-%m-%dT%H:%i:%s.%f') AS agora",
+        [],
+      );
       const v = textoOuNulo(r?.['agora']);
       return v ? v.slice(0, 23) : null;
     });
@@ -120,7 +130,10 @@ export class PortaImplantacaoPropria implements PortaImplantacao {
         [],
         { teto: 200_000 },
       );
-      return { resumo: resumoDaEstrutura(colunas), tabelas: new Set(colunas.map((x) => texto(x['tabela']))).size };
+      return {
+        resumo: resumoDaEstrutura(colunas),
+        tabelas: new Set(colunas.map((x) => texto(x['tabela']))).size,
+      };
     });
   }
 }

@@ -13,9 +13,19 @@ import { chaveMestra } from '@sgh/dominio-acesso';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import { portaDoAtendimento } from '../atendimento/modulo.js';
-import { CACHE_CONFIG, type CacheConfig, FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
+import {
+  CACHE_CONFIG,
+  type CacheConfig,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+} from '../config/public-api.js';
 import { fonteDaInternacao } from '../internacao/modulo.js';
-import { CONFIGURACAO_M16, ConfiguracaoM16, SERVICO_INTERNACAO, ServicoInternacao } from '../internacao/public-api.js';
+import {
+  CONFIGURACAO_M16,
+  ConfiguracaoM16,
+  SERVICO_INTERNACAO,
+  ServicoInternacao,
+} from '../internacao/public-api.js';
 import { PORTA_ATENDIMENTO, type PortaAtendimento } from '../atendimento/porta.js';
 import type { ContextoModulo } from '../registro.js';
 import { CENTRAL_AVISOS_QUALIDADE, type CentralAvisosQualidade } from './central-pendencias.js';
@@ -87,14 +97,21 @@ export async function portasDaQualidade(ctx: ContextoModulo): Promise<PortasQual
 @Module({})
 export class ModuloQualidade {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloQualidade = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloQualidade = {},
+): Promise<DynamicModule> {
   const faltam = !opcoes.qualidade || !opcoes.ccih || !opcoes.agravo || !opcoes.gestao;
   const padrao = faltam ? await portasDaQualidade(ctx) : null;
-  const mestra = chaveMestra(ctx.env['PLATAFORMA_CHAVE_MESTRA']) ?? (fontesSinteticas(ctx.env) ? randomBytes(32) : null);
-  const resumo = opcoes.resumoSugestao !== undefined ? opcoes.resumoSugestao : mestra ? new ResumoSugestao(mestra) : null;
+  const mestra =
+    chaveMestra(ctx.env['PLATAFORMA_CHAVE_MESTRA']) ?? (fontesSinteticas(ctx.env) ? randomBytes(32) : null);
+  const resumo =
+    opcoes.resumoSugestao !== undefined ? opcoes.resumoSugestao : mestra ? new ResumoSugestao(mestra) : null;
   const atendimento = opcoes.atendimento ?? (await portaDoAtendimento(ctx));
   const internacao =
-    opcoes.internacao !== undefined ? opcoes.internacao : new ServicoInternacao(await fonteDaInternacao(ctx), null);
+    opcoes.internacao !== undefined
+      ? opcoes.internacao
+      : new ServicoInternacao(await fonteDaInternacao(ctx), null);
   return {
     module: ModuloQualidade,
     controllers: [
@@ -119,7 +136,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloQualidade 
             { provide: SERVICO_INTERNACAO, useValue: internacao },
             {
               provide: CONFIGURACAO_M16,
-              useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) => new ConfiguracaoM16(cfg, cache),
+              useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) =>
+                new ConfiguracaoM16(cfg, cache),
               inject: [
                 { token: FONTE_CONFIGURACAO, optional: true },
                 { token: CACHE_CONFIG, optional: true },
@@ -127,7 +145,9 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloQualidade 
             },
           ]
         : []),
-      ...(opcoes.centralAvisos ? [{ provide: CENTRAL_AVISOS_QUALIDADE, useValue: opcoes.centralAvisos }] : []),
+      ...(opcoes.centralAvisos
+        ? [{ provide: CENTRAL_AVISOS_QUALIDADE, useValue: opcoes.centralAvisos }]
+        : []),
     ],
     exports: [PORTA_QUALIDADE, PORTA_CCIH, PORTA_AGRAVO, PORTA_GESTAO],
   };

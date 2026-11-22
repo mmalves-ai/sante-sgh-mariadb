@@ -108,8 +108,11 @@ ALTER TABLE regra_visita
     // Cada REVOKE vem logo depois do GRANT da mesma tabela (o REVOKE nunca falha por falta de concessão).
     const linhas = comandos.split('\n');
     linhas.forEach((l, i) => {
-      if (l.startsWith('REVOKE'))
-        expect(linhas[i - 1]).toMatch(new RegExp(`^GRANT .* ON ${l.split(' ON ')[1]!.split(' ')[0]} TO`));
+      if (l.startsWith('REVOKE')) {
+        const tabela = l.split(' ON ')[1]!.split(' ')[0];
+        const anterior = linhas[i - 1] ?? '';
+        expect(anterior.startsWith('GRANT ') && anterior.includes(` ON ${tabela} TO`)).toBe(true);
+      }
     });
     expect(sql).toContain(COMANDO_PAPEL);
     expect(

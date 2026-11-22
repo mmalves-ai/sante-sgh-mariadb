@@ -2,7 +2,38 @@
 // comissões, riscos, não conformidades, ouvidoria, envios regulatórios e a comissão de revisão, com as gravações numa
 // transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente (porta-gestao-propria.ts), em
 // memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
-import type { DependentesRegistro, TabelaCorrigivel, VersaoRegistro, AnaliseIndicadorNova, AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeNovo, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, FiltroDocumentos, ManifestacaoNova, ManifestacaoRegistrada, NaoConformidadeNova, NaoConformidadeRegistrada, PaginaGestao, PesquisaSatisfacaoRespondida, ProtocoloDoPaciente, ReuniaoComissaoRegistrada, RiscoNovo, RiscoRegistrado, VersaoProtocoloGerenciado, AltaParaRevisao, ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado, PublicacaoChecklist, RevisaoNova, SorteioRevisaoRegistrado, SorteioNovo } from './tipos.js';
+import type {
+  DependentesRegistro,
+  TabelaCorrigivel,
+  VersaoRegistro,
+  AnaliseIndicadorNova,
+  AnaliseIndicadorRegistrada,
+  AuditoriaRegistrada,
+  ComissaoRegistrada,
+  DocumentoQualidadeNovo,
+  DocumentoQualidadeRegistrado,
+  EnvioRegulatorioRegistrado,
+  FiltroDocumentos,
+  ManifestacaoNova,
+  ManifestacaoRegistrada,
+  NaoConformidadeNova,
+  NaoConformidadeRegistrada,
+  PaginaGestao,
+  PesquisaSatisfacaoRespondida,
+  ProtocoloDoPaciente,
+  ReuniaoComissaoRegistrada,
+  RiscoNovo,
+  RiscoRegistrado,
+  VersaoProtocoloGerenciado,
+  AltaParaRevisao,
+  ChecklistRevisaoRegistrado,
+  PendenciaRevisaoRegistrada,
+  ProntuarioRevisaoRegistrado,
+  PublicacaoChecklist,
+  RevisaoNova,
+  SorteioRevisaoRegistrado,
+  SorteioNovo,
+} from './tipos.js';
 import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_GESTAO = Symbol('PORTA_GESTAO');
@@ -243,7 +274,11 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
     },
   ): Promise<PaginaGestao<ManifestacaoRegistrada>>;
   manifestacao(c: C, id: number): Promise<ManifestacaoRegistrada | null>;
-  pesquisas(c: C, de: string, ate: string): Promise<{ itens: PesquisaSatisfacaoRespondida[]; cortada: boolean }>;
+  pesquisas(
+    c: C,
+    de: string,
+    ate: string,
+  ): Promise<{ itens: PesquisaSatisfacaoRespondida[]; cortada: boolean }>;
   pesquisa(
     c: C,
     id: number,

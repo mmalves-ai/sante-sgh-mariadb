@@ -22,7 +22,13 @@ import type {
   Precaucao,
   PreInternacaoItem,
 } from '@sgh/contratos';
-import { type DetalheInternacao, type EstadosDoMapa, type ItemIncoerencia, type LimpezaGiro, type SolicitacaoLimpezaFila } from './tipos.js';
+import {
+  type DetalheInternacao,
+  type EstadosDoMapa,
+  type ItemIncoerencia,
+  type LimpezaGiro,
+  type SolicitacaoLimpezaFila,
+} from './tipos.js';
 import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ProfissionalDaSessao } from '../atendimento/porta.js';
@@ -65,7 +71,12 @@ export interface GravadorSghAdt {
     solicitacao?: number | null;
     usuario: string;
   }): Promise<number>;
-  encerrarEstadoLeito(r: { leito: ChaveLeito; estado: EstadoLeitoNovo; versao?: number | null; usuario: string }): Promise<number>;
+  encerrarEstadoLeito(r: {
+    leito: ChaveLeito;
+    estado: EstadoLeitoNovo;
+    versao?: number | null;
+    usuario: string;
+  }): Promise<number>;
   /** W0-07: altera o estado aberto sem encerrar (a versão anterior na trilha de auditoria); devolve o id do estado. */
   alterarEstadoLeito(r: {
     leito: ChaveLeito;
@@ -184,11 +195,7 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     c: ContextoAdt,
     o: OpcoesListaInternacoes,
   ): Promise<{ itens: InternacaoResumo[]; cortada: boolean }>;
-  detalhe(
-    c: ContextoAdt,
-    reg: number,
-    intensivas: readonly number[],
-  ): Promise<DetalheInternacao | null>;
+  detalhe(c: ContextoAdt, reg: number, intensivas: readonly number[]): Promise<DetalheInternacao | null>;
   altaMedica(c: ContextoAdt, reg: number): Promise<AltaMedicaDecidida | null>;
   altasMedicas(c: ContextoAdt, regs: readonly number[]): Promise<Map<number, AltaMedicaDecidida>>;
   preInternacoes(

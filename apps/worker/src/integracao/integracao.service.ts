@@ -119,9 +119,15 @@ export class IntegracaoService implements OnApplicationBootstrap, OnApplicationS
         const { acesso, enviador } = this.doCliente(nucleo, cliente);
         let estabelecimentos: string[] = [];
         try {
-          estabelecimentos = await nucleo.lerSomente({ cliente, correlacao: 'integracao' }, lerEstabelecimentos);
+          estabelecimentos = await nucleo.lerSomente(
+            { cliente, correlacao: 'integracao' },
+            lerEstabelecimentos,
+          );
         } catch (e) {
-          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'integrações: cliente indisponível');
+          logger.warn(
+            { cliente, erro: e instanceof Error ? e.name : 'erro' },
+            'integrações: cliente indisponível',
+          );
         }
         for (const cod of estabelecimentos) {
           try {

@@ -102,13 +102,7 @@ export const LIMITE_PAGINA_MOVIMENTOS = 100;
 
 /** Nome para busca e ordem: maiúsculas, sem acento, espaços simples (a mesma regra na memória e no banco). */
 export function nomeBuscaPrestador(nome: string): string {
-  return nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase()
-    .slice(0, 120);
+  return nome.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 120);
 }
 
 export interface FiltroPrestadores {

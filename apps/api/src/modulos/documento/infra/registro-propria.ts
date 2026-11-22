@@ -74,14 +74,25 @@ const reservar = definirOperacao({
   async gravar(tx, e: Reserva) {
     const est = tx.contexto.estabelecimento;
     if (est === null)
-      throw new ErroOperacao(422, 'sem-estabelecimento', 'Estabelecimento da sessão', 'A emissão exige o estabelecimento da sessão.');
+      throw new ErroOperacao(
+        422,
+        'sem-estabelecimento',
+        'Estabelecimento da sessão',
+        'A emissão exige o estabelecimento da sessão.',
+      );
     let original: number | null = null;
     if (e.idOriginal !== null) {
       const o = await tx.uma<{ id: unknown }>(
         'SELECT id FROM emissao_documento WHERE codigo = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [e.idOriginal, est],
       );
-      if (!o) throw new ErroOperacao(409, 'original-inexistente', 'Original não encontrado', 'A emissão original da reemissão não existe.');
+      if (!o)
+        throw new ErroOperacao(
+          409,
+          'original-inexistente',
+          'Original não encontrado',
+          'A emissão original da reemissão não existe.',
+        );
       original = Number(o.id);
     }
     try {
@@ -109,9 +120,19 @@ const reservar = definirOperacao({
     } catch (erro) {
       const uq = restricaoUnicaViolada(erro);
       if (uq === UQ_VIA)
-        throw new ErroOperacao(409, 'via-ocupada', 'Via já reservada', `A via ${e.via} já foi reservada para o original.`);
+        throw new ErroOperacao(
+          409,
+          'via-ocupada',
+          'Via já reservada',
+          `A via ${e.via} já foi reservada para o original.`,
+        );
       if (uq)
-        throw new ErroOperacao(409, 'emissao-repetida', 'Emissão repetida', 'Emissão repetida: o registro é só de inclusão.');
+        throw new ErroOperacao(
+          409,
+          'emissao-repetida',
+          'Emissão repetida',
+          'Emissão repetida: o registro é só de inclusão.',
+        );
       throw erro;
     }
   },
@@ -128,7 +149,13 @@ const confirmar = definirOperacao({
       'SELECT id, situacao, versao FROM emissao_documento WHERE codigo = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [e.id, tx.contexto.estabelecimento],
     );
-    if (!l) throw new ErroOperacao(404, 'reserva-inexistente', 'Reserva não encontrada', 'Reserva da emissão não encontrada.');
+    if (!l)
+      throw new ErroOperacao(
+        404,
+        'reserva-inexistente',
+        'Reserva não encontrada',
+        'Reserva da emissão não encontrada.',
+      );
     if (l.situacao !== 'reservada')
       throw new ErroOperacao(409, 'ja-confirmada', 'Emissão já confirmada', 'Emissão já confirmada.');
     const versao = await tx.alterar(TABELA, Number(l.id), Number(l.versao), {
@@ -141,7 +168,8 @@ const confirmar = definirOperacao({
   alvo: (_e, r) => ({ tabela: TABELA, id: Number(r['id']) }),
 });
 
-const dataIso = (v: unknown): string => (v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
+const dataIso = (v: unknown): string =>
+  v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString();
 
 function emissaoDe(l: Linha): EmissaoDocumento {
   return {
@@ -152,14 +180,18 @@ function emissaoDe(l: Linha): EmissaoDocumento {
     versaoModelo: String(l['versao_modelo']),
     origem: { tipo: String(l['origem_tipo']), idLegado: Number(l['origem_registro_id']) },
     via: Number(l['via']),
-    idOriginal: l['codigo_original'] === null || l['codigo_original'] === undefined ? null : String(l['codigo_original']),
+    idOriginal:
+      l['codigo_original'] === null || l['codigo_original'] === undefined
+        ? null
+        : String(l['codigo_original']),
     motivoReemissao: l['motivo_reemissao'] === null ? null : String(l['motivo_reemissao']),
     sha256: String(l['hash_conteudo']),
     chaveObjeto: String(l['chave_objeto']),
     identificadorQr: String(l['identificador_qr']),
     autor: String(l['autor']),
     emitidoEm: dataIso(l['emitido_em']),
-    versaoS3: l['versao_objeto'] === null || l['versao_objeto'] === undefined ? null : String(l['versao_objeto']),
+    versaoS3:
+      l['versao_objeto'] === null || l['versao_objeto'] === undefined ? null : String(l['versao_objeto']),
   };
 }
 
@@ -194,7 +226,11 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
   }
 
   private contexto(): ContextoOperacao {
-    return { ...this.ctx, correlacao: this.ctx.correlacao.slice(0, 64), chaveIdempotencia: `emissao:${randomUUID()}` };
+    return {
+      ...this.ctx,
+      correlacao: this.ctx.correlacao.slice(0, 64),
+      chaveIdempotencia: `emissao:${randomUUID()}`,
+    };
   }
 
   private ler<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
@@ -210,7 +246,8 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
 
   async reservar(e: EmissaoDocumento): Promise<number> {
     if (e.versaoS3 !== null) throw new ErroEmissao('A reserva entra sem versão do S3.');
-    if (this.ctx.estabelecimento === null) throw new ErroEmissao('A emissão exige o estabelecimento da sessão.');
+    if (this.ctx.estabelecimento === null)
+      throw new ErroEmissao('A emissão exige o estabelecimento da sessão.');
     const entrada: Reserva = {
       id: e.id,
       rede: e.rede,
@@ -227,13 +264,16 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
       autor: e.autor,
       emitidoEm: e.emitidoEm,
     };
-    const r = await this.executor.executar(reservar, this.ctx.cliente, entrada, this.contexto()).catch(traduzir);
+    const r = await this.executor
+      .executar(reservar, this.ctx.cliente, entrada, this.contexto())
+      .catch(traduzir);
     return Number(r.resultado['id']);
   }
 
   async confirmar(id: string, versaoS3: string): Promise<EmissaoDocumento> {
     if (!versaoS3.trim() || versaoS3.length > 100) throw new ErroEmissao('Versão do S3 inválida.');
-    if (this.ctx.estabelecimento === null) throw new ErroEmissao('A emissão exige o estabelecimento da sessão.');
+    if (this.ctx.estabelecimento === null)
+      throw new ErroEmissao('A emissão exige o estabelecimento da sessão.');
     await this.executor
       .executar(confirmar, this.ctx.cliente, { id, versaoObjeto: versaoS3 }, this.contexto())
       .catch(traduzir);
@@ -260,7 +300,9 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
    */
   porQr(identificador: string): Promise<EmissaoDocumento | null> {
     return this.ler(async (l) => {
-      const r = await l.uma(`${SELECT_EMISSAO} AND e.identificador_qr = ? AND e.situacao = 'emitida'`, [identificador]);
+      const r = await l.uma(`${SELECT_EMISSAO} AND e.identificador_qr = ? AND e.situacao = 'emitida'`, [
+        identificador,
+      ]);
       return r ? emissaoDe(r) : null;
     });
   }

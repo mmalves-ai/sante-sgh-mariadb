@@ -147,4 +147,3 @@ export interface AdendoAtoNovo {
   readonly motivo: string;
   readonly usuario: string;
 }
-

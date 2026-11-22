@@ -78,13 +78,22 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
         [ids.est, ids.outroEst],
       );
       await e.executar('DELETE FROM visita WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
-      await e.executar('DELETE FROM cracha_visitante WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
-      await e.executar('DELETE FROM bloqueio_visitante WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM cracha_visitante WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
+      await e.executar('DELETE FROM bloqueio_visitante WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
       await e.executar(
         'DELETE a FROM acompanhante_internacao a JOIN internacao i ON i.id = a.internacao_id WHERE i.estabelecimento_id = ?',
         [ids.est],
       );
-      await e.executar('DELETE FROM regra_visita_unidade WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM regra_visita_unidade WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
       await e.executar(
         'DELETE t FROM terminal_acesso t JOIN ponto_acesso p ON p.id = t.ponto_acesso_id WHERE p.estabelecimento_id IN (?, ?)',
         [ids.est, ids.outroEst],
@@ -96,7 +105,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       ]);
       await e.executar("DELETE FROM pessoa_portaria WHERE numero_documento LIKE 'L0212-%'");
       if (ids.anonimizado) await e.executar('DELETE FROM pessoa_portaria WHERE id = ?', [ids.anonimizado]);
-      await e.executar("DELETE FROM arquivo WHERE finalidade = 'foto_visitante' AND chave_armazenamento LIKE 'visitante/l0212-%'");
+      await e.executar(
+        "DELETE FROM arquivo WHERE finalidade = 'foto_visitante' AND chave_armazenamento LIKE 'visitante/l0212-%'",
+      );
     })();
 
   beforeAll(async () => {
@@ -130,7 +141,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
           `SELECT id FROM ${tabela} WHERE codigo = ?`,
           [codigo],
           `INSERT INTO ${tabela} (codigo, descricao${extraCol ? `, ${extraCol}` : ''}, criado_em) VALUES (?, ?${extraCol ? ', ?' : ''}, ?)`,
-          extraCol ? [codigo, `${codigo} SINTETICO`, extraVal, agora] : [codigo, `${codigo} SINTETICO`, agora],
+          extraCol
+            ? [codigo, `${codigo} SINTETICO`, extraVal, agora]
+            : [codigo, `${codigo} SINTETICO`, agora],
         );
       ids.tipoVisitante = await dom('tipo_visitante', `${P}-VIS`, 'categoria', 'visitante');
       ids.visitadoPaciente = await dom('tipo_visitado', `${P}-PAC`, 'alvo', 'paciente');
@@ -214,7 +227,8 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
            codigo, situacao_leito_id, ativo, criado_em) VALUES (?, ?, ?, ?, '01', ?, TRUE, ?)`,
         [ids.est, ui, acomodacao, bloco, sit, agora],
       );
-      const catalogo = (sel: string, p: unknown[], ins: string, pi: unknown[]) => garantir(e, sel, p, ins, pi);
+      const catalogo = (sel: string, p: unknown[], ins: string, pi: unknown[]) =>
+        garantir(e, sel, p, ins, pi);
       const tiss = await catalogo(
         'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
         ['M2'],
@@ -252,11 +266,13 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
         [`${P}-INT`, agora],
       );
       const pessoa = (nome: string, nasc: string | null) =>
-        garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [nome], 'INSERT INTO pessoa_fisica (nome, data_nascimento, criado_em) VALUES (?, ?, ?)', [
-          nome,
-          nasc,
-          agora,
-        ]);
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, data_nascimento, criado_em) VALUES (?, ?, ?)',
+          [nome, nasc, agora],
+        );
       const pp = await pessoa(`PACIENTE SINTETICO ${P}`, '1950-03-10');
       const pm = await pessoa(`MEDICO SINTETICO ${P}`, null);
       ids.paciente = await garantir(
@@ -285,7 +301,22 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
            carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, leito_hospitalar_id, acomodacao_id,
            especialidade_medica_id, medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)`,
-        [ids.est, `${P}-IN1`, ids.atendimento, ids.paciente, entrada, carater, modal, ui, leito, acomodacao, esp, prof, fonte, agora],
+        [
+          ids.est,
+          `${P}-IN1`,
+          ids.atendimento,
+          ids.paciente,
+          entrada,
+          carater,
+          modal,
+          ui,
+          leito,
+          acomodacao,
+          esp,
+          prof,
+          fonte,
+          agora,
+        ],
       );
     });
     ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 'teste-02-12' };
@@ -305,7 +336,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   });
 
   const ler = <T>(sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-0212' }, (l) => l.uma<T & Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-0212' }, (l) =>
+      l.uma<T & Record<string, unknown>>(sql, p),
+    );
 
   /** A foto como a porta de arquivos do núcleo a deixa: o registro em `arquivo` (sem o disco) e a chave do módulo. */
   const fotoGuardada = (sufixo: string, hash: string, tamanho: number) =>
@@ -314,15 +347,29 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
         `INSERT INTO arquivo (estabelecimento_id, finalidade, nome_original, tipo_mime, tamanho_bytes, hash_sha256,
                               chave_armazenamento, criado_em)
          VALUES (?, 'foto_visitante', 'visitante.jpg', 'image/jpeg', ?, ?, ?, ?)`,
-        [ids.est, tamanho, hash, `visitante/l0212-00000000-0000-0000-0000-00000000000${sufixo}.jpg`, new Date()],
+        [
+          ids.est,
+          tamanho,
+          hash,
+          `visitante/l0212-00000000-0000-0000-0000-00000000000${sufixo}.jpg`,
+          new Date(),
+        ],
       );
       const r = await e.uma<{ id: unknown }>('SELECT id FROM arquivo WHERE chave_armazenamento = ?', [
         `visitante/l0212-00000000-0000-0000-0000-00000000000${sufixo}.jpg`,
       ]);
-      return { chave: chaveFotoVisitante(Number(r?.id), 'image/jpeg'), tipoMime: 'image/jpeg', tamanho, hash };
+      return {
+        chave: chaveFotoVisitante(Number(r?.id), 'image/jpeg'),
+        tipoMime: 'image/jpeg',
+        tamanho,
+        hash,
+      };
     });
 
-  const visitante = (doc: string, extra: Partial<{ foto: { chave: string; tipoMime: string; tamanho: number; hash: string } }> = {}) =>
+  const visitante = (
+    doc: string,
+    extra: Partial<{ foto: { chave: string; tipoMime: string; tamanho: number; hash: string } }> = {},
+  ) =>
     porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
       g.registrarVisitante({
         nome: `VISITANTE SINTETICO ${doc}`,
@@ -363,7 +410,14 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       g.registrarVisita(
         {
           visitante: pessoa,
-          destino: { tipo: 'paciente', internacao: ids.internacao, paciente: ids.paciente, bloco: `${P}-UI`, acomod: 'ENF1', leito: '01' },
+          destino: {
+            tipo: 'paciente',
+            internacao: ids.internacao,
+            paciente: ids.paciente,
+            bloco: `${P}-UI`,
+            acomod: 'ENF1',
+            leito: '01',
+          },
           tipoVisitado: ids.visitadoPaciente,
           identificacao: ids.cracha,
           cracha,
@@ -388,7 +442,13 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(d.identificacoes.find((t) => t.codigo === ids.biometria)?.biometrica).toBe(true);
     expect(d.identificacoes.find((t) => t.codigo === ids.cracha)?.biometrica).toBe(false);
     const i = await porta.internado(ctx, ids.internacao);
-    expect(i).toMatchObject({ paciente: ids.paciente, unidade: `${P}-UI`, acomod: 'ENF1', leito: 'ENF1-01', isolamento: false });
+    expect(i).toMatchObject({
+      paciente: ids.paciente,
+      unidade: `${P}-UI`,
+      acomod: 'ENF1',
+      leito: 'ENF1-01',
+      isolamento: false,
+    });
     expect((await porta.internados(ctx)).map((x) => x.internacao)).toContain(ids.internacao);
     expect(await porta.internado(outro, ids.internacao)).toBeNull();
     expect((await porta.unidades(ctx)).map((u) => u.unidade)).toContain(`${P}-UI`);
@@ -406,10 +466,18 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       "SELECT COUNT(*) AS total, MAX(entidade_id) AS entidade_id FROM arquivo WHERE finalidade = 'foto_visitante' AND hash_sha256 = ?",
       ['b'.repeat(64)],
     );
-    expect({ total: Number(ligada?.total), entidade: Number(ligada?.entidade_id) }).toEqual({ total: 1, entidade: r1.id });
+    expect({ total: Number(ligada?.total), entidade: Number(ligada?.entidade_id) }).toEqual({
+      total: 1,
+      entidade: r1.id,
+    });
     // Foto sem registro na porta de arquivos (ou com outro conteúdo): recusa, nunca grava um registro solto.
-    expect(await recusada(visitante('L0212-RG1', { foto: { ...f2, hash: 'c'.repeat(64) } }))).toBe('foto-inexistente');
-    const linha = await ler<{ versao: number; numero_documento: string }>('SELECT versao, numero_documento FROM pessoa_portaria WHERE id = ?', [r1.id]);
+    expect(await recusada(visitante('L0212-RG1', { foto: { ...f2, hash: 'c'.repeat(64) } }))).toBe(
+      'foto-inexistente',
+    );
+    const linha = await ler<{ versao: number; numero_documento: string }>(
+      'SELECT versao, numero_documento FROM pessoa_portaria WHERE id = ?',
+      [r1.id],
+    );
     expect(Number(linha?.versao)).toBe(2);
     const t = await ler<{ total: number }>(
       "SELECT COUNT(*) AS total FROM trilha_auditoria WHERE entidade = 'pessoa_portaria' AND entidade_id = ? AND estabelecimento_id = ?",
@@ -417,9 +485,18 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     );
     expect(Number(t?.total)).toBeGreaterThanOrEqual(2);
     const lido = await porta.visitante(ctx, r1.id);
-    expect(lido).toMatchObject({ tipoDocumento: 'rg', documento: 'L0212-RG1', tipoVisitante: ids.tipoVisitante, nascimento: '1980-05-01' });
+    expect(lido).toMatchObject({
+      tipoDocumento: 'rg',
+      documento: 'L0212-RG1',
+      tipoVisitante: ids.tipoVisitante,
+      nascimento: '1980-05-01',
+    });
     expect(await porta.foto(ctx, r1.id)).toBe(f2.chave);
-    expect((await porta.buscarVisitantes(ctx, { documento: { tipo: 'rg', numero: 'L0212-RG1' }, nomeBusca: null })).map((v) => v.id)).toEqual([r1.id]);
+    expect(
+      (
+        await porta.buscarVisitantes(ctx, { documento: { tipo: 'rg', numero: 'L0212-RG1' }, nomeBusca: null })
+      ).map((v) => v.id),
+    ).toEqual([r1.id]);
     // A guarda vencida (gravada) anonimiza o cadastro; o visitante recente fica como está.
     const { id: velho } = await visitante('L0212-RG90');
     ids.anonimizado = velho;
@@ -437,13 +514,21 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       'SELECT nome, cpf, numero_documento, telefone, anonimizada_em FROM pessoa_portaria WHERE id = ?',
       [velho],
     );
-    expect(anon).toMatchObject({ nome: 'VISITANTE ANONIMIZADO', cpf: null, numero_documento: null, telefone: null });
+    expect(anon).toMatchObject({
+      nome: 'VISITANTE ANONIMIZADO',
+      cpf: null,
+      numero_documento: null,
+      telefone: null,
+    });
     expect(anon?.['anonimizada_em']).not.toBeNull();
     expect(await porta.vencidos(ctx, hoje)).toBe(0);
     // Sem guarda gravada, vale o prazo do estabelecimento, o mesmo na contagem e no expurgo.
     const { id: medio } = await visitante('L0212-RG91');
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'guarda-teste-02-12b' }, (e) =>
-      e.executar('UPDATE pessoa_portaria SET criado_em = DATE_SUB(NOW(), INTERVAL 100 DAY), guarda_ate = NULL WHERE id = ?', [medio]),
+      e.executar(
+        'UPDATE pessoa_portaria SET criado_em = DATE_SUB(NOW(), INTERVAL 100 DAY), guarda_ate = NULL WHERE id = ?',
+        [medio],
+      ),
     );
     expect(await porta.vencidos(ctx, hoje, 1825)).toBe(0);
     const longo = await porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
@@ -470,13 +555,20 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(linha).toMatchObject({ situacao: 'em_andamento', cracha: 'L0212CRACHA01', cs: 'em_uso' });
     expect(Number(linha?.entrada_usuario_id)).toBe(ids.usuario);
     const aberta = (await porta.abertas(ctx)).find((x) => x.id === v.id);
-    expect(aberta).toMatchObject({ visitante: pessoa, internacao: ids.internacao, cracha: 'L0212CRACHA01', saida: null });
+    expect(aberta).toMatchObject({
+      visitante: pessoa,
+      internacao: ids.internacao,
+      cracha: 'L0212CRACHA01',
+      saida: null,
+    });
     expect(aberta!.validoAte > aberta!.entrada).toBe(true);
     expect(await recusada(visitaAoPaciente(pessoa, 'L0212CRACHA02'))).toBe('ja-em-visita');
     // Outro estabelecimento não vê nem encerra.
     expect(await porta.visita(outro, v.id)).toBeNull();
     const encerrar = (c: ContextoNucleo) =>
-      porta.gravarSgh(c, trilha('visita'), (g) => g.encerrarVisita({ id: v.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }));
+      porta.gravarSgh(c, trilha('visita'), (g) =>
+        g.encerrarVisita({ id: v.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }),
+      );
     expect(await recusada(encerrar(outro))).toBe('nao-encontrado');
     await encerrar(ctx);
     const fim = await ler<{ situacao: string; cs: string; versao: number }>(
@@ -486,7 +578,12 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(fim).toMatchObject({ situacao: 'encerrada', cs: 'inativo' });
     expect(Number(fim?.versao)).toBe(2);
     expect(await recusada(encerrar(ctx))).toBe('visita-encerrada');
-    const periodo = await porta.visitasDoPeriodo(ctx, { internacao: ids.internacao, unidade: null, de: '2020-01-01', ate: '2099-12-31' });
+    const periodo = await porta.visitasDoPeriodo(ctx, {
+      internacao: ids.internacao,
+      unidade: null,
+      de: '2020-01-01',
+      ate: '2099-12-31',
+    });
     expect(periodo.map((x) => x.id)).toContain(v.id);
   });
 
@@ -509,7 +606,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(Number(linha?.setor_funcional_id)).toBe(ids.setor);
     expect(linha?.paciente_id).toBeNull();
     expect((await porta.visita(ctx, v.id))?.local).toBe('FARMACIA SINTETICA L0212');
-    await porta.gravarSgh(ctx, trilha('visita'), (g) => g.encerrarVisita({ id: v.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }));
+    await porta.gravarSgh(ctx, trilha('visita'), (g) =>
+      g.encerrarVisita({ id: v.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }),
+    );
   });
 
   it('reenvio do mesmo pedido (Idempotency-Key): a mesma visita, marcada repetida, sem gravar de novo', async () => {
@@ -520,35 +619,45 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(v1.repetida).toBe(false);
     const v2 = await visitaAOutroDestino(pessoa, 'L0212CRACHA30', `${P}-FARM`, comPedido());
     expect(v2).toEqual({ ...v1, repetida: true });
-    const total = await ler<{ total: number }>('SELECT COUNT(*) AS total FROM visita WHERE pessoa_portaria_id = ?', [pessoa]);
+    const total = await ler<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM visita WHERE pessoa_portaria_id = ?',
+      [pessoa],
+    );
     expect(Number(total?.total)).toBe(1);
-    await porta.gravarSgh(ctx, trilha('visita'), (g) => g.encerrarVisita({ id: v1.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }));
+    await porta.gravarSgh(ctx, trilha('visita'), (g) =>
+      g.encerrarVisita({ id: v1.id, saida: agoraLocal(), origem: 'portaria', usuario: 'x' }),
+    );
   });
 
   it('visitante barrado: bloqueio da pessoa, cadastro restrito e bloqueio do paciente sem atendimento', async () => {
     const { id: barrado } = await visitante('L0212-RG8');
     const { id: restrito } = await visitante('L0212-RG9');
     const { id: livre } = await visitante('L0212-RG10');
-    const bloqueio = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-bloqueio-0212' }, async (e) => {
-      const agora = new Date();
-      const inicio = new Date(Date.now() - 3_600_000);
-      await e.inserir(
-        `INSERT INTO bloqueio_visitante (estabelecimento_id, abrangencia, pessoa_portaria_id, motivo_bloqueio_visita_id,
+    const bloqueio = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-bloqueio-0212' },
+      async (e) => {
+        const agora = new Date();
+        const inicio = new Date(Date.now() - 3_600_000);
+        await e.inserir(
+          `INSERT INTO bloqueio_visitante (estabelecimento_id, abrangencia, pessoa_portaria_id, motivo_bloqueio_visita_id,
            inicio_em, determinante_usuario_id, criado_em) VALUES (?, 'pessoa', ?, ?, ?, ?, ?)`,
-        [ids.est, barrado, ids.motivoPedido, inicio, ids.usuario, agora],
-      );
-      await e.executar(
-        "UPDATE pessoa_portaria SET situacao = 'restrito', restricao_motivo = 'MOTIVO SINTETICO L0212' WHERE id = ?",
-        [restrito],
-      );
-      return e.inserir(
-        `INSERT INTO bloqueio_visitante (estabelecimento_id, abrangencia, paciente_id, motivo_bloqueio_visita_id,
+          [ids.est, barrado, ids.motivoPedido, inicio, ids.usuario, agora],
+        );
+        await e.executar(
+          "UPDATE pessoa_portaria SET situacao = 'restrito', restricao_motivo = 'MOTIVO SINTETICO L0212' WHERE id = ?",
+          [restrito],
+        );
+        return e.inserir(
+          `INSERT INTO bloqueio_visitante (estabelecimento_id, abrangencia, paciente_id, motivo_bloqueio_visita_id,
            inicio_em, determinante_usuario_id, criado_em) VALUES (?, 'paciente', ?, ?, ?, ?, ?)`,
-        [ids.est, ids.paciente, ids.motivoPedido, inicio, ids.usuario, agora],
-      );
-    });
+          [ids.est, ids.paciente, ids.motivoPedido, inicio, ids.usuario, agora],
+        );
+      },
+    );
     // A pessoa barrada no estabelecimento não entra em destino nenhum.
-    expect(await recusada(visitaAOutroDestino(barrado, 'L0212CRACHA40', `${P}-FARM`))).toBe('visitante-bloqueado');
+    expect(await recusada(visitaAOutroDestino(barrado, 'L0212CRACHA40', `${P}-FARM`))).toBe(
+      'visitante-bloqueado',
+    );
     expect(await recusada(visitaAoPaciente(barrado, 'L0212CRACHA41'))).toBe('visitante-bloqueado');
     // O cadastro restrito também não entra.
     expect(await recusada(visitaAoPaciente(restrito, 'L0212CRACHA42'))).toBe('visitante-bloqueado');
@@ -556,7 +665,10 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(await recusada(visitaAoPaciente(livre, 'L0212CRACHA43'))).toBe('bloqueio');
     expect((await porta.bloqueios(ctx, ids.internacao)).map((b) => b.id)).toContain(bloqueio);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-bloqueio-0212' }, async (e) => {
-      await e.executar('DELETE FROM bloqueio_visitante WHERE id = ? OR pessoa_portaria_id = ?', [bloqueio, barrado]);
+      await e.executar('DELETE FROM bloqueio_visitante WHERE id = ? OR pessoa_portaria_id = ?', [
+        bloqueio,
+        barrado,
+      ]);
     });
     expect(await recusada(visitaAOutroDestino(livre, 'L0212CRACHA44', `${P}-FARM`))).toBeNull();
   });
@@ -574,7 +686,8 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
       observacao: null as string | null,
       usuario: 'x',
     };
-    const gravar = (r: typeof base & { versao: number | null }) => porta.gravarSgh(ctx, trilha('regra_visita_unidade'), (g) => g.definirRegra(r));
+    const gravar = (r: typeof base & { versao: number | null }) =>
+      porta.gravarSgh(ctx, trilha('regra_visita_unidade'), (g) => g.definirRegra(r));
     const r1 = await gravar({ ...base, versao: null });
     expect(r1.versao).toBe(1);
     expect(await recusada(gravar({ ...base, versao: null }))).toBe('regra-mudou');
@@ -627,7 +740,12 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
         }),
       );
     expect(await recusada(bloquear({ abrangencia: 'todos', limite: 1 }))).toBe('limite-invalido');
-    const lim = await bloquear({ abrangencia: 'limite', limite: 1, incluiAcompanhante: true, documento: 'PROC-SINT-1' });
+    const lim = await bloquear({
+      abrangencia: 'limite',
+      limite: 1,
+      incluiAcompanhante: true,
+      documento: 'PROC-SINT-1',
+    });
     expect((await porta.bloqueios(ctx, ids.internacao)).find((b) => b.id === lim)).toMatchObject({
       abrangencia: 'limite',
       limite: 1,
@@ -639,11 +757,21 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     );
     const id = await bloquear({});
     const lidos = await porta.bloqueios(ctx, ids.internacao);
-    expect(lidos.find((b) => b.id === id)).toMatchObject({ motivo: 'pedido', abrangencia: 'todos', revogado: false, internacao: ids.internacao });
+    expect(lidos.find((b) => b.id === id)).toMatchObject({
+      motivo: 'pedido',
+      abrangencia: 'todos',
+      revogado: false,
+      internacao: ids.internacao,
+    });
     expect(await recusada(visitaAoPaciente(pessoa, 'L0212CRACHA03'))).toBe('bloqueio');
     const revogar = () =>
       porta.gravarSgh(ctx, trilha('bloqueio_visitante'), (g) =>
-        g.revogarBloqueio({ id, motivo: 'Paciente SINTETICO liberou as visitas', usuario: 'x', podeClinico: false }),
+        g.revogarBloqueio({
+          id,
+          motivo: 'Paciente SINTETICO liberou as visitas',
+          usuario: 'x',
+          podeClinico: false,
+        }),
       );
     expect(await revogar()).toEqual({ id, internacao: ids.internacao, motivo: 'pedido' });
     const t = await ler<{ motivo: string }>(
@@ -679,7 +807,9 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     const r2 = await registrar(a2);
     expect(r2.substituido).toBe(r1.id);
     const vigentes = await porta.acompanhantes(ctx, `${P}-UI`);
-    expect(vigentes.map((x) => [x.id, x.visitante, x.fundamento, x.refeicao])).toEqual([[r2.id, a2, 'idoso', true]]);
+    expect(vigentes.map((x) => [x.id, x.visitante, x.fundamento, x.refeicao])).toEqual([
+      [r2.id, a2, 'idoso', true],
+    ]);
     const fim = () =>
       porta.gravarSgh(ctx, trilha('acompanhante_internacao'), (g) =>
         g.encerrarAcompanhante({ id: r2.id, motivo: 'Alta SINTETICA', fim: agoraLocal(), usuario: 'x' }),
@@ -692,7 +822,17 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   it('terminal pela versão, no ponto de acesso do estabelecimento; a catraca grava o evento uma vez por chave', async () => {
     const t = (id: number | null, versao: number | null, nome = 'CATRACA L0212') =>
       porta.gravarSgh(ctx, trilha('terminal_acesso'), (g) =>
-        g.configurarTerminal({ id, versao, nome, tipoTerminal: ids.modelo, fabricante: 0, local: 'PORTARIA L0212', sentido: 'ambos', ativo: true, usuario: 'x' }),
+        g.configurarTerminal({
+          id,
+          versao,
+          nome,
+          tipoTerminal: ids.modelo,
+          fabricante: 0,
+          local: 'PORTARIA L0212',
+          sentido: 'ambos',
+          ativo: true,
+          usuario: 'x',
+        }),
       );
     const r1 = await t(null, null);
     expect(r1.versao).toBe(1);
@@ -700,23 +840,48 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(await t(r1.id, 1, 'CATRACA L0212 B')).toEqual({ id: r1.id, versao: 2 });
     expect(await recusada(t(r1.id, 1))).toBe('terminal-mudou');
     const lidos = await porta.terminais(ctx);
-    expect(lidos.find((x) => x.id === r1.id)).toMatchObject({ nome: 'CATRACA L0212 B', local: 'PORTARIA L0212', tipoTerminal: ids.modelo, versao: 2 });
+    expect(lidos.find((x) => x.id === r1.id)).toMatchObject({
+      nome: 'CATRACA L0212 B',
+      local: 'PORTARIA L0212',
+      tipoTerminal: ids.modelo,
+      versao: 2,
+    });
     expect((await porta.terminais(outro)).some((x) => x.id === r1.id)).toBe(false);
     const passar = (chave: string, terminal = r1.id) =>
       porta.gravarSgh(ctx, trilha('evento_acesso_portaria'), (g) =>
         g.registrarEventoCatraca(
-          { terminal, cracha: 'L0212SEMVISITA', sentido: 'entrada', ocorridoEm: agoraLocal(), chave, usuario: 'x' },
-          (x) => ({ resultado: x.visita ? 'liberado' : 'negado', motivo: x.visita ? null : 'Crachá sem visita.', encerra: false }),
+          {
+            terminal,
+            cracha: 'L0212SEMVISITA',
+            sentido: 'entrada',
+            ocorridoEm: agoraLocal(),
+            chave,
+            usuario: 'x',
+          },
+          (x) => ({
+            resultado: x.visita ? 'liberado' : 'negado',
+            motivo: x.visita ? null : 'Crachá sem visita.',
+            encerra: false,
+          }),
         ),
       );
     const ev = await passar('ev-0212');
-    expect(ev).toMatchObject({ resultado: 'negado', motivo: 'Crachá sem visita.', visita: null, repetido: false });
+    expect(ev).toMatchObject({
+      resultado: 'negado',
+      motivo: 'Crachá sem visita.',
+      visita: null,
+      repetido: false,
+    });
     expect(await passar('ev-0212')).toEqual({ ...ev, repetido: true });
     const gravado = await ler<{ resultado: string; terminal_acesso_id: number; codigo_cracha: string }>(
       'SELECT resultado, terminal_acesso_id, codigo_cracha FROM evento_acesso_portaria WHERE id = ?',
       [ev.id],
     );
-    expect(gravado).toMatchObject({ resultado: 'recusado', terminal_acesso_id: r1.id, codigo_cracha: 'L0212SEMVISITA' });
+    expect(gravado).toMatchObject({
+      resultado: 'recusado',
+      terminal_acesso_id: r1.id,
+      codigo_cracha: 'L0212SEMVISITA',
+    });
     const lidos2 = await porta.eventos(ctx, 50);
     expect(lidos2.find((x) => x.id === ev.id)).toMatchObject({
       terminal: r1.id,

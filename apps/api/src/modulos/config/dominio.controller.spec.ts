@@ -90,18 +90,28 @@ async function status(p: Promise<unknown>): Promise<number> {
     await p;
     return 200;
   } catch (e) {
-    return e instanceof ErroProblema ? e.getStatus() : ((e as { problema?: { status?: number } }).problema?.status ?? -1);
+    return e instanceof ErroProblema
+      ? e.getStatus()
+      : ((e as { problema?: { status?: number } }).problema?.status ?? -1);
   }
 }
 
 describe('CRUD genérico (regras 2, 3 e 4)', () => {
   it('índice pela HTTP: só os domínios que a pessoa lê (sem as ações dos domínios, nenhum)', async () => {
     const s = await entrar('SINT.ADMIN');
-    const r = await app.inject({ method: 'GET', url: '/api/cadastros/dominios', headers: { cookie: s.cookie } });
+    const r = await app.inject({
+      method: 'GET',
+      url: '/api/cadastros/dominios',
+      headers: { cookie: s.cookie },
+    });
     expect(r.statusCode).toBe(200);
     expect(r.json().dominios).toEqual([]);
     const recepcao = await entrar('SINT.RECEPCAO');
-    const rr = await app.inject({ method: 'GET', url: '/api/cadastros/dominios', headers: { cookie: recepcao.cookie } });
+    const rr = await app.inject({
+      method: 'GET',
+      url: '/api/cadastros/dominios',
+      headers: { cookie: recepcao.cookie },
+    });
     expect(rr.statusCode === 403 || rr.json().dominios.length === 0).toBe(true);
   });
 
@@ -125,18 +135,30 @@ describe('CRUD genérico (regras 2, 3 e 4)', () => {
 
   it('incluir, duplicidade (409), alterar com versão e colisão; sem a permissão de criar, 403', async () => {
     const c = new DominiosController(fonteDominiosMemoria(), trilha);
-    expect(await status(c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Tendência' } }, requisicao(['ler'])))).toBe(
-      403,
-    );
-    expect(await c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Tendência (sintética)' } }, requisicao())).toMatchObject(
-      { codigo: 'T' },
-    );
-    expect(await status(c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Outra' } }, requisicao()))).toBe(409);
+    expect(
+      await status(
+        c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Tendência' } }, requisicao(['ler'])),
+      ),
+    ).toBe(403);
+    expect(
+      await c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Tendência (sintética)' } }, requisicao()),
+    ).toMatchObject({ codigo: 'T' });
+    expect(
+      await status(c.incluir(M, DIM, { valores: { codigo: 'T', descricao: 'Outra' } }, requisicao())),
+    ).toBe(409);
     const lido = await c.item(M, DIM, 'T', requisicao());
-    await c.alterar(M, DIM, 'T', { valores: { descricao: 'Tendência (revista)' }, versao: lido.versao }, requisicao());
+    await c.alterar(
+      M,
+      DIM,
+      'T',
+      { valores: { descricao: 'Tendência (revista)' }, versao: lido.versao },
+      requisicao(),
+    );
     // A mesma versão lida de novo: colisão (outra pessoa já gravou).
     expect(
-      await status(c.alterar(M, DIM, 'T', { valores: { descricao: 'Colisão' }, versao: lido.versao }, requisicao())),
+      await status(
+        c.alterar(M, DIM, 'T', { valores: { descricao: 'Colisão' }, versao: lido.versao }, requisicao()),
+      ),
     ).toBe(409);
     expect((await c.item(M, DIM, 'T', requisicao())).valores['descricao']).toBe('Tendência (revista)');
   });
@@ -150,7 +172,13 @@ describe('CRUD genérico (regras 2, 3 e 4)', () => {
     expect((await c.lista(M, DIM, {}, requisicao())).itens.map((x) => x.codigo)).not.toContain('U');
     const inativo = await c.item(M, DIM, 'U', requisicao());
     expect(inativo.ativo).toBe(false);
-    await c.reativar(M, DIM, 'U', { versao: inativo.versao, motivo: 'voltou a ser usado (teste)' }, requisicao());
+    await c.reativar(
+      M,
+      DIM,
+      'U',
+      { versao: inativo.versao, motivo: 'voltou a ser usado (teste)' },
+      requisicao(),
+    );
     expect((await c.item(M, DIM, 'U', requisicao())).ativo).toBe(true);
     // Exclusão física: não existe nos domínios do modelo próprio (regra 4).
     expect(await status(c.excluir(M, DIM))).toBeGreaterThanOrEqual(400);

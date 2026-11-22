@@ -26,7 +26,16 @@ import {
   type RevisaoDevida,
   type SituacaoDaLiberacao,
 } from '@sgh/dominio-qualidade';
-import type { AntimicrobianoPrescrito, CulturaDoPaciente, DispositivoInvasivoRegistrado, InternadoCcih, IrasRegistrada, ItemAntimicrobianoConfigurado, LiberacaoAntimicrobianoRegistrada, PrecaucaoRegistrada } from './tipos.js';
+import type {
+  AntimicrobianoPrescrito,
+  CulturaDoPaciente,
+  DispositivoInvasivoRegistrado,
+  InternadoCcih,
+  IrasRegistrada,
+  ItemAntimicrobianoConfigurado,
+  LiberacaoAntimicrobianoRegistrada,
+  PrecaucaoRegistrada,
+} from './tipos.js';
 
 /** O leito como a tela mostra. */
 export const textoLeito = (i: { bloco: string; acomodacao: string; leito: string }) =>

@@ -4,13 +4,19 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { loggerNest } from '@sgh/contratos';
-import { ambienteEfetivo, caminhoArquivoAmbiente, formatarNeutralizacao, verificarNeutralizacao } from '@sgh/nucleo';
+import {
+  ambienteEfetivo,
+  caminhoArquivoAmbiente,
+  formatarNeutralizacao,
+  verificarNeutralizacao,
+} from '@sgh/nucleo';
 import { logger } from './logger.js';
 import { iniciarTelemetria } from './telemetria.js';
 import { WorkerModule } from './worker.module.js';
 
 const { env } = ambienteEfetivo(process.env, caminhoArquivoAmbiente(process.env));
-for (const [k, v] of Object.entries(env)) if (process.env[k] === undefined && v !== undefined) process.env[k] = v;
+for (const [k, v] of Object.entries(env))
+  if (process.env[k] === undefined && v !== undefined) process.env[k] = v;
 const neutralizacao = verificarNeutralizacao(process.env);
 if (!neutralizacao.ok) {
   logger.fatal('trava de saídas: o worker não sobe');

@@ -38,7 +38,11 @@ export interface AtoIdempotente {
 type ContextoComAto = ContextoNucleo & { readonly ato?: AtoIdempotente };
 
 /** O contexto com o ato do pedido (a chave e a assinatura do conteúdo). */
-export function comAto<C extends ContextoNucleo>(c: C, chave: string, assinatura: unknown): C & {
+export function comAto<C extends ContextoNucleo>(
+  c: C,
+  chave: string,
+  assinatura: unknown,
+): C & {
   readonly ato: AtoIdempotente;
 } {
   return {

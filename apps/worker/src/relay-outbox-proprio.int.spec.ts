@@ -4,7 +4,13 @@
 // fo516r (só ids e códigos); a massa é apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CLIENTE, escrever, garantirCliente, garantirEstabelecimento, SEM_BANCO } from './importadores/integracao.spec-util.js';
+import {
+  CLIENTE,
+  escrever,
+  garantirCliente,
+  garantirEstabelecimento,
+  SEM_BANCO,
+} from './importadores/integracao.spec-util.js';
 import { cicloRelayOutbox, MAX_TENTATIVAS_RELAY } from './relay-outbox-proprio.js';
 import { dadosDoJobOutbox, type PendenteOutbox } from './relay-outbox.js';
 
@@ -15,7 +21,10 @@ describe.skipIf(SEM_BANCO)('relay da fila comum de saída sobre o banco próprio
   const ids: number[] = [];
   const linha = (id: number) =>
     escrever(nucleo, (e) =>
-      e.uma('SELECT situacao, tentativas, proxima_tentativa_em, processada_em, erro, versao FROM integracao_mensagem WHERE id = ?', [id]),
+      e.uma(
+        'SELECT situacao, tentativas, proxima_tentativa_em, processada_em, erro, versao FROM integracao_mensagem WHERE id = ?',
+        [id],
+      ),
     );
 
   beforeAll(async () => {
@@ -23,13 +32,21 @@ describe.skipIf(SEM_BANCO)('relay da fila comum de saída sobre o banco próprio
     nucleo = new NucleoProprio();
     await escrever(nucleo, async (e) => {
       est = await garantirEstabelecimento(e, 'fo516r');
-      await e.executar("DELETE FROM integracao_mensagem WHERE estabelecimento_id = ? AND direcao = 'saida'", [est]);
+      await e.executar("DELETE FROM integracao_mensagem WHERE estabelecimento_id = ? AND direcao = 'saida'", [
+        est,
+      ]);
       for (const n of [1, 2, 3])
         ids.push(
           await e.inserir(
             `INSERT INTO integracao_mensagem (estabelecimento_id, ponto, direcao, situacao, tentativas, referencia_externa,
                conteudo, criado_em, versao) VALUES (?, 'teste.sintetico', 'saida', 'pendente', ?, ?, ?, ?, 1)`,
-            [est, n === 3 ? MAX_TENTATIVAS_RELAY - 1 : 0, `${marca}-${n}`, JSON.stringify({ item: n, ok: true }), new Date()],
+            [
+              est,
+              n === 3 ? MAX_TENTATIVAS_RELAY - 1 : 0,
+              `${marca}-${n}`,
+              JSON.stringify({ item: n, ok: true }),
+              new Date(),
+            ],
           ),
         );
     });
@@ -37,7 +54,9 @@ describe.skipIf(SEM_BANCO)('relay da fila comum de saída sobre o banco próprio
 
   afterAll(async () => {
     if (!nucleo) return;
-    await escrever(nucleo, (e) => e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [est]));
+    await escrever(nucleo, (e) =>
+      e.executar('DELETE FROM integracao_mensagem WHERE estabelecimento_id = ?', [est]),
+    );
     await nucleo.encerrar();
   });
 
@@ -58,7 +77,12 @@ describe.skipIf(SEM_BANCO)('relay da fila comum de saída sobre o banco próprio
     const [a, b, c] = [await linha(ids[0]!), await linha(ids[1]!), await linha(ids[2]!)];
     expect(a).toMatchObject({ situacao: 'enviada', versao: 2 });
     expect(a!['processada_em']).not.toBeNull();
-    expect(b).toMatchObject({ situacao: 'pendente', tentativas: 1, versao: 2, erro: 'publicacao-falhou:Error' });
+    expect(b).toMatchObject({
+      situacao: 'pendente',
+      tentativas: 1,
+      versao: 2,
+      erro: 'publicacao-falhou:Error',
+    });
     expect(new Date(String(b!['proxima_tentativa_em'])).getTime()).toBeGreaterThan(Date.now());
     expect(c).toMatchObject({ situacao: 'erro', tentativas: MAX_TENTATIVAS_RELAY });
     // A que espera não volta no ciclo seguinte; a enviada e a esgotada também não.

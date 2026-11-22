@@ -204,7 +204,10 @@ export class SegurancaPacienteController {
       this.feriados(s, anosDosPrazos(visiveis, agora)),
       this.nomes(s),
     ]);
-    req.sghAlvo = { tabelaAlvo: 'analise_incidente', chaveNaturalAlvo: `analises:${String(visiveis.length)}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'analise_incidente',
+      chaveNaturalAlvo: `analises:${String(visiveis.length)}`,
+    };
     return {
       itens: visiveis.map((n) => ({
         ...resumoDe(n, agora, feriados, nomes),
@@ -570,7 +573,9 @@ export class SegurancaPacienteController {
   @Post('tecnovigilancia')
   @HttpCode(201)
   @Permissao(P.tecnovigilanciaRegistrar)
-  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: queixa_tecnica_produto e o andamento com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.registrarQueixaTecnica: queixa_tecnica_produto e o andamento com a trilha_auditoria',
+  )
   async abrirQueixa(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarQueixaTecnica, b);
@@ -623,7 +628,9 @@ export class SegurancaPacienteController {
   @Post('tecnovigilancia/:id/andamento')
   @HttpCode(200)
   @Permissao(P.tecnovigilanciaRegistrar)
-  @AuditadoNoHandler('qualidade.registrarQueixaTecnica: o andamento em queixa_tecnica_produto com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.registrarQueixaTecnica: o andamento em queixa_tecnica_produto com a trilha_auditoria',
+  )
   async andamentoQueixa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarQueixaTecnica, { ...(b as object), acao: 'andamento', id: idDaRota(id) });
@@ -695,18 +702,16 @@ export class SegurancaPacienteController {
       this.porta.painelNotificacoes(s.porta, p.de, p.fimExclusivo),
       this.porta.painelAnalises(s.porta, p.de, p.fimExclusivo, hoje),
       this.porta.painelAcoes(s.porta, hoje),
-      this.porta
-        .painelAdesao(s.porta, p.de, p.fimExclusivo, agora)
-        .catch(
-          parte('adesao', {
-            checagens: 0,
-            checagensComPulseira: 0,
-            checklists: 0,
-            checklistsConcluidos: 0,
-            checklistsComPausa: 0,
-            reavaliacoes: [],
-          }),
-        ),
+      this.porta.painelAdesao(s.porta, p.de, p.fimExclusivo, agora).catch(
+        parte('adesao', {
+          checagens: 0,
+          checagensComPulseira: 0,
+          checklists: 0,
+          checklistsConcluidos: 0,
+          checklistsComPausa: 0,
+          reavaliacoes: [],
+        }),
+      ),
       this.porta
         .protocolosGerenciados(s.porta, `${p.de}T00:00:00`, `${p.fimExclusivo}T00:00:00`)
         .catch(parte('protocolos', { versoes: [], protocolos: [] })),

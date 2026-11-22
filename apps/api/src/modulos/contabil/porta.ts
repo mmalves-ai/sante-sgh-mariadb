@@ -67,7 +67,9 @@ type SemHospital<T> = Omit<T, 'hospital'>;
 /** O que a gravação da contabilidade faz dentro da transação (com a trilha junto). */
 export interface GravadorContabil {
   incluirConta(c: SemHospital<PedidoInclusaoConta>): Promise<{ id: number; versao: number }>;
-  alterarConta(a: SemHospital<PedidoAlteracaoConta>): Promise<{ antes: ContaPlanoVersionada; versao: number }>;
+  alterarConta(
+    a: SemHospital<PedidoAlteracaoConta>,
+  ): Promise<{ antes: ContaPlanoVersionada; versao: number }>;
   publicarRegra(p: SemHospital<PedidoPublicacaoRegra>): Promise<{ id: number; versao: number }>;
   marcarSituacao(s: SemHospital<PedidoSituacaoFato>): Promise<boolean>;
   // Etapa 2 (F2): lançamento (período travado), encerramento e reabertura, conciliação.
@@ -148,7 +150,10 @@ export interface PortaContabil {
     pagina: number,
     tamanho: number,
   ): Promise<{ itens: LancamentoRegistrado[]; total: number }>;
-  lancamento(c: ContextoContabil, id: number): Promise<(LancamentoRegistrado & { partidas: PartidaRegistrada[] }) | null>;
+  lancamento(
+    c: ContextoContabil,
+    id: number,
+  ): Promise<(LancamentoRegistrado & { partidas: PartidaRegistrada[] }) | null>;
   /** As partidas dos lançamentos gravados dos fatos (o reprocessamento compara a derivação com elas). */
   lancamentosDosFatos(
     c: ContextoContabil,
@@ -162,7 +167,12 @@ export interface PortaContabil {
     ate: string | null,
     teto: number,
   ): Promise<PartidaPendente[]>;
-  conciliacoes(c: ContextoContabil, empresa: number, conta: string, teto: number): Promise<ConciliacaoRegistrada[]>;
+  conciliacoes(
+    c: ContextoContabil,
+    empresa: number,
+    conta: string,
+    teto: number,
+  ): Promise<ConciliacaoRegistrada[]>;
   paraContabilizar(
     c: ContextoContabil,
     empresa: number,

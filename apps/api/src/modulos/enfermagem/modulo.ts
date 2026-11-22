@@ -143,7 +143,10 @@ async function vigiaDaContencao(
   return new VigiaContencao(p.escores, p.enfermagem, alvos);
 }
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloEnfermagem = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloEnfermagem = {},
+): Promise<DynamicModule> {
   const p = await portasDaEnfermagem(ctx, opcoes);
   const vigia =
     opcoes.vigiaEnfermagem !== undefined
@@ -182,6 +185,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloEnfermagem
       { provide: AVISOS_ENFERMAGEM, useValue: new AvisosAtendimento(vigia, 'leitos') },
       { provide: VIGIA_CONTENCAO, useValue: vigiaContencao },
     ],
-    exports: [PORTA_ENFERMAGEM, PORTA_ESCORES, PORTA_BALANCO, PORTA_SAE, PORTA_TRANSFUSAO, PORTA_AGENCIA, AVISOS_ENFERMAGEM],
+    exports: [
+      PORTA_ENFERMAGEM,
+      PORTA_ESCORES,
+      PORTA_BALANCO,
+      PORTA_SAE,
+      PORTA_TRANSFUSAO,
+      PORTA_AGENCIA,
+      AVISOS_ENFERMAGEM,
+    ],
   };
 }

@@ -305,7 +305,16 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
     const doc = await get(a, `/repasse/rpas/${r.json().ids.rpa}/pdf`);
     expect(doc.statusCode).toBe(200);
     expect(String(doc.headers['content-type'])).toMatch(/application\/pdf|text\/html/);
-    const relido = await repasse.rpaDetalhe({ cliente: 'sintetico', estabelecimento: null, usuario: null, correlacao: 'teste', hospital: 'aa' } as never, Number(r.json().ids.rpa));
+    const relido = await repasse.rpaDetalhe(
+      {
+        cliente: 'sintetico',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        hospital: 'aa',
+      } as never,
+      Number(r.json().ids.rpa),
+    );
     const html = htmlRpaEmitido({ ...relido!, eventos: new Map([[40, 'Honorários']]) });
     expect(html).toContain(`RPA nº ${r.json().ids.numero}`);
     expect(html).toContain('MEDICO SINTETICO A');
@@ -373,7 +382,15 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
       regrasUsadas: async () => new Set<number>(),
     };
     const sv = new ServicoRepasse(porta as never, new RegistradorTrilhaMemoria(), null, null);
-    const s = { porta: { cliente: 'sintetico', estabelecimento: null, usuario: null, correlacao: 'teste', hospital: 'aa' } as never } as never;
+    const s = {
+      porta: {
+        cliente: 'sintetico',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 'teste',
+        hospital: 'aa',
+      } as never,
+    } as never;
     const p1 = await sv.regras(s, { convenio: 1, data: '2026-10-01', depoisDe: 0 });
     expect([p1.regras.length, p1.depoisDe]).toEqual([500, 500]);
     const p3 = await sv.regras(s, { convenio: 1, data: '2026-10-01', depoisDe: 1000 });

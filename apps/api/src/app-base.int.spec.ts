@@ -71,54 +71,57 @@ describe.skipIf(SEM_BANCO)('boot mínimo sobre o MariaDB (cliente teste_login)',
     conferencia = new NucleoProprio();
     expect((await conferencia.cliente(CLIENTE)).banco).toBe('cliente_teste_login');
     const resumo = await cifrarSenha(senha);
-    await conferencia.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-boot' }, async (e: Escritor) => {
-      const agora = new Date();
-      const garantir = async (sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> => {
-        const l = await e.uma<{ id: number }>(sel, p);
-        return l ? Number(l.id) : e.inserir(ins, pi);
-      };
-      const est = await garantir(
-        'SELECT id FROM estabelecimento WHERE codigo = ?',
-        [EST],
-        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
-        [EST, `Hospital de teste ${EST}`, `Hospital de teste ${EST} (fictício)`, agora],
-      );
-      await garantir(
-        'SELECT id FROM politica_senha WHERE estabelecimento_id = ?',
-        [est],
-        `INSERT INTO politica_senha (estabelecimento_id, tamanho_minimo, exige_numero, tentativas_ate_bloqueio,
-           inatividade_sessao_minutos, aviso_fim_sessao_minutos, validade_dias, criado_em) VALUES (?, 10, TRUE, 4, 20, 2, 60, ?)`,
-        [est, agora],
-      );
-      for (const login of [LOGIN_OK, LOGIN_ERRA]) {
-        const id = await garantir(
-          'SELECT id FROM usuario WHERE login = ?',
-          [login],
-          'INSERT INTO usuario (login, nome, dispensa_cpf, criado_em) VALUES (?, ?, TRUE, ?)',
-          [login, `Conta fictícia ${login}`, agora],
-        );
-        await e.executar(
-          "UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL, expira_em = NULL, excluido_em = NULL WHERE id = ?",
-          [id],
+    await conferencia.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-boot' },
+      async (e: Escritor) => {
+        const agora = new Date();
+        const garantir = async (sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> => {
+          const l = await e.uma<{ id: number }>(sel, p);
+          return l ? Number(l.id) : e.inserir(ins, pi);
+        };
+        const est = await garantir(
+          'SELECT id FROM estabelecimento WHERE codigo = ?',
+          [EST],
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [EST, `Hospital de teste ${EST}`, `Hospital de teste ${EST} (fictício)`, agora],
         );
         await garantir(
-          'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ?',
-          [id, est],
-          'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
-          [id, est, INICIO, agora],
+          'SELECT id FROM politica_senha WHERE estabelecimento_id = ?',
+          [est],
+          `INSERT INTO politica_senha (estabelecimento_id, tamanho_minimo, exige_numero, tentativas_ate_bloqueio,
+           inatividade_sessao_minutos, aviso_fim_sessao_minutos, validade_dias, criado_em) VALUES (?, 10, TRUE, 4, 20, 2, 60, ?)`,
+          [est, agora],
         );
-        await e.executar(
-          'UPDATE usuario_estabelecimento SET vigencia_fim = NULL, excluido_em = NULL WHERE usuario_id = ? AND estabelecimento_id = ?',
-          [id, est],
-        );
-        await e.executar('DELETE FROM credencial_usuario WHERE usuario_id = ?', [id]);
-        await e.inserir(
-          'INSERT INTO credencial_usuario (usuario_id, resumo_senha, senha_alterada_em, troca_obrigatoria, criado_em) VALUES (?, ?, ?, FALSE, ?)',
-          [id, resumo, agora, agora],
-        );
-        ids[login] = id;
-      }
-    });
+        for (const login of [LOGIN_OK, LOGIN_ERRA]) {
+          const id = await garantir(
+            'SELECT id FROM usuario WHERE login = ?',
+            [login],
+            'INSERT INTO usuario (login, nome, dispensa_cpf, criado_em) VALUES (?, ?, TRUE, ?)',
+            [login, `Conta fictícia ${login}`, agora],
+          );
+          await e.executar(
+            "UPDATE usuario SET situacao = 'ativo', bloqueado_em = NULL, expira_em = NULL, excluido_em = NULL WHERE id = ?",
+            [id],
+          );
+          await garantir(
+            'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ?',
+            [id, est],
+            'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+            [id, est, INICIO, agora],
+          );
+          await e.executar(
+            'UPDATE usuario_estabelecimento SET vigencia_fim = NULL, excluido_em = NULL WHERE usuario_id = ? AND estabelecimento_id = ?',
+            [id, est],
+          );
+          await e.executar('DELETE FROM credencial_usuario WHERE usuario_id = ?', [id]);
+          await e.inserir(
+            'INSERT INTO credencial_usuario (usuario_id, resumo_senha, senha_alterada_em, troca_obrigatoria, criado_em) VALUES (?, ?, ?, FALSE, ?)',
+            [id, resumo, agora, agora],
+          );
+          ids[login] = id;
+        }
+      },
+    );
 
     const env: Record<string, string> = {
       AMBIENTE: 'dev',
@@ -144,7 +147,10 @@ describe.skipIf(SEM_BANCO)('boot mínimo sobre o MariaDB (cliente teste_login)',
     return Array.isArray(c) ? (c as string[]) : typeof c === 'string' ? [c] : [];
   };
   const valor = (lista: string[], nome: string): string =>
-    lista.find((c) => c.startsWith(`${nome}=`))?.split(';')[0]?.slice(nome.length + 1) ?? '';
+    lista
+      .find((c) => c.startsWith(`${nome}=`))
+      ?.split(';')[0]
+      ?.slice(nome.length + 1) ?? '';
 
   it('login: 201 com cookie Secure e uma linha "login" na trilha_auditoria com o usuario_id', async () => {
     const desde = await maxTrilha();
@@ -191,8 +197,11 @@ describe.skipIf(SEM_BANCO)('boot mínimo sobre o MariaDB (cliente teste_login)',
     const csrf = valor(c, COOKIE_CSRF);
     const usuarioId = ids[LOGIN_OK] ?? -1;
     const antes = Number(
-      (await ler<{ n: number }>('SELECT COUNT(*) AS n FROM historico_senha WHERE usuario_id = ?', [usuarioId]))?.n ??
-        0,
+      (
+        await ler<{ n: number }>('SELECT COUNT(*) AS n FROM historico_senha WHERE usuario_id = ?', [
+          usuarioId,
+        ])
+      )?.n ?? 0,
     );
     const nova = `N${randomUUID()}7`;
     const r = await app.inject({
@@ -203,8 +212,11 @@ describe.skipIf(SEM_BANCO)('boot mínimo sobre o MariaDB (cliente teste_login)',
     });
     expect(r.statusCode, r.body.slice(0, 300)).toBe(200);
     const depois = Number(
-      (await ler<{ n: number }>('SELECT COUNT(*) AS n FROM historico_senha WHERE usuario_id = ?', [usuarioId]))?.n ??
-        0,
+      (
+        await ler<{ n: number }>('SELECT COUNT(*) AS n FROM historico_senha WHERE usuario_id = ?', [
+          usuarioId,
+        ])
+      )?.n ?? 0,
     );
     expect(depois).toBe(antes + 1);
     const comNova = await app.inject({
@@ -250,7 +262,10 @@ SELECT administrador_plataforma_id FROM credencial_administrador_plataforma WHER
     expect(r.statusCode, r.body.slice(0, 300)).toBe(201);
     const c = cookies(r);
     expect(c.find((x) => x.startsWith(`${COOKIE_SESSAO_DEV}=`)) ?? '').toMatch(/;\s*Secure/);
-    const corpo = r.json() as { usuario: { id: string; ator?: string; login?: string }; permissoes: string[] };
+    const corpo = r.json() as {
+      usuario: { id: string; ator?: string; login?: string };
+      permissoes: string[];
+    };
     expect(corpo.usuario.ator).toBe('plataforma');
     expect(corpo.usuario.id).toBe(`plataforma:${adm}`);
     expect(corpo.permissoes.length).toBeGreaterThan(10);
@@ -281,7 +296,9 @@ SELECT administrador_plataforma_id FROM credencial_administrador_plataforma WHER
     fechada = true;
     expect(nucleoApp.estadosDosPools()).toEqual([]);
     await expect(
-      nucleoApp.lerSomente({ cliente: CLIENTE, correlacao: 'depois-do-fim' }, (l) => l.uma('SELECT 1 AS um', [])),
+      nucleoApp.lerSomente({ cliente: CLIENTE, correlacao: 'depois-do-fim' }, (l) =>
+        l.uma('SELECT 1 AS um', []),
+      ),
     ).rejects.toThrow(/encerrad/i);
   });
 });

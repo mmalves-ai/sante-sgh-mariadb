@@ -76,7 +76,13 @@ import type {
   OpcoesListaInternacoes,
   PortaAdt,
 } from './porta.js';
-import type { DetalheInternacao, EstadosDoMapa, ItemIncoerencia, LimpezaGiro, SolicitacaoLimpezaFila } from './tipos.js';
+import type {
+  DetalheInternacao,
+  EstadosDoMapa,
+  ItemIncoerencia,
+  LimpezaGiro,
+  SolicitacaoLimpezaFila,
+} from './tipos.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoAdt = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -111,7 +117,11 @@ const DESTINO_MEDICO: Readonly<Record<DestinoAlta, string>> = {
 const DESTINO_DA_TELA = Object.fromEntries(Object.entries(DESTINO_MEDICO).map(([a, b]) => [b, a]));
 const CRITICIDADES = ['baixa', 'media', 'alta', 'intensiva'] as const;
 /** Natureza da clínica assistencial → clínica da tela (só as três que a tela conhece). */
-const CLINICA_DA_NATUREZA: Readonly<Record<string, string>> = { medica: 'M', cirurgica: 'C', pediatrica: 'N' };
+const CLINICA_DA_NATUREZA: Readonly<Record<string, string>> = {
+  medica: 'M',
+  cirurgica: 'C',
+  pediatrica: 'N',
+};
 const SEXO_DO_LEITO: Readonly<Record<string, string>> = { M: 'masculino', F: 'feminino', A: 'qualquer' };
 
 const TABELAS_DIRETAS = [
@@ -169,14 +179,23 @@ export class PortaAdtPropria implements PortaAdt {
   }
 
   private contexto(c: ContextoAdt): ContextoNucleo {
-    return { cliente: c.cliente, estabelecimento: c.estabelecimento, usuario: c.usuario, correlacao: c.correlacao };
+    return {
+      cliente: c.cliente,
+      estabelecimento: c.estabelecimento,
+      usuario: c.usuario,
+      correlacao: c.correlacao,
+    };
   }
 
   private ler<T>(c: ContextoAdt, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(this.contexto(c), async (l) => {
-      const f = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+      const f = await l.uma<{ fuso_horario: string | null }>(
+        'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+        [est],
+      );
       return fn(l, est, f?.fuso_horario || FUSO_PADRAO);
     });
   }
@@ -186,7 +205,10 @@ export class PortaAdtPropria implements PortaAdt {
   async podeGravar(c: ContextoAdt, op: string): Promise<LiberacaoGravacao> {
     const operacao = OPERACOES_ADT_BANCO[op];
     if (!operacao) return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida.' };
-    return this.executor.liberacao(operacao, { ...this.contexto(c), chaveIdempotencia: 'consulta.liberacao' });
+    return this.executor.liberacao(operacao, {
+      ...this.contexto(c),
+      chaveIdempotencia: 'consulta.liberacao',
+    });
   }
 
   async executar(c: ContextoAdt, op: string, entrada: unknown, ctx: ContextoOperacao) {
@@ -221,7 +243,11 @@ export class PortaAdtPropria implements PortaAdt {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = chaveDaGravacaoDireta(c as ComIdempotencia, 'internacao', randomUUID);
-    const ctx: ContextoOperacao = { ...this.contexto(c), correlacao: c.correlacao || 'internacao', chaveIdempotencia: chave };
+    const ctx: ContextoOperacao = {
+      ...this.contexto(c),
+      correlacao: c.correlacao || 'internacao',
+      chaveIdempotencia: chave,
+    };
     const r = await this.executor.executar(op, c.cliente, { chave }, ctx);
     return (r.resultado as unknown as { valor: T }).valor;
   }
@@ -231,7 +257,13 @@ export class PortaAdtPropria implements PortaAdt {
   relogio(c: ContextoAdt) {
     return this.ler(c, async (_l, _est, fuso) => {
       const r = relogioNoFuso(fuso);
-      const hms = new Intl.DateTimeFormat('en-GB', { timeZone: fuso, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+      const hms = new Intl.DateTimeFormat('en-GB', {
+        timeZone: fuso,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(new Date());
       return { hoje: r.hoje, agora: `${r.hoje}T${hms}` };
     });
   }
@@ -295,8 +327,7 @@ export class PortaAdtPropria implements PortaAdt {
         if (/^\d+$/.test(t)) {
           cond.push('(i.id = ? OR p.numero_prontuario = ?)');
           p.push(Number(t), Number(t));
-        }
-        else {
+        } else {
           cond.push('UPPER(pf.nome) LIKE ?');
           p.push(`%${t.toUpperCase()}%`);
         }
@@ -368,7 +399,13 @@ export class PortaAdtPropria implements PortaAdt {
       const resumo = this.resumoDe(r, fuso, hoje);
       const dia = (v: unknown) => (v ? civil(v as Date, fuso) : null);
       const tipoTroca = (d: string) =>
-        d === 'fonte_pagadora' ? 'convenio' : d === 'especialidade' ? 'especialidade' : d === 'modalidade' ? 'clinica' : 'medico';
+        d === 'fonte_pagadora'
+          ? 'convenio'
+          : d === 'especialidade'
+            ? 'especialidade'
+            : d === 'modalidade'
+              ? 'clinica'
+              : 'medico';
       return {
         resumo,
         cabecalho: texto(extra?.['numero']),
@@ -377,7 +414,9 @@ export class PortaAdtPropria implements PortaAdt {
         medicoSolicitante: texto(extra?.['solicitante']),
         acomodacaoPlano: resumo.tipoAcomodacao,
         matricula: texto(extra?.['numero_carteira']),
-        validadeCarteira: extra?.['validade_carteira'] ? (extra['validade_carteira'] as Date).toISOString().slice(0, 10) : null,
+        validadeCarteira: extra?.['validade_carteira']
+          ? (extra['validade_carteira'] as Date).toISOString().slice(0, 10)
+          : null,
         carater: verdadeiro(extra?.['urgencia']) ? 'urgencia' : 'eletivo',
         motivo: nn(extra?.['motivo_saida_hospitalar_id']),
         motivoNome: texto(extra?.['motivo_nome']),
@@ -411,10 +450,29 @@ export class PortaAdtPropria implements PortaAdt {
           const d = dia(t['ocorrido_em'])!;
           const tipo = tipoTroca(texto(t['dado_trocado']));
           const [de, para] =
-            tipo === 'convenio' ? [t['fa'], t['fn']] : tipo === 'especialidade' ? [t['ea'], t['en']] : [t['pa'], t['pn']];
-          return { tipo, data: d.data, hora: d.hora, de: texto(de), para: texto(para), usuario: texto(t['login']) };
+            tipo === 'convenio'
+              ? [t['fa'], t['fn']]
+              : tipo === 'especialidade'
+                ? [t['ea'], t['en']]
+                : [t['pa'], t['pn']];
+          return {
+            tipo,
+            data: d.data,
+            hora: d.hora,
+            de: texto(de),
+            para: texto(para),
+            usuario: texto(t['login']),
+          };
         }) as DetalheInternacao['trocas'],
-        contas: [{ conta: n(extra?.['atendimento_id']), inicio: resumo.entrada, fim: resumo.alta, tipo: 'internacao', guias: extra?.['numero_guia'] ? 1 : 0 }],
+        contas: [
+          {
+            conta: n(extra?.['atendimento_id']),
+            inicio: resumo.entrada,
+            fim: resumo.alta,
+            tipo: 'internacao',
+            guias: extra?.['numero_guia'] ? 1 : 0,
+          },
+        ],
         procedimentosExtras: [],
         historicoPaciente: historico.map((h) => ({
           reg: n(h['id']),
@@ -450,7 +508,8 @@ export class PortaAdtPropria implements PortaAdt {
 
   altaMedica(c: ContextoAdt, reg: number) {
     return this.ler(c, async (l, est) => {
-      if (!(await l.uma('SELECT id FROM internacao WHERE id = ? AND estabelecimento_id = ?', [reg, est]))) return null;
+      if (!(await l.uma('SELECT id FROM internacao WHERE id = ? AND estabelecimento_id = ?', [reg, est])))
+        return null;
       const [a] = (await this.altasDe(l, [reg])).slice(-1);
       return a ? this.altaDe(a) : null;
     });
@@ -459,7 +518,12 @@ export class PortaAdtPropria implements PortaAdt {
   altasMedicas(c: ContextoAdt, regs: readonly number[]) {
     return this.ler(c, async (l, est) => {
       const daqui = regs.length
-        ? (await l.consultar(`SELECT id FROM internacao WHERE estabelecimento_id = ? AND id IN (${lista(regs.length)})`, [est, ...regs])).map((x) => n(x['id']))
+        ? (
+            await l.consultar(
+              `SELECT id FROM internacao WHERE estabelecimento_id = ? AND id IN (${lista(regs.length)})`,
+              [est, ...regs],
+            )
+          ).map((x) => n(x['id']))
         : [];
       const m = new Map<number, AltaMedicaDecidida>();
       for (const a of await this.altasDe(l, daqui)) m.set(n(a['internacao_id']), this.altaDe(a));
@@ -485,7 +549,8 @@ export class PortaAdtPropria implements PortaAdt {
           ORDER BY a.previsto_para LIMIT ${TETO_LISTA + 1}`,
         [est],
       );
-      const pendente = (s: unknown) => ['solicitado', 'aguardando_autorizacao', 'autorizado', 'confirmado', 'em_espera'].includes(texto(s));
+      const pendente = (s: unknown) =>
+        ['solicitado', 'aguardando_autorizacao', 'autorizado', 'confirmado', 'em_espera'].includes(texto(s));
       const todos: PreInternacaoItem[] = linhas.slice(0, TETO_LISTA).map((r) => {
         const semData = r['situacao'] === 'em_espera';
         const d = civil(r['previsto_para'] as Date, fuso);
@@ -505,7 +570,9 @@ export class PortaAdtPropria implements PortaAdt {
         };
       });
       const itens = todos.filter(
-        (x) => (o.situacao === 'todas' || x.situacao === 'pendente') && (o.problema !== 'saneamento' || x.problema !== null),
+        (x) =>
+          (o.situacao === 'todas' || x.situacao === 'pendente') &&
+          (o.problema !== 'saneamento' || x.problema !== null),
       );
       return {
         itens,
@@ -535,7 +602,8 @@ export class PortaAdtPropria implements PortaAdt {
       );
       if (!r) return null;
       return {
-        dataPrevista: r['situacao'] === 'em_espera' ? DATA_SEM_DATA_PRE : civil(r['previsto_para'] as Date, fuso).data,
+        dataPrevista:
+          r['situacao'] === 'em_espera' ? DATA_SEM_DATA_PRE : civil(r['previsto_para'] as Date, fuso).data,
         convenio: n(r['fonte_pagadora_id']),
         especialidade: n(r['especialidade_medica_id']),
         clinica: CLINICA_DA_NATUREZA[texto(r['natureza'])] ?? null,
@@ -551,7 +619,12 @@ export class PortaAdtPropria implements PortaAdt {
   }
 
   leiturasPainel(c: ContextoAdt): Promise<LeiturasPainel> {
-    return this.painel.leiturasPainel({ rede: c.rede, hospital: c.hospital, traceId: c.correlacao, porta: this.contexto(c) });
+    return this.painel.leiturasPainel({
+      rede: c.rede,
+      hospital: c.hospital,
+      traceId: c.correlacao,
+      porta: this.contexto(c),
+    });
   }
 
   estadosDoMapa(c: ContextoAdt): Promise<EstadosDoMapa> {
@@ -559,7 +632,12 @@ export class PortaAdtPropria implements PortaAdt {
       const posicao = `COALESCE(b.codigo, '') AS bloco, ac.codigo AS acomodacao, lh.codigo AS leito`;
       const juntar = `JOIN acomodacao ac ON ac.id = lh.acomodacao_id
            LEFT JOIN bloco_internacao b ON b.id = COALESCE(lh.bloco_internacao_id, ac.bloco_internacao_id)`;
-      const chave = (r: Linha) => chaveTextoLeito({ bloco: texto(r['bloco']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) });
+      const chave = (r: Linha) =>
+        chaveTextoLeito({
+          bloco: texto(r['bloco']),
+          acomodacao: texto(r['acomodacao']),
+          leito: texto(r['leito']),
+        });
       const periodos = await l.consultar(
         `SELECT p.id, p.data_hora_inicio, p.data_hora_prevista_fim, p.solicitacao_limpeza_id, p.observacao, p.dados,
                 s.situacao_base, mb.descricao AS motivo, ${posicao}
@@ -594,7 +672,9 @@ export class PortaAdtPropria implements PortaAdt {
       const dados = (v: unknown): Record<string, unknown> => {
         if (!v) return {};
         try {
-          return typeof v === 'string' ? (JSON.parse(v) as Record<string, unknown>) : (v as Record<string, unknown>);
+          return typeof v === 'string'
+            ? (JSON.parse(v) as Record<string, unknown>)
+            : (v as Record<string, unknown>);
         } catch {
           return {};
         }
@@ -603,13 +683,15 @@ export class PortaAdtPropria implements PortaAdt {
       return {
         estados: periodos.flatMap((p) => {
           const d = dados(p['dados']);
-          const estado = (d['estado'] as EstadoLeitoNovo | undefined) ?? ESTADO_DA_BASE[texto(p['situacao_base'])];
+          const estado =
+            (d['estado'] as EstadoLeitoNovo | undefined) ?? ESTADO_DA_BASE[texto(p['situacao_base'])];
           if (!estado) return [];
           return [
             {
               chave: chave(p),
               estado,
-              motivo: (d['motivo'] as string | undefined) ?? (p['motivo'] === null ? null : texto(p['motivo'])),
+              motivo:
+                (d['motivo'] as string | undefined) ?? (p['motivo'] === null ? null : texto(p['motivo'])),
               precaucao: (d['precaucao'] as string | undefined) ?? null,
               previsaoFim: iso(p['data_hora_prevista_fim']),
               desde: iso(p['data_hora_inicio']) ?? '',
@@ -624,14 +706,17 @@ export class PortaAdtPropria implements PortaAdt {
           chave: chave(x),
           solicitacao: n(x['id']),
           etapa: texto(x['etapa']),
-          prazo: new Date((x['solicitada_em'] as Date).getTime() + n(x['tempo_previsto_minutos']) * 60_000).toISOString(),
+          prazo: new Date(
+            (x['solicitada_em'] as Date).getTime() + n(x['tempo_previsto_minutos']) * 60_000,
+          ).toISOString(),
         })),
         atributos: atributos.map((a) => ({
           chave: chave(a),
           sexo: a['sexo_permitido'] === 'masculino' ? 'M' : a['sexo_permitido'] === 'feminino' ? 'F' : null,
           idadeMinima: null,
           idadeMaxima: null,
-          criticidade: CRITICIDADES.indexOf(texto(a['criticidade']) as (typeof CRITICIDADES)[number]) + 1 || null,
+          criticidade:
+            CRITICIDADES.indexOf(texto(a['criticidade']) as (typeof CRITICIDADES)[number]) + 1 || null,
         })),
         reservas: reservas.map((r) => ({
           chave: chave(r),
@@ -645,7 +730,10 @@ export class PortaAdtPropria implements PortaAdt {
     });
   }
 
-  historico(c: ContextoAdt, o: { inicio: string; fim: string; bloco?: string; pagina: number; porPagina: number }): Promise<HistoricoOcupacao> {
+  historico(
+    c: ContextoAdt,
+    o: { inicio: string; fim: string; bloco?: string; pagina: number; porPagina: number },
+  ): Promise<HistoricoOcupacao> {
     return this.ler(c, async (l, est, fuso) => {
       const filtro = `FROM ocupacao_leito o
            JOIN leito_hospitalar lh ON lh.id = o.leito_hospitalar_id
@@ -655,7 +743,12 @@ export class PortaAdtPropria implements PortaAdt {
           WHERE o.estabelecimento_id = ? AND o.excluido_em IS NULL AND o.situacao <> 'cancelada'
             AND o.data_hora_inicio <= ? AND (o.data_hora_fim IS NULL OR o.data_hora_fim >= ?)
             ${o.bloco ? "AND COALESCE(b.codigo, '') = ?" : ''}`;
-      const p: unknown[] = [est, `${o.fim} 23:59:59.999`, `${o.inicio} 00:00:00`, ...(o.bloco ? [o.bloco] : [])];
+      const p: unknown[] = [
+        est,
+        `${o.fim} 23:59:59.999`,
+        `${o.inicio} 00:00:00`,
+        ...(o.bloco ? [o.bloco] : []),
+      ];
       const total = n((await l.uma(`SELECT COUNT(*) AS q ${filtro}`, p))?.['q']);
       const linhas = await l.consultar(
         `SELECT o.internacao_id, o.data_hora_inicio, o.data_hora_fim, COALESCE(b.codigo, '') AS bloco, ac.codigo AS acomodacao,
@@ -687,7 +780,9 @@ export class PortaAdtPropria implements PortaAdt {
     });
   }
 
-  solicitacoes(c: ContextoAdt): Promise<{ itens: SolicitacaoLimpezaFila[]; paradasAntigas: number; cortada: boolean }> {
+  solicitacoes(
+    c: ContextoAdt,
+  ): Promise<{ itens: SolicitacaoLimpezaFila[]; paradasAntigas: number; cortada: boolean }> {
     return this.ler(c, async (l, est) => {
       const linhas = await l.consultar(
         `SELECT s.id, s.solicitada_em, s.motivo_geracao, sl.etapa, COALESCE(b.codigo, '') AS bloco, ac.codigo AS acomodacao,
@@ -781,12 +876,22 @@ export class PortaAdtPropria implements PortaAdt {
 
   etapas(c: ContextoAdt, solicitacao: number) {
     return this.ler(c, async (l, est) => {
-      if (!(await l.uma('SELECT id FROM solicitacao_limpeza WHERE id = ? AND estabelecimento_id = ?', [solicitacao, est]))) return [];
+      if (
+        !(await l.uma('SELECT id FROM solicitacao_limpeza WHERE id = ? AND estabelecimento_id = ?', [
+          solicitacao,
+          est,
+        ]))
+      )
+        return [];
       return (await this.etapasDe(l, [solicitacao])).get(solicitacao) ?? [];
     });
   }
 
-  limpezasLiberadas(c: ContextoAdt, de: string, ate: string): Promise<{ itens: LimpezaGiro[]; areas: Record<string, string> }> {
+  limpezasLiberadas(
+    c: ContextoAdt,
+    de: string,
+    ate: string,
+  ): Promise<{ itens: LimpezaGiro[]; areas: Record<string, string> }> {
     return this.ler(c, async (l, est) => {
       const linhas = await l.consultar(
         `SELECT s.id, s.solicitada_em, COALESCE(b.codigo, '') AS bloco, b.nome AS bloco_nome
@@ -799,7 +904,10 @@ export class PortaAdtPropria implements PortaAdt {
           LIMIT 20000`,
         [est, `${de} 00:00:00`, `${ate} 23:59:59.999`],
       );
-      const etapas = await this.etapasDe(l, linhas.map((r) => n(r['id'])));
+      const etapas = await this.etapasDe(
+        l,
+        linhas.map((r) => n(r['id'])),
+      );
       const areas: Record<string, string> = {};
       for (const r of linhas) areas[texto(r['bloco'])] = texto(r['bloco_nome']);
       return {
@@ -838,8 +946,16 @@ export class PortaAdtPropria implements PortaAdt {
       return {
         leito: { bloco: texto(r['bloco']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) },
         espelho: n(r['id']),
-        criticidade: CRITICIDADES.indexOf(texto(r['criticidade']) as (typeof CRITICIDADES)[number]) + 1 || null,
-        situacaoCodigo: r['etapa'] === 'liberada' ? 4 : r['etapa'] === 'em_higienizacao' ? 3 : r['motivo_geracao'] === 'alta' ? 1 : 2,
+        criticidade:
+          CRITICIDADES.indexOf(texto(r['criticidade']) as (typeof CRITICIDADES)[number]) + 1 || null,
+        situacaoCodigo:
+          r['etapa'] === 'liberada'
+            ? 4
+            : r['etapa'] === 'em_higienizacao'
+              ? 3
+              : r['motivo_geracao'] === 'alta'
+                ? 1
+                : 2,
       };
     });
   }
@@ -847,18 +963,29 @@ export class PortaAdtPropria implements PortaAdt {
   contaDoCodigo(c: ContextoAdt, codigo: number) {
     return this.ler(c, async (l, est) => {
       // O código lido é o número do atendimento; o id só vale quando não há número igual. Número repetido é recusa.
-      const porNumero = await l.consultar('SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL ORDER BY id LIMIT 2', [
-        est,
-        String(codigo),
-      ]);
-      if (porNumero.length > 1) throw recusa('codigo-ambiguo', 'Mais de um atendimento com esse número: informe o atendimento pela lista.');
+      const porNumero = await l.consultar(
+        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL ORDER BY id LIMIT 2',
+        [est, String(codigo)],
+      );
+      if (porNumero.length > 1)
+        throw recusa(
+          'codigo-ambiguo',
+          'Mais de um atendimento com esse número: informe o atendimento pela lista.',
+        );
       if (porNumero.length === 1) return n(porNumero[0]?.['id']);
-      const porId = await l.uma('SELECT id FROM atendimento WHERE estabelecimento_id = ? AND id = ? AND excluido_em IS NULL', [est, codigo]);
+      const porId = await l.uma(
+        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND id = ? AND excluido_em IS NULL',
+        [est, codigo],
+      );
       return porId ? n(porId['id']) : null;
     });
   }
 
-  localizacao(c: ContextoAdt, conta: number, o: { setorSame: number; prazoDias: number }): Promise<LocalizacaoConta | null> {
+  localizacao(
+    c: ContextoAdt,
+    conta: number,
+    o: { setorSame: number; prazoDias: number },
+  ): Promise<LocalizacaoConta | null> {
     return this.ler(c, async (l, est, fuso) => {
       const a = await l.uma(
         `SELECT a.id, a.numero, a.paciente_id, p.numero_prontuario, COALESCE(p.nome_social, pf.nome) AS nome,
@@ -899,7 +1026,12 @@ export class PortaAdtPropria implements PortaAdt {
         const x = civil(d, fuso);
         return `${x.data}T${x.hora}:00`;
       };
-      const dataCivil = (v: unknown) => (v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : texto(v).slice(0, 10));
+      const dataCivil = (v: unknown) =>
+        v === null || v === undefined
+          ? null
+          : v instanceof Date
+            ? v.toISOString().slice(0, 10)
+            : texto(v).slice(0, 10);
       const excluido = (m: Linha) => m['excluido_em'] !== null || m['exclusao_id'] !== null;
       const ultimo = movs.find((m) => !excluido(m));
       const ondeEsta = ultimo
@@ -947,7 +1079,11 @@ export class PortaAdtPropria implements PortaAdt {
           aceito: m['aceite_id'] !== null,
           cobrada: m['cobranca_id'] !== null,
         })),
-        ocorrencias: ocorrencias.map((r) => ({ motivo: texto(r['motivo']), em: instante(r['registrado_em'] as Date), por: texto(r['login']) })),
+        ocorrencias: ocorrencias.map((r) => ({
+          motivo: texto(r['motivo']),
+          em: instante(r['registrado_em'] as Date),
+          por: texto(r['login']),
+        })),
         cortada: movs.length > 200,
       };
     });
@@ -979,9 +1115,17 @@ export class PortaAdtPropria implements PortaAdt {
       // previsão de retorno, senão o prazo padrão do arquivo.
       const prazoDe = (r: Linha) => {
         const v = r['prazo_devolucao'];
-        const rem = v === null || v === undefined ? null : v instanceof Date ? v.toISOString().slice(0, 10) : texto(v).slice(0, 10);
+        const rem =
+          v === null || v === undefined
+            ? null
+            : v instanceof Date
+              ? v.toISOString().slice(0, 10)
+              : texto(v).slice(0, 10);
         if (rem) return instanteCivil(rem, '23:59', fuso);
-        return (r['previsao_retorno'] as Date | null) ?? new Date((r['movimentado_em'] as Date).getTime() + o.prazoDias * 86_400_000);
+        return (
+          (r['previsao_retorno'] as Date | null) ??
+          new Date((r['movimentado_em'] as Date).getTime() + o.prazoDias * 86_400_000)
+        );
       };
       const atrasadas = linhas.filter((r) => prazoDe(r).getTime() < hoje);
       return {
@@ -1006,28 +1150,61 @@ export class PortaAdtPropria implements PortaAdt {
     return this.ler(c, async (l, est) => {
       const cn = (rs: Linha[]) => rs.map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
       const [conv, esp, mot, acom, tipos, prof, set, ops, exc, uni, cc] = await Promise.all([
-        l.consultar("SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome"),
-        l.consultar('SELECT id, descricao AS nome FROM especialidade_medica WHERE ativo = TRUE ORDER BY descricao'),
-        l.consultar('SELECT id, descricao AS nome, tipo_saida FROM motivo_saida_hospitalar WHERE ativo = TRUE ORDER BY descricao'),
+        l.consultar(
+          "SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
+        ),
+        l.consultar(
+          'SELECT id, descricao AS nome FROM especialidade_medica WHERE ativo = TRUE ORDER BY descricao',
+        ),
+        l.consultar(
+          'SELECT id, descricao AS nome, tipo_saida FROM motivo_saida_hospitalar WHERE ativo = TRUE ORDER BY descricao',
+        ),
         l.consultar(
           `SELECT COALESCE(b.codigo, '') AS bloco, ac.codigo, ac.nome, ac.categoria_acomodacao_id FROM acomodacao ac
              LEFT JOIN bloco_internacao b ON b.id = ac.bloco_internacao_id
             WHERE ac.estabelecimento_id = ? AND ac.excluido_em IS NULL AND ac.ativo = TRUE ORDER BY bloco, ac.codigo`,
           [est],
         ),
-        l.consultar('SELECT id, descricao AS nome FROM modalidade_limpeza WHERE ativo = TRUE ORDER BY descricao'),
-        l.consultar('SELECT id, nome FROM profissional_higienizacao WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome', [est]),
-        l.consultar('SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome', [est]),
-        l.consultar('SELECT codigo, descricao AS nome FROM operacao_movimento_prontuario WHERE ativo = TRUE ORDER BY codigo'),
-        l.consultar('SELECT id, descricao AS nome FROM motivo_cancelamento_internacao WHERE ativo = TRUE ORDER BY descricao'),
-        l.consultar('SELECT id, descricao AS nome FROM unidade_internacao WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY descricao', [est]),
-        l.consultar('SELECT id, nome FROM centro_custo WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome', [est]),
+        l.consultar(
+          'SELECT id, descricao AS nome FROM modalidade_limpeza WHERE ativo = TRUE ORDER BY descricao',
+        ),
+        l.consultar(
+          'SELECT id, nome FROM profissional_higienizacao WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome',
+          [est],
+        ),
+        l.consultar(
+          'SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome',
+          [est],
+        ),
+        l.consultar(
+          'SELECT codigo, descricao AS nome FROM operacao_movimento_prontuario WHERE ativo = TRUE ORDER BY codigo',
+        ),
+        l.consultar(
+          'SELECT id, descricao AS nome FROM motivo_cancelamento_internacao WHERE ativo = TRUE ORDER BY descricao',
+        ),
+        l.consultar(
+          'SELECT id, descricao AS nome FROM unidade_internacao WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY descricao',
+          [est],
+        ),
+        l.consultar(
+          'SELECT id, nome FROM centro_custo WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL ORDER BY nome',
+          [est],
+        ),
       ]);
       return {
         convenios: cn(conv),
         especialidades: cn(esp),
-        motivosAlta: mot.map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']), grupo: texto(r['tipo_saida']) })),
-        acomodacoes: acom.map((r) => ({ bloco: texto(r['bloco']), acomodacao: texto(r['codigo']), nome: texto(r['nome']), tipo: n(r['categoria_acomodacao_id']) })),
+        motivosAlta: mot.map((r) => ({
+          codigo: n(r['id']),
+          nome: texto(r['nome']),
+          grupo: texto(r['tipo_saida']),
+        })),
+        acomodacoes: acom.map((r) => ({
+          bloco: texto(r['bloco']),
+          acomodacao: texto(r['codigo']),
+          nome: texto(r['nome']),
+          tipo: n(r['categoria_acomodacao_id']),
+        })),
         tiposLimpeza: cn(tipos),
         profissionaisLimpeza: cn(prof),
         setores: cn(set),
@@ -1054,7 +1231,12 @@ export class PortaAdtPropria implements PortaAdt {
             GROUP BY pr.id ORDER BY nome LIMIT 30`,
           [est, `%${termo.trim().toUpperCase()}%`, termo.trim()],
         )
-      ).map((r) => ({ vinculo: n(r['id']), nome: texto(r['nome']), conselho: texto(r['numero_inscricao']), especialidade: texto(r['especialidade']) })),
+      ).map((r) => ({
+        vinculo: n(r['id']),
+        nome: texto(r['nome']),
+        conselho: texto(r['numero_inscricao']),
+        especialidade: texto(r['especialidade']),
+      })),
     );
   }
 
@@ -1077,7 +1259,14 @@ export class PortaAdtPropria implements PortaAdt {
       const item = (r: Linha): ItemIncoerencia => {
         const e = civil(r['data_hora_entrada'] as Date, fuso);
         const s = r['data_hora_alta'] ? civil(r['data_hora_alta'] as Date, fuso) : null;
-        return { reg: n(r['id']), prontuario: n(r['numero_prontuario']), entrada: e.data, horaEntrada: e.hora, alta: s?.data ?? null, horaSaida: s?.hora ?? null };
+        return {
+          reg: n(r['id']),
+          prontuario: n(r['numero_prontuario']),
+          entrada: e.data,
+          horaEntrada: e.hora,
+          alta: s?.data ?? null,
+          horaSaida: s?.hora ?? null,
+        };
       };
       const semTrecho = await l.consultar(
         `SELECT i.id, p.numero_prontuario, i.data_hora_entrada, i.data_hora_alta FROM internacao i JOIN paciente p ON p.id = i.paciente_id
@@ -1092,7 +1281,14 @@ export class PortaAdtPropria implements PortaAdt {
           LIMIT 200`,
         [est],
       );
-      const leitos = n((await l.uma('SELECT COUNT(*) AS q FROM leito_hospitalar WHERE estabelecimento_id = ? AND excluido_em IS NULL', [est]))?.['q']);
+      const leitos = n(
+        (
+          await l.uma(
+            'SELECT COUNT(*) AS q FROM leito_hospitalar WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+            [est],
+          )
+        )?.['q'],
+      );
       return {
         altaAntesDaEntrada: altaAntes.map((r) => n(r['id'])),
         listaAltaAntes: altaAntes.map(item),
@@ -1134,7 +1330,11 @@ export class PortaAdtPropria implements PortaAdt {
         convenio: texto(r['convenio']),
         entrada: e.data,
         hora: e.hora,
-        leito: chaveTextoLeito({ bloco: texto(r['bloco']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) }),
+        leito: chaveTextoLeito({
+          bloco: texto(r['bloco']),
+          acomodacao: texto(r['acomodacao']),
+          leito: texto(r['leito']),
+        }),
         medico: texto(r['medico']),
         alergia: verdadeiro(r['alergia']),
       };
@@ -1217,14 +1417,17 @@ export class PortaAdtPropria implements PortaAdt {
 
 /** Idade da tela (anos, 0 a 130) → dias do atributo do tipo de acomodação (o banco guarda a faixa etária em dias). */
 const DIAS_POR_ANO = 365;
-const anosParaDias = (anos: number | null | undefined): number | null => (anos === null || anos === undefined ? null : anos * DIAS_POR_ANO);
+const anosParaDias = (anos: number | null | undefined): number | null =>
+  anos === null || anos === undefined ? null : anos * DIAS_POR_ANO;
 
 /** Tipo de acomodação (categoria) da chave do atributo por tipo: o id do cadastro, como a tela o recebe em `apoio`. */
 async function categoriaDaChave(tx: TxOperacao, chave: string): Promise<number> {
   const id = Number(chave);
-  if (!Number.isSafeInteger(id) || id <= 0) throw recusa('tipo-acomodacao-inexistente', 'Informe o tipo de acomodação.', { campos: ['chave'] });
+  if (!Number.isSafeInteger(id) || id <= 0)
+    throw recusa('tipo-acomodacao-inexistente', 'Informe o tipo de acomodação.', { campos: ['chave'] });
   const r = await tx.uma('SELECT id FROM categoria_acomodacao WHERE id = ?', [id]);
-  if (!r) throw recusa('tipo-acomodacao-inexistente', 'O tipo de acomodação não existe.', { campos: ['chave'] });
+  if (!r)
+    throw recusa('tipo-acomodacao-inexistente', 'O tipo de acomodação não existe.', { campos: ['chave'] });
   return id;
 }
 
@@ -1238,7 +1441,13 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
       'SELECT id, versao, situacao, atendimento_id, paciente_id, data_hora_entrada FROM internacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [reg, est],
     );
-    if (!i) throw new ErroOperacao(404, 'registro-inexistente', 'Internação não encontrada', 'A internação não existe neste estabelecimento.');
+    if (!i)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Internação não encontrada',
+        'A internação não existe neste estabelecimento.',
+      );
     return i;
   };
   const periodoAberto = async (leito: number) => {
@@ -1251,14 +1460,25 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
   };
   const conferirVersao = (vista: number | null | undefined, atual: unknown, oque: string) => {
     if (vista !== undefined && vista !== null && vista !== n(atual))
-      throw new ErroOperacao(409, 'conflito-versao', 'Registro alterado', `${oque} mudou desde a leitura. Releia e confira antes de salvar.`, {
-        colunas: ['versao'],
-      });
+      throw new ErroOperacao(
+        409,
+        'conflito-versao',
+        'Registro alterado',
+        `${oque} mudou desde a leitura. Releia e confira antes de salvar.`,
+        {
+          colunas: ['versao'],
+        },
+      );
   };
   /** O motivo de bloqueio pelo código do cadastro (motivo_bloqueio_leito); código sem cadastro é configuração incompleta. */
   const motivoBloqueio = async (codigo: string | null | undefined) =>
     codigo
-      ? apoio(tx, 'SELECT id FROM motivo_bloqueio_leito WHERE codigo = ? AND ativo = TRUE', [codigo], `o motivo de bloqueio "${codigo}"`)
+      ? apoio(
+          tx,
+          'SELECT id FROM motivo_bloqueio_leito WHERE codigo = ? AND ativo = TRUE',
+          [codigo],
+          `o motivo de bloqueio "${codigo}"`,
+        )
       : null;
   /** O isolamento ativo no leito (a precaução do período aponta para ele). */
   const isolamentoNoLeito = async (leito: number) =>
@@ -1273,7 +1493,8 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
   const estadoDe = (p: Linha): string => {
     try {
       const d = typeof p['dados'] === 'string' ? JSON.parse(p['dados']) : p['dados'];
-      if (d && typeof d === 'object' && 'estado' in d) return String((d as Record<string, unknown>)['estado']);
+      if (d && typeof d === 'object' && 'estado' in d)
+        return String((d as Record<string, unknown>)['estado']);
     } catch {
       /* dados sem o estado: vale a situação base */
     }
@@ -1282,8 +1503,9 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
   return {
     async registrarAltaMedica(r) {
       const i = await internacao(r.reg);
-      if (i['situacao'] !== 'ativa') throw recusa('internacao-sem-alta-medica', 'A internação não está aberta para a alta médica.');
-      if (!(await tx.uma("SELECT id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE", [r.motivo])))
+      if (i['situacao'] !== 'ativa')
+        throw recusa('internacao-sem-alta-medica', 'A internação não está aberta para a alta médica.');
+      if (!(await tx.uma('SELECT id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE', [r.motivo])))
         throw recusa('motivo-inexistente', 'O motivo da alta não existe.', { campos: ['motivo'] });
       const agora = new Date();
       const id = await tx.incluir('alta_medica', {
@@ -1333,13 +1555,20 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         justificativa_cancelamento: r.motivo,
       });
       if (i['situacao'] === 'alta_medica')
-        await tx.alterar('internacao', r.reg, n(i['versao']), { situacao: 'ativa', data_hora_alta_medica: null, alta_medica_profissional_id: null });
+        await tx.alterar('internacao', r.reg, n(i['versao']), {
+          situacao: 'ativa',
+          data_hora_alta_medica: null,
+          alta_medica_profissional_id: null,
+        });
       return n(a['id']);
     },
     async abrirEstadoLeito(r) {
       const leito = await leitoDaChave(tx, est, r.leito);
       if (await periodoAberto(n(leito['id'])))
-        throw recusa('leito-com-estado', 'O leito já tem um estado aberto (bloqueio, precaução, extra ou higienização): encerre-o antes.');
+        throw recusa(
+          'leito-com-estado',
+          'O leito já tem um estado aberto (bloqueio, precaução, extra ou higienização): encerre-o antes.',
+        );
       const base = BASE_DO_ESTADO[r.estado];
       const situacao = await situacaoDoLeitoPorBase(tx, base);
       const agora = new Date();
@@ -1363,17 +1592,24 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
     async encerrarEstadoLeito(r) {
       const leito = await leitoDaChave(tx, est, r.leito);
       const p = await periodoAberto(n(leito['id']));
-      if (!p || estadoDe(p) !== r.estado) throw recusa('estado-inexistente', 'O leito não tem esse estado aberto.');
+      if (!p || estadoDe(p) !== r.estado)
+        throw recusa('estado-inexistente', 'O leito não tem esse estado aberto.');
       conferirVersao(r.versao, p['versao'], 'O estado do leito');
       const agora = new Date();
-      await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), { data_hora_fim: agora, operacao: 'alteracao', ocorrido_em: agora, usuario_id: usuario() });
+      await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), {
+        data_hora_fim: agora,
+        operacao: 'alteracao',
+        ocorrido_em: agora,
+        usuario_id: usuario(),
+      });
       await situarLeito(tx, n(leito['id']));
       return n(p['id']);
     },
     async alterarEstadoLeito(r) {
       const leito = await leitoDaChave(tx, est, r.leito);
       const p = await periodoAberto(n(leito['id']));
-      if (!p || estadoDe(p) !== r.estado) throw recusa('estado-inexistente', 'O leito não tem esse estado aberto.');
+      if (!p || estadoDe(p) !== r.estado)
+        throw recusa('estado-inexistente', 'O leito não tem esse estado aberto.');
       conferirVersao(r.versao, p['versao'], 'O estado do leito');
       const agora = new Date();
       await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), {
@@ -1381,7 +1617,12 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         data_hora_prevista_fim: r.previsaoFim ? new Date(r.previsaoFim) : null,
         observacao: r.observacao ?? null,
         operacao: 'alteracao',
-        dados: JSON.stringify({ estado: r.estado, motivo: r.motivo ?? null, precaucao: r.precaucao ?? null, justificativa: r.justificativa }),
+        dados: JSON.stringify({
+          estado: r.estado,
+          motivo: r.motivo ?? null,
+          precaucao: r.precaucao ?? null,
+          justificativa: r.justificativa,
+        }),
         ocorrido_em: agora,
         usuario_id: usuario(),
       });
@@ -1395,7 +1636,11 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
           'SELECT id, versao FROM atributo_categoria_acomodacao WHERE estabelecimento_id = ? AND categoria_acomodacao_id = ?',
           [est, cat],
         );
-        if (!a) throw recusa('atributos-inexistentes', 'O tipo de acomodação não tem atributos próprios: já vale o padrão.');
+        if (!a)
+          throw recusa(
+            'atributos-inexistentes',
+            'O tipo de acomodação não tem atributos próprios: já vale o padrão.',
+          );
         await tx.alterar('atributo_categoria_acomodacao', n(a['id']), n(a['versao']), {
           sexo_permitido: null,
           criticidade: null,
@@ -1408,9 +1653,16 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         return n(a['id']);
       }
       const chave = r.chave.split('|');
-      const leito = await leitoDaChave(tx, est, { bloco: chave[0] ?? '', acomodacao: chave[1] ?? '', leito: chave[2] ?? '' });
+      const leito = await leitoDaChave(tx, est, {
+        bloco: chave[0] ?? '',
+        acomodacao: chave[1] ?? '',
+        leito: chave[2] ?? '',
+      });
       const v = await tx.uma('SELECT versao FROM leito_hospitalar WHERE id = ?', [n(leito['id'])]);
-      await tx.alterar('leito_hospitalar', n(leito['id']), n(v?.['versao']), { sexo_permitido: 'qualquer', criticidade: 'baixa' });
+      await tx.alterar('leito_hospitalar', n(leito['id']), n(v?.['versao']), {
+        sexo_permitido: 'qualquer',
+        criticidade: 'baixa',
+      });
       return n(leito['id']);
     },
     async gravarAtributo(r) {
@@ -1418,8 +1670,12 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         const cat = await categoriaDaChave(tx, r.chave);
         const campos: Record<string, unknown> = {
           ...(r.andar !== undefined ? { andar: r.andar } : {}),
-          ...(r.sexo !== undefined ? { sexo_permitido: r.sexo === null ? null : (SEXO_DO_LEITO[r.sexo] ?? null) } : {}),
-          ...(r.criticidade !== undefined ? { criticidade: r.criticidade ? (CRITICIDADES[r.criticidade - 1] ?? null) : null } : {}),
+          ...(r.sexo !== undefined
+            ? { sexo_permitido: r.sexo === null ? null : (SEXO_DO_LEITO[r.sexo] ?? null) }
+            : {}),
+          ...(r.criticidade !== undefined
+            ? { criticidade: r.criticidade ? (CRITICIDADES[r.criticidade - 1] ?? null) : null }
+            : {}),
           ...(r.ramal !== undefined ? { ramal: r.ramal === null ? null : String(r.ramal) } : {}),
           ...(r.idadeMinima !== undefined ? { idade_minima_dias: anosParaDias(r.idadeMinima) } : {}),
           ...(r.idadeMaxima !== undefined ? { idade_maxima_dias: anosParaDias(r.idadeMaxima) } : {}),
@@ -1431,25 +1687,54 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
           [est, cat],
         );
         if (!a) {
-          await tx.incluir('atributo_categoria_acomodacao', { estabelecimento_id: est, categoria_acomodacao_id: cat, ...campos });
+          await tx.incluir('atributo_categoria_acomodacao', {
+            estabelecimento_id: est,
+            categoria_acomodacao_id: cat,
+            ...campos,
+          });
           return;
         }
-        const proprios = ['sexo_permitido', 'criticidade', 'idade_minima_dias', 'idade_maxima_dias', 'andar', 'ramal', 'terapia_intensiva'].some(
-          (c) => a[c] !== null,
-        );
-        if (proprios && !r.motivo) throw recusa('motivo-obrigatorio', 'Informe o motivo da mudança dos atributos do tipo de acomodação.', { campos: ['motivo'] });
+        const proprios = [
+          'sexo_permitido',
+          'criticidade',
+          'idade_minima_dias',
+          'idade_maxima_dias',
+          'andar',
+          'ramal',
+          'terapia_intensiva',
+        ].some((c) => a[c] !== null);
+        if (proprios && !r.motivo)
+          throw recusa(
+            'motivo-obrigatorio',
+            'Informe o motivo da mudança dos atributos do tipo de acomodação.',
+            { campos: ['motivo'] },
+          );
         await tx.alterar('atributo_categoria_acomodacao', n(a['id']), n(a['versao']), campos);
         return;
       }
       const chave = r.chave.split('|');
-      const leito = await leitoDaChave(tx, est, { bloco: chave[0] ?? '', acomodacao: chave[1] ?? '', leito: chave[2] ?? '' });
-      const atual = await tx.uma('SELECT versao, sexo_permitido, criticidade FROM leito_hospitalar WHERE id = ?', [n(leito['id'])]);
+      const leito = await leitoDaChave(tx, est, {
+        bloco: chave[0] ?? '',
+        acomodacao: chave[1] ?? '',
+        leito: chave[2] ?? '',
+      });
+      const atual = await tx.uma(
+        'SELECT versao, sexo_permitido, criticidade FROM leito_hospitalar WHERE id = ?',
+        [n(leito['id'])],
+      );
       const proprios = atual && (atual['sexo_permitido'] !== 'qualquer' || atual['criticidade'] !== 'baixa');
-      if (proprios && !r.motivo) throw recusa('motivo-obrigatorio', 'Informe o motivo da mudança dos atributos do leito.', { campos: ['motivo'] });
+      if (proprios && !r.motivo)
+        throw recusa('motivo-obrigatorio', 'Informe o motivo da mudança dos atributos do leito.', {
+          campos: ['motivo'],
+        });
       await tx.alterar('leito_hospitalar', n(leito['id']), n(atual?.['versao']), {
         ...(r.andar !== undefined ? { andar: r.andar } : {}),
-        ...(r.sexo !== undefined ? { sexo_permitido: r.sexo === null ? 'qualquer' : (SEXO_DO_LEITO[r.sexo] ?? 'qualquer') } : {}),
-        ...(r.criticidade !== undefined ? { criticidade: r.criticidade ? (CRITICIDADES[r.criticidade - 1] ?? 'baixa') : 'baixa' } : {}),
+        ...(r.sexo !== undefined
+          ? { sexo_permitido: r.sexo === null ? 'qualquer' : (SEXO_DO_LEITO[r.sexo] ?? 'qualquer') }
+          : {}),
+        ...(r.criticidade !== undefined
+          ? { criticidade: r.criticidade ? (CRITICIDADES[r.criticidade - 1] ?? 'baixa') : 'baixa' }
+          : {}),
         ...(r.ramal !== undefined ? { ramal: r.ramal === null ? null : String(r.ramal) } : {}),
       });
     },
@@ -1458,15 +1743,23 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
         'SELECT id, versao, inicio_higienizacao_em, fim_higienizacao_em, concluida_em, cancelada_em FROM solicitacao_limpeza WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [r.solicitacao, est],
       );
-      if (!s) throw new ErroOperacao(404, 'registro-inexistente', 'Solicitação não encontrada', 'A solicitação de limpeza não existe.');
-      if (s['concluida_em'] !== null || s['cancelada_em'] !== null) throw recusa('limpeza-encerrada', 'A limpeza já foi liberada ou cancelada.');
+      if (!s)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Solicitação não encontrada',
+          'A solicitação de limpeza não existe.',
+        );
+      if (s['concluida_em'] !== null || s['cancelada_em'] !== null)
+        throw recusa('limpeza-encerrada', 'A limpeza já foi liberada ou cancelada.');
       const agora = new Date();
       const etapa = ETAPA_DA_SITUACAO[r.etapa] ?? 'aguardando';
       const muda: Record<string, unknown> = { situacao_limpeza_id: await situacaoLimpeza(tx, etapa) };
       if (r.profissional) muda['profissional_higienizacao_id'] = r.profissional;
       if (r.tipoLimpeza) muda['modalidade_limpeza_id'] = r.tipoLimpeza;
       if (r.etapa === 'atribuido') muda['fim_aguardando_em'] = agora;
-      if (r.etapa === 'emExecucao' && s['inicio_higienizacao_em'] === null) muda['inicio_higienizacao_em'] = agora;
+      if (r.etapa === 'emExecucao' && s['inicio_higienizacao_em'] === null)
+        muda['inicio_higienizacao_em'] = agora;
       if (r.etapa === 'concluido') {
         if (s['inicio_higienizacao_em'] === null) muda['inicio_higienizacao_em'] = agora;
         muda['fim_higienizacao_em'] = agora;
@@ -1490,7 +1783,12 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
           [r.solicitacao],
         );
         for (const p of periodos) {
-          await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), { data_hora_fim: agora, operacao: 'alteracao', ocorrido_em: agora, usuario_id: usuario() });
+          await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), {
+            data_hora_fim: agora,
+            operacao: 'alteracao',
+            ocorrido_em: agora,
+            usuario_id: usuario(),
+          });
           await situarLeito(tx, n(p['leito_hospitalar_id']));
         }
       }
@@ -1511,8 +1809,17 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
       // Ocorrência do arquivo de prontuários que não é movimento físico do volume (remessa, aceite, cobrança,
       // exclusão, ocorrência e descarte). A conta é o atendimento; o movimento, quando vier, é desta conta (do
       // atendimento ou, sem atendimento, do volume do mesmo paciente).
-      const a = await tx.uma('SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [r.conta, est]);
-      if (!a) throw new ErroOperacao(404, 'registro-inexistente', 'Conta não encontrada', 'O atendimento não existe neste estabelecimento.');
+      const a = await tx.uma(
+        'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [r.conta, est],
+      );
+      if (!a)
+        throw new ErroOperacao(
+          404,
+          'registro-inexistente',
+          'Conta não encontrada',
+          'O atendimento não existe neste estabelecimento.',
+        );
       if (r.movimento !== null) {
         const m = await tx.uma(
           `SELECT id FROM movimento_prontuario
@@ -1520,17 +1827,24 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
               AND excluido_em IS NULL`,
           [r.movimento, est, n(a['paciente_id']), r.conta],
         );
-        if (!m) throw recusa('movimento-inexistente', 'O movimento não é desta conta ou foi desfeito.', { campos: ['movimento'] });
+        if (!m)
+          throw recusa('movimento-inexistente', 'O movimento não é desta conta ou foi desfeito.', {
+            campos: ['movimento'],
+          });
       }
       const motivo = r.motivo?.trim() || null;
       if (['exclusao', 'descarte', 'ocorrencia'].includes(r.tipo) && !motivo)
         throw recusa('motivo-obrigatorio', 'Informe o motivo do registro.', { campos: ['motivo'] });
       const aval = r.avalComissao?.trim() || null;
       if (r.tipo === 'descarte' && !aval)
-        throw recusa('aval-obrigatorio', 'O descarte exige o aval da comissão de revisão de prontuários.', { campos: ['avalComissao'] });
+        throw recusa('aval-obrigatorio', 'O descarte exige o aval da comissão de revisão de prontuários.', {
+          campos: ['avalComissao'],
+        });
       const prazo = r.prazoDevolucao ?? null;
       if (prazo !== null && !/^\d{4}-\d{2}-\d{2}$/.test(prazo))
-        throw recusa('data.formato', 'O prazo de devolução é uma data AAAA-MM-DD.', { campos: ['prazoDevolucao'] });
+        throw recusa('data.formato', 'O prazo de devolução é uma data AAAA-MM-DD.', {
+          campos: ['prazoDevolucao'],
+        });
       return tx.incluir('ocorrencia_arquivo_prontuario', {
         estabelecimento_id: est,
         atendimento_id: r.conta,

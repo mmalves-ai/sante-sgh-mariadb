@@ -466,9 +466,7 @@ export class SuprimentosController {
     const e = corpo(esquemaAtender, b);
     const r = await this.porta.relogio(ctx(s));
     const fila = await this.porta.requisicoes(ctx(s), { hoje: r.hoje });
-    const x = fila.itens.find(
-      (y) => y.id === e.requisicao,
-    );
+    const x = fila.itens.find((y) => y.id === e.requisicao);
     if (!x)
       throw new ErroProblema(
         'recusa-de-negocio',

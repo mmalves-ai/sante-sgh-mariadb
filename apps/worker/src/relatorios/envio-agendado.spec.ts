@@ -116,7 +116,9 @@ describe('envio agendado (regra 5)', () => {
 
   it('sem destinatário com e-mail, falha com o motivo; job fora do formato é recusado', async () => {
     const { d } = deps({ emails: async () => ({ destinatarios: [], dono: null }) });
-    expect((await processarEnvio({ ...JOB, enderecos: [] }, d, ORIGEM)).falha).toBe('nenhum destinatário com e-mail');
+    expect((await processarEnvio({ ...JOB, enderecos: [] }, d, ORIGEM)).falha).toBe(
+      'nenhum destinatário com e-mail',
+    );
     await expect(processarEnvio({ ...JOB, anexo: 'arquivo.xlsx' }, d, ORIGEM)).rejects.toThrow();
     await expect(processarEnvio({ ...JOB, link: 'ftp://x' }, d, ORIGEM)).rejects.toThrow();
   });
@@ -129,7 +131,11 @@ describe('envio agendado (regra 5)', () => {
 
   it('avisar_falha falso: a falha não alerta o dono', async () => {
     const { d, enviados, registros } = deps({
-      emails: async () => ({ destinatarios: ['gerente@exemplo.invalid'], dono: 'ti@exemplo.invalid', avisarFalha: false }),
+      emails: async () => ({
+        destinatarios: ['gerente@exemplo.invalid'],
+        dono: 'ti@exemplo.invalid',
+        avisarFalha: false,
+      }),
       enviar: async (m) => {
         if (m.para !== 'ti@exemplo.invalid') throw new Error('550 caixa inexistente');
         enviados.push(m);

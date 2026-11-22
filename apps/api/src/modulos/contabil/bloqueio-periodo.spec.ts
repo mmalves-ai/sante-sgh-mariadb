@@ -3,13 +3,21 @@ import { avisoDoBloqueio, bloqueioDoLancamento } from './bloqueio-periodo.js';
 
 describe('bloqueio do período para lançar', () => {
   it('aberto sem bloqueio diário aceita', () => {
-    expect(bloqueioDoLancamento({ situacao: 'aberto', bloqueadoAte: null }, '2026-03-10', '2026-03')).toBeNull();
+    expect(
+      bloqueioDoLancamento({ situacao: 'aberto', bloqueadoAte: null }, '2026-03-10', '2026-03'),
+    ).toBeNull();
     expect(avisoDoBloqueio({ situacao: 'aberto', bloqueadoAte: null })).toBeNull();
   });
   it('encerrado e bloqueado recusam com o código', () => {
-    expect(bloqueioDoLancamento({ situacao: 'encerrado', bloqueadoAte: null }, '2026-03-10', '2026-03')?.codigo).toBe('periodo-encerrado');
-    expect(bloqueioDoLancamento({ situacao: 'bloqueado', bloqueadoAte: null }, '2026-03-10', '2026-03')?.codigo).toBe('periodo-bloqueado');
-    expect(avisoDoBloqueio({ situacao: 'bloqueado', bloqueadoAte: null })).toBe('Período bloqueado para lançamentos.');
+    expect(
+      bloqueioDoLancamento({ situacao: 'encerrado', bloqueadoAte: null }, '2026-03-10', '2026-03')?.codigo,
+    ).toBe('periodo-encerrado');
+    expect(
+      bloqueioDoLancamento({ situacao: 'bloqueado', bloqueadoAte: null }, '2026-03-10', '2026-03')?.codigo,
+    ).toBe('periodo-bloqueado');
+    expect(avisoDoBloqueio({ situacao: 'bloqueado', bloqueadoAte: null })).toBe(
+      'Período bloqueado para lançamentos.',
+    );
   });
   it('bloqueio diário recusa a data até o dia, inclusive, e aceita a seguinte', () => {
     const p = { situacao: 'aberto', bloqueadoAte: '2026-03-15' };

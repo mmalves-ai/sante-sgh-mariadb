@@ -15,7 +15,11 @@ import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloEspecialidades } from './modulo.js';
 import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'config,documento,especialidades' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'config,documento,especialidades',
+};
 const trilha = new RegistradorTrilhaMemoria();
 // 25/10/2026 às 15:00 (local).
 // O relógio anda só no caso da ordem vencida do lactário (e volta no fim dele).

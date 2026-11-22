@@ -4,9 +4,22 @@ import type { ContextoNucleo, ContextoOperacao } from '@sgh/nucleo';
 import { ErroOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import { PortaExameMemoria } from './porta-memoria.js';
-import { civil, horaCivil, horaDeMinutos, instanteCivil, minutosDaHora, relogioDoEstabelecimento, relogioNoFuso } from './relogio.js';
+import {
+  civil,
+  horaCivil,
+  horaDeMinutos,
+  instanteCivil,
+  minutosDaHora,
+  relogioDoEstabelecimento,
+  relogioNoFuso,
+} from './relogio.js';
 
-const ctx: ContextoNucleo = { cliente: 'sintetico', estabelecimento: 1, usuario: 7, correlacao: 'unidade-01-05' };
+const ctx: ContextoNucleo = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 7,
+  correlacao: 'unidade-01-05',
+};
 let k = 0;
 const op = (): ContextoOperacao => ({ ...ctx, chaveIdempotencia: `unidade-${++k}-0105` });
 const codigo = (e: unknown) => (e instanceof ErroOperacao ? e.problema['codigo'] : null);
@@ -16,11 +29,21 @@ describe('relógio civil do estabelecimento', () => {
     const r = relogioDoEstabelecimento('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z'));
     expect(r).toEqual({ hoje: '2026-11-20', hora: '09:05' });
     expect(relogioNoFuso('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z')).hora).toBe('09:05');
-    expect(instanteCivil('2026-11-20', '09:05', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
-    expect(horaCivil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30' });
+    expect(instanteCivil('2026-11-20', '09:05', 'America/Sao_Paulo').toISOString()).toBe(
+      '2026-11-20T12:05:00.000Z',
+    );
+    expect(horaCivil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({
+      data: '2026-11-20',
+      hora: '23:30',
+    });
     // A forma antiga (quatro dígitos) segue para os módulos de fora da agenda de exames.
-    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30' });
-    expect(instanteCivil('2026-11-20', '0905', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
+    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({
+      data: '2026-11-20',
+      hora: '23:30',
+    });
+    expect(instanteCivil('2026-11-20', '0905', 'America/Sao_Paulo').toISOString()).toBe(
+      '2026-11-20T12:05:00.000Z',
+    );
     expect(minutosDaHora('01:20')).toBe(80);
     expect(minutosDaHora('0120')).toBe(80);
     expect(() => minutosDaHora('')).toThrow();
@@ -64,12 +87,25 @@ describe('porta da agenda de exames em memória', () => {
     const id = Number(r.resultado['marcacao']);
     const dia = await p.marcacoesDoDia(ctx, h?.data ?? '', 951);
     expect(dia.itens).toContainEqual(expect.objectContaining({ id, estado: 'marcado', atendido: false }));
-    expect(codigo(await p.executar(ctx, 'agenda.agendarExame', entrada, op()).catch((e) => e))).toBe('horario-ocupado');
+    expect(codigo(await p.executar(ctx, 'agenda.agendarExame', entrada, op()).catch((e) => e))).toBe(
+      'horario-ocupado',
+    );
     expect(codigo(await p.executar(ctx, 'agenda.agendarExame', { agenda: 951 }, op()).catch((e) => e))).toBe(
       'entrada-invalida',
     );
-    await p.executar(ctx, 'agenda.cancelarExame', { marcacao: id, motivo: 'PAC-DESISTIU', solicitante: 'paciente' }, op());
-    const canc = await p.cancelamentos(ctx, { de: '2026-11-20', ate: '2026-11-20', agendas: [951], pagina: 1, porPagina: 10 });
+    await p.executar(
+      ctx,
+      'agenda.cancelarExame',
+      { marcacao: id, motivo: 'PAC-DESISTIU', solicitante: 'paciente' },
+      op(),
+    );
+    const canc = await p.cancelamentos(ctx, {
+      de: '2026-11-20',
+      ate: '2026-11-20',
+      agendas: [951],
+      pagina: 1,
+      porPagina: 10,
+    });
     expect(canc.total).toBe(1);
     expect((await p.podeGravar(ctx, 'agenda.agendarExameSemProntuario')).pode).toBe(false);
   });

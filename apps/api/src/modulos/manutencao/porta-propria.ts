@@ -1803,7 +1803,10 @@ function gravador(
       );
       const alertaId = acao ? n(acao['alerta_sanitario_id']) : null;
       if (natureza === 'alerta_sanitario' && alertaId === null)
-        throw recusa('os-sem-alerta', 'Esta OS não foi gerada pela ação de campo de um alerta sanitário: abra como queixa técnica ou evento adverso.');
+        throw recusa(
+          'os-sem-alerta',
+          'Esta OS não foi gerada pela ação de campo de um alerta sanitário: abra como queixa técnica ou evento adverso.',
+        );
       const f = await fuso();
       const em = paraInstante(x.agora, f);
       const segregado = x.conduta !== 'nenhuma';

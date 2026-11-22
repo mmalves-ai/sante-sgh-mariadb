@@ -49,12 +49,15 @@ export function estadoDoEnvelope(e: EnvelopeParaVerificar): EstadoDoEnvelope | n
   const exigidas = Math.max(1, Math.floor(e.assinaturasExigidas));
   if (ENVELOPE_INCOMPLETO.has(e.situacao) || e.assinaturas.length < exigidas)
     return { estado: 'pendente', resultado: null };
-  if (e.assinaturas.some((a) => a.situacao === 'expirada')) return { estado: 'assinada', resultado: 'indeterminada' };
+  if (e.assinaturas.some((a) => a.situacao === 'expirada'))
+    return { estado: 'assinada', resultado: 'indeterminada' };
   return { estado: 'assinada', resultado: 'valida' };
 }
 
 /** O registro no conselho como o selo mostra (sigla-UF número); sem número, null. */
-export function registroExibido(r: { sigla: string | null; uf: string | null; numero: string | null } | null): string | null {
+export function registroExibido(
+  r: { sigla: string | null; uf: string | null; numero: string | null } | null,
+): string | null {
   if (!r?.numero) return null;
   return `${r.sigla ?? 'Conselho'}${r.uf ? `-${r.uf}` : ''} ${r.numero}`;
 }

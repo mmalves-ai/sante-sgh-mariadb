@@ -23,7 +23,8 @@ export function gravacaoDaTela(
     corpo && typeof corpo === 'object' && !Array.isArray(corpo)
       ? Object.fromEntries(Object.entries(corpo as Record<string, unknown>).filter(([k]) => k !== 'senha'))
       : (corpo ?? null);
-  if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave)) return { contexto: base, pedido: { operacao, pedido } };
+  if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave))
+    return { contexto: base, pedido: { operacao, pedido } };
   const ordem = (ordemNaRequisicao.get(s.req) ?? 0) + 1;
   ordemNaRequisicao.set(s.req, ordem);
   return { contexto: { ...base, chaveIdempotencia: `${chave}:${ordem}` }, pedido: { operacao, pedido } };

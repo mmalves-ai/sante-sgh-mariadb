@@ -5,7 +5,13 @@ import type { Escritor } from '@sgh/nucleo';
 export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
-export async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
+export async function garantir(
+  e: Escritor,
+  sel: string,
+  p: unknown[],
+  ins: string,
+  pi: unknown[],
+): Promise<number> {
   const l = await e.uma<{ id: unknown }>(sel, p);
   return l ? Number(l.id) : e.inserir(ins, pi);
 }
@@ -55,9 +61,11 @@ export async function limparParceiro(e: Escritor, codigo: string): Promise<void>
     await e.executar('DELETE FROM ponto_integracao WHERE sistema_externo_id = ?', [sistema]);
   }
   if (p) {
-    if (p.cliente_api_id !== null) await e.executar('DELETE FROM chave_api WHERE cliente_api_id = ?', [p.cliente_api_id]);
+    if (p.cliente_api_id !== null)
+      await e.executar('DELETE FROM chave_api WHERE cliente_api_id = ?', [p.cliente_api_id]);
     await e.executar('DELETE FROM parceiro_dados WHERE id = ?', [p.id]);
-    if (p.cliente_api_id !== null) await e.executar('DELETE FROM cliente_api WHERE id = ?', [p.cliente_api_id]);
+    if (p.cliente_api_id !== null)
+      await e.executar('DELETE FROM cliente_api WHERE id = ?', [p.cliente_api_id]);
   }
   if (sistema !== null) await e.executar('DELETE FROM sistema_externo WHERE id = ?', [sistema]);
 }

@@ -18,7 +18,11 @@ import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 import { registroDe } from './regulacao.controller.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,adt',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const painel = new FonteInternacaoMemoria({});

@@ -105,7 +105,10 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
         'DELETE v FROM validacao_assinatura v JOIN assinatura_icp a ON a.id = v.assinatura_icp_id WHERE a.estabelecimento_id = ?',
         [ids.est],
       );
-      await e.executar('UPDATE documento_prontuario SET documento_assinado_id = NULL WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'UPDATE documento_prontuario SET documento_assinado_id = NULL WHERE estabelecimento_id = ?',
+        [ids.est],
+      );
       await e.executar('DELETE FROM assinatura_icp WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM previa_assinatura WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM pedido_assinatura WHERE estabelecimento_id = ?', [ids.est]);
@@ -124,10 +127,16 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
         'DELETE a FROM assinatura_documento a JOIN documento_assinado d ON d.id = a.documento_assinado_id WHERE d.estabelecimento_id = ?',
         [ids.est],
       );
-      await e.executar('DELETE FROM documento_prontuario WHERE estabelecimento_id = ? AND titulo LIKE ?', [ids.est, `${P}%`]);
+      await e.executar('DELETE FROM documento_prontuario WHERE estabelecimento_id = ? AND titulo LIKE ?', [
+        ids.est,
+        `${P}%`,
+      ]);
       await e.executar('DELETE FROM documento_assinado WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM arquivo WHERE chave_armazenamento LIKE ?', [`${P}/%`]);
-      await e.executar('DELETE FROM certificado_usuario WHERE usuario_id IN (?, ?)', [ids.usuario, ids.outro]);
+      await e.executar('DELETE FROM certificado_usuario WHERE usuario_id IN (?, ?)', [
+        ids.usuario,
+        ids.outro,
+      ]);
       await e.executar('DELETE FROM provedor_assinatura_nuvem WHERE codigo LIKE ?', ['l0201-%']);
     })();
 
@@ -292,7 +301,9 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       registros: [{ cbo: null, sigla: 'LZCRM', uf: 'RJ', numero: '201001' }],
     });
     // No outro estabelecimento a conta não tem vínculo de profissional.
-    expect(await porta.identidade({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, LOGIN)).toEqual({
+    expect(
+      await porta.identidade({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, LOGIN),
+    ).toEqual({
       cpf: CPF,
       cpfProfissional: null,
       registros: [],
@@ -308,13 +319,20 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       ativo: true,
     });
     expect(await porta.conselhos(ctx)).toContain('LZCRM');
-    expect(await porta.oidsDeConselho(ctx)).toContainEqual({ oid: '2.16.76.1.4.2.2.20101', conselho: 'LZCRM' });
+    expect(await porta.oidsDeConselho(ctx)).toContainEqual({
+      oid: '2.16.76.1.4.2.2.20101',
+      conselho: 'LZCRM',
+    });
   });
 
   it('vincular certificado: linha, impressão digital, padrão, versão e trilha; repetido é recusado sem gravar', async () => {
     const c = novoCtx();
     const x = certificado(ctx.hospital, LOGIN);
-    const { id } = await porta.gravar(c, (g) => g.gravarCertificado(x), trilhaDe(c, 'certificado_usuario', 'vinculado'));
+    const { id } = await porta.gravar(
+      c,
+      (g) => g.gravarCertificado(x),
+      trilhaDe(c, 'certificado_usuario', 'vinculado'),
+    );
     const [linha] = await ler(
       'SELECT usuario_id, impressao_digital, padrao, situacao, cpf_titular, numero_serie, versao FROM certificado_usuario WHERE id = ?',
       [id],
@@ -344,13 +362,22 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     // A lista e a leitura por id.
     const lista = await porta.certificados(ctx, LOGIN);
     expect(lista.map((l) => l.id)).toContain(id);
-    expect(lista.find((l) => l.id === id)).toMatchObject({ ativo: true, cpfMascarado: expect.not.stringContaining(CPF) });
+    expect(lista.find((l) => l.id === id)).toMatchObject({
+      ativo: true,
+      cpfMascarado: expect.not.stringContaining(CPF),
+    });
     expect((await porta.certificado(ctx, id))?.usuario).toBe(LOGIN);
     // O mesmo certificado de novo: recusa de negócio, nenhuma linha nem trilha a mais.
     const c2 = novoCtx();
-    expect(await erroDe(porta.gravar(c2, (g) => g.gravarCertificado(x), null))).toBe('certificado-ja-vinculado');
-    expect(await ler('SELECT id FROM certificado_usuario WHERE usuario_id = ?', [ids.usuario])).toHaveLength(1);
-    expect(await ler('SELECT id FROM trilha_auditoria WHERE correlacao = ?', [c2.correlacao])).toHaveLength(0);
+    expect(await erroDe(porta.gravar(c2, (g) => g.gravarCertificado(x), null))).toBe(
+      'certificado-ja-vinculado',
+    );
+    expect(await ler('SELECT id FROM certificado_usuario WHERE usuario_id = ?', [ids.usuario])).toHaveLength(
+      1,
+    );
+    expect(await ler('SELECT id FROM trilha_auditoria WHERE correlacao = ?', [c2.correlacao])).toHaveLength(
+      0,
+    );
   });
 
   it('desvincular: exclusão lógica com nova versão; some da lista, segue legível por id; de outro login não acha', async () => {
@@ -359,7 +386,10 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     const de = (usuario: string) => ({ hospital: ctx.hospital, usuario, id, por: usuario, em: new Date() });
     expect(await porta.gravar(novoCtx(), (g) => g.inativarCertificado(de(OUTRO_LOGIN)), null)).toBe(false);
     expect(await porta.gravar(novoCtx(), (g) => g.inativarCertificado(de(LOGIN)), null)).toBe(true);
-    const [linha] = await ler('SELECT versao, excluido_em, excluido_por, padrao FROM certificado_usuario WHERE id = ?', [id]);
+    const [linha] = await ler(
+      'SELECT versao, excluido_em, excluido_por, padrao FROM certificado_usuario WHERE id = ?',
+      [id],
+    );
     expect(linha).toMatchObject({ versao: 2, excluido_por: ids.usuario, padrao: 0 });
     expect(linha!['excluido_em']).not.toBeNull();
     expect((await porta.certificados(ctx, LOGIN)).map((l) => l.id)).not.toContain(id);
@@ -382,25 +412,45 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       url_servico: p.uriBase,
       versao: 1,
     });
-    expect(await porta.provedor(ctx, 'l0201-psc')).toMatchObject({ codigo: 'l0201-psc', versao: 1, alteradoPor: LOGIN });
+    expect(await porta.provedor(ctx, 'l0201-psc')).toMatchObject({
+      codigo: 'l0201-psc',
+      versao: 1,
+      alteradoPor: LOGIN,
+    });
     const alterado = await porta.gravar(
       novoCtx(),
       (g) => g.gravarProvedor(provedor(ctx.hospital, 'l0201-psc', 'Provedor renomeado'), 1),
       null,
     );
     expect(alterado).toEqual({ id: r.id, versao: 2 });
-    expect((await porta.provedores(ctx)).find((x) => x.codigo === 'l0201-psc')?.nome).toBe('Provedor renomeado');
-    expect(await erroDe(porta.gravar(novoCtx(), (g) => g.gravarProvedor(p, 1), null))).toBe('versao-desatualizada');
-    expect(await erroDe(porta.gravar(novoCtx(), (g) => g.gravarProvedor(p, null), null))).toBe('provedor-repetido');
+    expect((await porta.provedores(ctx)).find((x) => x.codigo === 'l0201-psc')?.nome).toBe(
+      'Provedor renomeado',
+    );
+    expect(await erroDe(porta.gravar(novoCtx(), (g) => g.gravarProvedor(p, 1), null))).toBe(
+      'versao-desatualizada',
+    );
+    expect(await erroDe(porta.gravar(novoCtx(), (g) => g.gravarProvedor(p, null), null))).toBe(
+      'provedor-repetido',
+    );
     const fora = { ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` };
     expect(await porta.provedor(fora, 'l0201-psc')).toBeNull();
-    expect(await erroDe(porta.gravar(novoCtx(fora), (g) => g.gravarProvedor(p, 2), null))).toBe('versao-desatualizada');
-    // Sem estabelecimento resolvido: recusa, nada de provedor da rede inteira.
-    const semEst: ContextoAssinatura = { rede: 'rede-sintetica', hospital: `${P}Inexistente`, correlacao: `l0201-semest-${randomUUID().slice(0, 8)}` };
-    expect(await erroDe(porta.gravar(semEst, (g) => g.gravarProvedor(provedor(`${P}A`, 'l0201-rede'), null), null))).toBe(
-      'estabelecimento-ausente',
+    expect(await erroDe(porta.gravar(novoCtx(fora), (g) => g.gravarProvedor(p, 2), null))).toBe(
+      'versao-desatualizada',
     );
-    expect(await ler('SELECT id FROM provedor_assinatura_nuvem WHERE codigo = ?', ['l0201-rede'])).toHaveLength(0);
+    // Sem estabelecimento resolvido: recusa, nada de provedor da rede inteira.
+    const semEst: ContextoAssinatura = {
+      rede: 'rede-sintetica',
+      hospital: `${P}Inexistente`,
+      correlacao: `l0201-semest-${randomUUID().slice(0, 8)}`,
+    };
+    expect(
+      await erroDe(
+        porta.gravar(semEst, (g) => g.gravarProvedor(provedor(`${P}A`, 'l0201-rede'), null), null),
+      ),
+    ).toBe('estabelecimento-ausente');
+    expect(
+      await ler('SELECT id FROM provedor_assinatura_nuvem WHERE codigo = ?', ['l0201-rede']),
+    ).toHaveLength(0);
     // O mesmo código no outro estabelecimento, com credencial própria. Enquanto o banco tiver a unicidade antiga (só o
     // código, no cliente inteiro: pedido de troca em saida/02-01.json), a inclusão é recusada como repetida.
     const [ix] = await ler(
@@ -415,7 +465,10 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     } else {
       const b = await noOutro;
       expect(b.id).not.toBe(r.id);
-      const [lb] = await ler('SELECT estabelecimento_id, referencia_cofre FROM provedor_assinatura_nuvem WHERE id = ?', [b.id]);
+      const [lb] = await ler(
+        'SELECT estabelecimento_id, referencia_cofre FROM provedor_assinatura_nuvem WHERE id = ?',
+        [b.id],
+      );
       expect(lb).toEqual({ estabelecimento_id: ids.outroEst, referencia_cofre: pb.segredoRef });
       expect(await porta.provedor(fora, 'l0201-psc')).toMatchObject({ id: b.id, segredoRef: pb.segredoRef });
       expect(await porta.provedor(ctx, 'l0201-psc')).toMatchObject({ id: r.id, versao: 2 });
@@ -468,9 +521,14 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       await assinatura(rev, 2, 'valida');
       return d;
     });
-    const [lida] = await ler('SELECT assinado_em FROM assinatura_documento WHERE documento_assinado_id = ?', [doc]);
+    const [lida] = await ler('SELECT assinado_em FROM assinatura_documento WHERE documento_assinado_id = ?', [
+      doc,
+    ]);
     const assinadoEm = new Date(lida!['assinado_em'] as Date).toISOString();
-    const achado = await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: `${P}A` }, CODIGO_VERIFICACAO);
+    const achado = await porta.documentoDoCodigo(
+      { rede: 'rede-sintetica', hospital: `${P}A` },
+      CODIGO_VERIFICACAO,
+    );
     expect(achado).toMatchObject({
       previa: doc,
       documento: 77,
@@ -496,9 +554,15 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       assinatura: { estado: 'falha' },
       validacao: { resultado: 'invalida' },
     });
-    expect(await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: `${P}B` }, CODIGO_VERIFICACAO)).toBeNull();
+    expect(
+      await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: `${P}B` }, CODIGO_VERIFICACAO),
+    ).toBeNull();
     // A consulta pública: sem usuário, o estabelecimento pelo código; a origem já mascarada.
-    const publico: ContextoAssinatura = { rede: 'rede-sintetica', hospital: `${P}A`, correlacao: `l0201-pub-${randomUUID().slice(0, 8)}` };
+    const publico: ContextoAssinatura = {
+      rede: 'rede-sintetica',
+      hospital: `${P}A`,
+      correlacao: `l0201-pub-${randomUUID().slice(0, 8)}`,
+    };
     const consulta = (resultado: 'valida' | 'nao-encontrado' | 'pendente', previa: number | null) =>
       porta.gravar(
         publico,
@@ -526,15 +590,18 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       endereco_ip: '203.0.113.0',
       codigo_informado: `${P}valida`,
     });
-    const [t] = await ler('SELECT usuario_id, estabelecimento_id FROM trilha_auditoria WHERE correlacao = ? ORDER BY id LIMIT 1', [
-      publico.correlacao,
-    ]);
+    const [t] = await ler(
+      'SELECT usuario_id, estabelecimento_id FROM trilha_auditoria WHERE correlacao = ? ORDER BY id LIMIT 1',
+      [publico.correlacao],
+    );
     expect(t).toEqual({ usuario_id: null, estabelecimento_id: ids.est });
     // Pendente também é guardado, no vocabulário do banco.
     await consulta('pendente', doc);
-    expect(await ler('SELECT resultado FROM consulta_verificacao_documento WHERE codigo_informado = ?', [`${P}pendente`])).toEqual([
-      { resultado: 'pendente' },
-    ]);
+    expect(
+      await ler('SELECT resultado FROM consulta_verificacao_documento WHERE codigo_informado = ?', [
+        `${P}pendente`,
+      ]),
+    ).toEqual([{ resultado: 'pendente' }]);
     const resumo = await porta.resumoVerificacoes(ctx, new Date(Date.now() - 86_400_000));
     expect(resumo.find((r) => r.resultado === 'valida')?.consultas).toBeGreaterThanOrEqual(1);
     expect(resumo.find((r) => r.resultado === 'nao-encontrado')?.consultas).toBeGreaterThanOrEqual(1);
@@ -548,7 +615,18 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
            situacao_documento_prontuario_id, entidade_origem, entidade_origem_id, titulo, profissional_id,
            referencia_em, lancado_em, conteudo, criado_em, versao)
          VALUES (?, ?, ?, ?, 'registro_assistencial', ?, ?, ?, ?, ?, '{"texto":"sintético"}', ?, 1)`,
-        [ids.est, ids.paciente, ids2.tipoDoc, ids2.situacao, Date.now() % 1_000_000_000, `${P} atestado`, ids.prof, agora, agora, agora],
+        [
+          ids.est,
+          ids.paciente,
+          ids2.tipoDoc,
+          ids2.situacao,
+          Date.now() % 1_000_000_000,
+          `${P} atestado`,
+          ids.prof,
+          agora,
+          agora,
+          agora,
+        ],
       ),
     );
     expect(await porta.documentoEmitido(ctx, id)).toMatchObject({
@@ -559,12 +637,20 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       suspenso: false,
       assinadoEm: null,
     });
-    expect(await porta.documentoEmitido({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, id)).toBeNull();
+    expect(
+      await porta.documentoEmitido({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, id),
+    ).toBeNull();
     const fila = await porta.filaIcp(ctx, LOGIN, 10, ['atestado']);
     expect(fila.itens.map((i) => i.documento)).toContain(id);
-    expect(fila.itens.find((i) => i.documento === id)).toMatchObject({ assinatura: null, estado: null, tentativas: 0 });
+    expect(fila.itens.find((i) => i.documento === id)).toMatchObject({
+      assinatura: null,
+      estado: null,
+      tentativas: 0,
+    });
     expect((await porta.filaIcp(ctx, OUTRO_LOGIN, 10, ['atestado'])).itens).toEqual([]);
-    expect((await porta.filaIcp(ctx, LOGIN, 10, ['receita'])).itens.map((i) => i.documento)).not.toContain(id);
+    expect((await porta.filaIcp(ctx, LOGIN, 10, ['receita'])).itens.map((i) => i.documento)).not.toContain(
+      id,
+    );
     // Rascunho: fora da fila e recusado na leitura por id (suspenso para a assinatura).
     const rascunho = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'l0201-rascunho' }, (e) =>
       e.inserir(
@@ -572,17 +658,34 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
            situacao_documento_prontuario_id, entidade_origem, entidade_origem_id, titulo, profissional_id,
            referencia_em, lancado_em, conteudo, criado_em, versao)
          VALUES (?, ?, ?, ?, 'registro_assistencial', ?, ?, ?, ?, ?, '{"texto":"sintético"}', ?, 1)`,
-        [ids.est, ids.paciente, ids2.tipoDoc, ids2.rascunho, (Date.now() + 1) % 1_000_000_000, `${P} rascunho`, ids.prof, agora, agora, agora],
+        [
+          ids.est,
+          ids.paciente,
+          ids2.tipoDoc,
+          ids2.rascunho,
+          (Date.now() + 1) % 1_000_000_000,
+          `${P} rascunho`,
+          ids.prof,
+          agora,
+          agora,
+          agora,
+        ],
       ),
     );
     expect(await porta.documentoEmitido(ctx, rascunho)).toMatchObject({ id: rascunho, suspenso: true });
-    expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(rascunho);
+    expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(
+      rascunho,
+    );
   });
 
   it('motor ICP: política vigente, pedido de uso único, prévia, tentativa, conclusão com envelope e evento, avisos e numeração', async () => {
     const H = ctx.hospital;
     const agora = new Date();
-    const gravar = <T extends { id: number }>(fn: (g: GravadorAssinatura) => Promise<T>, tabela: string, evento: string) => {
+    const gravar = <T extends { id: number }>(
+      fn: (g: GravadorAssinatura) => Promise<T>,
+      tabela: string,
+      evento: string,
+    ) => {
       const c = novoCtx();
       return porta.gravar(c, fn, trilhaDe(c, tabela, evento));
     };
@@ -593,7 +696,18 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
            situacao_documento_prontuario_id, entidade_origem, entidade_origem_id, titulo, profissional_id,
            referencia_em, lancado_em, conteudo, criado_em, versao)
          VALUES (?, ?, ?, ?, 'registro_assistencial', ?, ?, ?, ?, ?, '{"texto":"sintético"}', ?, 1)`,
-        [ids.est, ids.paciente, ids2.tipoDoc, ids2.situacao, (Date.now() + 7) % 1_000_000_000, `${P} motor`, ids.prof, agora, agora, agora],
+        [
+          ids.est,
+          ids.paciente,
+          ids2.tipoDoc,
+          ids2.situacao,
+          (Date.now() + 7) % 1_000_000_000,
+          `${P} motor`,
+          ids.prof,
+          agora,
+          agora,
+          agora,
+        ],
       ),
     );
     const { id: cert } = await sem((g) => g.gravarCertificado(certificado(H, LOGIN)));
@@ -621,7 +735,14 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     const p1 = await politica('icp-brasil', true);
     const daChave = async () => (await porta.politicas(ctx)).filter((x) => x.conselho === 'LZCRM');
     expect(await daChave()).toEqual([
-      expect.objectContaining({ id: p1.id, tipoDocumento: 'atestado', nivel: 'icp-brasil', politicaIcp: 'AD-RT', ativa: true, usuario: LOGIN }),
+      expect.objectContaining({
+        id: p1.id,
+        tipoDocumento: 'atestado',
+        nivel: 'icp-brasil',
+        politicaIcp: 'AD-RT',
+        ativa: true,
+        usuario: LOGIN,
+      }),
     ]);
     expect((await politica('eletronica-avancada', true)).id).toBe(p1.id);
     expect((await daChave()).map((x) => x.nivel)).toEqual(['eletronica-avancada']);
@@ -646,15 +767,21 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     };
     await gravar((g) => g.gravarPedido(pedido), 'pedido_assinatura', 'pedido');
     expect(await erroDe(sem((g) => g.gravarPedido(pedido)))).toBe('pedido-repetido');
-    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: OUTRO_LOGIN }, new Date()))).toBeNull();
-    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date()))).toMatchObject({
+    expect(
+      await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: OUTRO_LOGIN }, new Date())),
+    ).toBeNull();
+    expect(
+      await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date())),
+    ).toMatchObject({
       finalidade: 'documento',
       certificado: cert,
       hashes: ['f'.repeat(64)],
       documentos: [doc],
       vencido: false,
     });
-    expect(await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date()))).toBeNull();
+    expect(
+      await sem((g) => g.consumirPedido(estado, { hospital: H, usuario: LOGIN }, new Date())),
+    ).toBeNull();
 
     // Prévia: o PDF vira arquivo; a versão vem da coluna pedida ou da emissão registrada para a mesma chave.
     const [coluna] = await ler(
@@ -668,7 +795,20 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
              origem_tipo, origem_registro_id, via, hash_conteudo, chave_objeto, identificador_qr, autor, emitido_em,
              versao_objeto, situacao, confirmado_em, criado_em, versao)
            VALUES (?, ?, 'rede-sintetica', ?, 'pep', '1', 'pep-documento', ?, 1, ?, ?, ?, ?, ?, ?, 'emitida', ?, ?, 1)`,
-          [ids.est, randomUUID(), H, doc, '1'.repeat(64), chave, randomUUID(), LOGIN, agora, versao, agora, agora],
+          [
+            ids.est,
+            randomUUID(),
+            H,
+            doc,
+            '1'.repeat(64),
+            chave,
+            randomUUID(),
+            LOGIN,
+            agora,
+            versao,
+            agora,
+            agora,
+          ],
         ),
       );
     const chavePrevia = `${P}/previa-${doc}.pdf`;
@@ -688,11 +828,18 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       registro: 'LZCRM-RJ 201001',
     };
     if (!temColuna)
-      expect(await erroDe(sem((g) => g.gravarPrevia({ ...previa, chaveS3: `${P}/sem-emissao.pdf`, codigo: `${P}x${doc}` })))).toBe(
-        'modelo-pendente',
-      );
+      expect(
+        await erroDe(
+          sem((g) => g.gravarPrevia({ ...previa, chaveS3: `${P}/sem-emissao.pdf`, codigo: `${P}x${doc}` })),
+        ),
+      ).toBe('modelo-pendente');
     const { id: pv } = await gravar((g) => g.gravarPrevia(previa), 'previa_assinatura', 'previa');
-    expect(await porta.previaMaisRecente(ctx, doc, LOGIN)).toMatchObject({ id: pv, chaveS3: chavePrevia, versaoS3: 'v1', codigo: previa.codigo });
+    expect(await porta.previaMaisRecente(ctx, doc, LOGIN)).toMatchObject({
+      id: pv,
+      chaveS3: chavePrevia,
+      versaoS3: 'v1',
+      codigo: previa.codigo,
+    });
     expect(await porta.previa({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, pv)).toBeNull();
 
     // Tentativa pendente com avisos: aparece na fila (mesmo fora dos tipos da política), na contagem e no reprocessamento.
@@ -721,8 +868,22 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
         expect(await g.travarDocumentoParaAssinar(H, doc, null)).toBeNull();
         const r = await g.gravarAssinatura(tentativa);
         await g.gravarAssinaturaPdf({ assinatura: r.id, previa: pv });
-        await g.gravarAviso({ hospital: H, assinatura: r.id, destinatario: 'autor', usuario: LOGIN, estado: 'pendente', falha: tentativa.falha });
-        await g.gravarAviso({ hospital: H, assinatura: r.id, destinatario: 'diretor-tecnico', usuario: null, estado: 'pendente', falha: tentativa.falha });
+        await g.gravarAviso({
+          hospital: H,
+          assinatura: r.id,
+          destinatario: 'autor',
+          usuario: LOGIN,
+          estado: 'pendente',
+          falha: tentativa.falha,
+        });
+        await g.gravarAviso({
+          hospital: H,
+          assinatura: r.id,
+          destinatario: 'diretor-tecnico',
+          usuario: null,
+          estado: 'pendente',
+          falha: tentativa.falha,
+        });
         return r;
       },
       'assinatura_icp',
@@ -736,14 +897,31 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
     });
     expect(await porta.pendentesVencidas(ctx, new Date(), 10)).toContainEqual({ id: a, usuario: LOGIN });
     expect(await porta.contagemPendencias(ctx)).toEqual({ pendentes: 1, falhas: 0 });
-    expect((await porta.assinaturasDosDocumentos(ctx, [doc])).get(doc)).toEqual({ id: a, estado: 'pendente' });
+    expect((await porta.assinaturasDosDocumentos(ctx, [doc])).get(doc)).toEqual({
+      id: a,
+      estado: 'pendente',
+    });
     const doAutor = await porta.avisos(ctx, { autor: LOGIN });
-    expect(doAutor).toEqual([expect.objectContaining({ assinatura: a, documento: doc, autor: LOGIN, destinatario: 'autor', estado: 'pendente' })]);
+    expect(doAutor).toEqual([
+      expect.objectContaining({
+        assinatura: a,
+        documento: doc,
+        autor: LOGIN,
+        destinatario: 'autor',
+        estado: 'pendente',
+      }),
+    ]);
     const daDirecao = await porta.avisos(ctx, 'diretor-tecnico');
     expect(daDirecao).toHaveLength(1);
     const todos = [doAutor[0]!.id, daDirecao[0]!.id];
-    expect(await sem((g) => g.marcarAvisosLidos(H, todos, { login: OUTRO_LOGIN, diretorTecnico: false }, new Date()))).toBe(0);
-    expect(await sem((g) => g.marcarAvisosLidos(H, todos, { login: LOGIN, diretorTecnico: false }, new Date()))).toBe(1);
+    expect(
+      await sem((g) =>
+        g.marcarAvisosLidos(H, todos, { login: OUTRO_LOGIN, diretorTecnico: false }, new Date()),
+      ),
+    ).toBe(0);
+    expect(
+      await sem((g) => g.marcarAvisosLidos(H, todos, { login: LOGIN, diretorTecnico: false }, new Date())),
+    ).toBe(1);
     expect(await porta.avisos(ctx, { autor: LOGIN })).toEqual([]);
     expect(await porta.avisos(ctx, 'diretor-tecnico')).toHaveLength(1);
 
@@ -803,15 +981,22 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
       nivel: 'icp-brasil',
       profissional_id: ids.prof,
     });
-    expect(await ler('SELECT acao, usuario_id FROM documento_prontuario_evento WHERE documento_prontuario_id = ?', [doc])).toEqual([
-      { acao: 'assinatura', usuario_id: ids.usuario },
-    ]);
-    expect(await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: H }, previa.codigo)).toMatchObject({
+    expect(
+      await ler(
+        'SELECT acao, usuario_id FROM documento_prontuario_evento WHERE documento_prontuario_id = ?',
+        [doc],
+      ),
+    ).toEqual([{ acao: 'assinatura', usuario_id: ids.usuario }]);
+    expect(
+      await porta.documentoDoCodigo({ rede: 'rede-sintetica', hospital: H }, previa.codigo),
+    ).toMatchObject({
       documento: doc,
       tipo: 'atestado',
       assinatura: { estado: 'assinada' },
     });
-    expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(doc);
+    expect((await porta.filaIcp(ctx, LOGIN, 10, ['atestado'])).itens.map((i) => i.documento)).not.toContain(
+      doc,
+    );
     expect(await porta.contagemPendencias(ctx)).toEqual({ pendentes: 0, falhas: 0 });
     expect((await porta.assinadosRecentes(ctx, LOGIN)).find((x) => x.assinatura === a)).toMatchObject({
       documento: doc,
@@ -847,28 +1032,55 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
 
     // Numeração da receita controlada: o pedido, a resposta uma vez, e o documento aceita um número só.
     const { id: sn } = await gravar(
-      (g) => g.gravarSolicitacaoSncr({ hospital: H, documento: doc, origemId: 1, tipo: 'controle-especial', medicamentos: 2, usuario: LOGIN }),
+      (g) =>
+        g.gravarSolicitacaoSncr({
+          hospital: H,
+          documento: doc,
+          origemId: 1,
+          tipo: 'controle-especial',
+          medicamentos: 2,
+          usuario: LOGIN,
+        }),
       'pedido_numeracao_receita',
       'numeracao',
     );
-    const resposta = { id: sn, hospital: H, situacao: 'numerada' as const, tentativas: 1, numero: 'N-0001', retorno: 'ok' };
+    const resposta = {
+      id: sn,
+      hospital: H,
+      situacao: 'numerada' as const,
+      tentativas: 1,
+      numero: 'N-0001',
+      retorno: 'ok',
+    };
     expect(
-      await sem(async (g) => [await g.atualizarSolicitacaoSncr(resposta, new Date()), await g.gravarNumeroSncr(H, doc, 'N-0001')]),
+      await sem(async (g) => [
+        await g.atualizarSolicitacaoSncr(resposta, new Date()),
+        await g.gravarNumeroSncr(H, doc, 'N-0001'),
+      ]),
     ).toEqual([true, true]);
     expect(await sem((g) => g.atualizarSolicitacaoSncr(resposta, new Date()))).toBe(false);
     expect(await sem((g) => g.gravarNumeroSncr(H, doc, 'N-0002'))).toBe(false);
     expect(await porta.solicitacoesSncr(ctx, doc)).toEqual([
       { id: sn, documento: doc, situacao: 'numerada', tentativas: 1, numero: 'N-0001', retorno: 'ok' },
     ]);
-    expect(await porta.solicitacoesSncr({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, doc)).toEqual([]);
+    expect(
+      await porta.solicitacoesSncr({ ...ctx, estabelecimento: ids.outroEst, hospital: `${P}B` }, doc),
+    ).toEqual([]);
   });
 });
 
 /** A mesma bateria do certificado e do provedor sobre as duas portas (memória sempre; banco quando há). */
-const fabricas: [string, () => Promise<{ porta: PortaAssinaturaIcp; c: ContextoAssinatura; fim: () => Promise<void> }>][] = [
+const fabricas: [
+  string,
+  () => Promise<{ porta: PortaAssinaturaIcp; c: ContextoAssinatura; fim: () => Promise<void> }>,
+][] = [
   [
     'memória',
-    async () => ({ porta: new PortaAssinaturaMemoria(), c: { rede: 'rede-sintetica', hospital: `${P}A` }, fim: async () => {} }),
+    async () => ({
+      porta: new PortaAssinaturaMemoria(),
+      c: { rede: 'rede-sintetica', hospital: `${P}A` },
+      fim: async () => {},
+    }),
   ],
 ];
 if (!SEM_BANCO)
@@ -909,7 +1121,9 @@ describe.each(fabricas)('mesma bateria da assinatura: porta em %s', (_nome, fabr
     try {
       const x = certificado(c.hospital, LOGIN);
       const { id } = await porta.gravar(c, (g) => g.gravarCertificado(x), null);
-      expect(await erroDe(porta.gravar(c, (g) => g.gravarCertificado(x), null))).toBe('certificado-ja-vinculado');
+      expect(await erroDe(porta.gravar(c, (g) => g.gravarCertificado(x), null))).toBe(
+        'certificado-ja-vinculado',
+      );
       const de = { hospital: c.hospital, usuario: LOGIN, id, por: LOGIN, em: new Date() };
       expect(await porta.gravar(c, (g) => g.inativarCertificado(de), null)).toBe(true);
       expect(await porta.gravar(c, (g) => g.inativarCertificado(de), null)).toBe(false);

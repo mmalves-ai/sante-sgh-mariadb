@@ -45,7 +45,14 @@ function sessao(
     hospital,
     rede: 'rede-sintetica',
     login: o.login ?? LOGIN,
-    porta: { rede: 'rede-sintetica', hospital, cliente: 'teste', estabelecimento: 1, usuario: 1, correlacao: 'teste' },
+    porta: {
+      rede: 'rede-sintetica',
+      hospital,
+      cliente: 'teste',
+      estabelecimento: 1,
+      usuario: 1,
+      correlacao: 'teste',
+    },
     pode,
   };
 }

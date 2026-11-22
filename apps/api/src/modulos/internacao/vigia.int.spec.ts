@@ -24,17 +24,18 @@ describe.skipIf(SEM_BANCO)('vigia sobre o banco próprio (MariaDB, cliente f22_o
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    const est = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-11-vigia' }, async (e) => {
-      const l = await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [COD]);
-      if (l) return Number(l.id);
-      criado = true;
-      return e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-        COD,
-        'ESTAB SINTETICO VIGIA',
-        'ESTAB SINTETICO VIGIA',
-        new Date(),
-      ]);
-    });
+    const est = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-02-11-vigia' },
+      async (e) => {
+        const l = await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [COD]);
+        if (l) return Number(l.id);
+        criado = true;
+        return e.inserir(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [COD, 'ESTAB SINTETICO VIGIA', 'ESTAB SINTETICO VIGIA', new Date()],
+        );
+      },
+    );
     alvo = { cliente: CLIENTE, estabelecimento: est, usuario: null, correlacao: 'teste-02-11-vigia' };
     fonte = new FonteInternacaoPropria(nucleo);
   });
@@ -107,7 +108,11 @@ describe.skipIf(SEM_BANCO)('vigia sobre o banco próprio (MariaDB, cliente f22_o
     // Estabelecimento sem movimento: o período vai explícito (o padrão é o dos 12 meses até o último movimento).
     await medir('indicadores', () => s.indice(c, PARAMETROS_PADRAO, '2025-01', '2025-12'));
     await medir('serie', () =>
-      s.serieIndicador(c, PARAMETROS_PADRAO, 'taxaOcupacao', { recorte: 'acomodacao', de: '2025-01', ate: '2025-12' }),
+      s.serieIndicador(c, PARAMETROS_PADRAO, 'taxaOcupacao', {
+        recorte: 'acomodacao',
+        de: '2025-01',
+        ate: '2025-12',
+      }),
     );
     expect(censo.totais.internados).toBe(
       p.totais.ocupados -

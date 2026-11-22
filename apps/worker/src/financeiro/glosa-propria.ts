@@ -37,7 +37,8 @@ const centavos = (n: number): number => Math.round(n * 100);
 
 /** O título depois de receber `valor` de glosa aceita (em reais; conta em centavos). */
 export function aplicarGlosaAceita(atual: ValoresGlosaTitulo, valor: number): ValoresGlosaTitulo {
-  if (!Number.isFinite(valor) || centavos(valor) <= 0) throw new RangeError('A glosa aceita precisa de valor positivo.');
+  if (!Number.isFinite(valor) || centavos(valor) <= 0)
+    throw new RangeError('A glosa aceita precisa de valor positivo.');
   const aceita = centavos(atual.glosaAceita) + centavos(valor);
   const glosa = Math.max(centavos(atual.glosa), aceita);
   return { glosa: glosa / 100, glosaAceita: aceita / 100 };
@@ -55,12 +56,18 @@ export async function registrarGlosaAceitaDoEvento(
   d: GlosaAceitaDoEvento,
 ): Promise<ResultadoGlosaDoEvento> {
   const est = Number(tx.contexto.estabelecimento);
-  if (!Number.isInteger(est) || est <= 0) throw recusa('estabelecimento-desconhecido', 'Gravação sem estabelecimento.');
+  if (!Number.isInteger(est) || est <= 0)
+    throw recusa('estabelecimento-desconhecido', 'Gravação sem estabelecimento.');
   // Ordem contra a corrida (REPEATABLE READ): primeiro a trava do título, e só depois as leituras, todas travadas
   // (FOR UPDATE lê o último valor gravado, não a foto da transação). Duas entregas com chaves diferentes para o mesmo
   // item ficam em fila no título; a segunda enxerga a linha que a primeira gravou e não lança de novo.
   const titulo = (
-    await tx.consultarParaAtualizar<{ id: unknown; versao: unknown; valor_glosa: unknown; valor_glosa_aceita: unknown }>(
+    await tx.consultarParaAtualizar<{
+      id: unknown;
+      versao: unknown;
+      valor_glosa: unknown;
+      valor_glosa_aceita: unknown;
+    }>(
       `SELECT t.id, t.versao, t.valor_glosa, t.valor_glosa_aceita
          FROM conta_hospitalar_item i
          JOIN titulo_receber t ON t.conta_hospitalar_id = i.conta_hospitalar_id

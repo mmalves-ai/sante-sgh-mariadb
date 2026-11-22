@@ -41,8 +41,7 @@ beforeAll(async () => {
     trilha,
     registro: {
       rede: async () => ({
-        modulo: (ctx: ContextoModulo) =>
-          moduloRede(ctx, { porta, servicos: new PortaServicosRedeMemoria() }),
+        modulo: (ctx: ContextoModulo) => moduloRede(ctx, { porta, servicos: new PortaServicosRedeMemoria() }),
       }),
     },
   });

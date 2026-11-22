@@ -154,7 +154,11 @@ const ACAO_DA_TELA: Readonly<Record<string, CorrecaoRegistrada['acao']>> = {
   encerramento: 'encerramento',
 };
 /** Evento do histórico (tela) ↔ evento do modelo. */
-const EVENTO_DO_MODELO = { alterada: 'alterado', cancelada: 'cancelado', 'etiqueta-emitida': 'etiqueta_emitida' } as const;
+const EVENTO_DO_MODELO = {
+  alterada: 'alterado',
+  cancelada: 'cancelado',
+  'etiqueta-emitida': 'etiqueta_emitida',
+} as const;
 
 /** Texto livre do histórico → JSON (literal de texto, sem perda); a leitura devolve o texto como veio. */
 const jsonDoTexto = (v: string | null) => (v === null ? null : JSON.stringify(v));
@@ -170,7 +174,6 @@ function listaJson(v: unknown): string[] {
     return [];
   }
 }
-
 
 const SQL_INTERNADOS = `
   SELECT i.id, i.paciente_id, i.atendimento_id, pf.nome, pf.data_nascimento, i.data_hora_entrada, i.situacao,
@@ -231,7 +234,8 @@ function metaDe(r: Linha): MetaTerapiaRegistrada & { reg: number } {
     metaVolumeMl: vol,
     por: texto(r['login']),
     em: '',
-    origemTerapia: r['prescricao_item_id'] === null || r['prescricao_item_id'] === undefined ? 'informada' : 'prescrita',
+    origemTerapia:
+      r['prescricao_item_id'] === null || r['prescricao_item_id'] === undefined ? 'informada' : 'prescrita',
     observacao: textoN(r['observacao']),
   };
 }
@@ -240,7 +244,10 @@ function metaDe(r: Linha): MetaTerapiaRegistrada & { reg: number } {
 const marcas = (xs: readonly unknown[]) => xs.map(() => '?').join(', ');
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -306,7 +313,8 @@ async function internacaoDoRegistroEm(
              JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
             WHERE a.id = ? AND t.estabelecimento_id = ? AND a.excluido_em IS NULL AND i.excluido_em IS NULL
             ORDER BY i.id LIMIT 1`,
-    social: 'SELECT internacao_id FROM registro_social WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    social:
+      'SELECT internacao_id FROM registro_social WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
   };
   const r = await l.uma(sql[registro], [id, est]);
   return nn(r?.['internacao_id']);
@@ -330,9 +338,10 @@ function gravadorSobre(
   return {
     async triar(t) {
       const i = await internacao(t.reg);
-      const inst = await tx.uma('SELECT id FROM instrumento_triagem_nutricional WHERE codigo = ? AND ativo = TRUE', [
-        t.instrumento,
-      ]);
+      const inst = await tx.uma(
+        'SELECT id FROM instrumento_triagem_nutricional WHERE codigo = ? AND ativo = TRUE',
+        [t.instrumento],
+      );
       if (!inst) throw recusa('instrumento-inexistente', 'Instrumento de triagem não cadastrado ou inativo.');
       const agora = new Date();
       const id = await tx.incluir('triagem_nutricional', {
@@ -391,7 +400,8 @@ function gravadorSobre(
             WHERE pid.id = ? AND p.atendimento_id = ? AND pid.excluido_em IS NULL`,
           [m.itemDieta, i.atendimento],
         );
-        if (!r) throw recusa('item-dieta-inexistente', 'O item de dieta não é da prescrição desta internação.');
+        if (!r)
+          throw recusa('item-dieta-inexistente', 'O item de dieta não é da prescrição desta internação.');
         prescricaoItem = n(r['id']);
         prescricao = n(r['prescricao_id']);
       }
@@ -404,7 +414,10 @@ function gravadorSobre(
         prescricao_item_id: prescricaoItem,
         tipo_terapia: TIPO_DA_VIA[m.via],
         via_acesso: ACESSO_DA_VIA[m.via],
-        indicacao: (m.observacao ?? 'Meta nutricional calculada pela equipe de terapia nutricional').slice(0, 500),
+        indicacao: (m.observacao ?? 'Meta nutricional calculada pela equipe de terapia nutricional').slice(
+          0,
+          500,
+        ),
         peso_kg: m.pesoKg,
         meta_calorica_kcal_dia: m.metaKcal,
         meta_proteica_g_dia: m.metaProteinaG,
@@ -425,7 +438,8 @@ function gravadorSobre(
           WHERE t.id = ? AND t.estabelecimento_id = ? AND i.id = ? AND t.excluido_em IS NULL AND i.excluido_em IS NULL`,
         [a.meta, est, a.reg],
       );
-      if (!t) throw recusa('meta-de-outra-internacao', 'A meta de terapia nutricional não é desta internação.');
+      if (!t)
+        throw recusa('meta-de-outra-internacao', 'A meta de terapia nutricional não é desta internação.');
       // Um acompanhamento ativo por meta e dia (restrição do banco): o do dia que já existe fica 'retificado' à espera
       // da correção na mesma gravação; sem ela, a gravação inteira é recusada (gravarSgh).
       const [vigente] = await tx.consultarParaAtualizar(
@@ -461,22 +475,33 @@ function gravadorSobre(
           WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL`,
         [est, m.unidade],
       );
-      if (!u) throw recusa('unidade-inexistente', 'Unidade de internação não encontrada neste estabelecimento.');
+      if (!u)
+        throw recusa('unidade-inexistente', 'Unidade de internação não encontrada neste estabelecimento.');
       if (u['setor_funcional_id'] === null || u['setor_funcional_id'] === undefined)
-        throw recusa('unidade-sem-setor', 'A unidade não tem o setor funcional cadastrado: o mapa não pode ser fechado.');
+        throw recusa(
+          'unidade-sem-setor',
+          'A unidade não tem o setor funcional cadastrado: o mapa não pode ser fechado.',
+        );
       // A linha em jejum leva a modalidade de jejum do cadastro (classe 'jejum'); a linha sem prescrição não gera
       // bandeja: fica no registro do fechamento (trilha) até a coluna do tipo de linha (pedido do lote).
       const comDieta = m.linhas.filter((l) => l.dieta !== null || l.tipo === 'jejum');
       const semPrescricao = m.linhas.filter((l) => l.dieta === null && l.tipo !== 'jejum');
       if (semPrescricao.some((l) => l.tipo !== 'sem-prescricao'))
-        throw recusa('dieta-sem-modalidade', 'Há prescrição de dieta sem modalidade cadastrada: corrija a prescrição antes de fechar o mapa.');
+        throw recusa(
+          'dieta-sem-modalidade',
+          'Há prescrição de dieta sem modalidade cadastrada: corrija a prescrição antes de fechar o mapa.',
+        );
       let modalidadeJejum: number | null = null;
       if (comDieta.some((l) => l.dieta === null)) {
         const j = await tx.uma(
           "SELECT id FROM modalidade_dieta WHERE classe = 'jejum' AND ativo = TRUE ORDER BY ordem IS NULL, ordem, id LIMIT 1",
           [],
         );
-        if (!j) throw recusa('sem-modalidade-jejum', 'Cadastre a modalidade de dieta de jejum para fechar o mapa com pacientes em jejum.');
+        if (!j)
+          throw recusa(
+            'sem-modalidade-jejum',
+            'Cadastre a modalidade de dieta de jejum para fechar o mapa com pacientes em jejum.',
+          );
         modalidadeJejum = n(j['id']);
       }
       const agora = new Date();
@@ -566,7 +591,10 @@ function gravadorSobre(
           [],
         );
         if (!tipo)
-          throw recusa('sem-tipo-barreira-social', 'Cadastre o tipo de barreira de alta da categoria social.');
+          throw recusa(
+            'sem-tipo-barreira-social',
+            'Cadastre o tipo de barreira de alta da categoria social.',
+          );
         // O responsável vem em texto da tela (não é um usuário do cadastro): vai junto da descrição.
         barreira = await tx.incluir('barreira_alta', {
           internacao_id: a.reg,
@@ -597,7 +625,10 @@ function gravadorSobre(
     async registrarEvento(linha) {
       // O evento próprio vai nos dados da trilha da operação (uma linha da trilha por gravação).
       const eventos = (extras.dados['eventos'] as unknown[] | undefined) ?? [];
-      extras.dados = { ...extras.dados, eventos: [...eventos, { acao: linha.acao, entidade: linha.entidade, id: linha.entidadeId }] };
+      extras.dados = {
+        ...extras.dados,
+        eventos: [...eventos, { acao: linha.acao, entidade: linha.entidade, id: linha.entidadeId }],
+      };
     },
     async corrigir(k) {
       const dono = await internacaoDoRegistroEm(tx, est, k.registro, k.id);
@@ -609,12 +640,18 @@ function gravadorSobre(
         [est, k.registro, k.id],
       );
       if (ja.length > 0)
-        throw recusa('registro-ja-corrigido', 'O registro já foi retificado, estornado ou encerrado (inativo).');
+        throw recusa(
+          'registro-ja-corrigido',
+          'O registro já foi retificado, estornado ou encerrado (inativo).',
+        );
       const substitui = k.acao === 'retificacao' || k.acao === 'nova-versao';
       if (k.registro === 'acompanhamento') {
         const provisoria = extras.provisorias.get(k.id);
         if (provisoria !== undefined && (!substitui || provisoria !== k.idNovo))
-          throw recusa('acompanhamento-do-dia', 'O dia já tem acompanhamento ativo: retifique o registro do dia.');
+          throw recusa(
+            'acompanhamento-do-dia',
+            'O dia já tem acompanhamento ativo: retifique o registro do dia.',
+          );
         extras.provisorias.delete(k.id);
         const [o] = await tx.consultarParaAtualizar(
           'SELECT id, versao, situacao FROM acompanhamento_terapia_nutricional WHERE id = ?',
@@ -629,7 +666,8 @@ function gravadorSobre(
             'SELECT id, versao FROM acompanhamento_terapia_nutricional WHERE id = ? AND terapia_nutricional_id = (SELECT terapia_nutricional_id FROM acompanhamento_terapia_nutricional WHERE id = ?)',
             [k.idNovo, k.id],
           );
-          if (!novo) throw recusa('registro-novo-inexistente', 'O registro novo da retificação não é da mesma meta.');
+          if (!novo)
+            throw recusa('registro-novo-inexistente', 'O registro novo da retificação não é da mesma meta.');
           await tx.alterar('acompanhamento_terapia_nutricional', k.idNovo, n(novo['versao']), {
             substitui_id: k.id,
             motivo_correcao: k.motivo.slice(0, 500),
@@ -637,12 +675,14 @@ function gravadorSobre(
         }
       }
       if (k.registro === 'social') {
-        const [o] = await tx.consultarParaAtualizar('SELECT id, versao, situacao FROM registro_social WHERE id = ?', [
-          k.id,
-        ]);
+        const [o] = await tx.consultarParaAtualizar(
+          'SELECT id, versao, situacao FROM registro_social WHERE id = ?',
+          [k.id],
+        );
         if (o && texto(o['situacao']) === 'ativo')
           await tx.alterar('registro_social', k.id, n(o['versao']), {
-            situacao: k.acao === 'estorno' ? 'estornado' : k.acao === 'encerramento' ? 'encerrado' : 'retificado',
+            situacao:
+              k.acao === 'estorno' ? 'estornado' : k.acao === 'encerramento' ? 'encerrado' : 'retificado',
           });
       }
       return tx.incluir('correcao_registro_nutricao', {
@@ -665,9 +705,15 @@ function gravadorSobre(
       );
       if (!t || texto(t['tipo_terapia']) !== 'parenteral')
         throw recusa('meta-nao-parenteral', 'A meta não é uma terapia parenteral desta internação.');
-      const ja = await tx.uma('SELECT id FROM avaliacao_nutricao_parenteral WHERE terapia_nutricional_id = ?', [a.meta]);
+      const ja = await tx.uma(
+        'SELECT id FROM avaliacao_nutricao_parenteral WHERE terapia_nutricional_id = ?',
+        [a.meta],
+      );
       if (ja)
-        throw recusa('avaliacao-registrada', 'A avaliação farmacêutica desta formulação já foi registrada e não se edita.');
+        throw recusa(
+          'avaliacao-registrada',
+          'A avaliação farmacêutica desta formulação já foi registrada e não se edita.',
+        );
       return tx.incluir('avaliacao_nutricao_parenteral', {
         terapia_nutricional_id: a.meta,
         parecer: a.parecer,
@@ -766,8 +812,15 @@ function gravadorSobre(
         // Histórico do plano de refeição do acompanhante: só 'alterado' e 'cancelado' (CHECK da tabela).
         if (a.evento === 'etiqueta-emitida')
           throw recusa('evento-invalido', 'O plano de refeição do acompanhante não emite etiqueta.');
-        const p = await tx.uma('SELECT id FROM plano_refeicao_acompanhante WHERE id = ? AND estabelecimento_id = ?', [a.id, est]);
-        if (!p) throw recusa('acompanhante-inexistente', 'O plano de refeição do acompanhante não existe neste estabelecimento.');
+        const p = await tx.uma(
+          'SELECT id FROM plano_refeicao_acompanhante WHERE id = ? AND estabelecimento_id = ?',
+          [a.id, est],
+        );
+        if (!p)
+          throw recusa(
+            'acompanhante-inexistente',
+            'O plano de refeição do acompanhante não existe neste estabelecimento.',
+          );
         return tx.incluir('plano_refeicao_acompanhante_evento', {
           plano_refeicao_acompanhante_id: a.id,
           evento: EVENTO_DO_MODELO[a.evento],
@@ -778,7 +831,10 @@ function gravadorSobre(
           usuario_id: usuario,
         });
       }
-      const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [a.id, est]);
+      const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [
+        a.id,
+        est,
+      ]);
       if (!o) throw recusa('ordem-inexistente', 'A ordem do lactário não existe neste estabelecimento.');
       return tx.incluir('preparo_lactario_evento', {
         preparo_lactario_id: a.id,
@@ -806,7 +862,8 @@ export class PortaNutricaoPropria implements PortaNutricao {
 
   private ler<T>(c: ContextoNutricao, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), async (l) => fn(l, est, await fusoDe(l, est)));
   }
 
@@ -854,12 +911,19 @@ export class PortaNutricaoPropria implements PortaNutricao {
       trilha: () => {
         const depois = linha()?.dadosDepois;
         const dados =
-          depois && typeof depois === 'object' ? { ...(depois as object), ...extras.dados } : (depois ?? extras.dados);
+          depois && typeof depois === 'object'
+            ? { ...(depois as object), ...extras.dados }
+            : (depois ?? extras.dados);
         return { dados, motivo: linha()?.motivo ?? null };
       },
     });
     const chave = chaveDaGravacao('nutricao', c);
-    const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      { ...contextoDe(c), chaveIdempotencia: chave },
+    );
     if (r.repetida) return JSON.parse(String(r.resultado['valor'] ?? 'null')) as T;
     if (!saida) throw new Error('Gravação da nutrição sem resultado.');
     return (saida as { valor: T }).valor;
@@ -896,7 +960,9 @@ export class PortaNutricaoPropria implements PortaNutricao {
         ativo:
           verdadeiro(r['ativo']) &&
           texto(r['situacao']) === 'ativo' &&
-          (r['vigencia_fim'] === null || r['vigencia_fim'] === undefined || dataIso(r['vigencia_fim'])! >= new Date().toISOString().slice(0, 10)),
+          (r['vigencia_fim'] === null ||
+            r['vigencia_fim'] === undefined ||
+            dataIso(r['vigencia_fim'])! >= new Date().toISOString().slice(0, 10)),
       })),
     );
   }
@@ -913,7 +979,10 @@ export class PortaNutricaoPropria implements PortaNutricao {
     });
   }
 
-  internados(c: ContextoNutricao, unidade: string | null): Promise<{ itens: InternadoNutricao[]; cortada: boolean }> {
+  internados(
+    c: ContextoNutricao,
+    unidade: string | null,
+  ): Promise<{ itens: InternadoNutricao[]; cortada: boolean }> {
     return this.ler(c, async (l, est, fuso) => {
       const rs = await l.consultar(
         `${SQL_INTERNADOS} AND i.situacao IN ('ativa', 'alta_medica')${unidade ? ' AND ui.codigo = ?' : ''}
@@ -931,7 +1000,9 @@ export class PortaNutricaoPropria implements PortaNutricao {
   internacao(c: ContextoNutricao, reg: number): Promise<(InternadoNutricao & { aberta: boolean }) | null> {
     return this.ler(c, async (l, est, fuso) => {
       const r = (await l.consultar(`${SQL_INTERNADOS} AND i.id = ?`, [est, reg], { teto: 1 }))[0];
-      return r ? { ...internadoDe(r, fuso), aberta: ['ativa', 'alta_medica'].includes(texto(r['situacao'])) } : null;
+      return r
+        ? { ...internadoDe(r, fuso), aberta: ['ativa', 'alta_medica'].includes(texto(r['situacao'])) }
+        : null;
     });
   }
 
@@ -975,7 +1046,9 @@ export class PortaNutricaoPropria implements PortaNutricao {
   comMeta(c: ContextoNutricao, regs: readonly number[]): Promise<Set<number>> {
     if (regs.length === 0) return Promise.resolve(new Set());
     return this.ler(c, async (l, est) => {
-      const rs = await l.consultar(`${SQL_METAS} AND i.id IN (${marcas(regs)})`, [est, ...regs], { teto: 5000 });
+      const rs = await l.consultar(`${SQL_METAS} AND i.id IN (${marcas(regs)})`, [est, ...regs], {
+        teto: 5000,
+      });
       return new Set(rs.map((r) => n(r['internacao'])));
     });
   }
@@ -1058,9 +1131,13 @@ export class PortaNutricaoPropria implements PortaNutricao {
     reg: number,
   ): Promise<{ metas: MetaTerapiaRegistrada[]; acompanhamentos: AcompanhamentoTerapiaRegistrado[] }> {
     return this.ler(c, async (l, est, fuso) => {
-      const rs = await l.consultar(`${SQL_METAS} AND i.id = ? ORDER BY t.criado_em DESC, t.id DESC`, [est, reg], {
-        teto: 500,
-      });
+      const rs = await l.consultar(
+        `${SQL_METAS} AND i.id = ? ORDER BY t.criado_em DESC, t.id DESC`,
+        [est, reg],
+        {
+          teto: 500,
+        },
+      );
       const as = await l.consultar(
         `SELECT a.id, a.terapia_nutricional_id, a.data_referencia, a.volume_prescrito_ml, a.volume_infundido_ml,
                 a.origem_volume, a.calorias_atingidas_kcal, a.proteina_atingida_g, a.percentual_calorico,
@@ -1122,9 +1199,13 @@ export class PortaNutricaoPropria implements PortaNutricao {
   sociais(c: ContextoNutricao, reg: number): Promise<RegistroSocialRegistrado[]> {
     return this.ler(c, async (l, est, fuso) =>
       (
-        await l.consultar(`${SQL_SOCIAIS} AND r.internacao_id = ? ORDER BY r.criado_em DESC, r.id DESC`, [est, reg], {
-          teto: 1000,
-        })
+        await l.consultar(
+          `${SQL_SOCIAIS} AND r.internacao_id = ? ORDER BY r.criado_em DESC, r.id DESC`,
+          [est, reg],
+          {
+            teto: 1000,
+          },
+        )
       ).map((r) => socialDe(r, fuso)),
     );
   }
@@ -1199,11 +1280,15 @@ export class PortaNutricaoPropria implements PortaNutricao {
         return {
           id: n(r['id']),
           reg: n(r['internacao_id']),
-          tipo: ((CODIGOS_TIPO_BARREIRA as readonly string[]).includes(codigo) ? codigo : 'outro') as TipoBarreiraAlta,
+          tipo: ((CODIGOS_TIPO_BARREIRA as readonly string[]).includes(codigo)
+            ? codigo
+            : 'outro') as TipoBarreiraAlta,
           descricao: texto(r['descricao']),
           responsavel: texto(r['responsavel']),
           prazo: local(r['prazo_em'], fuso) ?? '',
-          situacao: (['aberta', 'resolvida', 'cancelada'].includes(sit) ? sit : 'aberta') as BarreiraAltaRegistrada['situacao'],
+          situacao: (['aberta', 'resolvida', 'cancelada'].includes(sit)
+            ? sit
+            : 'aberta') as BarreiraAltaRegistrada['situacao'],
           criadaPor: texto(r['criada_por']),
           criadaEm: local(r['identificada_em'], fuso) ?? '',
           resolvidaEm: local(r['resolvida_em'], fuso),
@@ -1226,7 +1311,11 @@ export class PortaNutricaoPropria implements PortaNutricao {
           [est],
           { teto: 500 },
         )
-      ).map((r) => ({ unidade: texto(r['codigo']), nome: texto(r['descricao']), internados: n(r['internados']) })),
+      ).map((r) => ({
+        unidade: texto(r['codigo']),
+        nome: texto(r['descricao']),
+        internados: n(r['internados']),
+      })),
     );
   }
 
@@ -1247,7 +1336,11 @@ export class PortaNutricaoPropria implements PortaNutricao {
     );
   }
 
-  itensDieta(c: ContextoNutricao, atendimentos: readonly number[], servirEm: string): Promise<ItemDietaMapa[]> {
+  itensDieta(
+    c: ContextoNutricao,
+    atendimentos: readonly number[],
+    servirEm: string,
+  ): Promise<ItemDietaMapa[]> {
     if (atendimentos.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l, est, fuso) => {
       const quando = instante(servirEm, fuso);
@@ -1360,24 +1453,37 @@ export class PortaNutricaoPropria implements PortaNutricao {
   ): Promise<Map<number, RefeicaoAcompanhanteRegistrada>> {
     if (regs.length === 0) return Promise.resolve(new Map());
     return this.ler(c, async (l, est, fuso) => {
-      const xs = await this.planos(l, fuso, `p.estabelecimento_id = ? AND p.internacao_id IN (${marcas(regs)}) AND p.situacao = 'ativa'`, [
-        est,
-        ...regs,
-      ]);
+      const xs = await this.planos(
+        l,
+        fuso,
+        `p.estabelecimento_id = ? AND p.internacao_id IN (${marcas(regs)}) AND p.situacao = 'ativa'`,
+        [est, ...regs],
+      );
       return new Map(xs.map((x) => [x.reg, x]));
     });
   }
 
   acompanhantes(c: ContextoNutricao, reg: number): Promise<RefeicaoAcompanhanteRegistrada[]> {
-    return this.ler(c, (l, est, fuso) => this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.internacao_id = ?', [est, reg]));
+    return this.ler(c, (l, est, fuso) =>
+      this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.internacao_id = ?', [est, reg]),
+    );
   }
 
   acompanhante(c: ContextoNutricao, id: number): Promise<RefeicaoAcompanhanteRegistrada | null> {
-    return this.ler(c, async (l, est, fuso) => (await this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.id = ?', [est, id]))[0] ?? null);
+    return this.ler(
+      c,
+      async (l, est, fuso) =>
+        (await this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.id = ?', [est, id]))[0] ?? null,
+    );
   }
 
   /** Os planos de refeição do acompanhante, com as refeições (o mais novo primeiro). */
-  private async planos(l: Leitor, fuso: string, filtro: string, p: unknown[]): Promise<RefeicaoAcompanhanteRegistrada[]> {
+  private async planos(
+    l: Leitor,
+    fuso: string,
+    filtro: string,
+    p: unknown[],
+  ): Promise<RefeicaoAcompanhanteRegistrada[]> {
     const rs = await l.consultar(
       `SELECT p.id, p.internacao_id, p.direito_legal, p.inicio_em, p.fim_em, p.dieta, p.observacao, p.situacao,
               p.criado_em, u.login
@@ -1505,7 +1611,11 @@ export class PortaNutricaoPropria implements PortaNutricao {
     });
   }
 
-  internacaoDoRegistro(c: ContextoNutricao, registro: RegistroCorrigivel, id: number): Promise<number | null> {
+  internacaoDoRegistro(
+    c: ContextoNutricao,
+    registro: RegistroCorrigivel,
+    id: number,
+  ): Promise<number | null> {
     return this.ler(c, (l, est) => internacaoDoRegistroEm(l, est, registro, id));
   }
 

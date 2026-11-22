@@ -33,11 +33,7 @@ import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/reso
 import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
-import {
-  CACHE_CONFIG,
-  type CacheConfig,
-  TTL_CONFIG_NOVO_S,
-} from './cache-config.js';
+import { CACHE_CONFIG, type CacheConfig, TTL_CONFIG_NOVO_S } from './cache-config.js';
 import {
   destinoNoContrato,
   FONTE_CONFIGURACAO,
@@ -214,7 +210,12 @@ export class ParametrosController {
         );
       });
     const atraso = await this.cache.invalidar(rede, hospital, ['parametros-novos'], Date.now());
-    return { id: ok.id, destino: destinoNoContrato(this.fonte.destino), atrasoInvalidacaoMs: atraso, avisos: plano.avisos };
+    return {
+      id: ok.id,
+      destino: destinoNoContrato(this.fonte.destino),
+      atrasoInvalidacaoMs: atraso,
+      avisos: plano.avisos,
+    };
   }
 
   @Post(':chave/retirada')

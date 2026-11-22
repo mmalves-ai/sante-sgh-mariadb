@@ -187,7 +187,12 @@ export async function ancoraAgenda(l: Leitor, est: number): Promise<AncoraAgenda
 }
 
 /** A busca de vaga: horários livres com vaga na janela, de todas as agendas ou de uma. */
-export async function cargaVagas(l: Leitor, est: number, a: AncoraAgenda, agenda: number | null): Promise<number> {
+export async function cargaVagas(
+  l: Leitor,
+  est: number,
+  a: AncoraAgenda,
+  agenda: number | null,
+): Promise<number> {
   if (!a.dia) return 0;
   return contar(
     l,
@@ -233,7 +238,11 @@ export async function alvosMarcacao(l: Leitor, est: number, a: AncoraAgenda): Pr
       ORDER BY h.id LIMIT 500`,
     [est, somarDias(a.dia, -30), a.dia],
   );
-  return linhas.map((x) => ({ horario: n(x.id), agenda: n(x.agenda), paciente: x.paciente === null ? null : n(x.paciente) }));
+  return linhas.map((x) => ({
+    horario: n(x.id),
+    agenda: n(x.agenda),
+    paciente: x.paciente === null ? null : n(x.paciente),
+  }));
 }
 
 /** As leituras da marcação antes de gravar: o horário, a agenda, as fontes pagadoras aceitas e a escala do dia. */
@@ -258,7 +267,12 @@ export async function cargaMarcacao(l: Leitor, est: number, alvo: AlvoMarcacao):
 }
 
 /** A busca de horários do portal: só agendas com fonte pagadora que aceita marcação pela internet. */
-export async function cargaHorariosPortal(l: Leitor, est: number, a: AncoraAgenda, sorteio: number): Promise<number> {
+export async function cargaHorariosPortal(
+  l: Leitor,
+  est: number,
+  a: AncoraAgenda,
+  sorteio: number,
+): Promise<number> {
   if (!a.dia) return 0;
   const agenda = sorteio % 2 === 0 ? null : sortear(a.agendas, sorteio);
   return contar(
@@ -407,7 +421,11 @@ const DO_LABORATORIO = `FROM exame_item i
  WHERE r.estabelecimento_id = ? AND i.excluido_em IS NULL`;
 
 /** Último dia com pedido do laboratório (ou com pedido ainda não coletado). */
-export async function ultimoDiaDoLaboratorio(l: Leitor, est: number, pendente = false): Promise<string | null> {
+export async function ultimoDiaDoLaboratorio(
+  l: Leitor,
+  est: number,
+  pendente = false,
+): Promise<string | null> {
   const r = await l.uma<{ d: unknown }>(
     `SELECT MAX(r.solicitado_em) AS d ${DO_LABORATORIO}${pendente ? " AND i.situacao IN ('solicitado','autorizado','agendado')" : ''}`,
     [est],
@@ -538,9 +556,16 @@ export async function lotesDoLocal(l: Leitor, local: number, insumo: number): Pr
 }
 
 /** As saídas do local na competência (documentos de saída). */
-export async function saidasDaCompetencia(l: Leitor, est: number, local: number, mes: string): Promise<number> {
+export async function saidasDaCompetencia(
+  l: Leitor,
+  est: number,
+  local: number,
+  mes: string,
+): Promise<number> {
   const inicio = `${mes}-01`;
-  const fim = new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 1)).toISOString().slice(0, 10);
+  const fim = new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 1))
+    .toISOString()
+    .slice(0, 10);
   return contar(
     l,
     `SELECT COUNT(*) AS n FROM (SELECT id FROM documento_estoque WHERE estabelecimento_id = ? AND origem_local_estoque_id = ?
@@ -577,12 +602,23 @@ export async function ancoraFarmacia(l: Leitor, est: number): Promise<AncoraFarm
     'SELECT MAX(previsto_em) AS fim FROM horario_administracao WHERE estabelecimento_id = ? AND excluido_em IS NULL',
     [est],
   );
-  const fim = h?.fim instanceof Date ? h.fim : typeof h?.fim === 'string' ? new Date(`${h.fim.replace(' ', 'T')}Z`) : null;
+  const fim =
+    h?.fim instanceof Date
+      ? h.fim
+      : typeof h?.fim === 'string'
+        ? new Date(`${h.fim.replace(' ', 'T')}Z`)
+        : null;
   return { unidade: u ? n(u.unidade) : null, fim };
 }
 
 /** A fila da dispensação: as doses da unidade na janela de 12 h (horários dos internados da unidade). */
-export async function filaDaUnidade(l: Leitor, est: number, unidade: number, inicio: Date, fim: Date): Promise<number> {
+export async function filaDaUnidade(
+  l: Leitor,
+  est: number,
+  unidade: number,
+  inicio: Date,
+  fim: Date,
+): Promise<number> {
   return contar(
     l,
     `SELECT COUNT(*) AS n FROM (SELECT h.id FROM horario_administracao h
@@ -604,7 +640,12 @@ export async function entregasPendentes(l: Leitor, est: number): Promise<number>
 }
 
 /** Os controlados: os itens dispensados de insumo da lista de controle especial nos 7 dias. */
-export async function movimentosControlados(l: Leitor, est: number, inicio: Date, fim: Date): Promise<number> {
+export async function movimentosControlados(
+  l: Leitor,
+  est: number,
+  inicio: Date,
+  fim: Date,
+): Promise<number> {
   return contar(
     l,
     `SELECT COUNT(*) AS n FROM (SELECT di.id FROM dispensacao_item di
@@ -624,7 +665,11 @@ export interface PrescricaoRecente {
   readonly paciente: number;
 }
 
-export async function prescricoesRecentes(l: Leitor, est: number, teto: number): Promise<PrescricaoRecente[]> {
+export async function prescricoesRecentes(
+  l: Leitor,
+  est: number,
+  teto: number,
+): Promise<PrescricaoRecente[]> {
   const linhas = await l.consultar<{ id: Num; atendimento: Num; paciente: Num }>(
     `SELECT id, atendimento_id AS atendimento, paciente_id AS paciente FROM prescricao
       WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY prescrito_em DESC, id DESC LIMIT ?`,
@@ -664,7 +709,11 @@ export interface AncoraHorario {
 }
 
 /** O primeiro horário da prescrição (a janela da beira do leito gira em torno dele). */
-export async function ancoraDaPrescricao(l: Leitor, est: number, prescricao: number): Promise<AncoraHorario | null> {
+export async function ancoraDaPrescricao(
+  l: Leitor,
+  est: number,
+  prescricao: number,
+): Promise<AncoraHorario | null> {
   const r = await l.uma<{ id: Num; previsto: unknown; atendimento: Num }>(
     `SELECT id, previsto_em AS previsto, atendimento_id AS atendimento FROM horario_administracao
       WHERE prescricao_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL ORDER BY previsto_em, id LIMIT 1`,

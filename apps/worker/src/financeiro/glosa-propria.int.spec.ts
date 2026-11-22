@@ -29,7 +29,17 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
   let est = 0;
   let est2 = 0;
   let seqGlosa = 0;
-  const m = { titulo: 0, tituloOutro: 0, tituloParalelo: 0, itemParalelo: 0, item: 0, itemSemTitulo: 0, itemSemGlosa: 0, itemOutro: 0, glosas: [] as number[] };
+  const m = {
+    titulo: 0,
+    tituloOutro: 0,
+    tituloParalelo: 0,
+    itemParalelo: 0,
+    item: 0,
+    itemSemTitulo: 0,
+    itemSemGlosa: 0,
+    itemOutro: 0,
+    glosas: [] as number[],
+  };
 
   const limpar = () =>
     escrever(nucleo, async (e) => {
@@ -78,8 +88,18 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
       versao: 1,
     });
   const item = (e: Parameters<Parameters<typeof escrever>[1]>[0], conta: number, sequencia: number) =>
-    inserirSintetico(e, 'conta_hospitalar_item', { conta_hospitalar_id: conta, sequencia, criado_em: new Date(), versao: 1 });
-  const glosa = (e: Parameters<Parameters<typeof escrever>[1]>[0], itemId: number, aceito: number, decisao = 'aceitar') =>
+    inserirSintetico(e, 'conta_hospitalar_item', {
+      conta_hospitalar_id: conta,
+      sequencia,
+      criado_em: new Date(),
+      versao: 1,
+    });
+  const glosa = (
+    e: Parameters<Parameters<typeof escrever>[1]>[0],
+    itemId: number,
+    aceito: number,
+    decisao = 'aceitar',
+  ) =>
     inserirSintetico(e, 'glosa_item', {
       glosa_id: 990513,
       sequencia: ++seqGlosa,
@@ -152,7 +172,13 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
     expect(r).toMatchObject({ resultado: 'registrada' });
     const id = (r as { id: number }).id;
     const linha = await escrever(nucleo, (e) =>
-      e.uma<{ valor: unknown; meio: string; situacao: string; chave_evento: string; titulo_receber_id: unknown }>(
+      e.uma<{
+        valor: unknown;
+        meio: string;
+        situacao: string;
+        chave_evento: string;
+        titulo_receber_id: unknown;
+      }>(
         'SELECT valor, meio, situacao, chave_evento, titulo_receber_id FROM glosa_titulo_receber WHERE id = ?',
         [id],
       ),
@@ -195,7 +221,9 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
       id: null,
     });
     expect(Number((await lerTitulo(m.tituloOutro))?.versao)).toBe(1);
-    await expect(consumirEventoFinanceiro(acesso, CLIENTE, evento('glosa-5', 'fo513x', m.item))).rejects.toMatchObject({
+    await expect(
+      consumirEventoFinanceiro(acesso, CLIENTE, evento('glosa-5', 'fo513x', m.item)),
+    ).rejects.toMatchObject({
       problema: { codigo: 'estabelecimento-desconhecido' },
     });
   });
@@ -211,7 +239,9 @@ describe.skipIf(SEM_BANCO)('glosa aceita do evento no título a receber (f22_o5)
     expect(Number(t?.valor_glosa)).toBe(40);
     expect(Number(t?.versao)).toBe(2);
     const n = await escrever(nucleo, (e) =>
-      e.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM glosa_titulo_receber WHERE titulo_receber_id = ?', [m.tituloParalelo]),
+      e.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM glosa_titulo_receber WHERE titulo_receber_id = ?', [
+        m.tituloParalelo,
+      ]),
     );
     expect(Number(n?.n)).toBe(1);
   });

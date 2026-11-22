@@ -21,7 +21,12 @@ import {
   montarDeclaracao,
   type PaiDoBanco,
 } from './declaracao.js';
-import { type CtxConsulta, destinoDaConsulta, type FonteConsultas, type JustificativaExportacao } from './fonte.js';
+import {
+  type CtxConsulta,
+  destinoDaConsulta,
+  type FonteConsultas,
+  type JustificativaExportacao,
+} from './fonte.js';
 
 /** O mínimo do núcleo que a fonte usa (os testes trocam). */
 export type NucleoConsultas = Pick<NucleoProprio, 'lerSomente'>;
@@ -63,7 +68,8 @@ function linhaDaTela(x: Linha, d: DeclaracaoConsulta): Record<string, ValorCampo
 /** O filtro fixo da consulta em SQL (nomes da lista branca do gerador, valores como parâmetro). */
 function sqlFixo(f: FiltroFixoConsulta, p: unknown[]): string {
   const col = conferirNome(f.coluna);
-  if ('em' in f) return `${col} IN (SELECT id FROM ${conferirNome(f.em.tabela)} WHERE ${sqlFixo(f.em.filtro, p)})`;
+  if ('em' in f)
+    return `${col} IN (SELECT id FROM ${conferirNome(f.em.tabela)} WHERE ${sqlFixo(f.em.filtro, p)})`;
   p.push(f.valor);
   return `${col} = ?`;
 }
@@ -163,7 +169,8 @@ export class FonteConsultasPropria implements FonteConsultas {
     const r = await this.nucleo.lerSomente(this.contexto(c, null), (l) =>
       l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [c.hospital]),
     );
-    if (!r) throw new ErroConsulta('filtro-invalido', 'O estabelecimento da sessão não está no banco do cliente.');
+    if (!r)
+      throw new ErroConsulta('filtro-invalido', 'O estabelecimento da sessão não está no banco do cliente.');
     const id = Number(r['id']);
     this.estabelecimentos.set(c.hospital, { id, em: this.agora() });
     return id;
@@ -304,7 +311,10 @@ export class FonteConsultasPropria implements FonteConsultas {
         { teto: TETO_EXPORTACAO_CONSULTA + 1 },
       );
       if (ls.length > TETO_EXPORTACAO_CONSULTA)
-        throw new ErroConsulta('exportacao-grande', 'A exportação passa do teto: filtre mais (período ou código).');
+        throw new ErroConsulta(
+          'exportacao-grande',
+          'A exportação passa do teto: filtre mais (período ou código).',
+        );
       return ls.map((x) => linhaDaTela(x, d));
     });
   }
@@ -313,9 +323,13 @@ export class FonteConsultasPropria implements FonteConsultas {
     // Domínio do cliente inteiro (sem estabelecimento).
     return this.ler(c, async (l) =>
       (
-        await l.consultar('SELECT id, descricao FROM tipo_justificativa_exportacao WHERE ativo ORDER BY descricao, id', [], {
-          teto: 500,
-        })
+        await l.consultar(
+          'SELECT id, descricao FROM tipo_justificativa_exportacao WHERE ativo ORDER BY descricao, id',
+          [],
+          {
+            teto: 500,
+          },
+        )
       ).map((x) => ({ codigo: Number(x['id']), descricao: String(x['descricao']) })),
     );
   }

@@ -390,9 +390,9 @@ describe('situação da senha e exigência do perfil', () => {
 
   it('regravação pelo gestor: a trilha leva o autor, a credencial é da conta alvo', async () => {
     const m = montar();
-    expect(await m.s.regravar(ator('SINT.FAT', 70), 'Provisoria#1x', 'senha-provisoria', ator('SINT.GESTOR', 72))).toBe(
-      true,
-    );
+    expect(
+      await m.s.regravar(ator('SINT.FAT', 70), 'Provisoria#1x', 'senha-provisoria', ator('SINT.GESTOR', 72)),
+    ).toBe(true);
     expect(m.porta.trilha.at(-1)).toMatchObject({ usuario: 'SINT.GESTOR', idUsuario: 72 });
     expect(m.porta.usuariosPorLogin.get('SINT.FAT')?.forte?.origem).toBe('senha-provisoria');
   });

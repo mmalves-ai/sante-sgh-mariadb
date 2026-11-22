@@ -41,7 +41,11 @@ export interface DependenciasEnvio {
   /** Endereço de alerta quando o dono não tem e-mail (ALERTA_RELATORIO_EMAIL; senão, o do sistema). */
   readonly alertaPadrao: string | null;
   /** Reserva o envio antes do e-mail (só com o banco); null: outro já reservou, não envia. */
-  readonly reservar?: (hospital: string, agendamento: string, origem: OrigemEnvio) => Promise<{ envio: number } | null>;
+  readonly reservar?: (
+    hospital: string,
+    agendamento: string,
+    origem: OrigemEnvio,
+  ) => Promise<{ envio: number } | null>;
   /** Grava o resultado na linha reservada (só com o banco). */
   readonly registrar?: (hospital: string, agendamento: string, r: ConclusaoEnvio) => Promise<void>;
   /** As falhas seguidas antes deste envio (do agendamento; 0 sem o banco). */
@@ -80,7 +84,14 @@ export async function processarEnvio(
     if (!origem) throw new Error('Envio com registro sem a origem (vencimento ou job da fila).');
     reserva = await d.reservar(job.hospital, job.agendamento, origem);
     if (!reserva)
-      return { repetido: true, destinatarios: 0, enviados: 0, situacao: 'enviado', falha: null, alertouDono: false };
+      return {
+        repetido: true,
+        destinatarios: 0,
+        enviados: 0,
+        situacao: 'enviado',
+        falha: null,
+        alertouDono: false,
+      };
   }
   const estabelecimento = await d.nomeEstabelecimento(job.hospital);
   let falha: string | null = null;
@@ -147,5 +158,12 @@ export async function processarEnvio(
       enderecos: destinatarios,
       ...(formas ? { formas } : {}),
     });
-  return { repetido: false, destinatarios: destinatarios.length, enviados, situacao: depois.situacao, falha, alertouDono };
+  return {
+    repetido: false,
+    destinatarios: destinatarios.length,
+    enviados,
+    situacao: depois.situacao,
+    falha,
+    alertouDono,
+  };
 }

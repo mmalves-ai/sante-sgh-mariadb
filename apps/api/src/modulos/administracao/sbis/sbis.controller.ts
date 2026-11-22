@@ -155,7 +155,9 @@ export class SbisController {
   @Post(`${BASE_SBIS}/ciclos`)
   @HttpCode(201)
   @Permissao(P.sbisAvaliar)
-  @AuditadoNoHandler('porta: ciclo_certificacao, ciclo_certificacao_item e trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'porta: ciclo_certificacao, ciclo_certificacao_item e trilha_auditoria na mesma transação',
+  )
   abrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<CicloSbisDetalhe> {
     return this.servico.abrirCiclo(this.ator(req, true), analisar(esquemaAbrirCiclo, corpo));
   }
@@ -254,6 +256,9 @@ export class SbisController {
   @Permissao(P.backupRegistrar)
   @AuditadoNoHandler('porta: verificacao_backup e trilha_auditoria na mesma transação')
   registrar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<{ id: string }> {
-    return this.servico.registrarRestauracao(this.ator(req, true), analisar(esquemaRegistrarRestauracao, corpo));
+    return this.servico.registrarRestauracao(
+      this.ator(req, true),
+      analisar(esquemaRegistrarRestauracao, corpo),
+    );
   }
 }

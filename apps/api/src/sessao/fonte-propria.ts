@@ -409,15 +409,21 @@ export class FonteAcessoPropria implements FonteAcesso {
       }
     }
     if (semLugar > 0)
-      this.aviso('recortes de acesso de tipo sem lugar na sessão: as ações do módulo do recorte foram retiradas', {
-        cliente: this.cliente,
-        quantidade: semLugar,
-      });
+      this.aviso(
+        'recortes de acesso de tipo sem lugar na sessão: as ações do módulo do recorte foram retiradas',
+        {
+          cliente: this.cliente,
+          quantidade: semLugar,
+        },
+      );
     if (soConsulta > 0)
-      this.aviso('recortes de acesso só de consulta: as ações de operação do módulo do recorte foram retiradas', {
-        cliente: this.cliente,
-        quantidade: soConsulta,
-      });
+      this.aviso(
+        'recortes de acesso só de consulta: as ações de operação do módulo do recorte foram retiradas',
+        {
+          cliente: this.cliente,
+          quantidade: soConsulta,
+        },
+      );
     return { escopos: r, cortes };
   }
 }

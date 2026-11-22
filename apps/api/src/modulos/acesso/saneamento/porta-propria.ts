@@ -53,11 +53,7 @@ import type {
   TrilhaSaneamento,
   UsuarioDoGrupo,
 } from './porta.js';
-import {
-  type ContextoExecucaoSaneamento,
-  type ExecutorSaneamento,
-  OPERACOES_SANEAMENTO,
-} from './servico.js';
+import { type ContextoExecucaoSaneamento, type ExecutorSaneamento, OPERACOES_SANEAMENTO } from './servico.js';
 
 /** O mínimo do núcleo que a porta e o executor usam. */
 export type NucleoSaneamento = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -100,7 +96,9 @@ const DECISAO_NO_BANCO: Readonly<Record<DecisaoSaneamento, string>> = {
   'manter-administrador': 'manter_administrador',
   'dissolver-grupo': 'dissolver_perfil',
 };
-const DECISAO_DO_BANCO = new Map(Object.entries(DECISAO_NO_BANCO).map(([k, v]) => [v, k as DecisaoSaneamento]));
+const DECISAO_DO_BANCO = new Map(
+  Object.entries(DECISAO_NO_BANCO).map(([k, v]) => [v, k as DecisaoSaneamento]),
+);
 
 /** O perfil amplo de uma conta: o primeiro da lista dos amplos que ela tem; sem nenhum, o primeiro código; ou null. */
 export function grupoPrincipal(codigos: readonly string[]): string | null {
@@ -133,7 +131,9 @@ interface PerfilLido {
 }
 
 async function idEstabelecimento(l: Leitor, codigo: string): Promise<number | null> {
-  const r = await l.uma<Linha>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [codigo]);
+  const r = await l.uma<Linha>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+    codigo,
+  ]);
   return r ? Number(r['id']) : null;
 }
 
@@ -326,7 +326,11 @@ const opAprovar = definirOperacao({
   tabelas: [TABELA_PLANO_SANEAMENTO],
   acao: 'alteracao',
   entrada: z
-    .object({ ...esquemaItem, area: z.string().trim().min(1).max(60), motivo: z.string().trim().min(1).max(200) })
+    .object({
+      ...esquemaItem,
+      area: z.string().trim().min(1).max(60),
+      motivo: z.string().trim().min(1).max(200),
+    })
     .strict(),
   async gravar(tx, e, ctx) {
     const [atual] = await tx.consultarParaAtualizar<Linha>(
@@ -335,7 +339,10 @@ const opAprovar = definirOperacao({
       [e.id, e.estabelecimento],
       { teto: 1 },
     );
-    if (atual && (numeroOuNulo(atual['criado_por']) === ctx.usuario || numeroOuNulo(atual['usuario_id']) === ctx.usuario))
+    if (
+      atual &&
+      (numeroOuNulo(atual['criado_por']) === ctx.usuario || numeroOuNulo(atual['usuario_id']) === ctx.usuario)
+    )
       throw recusa('aprovacao-pelo-proponente', 'A aprovação da área tem de ser de outra pessoa.');
     await mudarItem(
       tx,
@@ -443,7 +450,9 @@ export const opTrocarPerfil = definirOperacao({
     })
     .strict(),
   async gravar(tx, e, ctx) {
-    const u = await tx.uma<Linha>('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [e.login]);
+    const u = await tx.uma<Linha>('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [
+      e.login,
+    ]);
     if (!u) throw recusa('usuario-inexistente', 'A conta não existe.');
     const usuario = Number(u['id']);
     // A origem é o grupo inteiro: o perfil do estabelecimento e o da rede com o mesmo código.
@@ -471,7 +480,9 @@ export const opTrocarPerfil = definirOperacao({
         Number(v['id']),
         Number(v['versao']),
         // Começou antes de hoje: a vigência termina ontem. Começou hoje: a atribuição é desfeita (exclusão lógica).
-        bool(v['antes']) ? { vigencia_fim: diaUtc(agora, -1) } : { excluido_em: new Date(agora), excluido_por: ctx.usuario },
+        bool(v['antes'])
+          ? { vigencia_fim: diaUtc(agora, -1) }
+          : { excluido_em: new Date(agora), excluido_por: ctx.usuario },
       );
     const ja = await tx.uma<Linha>(
       `SELECT up.id FROM usuario_perfil up
@@ -617,7 +628,8 @@ class Gravador {
       est: await idEstabelecimento(l, a.hospital),
       usu: await l.uma<Linha>('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [a.login]),
     }));
-    if (ids.est === null) throw recusa('estabelecimento-desconhecido', 'O estabelecimento não existe neste cliente.');
+    if (ids.est === null)
+      throw recusa('estabelecimento-desconhecido', 'O estabelecimento não existe neste cliente.');
     if (!ids.usu) throw recusa('usuario-desconhecido', 'A conta de quem opera não existe neste cliente.');
     return {
       cliente: this.cliente,
@@ -636,7 +648,12 @@ export class ExecutorSaneamentoProprio extends Gravador implements ExecutorSanea
     return { ligada: true, motivo: null };
   }
 
-  async executar(nome: string, hospital: string, entrada: unknown, c: ContextoExecucaoSaneamento): Promise<void> {
+  async executar(
+    nome: string,
+    hospital: string,
+    entrada: unknown,
+    c: ContextoExecucaoSaneamento,
+  ): Promise<void> {
     const op =
       nome === OPERACOES_SANEAMENTO.trocarGrupo
         ? opTrocarPerfil
@@ -645,8 +662,13 @@ export class ExecutorSaneamentoProprio extends Gravador implements ExecutorSanea
           : nome === OPERACOES_SANEAMENTO.retirarOpcoes
             ? opRetirarAcoes
             : null;
-    if (!op) throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', 'Operação desconhecida.');
-    const ctx = await this.contexto({ hospital, login: c.login, correlacao: c.correlacao }, c.chaveIdempotencia, c.reautenticadoEm);
+    if (!op)
+      throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', 'Operação desconhecida.');
+    const ctx = await this.contexto(
+      { hospital, login: c.login, correlacao: c.correlacao },
+      c.chaveIdempotencia,
+      c.reautenticadoEm,
+    );
     const corpo = { ...(entrada as Record<string, unknown>), estabelecimento: ctx.estabelecimento };
     await this.executor().executar(op as typeof opRetirarAcoes, this.cliente, corpo, ctx);
   }
@@ -655,7 +677,11 @@ export class ExecutorSaneamentoProprio extends Gravador implements ExecutorSanea
 export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento {
   readonly destino = 'banco' as const;
 
-  private comEstabelecimento<T>(hospital: string, vazio: T, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
+  private comEstabelecimento<T>(
+    hospital: string,
+    vazio: T,
+    fn: (l: Leitor, est: number) => Promise<T>,
+  ): Promise<T> {
     return this.ler(hospital, async (l) => {
       const est = await idEstabelecimento(l, hospital);
       return est === null ? vazio : fn(l, est);
@@ -673,7 +699,14 @@ export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento 
   }
 
   grupos(hospital: string, nomes: readonly string[]): Promise<SituacaoGrupo[]> {
-    const vazio = nomes.map((grupo) => ({ grupo, existe: false, ativo: false, usuarios: 0, ativos: 0, opcoes: 0 }));
+    const vazio = nomes.map((grupo) => ({
+      grupo,
+      existe: false,
+      ativo: false,
+      usuarios: 0,
+      ativos: 0,
+      opcoes: 0,
+    }));
     return this.comEstabelecimento(hospital, vazio, async (l, est) => {
       const perfis = await perfisDoEstabelecimento(l, est);
       const ids = nomes.map((n) => perfis.get(n)?.id).filter((x): x is number => x !== undefined);
@@ -795,7 +828,11 @@ export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento 
         lista.push(Number(x['acao']));
         por.set(id, lista);
       }
-      return [...perfis.values()].map((p) => ({ grupo: p.codigo, ativo: p.ativo, opcoes: por.get(p.id) ?? [] }));
+      return [...perfis.values()].map((p) => ({
+        grupo: p.codigo,
+        ativo: p.ativo,
+        opcoes: por.get(p.id) ?? [],
+      }));
     });
   }
 
@@ -831,7 +868,8 @@ export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento 
           'O registro do uso das ações ainda não está instalado: a perda de ação exige a aprovação da área.',
         );
       const est = await idEstabelecimento(l, hospital);
-      if (est === null) throw recusa('estabelecimento-desconhecido', 'O estabelecimento não existe neste cliente.');
+      if (est === null)
+        throw recusa('estabelecimento-desconhecido', 'O estabelecimento não existe neste cliente.');
       // A contagem tem de cobrir a janela inteira: começou depois do início dela (ou nem começou), o uso não é sabido.
       const inicio = await l.uma<Linha>(
         "SELECT DATE_FORMAT(MIN(dia), '%Y-%m-%d') AS inicio FROM uso_acao_usuario WHERE estabelecimento_id = ?",
@@ -915,7 +953,13 @@ export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento 
       const r = await this.executor().executar(
         op as typeof opDescartar,
         this.cliente,
-        { ...entrada, estabelecimento: ctx.estabelecimento, evento: t.evento, recurso: t.recurso, estacao: t.estacao?.slice(0, 80) ?? null },
+        {
+          ...entrada,
+          estabelecimento: ctx.estabelecimento,
+          evento: t.evento,
+          recurso: t.recurso,
+          estacao: t.estacao?.slice(0, 80) ?? null,
+        },
         ctx,
       );
       return { id: Number(r.resultado['id']) };
@@ -987,10 +1031,15 @@ export class PortaSaneamentoPropria extends Gravador implements PortaSaneamento 
   ): Promise<boolean> {
     const id = this.idItem(a.id);
     if (id === null) return false;
-    const r = await this.gravar(hospital, opAprovar, { id, area: a.area.slice(0, 60), motivo: a.motivo.slice(0, 200) }, {
-      ...t,
-      usuario: a.aprovadoPor,
-    });
+    const r = await this.gravar(
+      hospital,
+      opAprovar,
+      { id, area: a.area.slice(0, 60), motivo: a.motivo.slice(0, 200) },
+      {
+        ...t,
+        usuario: a.aprovadoPor,
+      },
+    );
     return r !== null;
   }
 

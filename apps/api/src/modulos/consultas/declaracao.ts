@@ -38,7 +38,10 @@ export interface ColunaConsultaFisica {
  */
 export type FiltroFixoConsulta =
   | { readonly coluna: string; readonly valor: string }
-  | { readonly coluna: string; readonly em: { readonly tabela: string; readonly filtro: FiltroFixoConsulta } };
+  | {
+      readonly coluna: string;
+      readonly em: { readonly tabela: string; readonly filtro: FiltroFixoConsulta };
+    };
 
 /** O destino de uma consulta no modelo (tabelas.gerado.ts). */
 export interface DestinoConsulta {
@@ -124,7 +127,8 @@ export interface DeclaracaoConsulta {
   readonly fixo?: FiltroFixoConsulta;
 }
 
-export type CodigoErroConsulta = 'sem-filtro' | 'exportacao-grande' | 'sem-chave' | 'filtro-invalido' | 'pagina-invalida';
+export type CodigoErroConsulta =
+  'sem-filtro' | 'exportacao-grande' | 'sem-chave' | 'filtro-invalido' | 'pagina-invalida';
 
 export class ErroConsulta extends Error {
   override readonly name = 'ErroConsulta';
@@ -176,9 +180,19 @@ const FORA = new Set([
   'versao',
   'estabelecimento_id',
 ]);
-const TIPOS_FORA = new Set(['json', 'blob', 'longblob', 'mediumblob', 'tinyblob', 'binary', 'varbinary', 'geometry']);
+const TIPOS_FORA = new Set([
+  'json',
+  'blob',
+  'longblob',
+  'mediumblob',
+  'tinyblob',
+  'binary',
+  'varbinary',
+  'geometry',
+]);
 /** Dado de pessoa pelo nome da coluna (a máscara da lista). */
-const PESSOAL = /(^|_)(nome|cpf|cns|rg|documento|telefone|celular|email|endereco|logradouro|cep|nascimento|mae|pai|carteira|prontuario|social|apelido|responsavel)(_|$)/;
+const PESSOAL =
+  /(^|_)(nome|cpf|cns|rg|documento|telefone|celular|email|endereco|logradouro|cep|nascimento|mae|pai|carteira|prontuario|social|apelido|responsavel)(_|$)/;
 /** Colunas de escopo do M06, pelo nome no modelo. */
 const COLUNA_DO_ESCOPO: Readonly<Partial<Record<EscopoConsulta, readonly string[]>>> = {
   unidade: ['unidade_assistencial_id', 'setor_funcional_id'],
@@ -224,7 +238,8 @@ export function montarDeclaracao(
   extra: { readonly fixo?: FiltroFixoConsulta; readonly pais?: readonly PaiDoBanco[] } = {},
 ): DeclaracaoConsulta {
   conferirNome(tabela);
-  if (!colunasDoBanco.some((c) => c.nome === 'id')) throw new Error(`Consulta ${publico.recurso}: tabela sem id.`);
+  if (!colunasDoBanco.some((c) => c.nome === 'id'))
+    throw new Error(`Consulta ${publico.recurso}: tabela sem id.`);
   const clinica = publico.classe === 'clinica';
   const comPessoa = publico.classe !== 'comum';
   const colunas: ColunaConsultaFisica[] = [];
@@ -270,7 +285,8 @@ export function montarDeclaracao(
       conferirNome(p.tabela);
     }
     if (definem.length) caminho = { estabelecimentoPorPai: Object.freeze(definem) };
-    else if (extra.pais.some((p) => !PAIS_DE_REFERENCIA.has(p.tabela))) caminho = { semCaminhoEstabelecimento: true };
+    else if (extra.pais.some((p) => !PAIS_DE_REFERENCIA.has(p.tabela)))
+      caminho = { semCaminhoEstabelecimento: true };
   }
   return Object.freeze({
     publico,
@@ -288,7 +304,8 @@ export function montarDeclaracao(
 /** Confere os nomes do filtro fixo (a coluna de primeiro nível tem de existir na tabela da consulta). */
 function conferirFixo(f: FiltroFixoConsulta, nomes: ReadonlySet<string> | null, recurso: string): void {
   conferirNome(f.coluna);
-  if (nomes && !nomes.has(f.coluna)) throw new Error(`Consulta ${recurso}: coluna do filtro fixo fora da tabela.`);
+  if (nomes && !nomes.has(f.coluna))
+    throw new Error(`Consulta ${recurso}: coluna do filtro fixo fora da tabela.`);
   if ('em' in f) {
     conferirNome(f.em.tabela);
     conferirFixo(f.em.filtro, null, recurso);
@@ -296,7 +313,10 @@ function conferirFixo(f: FiltroFixoConsulta, nomes: ReadonlySet<string> | null, 
 }
 
 /** Declaração SINTÉTICA (memória de dev/ci): id, código, descrição e data de criação, sem banco. */
-export function declaracaoSintetica(publico: ConsultaPublica, tabela = 'consulta_sintetica'): DeclaracaoConsulta {
+export function declaracaoSintetica(
+  publico: ConsultaPublica,
+  tabela = 'consulta_sintetica',
+): DeclaracaoConsulta {
   const coluna = (nome: string, tipo: string, comentario = ''): ColunaDoBanco => ({
     nome,
     tipo,

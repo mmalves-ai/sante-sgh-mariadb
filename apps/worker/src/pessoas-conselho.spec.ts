@@ -58,7 +58,14 @@ describe('retrato do conselho (M52.1)', () => {
   it('aplica a janela do parâmetro (30: 45 dias fica fora; padrão 60: dentro) e grava só as contagens', async () => {
     const a = portaFalsa(30, true);
     const r = await retratoDoCliente(a.porta, 'f22_teste', AGORA);
-    expect(r).toMatchObject({ cliente: 'f22_teste', dia: HOJE, janelaDias: 30, registros: 2, aVencer: 0, semValidade: 1 });
+    expect(r).toMatchObject({
+      cliente: 'f22_teste',
+      dia: HOJE,
+      janelaDias: 30,
+      registros: 2,
+      aVencer: 0,
+      semValidade: 1,
+    });
     expect(r.gravado).toBe(true);
     expect(Object.keys(a.gravados[0]!).sort()).toEqual(
       ['aVencer', 'cliente', 'dia', 'janelaDias', 'registros', 'semValidade', 'vencidos'].sort(),
@@ -86,8 +93,9 @@ describe('retrato do conselho (M52.1)', () => {
       const s = new PessoasConselhoService();
       expect(await s.ciclo()).toEqual([]);
       process.env['WORKER_CLIENTES'] = 'f22_teste,Invalido';
-      s.usar({ lerPlataforma: async () => [], encerrar: async () => undefined } as unknown as NucleoConselho, () =>
-        portaFalsa(30, false).porta,
+      s.usar(
+        { lerPlataforma: async () => [], encerrar: async () => undefined } as unknown as NucleoConselho,
+        () => portaFalsa(30, false).porta,
       );
       const r = await s.ciclo(AGORA);
       expect(r.map((x) => [x.cliente, x.gravado])).toEqual([['f22_teste', false]]);

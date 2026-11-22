@@ -147,9 +147,7 @@ export class ServicoFarmacia {
       });
       const a = avals.get(d.horario.item);
       const validada =
-        d.validadaAntes ||
-        a?.estado === 'automatico' ||
-        (a?.estado === 'decidido' && a.decisao === 'valido');
+        d.validadaAntes || a?.estado === 'automatico' || (a?.estado === 'decidido' && a.decisao === 'valido');
       const n: DoseNaFila = {
         horario: d.horario.id,
         atendimento: d.atendimento,
@@ -385,10 +383,7 @@ export class ServicoFarmacia {
   }
 
   /** A fila da unidade: os itens das próximas 24 h, com a triagem (automática ou humana) e o estado da avaliação. */
-  async filaAvaliacao(
-    s: SessaoCadastro,
-    unidade: string,
-  ): Promise<FilaAvaliacao & { triagens: Triagem[] }> {
+  async filaAvaliacao(s: SessaoCadastro, unidade: string): Promise<FilaAvaliacao & { triagens: Triagem[] }> {
     const r = await this.porta.relogio(ctx(s));
     const inicio = new Date(r.agora.getTime() - 2 * 3_600_000);
     const fim = new Date(r.agora.getTime() + 24 * 3_600_000);

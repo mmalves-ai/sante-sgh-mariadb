@@ -4,7 +4,12 @@
 import { CHAVE_LIBERACAO_WORKLIST, recursoDesligado } from '@sgh/contratos';
 import { recursoLigadoNoEstabelecimento } from '@sgh/dominio-config';
 import type { Leitor } from '@sgh/nucleo';
-import { type ChaveRecursoLida, lerChavesLiberacao, lerPrerequisitos, type PrerequisitoLido } from './porta-propria.js';
+import {
+  type ChaveRecursoLida,
+  lerChavesLiberacao,
+  lerPrerequisitos,
+  type PrerequisitoLido,
+} from './porta-propria.js';
 
 type ChaveDominio = Parameters<typeof recursoLigadoNoEstabelecimento>[0][number];
 type PrerequisitoDominio = Parameters<typeof recursoLigadoNoEstabelecimento>[2][number];

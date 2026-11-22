@@ -227,7 +227,12 @@ export interface DominiosBeneficiario {
 
 /** As gravações da F1 numa transação só (o estabelecimento vem do contexto; `por` é o login, mostrado na memória). */
 export interface GravadorOperadora {
-  gravarOperadora(x: { id: number | null; versao: number | null; dados: DadosOperadora; por: string }): Promise<{
+  gravarOperadora(x: {
+    id: number | null;
+    versao: number | null;
+    dados: DadosOperadora;
+    por: string;
+  }): Promise<{
     id: number;
   }>;
   gravarProduto(x: { id: number | null; versao: number | null; dados: DadosProduto; por: string }): Promise<{
@@ -259,7 +264,13 @@ export interface GravadorOperadora {
     por: string;
   }): Promise<{ id: number; dependentes: number }>;
   reativarBeneficiario(x: { id: number; versao: number; por: string }): Promise<{ id: number }>;
-  emitirVia(x: { id: number; versao: number; motivo: number | null; validade: string; por: string }): Promise<{
+  emitirVia(x: {
+    id: number;
+    versao: number;
+    motivo: number | null;
+    validade: string;
+    por: string;
+  }): Promise<{
     id: number;
     via: number;
   }>;

@@ -46,7 +46,15 @@ class PortaFalsa implements PortaPublicacaoCatalogo {
     return this.atual;
   }
   async itensDoLote(): Promise<LinhaDoLote[]> {
-    return [{ entidade: 'cbo', chave: 'codigo=999998', comparacao: 'novo', antes: null, depois: { codigo: '999998', nome: 'X' } }];
+    return [
+      {
+        entidade: 'cbo',
+        chave: 'codigo=999998',
+        comparacao: 'novo',
+        antes: null,
+        depois: { codigo: '999998', nome: 'X' },
+      },
+    ];
   }
   async publicarLote(_c: CargaAPublicar, e: { lote: number }) {
     this.lotes.push(e.lote);
@@ -74,7 +82,9 @@ describe('publicador de catálogos', () => {
 
   it('catálogo desconhecido: parada', async () => {
     const p = new PortaFalsa(carga(0));
-    expect(await publicarCarga(deps(p), { ...carga(0), catalogo: 'naoexiste' })).toMatchObject({ situacao: 'parada' });
+    expect(await publicarCarga(deps(p), { ...carga(0), catalogo: 'naoexiste' })).toMatchObject({
+      situacao: 'parada',
+    });
   });
 
   it('publica o lote seguinte ao último confirmado, até o fim', async () => {
@@ -130,8 +140,20 @@ describe('publicador de catálogos', () => {
 
   it('item do lote a partir da linha', () => {
     expect(
-      itemDaLinha({ entidade: 'cbo', chave: 'codigo=1', comparacao: 'alterado', antes: { nome: 'A', x: 1 }, depois: { nome: 'B' } }),
-    ).toEqual({ entidade: 'cbo', acao: 'alterar', chave: { codigo: '1' }, valores: { nome: 'B' }, antes: { nome: 'A' } });
+      itemDaLinha({
+        entidade: 'cbo',
+        chave: 'codigo=1',
+        comparacao: 'alterado',
+        antes: { nome: 'A', x: 1 },
+        depois: { nome: 'B' },
+      }),
+    ).toEqual({
+      entidade: 'cbo',
+      acao: 'alterar',
+      chave: { codigo: '1' },
+      valores: { nome: 'B' },
+      antes: { nome: 'A' },
+    });
     expect(
       itemDaLinha({ entidade: 'cbo', chave: 'codigo=1', comparacao: 'novo', antes: null, depois: null }),
     ).toMatchObject({ acao: 'incluir', valores: {} });

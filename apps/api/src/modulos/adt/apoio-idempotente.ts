@@ -28,7 +28,8 @@ export class ApoioGravacaoIdempotente<G> extends ApoioGravacao<G> {
   ): Promise<T> {
     const bruto = s.req.headers['idempotency-key'];
     const chave = Array.isArray(bruto) ? bruto[0] : bruto;
-    if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave)) return super.sgh(s, evento, recurso, alvoOuFn, fn);
+    if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave))
+      return super.sgh(s, evento, recurso, alvoOuFn, fn);
     const ordem = (ordemNaRequisicao.get(s.req) ?? 0) + 1;
     ordemNaRequisicao.set(s.req, ordem);
     const porta = { ...s.porta, idempotencia: `${chave}:${ordem}` };

@@ -63,7 +63,11 @@ describe('ServicoPortal no contexto do núcleo', () => {
   it('o acerto abre a sessão do portal com o primeiro nome e zera as tentativas', async () => {
     const { porta, chamadas } = dubla();
     const portal = new ServicoPortal(porta, 'rede', null, null, 'Produto');
-    const r = await portal.entrarPaciente('aa', { protocolo: 'ABCDE23456', nascimento: '2000-01-01' }, '10.0.0.9');
+    const r = await portal.entrarPaciente(
+      'aa',
+      { protocolo: 'ABCDE23456', nascimento: '2000-01-01' },
+      '10.0.0.9',
+    );
     expect(r.sessao).toMatchObject({ perfil: 'paciente', nome: 'Pessoa' });
     expect(chamadas[0]?.tentativa).toMatchObject({ tentativas: 0, acertou: true });
   });

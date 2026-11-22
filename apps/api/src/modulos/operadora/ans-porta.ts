@@ -8,7 +8,29 @@
 // gravação vem da sessão, nunca da entrada.
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
-import { type DadosAtivos, type DadosBeneficiarioDaOperadora, type DadosBeneficiarioRessarcimento, type DadosBeneficiarioSib, type DadosCobrancaDiops, type DadosComplementoSib, type DadosEnvioAns, type DadosEnvioAnsResumo, type DadosEnvioExistente, type DadosEventoEnvioAns, type DadosGuiaMonitoramento, type DadosItemEnvioAns, type DadosItemSip, type DadosObrigacao, type DadosOperadora, type DadosVigenciaSip, type EntradaComplementoSib, type EntradaGeracaoEnvio, type EntradaResultadoItem, type FiltroEnviosPorta, type TotaisEnvios } from './dados-portas.js';
+import {
+  type DadosAtivos,
+  type DadosBeneficiarioDaOperadora,
+  type DadosBeneficiarioRessarcimento,
+  type DadosBeneficiarioSib,
+  type DadosCobrancaDiops,
+  type DadosComplementoSib,
+  type DadosEnvioAns,
+  type DadosEnvioAnsResumo,
+  type DadosEnvioExistente,
+  type DadosEventoEnvioAns,
+  type DadosGuiaMonitoramento,
+  type DadosItemEnvioAns,
+  type DadosItemSip,
+  type DadosObrigacao,
+  type DadosOperadora,
+  type DadosVigenciaSip,
+  type EntradaComplementoSib,
+  type EntradaGeracaoEnvio,
+  type EntradaResultadoItem,
+  type FiltroEnviosPorta,
+  type TotaisEnvios,
+} from './dados-portas.js';
 
 export const PORTA_ANS_OPERADORA = Symbol('PORTA_ANS_OPERADORA');
 

@@ -906,7 +906,12 @@ export class PortaTissPropria implements PortaTiss {
         [item, est],
       );
       return r
-        ? { item, evidencia: texto(r['evidencia_prontuario']), decididoPor: texto(r['decidido_por']), decididoEm: instante(r['decidido_em']) ?? '' }
+        ? {
+            item,
+            evidencia: texto(r['evidencia_prontuario']),
+            decididoPor: texto(r['decidido_por']),
+            decididoEm: instante(r['decidido_em']) ?? '',
+          }
         : null;
     });
   }

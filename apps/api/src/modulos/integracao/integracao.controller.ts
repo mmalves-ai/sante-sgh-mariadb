@@ -108,9 +108,7 @@ export class IntegracaoController {
   @Post('parceiros')
   @HttpCode(201)
   @Permissao(P.parceiroEditar)
-  @AuditadoNoHandler(
-    'parceiro, cliente da API e chave (só o resumo) com a trilha na mesma transação',
-  )
+  @AuditadoNoHandler('parceiro, cliente da API e chave (só o resumo) com a trilha na mesma transação')
   criarParceiro(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,

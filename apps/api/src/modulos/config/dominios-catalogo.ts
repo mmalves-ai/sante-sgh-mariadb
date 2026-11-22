@@ -4,13 +4,7 @@
 // Melhoria: nada de declaração à mão por tabela nem de opções de menu do sistema de origem; o rótulo é o comentário
 // da tabela e da coluna, a obrigatoriedade é o NOT NULL sem padrão, o tamanho é o da coluna e a referência é a FK.
 // Melhoria: booleano é booleano (Sim/Não na tela, verdadeiro/falso no banco), sem letra S/N.
-import type {
-  AcaoDominio,
-  CampoDescrito,
-  NaturezaDominio,
-  SubitemDominio,
-  ValorCampo,
-} from '@sgh/contratos';
+import type { AcaoDominio, CampoDescrito, NaturezaDominio, SubitemDominio, ValorCampo } from '@sgh/contratos';
 import { TABELAS_DOMINIO } from './dominios-tabelas.js';
 
 /** Coluna como o information_schema a descreve (só o que a declaração usa). */
@@ -91,7 +85,8 @@ const SUBITEM_DA_AREA: Readonly<Record<string, SubitemDominio>> = {
 const DO_SISTEMA: Readonly<Record<string, string>> = {
   acao_sistema: 'Catálogo de ações do sistema, carregado com o produto.',
   modulo_sistema: 'Módulos do sistema, carregados com o produto.',
-  funcionalidade_sistema: 'Funcionalidades do produto: ligue ou desligue em Funcionalidades por estabelecimento.',
+  funcionalidade_sistema:
+    'Funcionalidades do produto: ligue ou desligue em Funcionalidades por estabelecimento.',
 };
 
 /** Colunas do núcleo (id, auditoria, exclusão lógica, gerada) e a situação: nunca campos editáveis. */
@@ -145,7 +140,8 @@ function rotuloDaTabela(tabela: string, comentario: string): { singular: string;
   return { singular, plural };
 }
 
-export const ehBooleano = (c: ColunaMeta): boolean => c.tipo === 'tinyint' && /^tinyint\(1\)/.test(c.tipoColuna);
+export const ehBooleano = (c: ColunaMeta): boolean =>
+  c.tipo === 'tinyint' && /^tinyint\(1\)/.test(c.tipoColuna);
 
 const LIMITES_INTEIRO: Readonly<Record<string, readonly [number, number]>> = {
   tinyint: [-128, 255],

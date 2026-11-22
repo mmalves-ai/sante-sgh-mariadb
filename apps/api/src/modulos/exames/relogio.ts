@@ -3,7 +3,13 @@
 // Toda hora sai na forma neutra "HH:MM" (formatacao/hora de @sgh/contratos). Este arquivo é compartilhado por cerca
 // de 20 módulos (ADT, farmácia, portaria, TISS, pessoas…); instanteCivil ainda aceita a hora digitada em quatro
 // dígitos, que o auxiliar neutro converte.
-import { ErroHoraInvalida, FUSO_PADRAO, horaParaMinutos, lerHoraDigitada, minutosParaHora } from '@sgh/contratos';
+import {
+  ErroHoraInvalida,
+  FUSO_PADRAO,
+  horaParaMinutos,
+  lerHoraDigitada,
+  minutosParaHora,
+} from '@sgh/contratos';
 import type { RelogioEstabelecimento } from './tipos.js';
 
 export { FUSO_PADRAO };
@@ -21,7 +27,10 @@ export function relogioNoFuso(fuso: string = FUSO_PADRAO, agora: Date = new Date
 }
 
 /** Hoje e a hora corrente "HH:MM" no fuso do estabelecimento (o `Relogio` do motor da agenda). */
-export function relogioDoEstabelecimento(fuso: string = FUSO_PADRAO, agora: Date = new Date()): RelogioEstabelecimento {
+export function relogioDoEstabelecimento(
+  fuso: string = FUSO_PADRAO,
+  agora: Date = new Date(),
+): RelogioEstabelecimento {
   return relogioNoFuso(fuso, agora);
 }
 

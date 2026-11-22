@@ -28,7 +28,14 @@ import {
   semeDaSugestaoResolvida,
 } from '@sgh/dominio-qualidade';
 import { adesaoDasMetas, conteudoCanonico, nomeDoTipo } from '@sgh/dominio-recepcao';
-import type { AcaoPlanoRegistrada, AnaliseRegistrada, ContagemNotificacoes, ProtocoloDoPaciente, QueixaTecnicaRegistrada, VersaoProtocoloGerenciado } from './tipos.js';
+import type {
+  AcaoPlanoRegistrada,
+  AnaliseRegistrada,
+  ContagemNotificacoes,
+  ProtocoloDoPaciente,
+  QueixaTecnicaRegistrada,
+  VersaoProtocoloGerenciado,
+} from './tipos.js';
 import type { ContagensAdesaoLidas } from './porta.js';
 
 /** Provedor do resumo da sugestão resolvida (null: sem a chave, as sugestões ficam desligadas com o motivo). */
@@ -239,10 +246,8 @@ export function montarPainel(x: {
   readonly historico: readonly { ano: number; registros: number }[];
 }): PainelSegurancaPaciente {
   const validas = x.notificacoes.filter((n) => n.situacao !== 'descartada');
-  const soma = (
-    f: (n: ContagemNotificacoes) => boolean,
-    ls: readonly ContagemNotificacoes[] = validas,
-  ) => ls.filter(f).reduce((t, n) => t + n.quantidade, 0);
+  const soma = (f: (n: ContagemNotificacoes) => boolean, ls: readonly ContagemNotificacoes[] = validas) =>
+    ls.filter(f).reduce((t, n) => t + n.quantidade, 0);
   const somaA = (f: (a: (typeof x.acoes)[number]) => boolean) =>
     x.acoes.filter(f).reduce((t, a) => t + a.quantidade, 0);
   const aberta = (s: string) => s === 'planejada' || s === 'emAndamento';

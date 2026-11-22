@@ -139,7 +139,10 @@ export class PortaIdentidadeMemoria implements PortaIdentidade {
   encerrarPolitica: PortaIdentidade['encerrarPolitica'] = async (_h, c, t) => {
     const i = this.linhas.findIndex((l) => l.id === c.id && l.hospital === c.hospital && !l.encerradaEm);
     if (i < 0) return false;
-    this.linhas[i] = { ...(this.linhas[i] as LinhaPolitica2faRegistrada), encerradaEm: new Date(this.relogio()) };
+    this.linhas[i] = {
+      ...(this.linhas[i] as LinhaPolitica2faRegistrada),
+      encerradaEm: new Date(this.relogio()),
+    };
     this.trilha.push(t);
     return true;
   };

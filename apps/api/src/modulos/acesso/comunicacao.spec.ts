@@ -44,10 +44,22 @@ const msg = (destino: string, extra: Record<string, unknown> = {}) => ({
 describe('comunicação interna (memória)', () => {
   it('envia, avisa depois da gravação, abre (leitura) e dá ciência (resolve o aviso); texto fora da trilha', async () => {
     const { porta, s, avisados } = montar();
-    const r = await s.enviar(c, autor('SINT.GESTOR'), msg('SINT.MEDICO', { cienciaObrigatoria: true }), 'teste-envio-1');
+    const r = await s.enviar(
+      c,
+      autor('SINT.GESTOR'),
+      msg('SINT.MEDICO', { cienciaObrigatoria: true }),
+      'teste-envio-1',
+    );
     expect(r).toMatchObject({ destinatarios: 1, repetida: false });
     expect(avisados).toEqual(['aa|SINT.MEDICO']);
-    expect(await s.enviar(c, autor('SINT.GESTOR'), msg('SINT.MEDICO', { cienciaObrigatoria: true }), 'teste-envio-1')).toMatchObject({
+    expect(
+      await s.enviar(
+        c,
+        autor('SINT.GESTOR'),
+        msg('SINT.MEDICO', { cienciaObrigatoria: true }),
+        'teste-envio-1',
+      ),
+    ).toMatchObject({
       id: r.id,
       repetida: true,
     });
@@ -63,7 +75,9 @@ describe('comunicação interna (memória)', () => {
     expect(central.avisos.find((x) => x.link === `/mensagens?id=${r.id}`)?.estado).toBe('resolvido');
     const trilha = JSON.stringify(porta.trilhaDe('aa'));
     expect(trilha).not.toContain('Texto sintético');
-    expect(porta.trilhaDe('aa').some((l) => l.entidade === 'mensagem_interna' && l.entidadeId === r.id)).toBe(true);
+    expect(porta.trilhaDe('aa').some((l) => l.entidade === 'mensagem_interna' && l.entidadeId === r.id)).toBe(
+      true,
+    );
     const enviada = (await s.caixa(c, 'SINT.GESTOR')).enviadas.find((x) => x.id === r.id);
     expect(enviada).toMatchObject({ destinatarios: 1, lidas: 1, ciencias: 1 });
   });
@@ -71,7 +85,12 @@ describe('comunicação interna (memória)', () => {
   it('recusas: dado do paciente, destino sem conta ativa (sem gravar nem avisar), contexto sem acesso', async () => {
     const { s, avisados } = montar();
     await expect(
-      s.enviar(c, autor('SINT.GESTOR'), msg('SINT.MEDICO', { texto: 'CPF 123.456.789-09' }), 'teste-recusa-1'),
+      s.enviar(
+        c,
+        autor('SINT.GESTOR'),
+        msg('SINT.MEDICO', { texto: 'CPF 123.456.789-09' }),
+        'teste-recusa-1',
+      ),
     ).rejects.toMatchObject({ extras: { codigo: 'dado-do-paciente' } });
     await expect(s.enviar(c, autor('SINT.GESTOR'), msg('NINGUEM'), 'teste-recusa-2')).rejects.toMatchObject({
       extras: { codigo: 'destino-sem-usuario' },
@@ -121,12 +140,16 @@ describe('comunicação interna (memória)', () => {
     const { s, porta } = montar();
     expect((await s.anteriores(c, 'SINT.MEDICO')).length).toBe(2);
     expect(await s.anteriores(c, 'SINT.GESTOR')).toEqual([]);
-    expect(await s.gravarPalavra(c, 'incluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-1'))).toEqual({
-      repetida: false,
-    });
-    expect(await s.gravarPalavra(c, 'incluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-1'))).toEqual({
-      repetida: true,
-    });
+    expect(await s.gravarPalavra(c, 'incluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-1'))).toEqual(
+      {
+        repetida: false,
+      },
+    );
+    expect(await s.gravarPalavra(c, 'incluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-1'))).toEqual(
+      {
+        repetida: true,
+      },
+    );
     await expect(
       s.gravarPalavra(c, 'incluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-2')),
     ).rejects.toMatchObject({ problema: { codigo: 'palavra-existente' } });
@@ -135,9 +158,11 @@ describe('comunicação interna (memória)', () => {
     expect(dic.gravacao).toEqual({ incluir: null, excluir: null });
     await s.gravarPalavra(c, 'excluir', 'Ecocardiograma', octx('SINT.MEDICO', 'teste-dic-3'));
     expect((await s.dicionario(c, 'SINT.MEDICO')).palavras).toEqual([]);
-    expect(porta.trilhaDe('aa').filter((l) => l.entidade === 'dicionario_usuario').map((l) => l.acao)).toEqual([
-      'inclusao',
-      'exclusao',
-    ]);
+    expect(
+      porta
+        .trilhaDe('aa')
+        .filter((l) => l.entidade === 'dicionario_usuario')
+        .map((l) => l.acao),
+    ).toEqual(['inclusao', 'exclusao']);
   });
 });

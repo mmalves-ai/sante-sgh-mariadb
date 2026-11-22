@@ -110,8 +110,13 @@ describe('permissões pelas ações dos perfis do cliente', () => {
   });
 
   it('ação negada prevalece sobre o perfil e sobre as concessões gerais do catálogo', () => {
-    const geral = CATALOGO_DECLARADO.find((p) => p.concessaoPorPerfil === 'todos-os-perfis-de-pessoa')?.codigo;
-    const livre = calcularAutorizacao({ ...base, acoesDoPerfil: [{ perfil: 'RECEPCAO', permissao: a }] }, Date.now());
+    const geral = CATALOGO_DECLARADO.find(
+      (p) => p.concessaoPorPerfil === 'todos-os-perfis-de-pessoa',
+    )?.codigo;
+    const livre = calcularAutorizacao(
+      { ...base, acoesDoPerfil: [{ perfil: 'RECEPCAO', permissao: a }] },
+      Date.now(),
+    );
     const r = calcularAutorizacao(
       {
         ...base,

@@ -181,9 +181,7 @@ export class EmergenciaController {
   }
 
   @Post('emergencias')
-  @AuditadoNoHandler(
-    'acesso_emergencial, trilha e outbox na mesma transação (Executor do núcleo)',
-  )
+  @AuditadoNoHandler('acesso_emergencial, trilha e outbox na mesma transação (Executor do núcleo)')
   @HttpCode(201)
   @Permissao(PERMISSOES_ACESSO.emergenciaSolicitar)
   async abrir(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<EmergenciaAberta> {
@@ -243,8 +241,16 @@ export class EmergenciaController {
       if (e instanceof ErroOperacao && e.problema.status >= 400 && e.problema.status < 500) {
         const p = e.problema;
         const tipo =
-          p.status === 404 ? 'nao-encontrado' : p.status === 400 ? 'entrada-invalida' : p.status === 403 ? 'sem-permissao' : 'recusa-de-negocio';
-        throw new ErroProblema(tipo, p.status, p.title, p.detail, { ...(p.codigo ? { codigo: p.codigo } : {}) });
+          p.status === 404
+            ? 'nao-encontrado'
+            : p.status === 400
+              ? 'entrada-invalida'
+              : p.status === 403
+                ? 'sem-permissao'
+                : 'recusa-de-negocio';
+        throw new ErroProblema(tipo, p.status, p.title, p.detail, {
+          ...(p.codigo ? { codigo: p.codigo } : {}),
+        });
       }
       throw new ErroProblema(
         'trilha-indisponivel',
@@ -324,7 +330,10 @@ export class EmergenciaController {
 
 /** O que o registro usa do NucleoProprio (os testes trocam). */
 export interface NucleoEmergencia {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
   criarExecutor(): Executor;
 }
 
@@ -416,7 +425,10 @@ export class RegistroEmergenciaPropria implements RegistroEmergencia {
 
   private ids(codigo: string, login: string, paciente: number) {
     return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'emergencia' }, async (l) => ({
-      estabelecimento: await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [codigo]),
+      estabelecimento: await l.uma(
+        'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+        [codigo],
+      ),
       usuario: await l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]),
       paciente: await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [paciente]),
     }));
@@ -425,7 +437,8 @@ export class RegistroEmergenciaPropria implements RegistroEmergencia {
   async abrir(a: Parameters<RegistroEmergencia['abrir']>[0]): Promise<AberturaRegistrada> {
     const x = await this.ids(a.hospital, a.login, a.idPaciente);
     if (!x.paciente) throw new ErroPacienteInexistente();
-    if (!x.estabelecimento || !x.usuario) throw recusa('sessao-sem-conta', 'A sessão não tem conta no cliente.');
+    if (!x.estabelecimento || !x.usuario)
+      throw recusa('sessao-sem-conta', 'A sessão não tem conta no cliente.');
     const inicio = new Date();
     const fim = fimDaEmergencia(inicio, a.minutos);
     const r = await this.executor.executar(
@@ -464,6 +477,11 @@ export class RegistroEmergenciaPropria implements RegistroEmergencia {
         [hospital, login, idPaciente, new Date()],
       ),
     );
-    return l ? { id: String(l['id']), fim: l['fim_em'] instanceof Date ? l['fim_em'] : new Date(String(l['fim_em'])) } : null;
+    return l
+      ? {
+          id: String(l['id']),
+          fim: l['fim_em'] instanceof Date ? l['fim_em'] : new Date(String(l['fim_em'])),
+        }
+      : null;
   }
 }

@@ -9,7 +9,14 @@ import { portaContabilIndisponivel, PortaContabilPropria } from './porta-propria
 import { PLANO_SINTETICO, PortaContabilMemoria } from './porta-memoria.js';
 import { camposAlterados, impressaoDaRegra, ServicoContabil, TETO_FATOS_COMPETENCIA } from './servico.js';
 
-const C = { rede: 'sint', hospital: 'aa', cliente: 'sint', estabelecimento: 1, usuario: null, correlacao: 'teste' };
+const C = {
+  rede: 'sint',
+  hospital: 'aa',
+  cliente: 'sint',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 'teste',
+};
 
 const status = async (p: Promise<unknown>) => {
   try {
@@ -36,11 +43,24 @@ describe('portas da contabilidade', () => {
     };
     const p = new PortaContabilPropria(nucleo as never);
     expect(p.destino).toBe('banco');
-    expect(await status(p.gravar({ ...C, estabelecimento: null }, { operacao: 'contabil.teste', pedido: null }, {} as never, () => Promise.resolve(1)))).toBe(409);
+    expect(
+      await status(
+        p.gravar(
+          { ...C, estabelecimento: null },
+          { operacao: 'contabil.teste', pedido: null },
+          {} as never,
+          () => Promise.resolve(1),
+        ),
+      ),
+    ).toBe(409);
     expect(abriu).toBe(false);
     const i = portaContabilIndisponivel();
     expect(await status(i.plano(C, 1))).toBe(503);
-    expect(await status(i.gravar(C, { operacao: 'contabil.teste', pedido: null }, {} as never, () => Promise.resolve(1)))).toBe(503);
+    expect(
+      await status(
+        i.gravar(C, { operacao: 'contabil.teste', pedido: null }, {} as never, () => Promise.resolve(1)),
+      ),
+    ).toBe(503);
   });
 });
 

@@ -282,7 +282,10 @@ export class SusController {
         return cache.get(i) ?? false;
       },
       trilha: (evento, operacao, alvo) => {
-        const base = linhaTrilha(s, evento, 'faturamento.sus', operacao, { tabela: alvo.tabela, id: alvo.id });
+        const base = linhaTrilha(s, evento, 'faturamento.sus', operacao, {
+          tabela: alvo.tabela,
+          id: alvo.id,
+        });
         const estacao = (base.dadosDepois as { estacao?: unknown } | undefined)?.estacao;
         return {
           rede: s.rede,

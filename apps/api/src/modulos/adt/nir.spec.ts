@@ -21,7 +21,11 @@ import { EstadoNirMemoria } from './nir-memoria.js';
 import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro,adt' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,adt',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const pasta = resolve(import.meta.dirname, '../../../../../.tmp/nir-spec');

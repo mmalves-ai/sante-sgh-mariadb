@@ -139,7 +139,11 @@ export interface AvaliacaoSocialParaGravar {
   readonly encaminhamentos: readonly EncaminhamentoSocial[];
   readonly parecer: string;
   readonly orientacoes: string | null;
-  readonly barreira: { readonly descricao: string; readonly responsavel: string; readonly prazo: string } | null;
+  readonly barreira: {
+    readonly descricao: string;
+    readonly responsavel: string;
+    readonly prazo: string;
+  } | null;
   readonly vinculo: number;
   readonly usuario: string;
 }

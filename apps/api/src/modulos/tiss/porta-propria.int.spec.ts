@@ -1012,35 +1012,38 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
   });
 
   it('glosa: recorrer grava a evidência do prontuário, a leitura auditada a devolve e a lista só diz que existe; aceitar grava sem evidência', async () => {
-    const [recorrido, aceito] = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-evidencia' }, async (e) => {
-      const agora = new Date();
-      const item = (seq: number) =>
-        e.inserir(
-          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+    const [recorrido, aceito] = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-evidencia' },
+      async (e) => {
+        const agora = new Date();
+        const item = (seq: number) =>
+          e.inserir(
+            `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
              valor_unitario, valor_total, criado_em)
            VALUES (?, ?, ?, ?, 1, 100, 100, ?)`,
-          [ids.conta, seq, ids.item, agora, agora],
-        );
-      const i8 = await item(8);
-      const i9 = await item(9);
-      const glosa = await e.inserir(
-        `INSERT INTO glosa (estabelecimento_id, numero, fonte_pagadora_id, procedencia, conta_hospitalar_id, data_glosa,
+            [ids.conta, seq, ids.item, agora, agora],
+          );
+        const i8 = await item(8);
+        const i9 = await item(9);
+        const glosa = await e.inserir(
+          `INSERT INTO glosa (estabelecimento_id, numero, fonte_pagadora_id, procedencia, conta_hospitalar_id, data_glosa,
            competencia, valor_apresentado, valor_glosado, data_limite_recurso, criado_em)
          VALUES (?, ?, ?, 'digitacao', ?, ?, ?, 200, 80, ?, ?)`,
-        [ids.est, `${P}-G9`, ids.fonte, ids.conta, hoje, competencia, hoje, agora],
-      );
-      for (const [seq, it] of [
-        [1, i8],
-        [2, i9],
-      ] as const)
-        await e.inserir(
-          `INSERT INTO glosa_item (glosa_id, sequencia, conta_hospitalar_item_id, motivo_glosa_id, quantidade_apresentada,
+          [ids.est, `${P}-G9`, ids.fonte, ids.conta, hoje, competencia, hoje, agora],
+        );
+        for (const [seq, it] of [
+          [1, i8],
+          [2, i9],
+        ] as const)
+          await e.inserir(
+            `INSERT INTO glosa_item (glosa_id, sequencia, conta_hospitalar_item_id, motivo_glosa_id, quantidade_apresentada,
              quantidade_glosada, valor_apresentado, valor_glosado, criado_em)
            VALUES (?, ?, ?, ?, 1, 1, 100, 40, ?)`,
-          [glosa, seq, it, ids.motivo, agora],
-        );
-      return [i8, i9];
-    });
+            [glosa, seq, it, ids.motivo, agora],
+          );
+        return [i8, i9];
+      },
+    );
     const trilhaDe = (x: { id: number }) => ({
       ...base,
       acao: 'alteracao' as const,

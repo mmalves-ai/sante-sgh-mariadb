@@ -93,7 +93,8 @@ const instante = (v: unknown): string | null => {
 /** Valor fixo do contrato (com hífen) ↔ valor do banco (snake_case, convenção do DDL). */
 const paraBanco = (v: string): string => v.replace(/-/g, '_');
 const doBanco = <T extends string>(v: unknown): T => texto(v).replace(/_/g, '-') as T;
-const doBancoOuNulo = <T extends string>(v: unknown): T | null => (textoOuNulo(v) === null ? null : doBanco<T>(v));
+const doBancoOuNulo = <T extends string>(v: unknown): T | null =>
+  textoOuNulo(v) === null ? null : doBanco<T>(v);
 const idDe = (v: string): number => {
   const n = Number(v);
   if (!Number.isSafeInteger(n) || n <= 0)
@@ -192,7 +193,12 @@ const ENTRADA = z.record(z.string(), z.unknown());
 /** Recusa apurada dentro da gravação (a condição mudou): desfaz a transação; a porta devolve "não gravou". */
 export class RecusaGravacaoSbis extends ErroOperacao {
   constructor() {
-    super(409, 'recusa-de-negocio', 'Ação recusada', 'A situação do ciclo ou do item mudou: nada foi gravado.');
+    super(
+      409,
+      'recusa-de-negocio',
+      'Ação recusada',
+      'A situação do ciclo ou do item mudou: nada foi gravado.',
+    );
   }
 }
 const recusar = (): never => {
@@ -236,13 +242,25 @@ export class PortaSbisPropria implements PortaSbis {
       ),
     );
     if (!r)
-      throw new ErroProblema('recusa-de-negocio', 409, 'Ação recusada', 'O estabelecimento da sessão não existe neste banco.', {
-        codigo: 'estabelecimento-desconhecido',
-      });
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Ação recusada',
+        'O estabelecimento da sessão não existe neste banco.',
+        {
+          codigo: 'estabelecimento-desconhecido',
+        },
+      );
     if (r['usuario'] === null || r['usuario'] === undefined)
-      throw new ErroProblema('recusa-de-negocio', 409, 'Ação recusada', 'O usuário da sessão não tem conta neste banco.', {
-        codigo: 'usuario-desconhecido',
-      });
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Ação recusada',
+        'O usuário da sessão não tem conta neste banco.',
+        {
+          codigo: 'usuario-desconhecido',
+        },
+      );
     return { est: Number(r['est']), usuario: Number(r['usuario']) };
   }
 
@@ -250,7 +268,11 @@ export class PortaSbisPropria implements PortaSbis {
    * Uma gravação pelo Executor: tabelas declaradas, trilha (evento, recurso, operação, estação) e idempotência pela
    * chave do pedido. A recusa apurada na transação (RecusaGravacaoSbis) volta como null: nada gravado, nem trilha.
    */
-  private async gravar<S extends ResultadoOperacao>(h: string, t: TrilhaSbis, p: PedidoGravacao<S>): Promise<S | null> {
+  private async gravar<S extends ResultadoOperacao>(
+    h: string,
+    t: TrilhaSbis,
+    p: PedidoGravacao<S>,
+  ): Promise<S | null> {
     const { est, usuario } = await this.ids(h, t.usuario, t.correlacao);
     const op = definirOperacao<Record<string, unknown>, S>({
       nome: p.nome,
@@ -413,7 +435,12 @@ export class PortaSbisPropria implements PortaSbis {
   }
 
   /** O item do ciclo ABERTO do estabelecimento, travado (ciclo e item); null quando não há. */
-  private async itemTravado(tx: TxOperacao, est: number, idCiclo: string, requisito: string): Promise<Linha | null> {
+  private async itemTravado(
+    tx: TxOperacao,
+    est: number,
+    idCiclo: string,
+    requisito: string,
+  ): Promise<Linha | null> {
     const [x] = await tx.consultarParaAtualizar<Linha>(
       `SELECT i.id, i.versao, i.resultado, i.situacao_correcao, i.corrigido_por_usuario_id
          FROM ciclo_certificacao_item i
@@ -426,11 +453,7 @@ export class PortaSbisPropria implements PortaSbis {
     return x ?? null;
   }
 
-  async avaliar(
-    h: string,
-    a: Parameters<PortaSbis['avaliar']>[1],
-    t: TrilhaSbis,
-  ): Promise<boolean> {
+  async avaliar(h: string, a: Parameters<PortaSbis['avaliar']>[1], t: TrilhaSbis): Promise<boolean> {
     const p = a.pedido;
     const r = await this.gravar(h, t, {
       nome: 'auditoria.sbis.avaliar-item',
@@ -440,7 +463,10 @@ export class PortaSbisPropria implements PortaSbis {
       fn: async (tx, est, usuario) => {
         const i = await this.itemTravado(tx, est, a.idCiclo, a.requisito);
         // A NC sem correção verificada não se reavalia.
-        if (!i || (texto(i['resultado']) === 'nao_conforme' && texto(i['situacao_correcao']) !== 'verificada'))
+        if (
+          !i ||
+          (texto(i['resultado']) === 'nao_conforme' && texto(i['situacao_correcao']) !== 'verificada')
+        )
           return recusar();
         const nc = p.resultado === 'nao-conforme';
         await tx.alterar('ciclo_certificacao_item', Number(i['id']), Number(i['versao']), {
@@ -626,7 +652,7 @@ export class PortaSbisPropria implements PortaSbis {
           tamanho_bytes: p.tamanhoMb === undefined ? null : p.tamanhoMb * BYTES_MB,
           destino: p.ambiente.trim(),
           situacao: p.resultado === 'ok' ? 'concluido' : 'falhou',
-          mensagem_erro: p.resultado === 'falhou' ? (p.observacao?.trim() || null) : null,
+          mensagem_erro: p.resultado === 'falhou' ? p.observacao?.trim() || null : null,
           // Periodicidade, integridade conferida e observação: colunas pedidas ao modelo (pedido do lote 02-06).
           dados: JSON.stringify({
             periodicidade: p.tipo,
@@ -641,7 +667,13 @@ export class PortaSbisPropria implements PortaSbis {
       alvoId: (x) => (typeof x.id === 'number' ? x.id : null),
     });
     // A restauração não tem recusa dentro da transação: sem resultado, é falha do banco.
-    if (!s) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível', 'A restauração não foi registrada.');
+    if (!s)
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'Serviço indisponível',
+        'A restauração não foi registrada.',
+      );
     return { id: String(s.id) };
   }
 
@@ -655,7 +687,12 @@ export class PortaSbisPropria implements PortaSbis {
       ),
     );
     if (!x)
-      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento não encontrado', 'O estabelecimento da sessão não existe neste banco.');
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Estabelecimento não encontrado',
+        'O estabelecimento da sessão não existe neste banco.',
+      );
     return {
       nome: textoOuNulo(x['nome_fantasia']) ?? textoOuNulo(x['razao_social']),
       cnes: textoOuNulo(x['codigo_cnes']),

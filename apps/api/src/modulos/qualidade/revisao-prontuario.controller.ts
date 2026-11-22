@@ -76,7 +76,11 @@ import {
   textoDoAval,
   universoCanonico,
 } from '@sgh/dominio-qualidade';
-import type { ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado } from './tipos.js';
+import type {
+  ChecklistRevisaoRegistrado,
+  PendenciaRevisaoRegistrada,
+  ProntuarioRevisaoRegistrado,
+} from './tipos.js';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -666,7 +670,9 @@ export class RevisaoProntuarioController {
 
   @Post(`${B}/pendencias/:id/resposta`)
   @Permissao(P.revisaoPendenciaResponder)
-  @AuditadoNoHandler('qualidade.responderPendenciaRevisao: pendencia_prontuario (resposta) e a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.responderPendenciaRevisao: pendencia_prontuario (resposta) e a trilha_auditoria',
+  )
   async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaResponderPendenciaRevisao, b);

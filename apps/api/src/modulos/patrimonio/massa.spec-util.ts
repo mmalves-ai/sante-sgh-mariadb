@@ -50,80 +50,85 @@ export async function limparGravacoes(e: Escritor, ests: readonly number[]): Pro
 /** `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). */
 export async function prepararMassaPatrimonio(marca = 'A'): Promise<MassaPatrimonio> {
   const nucleo = new NucleoProprio();
-  const ids = await nucleo.escrever({ cliente: CLIENTE_PAT, correlacao: 'preparo-teste-02-11-pat' }, async (e) => {
-    const agora = new Date();
-    const estab = (cod: string) =>
-      garantir(
+  const ids = await nucleo.escrever(
+    { cliente: CLIENTE_PAT, correlacao: 'preparo-teste-02-11-pat' },
+    async (e) => {
+      const agora = new Date();
+      const estab = (cod: string) =>
+        garantir(
+          e,
+          'SELECT id FROM estabelecimento WHERE codigo = ?',
+          [cod],
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [cod, 'ESTAB SINTETICO PATRIMONIO', 'ESTAB SINTETICO PATRIMONIO', agora],
+        );
+      const est = await estab(`${P_PAT}${marca}`);
+      const outro = await estab(`${P_PAT}${marca}X`);
+      const usuario = (login: string) =>
+        garantir(
+          e,
+          'SELECT id FROM usuario WHERE login = ?',
+          [login],
+          "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+          [login, `USUARIO SINTETICO ${login.toUpperCase()}`, agora],
+        );
+      const origem = await garantir(
         e,
-        'SELECT id FROM estabelecimento WHERE codigo = ?',
-        [cod],
-        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
-        [cod, 'ESTAB SINTETICO PATRIMONIO', 'ESTAB SINTETICO PATRIMONIO', agora],
+        'SELECT id FROM origem_bem WHERE codigo = ?',
+        [`${P_PAT}-DOA`],
+        "INSERT INTO origem_bem (codigo, descricao, tipo_aquisicao, criado_em) VALUES (?, 'DOACAO SINTETICA', 'doacao', ?)",
+        [`${P_PAT}-DOA`, agora],
       );
-    const est = await estab(`${P_PAT}${marca}`);
-    const outro = await estab(`${P_PAT}${marca}X`);
-    const usuario = (login: string) =>
-      garantir(
+      const setor = await garantir(
         e,
-        'SELECT id FROM usuario WHERE login = ?',
-        [login],
-        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
-        [login, `USUARIO SINTETICO ${login.toUpperCase()}`, agora],
+        'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, `${P_PAT}-S2`],
+        "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SETOR SINTETICO', 'administrativo', ?)",
+        [est, `${P_PAT}-S2`, agora],
       );
-    const origem = await garantir(
-      e,
-      'SELECT id FROM origem_bem WHERE codigo = ?',
-      [`${P_PAT}-DOA`],
-      "INSERT INTO origem_bem (codigo, descricao, tipo_aquisicao, criado_em) VALUES (?, 'DOACAO SINTETICA', 'doacao', ?)",
-      [`${P_PAT}-DOA`, agora],
-    );
-    const setor = await garantir(
-      e,
-      'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
-      [est, `${P_PAT}-S2`],
-      "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SETOR SINTETICO', 'administrativo', ?)",
-      [est, `${P_PAT}-S2`, agora],
-    );
-    const centro = (cod: string, setorId: number | null) =>
-      garantir(
-        e,
-        'SELECT id FROM centro_custo WHERE estabelecimento_id = ? AND codigo = ?',
-        [est, cod],
-        'INSERT INTO centro_custo (estabelecimento_id, codigo, nome, setor_funcional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
-        [est, cod, `CENTRO SINTETICO ${cod}`, setorId, '2020-01-01', agora],
-      );
-    // Vínculo vigente do usuário com o estabelecimento (o responsável pelo bem só vale na sua unidade).
-    const vincular = (u: number, estab: number) =>
-      garantir(
-        e,
-        'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [u, estab],
-        'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
-        [u, estab, '2020-01-01', agora],
-      );
-    const usu = await usuario('l0211p.patrimonio');
-    const aceitante = await usuario('l0211p.aceite');
-    await vincular(usu, est);
-    await vincular(aceitante, outro);
-    const r = {
-      est,
-      outro,
-      usuario: usu,
-      aceitante,
-      origem,
-      centro1: await centro('921201', null),
-      centro2: await centro('921202', setor),
-    };
-    await limparGravacoes(e, [est, outro]);
-    return r;
-  });
+      const centro = (cod: string, setorId: number | null) =>
+        garantir(
+          e,
+          'SELECT id FROM centro_custo WHERE estabelecimento_id = ? AND codigo = ?',
+          [est, cod],
+          'INSERT INTO centro_custo (estabelecimento_id, codigo, nome, setor_funcional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
+          [est, cod, `CENTRO SINTETICO ${cod}`, setorId, '2020-01-01', agora],
+        );
+      // Vínculo vigente do usuário com o estabelecimento (o responsável pelo bem só vale na sua unidade).
+      const vincular = (u: number, estab: number) =>
+        garantir(
+          e,
+          'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [u, estab],
+          'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+          [u, estab, '2020-01-01', agora],
+        );
+      const usu = await usuario('l0211p.patrimonio');
+      const aceitante = await usuario('l0211p.aceite');
+      await vincular(usu, est);
+      await vincular(aceitante, outro);
+      const r = {
+        est,
+        outro,
+        usuario: usu,
+        aceitante,
+        origem,
+        centro1: await centro('921201', null),
+        centro2: await centro('921202', setor),
+      };
+      await limparGravacoes(e, [est, outro]);
+      return r;
+    },
+  );
   return { nucleo, marca, ...ids };
 }
 
 export async function encerrarMassaPatrimonio(m: MassaPatrimonio | null): Promise<void> {
   if (!m) return;
   await m.nucleo
-    .escrever({ cliente: CLIENTE_PAT, correlacao: 'limpeza-teste-02-11-pat' }, (e) => limparGravacoes(e, [m.est, m.outro]))
+    .escrever({ cliente: CLIENTE_PAT, correlacao: 'limpeza-teste-02-11-pat' }, (e) =>
+      limparGravacoes(e, [m.est, m.outro]),
+    )
     .catch(() => undefined);
   await m.nucleo.encerrar();
 }
@@ -142,7 +147,12 @@ export function contextoPat(m: MassaPatrimonio, usuario = m.usuario, est = m.est
 }
 
 /** A linha da trilha da tela (o Executor a leva para a trilha de auditoria). */
-export function trilhaPat(m: MassaPatrimonio, evento: string, tabela: string, id: number | null): RegistroTrilhaTela {
+export function trilhaPat(
+  m: MassaPatrimonio,
+  evento: string,
+  tabela: string,
+  id: number | null,
+): RegistroTrilhaTela {
   return {
     estabelecimento: m.est,
     usuario: m.usuario,

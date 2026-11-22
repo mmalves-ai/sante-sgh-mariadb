@@ -54,7 +54,8 @@ const dataBr = (d: string) => d.split('-').reverse().join('/');
 const situacaoDaRegra = (s: string) => (s === 'vigente' ? 'ativo' : s) as EntradaAlerta['situacao'];
 
 const DIA_MS = 86_400_000;
-const diasAte = (fim: string, hoje: string) => Math.round((Date.parse(`${fim}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)) / DIA_MS);
+const diasAte = (fim: string, hoje: string) =>
+  Math.round((Date.parse(`${fim}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)) / DIA_MS);
 
 /** O título e o texto do aviso: o assunto e a mensagem próprios do contrato, quando preenchidos. */
 function textos(c: ContratoParaAlerta, padrao: string, quando: string): { titulo: string; texto: string } {
@@ -114,7 +115,11 @@ export function alertasDoDia(contratos: readonly ContratoParaAlerta[], hoje: str
         fim: c.fim,
         destinatarios,
         chave: `${c.id}:${c.fim}:antecedencia-${dias}`,
-        ...textos(c, `Contrato ${c.numero}: vence em até ${dias} dias (${dataBr(c.fim)})`, `vence em ${dataBr(c.fim)}`),
+        ...textos(
+          c,
+          `Contrato ${c.numero}: vence em até ${dias} dias (${dataBr(c.fim)})`,
+          `vence em ${dataBr(c.fim)}`,
+        ),
       });
   }
   return out;
@@ -171,7 +176,10 @@ export class ContratosVencimentoService implements OnApplicationBootstrap, OnApp
       this.temporizador = setInterval(() => void this.ciclo(), 3_600_000);
       this.temporizador.unref();
     } catch (e) {
-      logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'alerta de vencimento dos contratos não subiu');
+      logger.error(
+        { erro: e instanceof Error ? e.message : 'erro' },
+        'alerta de vencimento dos contratos não subiu',
+      );
     }
   }
 
@@ -199,7 +207,12 @@ export class ContratosVencimentoService implements OnApplicationBootstrap, OnApp
         const x = v.resultado;
         if (x.avisos > 0)
           logger.info(
-            { cliente: v.cliente, estabelecimento: v.estabelecimento, emAlerta: x.emAlerta, avisos: x.avisos },
+            {
+              cliente: v.cliente,
+              estabelecimento: v.estabelecimento,
+              emAlerta: x.emAlerta,
+              avisos: x.avisos,
+            },
             'vencimento de contratos avisado',
           );
         if (x.semDestinatario > 0)

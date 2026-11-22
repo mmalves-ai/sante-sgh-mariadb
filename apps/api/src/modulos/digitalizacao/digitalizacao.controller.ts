@@ -452,7 +452,8 @@ export class DigitalizacaoController {
       acao: 'conferir',
       entrada: { id: e.id, resultado: e.resultado, motivo: e.motivo ?? null, versao: e.versao },
     });
-    if (await this.repeticao<null>(sp)) return respostaConferencia(d, e.resultado === 'fiel' ? 'conferido' : 'recusado');
+    if (await this.repeticao<null>(sp))
+      return respostaConferencia(d, e.resultado === 'fiel' ? 'conferido' : 'recusado');
     // A guarda legal antes de aceitar a fidelidade (se a fixação depois da captura falhou, refaz aqui; falhando, recusa).
     await this.armazem.fixar(s.hospital, d.arquivoChave);
     let nova: SituacaoDigitalizacao;
@@ -527,7 +528,10 @@ function respostaCaptura(r: { id: number; lote: number; ordem: number }): Result
   };
 }
 
-function respostaConferencia(d: { id: number; lote: number }, nova: SituacaoDigitalizacao): ResultadoDigitalizacao {
+function respostaConferencia(
+  d: { id: number; lote: number },
+  nova: SituacaoDigitalizacao,
+): ResultadoDigitalizacao {
   return {
     ok: true,
     id: d.id,

@@ -34,7 +34,9 @@ describe.skipIf(SEM_BANCO)('aviso em tempo real sobre o banco próprio (f22_o2)'
     });
     const canal = new AvisosAtendimento(null);
     const vistos: { versao: number; dentro: boolean }[] = [];
-    const cancelar = canal.assinar(chaveDoCanal(m.codA, m.login.d1), (versao) => vistos.push({ versao, dentro }));
+    const cancelar = canal.assinar(chaveDoCanal(m.codA, m.login.d1), (versao) =>
+      vistos.push({ versao, dentro }),
+    );
     const s = new ServicoComunicacao(porta, canal);
     const autor = { login: m.login.rem, estacao: 'INT-M27', correlacao: 'int-m27-aviso-1' };
     const msg = (destino: string) => ({
@@ -44,7 +46,9 @@ describe.skipIf(SEM_BANCO)('aviso em tempo real sobre o banco próprio (f22_o2)'
       cienciaObrigatoria: false,
       contextoAtendimento: null,
     });
-    await expect(s.enviar(m.ctx('rem'), autor, msg('f2201.ninguem'), 'int-m27-aviso-falha')).rejects.toBeTruthy();
+    await expect(
+      s.enviar(m.ctx('rem'), autor, msg('f2201.ninguem'), 'int-m27-aviso-falha'),
+    ).rejects.toBeTruthy();
     expect(vistos).toEqual([]);
     const inicio = performance.now();
     const r = await s.enviar(m.ctx('rem'), autor, msg(m.login.d1), `int-m27-aviso-${Date.now()}`);

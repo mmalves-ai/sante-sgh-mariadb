@@ -89,8 +89,16 @@ export const TABELAS_REDE = [
 
 const RESTRICOES: MapaRestricoes = {
   uq_prestador_rede_cpf: ['documento-ja-credenciado', 'Este CPF já está na rede da operadora.', 'documento'],
-  uq_prestador_rede_cnpj: ['documento-ja-credenciado', 'Este CNPJ já está na rede da operadora.', 'documento'],
-  uq_prestador_rede_codigo: ['codigo-em-uso', 'O código gerado para o prestador já existe: tente de novo.', 'codigo'],
+  uq_prestador_rede_cnpj: [
+    'documento-ja-credenciado',
+    'Este CNPJ já está na rede da operadora.',
+    'documento',
+  ],
+  uq_prestador_rede_codigo: [
+    'codigo-em-uso',
+    'O código gerado para o prestador já existe: tente de novo.',
+    'codigo',
+  ],
   uq_contrato_rede_prestador_numero: [
     'contrato-numero-em-uso',
     'Já existe contrato com este número na operadora.',
@@ -249,43 +257,54 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
   }
 
   private ler<T>(c: ContextoRede, fn: (l: Leitor, est: number) => Promise<T>, vazio: T): Promise<T> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' }, async (l) => {
-      const est = await estabelecimentoDaSessao(c, l);
-      return est === null ? vazio : fn(l, est);
-    });
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' },
+      async (l) => {
+        const est = await estabelecimentoDaSessao(c, l);
+        return est === null ? vazio : fn(l, est);
+      },
+    );
   }
 
   async hoje(c: ContextoRede): Promise<string> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' }, async (l) => {
-      const r = await l.uma<{ hoje: unknown }>('SELECT CURRENT_DATE AS hoje');
-      return dataIso(r?.['hoje']) ?? new Date().toISOString().slice(0, 10);
-    });
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' },
+      async (l) => {
+        const r = await l.uma<{ hoje: unknown }>('SELECT CURRENT_DATE AS hoje');
+        return dataIso(r?.['hoje']) ?? new Date().toISOString().slice(0, 10);
+      },
+    );
   }
 
   async dominios(c: ContextoRede): Promise<Record<DominioRede, ItemDominioRede[]>> {
-    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' }, async (l) => {
-      // Cadastros do cliente com o código do padrão da ANS (só os códigos numéricos; a lista é pequena).
-      const dominio = async (tabela: 'tipo_prestador_rede' | 'natureza_prestador_rede' | 'regime_atendimento_rede') =>
-        (
-          await l.consultar(
-            `SELECT codigo, descricao FROM ${tabela} WHERE ativo = TRUE AND codigo REGEXP '^[0-9]{1,5}$' ORDER BY CAST(codigo AS UNSIGNED)`,
-            [],
-            { teto: 200 },
-          )
-        ).map((x) => ({ codigo: Number(x['codigo']), rotulo: textoObrigatorio(x['descricao']) }));
-      return {
-        tipo: await dominio('tipo_prestador_rede'),
-        natureza: await dominio('natureza_prestador_rede'),
-        regime: await dominio('regime_atendimento_rede'),
-        classificacao: opcoesFixas(CLASSIFICACOES_REDE, CLASSIFICACAO),
-        contratacao: opcoesFixas(CONTRATACOES_PRESTADOR, CONTRATACAO),
-        disponibilidade: opcoesFixas(DISPONIBILIDADES_SERVICO, DISPONIBILIDADE),
-        isencaoOnus: opcoesFixas(ISENCOES_ONUS, ISENCAO_ONUS),
-        remuneracao: opcoesFixas(MODELOS_REMUNERACAO, REMUNERACAO),
-        formaReajuste: opcoesFixas(FORMAS_REAJUSTE, FORMA_REAJUSTE),
-        movimento: opcoesFixas(MOVIMENTOS_REDE, MOVIMENTO_REDE),
-      };
-    });
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' },
+      async (l) => {
+        // Cadastros do cliente com o código do padrão da ANS (só os códigos numéricos; a lista é pequena).
+        const dominio = async (
+          tabela: 'tipo_prestador_rede' | 'natureza_prestador_rede' | 'regime_atendimento_rede',
+        ) =>
+          (
+            await l.consultar(
+              `SELECT codigo, descricao FROM ${tabela} WHERE ativo = TRUE AND codigo REGEXP '^[0-9]{1,5}$' ORDER BY CAST(codigo AS UNSIGNED)`,
+              [],
+              { teto: 200 },
+            )
+          ).map((x) => ({ codigo: Number(x['codigo']), rotulo: textoObrigatorio(x['descricao']) }));
+        return {
+          tipo: await dominio('tipo_prestador_rede'),
+          natureza: await dominio('natureza_prestador_rede'),
+          regime: await dominio('regime_atendimento_rede'),
+          classificacao: opcoesFixas(CLASSIFICACOES_REDE, CLASSIFICACAO),
+          contratacao: opcoesFixas(CONTRATACOES_PRESTADOR, CONTRATACAO),
+          disponibilidade: opcoesFixas(DISPONIBILIDADES_SERVICO, DISPONIBILIDADE),
+          isencaoOnus: opcoesFixas(ISENCOES_ONUS, ISENCAO_ONUS),
+          remuneracao: opcoesFixas(MODELOS_REMUNERACAO, REMUNERACAO),
+          formaReajuste: opcoesFixas(FORMAS_REAJUSTE, FORMA_REAJUSTE),
+          movimento: opcoesFixas(MOVIMENTOS_REDE, MOVIMENTO_REDE),
+        };
+      },
+    );
   }
 
   convenios(c: ContextoRede): Promise<ConvenioRede[]> {
@@ -315,7 +334,10 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
     c: ContextoRede,
     f: FiltroPrestadores,
   ): Promise<{ itens: Prestador[]; proxima: { nome: string; id: number } | null }> {
-    const limite = Math.min(Math.max(1, Math.trunc(f.limite ?? LIMITE_PAGINA_PRESTADORES)), LIMITE_PAGINA_PRESTADORES);
+    const limite = Math.min(
+      Math.max(1, Math.trunc(f.limite ?? LIMITE_PAGINA_PRESTADORES)),
+      LIMITE_PAGINA_PRESTADORES,
+    );
     return this.ler(
       c,
       async (l, est) => {
@@ -335,7 +357,8 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
             ps.push(trechoLike(busca.replace(/\s+/g, ' ').slice(0, 60)));
           }
         }
-        if (f.situacao) onde.push(f.situacao === 'credenciado' ? SQL_VIGENTE_CREDENCIADO : SQL_VIGENTE_DESCREDENCIADO);
+        if (f.situacao)
+          onde.push(f.situacao === 'credenciado' ? SQL_VIGENTE_CREDENCIADO : SQL_VIGENTE_DESCREDENCIADO);
         if (f.tipo !== undefined) {
           onde.push('tp.codigo = ?');
           ps.push(String(f.tipo));
@@ -369,7 +392,13 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
   }
 
   totais(c: ContextoRede): Promise<TotaisRede> {
-    const zero: TotaisRede = { credenciados: 0, descredenciados: 0, hospitalares: 0, saidasAgendadas: 0, rpsPendentes: 0 };
+    const zero: TotaisRede = {
+      credenciados: 0,
+      descredenciados: 0,
+      hospitalares: 0,
+      saidasAgendadas: 0,
+      rpsPendentes: 0,
+    };
     return this.ler(
       c,
       async (l, est) => {
@@ -400,14 +429,18 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
     );
   }
 
-  movimentos(c: ContextoRede, f: FiltroMovimentosPorta): Promise<{ itens: MovimentoRede[]; proxima: number | null }> {
+  movimentos(
+    c: ContextoRede,
+    f: FiltroMovimentosPorta,
+  ): Promise<{ itens: MovimentoRede[]; proxima: number | null }> {
     const limite = LIMITE_PAGINA_MOVIMENTOS;
     return this.ler(
       c,
       async (l, est) => {
         const onde = ['p.estabelecimento_id = ?', 'p.excluido_em IS NULL'];
         const ps: unknown[] = [est];
-        if (f.situacao) onde.push(f.situacao === 'pendente' ? 'm.envio_ans_id IS NULL' : 'm.envio_ans_id IS NOT NULL');
+        if (f.situacao)
+          onde.push(f.situacao === 'pendente' ? 'm.envio_ans_id IS NULL' : 'm.envio_ans_id IS NOT NULL');
         if (f.prestador !== undefined) {
           onde.push('m.prestador_rede_id = ?');
           ps.push(f.prestador);
@@ -428,7 +461,9 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
         );
         const itens = r.slice(0, limite).map((x): MovimentoRede => {
           const d = lerJson(x['dados']);
-          const campos = Array.isArray(d['campos']) ? d['campos'].filter((v): v is string => typeof v === 'string') : [];
+          const campos = Array.isArray(d['campos'])
+            ? d['campos'].filter((v): v is string => typeof v === 'string')
+            : [];
           return {
             id: Number(x['id']),
             prestador: Number(x['prestador_rede_id']),
@@ -452,8 +487,9 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
     trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: GravadorRede) => Promise<T>,
   ): Promise<T> {
-    const est = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' }, (l) =>
-      estabelecimentoDaSessao(c, l),
+    const est = await this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: c.correlacao || 'operadora-rede' },
+      (l) => estabelecimentoDaSessao(c, l),
     );
     if (est === null) throw semEstabelecimento();
     const fixa = typeof trilha === 'function' ? null : trilha;
@@ -475,7 +511,12 @@ export class PortaRedeOperadoraPropria implements PortaRedeOperadora {
         return { dados: l.dadosDepois, motivo: l.motivo ?? null };
       },
     });
-    const r = await this.executor.executar(operacao, this.cliente, {}, contextoDireto(this.cliente, est, c, fixa));
+    const r = await this.executor.executar(
+      operacao,
+      this.cliente,
+      {},
+      contextoDireto(this.cliente, est, c, fixa),
+    );
     return r.resultado;
   }
 }
@@ -493,7 +534,10 @@ class GravadorRedeBanco implements GravadorRede {
   }
 
   private async idDoCodigo(tabela: string, codigo: number, rotulo: string, campo: string): Promise<number> {
-    const r = await this.tx.uma<{ id: unknown }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`, [String(codigo)]);
+    const r = await this.tx.uma<{ id: unknown }>(
+      `SELECT id FROM ${tabela} WHERE codigo = ? AND ativo = TRUE`,
+      [String(codigo)],
+    );
     if (!r) throw dominioAusente(rotulo, campo);
     return Number(r['id']);
   }
@@ -511,9 +555,14 @@ class GravadorRedeBanco implements GravadorRede {
          JOIN unidade_federativa uf ON uf.id = mi.unidade_federativa_id WHERE mi.codigo_ibge = ?`,
       [String(x.municipioIbge).padStart(7, '0')],
     );
-    if (!mun) throw recusa('municipio-inexistente', 'O município não está no cadastro do IBGE do cliente.', { campos: ['municipioIbge'] });
+    if (!mun)
+      throw recusa('municipio-inexistente', 'O município não está no cadastro do IBGE do cliente.', {
+        campos: ['municipioIbge'],
+      });
     if (textoObrigatorio(mun['sigla']) !== x.uf)
-      throw recusa('municipio-fora-da-uf', 'O município não é da UF informada.', { campos: ['municipioIbge'] });
+      throw recusa('municipio-fora-da-uf', 'O município não é da UF informada.', {
+        campos: ['municipioIbge'],
+      });
     if (x.convenio !== null) {
       const f = await this.tx.uma(
         `SELECT f.id FROM fonte_pagadora f WHERE f.id = ? AND f.excluido_em IS NULL
@@ -521,7 +570,10 @@ class GravadorRedeBanco implements GravadorRede {
                          WHERE fe.fonte_pagadora_id = f.id AND fe.estabelecimento_id = ? AND fe.excluido_em IS NULL)`,
         [x.convenio, this.est],
       );
-      if (!f) throw recusa('convenio-inexistente', 'O convênio não está no cadastro do estabelecimento.', { campos: ['convenio'] });
+      if (!f)
+        throw recusa('convenio-inexistente', 'O convênio não está no cadastro do estabelecimento.', {
+          campos: ['convenio'],
+        });
     }
     return {
       nome: x.nome,
@@ -529,9 +581,24 @@ class GravadorRedeBanco implements GravadorRede {
       codigo_cnes: x.cnes,
       municipio_ibge_id: Number(mun['id']),
       unidade_federativa_id: Number(mun['unidade_federativa_id']),
-      tipo_prestador_rede_id: await this.idDoCodigo('tipo_prestador_rede', x.tipo, 'tipos de prestador', 'tipo'),
-      natureza_prestador_rede_id: await this.idDoCodigo('natureza_prestador_rede', x.natureza, 'naturezas de prestador', 'natureza'),
-      regime_atendimento_rede_id: await this.idDoCodigo('regime_atendimento_rede', x.regime, 'regimes de atendimento', 'regime'),
+      tipo_prestador_rede_id: await this.idDoCodigo(
+        'tipo_prestador_rede',
+        x.tipo,
+        'tipos de prestador',
+        'tipo',
+      ),
+      natureza_prestador_rede_id: await this.idDoCodigo(
+        'natureza_prestador_rede',
+        x.natureza,
+        'naturezas de prestador',
+        'natureza',
+      ),
+      regime_atendimento_rede_id: await this.idDoCodigo(
+        'regime_atendimento_rede',
+        x.regime,
+        'regimes de atendimento',
+        'regime',
+      ),
       classificacao: this.valor(CLASSIFICACAO, x.classificacao, 'classificacao'),
       contratacao: this.valor(CONTRATACAO, x.contratacao, 'contratacao'),
       operadora_intermediaria_registro_ans: x.operadoraIntermediaria,
@@ -548,8 +615,13 @@ class GravadorRedeBanco implements GravadorRede {
   /** O estabelecimento próprio pelo código (só quando é o próprio hospital) e a unicidade dele na rede. */
   private async proprio(x: CamposPrestador, exceto: number | null): Promise<number | null> {
     if (!x.ehOHospital || !x.estabelecimento) return null;
-    const e = await this.tx.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [x.estabelecimento]);
-    if (!e) throw recusa('estabelecimento-inexistente', 'O estabelecimento da Rede não existe.', { campos: ['estabelecimento'] });
+    const e = await this.tx.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+      x.estabelecimento,
+    ]);
+    if (!e)
+      throw recusa('estabelecimento-inexistente', 'O estabelecimento da Rede não existe.', {
+        campos: ['estabelecimento'],
+      });
     const id = Number(e['id']);
     const outro = await this.tx.uma(
       `SELECT id FROM prestador_rede WHERE estabelecimento_id = ? AND proprio_estabelecimento_id = ? AND excluido_em IS NULL
@@ -557,9 +629,13 @@ class GravadorRedeBanco implements GravadorRede {
       [this.est, id, exceto ?? 0],
     );
     if (outro)
-      throw recusa('hospital-ja-na-rede', 'Este estabelecimento da Rede já está credenciado como prestador da operadora.', {
-        campos: ['estabelecimento'],
-      });
+      throw recusa(
+        'hospital-ja-na-rede',
+        'Este estabelecimento da Rede já está credenciado como prestador da operadora.',
+        {
+          campos: ['estabelecimento'],
+        },
+      );
     return id;
   }
 
@@ -580,7 +656,11 @@ class GravadorRedeBanco implements GravadorRede {
     return Number(r['operadora_saude_id']);
   }
 
-  private async incluirContrato(prestador: number, x: Pick<CamposPrestador, 'contrato' | 'contratacao'>, regime: unknown) {
+  private async incluirContrato(
+    prestador: number,
+    x: Pick<CamposPrestador, 'contrato' | 'contratacao'>,
+    regime: unknown,
+  ) {
     return this.tx.incluir('contrato_rede_prestador', {
       estabelecimento_id: this.est,
       operadora_saude_id: await this.operadora(),
@@ -628,7 +708,9 @@ class GravadorRedeBanco implements GravadorRede {
     hoje: string,
   ): Promise<number> {
     const codigo = MOVIMENTO_REDE.banco(tipo) ?? 'inclusao';
-    const s = await this.tx.uma('SELECT id FROM situacao_movimento_rede WHERE codigo = ? AND ativo = TRUE', [codigo]);
+    const s = await this.tx.uma('SELECT id FROM situacao_movimento_rede WHERE codigo = ? AND ativo = TRUE', [
+      codigo,
+    ]);
     if (!s) throw dominioAusente('situações do movimento da rede', 'movimento');
     return this.tx.incluir('movimento_rede_ans', {
       prestador_rede_id: prestador,
@@ -723,7 +805,9 @@ class GravadorRedeBanco implements GravadorRede {
         [x.substituto, this.est],
       );
       if (!s)
-        throw recusa('substituto-nao-credenciado', 'O substituto não está credenciado na rede.', { campos: ['substituto'] });
+        throw recusa('substituto-nao-credenciado', 'O substituto não está credenciado na rede.', {
+          campos: ['substituto'],
+        });
     }
     const hoje = await this.hoje();
     const versao = await this.tx.alterar('prestador_rede', x.id, x.versao, {
@@ -731,11 +815,19 @@ class GravadorRedeBanco implements GravadorRede {
       situacao_em: hoje,
       descredenciado_em: x.efetivoEm,
     });
-    await this.historico(x.id, 'alteracao', textoObrigatorio(atual['situacao']), 'descredenciado', x.efetivoEm, x.motivo, {
-      substituto: x.substituto,
-      avisoBeneficiariosEm: x.avisoBeneficiariosEm,
-      autorizacaoAns: x.autorizacaoAns,
-    });
+    await this.historico(
+      x.id,
+      'alteracao',
+      textoObrigatorio(atual['situacao']),
+      'descredenciado',
+      x.efetivoEm,
+      x.motivo,
+      {
+        substituto: x.substituto,
+        avisoBeneficiariosEm: x.avisoBeneficiariosEm,
+        autorizacaoAns: x.autorizacaoAns,
+      },
+    );
     const movimento = await this.movimento(x.id, 3, [], x.motivo, hoje);
     return { id: x.id, versao, movimento };
   }
@@ -752,7 +844,10 @@ class GravadorRedeBanco implements GravadorRede {
     if (textoObrigatorio(atual['situacao']) !== 'descredenciado') throw desatualizado();
     const agendada = booleano(atual['agendada']);
     const hoje = await this.hoje();
-    const p = await this.tx.uma('SELECT regime_atendimento_rede_id, contratacao FROM prestador_rede WHERE id = ?', [x.id]);
+    const p = await this.tx.uma(
+      'SELECT regime_atendimento_rede_id, contratacao FROM prestador_rede WHERE id = ?',
+      [x.id],
+    );
     const contratacao = CONTRATACAO.codigo(p?.['contratacao']) ?? 1;
     const regime = p?.['regime_atendimento_rede_id'] ?? null;
     const contratos = await this.tx.consultar(
@@ -761,7 +856,9 @@ class GravadorRedeBanco implements GravadorRede {
       [x.id],
       { teto: 50 },
     );
-    const abertos = contratos.filter((k) => ['rascunho', 'vigente', 'suspenso'].includes(textoObrigatorio(k['situacao'])));
+    const abertos = contratos.filter((k) =>
+      ['rascunho', 'vigente', 'suspenso'].includes(textoObrigatorio(k['situacao'])),
+    );
     const termos = {
       numero: x.contrato.numero,
       inicio: x.contrato.inicio,
@@ -772,7 +869,11 @@ class GravadorRedeBanco implements GravadorRede {
     };
     const mesmoNumero = contratos.find((k) => textoObrigatorio(k['numero']) === x.contrato.numero);
     // Saída agendada: o contrato vigente segue (o de mesmo número, senão o primeiro aberto).
-    const manter = agendada ? (mesmoNumero && abertos.includes(mesmoNumero) ? mesmoNumero : abertos[0]) : mesmoNumero;
+    const manter = agendada
+      ? mesmoNumero && abertos.includes(mesmoNumero)
+        ? mesmoNumero
+        : abertos[0]
+      : mesmoNumero;
     for (const k of abertos)
       if (k !== manter)
         await this.tx.alterar('contrato_rede_prestador', Number(k['id']), Number(k['versao']), {

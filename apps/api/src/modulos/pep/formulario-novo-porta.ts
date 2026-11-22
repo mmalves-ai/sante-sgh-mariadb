@@ -5,7 +5,15 @@
 //     modelo do prontuário pelo executor (`pep.publicarFormularioNovo`, desligada até o cenário do M36);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): versões SINTÉTICAS em memória, com as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-import type { EspecialidadeLida, EventoFormularioNovoLido, FormularioNovoLido, MudancaFormularioNovo, PerguntaDoBancoLida, RespostaCadastradaLida, SalvarFormularioNovo } from './tipos-pep.js';
+import type {
+  EspecialidadeLida,
+  EventoFormularioNovoLido,
+  FormularioNovoLido,
+  MudancaFormularioNovo,
+  PerguntaDoBancoLida,
+  RespostaCadastradaLida,
+  SalvarFormularioNovo,
+} from './tipos-pep.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_FORMULARIO_NOVO = Symbol('PORTA_FORMULARIO_NOVO');

@@ -73,7 +73,10 @@ const LOTE_INSERCAO = 500;
 /** A versão do orçamento é do estabelecimento: uma só "empresa" no contrato da tela. */
 const EMPRESA_UNICA = 1;
 
-const MESES = Array.from({ length: MESES_ORCAMENTO }, (_, i) => `valor_mes_${String(i + 1).padStart(2, '0')}`);
+const MESES = Array.from(
+  { length: MESES_ORCAMENTO },
+  (_, i) => `valor_mes_${String(i + 1).padStart(2, '0')}`,
+);
 
 const texto = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
@@ -147,7 +150,8 @@ function versaoDaLinha(x: Record<string, unknown>): OrcamentoVersao {
   const situacao = SITUACOES[String(x['situacao'])] ?? 'rascunho';
   const ano = inteiro(x['ano']);
   const tipoBase = String(x['tipo_base']) as 'vazio' | 'copia_versao' | 'realizado';
-  const copia = x['base_ano'] == null ? null : { ano: inteiro(x['base_ano']), numero: inteiro(x['base_numero']) };
+  const copia =
+    x['base_ano'] == null ? null : { ano: inteiro(x['base_ano']), numero: inteiro(x['base_numero']) };
   const ajuste = Math.round(Number(x['percentual_ajuste_base'] ?? 0) * 100);
   const criadoEm = instanteIso(x['criado_em']) ?? '';
   return {
@@ -168,7 +172,8 @@ function versaoDaLinha(x: Record<string, unknown>): OrcamentoVersao {
     alteradoEm: instanteIso(x['alterado_em']) ?? criadoEm,
     aprovadoPor: situacao === 'aprovado' || situacao === 'substituido' ? texto(x['aprovador_login']) : null,
     aprovadoEm: instanteIso(x['aprovado_em']),
-    observacaoAprovacao: situacao === 'aprovado' || situacao === 'substituido' ? texto(x['observacao']) : null,
+    observacaoAprovacao:
+      situacao === 'aprovado' || situacao === 'substituido' ? texto(x['observacao']) : null,
     // O descarte é a última alteração da versão: quem descartou é o último que alterou.
     descartadoPor: situacao === 'descartado' ? texto(x['alterado_login']) : null,
     motivoDescarte: texto(x['motivo_descarte']),
@@ -245,7 +250,9 @@ const desatualizado = () =>
 /** A linha de consumo pede o insumo no modelo; o consumo total por centro ainda não tem onde ficar. */
 /** Os dados da tela para a trilha, como objeto (o que não for objeto vai em `tela`). */
 const asObjetoDados = (d: unknown): Record<string, unknown> =>
-  d !== null && typeof d === 'object' && !Array.isArray(d) ? (d as Record<string, unknown>) : { tela: d ?? null };
+  d !== null && typeof d === 'object' && !Array.isArray(d)
+    ? (d as Record<string, unknown>)
+    : { tela: d ?? null };
 
 const consumoSemModelo = () =>
   recusa(
@@ -325,11 +332,13 @@ async function travarRascunho(tx: TxOperacao, id: number, versao: number): Promi
     versaoEsperada: versao,
     colunas: ['estabelecimento_id', 'situacao', 'ano', 'excluido_em'],
   });
-  if (
-    Number(relido['estabelecimento_id']) !== tx.contexto.estabelecimento ||
-    relido['excluido_em'] != null
-  )
-    throw new ErroOperacao(404, 'nao-encontrado', 'Orçamento não encontrado', 'A versão não existe neste estabelecimento.');
+  if (Number(relido['estabelecimento_id']) !== tx.contexto.estabelecimento || relido['excluido_em'] != null)
+    throw new ErroOperacao(
+      404,
+      'nao-encontrado',
+      'Orçamento não encontrado',
+      'A versão não existe neste estabelecimento.',
+    );
   if (relido['situacao'] !== 'rascunho') throw desatualizado();
   return relido;
 }
@@ -365,7 +374,8 @@ const opCriar = definirOperacao({
         tipo_versao: numero === 1 ? 'original' : 'revisao',
         tipo_base: x.base.tipo === 'versao' ? 'copia_versao' : x.base.tipo,
         base_versao_orcamento_id: x.base.tipo === 'versao' ? x.base.id : null,
-        percentual_ajuste_base: x.base.tipo === 'realizado' ? (x.base.ajusteCentesimos / 100).toFixed(4) : null,
+        percentual_ajuste_base:
+          x.base.tipo === 'realizado' ? (x.base.ajusteCentesimos / 100).toFixed(4) : null,
         vigencia_inicio: `${x.ano}-01-01`,
         vigencia_fim: `${x.ano}-12-31`,
         situacao: 'rascunho',
@@ -379,7 +389,10 @@ const opCriar = definirOperacao({
     return { id, numero, linhas: x.linhas.length };
   },
   alvo: (_x, r) => ({ tabela: 'versao_orcamento', id: r.id }),
-  trilha: (x) => ({ acao: 'inclusao', dados: { ...asObjetoDados(x.dados), linhasIncluidas: x.linhas.length } }),
+  trilha: (x) => ({
+    acao: 'inclusao',
+    dados: { ...asObjetoDados(x.dados), linhasIncluidas: x.linhas.length },
+  }),
 });
 
 const opLinhas = definirOperacao({
@@ -401,7 +414,10 @@ const opLinhas = definirOperacao({
     };
     for (const l of x.remover) {
       const r = await linhaDaChave(l);
-      await tx.alterar('linha_orcamento', r.id, r.versao, { excluido_em: agora, excluido_por: tx.contexto.usuario });
+      await tx.alterar('linha_orcamento', r.id, r.versao, {
+        excluido_em: agora,
+        excluido_por: tx.contexto.usuario,
+      });
     }
     for (const l of x.alterar) {
       if (l.natureza === 'consumo') throw consumoSemModelo();
@@ -429,7 +445,12 @@ const opLinhas = definirOperacao({
   alvo: (x) => ({ tabela: 'versao_orcamento', id: x.id }),
   trilha: (x) => ({
     acao: 'alteracao',
-    dados: { ...asObjetoDados(x.dados), linhasIncluidas: x.incluir.length, linhasAlteradas: x.alterar.length, linhasRemovidas: x.remover.length },
+    dados: {
+      ...asObjetoDados(x.dados),
+      linhasIncluidas: x.incluir.length,
+      linhasAlteradas: x.alterar.length,
+      linhasRemovidas: x.remover.length,
+    },
   }),
 });
 
@@ -501,11 +522,17 @@ export class PortaOrcamentoPropria implements PortaOrcamento {
   /** O estabelecimento da sessão (pelo id, ou pelo código quando o mapa ainda não o tinha); sem ele, recusa. */
   private async estabelecimento(c: ContextoOrcamento, l: Leitor): Promise<number> {
     if (c.estabelecimento !== null) return c.estabelecimento;
-    const x = await l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-      c.hospital,
-    ]);
+    const x = await l.uma<{ id: unknown }>(
+      'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+      [c.hospital],
+    );
     if (!x)
-      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento desconhecido', 'O estabelecimento da sessão não existe.');
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Estabelecimento desconhecido',
+        'O estabelecimento da sessão não existe.',
+      );
     return Number(x.id);
   }
 
@@ -550,25 +577,21 @@ export class PortaOrcamentoPropria implements PortaOrcamento {
         { teto: TETO_ITENS },
       );
       return {
-        centros: centros.map(
-          (x): CentroOrcamento => ({
-            id: inteiro(x['id']),
-            codigo: /^\d{1,15}$/.test(String(x['codigo'] ?? '')) ? Number(x['codigo']) : inteiro(x['id']),
-            nome: texto(x['nome']) ?? '',
-            ativo: Boolean(Number(x['ativo'])),
-          }),
-        ),
-        itens: itens.map(
-          (x): ItemGerencialOrcamento => ({
-            grupo: inteiro(x['grp']),
-            subgrupo: inteiro(x['sub']),
-            item: inteiro(x['id']),
-            nome: texto(x['descricao']) ?? '',
-            grupoNome: texto(x['gnome']) ?? '',
-            natureza: x['tipo'] === 'receita' ? 'receita' : 'despesa',
-            ativo: Boolean(Number(x['ativo'])),
-          }),
-        ),
+        centros: centros.map((x): CentroOrcamento => ({
+          id: inteiro(x['id']),
+          codigo: /^\d{1,15}$/.test(String(x['codigo'] ?? '')) ? Number(x['codigo']) : inteiro(x['id']),
+          nome: texto(x['nome']) ?? '',
+          ativo: Boolean(Number(x['ativo'])),
+        })),
+        itens: itens.map((x): ItemGerencialOrcamento => ({
+          grupo: inteiro(x['grp']),
+          subgrupo: inteiro(x['sub']),
+          item: inteiro(x['id']),
+          nome: texto(x['descricao']) ?? '',
+          grupoNome: texto(x['gnome']) ?? '',
+          natureza: x['tipo'] === 'receita' ? 'receita' : 'despesa',
+          ativo: Boolean(Number(x['ativo'])),
+        })),
         empresas: [EMPRESA_UNICA],
         // Os parâmetros do orçamento ainda não têm lugar no modelo (pedido ao orquestrador): nada a mostrar.
         parametros: { anoInicial: null, mesInicial: null, digitaCentro: null, regime: null },
@@ -790,10 +813,14 @@ const paraEntrada = (l: LinhaOrcamentoParaGravar): z.infer<typeof linhaZ> => ({
 });
 
 /** Contagens das tabelas do orçamento no estabelecimento (prova da integração; só números). */
-export async function contagensOrcamento(e: Escritor | Leitor, estabelecimento: number): Promise<Record<string, number>> {
-  const v = await e.uma<{ n: unknown }>('SELECT COUNT(*) AS n FROM versao_orcamento WHERE estabelecimento_id = ?', [
-    estabelecimento,
-  ]);
+export async function contagensOrcamento(
+  e: Escritor | Leitor,
+  estabelecimento: number,
+): Promise<Record<string, number>> {
+  const v = await e.uma<{ n: unknown }>(
+    'SELECT COUNT(*) AS n FROM versao_orcamento WHERE estabelecimento_id = ?',
+    [estabelecimento],
+  );
   const l = await e.uma<{ n: unknown }>(
     `SELECT COUNT(*) AS n FROM linha_orcamento l JOIN versao_orcamento v ON v.id = l.versao_orcamento_id
       WHERE v.estabelecimento_id = ?`,

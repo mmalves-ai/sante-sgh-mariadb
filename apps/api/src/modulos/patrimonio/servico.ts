@@ -119,7 +119,10 @@ export interface SessaoPatrimonio {
   ): RegistroTrilhaTela;
 }
 
-const ctx = (s: SessaoPatrimonio): ContextoPatrimonio => ({ ...s.porta, chaveIdempotencia: s.chaveIdempotencia });
+const ctx = (s: SessaoPatrimonio): ContextoPatrimonio => ({
+  ...s.porta,
+  chaveIdempotencia: s.chaveIdempotencia,
+});
 
 /** O inventário que não está aberto: encerrado ou cancelado (W0-08), cada um com o seu código. */
 const inventarioNaoAberto = (situacao: string) =>

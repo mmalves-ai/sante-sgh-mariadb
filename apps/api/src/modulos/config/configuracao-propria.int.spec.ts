@@ -8,11 +8,7 @@ import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import {
-  type FonteConfiguracao,
-  fonteConfiguracaoMemoria,
-  type TrilhaConfig,
-} from './configuracao-fonte.js';
+import { type FonteConfiguracao, fonteConfiguracaoMemoria, type TrilhaConfig } from './configuracao-fonte.js';
 import { FonteConfiguracaoPropria } from './configuracao-propria.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
 
@@ -108,9 +104,9 @@ async function preparar(): Promise<void> {
 
 async function limparValores(): Promise<void> {
   await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'limpeza-f22-0103' }, async (e) => {
-    const est = (await e.consultar<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [H, OUTRO])).map(
-      (x) => Number(x.id),
-    );
+    const est = (
+      await e.consultar<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo IN (?, ?)', [H, OUTRO])
+    ).map((x) => Number(x.id));
     await e.executar(
       `DELETE h FROM parametro_valor_historico h JOIN parametro_valor v ON v.id = h.parametro_valor_id
         JOIN parametro_definicao d ON d.id = v.parametro_definicao_id WHERE d.chave = ?`,
@@ -125,7 +121,10 @@ async function limparValores(): Promise<void> {
       await e.executar(`DELETE FROM liberacao_chave WHERE estabelecimento_id IN (${m})`, est);
       await e.executar(`DELETE FROM liberacao_lote WHERE estabelecimento_id IN (${m})`, est);
       await e.executar(`DELETE FROM recurso_prerequisito WHERE estabelecimento_id IN (${m})`, est);
-      await e.executar(`DELETE FROM sequencia_negocio WHERE tipo = 'liberacao_lote' AND estabelecimento_id IN (${m})`, est);
+      await e.executar(
+        `DELETE FROM sequencia_negocio WHERE tipo = 'liberacao_lote' AND estabelecimento_id IN (${m})`,
+        est,
+      );
     }
     if (idUsuario) {
       await e.executar('DELETE FROM idempotencia_operacao WHERE usuario_id = ?', [idUsuario]);
@@ -136,7 +135,12 @@ async function limparValores(): Promise<void> {
 
 const fabricas: [string, () => FonteConfiguracao][] = [
   ['memória', () => fonteConfiguracaoMemoria(new RegistradorTrilhaMemoria())],
-  ...(SEM_BANCO ? [] : ([['banco', () => new FonteConfiguracaoPropria(nucleo!, CLIENTE)]] as [string, () => FonteConfiguracao][])),
+  ...(SEM_BANCO
+    ? []
+    : ([['banco', () => new FonteConfiguracaoPropria(nucleo!, CLIENTE)]] as [
+        string,
+        () => FonteConfiguracao,
+      ][])),
 ];
 
 beforeAll(async () => {
@@ -165,8 +169,11 @@ describe.each(fabricas)('fonte de configuração (%s): parâmetros', (nome, cria
   });
 
   it('define o valor e, na nova definição, fecha a versão anterior do mesmo nível e alvo', async () => {
-    id1 = (await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('20') }, trilha())).id;
-    id2 = (await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [id1], nova: nova('30') }, trilha())).id;
+    id1 = (await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('20') }, trilha()))
+      .id;
+    id2 = (
+      await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [id1], nova: nova('30') }, trilha())
+    ).id;
     const v = (await fonte.valoresParametro('rede-teste', H)).filter((x) => x.chave === PARAM);
     const primeiro = v.find((x) => x.id === id1)!;
     const segundo = v.find((x) => x.id === id2)!;
@@ -176,7 +183,9 @@ describe.each(fabricas)('fonte de configuração (%s): parâmetros', (nome, cria
   });
 
   it('recusa a definição concorrente (as vigentes relidas não são as do plano): 409 conflito-concorrente', async () => {
-    const r = await falha(fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('40') }, trilha()));
+    const r = await falha(
+      fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('40') }, trilha()),
+    );
     expect(r).toEqual({ status: 409, codigo: 'conflito-concorrente' });
     const vigentes = (await fonte.valoresParametro('r', H)).filter((x) => x.chave === PARAM && !x.vigenteAte);
     expect(vigentes.map((x) => x.id)).toEqual([id2]);
@@ -205,7 +214,16 @@ describe.each(fabricas)('fonte de configuração (%s): parâmetros', (nome, cria
   it('retirada sem vigente é recusada (409)', async () => {
     const r = await falha(
       fonte.retirarParametro(
-        { rede: 'r', hospital: H, chave: PARAM, nivel: 'estabelecimento', alvo: H, fechar: [], motivo: 'x'.repeat(12), por: LOGIN },
+        {
+          rede: 'r',
+          hospital: H,
+          chave: PARAM,
+          nivel: 'estabelecimento',
+          alvo: H,
+          fechar: [],
+          motivo: 'x'.repeat(12),
+          por: LOGIN,
+        },
         trilha(),
       ),
     );
@@ -244,14 +262,22 @@ describe.each(fabricas)('fonte de configuração (%s): chaves de liberação', (
     expect(r!.alteradas).toBe(1);
     const chaves = (await fonte.chaves('r', H)).filter((c) => c.chave === 'f22o103.recurso');
     expect(chaves).toHaveLength(1);
-    expect(chaves[0]).toMatchObject({ escopo: 'hospital', valor: '*', ligada: true, ligadaAntes: null, lote });
+    expect(chaves[0]).toMatchObject({
+      escopo: 'hospital',
+      valor: '*',
+      ligada: true,
+      ligadaAntes: null,
+      lote,
+    });
     expect(await fonte.lote('r', H, lote)).toHaveLength(1);
     expect(await fonte.chaves('r', OUTRO)).toEqual([]);
   });
 
   it('a recusa do plano volta como foi lançada e nada é gravado', async (ctx) => {
     pular(ctx);
-    const recusa = new ErroProblema('recusa-de-negocio', 409, 'Falta pré-requisito', 'falta', { codigo: 'x' });
+    const recusa = new ErroProblema('recusa-de-negocio', 409, 'Falta pré-requisito', 'falta', {
+      codigo: 'x',
+    });
     await expect(
       fonte.aplicarLote(
         'r',
@@ -303,7 +329,11 @@ describe.each(fabricas)('fonte de configuração (%s): chaves de liberação', (
       autor: LOGIN,
     };
     await fonte.gravarPrerequisito('r', p, trilha());
-    await fonte.gravarPrerequisito('r', { ...p, situacao: 'cumprido', validade: '2030-12-31', evidencia: 'ata 1' }, trilha());
+    await fonte.gravarPrerequisito(
+      'r',
+      { ...p, situacao: 'cumprido', validade: '2030-12-31', evidencia: 'ata 1' },
+      trilha(),
+    );
     const lidos = (await fonte.prerequisitos('r', H)).filter((x) => x.recurso === 'f22o103.recurso');
     expect(lidos).toHaveLength(1);
     expect(lidos[0]).toMatchObject({ situacao: 'cumprido', validade: '2030-12-31', evidencia: 'ata 1' });
@@ -320,42 +350,71 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
 
   it('a definição deixa o valor, o histórico, a trilha e a idempotência na mesma transação; a repetição não grava de novo', async () => {
     const chave = `f22o103-${randomUUID()}`;
-    const { id } = await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('50') }, trilha(chave));
-    const repetida = await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [], nova: nova('50') }, trilha(chave));
+    const { id } = await fonte.definirParametro(
+      { rede: 'r', hospital: H, fechar: [], nova: nova('50') },
+      trilha(chave),
+    );
+    const repetida = await fonte.definirParametro(
+      { rede: 'r', hospital: H, fechar: [], nova: nova('50') },
+      trilha(chave),
+    );
     expect(repetida.id).toBe(id);
-    const efeito = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-f22-0103' }, async (l) => ({
-      valor: await l.uma(
-        'SELECT nivel, valor, versao, vigencia_fim, criado_por, motivo FROM parametro_valor WHERE id = ?',
-        [Number(id)],
-      ),
-      historico: await l.consultar(
-        'SELECT operacao, valor_anterior, valor_novo, usuario_id FROM parametro_valor_historico WHERE parametro_valor_id = ?',
-        [Number(id)],
-      ),
-      trilha: await l.consultar(
-        "SELECT acao, entidade FROM trilha_auditoria WHERE entidade = 'parametro_valor' AND entidade_id = ?",
-        [Number(id)],
-      ),
-      idempotencia: await l.consultar(
-        "SELECT operacao FROM idempotencia_operacao WHERE operacao = 'config.parametro.definir' AND chave = ?",
-        [chave],
-      ),
-    }));
-    expect(efeito.valor).toMatchObject({ nivel: 'estabelecimento', valor: '50', versao: 1, vigencia_fim: null });
+    const efeito = await nucleo!.lerSomente(
+      { cliente: CLIENTE, correlacao: 'conferencia-f22-0103' },
+      async (l) => ({
+        valor: await l.uma(
+          'SELECT nivel, valor, versao, vigencia_fim, criado_por, motivo FROM parametro_valor WHERE id = ?',
+          [Number(id)],
+        ),
+        historico: await l.consultar(
+          'SELECT operacao, valor_anterior, valor_novo, usuario_id FROM parametro_valor_historico WHERE parametro_valor_id = ?',
+          [Number(id)],
+        ),
+        trilha: await l.consultar(
+          "SELECT acao, entidade FROM trilha_auditoria WHERE entidade = 'parametro_valor' AND entidade_id = ?",
+          [Number(id)],
+        ),
+        idempotencia: await l.consultar(
+          "SELECT operacao FROM idempotencia_operacao WHERE operacao = 'config.parametro.definir' AND chave = ?",
+          [chave],
+        ),
+      }),
+    );
+    expect(efeito.valor).toMatchObject({
+      nivel: 'estabelecimento',
+      valor: '50',
+      versao: 1,
+      vigencia_fim: null,
+    });
     expect(Number(efeito.valor?.['criado_por'])).toBe(idUsuario);
     expect(efeito.historico).toHaveLength(1);
-    expect(efeito.historico[0]).toMatchObject({ operacao: 'inclusao', valor_novo: '50', valor_anterior: null });
+    expect(efeito.historico[0]).toMatchObject({
+      operacao: 'inclusao',
+      valor_novo: '50',
+      valor_anterior: null,
+    });
     expect(efeito.trilha).toHaveLength(1);
     expect(efeito.idempotencia).toHaveLength(1);
   });
 
   it('o fechamento sobe a versão da linha fechada (trava otimista) e o histórico guarda o valor anterior', async () => {
     const [vig] = (await fonte.valoresParametro('r', H)).filter((x) => x.chave === PARAM && !x.vigenteAte);
-    const { id } = await fonte.definirParametro({ rede: 'r', hospital: H, fechar: [vig!.id], nova: nova('60') }, trilha());
-    const e = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-f22-0103' }, async (l) => ({
-      fechada: await l.uma('SELECT versao, vigencia_fim FROM parametro_valor WHERE id = ?', [Number(vig!.id)]),
-      hist: await l.uma('SELECT valor_anterior FROM parametro_valor_historico WHERE parametro_valor_id = ?', [Number(id)]),
-    }));
+    const { id } = await fonte.definirParametro(
+      { rede: 'r', hospital: H, fechar: [vig!.id], nova: nova('60') },
+      trilha(),
+    );
+    const e = await nucleo!.lerSomente(
+      { cliente: CLIENTE, correlacao: 'conferencia-f22-0103' },
+      async (l) => ({
+        fechada: await l.uma('SELECT versao, vigencia_fim FROM parametro_valor WHERE id = ?', [
+          Number(vig!.id),
+        ]),
+        hist: await l.uma(
+          'SELECT valor_anterior FROM parametro_valor_historico WHERE parametro_valor_id = ?',
+          [Number(id)],
+        ),
+      }),
+    );
     expect(e.fechada?.['versao']).toBe(2);
     expect(e.fechada?.['vigencia_fim']).not.toBeNull();
     expect(e.hist?.['valor_anterior']).toBe('50');
@@ -383,16 +442,14 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
 
   it('entrada inválida é recusada antes de gravar (400)', async () => {
     const r = await falha(
-      fonte.definirParametro(
-        { rede: 'r', hospital: H, fechar: ['abc'], nova: nova('1') },
-        trilha(),
-      ),
+      fonte.definirParametro({ rede: 'r', hospital: H, fechar: ['abc'], nova: nova('1') }, trilha()),
     );
     expect(r.status).toBe(400);
   });
 
   it('a montagem confere as tabelas do modelo: sem as da liberação, recusa com os nomes que faltam', async () => {
-    if (tabelasLiberacao) await expect(FonteConfiguracaoPropria.conferirModelo(nucleo!, CLIENTE)).resolves.toBeUndefined();
+    if (tabelasLiberacao)
+      await expect(FonteConfiguracaoPropria.conferirModelo(nucleo!, CLIENTE)).resolves.toBeUndefined();
     else
       await expect(FonteConfiguracaoPropria.conferirModelo(nucleo!, CLIENTE)).rejects.toThrow(
         /liberacao_chave, liberacao_lote, recurso_prerequisito/,
@@ -412,29 +469,32 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
     const [a] = await fonte.aplicarLotes('r', [pedido(true)], trilha());
     const [b] = await fonte.aplicarLotes('r', [pedido(false)], trilha());
     expect(Number(b!.lote)).toBe(Number(a!.lote) + 1);
-    const e = await nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-f22-0103' }, async (l) => ({
-      chave: await l.consultar(
-        `SELECT c.ligada, c.ligada_antes, c.versao, l.numero FROM liberacao_chave c
+    const e = await nucleo!.lerSomente(
+      { cliente: CLIENTE, correlacao: 'conferencia-f22-0103' },
+      async (l) => ({
+        chave: await l.consultar(
+          `SELECT c.ligada, c.ligada_antes, c.versao, l.numero FROM liberacao_chave c
            JOIN liberacao_lote l ON l.id = c.liberacao_lote_id
            JOIN estabelecimento s ON s.id = c.estabelecimento_id
           WHERE s.codigo = ? AND c.chave = 'f22o103.operacao'`,
-        [H],
-      ),
-      lotes: await l.consultar(
-        `SELECT l.numero, l.alteradas, l.justificativa FROM liberacao_lote l JOIN estabelecimento s ON s.id = l.estabelecimento_id
+          [H],
+        ),
+        lotes: await l.consultar(
+          `SELECT l.numero, l.alteradas, l.justificativa FROM liberacao_lote l JOIN estabelecimento s ON s.id = l.estabelecimento_id
           WHERE s.codigo = ? AND l.chave = 'f22o103.operacao' ORDER BY l.numero`,
-        [H],
-      ),
-      sequencia: await l.uma(
-        `SELECT q.proximo_valor FROM sequencia_negocio q JOIN estabelecimento s ON s.id = q.estabelecimento_id
+          [H],
+        ),
+        sequencia: await l.uma(
+          `SELECT q.proximo_valor FROM sequencia_negocio q JOIN estabelecimento s ON s.id = q.estabelecimento_id
           WHERE s.codigo = ? AND q.tipo = 'liberacao_lote'`,
-        [H],
-      ),
-      trilha: await l.consultar(
-        "SELECT acao FROM trilha_auditoria WHERE entidade = 'liberacao_lote' AND usuario_id = ?",
-        [idUsuario],
-      ),
-    }));
+          [H],
+        ),
+        trilha: await l.consultar(
+          "SELECT acao FROM trilha_auditoria WHERE entidade = 'liberacao_lote' AND usuario_id = ?",
+          [idUsuario],
+        ),
+      }),
+    );
     expect(e.chave).toHaveLength(1);
     expect(e.chave[0]).toMatchObject({ versao: 2 });
     expect(Boolean(e.chave[0]!['ligada'])).toBe(false);
@@ -450,8 +510,12 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
     if (!tabelasLiberacao) ctx.skip();
     const contar = () =>
       nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-f22-0103' }, async (l) => ({
-        lotes: Number((await l.uma("SELECT COUNT(*) AS n FROM liberacao_lote WHERE chave = 'f22o103.recusa'"))?.['n']),
-        chaves: Number((await l.uma("SELECT COUNT(*) AS n FROM liberacao_chave WHERE chave = 'f22o103.recusa'"))?.['n']),
+        lotes: Number(
+          (await l.uma("SELECT COUNT(*) AS n FROM liberacao_lote WHERE chave = 'f22o103.recusa'"))?.['n'],
+        ),
+        chaves: Number(
+          (await l.uma("SELECT COUNT(*) AS n FROM liberacao_chave WHERE chave = 'f22o103.recusa'"))?.['n'],
+        ),
       }));
     const recusa = new ErroProblema('recusa-de-negocio', 409, 'Recusado', 'recusado', { codigo: 'x' });
     await expect(
@@ -497,4 +561,3 @@ describe.skipIf(SEM_BANCO)('fonte própria de configuração: contrato de efeito
     expect(Math.abs(h.getTime() - Date.now())).toBeLessThan(60_000);
   });
 });
-

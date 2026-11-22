@@ -73,13 +73,21 @@ export function portaDaAssinatura(ctx: ContextoModulo): PortaAssinaturaIcp {
 @Module({})
 export class ModuloAssinatura {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAssinatura = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloAssinatura = {},
+): Promise<DynamicModule> {
   const env = ctx.env as NodeJS.ProcessEnv;
   const porta = opcoes.porta ?? portaDaAssinatura(ctx);
   const sintetico = fontesSinteticas(ctx.env);
   const config =
     opcoes.config ??
-    (await configAssinaturaDoAmbiente(env, sintetico, chaveMestra(env['PLATAFORMA_CHAVE_MESTRA']), process.cwd()));
+    (await configAssinaturaDoAmbiente(
+      env,
+      sintetico,
+      chaveMestra(env['PLATAFORMA_CHAVE_MESTRA']),
+      process.cwd(),
+    ));
   const estabelecimentos: readonly string[] | (() => Promise<readonly string[]>) = opcoes.estabelecimentos
     ? estabelecimentosDoVerificador(opcoes.estabelecimentos, null)
     : porta instanceof PortaAssinaturaPropria
@@ -94,7 +102,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAssinatura
       { provide: CONFIG_ASSINATURA_ICP, useValue: config },
       {
         provide: SERVICO_ASSINATURA_ICP,
-        useFactory: (fonte: FonteConfiguracao | null) => new ServicoAssinaturaIcp(porta, ctx.trilha, config, fonte),
+        useFactory: (fonte: FonteConfiguracao | null) =>
+          new ServicoAssinaturaIcp(porta, ctx.trilha, config, fonte),
         inject: [{ token: FONTE_CONFIGURACAO, optional: true }],
       },
       {
@@ -105,7 +114,10 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAssinatura
       },
       {
         provide: CONFIG_DOCUMENTOS_ICP,
-        useValue: configDocumentosIcpDoAmbiente(env, config.modo === 'simulador' ? new SimuladorSncr() : null),
+        useValue: configDocumentosIcpDoAmbiente(
+          env,
+          config.modo === 'simulador' ? new SimuladorSncr() : null,
+        ),
       },
       {
         provide: SERVICO_VERIFICADOR,

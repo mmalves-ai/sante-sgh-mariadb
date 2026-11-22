@@ -465,7 +465,9 @@ export class GestaoAcessoController {
   @Post('perfis')
   @HttpCode(201)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async concederPerfil(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -515,7 +517,9 @@ export class GestaoAcessoController {
   @Post('perfis/:id/revogar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async revogarPerfil(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -548,7 +552,9 @@ export class GestaoAcessoController {
   @Post('perfis/:id/alteracao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async alterarPerfil(
     @Param('id') id: string,
     @Body() corpo: unknown,
@@ -727,7 +733,9 @@ export class GestaoAcessoController {
   @Post('mapa/decidir')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async decidirMapa(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -876,7 +884,9 @@ export class GestaoAcessoController {
   @Post('politica-senha')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async publicarPoliticaSenha(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -922,7 +932,9 @@ export class GestaoAcessoController {
   @Post('politica-senha/:versao/cancelar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async cancelarPoliticaSenha(
     @Param('versao') bruto: string,
     @Body() corpo: unknown,
@@ -974,7 +986,9 @@ export class GestaoAcessoController {
   @Post('limites-sessao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async definirLimiteSessao(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1028,7 +1042,9 @@ export class GestaoAcessoController {
   @Post('grupos/descricao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async descreverGrupo(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -1067,7 +1083,9 @@ export class GestaoAcessoController {
   @Post('operacoes/:operacao')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
-  @AuditadoNoHandler('executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)')
+  @AuditadoNoHandler(
+    'executor do núcleo: a gravação e a trilha na mesma transação (memória: registrador da API)',
+  )
   async executarOperacao(
     @Param('operacao') nome: string,
     @Body() corpo: unknown,
@@ -1115,10 +1133,7 @@ export class GestaoAcessoController {
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.perfilGerir)
   @Auditar(EVENTOS_AUDITAVEIS.cacheInvalidado.codigo)
-  async invalidarCache(
-    @Body() corpo: unknown,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<ResultadoGestao> {
+  async invalidarCache(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoGestao> {
     const p = this.analisar(esquemaInvalidarCache, corpo);
     return {
       operacao: 'acesso.invalidarCache',

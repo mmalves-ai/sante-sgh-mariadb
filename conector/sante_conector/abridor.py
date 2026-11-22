@@ -46,7 +46,17 @@ def _garantir_no_bloco(caminho, maj_min):
 
 
 def _loop(arquivo, somente_leitura):
-    args = ["losetup", "--find", "--show"] + (["--read-only"] if somente_leitura else []) + [arquivo]
+    # O container só tem os nós /dev/loopN que existiam quando subiu. Depois de um reinício do host o kernel cria os
+    # loops sob demanda, e "losetup --find" pode escolher um número sem nó aqui ("No such file or directory"). Por isso:
+    # pede o livre (losetup -f cria o dispositivo no kernel), garante o nó (bloco, major 7) e monta nele, explícito.
+    livre = _sh("losetup", "-f")
+    num = os.path.basename(livre)
+    try:
+        with open("/sys/block/%s/dev" % num) as f:
+            _garantir_no_bloco(livre, f.read().strip())
+    except FileNotFoundError:
+        _garantir_no_bloco(livre, "7:%s" % num.replace("loop", ""))
+    args = ["losetup", "--show"] + (["--read-only"] if somente_leitura else []) + [livre, arquivo]
     dev = _sh(*args)
     num = os.path.basename(dev)
     with open("/sys/block/%s/dev" % num) as f:

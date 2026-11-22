@@ -59,14 +59,16 @@ export function instanteDe(civil: string, fuso: string): Date {
 
 /** O estabelecimento da sessão (recusa sem ele: toda leitura e gravação daqui é do estabelecimento). */
 export function estabelecimentoDe(c: ContextoNucleo): number {
-  if (c.estabelecimento === null)
-    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (c.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return c.estabelecimento;
 }
 
 /** O fuso do estabelecimento. */
 export async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -88,7 +90,11 @@ export async function profissionalDoUsuario(
 }
 
 /** O profissional da conta pelo login (o segundo profissional da dupla checagem), no estabelecimento. */
-export async function profissionalDoLogin(l: Leitor | Escritor, login: string, est: number): Promise<number | null> {
+export async function profissionalDoLogin(
+  l: Leitor | Escritor,
+  login: string,
+  est: number,
+): Promise<number | null> {
   const u = await l.uma<{ id: number }>('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [
     login.trim().toLowerCase(),
   ]);
@@ -96,7 +102,11 @@ export async function profissionalDoLogin(l: Leitor | Escritor, login: string, e
 }
 
 /** Exige o profissional da conta da sessão (recusa 422 sem vínculo no estabelecimento). */
-export async function exigirProfissional(l: Leitor | Escritor, c: ContextoNucleo, est: number): Promise<number> {
+export async function exigirProfissional(
+  l: Leitor | Escritor,
+  c: ContextoNucleo,
+  est: number,
+): Promise<number> {
   if (c.usuario === null) throw recusa('sem-usuario', 'A gravação exige o usuário da sessão.');
   const p = await profissionalDoUsuario(l, c.usuario, est);
   if (p === null)

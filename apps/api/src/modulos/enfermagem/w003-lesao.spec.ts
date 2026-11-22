@@ -23,9 +23,7 @@ interface Sessao {
 
 async function montar() {
   const trilha = new RegistradorTrilhaMemoria();
-  const enfermagem = new PortaEnfermagemMemoria(
-    { agora },
-  );
+  const enfermagem = new PortaEnfermagemMemoria({ agora });
   const escores = new PortaEscoresMemoria({ agora });
   const app: NestFastifyApplication = await criarAppComEnfermagem(env, {
     trilha,

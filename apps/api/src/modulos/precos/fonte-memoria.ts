@@ -53,7 +53,13 @@ function componenteAceito(c: Componentes): boolean {
 /** Igualdade exata dos cinco componentes (anestesia e filme comparados em centavos). */
 function mesmosComponentes(a: Componentes, b: Componentes): boolean {
   const c2 = (x: number) => Math.round(x * 100);
-  return a.ch === b.ch && a.co === b.co && a.outros === b.outros && c2(a.anes) === c2(b.anes) && c2(a.filme) === c2(b.filme);
+  return (
+    a.ch === b.ch &&
+    a.co === b.co &&
+    a.outros === b.outros &&
+    c2(a.anes) === c2(b.anes) &&
+    c2(a.filme) === c2(b.filme)
+  );
 }
 /** A diária de acompanhante apontada é do tipo diária e do subtipo acompanhante (1/5), ou nenhuma. */
 function diariaAcompanhanteValida(d: { tipo: number | null; subtipo: number | null } | null): boolean {
@@ -851,9 +857,7 @@ export class FontePrecosMemoria implements FontePrecos {
     const x = this.planos_[i];
     if (!x) return Promise.reject(new ErroPlano('nao-encontrado', 'Plano não encontrado neste convênio.'));
     if (x.versao !== a.versao)
-      return Promise.reject(
-        new ErroPlano('conflito-concorrente', 'O plano mudou desde a leitura. Releia.'),
-      );
+      return Promise.reject(new ErroPlano('conflito-concorrente', 'O plano mudou desde a leitura. Releia.'));
     if (a.fim && a.fim < x.inicio)
       return Promise.reject(
         new ErroPlano('vigencia-invalida', `O fim (${a.fim}) não pode ser antes do início (${x.inicio}).`),
@@ -891,8 +895,7 @@ export class FontePrecosMemoria implements FontePrecos {
     const chave = `${hospital}|${nome}|${ctx.chaveIdempotencia}`;
     const anterior = this.idem.get(chave);
     if (anterior) {
-      if (anterior.hash !== hash || anterior.usuario !== ctx.login)
-        throw erroIdempotenciaDivergente();
+      if (anterior.hash !== hash || anterior.usuario !== ctx.login) throw erroIdempotenciaDivergente();
       return { resultado: anterior.resultado, repetida: true };
     }
     const resultado = this.aplicar(nome, a.data as Record<string, unknown>, ctx);
@@ -1014,7 +1017,10 @@ export class FontePrecosMemoria implements FontePrecos {
     if ((tab === TABELA_COMPARTILHADA || ativos > 1) && !confirm.tabelaCompartilhada)
       throw recusa('confirmacao-pendente', `A tabela ${tab} é usada por mais de um convênio: confirme.`);
     if (TABELAS_COM_PERCENTUAL.includes(tab) && !confirm.percentualTabela)
-      throw recusa('confirmacao-pendente', `A tabela ${tab} tem percentual de honorário no convênio: confirme.`);
+      throw recusa(
+        'confirmacao-pendente',
+        `A tabela ${tab} tem percentual de honorário no convênio: confirme.`,
+      );
     for (const x of alvos) {
       m(x).vigencias.push({ data, valores: { ...x.i.novos } });
       this.registrar({

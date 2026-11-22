@@ -17,7 +17,13 @@ describe.skipIf(SEM_BANCO)('leitura própria das telas de consulta do acesso (cl
   let nucleo: NucleoProprio;
   const ids = { est: 0, usuario: 0, perfil: 0, modulo: 0, acoes: [] as number[], codigo: '' };
 
-  async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
+  async function garantir(
+    e: Escritor,
+    sel: string,
+    p: unknown[],
+    ins: string,
+    pi: unknown[],
+  ): Promise<number> {
     const l = await e.uma<{ id: number }>(sel, p);
     return l ? Number(l.id) : e.inserir(ins, pi);
   }
@@ -115,6 +121,8 @@ describe.skipIf(SEM_BANCO)('leitura própria das telas de consulta do acesso (cl
     const modulo = (await leitura.modulos(EST)).find((m) => m.id === ids.modulo);
     expect(modulo?.opcoes).toBeGreaterThanOrEqual(1);
     const mapa = await leitura.mapa(EST, ids.modulo);
-    expect(mapa).toContainEqual(expect.objectContaining({ opcao: ids.acoes[0], permissao: ids.codigo, exclusao: null }));
+    expect(mapa).toContainEqual(
+      expect.objectContaining({ opcao: ids.acoes[0], permissao: ids.codigo, exclusao: null }),
+    );
   });
 });

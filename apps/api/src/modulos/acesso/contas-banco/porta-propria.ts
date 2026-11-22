@@ -18,7 +18,10 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoContasBanco {
-  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
 }
 
 /** As contas do Sante SGH no banco do cliente: a do núcleo (SGH_MARIADB_USUARIO; padrão root, só em dev). */
@@ -79,7 +82,9 @@ export class PortaContasBancoPropria implements PortaContasBanco {
   }
 
   private privilegios(l: Leitor): Promise<{ titular: string; acao: string; objeto: string }[]> {
-    return l.consultar<{ titular: string; acao: string; objeto: string }>(PRIVILEGIOS, [], { teto: 2_000_000 });
+    return l.consultar<{ titular: string; acao: string; objeto: string }>(PRIVILEGIOS, [], {
+      teto: 2_000_000,
+    });
   }
 
   contasSgh(): ContasSgh {
@@ -91,9 +96,15 @@ export class PortaContasBancoPropria implements PortaContasBanco {
     return [];
   }
 
-  lerInventario(_c: ContextoContasBanco, legiveis: { nomes: string[]; prefixos: string[] }): Promise<InventarioLido> {
+  lerInventario(
+    _c: ContextoContasBanco,
+    legiveis: { nomes: string[]; prefixos: string[] },
+  ): Promise<InventarioLido> {
     return this.ler(async (l) => {
-      const porConta = new Map<string, { papel: boolean; acoes: Map<string, Set<string>>; escrita: Set<string> }>();
+      const porConta = new Map<
+        string,
+        { papel: boolean; acoes: Map<string, Set<string>>; escrita: Set<string> }
+      >();
       for (const x of await this.privilegios(l)) {
         const t = titularDoGrantee(String(x.titular));
         const chave = `${t.papel ? 'p' : 'u'}:${t.nome}`;
@@ -116,7 +127,8 @@ export class PortaContasBancoPropria implements PortaContasBanco {
         }
         if (!legivel(nome, legiveis)) {
           agregado.quantidade += 1;
-          for (const k of Object.keys(privilegios) as (keyof typeof privilegios)[]) agregado.privilegios[k] += privilegios[k];
+          for (const k of Object.keys(privilegios) as (keyof typeof privilegios)[])
+            agregado.privilegios[k] += privilegios[k];
           agregado.escrita += c.escrita.size;
           if (!c.papel) loginsNaoLegiveis += 1;
           continue;
@@ -151,7 +163,11 @@ export class PortaContasBancoPropria implements PortaContasBanco {
     const minhas = new Set(this.contas.aplicacao.map((n) => n.toUpperCase()));
     return this.ler(async (l) =>
       (await this.privilegios(l))
-        .map((x) => ({ t: titularDoGrantee(String(x.titular)), acao: String(x.acao), objeto: String(x.objeto) }))
+        .map((x) => ({
+          t: titularDoGrantee(String(x.titular)),
+          acao: String(x.acao),
+          objeto: String(x.objeto),
+        }))
         .filter((x) => minhas.has(x.t.nome.toUpperCase()) && ACAO_MODULO.has(x.acao))
         .map((x) => ({ titular: x.t.nome, objeto: x.objeto, acao: x.acao as PrivilegioReal['acao'] })),
     );

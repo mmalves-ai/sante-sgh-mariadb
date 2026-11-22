@@ -371,7 +371,9 @@ export class ContasOperadoraController {
   @Post(R.devolver.caminho)
   @HttpCode(200)
   @Permissao(R.devolver.permissao)
-  @AuditadoNoHandler('operadora.devolverConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'operadora.devolverConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação',
+  )
   async devolver(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -518,7 +520,9 @@ export class ContasOperadoraController {
   @Post(R.pagar.caminho)
   @HttpCode(200)
   @Permissao(R.pagar.permissao)
-  @AuditadoNoHandler('operadora.pagarConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'operadora.pagarConta (lote_conta_recebida e o evento) com a trilha_auditoria na mesma transação',
+  )
   async pagar(
     @Param('id') id: string,
     @Body() b: unknown,

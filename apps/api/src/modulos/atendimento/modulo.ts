@@ -31,7 +31,10 @@ export async function portaDoAtendimento(ctx: ContextoModulo): Promise<PortaAten
 @Module({})
 export class ModuloAtendimento {}
 
-export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAtendimento = {}): Promise<DynamicModule> {
+export async function modulo(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloAtendimento = {},
+): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDoAtendimento(ctx));
   return {
     module: ModuloAtendimento,

@@ -1487,10 +1487,7 @@ export class ServicoPortalMedico {
   }
 
   /** Os avisos de crítico dos pacientes do médico (os sem ciência primeiro); a leitura vai à trilha. */
-  async criticos(
-    s: SessaoPortalM26,
-    sessaoId: string | null,
-  ): Promise<CriticosPortalMedico> {
+  async criticos(s: SessaoPortalM26, sessaoId: string | null): Promise<CriticosPortalMedico> {
     const p = await this.noPedido(s, sessaoId);
     const fila = await this.filaDaConta(p);
     if (!fila) return { vinculado: false, avisos: [], pendentes: 0 };
@@ -1893,10 +1890,13 @@ export class ServicoPortalMedico {
             .then((r) => {
               // Só ids e códigos no log (nada do paciente): a recusa fica visível em vez de engolida.
               for (const x of r.recusas)
-                this.logCritico.warn(`aviso ${x.aviso} conta M${x.acesso} em ${h}: notificação recusada (${x.codigo})`);
+                this.logCritico.warn(
+                  `aviso ${x.aviso} conta M${x.acesso} em ${h}: notificação recusada (${x.codigo})`,
+                );
             })
             .catch((e: unknown) => {
-              const codigo = e instanceof ErroOperacao ? String(e.problema['codigo'] ?? e.problema.status) : 'erro';
+              const codigo =
+                e instanceof ErroOperacao ? String(e.problema['codigo'] ?? e.problema.status) : 'erro';
               this.logCritico.error(`ciclo da notificação de críticos em ${h} falhou (${codigo})`);
             }),
         ),

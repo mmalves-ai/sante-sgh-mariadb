@@ -70,7 +70,9 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
     diferenca: 'situacao',
   });
   const uma = (sql: string, p: readonly unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0305-conta' }, (l) => l.uma<Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0305-conta' }, (l) =>
+      l.uma<Record<string, unknown>>(sql, p),
+    );
 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0305-limpa' }, async (e) => {
@@ -187,7 +189,13 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
       await g.trilha(linha('faturamento.competenciaSus.aberta', 'competencia_sus', String(x.id)));
       return x;
     });
-    expect(c).toMatchObject({ instrumento: 'ciha', competencia: '202601', situacao: 'aberta', versao: 1, cnes: CNES });
+    expect(c).toMatchObject({
+      instrumento: 'ciha',
+      competencia: '202601',
+      situacao: 'aberta',
+      versao: 1,
+      cnes: CNES,
+    });
     expect(c.bloqueantes + c.avisos).toBe(0);
     const linhaBanco = await uma(
       "SELECT DATE_FORMAT(periodo_inicio, '%Y-%m-%d') AS i, DATE_FORMAT(periodo_fim, '%Y-%m-%d') AS f, situacao FROM competencia_sus WHERE id = ?",
@@ -215,18 +223,26 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
   it('fecha pela versão vista, recusa a versão velha e reabre com o motivo; outro estabelecimento não vê', async () => {
     const c = await porta.ler(ctxA, (l) => l.competencia('ciha', '202601'));
     expect(c).not.toBeNull();
-    await expect(porta.gravar(ctxA, (g) => g.fechar({ id: c!.id, versao: c!.versao + 5 }, 'x'))).rejects.toMatchObject({
+    await expect(
+      porta.gravar(ctxA, (g) => g.fechar({ id: c!.id, versao: c!.versao + 5 }, 'x')),
+    ).rejects.toMatchObject({
       codigo: 'versao-alterada',
     });
     await porta.gravar(ctxA, (g) => g.fechar({ id: c!.id, versao: c!.versao }, 'x'));
     const f = await porta.ler(ctxA, (l) => l.competencia('ciha', '202601'));
     expect(f).toMatchObject({ situacao: 'fechada', versao: c!.versao + 1 });
     expect(f?.fechadaEm).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    await expect(porta.gravar(ctxA, (g) => g.fechar({ id: f!.id, versao: f!.versao }, 'x'))).rejects.toMatchObject({
+    await expect(
+      porta.gravar(ctxA, (g) => g.fechar({ id: f!.id, versao: f!.versao }, 'x')),
+    ).rejects.toMatchObject({
       codigo: 'competencia-ja-fechada',
     });
-    await porta.gravar(ctxA, (g) => g.reabrir({ id: f!.id, versao: f!.versao }, 'x', 'Correção da produção (teste)'));
-    const r = await uma('SELECT situacao, motivo_reabertura, versao FROM competencia_sus WHERE id = ?', [f!.id]);
+    await porta.gravar(ctxA, (g) =>
+      g.reabrir({ id: f!.id, versao: f!.versao }, 'x', 'Correção da produção (teste)'),
+    );
+    const r = await uma('SELECT situacao, motivo_reabertura, versao FROM competencia_sus WHERE id = ?', [
+      f!.id,
+    ]);
     expect(r).toMatchObject({ situacao: 'reaberta', motivo_reabertura: 'Correção da produção (teste)' });
     expect((await porta.ler(ctxA, (l) => l.competencia('ciha', '202601')))?.situacao).toBe('aberta');
     expect(await porta.ler(ctxB, (l) => l.competencias(null))).toEqual([]);
@@ -238,9 +254,19 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
 
   it('equivalência SIGTAP por vigência: registra, troca, recusa versão velha, desativa e pagina com os nomes', async () => {
     const r1 = await porta.gravar(ctxA, (g) =>
-      g.registrarEquivalencia({ procedimento: item, codigoProcedimento: Number(ITEM), sigtap: sigA, codigo: SIG_A, por: 'x' }),
+      g.registrarEquivalencia({
+        procedimento: item,
+        codigoProcedimento: Number(ITEM),
+        sigtap: sigA,
+        codigo: SIG_A,
+        por: 'x',
+      }),
     );
-    expect(r1).toMatchObject({ antes: null, mudou: true, depois: { procedimento: item, sigtap: sigA, ativa: true } });
+    expect(r1).toMatchObject({
+      antes: null,
+      mudou: true,
+      depois: { procedimento: item, sigtap: sigA, ativa: true },
+    });
     const r2 = await porta.gravar(ctxA, (g) =>
       g.registrarEquivalencia({
         procedimento: item,
@@ -254,7 +280,14 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
     expect(r2.mudou).toBe(false);
     await expect(
       porta.gravar(ctxA, (g) =>
-        g.registrarEquivalencia({ procedimento: item, codigoProcedimento: 0, sigtap: sigB, codigo: SIG_B, por: 'x', versao: 99 }),
+        g.registrarEquivalencia({
+          procedimento: item,
+          codigoProcedimento: 0,
+          sigtap: sigB,
+          codigo: SIG_B,
+          por: 'x',
+          versao: 99,
+        }),
       ),
     ).rejects.toMatchObject({ codigo: 'equivalencia-alterada' });
     const r3 = await porta.gravar(ctxA, (g) =>
@@ -298,7 +331,13 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
     ).rejects.toMatchObject({ codigo: 'nao-encontrado' });
     // A mesma ligação fechada hoje volta a valer (sem ferir a chave única do dia).
     const r4 = await porta.gravar(ctxA, (g) =>
-      g.registrarEquivalencia({ procedimento: item, codigoProcedimento: 0, sigtap: sigB, codigo: SIG_B, por: 'x' }),
+      g.registrarEquivalencia({
+        procedimento: item,
+        codigoProcedimento: 0,
+        sigtap: sigB,
+        codigo: SIG_B,
+        por: 'x',
+      }),
     );
     expect(r4.depois).toMatchObject({ id: r3.depois.id, ativa: true });
   });
@@ -352,13 +391,25 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
     expect(x.busca.every((b) => b.vigente)).toBe(true);
     expect(x.nomes.get(sigB)).toBe('Teste ergométrico fictício (teste)');
     expect(x.valores).toEqual([
-      { id: sigA, data: '2008-01-01', servicoHospitalar: 0, servicoProfissional: 0, sadt: 5.15, ambulatorial: 5.15 },
+      {
+        id: sigA,
+        data: '2008-01-01',
+        servicoHospitalar: 0,
+        servicoProfissional: 0,
+        sadt: 5.15,
+        ambulatorial: 5.15,
+      },
     ]);
     expect(x.itens.map((i) => i.id)).toContain(item);
     expect(x.porId[0]).toMatchObject({ id: item, codigo: Number(ITEM), tabela: 'procedimento' });
     expect(x.uti).toEqual([{ tipo: 26, nome: 'UTI adulto tipo II (teste)', leitos: 10 }]);
     expect(x.ciha.cnesCadastrados).toEqual([Number(CNES)]);
-    expect(x.ciha.procedimentos[0]).toMatchObject({ id: sigA, codigo: SIG_A, competenciaInicial: 200801, competenciaFinal: 0 });
+    expect(x.ciha.procedimentos[0]).toMatchObject({
+      id: sigA,
+      codigo: SIG_A,
+      competenciaInicial: 200801,
+      competenciaFinal: 0,
+    });
     expect(x.ciha.atendimentos).toEqual([]);
     expect(await porta.ler(ctxB, (l) => l.leitosUti())).toEqual([]);
   });
@@ -366,28 +417,55 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
   it('crítica prévia: rodada com chave estável, justificativa do aviso, correção na rodada seguinte e recusa atômica', async () => {
     const c = (await porta.ler(ctxA, (l) => l.competencia('ciha', '202601')))!;
     const nova = (chave: string, regra: string, gravidade: 'bloqueante' | 'aviso') => ({
-      chave, regra, gravidade, conta: null, convenio: null, atendimento: null, item: null, detalhe: '{"campo":"cid"}',
+      chave,
+      regra,
+      gravidade,
+      conta: null,
+      convenio: null,
+      atendimento: null,
+      item: null,
+      detalhe: '{"campo":"cid"}',
     });
     const r1 = await porta.gravar(ctxA, (g) =>
-      g.gravarCriticas({ id: c.id, versao: c.versao }, [nova('R1:202601', 'R1', 'bloqueante'), nova('R2:202601', 'R2', 'aviso')], { registros: 5, cnes: CNES }),
+      g.gravarCriticas(
+        { id: c.id, versao: c.versao },
+        [nova('R1:202601', 'R1', 'bloqueante'), nova('R2:202601', 'R2', 'aviso')],
+        { registros: 5, cnes: CNES },
+      ),
     );
     expect(r1).toEqual({ novas: 2, mantidas: 0, reabertas: 0, corrigidas: 0, bloqueantes: 1, avisos: 1 });
     const c2 = (await porta.ler(ctxA, (l) => l.competencia('ciha', '202601')))!;
     expect(c2).toMatchObject({ registros: 5, bloqueantes: 1, avisos: 1, versao: c.versao + 1 });
     expect(c2.criticadaEm).toBeTruthy();
-    const pagina = await porta.ler(ctxA, (l) => l.criticas(c.id, { convenios: null, pagina: 0, porPagina: 50 }));
+    const pagina = await porta.ler(ctxA, (l) =>
+      l.criticas(c.id, { convenios: null, pagina: 0, porPagina: 50 }),
+    );
     expect(pagina.total).toBe(2);
     expect(pagina.porRegra).toEqual({ R1: 1, R2: 1 });
-    expect(pagina.itens[0]).toMatchObject({ regra: 'R1', gravidade: 'bloqueante', situacao: 'aberta', detalhe: '{"campo":"cid"}' });
+    expect(pagina.itens[0]).toMatchObject({
+      regra: 'R1',
+      gravidade: 'bloqueante',
+      situacao: 'aberta',
+      detalhe: '{"campo":"cid"}',
+    });
     const aviso = pagina.itens.find((x) => x.regra === 'R2')!;
     expect(await porta.ler(ctxB, (l) => l.critica(aviso.id))).toBeNull();
-    await porta.gravar(ctxA, (g) => g.justificar({ id: aviso.id, versao: aviso.versao }, 'Conferido com o laudo (teste)', 'x'));
-    expect(await porta.ler(ctxA, (l) => l.critica(aviso.id))).toMatchObject({ situacao: 'justificada', justificativa: 'Conferido com o laudo (teste)', competencia: c.id });
+    await porta.gravar(ctxA, (g) =>
+      g.justificar({ id: aviso.id, versao: aviso.versao }, 'Conferido com o laudo (teste)', 'x'),
+    );
+    expect(await porta.ler(ctxA, (l) => l.critica(aviso.id))).toMatchObject({
+      situacao: 'justificada',
+      justificativa: 'Conferido com o laudo (teste)',
+      competencia: c.id,
+    });
     await expect(
       porta.gravar(ctxA, (g) => g.justificar({ id: aviso.id, versao: aviso.versao + 1 }, 'de novo', 'x')),
     ).rejects.toMatchObject({ codigo: 'critica-nao-justificavel' });
     const r2 = await porta.gravar(ctxA, (g) =>
-      g.gravarCriticas({ id: c2.id, versao: c2.versao }, [nova('R1:202601', 'R1', 'bloqueante')], { registros: 4, cnes: CNES }),
+      g.gravarCriticas({ id: c2.id, versao: c2.versao }, [nova('R1:202601', 'R1', 'bloqueante')], {
+        registros: 4,
+        cnes: CNES,
+      }),
     );
     expect(r2).toMatchObject({ novas: 0, mantidas: 1, corrigidas: 1, bloqueantes: 1, avisos: 0 });
 
@@ -399,37 +477,87 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
         return g.gravarCriticas({ id: c3.id, versao: c3.versao }, [], { registros: 0, cnes: CNES });
       }),
     ).rejects.toMatchObject({ codigo: 'versao-alterada' });
-    expect(await uma('SELECT versao, situacao FROM competencia_sus WHERE id = ?', [c3.id])).toMatchObject({ versao: c3.versao });
+    expect(await uma('SELECT versao, situacao FROM competencia_sus WHERE id = ?', [c3.id])).toMatchObject({
+      versao: c3.versao,
+    });
   });
 
   it('faixa de AIH: número de 13 dígitos, sobreposição recusada, cancelamento com motivo; outro estabelecimento não vê', async () => {
     const id = await porta.gravar(ctxA, (g) =>
-      g.inserirFaixaAih({ inicio: 412610000001n, fim: 412610000100n, orgaoEmissor: 'M410000', dataLiberacao: '2026-01-05', por: 'x' }),
+      g.inserirFaixaAih({
+        inicio: 412610000001n,
+        fim: 412610000100n,
+        orgaoEmissor: 'M410000',
+        dataLiberacao: '2026-01-05',
+        por: 'x',
+      }),
     );
     expect(await porta.ler(ctxA, (l) => l.faixasAih())).toMatchObject([
-      { id, inicio: '412610000001', fim: '412610000100', orgaoEmissor: 'M410000', dataLiberacao: '2026-01-05', situacao: 'ativa', usados: 0, versao: 1 },
+      {
+        id,
+        inicio: '412610000001',
+        fim: '412610000100',
+        orgaoEmissor: 'M410000',
+        dataLiberacao: '2026-01-05',
+        situacao: 'ativa',
+        usados: 0,
+        versao: 1,
+      },
     ]);
-    expect(String((await uma('SELECT numero_inicial FROM faixa_numeracao_aih WHERE id = ?', [id]))?.['numero_inicial'])).toMatch(/^412610000001\d$/);
+    expect(
+      String(
+        (await uma('SELECT numero_inicial FROM faixa_numeracao_aih WHERE id = ?', [id]))?.['numero_inicial'],
+      ),
+    ).toMatch(/^412610000001\d$/);
     expect(await porta.ler(ctxA, (l) => l.maiorNumeroDaFaixa(id))).toBeNull();
     expect(await porta.ler(ctxB, (l) => l.faixasAih())).toEqual([]);
     await expect(
-      porta.gravar(ctxA, (g) => g.inserirFaixaAih({ inicio: 412610000050n, fim: 412610000200n, orgaoEmissor: 'M410000', dataLiberacao: '2026-01-06', por: 'x' })),
+      porta.gravar(ctxA, (g) =>
+        g.inserirFaixaAih({
+          inicio: 412610000050n,
+          fim: 412610000200n,
+          orgaoEmissor: 'M410000',
+          dataLiberacao: '2026-01-06',
+          por: 'x',
+        }),
+      ),
     ).rejects.toMatchObject({ codigo: 'faixa-sobreposta' });
-    await porta.gravar(ctxA, (g) => g.mudarFaixaAih({ id, versao: 1, situacao: 'cancelada', justificativa: 'Faixa trocada pelo gestor', por: 'x' }));
-    expect(await porta.ler(ctxA, (l) => l.faixaAih(id))).toMatchObject({ situacao: 'cancelada', justificativa: 'Faixa trocada pelo gestor', versao: 2 });
+    await porta.gravar(ctxA, (g) =>
+      g.mudarFaixaAih({
+        id,
+        versao: 1,
+        situacao: 'cancelada',
+        justificativa: 'Faixa trocada pelo gestor',
+        por: 'x',
+      }),
+    );
+    expect(await porta.ler(ctxA, (l) => l.faixaAih(id))).toMatchObject({
+      situacao: 'cancelada',
+      justificativa: 'Faixa trocada pelo gestor',
+      versao: 2,
+    });
     await expect(
-      porta.gravar(ctxA, (g) => g.mudarFaixaAih({ id, versao: 2, situacao: 'esgotada', justificativa: null, por: 'x' })),
+      porta.gravar(ctxA, (g) =>
+        g.mudarFaixaAih({ id, versao: 2, situacao: 'esgotada', justificativa: null, por: 'x' }),
+      ),
     ).rejects.toMatchObject({ codigo: 'versao-alterada' });
     expect(await porta.ler(ctxA, (l) => l.numeroAihEmUso('4126100000017'))).toBe(false);
   });
 
   it('o arquivo gerado ainda não é escrito por esta porta: recusa e nada muda', async () => {
-    await expect(porta.gravar(ctxA, (g) => g.proximoArquivo())).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    await expect(porta.gravar(ctxA, (g) => g.proximoArquivo())).rejects.toMatchObject({
+      problema: { codigo: 'modelo-pendente' },
+    });
   });
 
   it('o serviço da tela sobre a porta própria: abre a competência do BPA pela ServicoSus', async () => {
     const trilhas: LinhaTrilhaSus[] = [];
-    const servico = new ServicoSus(porta, armazemSusMemoria(), () => undefined, new SeloSolicitanteApac(null));
+    const servico = new ServicoSus(
+      porta,
+      armazemSusMemoria(),
+      () => undefined,
+      new SeloSolicitanteApac(null),
+    );
     const sessao: SessaoSus = {
       rede: 'rede-teste',
       hospital: EST_A,

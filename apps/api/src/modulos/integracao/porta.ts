@@ -204,7 +204,10 @@ export interface ResultadoApoio {
   /** A versão do exame pedido lida na conferência (trava otimista). */
   readonly versao: number;
   readonly laboratorio: number | null;
-  readonly elementos: readonly Pick<RetornoApoioLido['elementos'][number], 'elemento' | 'numerico' | 'alfa'>[];
+  readonly elementos: readonly Pick<
+    RetornoApoioLido['elementos'][number],
+    'elemento' | 'numerico' | 'alfa'
+  >[];
   readonly observacao: string;
   /** O profissional responsável técnico que conferiu (e libera o resultado). */
   readonly conferente: number;

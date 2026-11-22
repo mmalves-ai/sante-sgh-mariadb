@@ -468,8 +468,16 @@ const login = z.string().trim().min(1).max(60);
 export const OPERACOES_GESTAO: Readonly<
   Record<string, { readonly evento: string; readonly recurso: string; readonly entrada: z.ZodType }>
 > = {
-  'acesso.criarUsuario': { evento: 'acesso.usuario.criado', recurso: 'acesso.usuario', entrada: esquemaCriarUsuario },
-  'acesso.alterarUsuario': { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: esquemaAlterarUsuario },
+  'acesso.criarUsuario': {
+    evento: 'acesso.usuario.criado',
+    recurso: 'acesso.usuario',
+    entrada: esquemaCriarUsuario,
+  },
+  'acesso.alterarUsuario': {
+    evento: 'acesso.usuario.alterado',
+    recurso: 'acesso.usuario',
+    entrada: esquemaAlterarUsuario,
+  },
   'acesso.alterarFlagsUsuario': {
     evento: 'acesso.usuario.alterado',
     recurso: 'acesso.usuario',
@@ -499,14 +507,54 @@ export const OPERACOES_GESTAO: Readonly<
   },
   'acesso.concederOpcoesGrupo': { evento: 'acesso.grupo.alterado', recurso: 'acesso.grupo', entrada: livre },
   'acesso.revogarOpcoesGrupo': { evento: 'acesso.grupo.alterado', recurso: 'acesso.grupo', entrada: livre },
-  'acesso.concederPapelUsuario': { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: livre },
-  'acesso.revogarPapelUsuario': { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: livre },
-  'acesso.reativarPapelUsuario': { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: livre },
-  'acesso.trocarGrupoUsuario': { evento: 'acesso.usuario.alterado', recurso: 'acesso.usuario', entrada: livre },
-  'organizacao.incluirAcomodacao': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
-  'organizacao.alterarAcomodacao': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
-  'organizacao.incluirLeito': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
-  'organizacao.alterarLeito': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
-  'organizacao.inativarLeito': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
-  'organizacao.reativarLeito': { evento: 'organizacao.leito.alterado', recurso: 'organizacao.leito', entrada: livre },
+  'acesso.concederPapelUsuario': {
+    evento: 'acesso.usuario.alterado',
+    recurso: 'acesso.usuario',
+    entrada: livre,
+  },
+  'acesso.revogarPapelUsuario': {
+    evento: 'acesso.usuario.alterado',
+    recurso: 'acesso.usuario',
+    entrada: livre,
+  },
+  'acesso.reativarPapelUsuario': {
+    evento: 'acesso.usuario.alterado',
+    recurso: 'acesso.usuario',
+    entrada: livre,
+  },
+  'acesso.trocarGrupoUsuario': {
+    evento: 'acesso.usuario.alterado',
+    recurso: 'acesso.usuario',
+    entrada: livre,
+  },
+  'organizacao.incluirAcomodacao': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
+  'organizacao.alterarAcomodacao': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
+  'organizacao.incluirLeito': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
+  'organizacao.alterarLeito': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
+  'organizacao.inativarLeito': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
+  'organizacao.reativarLeito': {
+    evento: 'organizacao.leito.alterado',
+    recurso: 'organizacao.leito',
+    entrada: livre,
+  },
 };

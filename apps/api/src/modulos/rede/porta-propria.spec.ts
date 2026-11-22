@@ -12,7 +12,8 @@ const REDE = 'rede-unidade';
 
 function duble() {
   const leituras: string[] = [];
-  const execucoes: { nome: string; cliente: string; entrada: unknown; contexto: Record<string, unknown> }[] = [];
+  const execucoes: { nome: string; cliente: string; entrada: unknown; contexto: Record<string, unknown> }[] =
+    [];
   const leitor = {
     cliente: 'cliente_unidade',
     consultar: async (sql: string) => {
@@ -28,7 +29,12 @@ function duble() {
     uma: async () => null,
   } as unknown as Leitor;
   const executor = {
-    executar: async (op: { nome: string }, cliente: string, entrada: unknown, contexto: Record<string, unknown>) => {
+    executar: async (
+      op: { nome: string },
+      cliente: string,
+      entrada: unknown,
+      contexto: Record<string, unknown>,
+    ) => {
       execucoes.push({ nome: op.nome, cliente, entrada, contexto });
       return { resultado: {}, repetida: false, eventos: [], trilha: 1 };
     },
@@ -90,7 +96,12 @@ describe('porta própria do MPI (dublê do núcleo)', () => {
       nome: 'rede.gravar-indice',
       cliente: 'cliente_unidade',
       entrada: { estabelecimento: 'hosp2' },
-      contexto: { cliente: 'cliente_unidade', estabelecimento: 1, usuario: 7, correlacao: 'correlacao-teste' },
+      contexto: {
+        cliente: 'cliente_unidade',
+        estabelecimento: 1,
+        usuario: 7,
+        correlacao: 'correlacao-teste',
+      },
     });
     expect(a?.contexto['chaveIdempotencia']).not.toBe(b?.contexto['chaveIdempotencia']);
   });
@@ -160,9 +171,14 @@ describe('serviço sobre o banco único do cliente', () => {
     const k = fila.itens[0]?.chave ?? '';
     const pc = porta.estado('pc')?.trilha.length ?? 0;
     const sx = porta.estado('sx')?.trilha.length ?? 0;
-    const r = await servico.decidir(sessao, k, { decisao: 'outra_pessoa', justificativa: 'Pessoas diferentes (teste)' });
+    const r = await servico.decidir(sessao, k, {
+      decisao: 'outra_pessoa',
+      justificativa: 'Pessoas diferentes (teste)',
+    });
     expect(r.bancos.map((b) => b.situacao)).toEqual(['gravado', 'gravado']);
-    expect((porta.estado('pc')?.trilha.length ?? 0) + (porta.estado('sx')?.trilha.length ?? 0)).toBe(pc + sx + 1);
+    expect((porta.estado('pc')?.trilha.length ?? 0) + (porta.estado('sx')?.trilha.length ?? 0)).toBe(
+      pc + sx + 1,
+    );
   });
 
   it('divergência e reparo: vazio e zero, de forma explícita (nada a comparar no banco único)', async () => {
@@ -178,12 +194,29 @@ describe('serviço sobre o banco único do cliente', () => {
       atendimentosNaRede: async (_c: unknown, id: number) => {
         chamadas.push(id);
         return [
-          { estabelecimento: 'sx', idRemoto: id, atendimentos: 2, ultimoAtendimento: '2026-11-01', internacoes: 0, ultimaInternacao: null },
-          { estabelecimento: 'fora', idRemoto: id, atendimentos: 9, ultimoAtendimento: '2026-11-02', internacoes: 0, ultimaInternacao: null },
+          {
+            estabelecimento: 'sx',
+            idRemoto: id,
+            atendimentos: 2,
+            ultimoAtendimento: '2026-11-01',
+            internacoes: 0,
+            ultimaInternacao: null,
+          },
+          {
+            estabelecimento: 'fora',
+            idRemoto: id,
+            atendimentos: 9,
+            ultimoAtendimento: '2026-11-02',
+            internacoes: 0,
+            ultimaInternacao: null,
+          },
         ];
       },
     });
-    const a = await servico.avisoDoPaciente(sessao, 1, async () => ({ pode: false, motivo: 'regra não registrada' }));
+    const a = await servico.avisoDoPaciente(sessao, 1, async () => ({
+      pode: false,
+      motivo: 'regra não registrada',
+    }));
     expect(chamadas).toEqual([1]);
     expect(a).toEqual({
       situacao: 'com-atendimentos',

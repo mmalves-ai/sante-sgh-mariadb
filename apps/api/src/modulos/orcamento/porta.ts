@@ -124,7 +124,13 @@ export interface PortaOrcamento {
     observacao: string | null,
     g: GravacaoOrcamento,
   ): Promise<{ substituida: number | null }>;
-  descartar(c: ContextoOrcamento, id: number, versao: number, motivo: string, g: GravacaoOrcamento): Promise<void>;
+  descartar(
+    c: ContextoOrcamento,
+    id: number,
+    versao: number,
+    motivo: string,
+    g: GravacaoOrcamento,
+  ): Promise<void>;
 }
 
 export function portaOrcamentoIndisponivel(): PortaOrcamento {

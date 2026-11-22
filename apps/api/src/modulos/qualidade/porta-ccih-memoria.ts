@@ -3,7 +3,24 @@
 // não confere sozinha: a versão no UPDATE, a decisão única por item prescrito, o estado do leito (um "precaução" e um
 // "bloqueio" abertos por leito) e o consumo por setor e competência. A transação desfaz tudo se a função falhar.
 import type { ChaveLeito, UnidadeNotificacao } from '@sgh/contratos';
-import { type BundleRegistrado, type CompetenciaFechada, type DependentesRegistro, type TabelaCorrigivel, type VersaoRegistro, type AntimicrobianoPrescrito, type CulturaDoPaciente, type DispositivoInvasivoRegistrado, type InternadoCcih, type IrasRegistrada, type ItemAntimicrobianoConfigurado, type LiberacaoAntimicrobianoRegistrada, type ObservacaoMaosRegistrada, type PrecaucaoRegistrada, recusaVersaoCcih, type SurtoRegistrado } from './tipos.js';
+import {
+  type BundleRegistrado,
+  type CompetenciaFechada,
+  type DependentesRegistro,
+  type TabelaCorrigivel,
+  type VersaoRegistro,
+  type AntimicrobianoPrescrito,
+  type CulturaDoPaciente,
+  type DispositivoInvasivoRegistrado,
+  type InternadoCcih,
+  type IrasRegistrada,
+  type ItemAntimicrobianoConfigurado,
+  type LiberacaoAntimicrobianoRegistrada,
+  type ObservacaoMaosRegistrada,
+  type PrecaucaoRegistrada,
+  recusaVersaoCcih,
+  type SurtoRegistrado,
+} from './tipos.js';
 import { recusa } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
@@ -688,7 +705,13 @@ export class PortaCcihMemoria implements PortaCcih {
           return { id: n, versao: 1 };
         }
         if (x.situacao === 'fechada') throw recusa('competencia-fechada', 'A competência já está fechada.');
-        versionar('fechamento_vigilancia_iras', x, 'fechamento', 'Fechamento depois da reabertura', c.usuario);
+        versionar(
+          'fechamento_vigilancia_iras',
+          x,
+          'fechamento',
+          'Fechamento depois da reabertura',
+          c.usuario,
+        );
         Object.assign(x, {
           situacao: 'fechada',
           fechadaPor: c.usuario,

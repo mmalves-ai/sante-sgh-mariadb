@@ -93,7 +93,13 @@ export interface GravadorComunicacao {
    */
   resolverAvisosDoObjeto(r: { login: string; tabela: string; id: number }): Promise<number>;
   /** W0-09: corrige o texto ainda não lido (lido: recusa 409); o anterior vai ao evento do comunicado. */
-  corrigirComunicado(r: { id: number; assunto: string; texto: string; motivo: string; por: string }): Promise<void>;
+  corrigirComunicado(r: {
+    id: number;
+    assunto: string;
+    texto: string;
+    motivo: string;
+    por: string;
+  }): Promise<void>;
   /** W0-09: encurta a vigência (nunca estende). */
   encurtarVigencia(r: { id: number; vigenciaFim: string; motivo: string; por: string }): Promise<void>;
   /** W0-09: encerra com o motivo (o comunicado e as ciências continuam visíveis). */

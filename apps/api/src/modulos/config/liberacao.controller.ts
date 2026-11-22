@@ -54,10 +54,7 @@ import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { CACHE_CONFIG, type CacheConfig, TTL_CONFIG_NOVO_S } from './cache-config.js';
 import { CRITERIO_LIGAR_SETOR, type CriterioLigarSetor } from './criterio-ligar.js';
-import {
-  CATALOGO_OPERACOES,
-  type CatalogoOperacoesLiberacao,
-} from './catalogo-operacoes.js';
+import { CATALOGO_OPERACOES, type CatalogoOperacoesLiberacao } from './catalogo-operacoes.js';
 import {
   type ChaveLiberacao,
   destinoNoContrato,
@@ -219,18 +216,20 @@ export class LiberacaoController {
       ...RECURSOS_DESLIGADOS.map((r) =>
         this.funcionalidade('recurso', r.chave, r.titulo, r.descricao, r.marco, null, chaves, prerequisitos),
       ),
-      ...this.catalogo.operacoes().map((o) =>
-        this.funcionalidade(
-          'operacao',
-          o.nome,
-          o.nome,
-          o.descricao,
-          null,
-          this.catalogo.estado(o.nome, hospital),
-          chaves,
-          prerequisitos,
+      ...this.catalogo
+        .operacoes()
+        .map((o) =>
+          this.funcionalidade(
+            'operacao',
+            o.nome,
+            o.nome,
+            o.descricao,
+            null,
+            this.catalogo.estado(o.nome, hospital),
+            chaves,
+            prerequisitos,
+          ),
         ),
-      ),
     ];
   }
 

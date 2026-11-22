@@ -359,9 +359,7 @@ export class AnsOperadoraController {
   @Post(R.pagar.caminho)
   @HttpCode(200)
   @Permissao(R.pagar.permissao)
-  @AuditadoNoHandler(
-    'operadora.pagarGruAns (envio_ans e o evento) com a trilha_auditoria na mesma transação',
-  )
+  @AuditadoNoHandler('operadora.pagarGruAns (envio_ans e o evento) com a trilha_auditoria na mesma transação')
   async pagar(
     @Param('id') id: string,
     @Body() b: unknown,

@@ -49,7 +49,11 @@ const lerPaciente = async (_c: unknown, pront: number) => PACIENTES[pront] ?? nu
 const relogio = () => new Date('2026-10-25T13:00:00Z');
 
 describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
-  const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'assinatura,digitalizacao' };
+  const env: Record<string, string> = {
+    ...envTeste,
+    AMBIENTE: 'dev',
+    API_MODULOS: 'assinatura,digitalizacao',
+  };
   const trilha = new RegistradorTrilhaMemoria();
   const digitalizacao = new PortaDigitalizacaoMemoria(lerPaciente, relogio);
   const armazemDigitalizacao = new ArmazemDigitalizacaoMemoria();
@@ -306,7 +310,12 @@ describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
     const b = pdf(2, 'repetivel');
     const cabecalho = { ...h(capt), 'idempotency-key': `teste-m50-repetido-${Date.now()}` };
     const enviar = (payload: unknown) =>
-      app.inject({ method: 'POST', url: '/api/digitalizacao', headers: cabecalho, payload: payload as object });
+      app.inject({
+        method: 'POST',
+        url: '/api/digitalizacao',
+        headers: cabecalho,
+        payload: payload as object,
+      });
     const antes = eventos(E.documentoDigitalizado.codigo);
     const r1 = await enviar(captura(b));
     expect(r1.statusCode, r1.body).toBe(201);
@@ -318,7 +327,9 @@ describe('digitalização certificada pela HTTP (M50, etapa 6)', () => {
     expect(divergente.statusCode, divergente.body).toBe(422);
     expect(divergente.json()).toMatchObject({ codigo: 'idempotencia-divergente' });
     // Sem a chave repetida, o mesmo arquivo continua recusado (o arquivo repetido do estabelecimento).
-    expect((await post(capt, '/digitalizacao', captura(b))).json()).toMatchObject({ codigo: 'ja-digitalizado' });
+    expect((await post(capt, '/digitalizacao', captura(b))).json()).toMatchObject({
+      codigo: 'ja-digitalizado',
+    });
   });
 });
 

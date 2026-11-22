@@ -5,7 +5,14 @@
 // estrangeiras desligadas só na montagem; apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CLIENTE, escrever, garantirCliente, garantirEstabelecimento, inserirSintetico, SEM_BANCO } from './importadores/integracao.spec-util.js';
+import {
+  CLIENTE,
+  escrever,
+  garantirCliente,
+  garantirEstabelecimento,
+  inserirSintetico,
+  SEM_BANCO,
+} from './importadores/integracao.spec-util.js';
 import { PortaNirPropria } from './nir-reserva-propria.js';
 import { cicloExpiracao } from './nir-reserva.service.js';
 import type { AlvoEstabelecimento } from './servico-worker.js';
@@ -77,7 +84,10 @@ describe.skipIf(SEM_BANCO)('expiração das reservas sobre o banco próprio (f22
       ids.valida = await reserva(a, 9_905_152, null, new Date(agora.getTime() + 3_600_000));
       ids.disputa = await reserva(a, 9_905_153, null, passado);
       ids.alheia = await reserva(b, 9_905_154, null, passado);
-      await e.executar('UPDATE pedido_leito SET reserva_leito_id = ? WHERE id = ?', [ids.vencida, ids.pedido]);
+      await e.executar('UPDATE pedido_leito SET reserva_leito_id = ? WHERE id = ?', [
+        ids.vencida,
+        ids.pedido,
+      ]);
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
     });
   });
@@ -113,10 +123,16 @@ describe.skipIf(SEM_BANCO)('expiração das reservas sobre o banco próprio (f22
     );
     expect(p).toMatchObject({ estado: 'em_analise', reserva_leito_id: null, versao: 2 });
     const t = await escrever(nucleo, (e) =>
-      e.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'reserva_leito' AND entidade_id = ?", [ids.vencida]),
+      e.uma(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'reserva_leito' AND entidade_id = ?",
+        [ids.vencida],
+      ),
     );
     expect(Number(t!['n'])).toBe(1);
-    expect(await porta.expirar(est, ids.vencida, new Date())).toEqual({ expirou: false, voltouAnalise: false });
+    expect(await porta.expirar(est, ids.vencida, new Date())).toEqual({
+      expirou: false,
+      voltouAnalise: false,
+    });
   });
 
   it('dois consumidores ao mesmo tempo: uma expiração só', async () => {
@@ -125,7 +141,9 @@ describe.skipIf(SEM_BANCO)('expiração das reservas sobre o banco próprio (f22
       new PortaNirPropria(nucleo, CLIENTE).expirar(est, ids.disputa, new Date()),
     ]);
     expect([x.expirou, y.expirou].filter(Boolean)).toHaveLength(1);
-    const r = await escrever(nucleo, (e) => e.uma('SELECT versao FROM reserva_leito WHERE id = ?', [ids.disputa]));
+    const r = await escrever(nucleo, (e) =>
+      e.uma('SELECT versao FROM reserva_leito WHERE id = ?', [ids.disputa]),
+    );
     expect(Number(r!['versao'])).toBe(2);
   });
 

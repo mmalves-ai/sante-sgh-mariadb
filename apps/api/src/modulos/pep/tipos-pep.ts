@@ -2,7 +2,12 @@
 // esquemas de entrada (zod). Sem dependência de banco: as portas própria e de memória os produzem.
 // Melhoria: tipos e esquemas próprios do módulo (antes vinham do pacote de convivência); entrada validada por zod.
 
-import { GRAVIDADES_ALERGIA, ORIGENS_ALERGIA, textoCp1252, type LinhaCadastroPrescricao } from '@sgh/contratos';
+import {
+  GRAVIDADES_ALERGIA,
+  ORIGENS_ALERGIA,
+  textoCp1252,
+  type LinhaCadastroPrescricao,
+} from '@sgh/contratos';
 import { inflateSync } from 'node:zlib';
 import { z } from 'zod';
 import type { ContextoPorta } from '../cadastro/porta.js';
@@ -149,9 +154,6 @@ export const esquemaInativacaoAlergia = z
   })
   .strict();
 
-
-
-
 export const esquemaRetratos = z.object({ htAtendimento: ID, htPaciente: ID }).strict();
 
 export const TIPO_ATO = { atestado: 40, receita: 41, resultadoLancado: 54, pedidoExame: 79 } as const;
@@ -276,7 +278,8 @@ export type EstadoFormularioNovo = 'rascunho' | 'revisao' | 'publicado' | 'apose
 
 export type PonteFormularioNovo = 'modelo-legado' | 'registro-resumo' | 'so-sante';
 
-export type TipoEventoFormularioNovo = 'salvo' | 'revisao' | 'aprovado' | 'devolvido' | 'publicado' | 'aposentado';
+export type TipoEventoFormularioNovo =
+  'salvo' | 'revisao' | 'aprovado' | 'devolvido' | 'publicado' | 'aposentado';
 
 export interface FormularioNovoLido {
   readonly id: number;
@@ -1879,5 +1882,7 @@ export interface CabecalhoDocumentoLido {
  * Quem opera, para os registros em memória (dev/ci): o login da sessão quando o contexto da gravação o traz (a sessão
  * sintética não tem id numérico de usuário); senão, o id do usuário (null: processo automático).
  */
-export const loginDaOperacao = (ctx: { readonly usuario: number | null; readonly login?: string | null }): string =>
-  ctx.login || (ctx.usuario === null ? 'sistema' : String(ctx.usuario));
+export const loginDaOperacao = (ctx: {
+  readonly usuario: number | null;
+  readonly login?: string | null;
+}): string => ctx.login || (ctx.usuario === null ? 'sistema' : String(ctx.usuario));

@@ -219,7 +219,12 @@ describe('rotas do M59-F5', () => {
       hoje,
       hoje,
     );
-    expect(r.identificacao).toMatchObject({ cnes: '0000000', inicio: hoje, fim: hoje, geradoPor: 'SINT.AUDITOR' });
+    expect(r.identificacao).toMatchObject({
+      cnes: '0000000',
+      inicio: hoje,
+      fim: hoje,
+      geradoPor: 'SINT.AUDITOR',
+    });
     expect(r.prova.integra).toBe(true);
   });
 });

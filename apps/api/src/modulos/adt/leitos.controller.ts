@@ -258,7 +258,9 @@ export class MapaLeitosController implements OnModuleDestroy {
   @Post('estados/encerrar')
   @HttpCode(200)
   @Permissao('leitos.bloqueio.criar')
-  @AuditadoNoHandler('fim do estado do leito (periodo_situacao_leito) com a trilha de auditoria na mesma transação')
+  @AuditadoNoHandler(
+    'fim do estado do leito (periodo_situacao_leito) com a trilha de auditoria na mesma transação',
+  )
   async encerrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoInternacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEncerrarEstadoLeito, b);

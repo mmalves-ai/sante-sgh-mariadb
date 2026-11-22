@@ -3,7 +3,12 @@
 // idempotência pela chave da proposta), com as recusas no contrato de erro da fachada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CLIENTE, garantir, garantirEstabelecimento, SEM_BANCO } from '../infra/massa-integracao.spec-util.js';
+import {
+  CLIENTE,
+  garantir,
+  garantirEstabelecimento,
+  SEM_BANCO,
+} from '../infra/massa-integracao.spec-util.js';
 import type { ContextoFachada } from './porta.js';
 import { PortaFachadaPropria } from './porta-propria.js';
 
@@ -58,13 +63,30 @@ describe.skipIf(SEM_BANCO)('porta própria da fachada contra o MariaDB (cliente 
   });
 
   it('lista só os convênios do estabelecimento, na forma do contrato; retrato e impacto', async () => {
-    expect(await porta.convenios(A)).toContainEqual({ cod, nome: 'CONVENIO DE TESTE F2241', situacao: 'A', permiteAtend: 1 });
+    expect(await porta.convenios(A)).toContainEqual({
+      cod,
+      nome: 'CONVENIO DE TESTE F2241',
+      situacao: 'A',
+      permiteAtend: 1,
+    });
     expect((await porta.convenios(B)).map((c) => c.cod)).not.toContain(cod);
     expect(estB).toBeGreaterThan(0);
     expect(await porta.convenio(B, cod)).toBeNull();
-    expect(await porta.retratoConvenio(A, cod)).toMatchObject({ existe: true, cod, situacao: 'A', agendasConsulta: 0, agendasExame: 0 });
+    expect(await porta.retratoConvenio(A, cod)).toMatchObject({
+      existe: true,
+      cod,
+      situacao: 'A',
+      agendasConsulta: 0,
+      agendasExame: 0,
+    });
     expect(await porta.retratoConvenio(B, cod)).toEqual({ existe: false, cod });
-    expect(await porta.impactoConvenio(A, cod)).toEqual({ consulta: 0, exame: 0, contasAbertas: 0, carteira: 0, profissionais: 0 });
+    expect(await porta.impactoConvenio(A, cod)).toEqual({
+      consulta: 0,
+      exame: 0,
+      contasAbertas: 0,
+      carteira: 0,
+      profissionais: 0,
+    });
     expect(await porta.diariaConvenio()).toBeNull();
     expect(porta.estado('convenio.alterarSituacao')).toBe('verde');
     expect(porta.estado('outra.operacao')).toBeNull();
@@ -72,10 +94,10 @@ describe.skipIf(SEM_BANCO)('porta própria da fachada contra o MariaDB (cliente 
   });
 
   const vinculo = (est: () => number) =>
-    sql('SELECT id, situacao, versao FROM fonte_pagadora_estabelecimento WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?', [
-      cod,
-      est(),
-    ]);
+    sql(
+      'SELECT id, situacao, versao FROM fonte_pagadora_estabelecimento WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?',
+      [cod, est()],
+    );
 
   it('suspende pelo Executor (versão, trilha) e a mesma proposta não grava duas vezes; a desatualizada é recusada', async () => {
     const chave = `f2241-prop-${Date.now()}`;
@@ -84,7 +106,9 @@ describe.skipIf(SEM_BANCO)('porta própria da fachada contra o MariaDB (cliente 
     const [v] = await vinculo(() => estA);
     expect(v).toMatchObject({ situacao: 'suspensa', versao: 2 });
     // O cadastro do cliente inteiro não muda.
-    expect(await sql('SELECT situacao, versao FROM fonte_pagadora WHERE id = ?', [cod])).toEqual([{ situacao: 'ativa', versao: 1 }]);
+    expect(await sql('SELECT situacao, versao FROM fonte_pagadora WHERE id = ?', [cod])).toEqual([
+      { situacao: 'ativa', versao: 1 },
+    ]);
     const t = await sql(
       "SELECT motivo FROM trilha_auditoria WHERE entidade = 'fonte_pagadora_estabelecimento' AND entidade_id = ? ORDER BY id DESC LIMIT 1",
       [v?.['id']],
@@ -94,12 +118,16 @@ describe.skipIf(SEM_BANCO)('porta própria da fachada contra o MariaDB (cliente 
     expect(await porta.gravarSituacaoConvenio(A, g)).toBe('I');
     expect((await vinculo(() => estA))[0]).toMatchObject({ versao: 2 });
     // Outra proposta de suspender o já suspenso: o cadastro mudou (409 no contrato da fachada).
-    await expect(porta.gravarSituacaoConvenio(A, { ...g, chave: `${chave}-b` })).rejects.toMatchObject({ status: 409 });
+    await expect(porta.gravarSituacaoConvenio(A, { ...g, chave: `${chave}-b` })).rejects.toMatchObject({
+      status: 409,
+    });
     // Outro estabelecimento não altera.
     await expect(
       porta.gravarSituacaoConvenio(B, { ...g, operacao: 'reativar', chave: `${chave}-c` }),
     ).rejects.toMatchObject({ status: 409 });
-    expect(await porta.gravarSituacaoConvenio(A, { ...g, operacao: 'reativar', chave: `${chave}-d` })).toBe('A');
+    expect(await porta.gravarSituacaoConvenio(A, { ...g, operacao: 'reativar', chave: `${chave}-d` })).toBe(
+      'A',
+    );
   });
 
   it('com o convênio nos dois estabelecimentos, suspender em A não muda B; o cadastro suspenso é o teto', async () => {
@@ -115,21 +143,29 @@ describe.skipIf(SEM_BANCO)('porta própria da fachada contra o MariaDB (cliente 
     expect(await porta.convenio(A, cod)).toMatchObject({ situacao: 'I', permiteAtend: 0 });
     expect(await porta.convenio(B, cod)).toMatchObject({ situacao: 'A', permiteAtend: 1 });
     expect((await vinculo(() => estB))[0]).toMatchObject({ situacao: 'ativa', versao: 1 });
-    expect(await porta.gravarSituacaoConvenio(A, { ...g, operacao: 'reativar', chave: `${chave}-r` })).toBe('A');
+    expect(await porta.gravarSituacaoConvenio(A, { ...g, operacao: 'reativar', chave: `${chave}-r` })).toBe(
+      'A',
+    );
     // O cadastro suspenso para o cliente inteiro vale nos dois e o vínculo sozinho não o reativa.
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f2241' }, (e) =>
       e.executar("UPDATE fonte_pagadora SET situacao = 'suspensa' WHERE id = ?", [cod]),
     );
     expect(await porta.convenio(B, cod)).toMatchObject({ situacao: 'I', permiteAtend: 0 });
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f2241' }, (e) =>
-      e.executar("UPDATE fonte_pagadora_estabelecimento SET situacao = 'suspensa', versao = versao + 1 WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?", [cod, estA]),
+      e.executar(
+        "UPDATE fonte_pagadora_estabelecimento SET situacao = 'suspensa', versao = versao + 1 WHERE fonte_pagadora_id = ? AND estabelecimento_id = ?",
+        [cod, estA],
+      ),
     );
     await expect(
       porta.gravarSituacaoConvenio(A, { ...g, operacao: 'reativar', chave: `${chave}-t` }),
     ).rejects.toMatchObject({ status: 409 });
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f2241' }, async (e) => {
       await e.executar("UPDATE fonte_pagadora SET situacao = 'ativa' WHERE id = ?", [cod]);
-      await e.executar("UPDATE fonte_pagadora_estabelecimento SET situacao = 'ativa' WHERE fonte_pagadora_id = ?", [cod]);
+      await e.executar(
+        "UPDATE fonte_pagadora_estabelecimento SET situacao = 'ativa' WHERE fonte_pagadora_id = ?",
+        [cod],
+      );
     });
   });
 });

@@ -31,7 +31,11 @@ export function moduloContabil(ctx: ContextoModulo, opcoes: OpcoesModuloContabil
   const memoria = !ctx.nucleo && fontesSinteticas(ctx.env);
   const porta: PortaContabil =
     opcoes.porta ??
-    (ctx.nucleo ? new PortaContabilPropria(ctx.nucleo) : memoria ? new PortaContabilMemoria() : portaContabilIndisponivel());
+    (ctx.nucleo
+      ? new PortaContabilPropria(ctx.nucleo)
+      : memoria
+        ? new PortaContabilMemoria()
+        : portaContabilIndisponivel());
   // A liberação (chaves contabil e contabil.sped) e os parâmetros vêm da FONTE_CONFIGURACAO global do módulo de
   // configuração (a mesma que a administração liga e desliga); uma fonte local só quando o teste a passa.
   const configuracao = opcoes.configuracao ?? null;

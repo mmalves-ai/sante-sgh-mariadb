@@ -19,7 +19,13 @@ import {
 import { direcaoDaMeta, PortaSaePropria, situacaoDaEvolucao } from './sae-porta-propria.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
-const recusada = async (p: Promise<unknown>) => codigoDe(await p.then(() => null, (e: unknown) => e));
+const recusada = async (p: Promise<unknown>) =>
+  codigoDe(
+    await p.then(
+      () => null,
+      (e: unknown) => e,
+    ),
+  );
 
 describe('regras derivadas das notas (sem banco)', () => {
   it('a direção da meta e a situação da evolução', () => {
@@ -96,7 +102,9 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
             descricao: 'Diagnóstico sintético',
             caracteristicas: [`${m!.marca}-C1`],
             fatores: [`${m!.marca}-F1`],
-            resultados: [{ codigo: `${m!.marca}-R1`, descricao: 'Resultado', escalaAtual: 2, meta: 1, escalaMeta: 4 }],
+            resultados: [
+              { codigo: `${m!.marca}-R1`, descricao: 'Resultado', escalaAtual: 2, meta: 1, escalaMeta: 4 },
+            ],
             intervencoes: [{ codigo: `${m!.marca}-I1`, descricao: 'Intervenção' }],
           },
         ],
@@ -112,8 +120,18 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     processo = r.id;
     // A linha da tela montada pelo resultado chega à trilha da operação: o evento e o paciente.
     expect(await trilhaDoEvento('processo_enfermagem', processo, 'L0205_SAE_REGISTRADA')).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM diagnostico_enfermagem_paciente_caracteristica x JOIN diagnostico_enfermagem_paciente d ON d.id = x.diagnostico_enfermagem_paciente_id WHERE d.atendimento_id = ?', [m!.atendimento])).toBe(2);
-    expect(await contar("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'processo_enfermagem' AND entidade_id = ?", [processo])).toBeGreaterThanOrEqual(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM diagnostico_enfermagem_paciente_caracteristica x JOIN diagnostico_enfermagem_paciente d ON d.id = x.diagnostico_enfermagem_paciente_id WHERE d.atendimento_id = ?',
+        [m!.atendimento],
+      ),
+    ).toBe(2);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'processo_enfermagem' AND entidade_id = ?",
+        [processo],
+      ),
+    ).toBeGreaterThanOrEqual(1);
     expect((await registrar(0, chaveSae)).repetida).toBe(true);
     expect(await recusada(registrar(0, null))).toBe('sae-mudou');
     expect(await recusada(registrar(1, null, `${m!.marca}-NAOEXISTE`))).toBe('termo-nao-cadastrado');
@@ -132,7 +150,12 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     const vs = (await porta.sae(c(), m!.atendimento)).versoes;
     expect(vs.map((x) => x.versao)).toEqual([1, 2]);
     expect(vs.every((x) => x.id === processo && x.usuario === m!.login && x.em !== '')).toBe(true);
-    expect(await contar("SELECT COUNT(*) AS n FROM diagnostico_enfermagem_paciente WHERE atendimento_id = ? AND situacao = 'inativado'", [m!.atendimento])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM diagnostico_enfermagem_paciente WHERE atendimento_id = ? AND situacao = 'inativado'",
+        [m!.atendimento],
+      ),
+    ).toBe(1);
     const resultado = (await porta.sae(c(), m!.atendimento)).itens.find((i) => i.tipo === 'resultado')!;
     const ev = await porta.gravarSgh(c(), null, (g) =>
       g.evoluir({
@@ -148,11 +171,25 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     );
     expect(ev.ids).toHaveLength(1);
     const evolucao = (await porta.sae(c(), m!.atendimento)).itens.find((i) => i.tipo === 'evolucao');
-    expect(evolucao).toMatchObject({ pai: resultado.id, escala: 3, situacao: 'melhorou', nota: 'Evolução sintética' });
+    expect(evolucao).toMatchObject({
+      pai: resultado.id,
+      escala: 3,
+      situacao: 'melhorou',
+      nota: 'Evolução sintética',
+    });
     expect(
       await recusada(
         porta.gravarSgh(c(), null, (g) =>
-          g.evoluir({ sae: processo + 999_999, paciente: m!.paciente, atendimento: m!.atendimento, nota: 'x', resultados: [], vinculo: 1, usuario: m!.login, chave: `l0205-ev2-${Date.now()}` }),
+          g.evoluir({
+            sae: processo + 999_999,
+            paciente: m!.paciente,
+            atendimento: m!.atendimento,
+            nota: 'x',
+            resultados: [],
+            vinculo: 1,
+            usuario: m!.login,
+            chave: `l0205-ev2-${Date.now()}`,
+          }),
         ),
       ),
     ).toBe('sae-mudou');
@@ -182,31 +219,69 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
       );
     const r = await aplicar(`l0205-vac-${Date.now()}`);
     vacina = r.id;
-    expect(await contar("SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.vacina.aplicada' AND estabelecimento_id = ?", [m!.est])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.vacina.aplicada' AND estabelecimento_id = ?",
+        [m!.est],
+      ),
+    ).toBe(1);
     expect(r.evento).not.toBe('');
     expect(await recusada(aplicar(null))).toBe('dose-ja-registrada');
     // A retificação reenviada com a mesma chave (resposta perdida) não cria outra retificação nem outro evento.
     const kRet = `l0205-ret-${Date.now()}`;
     const retificar = () =>
       porta.gravarSgh(c(), null, (g) =>
-        g.corrigirVacina({ id: vacina, paciente: m!.paciente, tipo: 'retificacao', motivo: 'Lote digitado errado', dados: { lote: 'LOTE2' }, usuario: m!.login, chave: kRet }),
+        g.corrigirVacina({
+          id: vacina,
+          paciente: m!.paciente,
+          tipo: 'retificacao',
+          motivo: 'Lote digitado errado',
+          dados: { lote: 'LOTE2' },
+          usuario: m!.login,
+          chave: kRet,
+        }),
       );
     const ret = await retificar();
     expect(ret.versao).toBe(1);
     expect((await retificar()).versao).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM vacina_aplicada WHERE vacina_aplicada_original_id = ?', [vacina])).toBe(1);
-    expect(await contar("SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.vacina.substituida' AND estabelecimento_id = ?", [m!.est])).toBe(1);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM vacina_aplicada WHERE vacina_aplicada_original_id = ?', [
+        vacina,
+      ]),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.vacina.substituida' AND estabelecimento_id = ?",
+        [m!.est],
+      ),
+    ).toBe(1);
     let [v] = await porta.vacinas(c(), m!.paciente);
-    expect(v?.correcoes).toEqual([expect.objectContaining({ tipo: 'retificacao', dados: { lote: 'LOTE2' } })]);
+    expect(v?.correcoes).toEqual([
+      expect.objectContaining({ tipo: 'retificacao', dados: { lote: 'LOTE2' } }),
+    ]);
     await porta.gravarSgh(c(), null, (g) =>
-      g.corrigirVacina({ id: vacina, paciente: m!.paciente, tipo: 'estorno', motivo: 'Aplicada em outro paciente', dados: null, usuario: m!.login }),
+      g.corrigirVacina({
+        id: vacina,
+        paciente: m!.paciente,
+        tipo: 'estorno',
+        motivo: 'Aplicada em outro paciente',
+        dados: null,
+        usuario: m!.login,
+      }),
     );
     [v] = await porta.vacinas(c(), m!.paciente);
     expect(v?.correcoes.map((x) => x.tipo)).toEqual(['retificacao', 'estorno']);
     expect(
       await recusada(
         porta.gravarSgh(c(), null, (g) =>
-          g.corrigirVacina({ id: vacina, paciente: m!.paciente, tipo: 'estorno', motivo: 'De novo', dados: null, usuario: m!.login }),
+          g.corrigirVacina({
+            id: vacina,
+            paciente: m!.paciente,
+            tipo: 'estorno',
+            motivo: 'De novo',
+            dados: null,
+            usuario: m!.login,
+          }),
         ),
       ),
     ).toBe('vacina-estornada');
@@ -214,11 +289,17 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
   });
 
   it('a consulta, os externos do dia e o cabeçalho da receita; a prescrição aguarda o modelo', async () => {
-    expect(await porta.consulta(c(), m!.atendimento)).toMatchObject({ tipo: 'I', vinculoDoAtendimento: m!.profissional, ativo: true });
+    expect(await porta.consulta(c(), m!.atendimento)).toMatchObject({
+      tipo: 'I',
+      vinculoDoAtendimento: m!.profissional,
+      ativo: true,
+    });
     expect(await porta.consulta(contextoDe(m!, m!.outroEst), m!.atendimento)).toBeNull();
     expect((await porta.externosDoDia(c(), agora().slice(0, 10))).itens).toEqual([]);
     const cab = await porta.cabecalhoReceita(c(), { paciente: m!.paciente, vinculo: m!.profissional });
     expect(cab).toMatchObject({ paciente: `PACIENTE ${m!.marca} SINTETICO`, nascimento: '1970-05-01' });
-    expect(await recusada(porta.gravarSgh(c(), null, (g) => g.prescrever({} as never)))).toBe('modelo-pendente');
+    expect(await recusada(porta.gravarSgh(c(), null, (g) => g.prescrever({} as never)))).toBe(
+      'modelo-pendente',
+    );
   });
 });
