@@ -22,3 +22,16 @@ teto_M: 58
   - Soma 37,5 M × 1,2 = **45 M**; teto 30% acima = **58 M**.
 - **Economia aplicada:** G6 (60/80 ferramentas), lotes de 2 fatias, diagnóstico por script em vez de agente,
   mudança compartilhada primeiro e em sequência, prefixo idêntico ao da rodada 5 (cache), sem retomada de workflow.
+
+## Andamento
+- **22/11, 0h10:** a rodada parou no `LIMITE_AGENTES` (32) antes do conferidor final. Gasto até aqui: **cerca de 21,6 M**
+  (compartilhado 2 × 2,12 M; fatias 29 × 0,55 M; verificação 0,18 M; 1,3 M da primeira largada derrubada pela rede).
+  - **Causa:** o compartilhado 2 (bloqueadas) fechou na G6 sem commit, com o índice das fatias desatualizado. O erro
+    global do fatiador deixou as 57 fatias vermelhas na verificação, e o script lançou 29 lotes em vez de cerca de 10.
+  - **Efeito:** os lotes saíram baratos (0,55 M cada, 34 turnos), e quase todos corrigiram a parte própria da fatia.
+    O gasto ficou dentro do orçamento.
+  - **Lição (vale daqui em diante):** antes de abrir lotes por fatia, o script confere os passos globais (verificador do
+    mapa e fatiador). Se um deles estiver vermelho, ele corrige primeiro e só depois conta as fatias vermelhas. A trava
+    de resultado também passa a olhar `ok`, além de resultado nulo.
+  - Bloqueadas: de 8 para 1. O orquestrador regenerou o índice das fatias por script (`fatiar_conector.py`) e roda a
+    autoconferência das 57 de novo, antes de lançar o resto.
