@@ -18,6 +18,7 @@ services:
       - '0.0.0.0:5320:5320'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../certs:/certs:ro
       - caddy-dados:/data
     networks: [borda]
 networks:
