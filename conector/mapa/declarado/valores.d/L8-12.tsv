@@ -20,3 +20,55 @@ SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	2E	cupom_fiscal	L8-12: m
 SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	59	cupom_fiscal	L8-12: modelo oficial 59: cupom fiscal eletrônico (CF-e SAT)
 SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	55	nfe	L8-12: modelo oficial 55: NF-e
 SDGECADNFS	ID_SDTIPODOCTO	nota_entrada.modelo_documento	65	nfce	L8-12: modelo oficial 65: NFC-e
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Corrente	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CORRENTE	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	corrente	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Conta Corrente	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Conta corrente	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA CORRENTE	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	C/C	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	C/Corrente	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	C/CORRENTE	corrente	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Aplicação	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	APLICAÇÃO	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Aplicacao	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	APLICACAO	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	aplicação	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	aplicacao	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Aplicações	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	APLICAÇÕES	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Aplicacoes	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	APLICACOES	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Conta Aplicação	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA APLICAÇÃO	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA APLICACAO	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Investimento	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	INVESTIMENTO	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Investimentos	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	INVESTIMENTOS	aplicacao	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Poupança	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	POUPANÇA	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Poupanca	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	POUPANCA	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	poupança	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	poupanca	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Conta Poupança	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	Conta poupança	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA POUPANÇA	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA POUPANCA	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
+TBBANCOS	SITUACAO	contrato_cobranca_bancaria.situacao	A	ativo	L8-12: cadastro ativo
+TBBANCOS	SITUACAO	contrato_cobranca_bancaria.situacao	I	suspenso	L8-12: inativo = suspenso (reversível; a origem não guarda o encerramento)
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	0	desconto	L8-12: natureza 0 = desconto
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	1	acrescimo	L8-12: natureza 1 = acréscimo
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	2	abatimento	L8-12: natureza 2 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	3	abatimento	L8-12: natureza 3 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	4	abatimento	L8-12: natureza 4 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	5	abatimento	L8-12: natureza 5 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	6	abatimento	L8-12: natureza 6 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	7	abatimento	L8-12: natureza 7 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	8	abatimento	L8-12: natureza 8 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	9	abatimento	L8-12: natureza 9 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	10	abatimento	L8-12: natureza 10 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	11	abatimento	L8-12: natureza 11 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	12	abatimento	L8-12: natureza 12 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	13	abatimento	L8-12: natureza 13 = retenção de tributo, migrada como abatimento da parcela

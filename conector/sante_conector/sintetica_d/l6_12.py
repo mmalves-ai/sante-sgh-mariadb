@@ -12,7 +12,12 @@ com TODAS as colunas do dicionário (`conector/mapa/colunas.tsv`), com ids difer
 referência direta não é usada. O profissional (TBPROFIS) é carregado pela declaração da L5-06; os demais avós são
 pais externos. A alergia lê paciente, atendimento, data e autor do registro clínico pela origem dele. Unidade e
 hemocomponente vêm por chave alternativa (sigla); o campo do modelo da resposta, pela opção -> pergunta -> ligação.
-Descartes (sem_carga.tsv) e a bloqueada (PRALERGIAPAC_TBPRINC, catálogo oficial sem de-para) entram só com a forma.
+O princípio ativo da alergia (PRALERGIAPAC_TBPRINC) vem do catálogo oficial DCB pelo código guardado no princípio
+da origem (TBPRINC, intermediária: encadeada terminada em coluna + `cod:principio_ativo.codigo_dcb`); o catálogo
+oficial é preparado no destino (nunca gravado pelo conector). O documento do prontuário nasce do cabeçalho da
+assinatura (PRASSINATURA_CAB, carregado pela declaração da L6-11: autor do primeiro evento, situação do último) e o
+evento aponta o documento por ref:PRASSINATURA_CAB; a opção respondida, da própria
+resposta (secundário adotado por campo x código). Descartes (sem_carga.tsv) entram só com a forma.
 """
 import csv
 import datetime
@@ -88,6 +93,11 @@ FORMAS = {
         'OBSERVACAO:VARCHAR(255) '),
     'PRALERGIAPACTMP_TBPRINC': ('ID',
         'ID:INTEGER ID_PRALERGIAPAC:INTEGER ID_TBPRINC:INTEGER '),
+    'PREVOLPACTMP': ('ID_CABEVOL,ID_RESPOSTA,SEQ,ORDEM',
+        'ID_CABEVOL:INTEGER ID_RESPOSTA:INTEGER SEQ:SMALLINT UNIDRESP:VARCHAR(10) CONTEVOL:BLOB1 RESPDATA:DATE '
+        'RESPHORA:VARCHAR(4) RESPSNAO:VARCHAR(5) RESPVALOR:NUMERIC(18,3) RESPALFA:VARCHAR(255) ORDEM:VARCHAR(15) '
+        'TAB:SMALLINT ID_HTPROCTO:INTEGER ID_HTCID:INTEGER OBSERVACAO:VARCHAR(255) AUTOPREENCHIDO:CHAR(1) '
+        'JUSTIFICATIVA_DIAGNOSTICO:VARCHAR(254) '),
     'PRCONTEVOL': ('ID',
         'ID:BIGINT ID_PRCABEVOL:INTEGER EVOLUCAO:BLOB1 EVOLUCAO_XML:BLOB1 ID_RIEVOLUCAOPAC:INTEGER '
         'DOCUMENTO_QRP:BLOB1 ASSINATURA:BLOB1 '),
@@ -199,11 +209,13 @@ FORMAS = {
 # intermediárias da referência encadeada (de outras fatias): todas as colunas do dicionário, chave ID
 _TIPOS_FB = {"DOUBLE": "DOUBLE PRECISION", "BLOB": "BLOB SUB_TYPE 0"}
 INTERMEDIARIAS = ("HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO", "TBPROFIS", "PRRESPOSTA", "PRPADEVOL", "PRHEMOTLAN",
-                  "TBUNIDADEMEDIDA")
-# chave das intermediárias (as demais: ID). PRHEMOTLAN e TBUNIDADEMEDIDA são carregadas pela declaração das fatias
-# L7-01 e L6-10 (pais por chave alternativa); PRRESPOSTA e PRPADEVOL ficam fora do plano (bloqueadas na L6-10/L6-11):
-# são lidas pela referência encadeada e registradas como pais externos
-CHAVE_INTER = {"PRRESPOSTA": "ID_RESPOSTA", "PRHEMOTLAN": "ID_HEMOTLAN"}
+                  "TBUNIDADEMEDIDA", "TBPRINC", "PREVOLUCAO", "PRPERGUNTA", "PRCADRESP", "PRASSINATURA_CAB",
+                  "PRTPASSINATURA", "ATCABECATEND")  # r5: ATCABECATEND só lida (saída do atendimento)
+# chave das intermediárias (as demais: ID). PRHEMOTLAN, TBUNIDADEMEDIDA (L7-01, L6-10), PREVOLUCAO, PRPADEVOL e
+# PRRESPOSTA (L6-11, rodada 3) são carregadas pela declaração das outras fatias: o campo do modelo e a opção da
+# resposta saem do destino que elas gravam. PRPERGUNTA e PRCADRESP só são lidas (título do campo e rótulo da opção)
+CHAVE_INTER = {"PRRESPOSTA": "ID_RESPOSTA", "PRHEMOTLAN": "ID_HEMOTLAN", "TBPRINC": "COD", "PREVOLUCAO": "ID_EVOLUCAO",
+               "PRCADRESP": "COD"}
 
 
 def _dicionario():
@@ -234,14 +246,33 @@ DDL = "".join("CREATE TABLE %s (%s, PRIMARY KEY (%s));\n" % (
 # avós da referência encadeada e pais de fora da fatia, registrados como já carregados (ids diferentes das
 # intermediárias: a referência direta não acharia nada)
 PAIS_EXTERNOS = {"RICADPAC": [1, 2], "ATCABECATEND": [1, 2], "TBUSERS": ["USR1", "USR2"], "TBPESSOA": [1, 2],
-                 "PRLOCAL_ASSISTENCIA": [1], "PREVOLUCAO": [1], "PRASSINATURA_CAB": [1, 2], "PRSITDOCUMENTO": [1],
+                 "PRLOCAL_ASSISTENCIA": [1], "PRTPCOMP": [1], "PRSITDOCUMENTO": [1],
                  "TBALERGIA": [1], "PRTPLAN": [1, 2], "PRFREQUENCIA": [1], "GETABVIA": ["VO", "EV"],
                  "PRPROTGERAL": [1], "TBPROENF": [1, 2], "PRTPINFUSAO": [1], "TBDIETAS": [1, 2], "PRVIAADMIN": [1],
                  "PRUNIDINFUSAO": [1], "PRCARACTDIE": [1, 2], "GEITENS": [1, 2], "PRITEMNAOPAD": [1],
-                 "PRFORMULA": [1], "PRKITSOL": [1], "PRPADEVOL": [1, 2, 3, 4], "PRRESPOSTA": [1, 2, 3]}
+                 "PRFORMULA": [1], "PRKITSOL": [1], "PRTIPODOCANEXO": [1],
+                 "PREXAMEASSINATURA": [1, 2]}  # r5: assinatura do exame (L7-04)
+# r5: a assinatura do exame (L7-04) é pai externo; a linha dela já existe no destino com o id que a conferência dá ao
+# pai externo (sequência na ordem das tabelas e chaves), para a ligação COMPLEMENTAR (UPDATE do documento)
+_IDS_EXT, _n = {}, 0
+for _t in sorted(PAIS_EXTERNOS):
+    for _k in PAIS_EXTERNOS[_t]:
+        _n += 1
+        _IDS_EXT[(_t, str(_k))] = _n
 # único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
+                   # catálogo oficial DCB (do carregador oficial; aqui a forma mínima e dois códigos inventados): o
+                   # conector só lê
+                   " CREATE TABLE IF NOT EXISTS principio_ativo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo_dcb VARCHAR(10) NOT NULL UNIQUE, descricao VARCHAR(255) NOT NULL,"
+                   " versao_fonte VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);"
+                   " INSERT IGNORE INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES"
+                   " ('01234', 'Principio falso A', 'exemplo', NOW(3)), ('00777', 'Principio falso B', 'exemplo',"
+                   " NOW(3));"
+                   " SET FOREIGN_KEY_CHECKS=0; INSERT INTO exame_item_assinatura (id, exame_item_id, documento_prontuario_id,"
+                   " origem, criado_em) VALUES (%d, 1, 1, 'migracao', NOW(3)), (%d, 2, 1, 'migracao', NOW(3));"
+                   " SET FOREIGN_KEY_CHECKS=1" % (_IDS_EXT[("PREXAMEASSINATURA", "1")], _IDS_EXT[("PREXAMEASSINATURA", "2")]))
 
 T0 = datetime.datetime(2026, 3, 2, 8, 30)
 SENTINELA = datetime.datetime(1899, 12, 30)
@@ -269,7 +300,11 @@ def linhas(r, ins):
     for i, pac in ((101, 1), (102, 2), (103, 9)):
         linha("HTPACIENTE", ID=i, ID_RICADPAC=pac, DATA_HORA_HISTORICO=_h(-48))
     for i, atd in ((201, 1), (202, 2)):
-        linha("HTATENDIMENTO", ID=i, ID_ATCABECATEND=atd, DATA_HORA_HISTORICO=_h(-48))
+        linha("HTATENDIMENTO", ID=i, ID_ATCABECATEND=atd, DATA_HORA_HISTORICO=_h(-48),
+              ID_TBCBOPRO_ASSISTENTE=301 if i == 201 else None)  # r5: médico assistente (responsável estimado)
+    # r5: atendimento 1 em curso; 2 com saída (monitorização encerrada, planejamento não liberado)
+    for i in (1, 2):
+        linha("ATCABECATEND", ID=i, DATA_HORA_SAIDA_EFETIVA=_h(12) if i == 2 else None)
     for i, prof in ((301, 1), (302, 2), (303, 9)):
         linha("TBCBOPRO", ID=i, ID_TBPROFIS=prof, ID_TBCBOSUS=1, UF="SP", COD=7000 + i, VINC_EMPR="N")
     for i in (1, 2):
@@ -345,10 +380,18 @@ def linhas(r, ins):
     for i, sig in ((1, "ML"), (2, "MG"), (3, "UN")):
         linha("TBUNIDADEMEDIDA", ID=i, NOME="Unidade falsa %d" % i, SIMBOLO="u%d" % i, SIGLA_API=sig, SITUACAO="A")
     linha("PRHEMOTLAN", ID_HEMOTLAN=1, ATO=1, CODALF="HM01")
+    # modelos 1 e 2 (tipo de documento 1, pai externo), perguntas 10 a 12 e textos de resposta 1 a 3 (só lidos)
+    for i in (1, 2):
+        linha("PREVOLUCAO", ID_EVOLUCAO=i, DESCRICAO="Modelo falso %d" % i, ID_PRTPCOMP=1)
+    for i in (10, 11, 12):
+        linha("PRPERGUNTA", ID=i, COD_PERGUNTA=i, COLUNA=1, DESCRICAO="Pergunta falsa %d" % i, TIPOPERG="4",
+              ATIVO="T")
+    for i in (1, 2, 3):
+        linha("PRCADRESP", COD=i, DESCRICAO="Resposta falsa %d" % i)
     for i, perg in ((1, 10), (2, 11), (3, 12)):
         linha("PRRESPOSTA", ID_RESPOSTA=i, ID_PRPERGUNTA=perg, COD=i, CONTEVOL=b"Opcao falsa", ATIVO="S", ORDEM=i)
     for i, modelo, perg in ((1, 1, 10), (2, 1, 11), (3, 1, 12), (4, 2, 12)):
-        linha("PRPADEVOL", ID=i, ID_EVOLUCAO=modelo, ID_PRPERGUNTA=perg, ORDEM="%02d" % i, ATIVO="S")
+        linha("PRPADEVOL", ID=i, ID_EVOLUCAO=modelo, ID_PRPERGUNTA=perg, ORDEM="%02d" % i, ATIVO="T")
     # registros clínicos: 1 normal; 2 suspenso (excluído logicamente) e correção do 1 (fase 2); 3 inscrição de
     # profissional inexistente (profissional e usuário pai_inexistente, NOT NULL); 4 modelo nunca visto (NOT NULL)
     for i, pac, atd, modelo, autor in [(1, 101, 201, 1, 301), (2, 102, 202, 1, 302), (3, 101, 201, 1, 303),
@@ -370,8 +413,11 @@ def linhas(r, ins):
         acao = {"ACAO": "R", "ACAO_DATA_HORA": _h(7), "ID_TBUSERS_ACAO": "USR2"} if i == 2 else {}
         linha("PRALERGIAPAC", ID=i, ID_PRCABEVOL=cab, ID_TBALERGIA=alg, RETIRAR_VINCULO_PACIENTE=ret,
               OBSERVACAO="Reação leve %d" % i, **acao)
-    # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2), 3 no registro 2 (autopreenchida); 4 registro
-    # recusado (pai_pendente); 5 pergunta em dois modelos (pai_ambiguo, NOT NULL); 6 opção nunca vista (NOT NULL);
+    # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2) criam a opção do campo (modelo_campo_opcao, uma
+    # por campo x código, rótulo do catálogo de respostas), 3 no registro 2 (autopreenchida) adota a opção da 1; 4
+    # registro recusado (pai_pendente; a opção já existe e é adotada); 5 opção de pergunta em dois modelos: o campo
+    # sai pai_ambiguo (na opção e na resposta) e a linha recusa (NOT NULL); 6 opção nunca vista (pai_inexistente nas
+    # cinco colunas lidas por ela e NOT NULL); 7 adota a opção da 2;
     # 7 hora inválida (NULL com hora_invalida, gravada). A hora '0830' da 2 também sai hora_invalida: a origem entrega
     # VARCHAR em bytes; desde a rodada 2 a regra hora_hhmm decodifica o texto cru: só 2575 fica hora_invalida
     for i, cab, resp, extra in [(1, 1, 1, {"RESPALFA": "Texto livre", "RESPVALOR": D("37.500"), "UNIDRESP": "C"}),
@@ -392,26 +438,107 @@ def linhas(r, ins):
               CONTEUDO_XML=("Declaro, para os devidos fins, documento falso %d." % i).encode("cp1252") if texto else None,
               REGISTRO_VALIDO=valido, ID_PRATESTREQIMP_ORIG_CORREC=1 if i == 5 else None, ID_TBPROFIS_ACOMP_RESP=1,
               **extra)
-    # eventos de assinatura: 1 e 2 normais; 3 documento nunca visto (NOT NULL); 4 sem momento do evento (NOT NULL)
-    for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None)]:
+    # cabeçalhos da assinatura (rodada 4: carregados pela declaração da L6-11, que cria o documento do prontuário) e o
+    # tipo de assinatura (carregado pela L6-07: pai externo, lido também pela descrição do título)
+    linha("PRTPASSINATURA", ID=1, DESCRICAO="Tipo de assinatura falso", ORDEM_MEDICA="N")
+    for i, pac, atd in ((1, 101, 201), (2, 102, None)):
+        linha("PRASSINATURA_CAB", ID=i, ID_PRTPASSINATURA=1, ID_TABELA=500 + i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=atd)
+    # eventos de assinatura: 1 e 2 normais (documentos dos cabeçalhos 1 e 2); 3 cabeçalho nunca visto
+    # (pai_inexistente, NOT NULL); 4 do documento 1 sem momento do evento (NOT NULL); 5 segundo evento do documento 1
+    # (dois eventos, um documento)
+    for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None), (5, 1, 4)]:
         linha("PRASSINATURA_DOC", ID=i, ID_PRASSINATURA_CAB=cab, ID_PRTPDOCUMENTO=1, ID_PRSITDOCUMENTO=1,
               ID_TBCBOPRO=301 + i % 2, DATA_HORA_EVENTO=None if ev is None else _h(ev), DATA_HORA_GRAVACAO=_h(9))
-    # descartes e bloqueada: só a forma, duas linhas falsas cada
+    # princípios da origem: 1 código sem zeros à esquerda (casa com 01234); 2 código já com 5 dígitos; 3 sem código
+    # DCB; 4 código que o catálogo oficial não tem
+    for i, dcb in ((1, "1234"), (2, "00777"), (3, None), (4, "99999")):
+        linha("TBPRINC", COD=i, NOME="Principio falso %d" % i, ATIVO="S", COD_DCB=dcb)
+    # princípio da alergia: 1 e 2 gravados; 3 alerta recusado (pai_pendente); 4 código ausente no catálogo
+    # (codigo_inexistente_destino, NOT NULL); 5 princípio sem código DCB (NOT NULL); 6 princípio nunca visto na
+    # origem (pai_inexistente, NOT NULL); 7 repete o par da 1 (UNIQUE)
+    for i, alg, princ in [(1, 1, 1), (2, 2, 2), (3, 3, 1), (4, 1, 4), (5, 1, 3), (6, 1, 99), (7, 1, 1)]:
+        linha("PRALERGIAPAC_TBPRINC", ID=i, ID_PRALERGIAPAC=alg, ID_TBPRINC=princ)
+    # conferidor r4: anexo do prontuário (#arquivo): 1 PDF; 2 sem DOCUMENTO, pela IMAGEM, suspenso; 3 sem binário
+    # nenhum (1048); 4 sem nome (título presumido); 5 paciente nunca visto (pai_inexistente, 1048)
+    for i, pac, doc, img, nome, susp in [(1, 1, b"%PDF-1.4 falso 1", None, "Laudo externo exemplo", None),
+                                         (2, 2, None, b"\xff\xd8\xff falsa", "Foto exemplo", _h(3)),
+                                         (3, 1, None, None, "Sem arquivo exemplo", None),
+                                         (4, 2, b"%PDF-1.4 falso 4", None, None, None),
+                                         (5, 9, b"%PDF-1.4 falso 5", None, "Orfao exemplo", None)]:
+        linha("PRGEDIMP", ID=i, ID_RICADPAC=pac, ID_ATCABECATEND=pac if pac < 3 else None, DATA_HORA_IMPORTACAO=_h(-i),
+              ID_TBCBOPRO_IMPORTACAO=301, MAQUINA_IMPORTACAO="MAQ1", DOCUMENTO=doc, IMAGEM=img, NOME_DOCUMENTO=nome,
+              ID_PRTIPODOCANEXO=1, DATA_HORA_SUSPENSAO=susp,
+              JUSTIFICATIVA_SUSPENSAO="Suspenso exemplo" if susp else None)
+    # rodada 5 (ADR 0006, item 2): rascunhos de evolução como RASCUNHO do autor, com a data original. 101 aberto;
+    # 102 descartado (exclusão); 103 arquivado, sem lançamento (data original = momento clínico); 104 inscrição de
+    # profissional inexistente (autor e usuário pai_inexistente; NOT NULL recusa)
+    for i, autor, exc, arq in [(101, 301, _h(9), None), (102, 302, _h(9), None), (103, 301, None, _h(10)),
+                               (104, 303, None, None)]:
+        linha("PRCABEVOLTMP", ID_CABEVOL=i, ID_HTPACIENTE=101, ID_HTATENDIMENTO=201, ID_EVOLUCAO=1,
+              ID_TBCBOPRO_EVOLUCAO=autor, ID_PRLOCAL_ASSISTENCIA=1, DATA_HORA_EVOLUCAO=_h(i - 100),
+              DATA_HORA_LANCAMENTO=None if i == 103 else _h(i - 99), DATA_HORA_EXCLUSAO=exc if i == 102 else None,
+              DATA_HORA_ARQUIVADO=arq)
+    # r5: 105 suspenso (entra descartado, com a suspensão na trilha); 106 com respostas e aberto
+    linha("PRCABEVOLTMP", ID_CABEVOL=105, ID_HTPACIENTE=101, ID_HTATENDIMENTO=201, ID_EVOLUCAO=1,
+          ID_TBCBOPRO_EVOLUCAO=301, ID_PRLOCAL_ASSISTENCIA=1, DATA_HORA_EVOLUCAO=_h(5), DATA_HORA_LANCAMENTO=_h(6),
+          DATA_HORA_SUSPENSAO=_h(11), ID_TBCBOPRO_SUSPENSAO=302, JUSTIFICATIVA_SUSPENSAO="Suspenso exemplo")
+    # respostas em edição: duas no 101 e uma no 102 (lista do grupo no próprio rascunho, por complementa); 4 no rascunho
+    # recusado (pai_pendente); 5 em rascunho nunca visto (pai_inexistente)
+    for cab, resp, ordem, extra in [(101, 1, "01", {"RESPALFA": "Rascunho falso"}),
+                                    (101, 2, "02", {"RESPVALOR": D("37.500"), "RESPHORA": "0830"}),
+                                    (102, 1, "01", {"RESPSNAO": "S"}), (104, 1, "01", {}), (999, 1, "01", {})]:
+        linha("PREVOLPACTMP", ID_CABEVOL=cab, ID_RESPOSTA=resp, SEQ=1, ORDEM=ordem, **extra)
+    # alergias em rascunho: 1 rascunho aberto; 2 retirada proposta (recusada, baixa: retirada_proposta_aguarda_modelo);
+    # 5 no rascunho arquivado (descartada, com o encerramento do pai); 3 rascunho recusado
+    # (pai_pendente); 4 alérgeno nunca visto (CHECK de alergia)
+    for i, cab, alg, ret in [(1, 101, 1, "F"), (2, 101, 1, "T"), (3, 104, 1, None), (4, 102, 99, None), (5, 103, 1, None)]:
+        linha("PRALERGIAPACTMP", ID=i, ID_PRCABEVOL=cab, ID_TBALERGIA=alg, RETIRAR_VINCULO_PACIENTE=ret,
+              OBSERVACAO="Reação em rascunho %d" % i)
+    # princípio da alergia em rascunho: 1 gravado; 2 alergia recusada (pai_pendente); 3 código ausente no catálogo
+    # (na alergia gravada: codigo_inexistente_destino e o CHECK do princípio)
+    for i, alg, princ in [(1, 1, 1), (2, 3, 2), (3, 1, 4)]:
+        linha("PRALERGIAPACTMP_TBPRINC", ID=i, ID_PRALERGIAPAC=alg, ID_TBPRINC=princ)
+    # monitorização: 1 com assistente (responsável estimado); 2 atendimento sem assistente (NOT NULL); 3 fim antes do
+    # início (CHECK), retroativa com justificativa
+    for i, atd, ini, fim, just in [(1, 201, 0, 5, None), (2, 202, 0, 5, None), (3, 201, 5, 1, "Lançado depois")]:
+        linha("PRCABEC_MONITORIZACAO", ID=i, ID_HTATENDIMENTO=atd, ID_HTPACIENTE=101, VIGENCIA_INICIAL=_h(ini),
+              VIGENCIA_FINAL=_h(fim), DATA_HORA_GRAVACAO=_h(6), DATA_HORA_GRAVACAO_UTC="falso",
+              JUSTIFICATIVA_LANC_RETROATIVO=just)
+    # planejamento de prescrição futura: 1 gravado com a prescrição futura (o item 8 de PRLANGERAL liga a ela);
+    # 2 fim antes do início (a prescrição recusa: CHECK; o planejamento sem ela, NOT NULL); 3 paciente nunca visto
+    # r5: 4 no atendimento já encerrado (planejamento e prescrição cancelados, nunca liberados)
+    for i, pac, ini, fim in [(1, 101, 30, 54), (2, 101, 54, 30), (3, 103, 30, 54), (4, 101, 30, 54)]:
+        linha("PRPLANPRESC", ID=i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=202 if i == 4 else 201, DATA_HORA_PRESCRICAO=_h(20),
+              DATA_HORA_INICIAL_VIGENCIA=_h(ini), DATA_HORA_FINAL_VIGENCIA=_h(fim), TP_PRESCRICAO="G",
+              ID_TBCBOPRO_PRESCRICAO=301, ID_TBPROFIS_ACOMP_RESP=1, DATA_HORA_GRAVACAO=_h(20),
+              DATA_HORA_GRAVACAO_UTC="falso", LANCAMENTO_RETROATIVO="N", ID_PRLOCAL_ASSISTENCIA=1,
+              OBS_GERAL_PRESCRICAO=b"Planejada falsa")
+    # ligação evento de assinatura x assinatura do exame (complementa a assinatura da L7-04, pai externo): 1 gravada;
+    # 2 evento de cabeçalho nunca visto (pai_inexistente); 3 assinatura de exame nunca vista (pai_inexistente)
+    for i, doc, exa in [(1, 1, 1), (2, 3, 2), (3, 1, 9)]:
+        linha("PRASS_DOC_PREXAMEASS", ID=i, ID_PRASSINATURA_DOC=doc, ID_PREXAMEASSINATURA=exa)
+    feitas_r5 = {"PRCABEVOLTMP", "PREVOLPACTMP", "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC", "PRCABEC_MONITORIZACAO",
+                 "PRPLANPRESC", "PRASS_DOC_PREXAMEASS"}
+    feitas_r4 = {"PRGEDIMP"} | feitas_r5
+    # descartes: só a forma, duas linhas falsas cada
     feitas = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
-             "PREVOLPAC"}
+             "PREVOLPAC", "PRALERGIAPAC_TBPRINC"}
     for t in FORMAS:
-        if t not in feitas:
+        if t not in feitas and t not in feitas_r4:
             for i in (1, 2):
                 linha(t, **{c: i for c in FORMAS[t][0].split(",")})
     return ESPERADO
 
 
 ESPERADO = {
+    "PRGEDIMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 1,
+                                               "valor_presumido": 1}},
     "PRPRESC": {"gravados": 2, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1, "restricao_destino_1048": 2,
                                               "restricao_destino_4025": 2, "valor_fora_do_dominio": 1}},
-    "PRLANGERAL": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
-                                                 "restricao_destino_1048": 2, "restricao_destino_1406": 1}},
+    # rodada 5: o item 8 (do planejamento) liga à prescrição futura e grava
+    "PRLANGERAL": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
+                                                 "restricao_destino_1048": 1, "restricao_destino_1406": 1}},
     "PRPRESCPROCED": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
                                                     "restricao_destino_1062": 1, "restricao_destino_4025": 1,
                                                     "valor_fora_do_dominio": 1}},
@@ -426,12 +553,43 @@ ESPERADO = {
                                                    "restricao_destino_4025": 2}},
     "PRCABEVOL": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
                                                 "valor_presumido": 4}},
+    # rodada 5 (ADR 0006): anomalias descritas em linhas(); o rascunho 104 entra sem autor (rascunho_sem_autor) e recusa
+    # pelo profissional nunca visto; a trilha das respostas do rascunho nunca visto grava sem a ligação (pai_inexistente)
+    "PRCABEVOLTMP": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "rascunho_sem_autor": 1, "restricao_destino_1048": 1}},
+    # r5: as respostas em edição ficam na trilha do rascunho (agrupadas); no próprio rascunho só no contrato do produto
+    # (pedido em saida/L6-12.json); a do rascunho nunca visto (999) grava sem a ligação; gravados contam as LINHAS
+    # da origem (101 tem duas no mesmo grupo), como o agrupar principal do exemplo_r4 (r6)
+    "PREVOLPACTMP": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
+    "PRALERGIAPACTMP": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "restricao_destino_4025": 1,
+                                                    "retirada_proposta_aguarda_modelo": 1}},
+    "PRALERGIAPACTMP_TBPRINC": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, "pai_pendente": 1, "restricao_destino_4025": 1}},
+    "PRCABEC_MONITORIZACAO": {"gravados": 1, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1}},
+    "PRPLANPRESC": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
+    "PRASS_DOC_PREXAMEASS": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1}},
     "PRCONTEVOL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
-    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_ambiguo": 1, "pai_inexistente": 2,
-                                                "restricao_destino_1048": 2, "hora_invalida": 1}},
+    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 5, "pai_ambiguo": 2,
+                                                "adotado_existente": 4, "restricao_destino_1048": 2,
+                                                "hora_invalida": 1}},
     "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_4025": 2}},
+    "PRALERGIAPAC_TBPRINC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "codigo_inexistente_destino": 1,
+                                                           "pai_inexistente": 1, "restricao_destino_4025": 3,
+                                                           "restricao_destino_1062": 1}},
+    # rodada 4 (11_SUP/08): princípio da alergia agora anulável com o do cliente; sem nenhum dos dois o CHECK
+    # ck_alergia_paciente_principio_principio (4025) recusa a linha, no lugar do NOT NULL (1048)
     "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
                                                     "restricao_destino_4025": 1}},
-    "PRASSINATURA_DOC": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+    # rodada 4: o documento é do cabeçalho (ref:PRASSINATURA_CAB): 3 cabeçalho nunca visto (pai_inexistente + 1048)
+    "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
 }
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE` (lido pela conferência): o mapa REAL sem a declaração do catálogo de respostas (PRCADRESP), que a
+    L6-05 carrega antes (rodada 5: opção do parâmetro do formulário); aqui ele está na imagem só para a encadeada ler
+    o rótulo da opção na origem."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in ("PRCADRESP", "ATCABECATEND")])

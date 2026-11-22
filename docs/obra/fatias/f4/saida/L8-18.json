@@ -1,89 +1,123 @@
 {
- "pedidos": [
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "tipar literal (=/=~) em coluna DATE/DATETIME antes da soma de controle (mesmo pedido do L8-13)",
-   "motivo": "L8-18: relatorio_versao exige ocorrido_em e dados (JSON); sem literal de data a versão inicial de cada relatório não é gravada (ficou fora)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "pai_inexistente da mesma coluna de origem declarada em dois destinos deve contar uma vez por linha (Propagador: conjunto por linha)",
-   "motivo": "L8-18: TBEDITREL.MODULO nunca visto gerou 2 pendências na mesma linha (relatorio e triagem_relatorio_legado); a imagem sintética espera 3 hoje (2+1)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
-   "mudanca": "de-para de TBEDITPARAM.TIPO -> relatorio_parametro.tipo_dado (data, inteiro, texto, escolha...) quando o domínio for confirmado com o cliente; hoje presumido 'texto'",
-   "motivo": "L8-18: código numérico sem domínio documentado"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "'#seq:<GRUPO>:<ORDEM>': numerar 1..n dentro do grupo ordenando por (ORDEM, chave), com a chave como desempate quando ORDEM for nula ou repetida; no diferencial, linha nova recebe o número seguinte ao maior já gravado do grupo no destino (ou o número da linha já gravada, guardado em conector_origem), e nunca a contagem das linhas lidas",
-   "motivo": "L8-18: TBEDITPARAM.ORDEM (ordem das perguntas ao usuário) está perdida porque o '#seq' numera pela chave; e no diferencial, um parâmetro apagado seguido de outro incluído pode receber um número já gravado e ser recusado por restricao_destino_1062 em uq_relatorio_parametro_sequencia. Ao aplicar, a fatia troca '#seq:ID_TBEDITREL' por '#seq:ID_TBEDITREL:ORDEM' e o ORDEM sai das perdas"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "falha de coluna especial (@estabelecimento) num destino SECUNDÁRIO recusa só aquele destino (pendência estabelecimento_indefinido na entidade '<chave>/<destino>'), e o destino principal é gravado; ou '@estabelecimento' aceitar a escolha do estabelecimento padrão do cliente no painel (configuração por cliente, nunca fixa)",
-   "motivo": "L8-18: a triagem (destino secundário de TBEDITREL) usa @estabelecimento; com nenhum ou vários estabelecimentos (o L3 já teve 2 e 3) a linha INTEIRA é recusada e o relatório do catálogo, que não precisa de estabelecimento, se perde, com parâmetros, itens de agrupamento e permissões em cascata (pai_pendente). Efeito provado em testes/test_l8_18.py (RiscoEstabelecimento)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "agregação pós-carga genérica declarada no mapa (ex.: 'agrega:<TABELA_FILHA>:<COLUNA_REF>:contar' e ':existe'), aplicada depois da carga das filhas por UPDATE do pai pelo conector_origem, fora do hash da linha",
-   "motivo": "L8-18: triagem_relatorio_legado.quantidade_parametros (contagem de TBEDITPARAM) e acesso_restrito (existe linha em TBEDITREL_GRUUSU ou TBEDITREL_TBUSERS) hoje entram PRESUMIDOS (=~0, valor_presumido por linha) para não mostrar 'sem parâmetros' e 'acesso livre' como fato no painel"
-  },
-  {
-   "arquivo": "db/migracoes/19_REL (modelo) e colunas.d/L8-18.tsv",
-   "mudanca": "atributo de parâmetro oculto em relatorio_parametro (ex.: visivel BOOLEAN NOT NULL DEFAULT TRUE, ou modo_exibicao 'oculto' no CHECK) para receber TBEDITPARAM.VISIVEL por booleano_sn",
-   "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
-   "mudanca": "de-para de TBEDITPARAM.TIPO_DEFAULT + VALOR_DEFAULT para relatorio_parametro.valor_padrao relativo (hoje, mes_anterior...) quando o domínio do código for confirmado com o cliente",
-   "motivo": "L8-18: sem TIPO_DEFAULT o valor padrão relativo entra como texto literal da origem (perda declarada)"
-  },
-  {
-   "arquivo": "tools/obra/cobertura_conector.py",
-   "mudanca": "na checagem coluna_obrigatoria_sem_fonte, pular o destino com a opção `complementa` (mapa.opcoes_destino): o complemento faz UPDATE da linha do pai, nunca INSERT, e as obrigatórias já estão nela",
-   "motivo": "L8-18 cobertura: TBEDITPESQ aparece BLOQUEADA (relatorio_parametro.relatorio_id, sequencia, campo, rotulo, tipo_dado) embora carregue e concilie na conferência; o mesmo falso bloqueio atinge PRPARRECMED, SIWEBPARPERFIL, GEINFVENEXT, TBTABTHM, SDGECADNFS e SIMODULO_SIWEBATOS"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
-   "mudanca": "chave alternativa composta com valor vindo de passo encadeado, ex.: `ref:TBEDITPARAM.(ID_TBEDITREL,PARAMETRO)` montada por `TBBTNOPREL>ID_TBEDITREL` + PARAMETRO desta linha",
-   "motivo": "L8-18 cobertura: TBPARAMOPREL acha o parâmetro só pelo nome (`ref:TBEDITPARAM.PARAMETRO`): nome repetido vira pai_ambiguo e nome único de outro relatório ligaria o parâmetro errado"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "desdobrar o VALOR de uma coluna por separador (`desdobrar_valor:<COL>:<sep>` com #item), uma linha do destino por parte",
-   "motivo": "L8-18 cobertura: TBEDITREL_AGENDA.EMAILS_DESTINO guarda a lista de endereços num campo; hoje vira um destinatário 'endereco' presumido com a lista inteira (valor_presumido), e o cliente desdobra no painel"
-  },
-  {
-   "arquivo": "db/migracoes/19_REL (modelo, trilha F2.2)",
-   "mudanca": "relatorio_parametro_pesquisa.especificacao TEXT NULL (texto da busca de origem, nunca executado) e relatorio_tela.agrupamento_relatorio_id (botão que imprime um agrupamento, exclusivo com relatorio_id)",
-   "motivo": "L8-18 cobertura: perdas declaradas de TBEDITPESQ.BROWSER e TBBTNOPREL.ID_TBAGRUPRELAT"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
-   "mudanca": "de-para de TBEDITREL_AGENDA.DIAS_ESPECIFICOS para periodicidade semanal/mensal + dia, quando o formato for confirmado com o cliente",
-   "motivo": "L8-18 cobertura: periodicidade presumida diária (o agendamento entra desligado)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
-   "mudanca": "especial de texto composto, ex.: '#juntar:<C1>,<C2>[:<separador>]' (cada parte pela regra/referência declarada, inclusive encadeada como `ref:TBEDITREL>NOME`), ou `#codigo_derivado` aceitando mais de uma coluna",
-   "motivo": "L8-18 (achado alto): agendamento_relatorio.nome é único por estabelecimento; a origem tem a chave (relatório, horário) e o nome vem só do relatório, então o segundo horário do mesmo relatório é recusado (1062). Ao aplicar, a fatia troca o nome por relatório + ' ' + hora"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
-   "mudanca": "desempate determinístico na chave alternativa: `ref:T.K` com opção `menor:<COLUNA>` (entre as linhas de T com o mesmo K, a de menor COLUNA, desempate pela chave), registrando pendência baixa `pai_desempatado` em vez de recusar com pai_ambiguo",
-   "motivo": "L8-18 (achado alto): o log de envio só tem o relatório; com dois agendamentos do mesmo relatório todo o histórico dele é recusado (pai_ambiguo). Decisão registrada em F4-decisoes-destino.md: ligar ao agendamento de menor horário; ao aplicar, a via vira `ref:TBEDITREL_AGENDA.ID_TBEDITREL;menor:HORARIO`"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "pai_pendente (e estabelecimento_indefinido) numa coluna de destino SECUNDÁRIO `opcional` descarta só aquele destino, com a pendência na entidade '<chave>/<destino>', e grava o principal",
-   "motivo": "L8-18: o vínculo opcional relatório-tela (TBEDITREL.ID_TBOPCOES) recusaria o relatório inteiro se a tela foi recusada no L5"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
-   "mudanca": "opção `opcional:<COLUNA>` (o destino secundário só grava quando a coluna da origem tem valor resolvido), para poder preencher o rótulo do vínculo pela coluna NOME sem marcar o destino como preenchido",
-   "motivo": "L8-18: relatorio_tela vindo de TBEDITREL usa rótulo fixo 'Relatório' porque qualquer coluna lida marcaria o destino opcional e a falta da tela recusaria o relatório pelo NOT NULL"
-  }
- ]
+  "pedidos": [
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "tipar literal (=/=~) em coluna DATE/DATETIME antes da soma de controle (mesmo pedido do L8-13)",
+      "motivo": "L8-18: relatorio_versao exige ocorrido_em e dados (JSON); sem literal de data a versão inicial de cada relatório não é gravada (ficou fora)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "pai_inexistente da mesma coluna de origem declarada em dois destinos deve contar uma vez por linha (Propagador: conjunto por linha)",
+      "motivo": "L8-18: TBEDITREL.MODULO nunca visto gerou 2 pendências na mesma linha (relatorio e triagem_relatorio_legado); a imagem sintética espera 3 hoje (2+1)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+      "mudanca": "de-para de TBEDITPARAM.TIPO -> relatorio_parametro.tipo_dado (data, inteiro, texto, escolha...) quando o domínio for confirmado com o cliente; hoje presumido 'texto'",
+      "motivo": "L8-18: código numérico sem domínio documentado"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "'#seq:<GRUPO>:<ORDEM>': numerar 1..n dentro do grupo ordenando por (ORDEM, chave), com a chave como desempate quando ORDEM for nula ou repetida; no diferencial, linha nova recebe o número seguinte ao maior já gravado do grupo no destino (ou o número da linha já gravada, guardado em conector_origem), e nunca a contagem das linhas lidas",
+      "motivo": "L8-18: TBEDITPARAM.ORDEM (ordem das perguntas ao usuário) está perdida porque o '#seq' numera pela chave; e no diferencial, um parâmetro apagado seguido de outro incluído pode receber um número já gravado e ser recusado por restricao_destino_1062 em uq_relatorio_parametro_sequencia. Ao aplicar, a fatia troca '#seq:ID_TBEDITREL' por '#seq:ID_TBEDITREL:ORDEM' e o ORDEM sai das perdas",
+      "bloqueante": true
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "falha de coluna especial (@estabelecimento) num destino SECUNDÁRIO recusa só aquele destino (pendência estabelecimento_indefinido na entidade '<chave>/<destino>'), e o destino principal é gravado; ou '@estabelecimento' aceitar a escolha do estabelecimento padrão do cliente no painel (configuração por cliente, nunca fixa)",
+      "motivo": "L8-18: a triagem (destino secundário de TBEDITREL) usa @estabelecimento; com nenhum ou vários estabelecimentos (o L3 já teve 2 e 3) a linha INTEIRA é recusada e o relatório do catálogo, que não precisa de estabelecimento, se perde, com parâmetros, itens de agrupamento e permissões em cascata (pai_pendente). Efeito provado em testes/test_l8_18.py (RiscoEstabelecimento)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "agregação pós-carga genérica declarada no mapa (ex.: 'agrega:<TABELA_FILHA>:<COLUNA_REF>:contar' e ':existe'), aplicada depois da carga das filhas por UPDATE do pai pelo conector_origem, fora do hash da linha",
+      "motivo": "L8-18: triagem_relatorio_legado.quantidade_parametros (contagem de TBEDITPARAM) e acesso_restrito (existe linha em TBEDITREL_GRUUSU ou TBEDITREL_TBUSERS) hoje entram PRESUMIDOS (=~0, valor_presumido por linha) para não mostrar 'sem parâmetros' e 'acesso livre' como fato no painel"
+    },
+    {
+      "arquivo": "db/migracoes/19_REL (modelo) e colunas.d/L8-18.tsv",
+      "mudanca": "atributo de parâmetro oculto em relatorio_parametro (ex.: visivel BOOLEAN NOT NULL DEFAULT TRUE, ou modo_exibicao 'oculto' no CHECK) para receber TBEDITPARAM.VISIVEL por booleano_sn",
+      "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)",
+      "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04; aplicado na fatia na r5 (VISIVEL -> relatorio_parametro.visivel, booleano_sn)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+      "mudanca": "de-para de TBEDITPARAM.TIPO_DEFAULT + VALOR_DEFAULT para relatorio_parametro.valor_padrao relativo (hoje, mes_anterior...) quando o domínio do código for confirmado com o cliente",
+      "motivo": "L8-18: sem TIPO_DEFAULT o valor padrão relativo entra como texto literal da origem (perda declarada)"
+    },
+    {
+      "arquivo": "tools/obra/cobertura_conector.py",
+      "mudanca": "na checagem coluna_obrigatoria_sem_fonte, pular o destino com a opção `complementa` (mapa.opcoes_destino): o complemento faz UPDATE da linha do pai, nunca INSERT, e as obrigatórias já estão nela",
+      "motivo": "L8-18 cobertura: TBEDITPESQ aparece BLOQUEADA (relatorio_parametro.relatorio_id, sequencia, campo, rotulo, tipo_dado) embora carregue e concilie na conferência; o mesmo falso bloqueio atinge PRPARRECMED, SIWEBPARPERFIL, GEINFVENEXT, TBTABTHM, SDGECADNFS e SIMODULO_SIWEBATOS"
+    },
+    {
+      "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+      "mudanca": "chave alternativa composta com valor vindo de passo encadeado, ex.: `ref:TBEDITPARAM.(ID_TBEDITREL,PARAMETRO)` montada por `TBBTNOPREL>ID_TBEDITREL` + PARAMETRO desta linha",
+      "motivo": "L8-18 cobertura: TBPARAMOPREL acha o parâmetro só pelo nome (`ref:TBEDITPARAM.PARAMETRO`): nome repetido vira pai_ambiguo e nome único de outro relatório ligaria o parâmetro errado"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "desdobrar o VALOR de uma coluna por separador (`desdobrar_valor:<COL>:<sep>` com #item), uma linha do destino por parte",
+      "motivo": "L8-18 cobertura: TBEDITREL_AGENDA.EMAILS_DESTINO guarda a lista de endereços num campo; hoje vira um destinatário 'endereco' presumido com a lista inteira (valor_presumido), e o cliente desdobra no painel"
+    },
+    {
+      "arquivo": "db/migracoes/19_REL (modelo, trilha F2.2)",
+      "mudanca": "relatorio_parametro_pesquisa.especificacao TEXT NULL (texto da busca de origem, nunca executado) e relatorio_tela.agrupamento_relatorio_id (botão que imprime um agrupamento, exclusivo com relatorio_id)",
+      "motivo": "L8-18 cobertura: perdas declaradas de TBEDITPESQ.BROWSER e TBBTNOPREL.ID_TBAGRUPRELAT",
+      "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+      "mudanca": "de-para de TBEDITREL_AGENDA.DIAS_ESPECIFICOS para periodicidade semanal/mensal + dia, quando o formato for confirmado com o cliente",
+      "motivo": "L8-18 cobertura: periodicidade presumida diária (o agendamento entra desligado)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+      "mudanca": "especial de texto composto, ex.: '#juntar:<C1>,<C2>[:<separador>]' (cada parte pela regra/referência declarada, inclusive encadeada como `ref:TBEDITREL>NOME`), ou `#codigo_derivado` aceitando mais de uma coluna",
+      "motivo": "L8-18 (achado alto): agendamento_relatorio.nome é único por estabelecimento; a origem tem a chave (relatório, horário) e o nome vem só do relatório, então o segundo horário do mesmo relatório é recusado (1062). Ao aplicar, a fatia troca o nome por relatório + ' ' + hora"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+      "mudanca": "desempate determinístico na chave alternativa: `ref:T.K` com opção `menor:<COLUNA>` (entre as linhas de T com o mesmo K, a de menor COLUNA, desempate pela chave), registrando pendência baixa `pai_desempatado` em vez de recusar com pai_ambiguo",
+      "motivo": "L8-18 (achado alto): o log de envio só tem o relatório; com dois agendamentos do mesmo relatório todo o histórico dele é recusado (pai_ambiguo). Decisão registrada em F4-decisoes-destino.md: ligar ao agendamento de menor horário; ao aplicar, a via vira `ref:TBEDITREL_AGENDA.ID_TBEDITREL;menor:HORARIO`"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "pai_pendente (e estabelecimento_indefinido) numa coluna de destino SECUNDÁRIO `opcional` descarta só aquele destino, com a pendência na entidade '<chave>/<destino>', e grava o principal",
+      "motivo": "L8-18: o vínculo opcional relatório-tela (TBEDITREL.ID_TBOPCOES) recusaria o relatório inteiro se a tela foi recusada no L5"
+    },
+    {
+      "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+      "mudanca": "opção `opcional:<COLUNA>` (o destino secundário só grava quando a coluna da origem tem valor resolvido), para poder preencher o rótulo do vínculo pela coluna NOME sem marcar o destino como preenchido",
+      "motivo": "L8-18: relatorio_tela vindo de TBEDITREL usa rótulo fixo 'Relatório' porque qualquer coluna lida marcaria o destino opcional e a falta da tela recusaria o relatório pelo NOT NULL"
+    },
+    {
+      "arquivo": "db/migracoes/16_*/modelo_impressao_clinica (trilha F2.2)",
+      "mudanca": "coluna relatorio_id (FK relatorio, NULL) em modelo_impressao_clinica",
+      "motivo": "r5 achado: hoje o vínculo modelo -> relatório fica em trilha_auditoria (entidade relatorio, entidade_id = id do relatório por ref:TBEDITREL, correlacao = código do modelo, retrato sempre); com a coluna, declarar TBEDITREL_PRMODELOREL.ID_TBEDITREL -> modelo_impressao_clinica.relatorio_id por ref:TBEDITREL"
+    },
+    {
+      "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+      "mudanca": "relatorio_parametro.ordem_exibicao (SMALLINT NULL), se o motor não ganhar '#seq:<GRUPO>:<ORDEM>'",
+      "motivo": "r5 achado: VISIVEL já vai a relatorio_parametro.visivel; a ORDEM segue só no retrato da trilha e a sequência pela chave"
+    },
+    {
+      "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+      "mudanca": "agendamento_relatorio: periodicidade 'a_confirmar' (permitida só com ativo = FALSE) ou dias_semana JSON",
+      "motivo": "r5 achado: com DIAS_ESPECIFICOS preenchido a periodicidade é presumida diária (valor_presumido, agendamento desligado, texto no retrato), porque o CHECK exige diaria/semanal/mensal; o valor neutro evita o presumido"
+    },
+    {
+      "arquivo": "integrador (imagem real, só agregados)",
+      "mudanca": "censo de frequência dos códigos TBEDITPARAM.TIPO, TIPO_DEFAULT, TBEDITPESQ.TIPO_RETORNO, TBEDITREL.TIPO e do formato de TBEDITREL_AGENDA.DIAS_ESPECIFICOS (classe de caracteres e separador, nunca valor)",
+      "motivo": "ADR 0007/18: estimar o domínio pelo uso; a fatia não abre a imagem real. Com o censo, declarar o de-para em valores.d/L8-18.tsv (tipo_dado, retorno, periodicidade)"
+    },
+    {
+      "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+      "mudanca": "painel_tv.painel_chamada_id (FK painel_chamada, NULL)",
+      "motivo": "r5 achado (ADR 0007/19): o portal (PNCONFIGPORTAL) liga-se hoje ao painel de chamada por trilha_auditoria (entidade painel_chamada, entidade_id por ref:PNCONFIG, correlacao = código do painel_tv); com a coluna, declarar ID_PNCONFIG -> painel_tv.painel_chamada_id por ref:PNCONFIG"
+    },
+    {
+      "id": "r6-1",
+      "arquivo": "docs/obra/fatias/f4 (fatiar_conector, orquestrador)",
+      "mudanca": "Regerar as fatias L7-07, L7-08 e o indice.tsv (fatiar_conector) depois das mudanças paralelas das trilhas L7-07/L7-08.",
+      "motivo": "L8-18 rodada 6: a autoconferência só falha no passo global 'fatiar_conector --conferir' (L7-07, L7-08 e indice.tsv diferentes do gerado); testes da fatia, carga sintética duas vezes e cobertura (sem bloqueadas) estão ok. Os erros do verificador (PRAGRUP_PRFILTROCLASSIF de L6-11, GECOMPRA de L7-05) já sumiram com as correções das outras fatias."
+    }
+  ]
 }

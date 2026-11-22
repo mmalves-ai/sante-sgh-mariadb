@@ -2,7 +2,7 @@
  "pedidos": [
   {
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
-   "mudanca": "acrescentar (ou substituir, se a versão anterior da L5-09 já foi aplicada) as linhas abaixo: 19 tabelas da L5-09; colunas tabela, situacao, causa, motivo separadas por TAB",
+   "mudanca": "nenhuma linha da L5-09 em sem_carga.tsv (as 19 foram retiradas pela própria fatia na rodada 5: carregam como listas do hospital)",
    "motivo": "cobertura total sem depender do carregador inexistente: 17 listas são mecanismo do produto (11 domínios fixos por CHECK e 6 códigos simples no consumidor), FPRESC_CAUSA é duplicado do código RAIS e FPMOTDESLIG fica BLOQUEADA por catalogo_oficial_faltante até o carregador oficial existir",
    "linhas": [
     "FPMOTESTABILI\tdescarte\tmecanismo_do_produto\tlista de domínio fixa do produto (CHECK de estabilidade_colaborador.motivo): a linha não é registro do cliente; o consumidor na origem (FPESTABIFUNC) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)",
@@ -24,7 +24,8 @@
     "FPPROCTRAB_ESOCIAL_CR\tdescarte\tmecanismo_do_produto\tcódigo oficial guardado como código simples no consumidor (processo_trabalhista.codigo_receita, VARCHAR(6); alíquota e aplicabilidade são as da tabela pública da Receita, não do cliente; consumidores FPPROCTRAB_ESOCIAL_PCR e _DCR vazios e fora do mapa), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)",
     "FPRESC_CAUSA\tdescarte\tduplicado\tlista local de causas de demissão que repete o que o código RAIS do tipo de rescisão já diz de forma legal (iniciativa e justa causa, RAIS 10); o modelo não tem coluna para ela (F4-decisoes-destino.md, L5-09)",
     "FPMOTDESLIG\tbloqueada\tcatalogo_oficial_faltante\ttabela 19 do eSocial (motivo de desligamento, com vigências): pela regra 7 só o carregador oficial versionado grava codigo_esocial, e ele não existe em catalogos/carregadores (pedido em saida/L5-09.json); até lá o de-para codigo_esocial:19 de tipo_rescisao deixa o motivo NULL com pendência. Nunca carregar da origem"
-   ]
+   ],
+   "atendido": true
   },
   {
    "arquivo": "conector/mapa/declarado/catalogos.tsv",
@@ -55,6 +56,73 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes)",
    "mudanca": "aplicar a recusa codigo_colisao_caixa também a #codigo_derivado com regra codigo_char (comparando o código já prefixado)",
    "motivo": "hoje a coluna especial fica fora da checagem de caixa; a L5-09 manteve o código da situação sem prefixo por isso (o prefixo ficou do lado da condição, L5-07)"
+  },
+  {
+   "id": "r5-1",
+   "rodada": 5,
+   "arquivo": "conector/sante_conector/mapa.py (verificador) e carga_mapa.py; modelo 15_RH (domínios CHECK)",
+   "mudanca": "Item do hospital nas listas legais (ADR 0006, item 4): (a) permitir que a carga grave em codigo_esocial SÓ linha com item_hospital = TRUE e motivo_item_hospital codigo_local/versao_antiga (hoje o verificador recusa qualquer destino oficial), para o código da lista da origem que não existe na fonte oficial; (b) para as listas que o modelo guarda como CHECK (aso.tipo, comunicacao_acidente.tipo, vinculo_trabalho.tipo_contrato e outras desta fatia), uma forma de o hospital ter o item local ativo (ex.: coluna *_codigo_esocial_id com FK para codigo_esocial ao lado do domínio, ou o CHECK aceitando 'item_hospital' com o código guardado).",
+   "motivo": "ADR 0006, itens 1 e 4: a lista legal da origem não pode ser descartada sem prova; o código oficial liga pelo código e o código local ou de versão antiga tem de entrar como item do hospital ATIVO. O modelo já tem as colunas (15_RH/40_tabelas.sql: item_hospital, motivo_item_hospital), mas o verificador (mapa.py, 'grava em catálogo oficial') e o motor recusam qualquer destino oficial, e os domínios CHECK não guardam item local. Até lá as tabelas ficam bloqueada/mecanismo_pedido (sem_carga.tsv).",
+   "tabelas_bloqueadas": [
+    "FPMOTDESLIG",
+    "FPMOTESTABILI",
+    "FPMTCANCELAVI",
+    "FPNIVELESTAG",
+    "FPOCOR_SEFIP",
+    "FPPROCESSOTEOR",
+    "FPPROCTRAB_ESOCIAL_CR",
+    "FPRESC_CAGED",
+    "FPRESC_RAIS",
+    "FPRESC_SEFIP",
+    "FPSAQUE",
+    "FPTEMPO_RESID_TRAB_IMIGRANTE",
+    "FPTIPOAVISO",
+    "FPTIPO_CONTRATO",
+    "FPTPACIDTRANS",
+    "FPTPAVISORESC",
+    "FPTPDEFICIEN"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; a conciliação compara cada código e descrição da origem com o catálogo oficial carregado (casados, locais, divergentes); fonte extinta (FPAFAST_COD, FPAFAST_RAIS, FPRESC_SEFIP, FPOCOR_SEFIP, FPRESC_CAGED, FPRESC_RAIS) entra inteira como versao_antiga, ligada ao motivo atual por de-para declarado. Também falta o carregador oficial versionado de codigo_esocial, aliquota_rat_cnae, aliquota_terceiros e codigo_retorno_esocial.",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "id": "r5-2",
+   "rodada": 5,
+   "arquivo": "db/migracoes (trilha F2.2: tabela nova) e conector/mapa/declarado/colunas.d da fatia",
+   "mudanca": "Tabela genérica de listas próprias do hospital sem equivalente no produto, ex. lista_hospital_valor (lista VARCHAR(60), codigo VARCHAR(30), descricao VARCHAR(300), valor_produto VARCHAR(60) NULL = valor equivalente do domínio do produto quando houver, ativo, origem, criado_em..., UNIQUE(lista, codigo)); com ela as tabelas FPRESC_CAUSA, FPTPACESSORIA CARREGAM (código pela chave, descrição, ativo) e o consumidor pode ligar por FK, sem prova de 'não copiar'. FPRESC_CAUSA: também tipo_rescisao.causa_demissao_id (FK para a lista), pela coluna FPTIPORESC.ID_FPRESC_CAUSA (NOT NULL na origem: escolha do hospital por tipo de rescisão).",
+   "motivo": "ADR 0006, item 1: sem consumidor carregado nem de-para conhecido (o significado de cada item só está no rótulo da origem, que não pode entrar no código), não há prova honesta de que a lista continua utilizável; uma prova com mapeamento inventado seria tautológica. Até a tabela existir, a fatia fica com FPRESC_CAUSA, FPTPACESSORIA BLOQUEADA(s) descarte_sem_prova.",
+   "tabelas": [
+    "FPRESC_CAUSA",
+    "FPTPACESSORIA"
+   ],
+   "tabelas_bloqueadas": [
+    "FPRESC_CAUSA",
+    "FPTPACESSORIA"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; inclui tipo_rescisao.causa_demissao_id (FPTIPORESC.ID_FPRESC_CAUSA, tese de duplicado retirada) e o de-para dos consumidores FPTPEVENTOAUT_TBEMPHOS (L5-12, evento_gatilho) e FPVALE (L5-11, beneficio.tipo) no lugar do =~outro, outro só para código sem par.",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "id": "r5-a",
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (verificador)",
+   "mudanca": "especial `#seq:*` (ou `#grupo_seq@*`): posição 1..n da linha na tabela INTEIRA, na ordem da chave (hoje `#seq:` e `#grupo_seq@` exigem uma coluna de grupo)",
+   "motivo": "parametro_opcao.sequencia é NOT NULL e única por lista; nas listas de chave texto (FPMOTDESLIG, FPRESC_SEFIP, FPSAQUE) a ordem sai do código por faixa:0,65535, e código não numérico (ex.: os da SEFIP, 'I1') fica NULL e a linha é recusada (valor_fora_do_dominio + restricao_destino_1048), visível. Com `#seq:*` a L5-09 troca a fonte da ordem e toda linha entra",
+   "atendido": false
+  },
+  {
+   "id": "r5-b",
+   "arquivo": "db/migracoes/15_RH (trilha F2.2)",
+   "mudanca": "tipo_rescisao.causa_demissao_parametro_opcao_id BIGINT UNSIGNED NULL, FK para parametro_opcao (lista 'rh.lista.causa_demissao')",
+   "motivo": "a lista de causas de demissão do hospital (FPRESC_CAUSA) já carrega, mas o tipo de rescisão não tem coluna para guardar a causa (FPTIPORESC.ID_FPRESC_CAUSA); com a coluna, a L5-09 declara `ref:FPRESC_CAUSA` para ela",
+   "atendido": false
+  },
+  {
+   "arquivo": "colunas.d/L6-11.tsv, colunas.d/L7-05.tsv, colunas.d/L7-07.tsv, colunas.d/L7-08.tsv e fatias geradas (indice.tsv)",
+   "mudanca": "rodada 6: corrigir os 13 erros do verificador (GECOMPRA -> historico_compra_insumo 11; PRAGRUP_PRFILTROCLASSIF -> classificacao_filtro_painel_despesa 2: destino fora dos destinos da tabela) e regerar as fatias L7-07, L7-08 e indice.tsv (fatiar_conector)",
+   "motivo": "únicos erros da autoconferência de L5-09; vêm de fatias de outros agentes em edição paralela. Os passos próprios da fatia passam: testes OK, conciliação na sintética nas duas execuções, cobertura 21/0/0",
+   "atendido": false
   }
  ]
 }

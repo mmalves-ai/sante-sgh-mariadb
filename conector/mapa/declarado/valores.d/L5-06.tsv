@@ -3,3 +3,15 @@ TBCONVEN	SITUACAO	fonte_pagadora.situacao	A	ativa	L5-06: A/I validados pelo cód
 TBCONVEN	SITUACAO	fonte_pagadora.situacao	I	inativa	L5-06: idem
 TBPROFIS	SITUACAO	profissional.situacao	A	ativo	L5-06: mesma convenção A/I da origem
 TBPROFIS	SITUACAO	profissional.situacao	I	inativo	L5-06: idem; sem data de desligamento recusa pela regra do modelo
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	T	opcional	L5-06 r3 (revisão): marcação T/F de digitação do campo (valores da imagem de referência): T = o campo é digitado
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	F	oculto	L5-06 r3 (revisão): F = o campo não é digitado (mesma leitura de 1 Não da lista)
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	S	opcional	L5-06 r3 (revisão): S/N, mesma leitura de T/F
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	N	oculto	L5-06 r3 (revisão): S/N, mesma leitura de T/F
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	0	opcional	L5-06 r3 (revisão): 0 fica fora da lista (colunas novas NOT NULL sem configuração): padrão do produto, nunca oculta
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	1	oculto	L5-06 r3 (revisão): 1 Não (não digitar); contagem na imagem de referência: TBDIGITAR 1 Não, 2 Sim, 3 Obrigatório; TBDIGITAR_CNSCADPAC também 4 Obrig.atend.SUS; TBDIGITAR_FILIACAO 1 Não, 2 Ambos, 3 Mãe, 4 Pai
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	2	opcional	L5-06 r3 (revisão): 2 Sim (digitar); filiação: 2 Ambos
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	3	obrigatorio	L5-06 r3 (revisão): 3 Obrigatório; filiação: 3 Mãe (limite conhecido: o de-para do item é um só; na imagem de referência a filiação é 2)
+ATPARAMGERAL	#item	regra_campo_cadastro.exigencia	4	opcional	L5-06 r3 (revisão): 4 do CNS (obrigatório só no atendimento SUS: o produto exige o CNS nas regras SUS próprias, não na recepção geral) e da filiação (Pai)
+TBESPEC	SEXO	especialidade_medica.sexo_atendido	A	ambos	L5-06 r3 (revisão): restrição de sexo da especialidade
+TBESPEC	SEXO	especialidade_medica.sexo_atendido	F	feminino	L5-06 r3 (revisão): restrição de sexo da especialidade
+TBESPEC	SEXO	especialidade_medica.sexo_atendido	M	masculino	L5-06 r3 (revisão): restrição de sexo da especialidade

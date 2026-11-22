@@ -99,3 +99,114 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
 - `PREPARO_DOS_REQUERIDOS = True` na sintética da fatia: o `PREPARO_DESTINO` das fatias de `REQUER` roda antes do dela.
 - A autoconferência acusa cada tabela BLOQUEADA da fatia (passo 6); `complementa` não exige as NOT NULL do destino;
   coluna obrigatória por referência a pai BLOQUEADO ou DESCARTADO deixa a tabela BLOQUEADA (`pai_nao_carregado`).
+
+## Mecanismos da rodada 3, grupo 1: data e hora (integrador; prova em `sintetica_d/exemplo_r3.py`, `testes/test_carga_mapa_r3.py`)
+- Data + hora HHMM em outra coluna: `#data_hora:<DATA>,<HORA>` (já existia; hora em inteiro, texto 'HHMM'/'HH:MM'
+  ou texto cru, TIME ou TIMESTAMP de só hora). NOVO: `#data_hora:<DATA>,<HORA>,<HORA_REF>`: a hora menor que a hora
+  de referência válida da mesma data (ex.: fim antes do início) passa para o dia seguinte, com a pendência baixa
+  `virada_de_dia` (ato cirúrgico que atravessa a meia-noite). Data DATE em DATETIME e o contrário: `tipar` (rodada 2).
+- Quantidade com a unidade em outra coluna: `#dias:<VALOR>,<UNIDADE>` (ou `#dias:<VALOR>,=ano` para unidade fixa)
+  grava dias inteiros: minuto, hora, dia, semana (7), mes (30), ano (365). A unidade aceita nome, plural ou letra
+  (D, S, M = mês, A, H), sem caixa; pode vir do pai por `ref:T>COLUNA` na via (encadeada TERMINADA EM COLUNA, ex.:
+  `ref:TBUNID_IDADE>UNIDADE_CALCULO`) e passar pelo de-para de valores da linha (`depara=valores`, pares em
+  `valores.d/<fatia>.tsv` com a coluna `#dias:V,U`: valor da origem -> unidade canônica). A regra declarada na linha
+  vale para o VALOR antes da conta (ex.: `inteiro_zero_nulo`, 0 = sem limite). Mês, ano e fração de dia truncada:
+  pendência baixa `periodo_aproximado`; sem unidade: NULL com `unidade_ausente`; unidade desconhecida, sem par ou
+  valor negativo: NULL com `valor_fora_do_dominio`; pai da unidade ausente: `pai_inexistente`.
+- Recorrência de datas (ex.: feriado com ano-marca 9999 = todo ano): regras `ano_recorrente:<ano>` (TRUE/FALSE; com
+  `depara=valores` 1 -> anual, 0 -> data_unica), `data_nao_recorrente:<ano>` (a data; NULL no ano-marca),
+  `dia_recorrente:<ano>` e `mes_recorrente:<ano>` (dia e mês só no ano-marca). Declare a MESMA coluna de data uma vez
+  por destino (recorrencia, dia, mes, data). Data sentinela: `data_sentinela`.
+- Pares de colunas que viram linhas, também no destino PRINCIPAL: `desdobrar:SEG_I+SEG_F=2|0,...,FER_I+FER_F=|1`
+  na via de `#item`; `#item` recebe a 1ª coluna do par, `#item2` a 2ª (cada uma pela regra declarada na própria
+  linha `#itemN`, ex. `hora` ou `hora_hhmm`); `#rotulo`, `#rotulo2` recebem as partes do rótulo separadas por '|'
+  (parte vazia = NULL; literal convertido ao tipo do destino). Item sem valor em nenhuma das colunas não gera linha.
+  No principal: cada item é `<chave>/<destino>/<rótulo>` no conector_origem, a conciliação confere linhas e itens
+  ("gravados" = itens), linha sem item é recusada com a pendência baixa `sem_item_a_gravar`, e uma restrição do
+  destino num item (ex.: fim <= início) recusa a linha inteira. Desdobrado não combina com `complementa`; rótulo
+  repetido ou par sem `#item2` declarado é erro do verificador. Ex.: TBLOCALHORA, FCHORATE (sem `complementa` nem
+  destino extra: o próprio horário é o principal).
+
+## Mecanismos da rodada 3, grupo 2: estrutura (integrador; prova em `sintetica_d/exemplo_r3b.py`, `testes/test_carga_mapa_r3b.py`)
+- Retrato COMPLETO da linha (históricos HT*, exclusões): `#retrato:*` grava o JSON de TODAS as colunas da tabela da
+  origem (dicionário vivo; entram também no hash da linha), `#retrato:*-A,B` todas menos A e B, `#retrato:A,B` as
+  colunas lidas mais A e B. Nunca leva segredo: colunas de `#cofre` e nomes de segredo (`mapa.SEGREDO_NOME`: SENHA,
+  PASSW, TOKEN, SECRET, SEGREDO, CHAVE_PRIVADA). Coluna sem regra gerada: BLOB binário em `sha256:<hex>`, BLOB de
+  texto convertido, o resto texto. `#sha256:#retrato[...]` grava o SHA-256 hex do MESMO texto JSON (o produto
+  deduplica versões pelo hash dos dados, ex.: `paciente_versao.hash_dados`). Ex.: HTPACIENTE, HTPACTELEFONE, HTPROFIS,
+  HTPROFISTEL, HTATENDRESP, HTATENDIMENTO, REEXCATE.
+- Referência ao destino SECUNDÁRIO do pai (`ref:T/<destino>`, rodada 2) em colunas CONCORRENTES: várias colunas da
+  origem declaradas para a MESMA coluna do destino gravam a primeira com valor, na ordem declarada (as outras só
+  deixam a pendência própria, ex.: `pai_inexistente`). Ex.: FCLANEXT `item_faturavel_id` por ID_TBPROCTO
+  (`ref:TBPROCTO/item_faturavel`), ID_TBTABDTH e ID_TBMATMED; TBHISTTAB* `ref:TBCONVEN/contrato_fonte_pagadora` com o
+  acordo declarado como destino secundário de TBCONVEN. Item ou `@id` não pode ser concorrente (erro do verificador).
+- Cópia de coluna de outra tabela: `ref:T@<coluna>` (também `ref:T/<destino>@<coluna>` e no fim da encadeada,
+  `ref:T>X>U/<destino>@<coluna>`) grava o VALOR da coluna da linha do DESTINO que o pai gravou (lido do banco: o que o
+  cliente vê), não o id. Pai pendente ou inexistente como na referência comum. Não combina com `cod:`. Ex.: FCCTRLANCIHA
+  `ref:FCLANEXT@item_faturavel_id`.
+- Divisão do destino principal com o item FALSO: opção `com_falso` (na via do `#item`, junto do `desdobrar:`): o
+  valor falso (o 'N' de uma marcação S/N pela `booleano_sn`) também gera a linha; vazio continua sem linha; tabela sem
+  chave funciona (chave pelo hash). Ex.: REPARATE (`regra_heranca_campo`, herda = falso), ATPARAMGERAL.
+- Agrupamento de linhas sob um cabeçalho (parcelas de um título): opção `antes;agrupar:C1,C2,...` (colunas da
+  ORIGEM) num destino SECUNDÁRIO. As linhas com os mesmos valores em C1, C2 (texto aparado; todas vazias: a linha é o
+  próprio grupo) gravam UM cabeçalho: a primeira linha gravada do grupo cria, as outras usam (sem pendência; recusa da
+  primeira desfaz o cabeçalho e a seguinte cria). O principal (a parcela) liga por `@id:<destino>`. Agregados de todas
+  as linhas LIDAS do grupo: `#grupo_contar`, `#grupo_seq` (posição na ordem da chave), `#grupo_somar:C`,
+  `#grupo_min:C`, `#grupo_max:C` (regra declarada na linha especial, ou a gerada da coluna). Cabeçalho de execução
+  anterior com agregado diferente (parcela nova na origem): usado como está, pendência
+  `grupo_divergente_aguarda_sincronizar`. Só um destino agrupado por tabela; não combina com `adotar`, `desdobrar`,
+  `complementa` nem `opcional`. Ex.: MFCONPAG (`titulo_pagar` agrupado por EMPRESA, FORN, DOC, SERIE, TIPO;
+  `parcela_pagar` principal), MFCTAREC.
+
+## Mecanismos da rodada 3, grupo 3: catálogos e modelo (integrador; prova em `sintetica_d/exemplo_r3c.py`, `testes/test_carga_mapa_r3c.py`)
+- De-para oficial `cfop` (`depara=cfop`): CFOP de 4 dígitos com ou sem ponto ('1.102' = 1102), 1.º dígito 1-3 ou 5-7;
+  inválido `catalogo_codigo_invalido`, ausente `catalogo_codigo_inexistente`. Pelo código guardado na tabela de CFOP
+  da origem: `via=ref:SDCFOP>CODIGO` com `depara=cfop` (encadeada terminada em coluna). O catálogo vem do carregador
+  oficial `catalogos/carregadores/cfop.py` (anexo do Convênio SINIEF s/n.º de 1970, registrado por
+  `catalogos/baixar.py --registrar cfop <arquivo>`); a tabela da origem nunca é gravada.
+- Códigos fiscais afins com FK para `codigo_fiscal_oficial`: `depara=codigo_fiscal:<tabela fiscal>` (ex.:
+  `codigo_fiscal:modelo_documento`), zeros à esquerda não contam, o vigente vence o revogado. CST/NCM guardados como
+  texto no modelo seguem com a encadeada ao código e `inteiro_zeros_esquerda:n`.
+- Padrão TISS: `depara=versao_tiss` (versão de troca pelo código: '04.03.00', '4.3.0' ou '040300' = 4.03.00),
+  `depara=terminologia` (terminologia pelo número da tabela TISS, ex. 18, 22) e `depara=tiss:<número da tabela>`
+  (termo da terminologia TISS pelo código, ex. `tiss:61`; zeros à esquerda não contam).
+- Modelo (DDL proposto para a trilha F2.2, já no banco descartável da conferência): `grade_horario_unidade.
+  unidade_assistencial_id` (06_PEP/16; TBHORMED_TBUNIDAD por `complementa`); `regra_transicao_situacao_prescricao.
+  qualquer_origem` (06_PEP/16; TBTPSITUACAOMP com `=1` e origem nula); vínculo `exame_item_assinatura`
+  (10_SADT/08; PREXAMEASSINATURA: exame por `ref:SILANEXA`, documento pelo cabeçalho da assinatura, local);
+  `diaria_por_plano_local` com fonte obrigatória, acordo opcional e `plano_fonte_pagadora_id` (12_FAT/11;
+  TBTIPPLCONV); tipos NATIVOS de migração `tipo_movimento_estoque` `migracao_entrada`/`migracao_saida` e
+  `tipo_entrada_estoque` `migracao` (11_SUP/07_chaves.sql; por `cod:<tabela>.codigo` com `=migracao_entrada`).
+- Pedido atendido: campo `atendido` no pedido de `saida/<fatia>.json`; a cobertura deixa de contá-lo como bloqueio.
+
+## Mecanismos da rodada 4 (integrador; prova em `sintetica_d/exemplo_r4.py`, `testes/test_carga_mapa_r4.py`; lista em `saida/aplicados-r4.md`)
+- Regras: `inteiro_mais_um` (contador do último número -> o próximo), `tipo_pessoa_documento`, `cpf_de_documento`,
+  `cnpj_de_documento` (documento num campo só), `data_fim_aberta:<ano>`; `_digitos` aceita DOUBLE de valor inteiro.
+- `#data_hora_mais:DATA,HORA,MIN`: fim = data e hora + minutos (regra declarada na linha, ex. `minutos_hhmm`); sem
+  valor na linha, a `ref:` da via dá a duração (encadeada terminada em coluna ou `@coluna`); sem nenhuma:
+  `duracao_ausente`; passou da meia-noite: `virada_de_dia` (baixa).
+- Condições (`COL[>T>X][=v1,v2]`; valor vazio na lista casa o nulo; sem lista = tem valor): `se:` na via de uma
+  coluna (fora: NULL sem pendência; a próxima concorrente é tentada; com `=~x` a presumida só quando vale),
+  `destino_se:` num destino SECUNDÁRIO (fora: não grava) e `so_se:COND[!regra]` na tabela (fora: recusada com a
+  pendência BAIXA da regra, padrão `fora_do_filtro_da_carga`, nunca gravada).
+- `cod:<tabela>.(c1,c2)=(=literal,valor)`; `#item` com `ref:` encadeada/composta e `cod:`; `#rotulo` com `cod:`.
+- `agrupar:C1,..` também no destino PRINCIPAL (sem `antes`); `#grupo_json:C1,C2`; grupos de leitura sem cabeçalho
+  `#grupo_seq@C1,C2` e `#grupo_razao:V@C1,C2`; agregados das filhas `#filhos_min|max|somar|contar:T.C|U.D@FK`.
+- Referência: literal na chave alternativa composta `T.(K1,K2)=(C1,=1)`; `>max:COL` / `>min:COL` logo depois do passo
+  por chave alternativa (empate: menor chave; `escolha_pelo_maior`, baixa); chave composta num passo seguinte
+  `>(C1,C2)>U`; vários pais da chave alternativa que apontam a MESMA linha do destino (título agrupado) valem por ela.
+- `#codigo_derivado:C1+C2:n[:prefixo]`; opção `principal` na via escolhe o destino principal; secundário fora de
+  `tabelas_destino` vale quando nomeado na via ou com opção de destino (`antes`, `adotar:`...).
+
+## Mecanismos da rodada 5 (motor; ADR 0006 e 0007; prova em `sintetica_d/exemplo_r5.py`, `testes/test_carga_mapa_r5.py`; lista em `saida/aplicados-r5.md`)
+- Rascunho do autor: opção `autor` com `cod:usuario.login` ou `ref:`; sem autor a linha entra com `rascunho_sem_autor`.
+- Espelho: `espelho:<brasindice|simpro|cbhpm|cep>[@COLUNA|@=edição]` liga pelo código (e edição); NUNCA declare destino
+  em tabela licenciada (`mapa.LICENCIADAS_ESPELHO`: a cobertura bloqueia `licenciado_copiado`). Semente: declaração em
+  `declarado/semente_espelho.tsv` e `conector.sh semear-espelho`.
+- Descarte só com PROVA: `declarado/provas.tsv` (tabela, tipo derivado|mecanismo, chave, valores `COL[!regra]`) +
+  `provas.d/<TABELA>.sql` (SELECT no destino, mesmas colunas); sem prova: BLOQUEADA `descarte_sem_prova`.
+- Vigência: `@vigencia_carga` (e `=@data_carga` em vigência) = evidência mais antiga; `#vigencia:A,B` declara as colunas.
+- Credenciais: `#senha_hash:COL:<md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id>` + literais do algoritmo e
+  `regravar_no_login`; `#senha:COL` (legível -> argon2id); `#cofre:COL` grava cifrado no cofre do cliente.
+- `adotar:` mescla sem destruir (histórico da origem); filho de pai com `#codigo_derivado` é conferido no fim.
+- Chave composta com componente encadeado: `ref:T(COL>U>X,C2)`.

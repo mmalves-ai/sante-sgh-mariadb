@@ -2,8 +2,11 @@
 sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L7-05`."""
 import datetime
 import decimal
+import json
+import os
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l7_05
@@ -11,6 +14,8 @@ from sante_conector.sintetica_d import l7_05
 TABELAS = set(l7_05.CARREGADAS)
 # fase 2 (autorreferência do local de estoque): a linha fica gravada, a pendência não é recusa
 FASE2 = {"GELOCARM"}
+# complementa: sem a linha do pai a recusa é pai_inexistente (UPDATE sem alvo)
+COMPLEMENTA = {"GECONITL", "GEDESPDS"}
 
 
 class Plano(unittest.TestCase):
@@ -115,17 +120,95 @@ class Plano(unittest.TestCase):
                          {"S": "aprovado", "N": "aberto", "": "aberto"})
 
     def test_fechamento_nunca_entra_aberto(self):
-        # a linha da origem só existe para mês FECHADO: bloqueada (sem destino) até a data em DATETIME no motor;
-        # a declaração pronta, comentada, grava 'fechado' com a data do fechamento presumida
-        self.assertIn("GEFECMES", l7_05.BLOQUEADAS)
-        decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "GEFECMES"]
-        self.assertFalse([c for c in decl if c["destino"]])
-        from pathlib import Path
-        txt = (Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "colunas.d" / "L7-05.tsv").read_text(
-            encoding="utf-8")
-        self.assertNotIn("=~aberto\tfechamento_estoque", txt)
-        self.assertIn("#GEFECMES\t=fechado\tfechamento_estoque.situacao", txt)
-        self.assertIn("#GEFECMES\t=~@data_carga\tfechamento_estoque.fechado_em", txt)
+        # a linha da origem só existe para mês FECHADO: entra 'fechado' com a data do fechamento presumida (tipar:
+        # data em DATETIME), nunca 'aberto' (liberaria movimento retroativo)
+        f = self.cols("GEFECMES", "fechamento_estoque")
+        self.assertEqual(f["situacao"]["coluna"], "=fechado")
+        self.assertEqual(f["fechado_em"]["coluna"], "=~@data_carga")
+        self.assertEqual(f["competencia"]["coluna"], "#data:ANO,MES")
+        self.assertEqual(f["exportado_contabilidade"]["regra"], "booleano_sn")
+        self.assertNotIn("=~aberto", {c["coluna"] for c in f.values()})
+
+    def test_saldo_mensal_pelo_saldo_do_local_e_insumo(self):
+        p = self.plano["GEARMLOC"]
+        self.assertEqual(p["destinos"], ["saldo_estoque_mensal", "saldo_estoque"])
+        op = p["opcoes"]["saldo_estoque"]
+        self.assertTrue(op["antes"])
+        self.assertEqual(op["adotar"], ["local_estoque_id", "insumo_id"])
+        m = self.cols("GEARMLOC", "saldo_estoque_mensal")
+        self.assertEqual(m["saldo_estoque_id"]["coluna"], "@id:saldo_estoque")
+        self.assertEqual((m["quantidade_final"]["coluna"], m["valor_final"]["coluna"]), ("QTDE", "VALOR"))
+        s = self.cols("GEARMLOC", "saldo_estoque")
+        self.assertEqual((s["local_estoque_id"]["referencia"], s["insumo_id"]["referencia"]), ("GELOCARM", "GEITENS"))
+        # o movimento do mês completa o saldo mensal de mesma chave (UPDATE), sem linha nova
+        c = self.plano["GECONITL"]
+        self.assertTrue(c["opcoes"]["saldo_estoque_mensal"]["complementa"])
+        self.assertEqual([x["tabela"] for x in self.cols("GECONITL", "saldo_estoque_mensal")["id"]["passos"]
+                          if "tabela" in x], ["GEARMLOC"])
+
+    def test_itens_do_estoque_inicial_na_rodada_do_cabecalho(self):
+        i = self.cols("GELANESI", "inventario_estoque_item")
+        self.assertEqual(i["inventario_estoque_id"]["referencia"], "GEESTINI")
+        self.assertEqual(i["inventario_estoque_contagem_id"]["passos"][-1].get("destino"), "inventario_estoque_contagem")
+        self.assertEqual(i["sequencia"]["coluna"], "#seq:DOC")
+        self.assertEqual([x["tabela"] for x in i["unidade_medida_id"]["passos"] if "tabela" in x],
+                         ["GEITENS", "TBUNICON"])
+        self.assertEqual(i["situacao"]["valores"], {"S": "ok", "N": "pendente", "": "pendente"})
+
+    def test_descricao_do_servico_completa_o_item_de_compra(self):
+        p = self.plano["GEDESPDS"]
+        self.assertEqual(p["destinos"], ["pedido_compra_item"])
+        self.assertTrue(p["opcoes"]["pedido_compra_item"]["complementa"])
+        d = self.cols("GEDESPDS", "pedido_compra_item")
+        self.assertEqual(d["descricao_servico"]["regra"], "texto_longo")
+        self.assertEqual([x["tabela"] for x in d["id"]["passos"] if "tabela" in x], ["GELANPED"])
+
+    def test_transferencia_grava_movimento_de_saida(self):
+        # rodada 3: o item de transferência também grava a SAÍDA do local de origem no razão (a GERASVALTRANSFLOTE, da
+        # L7-07, aponta o lote para esse movimento por ref:GELANTRA/movimento_estoque)
+        self.assertEqual(self.plano["GELANTRA"]["destinos"], ["documento_estoque_item", "movimento_estoque"])
+        m = self.cols("GELANTRA", "movimento_estoque")
+        obrig = {"estabelecimento_id", "local_estoque_id", "ocorrido_em", "competencia", "tipo_movimento_estoque_id",
+                 "natureza", "insumo_id", "unidade_medida_id", "quantidade", "quantidade_estoque", "usuario_id"}
+        self.assertTrue(obrig <= set(m), obrig - set(m))
+        self.assertEqual((m["natureza"]["coluna"], m["tipo_movimento_estoque_id"]["coluna"]), ("=saida", "=migracao_saida"))
+        self.assertEqual(m["tipo_movimento_estoque_id"]["cod"], ("tipo_movimento_estoque", "codigo"))
+        for dc in ("local_estoque_id", "contrapartida_local_estoque_id"):
+            self.assertEqual([x["tabela"] for x in m[dc]["passos"] if "tabela" in x], ["GECADTRA", "GELOCARM"])
+        self.assertEqual(m["competencia"]["regra"], "data_primeiro_dia_mes")
+        self.assertEqual(m["documento_estoque_item_id"]["coluna"], "@id")
+        self.assertEqual(m["documento_estoque_id"]["referencia"], "GECADTRA")
+
+    def test_sequencia_do_ano_e_do_mes(self):
+        # SEQ é o PRÓXIMO número (captura de assinatura do sistema antigo); MES 0 é a sequência do ano
+        s = self.cols("GEGERSEQ", "sequencia_documento_estoque")
+        self.assertEqual(s["proximo_numero"]["regra"], "piso:1")
+        self.assertEqual(s["reinicio"]["coluna"], "MES")
+        self.assertEqual(s["reinicio"]["valores"], dict({"0": "anual"}, **{str(i): "mensal" for i in range(1, 13)}))
+
+    def test_presumidos_visiveis_nunca_zero_silencioso(self):
+        self.assertEqual(self.cols("GEARMLOC", "saldo_estoque")["quantidade"]["coluna"], "=~0")
+        self.assertEqual(self.cols("GECONITL", "saldo_estoque_mensal")["quantidade_saida_paciente"]["coluna"], "=~0")
+
+    def test_consumo_e_lote_nao_sao_descartados(self):
+        # rodada 3: consumo por centro de custo e lote por documento CARREGAM (dado financeiro e sanitário); rodada 4:
+        # o consumo carrega somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+        raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado"
+        sem = {r["tabela"] for r in mapa.ler_tsv(raiz / "sem_carga.tsv")}
+        self.assertFalse({"GEKONCDC", "GECTRVMM"} & sem)
+        pronta = (raiz / "colunas.d" / "L7-05.tsv").read_text(encoding="utf-8")
+        self.assertIn("\nGEKONCDC\t#grupo_somar:VALOR\tconsumo_centro_custo.valor_liquido", pronta)
+        decl = {(c["tabela"], c["coluna"], c["destino"]): c for c in self.mapa["colunas_decl"]}
+        self.assertEqual(decl[("GEKONCDC", "ANO", "consumo_centro_custo.ano")]["via"], "agrupar:ANO,MES,CDC,ITEM")
+        self.assertIn(("GEKONCDC", "#grupo_json:DOC,DATA,QTDE,VALOR", "consumo_centro_custo.dados"), decl)
+        # o local: primeiro o estoque padrão do centro de custo (constante no grupo), depois o do documento
+        locais = [c["coluna"] for c in self.mapa["colunas_decl"]
+                  if c["tabela"] == "GEKONCDC" and c["destino"] == "consumo_centro_custo.local_estoque_id"]
+        self.assertEqual(locais, ["CDC", "DOC"])
+        self.assertIn("GEKONCDC", self.plano)
+        # o lote por documento carrega desde a rodada 3 (conferidor): declaração ativa, não comentada
+        self.assertIn("\nGECTRVMM\tLOTE\tlote_insumo.numero_lote", pronta)
+        self.assertNotIn("\n#GECTRVMM\t", pronta)
 
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
@@ -159,7 +242,11 @@ class Sintetica(unittest.TestCase):
         esp = l7_05.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
+            if t == "GEHORMED":  # desdobrado: "gravados" conta itens (10 de uma linha) e a outra não tem item
+                self.assertEqual(cont[t], 1 + e["pendencias"]["sem_item_a_gravar"], t)
+                continue
             pref = ("restricao_destino_",) if t in FASE2 else ("restricao_destino_", "pai_pendente")
+            pref += ("pai_inexistente",) if t in COMPLEMENTA else ()
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in l7_05.BLOQUEADAS:  # presença na imagem, nada esperado no destino
@@ -167,7 +254,7 @@ class Sintetica(unittest.TestCase):
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l7_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, TABELAS | set(l7_05.BLOQUEADAS))
+        self.assertEqual(criadas, TABELAS | set(l7_05.BLOQUEADAS) | set(l7_05.PAIS_NA_IMAGEM))
 
     def test_colunas_das_linhas_batem_com_o_ddl(self):
         ncols = {}
@@ -185,6 +272,49 @@ class Sintetica(unittest.TestCase):
         l7_05.linhas(random.Random(1), lambda t, v: vistos.append((t, len(v))))
         for t, n in vistos:
             self.assertEqual(n, ncols[t], t)
+
+
+
+def _mariadb():
+    try:
+        from sante_conector import banco
+        banco.conectar(None).close()
+        return True
+    except Exception:  # noqa: BLE001 (fora do container: sem MariaDB)
+        return False
+
+
+@unittest.skipUnless(os.path.exists("/opt/firebird/bin/isql") and _mariadb(),
+                     "só no container do conector, com o MariaDB da rede interna")
+class Conferencia(unittest.TestCase):
+    def test_consumo_somado_por_grupo(self):
+        """GEKONCDC: 4 linhas gravadas em 3 grupos; o grupo 2025/3, centro 11, insumo 1 soma os 2 documentos e os
+        guarda no JSON; o local é o estoque padrão do centro (11 -> local 1)."""
+        from sante_conector import conferencia
+        lidos = {}
+
+        def ler(cc):
+            with cc.cursor() as c:
+                c.execute("SELECT k.ano, k.mes, CAST(k.quantidade_liquida AS CHAR), CAST(k.valor_liquido AS CHAR),"
+                          " k.dados, l.codigo FROM consumo_centro_custo k JOIN local_estoque l ON"
+                          " l.id=k.local_estoque_id ORDER BY k.ano, k.mes, k.quantidade_liquida")
+                lidos["kon"] = [list(x) for x in c.fetchall()]
+                # r6: histórico de compra do insumo (GECOMPRA): 2 compras, fornecedor fora da imagem (NULL)
+                c.execute("SELECT numero_nota, CAST(quantidade AS CHAR), empresa_fornecedora_id IS NULL, origem"
+                          " FROM historico_compra_insumo ORDER BY comprado_em")
+                lidos["compra"] = [list(x) for x in c.fetchall()]
+        r = conferencia.conferir("L7-05", depois_da_primeira=ler)
+        self.assertEqual(r["erros"], [])
+        self.assertEqual(lidos["compra"], [["100", "2.0000", 1, "migracao"], ["101", "1.0000", 1, "migracao"]])
+        kon = lidos["kon"]
+        self.assertEqual(len(kon), 3)
+        self.assertEqual([(k[0], k[1], k[2], k[3], str(k[5])) for k in kon],
+                         [(2025, 3, "3.5000", "17.50", "1"), (2025, 3, "4.0000", "8.00", "1"),
+                          (2025, 4, "1.0000", "5.00", "1")])
+        docs = json.loads(kon[0][4])
+        self.assertEqual(len(docs), 2)
+        self.assertIn("100", json.dumps(docs))
+        self.assertIn("101", json.dumps(docs))
 
 
 if __name__ == "__main__":

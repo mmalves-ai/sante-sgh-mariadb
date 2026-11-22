@@ -50,7 +50,11 @@ export const esquemaVincularOrigemEntrada = z
   .strict();
 export type VincularOrigemEntrada = z.infer<typeof esquemaVincularOrigemEntrada>;
 
-export const esquemaPedirExecucaoEntrada = z.object({ tipo: z.enum(TIPOS_EXECUCAO_CONECTOR) }).strict();
+/** `confirmarExclusaoEmMassa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu fica no
+ * evento da fila. */
+export const esquemaPedirExecucaoEntrada = z
+  .object({ tipo: z.enum(TIPOS_EXECUCAO_CONECTOR), confirmarExclusaoEmMassa: z.boolean().optional() })
+  .strict();
 export type PedirExecucaoEntrada = z.infer<typeof esquemaPedirExecucaoEntrada>;
 
 export const esquemaConciliacaoEntidade = z.object({
@@ -68,6 +72,83 @@ export const esquemaPendenciaResumo = z.object({
   gravidade: z.enum(['critica', 'alta', 'media', 'baixa']),
   quantidade: z.number().int(),
 });
+
+/** L10 (ADR 0007, item 22): relatório CURTO da execução. Só contagens, entidades de DESTINO e regras; nunca valores
+ * nem nome da origem. `decisao`: a quem cabe resolver (`cliente`, `plataforma`) ou `informativa`. */
+export const CLASSES_DECISAO_CONECTOR = ['cliente', 'plataforma', 'informativa'] as const;
+const gravidadeConector = z.enum(['critica', 'alta', 'media', 'baixa']);
+const inteiro = z.number().int();
+export const esquemaRelatorioConector = z.object({
+  versao: inteiro,
+  totais: z.object({
+    entidades: inteiro,
+    conferidas: inteiro,
+    registrosOrigem: inteiro,
+    registrosDestino: inteiro,
+    recusados: inteiro,
+    /** Pendências abertas por LINHA da origem (os itens contados por tabela ficam em `tabelasAbertas`). */
+    abertas: inteiro,
+    /** Itens contados por TABELA (sem prova de não copiar, bloqueada): nunca somados a `abertas`. */
+    tabelasAbertas: inteiro.optional(),
+    criticas: inteiro,
+    resolvidas: inteiro,
+    decisoesCliente: inteiro,
+  }),
+  porRegra: z.array(
+    z.object({
+      entidade: z.string(),
+      regra: z.string(),
+      gravidade: gravidadeConector,
+      abertas: inteiro,
+      resolvidas: inteiro,
+      /** `linha` (pendência por linha da origem) ou `tabela` (item contado por tabela). */
+      unidade: z.enum(['linha', 'tabela']).optional(),
+      decisao: z.enum(CLASSES_DECISAO_CONECTOR),
+      acao: z.string(),
+    }),
+  ),
+  decisoesCliente: z.array(
+    z.object({
+      regra: z.string(),
+      gravidade: gravidadeConector,
+      quantidade: inteiro,
+      entidades: inteiro,
+      acao: z.string(),
+    }),
+  ),
+  naoCarregado: z.object({
+    recusados: z.array(z.object({ entidade: z.string(), recusados: inteiro })),
+    semMapa: z.object({ tabelas: inteiro, registros: inteiro }),
+    bloqueadas: z.object({ tabelas: inteiro, registros: inteiro }),
+    semCarga: z.array(
+      z.object({
+        causa: z.string(),
+        tabelas: inteiro,
+        registros: inteiro,
+        provasConferidas: inteiro,
+        provasFalhas: inteiro,
+        semProva: inteiro,
+      }),
+    ),
+  }),
+  /** Prova de não copiar de cada tabela (ADR 0006, item 1), pelo destino onde a informação continua. */
+  provas: z.array(
+    z.object({
+      destino: z.string(),
+      causa: z.string(),
+      tipo: z.string(),
+      linhasOrigem: inteiro,
+      iguais: inteiro,
+      divergentes: inteiro,
+      faltandoNoDestino: inteiro,
+      sobrandoNoDestino: inteiro,
+      conferido: z.boolean(),
+    }),
+  ),
+  saidasExternas: inteiro,
+  redeSemRotaExterna: z.boolean().nullable(),
+});
+export type RelatorioConector = z.infer<typeof esquemaRelatorioConector>;
 
 export const esquemaExecucaoConector = z.object({
   id: z.number().int(),
@@ -87,8 +168,28 @@ export const esquemaExecucaoConector = z.object({
     criticas: z.number().int(),
     porRegra: z.array(esquemaPendenciaResumo),
   }),
+  /** L9: resultado do Sincronizar (só contagens, tabela e id do destino e nomes de coluna; nunca valores). */
+  sincronizar: z
+    .object({
+      atualizadas: z.number().int(),
+      conflitos: z.number().int(),
+      excluidas: z.number().int(),
+      reativadas: z.number().int(),
+      /** Linhas apagadas na origem cujo destino não tem exclusão lógica: seguem ativas, com pendência. */
+      exclusoesSemSuporte: z.number().int().optional(),
+      alertasExclusaoEmMassa: z.array(
+        z.object({ entidade: z.string(), apagadas: z.number().int(), ativas: z.number().int() }),
+      ),
+      conflitosItens: z.array(
+        z.object({ tabelaDestino: z.string(), idDestino: z.number().int(), colunas: z.array(z.string()) }),
+      ),
+    })
+    .nullish(),
+  relatorio: esquemaRelatorioConector.nullish(),
 });
 export type ExecucaoConector = z.infer<typeof esquemaExecucaoConector>;
+export const esquemaListaExecucoes = z.object({ execucoes: z.array(esquemaExecucaoConector) });
+export type ListaExecucoes = z.infer<typeof esquemaListaExecucoes>;
 
 export const esquemaClienteOnboarding = z.object({
   id: z.number().int(),

@@ -2,6 +2,7 @@
 coerência da imagem sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em
 `conector.sh conferir-fatia L7-03`."""
 import decimal
+import os
 import random
 import unittest
 
@@ -31,7 +32,8 @@ class Plano(unittest.TestCase):
                     "SIWEBCADPERFIL_TBUSERS": ["perfil_portal_usuario"], "SIWEBPARLAUDO": ["modelo_impressao_laudo"],
                     # cobertura: grandeza sem seção (a origem não tem seção); complementos; visualizador
                     "SITBGRAN": ["grandeza_laudo"],
-                    "SIWEBPARPERFIL": ["perfil_portal_resultado"], "SIWEBVISULIMG": ["visualizador_imagem"]}
+                    "SIWEBPARPERFIL": ["perfil_portal_resultado"], "SIWEBVISULIMG": ["visualizador_imagem"],
+                    "SIVARFORMULA": ["variavel_formula"]}
         for t, dts in esperado.items():
             self.assertEqual(self.plano[t]["destinos"], dts, t)
 
@@ -51,7 +53,9 @@ class Plano(unittest.TestCase):
                ("SIWEBCADPERFIL_TBUSERS", "perfil_portal_usuario"): {"perfil_portal_resultado_id", "usuario_id"},
                ("SIWEBPARLAUDO", "modelo_impressao_laudo"): {"estabelecimento_id", "codigo", "descricao"},
                ("SITBGRAN", "grandeza_laudo"): {"exame_id", "codigo", "descricao"},
-               ("SIWEBVISULIMG", "visualizador_imagem"): {"estabelecimento_id", "codigo", "nome", "url_base"}}
+               ("SIWEBVISULIMG", "visualizador_imagem"): {"estabelecimento_id", "codigo", "nome", "url_base"},
+               ("SIVARFORMULA", "variavel_formula"): {"formula_calculo_id", "sequencia", "identificador", "descricao",
+                                                      "fonte"}}
         for (t, dt), cs in req.items():
             self.assertTrue(cs <= set(self.cols(t, dt)), (t, cs - set(self.cols(t, dt))))
 
@@ -67,6 +71,9 @@ class Plano(unittest.TestCase):
         op = self.plano["SITABELE"]["opcoes"]["unidade_resultado"]
         self.assertTrue(op["opcional"])
         self.assertEqual(op["adotar"], ["codigo"])
+        # rodada 3: gravada antes do analito, que liga a ela (sem unidade: NULL)
+        self.assertTrue(op["antes"])
+        self.assertEqual(self.cols("SITABELE", "analito")["unidade_resultado_id"]["coluna"], "@id:unidade_resultado")
         self.assertEqual(ref("SITABPRO", "exame", "especialidade_diagnostica_id"), "SIESPEC")
         self.assertEqual(ref("SITABPRO", "exame", "modalidade_imagem_id"), "SIPACSMODALID")
         # sexo: TBSEXO não entra no conector_origem (L3 pelas siglas; adoção pedida no L5-05): não aproveitado
@@ -111,12 +118,36 @@ class Plano(unittest.TestCase):
         pronta = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8")
         for col in ("SENHA_EXPORTACAO", "SENHA_FTP"):
             self.assertEqual(decl[("SITPEQV", col)]["destino"], "")
-            # cada senha tem o seu #cofre na declaração pronta (pendência segredo_aguarda_cofre própria)
-            self.assertIn("#SITPEQV\t#cofre:%s\tinterface_equipamento.chave_cofre_credencial" % col, pronta)
-        self.assertIn("#SITPEQV\tCRIPTOGRAFIA_AES\tinterface_equipamento.criptografia\tbooleano_sn", pronta)
+            # cada senha tem o seu #cofre (pendência segredo_aguarda_cofre própria): nunca gravada em claro
+            self.assertIn("\nSITPEQV\t#cofre:%s\tinterface_equipamento.chave_cofre_credencial" % col, pronta)
+        self.assertIn("\nSITPEQV\tCRIPTOGRAFIA_AES\tinterface_equipamento.criptografia\tbooleano_sn", pronta)
         for col in ("INTERFACE", "COD_LABORATORIO", "NOME_LABORATORIO", "USUARIO_FTP"):
             self.assertTrue(decl[("SITPEQV", col)]["motivo"].strip(), col)
         self.assertEqual(decl[("SIWEBPARLAUDO", "ARQUIVO_LAUDO")]["destino"], "")
+
+    def test_declaracao_pronta_do_apoio(self):
+        # rodada 4 (DDL 10_SADT/09): o apoio da interface e os exames do apoio carregam
+        from sante_conector import mapa as m
+        pronta = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8").splitlines()
+        self.assertFalse([l for l in pronta if l.startswith("#SITPEQV\t") or l.startswith("#SITBEXHP\t")])
+        com = [l.split("\t") for l in pronta if l.split("\t")[0] in ("SITPEQV", "SITBEXHP") and l.split("\t")[2]]
+        self.assertIn("SITPEQV", self.plano)
+        self.assertIn("SITBEXHP", self.plano)
+        dest = {(c[0], c[2]): c for c in com}
+        self.assertIn("antes;opcional;adotar:codigo", dest[("SITPEQV", "laboratorio_apoio.codigo")][5])
+        self.assertEqual(dest[("SITPEQV", "interface_equipamento.laboratorio_apoio_id")][1], "@id:laboratorio_apoio")
+        self.assertEqual(dest[("SITPEQV", "laboratorio_apoio.ativo")][1], "=~0")
+        via = dest[("SITBEXHP", "exame_laboratorio_apoio.exame_id")][5]
+        passos = m.passos_ref(via[4:])
+        self.assertEqual(passos[0]["modo"], "alt_composta")
+        self.assertEqual(passos[0]["arg"], ["TIPO", "COD_EXAME"])
+        self.assertEqual(passos[0]["coluna_destino"], "exame_id")
+        self.assertEqual(m.passos_ref(dest[("SITBEXHP", "exame_laboratorio_apoio.laboratorio_apoio_id")][5][4:])[0]
+                         .get("destino"), "laboratorio_apoio")
+        for col in ("NECESSITA_PESO", "NECESSITA_ALTURA", "TEMPODIURESE", "VOLUMEDIURESE"):
+            self.assertTrue(any(c[1] == col and c[3] == "booleano_sn" for c in com), col)
+        # nenhuma senha no apoio nem nos exames do apoio
+        self.assertFalse(any("SENHA" in c[1] and not c[1].startswith("#cofre:") and c[2] for c in com))
 
     def test_exame_ativo_tipo_e_sigla(self):
         # inativo entra inativo, desativado na data da carga (cumpre ck_exame_desativacao)
@@ -156,14 +187,38 @@ class Plano(unittest.TestCase):
         self.assertEqual(decl[("SIWEBPARPERFIL", "perfil_portal_resultado.id")]["via"], "ref:SIWEBCADPERFIL;complementa")
         self.assertEqual(decl[("SIRESPAD", "modelo_resultado.exame_id")]["via"], "ref:SITABPRO(ATO,EXAME)")
         self.assertTrue(self.plano["SIWEBPARPERFIL"]["opcoes"]["perfil_portal_resultado"]["complementa"])
-        # a ligação interface x modelo não grava: o modelo vem de uma só fonte (a SITPEQV)
-        self.assertNotIn("SITPEQV_SITPEQVMODELO", self.plano)
+        # r5 (ADR 0006): a ligação interface x modelo entra na trilha da interface (retrato); o modelo ESCOLHIDO
+        # continua vindo de uma só fonte (a SITPEQV), sem gravar por cima da interface
+        self.assertEqual(self.plano["SITPEQV_SITPEQVMODELO"]["destinos"], ["trilha_auditoria"])
+        self.assertEqual(decl[("SITPEQV_SITPEQVMODELO", "trilha_auditoria.entidade_id")]["via"],
+                         "ref:SITPEQV;trilha_auditoria")
         # ordem: o exame vem antes do resultado padrão e do analito no exame
         ordem = {p["tabela"]: i for i, p in enumerate(carga_mapa.planejar(self.mapa, TABELAS))}
         self.assertLess(ordem["SITABPRO"], ordem["SIRESPAD"])
         self.assertLess(ordem["SITABPRO"], ordem["SITABELE"])
         # secao_laudo_estruturado não recebe linha: a origem não tem seção
         self.assertNotIn("secao_laudo_estruturado", self.plano["SITBGRAN"]["destinos"])
+
+    def test_rodada3_revisao(self):
+        # resultado padrão: HTML e, sem ele, o texto antigo (concorrentes, nessa ordem)
+        dec = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "SIRESPAD"
+               and c.get("destino") == "modelo_resultado.texto_html"]
+        self.assertEqual([c["coluna"] for c in dec], ["RESULTADO_HTML", "DESCR"])
+        # variável de fórmula: fórmula do exame pela chave alternativa composta; fonte digitada presumida
+        v = self.cols("SIVARFORMULA", "variavel_formula")
+        self.assertEqual(v["formula_calculo_id"]["passos"][0]["modo"], "alt_composta")
+        self.assertEqual(v["formula_calculo_id"]["passos"][0]["tabela"], "SIFORMUL")
+        self.assertEqual(v["fonte"]["coluna"], "=~digitado")
+        self.assertEqual(v["sequencia"]["coluna"], "#seq:EXAME")
+        # faixa de referência: declaração pronta (comentada) até o verificador aceitar @id:exame_analito
+        pronta = [l[1:].split("\t") for l in (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(
+            encoding="utf-8").splitlines() if l.startswith("#SITABELE\t")]
+        dest = {c[2]: c for c in pronta}
+        self.assertEqual(dest["faixa_referencia.exame_analito_id"][1], "@id:exame_analito")
+        self.assertEqual(dest["faixa_referencia.referencia_minima"][3], "decimal_zero_nulo")
+        self.assertIn("opcional", dest["faixa_referencia.referencia_minima"][5])
+        self.assertEqual(dest["faixa_referencia.referencia_texto"][3], "texto_resumo:300")
+        self.assertEqual(dest["faixa_referencia.vigencia_inicio"][1], "@vigencia_carga")
 
     def test_visualizador_inativo_ate_ter_endereco(self):
         v = self.cols("SIWEBVISULIMG", "visualizador_imagem")
@@ -173,12 +228,14 @@ class Plano(unittest.TestCase):
 
     def test_descartes_com_causa_de_produto(self):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        esperado = {"SITPEQV_SITPEQVMODELO": "duplicado", "SIVARFORMULA": "sem_valor", "SIWEBPARDATA": "mecanismo_do_produto",
-                    "SIWEBPARTPATU": "mecanismo_do_produto"}
-        for t, causa in esperado.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
-            self.assertTrue(sc[t]["motivo"].strip(), t)
-        self.assertEqual(set(esperado), set(l7_03.DESCARTADAS))
+        self.assertNotIn("SIVARFORMULA", sc)  # rodada 3: carrega (fórmula da SIFORMUL)
+        # r5 (ADR 0006): nenhum descarte; as listas do portal viram opções da lista do produto
+        self.assertFalse({"SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU"} & set(sc))
+        self.assertEqual(set(l7_03.DESCARTADAS), set())
+        for t, chave in (("SIWEBPARDATA", "migracao.periodo_portal_resultado"), ("SIWEBPARTPATU", "migracao.tipo_atualizacao_portal")):
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_opcao", t)
+            c = {x["destino"]: x["coluna"] for x in self.mapa["colunas_decl"] if x["tabela"] == t}
+            self.assertEqual(c["parametro_definicao.chave"], "=" + chave)
 
 
 class Regras(unittest.TestCase):
@@ -212,7 +269,57 @@ class Sintetica(unittest.TestCase):
     def test_colunas_da_origem(self):
         for t, cols in l7_03.COLUNAS.items():
             self.assertEqual(len(cols), len(set(cols)), t)
-        self.assertEqual(set(l7_03.COLUNAS), TABELAS | BLOQUEADAS)
+        self.assertEqual(set(l7_03.COLUNAS), TABELAS | BLOQUEADAS | set(l7_03.FORMA_SO) |
+                         set(l7_03.PAIS_NA_IMAGEM))
+
+
+
+def _mariadb():
+    try:
+        from sante_conector import banco
+        banco.conectar(None).close()
+        return True
+    except Exception:  # noqa: BLE001 (fora do container: sem MariaDB)
+        return False
+
+
+@unittest.skipUnless(os.path.exists("/opt/firebird/bin/isql") and _mariadb(),
+                     "só no container do conector, com o MariaDB da rede interna")
+class Conferencia(unittest.TestCase):
+    def test_apoio_por_exame_pela_equivalencia(self):
+        """SITBEXHP 1: apoio da interface 1 (código 7), exame próprio HB copiado da equivalência 1/HGB, exige peso."""
+        from sante_conector import conferencia
+        lidos = {}
+
+        def ler(cc):
+            with cc.cursor() as c:
+                c.execute("SELECT a.codigo, e.sigla, x.codigo_exame_apoio, x.exige_peso, x.exige_altura FROM"
+                          " exame_laboratorio_apoio x JOIN laboratorio_apoio a ON a.id=x.laboratorio_apoio_id"
+                          " JOIN exame e ON e.id=x.exame_id")
+                lidos["apoio"] = [[str(v) for v in x] for x in c.fetchall()]
+        r = conferencia.conferir("L7-03", depois_da_primeira=ler)
+        self.assertEqual(r["erros"], [])
+        self.assertEqual(lidos["apoio"], [["7", "HB", "HGB", "1", "0"]])
+
+    def test_ligacao_interface_modelo_r5(self):
+        # r5 (achado): a ligação vai à trilha como operação trazida da origem, datada pela evidência (nunca a carga)
+        pl = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), TABELAS | BLOQUEADAS)}
+        t = {c["destino"]: c for c in pl["SITPEQV_SITPEQVMODELO"]["colunas"]["trilha_auditoria"]}
+        self.assertEqual(t["acao"]["coluna"], "=operacao")
+        self.assertEqual(t["ocorrido_em"]["coluna"], "#vigencia")
+        self.assertIn("vigencia", t["ocorrido_em"])
+        # conciliação na imagem: o modelo escolhido de cada interface pertence ao conjunto das ligações dela
+        lig, esc = {}, {}
+        def ins(tab, v):
+            d = dict(zip(l7_03.COLUNAS[tab], v))
+            if tab == "SITPEQV_SITPEQVMODELO":
+                lig[d["ID"]] = (d["ID_SITPEQV"], d["ID_SITPEQVMODELO"])
+            elif tab == "SITPEQV":
+                esc[d["CODIGO"]] = d["ID_SITPEQV_SITPEQVMODELO"]
+        l7_03.linhas(random.Random(1), ins)
+        fora = [k for k, e in esc.items() if lig[e][0] != k and k != 4]  # a 4 é recusada (sem nome)
+        self.assertEqual(fora, [])
+        self.assertEqual(len([k for k, (i, _) in lig.items() if i == 1]), 2)  # escolhida + alternativa
 
 
 if __name__ == "__main__":

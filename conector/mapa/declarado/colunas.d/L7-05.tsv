@@ -110,20 +110,12 @@ GEESTINI	=1	inventario_estoque_contagem.sequencia			inventario_estoque_contagem	
 GEESTINI	=fechada	inventario_estoque_contagem.situacao			inventario_estoque_contagem	L7-05: contagem do sistema antigo já encerrada
 GEESTINI	DATA	inventario_estoque_contagem.aberta_em	data		inventario_estoque_contagem	L7-05: a origem só tem a data do documento
 GEESTINI	USUARIO	inventario_estoque_contagem.contador_usuario_id	chave_origem		inventario_estoque_contagem;ref:TBUSERS	L7-05: quem lançou o estoque inicial
-GEFECMES	ANO					L7-05: BLOQUEADA até o motor gravar data em DATETIME (pedido 3 em saida/L7-05.json): a linha só existe para mês FECHADO no sistema antigo e fechado exige fechado_em; carregar como aberta inverteria o significado (aceitaria movimento retroativo). Declaração pronta comentada abaixo
-GEFECMES	MES					L7-05: BLOQUEADA (ver ANO); vai na competência #data:ANO,MES
-GEFECMES	EXPORTADO					L7-05: BLOQUEADA (ver ANO); vai em exportado_contabilidade (booleano_sn)
-#GEFECMES	@estabelecimento	fechamento_estoque.estabelecimento_id				L7-05: único estabelecimento do cliente
-#GEFECMES	#data:ANO,MES	fechamento_estoque.competencia				L7-05: competência fechada (dia 1); mês inválido: valor_fora_do_dominio e recusa (NOT NULL)
-#GEFECMES	=fechado	fechamento_estoque.situacao				L7-05: a linha existe só para mês fechado no sistema antigo (ativar com o pedido 3: data em DATETIME)
-#GEFECMES	=~@data_carga	fechamento_estoque.fechado_em				L7-05: a origem não guarda quando fechou: data da carga PRESUMIDA (valor_presumido), exigida pelo CHECK de fechado
-#GEFECMES	EXPORTADO	fechamento_estoque.exportado_contabilidade	booleano_sn			L7-05: exportado para a contabilidade; fora do domínio: padrão FALSE com pendência
 GEGERSEQ	@estabelecimento	sequencia_documento_estoque.estabelecimento_id				L7-05: único estabelecimento do cliente
 GEGERSEQ	COD	sequencia_documento_estoque.tipo_movimento_estoque_id	chave_origem		ref:GETPLANCTO	L7-05: tipo de movimento da sequência (aresta de ordem pedida: GETPLANCTO antes)
-GEGERSEQ	=mensal	sequencia_documento_estoque.reinicio				L7-05: a origem numera por ANO e MES
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	inteiro	valores		L7-05 r3: MES 0 = sequência do ano (pedido de compra), 1-12 = do mês (valores.d/L7-05.tsv); antes era 'mensal' fixo e a sequência anual recusava pelo CHECK
 GEGERSEQ	ANO	sequencia_documento_estoque.ano	inteiro			L7-05: ano do contador; antes de 2000 recusa pelo CHECK
-GEGERSEQ	MES	sequencia_documento_estoque.mes	inteiro			L7-05: mês do contador
-GEGERSEQ	SEQ	sequencia_documento_estoque.proximo_numero	piso:1			L7-05: contador do mês; 0 elevado a 1 (valor_elevado_ao_minimo); pedido: regra de incremento se o dono confirmar que SEQ é o último gerado
+GEGERSEQ	MES	sequencia_documento_estoque.mes	inteiro			L7-05: mês do contador (0 na sequência do ano)
+GEGERSEQ	SEQ	sequencia_documento_estoque.proximo_numero	piso:1			L7-05 r3: SEQ é o PRÓXIMO número (evidência: captura de assinatura do sistema antigo, o número emitido é o SEQ e o SEQ sobe 1; a primeira do ano nasce já usada a 1 com SEQ 2); 0 elevado a 1 (valor_elevado_ao_minimo)
 GEGERSEQ	NOME		texto_nome			L7-05: sem destino: repete o nome do tipo de movimento
 GELIMLOC	@estabelecimento	parametro_reposicao.estabelecimento_id				L7-05: único estabelecimento do cliente
 GELIMLOC	ITEM	parametro_reposicao.insumo_id	chave_origem		ref:GEITENS	L7-05: insumo (aresta de ordem pedida: GEITENS antes); nunca visto recusa (NOT NULL)
@@ -145,96 +137,119 @@ GELANTRA	KIT					L7-05: sem destino: kit de origem do lançamento, sem coluna no
 GELANTRA	DETALHEVAL					L7-05: sem destino: marca interna de detalhe de validade
 GELANTRA	DATA_HORA_INCLUSAO					L7-05: sem destino: carimbo técnico
 GELANTRA	DATA_HORA_ULTIMA_ATUALIZACAO					L7-05: sem destino: carimbo técnico (diferencial)
-GECOMPRA	ITEM					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	DATA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	FORN					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	NF					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	DOC					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	QTDE					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	UNIT					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	CUSTO					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	MARCA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	VENDA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GEKONCDC	ANO					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	MES					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	CDC					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	DATA					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	ITEM					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	DOC					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	QTDE					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GEKONCDC	VALOR					L7-05: descarte pedido (duplicado): consumo por centro de custo derivado das saídas (GELANSAI, GELANPAC, GELANDEV -> movimento_estoque); o produto recompõe consumo_centro_custo no fechamento
-GECTRVMM	ANO					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	MES					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	DOC					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	ITEM					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	DATA					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	QTDE					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECTRVMM	LOTE					L7-05: descarte pedido (duplicado): lote por documento do modelo antigo; o lote (GEVALMEM -> lote_insumo) e o lote por movimento (GERASVAL* -> movimento_lote) vêm das tabelas novas; sem validade não há lote_insumo
-GECADTER	NOME					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
-GECADTER	NASC					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
-GECADTER	COD					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
-GEARMLOC	ANO					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	MES					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	LOCAL					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	ITEM					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	QTDE					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	VALOR					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	RELEVAR					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GEARMLOC	TRANSICAO					L7-05: mecanismo pedido (secundário gravado antes do principal): saldo_estoque_mensal exige saldo_estoque_id e o saldo por local e insumo não tem tabela própria na origem
-GECONITL	ANO					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	MES					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	LOCAL					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	ITEM					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	ENT					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	SAI					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	DEV					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	VLR_ENT					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	VLR_SAI					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GECONITL	VLR_DEV					L7-05: mecanismo pedido (secundário gravado antes do principal), mesmo saldo mensal de GEARMLOC, por complementa
-GELANESI	DOC					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GELANESI	ITEM					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GELANESI	QTDE					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GELANESI	VLRMED					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GELANESI	CONS					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GELANESI	TOTAL					L7-05: mecanismo pedido (secundário gravado antes do principal): o item exige a rodada de contagem (inventario_estoque_contagem), que a origem não tem
-GEHORMED	H11					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H21					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H22					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H31					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H32					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H33					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H41					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H42					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H43					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H44					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H61					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H62					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H63					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H64					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H65					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H66					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H81					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H82					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H83					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H84					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H85					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H86					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H87					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H88					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H121					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H122					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H123					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H124					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H125					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H126					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H127					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H128					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H129					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H1210					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H1211					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEHORMED	H1212					L7-05: mecanismo pedido (desdobrar colunas em linhas com dois rótulos: frequência e ordem da dose, e referência pelo rótulo)
-GEDESPDS	ANO					L7-05: mecanismo pedido (referência por chave alternativa composta, para complementar o item do pedido ou da licitação)
-GEDESPDS	OQUE					L7-05: mecanismo pedido (referência por chave alternativa composta, para complementar o item do pedido ou da licitação)
-GEDESPDS	DOC					L7-05: mecanismo pedido (referência por chave alternativa composta, para complementar o item do pedido ou da licitação)
-GEDESPDS	SEQ					L7-05: mecanismo pedido (referência por chave alternativa composta, para complementar o item do pedido ou da licitação)
-GEDESPDS	DESCRICAO					L7-05: mecanismo pedido (referência por chave alternativa composta, para complementar o item do pedido ou da licitação)
+GELANTRA	@estabelecimento	movimento_estoque.estabelecimento_id			movimento_estoque	L7-05 r3: razão do estoque: único estabelecimento do cliente
+GELANTRA	ID_GECADTRA	movimento_estoque.local_estoque_id	chave_origem		ref:GECADTRA>LOC_ORI>GELOCARM;movimento_estoque	L7-05 r3: saída da transferência no local de origem do documento (encadeada); sem local: NOT NULL recusa
+GELANTRA	ID_GECADTRA	movimento_estoque.contrapartida_local_estoque_id	chave_origem		ref:GECADTRA>LOC_DES>GELOCARM;movimento_estoque	L7-05 r3: local de destino da transferência (contrapartida); a entrada nele pede destino repetido no motor (saida/L7-05.json)
+GELANTRA	ID_GECADTRA	movimento_estoque.ocorrido_em	data		ref:GECADTRA>DATA;movimento_estoque	L7-05 r3: data do documento (tipar: meia-noite); o documento sem data já é recusado
+GELANTRA	ID_GECADTRA	movimento_estoque.competencia	data_primeiro_dia_mes		ref:GECADTRA>DATA;movimento_estoque	L7-05 r3: competência = 1º dia do mês da data do documento
+GELANTRA	=migracao_saida	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo;movimento_estoque	L7-05 r3: a origem não tem tipo de movimento: tipo NATIVO de migração (como a GELANSAI)
+GELANTRA	=saida	movimento_estoque.natureza			movimento_estoque	L7-05 r3: FATO da tabela: o item de transferência baixa o local de origem
+GELANTRA	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS;movimento_estoque	L7-05 r3: insumo
+GELANTRA	ITEM	movimento_estoque.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON;movimento_estoque	L7-05 r3: unidade de estoque do insumo (encadeada)
+GELANTRA	QTDE	movimento_estoque.quantidade	decimal		movimento_estoque	L7-05 r3: quantidade transferida; zero ou negativa: CHECK recusa
+GELANTRA	QTDE	movimento_estoque.quantidade_estoque	decimal		movimento_estoque	L7-05 r3: a transferência já é na unidade de estoque
+GELANTRA	VLRMED	movimento_estoque.custo_unitario	decimal_nao_negativo		movimento_estoque	L7-05 r3: custo médio unitário; valor_total fica para o recálculo (o motor não multiplica; pedido #razao)
+GELANTRA	ID_GECADTRA	movimento_estoque.documento_estoque_id	chave_origem		ref:GECADTRA;movimento_estoque	L7-05 r3: documento de transferência
+GELANTRA	@id	movimento_estoque.documento_estoque_item_id			movimento_estoque	L7-05 r3: item do documento que gerou o movimento
+GELANTRA	ID_GECADTRA	movimento_estoque.usuario_id	chave_origem		ref:GECADTRA>USUARIO>TBUSERS;movimento_estoque	L7-05 r3: quem lançou = usuário do documento; sem usuário: NOT NULL recusa a linha (visível)
+GEKONCDC	ANO					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	MES					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	CDC					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	DATA					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	ITEM					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	DOC					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	QTDE					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	VALOR					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
+GEKONCDC	@estabelecimento	consumo_centro_custo.estabelecimento_id				L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	ANO	consumo_centro_custo.ano	inteiro		agrupar:ANO,MES,CDC,ITEM	L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	MES	consumo_centro_custo.mes	inteiro			L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	CDC	consumo_centro_custo.centro_custo_id	chave_origem		ref:TBCENCUS	L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	ITEM	consumo_centro_custo.insumo_id	chave_origem		ref:GEITENS	L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	CDC	consumo_centro_custo.local_estoque_id	chave_origem		ref:TBCENCUS>LOCARM>GELOCARM	L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): o local é o estoque padrão do centro de custo (constante no grupo); sem ele, o local do documento de saída da primeira linha do grupo (concorrente)
+GEKONCDC	DOC	consumo_centro_custo.local_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM>GELOCARM	L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): concorrente: local do documento de saída (GECADSAI pelo ANO, MES e DOC)
+GEKONCDC	#data:ANO,MES	consumo_centro_custo.ocorrido_em				L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	#grupo_somar:QTDE	consumo_centro_custo.quantidade_liquida	decimal			L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	#grupo_somar:VALOR	consumo_centro_custo.valor_liquido	decimal			L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
+GEKONCDC	#grupo_json:DOC,DATA,QTDE,VALOR	consumo_centro_custo.dados				L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): cada documento do grupo (DOC, DATA, QTDE, VALOR) fica no retrato, nada se perde
+GECTRVMM	ITEM	movimento_lote.movimento_estoque_id	chave_origem		ref:GELANSAI.(ANO,MES,DOC,ITEM)=(ANO,MES,DOC,ITEM)	L7-05 r3 (conferidor): movimento de saída do insumo no documento (GELANSAI, principal movimento_estoque) pela chave alternativa composta; item repetido no documento: pai_ambiguo; documento sem saída: pai_inexistente; ambos recusam (NOT NULL), visíveis
+GECTRVMM	#seq:DOC	movimento_lote.sequencia				L7-05 r3 (conferidor): ordem do lote no documento (única no movimento, que é de um só documento)
+GECTRVMM	@id:lote_insumo	movimento_lote.lote_insumo_id				L7-05 r3 (conferidor): lote físico adotado (ou criado) antes, no destino secundário lote_insumo
+GECTRVMM	QTDE	movimento_lote.quantidade	decimal			L7-05 r3 (conferidor): quantidade dispensada do lote; zero ou negativa: CHECK recusa (4025); nula: 1048
+GECTRVMM	@estabelecimento	lote_insumo.estabelecimento_id			antes;adotar:estabelecimento_id,insumo_id,numero_lote	L7-05 r3 (conferidor): lote físico ADOTADO pelo insumo e número (sem regra nova no motor: substitui o pedido de pai repetido com o mesmo id): a GEVALMEM tem uma linha por local e todas adotam o MESMO lote_insumo; um só lote com esse insumo e número: adotado (adotado_existente, nada sobrescrito); validades diferentes (dois lotes) ou lote sem par: tenta criar e recusa por validade nula (1048), visível; nunca inventa validade
+GECTRVMM	ITEM	lote_insumo.insumo_id	chave_origem		ref:GEITENS	L7-05 r3 (conferidor): insumo do lote; nunca visto: pai_inexistente e recusa
+GECTRVMM	LOTE	lote_insumo.numero_lote	texto			L7-05 r3 (conferidor): número do lote (mesma regra da GEVALMEM, para a adoção casar)
+GECTRVMM	LOTE	lote_insumo.validade	data		ref:GEVALMEM.(ITEM,LOTE)=(ITEM,LOTE)@validade	L7-05 r3 (conferidor): validade do lote como gravada pela GEVALMEM (o que o cliente vê); lote em mais de um local: pai_ambiguo (média, informativa: a adoção pelo insumo e número resolve o lote); sem par: pai_inexistente e, sem lote a adotar, recusa
+GECTRVMM	DATA		data			L7-05 r3 (conferidor): não carregada: data da dispensação = a do movimento de saída (GELANSAI) a que o lote pertence
+GEHORMED	@estabelecimento	horario_padrao_dose.estabelecimento_id			horario_padrao_dose	L7-05 r3 (conferidor): horário padrão do ESTABELECIMENTO (grade_horario_unidade_id nulo = padrão do estabelecimento); a origem não traz estabelecimento
+GEHORMED	#item	horario_padrao_dose.horario	hora_hhmm		horario_padrao_dose;desdobrar:H11=1|1,H21=2|1,H22=2|2,H31=3|1,H32=3|2,H33=3|3,H41=4|1,H42=4|2,H43=4|3,H44=4|4,H61=6|1,H62=6|2,H63=6|3,H64=6|4,H65=6|5,H66=6|6,H81=8|1,H82=8|2,H83=8|3,H84=8|4,H85=8|5,H86=8|6,H87=8|7,H88=8|8,H121=12|1,H122=12|2,H123=12|3,H124=12|4,H125=12|5,H126=12|6,H127=12|7,H128=12|8,H129=12|9,H1210=12|10,H1211=12|11,H1212=12|12	L7-05 r3 (conferidor): destino revisto (F4-decisoes-destino.md): a grade antiga é por NÚMERO DE DOSES AO DIA, coluna H<doses><posição>, o mesmo grão de horario_padrao_dose (o padrão por frequência exigiria inventar a frequência). Uma linha por coluna preenchida; horário HHMM inteiro (0 = 00:00, válido na grade de 4/4h); inválido: hora_invalida e sem linha; nenhuma coluna válida: sem_item_a_gravar
+GEHORMED	#rotulo	horario_padrao_dose.doses_por_dia			horario_padrao_dose	L7-05 r3 (conferidor): 1.ª parte do rótulo: doses ao dia (o 1.º número do nome da coluna)
+GEHORMED	#rotulo2	horario_padrao_dose.ordem_dose			horario_padrao_dose	L7-05 r3 (conferidor): 2.ª parte do rótulo: posição da dose no dia (o resto do nome da coluna)
+GEFECMES	@estabelecimento	fechamento_estoque.estabelecimento_id				L7-05: único estabelecimento do cliente
+GEFECMES	#data:ANO,MES	fechamento_estoque.competencia				L7-05: competência fechada (dia 1); mês inválido: valor_fora_do_dominio e recusa (NOT NULL)
+GEFECMES	=fechado	fechamento_estoque.situacao				L7-05: a linha existe só para mês FECHADO no sistema antigo; carregar aberto liberaria movimento retroativo
+GEFECMES	=~@data_carga	fechamento_estoque.fechado_em				L7-05: a origem não guarda quando fechou: data da carga PRESUMIDA (valor_presumido), exigida pelo CHECK de fechado (tipar: DATETIME)
+GEFECMES	EXPORTADO	fechamento_estoque.exportado_contabilidade	booleano_sn			L7-05: exportado para a contabilidade; fora do domínio: padrão FALSE com pendência
+GEFECMES	ANO		inteiro			L7-05: vai na competência #data:ANO,MES
+GEFECMES	MES		inteiro			L7-05: vai na competência #data:ANO,MES
+GEARMLOC	LOCAL	saldo_estoque.local_estoque_id	chave_origem		saldo_estoque;antes;adotar:local_estoque_id,insumo_id;ref:GELOCARM	L7-05: saldo do insumo no local (a origem não tem tabela própria): criado no primeiro mês e adotado nos seguintes (adotado_existente, baixa); local nunca visto recusa (NOT NULL)
+GEARMLOC	ITEM	saldo_estoque.insumo_id	chave_origem		saldo_estoque;ref:GEITENS	L7-05: insumo do saldo; nunca visto recusa (NOT NULL)
+GEARMLOC	@estabelecimento	saldo_estoque.estabelecimento_id			saldo_estoque	L7-05: único estabelecimento do cliente
+GEARMLOC	=~0	saldo_estoque.quantidade			saldo_estoque	L7-05 r3: o saldo atual NÃO vem desta tabela (é histórico mensal): criado com 0 PRESUMIDO (valor_presumido por linha, visível) até o pedido 'adotar e atualizar' gravar o saldo do mês mais recente; nunca zero silencioso
+GEARMLOC	@id:saldo_estoque	saldo_estoque_mensal.saldo_estoque_id				L7-05: o mensal pertence ao saldo do local e insumo gravado ou adotado antes
+GEARMLOC	#data:ANO,MES	saldo_estoque_mensal.competencia				L7-05: competência (dia 1); mês inválido: valor_fora_do_dominio e recusa (NOT NULL)
+GEARMLOC	#data:ANO,MES	saldo_estoque_mensal.ocorrido_em				L7-05: a origem não guarda o instante: início da competência (tipar: DATETIME)
+GEARMLOC	QTDE	saldo_estoque_mensal.quantidade_final	decimal			L7-05: saldo em quantidade no fim do mês; vazio: padrão 0
+GEARMLOC	VALOR	saldo_estoque_mensal.valor_final	decimal			L7-05: saldo em valor no fim do mês (o informado à contabilidade); vazio: padrão 0
+GEARMLOC	#retrato:RELEVAR,TRANSICAO	saldo_estoque_mensal.dados				L7-05: retrato da linha com as marcas RELEVAR e TRANSICAO do sistema antigo (sem coluna própria no produto), à vista na conferência
+GEARMLOC	ANO		inteiro			L7-05: vai na competência
+GEARMLOC	MES		inteiro			L7-05: vai na competência
+GEARMLOC	RELEVAR		codigo_char			L7-05: no retrato (dados)
+GEARMLOC	TRANSICAO		codigo_char			L7-05: no retrato (dados)
+GECONITL	ANO	saldo_estoque_mensal.id	chave_origem		complementa;ref:GEARMLOC(ANO,MES,ITEM,LOCAL)	L7-05: completa o saldo mensal do mesmo local, insumo e mês (GEARMLOC); sem saldo mensal: pai_inexistente e recusa
+GECONITL	ENT	saldo_estoque_mensal.quantidade_entrada	decimal			L7-05: entradas do mês no local
+GECONITL	VLR_ENT	saldo_estoque_mensal.valor_entrada	decimal			L7-05: valor das entradas
+GECONITL	SAI	saldo_estoque_mensal.quantidade_saida_setor	decimal			L7-05 r3: saídas do local SEM natureza na origem: o total fica em saída para setor e a saída para paciente vai =~0 (valor_presumido por linha, visível); pedido de coluna de saída não classificada
+GECONITL	VLR_SAI	saldo_estoque_mensal.valor_saida_setor	decimal			L7-05: valor das saídas de consumo
+GECONITL	DEV	saldo_estoque_mensal.quantidade_devolucao_setor	decimal			L7-05: devoluções de consumo ao local
+GECONITL	VLR_DEV	saldo_estoque_mensal.valor_devolucao_setor	decimal			L7-05: valor das devoluções
+GECONITL	=~0	saldo_estoque_mensal.quantidade_saida_paciente				L7-05 r3: marca a classificação PRESUMIDA das saídas (total em saída para setor): valor_presumido por linha completada, para o cliente revisar
+GECONITL	MES		inteiro			L7-05: parte da referência ao saldo mensal
+GECONITL	LOCAL		inteiro			L7-05: parte da referência ao saldo mensal
+GECONITL	ITEM		inteiro			L7-05: parte da referência ao saldo mensal
+GELANESI	DOC	inventario_estoque_item.inventario_estoque_id	chave_origem		ref:GEESTINI	L7-05: estoque inicial (inventário de abertura)
+GELANESI	DOC	inventario_estoque_item.inventario_estoque_contagem_id	chave_origem		ref:GEESTINI/inventario_estoque_contagem	L7-05: rodada única de contagem que a GEESTINI grava como secundário
+GELANESI	#seq:DOC	inventario_estoque_item.sequencia				L7-05: 1..n dentro do documento, na ordem do ID
+GELANESI	ITEM	inventario_estoque_item.insumo_id	chave_origem		ref:GEITENS	L7-05: insumo contado; nunca visto recusa (NOT NULL)
+GELANESI	ITEM	inventario_estoque_item.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-05: unidade de estoque do insumo (encadeada, como os itens de transferência)
+GELANESI	QTDE	inventario_estoque_item.quantidade_contada	decimal			L7-05: quantidade lançada no estoque inicial; negativa recusa (CHECK)
+GELANESI	QTDE	inventario_estoque_item.saldo_sistema	decimal			L7-05: no estoque inicial o saldo do sistema é o próprio lançamento (sem divergência)
+GELANESI	VLRMED	inventario_estoque_item.custo_medio_unitario	decimal_nao_negativo			L7-05: custo médio na data de corte; negativo: NULL com pendência
+GELANESI	CONS	inventario_estoque_item.situacao	codigo_char	valores		L7-05: S consolidado = ok; N ou vazio = pendente; outro: padrão (pendente) com valor_fora_do_dominio
+GELANESI	DOC	inventario_estoque_item.contagem_usuario_id	chave_origem		ref:GEESTINI>USUARIO>TBUSERS	L7-05: quem lançou o estoque inicial (do cabeçalho)
+GELANESI	DOC	inventario_estoque_item.contado_em	data		ref:GEESTINI>DATA	L7-05: data do documento de estoque inicial (tipar: DATETIME)
+GELANESI	TOTAL		decimal			L7-05: sem destino: derivado (quantidade x custo médio)
+GELANESI	ID		chave_origem			L7-05: chave da origem (conector_origem); ordena a sequência
+GEDESPDS	OQUE	pedido_compra_item.id	chave_origem		complementa;ref:GELANPED.(OQUE,ANO,DOC,SEQ)=(OQUE,ANO,DOC,SEQ)	L7-05: completa o item do pedido/processo de compra (GELANPED) pelo tipo, ano, documento e sequência; sem item: pai_inexistente e recusa; repetido: pai_ambiguo
+GEDESPDS	DESCRICAO	pedido_compra_item.descricao_servico	texto_longo			L7-05: especificação do serviço comprado (texto longo, sem alteração)
+GEDESPDS	ANO		inteiro			L7-05: parte da referência ao item
+GEDESPDS	DOC		inteiro			L7-05: parte da referência ao item
+GEDESPDS	SEQ		inteiro			L7-05: parte da referência ao item
+GECADTER	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	L7-05 r5 (ADR 0006): retrato COMPLETO da linha (todas as colunas, sem segredo): terceiro só com nome e nascimento; o administrador o cadastra como terceiro_destinatario a partir daqui (antes: descarte sem_valor, revogado)
+GECADTER	=@data_carga	trilha_auditoria.ocorrido_em				L7-05 r5 (ADR 0006): a origem não data a linha: momento da inclusão pela migração (não é vigência)
+GECADTER	=inclusao	trilha_auditoria.acao				L7-05 r5 (ADR 0006): natureza do registro na trilha
+GECADTER	=terceiro_destinatario	trilha_auditoria.entidade				L7-05 r5 (ADR 0006): entidade do produto a que o registro se refere
+GECADTER	=terceiro da origem sem documento: aguarda identificação para virar terceiro_destinatario	trilha_auditoria.motivo				L7-05 r5 (ADR 0006): o que o retrato guarda
+GECADTER	NOME		texto_nome			L7-05 r5 (ADR 0006): no retrato (o terceiro do produto exige pessoa identificada e finalidade, que a origem não tem)
+GECADTER	NASC		data			L7-05 r5 (ADR 0006): no retrato
+GECADTER	COD		inteiro			L7-05 r5 (ADR 0006): no retrato (código do terceiro na origem)
+GECOMPRA	ITEM	historico_compra_insumo.insumo_id	chave_origem		ref:GEITENS;principal	L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido); insumo nunca visto: NOT NULL recusa (pai_inexistente)
+GECOMPRA	FORN	historico_compra_insumo.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido); fornecedor nunca visto: NULL com pai_inexistente, a compra fica
+GECOMPRA	NF	historico_compra_insumo.numero_nota	inteiro		historico_compra_insumo	L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido); número da nota como na origem (a nota da entrada liga pelo número quando existir)
+GECOMPRA	DOC	historico_compra_insumo.numero_documento	inteiro			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	DATA	historico_compra_insumo.comprado_em	data			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	QTDE	historico_compra_insumo.quantidade	decimal			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	UNIT	historico_compra_insumo.valor_unitario	decimal			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	CUSTO	historico_compra_insumo.custo_unitario	decimal			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	MARCA	historico_compra_insumo.marca	texto			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	VENDA	historico_compra_insumo.preco_venda	decimal			L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)
+GECOMPRA	=migracao	historico_compra_insumo.origem				L7-05 r6 (ADR 0006): histórico de compra do insumo em historico_compra_insumo (pedido r5b_historico_compra atendido)

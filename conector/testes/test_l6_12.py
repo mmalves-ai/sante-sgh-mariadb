@@ -20,16 +20,25 @@ from sante_conector.sintetica_d import l6_12
 
 VALORES = mapa.DIR_PACOTE / "declarado" / "valores.d" / "L6-12.tsv"
 SEM_CARGA = mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv"
-CARREGADAS = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
+CARREGADAS = {"PRGEDIMP", "PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
-              "PREVOLPAC"}
+              "PREVOLPAC", "PRALERGIAPAC_TBPRINC",
+              # rodada 5 (ADR 0006): rascunhos como rascunho do autor, monitorização, planejamento com a prescrição
+              # futura e a ligação evento x assinatura do exame (complementa)
+              "PRCABEVOLTMP", "PREVOLPACTMP", "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC", "PRCABEC_MONITORIZACAO",
+              "PRPLANPRESC", "PRASS_DOC_PREXAMEASS"}
 # cadastros de outras fatias lidos por chave alternativa/encadeada e carregados pela declaração delas
-DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA"}
-DESCARTES = {"PRASS_DOC_PREXAMEASS", "PRCABEC_MONITORIZACAO", "PRGEDIMP", "PRPLANPRESC", "PRCABEVOLTMP",
-             "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC"}
-BLOQUEADA = {"PRALERGIAPAC_TBPRINC"}  # principio_ativo é catálogo oficial (DCB) sem de-para no depara.py (pedido)
+DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA", "PRTPASSINATURA",
+             "PRCADRESP", "PRPERGUNTA"}  # rodada 5: o catálogo de respostas carrega na L6-05 (fora do plano da conferência: MAPA_TESTE)
+# lidas só pela encadeada terminada em coluna, sem carga (TBPRINC: descarte catalogo_oficial na L7-07)
+# rodada 4: PRASSINATURA_CAB passa a carregar (L6-11, documento do prontuário) e TBPRINC também (L7-07,
+# principio_ativo_cliente): só lidas ficam a pergunta e o catálogo de respostas
+SO_LEITURA = set()  # rodada 5: a pergunta carrega na L6-10
+DESCARTES = set()  # rodada 5 (ADR 0006): nenhum descarte
+# o anexo do prontuário só existe como binário na origem: bloqueada até o mecanismo de arquivo (#arquivo, M4)
+BLOQUEADA = set()  # conferidor r4: PRGEDIMP carrega com #arquivo
 INTERMEDIARIAS = {"HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO"}
-COMPLEMENTAM = {"PRCONTEVOL"}
+COMPLEMENTAM = {"PRCONTEVOL", "PRASS_DOC_PREXAMEASS"}
 AUDITORIA = {"id", "criado_em", "origem", "versao"}
 NAO_COLUNA = {"CONSTRAINT", "KEY", "UNIQUE", "PRIMARY", "FULLTEXT", "INDEX", "CHECK"}
 CAUSAS = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
@@ -65,6 +74,8 @@ class FatiaL612(unittest.TestCase):
         self.assertEqual(CARREGADAS | DESCARTES | BLOQUEADA, set(l6_12.FORMAS))
         with open(SEM_CARGA, encoding="utf-8") as f:
             sem = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
+        for t in BLOQUEADA:
+            self.assertEqual((sem[t]["situacao"], sem[t]["causa"]), ("bloqueada", "regra_faltante"), t)
         for t in DESCARTES:
             self.assertEqual(sem[t]["situacao"], "descarte", t)
             self.assertIn(sem[t]["causa"], CAUSAS, t)
@@ -86,8 +97,10 @@ class FatiaL612(unittest.TestCase):
 
     def test_declaracoes_cobrem_os_not_null_de_todos_os_destinos(self):
         por_dt = {}
+        # r5: destino secundário com complementa (ex.: respostas do rascunho por PREVOLPACTMP) não insere
+        comp = {(c["tabela"], c["destino"].split(".")[0]) for c in self.decl if "complementa" in c["via"].split(";")}
         for c in self.decl:
-            if c["tabela"] not in COMPLEMENTAM:  # completa a linha do pai: não insere
+            if c["tabela"] not in COMPLEMENTAM and (c["tabela"], c["destino"].split(".")[0]) not in comp:
                 dt, dc = c["destino"].split(".")
                 por_dt.setdefault((c["tabela"], dt), set()).add(dc)
         self.assertIn(("PRALERGIAPAC", "alergia_paciente_evento"), por_dt)
@@ -160,8 +173,10 @@ class FatiaL612(unittest.TestCase):
         imp = {c["tabela"]: c["coluna"] for c in self.decl if c["destino"] == "registro_assistencial.impressao_digital"}
         # provisória na inclusão (NOT NULL) e substituída pelo hash do texto que completa o registro
         # o motor ainda não tira do resumo do pai a coluna que o complemento regrava (pedido): até lá a marca é
-        # PRESUMIDA (valor_presumido por linha), nunca apresentada como hash válido
-        self.assertEqual(imp, {"PRCABEVOL": "=~" + hashlib.sha256(b"").hexdigest()})
+        # NÃO CALCULADA: zeros presumidos (valor_presumido por linha), nunca um hash que pareça válido (o SHA-256 do
+        # vazio afirmaria que o texto é vazio)
+        self.assertEqual(imp, {"PRCABEVOL": "=~" + "0" * 64})
+        self.assertNotEqual("0" * 64, hashlib.sha256(b"").hexdigest())
 
     def test_sem_destino_de_unidade_ou_significado_duvidoso(self):
         destinos = {(c["tabela"], c["coluna"]): c["destino"] for c in self.decl}
@@ -182,7 +197,20 @@ class FatiaL612(unittest.TestCase):
         # intermediária carregada (por esta ou por outra fatia) nunca é pai externo; só a que fica fora do plano
         plano = {p["tabela"] for p in carga_mapa.planejar(self.m, nomes)}
         self.assertFalse(set(l6_12.PAIS_EXTERNOS) & plano)
-        self.assertEqual(set(l6_12.PAIS_EXTERNOS) & nomes, {"PRPADEVOL", "PRRESPOSTA"})
+        # r5: ATCABECATEND é pai externo e também está na imagem só para a condição de saída do atendimento (fora do
+        # plano pelo MAPA_TESTE)
+        self.assertEqual(set(l6_12.PAIS_EXTERNOS) & nomes, {"ATCABECATEND"})
+        self.assertFalse(SO_LEITURA & plano)
+
+    def test_principio_ativo_pelo_catalogo_oficial(self):
+        d = {c["coluna"]: c for c in self.decl if c["tabela"] == "PRALERGIAPAC_TBPRINC"}
+        c = d["ID_TBPRINC"]
+        self.assertEqual(c["destino"], "alergia_paciente_principio.principio_ativo_id")
+        self.assertEqual(set(c["via"].split(";")), {"ref:TBPRINC>COD_DCB", "cod:principio_ativo.codigo_dcb"})
+        self.assertEqual(sentinela.aplicar(c["regra"], "1234")[0], "01234")
+        self.assertEqual(sentinela.aplicar(c["regra"], "00777")[0], "00777")
+        # o catálogo oficial nunca é destino declarado (regra 7)
+        self.assertFalse([x for x in self.decl if x["destino"].startswith("principio_ativo.")])
 
 
 class ConferenciaL612(unittest.TestCase):
@@ -201,12 +229,13 @@ class ConferenciaL612(unittest.TestCase):
                 def um(sql, *a):
                     c.execute(sql, a)
                     return c.fetchone()
-                lido["ext"] = {k: ids(*k) for k in [("RICADPAC", "1"), ("ATCABECATEND", "2"), ("TBPROFIS", "1"),
+                lido["ext"] = {k: ids(*k) for k in [("RICADPAC", "1"), ("RICADPAC", "2"), ("ATCABECATEND", "1"),
+                                                    ("ATCABECATEND", "2"), ("TBPROFIS", "1"),
                                                     ("TBUSERS", "USR1"), ("TBUSERS", "USR2")]}
                 lido["presc"] = um("SELECT paciente_id, atendimento_id, prescritor_profissional_id, situacao FROM"
                                    " prescricao WHERE numero=1")
                 lido["reg"] = [um("SELECT r.autor_usuario_id, r.suspenso_por_usuario_id, r.situacao, r.excluido_em,"
-                                  " r.impressao_digital = SHA2('', 256), LEFT(r.texto_consolidado, 11),"
+                                  " r.impressao_digital = REPEAT('0', 64), LEFT(r.texto_consolidado, 11),"
                                   " r.corrige_registro_assistencial_id"
                                   " FROM registro_assistencial r JOIN `%s`.conector_origem o ON o.id_destino=r.id AND"
                                   " o.tabela_origem='PRCABEVOL' AND o.chave_original=%%s" % ctl, k) for k in ("1", "2")]
@@ -225,13 +254,22 @@ class ConferenciaL612(unittest.TestCase):
                 c.execute("SELECT tipo_valor, COUNT(*), COUNT(modelo_campo_opcao_id), COUNT(valor_hora)"
                           " FROM registro_assistencial_resposta GROUP BY tipo_valor")
                 lido["resp"] = c.fetchall()
+                c.execute("SELECT d.paciente_id, d.atendimento_id, d.entidade_origem, d.entidade_origem_id,"
+                          " d.referencia_em, d.titulo, COUNT(e.id) FROM documento_prontuario d LEFT JOIN"
+                          " documento_prontuario_evento e ON e.documento_prontuario_id=d.id GROUP BY d.id"
+                          " ORDER BY d.entidade_origem_id")
+                lido["docpront"] = c.fetchall()
+                lido["opcao"] = um("SELECT COUNT(*), COUNT(DISTINCT modelo_campo_id), MIN(rotulo) FROM modelo_campo_opcao")
+                c.execute("SELECT p.codigo_dcb FROM alergia_paciente_principio a JOIN principio_ativo p"
+                          " ON p.id=a.principio_ativo_id ORDER BY p.codigo_dcb")
+                lido["princ"] = [x[0] for x in c.fetchall()]
         r = conferencia.conferir("L6-12", depois_da_primeira=ler)
         self.assertEqual(r["erros"], [])
         ext = lido["ext"]
         # paciente, atendimento e profissional pelos avós (a referência direta daria os ids das intermediárias)
         self.assertEqual(lido["presc"], (ext[("RICADPAC", "1")], ext[("ATCABECATEND", "2")], ext[("TBPROFIS", "1")],
                                          "vencida"))
-        # suspenso na origem = situação suspenso, nunca excluído; impressão digital = SHA-256 do texto migrado
+        # suspenso na origem = situação suspenso, nunca excluído; impressão digital não calculada (zeros presumidos)
         self.assertEqual(lido["reg"][0], (ext[("TBUSERS", "USR1")], None, "finalizado", None, 1, "Evolução 10", None))
         self.assertEqual(lido["reg"][1], (ext[("TBUSERS", "USR2")], ext[("TBUSERS", "USR2")], "suspenso", None, 1,
                                           "Evolução 11", lido["reg1"]))
@@ -243,6 +281,20 @@ class ConferenciaL612(unittest.TestCase):
         self.assertEqual(lido["mat"], [1, 2])
         # hora '0830' em bytes ainda sai hora_invalida (pedido: hora_hhmm decodificar bytes): nenhuma hora gravada
         self.assertEqual(list(lido["resp"]), [("opcao", 4, 4, 1)])
+        # documento do prontuário pelo primeiro evento de cada cabeçalho (agrupado): o documento 1 tem dois eventos
+        # gravados (o terceiro, sem momento, recusa); o cabeçalho nunca visto não cria documento
+        T0 = datetime.datetime(2026, 3, 2, 8, 30)
+        self.assertEqual([tuple(x) for x in lido["docpront"]],
+                         [(ext[("RICADPAC", "1")], ext[("ATCABECATEND", "1")], "documento_migrado", 1,
+                           T0 + datetime.timedelta(hours=1), "Tipo de assinatura falso", 2),
+                          (ext[("RICADPAC", "2")], None, "documento_migrado", 2, T0 + datetime.timedelta(hours=2),
+                           "Tipo de assinatura falso", 1)])
+        # rodada 4: as opções da origem (PRRESPOSTA) carregam pela L6-11 (por_pai: uma por campo de cada modelo da
+        # pergunta), antes das respostas; a resposta adota a opção do campo x código
+        self.assertEqual(tuple(lido["opcao"]), (4, 4, "Resposta falsa 1"))
+        # princípio pelo código DCB no catálogo oficial (zeros à esquerda normalizados)
+        # rodada 5: mais o princípio da alergia em RASCUNHO (PRALERGIAPACTMP_TBPRINC 1 -> 01234)
+        self.assertEqual(lido["princ"], ["00777", "01234", "01234"])
 
 
 if __name__ == "__main__":

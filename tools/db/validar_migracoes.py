@@ -9,7 +9,8 @@ uso: python3 -I tools/db/validar_migracoes.py [--banco validacao] [--manter]
    auditoria; comentário da tabela; nomes (snake_case, sem prefixo críptico de origem); gatilhos;
    colunas *_id sem FK (aviso).
 3. Banco plataforma: aplica db/plataforma/*.sql DUAS vezes num banco de validação (idempotência) e confere PK,
-   auditoria, comentário, nomes e gatilhos (erros em "plataforma").
+   auditoria, comentário, nomes e gatilhos (erros em "plataforma"); o mesmo para db/espelho/*.sql (controle do
+   espelho padrão da base).
 Saídas: docs/obra/validacao-ddl.md (resumo) e docs/obra/validacao-ddl.json (erros por arquivo e por tabela).
 Sai com 1 se houver erro.
 """
@@ -48,13 +49,14 @@ def consulta(q: str) -> list[list[str]]:
     return [ln.split("\t") for ln in r.stdout.splitlines() if ln]
 
 
-def validar_plataforma() -> list[str]:
-    """db/plataforma/*.sql num banco vazio, duas vezes (idempotente), com as mesmas regras estruturais."""
-    banco = f"{BANCO}_plataforma"
+def validar_plataforma(pasta: str = "plataforma") -> list[str]:
+    """db/<pasta>/*.sql num banco vazio, duas vezes (idempotente), com as mesmas regras estruturais. Vale para o
+    banco da plataforma e para as tabelas de controle do espelho padrão da base (db/espelho)."""
+    banco = f"{BANCO}_{pasta}"
     sql(None, None, "-e", f"DROP DATABASE IF EXISTS {banco}; CREATE DATABASE {banco}")
     erros = []
     for rodada in (1, 2):
-        for arq in sorted((RAIZ / "db/plataforma").glob("*.sql")):
+        for arq in sorted((RAIZ / "db" / pasta).glob("*.sql")):
             r = sql(banco, arq.read_text(encoding="utf-8"), "--force")
             erros += [f"{arq.name} (rodada {rodada}): {ln.strip()[:200]}" for ln in r.stderr.splitlines() if ln.strip()]
     tabelas = consulta(f"select table_name, table_comment from information_schema.tables where table_schema='{banco}'")
@@ -72,7 +74,7 @@ def validar_plataforma() -> list[str]:
             erros.append(f"{tb}: tabela sem COMMENT")
         erros += [f"{tb}: nome inválido: {n}" for n in [tb, *c] if not NOME.match(n) or PROIBIDO.search(n)]
     if consulta(f"select trigger_name from information_schema.triggers where trigger_schema='{banco}'"):
-        erros.append("gatilhos no banco plataforma")
+        erros.append(f"gatilhos no banco {pasta}")
     if not MANTER:
         sql(None, None, "-e", f"DROP DATABASE IF EXISTS {banco}")
     return erros
@@ -130,7 +132,7 @@ def main() -> int:
     if gatilhos:
         erros_tab["(banco)"].append(f"gatilhos encontrados: {[g[0] for g in gatilhos]}")
 
-    erros_plataforma = validar_plataforma()
+    erros_plataforma = validar_plataforma() + validar_plataforma("espelho")
     total_erros = sum(len(v) for v in erros_arq.values()) + sum(len(v) for v in erros_tab.values()) + len(faltam) \
         + len(erros_plataforma)
     resumo = {

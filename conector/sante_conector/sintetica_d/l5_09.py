@@ -1,13 +1,11 @@
-"""Fatia L5-09 (cadastros do RH): situações do colaborador e tipos de rescisão carregam; das outras 19 tabelas da
-fatia, 18 são descarte de produto e 1 fica BLOQUEADA (pedidos em docs/obra/fatias/f4/saida/L5-09.json):
-- `mecanismo_do_produto`, domínio fixo por CHECK (11): o consumidor do produto guarda o valor do CHECK; o de-para
-  'id da origem -> valor do CHECK' é declarado no lote do consumidor quando ele tiver linhas (nesta origem todos estão
-  vazios e fora do mapa), lendo a descrição pela referência encadeada (a lista continua legível na origem);
-- `mecanismo_do_produto`, código simples (6): o modelo guarda o código oficial como texto ou número no consumidor
-  (RAIS, CAGED, SEFIP, saque do FGTS, ocorrência SEFIP, código de receita), sem tabela de catálogo;
-- `duplicado` (1): a causa de demissão repete o que o código RAIS já diz (iniciativa e justa causa);
-- BLOQUEADA (1): a tabela 19 do eSocial espera o carregador oficial de codigo_esocial (regra 7), que não existe.
-
+"""Fatia L5-09 (cadastros do RH): as 21 tabelas carregam. Situações do colaborador e tipos de rescisão nos cadastros
+próprios; as 19 listas (eSocial, SEFIP, RAIS, CAGED, FGTS, Receita e as próprias do hospital) entram inteiras como
+LISTAS DO HOSPITAL, ativas (ADR 0006, itens 1 e 4; decisão do conferidor da rodada 5): uma definição
+'rh.lista.<nome>' em parametro_definicao (tipo lista, módulo 'migracao' criado uma vez e adotado depois) e uma opção
+por linha em parametro_opcao (valor = código, rótulo = descrição ou o próprio código, ordem = código, origem
+migracao). O consumidor continua ligando ao oficial pelo código (de-para codigo_esocial ou domínio CHECK).
+Anomalias das listas: descrição nula (rótulo = código), descrição longa (texto_resumido), código não numérico
+('I1': a ordem pelo código fica NULL, recusa visível até o pedido r5-a, `#seq:*`, em saida/L5-09.json).
 Dados 100% falsos. Anomalias: código de 1 caractere com colisão de caixa ('a' e 'A': a chave única do destino não
 distingue caixa: as duas linhas recusadas com codigo_colisao_caixa), descrição nula e só de espaços (NOT NULL no
 destino), texto com espaços internos e bytes CP1252, nome com espaços repetidos (colapsados), código CAGED fora da
@@ -15,8 +13,7 @@ faixa do destino (SMALLINT UNSIGNED), código RAIS fora da tabela legal (iniciat
 recusa pela NOT NULL), categoria e booleanos da situação PRESUMIDOS (valor_presumido em cada linha que chega ao
 destino), iniciativa e consequências legais do tipo de rescisão pelo de-para de valores do código RAIS, motivo de
 desligamento pelo de-para oficial da tabela 19 do eSocial (código ausente do catálogo: catalogo_codigo_inexistente, a
-linha grava com NULL). As tabelas descartadas entram na imagem para provar que nada delas é gravado.
-REQUER a L5-07: a condição do colaborador grava no mesmo cadastro (código único). Enquanto a L5-07 gravar o número da
+linha grava com NULL). REQUER a L5-07: a condição do colaborador grava no mesmo cadastro (código único). Enquanto a L5-07 gravar o número da
 condição sem prefixo de domínio, a situação '1' choca com a condição 1 (restricao_destino_1062); com o prefixo, não
 choca. O esperado lê a declaração da L5-07 para saber qual vale.
 """
@@ -62,46 +59,34 @@ PREPARO_DESTINO = (
     " SELECT id, c, 'Motivo falso', UTC_TIMESTAMP(3) FROM tabela_esocial,"
     " (SELECT '02' AS c UNION ALL SELECT '04' UNION ALL SELECT '06') x WHERE codigo_oficial = '19';\n")
 
-# descarte de produto pedido ao integrador (declarado/sem_carga.tsv, situacao=descarte): {tabela: (causa, motivo)}
-_CHK = "lista de domínio fixa do produto (CHECK de %s): a linha não é registro do cliente; o consumidor na origem (%s) está vazio e fora do mapa; quando um cliente o trouxer com linhas, o lote dele declara o de-para de valores 'id -> valor do CHECK' pela descrição (ref encadeada à lista, que continua legível na origem), com par só por evidência e o resto presumido (=~, valor_presumido) (F4-decisoes-destino.md, L5-09)"
-_COD = 'código oficial guardado como código simples no consumidor (%s), sem tabela de catálogo no modelo: a lista é a pública da fonte legal, não registro do cliente (F4-decisoes-destino.md, L5-09)'
-SEM_CARGA = {
-    "FPMOTESTABILI": ("mecanismo_do_produto", _CHK % ("estabilidade_colaborador.motivo", "FPESTABIFUNC")),
-    "FPMTCANCELAVI": ("mecanismo_do_produto", _CHK % ("aviso_previo.motivo_cancelamento", "FPRESCISAO_FPMTCANCELAVI")),
-    "FPNIVELESTAG": ("mecanismo_do_produto", _CHK % ("estagio_colaborador.nivel", "FPFUNC e FPFUNCVIG")),
-    "FPPROCESSOTEOR": ("mecanismo_do_produto", _CHK % ("processo_trabalhista.teor_decisao", "FPFUNC_FPROCESSO")),
-    "FPTEMPO_RESID_TRAB_IMIGRANTE": ("mecanismo_do_produto",
-                                     _CHK % ("estrangeiro_colaborador.prazo_residencia", "FPTRABALHADOR_IMIGRANTE")),
-    "FPTIPOAVISO": ("mecanismo_do_produto", _CHK % ("aviso_previo.iniciativa e reducao_jornada", "nenhum")),
-    "FPTIPO_CONTRATO": ("mecanismo_do_produto", _CHK % ("vinculo_trabalho.tipo_contrato", "FPFUNC e FPFUNCPREREG")),
-    "FPTPACIDTRANS": ("mecanismo_do_produto", _CHK % ("comunicacao_acidente.tipo_acidente_transito", "FPAFAST")),
-    "FPTPAVISORESC": ("mecanismo_do_produto", _CHK % ("aviso_previo.cumprimento", "nenhum")),
-    "FPTPDEFICIEN": ("mecanismo_do_produto", _CHK % ("deficiencia_colaborador.tipo", "FPTPDEFICIEN_FPFUNC")),
-    "FPTPACESSORIA": ("mecanismo_do_produto", _CHK % ("assessoria_externa.tipo",
-                                                       "FPRESPCADREG_FPTPACESSORIA e FPPROCESSO; FPESOCEVENTO e FPEMPSOFTWARE são de outras fatias")),
-    "FPRESC_RAIS": ("mecanismo_do_produto", _COD % "tipo_rescisao.codigo_rais, declarado nesta fatia; a iniciativa e as consequências legais saem dele por de-para de valores"),
-    "FPRESC_CAGED": ("mecanismo_do_produto", _COD % "tipo_rescisao.codigo_caged, declarado nesta fatia"),
-    "FPRESC_SEFIP": ("mecanismo_do_produto", _COD % "tipo_rescisao.codigo_sefip, declarado nesta fatia"),
-    "FPSAQUE": ("mecanismo_do_produto", _COD % "tipo_rescisao.codigo_saque_fgts e rescisao.codigo_saque_fgts"),
-    "FPOCOR_SEFIP": ("mecanismo_do_produto", _COD % "risco_funcao.codigo_ocorrencia_sefip, VARCHAR(2); o consumidor com linhas é TBPROFIS.ID_FPOCOR_SEFIP, do lote do profissional"),
-    "FPPROCTRAB_ESOCIAL_CR": ("mecanismo_do_produto", _COD % "processo_trabalhista.codigo_receita, VARCHAR(6); alíquota e aplicabilidade são as da tabela pública da Receita, não do cliente; consumidores FPPROCTRAB_ESOCIAL_PCR e _DCR vazios e fora do mapa"),
-    "FPRESC_CAUSA": ("duplicado", "lista local de causas de demissão que repete o que o código RAIS do tipo de rescisão já diz de forma legal (iniciativa e justa causa, RAIS 10); o modelo não tem coluna para ela (F4-decisoes-destino.md, L5-09)"),
-}
-
-# BLOQUEADA com causa (declarado/sem_carga.tsv, situacao=bloqueada): depende de algo que ainda não existe
-BLOQUEADAS = {
-    "FPMOTDESLIG": ("catalogo_oficial_faltante", "tabela 19 do eSocial (motivo de desligamento, com vigências): pela regra 7 só o carregador oficial versionado grava codigo_esocial, e ele não existe em catalogos/carregadores (pedido em saida/L5-09.json); até lá o de-para codigo_esocial:19 de tipo_rescisao deixa o motivo NULL com pendência. Nunca carregar da origem"),
-}
+# rodada 5, conferidor (ADR 0006, itens 1 e 4; F4-decisoes-destino.md): as 19 listas entram inteiras como listas
+# do hospital, ativas: uma definição 'rh.lista.<nome>' (parametro_definicao, tipo lista, módulo 'migracao') e uma
+# opção por linha (parametro_opcao: valor = código, rótulo = descrição ou o código, ordem = código, origem migracao)
+SEM_CARGA = {}
+BLOQUEADAS = {}
 
 SIT, TR = "FPSIT_FUNC", "FPTIPORESC"
 
-# listas de códigos oficiais e de domínio (descarte de produto): (tabela, nº de colunas, chave texto?)
-DESCARTADAS = [("FPMOTESTABILI", 2, False), ("FPMTCANCELAVI", 2, False), ("FPNIVELESTAG", 2, False),
-               ("FPOCOR_SEFIP", 2, False), ("FPPROCESSOTEOR", 2, False), ("FPRESC_CAGED", 2, False),
-               ("FPRESC_CAUSA", 2, False), ("FPRESC_RAIS", 2, False), ("FPRESC_SEFIP", 2, True),
-               ("FPSAQUE", 2, True), ("FPTEMPO_RESID_TRAB_IMIGRANTE", 2, False), ("FPTIPOAVISO", 2, False),
-               ("FPTIPO_CONTRATO", 2, False), ("FPTPACESSORIA", 2, False), ("FPTPACIDTRANS", 2, False),
-               ("FPTPAVISORESC", 2, False), ("FPTPDEFICIEN", 2, False)]
+# listas (tabela, nº de colunas, chave texto?)
+LISTAS = [("FPMOTESTABILI", 2, False), ("FPMTCANCELAVI", 2, False), ("FPNIVELESTAG", 2, False),
+          ("FPOCOR_SEFIP", 2, False), ("FPPROCESSOTEOR", 2, False), ("FPRESC_CAGED", 2, False),
+          ("FPRESC_CAUSA", 2, False), ("FPRESC_RAIS", 2, False), ("FPRESC_SEFIP", 2, True),
+          ("FPSAQUE", 2, True), ("FPTEMPO_RESID_TRAB_IMIGRANTE", 2, False), ("FPTIPOAVISO", 2, False),
+          ("FPTIPO_CONTRATO", 2, False), ("FPTPACESSORIA", 2, False), ("FPTPACIDTRANS", 2, False),
+          ("FPTPAVISORESC", 2, False), ("FPTPDEFICIEN", 2, False)]
+DESCARTADAS = LISTAS          # nome antigo, mantido para quem importa
+TODAS_LISTAS = [t for t, _, _ in LISTAS] + ["FPMOTDESLIG", "FPPROCTRAB_ESOCIAL_CR"]
+# primeira lista na ordem da carga: cria o módulo 'migracao' (as outras o adotam), salvo se a L5-07 já o criar
+PRIMEIRA_LISTA = "FPMOTDESLIG"
+
+
+def _modulo_na_l507():
+    arq = Path(__file__).resolve().parents[2] / "mapa" / "declarado" / "colunas.d" / "L5-07.tsv"
+    try:
+        return any(ln.split("\t")[2:3] == ["modulo_sistema.codigo"]
+                   for ln in arq.read_text(encoding="utf-8").splitlines())
+    except OSError:
+        return False
 
 
 def condicao_sem_prefixo():
@@ -115,6 +100,9 @@ def condicao_sem_prefixo():
     except OSError:
         pass
     return False
+
+
+ESPERADO_SEFIP_I1 = {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}   # código não numérico: ordem NULL, recusa visível
 
 
 def linhas(r, ins):
@@ -145,8 +133,13 @@ def linhas(r, ins):
         ins("FPMOTDESLIG", ["0%d" % i, ("Motivo falso %d\r\nlinha dois" % i).encode("cp1252"),
                             datetime.date(2020, 1, i), None])
         ins("FPPROCTRAB_ESOCIAL_CR", [i, "10%02d01" % i, "Receita falsa %d" % i, "%d.50" % i, None, "S", "N", None, "S"])
-        for t, _, txt in DESCARTADAS:
+        for t, _, txt in LISTAS:
             ins(t, ["%02d" % i if txt else 10 + i, "Falso %d" % i])
+    # anomalias das listas
+    ins("FPMOTESTABILI", [14, None])                             # sem descrição: o rótulo é o código
+    ins("FPTPAVISORESC", [14, "Forma de cumprimento " + "muito longa " * 15])   # rótulo resumido a 150
+    ins("FPRESC_SEFIP", ["I1", "Código não numérico"])           # ordem pelo código: recusa visível até #seq:*
+    ins("FPPROCTRAB_ESOCIAL_CR", [4, "109901", None, None, None, None, None, None, None])  # rótulo = código de receita
     sit_gravados, sit_pend = 5, {"codigo_colisao_caixa": 2, "restricao_destino_1048": 2}
     if condicao_sem_prefixo():
         sit_pend["restricao_destino_1062"] = 1
@@ -154,7 +147,16 @@ def linhas(r, ins):
         sit_gravados += 1
     # toda linha fora da colisão de caixa passa pelas 3 presunções (categoria e 2 booleanos): uma pendência por coluna
     sit_pend["valor_presumido"] = 8 * 3
+    esp = {}
+    mod_previo = _modulo_na_l507()
+    for t in TODAS_LISTAS:
+        n = 4 if t in ("FPMOTESTABILI", "FPTPAVISORESC", "FPPROCTRAB_ESOCIAL_CR") else 3
+        pend = {"adotado_existente": (n - 1) + n - (0 if mod_previo or t != PRIMEIRA_LISTA else 1)}
+        esp[t] = {"gravados": n, "pendencias": pend}
+    esp["FPRESC_SEFIP"]["pendencias"].update(ESPERADO_SEFIP_I1)
+    esp["FPTPAVISORESC"]["pendencias"]["texto_resumido"] = 1
     return {
+        **esp,
         SIT: {"gravados": sit_gravados, "pendencias": sit_pend},
         TR: {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1264": 1,
                                            "valor_fora_do_dominio": 8, "catalogo_codigo_inexistente": 1}},

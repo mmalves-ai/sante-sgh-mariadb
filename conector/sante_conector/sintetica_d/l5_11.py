@@ -9,6 +9,7 @@ destino NOT NULL (restricao_destino_1048), limite semanal fora de 1..44, inclusi
 valor_fora_do_dominio), espaços e quebra interna na descrição (texto preserva; texto_nome colapsa), acentos CP1252,
 chaves com lacunas e classificador sem fonte gravado como literal presumido (valor_presumido, uma por coluna presumida em cada linha lida, também na recusada).
 """
+import datetime
 
 DDL = """
 CREATE TABLE FPVACINA (COD_VAC SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(50));
@@ -20,11 +21,42 @@ CREATE TABLE POTPTRABFOLGA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(150) 
 CREATE TABLE POTPHORA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(45) NOT NULL);
 CREATE TABLE PETPINTERVALO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(15) NOT NULL);
 CREATE TABLE POREPHOMOLOGADO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL);
+CREATE TABLE PODIA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30));
+CREATE TABLE POTPINIBANCO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30));
+CREATE TABLE POPROGSIT (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL);
+CREATE TABLE POPROSITUACAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
+CREATE TABLE POBANCOHRTP (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
+CREATE TABLE PETP_INTEGR_EVENTO (COD_INTEGR_EVENTO SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(50));
+CREATE TABLE PEPARAM (COD_EMP INTEGER NOT NULL PRIMARY KEY, DESC_MIN_FALTA_MARC VARCHAR(1), QTD_MIN_DESC INTEGER,
+  UTILIZA_BHRS VARCHAR(1), ABATER_ATR_HR_EXT VARCHAR(1), QTD_MIN_ATR INTEGER, QTD_MIN_HR_EXT INTEGER,
+  NRO_PORTA_COM SMALLINT, MIN_MARC_ADT_HR_EXT VARCHAR(1), MSG_ANIVER VARCHAR(40), INT_FOLHA_PGTO VARCHAR(1),
+  CAMIN_FOTO VARCHAR(150), INT_ENT_MARC INTEGER, EDIT_REL VARCHAR(250), POL_MARCACAO VARCHAR(1), PER_INICIAL DATE,
+  PER_FINAL DATE, HORA_NOTURNO_INICIAL TIMESTAMP, HORA_NOTURNO_FINAL TIMESTAMP, TP_TOLERANCIA CHAR(1),
+  GERAR_EXTRA_FERIADO_NORMAL CHAR(1), GERAR_EXTRA_FERIADO_ESCALONADO CHAR(1), GERAR_EXTRA_FERIADO_MEIO_PER CHAR(1),
+  GERAR_EXTRA_INTER_SEM_REG_ESC CHAR(1));
+CREATE TABLE FPTP_SAL (COD_TPSAL SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50), COD_ESOCIAL SMALLINT);
+CREATE TABLE FPTP_TREINAMENTO_CAPACITACAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(150));
+CREATE TABLE POTPJORNADA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20));
+CREATE TABLE STEMITENTE (COD_EMIT SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50));
 CREATE TABLE FPVALE (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(45) NOT NULL, ID_FPTPVALE SMALLINT NOT NULL);
 """
 
+# rodada 5 (correção): PEPARAM fica BLOQUEADA até o produto ter as definições do ponto (pedido em
+# saida/L5-11.json); a sintética não cria definição que o produto não tem
+PREPARO_DESTINO = """
+CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);
+INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);
+"""
+
+
+PROVADAS = {'PODIA': [(1, 'Domingo'), (2, 'Segunda'), (3, 'Terça'), (4, 'Quarta'), (5, 'Quinta'), (6, 'Sexta'), (7, 'Sábado'), (8, 'Feriado')], 'POTPINIBANCO': [(1, 'Admissão'), (2, 'Data fixa'), (3, 'Competência'), (4, 'Adesão')]}
+
 
 def linhas(r, ins):
+    # listas fixas com prova derivado (provas.d): a mesma lista conhecida; não carregadas, só conferidas
+    for t in PROVADAS:
+        for n, rot in PROVADAS[t]:
+            ins(t, [n, rot])
     # vacina: 7 linhas, a 4 sem descrição (NOT NULL no destino); a 2 com espaço e quebra internos preservados
     for i in range(1, 8):
         d = None if i == 4 else ("Vacina  exemplo\n%d ção" % i if i == 2 else "Vacina exemplo %d" % i)
@@ -53,7 +85,39 @@ def linhas(r, ins):
     # vale: códigos 1 e 2 iguais aos do tipo (FPTPVALE grava '1', '2' em beneficio): o prefixo v evita a colisão
     for i, tp in [(1, 1), (2, 1), (3, 2)]:
         ins("FPVALE", [i, "Vale  exemplo %d" % i, tp])
+    # rodada 5 (ADR 0006): listas fixas sem prova possível entram como listas do hospital (parametro_opcao sob a
+    # definição migracao.<lista>, módulo migracao criado pela 1.ª linha e adotado depois: adotado_existente, baixa)
+    for i, n in [(1, "Programada ex"), (2, "Liberada ex"), (3, "Fechada ex"), (4, "Cancelada ex"), (5, "Refeita ex")]:
+        ins("POPROGSIT", [i, n])
+    for i, n in [(1, "Aberta ex"), (2, "Calculada ex"), (3, "Fechada ex")]:
+        ins("POPROSITUACAO", [i, n])
+    for i, n in [(1, "Banco  ex  um"), (2, "Banco ex dois"), (3, "Banco ex três"), (4, "Banco ex quatro")]:
+        ins("POBANCOHRTP", [i, n])
+    for i in (1, 2, 3, 5, 8):          # o 8 sem descrição: o rótulo é o próprio código
+        ins("PETP_INTEGR_EVENTO", [i, None if i == 8 else "Evento integração ex %d" % i])
+    # rodada 5 (conferidor, ADR 0006, 4): listas legais do eSocial como listas do hospital; código local (9x) ativo
+    for i, n, e in [(1, "Mensal ex", 1), (2, "Horista ex", 2), (97, "Local ex", None)]:
+        ins("FPTP_SAL", [i, n, e])
+    for i in (1, 2, 3):
+        ins("FPTP_TREINAMENTO_CAPACITACAO", [i, None if i == 3 else "Treinamento ex %d" % i])
+    for i in (1, 2, 9):
+        ins("POTPJORNADA", [i, "Jornada ex %d" % i])
+    for i in (1, 2):
+        ins("STEMITENTE", [i, "Emitente ex %d" % i])
+    # configuração do ponto da empresa: uma linha com todas as colunas (retrato JSON numa definição por empresa)
+    ins("PEPARAM", [1, "S", 10, "S", "N", 5, 10, 1, "N", "Feliz aniversário ex", "S", "C:\\fotos_ex", 30, "editor_ex",
+                    "1", datetime.date(2026, 1, 1), datetime.date(2026, 1, 31), datetime.datetime(1899, 12, 30, 22, 0),
+                    datetime.datetime(1899, 12, 30, 5, 0), "M", "S", "N", "N", "S"])
     return {
+        "POPROGSIT": {"gravados": 5, "pendencias": {"adotado_existente": 9}},
+        "POPROSITUACAO": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+        "POBANCOHRTP": {"gravados": 4, "pendencias": {"adotado_existente": 7}},
+        "PETP_INTEGR_EVENTO": {"gravados": 5, "pendencias": {"adotado_existente": 9}},
+        "FPTP_SAL": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
+        "FPTP_TREINAMENTO_CAPACITACAO": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+        "POTPJORNADA": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+        "STEMITENTE": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+        "PEPARAM": {"gravados": 1, "pendencias": {"adotado_existente": 1}},
         "FPVACINA": {"gravados": 6, "pendencias": {"restricao_destino_1048": 1}},
         "POTPCONTTEMP": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2}},
         "PEPERIOD_JUSTIF": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},

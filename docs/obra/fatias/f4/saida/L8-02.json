@@ -3,17 +3,20 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar o mapa: tools/obra/gerar_mapa_conector.py)",
    "mudanca": "acrescentar as arestas: RPINTEVE -> RPEVENTO (ref:RPEVENTO.COD), RPINTEVE -> TBITEDES (ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)), RPRPA -> TBPROFIS (ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS), SIORCAME -> TBCONVEN (ref:TBCONVEN), SIEXAORC -> SIORCAME (ref:SIORCAME(NOME,ATO)); motivo 'L8-02 cobertura: <ref> declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga'",
-   "motivo": "L8-02: na ordem atual o pai vem depois (RPEVENTO 638 > RPINTEVE 634; TBITEDES 854 > RPINTEVE; TBPROFIS 869 > RPRPA 643; TBCONVEN 712 > SIORCAME 648; SIORCAME 648 > SIEXAORC 647): a carga real recusa RPINTEVE, RPRPA e SIEXAORC inteiras e o orçamento perde a fonte pagadora. A imagem sintética só registra pai externo que vem antes e o esperado é o da ordem certa: até aplicar, conferir-fatia-f4.sh L8-02 FALHA nessas quatro tabelas (de propósito). Edição de arquivo compartilhado negada a esta fatia: o orquestrador aplica"
+   "motivo": "L8-02: na ordem atual o pai vem depois (RPEVENTO 638 > RPINTEVE 634; TBITEDES 854 > RPINTEVE; TBPROFIS 869 > RPRPA 643; TBCONVEN 712 > SIORCAME 648; SIORCAME 648 > SIEXAORC 647): a carga real recusa RPINTEVE, RPRPA e SIEXAORC inteiras e o orçamento perde a fonte pagadora. A imagem sintética só registra pai externo que vem antes e o esperado é o da ordem certa: até aplicar, conferir-fatia-f4.sh L8-02 FALHA nessas quatro tabelas (de propósito). Edição de arquivo compartilhado negada a esta fatia: o orquestrador aplica",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   },
   {
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
    "mudanca": "acrescentar (situacao descarte): RPPARAM mecanismo_do_produto ('linha única de parâmetros do RPA: definição é catálogo do produto, valor confirmado na implantação, como RIPARAM e PEPARAM; a numeração continua da série e do maior número dos RPAs migrados'); RPRPA_TBCBOPRO duplicado ('o RPA lê o profissional pela origem encadeada ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS'); RPLANEVE_TBCBOPRO duplicado ('o lançamento lê o profissional pela origem encadeada ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS: o CHECK de médico exige o profissional no INSERT'); TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD mecanismo_do_produto ('lista fixa de opções (id, nome) de uma regra de consistência do convênio: domínio do produto, regra_consistencia_lancamento.tipo_regra e opcao; a escolha de cada convênio entra pela coluna do cadastro do convênio (TBCONVEN) com de-para de valores para a opção')",
-   "motivo": "L8-02: descartes de produto da rodada de cobertura; a fatia já não declara coluna dessas tabelas (o verificador recusa tabela declarada e descartada). Edição negada a esta fatia: o orquestrador aplica"
+   "motivo": "L8-02: descartes de produto da rodada de cobertura; a fatia já não declara coluna dessas tabelas (o verificador recusa tabela declarada e descartada). Edição negada a esta fatia: o orquestrador aplica",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "db/migracoes/12_FAT/04_tabelas.sql (lancamento_repasse) — trilha F2.2",
    "mudanca": "modelo: favorecido_repasse_id NULL permitido no lançamento migrado (CHECK origem = 'migracao' OR favorecido_repasse_id IS NOT NULL); o favorecido da origem fica em tipo_favorecido (de-para de RPLANEVE.TIPO = código de RPTIPOPRESTADOR) e profissional_id (ref:RPLANEVE_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS); justificativa literal da migração para o tipo ajuste (CHECK ck_lancamento_repasse_ajuste)",
-   "motivo": "L8-02: nenhuma tabela da origem carrega favorecido_repasse antes do lançamento (a regra de favorecido é do produto); sem a mudança RPLANEVE (8675), RPLANEVE_COMPOSICAOBASE e RPLANRPA ficam fora (coluna_obrigatoria_sem_fonte). Decisão registrada em F4-decisoes-destino.md"
+   "motivo": "L8-02: nenhuma tabela da origem carrega favorecido_repasse antes do lançamento (a regra de favorecido é do produto); sem a mudança RPLANEVE (8675), RPLANEVE_COMPOSICAOBASE e RPLANRPA ficam fora (coluna_obrigatoria_sem_fonte). Decisão registrada em F4-decisoes-destino.md",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
@@ -23,7 +26,8 @@
   {
    "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (equivalencia_item_fonte_pagadora) — trilha F2.2",
    "mudanca": "modelo: alvo exame_id (FK exame) na equivalência por fonte pagadora, CHECK de alvo único entre item_faturavel_id, grupo_faturamento_id e exame_id; tipo_conta pelo TIPO_CTA. Até lá SIREFCON fica fora",
-   "motivo": "L8-02: SIREFCON (27081) dá o código de cobrança do exame (ATO, EXAME) por convênio (CONV) e tipo de conta; o exame não tem caminho pela origem até o item faturável (a referência só segue a origem) e exame_equivalencia_codigo não tem fonte pagadora. Decisão registrada em F4-decisoes-destino.md"
+   "motivo": "L8-02: SIREFCON (27081) dá o código de cobrança do exame (ATO, EXAME) por convênio (CONV) e tipo de conta; o exame não tem caminho pela origem até o item faturável (a referência só segue a origem) e exame_equivalencia_codigo não tem fonte pagadora. Decisão registrada em F4-decisoes-destino.md",
+   "atendido": "rodada 3: o modelo exame_id deixa de ser necessário (SIREFCON copia o item faturável do exame); SIREFCON segue BLOQUEADA pelo pedido do vínculo exame -> item faturável à L7-03 (revisão r3)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
@@ -43,7 +47,8 @@
   {
    "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (evento_repasse) — trilha F2.2",
    "mudanca": "modelo: evento_repasse.tipo_deducao_irrf_id (FK tipo_deducao_irrf) e tipo_rendimento_isento_id (FK tipo_rendimento_isento), opcionais",
-   "motivo": "L8-02: RPEVENTO.ID_RPDEDUTIVEL e ID_RPRENDISENTO ligam o evento ao tipo de dedução e ao rendimento isento; o modelo só liga esses tipos à natureza de rendimento, e o vínculo do evento se perde. Com a coluna, declarar ref:RPDEDUTIVEL e ref:RPRENDISENTO"
+   "motivo": "L8-02: RPEVENTO.ID_RPDEDUTIVEL e ID_RPRENDISENTO ligam o evento ao tipo de dedução e ao rendimento isento; o modelo só liga esses tipos à natureza de rendimento, e o vínculo do evento se perde. Com a coluna, declarar ref:RPDEDUTIVEL e ref:RPRENDISENTO",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
@@ -59,6 +64,107 @@
    "arquivo": "tools/obra/conferir-fatia-f4.sh, tools/obra/cobertura_conector.py, conector/sante_conector/mapa.py (verificador)",
    "mudanca": "(a) o conferir-fatia roda `cobertura_conector.py --fatia <F> --falhar-se-bloqueada`; (b) a cobertura só conta CARREGA quando todo pai de uma ref: declarada vem antes na ordem (L3 conta como antes); (c) o verificador recusa coluna da origem sem declaração (com destino ou com motivo) em tabela carregada",
    "motivo": "L8-02 (revisão): o 'ok' da autoconferência não provava cobertura nem ordem; a fatia já testa (c) para si em test_toda_coluna_da_origem_declarada_nas_carregadas"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv",
+   "mudanca": "tirar as linhas de TBCOOPER (50 sem destino), #TBCOOPER (33 comentadas) e TBINDPRO (4 sem destino): o índice da rodada 3 dá essas tabelas à L8-02, que as declara agora em colunas.d/L8-02.tsv; e ajustar conector/testes/test_l8_03.py (BLOQUEADAS sem TBCOOPER e TBINDPRO; test_cooperativa_pronta_e_comentada removido) e o docstring de sintetica_d/l8_03.py",
+   "motivo": "L8-02 r3: edição de arquivo de outra fatia negada a esta fatia; até aplicar, o verificador acusa 'tabela declarada em mais de um arquivo' para TBCOOPER e TBINDPRO (as declarações da L8-02 valem: as linhas da L8-03 não têm destino)",
+   "atendido": "aplicado pela L8-03 na rodada 3 (linhas de TBCOOPER e TBINDPRO fora de colunas.d/L8-03.tsv); verificador sem conflito"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "conector/testes/test_l8_01.py + sintetica_d/l8_01.py",
+   "mudanca": "FCPORANE sai das BLOQUEADAS e da imagem da L8-01 (declarada agora na L8-02, índice da rodada 3); a linha '#--- FCPORANE: bloqueada' de colunas.d/L8-01.tsv pode sair",
+   "motivo": "L8-02 r3: com FCPORANE declarada, o plano da L8-01 passa a incluí-la (test_so_as_carregaveis_entram_com_o_destino_certo)"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar o mapa)",
+   "mudanca": "acrescentar as arestas SIREFCON -> TBCONVEN, TBINDPRO -> TBCONVEN e TBINDPRO -> TBPROCTO; motivo 'L8-02 r3: referência declarada sem FK na origem: o pai vinha depois do filho na ordem de carga'",
+   "motivo": "L8-02 r3: na ordem atual TBCONVEN (690) e TBPROCTO (658) vêm depois de SIREFCON (629) e TBINDPRO (648): a carga real recusaria essas linhas (pai_inexistente). A imagem sintética registra os pais como já carregados; o teste da fatia exige este pedido enquanto a ordem não mudar",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "conector/sante_conector/sentinela.py (_digitos)",
+   "mudanca": "documento (cnpj, cpf, cpf_cnpj, inteiro_zeros_esquerda) em coluna DOUBLE: float integral vira inteiro antes de tirar os dígitos (hoje str(float) traz '.0' e todo CNPJ em DOUBLE vira documento_invalido)",
+   "motivo": "L8-02 r3: TBCOOPER.CGC é DOUBLE na origem (como TBHOSPIT, TBEMPHOS e outras): sem a correção a pessoa jurídica da cooperativa entra sem CNPJ e a adoção pelo CNPJ não acontece. A imagem sintética já traz o CGC em DOUBLE e o esperado muda sozinho quando a regra aceitar. REVISÃO r3: o esperado da imagem sintética é só o correto (adoção pelo CNPJ, 1062 da repetida): até aplicar, a conciliação de TBCOOPER FALHA de propósito",
+   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "db/migracoes (pessoa_juridica) — trilha F2.2",
+   "mudanca": "modelo: ck_pessoa_juridica_cnpj com cnpj NULL deixa passar empresa nacional sem CNPJ (NULL REGEXP dá NULL e o CHECK aceita); trocar por (estrangeira AND cnpj IS NULL) OR (NOT estrangeira AND cnpj IS NOT NULL AND cnpj REGEXP '^[0-9]{14}$'). Decisão (melhor prática, F4-decisoes): empresa nacional sem CNPJ NÃO é permitida; não afrouxar",
+   "motivo": "L8-02 r3: medido na imagem sintética: cooperativa sem CGC grava a pessoa jurídica sem CNPJ. REVISÃO r3: o esperado da imagem sintética recusa a cooperativa sem CNPJ (restricao_destino_4025): até aplicar, a conciliação de TBCOOPER FALHA de propósito",
+   "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-03.tsv (SITABPRO) / decisão com a L8-03",
+   "mudanca": "vínculo exame -> item faturável (exame.item_faturavel_id): SITABPRO.CODAMB é o procedimento do exame; o item faturável vem do procedimento (TBPROCTO, principal item_faturavel) ou de um item por exame criado na carga do exame (destino secundário antes, adotar:codigo)",
+   "motivo": "L8-02 r3 (revisão): SIREFCON (27081, código de cobrança do exame por fonte pagadora) copia o item do exame; nenhuma declaração preenche exame.item_faturavel_id, então SIREFCON está BLOQUEADA (sem_carga.tsv, pai_nao_carregado:SITABPRO) com a declaração pronta COMENTADA em colunas.d/L8-02.tsv. Com o vínculo: descomentar as linhas #SIREFCON, tirar SIREFCON do sem_carga.tsv, voltar o esperado e acrescentar a dependência SIREFCON -> SITABPRO (ou TBPROCTO, conforme o caminho do vínculo). Atenção: SITABPRO.CODAMB como código de TBPROCTO repete entre tabelas de honorários (pai_ambiguo)",
+   "atendido": "r4 (fatia): SIREFCON carrega com o item do procedimento do exame (ref:SITABPRO(ATO,EXAME)>CODAMB>TBPROCTO.COD_PROCEDIMENTO>min:ID), sem depender de exame.item_faturavel_id"
+  },
+  {
+   "rodada": 3,
+   "arquivo": "docs/obra/fatias/f4 (índice) / L8-03",
+   "mudanca": "TBINDPRO só carrega quando TBPROCTO (L8-03) carregar como item_faturavel principal: a cobertura marca TBINDPRO pai_nao_carregado:TBPROCTO até lá",
+   "motivo": "L8-02 r3: valor_indice_item.item_faturavel_id NOT NULL por ref:TBPROCTO; não há outra origem do item do procedimento",
+   "atendido": "TBPROCTO carrega na rodada 3 (L8-03): TBINDPRO deixou de ser pai_nao_carregado"
+  },
+  {
+   "rodada": 3,
+   "revisao": true,
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (TBCONVEN) + valores.d/L5-06.tsv",
+   "mudanca": "declarar as 10 colunas de regra do convênio para regra_consistencia_lancamento (fonte_pagadora = a própria linha, desdobrar uma linha por regra, tipo_regra fixo por coluna, opcao por de-para de valores do id da lista -> código da opção, com os nomes lidos das listas na imagem de referência): ID_TBCONVCONSMAT -> material_obrigatorio; ID_TBCONSBRASINATIVO -> item_referencia_inativo; ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH -> data_base_calculo (um por grupo, ver pedido de modelo); ID_TBCONVMEDREQATD -> requisitante_obrigatorio; ID_TBCONVCOBTXPA -> taxa_porte_anestesico; ID_TBCONVPERCTAPAC -> percentual_taxa_pacote. Depois, o orquestrador volta TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD e TBCONVPERCTAPAC a descarte (mecanismo_do_produto) em sem_carga.tsv",
+   "motivo": "L8-02 r3 (revisão do achado): as seis listas só são descartáveis se a escolha de cada fonte pagadora for gravada; hoje nenhuma declaração grava regra_consistencia_lancamento e a regra de faturamento por convênio se perderia. As seis ficam BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN) até lá",
+   "atendido": "conferidor r4 (tentativa 2)"
+  },
+  {
+   "rodada": 3,
+   "revisao": true,
+   "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (regra_consistencia_lancamento) — trilha F2.2",
+   "mudanca": "modelo: coluna grupo_item VARCHAR(20) NULL (CHECK: clinico, cirurgico, matmed, filme, diaria_taxa; nulo = todos) incluída na chave única (fonte_pagadora_id, tipo_regra, categoria_atendimento_id, grupo_item)",
+   "motivo": "L8-02 r3 (revisão): TBCONVEN tem cinco colunas da mesma regra (data base do cálculo do valor) por grupo de item (CLI, CIR, MATMED, FILME, DTH); sem o grupo, as cinco colidem na chave única e quatro se perdem",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+  },
+  {
+   "rodada": 3,
+   "revisao": true,
+   "arquivo": "db/migracoes/12_FAT/02_tabelas.sql (cooperativa_medica) — trilha F2.2",
+   "mudanca": "modelo: percentual_repasse_consulta, percentual_repasse_procedimento, percentual_repasse_exame, percentual_repasse_internacao DECIMAL(7,4) NULL, no CHECK de faixa 0 a 100 de ck_cooperativa_medica_aliquotas; depois a L8-02 declara TBCOOPER P_R_CO/P_R_PR/P_R_EX/P_R_IN (faixa:0,100)",
+   "motivo": "L8-02 r3 (revisão do achado): percentual de repasse da cooperativa por tipo, dado financeiro em uso; TBREPGER (L8-06) é outro cadastro (regras próprias, COOP só como critério) e não repete esses valores; regra_repasse exige evento_repasse_id sem fonte em TBCOOPER, então o lugar certo é o cadastro da cooperativa. Não é descarte: até o modelo, as colunas ficam sem destino com motivo 'aguarda modelo'",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: declarar TBCOOPER P_R_CO/P_R_PR/P_R_EX/P_R_IN"
+  },
+  {
+   "rodada": 3,
+   "revisao": true,
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBITEATE) + valores.d/L8-03.tsv",
+   "mudanca": "TBITEATE.TAB -> tipo_atendimento_tabela.padrao por ref:TBCTRTAT>NOME com depara=valores (os 3 nomes da lista na imagem de referência -> sus, tuss, presencial, proprio; sem par: valor_fora_do_dominio e o padrão), no lugar do literal presumido =~proprio; depois o orquestrador volta TBCTRTAT a descarte (mecanismo_do_produto) em sem_carga.tsv",
+   "motivo": "L8-02 r3 (revisão do achado): TAB é NOT NULL na origem e diz a tabela (SUS, TUSS, presencial) de cada tipo; trocar o fato por uma presunção grava tipos SUS e TUSS como próprios. TBCTRTAT fica BLOQUEADA até lá",
+   "atendido": "r4 (fatia L8-03): TAB por ref:TBCTRTAT>NOME com de-para de valores; TBCTRTAT voltou a descarte (mecanismo_do_produto)"
+  },
+  {
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (integrador; mesmo mecanismo do pedido 4 do L8-03.json)",
+   "mudanca": "chave composta com componente encadeado ref:T(ref:U>X,C) (ou T.(K1,K2)=(ref:U>X,C)); com ele SIREFCON.EXAME -> item pelo procedimento na tabela de honorários do PRÓPRIO convênio: ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(ref:TBCONVEN>THM,ref:SITABPRO(ATO,EXAME)>CODAMB), tirando o >min:ID",
+   "motivo": "revisão adversarial r4: hoje o código repetido em várias tabelas de honorários escolhe a menor chave (escolha_pelo_menor, baixa) e pode ligar o código de cobrança ao item de uma tabela que o convênio não usa. Enquanto o mecanismo não vem, a escolha fica visível e registrada em F4-decisoes-destino.md"
+  },
+  {
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06; atribuir pelo orquestrador)",
+   "mudanca": "pedido 19 REAFIRMADO: declarar em TBCONVEN as colunas ID_TBCONVMEDREQATD, ID_TBCONVCOBTXPA, ID_TBCONVCONSMAT, ID_TBCONVPERCTAPAC, ID_TBCONSBRASINATIVO e ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH com destino em regra_consistencia_lancamento (de-para de valores das listas)",
+   "motivo": "as 6 listas (TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC) voltaram a BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN): o descarte da r4 escondia que a escolha de cada convênio não carrega. test_l8_02 aceita o descarte sozinho quando essas colunas estiverem declaradas com destino",
+   "atendido": "conferidor r4 (tentativa 2)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py _provas + declarado/provas.tsv (motor/integrador; prova da L8-05)",
+   "mudanca": "melhoria opcional (não bloqueia; a conferência da L8-02 dá ok): a prova 'derivado' de RPRPA_TBCBOPRO excluir do lado da origem as linhas cujo RPA (ID_RPRPA) foi RECUSADO na carga (a recusa já é pendência própria do RPA), por ex. coluna nova em provas.tsv 'dono=RPRPA:ID_RPRPA'; com isso a imagem da L8-02 volta a exercitar o CHECK (4025) e o 1062 do rpa com a associação presente",
+   "motivo": "r6 (corrigido na fatia): a inscrição (TBCBOPRO) agora grava de verdade na conferência (UF e conselho do catálogo no PREPARO_DESTINO) e só o RPA gravado guarda a associação na origem; a prova confere 1 de 1. Sem (a), um RPA recusado com associação na origem também derruba a prova (alta, visível) além da pendência do RPA",
+   "rodada": 6
   }
  ]
 }

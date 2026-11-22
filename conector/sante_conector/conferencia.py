@@ -28,10 +28,42 @@ def _sem_fk(create):
     return re.sub(r",\s*\n(\s*\))", r"\n\1", txt)
 
 
-def ddl_destino(plano, raiz=RAIZ_APP):
-    """CREATE TABLE (sem FK) das tabelas de destino do plano e dos catálogos oficiais que ele usa, mais os ADD COLUMN."""
+ESPELHO_CONSULTA = {"brasindice": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
+                    "simpro": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
+                    "cbhpm": ["tabela_referencia_procedimento", "tabela_referencia_procedimento_item"],
+                    "cep": ["logradouro_cep"]}
+
+
+def _tabelas_cod(x, saida):
+    """Tabelas consultadas por `cod:` (também dentro de `#item`/`#rotulo`) em qualquer nível da coluna planejada."""
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k == "cod" and isinstance(v, (tuple, list)) and v and isinstance(v[0], str):
+                saida.append(v[0])
+            else:
+                _tabelas_cod(v, saida)
+    elif isinstance(x, (list, tuple)):
+        for v in x:
+            _tabelas_cod(v, saida)
+
+
+def ddl_destino(plano, raiz=RAIZ_APP, preparo="", provas=()):
+    """CREATE TABLE (sem FK) das tabelas de destino do plano, dos catálogos oficiais que ele usa, das tabelas que um
+    `cod:` consulta e das que o `PREPARO_DESTINO` das fatias usa (conferidor r5), mais os ADD COLUMN. `provas`: o SQL
+    das provas de "não copiar" das tabelas presentes, cujas tabelas do destino (FROM/JOIN e `TABLE_NAME = '...'` do
+    CHECK consultado) também são criadas (rodada 6: sem elas a prova dava tudo "faltando" ou nem rodava)."""
     ddl = mapa.ler_ddl(raiz)
     alvo = []
+    # a tabela que o próprio preparo cria (CREATE TABLE) fica com ele
+    criadas = set(re.findall(r"(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?", preparo or ""))
+    for p in plano:
+        for dt in p["destinos"]:
+            _tabelas_cod(p["colunas"][dt], alvo)
+    alvo += [t for t in re.findall(r"(?i)\b(?:INSERT\s+(?:IGNORE\s+)?INTO|UPDATE|FROM|JOIN)\s+`?(\w+)`?", preparo or "")
+             if t in ddl and t not in criadas]
+    for sql in provas:
+        alvo += [t for t in re.findall(r"(?i)\b(?:FROM|JOIN)\s+`?(\w+)`?(?!\s*\.)", sql) if t in ddl]
+        alvo += [t for t in re.findall(r"(?i)\bTABLE_NAME\s*=\s*'(\w+)'", sql) if t in ddl]
     for p in plano:
         for dt in p["destinos"]:
             alvo.append(dt)
@@ -43,6 +75,10 @@ def ddl_destino(plano, raiz=RAIZ_APP):
                         alvo.append(cat["pai"])
                     if c["depara"] == "cid10":
                         alvo.append("terminologia")
+                if c["coluna"].startswith("#arquivo:"):  # registro do binário no armazenamento (conferidor r4)
+                    alvo.append("arquivo")
+                if c.get("espelho"):  # ligação ao espelho (rodada 5): as tabelas que a ligação consulta
+                    alvo += ESPELHO_CONSULTA[c["espelho"]["catalogo"]]
     faltam = sorted({t for t in alvo if t not in ddl})
     if faltam:
         raise RuntimeError("destino sem DDL no modelo: %s" % ", ".join(faltam))
@@ -61,9 +97,19 @@ def _rodar(lt, cc, ctl, eid, mapa_exec, presentes, contagens):
     return c, c.executar(presentes, contagens)
 
 
-def _comparar(c, res, esperado, erros, rodada):
-    for ent, r in res["entidades"].items():
+def _comparar(c, res, esperado, erros, rodada, externos=()):
+    # rodada 5 (ADR 0006 e 0007): prova de "não copiar" e ligação filho -> pai de código derivado
+    for t, r in (res.get("provas") or {}).items():
         if not r["conferido"]:
+            erros.append("%s: prova de não copiar de %s não conferiu (%d divergentes, %d faltando, %d sobrando)" % (
+                rodada, t, r["divergentes"], r["faltando_no_destino"], r["sobrando_no_destino"]))
+    for k, r in (res.get("filho_pai") or {}).items():
+        if not r["conferido"]:
+            erros.append("%s: filho -> pai divergente em %s (%d de %d)" % (rodada, k, r["divergentes"], r["verificados"]))
+    for ent, r in res["entidades"].items():
+        # pai externo (PAIS_EXTERNOS) lido na origem: registrado como já carregado por outra fatia, nunca regravado
+        # aqui; a conciliação dele é da fatia dona (rodada 5: o principal do pai pode ser o mesmo destino da fatia)
+        if not r["conferido"] and r.get("tabela_origem") not in externos:
             erros.append("%s: conciliação divergiu em %s (origem %d, destino %d, recusados %d)" % (
                 rodada, ent, r["registros_origem"], r["registros_destino"], r["recusados"]))
     principal = {p["tabela"]: c._nome_ent(p["tabela"], p["destinos"][0]) for p in c.plano}
@@ -94,6 +140,10 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
     d = os.path.join(trabalho, "conferir-" + nome)
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d)
+    # armazenamento de arquivos (`#arquivo`, ADR 0004) da conferência: pasta descartável no trabalho, se não configurado
+    if not os.environ.get("ARQUIVOS_RAIZ"):
+        os.environ["ARQUIVOS_RAIZ"] = os.path.join(d, "arquivos")
+    os.makedirs(os.environ["ARQUIVOS_RAIZ"], exist_ok=True)
     arq = os.path.join(d, nome + ".fdb")
     manif = sintetica.gerar(arq, fatias=[nome])
     esperado = {}
@@ -116,16 +166,26 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 contagens = {t: lt.contar(t) for t in presentes}
                 plano = carga_mapa.planejar(mapa_exec, presentes)
                 root.select_db(cliente)
-                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano)
-                if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
-                    banco.aplicar_script(root, ddl)
                 # com PREPARO_DOS_REQUERIDOS = True na fatia, o preparo das fatias de REQUER roda antes do dela (rodada
                 # 2, pedido da L7-01); opcional porque preparos diferentes que criam o estabelecimento colidiriam
                 fs = sintetica.resolver_fatias([nome]) if getattr(mod, "PREPARO_DOS_REQUERIDOS", False) else [nome]
+                prep = "\n".join(getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None) or "" for f in fs)
+                provas = [pv["sql"] for pv in mapa_exec.get("provas") or [] if pv["tabela"] in presentes]
+                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano, preparo=prep, provas=provas)
+                if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
+                    banco.aplicar_script(root, ddl)
                 for f in fs:
                     preparo = getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None)
                     if preparo:
-                        banco.aplicar_script(root, preparo)
+                        # o banco da conferência cria as tabelas REAIS de `cod:` e do preparo (rodada 5): o preparo
+                        # grava só as colunas que a fatia consulta (pai dado como já carregado); as outras NOT NULL
+                        # recebem o padrão implícito (sql_mode sem STRICT, só nesta sessão; CHECK e FK continuam)
+                        banco.aplicar_script(root, "SET SESSION sql_mode = REPLACE(REPLACE(@@sql_mode,"
+                                             " 'STRICT_TRANS_TABLES', ''), 'STRICT_ALL_TABLES', '')")
+                        try:
+                            banco.aplicar_script(root, preparo)
+                        finally:
+                            banco.aplicar_script(root, "SET SESSION sql_mode = DEFAULT")
                 with root.cursor() as cur:
                     i = 0
                     for t, ks in sorted(manif["pais_externos"].items()):
@@ -137,19 +197,27 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 cc = banco.conectar(cliente, autocommit=False)
                 try:
                     c, res = _rodar(lt, cc, "%s" % ctl, 1, mapa_exec, presentes, contagens)
-                    _comparar(c, res, esperado, erros, "primeira")
+                    _comparar(c, res, esperado, erros, "primeira", set(manif["pais_externos"]))
                     saida = {"entidades": {k: {x: v[x] for x in ("tabela_origem", "registros_origem",
                                                                  "registros_destino", "recusados", "conferido")}
                                            for k, v in res["entidades"].items()},
                              "pendencias_por_regra": res["pendencias"]["por_regra"],
                              "por_tabela": res["carga"]["por_tabela"],
-                             "fase2": {k: res["carga"][k] for k in ("fase2_gravadas", "fase2_pendentes")}}
+                             "fase2": {k: res["carga"][k] for k in ("fase2_gravadas", "fase2_pendentes")},
+                             "provas": res.get("provas") or {}, "filho_pai": res.get("filho_pai") or {},
+                             "continuidade": {k: res["carga"].get(k, 0) for k in (
+                                 "mescla_preenchidas", "mescla_conflitos", "segredos_no_cofre")}}
                     if depois_da_primeira:
                         depois_da_primeira(cc)
                         cc.commit()
                     c2, res2 = _rodar(lt, cc, ctl, 2, mapa_exec, presentes, contagens)
-                    _comparar(c2, res2, esperado, erros, "segunda")
+                    _comparar(c2, res2, esperado, erros, "segunda", set(manif["pais_externos"]))
                     lidas = sum(int(contagens.get(p["tabela"], 0)) for p in c2.plano)
+                    # pai externo com principal próprio não é regravado (aguarda o Sincronizar da fatia dona)
+                    ext = sum(int(contagens.get(p["tabela"], 0)) for p in c2.plano
+                              if p["tabela"] in manif["pais_externos"])
+                    if lidas - ext <= res2["carga"]["puladas_iguais"] <= lidas:
+                        lidas = res2["carga"]["puladas_iguais"]
                     novas = sum(v["registros_destino"] for k, v in res2["entidades"].items()) - \
                         sum(v["registros_destino"] for k, v in res["entidades"].items())
                     if res2["carga"]["puladas_iguais"] != lidas or novas:

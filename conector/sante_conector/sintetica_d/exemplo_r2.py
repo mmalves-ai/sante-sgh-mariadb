@@ -121,7 +121,7 @@ def linhas(r, ins):
     ins(R, [2, "Profissional Dois", CPF_EXISTENTE, "Dois"])
     ins(R, [3, "Profissional Tres", CPF_NOVO, "Tres"])
     return {
-        R: {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1062": 1}},
+        R: {"gravados": 2, "pendencias": {"adotado_existente": 1, "mescla_conflito_origem_guardada": 1, "restricao_destino_1062": 1}},
         P: {"gravados": 3, "pendencias": {"hora_invalida": 1}},
         F: {"gravados": 3, "pendencias": {"pai_ambiguo": 2, "codigo_inexistente_destino": 1,
                                           "valor_fora_do_dominio": 2, "hora_invalida": 1, "pai_inexistente": 2}},

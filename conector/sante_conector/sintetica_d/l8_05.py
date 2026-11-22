@@ -1,42 +1,30 @@
 """Fatia L8-05 (faturamento e restantes, módulo FAT): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Rodada de cobertura total. CARREGADAS (11): TBTIPPLANO (plano), TBTABDTH (diária ou taxa), TBTPPROFPROC (função na
-cobrança, código com prefixo de domínio e tipo presumido), TBCODATI (código do prestador na fonte pagadora, senha para
-o cofre, vigência da carga), TBCODATI_TBUSERS (usuários do código), TBCONVEN_TBTISSPARDEF (valor padrão de campo TISS,
-campo pela referência encadeada ao parâmetro), TBEMIREF (referência de emissão de mat/med, de-para de valores S/N),
-TBENTCON (calendário de entrega, competência pelo mês da entrega), TBSEGUIA (contador de guia, tipo pelo de-para) e
-TBVLRTHM (valor do procedimento por vigência, pai pela chave composta TAB+COD) e TBINTCRC (de-para da conta de
-receita do escritório contábil por fonte pagadora e natureza financeira).
-PAIS_EXTERNOS: TBCONVEN (L5-06), TBCTRDTH (L8-03), TBUSERS (L3), TBCLASSI (L8-02), TBTABTHM (L8-04, chave TAB|COD) e
-TBITEDES (L8-12, chave GRUPO|SUBGRUPO|ITEM).
-TBTISSPARDEF (L8-04) NÃO entra nesta imagem (o DDL dela é da L8-04; a imagem conjunta dos lotes não admite tabela em
-dois módulos): aqui o campo TISS fica pai_inexistente e a linha é recusada (1048), o caminho de recusa; a carga
-conjunta prova o caminho feliz.
-As demais 12 (DESCARTE em sem_carga.tsv ou BLOQUEADA sem mecanismo) entram só com a forma (2 linhas falsas cada).
+Rodada 3 (correção). CARREGADAS (14): TBTIPPLANO, TBTABDTH, TBTPPROFPROC, TBCODATI, TBCODATI_TBUSERS,
+TBCONVEN_TBTISSPARDEF, TBEMIREF, TBENTCON, TBVLRTHM e, novas na rodada 3, TBTIPPLCONV (diária por plano da fonte, modelo
+12_FAT/11), TBTISS (parâmetros TISS, versão pelo cadastro de versões da origem e de-para oficial versao_tiss),
+TBVLRDTH (valor da diária pela chave alternativa composta TAB+OPE), FCCTAEXT (conta) e FCDIAEXT (segurado da conta,
+carteira lida da conta na origem).
+Rodada 4: carregam TBSEGUIA (regra inteiro_mais_um e tipo 'lote'), TBINTCRC (tipo de conta e de lançamento no
+de-para; ato e subtipo específicos ficam fora pelo so_se até o modelo) e FCCTAAUD (dependência da conta, total nulo e
+conclusão só com AUDITADA = S).
+COMENTADAS (declaração pronta, BLOQUEADA com motivo em colunas.d/L8-05.tsv): TBPERMEM e TBEMIREFMATMED (pai TBMATMED,
+L8-03) e RPLANRPA (linhas da L8-02). Entram só com a forma. RPLANRPA entra na imagem desta fatia e no esperado só quando a L8-02 a
+retirar da dela e a declaração daqui for descomentada (sem tabela duplicada na imagem conjunta).
+SO_ORIGEM: TBVERSAOTISS (catálogo oficial, só lido pela referência encadeada).
+PAIS_EXTERNOS: TBCONVEN (L5-06), TBCTRDTH (L8-03), TBUSERS (L3), TBCLASSI (L8-02), TBTABTHM (L8-04, chave TAB|COD),
+RECADATE (L3; o destino `atendimento` com o paciente vem do PREPARO) e
+TBLOCCON (L8-03). PREPARO_DESTINO: estabelecimento, semente de tipo_conta e tipo_auditoria (pedida à F2.2), versão
+TISS 4.03.00 do carregador oficial e os atendimentos dos pais externos.
+TBTISSPARDEF (L8-04) NÃO entra nesta imagem: aqui o campo TISS fica pai_inexistente e a linha é recusada (1048).
+As demais (DESCARTE em sem_carga.tsv) entram só com a forma (2 linhas falsas cada).
 """
 import datetime
 import decimal
 
 FORMAS = {
-    'TBTISSTERMO_TBTPLANC': ('ID', [
-        ('ID', 'INTEGER', True), ('ID_TBTISSTERMO', 'SMALLINT', True), ('ID_TBTPLANC', 'SMALLINT', True),
-    ]),
-    'TBTPOBRIGAMAT': ('ID', [
-        ('ID', 'SMALLINT', True), ('DESCRICAO', 'VARCHAR(15)', False),
-    ]),
-    'TBTPPERFILUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(40)', True),
-    ]),
     'TBTPPROFPROC': ('ID', [
         ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(20)', True),
-    ]),
-    'TBTPTRATUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(40)', True),
-    ]),
-    'TBTPCLASSIFUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(60)', True), ('CLASSIFICACAO', 'VARCHAR(60)', True),
-        ('ID_TBTPTRATUNIBH', 'SMALLINT', True), ('ID_TBTPPERFILUNIBH', 'SMALLINT', True),
-        ('ID_TBTPFASEUNIBH', 'SMALLINT', True),
     ]),
     'TBTABDTH': ('ID', [
         ('ID', 'INTEGER', True), ('TAB', 'SMALLINT', True), ('OPE', 'INTEGER', True),
@@ -73,10 +61,6 @@ FORMAS = {
         ('CONV', 'SMALLINT', True), ('CLASSIF', 'SMALLINT', True), ('COD_DESC', 'VARCHAR(1)', True),
         ('REF_COD', 'VARCHAR(1)', False), ('REF_DESC', 'VARCHAR(1)', False), ('REF_VALOR', 'VARCHAR(1)', False),
         ('REF_VALOR_PFB', 'CHAR(1)', False), ('REF_VALOR_PMC', 'CHAR(1)', False),
-    ]),
-    'TBEMIREFMATMED': ('ID_TBCONVEN,ID_TBMATMED', [
-        ('ID_TBCONVEN', 'SMALLINT', True), ('ID_TBMATMED', 'INTEGER', True), ('REF_VALOR_PMC', 'CHAR(1)', True),
-        ('REF_VALOR_PFB', 'CHAR(1)', True),
     ]),
     'TBENTCON': ('CONV,ENTREGA', [
         ('CONV', 'SMALLINT', True), ('ENTREGA', 'DATE', True), ('PAGAMENTO', 'DATE', False),
@@ -181,16 +165,145 @@ FORMAS = {
         ('SUBGRUPO', 'SMALLINT', False), ('ITEM', 'SMALLINT', False), ('CTA_CONTABIL', 'INTEGER', False),
         ('EMPRESA', 'SMALLINT', True),
     ]),
+    'TBVERSAOTISS': ('ID', [
+        ('ID', 'SMALLINT', True), ('COD_VERSAO_TISS', 'VARCHAR(7)', True), ('ID_TBVERSAOTISSPAD', 'SMALLINT', True),
+    ]),
+    'FCCTAAUD': ('ANOPRO,MESPRO,TIPO_CTA,COD', [
+        ('ANOPRO', 'SMALLINT', True), ('MESPRO', 'SMALLINT', True), ('TIPO_CTA', 'VARCHAR(1)', True),
+        ('COD', 'INTEGER', True), ('PACIENTE', 'VARCHAR(70)', False), ('CON', 'SMALLINT', False),
+        ('ALTA', 'TIMESTAMP', False), ('HOR_ALT', 'VARCHAR(4)', False), ('GUIA', 'VARCHAR(20)', False),
+        ('NASC', 'TIMESTAMP', False), ('SEGURADO', 'VARCHAR(70)', False), ('VEIO', 'VARCHAR(1)', False),
+        ('TIPO_NOTA', 'SMALLINT', False), ('OCORRENCIA', 'VARCHAR(1)', False), ('TIPO_ATE', 'SMALLINT', False),
+        ('MATRICULA', 'VARCHAR(24)', False), ('EMPRESA', 'VARCHAR(40)', False), ('SENHA', 'VARCHAR(20)', False),
+        ('CENCUS', 'INTEGER', False), ('CID9_P', 'INTEGER', False), ('CID9_S', 'INTEGER', False),
+        ('CID10_P', 'VARCHAR(6)', False), ('CID10_S', 'VARCHAR(6)', False), ('MOTIVO', 'SMALLINT', False),
+        ('SEXO', 'VARCHAR(1)', False), ('IDADE', 'SMALLINT', False), ('PERMANEN', 'SMALLINT', False),
+        ('ESP', 'SMALLINT', False), ('CLINICA', 'VARCHAR(1)', False), ('UNID', 'SMALLINT', False),
+        ('GRUPO', 'SMALLINT', False), ('AUTORIZADO', 'VARCHAR(1)', False), ('REG_ATE', 'INTEGER', False),
+        ('CAA', 'BIGINT', False), ('DESCONTO', 'NUMERIC(9,2)', False), ('MODVIII', 'VARCHAR(1)', False),
+        ('DESC_SH', 'VARCHAR(1)', False), ('DESC_SP', 'VARCHAR(1)', False), ('DESC_RC', 'VARCHAR(1)', False),
+        ('DESC_MM', 'VARCHAR(1)', False), ('DESC_TD', 'VARCHAR(1)', False), ('CRM_RESP', 'INTEGER', False),
+        ('UF_RESP', 'VARCHAR(2)', False), ('CRM_REQ', 'INTEGER', False), ('DATA_REQ', 'TIMESTAMP', False),
+        ('CRM_ENC', 'INTEGER', False), ('DESC_ENC', 'VARCHAR(40)', False), ('PROC_SOL', 'INTEGER', False),
+        ('MED_SOL', 'INTEGER', False), ('DATA_EMI', 'TIMESTAMP', False), ('DATA_GRA', 'TIMESTAMP', False),
+        ('DATA_FEC', 'TIMESTAMP', False), ('NOME_RESP', 'VARCHAR(70)', False), ('NOME_REQ', 'VARCHAR(70)', False),
+        ('DEPO', 'DOUBLE', False), ('ENCAM', 'VARCHAR(1)', False), ('PACOTE', 'VARCHAR(1)', False),
+        ('CONDIC', 'VARCHAR(1)', False), ('NOTA', 'INTEGER', False), ('AUDITADA', 'VARCHAR(1)', False),
+        ('IND_EMI', 'VARCHAR(1)', False), ('FECHADA', 'VARCHAR(1)', False), ('REMESSA', 'SMALLINT', False),
+        ('HOR_BAI', 'VARCHAR(4)', False), ('BAIXA', 'DATE', False), ('USU_EMI', 'VARCHAR(31)', False),
+        ('USU_FEC', 'VARCHAR(31)', False), ('USUARIO', 'VARCHAR(31)', False), ('COD_REQ', 'VARCHAR(14)', False),
+        ('UF_REQ', 'VARCHAR(2)', False), ('PERC_DESC', 'NUMERIC(9,2)', False), ('MOT_EXC', 'SMALLINT', False),
+        ('FICOU_APTO', 'VARCHAR(1)', False), ('HOR_URG', 'VARCHAR(1)', False), ('TFSHMM', 'SMALLINT', False),
+        ('INAMPS', 'INTEGER', False), ('PARTO', 'VARCHAR(1)', False), ('PREMAT', 'SMALLINT', False),
+        ('ATERMO', 'SMALLINT', False), ('NATIM', 'SMALLINT', False), ('MATRIC', 'VARCHAR(4)', False),
+        ('IDAGES', 'SMALLINT', False), ('DT_GUIA', 'DATE', False), ('PG_INTEG', 'CHAR(1)', False),
+        ('OBS', 'BLOB SUB_TYPE 1', False), ('DOC', 'INTEGER', False), ('PROC_CTA', 'INTEGER', False),
+        ('MED_CTA', 'INTEGER', False), ('DOC_CONTABIL', 'INTEGER', False), ('PESSOA', 'CHAR(1)', False),
+        ('CRED_PLS', 'INTEGER', False), ('FCH_PLS', 'CHAR(1)', False), ('USU_FCH_PLS', 'VARCHAR(31)', False),
+        ('DT_FCH_PLS', 'DATE', False), ('ORIG_PLS', 'CHAR(1)', False), ('PS_PLS', 'INTEGER', False),
+        ('SOL_PLS', 'INTEGER', False), ('PPS_PLS', 'CHAR(1)', False), ('PSOL_PLS', 'CHAR(1)', False),
+        ('ID_TBCBOPRO_SOLICITANTE', 'INTEGER', False), ('ID_TBCBOPRO_PRINCIPAL_CTA', 'INTEGER', False),
+    ]),
+    'FCCTAEXT': ('ID', [
+        ('ID', 'INTEGER', True), ('ANOPRO', 'SMALLINT', True), ('MESPRO', 'SMALLINT', True),
+        ('TIPO_CTA', 'VARCHAR(1)', True), ('COD', 'INTEGER', True), ('PACIENTE', 'VARCHAR(70)', False),
+        ('CON', 'SMALLINT', False), ('ALTA', 'TIMESTAMP', False), ('HOR_ALT', 'VARCHAR(4)', False),
+        ('GUIA', 'VARCHAR(20)', False), ('NASC', 'TIMESTAMP', False), ('SEGURADO', 'VARCHAR(70)', False),
+        ('VEIO', 'VARCHAR(1)', False), ('TIPO_NOTA', 'SMALLINT', False), ('OCORRENCIA', 'VARCHAR(1)', False),
+        ('TIPO_ATE', 'SMALLINT', False), ('MATRICULA', 'VARCHAR(26)', False), ('EMPRESA', 'VARCHAR(40)', False),
+        ('SENHA', 'VARCHAR(20)', False), ('CENCUS', 'INTEGER', False), ('CID9_P', 'INTEGER', False),
+        ('CID9_S', 'INTEGER', False), ('CID10_P', 'VARCHAR(6)', False), ('CID10_S', 'VARCHAR(6)', False),
+        ('MOTIVO', 'SMALLINT', False), ('SEXO', 'VARCHAR(1)', False), ('IDADE', 'SMALLINT', False),
+        ('PERMANEN', 'SMALLINT', False), ('ESP', 'SMALLINT', False), ('CLINICA', 'VARCHAR(1)', False),
+        ('UNID', 'SMALLINT', False), ('GRUPO', 'SMALLINT', False), ('AUTORIZADO', 'VARCHAR(1)', False),
+        ('REG_ATE', 'INTEGER', False), ('CAA', 'BIGINT', False), ('DESCONTO', 'NUMERIC(9,2)', False),
+        ('MODVIII', 'VARCHAR(1)', False), ('DESC_SH', 'VARCHAR(1)', False), ('DESC_SP', 'VARCHAR(1)', False),
+        ('DESC_RC', 'VARCHAR(1)', False), ('DESC_MM', 'VARCHAR(1)', False), ('DESC_TD', 'VARCHAR(1)', False),
+        ('CRM_RESP', 'INTEGER', False), ('UF_RESP', 'VARCHAR(2)', False), ('CRM_REQ', 'INTEGER', False),
+        ('DATA_REQ', 'TIMESTAMP', False), ('CRM_ENC', 'INTEGER', False), ('DESC_ENC', 'VARCHAR(40)', False),
+        ('PROC_SOL', 'INTEGER', False), ('MED_SOL', 'INTEGER', False), ('DATA_EMI', 'TIMESTAMP', False),
+        ('DATA_GRA', 'TIMESTAMP', False), ('DATA_FEC', 'TIMESTAMP', False), ('NOME_RESP', 'VARCHAR(70)', False),
+        ('NOME_REQ', 'VARCHAR(70)', False), ('DEPO', 'DOUBLE', False), ('ENCAM', 'VARCHAR(1)', False),
+        ('PACOTE', 'VARCHAR(1)', False), ('CONDIC', 'VARCHAR(1)', False), ('NOTA', 'INTEGER', False),
+        ('AUDITADA', 'VARCHAR(1)', False), ('IND_EMI', 'VARCHAR(1)', False), ('FECHADA', 'VARCHAR(1)', False),
+        ('REMESSA', 'SMALLINT', False), ('HOR_BAI', 'VARCHAR(4)', False), ('BAIXA', 'DATE', False),
+        ('USU_EMI', 'VARCHAR(31)', False), ('USU_FEC', 'VARCHAR(31)', False), ('USUARIO', 'VARCHAR(31)', False),
+        ('COD_REQ', 'VARCHAR(14)', False), ('UF_REQ', 'VARCHAR(2)', False), ('PERC_DESC', 'NUMERIC(9,2)', False),
+        ('MOT_EXC', 'SMALLINT', False), ('FICOU_APTO', 'VARCHAR(1)', False), ('HOR_URG', 'VARCHAR(1)', False),
+        ('TFSHMM', 'SMALLINT', False), ('INAMPS', 'INTEGER', False), ('PARTO', 'VARCHAR(1)', False),
+        ('PREMAT', 'SMALLINT', False), ('ATERMO', 'SMALLINT', False), ('NATIM', 'SMALLINT', False),
+        ('MATRIC', 'VARCHAR(4)', False), ('IDAGES', 'SMALLINT', False), ('DT_GUIA', 'DATE', False),
+        ('PG_INTEG', 'CHAR(1)', False), ('OBS', 'BLOB SUB_TYPE 1', False), ('DOC', 'INTEGER', False),
+        ('PROC_CTA', 'INTEGER', False), ('MED_CTA', 'INTEGER', False), ('DOC_CONTABIL', 'INTEGER', False),
+        ('PESSOA', 'CHAR(1)', False), ('CRED_PLS', 'INTEGER', False), ('FCH_PLS', 'CHAR(1)', False),
+        ('USU_FCH_PLS', 'VARCHAR(31)', False), ('DT_FCH_PLS', 'DATE', False), ('ORIG_PLS', 'CHAR(1)', False),
+        ('PS_PLS', 'INTEGER', False), ('SOL_PLS', 'INTEGER', False), ('PPS_PLS', 'CHAR(1)', False),
+        ('PSOL_PLS', 'CHAR(1)', False), ('CID10_O', 'VARCHAR(6)', False), ('N_DECL_OBITO', 'VARCHAR(17)', False),
+        ('PLANO', 'VARCHAR(40)', False), ('SERIE', 'VARCHAR(5)', True), ('TIPO_DOC', 'VARCHAR(1)', False),
+        ('TPDOENCA', 'SMALLINT', False), ('IDANO', 'SMALLINT', False), ('IDMESES', 'SMALLINT', False),
+        ('IDDIAS', 'SMALLINT', False), ('VAL_SENHA', 'DATE', True), ('TPSAIDA', 'SMALLINT', False),
+        ('GUIA_S', 'VARCHAR(20)', False), ('NR_DECLARA_VIVO_1', 'VARCHAR(15)', False), ('DATA_AUT', 'DATE', False),
+        ('TP_OBITO_MULHER', 'SMALLINT', False), ('ATUALIZOU_PLS', 'CHAR(1)', False),
+        ('GUIASPSADT', 'VARCHAR(20)', False), ('GUIACONS', 'VARCHAR(20)', False), ('ATIVIDADE', 'SMALLINT', False),
+        ('REGIME_INT', 'SMALLINT', False), ('CPL_POS_PARTO', 'CHAR(1)', False),
+        ('COMPL_PUERPERIO', 'CHAR(1)', False), ('ATD_RN_SALA', 'CHAR(1)', False),
+        ('COMPL_NEONATAL', 'CHAR(1)', False), ('BAIXO_PESO', 'CHAR(1)', False),
+        ('TRANST_EM_PARTO', 'CHAR(1)', False), ('TIPO_FAT', 'SMALLINT', False), ('ID_MFCTAREC', 'INTEGER', False),
+        ('HOSP', 'SMALLINT', False), ('DATA_APRES', 'DATE', False), ('TOTAL_CONTA', 'DOUBLE', False),
+        ('TERCEIRIZADO', 'SMALLINT', False), ('VAL_CAR', 'DATE', False), ('IDENT', 'VARCHAR(15)', False),
+        ('VALOR_PACOTE', 'NUMERIC(18,2)', False), ('CODVALIDBIO', 'VARCHAR(10)', False),
+        ('NUMERO_RAT', 'VARCHAR(10)', False), ('DATA_HORA_INCLUSAO', 'TIMESTAMP', False),
+        ('DATA_HORA_ULTIMA_ATUALIZACAO', 'TIMESTAMP', False),
+        ('GUIA_ATRIBUIDA_OPERADORA_TISS', 'VARCHAR(20)', False), ('ATENDIMENTO_RN_TISS', 'CHAR(1)', False),
+        ('TP_CONSULTA_TISS', 'SMALLINT', False), ('ID_TBTISSINDACID', 'SMALLINT', False),
+        ('ID_TBPROCTO', 'INTEGER', False), ('DATA_RAT', 'DATE', False),
+        ('ID_TBCBOPRO_SOLICITANTE', 'INTEGER', False), ('ID_TBCBOPRO_PRINCIPAL_CTA', 'INTEGER', False),
+        ('ID_FCCTAEXT_FATURADO', 'INTEGER', False), ('ID_TBCONSPROF_CRM_REQ', 'SMALLINT', False),
+        ('CODIGO_VALIDACAO_TISS', 'VARCHAR(10)', False), ('ID_TBTISSIDENTBENEFI', 'SMALLINT', False),
+        ('ID_TBTISSMOTAUSENCODVALID', 'SMALLINT', False), ('ID_FCCADNFS', 'INTEGER', False),
+        ('ID_TBTIPPLANO', 'INTEGER', False), ('NOME_SOCIAL', 'VARCHAR(70)', False),
+        ('ID_TBTISSCOBERTESPECIAL', 'INTEGER', False), ('ID_TBTISSREGIMEATEND', 'INTEGER', False),
+        ('ID_TBTISSSAUDEOCUPAC', 'INTEGER', False), ('USU_REM', 'VARCHAR(31)', False),
+        ('DATA_REM', 'TIMESTAMP', False),
+    ]),
+    'FCDIAEXT': ('ANOPRO,MESPRO,COD', [
+        ('ANOPRO', 'SMALLINT', True), ('MESPRO', 'SMALLINT', True), ('COD', 'INTEGER', True),
+        ('DIAB', 'BLOB SUB_TYPE 1', False), ('EST_CIVIL', 'VARCHAR(1)', False), ('NACAO', 'VARCHAR(32)', False),
+        ('ORIGEM', 'VARCHAR(20)', False), ('CPF', 'DOUBLE', False), ('VAL_CAR', 'DATE', False),
+        ('CARGO', 'VARCHAR(6)', False), ('PADRAO', 'INTEGER', False), ('UND_ADM', 'VARCHAR(50)', False),
+        ('AFINIDADE', 'VARCHAR(15)', False), ('N_ORDEM', 'VARCHAR(4)', False), ('CLASSE', 'VARCHAR(10)', False),
+    ]),
 }
+# RPLANRPA: forma e linhas aqui só quando a L8-02 retirar a tabela da imagem dela (imagem conjunta sem duplicata)
+# e a declaração desta fatia estiver ativa (descomentada).
+from pathlib import Path as _Path  # noqa: E402
+from sante_conector.sintetica_d import l8_02 as _l8_02  # noqa: E402
 
+_DECL = _Path(__file__).resolve().parents[2] / "mapa/declarado/colunas.d/L8-05.tsv"
+RPLANRPA_ATIVA = ("RPLANRPA" not in _l8_02.FORMAS
+                  and any(l.startswith("RPLANRPA\t") for l in _DECL.read_text(encoding="utf-8").splitlines()))
+if RPLANRPA_ATIVA:
+    FORMAS['RPLANRPA'] = ('ID_RPRPA,ID_RPLANEVE', [('ID_RPRPA', 'INTEGER', True), ('ID_RPLANEVE', 'INTEGER', True)])
+
+# r5 (ADR 0006, 3): a tabela de mat/med (L8-03) é lida pela condição do acordo (referência licenciada ou própria)
+FORMAS['TBCTRMEM'] = ('COD', [('COD', 'SMALLINT', True), ('NOME', 'VARCHAR(50)', False), ('REF_BRA', 'VARCHAR(1)', False),
+    ('ALT_EST', 'VARCHAR(1)', False), ('REF_SIMP', 'VARCHAR(1)', False), ('GPC', 'VARCHAR(1)', False),
+    ('SITUACAO', 'VARCHAR(1)', False), ('GRAVAR_REFERENCIA_ABC_FARMA', 'CHAR(1)', False)])
+ESPELHO_ITEM = 9501  # item da referência licenciada no espelho padrão da base (copiado no cliente pelo criar_cliente)
 
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TBUSERS", "TBCONVEN_TBTISSPARDEF",
-              "TBEMIREF", "TBENTCON", "TBSEGUIA", "TBVLRTHM", "TBINTCRC")
-DESCARTES = ("TBTPOBRIGAMAT", "TBTPPERFILUNIBH", "TBTPTRATUNIBH", "TBTPCLASSIFUNIBH",
-             "TBVERSAOBRASIN", "TBVLRMEM", "TBEMIREFMATMED", "TBPERMEM")
-SEM_MECANISMO = ("TBTISS", "TBVLRDTH", "TBTIPPLCONV", "TBTISSTERMO_TBTPLANC")
-BLOQUEADAS = tuple(t for t in FORMAS if t not in CARREGADAS)
+              "TBEMIREF", "TBENTCON", "TBVLRTHM", "TBTIPPLCONV", "TBTISS", "TBVLRDTH",
+              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM", "TBVLRMEM") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
+# declaração pronta e comentada (BLOQUEADA, motivo na linha); as três primeiras com linhas específicas na imagem
+COMENTADAS = ()  # conferidor r4: TBPERMEM carrega (modelo 12_FAT/13); TBEMIREFMATMED é da L8-04
+COM_LINHAS = ()
+# só lida pela referência encadeada (cadastro de versões TISS da origem, catálogo oficial nunca gravado)
+SO_ORIGEM = ("TBVERSAOTISS", "TBCTRMEM")
+# r5: TBTPOBRIGAMAT e as listas do campo adicional da guia saíram da fatia (L8-04, dona pelo índice, pedido R5-1)
+# r5 (achado): TBVLRMEM carrega o preço das tabelas PRÓPRIAS (o licenciado vive no espelho)
+DESCARTES = ("TBVERSAOBRASIN",)
+BLOQUEADAS = tuple(t for t in FORMAS if t not in CARREGADAS and t not in SO_ORIGEM)
 
 
 def _ddl():
@@ -207,10 +320,35 @@ def _ddl():
 DDL = _ddl()
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"], "TBUSERS": ["ANA.EX", "BRUNO.EX"],
                  "TBCLASSI": ["1", "2"], "TBTABTHM": ["1|10", "1|11"],
-                 "TBITEDES": ["1|1|1"]}
+                 "RECADATE": ["500", "501"], "TBLOCCON": ["1"],
+                 "TBTPLANC": ["1", "2"], "TBITEDES": ["1|1|1"],
+                 "TBMATMED": ["1", "2"]}  # r5: TBCTRMEM entra na imagem (lida pela condição do acordo e carregada)
+if RPLANRPA_ATIVA:  # RPA da L8-02 e lançamento de repasse da L8-01
+    PAIS_EXTERNOS.update({"RPRPA": ["1", "2"], "RPLANEVE": ["10", "11"]})
+# id de destino dado pela conferência a cada pai externo: 1, 2... na ordem das tabelas (nome) e das chaves
+_IDS_EXTERNOS = {}
+for _t in sorted(PAIS_EXTERNOS):
+    for _k in PAIS_EXTERNOS[_t]:
+        _IDS_EXTERNOS[(_t, _k)] = len(_IDS_EXTERNOS) + 1
 # único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
+    # catálogos-base do produto (semente pedida à F2.2): tipo de conta e tipo de auditoria pelo código
+    " CREATE TABLE IF NOT EXISTS tipo_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL);"
+    " INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) SELECT c, c, c, UTC_TIMESTAMP(3) FROM (SELECT"
+    " 'ambulatorial' c UNION ALL SELECT 'externa' UNION ALL SELECT 'urgencia' UNION ALL SELECT 'internacao') s;"
+    " CREATE TABLE IF NOT EXISTS tipo_auditoria (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+    " codigo VARCHAR(30) NOT NULL); INSERT INTO tipo_auditoria (codigo, descricao, categoria, criado_em) VALUES ('migracao', 'Migração', 'administrativa', UTC_TIMESTAMP(3));"
+    # versão TISS de troca do carregador oficial (só a 4.03.00; a 3.05.00 da origem fica sem par)
+    " INSERT INTO versao_padrao_tiss (codigo_tiss, componente, descricao, vigencia_inicio, versao_fonte, criado_em)"
+    " VALUES ('4.03.00', 'troca', 'Versao exemplo', '2024-01-01', 'exemplo', UTC_TIMESTAMP(3));"
+    # atendimentos já carregados pelo L3 (pais externos RECADATE 500 e 501): o paciente vem da cópia da coluna
+    " CREATE TABLE IF NOT EXISTS atendimento (id BIGINT UNSIGNED PRIMARY KEY, paciente_id BIGINT UNSIGNED NULL);"
+    " INSERT INTO atendimento (id, paciente_id) VALUES (%d, 7001), (%d, 7002);"
+    # r5 (ADR 0006, 3): o espelho padrão da base no cliente (criar_cliente): um item da referência licenciada
+    " INSERT INTO item_referencia_matmed (id, fonte_referencia, codigo_referencia, descricao, tipo_produto, criado_em)"
+    " VALUES (%d, 'brasindice', '77', 'Item exemplo da referencia', 'outro', UTC_TIMESTAMP(3))" % (
+        _IDS_EXTERNOS[("RECADATE", "500")], _IDS_EXTERNOS[("RECADATE", "501")], ESPELHO_ITEM))
 
 
 def _falso(tipo, i):
@@ -235,7 +373,30 @@ def _ins(ins, tab, **v):
 
 def linhas(r, ins):
     D, dt = decimal.Decimal, datetime.date
+    # conferidor r4: preço negociado (CON, COD, DATA, PERC, TAB, VLR_FIXO, QTDE_FIXA, ID_TBMATMED, TP_CONTA): 1, 2 e 4
+    # gravados (4 com tipo de conta fora do domínio: NULL = qualquer tipo); 3 item inexistente (sem item: CHECK 4025)
+    for x in [(1, 1, dt(2025, 1, 1), None, 1, D("10.50"), None, 1, "I"),
+              (2, 2, dt(2025, 2, 1), D("5.0"), 1, None, None, 2, "A"),
+              (1, 3, dt(2025, 3, 1), None, 1, D("7.00"), None, 99, "E"),
+              (2, 4, dt(2025, 4, 1), None, 1, D("3.25"), D("1.000"), 1, "Z")]:
+        ins("TBPERMEM", list(x))
+    # r5 (ADR 0006, 3): tabela 3 com a referência licenciada: o item liga ao espelho pelo código (77, no espelho:
+    # gravado sem pendência; 78, fora do espelho: espelho_codigo_inexistente e sem item nenhum, CHECK 4025); o item
+    # da origem (ID_TBMATMED 55, inexistente) nem é consultado
+    _ins(ins, "TBCTRMEM", COD=1, NOME="Tabela exemplo propria", REF_BRA="N", REF_SIMP="N", SITUACAO="A")
+    _ins(ins, "TBCTRMEM", COD=3, NOME="Tabela exemplo referencia", REF_BRA="S", REF_SIMP="N", SITUACAO="A")
+    for x in [(1, 77, dt(2025, 5, 1), D("10.0"), 3, None, None, 55, "I"),
+              (2, 78, dt(2025, 5, 1), D("12.0"), 3, None, None, 55, "I")]:
+        ins("TBPERMEM", list(x))
+    # r5 (ADR 0006, 3; achado): valores por tabela e data: 1 e 2 tabela própria (gravados numa edição de migração da
+    # tabela, agrupada); 3 tabela com referência licenciada (pulada: licenca_nao_comprovada); 4 sem valor (CHECK 4025)
+    for tab_, cod, d, val, item in [(1, 10, dt(2025, 1, 1), 12.5, 1), (1, 10, dt(2025, 2, 1), 13.0, 1),
+                                     (3, 20, dt(2025, 1, 1), 9.0, 2), (1, 11, dt(2025, 1, 1), None, 2)]:
+        _ins(ins, "TBVLRMEM", TAB=tab_, COD=cod, DATA=d, VALOR=val, PFB="N", ID_TBVERSAOBRASIN=1, ID_TBMATMED=item,
+             VALOR_PFB_BRASINDICE=None, VALOR_PMC_BRASINDICE=None)
     for tab in BLOQUEADAS:
+        if tab in COM_LINHAS:
+            continue
         for i in (1, 2):
             ins(tab, [_falso(tp, i) for _, tp, _ in COLUNAS[tab]])
     # planos: 3 repete o código 1 na fonte 1 (chave única: 1062); 4 sem nome (1048); 5 S/N fora do domínio (padrão
@@ -283,9 +444,9 @@ def linhas(r, ins):
     for conv, ent, pag in [(1, dt(2025, 2, 10), dt(2025, 3, 15)), (1, dt(2025, 3, 10), None),
                            (2, dt(2025, 2, 10), dt(2025, 1, 5)), (9, dt(2025, 2, 10), None)]:
         _ins(ins, "TBENTCON", CONV=conv, ENTREGA=ent, PAGAMENTO=pag)
-    # contadores: 2 sem números (padrão 1); 3 tipo 7 fora do de-para (valor_fora_do_dominio + 1048); 4 lote zero
-    # (CHECK: 4025); 5 lote não numérico (padrão 1 com valor_fora_do_dominio, gravado); 6 tipo 0, o contador geral
-    # do lote, sem tipo no modelo (valor_fora_do_dominio + 1048, até o pedido de modelo)
+    # contadores (último usado -> próximo): 1 lote 121, transação 46; 2 sem números (padrão 1); 3 tipo 7 fora do de-para
+    # (valor_fora_do_dominio + 1048); 4 lote zero (próximo 1, gravado); 5 lote não numérico (padrão 1 com
+    # valor_fora_do_dominio, gravado); 6 tipo 0, o contador geral do lote (tipo lote)
     for conv, tg, lote, seq in [(1, 1, "120", "45"), (1, 2, None, None), (2, 7, "5", "5"), (2, 1, "0", "3"),
                                 (2, 2, "L12", "9"), (2, 0, "7", "7")]:
         _ins(ins, "TBSEGUIA", CONV=conv, TIPO_GUIA=tg, NUM_LOTE=lote, SEQ_TRANSACAO=seq)
@@ -296,13 +457,79 @@ def linhas(r, ins):
                                          (2, 99, dt(2025, 1, 1), 1.0, None, None)]:
         _ins(ins, "TBVLRTHM", TAB=tab, COD=cod, DATA=data, VALOR_CH=ch, VALOR_CO=co, VALOR_ANES=anes)
     # de-para da conta de receita: 1 com natureza; 2 sem natureza (vale para a fonte); 3 conta zero (sem conta: CHECK
-    # 4025); 4 fonte nunca vista (pai_inexistente + CHECK 4025); 5 natureza nunca vista (pai_inexistente, gravado)
-    for conv, tc, tl, g, sg, it, cta in [(1, "I", 1, 1, 1, 1, 3101), (2, "E", 1, None, None, None, 3102),
-                                         (1, "E", 2, None, None, None, 0), (9, "I", 1, None, None, None, 3103),
-                                         (2, "I", 3, 9, 9, 9, 3104)]:
-        _ins(ins, "TBINTCRC", EMPRESA=1, CONV=conv, TIPO_CONTA=tc, TIPO_LANC=tl, TIPO_ATO=0, SUBTIPO_DIARIA=0,
+    # 4025); 4 fonte nunca vista (pai_inexistente + CHECK 4025); 5 natureza e tipo de lançamento nunca vistos
+    # (pai_inexistente, gravado); 6 tipo de lançamento 0 = todos (NULL), tipo de conta X fora do de-para (NULL com
+    # valor_fora_do_dominio, gravado); 7 tipo de ato específico (aguarda_dimensao_no_modelo, nunca gravada)
+    for conv, tc, tl, g, sg, it, cta, ato in [(1, "I", 1, 1, 1, 1, 3101, 0), (2, "E", 1, None, None, None, 3102, 0),
+                                              (1, "E", 2, None, None, None, 0, 0),
+                                              (9, "I", 1, None, None, None, 3103, 0),
+                                              (2, "I", 3, 9, 9, 9, 3104, 0), (2, "X", 0, None, None, None, 3105, 0),
+                                              (1, "A", 1, None, None, None, 3106, 2)]:
+        _ins(ins, "TBINTCRC", EMPRESA=1, CONV=conv, TIPO_CONTA=tc, TIPO_LANC=tl, TIPO_ATO=ato, SUBTIPO_DIARIA=0,
              GRUPO=g, SUBGRUPO=sg, ITEM=it, CTA_CONTABIL=cta)
-    return {
+    # diária por plano e local: 1 com local; 2 todos os locais; 3 sem diária (1048); 4 fonte nunca vista
+    # (pai_inexistente + 1048); 5 plano recusado (TBTIPPLANO 4: pai_pendente); 6 local nunca visto (NULL, gravado)
+    for conv, pl, dth, loc in [(1, 1, 1, 1), (1, 2, 2, None), (2, 5, None, None), (9, 1, 1, None), (2, 4, 3, None),
+                               (2, 1, 6, 7)]:
+        _ins(ins, "TBTIPPLCONV", CONV=conv, ID_TBTIPPLANO=pl, ID_TBTABDTH=dth, ID_TBLOCCON=loc)
+    # versões TISS da origem: 1 = 4.03.00 (no catálogo oficial); 2 = 3.05.00 (sem par no catálogo)
+    for i, cod in [(1, "4.03.00"), (2, "3.05.00")]:
+        _ins(ins, "TBVERSAOTISS", ID=i, COD_VERSAO_TISS=cod, ID_TBVERSAOTISSPAD=1)
+    # parâmetros TISS: 1 grava os dois destinos (senha do certificado nunca lida); 2 versão sem par no catálogo
+    # (catalogo_codigo_inexistente + 1048); 3 fonte nunca vista (pai_inexistente + 1048)
+    for conv, ver, cod, verso in [(1, 1, "A100", "S"), (2, 2, "B200", "N"), (9, 1, "C300", "S")]:
+        _ins(ins, "TBTISS", CONV=conv, VERSAO_TISS=ver, COD_CON_TISS=cod, IMP_VERSO_GUIA=verso,
+             SENHA_CERTIFICADO_DIG_WS_TISS="senha falsa")
+    # valor da diária por vigência (pai pela chave alternativa TAB+OPE de TBTABDTH): 1 e 2 gravam; 3 sem valor
+    # (1048); 4 TAB+OPE repetido na origem (pai_ambiguo + 1048); 5 nunca visto (pai_inexistente + 1048); 6 valor
+    # negativo (CHECK 4025); 7 pai recusado (TBTABDTH 4: pai_pendente)
+    for tab, ope, data, v in [(1, 11, dt(2025, 1, 1), 100.0), (1, 11, dt(2025, 6, 1), 120.5),
+                              (2, 10, dt(2025, 1, 1), None), (1, 10, dt(2025, 1, 1), 50.0),
+                              (3, 99, dt(2025, 1, 1), 10.0), (2, 11, dt(2025, 1, 1), -5.0),
+                              (1, 12, dt(2025, 1, 1), 9.0)]:
+        _ins(ins, "TBVLRDTH", TAB=tab, OPE=ope, DATA=data, VALOR=v)
+    # contas: 1, 2 (fechada), 7 e 8 gravam; 3 atendimento nunca visto (pai_inexistente + 1048); 4 tipo X fora do
+    # de-para (valor_fora_do_dominio na natureza, no tipo e 1048); 5 fechada sem usuário (CHECK 4025); 6 sem data
+    # de início (1048). A conta 8 repete ANO+MES+COD da 1 com outro tipo (a chave do segurado fica ambígua)
+    ts = datetime.datetime
+    for i, ano, mes, tc, cod, conv, reg, baixa, fech, dfec, ufec in [
+            (1, 2025, 1, "E", 100, 1, 500, dt(2025, 1, 10), "N", None, None),
+            (2, 2025, 1, "A", 101, 2, 501, dt(2025, 1, 11), "S", ts(2025, 1, 31, 18, 0), "ANA.EX"),
+            (3, 2025, 1, "E", 102, 1, 999, dt(2025, 1, 12), "N", None, None),
+            (4, 2025, 1, "X", 103, 1, 500, dt(2025, 1, 13), "N", None, None),
+            (5, 2025, 1, "E", 104, 1, 500, dt(2025, 1, 14), "S", ts(2025, 1, 31, 18, 0), None),
+            (6, 2025, 1, "E", 105, 1, 500, None, "N", None, None),
+            (7, 2025, 2, "E", 100, 1, 500, dt(2025, 2, 3), "N", None, None),
+            (8, 2025, 1, "A", 100, 2, 501, dt(2025, 1, 20), "N", None, None)]:
+        _ins(ins, "FCCTAEXT", ID=i, ANOPRO=ano, MESPRO=mes, TIPO_CTA=tc, COD=cod, CON=conv, REG_ATE=reg,
+             BAIXA=baixa, HOR_BAI="0830", ALTA=ts(2025, 2, 28) if i == 1 else None, HOR_ALT="1015",
+             FECHADA=fech, DATA_FEC=dfec, USU_FEC=ufec, TOTAL_CONTA=150.75 * i, DESCONTO=D("1.50"),
+             SENHA="AUT%d" % i, MATRICULA="CART-%d" % i, ID_TBTIPPLANO=1, SERIE="EX", VAL_SENHA=dt(2025, 12, 31),
+             OBS=("Observacao exemplo %d" % i).encode("cp1252"))
+    # auditorias (cópia do cabeçalho antes da auditoria): 1 (concluída, resultado presumido) e 2 (em andamento) gravam;
+    # 3 conta recusada (pai_pendente); 4 conta nunca vista (pai_inexistente + 1048); 5 sem auditor (CHECK 4025);
+    # 6 sem data (1048)
+    for ano, mes, tc, cod, usu, dgra, aud in [
+            (2025, 1, "E", 100, "ANA.EX", ts(2025, 1, 20, 10, 0), "S"),
+            (2025, 1, "A", 101, "BRUNO.EX", ts(2025, 1, 21, 11, 0), "N"),
+            (2025, 1, "E", 102, "ANA.EX", ts(2025, 1, 22, 9, 0), "S"),
+            (2025, 3, "E", 555, "ANA.EX", ts(2025, 3, 2, 9, 0), "S"),
+            (2025, 2, "E", 100, None, ts(2025, 2, 10, 9, 0), "S"),
+            (2025, 1, "A", 100, "ANA.EX", None, "S")]:
+        _ins(ins, "FCCTAAUD", ANOPRO=ano, MESPRO=mes, TIPO_CTA=tc, COD=cod, CON=1, USUARIO=usu, DATA_GRA=dgra,
+             AUDITADA=aud, SENHA="AUTX", OBS=b"Nota de auditoria exemplo")
+    # segurado da conta: 1 e 3 gravam (carteira lida da conta); 2 ANO+MES+COD em duas contas (pai_ambiguo + 1048);
+    # 4 conta recusada (pai_pendente); 5 conta nunca vista (pai_inexistente + 1048)
+    for ano, mes, cod, cargo in [(2025, 2, 100, "Analista"), (2025, 1, 100, "Tecnico"), (2025, 1, 101, "Auxiliar"),
+                                 (2025, 1, 102, "Agente"), (2025, 5, 1, "Outro")]:
+        _ins(ins, "FCDIAEXT", ANOPRO=ano, MESPRO=mes, COD=cod, CARGO=cargo[:6], PADRAO=3, CLASSE="B",
+             UND_ADM="Unidade administrativa ex", AFINIDADE="Titular", N_ORDEM="01", VAL_CAR=dt(2026, 6, 30),
+             CPF=None, DIAB=b"texto exemplo")
+    # lançamentos do RPA: 1 e 2 gravam; 3 lançamento nunca visto (pai_inexistente + 1048)
+    if RPLANRPA_ATIVA:
+        for rpa, lan in [(1, 10), (2, 11), (1, 99)]:
+            _ins(ins, "RPLANRPA", ID_RPRPA=rpa, ID_RPLANEVE=lan)
+    esperado = {
         "TBTIPPLANO": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_1048": 3,
                                                      "valor_fora_do_dominio": 1, "pai_inexistente": 1}},
         "TBTABDTH": {"gravados": 4, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 3,
@@ -320,9 +547,35 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 1}},
         "TBENTCON": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
-        "TBSEGUIA": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_1048": 2,
-                                                   "restricao_destino_4025": 1}},
         "TBVLRTHM": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
-        "TBINTCRC": {"gravados": 3, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2}},
+        "TBTIPPLCONV": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 2,
+                                                      "pai_pendente": 1, "vigencia_sem_fonte": 5}},
+        "TBTISS": {"gravados": 1, "pendencias": {"catalogo_codigo_inexistente": 2, "pai_inexistente": 2,
+                                                 "restricao_destino_1048": 2, "vigencia_sem_fonte": 3}},
+        "TBVLRDTH": {"gravados": 2, "pendencias": {"restricao_destino_1048": 3, "pai_ambiguo": 1,
+                                                   "pai_inexistente": 1, "restricao_destino_4025": 1,
+                                                   "pai_pendente": 1}},
+        "FCCTAEXT": {"gravados": 4, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
+                                                   "restricao_destino_4025": 1, "valor_fora_do_dominio": 2}},
+        "FCDIAEXT": {"gravados": 2, "pendencias": {"pai_ambiguo": 2, "pai_inexistente": 2, "pai_pendente": 1,
+                                                   "restricao_destino_1048": 2}},
     }
+    esperado.update({
+        "TBSEGUIA": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
+        "TBINTCRC": {"gravados": 4, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2,
+                                                   "valor_fora_do_dominio": 1, "aguarda_dimensao_no_modelo": 1}},
+        "FCCTAAUD": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1,
+                                                   "valor_presumido": 4}},
+    })
+    # conferidor r4: preço negociado de mat/med pelo item de referência
+    # r5: + item ligado ao espelho (gravado) e código fora do espelho (espelho_codigo_inexistente + CHECK 4025)
+    esperado["TBPERMEM"] = {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 2,
+                                                          "valor_fora_do_dominio": 1, "espelho_codigo_inexistente": 1}}
+    esperado["TBVLRMEM"] = {"gravados": 2, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_4025": 1,
+                                                 "adotado_existente": 1}}  # a fonte matmed_1 já existe: adotada
+    if RPLANRPA_ATIVA:
+        esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
+    return esperado
+

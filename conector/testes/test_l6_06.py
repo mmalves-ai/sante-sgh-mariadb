@@ -1,11 +1,15 @@
 """Fatia F4 L6-06 (prontuário, assinatura e assistência, módulo PEP): declarações e plano da carga dirigida pelo mapa.
 Só metadado do mapa e a imagem SINTÉTICA (dados 100% falsos); a conciliação roda em conector.sh conferir-fatia."""
+import datetime
 import decimal
+import os
 import re
 import unittest
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_06
+
+RAIZ = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 FATIA = "colunas.d/L6-06.tsv"
 # de-para de valores da fatia (valores.d/L6-06.tsv): nenhum valor presumido em massa
@@ -15,7 +19,14 @@ COM_VALORES = {("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.atendim
                ("PRPROTGERAL", "SEXO", "protocolo_prescricao.sexo"),
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto"),
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao"),
-               ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria")}
+               ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria"),
+               # r6: S/N da checagem -> 'sim'/'nao' do parâmetro booleano do produto (formato canônico)
+               ("PRPARAM_CHECAGEM", "#item", "parametro_valor.valor")}
+
+
+# rodada 5 (ADR 0006): as antes descartadas, que carregam por parâmetro do produto e pelo agrupamento
+R5 = {"PROFTGABARITO", "PROFTGRADUACAO", "PROFTTPARQUIV", "PRPARAM_CHECAGEM", "PRPARAM_PRESCFUTURA", "PRPAROFTALMO",
+      "PRPARTAMPADPRESC", "PRPROCESSOPEP", "PRSITCHECAGEM"}
 
 
 class L6_06(unittest.TestCase):
@@ -89,12 +100,13 @@ class L6_06(unittest.TestCase):
         self.assertEqual((ai["Atendimento inteiro"], hr["Atendimento inteiro"]), ("1", ""))
 
     def test_checagem_antiga_e_duplicado_da_vigente(self):
-        self.assertFalse([c for c in self.decl if c["tabela"] == "PRSITCHECAGEM"])
+        # rodada 5: o cadastro antigo carrega como opções de parâmetro, nunca em situacao_checagem (a vigente)
+        self.assertEqual(self.plano["PRSITCHECAGEM"]["destinos"], ["parametro_opcao"])
         refs = [c for c in self.m["colunas_decl"] if c["destino"].startswith("horario_administracao_evento.situacao_checagem_id")]
         self.assertTrue(refs and all(c["via"] == "ref:PRSITUACAOCHECAGEM" for c in refs))
 
     def test_referencias_declaradas_na_via(self):
-        via = {(c["tabela"], c["coluna"], c["destino"], c["via"]) for c in self.decl if c["via"]}
+        via = {(c["tabela"], c["coluna"], c["destino"], c["via"]) for c in self.decl if c["via"] and c["tabela"] not in R5}
         self.assertEqual(via, {("PROFTEXAME", "ID_OFTGRUPO", "tipo_exame_oftalmologico.grupo_exame_oftalmologico_id",
                                 "ref:PROFTGRUPEXAME"),
                                ("PRPADRECEITA", "USUARIO", "modelo_receita.criado_por", "ref:TBUSERS"),
@@ -120,9 +132,52 @@ class L6_06(unittest.TestCase):
         self.assertEqual((ger["destino"], ger["regra"]), ("protocolo_prescricao.uso_geral", "booleano_sn"))
 
     def test_extensoes_de_arquivo_nao_viram_tipo_de_anexo(self):
-        self.assertIn("PROFTTPARQUIV", l6_06.DESCARTADAS)
-        self.assertNotIn("PROFTTPARQUIV", self.plano)
-        self.assertFalse([c for c in self.m["colunas_decl"] if c["tabela"] == "PROFTTPARQUIV" and c["destino"]])
+        self.assertEqual(self.plano["PROFTTPARQUIV"]["destinos"], ["parametro_opcao"])
+
+    def test_r5_listas_viram_opcoes_de_parametro_do_produto(self):
+        for t, chave in l6_06.PARAMETROS_LISTA.items():
+            lit = {c["destino"]: c for c in self.decl if c["tabela"] == t}
+            self.assertEqual(lit["parametro_opcao.parametro_definicao_id"]["coluna"], "=" + chave, t)
+            self.assertIn("cod:parametro_definicao.chave", lit["parametro_opcao.parametro_definicao_id"]["via"], t)
+            self.assertEqual(lit["parametro_opcao.origem"]["coluna"], "=migracao", t)
+            self.assertIn(chave, l6_06.PREPARO_DESTINO)
+
+    def test_r5_parametros_de_linha_unica_desdobrados(self):
+        for t in ("PRPARAM_CHECAGEM", "PRPARAM_PRESCFUTURA", "PRPAROFTALMO"):
+            self.assertEqual(self.plano[t]["destinos"], ["parametro_valor"], t)
+            item = next(c for c in self.decl if c["tabela"] == t and c["coluna"] == "#item")
+            for par in item["via"].split(";")[0].split(":", 1)[1].split(","):
+                self.assertIn(par.split("=")[1], l6_06.PARAMETROS_VALOR)
+
+    def test_r5_semente_do_produto_cobre_as_chaves_com_o_tipo_certo(self):
+        """Toda chave de parâmetro usada pelas fatias L6-03 a L6-06 está na semente do produto (a mesma do PREPARO),
+        com o tipo do formato gravado: lista nas opções; booleano em sim/nao; inteiro nas durações em minutos."""
+        import re as _re
+        tipos = l6_06.tipos_semente()
+        usadas = set()
+        for f in ("L6-03", "L6-04", "L6-05", "L6-06"):
+            # pelo pacote do mapa (no container a raiz do repositório não existe: /app)
+            with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / (f + ".tsv"), encoding="utf-8") as a:
+                for ln in a:
+                    usadas.update(_re.findall(r"=((?:agenda|pep|oftalmologia|prescricao)\.[a-zA-Z.]+)", ln))
+        self.assertTrue(usadas)
+        self.assertEqual(sorted(usadas - set(tipos)), [])
+        for k in ("prescricao.checagem.loteValidadeObrigatorioMedicamento",
+                  "prescricao.checagem.loteValidadeObrigatorioSolucao",
+                  "prescricao.checagem.loteValidadeObrigatorioHemocomponente"):
+            self.assertEqual(tipos[k], "booleano", k)
+        for k in ("prescricao.futura.tempoAvaliacao", "prescricao.futura.antecedenciaAvaliacao"):
+            self.assertEqual(tipos[k], "inteiro", k)
+        self.assertNotIn("CREATE TABLE IF NOT EXISTS parametro_definicao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                         " chave VARCHAR(100) NOT NULL, modulo_sistema_id BIGINT UNSIGNED NOT NULL, descricao"
+                         " VARCHAR(500) NOT NULL, tipo VARCHAR(30) NOT NULL, criado_em", l6_06.PREPARO_DESTINO)
+        self.assertIn(l6_06.semente_parametros(), l6_06.PREPARO_DESTINO)
+        self.assertEqual(sentinela.aplicar("minutos_em_timestamp", datetime.time(0, 30))[0], 30)
+
+    def test_r5_gabarito_agrupado_pela_forma(self):
+        self.assertEqual(self.plano["PROFTGABARITO"]["destinos"][0], "gabarito_acuidade_visual")
+        cod = next(c for c in self.decl if c["tabela"] == "PROFTGABARITO" and c["destino"] == "tipo_acuidade_visual.codigo")
+        self.assertIn("agrupar:FORMA", cod["via"])
 
     def test_regras_da_fatia(self):
         self.assertEqual(sentinela.aplicar("inteiro_zero_nulo", decimal.Decimal("0.000")), (None, None))

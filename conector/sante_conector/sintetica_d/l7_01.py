@@ -1,6 +1,8 @@
 """Fatia L7-01 (SADT e suprimentos, módulo SADT: hemoterapia, impressão de laudo, exclusão de requisição e
-dispositivo de coleta). Cobertura total: 18 tabelas carregam e 2 são descarte com motivo de produto (parâmetros do
-módulo antigo e cabeçalho do pedido ao fornecedor, em declarado/sem_carga.tsv).
+dispositivo de coleta). Cobertura total: as 20 tabelas carregam (rodada 5, ADR 0006): SHPARAM vira parametro_valor do
+estabelecimento (linha inteira em JSON; senha mestra ao cofre por credencial_integracao) e SHREQUISICAO, o pedido ao
+fornecedor sem paciente, entra na trilha do fornecedor com o retrato e o número do pedido (sem data: a mais antiga com evidência; nunca visto:
+pai_inexistente); a trilha de cada bolsa leva o mesmo número (ligação bolsa -> pedido).
 
 Dados 100% falsos. Anomalias: descrição nula, vazia e só de espaços (NOT NULL no destino), texto com espaços internos
 preservados e nome com espaços colapsados, bytes CP1252, S/N e A/I inválidos e vazios (padrão do destino), ordem
@@ -28,6 +30,14 @@ CREATE TABLE SICADATE_EXCLUSAO (ID INTEGER NOT NULL PRIMARY KEY, ID_SICADATE DOU
 CREATE TABLE SICOLETE (COD SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(40), SITUACAO VARCHAR(1));
 CREATE TABLE PRHEMOTLAN (ID_HEMOTLAN INTEGER NOT NULL PRIMARY KEY, ATO SMALLINT, CODALF VARCHAR(4));
 CREATE TABLE SHCLIENT (CODCLIENTE INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(40));
+CREATE TABLE SHPARAM (ID INTEGER NOT NULL PRIMARY KEY, CEVS VARCHAR(20), SEXO INTEGER, DIASTEMPO INTEGER,
+  GRAVARIMGBANCO VARCHAR(1), CAMINHOIMG VARCHAR(50), FORMULAPADRAOSC INTEGER, IMPDOACAO VARCHAR(300), IMPBOLSA
+  VARCHAR(300), IMPTRANSFUSAO VARCHAR(300), IMPTRANSFERENCIA VARCHAR(300), LANCTRANSPRETRANS VARCHAR(1),
+  IMPPRETRANSFUSAO VARCHAR(300), IMPRELATORIO BLOB, DIGITACAO_OBR_CPF VARCHAR(1), IMPREQUISHEMOCENTRO VARCHAR(300),
+  IMPREQUISPACIENTE VARCHAR(300), COD_REGIONAL SMALLINT, SENHA_MASTER VARCHAR(30), LANCAR_TRANSFUSAO_APOS24H CHAR(1)
+  NOT NULL);
+CREATE TABLE SHREQUISICAO (ID_SHREQUISICAO INTEGER NOT NULL PRIMARY KEY, DATA_HORA TIMESTAMP, COD_FORNEC INTEGER,
+  CRM_SOLICITANTE INTEGER, ID_TBCBOPRO_SOLICITANTE INTEGER);
 CREATE TABLE SHINTER (CODINTER INTEGER NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(50));
 CREATE TABLE SHDOACAO (REGISTRO INTEGER NOT NULL PRIMARY KEY, CODDOADOR INTEGER, DATA DATE NOT NULL,
   CRM_TECNICO INTEGER NOT NULL, HORA VARCHAR(5), RETORNO DATE, INAPTO INTEGER, OBS BLOB SUB_TYPE 1,
@@ -56,12 +66,36 @@ PREPARO_DOS_REQUERIDOS = True  # o preparo da L7-06 (locais, itens) roda antes, 
 PAIS_EXTERNOS = {"SHTECNIC": ["10", "11"], "TBUSERS": ["USR_L7_A", "USR_L7_B"], "TBTPSANGUINEO": ["1", "2", "3", "4"],
                  "TBFATORRH": ["1", "2"], "SHDOADOR": ["1", "2", "3"]}
 # @estabelecimento: o estabelecimento único do cliente de exemplo
-PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+def _preparo_definicoes(chaves, modulo):
+    """SQL do PREPARO_DESTINO: módulo do produto e definições dos parâmetros (catálogo do produto; a migração nunca
+    cria definição). Próprio da fatia, para não depender do preparo de outra."""
+    sel = " UNION ALL ".join("SELECT '%s' AS c" % c for c in chaves)
+    return ("INSERT INTO modulo_sistema (codigo, descricao, criado_em) SELECT '%s', '%s', UTC_TIMESTAMP(3) FROM DUAL"
+            " WHERE NOT EXISTS (SELECT 1 FROM modulo_sistema WHERE codigo = '%s');"
+            " INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_estabelecimento,"
+            " criado_em) SELECT x.c, (SELECT MIN(id) FROM modulo_sistema WHERE codigo = '%s'), x.c, 'texto', TRUE,"
+            " UTC_TIMESTAMP(3) FROM (%s) x WHERE NOT EXISTS (SELECT 1 FROM parametro_definicao d WHERE d.chave = x.c)"
+            % (modulo, modulo, modulo, modulo, sel))
+
+
+# r5 achado (ADR 0006/0003): um valor por chave do produto (SHPARAM desdobrado em parametro_valor)
+CHAVES_PARAMETROS = tuple("sadt.hemoterapia." + c for c in (
+    "codigoCevs", "sexoPadrao", "prazoDias", "gravarImagemNoBanco", "diretorioImagens", "formulaSuperficieCorporal",
+    "modeloImpressaoDoacao", "modeloImpressaoBolsa", "modeloImpressaoTransfusao", "modeloImpressaoTransferencia",
+    "lancarTransfusaoNaPreTransfusao", "modeloImpressaoPreTransfusao", "exigeCpfDoador",
+    "modeloImpressaoRequisicaoHemocentro", "modeloImpressaoRequisicaoPaciente", "codigoRegionalSaude",
+    "lancarTransfusaoApos24h"))
+# r6: o estabelecimento é a tabela REAL do modelo (criada pela conferência a partir do preparo), não uma tabela
+# provisória: o preparo da L7-06 (REQUER, roda antes) já grava nela com o código
+PREPARO_DESTINO = ("INSERT INTO estabelecimento (id, codigo) SELECT 1, 'exemplo' FROM DUAL"
+                   " WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
                    # o município que o cadastro de fornecedores da L7-06 (REQUER) usa: só o preparo desta fatia roda
                    " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em)"
                    " SELECT '3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3) FROM DUAL"
-                   " WHERE NOT EXISTS (SELECT 1 FROM municipio_ibge WHERE codigo_ibge = '3550308')")
+                   " WHERE NOT EXISTS (SELECT 1 FROM municipio_ibge WHERE codigo_ibge = '3550308'); "
+                   # r5 achado: definições dos parâmetros da hemoterapia (catálogo do produto, pedido em
+                   # saida/L7-01.json; a migração nunca cria definição)
+                   + _preparo_definicoes(CHAVES_PARAMETROS, "sadt"))
 
 
 def linhas(r, ins):
@@ -111,6 +145,15 @@ def linhas(r, ins):
               (2, None),                                                            # nome nulo: 1048
               (3, "Hemocentro exemplo")]:                                           # sem empresa: pai_inexistente
         ins("SHCLIENT", list(v))
+    # r5: parâmetros (1 com senha mestra: cofre; sem chave mestra, segredo_aguarda_cofre) e pedidos ao fornecedor
+    # (1 grava; 2 sem data: grava com a data mais antiga com evidência, vigencia_sem_fonte; 3 fornecedor nunca visto:
+    # pai_inexistente, grava sem o fornecedor). As bolsas apontam o pedido 1: a trilha de cada bolsa leva o número dele
+    ins("SHPARAM", [1, "CEVS-0001", 1, 30, "N", None, 1, "Modelo doação", None, None, None, "S", None,
+                    b"modelo falso", "S", None, None, 1, "senha-falsa", "N"])
+    import datetime as _dt
+    for v in [(1, _dt.datetime(2025, 2, 3, 10, 0), 1, 1234, None), (2, None, 1, None, None),
+              (3, _dt.datetime(2025, 2, 4, 11, 30), 77, None, None)]:
+        ins("SHREQUISICAO", list(v))
     for v in [(1, "Hematoma exemplo"), (2, "Lipotimia exemplo"), (3, None)]:       # nula: 1048
         ins("SHINTER", list(v))
     d = datetime.date
@@ -170,6 +213,12 @@ def linhas(r, ins):
     return {
         "PRHEMOTLAN": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "SHCLIENT": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+        # r6: desdobrado, um valor por coluna preenchida (10 itens); sem chave mestra na conferência o cofre falha
+        # fechado e a credencial (destino opcional) não grava: só segredo_aguarda_cofre, sem recusar os parâmetros
+        "SHPARAM": {"gravados": 10, "pendencias": {"segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 1}},
+        # fornecedor sem dependência de ordem declarada (pedido em saida/L7-01.json): pai_inexistente nas 3 linhas
+        # até a aresta SHREQUISICAO -> SHCLIENT; depois, só a do fornecedor 77
+        "SHREQUISICAO": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "vigencia_sem_fonte": 1}},
         "SHINTER": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "SHDOACAO": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 4,
                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1}},

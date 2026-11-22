@@ -62,7 +62,23 @@ export class RepositorioOnboardingPlataforma implements RepositorioOnboarding {
     return l ? execucaoDaLinha(l) : null;
   }
 
-  async enfileirar(codigo: string, tipo: 'importar' | 'sincronizar', admin: number | null): Promise<number> {
+  async historico(codigo: string, limite = 20): Promise<ExecucaoConector[]> {
+    const linhas = await this.nucleo.lerPlataforma('onboarding-historico', (x) =>
+      x.consultar(
+        `SELECT ${COLUNAS_EXECUCAO} FROM conector_execucao e JOIN cliente c ON c.id = e.cliente_id
+          WHERE c.codigo = ? ORDER BY e.id DESC LIMIT ${Math.max(1, Math.min(100, Math.trunc(limite)))}`,
+        [codigo],
+      ),
+    );
+    return linhas.map(execucaoDaLinha);
+  }
+
+  async enfileirar(
+    codigo: string,
+    tipo: 'importar' | 'sincronizar',
+    admin: number | null,
+    confirmarExclusaoEmMassa = false,
+  ): Promise<number> {
     try {
       return await this.nucleo.escreverPlataforma('onboarding-enfileirar', async (e) => {
         const cli = await e.consultarParaAtualizar<{ id: number }>(
@@ -85,16 +101,33 @@ export class RepositorioOnboardingPlataforma implements RepositorioOnboarding {
             throw new ErroOnboarding('invalido', 'Sincronizar exige uma importação concluída.');
         }
         const eid = await e.inserir(
-          `INSERT INTO conector_execucao (cliente_id, cliente_origem_id, tipo, estado, etapa, solicitado_em,
-                                          solicitado_por, criado_em, criado_por)
-           VALUES (?, ?, ?, 'fila', 'aguardando o motor', UTC_TIMESTAMP(3), ?, UTC_TIMESTAMP(3), ?)`,
-          [cid, origem.id, tipo, admin, admin],
+          `INSERT INTO conector_execucao (cliente_id, cliente_origem_id, tipo, estado, etapa,
+                                          confirmar_exclusao_em_massa, solicitado_em, solicitado_por, criado_em,
+                                          criado_por)
+           VALUES (?, ?, ?, 'fila', 'aguardando o motor', ?, UTC_TIMESTAMP(3), ?, UTC_TIMESTAMP(3), ?)`,
+          [cid, origem.id, tipo, confirmarExclusaoEmMassa ? 1 : 0, admin, admin],
         );
         await e.executar(
           `INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, administrador_plataforma_id, criado_em,
                                        criado_por)
            VALUES (?, ?, ?, UTC_TIMESTAMP(3), ?, UTC_TIMESTAMP(3), ?)`,
-          [cid, EVENTO[tipo], JSON.stringify({ estado: 'fila', execucao_id: eid, tipo }), admin, admin],
+          [
+            cid,
+            EVENTO[tipo],
+            JSON.stringify(
+              confirmarExclusaoEmMassa
+                ? {
+                    confirmado_por: admin,
+                    confirmar_exclusao_em_massa: true,
+                    estado: 'fila',
+                    execucao_id: eid,
+                    tipo,
+                  }
+                : { estado: 'fila', execucao_id: eid, tipo },
+            ),
+            admin,
+            admin,
+          ],
         );
         return eid;
       });

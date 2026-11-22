@@ -9,22 +9,57 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
    "mudanca": "data (datetime.date, não datetime) em coluna DATETIME/TIMESTAMP vira datetime.combine(x, time()) antes da soma; o mesmo pedido 1 do L8-09.json e do L8-14.json. Patch: em tipar(), antes do return final: `if tipo in (\"datetime\", \"timestamp\") and isinstance(x, datetime.date) and not isinstance(x, datetime.datetime): return datetime.datetime.combine(x, datetime.time())`",
-   "motivo": "pedido_vinculo_profissional_externo.solicitado_em é DATETIME(3) NOT NULL com =~@data_carga (data): o resumo da origem 'AAAA-MM-DD' não casa com o relido 'AAAA-MM-DD 00:00:00.000' e a conciliação de TBMEDSOLWEBCAD diverge (origem 6, destino 3, recusados 3; pendências conforme o esperado). Único erro restante da autoconferência do L8-16"
+   "motivo": "pedido_vinculo_profissional_externo.solicitado_em é DATETIME(3) NOT NULL com =~@data_carga (data): o resumo da origem 'AAAA-MM-DD' não casa com o relido 'AAAA-MM-DD 00:00:00.000' e a conciliação de TBMEDSOLWEBCAD diverge (origem 6, destino 3, recusados 3; pendências conforme o esperado). Único erro restante da autoconferência do L8-16",
+   "atendido": "rodada 3: conciliação de TBMEDSOLWEBCAD confere (origem 6, destino 3, recusados 3) na autoconferência"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "rebaixar para BLOQUEADA (pai_nao_carregado) a tabela cuja referência para coluna NOT NULL do destino aponta para pai BLOQUEADO na cobertura global, mesmo com declaração completa; e `complementa` não exige as colunas obrigatórias do destino",
-   "motivo": "GEINTAPOIOCOT (pai GECADPED, L7-07) e SITBEXEQ (pai SITPEQV, L7-03) aparecem como CARREGA mas gravam zero na imagem real enquanto os pais estiverem bloqueados; complementa ainda vale para FAMEDSOL (L5-04) e SITPEQV_SITPEQVMODELO (L7-03)"
+   "motivo": "GEINTAPOIOCOT (pai GECADPED, L7-07) e SITBEXEQ (pai SITPEQV, L7-03) aparecem como CARREGA mas gravam zero na imagem real enquanto os pais estiverem bloqueados; complementa ainda vale para FAMEDSOL (L5-04) e SITPEQV_SITPEQVMODELO (L7-03)",
+   "atendido": "rodada 3: cobertura acusa pai_nao_carregado"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh",
    "mudanca": "passo 6: `python3 -I tools/obra/cobertura_conector.py --fatia $F --falhar-se-bloqueada` (com a regra de pai bloqueado acima)",
-   "motivo": "o ok da autoconferência não atesta a cobertura total pedida na rodada"
+   "motivo": "o ok da autoconferência não atesta a cobertura total pedida na rodada",
+   "atendido": "rodada 3: passo 6 da autoconferência acusa as bloqueadas"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (opcional, rodada seguinte)",
    "mudanca": "especial de referência por código a cadastro do produto já gravado (ex.: '=ref:padrao_troca.codigo=<x>'), recusa com pendência se o código não existir",
    "motivo": "permitiria rever os descartes de FPESOCTPAMB e TBREGUL_ENDPOINT como ponto_integracao, se o dono preferir carregar os endereços"
+  },
+  {
+   "arquivo": "(dependência de outras fatias, nada a mudar no L8-16)",
+   "mudanca": "nenhuma no L8-16: GEINTAPOIOCOT e SITBEXEQ têm declaração completa e carregam na imagem sintética (2 gravados cada, pais dados como já carregados); destravam sozinhas quando os pais carregarem",
+   "motivo": "rodada 3: as 2 bloqueadas da fatia são pai_nao_carregado de pais de outras fatias, com coluna NOT NULL sem fonte alternativa: GECADPED (L7-07, espera o mecanismo destino_condicional do saida/L7-07.json) -> vinculo_pedido_compra_portal.pedido_compra_id; SITPEQV (L7-03, espera o DDL da interface inativa sem alvo do saida/L7-03.json) -> equivalencia_exame_equipamento.interface_equipamento_id. Descartar seria fugir de trabalho (regra 23): é dado de compras e de integração de laboratório que o hospital usa"
+  },
+  {
+   "arquivo": "db/migracoes/17_INTG/01_tabelas.sql (trilha F2.2; banco descartável da conferência)",
+   "mudanca": "material_laboratorio_apoio.material_biologico_id e elemento_exame_laboratorio_apoio.analito_id passam a NULL (equivalência a conferir: o cliente liga o material e o analito próprios na tela; o motor de integração só usa a linha com os dois preenchidos)",
+   "motivo": "SIMATHP (321) e SITBELHP (7771) são configuração do cliente com o laboratório de apoio sem outra fonte; a origem não aponta o material nem o analito próprios. Declarações prontas e comentadas em colunas.d/L8-16.tsv",
+   "atendido": "rodada 4 (DDL): db/migracoes/17_INTG/05"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (especiais)",
+   "mudanca": "especial `@presumido:<T>/<destino>`: id do destino que a linha de T de menor chave original gravou, entre as ativas no destino (coluna `ativo` verdadeira, se houver); grava com pendência baixa `valor_presumido` por linha; nenhuma carregada: `pai_inexistente` (coluna NOT NULL recusa); ordem: T antes da tabela (aresta automática)",
+   "motivo": "TBREGUL_TABELAS -> tabela_codigo_regulacao.sistema_externo_id (NOT NULL): a origem não aponta a central dona e há 2 sistemas de regulação (TBREGUL_SISTEMA, L6-15). Declaração pronta e comentada; destrava também TBREGUL_VLR_TABELAS"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06)",
+   "mudanca": "declarar TBESPEC.ID_TBDIGITAL_ESPECIALIDADE para mapeamento_codigo_externo (destino secundário opcional): entidade `=especialidade_medica`, entidade_id `@id`, codigo_externo por `ref:TBDIGITAL_ESPECIALIDADE>ID_DIGITAL`, descricao_externa por `ref:TBDIGITAL_ESPECIALIDADE>NOME`, sistema_externo_id do parceiro de prescrição digital (secundário `sistema_externo` antes;adotar:codigo com código presumido) e tipo_mapeamento_codigo_id por `cod:tipo_mapeamento_codigo.codigo` (especialidade)",
+   "motivo": "a ligação especialidade do cliente -> especialidade do parceiro de prescrição digital não carrega por nenhuma fonte; com ela, TBDIGITAL_ESPECIALIDADE (L8-16) volta a descarte duplicado verdadeiro"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py",
+   "mudanca": "Dependência de ordem TBDIGITAL_ESPECIALIDADE -> TBESPEC (e regerar tabelas.tsv)",
+   "motivo": "O mapeamento do parceiro (TBDIGITAL_ESPECIALIDADE, uma equivalência por especialidade com `ref:TBESPEC.ID_TBDIGITAL_ESPECIALIDADE;por_pai`) carrega antes da especialidade: hoje toda linha sai pai_inexistente (efeito real na imagem sintética); com a ordem: 3 equivalências de 3 linhas lidas, 1 sem especialidade ligada"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv e ciclos.tsv",
+   "mudanca": "TBDIGITAL_ESPECIALIDADE -> TBESPEC (ordem) e ciclo TBESPEC -> TBDIGITAL_ESPECIALIDADE em duas fases; mapa regerado",
+   "motivo": "a equivalência acha a especialidade pela chave alternativa",
+   "atendido": "rodada 4 (revisão L8-16): feito pela fatia; conferência 3 itens, 1 pai_inexistente, 2 adotados"
   }
  ]
 }

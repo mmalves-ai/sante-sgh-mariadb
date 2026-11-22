@@ -10,3 +10,7 @@ PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao	1	suspenso	L6-12: c
 PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao		finalizado	L6-12: sem suspensão = finalizado
 PRATESTREQIMP	DATA_HORA_SUSPENSAO	documento_emitido.situacao	1	suspenso	L6-12: com suspensão = suspenso
 PRATESTREQIMP	DATA_HORA_SUSPENSAO	documento_emitido.situacao		valido	L6-12: sem suspensão = válido
+PRPLANPRESC	TP_PRESCRICAO	prescricao.tipo	G	medica	L6-12 r5: geral = prescrição médica (como PRPRESC)
+PRCABEVOLTMP	DATA_HORA_SUSPENSAO	registro_assistencial_rascunho.situacao	1	descartado	L6-12 r5 (ADR 0006): rascunho suspenso na origem entra descartado (não volta aberto); a suspensão fica na trilha
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.situacao_registro	1	descartado	L6-12 r6: rascunho pai arquivado na origem (preenchido) = alergia descartada (não volta aberta)
+PRALERGIAPACTMP	ID	alergia_paciente.situacao_registro	1	descartado	L6-12 r6: rascunho pai suspenso na origem (só sob a condição se:) = alergia descartada

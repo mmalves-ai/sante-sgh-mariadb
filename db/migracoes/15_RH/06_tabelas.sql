@@ -1,21 +1,36 @@
--- RH, lote 06 (F2.2 ondas finais, onda 5c; pedido do lote 05-16). Convenções do ADR 0002 (parte 2). Só para frente.
--- Sem FOREIGN KEY: a tabela só guarda contagens da rede inteira (nenhum id de pessoa nem de estabelecimento).
+-- RH, lote 6 (F4 conector, rodada 4: pedidos de modelo das fatias, registrados para a trilha F2.2 em
+-- docs/obra/passagens/F4-pedidos-f22.md). Convenções do ADR 0002 (parte 2). Só para frente.
+-- Sem FOREIGN KEY aqui (06_chaves.sql).
 
--- 05-16: retrato diário da validade do registro no conselho dos colaboradores (M52.1). O worker calcula pela regra do
--- domínio e grava pela operação pessoas.registrar_retrato_conselho (Executor); rodar de novo no mesmo dia refaz a linha.
-CREATE TABLE retrato_validade_conselho (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  dia           DATE NOT NULL COMMENT 'Dia civil do retrato (refeito se o worker rodar de novo no dia)',
-  janela_dias   SMALLINT UNSIGNED NOT NULL COMMENT 'Janela de alerta do parâmetro pessoas.alertaConselhoDias usada',
-  registros     INT UNSIGNED NOT NULL COMMENT 'Inscrições ativas de colaboradores ativos',
-  vencidos      INT UNSIGNED NOT NULL COMMENT 'Inscrições com a validade vigente já vencida no dia',
-  a_vencer      INT UNSIGNED NOT NULL COMMENT 'Inscrições que vencem dentro da janela de alerta',
-  sem_validade  INT UNSIGNED NOT NULL COMMENT 'Inscrições sem validade conhecida',
-  criado_em     DATETIME(3) NOT NULL,
-  criado_por    BIGINT UNSIGNED NULL,
-  alterado_em   DATETIME(3) NULL,
-  alterado_por  BIGINT UNSIGNED NULL,
-  versao        INT UNSIGNED NOT NULL DEFAULT 1,
-  CONSTRAINT ck_retrato_validade_conselho_contagens CHECK (vencidos + a_vencer + sem_validade <= registros),
-  UNIQUE KEY uq_retrato_validade_conselho_dia (dia)
-) COMMENT='Retrato diário da validade do registro no conselho dos colaboradores (só contagens; sem dado de pessoa)';
+-- L5-07 (5): tipos de admissão e condições de ingresso do leiaute oficial
+ALTER TABLE vinculo_trabalho DROP CONSTRAINT ck_vinculo_trabalho_tipo_admissao;
+ALTER TABLE vinculo_trabalho ADD CONSTRAINT ck_vinculo_trabalho_tipo_admissao CHECK (tipo_admissao IN ('admissao','transferencia_mesmo_grupo','transferencia_consorcio','transferencia_sucessao','transferencia_domestico','transferencia_sucedida_inapta','transferencia_cessao','reintegracao','mudanca_cpf','transferencia_regime'));
+ALTER TABLE estrangeiro_colaborador DROP CONSTRAINT ck_estrangeiro_colaborador_condicao_ingresso;
+ALTER TABLE estrangeiro_colaborador ADD CONSTRAINT ck_estrangeiro_colaborador_condicao_ingresso CHECK (condicao_ingresso IN ('refugiado','solicitante_refugio','reuniao_familiar','residencia_mercosul','tratado_brasil_portugal','residencia_humanitaria','residencia_trabalho','dependente_diplomata','outra'));
+
+-- L5-08 (4): escolha do empregador para gerar o evento de pagamentos
+ALTER TABLE cadastro_empregador
+  ADD COLUMN geracao_evento_pagamentos VARCHAR(30) NULL COMMENT 'Quando gerar o evento de pagamentos: pagamento_folha, baixa_financeira ou manual',
+  ADD CONSTRAINT ck_cadastro_empregador_geracao_evento_pagamentos CHECK (geracao_evento_pagamentos IS NULL OR geracao_evento_pagamentos IN ('pagamento_folha','baixa_financeira','manual'));
+
+-- L5-12 (7): habilitação do lançamento automático antes da escolha da rubrica
+ALTER TABLE lancamento_automatico_rubrica
+  MODIFY COLUMN rubrica_id BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Rubrica lançada; nula: habilitado, rubrica a escolher';
+ALTER TABLE lancamento_automatico_rubrica DROP CONSTRAINT ck_lancamento_automatico_rubrica_evento_gatilho;
+ALTER TABLE lancamento_automatico_rubrica ADD CONSTRAINT ck_lancamento_automatico_rubrica_evento_gatilho CHECK (evento_gatilho IN ('salario_familia','vale_transporte','adiantamento','insalubridade','periculosidade','adicional_noturno','pensao_alimenticia','consignado','contribuicao_sindical','beneficio','licenca_maternidade','rescisao','afastamento','outro'));
+
+-- L5-12 (8): incidência pelo tributo, com o código oficial e a guia opcionais
+ALTER TABLE incidencia_rubrica
+  ADD COLUMN tributo VARCHAR(30) NULL COMMENT 'Tributo em que a rubrica incide (mesmo domínio de codigo_incidencia_rubrica.tributo)' AFTER rubrica_id,
+  MODIFY COLUMN tributo_folha_id BIGINT UNSIGNED NULL DEFAULT NULL,
+  MODIFY COLUMN codigo_incidencia_rubrica_id BIGINT UNSIGNED NULL DEFAULT NULL COMMENT 'Código de incidência do leiaute oficial; nulo: a completar pelo cliente',
+  ADD CONSTRAINT ck_incidencia_rubrica_tributo CHECK (tributo IS NULL OR tributo IN ('inss','irrf','fgts','pis_pasep','contribuicao_sindical','regime_proprio')),
+  ADD CONSTRAINT ck_incidencia_rubrica_alvo CHECK (tributo IS NOT NULL OR codigo_incidencia_rubrica_id IS NOT NULL),
+  ADD UNIQUE KEY uq_incidencia_rubrica_tributo (rubrica_id, tributo, vigencia_inicio);
+
+-- L5-12 (9)
+ALTER TABLE justificativa_ponto
+  ADD COLUMN mantenedora_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para toda a rede' AFTER id,
+  ADD KEY ix_justificativa_ponto_mantenedora_id (mantenedora_id),
+  DROP INDEX uq_justificativa_ponto_codigo,
+  ADD UNIQUE KEY uq_justificativa_ponto_codigo (mantenedora_id, codigo);

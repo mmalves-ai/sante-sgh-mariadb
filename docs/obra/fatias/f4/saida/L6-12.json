@@ -1,14 +1,22 @@
 {
  "pedidos": [
   {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv (fatia L6-11)",
+   "mudanca": "carregar PRASSINATURA_CAB (documento_prontuario; precisa do autor, momento e situação do primeiro/último evento de PRASSINATURA_DOC: M3, referência reversa primeiro/último) e PRPADEVOL (modelo_campo por ref:PREVOLUCAO/modelo_documento_versao, mecanismo da rodada 2 já disponível)",
+   "motivo": "as duas últimas bloqueadas da L6-12 são só pai_nao_carregado: PRASSINATURA_DOC (documento_prontuario_evento.documento_prontuario_id NOT NULL por ref:PRASSINATURA_CAB) e PREVOLPAC (registro_assistencial_resposta.modelo_campo_id NOT NULL por ref:PRRESPOSTA>ID_PRPERGUNTA>PRPADEVOL.ID_PRPERGUNTA). Declarações, imagem sintética e conciliação da L6-12 prontas e conferidas (pais tratados como externos); passam a CARREGA sem mudança aqui quando a L6-11 carregar os pais",
+   "atendido": "atendido na rodada 3: a L6-11 declara PRASSINATURA_CAB e PRPADEVOL/PRRESPOSTA; a imagem sintética da L6-12 carrega PREVOLUCAO, PRPADEVOL e PRRESPOSTA pela declaração da L6-11 (conciliado e idempotente). Resta na L6-11 a referência reversa ao primeiro/último evento (PRASSINATURA_DOC.ID_PRASSINATURA_CAB repete por documento: pai_ambiguo)"
+  },
+  {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "destino com 'complementa' na via não exige as colunas NOT NULL do destino (juntar 'complementa' ao conjunto dos opcionais)",
-   "motivo": "PRCONTEVOL carrega por complementa (conferido e idempotente) e a ferramenta a conta como BLOQUEADA (coluna_obrigatoria_sem_fonte)"
+   "motivo": "PRCONTEVOL carrega por complementa (conferido e idempotente) e a ferramenta a conta como BLOQUEADA (coluna_obrigatoria_sem_fonte)",
+   "atendido": "atendido: a cobertura já não exige NOT NULL de destino complementa (PRCONTEVOL conta CARREGA)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py",
    "mudanca": "catálogo oficial 'dcb' em CATALOGOS: dict(tabela='principio_ativo', coluna='codigo_dcb', normalizar=<texto aparado, maiúsculas, só [0-9A-Z], zeros à esquerda até 5 dígitos>, chave=lambda c: c, filtro=None, descricao='princípio ativo pela DCB')",
-   "motivo": "PRALERGIAPAC_TBPRINC (29.858 na referência, alergia a princípio ativo) segue BLOQUEADA por mecanismo; declaração pronta e comentada (ref:TBPRINC>COD_DCB, depara dcb). Mesmo pedido de L7-07 (GEITENS_TBPRINC) e L6-11 (PRITEMNAOPAD_TBPRINC, TBALERGIA_TBPRINC)"
+   "motivo": "PRALERGIAPAC_TBPRINC (29.858 na referência, alergia a princípio ativo) segue BLOQUEADA por mecanismo; declaração pronta e comentada (ref:TBPRINC>COD_DCB, depara dcb). Mesmo pedido de L7-07 (GEITENS_TBPRINC) e L6-11 (PRITEMNAOPAD_TBPRINC, TBALERGIA_TBPRINC)",
+   "atendido": "dispensado na rodada 3: PRALERGIAPAC_TBPRINC carrega por ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb com regra inteiro_zeros_esquerda:5 (mecanismos existentes; conferido na imagem sintética). L6-11 (PRITEMNAOPAD_TBPRINC, TBALERGIA_TBPRINC) e L7-07 (GEITENS_TBPRINC) podem declarar igual"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (conciliação)",
@@ -47,8 +55,9 @@
   },
   {
    "arquivo": "conector (integrador)",
-   "mudanca": "mecanismo de arquivo: XML/QRP/assinatura do registro (PRCONTEVOL), documento assinado (PRASSINATURA_DOC.DOCUMENTO_ORIGINAL/DOCUMENTO_XML_IMPRESSAO -> arquivo_id) e anexos (PRGEDIMP)",
-   "motivo": "o conector não grava arquivos"
+   "mudanca": "mecanismo #arquivo (M4): XML/QRP/assinatura do registro (PRCONTEVOL), documento assinado (PRASSINATURA_DOC -> arquivo_id, assinatura_documento, documento_assinado; hoje no retrato do evento) e anexos (PRGEDIMP, BLOQUEADA, declaração comentada pronta; PRPAREVOLIMG na L6-11)",
+   "motivo": "pendência ALTA: prova legal da assinatura e anexos clínicos só existem como binário/texto na imagem; anexo_prontuario.arquivo_id e documento_assinado.arquivo_id são NOT NULL",
+   "atendido": "conferidor r4 (tentativa 2)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + pendencia.py",
@@ -69,6 +78,83 @@
    "arquivo": "orquestrador",
    "mudanca": "rodar python3 -I tools/obra/gerar_mapa_conector.py e conferir fatiar_conector (L8-17, L8-18, indice.tsv)",
    "motivo": "diferenças de fora desta fatia"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "estado de carga parcial: tabela planejada cuja recusa medida na referência passa de um limite (ex.: 20%) ou com coluna de origem esperando #arquivo conta à parte de CARREGA (ex.: CARREGA_PARCIAL com a causa)",
+   "motivo": "PRPRESCMED (~99,9% recusam pelo CHECK), PRITENSGERAL (~98% pela unidade), PRPRESCHEMO (0 de 910), PREVOLPAC (pergunta em vários modelos), PRASSINATURA_DOC e PRCONTEVOL (documento assinado sem arquivo) contam CARREGA: a meta zero bloqueadas fica só no papel",
+   "atendido": "conferidor r4 (tentativa 2)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (orquestrador)",
+   "mudanca": "arestas de ordem PREXAMEASSINATURA -> PRASSINATURA_CAB e PREXAMEASSINATURA -> SILANEXA (e PRASSINATURA_DOC, lida pela encadeada)",
+   "motivo": "exame_item_assinatura (L7-04) lê o documento pela ligação PRASS_DOC_PREXAMEASS (descarte duplicado da L6-12) e o exame por SILANEXA; ordem 848 antes de 1106 e 1145: a primeira carga recusa toda ligação",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv + sem_carga.tsv (fatia L6-11)",
+   "mudanca": "PRASSINATURA_CAB: o documento_prontuario passa a ser criado pela PRASSINATURA_DOC (L6-12, secundário antes;agrupar:ID_PRASSINATURA_CAB, entidade_origem 'documento_migrado', entidade_origem_id = id do cabeçalho). Na L6-11: retirar a declaração comentada que grava o documento e tratar a tabela como 'complementa' do documento só para DOCUMENTO_CONSOLIDADO (conteudo, #retrato) e ID_TABELA, ou descarte duplicado se o motor não achar o documento",
+   "motivo": "a alternativa sem motor novo pedida pela L6-11 está pronta e conferida na L6-12 (2 documentos, 3 eventos na imagem sintética, idempotente); falta só o texto consolidado do cabeçalho"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência por chave alternativa)",
+   "mudanca": "ref:T.K/<destino> com K repetido não dá pai_ambiguo quando todas as linhas candidatas apontam o MESMO id nesse destino secundário (ex.: ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB/documento_prontuario, destino agrupado)",
+   "motivo": "PRASSINATURA_CAB (L6-11) complementar o documento criado pelo grupo dos eventos (documento consolidado) sem M3"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-04.tsv e a fatia de PRASSINAT_DOC_PRCHKGERAL",
+   "mudanca": "o documento do prontuário vem do evento: trocar '>ID_PRASSINATURA_CAB>PRASSINATURA_CAB' por '>ID_PRASSINATURA_DOC>PRASSINATURA_DOC/documento_prontuario' (PREXAMEASSINATURA: ref:PRASS_DOC_PREXAMEASS.ID_PREXAMEASSINATURA>ID_PRASSINATURA_DOC>PRASSINATURA_DOC/documento_prontuario)",
+   "motivo": "PRASSINATURA_CAB não grava mais o documento; PREXAMEASSINATURA (BLOQUEADA por pai_nao_carregado:PRASSINATURA_CAB) passa a carregar"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv (PRRESPOSTA, quando carregar)",
+   "mudanca": "manter código = ID_RESPOSTA (inteiro) e adotar:modelo_campo_id,codigo no modelo_campo_opcao",
+   "motivo": "PREVOLPAC (L6-12) já cria a opção respondida por campo x código pela mesma chave; a carga da L6-11 adota as mesmas linhas sem duplicar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (M3)",
+   "mudanca": "agregado do grupo pelo ÚLTIMO da ordem da chave (ex.: #grupo_ultimo:ID_PRSITDOCUMENTO)",
+   "motivo": "documento_prontuario.situacao_documento_prontuario_id = situação atual (último evento); hoje fica a do primeiro e o histórico completo está nos eventos"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (registro_assistencial_rascunho) ou conector/sante_conector/carga_mapa.py (conciliar)",
+   "mudanca": "r5: respostas JSON NOT NULL DEFAULT ('[]') no rascunho, OU conciliação que exclua da soma de controle a coluna gravada por complementa de outra tabela",
+   "motivo": "levar as respostas em edição (PREVOLPACTMP) para o próprio rascunho; hoje ficam na trilha do rascunho (#grupo_json), sem perda"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "r5: especial de número de negócio pela sequência do destino (próximo número de sequencia_negocio/MAX+1) para registro criado pela migração sem número na origem",
+   "motivo": "prescrição futura de PRPLANPRESC usa hoje 9000000+chave (sem colisão, mas fora da sequência)"
+  },
+  {
+   "arquivo": "docs/obra/fatias/f4/L6-12.md e indice.tsv (fatiar_conector)",
+   "mudanca": "r5: regenerar a fatia (o conferir acusa 'arquivo diferente do gerado' por mudanças compartilhadas do mapa)",
+   "motivo": "orquestrador"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.condicao (PRIORIDADE ALTA)",
+   "mudanca": "r5b: condição por comparação com a data da carga: se:/destino_se: 'COL>@data_carga' e 'COL<=@data_carga' (também no fim da encadeada)",
+   "motivo": "PRCABEC_MONITORIZACAO: encerrada se VIGENCIA_FINAL <= carga, senão ativa; PRPLANPRESC: programada/futura só se DATA_HORA_FINAL_VIGENCIA > carga, senão cancelada/vencida. Hoje a decisão usa a saída efetiva do atendimento (encerrado = encerrada/cancelado); falta o caso do atendimento em curso com vigência já passada"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (verificador) + carga_mapa.py",
+   "mudanca": "r5b: a MESMA coluna da origem declarada mais de uma vez para o mesmo destino com vias diferentes (concorrentes; mesmo pedido da L6-13)",
+   "motivo": "PRCABEC_MONITORIZACAO.responsavel_profissional_id: assistente, senão solicitante (ref:HTATENDIMENTO>ID_TBCBOPRO_SOLICITANTE...), senão o profissional do atendimento (ATCABECATEND.ID_TBCBOPRO_ATENDIMENTO); hoje sem assistente a linha recusa (1048)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação) — PRIORITÁRIO",
+   "mudanca": "r5b: coluna regravada por destino 'complementa' de OUTRA tabela sai da soma de controle da entidade do pai (registro_assistencial_rascunho.respostas, gravada por PREVOLPACTMP)",
+   "motivo": "a declaração já grava as respostas no PRÓPRIO rascunho (ADR 0006, 2); a conferência da L6-12 diverge SÓ nessa entidade (conferido false, origem 5, destino 4, recusados 1) até isso entrar"
+  },
+  {
+   "arquivo": "domínio do prontuário (contrato de resposta do registro) ou conector",
+   "mudanca": "r5b: converter a lista do grupo (#grupo_json com ID_RESPOSTA, SEQ, ORDEM, RESPALFA, RESPVALOR, RESPDATA, RESPHORA, RESPSNAO, UNIDRESP, CONTEVOL...) ao contrato de resposta do registro (campo do modelo pela opção/pergunta)",
+   "motivo": "o rascunho já abre com as respostas, mas no formato da origem; a tela precisa delas no contrato para finalizar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter)",
+   "mudanca": "aplicar a regra e o de-para de valores (depara=valores) também ao valor copiado por ref:T@<coluna> (cópia da coluna do destino que o pai gravou); hoje a cópia retorna antes do de-para",
+   "motivo": "L6-12 r6: alergia_paciente.situacao_registro = estado do rascunho pai NO PRODUTO (aberto -> rascunho; descartado/arquivado -> descartado) saía cru ('aberto') e o CHECK recusava 2 de 2 alergias em rascunho válidas. Contornado na fatia com concorrentes condicionadas (se:) pelas mesmas colunas da origem que dão o estado do rascunho; com o pedido atendido a declaração pode voltar a ref:PRCABEVOLTMP@situacao"
   }
  ]
 }

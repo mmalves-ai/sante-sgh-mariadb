@@ -15,7 +15,7 @@
 // uma numa faixa própria, unidas) e só então calcula a mudança e ordena o lote, em vez de varrer as tabelas inteiras.
 // Pendência registrada (saida/05-15.json): a marca da leitura incremental fica em memória do processo (não há tabela
 // de marca de processamento no modelo); ao reiniciar, recomeça uma hora antes do último índice gravado. Os índices
-// das colunas de mudança estão no modelo (db/migracoes/03_CAD/08_tabelas.sql, onda 5d).
+// das colunas de mudança estão no modelo (db/migracoes/03_CAD/30_tabelas.sql, onda 5d).
 import { randomUUID } from 'node:crypto';
 import { type CadastroComparavel, chaveFonetica, chavesDoNome, palavrasDoCadastro } from '@sgh/dominio-cadastro';
 import { definirOperacao, type Executor, type Leitor, recusa } from '@sgh/nucleo';

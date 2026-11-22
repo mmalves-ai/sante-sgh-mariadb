@@ -1,69 +1,165 @@
 {
- "pedidos": [
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "em `tipar`: valor DATE (datetime.date que não é datetime) para coluna DATETIME/TIMESTAMP do destino vira datetime.datetime.combine(x, datetime.time()) (meia-noite); ex.: `if tipo in {'datetime', 'timestamp'} and type(x) is datetime.date: return datetime.datetime.combine(x, datetime.time())`",
-   "motivo": "PRIORIDADE ALTA, genérico. TBVLRTHM -> preco_procedimento_valor.ocorrido_em (DATETIME(3)) com DATA (DATE): a soma de controle soma '2025-01-01' na origem (carga.fmt de date) e '2025-01-01 00:00:00.000' no destino relido. A CONTAGEM confere (origem 4 = 2 gravadas + 2 recusadas de propósito na imagem: uma pelo CHECK ck_preco_procedimento_valor_algum, outra pai_inexistente + 1048); a divergência é só da soma. É o único erro da conferência da fatia (2 = primeira e segunda carga). Atinge também TBINDICE e MFSALDOS"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py",
-   "mudanca": "dois catálogos novos em depara.CATALOGOS: `versao_tiss` (versao_padrao_tiss pelo código da versão, ex. 04.03.00) e `terminologia` (terminologia pelo código da tabela da terminologia, ex. 18, 19, 20, 22); falta a regra no motor",
-   "motivo": "TBTISS (76 linhas: cerca de 130 parâmetros por fonte pagadora) não carrega: os dois destinos exigem versao_padrao_tiss_id (NOT NULL) e não há como achar a versão pelo código. TBTISSTERMO_TBTPLANC (24 linhas, configuração do cliente) não carrega: terminologia_tipo_lancamento exige a terminologia. O cadastro do padrão nunca é gravado pelo conector: só o de-para pelo código"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
-   "mudanca": "referência pelo PAR de colunas do pai que não é a chave dele (TAB+OPE; repetido = pai_ambiguo), M4 do L6-15: falta a regra no motor (hoje `ref:T.K` aceita uma coluna só)",
-   "motivo": "TBVLRDTH (6062 linhas) -> preco_diaria_taxa_valor: o pai TBTABDTH (chave ID) é achado por TAB+OPE. Destino e demais colunas já decididos (F4-decisoes-destino.md)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "de-para de valores com padrão presumido: na via `valores` + `~<literal>`, código sem par grava o literal com a pendência baixa valor_presumido (em vez de NULL com valor_fora_do_dominio)",
-   "motivo": "TBTABDTH.TIPO -> preco_diaria_taxa.tipo_item (NOT NULL sem padrão): só o TIPO 1 tem evidência (diária); hoje toda linha entra presumida taxa (=~taxa), inclusive as diárias"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "combinação de colunas num destino (`#combina:C1,C2,...` com de-para de valores pela tupla 'v1|v2|...', fora do domínio no padrão com valor_fora_do_dominio)",
-   "motivo": "TBEMIREF.preco_base = f(REF_VALOR, REF_VALOR_PFB, REF_VALOR_PMC) (N em REF_VALOR = tabela_propria); TBTABDTH.ativo = f(SITUACAO, TITULO) (linha de título entra inativa)"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "regra `inteiro_mais_um` (texto ou inteiro numérico + 1; não numérico: NULL com valor_fora_do_dominio)",
-   "motivo": "PRIORIDADE ALTA. TBSEGUIA.NUM_LOTE e SEQ_TRANSACAO guardam o ÚLTIMO número usado (evidência: o código antigo grava o contador relido sob trava + 1); o destino pede o próximo. Sem a regra, o primeiro lote depois da virada repete um número já enviado à operadora"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "marca presumida por coluna (ex. regra `presumido:<regra>`): aplica a regra e deixa a pendência baixa valor_presumido na linha",
-   "motivo": "TBENTCON.competencia (mês da entrega, sem evidência) e a faixa de permanência de TBTABDTH (unidade sem evidência) precisam sair marcadas para o cliente revisar"
-  },
-  {
-   "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
-   "mudanca": "sequencial_guia.tipo_guia: valores 'lote' (contador geral do lote e da transação) e 'recurso_glosa' no CHECK ck_sequencial_guia_tipo_guia",
-   "motivo": "TBSEGUIA: o tipo 0 é o contador geral do lote (o código antigo numera todo lote de guias e de recurso por ele, em quase todas as fontes) e o 8 é o recurso de glosa; hoje são recusados (valor_fora_do_dominio + 1048)"
-  },
-  {
-   "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
-   "mudanca": "mudança de modelo: diaria_por_plano_local: fonte_pagadora_id NOT NULL; contrato_fonte_pagadora_id NULL (nulo = qualquer contrato da fonte); plano_fonte_pagadora_id NULL ao lado de categoria_acomodacao_id NULL, com CHECK de um dos dois; chave única ajustada",
-   "motivo": "TBTIPPLCONV (76 linhas: fonte + tipo de plano -> diária e local de cobrança). Nenhuma tabela da origem carrega contrato; criar contrato padrão no conector inventaria contrato. Decisão em F4-decisoes-destino.md"
-  },
-  {
-   "arquivo": "db/migracoes/14_FIN (trilha F2.2: modelo)",
-   "mudanca": "depara_conta_externa: tipo_conta_id, tipo_lancamento_id e componente opcionais (filtros do de-para), como regra_contabil_receita tem",
-   "motivo": "TBINTCRC carrega em depara_conta_externa por fonte e natureza; TIPO_CONTA, TIPO_LANC, TIPO_ATO e SUBTIPO_DIARIA da chave da origem ficam sem coluna"
-  },
-  {
-   "arquivo": "tools/obra/cobertura_conector.py",
-   "mudanca": "em avaliar(): toda tabela CARREGA com pai OBRIGATÓRIO (coluna NOT NULL do destino com ref:X, inclusive X(...) e X.K) em BLOQUEADA passa a BLOQUEADA com pai_nao_carregado:<pai>; hoje a herança só vale para tabela sem declaração",
-   "motivo": "TBVLRTHM aparece CARREGA, mas o pai TBTABTHM (L8-04) pode estar BLOQUEADA: na carga real toda linha seria pai_inexistente + 1048"
-  },
-  {
-   "arquivo": "docs/adr (decisão do dono)",
-   "mudanca": "interruptor por cliente para a referência licenciada de mat/med (TBMATMED e dependentes: TBVLRMEM, TBEMIREFMATMED, TBPERMEM, TBVERSAOBRASIN), com a licença registrada",
-   "motivo": "hoje descarte (licenciado); TBPERMEM é acordo do cliente com a fonte pagadora por item licenciado"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-04.tsv",
-   "mudanca": "coerência: TBTABTHM (pai de TBVLRTHM, chave TAB+COD) e TBTISSPARDEF (campo de valor_padrao_campo_tiss) precisam carregar; TBTPFASEUNIBH segue o descarte (mecanismo_do_produto) dos atributos de operadora daqui",
-   "motivo": "dependência entre fatias"
-  }
- ]
+  "pedidos": [
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "em `tipar`: valor DATE (datetime.date que não é datetime) para coluna DATETIME/TIMESTAMP do destino vira datetime.datetime.combine(x, datetime.time()) (meia-noite); ex.: `if tipo in {'datetime', 'timestamp'} and type(x) is datetime.date: return datetime.datetime.combine(x, datetime.time())`",
+      "motivo": "PRIORIDADE ALTA, genérico. TBVLRTHM -> preco_procedimento_valor.ocorrido_em (DATETIME(3)) com DATA (DATE): a soma de controle soma '2025-01-01' na origem (carga.fmt de date) e '2025-01-01 00:00:00.000' no destino relido. A CONTAGEM confere (origem 4 = 2 gravadas + 2 recusadas de propósito na imagem: uma pelo CHECK ck_preco_procedimento_valor_algum, outra pai_inexistente + 1048); a divergência é só da soma. É o único erro da conferência da fatia (2 = primeira e segunda carga). Atinge também TBINDICE e MFSALDOS",
+      "atendido": "rodada 3: tipar converte DATE em DATETIME (meia-noite); TBVLRTHM e TBVLRDTH conciliam"
+    },
+    {
+      "arquivo": "conector/sante_conector/depara.py",
+      "mudanca": "dois catálogos novos em depara.CATALOGOS: `versao_tiss` (versao_padrao_tiss pelo código da versão, ex. 04.03.00) e `terminologia` (terminologia pelo código da tabela da terminologia, ex. 18, 19, 20, 22); falta a regra no motor",
+      "motivo": "TBTISS (76 linhas: cerca de 130 parâmetros por fonte pagadora) não carrega: os dois destinos exigem versao_padrao_tiss_id (NOT NULL) e não há como achar a versão pelo código. TBTISSTERMO_TBTPLANC (24 linhas, configuração do cliente) não carrega: terminologia_tipo_lancamento exige a terminologia. O cadastro do padrão nunca é gravado pelo conector: só o de-para pelo código",
+      "atendido": "rodada 3, grupo 3: de-para versao_tiss e terminologia em depara.CATALOGOS; refazer a fatia"
+    },
+    {
+      "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+      "mudanca": "referência pelo PAR de colunas do pai que não é a chave dele (TAB+OPE; repetido = pai_ambiguo), M4 do L6-15: falta a regra no motor (hoje `ref:T.K` aceita uma coluna só)",
+      "motivo": "TBVLRDTH (6062 linhas) -> preco_diaria_taxa_valor: o pai TBTABDTH (chave ID) é achado por TAB+OPE. Destino e demais colunas já decididos (F4-decisoes-destino.md)",
+      "atendido": "rodada 2: ref:T.(K1,K2)=(C1,C2); TBVLRDTH declarada com ref:TBTABDTH.(TAB,OPE)=(TAB,OPE)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "de-para de valores com padrão presumido: na via `valores` + `~<literal>`, código sem par grava o literal com a pendência baixa valor_presumido (em vez de NULL com valor_fora_do_dominio)",
+      "motivo": "TBTABDTH.TIPO -> preco_diaria_taxa.tipo_item (NOT NULL sem padrão): só o TIPO 1 tem evidência (diária); hoje toda linha entra presumida taxa (=~taxa), inclusive as diárias"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "combinação de colunas num destino (`#combina:C1,C2,...` com de-para de valores pela tupla 'v1|v2|...', fora do domínio no padrão com valor_fora_do_dominio)",
+      "motivo": "TBEMIREF.preco_base = f(REF_VALOR, REF_VALOR_PFB, REF_VALOR_PMC) (N em REF_VALOR = tabela_propria); TBTABDTH.ativo = f(SITUACAO, TITULO) (linha de título entra inativa)"
+    },
+    {
+      "arquivo": "conector/sante_conector/sentinela.py",
+      "mudanca": "regra `inteiro_mais_um` (texto ou inteiro numérico + 1; não numérico: NULL com valor_fora_do_dominio)",
+      "motivo": "PRIORIDADE ALTA. TBSEGUIA está BLOQUEADA (declaração pronta e comentada) até esta regra: NUM_LOTE e SEQ_TRANSACAO guardam o ÚLTIMO número usado (evidência: o código antigo grava o contador relido sob trava + 1); o destino pede o próximo. Gravar como está repetiria, depois da virada, um lote já enviado à operadora. Com a regra: descomentar as linhas #TBSEGUIA de colunas.d/L8-05.tsv e de valores.d/L8-05.tsv, trocar a regra de NUM_LOTE e SEQ_TRANSACAO para inteiro_mais_um e voltar TBSEGUIA para CARREGADAS na sintética",
+      "atendido": "rodada 4 (integrador): regra inteiro_mais_um"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "marca presumida por coluna (ex. regra `presumido:<regra>`): aplica a regra e deixa a pendência baixa valor_presumido na linha",
+      "motivo": "TBENTCON.competencia (mês da entrega, sem evidência) e a faixa de permanência de TBTABDTH (unidade sem evidência) precisam sair marcadas para o cliente revisar"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
+      "mudanca": "sequencial_guia.tipo_guia: valores 'lote' (contador geral do lote e da transação) e 'recurso_glosa' no CHECK ck_sequencial_guia_tipo_guia",
+      "motivo": "PRIORIDADE ALTA. O tipo 0 é o contador REAL do lote e do recurso (código antigo: TBSEGUIA.TIPO_GUIA = 0, 36 de 37 fontes conferem) e o 8 é o recurso de glosa; sem esses tipos o contador que importa não migra. TBSEGUIA fica BLOQUEADA até este pedido e o da regra inteiro_mais_um",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
+      "mudanca": "mudança de modelo: diaria_por_plano_local: fonte_pagadora_id NOT NULL; contrato_fonte_pagadora_id NULL (nulo = qualquer contrato da fonte); plano_fonte_pagadora_id NULL ao lado de categoria_acomodacao_id NULL, com CHECK de um dos dois; chave única ajustada",
+      "motivo": "TBTIPPLCONV (76 linhas: fonte + tipo de plano -> diária e local de cobrança). Nenhuma tabela da origem carrega contrato; criar contrato padrão no conector inventaria contrato. Decisão em F4-decisoes-destino.md",
+      "atendido": "rodada 3, grupo 3: DDL proposto em db/migracoes/12_FAT/11 (fonte obrigatória, acordo opcional, plano da fonte ao lado da categoria, CHECK de um dos dois); refazer a fatia"
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (trilha F2.2: modelo)",
+      "mudanca": "depara_conta_externa: tipo_conta_id, tipo_lancamento_id, tipo de ato e subtipo da diária opcionais (filtros do de-para), com chave única pelas dimensões",
+      "motivo": "BLOQUEIA TBINTCRC (2422 linhas, declaração pronta e comentada). A chave da origem é EMPRESA, CONV, TIPO_CONTA, TIPO_LANC, TIPO_ATO e SUBTIPO_DIARIA; sem essas colunas, linhas da mesma fonte e natureza com contas diferentes entrariam como de-paras concorrentes e indistinguíveis",
+      "atendido_parcial": "rodada 4 (DDL): db/migracoes/14_FIN/14; não aplicado: tipo de ato e subtipo da diária sem tabela definida"
+    },
+    {
+      "arquivo": "tools/obra/cobertura_conector.py",
+      "mudanca": "em avaliar(): toda tabela CARREGA com pai OBRIGATÓRIO (coluna NOT NULL do destino com ref:X, inclusive X(...) e X.K) em BLOQUEADA passa a BLOQUEADA com pai_nao_carregado:<pai>; hoje a herança só vale para tabela sem declaração",
+      "motivo": "TBVLRTHM aparece CARREGA, mas o pai TBTABTHM (L8-04) pode estar BLOQUEADA: na carga real toda linha seria pai_inexistente + 1048",
+      "atendido": "rodada 2: a cobertura herda pai_nao_carregado também para tabela declarada"
+    },
+    {
+      "arquivo": "docs/adr (decisão do dono)",
+      "mudanca": "interruptor por cliente para a referência licenciada de mat/med (TBMATMED e dependentes: TBVLRMEM, TBEMIREFMATMED, TBPERMEM, TBVERSAOBRASIN), com a licença registrada",
+      "motivo": "TBMATMED (L8-03) filtra por licença: itens de tabela própria carregam, os de referência comercial esperam a licença. TBPERMEM e TBEMIREFMATMED NÃO são descarte (correção r3): são acordo do hospital com a fonte pagadora e carregam junto com os itens de TBMATMED que carregarem. TBVLRMEM e TBVERSAOBRASIN seguem descarte licenciado"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-04.tsv",
+      "mudanca": "coerência: TBTABTHM (pai de TBVLRTHM, chave TAB+COD) e TBTISSPARDEF (campo de valor_padrao_campo_tiss) precisam carregar; TBTPFASEUNIBH segue o descarte (mecanismo_do_produto) dos atributos de operadora daqui",
+      "motivo": "dependência entre fatias"
+    },
+    {
+      "arquivo": "tools/obra/cobertura_conector.py",
+      "prioridade": "alta",
+      "mudanca": "em _colunas_ddl, aceitar MODIFY COLUMN como ADD COLUMN: trocar `(?:ADD COLUMN (?:IF NOT EXISTS )?)?` por `(?:(?:ADD|MODIFY) COLUMN (?:IF NOT EXISTS )?)?` no re.match (a última definição da coluna vale)",
+      "motivo": "TBTIPPLCONV aparece BLOQUEADA (coluna_obrigatoria_sem_fonte: contrato_fonte_pagadora_id, categoria_acomodacao_id) porque a cobertura lê só o CREATE: o DDL 12_FAT/11 já as torna NULL por MODIFY COLUMN, e a carga real concilia (conferência da fatia: 3 gravadas de 6). Prova sem editar o arquivo: a cobertura com a troca, executada em memória, dá TBTIPPLCONV CARREGA (e 798/340/47 no global)",
+      "atendido": "rodada 4 (integrador): cobertura lê MODIFY COLUMN"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar tabelas.tsv)",
+      "prioridade": "alta",
+      "mudanca": "linha: FCCTAAUD\tFCCTAEXT\treferência declarada sem FK na origem (chave alternativa composta ANOPRO, MESPRO, TIPO_CTA, COD): o pai vinha depois do filho na ordem de carga",
+      "motivo": "FCCTAAUD (ordem 970) carrega antes de FCCTAEXT (971): toda auditoria sai pai_inexistente + 1048. A imagem sintética já traz os dois esperados (antes e depois da dependência) e escolhe pelo mapa vigente (_esperado_auditoria)",
+      "atendido": "rodada 4 (integrador): aresta já no mapa"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT (trilha F2.2: semente)",
+      "prioridade": "alta",
+      "mudanca": "semente nativa de tipo_conta (códigos ambulatorial, externa, urgencia, internacao, com natureza ambulatorial/externo/pronto_atendimento/internacao) e de tipo_auditoria (codigo 'migracao', 'Auditoria trazida do sistema anterior'), como os tipos de migração do 11_SUP/07_chaves.sql",
+      "motivo": "FCCTAEXT (conta_hospitalar.tipo_conta_id, NOT NULL) e FCCTAAUD (auditoria_conta.tipo_auditoria_id, NOT NULL) acham o id por cod:<tabela>.codigo; nenhuma tabela da origem alimenta os dois cadastros. Sem a semente, toda linha sai codigo_inexistente_destino + 1048 (o mesmo pedido 0 da L8-06, com os mesmos códigos)",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT/01 (trilha F2.2: modelo)",
+      "mudanca": "auditoria_conta_versao.valor_total_conta NULL e auditoria_conta.valor_original NULL sem padrão 0 (o retrato pode vir de origem sem o total)",
+      "motivo": "BLOQUEIA FCCTAAUD (correção r3): zero presumido em valor financeiro não entra; a origem não tem a coluna de total (só DESCONTO, DEPO e PERC_DESC)",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv e L8-06.tsv (coordenação entre fatias)",
+      "mudanca": "L8-02: retirar as 2 linhas sem destino de RPLANRPA (a tabela é da L8-05 no índice); depois, descomentar as 2 linhas #RPLANRPA de colunas.d/L8-05.tsv e pôr RPLANRPA na imagem sintética da L8-05 (pais externos RPRPA e RPLANEVE). L8-06: retirar as linhas comentadas #FCCTAEXT e #FCCTAAUD (declaradas agora na L8-05); a L8-02 também tira RPLANRPA de FORMAS em sintetica_d/l8_02.py: a sintética da L8-05 então inclui a tabela, os pais externos RPRPA e RPLANEVE e o esperado sozinha (RPLANRPA_ATIVA)",
+      "motivo": "RPLANRPA é a única tabela da fatia ainda BLOQUEADA (sem_declaracao): declarar aqui com as linhas da L8-02 no lugar daria 'tabela declarada em mais de um arquivo'. O pai RPLANEVE passou a carregar na L8-01 (rodada 3)",
+      "atendido": "rodada 4 (conferidor): linhas sem destino tiradas da L8-02; RPLANRPA declarada e conferida na L8-05 (RPLANRPA_ATIVA)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv",
+      "mudanca": "TBMATMED: gravar também o item faturável do mat/med (destino secundário `item_faturavel`, tipo material ou medicamento, com o insumo exigido por ck_item_faturavel_insumo) para os itens que carregarem",
+      "motivo": "TBPERMEM (33910 linhas) e TBEMIREFMATMED apontam o item por `ref:TBMATMED/item_faturavel`: preco_negociado_matmed e referencia_emissao_matmed_excecao exigem item_faturavel_id, e o principal de TBMATMED é item_referencia_matmed. Sem isso as duas ficam BLOQUEADAS por pai (declaração pronta)",
+      "atendido": "conferidor r4 (tentativa 2)"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT/05 (trilha F2.2: modelo)",
+      "mudanca": "ck_preco_negociado_matmed_regra: aceitar também quantidade_fixa (valor_unitario OR percentual_ajuste OR quantidade_fixa), como regra_percentual_cobranca",
+      "motivo": "TBPERMEM tem acordos só de quantidade fixa (QTDE_FIXA); hoje seriam recusados pelo CHECK (4025)",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "regra condicional por coluna: gravar o valor só quando outra coluna da linha tiver um valor (ex.: via `se:AUDITADA=S`); fora da condição, NULL sem pendência",
+      "motivo": "FCCTAAUD: concluida_em e resultado só para auditoria concluída (AUDITADA = S); sem a condição, uma auditoria em andamento pareceria concluída. FCCTAAUD fica BLOQUEADA até este pedido, o da dependência e o do total nulo",
+      "atendido": "rodada 4 (integrador): se:AUDITADA=S na via"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv e sintetica_d/l8_02.py, test_l8_02.py (fatia L8-02)",
+      "mudanca": "rodada 4 (repete o pedido 17): retirar as 2 linhas sem destino de RPLANRPA da L8-02.tsv, RPLANRPA de FORMAS em sintetica_d/l8_02.py e de AGUARDAM em test_l8_02.py; depois a L8-05 descomenta as 2 linhas #RPLANRPA (a sintética da L8-05 liga sozinha por RPLANRPA_ATIVA)",
+      "motivo": "RPLANRPA é da L8-05 no índice; declaração pronta; a tabela em dois arquivos é erro do verificador. Não editado daqui (arquivo de outra fatia em trabalho paralelo)",
+      "atendido": "rodada 4 (conferidor): linhas sem destino tiradas da L8-02; RPLANRPA declarada e conferida na L8-05 (RPLANRPA_ATIVA)"
+    },
+    {
+      "arquivo": "modelo (F2.2) e L8-03",
+      "mudanca": "rodada 4: TBPERMEM (preco_negociado_matmed.item_faturavel_id NOT NULL) segue BLOQUEADA por pai: TBMATMED (L8-03 r4) carrega em item_referencia_matmed, sem item faturável; falta o item faturável do mat/med (pedido 18) ou preco_negociado_matmed apontar item_referencia_matmed",
+      "motivo": "pai_nao_carregado: TBMATMED",
+      "atendido": "conferidor r4 (tentativa 2)"
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (F2.2)",
+      "mudanca": "rodada 4 (resto do pedido 9): depara_conta_externa com tipo de ato e subtipo da diária (filtros); até lá TBINTCRC carrega só as linhas com TIPO_ATO=0 e SUBTIPO_DIARIA=0 e as demais ficam com a pendência baixa aguarda_dimensao_no_modelo (so_se)",
+      "motivo": "TBINTCRC carrega na r4 sem perder o filtro"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (so_se com gravidade)",
+      "mudanca": "r4 correção: so_se:COND!regra:gravidade (ex.: !aguarda_dimensao_no_modelo:alta). TBINTCRC recusa as linhas de tipo de ato e subtipo de diária específicos com pendência BAIXA (fixa no motor); é perda de de-para contábil e precisa ser alta até o modelo ganhar as colunas (pedido do depara_conta_externa, F2.2). Alternativa equivalente: o motor usar 'alta' quando a regra do so_se começar por aguarda_."
+    },
+    {
+      "arquivo": "db/migracoes (trilha F2.2): rpa.inscricao_conselho_id",
+      "rodada": "r5",
+      "mudanca": "coluna opcional rpa.inscricao_conselho_id (FK inscricao_conselho), gravada por RPRPA_TBCBOPRO com `complementa` (ref:RPRPA) e ref:TBCBOPRO.",
+      "motivo": "Hoje o RPA guarda só o profissional (encadeada da L8-02). A prova de não copiar de RPRPA_TBCBOPRO (provas.tsv) recalcula a inscrição pelo profissional e falha (prova_nao_conferida, alta, visível) para profissional com mais de uma inscrição: a inscrição (e a ocupação CBO) do RPA só continua com a coluna.",
+      "tabelas": [
+        "RPRPA_TBCBOPRO"
+      ]
+    },
+    {
+      "n": "R5-item-classificacao",
+      "rodada": "r5",
+      "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
+      "mudanca": "coluna preco_diaria_taxa.classificacao_guia_parametro_opcao_id (FK parametro_opcao, NULL) ou tabela de vínculo item x opção de parâmetro de lista; depois, na L8-05: TBTABDTH.ID_TBTPCLASSIFUNIBH -> essa coluna por ref:TBTPCLASSIFUNIBH/parametro_opcao",
+      "motivo": "a marcação do item na classificação do campo adicional da guia da operadora não tem coluna no modelo; a lista carrega pela L8-04 (R5-1)"
+    }
+  ]
 }

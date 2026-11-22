@@ -55,19 +55,24 @@ CREATE TABLE PRTPLAN_GETABVIA (ID_PRTPLAN SMALLINT NOT NULL, ID_GETABVIA VARCHAR
 """
 
 # vias de uso de outra fatia (L6, ordem 279), dadas como já carregadas
-PAIS_EXTERNOS = {"GETABVIA": ["01", "02", "03"]}
+# identificadores do certificado (L5-03, TBOID -> oid_icp), dados como já carregados: o rótulo do vínculo tipo de
+# documento x identificador lê a descrição gravada (ref:TBOID@descricao)
+PAIS_EXTERNOS = {"GETABVIA": ["01", "02", "03"], "TBOID": ["1", "2", "3"]}
 
 # choque de código em destino compartilhado: L6-06 (PROFTTPARQUIV, PRSITCHECAGEM) grava antes no mesmo destino com
 # código numérico: o tipo de anexo leva o prefixo 'anexo_' e a situação de checagem o prefixo 'checagem_' (de-para
 # de valores): nenhum choca
 PREPARO_DESTINO = """
+INSERT INTO oid_icp (id, codigo, descricao, oid, tipo_oid, criado_em) SELECT n, CONCAT('oid_falso_', n),
+  CONCAT('Identificador falso ', n), CONCAT('9.9.9.', n), 'outro', NOW(3)
+  FROM (WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 10) SELECT n FROM s) x;
 INSERT INTO tipo_anexo (codigo, descricao, criado_em) VALUES ('1', 'Tipo de arquivo falso de outra fonte', NOW(3));
 INSERT INTO situacao_checagem (codigo, descricao, categoria, criado_em)
   VALUES ('1', 'Situação falsa de outra fonte', 'pendente', NOW(3));
 """
 
 # descartadas com motivo de produto (declarado/sem_carga.tsv): nada delas é gravado
-NAO_CARREGADAS = ["PRTIPONOTIFICACAO", "PRTIPOPERGPAR", "PRTPASSINATURA_TBOID"]
+NAO_CARREGADAS = []  # rodada 5 (ADR 0006): todas carregam
 
 
 def _simples(ins, t, nomes, extra=lambda i: []):
@@ -98,7 +103,8 @@ def linhas(r, ins):
         ins("PRTIPODOCANEXO", [i, nome, at, None])
     for i in range(1, 4):
         ins("PRTIPONOTIFICACAO", [i, "Notificação falsa %d" % i])
-        ins("PRTIPOPERGPAR", [i, r.randint(1, 9), "Parâmetro falso %d" % i])
+        # parâmetro: 1 e 2 com o MESMO código fixo (o código derivado leva a chave: nenhum choque); 3 sem nome
+        ins("PRTIPOPERGPAR", [i, 7 if i < 3 else 8, ["Peso", "Parâmetro falso 2", None][i - 1]])  # 1: par pelo rótulo
         ins("PRTPCOMP", [i, "Componente falso %d" % i])
     ins("PRTPCOMP", [4, E])  # sem nome: NOT NULL recusa
     _simples(ins, "PRTIPOPRESENTEADMISSAO", ["Sim falso", "Não falso", "Indeterminado falso"],
@@ -117,8 +123,11 @@ def linhas(r, ins):
     # sobe a 0; situação inexistente (pai_inexistente, NOT NULL recusa)
     for i, (tp, sit, ordem) in enumerate([(1, 1, 1), (1, 2, 2), (1, 3, 3), (4, 1, 1), (2, 1, -1), (2, 99, 2)], 1):
         ins("PRTPASSINATURA_PRSITDOC", [i, tp, sit, ordem])
-    for i in range(1, 4):
-        ins("PRTPASSINATURA_TBOID", [i, i, i])
+    # vínculo tipo de documento x identificador: 4 aponta o tipo recusado (pai_pendente); 1 e 5 são o MESMO tipo
+    # com identificadores diferentes (rótulos distintos: a descrição do identificador); 6 identificador inexistente
+    # (pai_inexistente visível; rótulo cai para a descrição do tipo)
+    for i, (tp, oid) in enumerate([(1, 1), (2, 2), (3, 3), (4, 1), (1, 2), (2, 99)], 1):
+        ins("PRTPASSINATURA_TBOID", [i, tp, oid])
     _simples(ins, "PRTPDOCUMENTO", ["Sem assinatura falsa", "Eletrônica falsa"])
     _simples(ins, "PRTPINFOPERGOPERADORA", ["Grupo falso um", "Grupo falso dois", None])
     for i, (g, nome) in enumerate([(1, "Informação falsa um"), (2, "Informação falsa dois"), (None, "Sem grupo"),
@@ -136,6 +145,10 @@ def linhas(r, ins):
                                  (4, "03", "X", "N")]:     # S/N inválido: fica o padrão
         ins("PRTPLAN_GETABVIA", [item, via, vis, marc])
     return {
+        "PRTIPONOTIFICACAO": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
+        "PRTPASSINATURA_TBOID": {"gravados": 5, "pendencias": {"adotado_existente": 9, "pai_pendente": 1,
+                                                               "pai_inexistente": 1}},
+        "PRTIPOPERGPAR": {"gravados": 3, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 2}},
         "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1}},
         "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 3}},

@@ -1,11 +1,24 @@
 // Rotas do painel de onboarding (F4 L3; plano F4 seção 2). SÓ o administrador da plataforma (login POST
 // /api/sessao/plataforma): a guarda pede a sessão, a permissão declarada e o CSRF nas escritas; aqui se exige o ator
 // da plataforma (a sessão de um usuário do cliente, mesmo com a permissão, recebe 403). Respostas só com agregados.
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type {
   ClienteCriado,
   TipoProblema,
   ExecucaoConector,
+  ListaExecucoes,
   ExecucaoPedida,
   ListaClientesOnboarding,
   ListaOrigens,
@@ -14,6 +27,7 @@ import type {
 import { Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { filtrarRelatorio, relatorioCsv } from './execucao.js';
 import { ErroOnboarding, SERVICO_ONBOARDING } from './porta.js';
 import type { ServicoOnboarding } from './servico.js';
 
@@ -106,6 +120,16 @@ export class OnboardingController {
     return { execucao: await this.tratar(() => s.pedirExecucao(codigo, corpo, admin)) };
   }
 
+  @Get('clientes/:codigo/execucoes')
+  @Permissao(PERMISSAO_ONBOARDING)
+  async historico(
+    @Req() req: RequisicaoAutorizada,
+    @Param('codigo') codigo: string,
+  ): Promise<ListaExecucoes> {
+    const { s } = this.exigir(req);
+    return { execucoes: await this.tratar(() => s.historico(codigo)) };
+  }
+
   @Get('clientes/:codigo/execucoes/:id')
   @Permissao(PERMISSAO_ONBOARDING)
   async execucao(
@@ -115,5 +139,42 @@ export class OnboardingController {
   ): Promise<ExecucaoConector> {
     const { s } = this.exigir(req);
     return this.tratar(() => s.execucao(codigo, Number(id)));
+  }
+
+  /** L10: relatório da execução com filtro por entidade e regra (o painel filtra também na tela). */
+  @Get('clientes/:codigo/execucoes/:id/relatorio')
+  @Permissao(PERMISSAO_ONBOARDING)
+  async relatorio(
+    @Req() req: RequisicaoAutorizada,
+    @Param('codigo') codigo: string,
+    @Param('id') id: string,
+    @Query('entidade') entidade: string | undefined,
+    @Query('regra') regra: string | undefined,
+  ): Promise<ExecucaoConector> {
+    const { s } = this.exigir(req);
+    const e = await this.tratar(() => s.execucao(codigo, Number(id)));
+    return {
+      ...e,
+      entidades: e.entidades.filter((x) => !entidade || x.entidade === entidade),
+      relatorio: e.relatorio ? filtrarRelatorio(e.relatorio, { entidade, regra }) : null,
+    };
+  }
+
+  /** L10: exportação do relatório (CSV para planilha), com o mesmo filtro. Só agregados. */
+  @Get('clientes/:codigo/execucoes/:id/relatorio.csv')
+  @Permissao(PERMISSAO_ONBOARDING)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="relatorio-conciliacao.csv"')
+  @Header('Cache-Control', 'no-store')
+  async relatorioCsv(
+    @Req() req: RequisicaoAutorizada,
+    @Param('codigo') codigo: string,
+    @Param('id') id: string,
+    @Query('entidade') entidade: string | undefined,
+    @Query('regra') regra: string | undefined,
+  ): Promise<string> {
+    const { s } = this.exigir(req);
+    const e = await this.tratar(() => s.execucao(codigo, Number(id)));
+    return relatorioCsv(e, { entidade, regra });
   }
 }

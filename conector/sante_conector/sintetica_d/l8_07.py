@@ -7,8 +7,9 @@ tipo de aferição, esfera, tipo de dado, tipo de indicador, tipo de item do ind
 dialítico, contraindicação e situação de transplante, credor, classificação do diagnóstico, justificativa de paciente
 sem documento, tipo de leito de UTI) em `dominio_sus`. Várias tabelas da origem no mesmo destino, separadas pelo
 literal da lista; o mesmo código em listas diferentes não colide.
-Descartada (1, `declarado/sem_carga.tsv`, causa sem_valor): o incentivo contratual padrão (o destino é do contrato
-com gestor e exige valor ou percentual e vigência, que a origem não tem); a imagem prova que ele não entra.
+Incentivo contratual (CMINCENTIVO, rodada 5, ADR 0006): carrega em `incentivo_contratual_sus` INATIVO, com o tipo
+de dado pela lista, vigência pela evidência (ADR 0007, 16: `vigencia_sem_fonte`) e percentual 0 PRESUMIDO (a origem
+não tem valor; o CHECK exige valor ou percentual): o cliente liga ao contrato com gestor e informa o valor.
 Anomalias: nome só com espaços (NOT NULL no destino: recusa só a linha), espaços internos colapsados, acentos CP1252,
 sigla vazia (NULL, aceita), lacunas nos ids, o mesmo id em várias listas e o id 0 (sentinela 'não informado') na
 rede assistencial e no tipo de indicador: entra INATIVO (ativo falso), nunca escolhível. Duas listas do modelo são
@@ -39,7 +40,7 @@ LISTAS = {  # tabela: (tamanho de NOME, destino, lista)
 INT_ID = {"CMTPINDICADOR"}
 # lista maior que a coluna `dominio_sus.lista` VARCHAR(30) do modelo (o CHECK e a API já usam estes valores): até a
 # coluna ser alargada (pedido 2 em saida/L8-07.json) toda linha destas tabelas é recusada com restricao_destino_1406
-LARGURA_LISTA = 30
+LARGURA_LISTA = 40
 LISTA_LONGA = {t for t, (_, _, l) in LISTAS.items() if len(l) > LARGURA_LISTA}  # ID INTEGER; as demais SMALLINT
 
 DDL = "\n".join(
@@ -49,8 +50,10 @@ DDL = "\n".join(
 CREATE TABLE CMINCENTIVO (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(120) NOT NULL, ID_CMTPDADOS SMALLINT);
 """
 
-CARREGADAS = list(LISTAS)
-NAO_CARREGADAS = ["CMINCENTIVO"]
+CARREGADAS = list(LISTAS) + ["CMINCENTIVO"]
+NAO_CARREGADAS = []
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
 # tabelas com uma linha de nome só com espaços (recusa só a linha: restricao_destino_1048)
 COM_NOME_VAZIO = {"CMPERIODO", "CMTPINDICADOR", "FAHEMOCONTRAN", "FHLEITOUTITP"}
 # rede assistencial: (id, sigla, nome); sigla só com espaços vira NULL e a linha entra
@@ -88,5 +91,9 @@ def linhas(r, ins):
         if t in LISTA_LONGA:  # a lista não cabe: recusa todas (a de nome vazio também, pela lista)
             esp[t] = {"gravados": 0, "pendencias": {"restricao_destino_1406": len(ids) + sum(pend.values())}}
     ins("CMINCENTIVO", [1, "Incentivo padrão de exemplo", 2])
-    ins("CMINCENTIVO", [2, "Incentivo sem tipo de dado", None])
+    ins("CMINCENTIVO", [2, "Incentivo  sem tipo de dado", None])
+    ins("CMINCENTIVO", [3, "Incentivo de tipo inexistente", 7])
+    # 3 gravados (o tipo 7 não existe: NULL com pai_inexistente); vigência estimada e 0 presumidos em todos
+    esp["CMINCENTIVO"] = {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 3, "valor_presumido": 6,
+                                                        "pai_inexistente": 1}}
     return esp

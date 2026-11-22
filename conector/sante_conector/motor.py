@@ -18,7 +18,7 @@ import time
 
 import pymysql
 
-from . import banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma
+from . import banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma, relatorio
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -33,11 +33,29 @@ def soma_controle(contagens):
     return hashlib.sha256(txt.encode()).hexdigest()
 
 
+def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
+    """L10: relatório curto da execução (ADR 0007, item 22) em `contadores.relatorio`: pendências abertas, críticas e
+    resolvidas por entidade e regra, o que não carregou, a prova de não copiar e as decisões do cliente."""
+    if not rel.get("senha"):
+        return
+    contagens = rel.get("contagens") or {}
+    cr = banco.conectar(rel["ctl"], usuario=usuario, senha=rel["senha"], autocommit=False)
+    try:
+        cont["relatorio"] = relatorio.gerar(
+            cr, rel["ctl"], eid, rel.get("entidades") or {}, contagens=contagens, plano=rel.get("plano") or (),
+            carga_propria=[t for t in contagens if t in carga.MAPA], mapa_exec=mapa_exec,
+            provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"),
+            resolver_pendencias=resolver_pendencias)
+    finally:
+        cr.close()
+
+
 def executar(trab, eid):
     """Roda a execução `eid` já reivindicada (estado `abrindo`) por `trab`. Nunca levanta: termina em estado final."""
     conn = trab.conn
-    usuario = host = None
+    usuario = host = mapa_exec = None
     cont = {}
+    rel = {}  # o que o relatório de conciliação (L10) precisa, preenchido ao longo da execução
     try:
         ex = plataforma.consultar(conn, eid)
         cont["disco"] = disco.verificar(ex["tipo"], ex["origem_tamanho"])
@@ -54,6 +72,7 @@ def executar(trab, eid):
         host = controle.host_do_motor(conn)
         usuario = "sscon_e%d_%s" % (eid, banco.ficha_plataforma())
         senha = controle.criar_usuario(conn, usuario, ex["banco_nome"], ctl, host)
+        rel.update(ctl=ctl, senha=senha)
         nome_ab = "e%d-%s" % (eid, banco.ficha_plataforma())
         with abrir_remoto(origem["relativo"], nome_ab) as ab:
             plataforma.mudar_estado(conn, eid, "lendo", etapa="contando as tabelas da origem", percentual=5,
@@ -70,6 +89,7 @@ def executar(trab, eid):
                                              dict(cont, tabelas_lidas=i, tabelas_total=len(tabelas),
                                                   registros_lidos=sum(contagens.values())))
                 somente_leitura = lt.somente_leitura()
+                rel["contagens"] = contagens
                 generators = len(lt.generators())
             # fonte independente, no mesmo snapshot, com o leitor fechado (o embarcado não divide o arquivo)
             plataforma.progresso(conn, eid, 60, "confrontando com o gstat")
@@ -126,6 +146,7 @@ def executar(trab, eid):
             # L3: carga das entidades do mapa (mesmo snapshot; leitor reaberto depois do gstat), pelo usuário restrito
             # L5 a L8: carga dirigida pelo mapa (tabelas com colunas declaradas), depois do L3, mesmo snapshot
             plano = carga_mapa.planejar(mapa_exec, set(tabelas))
+            rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
                 try:
@@ -140,7 +161,10 @@ def executar(trab, eid):
                             "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
                         if plano:
                             rm = carga_mapa.CargaMapa(lt, cc, ctl, eid, iid, mapa_exec, prog_mapa,
-                                                      entidades_usadas=set(resumo["entidades"])).executar(
+                                                      entidades_usadas=set(resumo["entidades"]),
+                                                      sincronizar=ex["tipo"] == "sincronizar",
+                                                      confirmar_exclusao_em_massa=bool(
+                                                          ex.get("confirmar_exclusao_em_massa"))).executar(
                                 set(tabelas), contagens)
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]
@@ -150,6 +174,9 @@ def executar(trab, eid):
                             for k, n in pm["por_regra"].items():
                                 pr["por_regra"][k] = pr["por_regra"].get(k, 0) + n
                             resumo["carga"]["mapa"] = rm["carga"]
+                            cont["sincronizar"] = rm["sincronizar"]  # L9: contagens, conflitos (sem valores), alertas
+                            rel["provas"] = rm.get("provas") or {}
+                        rel["entidades"] = resumo["entidades"]
                 finally:
                     cc.close()
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",
@@ -157,10 +184,10 @@ def executar(trab, eid):
                                                           "aguardam_sincronizar", "editados_no_destino",
                                                           "apagados_na_origem") if x in v}
                                      for k, v in resumo["entidades"].items()}
-                # até o L9, o Sincronizar roda a mesma carga: traz linhas novas; alteradas, apagadas e editadas no
-                # destino ficam com pendência (nunca sobrescrita silenciosa). O resumo diz isso ao painel.
-                resumo["carga"]["modo"] = ("sincronizar_parcial_ate_l9" if ex["tipo"] == "sincronizar"
-                                           else "importar")
+                # L9: na carga dirigida pelo mapa, o Sincronizar reaplica a origem (vence), guarda a edição do destino
+                # em conflito, exclui logicamente o que sumiu e reativa o que voltou. As 7 tabelas da carga própria
+                # do L3 ainda deixam a alteração como pendência (nunca sobrescrita silenciosa).
+                resumo["carga"]["modo"] = "sincronizar" if ex["tipo"] == "sincronizar" else "importar"
                 cont.update(versao_mapa=resumo["versao_mapa"], pendencias=resumo["pendencias"], carga=resumo["carga"])
                 ruins = sorted(k for k, v in resumo["entidades"].items() if not v["conferido"])
                 if ruins:
@@ -179,6 +206,15 @@ def executar(trab, eid):
         if (sha_depois, depois["tamanho"], depois["mtime"]) != (sha_antes, origem["tamanho"], origem["mtime"]):
             raise FalhaExecucao("o arquivo de origem mudou durante a execução")
         cont["arquivo_inalterado"] = True
+        # o relatório (e a resolução das pendências anteriores) só depois de a carga e o arquivo conferirem; a falha
+        # só do relatório não derruba a carga gravada: vira pendência da plataforma
+        try:
+            _relatorio(eid, usuario, rel, cont, mapa_exec)
+        except Exception as e:  # noqa: BLE001
+            cont["relatorio_falhou"] = type(e).__name__
+            pend = cont.setdefault("pendencias", {"total": 0, "criticas": 0, "por_regra": {}})
+            pend["total"] = pend.get("total", 0) + 1
+            pend.setdefault("por_regra", {})["imagem:relatorio_falhou:alta"] = 1
         plataforma.mudar_estado(conn, eid, "concluida", etapa="concluída", percentual=100, contadores=cont,
                                 imagem_sha256=sha_antes)
     except Exception as e:  # o motivo é técnico e não traz valores de linha
@@ -188,6 +224,11 @@ def executar(trab, eid):
             motivo += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
         if isinstance(e, pymysql.err.MySQLError):  # a mensagem do servidor pode citar valores ("Duplicate entry ...")
             motivo = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
+        if "relatorio" not in cont:  # a execução que falha também deixa o relatório do que chegou a fazer
+            try:
+                _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=False)
+            except Exception:  # noqa: BLE001 - o motivo da falha original é o que importa
+                pass
         try:
             plataforma.mudar_estado(conn, eid, "falhou", etapa="falhou", motivo=motivo, contadores=cont or None)
         except plataforma.PlataformaErro:

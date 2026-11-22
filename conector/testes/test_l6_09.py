@@ -31,15 +31,13 @@ class L609(unittest.TestCase):
         self.assertEqual(set(self.plano), set(FATIA) - set(l6_09.NAO_CARREGADAS))
         with open(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv", encoding="utf-8") as f:
             sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
-        for t in l6_09.NAO_CARREGADAS:  # o que não carrega é descarte com causa de produto ou bloqueio por modelo
-            if t == "TBHORMED_TBUNIDAD":  # dado do cliente: nunca descarte (falta coluna no modelo, pedido F2.2)
-                self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "modelo_sem_destino"))
-            else:
-                self.assertEqual(sc[t]["situacao"], "descarte", t)
-                self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto"}, t)
+        self.assertNotIn("TBHORMED_TBUNIDAD", sc)  # dado do cliente: carrega (unidade na grade, 06_PEP/16)
+        for t in l6_09.NAO_CARREGADAS:  # o que não carrega é descarte com causa de produto
+            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto", "derivado"}, t)
             self.assertNotIn(t, {d["tabela"] for d in self.decl})
         for d in self.decl:
-            self.assertTrue(d["motivo"].startswith("L6-09: "))
+            self.assertTrue(d["motivo"].startswith("L6-09"))
 
     def test_um_destino_por_tabela(self):
         # princípio de validação = tipo de validação (a L6-10 liga as unidades a ele); referência = base da dose
@@ -49,7 +47,8 @@ class L609(unittest.TestCase):
         self.assertEqual(self.plano["PRSINAIS"]["destinos"], ["parametro_vital"])
 
     def test_situacao_do_lancamento_nao_vira_situacao_do_problema(self):
-        self.assertNotIn("TBLANC_DIAG_STATUS", self.plano)
+        # rodada 5: a situação do lançamento carrega como lista do hospital (parâmetro de lista), nunca no problema
+        self.assertEqual(self.plano["TBLANC_DIAG_STATUS"]["destinos"][0], "parametro_opcao")
         alim = [t for t, p in self.plano.items() if "situacao_problema" in p["destinos"]]
         self.assertEqual(alim, ["TBLISTADIAGNOSTICOSITUACAO"])
         c = self.cols("TBLISTADIAGNOSTICOSITUACAO", "situacao_problema")["clinicamente_ativo"]
@@ -69,7 +68,8 @@ class L609(unittest.TestCase):
                 c = self.cols(t, dt)[dc]
                 self.assertEqual((c["coluna"], c["depara"]), ("NOME", "valores"), (t, dc))
         presumidas = [d for d in self.decl if d["coluna"].startswith("=~")]
-        self.assertEqual([(d["tabela"], d["destino"]) for d in presumidas], [("PRSINAIS", "parametro_vital.tipo_resposta")])
+        self.assertEqual([(d["tabela"], d["destino"]) for d in presumidas], [("TBPROENF", "cuidado_enfermagem.tipo"),
+                                                                     ("PRSINAIS", "parametro_vital.tipo_resposta")])
         v = {(x["tabela"], x["destino"], x["valor_origem"]): x["valor_destino"] for x in self.m["valores"]}
         self.assertEqual(v[("TBLISTADIAGNOSTICOESTADO", "certeza_diagnostico.grau", "Confirmado")], "3")
         self.assertEqual(v[("TBLISTADIAGNOSTICOESTADO", "certeza_diagnostico.confirmado", "Confirmado")], "1")
@@ -98,7 +98,16 @@ class L609(unittest.TestCase):
         via = {d["destino"]: d["via"] for d in self.decl if d["tabela"] in ("TBPROENF", "PRSINAIS")}
         self.assertEqual(via["cuidado_enfermagem.acao_restricao_sexo"], "ref:PRTIPONOTIFICACAO>NOME")
         self.assertEqual(via["parametro_vital.unidade"], "ref:PRUNIDRESPOSTA>NOME")
-        self.assertEqual(v[("TBPROENF", "cuidado_enfermagem.tipo", "M")], "monitorizacao")
+        # tipo do cuidado: a letra A/E/M da origem não é a classificação do produto (sem evidência): presumido, com
+        # valor_presumido por linha, e nenhum de-para inventado pela letra
+        self.assertEqual(self.cols("TBPROENF", "cuidado_enfermagem")["tipo"]["coluna"], "=~cuidado")
+        self.assertFalse([k for k in v if k[:2] == ("TBPROENF", "cuidado_enfermagem.tipo")])
+        # nome acima de 150 resumido (nunca recusado: as prescrições de cuidado não perdem o pai), integral no detalhe
+        c = self.cols("TBPROENF", "cuidado_enfermagem")
+        self.assertEqual((c["descricao"]["coluna"], c["descricao"]["regra"]), ("NOME", "texto_resumo:150"))
+        self.assertEqual(c["descricao_detalhada"]["coluna"], "NOME")
+        x, pr = sentinela.aplicar("texto_resumo:150", "Cuidado " + "longo " * 26)
+        self.assertEqual((len(x) <= 150, pr), (True, "texto_resumido"))
 
     def test_ordem_clinica_nunca_presumida_em_silencio(self):
         # nível da gravidade e grau da certeza pelo NOME (de-para de valores), nunca pela ordem da chave
@@ -127,7 +136,24 @@ class L609(unittest.TestCase):
         via = {d["destino"]: d["via"] for d in self.decl if d["tabela"] == "TBHORARIODOSE"}
         self.assertEqual(via["horario_padrao_dose.grade_horario_unidade_id"], "ref:TBNUMDOSE>ID_TBHORMED>TBHORMED")
         self.assertEqual(via["horario_padrao_dose.doses_por_dia"], "ref:TBNUMDOSE>NUM_DOSE")
-        self.assertNotIn("TBNUMDOSE", self.plano)
+        self.assertEqual(self.plano["TBNUMDOSE"]["destinos"], ["frequencia_administracao"])
+        # grade da unidade = cópia da grade por linha de TBHORMED_TBUNIDAD (nunca UPDATE da grade: a grade com várias
+        # unidades perderia as ligações e a conciliação derrubaria a importação)
+        via = {d["destino"]: d["via"] for d in self.decl if d["tabela"] == "TBHORMED_TBUNIDAD"}
+        self.assertNotIn("grade_horario_unidade.id", via)
+        self.assertFalse(any("complementa" in x for x in via.values()))
+        self.assertEqual(via["grade_horario_unidade.unidade_assistencial_id"], "ref:TBUNIDAD")
+        self.assertEqual(via["grade_horario_unidade.estabelecimento_id"], "ref:TBUNIDAD@estabelecimento_id")
+        for dc in ("tipo_atendimento", "hora_inicio_dia", "considera_vigencia", "permite_liberar_fora_vigencia"):
+            self.assertEqual(via["grade_horario_unidade." + dc], "ref:TBHORMED@" + dc)
+        self.assertEqual(self.plano["TBHORMED_TBUNIDAD"]["destinos"], ["grade_horario_unidade"])
+        self.assertFalse(self.plano["TBHORMED_TBUNIDAD"]["opcoes"].get("grade_horario_unidade", {}).get("complementa"))
+        vistos = {}
+        l6_09.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
+        por_grade = {}
+        for u, g in vistos["TBHORMED_TBUNIDAD"]:
+            por_grade.setdefault(g, []).append(u)
+        self.assertTrue(any(len(us) > 1 for us in por_grade.values()))  # a imagem prova a grade com duas unidades
 
     def test_toda_coluna_da_origem_declarada(self):
         decl = {(d["tabela"], d["coluna"]) for d in self.decl}
@@ -166,10 +192,27 @@ class L609(unittest.TestCase):
         self.assertEqual(set(esp), set(self.plano))
         recusa = ("restricao_destino_", "pai_pendente", "codigo_colisao_caixa")
         self.assertEqual(esp["TBHORARIODOSE"]["pendencias"]["pai_inexistente"], 2)  # 99: as duas colunas encadeadas
+        extra = {}
         for t, e in esp.items():
-            self.assertEqual(e["gravados"] + sum(v for k, v in e["pendencias"].items() if k.startswith(recusa)),
-                             len(vistos[t]), t)
+            self.assertEqual(e["gravados"] + extra.get(t, 0)
+                             + sum(v for k, v in e["pendencias"].items() if k.startswith(recusa)), len(vistos[t]), t)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class NumeroDoses(unittest.TestCase):  # revisão 2 (ADR 0006, 1): o número de doses CARREGA (nunca derivado)
+    def test_numero_de_doses_vira_frequencia(self):
+        m = mapa.carregar_execucao()
+        p = {x["tabela"]: x for x in carga_mapa.planejar(m, {"TBNUMDOSE"})}["TBNUMDOSE"]
+        self.assertEqual(p["destinos"], ["frequencia_administracao"])
+        c = {x["destino"]: x for x in p["colunas"]["frequencia_administracao"]}
+        self.assertEqual(c["tipo"]["coluna"], "=vezes_ao_dia")
+        self.assertEqual(c["doses_por_dia"]["coluna"], "NUM_DOSE")
+        self.assertEqual(c["horario_fixo"]["coluna"], "=1")
+        self.assertTrue(c["codigo"]["coluna"].startswith("#codigo_derivado:NUM_DOSE:"))
+        d = mapa.DIR_PACOTE / "declarado"
+        with open(d / "provas.tsv", encoding="utf-8") as f:
+            self.assertNotIn("TBNUMDOSE", {r["tabela"] for r in csv.DictReader(f, delimiter="\t")})
+        self.assertFalse((d / "provas.d" / "TBNUMDOSE.sql").exists())
+        vistos = {}
+        l6_09.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
+        com_horario = {h[0] for h in vistos["TBHORARIODOSE"]}
+        self.assertTrue([n for n in vistos["TBNUMDOSE"] if n[0] not in com_horario])  # número de doses sem horário

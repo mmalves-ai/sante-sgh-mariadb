@@ -85,3 +85,6 @@ TBUNID_IDADE	NOME	unidade_idade.sigla	hora	H	L5-05: unidade de idade pelo nome
 TBUNID_IDADE	NOME	unidade_idade.sigla	horas	H	L5-05: unidade de idade pelo nome
 TBUNID_IDADE	NOME	unidade_idade.sigla	Hora(s)	H	L5-05: unidade de idade pelo nome
 TBUNID_IDADE	NOME	unidade_idade.sigla	HORA(S)	H	L5-05: unidade de idade pelo nome
+TBEMPHOS	TIPO_DECLARANTE_DMED	mantenedora.tipo_declarante_dmed	1	prestador_saude	L5-05 rodada 3: leiaute oficial da DMED (tipo do declarante)
+TBEMPHOS	TIPO_DECLARANTE_DMED	mantenedora.tipo_declarante_dmed	2	operadora	L5-05 rodada 3: leiaute oficial da DMED (tipo do declarante)
+TBEMPHOS	TIPO_DECLARANTE_DMED	mantenedora.tipo_declarante_dmed	3	prestador_e_operadora	L5-05 rodada 3: leiaute oficial da DMED (tipo do declarante)

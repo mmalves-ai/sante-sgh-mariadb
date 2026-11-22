@@ -1,13 +1,19 @@
 """Fatia L7-03 (SADT e suprimentos, módulo SADT): tabelas da origem com dados 100% falsos e as anomalias.
 
-Carregadas (14): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
+Carregadas (15): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
 fases), analitos (com o analito no exame pela chave alternativa CODALF e a unidade do cliente adotada pelo código),
 exames (inativo com desativação na data da carga), resultados padrão (exame pela chave composta ATO,EXAME, depois do
 exame pela aresta de ordem), grandezas do laudo, modelos de comunicação, perfis do portal de resultados com
 modalidades, usuários e parâmetros (complementa o perfil), modelos de impressão de laudo e visualizadores de imagem
-(endereço e ativo presumidos). Descartes (5, `declarado/sem_carga.tsv`) e bloqueadas (2: SITPEQV pelo modelo e SITBEXHP
-pelo apoio que vem dela; pedidos em `docs/obra/fatias/f4/saida/L7-03.json`) entram na imagem para provar que não geram
-carga.
+(endereço e ativo presumidos) e variáveis de fórmula (fórmula do exame pela chave alternativa composta ATO,EXAME
+da SIFORMUL, pai externo: a SIFORMUL é da L7-02 e entra aqui só como forma, com as MESMAS linhas da imagem da L7-02).
+A unidade do cliente é gravada antes do analito e ligada a ele; o resultado padrão sem HTML leva o texto antigo
+(colunas concorrentes). Rodada 4 (DDL 10_SADT/09): interfaces de equipamento (inativas, sem alvo ou com o
+laboratório de apoio gravado antes e adotado pelo código) e a configuração do apoio por exame (o exame próprio vem da
+equivalência SITBEXEQ, da L8-16, que entra NESTA imagem com as mesmas linhas de lá e carrega pela declaração
+de lá: prova positiva do apoio, do exame copiado e do exige peso; equivalência ambígua e ausente visíveis). Rodada 5 (ADR
+0006): os antigos descartes carregam: SIWEBPARDATA e SIWEBPARTPATU como opções das listas do portal
+(parametro_opcao) e SITPEQV_SITPEQVMODELO na trilha da interface (retrato; interface nunca vista: pai_inexistente).
 Anomalias: descrição vazia ou só espaços em destino NOT NULL, espaços repetidos, CP1252 acentuado, S/N e A/I fora do
 domínio, referência zero (ausência), pai inexistente (nulo com pendência; em NOT NULL recusa), pai recusado
 (pai_pendente; na autorreferência, na fase 2), código e sigla repetidos (chave única), CHECK do destino (casas
@@ -36,10 +42,15 @@ TABELAS = [
      'CODIGO SMALLINT, NOME VARCHAR(40), INTERFACE VARCHAR(1), COD_LABORATORIO INTEGER, NOME_LABORATORIO VARCHAR(45), CAMINHO_EXPORTACAO VARCHAR(150), CAMINHO_IMPORTACAO VARCHAR(60), SENHA_EXPORTACAO VARCHAR(32), ID_SITPEQV_SITPEQVMODELO SMALLINT, USUARIO_FTP VARCHAR(40), SENHA_FTP VARCHAR(100), IMPORTAR_EXAME_COMO_LIBERADO CHAR(1), CRIPTOGRAFIA_AES CHAR(1), HOST_ABBOTT VARCHAR(80), PORTA_ABBOTT INTEGER, BLOQUEARLAUDO CHAR(1)'),
     ('SITBEXHP', 'COD',
      'COD INTEGER, TIPO SMALLINT, COD_EXAME VARCHAR(20), EXAME_NOME VARCHAR(40), CODMATERIAL VARCHAR(8), MATERIALNOME VARCHAR(30), TEMPODIURESE VARCHAR(1), VOLUMEDIURESE VARCHAR(1), DESCMAT VARCHAR(1), NECESSITA_PESO CHAR(1), NECESSITA_ALTURA CHAR(1)'),
+    # equivalência exame próprio x interface (L8-16): só para provar SITBEXHP; as MESMAS linhas da imagem da L8-16
+    ('SITBEXEQ', 'TIPO,ATO,CODALF,CODMATERIAL',
+     'TIPO SMALLINT, ATO SMALLINT, CODALF VARCHAR(4), COD_EXAME VARCHAR(20), CODMATERIAL VARCHAR(8), ENVIAR_ELEMENTO_ARQ_EXP CHAR(1)'),
     ('SITPEQVMODELO', 'ID',
      'ID SMALLINT, NOME VARCHAR(10)'),
     ('SITPEQV_SITPEQVMODELO', 'ID',
      'ID SMALLINT, ID_SITPEQV SMALLINT, ID_SITPEQVMODELO SMALLINT'),
+    ('SIFORMUL', 'ATO,CODELE,EXAME',
+     'ATO INTEGER, CODELE INTEGER, EXAME VARCHAR(4), FORMULA BLOB SUB_TYPE 1'),
     ('SIVARFORMULA', 'CODIGO',
      'ATO INTEGER, CODIGO INTEGER, EXAME VARCHAR(4), IDENTIFICACAO VARCHAR(4), DESCRICAO VARCHAR(50)'),
     ('SIWEBCADPERFIL', 'ID',
@@ -81,9 +92,14 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 CARREGADAS = ("SIPOSRES", "SIRECIPI", "SISTATUS_AMOSTRA", "SITABELE", "SITABPRO", "SIRESPAD", "SITBGRAN",
               "SITPEQVMODELO", "SIWEBCADPERFIL", "SIWEBCADPERFIL_SIPACSMODALID", "SIWEBCADPERFIL_TBUSERS",
-              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG")
-DESCARTADAS = ("SITPEQV_SITPEQVMODELO", "SIVARFORMULA", "SIWEBPARDATA", "SIWEBPARTPATU")
-BLOQUEADAS = ("SITPEQV", "SITBEXHP") + DESCARTADAS
+              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG", "SIVARFORMULA", "SITPEQV", "SITBEXHP", "SIFORMUL",
+              "SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU")
+DESCARTADAS = ()
+# pai de outra fatia (L8-16) carregado AQUI pela declaração de lá, só para a prova positiva de SITBEXHP (o exame
+# próprio copiado da equivalência): conferido só pela conciliação, sem esperado próprio
+PAIS_NA_IMAGEM = ("SITBEXEQ",)
+FORMA_SO = ()  # r4: SIFORMUL passou da L7-02 para cá e carrega (fórmula do analito no exame)
+BLOQUEADAS = DESCARTADAS
 D = decimal.Decimal
 
 
@@ -148,7 +164,10 @@ def linhas(r, ins):
             (9, 1, "FER", "Ferritina", dict(SITUACAO="I")),
             (10, 1, "VDR", "VDRL", dict(SITUACAO="A")),
             (11, 1, "Vdr", "VDRL quantitativo", dict()),
-            (12, 1, "URI", "Urina tipo 1", dict(SITUACAO="A"))]:
+            (12, 1, "URI", "Urina tipo 1", dict(SITUACAO="A")),
+            # exames das equivalências da L8-16 (HB e GL no ato 1): o exame próprio de SITBEXHP
+            (13, 1, "HB", "Hemoglobina", dict(SITUACAO="A")),
+            (14, 1, "GL", "Glicose sérica", dict(SITUACAO="A"))]:
         v = dict(base, **extra)
         linha("SITABPRO", ID=i, ATO=ato, CODALF=alf, NOME=nome, **v)
     for i, nome in [(1, "ASTM"), (2, "HL7"), (3, None), (4, "Arquivo")]:
@@ -193,14 +212,40 @@ def linhas(r, ins):
     # visualizadores: endereço e ativo presumidos (2 valor_presumido por linha avaliada); sem nome (NOT NULL)
     for i, nome in [(1, "Visualizador web"), (2, "  Estação   local "), (3, None)]:
         linha("SIWEBVISULIMG", ID=i, NOME=nome)
-    # bloqueadas e descartadas: linhas que não podem gerar carga
+    # interfaces: 1 completa com o apoio 7 (criado antes, inativo presumido; senhas aguardam o cofre); 2 sem apoio
+    # (opcional: interface inativa sem alvo); 3 mesmo apoio 7 (adotado pelo código); 4 sem nome (1048); 5 porta fora
+    # da faixa e S/N fora do domínio
     linha("SITPEQV", CODIGO=1, NOME="Analisador exemplo", INTERFACE="S", SENHA_EXPORTACAO="falsa", SENHA_FTP="falsa",
           ID_SITPEQV_SITPEQVMODELO=1, PORTA_ABBOTT=4000, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo",
           USUARIO_FTP="usuario.falso", CRIPTOGRAFIA_AES="S")
-    for i, eqv, mod in [(1, 1, 1), (2, 1, 2)]:
+    linha("SITPEQV", CODIGO=2, NOME="  Interface   local ", ID_SITPEQV_SITPEQVMODELO=4, IMPORTAR_EXAME_COMO_LIBERADO="N")
+    linha("SITPEQV", CODIGO=3, NOME="Analisador dois", ID_SITPEQV_SITPEQVMODELO=5, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo")
+    linha("SITPEQV", CODIGO=4, NOME="   ", ID_SITPEQV_SITPEQVMODELO=1, COD_LABORATORIO=8, NOME_LABORATORIO="Apoio sem interface")
+    linha("SITPEQV", CODIGO=5, NOME="Porta errada", ID_SITPEQV_SITPEQVMODELO=6, PORTA_ABBOTT=70000, CRIPTOGRAFIA_AES="X")
+    # r5 (achado): cada interface escolhe uma ligação SUA (o modelo escolhido pertence ao conjunto das ligações dela;
+    # a 1 tem duas: a escolhida e uma alternativa); a 3 aponta interface nunca vista (pai_inexistente)
+    for i, eqv, mod in [(1, 1, 1), (2, 1, 2), (3, 9, 1), (4, 2, 2), (5, 3, 1), (6, 5, 2)]:
         linha("SITPEQV_SITPEQVMODELO", ID=i, ID_SITPEQV=eqv, ID_SITPEQVMODELO=mod)
-    linha("SITBEXHP", COD=1, TIPO=1, COD_EXAME="APX1", EXAME_NOME="Exame do apoio")
-    linha("SIVARFORMULA", ATO=1, CODIGO=1, EXAME="GLI", IDENTIFICACAO="A", DESCRICAO="Variável exemplo")
+    # equivalências (as mesmas linhas da imagem da L8-16; aqui carregam pela declaração de lá)
+    for x in [[1, 1, "HB", "HGB", "SG", "S"], [1, 1, "GL", "GLU", "SR", "N"], [1, 1, "HB", None, "PL", "N"],
+              [2, 1, "GL", "GLU2", "SR", "S"], [1, 2, "XX", "ZZZ", "SG", None], [1, 1, "HB", "GLU", "SR", "N"]]:
+        linha("SITBEXEQ", **dict(zip(COLUNAS["SITBEXEQ"], x)))
+    # configuração do apoio por exame: 1 grava (apoio 7 da interface 1; exame HB pela equivalência 1/HGB; exige peso);
+    # 2 interface sem apoio e exame sem equivalência (pai_inexistente nas duas, 1048); 3 código 1/GLU em duas
+    # equivalências (pai_ambiguo, 1048)
+    linha("SITBEXHP", COD=1, TIPO=1, COD_EXAME="HGB", EXAME_NOME="Exame do apoio", NECESSITA_PESO="S")
+    linha("SITBEXHP", COD=2, TIPO=2, COD_EXAME="APX2", EXAME_NOME="Exame sem apoio")
+    linha("SITBEXHP", COD=3, TIPO=1, COD_EXAME="GLU", EXAME_NOME="Exame ambíguo")
+    # fórmulas (r4): URI/1 e HMG/4 gravam (analito no exame gravado pela SITABELE); URI/9 sem analito no exame
+    # (pai_inexistente) e sem expressão: recusada
+    for x in [(1, 1, "URI", "(A+B)/2"), (1, 4, "HMG", "A*2"), (2, 9, "URI", None)]:
+        linha("SIFORMUL", ATO=x[0], CODELE=x[1], EXAME=x[2], FORMULA=None if x[3] is None else x[3].encode("cp1252"))
+    # variáveis: 1 e 4 completas; 2 sem descrição (o identificador vira a descrição); 3 sem identificador (1048);
+    # 5 exame sem fórmula no ato 2 (pai_inexistente e 1048); fonte 'digitado' presumida em toda linha avaliada
+    for cod, ato, exa, ide, desc in [(1, 1, "URI", "A", "Glicemia  basal"), (2, 1, "URI", "B", None),
+                                     (3, 1, "URI", None, "Sem identificador"), (4, 1, "HMG", "CR", "Creatinina"),
+                                     (5, 2, "GLI", "Z", "Outro ato")]:
+        linha("SIVARFORMULA", ATO=ato, CODIGO=cod, EXAME=exa, IDENTIFICACAO=ide, DESCRICAO=desc)
     for i, nome in [(1, "Hoje"), (2, "Últimos 7 dias")]:
         linha("SIWEBPARDATA", ID=i, NOME=nome)
         linha("SIWEBPARTPATU", ID=i, NOME="Atualização %d" % i)
@@ -214,7 +259,7 @@ def linhas(r, ins):
                                                    "restricao_destino_4025": 2, "pai_inexistente": 3,
                                                    "pai_ambiguo": 1, "valor_fora_do_dominio": 1,
                                                    "adotado_existente": 1}},
-        "SITABPRO": {"gravados": 8, "pendencias": {"valor_presumido": 20, "restricao_destino_1062": 1,
+        "SITABPRO": {"gravados": 10, "pendencias": {"valor_presumido": 24, "restricao_destino_1062": 1,
                                                    "restricao_destino_1048": 1, "codigo_colisao_caixa": 2,
                                                    "valor_fora_do_dominio": 2}},
         "SIRESPAD": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, "restricao_destino_1048": 2,
@@ -224,10 +269,28 @@ def linhas(r, ins):
         "SIWEBCADPERFIL_SIPACSMODALID": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                        "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL_TBUSERS": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
+        # r5 (ADR 0006): opções das listas do portal; ligação interface x modelo na trilha (interface 9 nunca
+        # vista: pai_inexistente, a linha grava sem a interface)
+        # módulo 'migracao' e definição criados pela 1ª linha e adotados pelas seguintes (padrão L8-14)
+        "SIWEBPARDATA": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
+        "SIWEBPARTPATU": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+        "SITPEQV_SITPEQVMODELO": {"gravados": 6, "pendencias": {"pai_inexistente": 1, "vigencia_sem_fonte": 6}},
         "SIWEBPARLAUDO": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                         "restricao_destino_1048": 1}},
         "SITBGRAN": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 2}},
         "SIWEBPARPERFIL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
         "SIWEBVISULIMG": {"gravados": 2, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1}},
+        # interface: protocolo e ativo presumidos em cada linha e o ativo do apoio (3 por linha); apoio 7 adotado
+        # pela interface 3; 4 sem nome (1048, o apoio 8 desfeito com ela); 5 porta e S/N fora do domínio
+        "SITPEQV": {"gravados": 4, "pendencias": {"valor_presumido": 15, "segredo_aguarda_cofre": 2,
+                                                  "adotado_existente": 1, "valor_fora_do_dominio": 2,
+                                                  "restricao_destino_1048": 1}},
+        # 1 grava (apoio e exame pela equivalência); 2 sem apoio e sem equivalência; 3 equivalência ambígua
+        "SITBEXHP": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "pai_ambiguo": 1,
+                                                   "restricao_destino_1048": 2}},
+        "SIFORMUL": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
+                                                   "vigencia_sem_fonte": 3}},
+        "SIVARFORMULA": {"gravados": 3, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 2,
+                                                       "pai_inexistente": 1}},
     }

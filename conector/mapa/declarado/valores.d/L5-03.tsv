@@ -3,3 +3,32 @@ TBUSERS_TBPAPEL	ATIVO	usuario_papel_seguranca.vigencia_fim	1		L5-03: ativo, sem 
 TBUSERS_TBPAPEL	ATIVO	usuario_papel_seguranca.vigencia_fim	0	@data_carga	L5-03: inativo termina na data da carga
 TBALERTA	ID_TBSEXO	regra_alerta.sexo_aplicavel	F	feminino	L5-03: sigla do cadastro de sexo
 TBALERTA	ID_TBSEXO	regra_alerta.sexo_aplicavel	M	masculino	L5-03: sigla do cadastro de sexo
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	POLÍTICA	politica	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Política	politica	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	POLITICA	politica	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Politica	politica	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	CPF	cpf	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	CNPJ	cnpj	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	NOME	nome	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Nome	nome	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	DATA DE NASCIMENTO	data_nascimento	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Data de nascimento	data_nascimento	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	DATA NASCIMENTO	data_nascimento	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Data Nascimento	data_nascimento	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	TÍTULO DE ELEITOR	titulo_eleitor	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Título de eleitor	titulo_eleitor	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	TITULO DE ELEITOR	titulo_eleitor	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Titulo de eleitor	titulo_eleitor	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	REGISTRO NO CONSELHO	registro_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Registro no conselho	registro_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	NÚMERO DO CONSELHO	registro_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Número do conselho	registro_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	UF DO CONSELHO	uf_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	UF do conselho	uf_conselho	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	ESPECIALIDADE	especialidade	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Especialidade	especialidade	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	CNES	cnes	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	RESPONSÁVEL	responsavel	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Responsável	responsavel	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	RESPONSAVEL	responsavel	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	Responsavel	responsavel	r5 ADR 0006/0007: nome público do campo de OID da ICP-Brasil

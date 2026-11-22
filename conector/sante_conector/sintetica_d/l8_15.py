@@ -5,9 +5,11 @@ beneficiário (PSBENEFI) e a venda (PSVENDAS -> proposta_adesao). Nas 7 tabelas 
 origens, o código é prefixo de domínio + chave (#codigo_derivado) e a linha com a mesma descrição (colação do destino)
 é ADOTADA (adotado_existente): o mesmo conceito de duas origens fica numa linha só, sem recusa 1062.
 Contrato e plano (PSEMPBEN, PSPLANOS) entram como pais externos (PAIS_EXTERNOS): fora do mapa na referência
-(pedido 11). A pessoa do beneficiário só se liga pela chave alternativa no cadastro de pessoas, que é descarte: o
-beneficiário é recusado com pai_inexistente e NOT NULL (visível) até o destino anterior ao principal (pedido 8);
-o dependente aponta o titular pelo vínculo e cai em pai_pendente quando o titular é recusado. A venda grava a
+(pedido 11). A pessoa física nasce do próprio beneficiário (destino gravado ANTES, adotada pelo CPF: a pessoa já
+cadastrada no destino é adotada, adotado_existente); o grau do dependente é criado ou adotado pelo código do parentesco
+(descrição lida no cadastro de parentesco da origem, TBPARENTE, pai de outra fatia: entra no DDL só com as colunas que a
+referência encadeada atravessa); o dependente aponta o titular pelo vínculo e cai em pai_pendente quando o titular é
+recusado. A venda grava a
 proposta pelo plano e contrato do beneficiário (referência encadeada na origem), mesmo com o beneficiário recusado.
 Descartadas (declarado/sem_carga.tsv), só com a forma: TBTPFAVORECIDO, TBTPFORMAREAJ e TBTPVIGCONTRATO (terminologia
 TISS oficial), PSTPSVIGENCIA (tabela oficial da taxa) e PSBENCPL (repete colunas de PSBENEFI). Recebem 2 linhas cada.
@@ -42,6 +44,7 @@ CREATE TABLE TBTPFAVORECIDO ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(50) NOT NULL
 CREATE TABLE TBTPFORMAREAJ ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(50) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE TBTPPRESTADOR ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(20) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE TBTPUNIDTEMPO ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(40) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBPARENTE ("COD_PAR" SMALLINT NOT NULL, "NOME" VARCHAR(20), PRIMARY KEY ("COD_PAR"));
 CREATE TABLE TBTPVIGCONTRATO ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(30) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE PSBENEFI ("ID" BIGINT NOT NULL, "EMP" INTEGER NOT NULL, "BEN" INTEGER NOT NULL, "DEP" INTEGER NOT NULL,
   "DIG" SMALLINT NOT NULL, "NOME" VARCHAR(70), "SEXO" VARCHAR(1), "NASC" DATE NOT NULL, "ECIV" SMALLINT, "IDENT"
@@ -109,12 +112,57 @@ CREATE TABLE PSVENDAS ("ID_PSBENEFI" BIGINT NOT NULL, "CONCESSIONARIA" INTEGER, 
 CARREGADAS = ("PSREEMBOLSOTP", "PSTIPMEN", "PSTIPOGUIA", "PSTPACUMULPOR", "PSTPPERIODO", "SPMOTLIG", "SPORIGEM_ATEND",
               "SPVINCULOTITULAR", "TBENVCOBEMAIL", "TBREGIMEATEND", "TBSTATUSCREPLS", "TBTIPOCOBRANCASGO",
               "TBTPCONTRATOCREPLS", "TBTPEMAILPLS", "TBTPPRESTADOR", "TBTPUNIDTEMPO", "PSBENEFI", "PSVENDAS")
-NAO_CARREGADAS = ("TBTPFAVORECIDO", "TBTPFORMAREAJ", "TBTPVIGCONTRATO", "PSTPSVIGENCIA", "PSBENCPL")
+NAO_CARREGADAS = ()  # r5c: PSTPSVIGENCIA passa a carregar na trilha (retrato) até o carregador da ANS
+# rodada 5 (ADR 0006): listas do hospital (parametro_opcao) e complemento do beneficiário (mescla não destrutiva)
+# lista: a 1.ª linha da fatia cria o módulo e a definição; as seguintes adotam (adotado_existente, baixa)
+NOVAS = {"TBTPFAVORECIDO": {"gravados": 2, "pendencias": {"adotado_existente": 2}}, "TBTPFORMAREAJ": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+         "TBTPVIGCONTRATO": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+         # r5c: valores da taxa por vigência guardados na trilha com o retrato; a placeholder de 1899 tem o momento pela
+         # evidência (ADR 0007, 16: data mais antiga da tabela, nunca a da carga), com vigencia_sem_fonte (baixa)
+         "PSTPSVIGENCIA": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1}}}
+# complemento do beneficiário 101 (mãe igual: adotado sem mudança nas colunas que PSBENEFI concilia); 999 sem
+# beneficiário (pai_inexistente em cada referência; recusado). Preencher pela mescla uma coluna que PSBENEFI também
+# concilia muda a soma de controle dele (pedido 14 em saida/L8-15.json: a conciliação descontar o que a mescla preencheu)
+PSBENCPL_LINHAS = (101, None, "Mae exemplo", None), (999, "Nome ex", None, None)
+# r5b: o complemento também grava o e-mail próprio (101) e o retrato da linha inteira no histórico do beneficiário;
+# 999 leva mais duas pai_inexistente (data do movimento pela adesão do beneficiário ausente)
+PSBENCPL_ESPERADO = {"gravados": 1, "pendencias": {"adotado_existente": 2, "pai_inexistente": 12,
+                                                   "restricao_destino_1048": 1}}
+# rodada 5: adotar passou a MESCLAR (ADR 0007, 20): o conflito da linha adotada fica guardado (baixa)
+MESCLA_R5 = {"PSBENEFI": 1, "PSTIPMEN": 1, "TBTIPOCOBRANCASGO": 1, "TBTPPRESTADOR": 1, "TBTPUNIDTEMPO": 1}
 # contrato 7 e plano 3 já carregados (cadastros fora do mapa na referência: pedido 11)
 PAIS_EXTERNOS = {"PSEMPBEN": ["7"], "PSPLANOS": ["3"]}
 # um estabelecimento só no cliente de exemplo (@estabelecimento da proposta)
+# CPF válido inventado (dígitos verificadores calculados): nunca de uma pessoa real
+def cpf_falso(base9):
+    d = [int(x) for x in "%09d" % base9]
+    for n in (10, 11):
+        r = sum(a * b for a, b in zip(d, range(n, 1, -1))) * 10 % 11
+        d.append(0 if r == 10 else r)
+    return int("".join(map(str, d)))
+
+
+CPF_NOVO, CPF_JA_CADASTRADO = cpf_falso(123450001), cpf_falso(123450002)
+# sexo e estado civil como o destino fica depois do L3 e do L5-04; a pessoa já cadastrada (paciente, por exemplo) prova
+# a adoção pelo CPF, sem sobrescrever
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   "INSERT INTO estabelecimento () VALUES ();")
+                   # r5c: a operadora única do cliente (@unico da conta do portal do beneficiário)
+                   "CREATE TABLE IF NOT EXISTS operadora_saude (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   "INSERT INTO operadora_saude () VALUES ();"
+                   "INSERT INTO estabelecimento () VALUES ();"
+                   # sexo e estado civil só são lidos (cod:): a conferência cria apenas os destinos da fatia
+                   "CREATE TABLE IF NOT EXISTS sexo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, sigla CHAR(1));"
+                   "INSERT INTO sexo (codigo, descricao, sigla, criado_em) VALUES ('masculino', 'Masculino', 'M', UTC_TIMESTAMP(3)), ('feminino', 'Feminino', 'F', UTC_TIMESTAMP(3));"
+                   "CREATE TABLE IF NOT EXISTS estado_civil (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo VARCHAR(30));"
+                   "INSERT INTO estado_civil (codigo, descricao, criado_em) VALUES ('1', 'Estado civil um', UTC_TIMESTAMP(3)),"
+                   " ('2', 'Estado civil dois', UTC_TIMESTAMP(3));"
+                   # tipo de documento rg do cadastro do produto (L3/L5-05), só lido (cod:)
+                   "CREATE TABLE IF NOT EXISTS tipo_documento_identificacao (id BIGINT UNSIGNED AUTO_INCREMENT"
+                   " PRIMARY KEY, codigo VARCHAR(30));"
+                   "INSERT INTO tipo_documento_identificacao (codigo, descricao, criado_em) VALUES ('rg', 'RG', UTC_TIMESTAMP(3));"
+                   "INSERT INTO pessoa_fisica (nome, cpf, origem, criado_em) VALUES ('Pessoa ja cadastrada', '%011d',"
+                   " 'sistema', UTC_TIMESTAMP(3));" % CPF_JA_CADASTRADO)
 P1899 = datetime.date(1899, 12, 30)
 
 
@@ -206,19 +254,37 @@ def _benef(n, **v):
 
 
 D25 = datetime.date(2025, 2, 1)
-# titular e dependente no contrato 7 e plano 3 (pais externos); pessoa só pela chave alternativa no cadastro de pessoas
-# (descarte, ausente): o titular cai em pai_inexistente e no NOT NULL (1048) e o dependente, que aponta o titular pelo
-# vínculo, em pai_pendente; a placeholder de 1899 tem contrato desconhecido (pai_inexistente), datas sentinela e 1048
+PARENTES = [[2, "Filho  exemplo"], [3, "Cônjuge exemplo"]]
+# titular com pessoa nova (CPF válido), dependente sem CPF com grau novo (código 2, descrição do cadastro de parentesco)
+# e o segundo dependente do mesmo grau (grau adotado); titular cuja pessoa já está no destino pelo CPF (adotada);
+# dependente com parentesco inexistente na origem (descrição NULL: 1048 no grau, recusa visível); a placeholder de 1899
+# tem contrato desconhecido (pai_inexistente), datas sentinela e nome nulo (1048)
 BENEFICIARIOS = [
-    _benef(1, ID=101, EMP=7, BEN=1, DEP=0, PLANO=3, CPF=11144477735, NOME="Titular  exemplo", ADESAO=D25, APARTIR=D25,
-           COD_ANT="ANT-EX-1", CCO=900001, ESTUDANTE="N", STATUS="A", COB_TEMP="N", COD_UNIDADE="U-EX",
-           DATA_HORA_INCLUSAO=datetime.datetime(2025, 2, 1, 9, 30)),
-    _benef(2, ID=102, EMP=7, BEN=1, DEP=1, PLANO=3, CPF=None, NOME="Dependente exemplo", ADESAO=D25, APARTIR=D25,
-           ESTUDANTE="S", ID_PSBENEFI_VINCULO=101, PARENTE=2),
+    _benef(1, ID=101, EMP=7, BEN=1, DEP=0, PLANO=3, CPF=CPF_NOVO, NOME="Titular  exemplo", SEXO="M", NASC=D25,
+           MAE="Mae exemplo", CNS="700000000000005", ECIV=1, ADESAO=D25, APARTIR=D25, COD_ANT="ANT-EX-1", CCO=900001,
+           ESTUDANTE="N", STATUS="A", COB_TEMP="N", COD_UNIDADE="U-EX", DATA_HORA_INCLUSAO=datetime.datetime(2025, 2, 1, 9, 30),
+           IDENT="RG-EX-1", EXPEDICAO=D25, EMAIL="titular@exemplo.test", SENHA_WEB="senha-falsa-ex1"),
+    _benef(2, ID=102, EMP=7, BEN=1, DEP=1, PLANO=3, CPF=None, NOME="Dependente exemplo", SEXO="F", ADESAO=D25,
+           APARTIR=D25, ESTUDANTE="S", ID_PSBENEFI_VINCULO=101, PARENTE=2, EMAIL="sem-arroba-exemplo",
+           SENHA_WEB="senha-falsa-ex2"),
+    _benef(4, ID=103, EMP=7, BEN=1, DEP=2, PLANO=3, CPF=None, NOME="Outro dependente exemplo", ADESAO=D25,
+           APARTIR=D25, ID_PSBENEFI_VINCULO=101, PARENTE=2, STATUS="C", NUM_DECLARACAO_OBITO="99999999"),
+    _benef(5, ID=104, EMP=7, BEN=2, DEP=0, PLANO=3, CPF=CPF_JA_CADASTRADO, NOME="Titular ja cadastrado", ADESAO=D25,
+           APARTIR=D25, STATUS="A", IDENT="RG-EX-4"),
+    _benef(6, ID=105, EMP=7, BEN=2, DEP=1, PLANO=3, CPF=None, NOME="Dependente sem parentesco", ADESAO=D25,
+           APARTIR=D25, ID_PSBENEFI_VINCULO=104, PARENTE=9),
     _forma("PSBENEFI", 3, True),
 ]
-ESPERADO_BENEFICIARIO = {"gravados": 0, "pendencias": {"pai_inexistente": 2, "data_sentinela": 2, R1048: 2,
-                                                       "pai_pendente": 1}}
+# 4 gravados (titular novo, dependente com grau novo, dependente com grau adotado, titular com pessoa adotada);
+# identidade e e-mail do titular novo e identidade do adotado viram documento_pessoa/email_pessoa da pessoa; e-mail
+# inválido do dependente: valor_fora_do_dominio e nenhuma linha; o outro dependente tem STATUS 'C' sem par (suspenso
+# com valor_fora_do_dominio) e declaração de óbito (pessoa falecida);
+# recusados: dependente sem parentesco na origem (pai_inexistente + 1048 na descrição do grau) e a placeholder
+# (pai_inexistente do contrato, 5 datas sentinela: adesão, início e nascimento, mais a adesão no efeito e no momento do
+# movimento de inclusão; 1048 no nome da pessoa). r5c: o e-mail inválido do dependente também vale para a conta do
+# portal (criada pela senha web): valor_fora_do_dominio 3 (e-mail da pessoa, e-mail da conta e STATUS 'C')
+ESPERADO_BENEFICIARIO = {"gravados": 4, "pendencias": {AD: 2, "data_sentinela": 5, "pai_inexistente": 2, R1048: 2,
+                                                       "valor_fora_do_dominio": 3}}
 # venda do titular: proposta gravada pelo plano e contrato do beneficiário (referência encadeada na origem); venda da
 # placeholder (contrato desconhecido: pai_inexistente; sem plano nem data: 1048) e do dependente sem data (1048)
 
@@ -239,7 +305,10 @@ def linhas(r, ins):
     esperado = {}
     for v in BENEFICIARIOS:
         ins("PSBENEFI", list(v))
-    esperado["PSBENEFI"] = {"gravados": 0, "pendencias": dict(ESPERADO_BENEFICIARIO["pendencias"])}
+    for v in PARENTES:
+        ins("TBPARENTE", list(v))
+    esperado["PSBENEFI"] = {"gravados": ESPERADO_BENEFICIARIO["gravados"],
+                            "pendencias": dict(ESPERADO_BENEFICIARIO["pendencias"])}
     for v in VENDAS:
         ins("PSVENDAS", list(v))
     esperado["PSVENDAS"] = {"gravados": 1, "pendencias": dict(ESPERADO_VENDAS["pendencias"])}
@@ -247,7 +316,19 @@ def linhas(r, ins):
         for v in ls:
             ins(tab, list(v))
         esperado[tab] = {"gravados": esp["gravados"], "pendencias": dict(esp["pendencias"])}
-    for tab in NAO_CARREGADAS:
+    for tab in NAO_CARREGADAS + tuple(NOVAS):
         ins(tab, _forma(tab, 1, True))
         ins(tab, _forma(tab, 2, False))
+    for tab, e in NOVAS.items():
+        esperado[tab] = {"gravados": e["gravados"], "pendencias": dict(e["pendencias"])}
+    nomes = [n for n, _, _ in colunas("PSBENCPL")]
+    for chave, cart, mae, pai in PSBENCPL_LINHAS:
+        v = _forma("PSBENCPL", 1, False)
+        for n, x in (("ID_PSBENEFI", chave), ("NOME_CARTEIRINHA", cart), ("MAE", mae), ("PAI", pai),
+                     ("EMAIL", "complemento@exemplo.test" if chave == 101 else None), ("EMPRESA", "Empresa exemplo")):
+            v[nomes.index(n)] = x
+        ins("PSBENCPL", v)
+    esperado["PSBENCPL"] = {"gravados": PSBENCPL_ESPERADO["gravados"], "pendencias": dict(PSBENCPL_ESPERADO["pendencias"])}
+    for tab, n in MESCLA_R5.items():
+        esperado[tab]["pendencias"]["mescla_conflito_origem_guardada"] = n
     return esperado

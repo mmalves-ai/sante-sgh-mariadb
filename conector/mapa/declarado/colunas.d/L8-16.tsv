@@ -25,3 +25,234 @@ TBMEDSOLWEBCAD	SENHA		texto			L8-16: nunca migra (o produto não guarda o acesso
 TBMEDSOLWEBCAD	SEXO		codigo_char			L8-16: não aproveitada: sexo_id é cadastro do produto sem chave da origem (TBSEXO fora do conector_origem, ver SITABPRO no L7-03); o pedido é reconferido na tela e o sexo vem do cadastro do solicitante
 TBMEDSOLWEBCAD	ATIVO		booleano_sn			L8-16: não aproveitada: a origem não distingue pedido recusado de cancelado; todo pedido entra 'pendente' para reconferência (decisão em F4-decisoes-destino.md)
 TBMEDSOLWEBCAD	ID_TBCBOPRO		inteiro			L8-16: não aproveitada: aponta a inscrição de um profissional do corpo clínico (TBCBOPRO), não a ocupação CBO; o vínculo com o profissional nasce da conferência do pedido
+SIMATHP	TIPO	material_laboratorio_apoio.laboratorio_apoio_id			ref:SITPEQV/laboratorio_apoio	L8-16: laboratório de apoio pelo TIPO (a interface SITPEQV que o criou, L7-03); interface ausente: pai_inexistente e o NOT NULL recusa
+SIMATHP	CODIGO	material_laboratorio_apoio.codigo_externo	texto			L8-16: código do material no apoio; repetido no mesmo apoio: a chave única recusa (1062)
+SIMATHP	NOME	material_laboratorio_apoio.descricao_externa	texto_nome			L8-16: nome do material no apoio; o material próprio (material_biologico_id) fica nulo: equivalência a conferir pelo cliente na tela (DDL 17_INTG/05)
+SITBELHP	COD_EXAME	elemento_exame_laboratorio_apoio.exame_laboratorio_apoio_id			ref:SITBEXHP	L8-16: exame do apoio pela chave inteira COD de SITBEXHP (L7-03); ausente: pai_inexistente e o NOT NULL recusa
+SITBELHP	COD	elemento_exame_laboratorio_apoio.codigo_elemento_externo	texto			L8-16: código do elemento no apoio
+SITBELHP	ELEMENTO_NOME	elemento_exame_laboratorio_apoio.nome_elemento_externo	texto_nome			L8-16: nome do elemento no apoio; o analito próprio fica nulo, a conferir pelo cliente (DDL 17_INTG/05)
+SITBELHP	ID_SIMATHP	elemento_exame_laboratorio_apoio.material_laboratorio_apoio_id			ref:SIMATHP	L8-16: material do apoio (opcional); ausente: pai_inexistente com a coluna nula
+TBREGUL_TABELAS	=~regulacao_a_conferir	sistema_externo.codigo			antes;adotar:codigo	L8-16 (rodada 3): central a conferir: a origem não aponta a central dona (há mais de uma): as tabelas entram sob a central 'a conferir' (inativa, criada uma vez e adotada nas linhas seguintes), com valor_presumido por linha, e o cliente as move para a central certa no painel (decisão em F4-decisoes-destino.md)
+TBREGUL_TABELAS	=Central de regulação a conferir	sistema_externo.nome				L8-16 (rodada 3): nome da central a conferir
+TBREGUL_TABELAS	=regulacao	sistema_externo.categoria				L8-16 (rodada 3): categoria da central
+TBREGUL_TABELAS	=Tabelas de códigos da regulação sem central indicada na origem	sistema_externo.finalidade				L8-16 (rodada 3): finalidade da central a conferir
+TBREGUL_TABELAS	=0	sistema_externo.ativo				L8-16 (rodada 3): a central a conferir entra INATIVA: nenhuma integração usa as tabelas até o cliente movê-las
+TBREGUL_TABELAS	@id:sistema_externo	tabela_codigo_regulacao.sistema_externo_id				L8-16 (rodada 3): a central da tabela é a central a conferir (secundário gravado antes)
+TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.codigo	texto			L8-16 (rodada 3): nome da tabela na central; repetido na mesma central choca na chave única (1062)
+TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.codigo	texto_resumo:50			L8-16 (rodada 3): sem nome de referência, a descrição resumida (concorrente) vira o código; sem as duas recusa (1048)
+TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
+TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o nome de referência (concorrente)
+TBREGUL_TABELAS	ATIVO	tabela_codigo_regulacao.ativo	booleano_sn			L8-16 (rodada 3): S/N; nulo fica no padrão (ativa)
+TBREGUL_TABELAS	=migracao	tabela_codigo_regulacao.origem				L8-16 (rodada 3): origem da linha
+TBREGUL_VLR_TABELAS	ID_TBREGUL_TABELAS	valor_codigo_regulacao.tabela_codigo_regulacao_id			ref:TBREGUL_TABELAS	L8-16 (rodada 3): tabela da central; pai recusado: pai_pendente; inexistente: pai_inexistente e recusa (1048)
+TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.valor_externo	texto			L8-16 (rodada 3): código exigido pela central; vazio recusa (1048); repetido na tabela choca (1062)
+TBREGUL_VLR_TABELAS	DESCRICAO	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
+TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o próprio valor (concorrente); registro e código internos ficam nulos para o cliente ligar na tela
+TBREGUL_VLR_TABELAS	=migracao	valor_codigo_regulacao.origem				L8-16 (rodada 3): origem da linha
+TBDIGITAL_ESPECIALIDADE	ID	mapeamento_codigo_externo.entidade_id	inteiro		ref:TBESPEC.ID_TBDIGITAL_ESPECIALIDADE;por_pai	L8-16: especialidade do hospital que aponta este código do parceiro (TBESPEC.ID_TBDIGITAL_ESPECIALIDADE): uma equivalência por especialidade; código sem especialidade ligada: pai_inexistente (catálogo do parceiro sem uso no hospital)
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	mapeamento_codigo_externo.entidade				L8-16: tabela interna do código mapeado
+TBDIGITAL_ESPECIALIDADE	ID_DIGITAL	mapeamento_codigo_externo.codigo_externo	texto			L8-16: código da especialidade no parceiro de prescrição digital
+TBDIGITAL_ESPECIALIDADE	NOME	mapeamento_codigo_externo.descricao_externa	texto_nome			L8-16: nome da especialidade no parceiro
+TBDIGITAL_ESPECIALIDADE	@id:sistema_externo	mapeamento_codigo_externo.sistema_externo_id				L8-16: parceiro de prescrição digital (criado uma vez e adotado pelo código)
+TBDIGITAL_ESPECIALIDADE	@id:tipo_mapeamento_codigo	mapeamento_codigo_externo.tipo_mapeamento_codigo_id				L8-16: domínio especialidade (criado uma vez e adotado pelo código)
+TBDIGITAL_ESPECIALIDADE	=~prescricao_digital	sistema_externo.codigo			antes;adotar:codigo	L8-16: PRESUMIDO: a origem não nomeia o parceiro; o cliente confirma no painel
+TBDIGITAL_ESPECIALIDADE	=Parceiro de prescrição digital	sistema_externo.nome				L8-16: nome do parceiro (o cliente ajusta no painel)
+TBDIGITAL_ESPECIALIDADE	=outro	sistema_externo.categoria				L8-16: prescrição digital não tem categoria própria no domínio
+TBDIGITAL_ESPECIALIDADE	=Prescrição digital: equivalência das especialidades do hospital com as do parceiro	sistema_externo.finalidade				L8-16: finalidade do sistema externo
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	tipo_mapeamento_codigo.codigo			antes;adotar:codigo	L8-16: domínio do mapeamento
+TBDIGITAL_ESPECIALIDADE	=Especialidade médica	tipo_mapeamento_codigo.descricao				L8-16: descrição do domínio
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	tipo_mapeamento_codigo.entidade_interna				L8-16: tabela interna do domínio
+TBFORMA_ASSINATURA_ICP	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBFORMA_ASSINATURA_ICP	ID	parametro_opcao.sequencia	inteiro			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBFORMA_ASSINATURA_ICP	DESCRICAO	parametro_opcao.rotulo	texto_nome			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBFORMA_ASSINATURA_ICP	ID	parametro_opcao.rotulo	texto			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBFORMA_ASSINATURA_ICP	=migracao	parametro_opcao.origem				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBFORMA_ASSINATURA_ICP	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBFORMA_ASSINATURA_ICP	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBFORMA_ASSINATURA_ICP	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBFORMA_ASSINATURA_ICP	=0	modulo_sistema.ativo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBFORMA_ASSINATURA_ICP	=migracao.formato_assinatura_icp	parametro_definicao.chave			antes;adotar:chave	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBFORMA_ASSINATURA_ICP	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBFORMA_ASSINATURA_ICP	=Formatos de assinatura ICP-Brasil usados pelo hospital (rótulos da origem; família e política em formato_assinatura_icp)	parametro_definicao.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBFORMA_ASSINATURA_ICP	=lista	parametro_definicao.tipo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBOPERSCHEMA	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBOPERSCHEMA	ID	parametro_opcao.sequencia	inteiro			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBOPERSCHEMA	NOME	parametro_opcao.rotulo	texto_nome			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBOPERSCHEMA	ID	parametro_opcao.rotulo	texto			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBOPERSCHEMA	=migracao	parametro_opcao.origem				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBOPERSCHEMA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBOPERSCHEMA	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBOPERSCHEMA	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBOPERSCHEMA	=0	modulo_sistema.ativo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBOPERSCHEMA	=migracao.operacao_servico_web	parametro_definicao.chave			antes;adotar:chave	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBOPERSCHEMA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBOPERSCHEMA	=Operações do serviço web cadastradas na origem (a conferir na configuração de operacao_ponto_integracao)	parametro_definicao.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBOPERSCHEMA	=lista	parametro_definicao.tipo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+SIMODULO_SIWEBATOS	ID_SIMODULO	parametro_opcao.valor	texto		principal;parametro_opcao	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+SIMODULO_SIWEBATOS	ID	parametro_opcao.sequencia	inteiro			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+SIMODULO_SIWEBATOS	ID_SIMODULO	parametro_opcao.rotulo	texto_nome			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+SIMODULO_SIWEBATOS	=migracao	parametro_opcao.origem				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+SIMODULO_SIWEBATOS	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+SIMODULO_SIWEBATOS	ATIVO	parametro_opcao.ativo	booleano_sn			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): publicado no portal (S/N); vazio fica com o padrão (ativo)
+SIMODULO_SIWEBATOS	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+SIMODULO_SIWEBATOS	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+SIMODULO_SIWEBATOS	=0	modulo_sistema.ativo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+SIMODULO_SIWEBATOS	=migracao.modulo_publicado_portal	parametro_definicao.chave			antes;adotar:chave	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+SIMODULO_SIWEBATOS	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+SIMODULO_SIWEBATOS	=Módulos publicados no portal web na origem (valor = código do módulo da origem; ativo = publicado); a conferir em setor_publicado_portal	parametro_definicao.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+SIMODULO_SIWEBATOS	=lista	parametro_definicao.tipo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBDIGITAL_INTEG_FIELD	#codigo_derivado:ID_TBDIGITAL_INTEG_TYPE+ID:200	parametro_opcao.valor	texto		principal;parametro_opcao	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBDIGITAL_INTEG_FIELD	ID	parametro_opcao.sequencia	inteiro			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBDIGITAL_INTEG_FIELD	FIELD_NAME	parametro_opcao.rotulo	texto_nome	valores		r5c (regra 1): campo da origem traduzido para o rótulo do produto (valores.d/L8-16.tsv); sem par: rótulo = código da opção
+TBDIGITAL_INTEG_FIELD	#codigo_derivado:ID_TBDIGITAL_INTEG_TYPE+ID:200	parametro_opcao.rotulo	texto			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBDIGITAL_INTEG_FIELD	=migracao	parametro_opcao.origem				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBDIGITAL_INTEG_FIELD	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBDIGITAL_INTEG_FIELD	ID_TBDIGITAL_INTEG_TYPE		chave_origem			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): vai no valor (tipo da integração)
+TBDIGITAL_INTEG_FIELD	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBDIGITAL_INTEG_FIELD	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBDIGITAL_INTEG_FIELD	=0	modulo_sistema.ativo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBDIGITAL_INTEG_FIELD	=migracao.campo_integracao_digital	parametro_definicao.chave			antes;adotar:chave	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBDIGITAL_INTEG_FIELD	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBDIGITAL_INTEG_FIELD	=Campos monitorados por tipo de integração com o parceiro digital (valor = tipo da integração _ campo; a conferir em assinatura_evento_parceiro.campos)	parametro_definicao.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBDIGITAL_INTEG_FIELD	=lista	parametro_definicao.tipo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBIDENTIFICACAOENDPOINT	#codigo_derivado:COD:40:servico_origem_	sistema_externo.codigo	texto		principal;sistema_externo	L8-16 r5 (ADR 0006): serviço integrado da origem vira sistema externo; código = prefixo + código da origem
+TBIDENTIFICACAOENDPOINT	DESCRICAO	sistema_externo.nome	texto_nome			L8-16 r5 (ADR 0006): nome do serviço
+TBIDENTIFICACAOENDPOINT	=outro	sistema_externo.categoria				L8-16 r5 (ADR 0006): a origem não classifica o serviço
+TBIDENTIFICACAOENDPOINT	=Serviço integrado cadastrado na origem (a conferir)	sistema_externo.finalidade				L8-16 r5 (ADR 0006): finalidade
+TBIDENTIFICACAOENDPOINT	=0	sistema_externo.ativo				L8-16 r5 (ADR 0006): entra inativo até o cliente conferir
+TBIDENTIFICACAOENDPOINT	=migracao	sistema_externo.origem				L8-16 r5 (ADR 0006): origem do registro
+TBIDENTIFICACAOENDPOINT	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem (conector_origem)
+TBIDENTIFICACAOENDPOINT	COD		inteiro			L8-16 r5 (ADR 0006): vai no código do sistema externo e do ponto
+TBIDENTIFICACAOENDPOINT	PORTA_DOCKER_INTERNO		inteiro			L8-16 r5 (ADR 0006): porta interna de container do sistema anterior: não é endereço alcançável do produto; o endereço real vem de TBENDPOINT
+TBIDENTIFICACAOENDPOINT	#codigo_derivado:COD:60:servico_origem_	ponto_integracao.codigo	texto		ponto_integracao	L8-16 r5 (ADR 0006): ponto de integração do serviço (as rotas de TBENDPOINTURI ficam nele)
+TBIDENTIFICACAOENDPOINT	DESCRICAO	ponto_integracao.nome	texto_nome			L8-16 r5 (ADR 0006): nome do ponto
+TBIDENTIFICACAOENDPOINT	@id	ponto_integracao.sistema_externo_id				L8-16 r5 (ADR 0006): o sistema externo da linha
+TBIDENTIFICACAOENDPOINT	=bidirecional	ponto_integracao.direcao				L8-16 r5 (ADR 0006): a origem não diz a direção
+TBIDENTIFICACAOENDPOINT	=http_rest	ponto_integracao.transporte				L8-16 r5 (ADR 0006): serviço web por rota (URI)
+TBIDENTIFICACAOENDPOINT	=json	ponto_integracao.formato_conteudo				L8-16 r5 (ADR 0006): formato do serviço web por rota
+TBIDENTIFICACAOENDPOINT	=servico_web_origem	padrao_troca.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): padrão dos serviços web cadastrados na origem (criado uma vez, adotado depois)
+TBIDENTIFICACAOENDPOINT	=Serviço web cadastrado na origem	padrao_troca.descricao				L8-16 r5 (ADR 0006): descrição do padrão
+TBIDENTIFICACAOENDPOINT	=api	padrao_troca.familia				L8-16 r5 (ADR 0006): família do padrão
+TBIDENTIFICACAOENDPOINT	@estabelecimento	ponto_integracao.estabelecimento_id				L8-16 r5 (ADR 0006): estabelecimento da carga
+TBIDENTIFICACAOENDPOINT	@id:padrao_troca	ponto_integracao.padrao_troca_id				L8-16 r5 (ADR 0006): padrão de troca
+TBIDENTIFICACAOENDPOINT	=0	ponto_integracao.ativo				L8-16 r5 (ADR 0006): entra INATIVO: o cliente confere credencial e padrão antes de ligar
+TBIDENTIFICACAOENDPOINT	=migracao	ponto_integracao.origem				L8-16 r5 (ADR 0006): origem do registro
+TBENDPOINT	#codigo_derivado:ID:60:endereco_origem_	ponto_integracao.codigo	texto		principal	L8-16 r5 (ADR 0006): endereço do serviço vira ponto de integração próprio
+TBENDPOINT	IDENTIFICACAOENDPOINT	ponto_integracao.nome	texto		ref:TBIDENTIFICACAOENDPOINT.COD>DESCRICAO	L8-16 r5 (ADR 0006): nome = descrição do serviço
+TBENDPOINT	URL	ponto_integracao.nome	texto_resumo:150			L8-16 r5 (ADR 0006): sem serviço achado: o próprio endereço
+TBENDPOINT	IDENTIFICACAOENDPOINT	ponto_integracao.sistema_externo_id			ref:TBIDENTIFICACAOENDPOINT.COD	L8-16 r5 (ADR 0006): serviço pelo código
+TBENDPOINT	URL	ponto_integracao.endereco	texto			L8-16 r5 (ADR 0006): endereço
+TBENDPOINT	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem
+TBENDPOINT	STATUS		codigo_char			L8-16 r5 (ADR 0006): situação do endereço no sistema anterior: o ponto entra inativo e o cliente liga ao conferir
+TBENDPOINT	=bidirecional	ponto_integracao.direcao				L8-16 r5 (ADR 0006): a origem não diz a direção
+TBENDPOINT	=http_rest	ponto_integracao.transporte				L8-16 r5 (ADR 0006): endereço HTTP
+TBENDPOINT	=json	ponto_integracao.formato_conteudo				L8-16 r5 (ADR 0006): formato do serviço web
+TBENDPOINT	=servico_web_origem	padrao_troca.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): padrão dos serviços web cadastrados na origem (criado uma vez, adotado depois)
+TBENDPOINT	=Serviço web cadastrado na origem	padrao_troca.descricao				L8-16 r5 (ADR 0006): descrição do padrão
+TBENDPOINT	=api	padrao_troca.familia				L8-16 r5 (ADR 0006): família do padrão
+TBENDPOINT	@estabelecimento	ponto_integracao.estabelecimento_id				L8-16 r5 (ADR 0006): estabelecimento da carga
+TBENDPOINT	@id:padrao_troca	ponto_integracao.padrao_troca_id				L8-16 r5 (ADR 0006): padrão de troca
+TBENDPOINT	=0	ponto_integracao.ativo				L8-16 r5 (ADR 0006): entra INATIVO: o cliente confere credencial e padrão antes de ligar
+TBENDPOINT	=migracao	ponto_integracao.origem				L8-16 r5 (ADR 0006): origem do registro
+TBENDPOINTURI	ID_TBIDENTIFICACAOENDPOINT	operacao_ponto_integracao.ponto_integracao_id			ref:TBIDENTIFICACAOENDPOINT/ponto_integracao	L8-16 r5 (ADR 0006): rota no ponto do serviço
+TBENDPOINTURI	#grupo_seq@ID_TBIDENTIFICACAOENDPOINT	operacao_ponto_integracao.sequencia				L8-16 r5 (ADR 0006): ordem da rota no serviço (pela chave)
+TBENDPOINTURI	#codigo_derivado:ID:60:rota_	operacao_ponto_integracao.codigo	texto			L8-16 r5 (ADR 0006): código da operação
+TBENDPOINTURI	URI	operacao_ponto_integracao.descricao	texto_resumo:150			L8-16 r5 (ADR 0006): descrição = a rota
+TBENDPOINTURI	URI	operacao_ponto_integracao.rota	texto			L8-16 r5 (ADR 0006): rota relativa
+TBENDPOINTURI	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem
+TBENDPOINTURI	=0	operacao_ponto_integracao.ativo				L8-16 r5 (ADR 0006): inativa até o cliente conferir
+TBENDPOINTURI	=migracao	operacao_ponto_integracao.origem				L8-16 r5 (ADR 0006): origem do registro
+TBREGUL_ENDPOINT	#codigo_derivado:ID:60:regulacao_	ponto_integracao.codigo	texto		principal	L8-16 r5 (ADR 0006): endereço da central de regulação vira ponto de integração
+TBREGUL_ENDPOINT	DESCRICAO	ponto_integracao.nome	texto_nome			L8-16 r5 (ADR 0006): nome
+TBREGUL_ENDPOINT	ENDPOINT	ponto_integracao.nome	texto_resumo:150			L8-16 r5 (ADR 0006): sem descrição: o endereço
+TBREGUL_ENDPOINT	ENDPOINT	ponto_integracao.endereco	texto			L8-16 r5 (ADR 0006): endereço
+TBREGUL_ENDPOINT	@id:sistema_externo	ponto_integracao.sistema_externo_id				L8-16 r5 (ADR 0006): central a conferir (mesma decisão de TBREGUL_TABELAS)
+TBREGUL_ENDPOINT	=saida	ponto_integracao.direcao				L8-16 r5 (ADR 0006): o hospital chama a central
+TBREGUL_ENDPOINT	=http_rest	ponto_integracao.transporte				L8-16 r5 (ADR 0006): serviço web com método HTTP
+TBREGUL_ENDPOINT	=json	ponto_integracao.formato_conteudo				L8-16 r5 (ADR 0006): formato
+TBREGUL_ENDPOINT	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem
+TBREGUL_ENDPOINT	#codigo_derivado:ID_TBREGUL_SERVICO:60:servico_	operacao_ponto_integracao.codigo	texto			r5c: código do serviço da central é o código da operação (não tipo de documento)
+TBREGUL_ENDPOINT	ID_TBREGUL_SERVICO		inteiro			lido pelo #codigo_derivado (código da operação)
+TBREGUL_ENDPOINT	=regulacao_a_conferir	sistema_externo.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): central a conferir (a origem não liga o endereço à central)
+TBREGUL_ENDPOINT	=Central de regulação a conferir	sistema_externo.nome				L8-16 r5 (ADR 0006): nome
+TBREGUL_ENDPOINT	=regulacao	sistema_externo.categoria				L8-16 r5 (ADR 0006): categoria
+TBREGUL_ENDPOINT	=Tabelas de códigos da regulação sem central indicada na origem	sistema_externo.finalidade				L8-16 r5 (ADR 0006): mesma finalidade de TBREGUL_TABELAS (adoção)
+TBREGUL_ENDPOINT	=0	sistema_externo.ativo				L8-16 r5 (ADR 0006): inativa até o cliente conferir
+TBREGUL_ENDPOINT	@id	operacao_ponto_integracao.ponto_integracao_id			operacao_ponto_integracao	L8-16 r5 (ADR 0006): operação única do endereço
+TBREGUL_ENDPOINT	=1	operacao_ponto_integracao.sequencia				L8-16 r5 (ADR 0006): única
+TBREGUL_ENDPOINT	=servico	operacao_ponto_integracao.codigo				concorrente: sem serviço na origem
+TBREGUL_ENDPOINT	=Serviço da central de regulação	operacao_ponto_integracao.descricao				L8-16 r5 (ADR 0006): descrição
+TBREGUL_ENDPOINT	METODO	operacao_ponto_integracao.metodo	texto		se:METODO=GET,POST,PUT,PATCH,DELETE	L8-16 r5 (ADR 0006): verbo HTTP; fora do domínio fica sem verbo
+TBREGUL_ENDPOINT	=migracao	operacao_ponto_integracao.origem				L8-16 r5 (ADR 0006): origem
+TBREGUL_ENDPOINT	=servico_web_origem	padrao_troca.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): padrão dos serviços web cadastrados na origem (criado uma vez, adotado depois)
+TBREGUL_ENDPOINT	=Serviço web cadastrado na origem	padrao_troca.descricao				L8-16 r5 (ADR 0006): descrição do padrão
+TBREGUL_ENDPOINT	=api	padrao_troca.familia				L8-16 r5 (ADR 0006): família do padrão
+TBREGUL_ENDPOINT	@estabelecimento	ponto_integracao.estabelecimento_id				L8-16 r5 (ADR 0006): estabelecimento da carga
+TBREGUL_ENDPOINT	@id:padrao_troca	ponto_integracao.padrao_troca_id				L8-16 r5 (ADR 0006): padrão de troca
+TBREGUL_ENDPOINT	=0	ponto_integracao.ativo				L8-16 r5 (ADR 0006): entra INATIVO: o cliente confere credencial e padrão antes de ligar
+TBREGUL_ENDPOINT	=migracao	ponto_integracao.origem				L8-16 r5 (ADR 0006): origem do registro
+FPESOCTPAMB	#codigo_derivado:ID:60:esocial_ambiente_	ponto_integracao.codigo	texto		principal	L8-16 r5 (ADR 0006): ambiente do eSocial e da EFD-Reinf vira ponto de integração com o governo
+FPESOCTPAMB	NOME	ponto_integracao.nome	texto_nome			L8-16 r5 (ADR 0006): nome do ambiente
+FPESOCTPAMB	ENDERECO_WS_PRODUCAO_ESOCIAL	ponto_integracao.nome	texto_resumo:150			L8-16 r5 (ADR 0006): sem nome: o endereço
+FPESOCTPAMB	ENDERECO_WS_PRODUCAO_ESOCIAL	ponto_integracao.endereco	texto			L8-16 r5 (ADR 0006): endereço de envio do eSocial
+FPESOCTPAMB	@id:sistema_externo	ponto_integracao.sistema_externo_id				L8-16 r5 (ADR 0006): governo
+FPESOCTPAMB	=saida	ponto_integracao.direcao				L8-16 r5 (ADR 0006): envio ao governo
+FPESOCTPAMB	=soap	ponto_integracao.transporte				L8-16 r5 (ADR 0006): serviço web SOAP (ação SOAP na origem)
+FPESOCTPAMB	=xml	ponto_integracao.formato_conteudo				L8-16 r5 (ADR 0006): XML
+FPESOCTPAMB	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem
+FPESOCTPAMB	=esocial_efdreinf	sistema_externo.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): governo (eSocial e EFD-Reinf)
+FPESOCTPAMB	=eSocial e EFD-Reinf	sistema_externo.nome				L8-16 r5 (ADR 0006): nome
+FPESOCTPAMB	=governo	sistema_externo.categoria				L8-16 r5 (ADR 0006): categoria
+FPESOCTPAMB	=Escrituração digital trabalhista e de retenções	sistema_externo.finalidade				L8-16 r5 (ADR 0006): finalidade
+FPESOCTPAMB	#item	operacao_ponto_integracao.rota	texto		operacao_ponto_integracao;desdobrar:SOAPACTION=enviar_esocial|1,ENDERECO_WS_CONSULTA_ESOCIAL=consultar_esocial|2,ENDERECO_WS_PRODUCAO_EFDREINF=enviar_efdreinf|3,SOAPACTION_EFDREINF=acao_efdreinf|4,ENDERECO_WS_CONSULTA_EFDREINF=consultar_efdreinf|5	L8-16 r5 (ADR 0006): cada endereço ou ação vira uma operação do ponto
+FPESOCTPAMB	#rotulo	operacao_ponto_integracao.codigo				L8-16 r5 (ADR 0006): operação
+FPESOCTPAMB	#rotulo2	operacao_ponto_integracao.sequencia				L8-16 r5 (ADR 0006): ordem
+FPESOCTPAMB	=Operação do serviço do governo	operacao_ponto_integracao.descricao				L8-16 r5 (ADR 0006): descrição
+FPESOCTPAMB	@id	operacao_ponto_integracao.ponto_integracao_id				L8-16 r5 (ADR 0006): o ponto da linha
+FPESOCTPAMB	=migracao	operacao_ponto_integracao.origem				L8-16 r5 (ADR 0006): origem
+FPESOCTPAMB	=esocial_efdreinf	padrao_troca.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): leiaute do governo
+FPESOCTPAMB	=Leiautes do eSocial e da EFD-Reinf	padrao_troca.descricao				L8-16 r5 (ADR 0006): descrição
+FPESOCTPAMB	=proprio	padrao_troca.familia				L8-16 r5 (ADR 0006): leiaute próprio do governo
+FPESOCTPAMB	@estabelecimento	ponto_integracao.estabelecimento_id				L8-16 r5 (ADR 0006): estabelecimento da carga
+FPESOCTPAMB	@id:padrao_troca	ponto_integracao.padrao_troca_id				L8-16 r5 (ADR 0006): padrão de troca
+FPESOCTPAMB	=0	ponto_integracao.ativo				L8-16 r5 (ADR 0006): entra INATIVO: o cliente confere credencial e padrão antes de ligar
+FPESOCTPAMB	=migracao	ponto_integracao.origem				L8-16 r5 (ADR 0006): origem do registro
+TBINFBANCO	#codigo_derivado:BANCO:30:conexao_banco_	credencial_integracao.codigo	texto		principal	L8-16 r5 (ADR 0006): conexão do sistema anterior ao próprio banco vira credencial (segredo no cofre)
+TBINFBANCO	CAMINHO	credencial_integracao.descricao	texto_resumo:150			L8-16 r5 (ADR 0006): caminho do banco
+TBINFBANCO	=senha	credencial_integracao.tipo				L8-16 r5 (ADR 0006): senha
+TBINFBANCO	#cofre:SENHA	credencial_integracao.referencia_cofre				L8-16 r5 (ADR 0006): senha cifrada no cofre do cliente (ADR 0007, 17)
+TBINFBANCO	=cofre:aguarda_chave_mestra	credencial_integracao.referencia_cofre				L8-16 r5 (ADR 0006): sem chave mestra: referência marcada, segredo com segredo_aguarda_cofre
+TBINFBANCO	=revogada	credencial_integracao.situacao				L8-16 r5 (ADR 0006): o produto não usa o banco do sistema anterior: guardada, revogada
+TBINFBANCO	=migracao	credencial_integracao.origem				L8-16 r5 (ADR 0006): origem
+TBINFBANCO	BANCO		inteiro			L8-16 r5 (ADR 0006): número da conexão: vai no código (não é banco financeiro)
+TBINFBANCO	CAMINHO		texto			L8-16 r5 (ADR 0006): vai na descrição
+TBINFBANCO	SENHA		texto			L8-16 r5 (ADR 0006): vai ao cofre (#cofre), nunca a coluna comum
+TBDIGITAL_INTEG_TYPE	#codigo_derivado:ID:60:integracao_digital_	tipo_evento_publicado.codigo	texto		principal	L8-16 r5 (ADR 0006): tipo de integração vira fato publicável
+TBDIGITAL_INTEG_TYPE	INTEGRATION_TYPE	tipo_evento_publicado.descricao	texto			L8-16 r5 (ADR 0006): tipo
+TBDIGITAL_INTEG_TYPE	TABLE_NAME	tipo_evento_publicado.entidade	texto	valores		r5c (regra 1): tabela da origem traduzida para a entidade do produto pelo de-para (valores.d/L8-16.tsv); sem par: valor_fora_do_dominio e a presumida
+TBDIGITAL_INTEG_TYPE	=~prescricao	tipo_evento_publicado.entidade				concorrente presumida (ADR 0007 18): o parceiro digital acompanha a receita
+TBDIGITAL_INTEG_TYPE	TABLE_NAME_SECONDARY	tipo_evento_publicado.entidade_secundaria	texto	valores		r5c (regra 1): pelo de-para; sem par fica nula (o nome da origem nunca é exibido)
+TBDIGITAL_INTEG_TYPE	FIELDNAME_ID	tipo_evento_publicado.descricao	texto			L8-16 r5 (ADR 0006): sem tipo: o campo identificador
+TBDIGITAL_INTEG_TYPE	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna da origem
+TBDIGITAL_INTEG_TYPE	=0	tipo_evento_publicado.ativo				L8-16 r5 (ADR 0006): inativo até o cliente conferir
+PRCABEARQINTEGRAQT	#codigo_derivado:ID:60:quimioterapia_	esquema_mensagem.codigo	texto		principal	L8-16 r5 (ADR 0006): campos do arquivo de quimioterapia viram leiaute em rascunho
+PRCABEARQINTEGRAQT	@id:padrao_troca	esquema_mensagem.padrao_troca_id				L8-16 r5 (ADR 0006): padrão
+PRCABEARQINTEGRAQT	=Campos do arquivo de autorização de quimioterapia	esquema_mensagem.descricao				L8-16 r5 (ADR 0006): descrição
+PRCABEARQINTEGRAQT	=1	esquema_mensagem.versao_esquema				L8-16 r5 (ADR 0006): primeira versão
+PRCABEARQINTEGRAQT	=csv	esquema_mensagem.formato				L8-16 r5 (ADR 0006): lista de campos
+PRCABEARQINTEGRAQT	#retrato:ID_PRCABAUTORIZ,CAMPOS_DEFAULT,CAMPOS_SELECIONADOS	esquema_mensagem.definicao				L8-16 r5 (ADR 0006): campos padrão e selecionados, como na origem
+PRCABEARQINTEGRAQT	=vigente	esquema_mensagem.situacao				L8-16 r5b (ADR 0006): o leiaute em uso no hospital continua valendo
+PRCABEARQINTEGRAQT	@vigencia_carga	esquema_mensagem.vigencia_inicio				L8-16 r5 (ADR 0006): vigência pela evidência (ADR 0007, 16): o motor usa a data mais antiga da linha, da tabela ou da origem, nunca a da carga: o motor usa a data mais antiga da linha, da tabela ou da origem, nunca a da carga
+PRCABEARQINTEGRAQT	ID		chave_origem			L8-16 r5 (ADR 0006): chave interna
+PRCABEARQINTEGRAQT	ID_PRCABAUTORIZ		chave_origem			L8-16 r5 (ADR 0006): no retrato
+PRCABEARQINTEGRAQT	CAMPOS_DEFAULT		texto			L8-16 r5 (ADR 0006): no retrato
+PRCABEARQINTEGRAQT	CAMPOS_SELECIONADOS		texto			L8-16 r5 (ADR 0006): no retrato
+PRCABEARQINTEGRAQT	=arquivo_quimioterapia	padrao_troca.codigo			antes;adotar:codigo	L8-16 r5 (ADR 0006): padrão do arquivo
+PRCABEARQINTEGRAQT	=Arquivo de autorização de quimioterapia	padrao_troca.descricao				L8-16 r5 (ADR 0006): descrição
+PRCABEARQINTEGRAQT	=arquivo	padrao_troca.familia				L8-16 r5 (ADR 0006): arquivo
+TBCID10	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): CID-10 do hospital na origem: termo oficial pelo código; código sem par oficial = item local (catalogo_codigo_inexistente)
+TBCID10	=inclusao	trilha_auditoria.acao				
+TBCID10	=termo_terminologia	trilha_auditoria.entidade				
+TBCID10	=@data_carga	trilha_auditoria.ocorrido_em				
+TBCID10	=CID-10 do hospital na origem: termo oficial pelo código; código sem par oficial = item local (catalogo_codigo_inexistente)	trilha_auditoria.motivo				
+TBCID10	COD	trilha_auditoria.entidade_id	texto	cid10		

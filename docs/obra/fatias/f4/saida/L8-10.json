@@ -1,19 +1,81 @@
 {
- "pedidos": [
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica nova)",
-   "mudanca": "pedido A (MFLANGSI -> rateio_lancamento): regra nova do motor para (1) achar o pai por várias colunas que não são a chave dele (o título pelo documento: EMPRESA, FORN, DOC, TIPO, SERIE; mais de um pai = pai_ambiguo), com o pai escolhido pelo valor de TP_LAN (título a pagar ou a receber, destino titulo_pagar_id ou titulo_receber_id); (2) coluna derivada valor / valor do pai x 100 para o percentual; (3) #seq por várias colunas para a sequência dentro do título. Com isso a fatia declara a natureza pelo item de despesa (TBITEDES por GRUPO, SUBGRUPO, ITEM), o centro de custo por TBCENCUS (CDC) e a competência PERAPUR. Os títulos (L8-11) têm de carregar antes",
-   "motivo": "MFLANGSI (117182 linhas na referência) é a única fonte da natureza financeira e do centro de custo dos títulos; sem a regra, o CHECK ck_rateio_lancamento_pai e o percentual NOT NULL recusariam toda linha. Destino decidido em F4-decisoes-destino.md"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + fatia L7-07",
-   "mudanca": "pedido B (SDGELANNFS): regra nova do motor: o CFOP do produto pelo código (acrescentar 'cfop' em depara.CATALOGOS: tabela cfop, coluna codigo_cfop, 4 dígitos, código ausente = catalogo_codigo_cfop). Com ela, e com GELANNFS carregada pela L7-07, a fatia declara: ID_GELANNFS -> nota_entrada_item.id via 'ref:GELANNFS' com a opção de UPDATE da linha do pai; ID_SDCFOP -> nota_entrada_item.cfop_id, depara 'cfop', pelo CODIGO de SDCFOP. GELANNFS (593) já vem antes de SDGELANNFS (804)",
-   "motivo": "o CFOP do item é atributo do item da nota (nota_entrada_item.cfop_id); escrituracao_item_entrada é gerada pelo produto. Destino decidido em F4-decisoes-destino.md"
-  },
-  {
-   "arquivo": "conector/mapa (origem do historico_padrao) + decisão do integrador",
-   "mudanca": "pedido 1 (coluna, não tabela): quando alguma tabela do mapa alimentar historico_padrao, declarar GPORIGEM.HISTPR -> origem_bem.historico_padrao_id pela referência a ela",
-   "motivo": "hoje nenhuma tabela do mapa tem historico_padrao como destino (o L8-02 registra o mesmo para RPINTEVE.HIST); a coluna ficaria sempre nula com pai_inexistente"
-  }
- ]
+  "pedidos": [
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (três regras genéricas, nenhuma por tabela)",
+      "mudanca": "pedido A (MFLANGSI -> rateio_lancamento), revisto na rodada 3 sobre os mecanismos já entregues. Faltam três regras genéricas do motor, nenhuma por tabela: (A1) busca do pai por várias colunas que não são a chave dele, terminada no destino AGRUPADO do pai, `ref:T.(K1,..)=(C1,..)/<destino agrupado>`: várias linhas do pai com os mesmos valores NÃO são pai_ambiguo quando todas apontam para o MESMO cabeçalho do agrupamento (as parcelas de um título); cabeçalhos diferentes continuam pai_ambiguo. (A2) a condição do pedido 2 da L8-11 (`se:<COLUNA>=<v1>,<v2>` na via: a coluna só é aplicada quando outra coluna da linha tem um dos valores; fora, NULL sem pendência), para escolher o título a pagar ou a receber por TP_LAN. (A3) agregados de um grupo de leitura SEM cabeçalho gravado, com o grupo na própria especial: `#grupo_seq@C1,C2,..` (posição na leitura pela chave, como o #grupo_seq do agrupar) e `#grupo_razao:<VALOR>@C1,C2,..` (VALOR / soma de VALOR das linhas lidas do grupo x 100, arredondado à escala do destino; soma zero: NULL com valor_fora_do_dominio). Declaração já desenhada para quando as três existirem: TP_LAN -> titulo_pagar_id por `ref:MFCONPAG.(EMPRESA,FORN,DOC,TIPO,SERIE)=(EMPRESA,FORN,DOC,TIPO,SERIE)/titulo_pagar;se:TP_LAN=<pagar>`; TP_LAN -> titulo_receber_id por `ref:MFCTAREC.(EMPRESA,COD,DOC,DEV,SERIE)=(EMPRESA,FORN,DOC,TIPO,SERIE)/titulo_receber;se:TP_LAN=<receber>` (os valores de TP_LAN medidos na referência, só contagem, pelo integrador); `#grupo_seq@EMPRESA,TP_LAN,FORN,DOC,TIPO,SERIE` -> sequencia; `#grupo_razao:VALOR@EMPRESA,TP_LAN,FORN,DOC,TIPO,SERIE` -> percentual; VALOR -> valor (decimal); GRUPO -> natureza_financeira_id pelo item de despesa TBITEDES (GRUPO, SUBGRUPO, ITEM, que já é a chave dele); CDC -> centro_custo_id por `ref:TBCENCUS`; PERAPUR -> competencia (MM/AAAA em texto); DATA lida só como parte da chave. Os títulos (MFCONPAG da L8-12, MFCTAREC da L8-11, pedidos 2 e 3 da L8-11) têm de carregar antes; a natureza principal do título pelo maior rateio (pedido 3a da L8-11) é o sentido inverso e não espera este pedido.",
+      "motivo": "MFLANGSI (117182 linhas na referência) é a única fonte da natureza financeira e do centro de custo dos títulos (dado financeiro e de custo que o hospital usa: carrega, ADR 0003). Com as regras atuais o título com mais de uma parcela cai em pai_ambiguo (o CHECK ck_rateio_lancamento_pai recusaria a linha), o percentual NOT NULL não tem conta e a sequência pede várias colunas. Destino decidido em F4-decisoes-destino.md",
+      "atendido": "rodada 4 (integrador): A1 (vários pais na mesma linha do destino agrupado não são pai_ambiguo), A2 (se:), A3 (#grupo_seq@C, #grupo_razao:V@C)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (uma regra genérica, nenhuma por tabela)",
+      "mudanca": "pedido C (MFCABECLANC -> grupo_lancamento_financeiro), rodada 3, revisão do descarte: regra nova do motor, genérica: agregado lido das tabelas FILHAS da origem na mesma execução (só leitura da imagem). `#filhos_min:T1.C1|T2.C2|..@FK`: menor valor de C entre as linhas das tabelas T cuja coluna FK é igual à chave desta linha (nenhum filho com valor: NULL com a pendência `sem_filho_com_valor`, e a coluna NOT NULL recusa a linha); `#filhos_somar:T.C@FK`: soma de C nesses filhos (nenhum filho: 0). Declaração já desenhada: ID -> grupo_lancamento_financeiro.numero (inteiro, único por estabelecimento); `=importacao` -> tipo_operacao; estabelecimento único do cliente -> estabelecimento_id; `#filhos_min:MFLANCTO.DATA|MFCCCONV.DATA|MFCONPAG.EMISSAO|MFCTAREC.APRES|MFADIFOR.EMISSAO@ID_MFCABECLANC` -> data_operacao; `#filhos_somar:MFCTAREC.VALOR@ID_MFCABECLANC` -> valor_receber; `#filhos_somar:MFCONPAG.VALOR@ID_MFCABECLANC` -> valor_pagar; origem `migracao` (automática).",
+      "motivo": "MFCABECLANC (139549 linhas na referência) liga os títulos, as parcelas e os movimentos nascidos da mesma operação (baixa, borderô, transferência), para consulta e estorno conjuntos: dado financeiro que o hospital usa, carrega (ADR 0003). A origem só guarda o ID; a data da operação (NOT NULL) e os totais existem só nos filhos, que vêm depois na carga, e a data da carga seria uma data falsa. Sem esta regra a tabela fica BLOQUEADA. Destino decidido em F4-decisoes-destino.md",
+      "atendido": "rodada 4 (integrador): #filhos_min/#filhos_somar:T.C|U.D@FK (exemplo_r4, EX4_CAB)"
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (DDL proposto para a trilha F2.2) + fatias L8-11 e L8-12",
+      "mudanca": "pedido D: coluna `grupo_lancamento_financeiro_id BIGINT UNSIGNED NULL`, com FK para grupo_lancamento_financeiro (ON DELETE RESTRICT) e índice, em titulo_pagar, titulo_receber, movimento_bancario e adiantamento (o produto também preenche ao gerar baixa, borderô, transferência e adiantamento). Depois, as fatias L8-11 (MFLANCTO, MFADIFOR, MFCTAREC) e L8-12 (MFCONPAG, MFCCCONV) trocam o 'sem destino: agrupador descartado' de ID_MFCABECLANC pela referência ao grupo (`ref:MFCABECLANC`, destino <tabela>.grupo_lancamento_financeiro_id).",
+      "motivo": "hoje nenhuma tabela aponta grupo_lancamento_financeiro: o agrupador existe e não tem onde ficar o vínculo, e a relação título, baixa e movimento das 139549 operações da origem se perderia. Revisar com o dono (decisão em F4-decisoes-destino.md)",
+      "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14; falta na fatia: L8-11 e L8-12 trocam ID_MFCABECLANC por ref:MFCABECLANC"
+    },
+    {
+      "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + fatia L7-07",
+      "mudanca": "pedido B (SDGELANNFS): regra nova do motor: o CFOP do produto pelo código (acrescentar 'cfop' em depara.CATALOGOS: tabela cfop, coluna codigo_cfop, 4 dígitos, código ausente = catalogo_codigo_cfop). Com ela, e com GELANNFS carregada pela L7-07, a fatia declara: ID_GELANNFS -> nota_entrada_item.id via 'ref:GELANNFS' com a opção de UPDATE da linha do pai; ID_SDCFOP -> nota_entrada_item.cfop_id, depara 'cfop', pelo CODIGO de SDCFOP. GELANNFS (593) já vem antes de SDGELANNFS (804)",
+      "motivo": "o CFOP do item é atributo do item da nota (nota_entrada_item.cfop_id); escrituracao_item_entrada é gerada pelo produto. Destino decidido em F4-decisoes-destino.md",
+      "atendido": "rodada 3, grupo 3: de-para oficial cfop em depara.CATALOGOS e carregador oficial catalogos/carregadores/cfop.py; fatia refeita na rodada 3 (SDGELANNFS carrega por complementa do item da nota; depende de a L7-07 carregar GELANNFS)"
+    },
+    {
+      "arquivo": "conector/mapa (origem do historico_padrao) + decisão do integrador",
+      "mudanca": "pedido 1 (coluna, não tabela): quando alguma tabela do mapa alimentar historico_padrao, declarar GPORIGEM.HISTPR -> origem_bem.historico_padrao_id pela referência a ela",
+      "motivo": "hoje nenhuma tabela do mapa tem historico_padrao como destino (o L8-02 registra o mesmo para RPINTEVE.HIST); a coluna ficaria sempre nula com pai_inexistente"
+    },
+    {
+      "arquivo": "L8-11 e L8-12 (títulos)",
+      "mudanca": "rodada 4: MFLANGSI segue BLOQUEADA (sem_declaracao): depende de MFCTAREC (L8-11, declaração pronta e comentada na r4) e MFCONPAG (L8-12) gravarem os títulos; declaração desenhada no pedido A (ref:MFCONPAG.(EMPRESA,FORN,DOC,TIPO,SERIE)=(...)/titulo_pagar;se:TP_LAN=1 e ref:MFCTAREC.(EMPRESA,COD,DOC,DEV,SERIE)=(EMPRESA,FORN,DOC,TIPO,SERIE)/titulo_receber;se:TP_LAN=2, #grupo_seq@..., #grupo_razao:VALOR@...)",
+      "motivo": "não feita nesta rodada por orçamento de turnos do agente"
+    },
+    {
+      "arquivo": "(nenhum compartilhado)",
+      "mudanca": "r4 correção: MFCABECLANC prova a carga na própria imagem (filhos MFLANCTO e MFCTAREC só lidos, formas iguais às da L8-11) e o agrupador sem filho recebe a data da carga (=@data_carga, concorrente) em vez de ser recusado. valor_receber soma MFCTAREC pela origem (o mesmo valor que o título a receber terá quando o pedido 20 da L8-11 for aplicado)."
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
+      "mudanca": "Pedido B (r4 correção). MFLANGSI agora declarada (rateio_lancamento pelo título agrupado: ref:MFCONPAG.(..)/titulo_pagar se TP_LAN=1, ref:MFCTAREC.(..)/titulo_receber se TP_LAN=2). Ordem: MFLANGSI (756) vem ANTES de MFCTAREC (776) e MFCONPAG (882): declarar MFLANGSI -> MFCTAREC e MFLANGSI -> MFCONPAG. Não há ciclo real: a natureza dos títulos lê o rateio só na ORIGEM (ref:MFLANGSI.(..)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES termina em TBITEDES); se o gerador emitir MFCTAREC/MFCONPAG -> MFLANGSI por essa encadeada, ela não deve virar aresta (só o último passo grava referência). Também depende do pedido 20 da L8-11 (títulos gravados)."
+    },
+    {
+      "arquivo": "db/migracoes/02_ADM (semente do catálogo de parâmetros, parametro_definicao)",
+      "mudanca": "r5-1: definir as chaves fiscal.escrituracao.anoProcessamento, fiscal.escrituracao.mesProcessamento (inteiro), orcamento.anoCompetencia, orcamento.mesCompetencia (inteiro), orcamento.digitaCentroCusto (booleano S/N) e orcamento.regime (lista) no catálogo do produto",
+      "motivo": "SDPARAM e MOPARAM passaram a CARREGAR em parametro_valor (desdobrar + cod:parametro_definicao.chave), ADR 0006; sem a definição no cliente cada item é recusado com codigo_inexistente_destino (visível). A conferência sintética cria as definições no PREPARO_DESTINO."
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (provedor_nota_municipal) + carga_mapa.py (gravar item do hospital em tabela oficial)",
+      "mudanca": "r5-2: provedor_nota_municipal com item_hospital/motivo_item_hospital (como banco, cfop, cbo; ADR 0006 item 4) e o motor gravando só linhas item_hospital = TRUE em tabela oficial (pedido já registrado em F4-decisoes-destino.md, rodada 5 modelo)",
+      "motivo": "NFSEEMPDESENT (9) e NFSEEMPDESENV (38, com versão do XML) são listas locais de provedores de NFS-e: pelo ADR 0006 (4) entram como itens do hospital, ativos, na tabela do produto. Seguem BLOQUEADAS (descarte_sem_prova:sem_valor) até o mecanismo existir; prova por domínio não cabe (nome e versão do provedor não têm equivalente no domínio). ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (modelo) ou decisão do orquestrador",
+      "mudanca": "r5-3: vínculo tipo de credor x tela (tipo_credor_tela: tipo_credor_id, tela_sistema_id, origem) para carregar MFTIPOLANC_TBOPCOES (1312 linhas) por ref:MFTIPOLANC e ref:TBOPCOES (tela_sistema já carregada)",
+      "motivo": "permissao_tipo_lancamento é por perfil e operação; a liberação da origem é por tela, sem perfil: gravar nela daria permissão errada, e não há prova de que a informação continue utilizável. Segue BLOQUEADA até o modelo ter onde guardar a liberação por tela (a API combina tela do perfil x tipo). ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+    },
+    {
+      "arquivo": "db/migracoes/14_FIN (renegociacao) + declaração da L8-10",
+      "mudanca": "r5-4: renegociacao com origem = 'migracao' aceitando devedor, valores, parcelas e primeiro vencimento nulos (CHECK condicionado à origem, como registro_assistencial_rascunho.autor) e vínculo parcela_pagar.renegociacao_id (MFCONPAG.ID_MFCABECRENEGO, L8-12)",
+      "motivo": "MFCABECRENEGO (2 linhas: data e responsável) é histórico financeiro e deve CARREGAR (ADR 0006); o acordo (valores, devedor) não está na origem e inventá-lo violaria o CHECK de total. Com o modelo aceitando a renegociação migrada incompleta, a declaração é: numero=ID, tipo=pagar, renegociado_em=DATA_HORA_RENEGOCIACAO, responsavel por cod:usuario.login (ou nome), estabelecimento @unico. Segue BLOQUEADA até a decisão. ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (_provas) + sentinela (regra de prova)",
+      "mudanca": "r5-5 (motor, genérico): regra de VALOR de prova que compare o RÓTULO da origem por palavra-chave, sem copiar o rótulo real para o código: o SQL da prova devolve, por item, um padrão (ex.: 'VENDA', 'REMESSA') e o comparador aceita quando o rótulo normalizado da origem (maiúsculas, sem acento, espaços colapsados) CONTÉM o padrão (ex.: valores `ID!inteiro,NOME!rotulo_contem`). Com ela, as provas das listas fixas passam a conferir ID e significado; ordem diferente de IDs num cliente vira prova_nao_conferida (alta).",
+      "motivo": "Achado da rodada 5: a prova compara só o ID com a sequência 1..N. Igualdade exata com o rótulo não é possível sem copiar texto da imagem real para o código (regra 5); hoje a troca de significado com o mesmo ID passaria. Tabelas desta fatia: MFTPAPURACAO, SDNATRECEITA, MFTPCONTRIBUICAO."
+    },
+    {
+      "arquivo": "db/migracoes/15_RH (título de contribuição sindical) ou 14_FIN",
+      "mudanca": "r5-6: domínio do TIPO de contribuição sindical (compulsoria, associativa, assistencial, confederativa; tabela tpContribSind do eSocial S-1300) na tabela do título ou do desconto sindical, para que a consumidora (título sindical e S-1300, vazios na referência) leve o tipo pelo de-para de MFTPCONTRIBUICAO",
+      "motivo": "Revisão r5: o domínio tributo_folha.tipo tem só contribuicao_sindical; a prova de MFTPCONTRIBUICAO agora confere código E rótulo dos 4 tipos, mas o produto ainda não guarda o tipo. Não bloqueia: as consumidoras estão vazias na referência."
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L7-05.tsv; fatias geradas L7-05..L7-08 e indice.tsv (orquestrador)",
+      "mudanca": "r6: corrigir GECOMPRA (11 colunas com destino historico_compra_insumo fora dos destinos da tabela) na fatia L7-05 e regenerar as fatias L7-05 a L7-08 e o indice.tsv (fatiar_conector) depois das correções em paralelo",
+      "motivo": "únicos erros restantes da autoconferência de L8-10 (23:57): passos globais (verificador do mapa e fatiar --conferir) quebrados por outras fatias; testes, carga/conciliação duas vezes e cobertura da fatia passam (0 bloqueadas)"
+    }
+  ]
 }

@@ -24,7 +24,21 @@ class PlanoL502(unittest.TestCase):
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(set(self.plano), set(l5_02.CARREGADAS))
         self.assertEqual(len(FATIA), 20)
-        self.assertEqual(len(l5_02.CARREGADAS), 11)
+        self.assertEqual(len(l5_02.CARREGADAS), 16)
+
+    def test_ultimo_acesso_carrega(self):
+        # TBSGHCONEXAO é do sistema de origem (último acesso por usuário e módulo): carrega, nunca é descarte
+        self.assertEqual(self.plano["TBSGHCONEXAO"]["destinos"], ["ultimo_acesso_usuario"])
+        c = self.cols("TBSGHCONEXAO", "ultimo_acesso_usuario")
+        self.assertEqual(c["usuario_id"]["coluna"], "USUARIO")
+        self.assertEqual(c["modulo_sistema_id"]["coluna"], "MODULO")
+        self.assertEqual(c["estabelecimento_id"]["coluna"], "@estabelecimento")
+        self.assertEqual((c["ultimo_acesso_em"]["coluna"], c["ultimo_acesso_em"]["regra"]), ("DATA_ULTIMA_CONEXAO", "data"))
+        self.assertEqual(c["origem"]["coluna"], "=migracao")
+        decl = {c["coluna"]: c["via"] for c in self.m["colunas_decl"] if c["tabela"] == "TBSGHCONEXAO"}
+        self.assertEqual((decl["USUARIO"], decl["MODULO"]), ("ref:TBUSERS", "ref:TBMODULO"))
+        sem = mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv"
+        self.assertFalse([x for x in sem.read_text(encoding="utf-8").splitlines() if x.startswith("TBSGHCONEXAO\t")])
 
     def test_menu_antigo_entra_como_referencia_inativa(self):
         # módulo, opção e evento do sistema antigo: referência histórica (trilha, alertas, relatórios), sempre
@@ -42,15 +56,22 @@ class PlanoL502(unittest.TestCase):
         self.assertEqual(self.cols("TBEVENTOS", "acao_sistema")["tipo_acao"]["coluna"], "=~executar")
         self.assertEqual(self.cols("TBOPCOES", "tela_sistema")["ordem"]["regra"], "inteiro_nao_negativo")
 
-    def test_concessoes_antigas_aguardam_o_motor(self):
-        # papel x opção e perfil x opção: a ação de acesso é o destino SECUNDÁRIO da opção (pedido 4)
-        for t in ("TBPAPEL_TBOPCOES", "TBPERUSU"):
-            self.assertNotIn(t, self.plano, t)
+    def test_concessoes_antigas_pela_acao_de_acesso_da_opcao(self):
+        # papel x opção e perfil x opção: a ação de ACESSO é o destino SECUNDÁRIO da opção (ref:T/<destino>), nunca a
+        # tela (principal); concessão preservada e visível, sem declaração comentada pendente
+        for t, dt, pai, col in [("TBPAPEL_TBOPCOES", "papel_seguranca_acao", "papel_seguranca_id", "ID_TBPAPEL"),
+                                ("TBPERUSU", "perfil_acao", "perfil_acesso_id", "GRUPO")]:
+            self.assertEqual(self.plano[t]["destinos"], [dt], t)
+            c = self.cols(t, dt)
+            self.assertEqual(c["acao_sistema_id"]["coluna"], "ID_TBOPCOES", t)
+            self.assertEqual(c[pai]["coluna"], col, t)
+        decl = {(c["tabela"], c["coluna"]): c["via"] for c in self.m["colunas_decl"]
+                if c["tabela"] in ("TBPAPEL_TBOPCOES", "TBPERUSU")}
+        self.assertEqual(decl[("TBPAPEL_TBOPCOES", "ID_TBOPCOES")], "ref:TBOPCOES/acao_sistema")
+        self.assertEqual(decl[("TBPERUSU", "ID_TBOPCOES")], "ref:TBOPCOES/acao_sistema")
+        self.assertEqual(decl[("TBPERUSU", "GRUPO")], "ref:TBGRUUSU")
         txt = (mapa.DIR_PACOTE / mapa.COLUNAS_D / "L5-02.tsv").read_text(encoding="utf-8")
-        for t in ("TBPAPEL_TBOPCOES", "TBPERUSU"):
-            ls = [x for x in txt.splitlines() if x.startswith("#%s\t" % t)]
-            self.assertEqual(len(ls), 2, t)
-            self.assertTrue(any("ref:TBOPCOES@acao_sistema" in x for x in ls), t)
+        self.assertFalse([x for x in txt.splitlines() if x.startswith("#")])
 
     def test_papel_entra_com_origem_migracao(self):
         c = self.cols("TBPAPEL", "papel_seguranca")
@@ -123,11 +144,25 @@ class PlanoL502(unittest.TestCase):
         v = self.valores("TBMENSAG", "mensagem_interna.prioridade")
         self.assertEqual(v, {"U": "urgente", "N": "normal", "S": "normal", "": "normal"})
 
-    def test_permissao_sus_aguarda_o_motor(self):
-        # declaração pronta, comentada: o motor ainda não desdobra o destino principal
-        self.assertNotIn("TBPERMISSAO_SUS", self.plano)
-        txt = (mapa.DIR_PACOTE / mapa.COLUNAS_D / "L5-02.tsv").read_text(encoding="utf-8")
-        self.assertEqual(sum(1 for x in txt.splitlines() if x.startswith("#TBPERMISSAO_SUS\t")), 6)
+    def test_permissao_sus_uma_linha_por_indicador(self):
+        # destino PRINCIPAL desdobrado: 34 indicadores S/N, rótulo funcionalidade|operação, N = negação explícita
+        self.assertEqual(self.plano["TBPERMISSAO_SUS"]["destinos"], ["usuario_permissao_sus"])
+        c = self.cols("TBPERMISSAO_SUS", "usuario_permissao_sus")
+        self.assertEqual((c["funcionalidade"]["coluna"], c["operacao"]["coluna"]), ("#rotulo", "#rotulo2"))
+        self.assertEqual((c["instrumento"]["coluna"], c["estabelecimento_id"]["coluna"]), ("=aih", "@estabelecimento"))
+        self.assertEqual((c["permitido"]["coluna"], c["permitido"]["regra"]), ("#item", "booleano_sn"))
+        via = [d["via"] for d in self.m["colunas_decl"]
+               if d["tabela"] == "TBPERMISSAO_SUS" and d["coluna"] == "#item"][0]
+        self.assertTrue(via.startswith("desdobrar:") and via.endswith(";com_falso"))
+        pares = dict(x.split("=") for x in via[len("desdobrar:"):-len(";com_falso")].split(","))
+        self.assertEqual(set(pares), set(l5_02.FLAGS_SUS))
+        ops = {"consultar", "incluir", "alterar", "excluir", "emitir", "reemitir", "apresentar", "cancelar",
+               "gerar_arquivo", "executar"}  # CHECK de usuario_permissao_sus.operacao
+        for col, rot in pares.items():
+            func, op = rot.split("|")
+            self.assertIn(op, ops, col)
+            self.assertTrue(func and len(func) <= 60, col)
+        self.assertEqual(len(set(pares.values())), len(pares))  # rótulo único: UNIQUE da regra
 
     def test_nenhum_destino_oficial(self):
         por = {r["tabela"]: r for r in self.m["tabelas"]}
@@ -174,10 +209,25 @@ class ImagemL502(unittest.TestCase):
         for t in l5_02.NAO_CARREGADAS:
             self.assertGreater(cont.get(t, 0), 0, t)
         for t, e in esp.items():
+            if t == "TBPERMISSAO_SUS":  # desdobrada: gravados = itens preenchidos
+                itens = sum(1 for _, u, fl in l5_02.PERMISSOES_SUS if u != "usuario9"
+                            for v in fl if v is not None) - 1  # a repetida (1062) não grava
+                self.assertEqual(e["gravados"], itens)
+                continue
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith("restricao_destino_") or k == "pai_pendente")
             self.assertEqual(e["gravados"] + recusas, cont[t], t)
 
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0006: a situação do termo carrega como item do cliente; as listas de domínio fixo têm prova."""
+    def test_situacao_termo_e_provas(self):
+        m = mapa.carregar_execucao()
+        d = {c["destino"] for c in m["colunas_decl"] if c["tabela"] == "TBMOVTERMSTATUS"}
+        self.assertIn("situacao_termo_consentimento.etapa", d)
+        provadas = {p["tabela"] for p in m["provas"]}
+        self.assertLessEqual({"TBTIPOREPRE", "TBTIPOOID", "TBPROCBACKUP", "TBSITBACKUP"}, provadas)
 
 if __name__ == "__main__":
     unittest.main()

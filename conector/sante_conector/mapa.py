@@ -80,9 +80,33 @@ DEPARA_VALORES = "valores"
 
 
 _LISTA = r"[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
+# colunas desta linha na chave alternativa composta: coluna ou literal `=<valor>` (rodada 4: '=1' casa a constante)
+_LISTA_V = r"(?:[A-Z0-9_$]+|=[^,()>;=]*)(?:,(?:[A-Z0-9_$]+|=[^,()>;=]*))+"
+# rodada 5 (sobra da rodada 4, pedido 4 da L8-03): componente da chave composta com valor ENCADEADO `COL>T>X` (a
+# coluna COL desta linha leva a T pela chave e o componente é a coluna X do pai), ex. `TBTABTHM(CON>TBCONVEN>THM,THM)`
+_COMP = r"[A-Z0-9_$]+(?:>[A-Z0-9_$]+(?:\.[A-Z0-9_$]+)?)*"
+_LISTA_C = r"%s(?:,%s)+" % (_COMP, _COMP)
 _REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\((%s)\)|\.\((%s)\)=\((%s)\))?(?:/([a-z][a-z0-9_]*))?"
-                      % (_LISTA, _LISTA, _LISTA))
+                      r"(?:@([a-z][a-z0-9_]*))?" % (_LISTA_C, _LISTA, _LISTA_V))
+
+
+def _partes_ref(spec):
+    """Passos separados por '>' fora dos parênteses (o componente encadeado da chave composta fica inteiro)."""
+    out, nivel, atual = [], 0, ""
+    for ch in spec:
+        if ch == "(":
+            nivel += 1
+        elif ch == ")":
+            nivel -= 1
+        if ch == ">" and nivel == 0:
+            out.append(atual)
+            atual = ""
+        else:
+            atual += ch
+    return out + [atual]
 _COL_ORIGEM = re.compile(r"[A-Z0-9_$]+")
+_COLS_PASSO = re.compile(r"\((%s)\)" % _LISTA)
+_ESCOLHA = re.compile(r"(max|min):([A-Z0-9_$]+)")
 
 
 def passos_ref(spec):
@@ -96,13 +120,31 @@ def passos_ref(spec):
     - `T.(K1,K2)=(C1,C2)` chave alternativa COMPOSTA (só no primeiro passo): as colunas C1, C2 desta linha casam com
                    as colunas K1, K2 de T na origem (repetido: `pai_ambiguo`);
     - `.../<destino>` no último passo de tabela: grava o id da linha do DESTINO SECUNDÁRIO `<destino>` que o pai gravou
-                   (chave `<chave do pai>/<destino>` no conector_origem), não o do principal."""
+                   (chave `<chave do pai>/<destino>` no conector_origem), não o do principal;
+    - `...@<coluna>` no último passo de tabela (também depois de `/<destino>`): em vez do id, grava o valor da
+                   `<coluna>` da linha do DESTINO que o pai gravou (cópia de coluna de outra tabela, ex.: o item
+                   faturável do lançamento: `ref:FCLANEXT@item_faturavel_id`).
+    Rodada 4 (pedido 20 da L8-12, 3a da L8-11):
+    - literal entre as colunas da chave alternativa composta: `T.(K1,K2)=(C1,=1)` (a 2ª casa a constante '1');
+    - `max:<COL>` (ou `min:<COL>`) logo depois de um passo por chave alternativa: vários pais casam e vale o de MAIOR
+      (menor) COL, empate pela menor chave, com a pendência baixa `escolha_pelo_maior` (nenhum: pai_inexistente);
+    - chave composta num passo SEGUINTE: `...>(C1,C2,C3)>U` monta a chave de U pelas colunas da linha do passo
+      anterior (ex.: a natureza do rateio pelo grupo, subgrupo e item)."""
     out = []
-    partes = (spec or "").split(">")
+    partes = _partes_ref(spec or "")
+    tabela_agora = True
     for i, p in enumerate(partes):
-        if i % 2 == 0:
+        ultimo = i == len(partes) - 1
+        me = _ESCOLHA.fullmatch(p)
+        if me:
+            if tabela_agora or not out or out[-1].get("modo") not in ("alt", "alt_composta") or "escolha" in out[-1]:
+                return None
+            out[-1]["escolha"] = (me.group(1), me.group(2))
+            continue
+        if tabela_agora:
+            tabela_agora = False
             m = _REF_TAB.fullmatch(p)
-            if not m or ((m.group(3) or m.group(4)) and i) or (m.group(6) and i != len(partes) - 1):
+            if not m or ((m.group(3) or m.group(4)) and out) or ((m.group(6) or m.group(7)) and not ultimo):
                 return None
             if m.group(4) and len(m.group(4).split(",")) != len(m.group(5).split(",")):
                 return None
@@ -112,26 +154,165 @@ def passos_ref(spec):
                  m.group(4).split(",") if m.group(4) else None}
             if m.group(4):
                 x["cols"] = m.group(5).split(",")
+            if m.group(3) and ">" in m.group(3):  # componentes encadeados: {posição: passos a partir da coluna}
+                x["cadeias"] = {}
+                for j, comp in enumerate(x["arg"]):
+                    if ">" in comp:
+                        base, resto = comp.split(">", 1)
+                        sub = passos_ref(resto)
+                        if not sub or "coluna" not in sub[-1] or any(s.get("cadeias") for s in sub):
+                            return None
+                        x["arg"][j] = base
+                        x["cadeias"][j] = sub
             if m.group(6):
                 x["destino"] = m.group(6)
+            if m.group(7):
+                x["coluna_destino"] = m.group(7)
             out.append(x)
         else:
+            tabela_agora = True
+            mc = _COLS_PASSO.fullmatch(p)
+            if mc and not ultimo:
+                out.append({"colunas": mc.group(1).split(",")})
+                continue
             if not _COL_ORIGEM.fullmatch(p):
                 return None
             out.append({"coluna": p})
     return out or None
 
 
+def tabelas_dos_passos(passos):
+    """Todas as tabelas da origem citadas nos passos (também nos componentes encadeados da chave composta)."""
+    out = []
+    for x in passos or []:
+        if x.get("tabela"):
+            out.append(x["tabela"])
+        for sub in (x.get("cadeias") or {}).values():
+            out += tabelas_dos_passos(sub)
+    return out
+
+
+def colunas_da_linha(passo):
+    """Colunas DESTA linha lidas pelo primeiro passo composto (sem os literais `=x`)."""
+    return [x for x in (passo.get("cols") or passo.get("arg") or []) if not x.startswith("=")] \
+        if passo.get("modo") in ("composta", "alt_composta") else []
+
+
+_COND = re.compile(r"([A-Z0-9_$]+)((?:>[^=!]+)?)(?:=([^!]*))?(?:!([a-z][a-z0-9_]*))?")
+
+
+def condicao(spec):
+    """Condição de linha (rodada 4, `se:`, `destino_se:` e `so_se:` na via): `COL[>T>X..][=v1,v2][!regra]`. A coluna
+    desta linha (ou, pela encadeada terminada em coluna, a do pai) tem um dos valores (texto aparado; inteiro sem
+    '.0'; valor vazio na lista casa o nulo) ou, sem lista, tem valor. `!regra` só no `so_se:` (padrão
+    `fora_do_filtro_da_carga`). None se mal formada."""
+    m = _COND.fullmatch(spec or "")
+    if not m:
+        return None
+    passos = None
+    if m.group(2):
+        passos = passos_ref(m.group(2)[1:])
+        if not passos or "coluna" not in passos[-1]:
+            return None
+    return {"coluna": m.group(1), "passos": passos,
+            "valores": None if m.group(3) is None else m.group(3).split(","), "regra": m.group(4) or ""}
+
+
+_COD_COMPOSTO = re.compile(r"([a-z][a-z0-9_]*)\.\(([a-z0-9_]+(?:,[a-z0-9_]+)+)\)=\(((?:valor|=[^,()]*)"
+                           r"(?:,(?:valor|=[^,()]*))+)\)")
+
+
+def cod_spec(x):
+    """`cod:` da via: `tabela.coluna` -> (tabela, coluna); composto (rodada 4, pedido 13 da L5-12)
+    `tabela.(c1,c2)=(v1,v2)` (cada v: `valor`, o da coluna depois da regra/de-para, ou literal `=x`) ->
+    (tabela, [c1, c2], [v1, v2]). None se mal formado."""
+    m = _COD_COMPOSTO.fullmatch(x)
+    if m:
+        cs, vs = m.group(2).split(","), m.group(3).split(",")
+        return (m.group(1), cs, vs) if len(cs) == len(vs) else None
+    tc = x.split(".")
+    return (tc[0], tc[1]) if len(tc) == 2 and all(re.fullmatch(r"\w+", y) for y in tc) else None
+
+
 def ref_simples(spec):
     """Referência só pela chave do pai (a forma original `ref:T`)."""
     p = passos_ref(spec)
-    return bool(p) and len(p) == 1 and p[0]["modo"] == "chave" and not p[0].get("destino")
+    return bool(p) and len(p) == 1 and p[0]["modo"] == "chave" and not p[0].get("destino") \
+        and not p[0].get("coluna_destino")
 
 
 # colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
-_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item|#rotulo|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
-                        r"|#cofre:[A-Z0-9_$]+|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?")
-OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes")
+_ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item[2-9]?|#item@[A-Z0-9_$]+|#rotulo[2-9]?|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
+                        r"|#cofre:[A-Z0-9_$]+|#arquivo:[A-Z0-9_$]+(?::[a-z][a-z0-9_]{0,59})?|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[^:\t]{1,80})?"
+                        r"|#dias:[A-Z0-9_$]+,(?:[A-Z0-9_$]+|=[a-z]+)"
+                        r"|(?:#sha256:)?#retrato:(?:\*(?:-[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)"
+                        r"|#sha256:#retrato|#grupo_contar|#grupo_seq|#grupo_(?:somar|min|max):[A-Z0-9_$]+"
+                        # rodada 4
+                        r"|#data_hora_mais:[A-Z0-9_$]+,[A-Z0-9_$]+,[A-Z0-9_$]+"
+                        r"|#codigo_derivado:[A-Z0-9_$]+(?:\+[A-Z0-9_$]+)+:[1-9][0-9]*(?::[^:\t]{1,80})?"
+                        r"|#grupo_json:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
+                        r"|#grupo_seq@(?:\*|[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)|#grupo_razao:[A-Z0-9_$]+@[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
+                        r"|#filhos_(?:min|max|somar|contar):[A-Z0-9_$]+\.[A-Z0-9_$]+(?:\|[A-Z0-9_$]+\.[A-Z0-9_$]+)*"
+                        r"@[A-Z0-9_$]+"
+                        # rodada 4, resíduo do motor: aritmética entre colunas da linha
+                        r"|#dif:[A-Z0-9_$]+,[A-Z0-9_$]+|#soma:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
+                        # rodada 5 (ADR 0007): vigência pela evidência e senha de login
+                        r"|#vigencia(?::[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|#senha:[A-Z0-9_$]+"
+                        r"|#senha_hash:[A-Z0-9_$]+:(?:md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id)")
+# colunas que um retrato de TODAS as colunas (`#retrato:*`) nunca leva, mesmo sem `#cofre` declarado (segredo)
+SEGREDO_NOME = re.compile(r"SENHA|PASSW|TOKEN|SECRET|SEGREDO|CHAVE_PRIVADA|PRIVATE_KEY")
+
+
+def spec_retrato(nome):
+    """`#retrato` -> {"todas": False, "exceto": [], "extras": []}; `#retrato:*-A,B` -> todas menos A e B (e sem
+    segredo); `#retrato:A,B` -> as colunas lidas mais A e B. Também para `#sha256:#retrato...`. None se não for."""
+    if nome.startswith("#sha256:"):
+        nome = nome[8:]
+    if nome == "#retrato":
+        return {"todas": False, "exceto": [], "extras": []}
+    if not nome.startswith("#retrato:"):
+        return None
+    arg = nome[9:]
+    if arg.startswith("*"):
+        return {"todas": True, "exceto": [x for x in arg[2:].split(",") if x], "extras": []}
+    return {"todas": False, "exceto": [], "extras": [x for x in arg.split(",") if x]}
+_ITEM = re.compile(r"#item([2-9]?)")
+_ROTULO = re.compile(r"#rotulo([2-9]?)")
+
+
+def posicao_item(nome):
+    """Posição (0..8) de `#item`/`#item2`.. ou de `#rotulo`/`#rotulo2`..; None se não for marca de item."""
+    m = _ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or "")
+    return (int(m.group(1) or 1) - 1) if m else None
+
+
+def eh_item(nome):
+    return bool(_ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or ""))
+OPCOES_DESTINO = ("opcional", "adotar:", "adotar_maior:", "desdobrar:", "complementa", "antes", "agrupar:", "com_falso", "destino_se:",
+                  "por_pai")
+# opções de COLUNA na via (resíduo do motor da rodada 4): `exige_dominio` (fora do de-para de valores recusa a linha),
+# `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
+# concorrente: a pendência valor_presumido em TODA linha, mesmo quando outra declaração deu o valor)
+OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor")
+# rodada 5 (ADR 0006, item 3): ligação ao ESPELHO PADRÃO DA BASE pelo código (e pela edição): `espelho:<catalogo>`
+# ou `espelho:<catalogo>@<COLUNA>` / `espelho:<catalogo>@=<edição>` na via. Catálogo -> tabela que a ligação acha.
+ESPELHO_CATALOGOS = {"brasindice": "item_referencia_matmed", "simpro": "item_referencia_matmed",
+                     "cbhpm": "tabela_referencia_procedimento_item", "cep": "logradouro_cep"}
+# tabelas do conteúdo licenciado: vivem no espelho; o conector nunca as grava (a cobertura bloqueia quem declarar)
+LICENCIADAS_ESPELHO = {"fonte_referencia_matmed", "edicao_referencia_matmed", "item_referencia_matmed",
+                       "preco_referencia_matmed", "tabela_referencia_procedimento",
+                       "tabela_referencia_procedimento_item", "logradouro_cep"}
+_ESPELHO = re.compile(r"espelho:([a-z]+)(?:@([A-Z0-9_$]+|=[A-Za-z0-9._/-]{1,30}))?")
+
+
+def espelho_spec(x):
+    """`espelho:<catalogo>[@<COLUNA>|@=<edição>]` -> {"catalogo", "edicao_coluna", "edicao"} ou None."""
+    m = _ESPELHO.fullmatch(x or "")
+    if not m or m.group(1) not in ESPELHO_CATALOGOS:
+        return None
+    e = m.group(2) or ""
+    return {"catalogo": m.group(1), "edicao_coluna": "" if e.startswith("=") else e,
+            "edicao": e[1:] if e.startswith("=") else ""}
 
 
 def opcoes_destino(colunas):
@@ -143,17 +324,30 @@ def opcoes_destino(colunas):
         if not dt:
             continue
         o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False,
-                                  "antes": False})
+                                  "antes": False, "agrupar": [], "com_falso": False, "se": None,
+                                  "por_pai": False, "adotar_maior": []})
         for x in (c.get("via") or "").split(";"):
-            if x == "opcional":
+            if x.startswith("destino_se:"):  # rodada 4: o destino (secundário) só grava quando a condição vale
+                o["se"] = condicao(x[11:]) or {"invalida": x[11:]}
+            elif x == "opcional":
                 o["opcional"] = True
+            elif x == "por_pai":       # uma linha do destino por pai da chave alternativa repetida (resíduo r4)
+                o["por_pai"] = True
+            elif x == "com_falso":     # desdobrar: o item FALSO também gera linha (ex.: herda = falso)
+                o["com_falso"] = True
+            elif x.startswith("agrupar:"):  # cabeçalho de várias linhas (título das parcelas): colunas da ORIGEM
+                o["agrupar"] = [y for y in x[8:].split(",") if y]
             elif x == "antes":
                 o["antes"] = True
             elif x == "complementa":
                 o["complementa"] = True
             elif x.startswith("adotar:"):
                 o["adotar"] = [y for y in x[7:].split(",") if y]
+            elif x.startswith("adotar_maior:"):  # rodada 6: na adoção, a coluna guarda o MAIOR (contador)
+                o["adotar_maior"] = [y for y in x[13:].split(",") if y]
             elif x.startswith("desdobrar:"):
+                # item: COLUNA ou COL1+COL2 (par: #item e #item2); rótulo com partes separadas por '|' (#rotulo,
+                # #rotulo2; parte vazia = NULL)
                 o["desdobrar"] = [tuple(y.split("=", 1)) if "=" in y else (y, y) for y in x[10:].split(",") if y]
     return saida
 
@@ -167,7 +361,14 @@ def principal_e_destinos(tabelas_destino, colunas):
         if dt and (c.get("destino") or "").count(".") == 1 and dt not in dts:
             dts.append(dt)
     pos = {x: i for i, x in enumerate(dts)}
-    return sorted(dts, key=lambda x: (ordem.index(x) if x in ordem else len(ordem), pos[x]))
+    # rodada 4 (pedido 20 da L6-11): opção `principal` na via de uma coluna escolhe o destino principal
+    esc = [(c.get("destino") or "").partition(".")[0] for c in colunas if "principal" in (c.get("via") or "").split(";")]
+    return sorted(dts, key=lambda x: (0 if esc and x == esc[0] else 1,
+                                      ordem.index(x) if x in ordem else len(ordem), pos[x]))
+
+
+def _especial_decl(nome):
+    return (nome or "")[:1] in ("=", "@", "#")
 
 
 def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
@@ -183,9 +384,29 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
             erros.append("@unico a tabela inexistente no DDL: %s.%s" % (c["tabela"], n))
         for x in (c.get("via") or "").split(";"):
             if x.startswith("cod:"):
-                tc = x[4:].split(".")
-                if len(tc) != 2 or (ddl and (tc[0] not in ddl or tc[1] not in ddl[tc[0]]["colunas"])):
+                cs = cod_spec(x[4:])
+                cols = ([cs[1]] if isinstance(cs[1], str) else cs[1]) if cs else []
+                if not cs or (ddl and (cs[0] not in ddl or any(y not in ddl[cs[0]]["colunas"] for y in cols))):
                     erros.append("cod: a tabela.coluna inexistente no DDL: %s.%s -> %s" % (c["tabela"], n, x[4:]))
+            if x.startswith("espelho:") and espelho_spec(x) is None:
+                erros.append("espelho: mal formado ou catálogo desconhecido: %s.%s -> %s" % (c["tabela"], n, x))
+            for pre in ("se:", "so_se:", "destino_se:"):
+                if x.startswith(pre):
+                    cd = condicao(x[len(pre):])
+                    if cd is None or (cd["regra"] and pre != "so_se:"):
+                        erros.append("condição mal formada (%s): %s.%s" % (pre, c["tabela"], n))
+        via = (c.get("via") or "").split(";")
+        if "autor" in via and not (referencia_declarada(c) or any(x.startswith("cod:") for x in via)):
+            erros.append("autor sem ref: nem cod: (o autor do rascunho é achado pelo login ou pela chave): %s.%s"
+                         % (c["tabela"], n))
+        if "exige_dominio" in via and (c.get("depara") or "") != DEPARA_VALORES:
+            erros.append("exige_dominio sem depara=valores: %s.%s" % (c["tabela"], n))
+        if "por_pai" in via:
+            ps = passos_ref(referencia_declarada(c) or "")
+            if not ps or len(ps) != 1 or ps[0].get("modo") not in ("alt", "alt_composta") or ps[0].get("escolha") \
+                    or ps[0].get("coluna_destino") or _especial_decl(n):
+                erros.append("por_pai sem referência por chave alternativa (ref:T.K ou ref:T.(K1,K2)=(C1,C2)): %s.%s"
+                             % (c["tabela"], n))
         if (c.get("destino") or "").count(".") == 1:
             por_t.setdefault(c["tabela"], []).append(c)
     for t, cols in sorted(por_t.items()):
@@ -199,18 +420,90 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                 if alvo not in dts or not ops.get(alvo, {}).get("antes") or alvo == c["destino"].split(".")[0]:
                     erros.append("@id:%s sem destino secundário gravado antes (via antes) em %s" % (alvo, t))
         for dt, o in opcoes_destino(cols).items():
-            if dts and dt == dts[0] and (o["opcional"] or o["desdobrar"] or o["antes"]):
-                erros.append("destino principal não pode ser opcional, desdobrado nem antes: %s -> %s" % (t, dt))
-            for a in o["adotar"]:
+            if o.get("por_pai") and (not dts or dt != dts[0] or o["desdobrar"] or o["agrupar"] or o["complementa"]):
+                erros.append("por_pai só no destino principal, sem desdobrar, agrupar nem complementa: %s -> %s"
+                             % (t, dt))
+            if dts and dt == dts[0] and (o["opcional"] or o["antes"] or o["se"]):
+                erros.append("destino principal não pode ser opcional, antes nem destino_se: %s -> %s" % (t, dt))
+            if o["desdobrar"] and o["complementa"]:
+                erros.append("destino desdobrado não pode ser complementa: %s -> %s" % (t, dt))
+            if o["com_falso"] and not o["desdobrar"]:
+                erros.append("com_falso só em destino desdobrado: %s -> %s" % (t, dt))
+            if o["agrupar"]:
+                # rodada 4: também no PRINCIPAL (uma linha do destino por grupo; pedidos L7-05 14 e L6-05 14)
+                if not dts or (dt != dts[0] and not o["antes"]):
+                    erros.append("agrupar só em destino secundário gravado antes (via antes;agrupar:) ou no "
+                                 "principal: %s -> %s" % (t, dt))
+                # rodada 6 (L7-06): no principal, agrupar combina com adotar quando a mescla guarda o maior
+                # (adotar_maior: contador de numeração por tipo e competência)
+                if (o["adotar"] and not (dt == dts[0] and o["adotar_maior"])) or o["desdobrar"] \
+                        or o["complementa"] or o["opcional"]:
+                    erros.append("agrupar não combina com adotar (só no principal com adotar_maior), desdobrar, "
+                                 "complementa nem opcional: %s -> %s" % (t, dt))
+                if not all(_COL_ORIGEM.fullmatch(x) for x in o["agrupar"]):
+                    erros.append("agrupar com coluna da origem mal formada: %s -> %s" % (t, dt))
+            if o["adotar_maior"] and not o["adotar"]:
+                erros.append("adotar_maior sem adotar: %s -> %s" % (t, dt))
+            for a in o["adotar"] + o["adotar_maior"]:
                 if dt in ddl and a not in ddl[dt]["colunas"]:
                     erros.append("coluna de adoção inexistente no DDL: %s -> %s.%s" % (t, dt, a))
             if o["complementa"] and not any(c["destino"] == dt + ".id" and referencia_declarada(c) for c in cols):
                 erros.append("destino complementado sem coluna de referência ao pai em %s.id: %s" % (dt, t))
-            itens = [c for c in cols if c["destino"].startswith(dt + ".") and c["coluna"] in ("#item", "#rotulo")]
+            itens = [c for c in cols if c["destino"].startswith(dt + ".") and eh_item(c["coluna"])]
             if itens and not o["desdobrar"]:
                 erros.append("#item/#rotulo em destino não desdobrado: %s -> %s" % (t, dt))
             if o["desdobrar"] and not any(c["coluna"] == "#item" for c in itens):
                 erros.append("destino desdobrado sem #item: %s -> %s" % (t, dt))
+            if o["desdobrar"]:
+                n_item = {posicao_item(c["coluna"]) for c in itens if c["coluna"].startswith("#item")}
+                rots = [r for _, r in o["desdobrar"]]
+                if len(set(rots)) != len(rots):
+                    erros.append("desdobrar com rótulo repetido: %s -> %s" % (t, dt))
+                for spec, _ in o["desdobrar"]:
+                    if not set(range(len(spec.split("+")))) <= n_item or not all(
+                            _COL_ORIGEM.fullmatch(x) for x in spec.split("+")):
+                        erros.append("desdobrar com colunas sem #item correspondente (#item, #item2..): %s -> %s (%s)"
+                                     % (t, dt, spec))
+        if sum(1 for o in ops.values() if o["agrupar"]) > 1:
+            erros.append("mais de um destino agrupado na mesma tabela: %s" % t)
+        if any(c["coluna"].startswith("#grupo_") and "@" not in c["coluna"] for c in cols) and \
+                not any(o["agrupar"] for o in ops.values()):
+            erros.append("#grupo_* sem destino agrupado (via antes;agrupar:) em %s" % t)
+        por_dc = {}
+        for c in cols:
+            if c["coluna"].startswith("#item@"):  # declaração do item por coluna do desdobrar (conferidor r4)
+                o = ops.get(c["destino"].split(".")[0]) or {}
+                specs = {x for spec, _ in (o.get("desdobrar") or []) for x in spec.split("+")[:1]}
+                if c["coluna"][6:] not in specs:
+                    erros.append("#item@<COLUNA> sem a coluna no desdobrar do destino: %s -> %s (%s)"
+                                 % (t, c["destino"], c["coluna"]))
+                continue
+            por_dc.setdefault(c["destino"], []).append(c["coluna"])
+        for dc, ns in sorted(por_dc.items()):
+            if len(ns) > 1 and any(eh_item(n) or n.startswith("@id") for n in ns):
+                erros.append("coluna do destino declarada várias vezes com item ou @id: %s -> %s" % (t, dc))
+        for c in cols:
+            rd = referencia_declarada(c)
+            ps = passos_ref(rd) if rd else None
+            if ps and ps[-1].get("coluna_destino") and ps[-1].get("destino") and ddl and ps[-1]["destino"] in ddl \
+                    and ps[-1]["coluna_destino"] not in ddl[ps[-1]["destino"]]["colunas"]:
+                erros.append("ref:...@coluna inexistente no destino do pai: %s.%s" % (t, c["coluna"]))
+            if ps and ps[-1].get("coluna_destino") and "cod:" in (c.get("via") or ""):
+                erros.append("ref:...@coluna não combina com cod: %s.%s" % (t, c["coluna"]))
+            if c["coluna"].startswith("#dias:"):
+                u = c["coluna"].split(",", 1)[1]
+                rd = referencia_declarada(c)
+                ps = passos_ref(rd) if rd else None
+                if u.startswith("="):
+                    if sentinela.unidade_periodo(u[1:]) is None:
+                        erros.append("#dias com unidade literal desconhecida: %s.%s" % (t, c["coluna"]))
+                    if rd:
+                        erros.append("#dias com unidade literal não leva ref: %s.%s" % (t, c["coluna"]))
+                elif rd and (not ps or "coluna" not in ps[-1]):
+                    erros.append("#dias: a ref: da unidade tem de terminar em coluna (ref:T>COL): %s.%s"
+                                 % (t, c["coluna"]))
+            if c["coluna"].startswith("#data_hora:") and referencia_declarada(c):
+                erros.append("#data_hora não leva ref: %s.%s" % (t, c["coluna"]))
     return sorted(set(erros))
 
 
@@ -228,7 +521,7 @@ def erros_referencia_e_valores(colunas_decl, valores, origem):
         passos = passos_ref(rd)
         if passos is None:
             erros.append("referência declarada mal formada: %s.%s" % (c["tabela"], c["coluna"]))
-        elif any(x.get("tabela") and x["tabela"] not in origem for x in passos):
+        elif any(x not in origem for x in tabelas_dos_passos(passos)):
             erros.append("referência declarada a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
     for k in sorted(dv - com_par):
         erros.append("de-para de valores sem par em declarado/valores.tsv: %s.%s -> %s" % k)
@@ -335,8 +628,9 @@ def ler_ddl(raiz=RAIZ):
             corpo = m.group(2)
             if "FOREIGN KEY" in corpo:
                 t["fks"].append(m.group(0))
-            # ALTER de coluna, ou de restrição sem FK (CHECK redefinido em lote posterior): entra no DDL da conferência
-            if re.search(r"\b(ADD|DROP) COLUMN\b", corpo) or (
+            # ALTER de coluna (inclusive MODIFY: NOT NULL afrouxado, largura), de índice único (chave trocada) ou de
+            # restrição sem FK (CHECK redefinido em lote posterior): entra no DDL da conferência
+            if re.search(r"\b((ADD|DROP|MODIFY) COLUMN|DROP INDEX|ADD UNIQUE KEY)\b", corpo) or (
                     re.search(r"\b(ADD|DROP) CONSTRAINT\b", corpo) and "FOREIGN KEY" not in corpo):
                 t["alter"].append(m.group(0))
             for c in re.findall(r"\bADD COLUMN (?:IF NOT EXISTS )?`?(\w+)`?", corpo):
@@ -560,7 +854,7 @@ def propor_quebras(ciclos, arestas, linhas):
 
 # ---------------- verificador ----------------
 def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes, colunas, colunas_decl,
-                    catalogos_decl, oficiais_decl=(), valores=(), deps_decl=(), sem_carga=()):
+                    catalogos_decl, oficiais_decl=(), valores=(), deps_decl=(), sem_carga=(), provas=()):
     """Lista de erros (vazia = mapa válido). Só nomes de tabela/coluna e regras; nunca valores."""
     erros = []
     ofi = oficiais(ddl, oficiais_decl)
@@ -645,6 +939,14 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
     # casa com a regra
     erros += conflitos_declarados(colunas_decl)
     gerada = {(c["tabela"], c["coluna"]): c["regra"] for c in colunas}
+    # destino secundário fora de tabelas_destino: nomeado na via de QUALQUER coluna da tabela, ou com opção de destino
+    # (antes, opcional, adotar:...) numa coluna dele (rodada 4: a declaração explícita do secundário)
+    via_t = {}
+    for c in colunas_decl:
+        via = (c.get("via") or "").split(";")
+        via_t.setdefault(c["tabela"], set()).update(via)
+        if any(x == o or (o.endswith(":") and x.startswith(o)) for x in via for o in OPCOES_DESTINO):
+            via_t[c["tabela"]].add((c.get("destino") or "").partition(".")[0])
     for c in colunas_decl:
         t = c["tabela"]
         if t not in por or not por[t]["tabelas_destino"]:
@@ -661,7 +963,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                 erros.append("coluna de destino em tabela inexistente no DDL: %s.%s -> %s" % (t, c["coluna"], dest))
             elif dc not in ddl[dt]["colunas"]:
                 erros.append("coluna de destino inexistente no DDL: %s.%s -> %s" % (t, c["coluna"], dest))
-            elif dt not in por[t]["tabelas_destino"].split(";") and dt not in (c.get("via") or "").split(";"):
+            elif dt not in por[t]["tabelas_destino"].split(";") and dt not in via_t.get(t, ()):
                 erros.append("coluna de destino fora dos destinos da tabela: %s.%s -> %s" % (t, c["coluna"], dest))
             elif dt in ofi:
                 erros.append("coluna declarada grava em catálogo oficial: %s.%s -> %s" % (t, c["coluna"], dest))
@@ -675,6 +977,10 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                     erros.append("regra %s com destino %s (esperado TIME): %s.%s -> %s" % (regra, tipo, t, c["coluna"],
                                                                                          dest))
     erros += erros_referencia_e_valores(colunas_decl, valores, vol)
+    oc = {}
+    for c in colunas:
+        oc.setdefault(c["tabela"], set()).add(c["coluna"])
+    erros += erros_provas(provas, oc)
     erros += erros_especiais_e_opcoes(colunas_decl, tabelas, ddl)
     sc = {d["tabela"] for d in sem_carga if d.get("situacao") == "descarte"}
     for t in sorted({c["tabela"] for c in colunas_decl if c.get("destino")} & sc):
@@ -718,7 +1024,8 @@ def carregar(raiz=RAIZ):
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
                 colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
                 oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler_valores(d),
-                deps_decl=ler("declarado/dependencias.tsv"), sem_carga=ler("declarado/sem_carga.tsv"))
+                deps_decl=ler("declarado/dependencias.tsv"), sem_carga=ler("declarado/sem_carga.tsv"),
+                provas=ler_provas(d))
 
 
 def verificar(raiz=RAIZ):
@@ -737,7 +1044,50 @@ def carregar_execucao(d=None):
     ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
             "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
-            "valores": ler_valores(d)}
+            "valores": ler_valores(d), "provas": ler_provas(d), "evidencia_origem": ler(EVIDENCIA_ORIGEM),
+            "sequencias": ler(SEQUENCIAS), "sem_carga": ler("declarado/sem_carga.tsv")}
+
+
+# L9 (F4.7): generator da origem -> `sequencia_negocio.tipo` (o Sincronizar avança a sequência própria, nunca recua)
+SEQUENCIAS = "declarado/sequencias.tsv"
+
+
+# rodada 5 (ADR 0006, item 1; ADR 0007, item 16)
+PROVAS = "declarado/provas.tsv"
+PROVAS_D = "declarado/provas.d"
+CAMPOS_PROVAS = ["tabela", "tipo", "chave", "valores", "motivo"]
+EVIDENCIA_ORIGEM = "declarado/evidencia_origem.tsv"
+
+
+def ler_provas(d):
+    """Provas de "não copiar": [{tabela, tipo (derivado|mecanismo), chave [COL], valores [(COL, regra)], sql}]. O SQL
+    (`provas.d/<TABELA>.sql`) devolve, no destino, as colunas da chave e dos valores na mesma ordem."""
+    d = Path(d)
+    out = []
+    for r in (ler_tsv(d / PROVAS) if (d / PROVAS).exists() else []):
+        f = d / PROVAS_D / ("%s.sql" % r["tabela"])
+        vs = [tuple((x.split("!", 1) + [""])[:2]) for x in (r.get("valores") or "").split(",") if x]
+        out.append({"tabela": r["tabela"], "tipo": r.get("tipo") or "", "motivo": r.get("motivo") or "",
+                    "chave": [x for x in (r.get("chave") or "").split(",") if x], "valores": vs,
+                    "sql": f.read_text(encoding="utf-8").strip().rstrip(";") if f.exists() else ""})
+    return out
+
+
+def erros_provas(provas, origem_cols):
+    """Prova bem formada: tipo conhecido, chave e valores com colunas da origem, SQL presente e só de leitura."""
+    erros = []
+    for pv in provas:
+        t = pv["tabela"]
+        cols = origem_cols.get(t)
+        if pv["tipo"] not in ("derivado", "mecanismo"):
+            erros.append("prova com tipo desconhecido (derivado|mecanismo): %s" % t)
+        if not pv["chave"] or not pv["valores"]:
+            erros.append("prova sem chave ou sem valores: %s" % t)
+        if cols is not None and any(c not in cols for c in pv["chave"] + [v[0] for v in pv["valores"]]):
+            erros.append("prova com coluna inexistente na origem: %s" % t)
+        if not re.match(r"(?is)^\s*(select|with)\b", pv["sql"] or "") or ";" in pv["sql"]:
+            erros.append("prova sem SQL de leitura (um SELECT em %s/%s.sql): %s" % (PROVAS_D, t, t))
+    return erros
 
 
 def tabelas_sem_mapa(contagens, tabelas, descartes):

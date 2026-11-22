@@ -9,8 +9,8 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l5_03
 
 TABELAS = {"TBOID", "TBTPMINISTCER", "TBTPACAOAUDIT", "TBALERTA"} | set(l5_03.TABELAS)
-DESCARTES = {"TBTPPERM_RICADPAC": "mecanismo_do_produto", "TBHISTSENHA": "sem_valor"}
-NA_IMAGEM = TABELAS | set(l5_03.CADEIA)
+DESCARTES = {"TBTPPERM_RICADPAC": "mecanismo_do_produto"}  # com prova (provas.tsv, r5)
+NA_IMAGEM = TABELAS | set(l5_03.CADEIA) | set(DESCARTES)  # r5: TBTPPERM_RICADPAC na imagem para a prova rodar
 
 
 class Plano(unittest.TestCase):
@@ -139,6 +139,25 @@ class Sintetica(unittest.TestCase):
         logins = {x for x in vals if x.startswith("USR.")}
         self.assertTrue(logins <= {l5_03.A, l5_03.B, l5_03.C, l5_03.D, l5_03.Z})
 
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0007 (17): o histórico de senhas entra com o resumo importado; o tipo do OID vem pelo nome do tipo."""
+    def test_historico_senha_e_tipo_oid(self):
+        m = mapa.carregar_execucao()
+        d = {c["coluna"]: c for c in m["colunas_decl"] if c["tabela"] == "TBHISTSENHA" and c["destino"]}
+        self.assertEqual(d["#senha_hash:SENHA:sha256"]["destino"], "historico_senha.hash_senha")
+        todas = [c for c in m["colunas_decl"] if c["tabela"] == "TBHISTSENHA"]
+        senha = [c for c in todas if c["coluna"] == "SENHA"]
+        self.assertEqual([c["destino"] for c in senha], [""])  # lida, nunca numa coluna comum (não vacuo)
+        retr = [c["coluna"] for c in todas if c["coluna"].startswith("#retrato")]
+        self.assertTrue(retr and all("SENHA" not in r.split(":", 1)[1].split(",") and "*" not in r for r in retr))
+        alg = [c for c in todas if c["destino"] == "historico_senha.algoritmo"]
+        self.assertEqual([c["coluna"] for c in alg], ["=sha256_sal_externo", "=sha256"])
+        self.assertIn("se:SALT", alg[0]["via"])
+        o = [c for c in m["colunas_decl"] if c["tabela"] == "TBOID" and c["destino"] == "oid_icp.tipo_oid"]
+        self.assertEqual([c["coluna"] for c in o], ["ID_TBTIPOOID", "=~outro"])
+        self.assertIn("TBTPPERM_RICADPAC", {p["tabela"] for p in m["provas"]})
 
 if __name__ == "__main__":
     unittest.main()

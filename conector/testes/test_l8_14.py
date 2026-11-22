@@ -8,7 +8,9 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_14
 
 NA_IMAGEM = set(re.findall(r"CREATE TABLE (\w+) \(", l8_14.DDL))
-TABELAS = NA_IMAGEM - set(l8_14.NAO_CARREGADAS)
+SO_ORIGEM = {t for t, _ in l8_14.PAIS_ORIGEM}  # pai de outra fatia, só com as colunas da referência
+DA_FATIA = NA_IMAGEM - SO_ORIGEM
+TABELAS = DA_FATIA - set(l8_14.NAO_CARREGADAS)
 DESTINOS = {
     "CDTPDESPCTAPGCM": "classe_despesa_assistencial", "CDTPEMISSAO": "forma_emissao_documento",
     "CDTPEVTCTAREC": "tipo_lancamento_fatura", "CDTPFRANQUIA": "tipo_franquia", "CDTPGUIA": "tipo_guia_plano",
@@ -33,7 +35,7 @@ OBRIGATORIAS = {
     "origem_cobranca_plano": {"codigo", "descricao", "natureza"},
     "origem_guia_plano": {"codigo", "descricao", "canal"}}
 PREFIXADOS = {"CDTPLANCAMEN": "#codigo_derivado:ID:30:lancamento_", "PSMOTIVO": "#codigo_derivado:COD:30:baixa_",
-              "PSORIGEMCOBR": "#codigo_derivado:ID:30:cobranca_", "PSORIGEMGUIA": "#codigo_derivado:ID:30:guia_"}
+              "PSORIGEMCOBR": "#codigo_derivado:ID:30:origem_", "PSORIGEMGUIA": "#codigo_derivado:ID:30:guia_"}
 PRESUMIDOS = {
     "CDTPEMISSAO": {"canal": "=~impresso"}, "CDTPEVTCTAREC": {"natureza": "=~debito"},
     "CDTPLANCAMEN": {"natureza": "=~debito"}, "CDTPFRANQUIA": {"base_calculo": "=~evento"},
@@ -46,31 +48,50 @@ class Plano(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mapa = mapa.carregar_execucao()
-        cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.mapa, NA_IMAGEM)}
-        cls.decl = [c for c in cls.mapa["colunas_decl"] if c["tabela"] in NA_IMAGEM]
+        cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.mapa, DA_FATIA)}
+        cls.decl = [c for c in cls.mapa["colunas_decl"] if c["tabela"] in DA_FATIA]
 
     def cols(self, t):
         return {c["destino"]: c for c in self.plano[t]["colunas"][DESTINOS[t]]}
 
     def test_tabelas_e_destinos(self):
         self.assertEqual(set(self.plano), TABELAS)
-        for t, dt in list(DESTINOS.items()) + list(l8_14.SEM_BENEFICIARIO.items()):
+        for t, dt in list(DESTINOS.items()) + list(l8_14.MOVIMENTOS.items()):
             self.assertEqual(self.plano[t]["destinos"], [dt], t)
 
-    def test_sem_beneficiario_lidas_e_recusadas(self):
-        # nunca saem do plano em silêncio: entram, e o NOT NULL do beneficiário (não declarado) recusa com pendência
-        for t, dt in l8_14.SEM_BENEFICIARIO.items():
-            cols = {c["destino"] for c in self.plano[t]["colunas"][dt]}
-            self.assertNotIn("beneficiario_plano_id", cols, t)
-            self.assertEqual(cols & {"canal", "dados", "usuario_id", "ocorrido_em", "data_efeito", "operacao",
-                                     "tipo_movimento"}, {"canal", "dados", "usuario_id", "ocorrido_em", "data_efeito",
-                                                         "operacao", "tipo_movimento"}, t)
+    def via(self, t, col):
+        return next(c["via"] for c in self.decl if (c["tabela"], c["coluna"]) == (t, col)).split(";")[0]
+
+    def test_movimentos_do_beneficiario(self):
+        alt = "ref:PSBENEFI.(EMP,BEN,DEP)=(EMP,BEN,DEP)"
+        for t, dt in l8_14.MOVIMENTOS.items():
             por = {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
+            # NOT NULL sem padrão do destino: todas com fonte
+            self.assertTrue({"beneficiario_plano_id", "operacao", "ocorrido_em", "tipo_movimento", "data_efeito",
+                             "canal"} <= set(por), t)
+            # beneficiário pela chave natural EMP+BEN+DEP (chave alternativa composta do pai)
+            self.assertEqual(por["beneficiario_plano_id"]["coluna"], "EMP", t)
+            self.assertEqual(por["beneficiario_plano_id"]["passos"][0]["modo"], "alt_composta", t)
+            self.assertEqual(self.via(t, "EMP"), alt, t)
             self.assertEqual(por["canal"]["coluna"], "=migracao", t)
             self.assertEqual(por["dados"]["coluna"], "#retrato", t)
+            self.assertEqual(self.via(t, "USUARIO"), "ref:TBUSERS", t)
+        self.assertEqual(self.via("PSATVASS", "MOTIVO"), "ref:PSMOTIVO")
         # troca de plano é movimento (mudança contratual presumida), nunca beneficiário novo
         self.assertEqual({c["destino"]: c["coluna"] for c in self.plano["PSPLNASS"]["colunas"][
             "movimento_cadastral_beneficiario"]}["tipo_movimento"], "=~mudanca_contratual")
+
+    def test_mapa_da_conferencia_so_sem_o_pai_da_origem(self):
+        mt = l8_14.MAPA_TESTE
+        self.assertFalse([c for c in mt["colunas_decl"] if c["tabela"] in SO_ORIGEM])
+        self.assertEqual([c for c in mt["colunas_decl"] if c["tabela"] in DA_FATIA], self.decl)
+        self.assertEqual(mt["tabelas"], self.mapa["tabelas"])
+
+    def test_pai_da_origem_unico_por_chave_natural_salvo_o_ambiguo(self):
+        nat = [tuple(v[1:4]) for v in dict(l8_14.PAIS_ORIGEM)["PSBENEFI"]]
+        self.assertEqual(sorted(k for k in set(nat) if nat.count(k) > 1), [(7, 7, 0)])
+        self.assertEqual(sorted(l8_14.PAIS_EXTERNOS["PSBENEFI"]),
+                         sorted(str(v[0]) for v in dict(l8_14.PAIS_ORIGEM)["PSBENEFI"]))
 
     def test_obrigatorias_do_destino_cobertas(self):
         for t, dt in DESTINOS.items():
@@ -91,6 +112,15 @@ class Plano(unittest.TestCase):
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "mecanismo_do_produto"), t)
             self.assertTrue(sc[t]["motivo"].strip(), t)
         self.assertFalse([c for c in self.decl if c["tabela"] in l8_14.NAO_CARREGADAS])
+
+    def test_listas_de_valores_do_hospital(self):
+        # rodada 5 (ADR 0006): a lista da origem vira opções (código e rótulo) de uma definição migracao.<lista>
+        for t in l8_14.LISTAS:
+            ds = {(c["coluna"], c["destino"]) for c in self.decl if c["tabela"] == t}
+            self.assertIn(("ID", "parametro_opcao.valor"), ds, t)
+            self.assertIn(("NOME", "parametro_opcao.rotulo"), ds, t)
+            self.assertIn(("@id:parametro_definicao", "parametro_opcao.parametro_definicao_id"), ds, t)
+            self.assertTrue(any(d == "parametro_definicao.chave" and c.startswith("=migracao.") for c, d in ds), t)
 
     def test_codigo_e_descricao(self):
         for t in DESTINOS:
@@ -134,6 +164,7 @@ class Sintetica(unittest.TestCase):
     def test_esperado_coerente_com_as_linhas(self):
         cont = {}
         esp = l8_14.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
+        self.assertEqual(cont["PSBENEFI"], 4)
         self.assertEqual(set(esp), TABELAS)
         decl = mapa.carregar_execucao()["colunas_decl"]
         for t, e in esp.items():
@@ -141,8 +172,6 @@ class Sintetica(unittest.TestCase):
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
             presumidas = sum(1 for c in decl if c["tabela"] == t and c["destino"] and c["coluna"].startswith("=~"))
             self.assertEqual(e["pendencias"].get("valor_presumido", 0), cont[t] * presumidas, t)
-        for t in l8_14.NAO_CARREGADAS:
-            self.assertEqual(cont[t], 2, t)
 
     def test_linhas_com_o_numero_de_colunas_do_ddl(self):
         def conferir(t, v):
@@ -150,8 +179,10 @@ class Sintetica(unittest.TestCase):
         l8_14.linhas(random.Random(1), conferir)
 
     def test_ddl_so_das_tabelas_da_fatia(self):
-        self.assertEqual(len(NA_IMAGEM), 23)
-        self.assertEqual(set(l8_14.NAO_CARREGADAS) | set(DESTINOS) | set(l8_14.SEM_BENEFICIARIO), NA_IMAGEM)
+        self.assertEqual(len(DA_FATIA), 23)
+        self.assertEqual(set(l8_14.LISTAS) | set(DESTINOS) | set(l8_14.MOVIMENTOS), DA_FATIA)
+        self.assertEqual(l8_14.NAO_CARREGADAS, ())
+        self.assertEqual(SO_ORIGEM, {"PSBENEFI"})
 
 
 if __name__ == "__main__":

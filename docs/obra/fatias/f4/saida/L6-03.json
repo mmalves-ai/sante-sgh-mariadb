@@ -4,27 +4,31 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "regra 'minutos_hhmm' (texto ou inteiro HHMM de DURAÇÃO -> minutos: '0030' -> 30, '0100' -> 60; minuto >= 60 -> NULL com valor_fora_do_dominio; vazio ou '0000' -> NULL)",
-   "motivo": "DURACAO é HHMM (o sistema antigo grava 'a duração (HHMM)'): REAGENDA, REAGECRI, SIAGECRI e RECTRAGE -> duracao_horario_minutos (obrigatória na agenda, CHECK 5..480); DT_CRIACAO+HR_CRIACAO -> geracao_grade.solicitada_em, REPACAGI DATA+HORA -> horario_agenda.inicio_em/fim_em, RECANAGE DT_CAN+HR_CAN -> cancelamento_marcacao.cancelado_em (todas obrigatórias); ler o texto como número daria 100 minutos para '0100'. Junto com a referência fixa por código (categoria), o ajuste do CHECK de dono e as arestas pai antes do filho pedidos abaixo, é o que falta para REAGENDA e filhas"
+   "motivo": "DURACAO é HHMM (o sistema antigo grava 'a duração (HHMM)'): REAGENDA, REAGECRI, SIAGECRI e RECTRAGE -> duracao_horario_minutos (obrigatória na agenda, CHECK 5..480); DT_CRIACAO+HR_CRIACAO -> geracao_grade.solicitada_em, REPACAGI DATA+HORA -> horario_agenda.inicio_em/fim_em, RECANAGE DT_CAN+HR_CAN -> cancelamento_marcacao.cancelado_em (todas obrigatórias); ler o texto como número daria 100 minutos para '0100'. Junto com a referência fixa por código (categoria), o ajuste do CHECK de dono e as arestas pai antes do filho pedidos abaixo, é o que falta para REAGENDA e filhas",
+   "atendido": "rodada 3: regra minutos_hhmm no motor (rodada 2); usada em REAGENDA, REAGECRI, RECTRAGE e SICTRAGE"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
    "mudanca": "especial '#data_hora:<DATA>,<HORA>[,<DURACAO>]': monta o DATETIME do destino com a data DATE da origem e a hora HHMM em texto (pela regra hora_hhmm); com a terceira coluna, soma a duração HHMM (regra minutos_hhmm) para o fim do horário. Data sentinela vira NULL com data_sentinela; hora inválida, hora_invalida.",
-   "motivo": "regra faltante para REAGECRI e SIAGECRI (geracao_grade.solicitada_em), REPACAGI (horario_agenda.inicio_em e fim_em) e RECANAGE (cancelamento_marcacao.cancelado_em): as quatro colunas são DATETIME NOT NULL e a origem guarda a data numa coluna e a hora HHMM noutra. Gravar só a data numa coluna DATETIME diverge na soma de controle (data ISO de um lado, data e hora do outro) e perde a hora. O mesmo pedido existe em saida/L6-04.json (SICANAGE)."
+   "motivo": "regra faltante para REAGECRI e SIAGECRI (geracao_grade.solicitada_em), REPACAGI (horario_agenda.inicio_em e fim_em) e RECANAGE (cancelamento_marcacao.cancelado_em): as quatro colunas são DATETIME NOT NULL e a origem guarda a data numa coluna e a hora HHMM noutra. Gravar só a data numa coluna DATETIME diverge na soma de controle (data ISO de um lado, data e hora do outro) e perde a hora. O mesmo pedido existe em saida/L6-04.json (SICANAGE).",
+   "atendido": "rodada 3: #data_hora no motor; usado em REAGECRI (solicitada_em, processada_em) e SICANAGE (ocorrido_em). O fim do horário (início + duração) é pedido novo, abaixo"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py + fatiar_conector.py (compartilhados)",
    "mudanca": "arestas novas (pai antes do filho): REAGECRI, RECTRAGE e REPACAGI -> REAGENDA; REAGENDA -> TBCBOPRO e TBPROFIS (profissional pelo CRM = TBCBOPRO.COD, e dele a TBPROFIS); RECANAGE -> REPACAGD (marcação); SIAGECRI -> SIAGENDA; e regerar tabelas.tsv e as fatias",
-   "motivo": "hoje a ordem é REAGECRI 260, RECANAGE 261, RECTRAGE 262, REPACAGI 263, REAGENDA 267, SIAGECRI 268, SIAGENDA 694, TBPROFIS 874, REPACAGD 1015: toda filha chega antes do pai NOT NULL e seria recusada; a fatia não edita o arquivo compartilhado nem regera o mapa em paralelo"
+   "motivo": "hoje a ordem é REAGECRI 260, RECANAGE 261, RECTRAGE 262, REPACAGI 263, REAGENDA 267, SIAGECRI 268, SIAGENDA 694, TBPROFIS 874, REPACAGD 1015: toda filha chega antes do pai NOT NULL e seria recusada; a fatia não edita o arquivo compartilhado nem regera o mapa em paralelo",
+   "atendido": "parcial (rodada 2: REPACAGI -> REAGENDA e REAGENDA -> TBCBOPRO aplicadas); o resto foi repetido no pedido de ordem da rodada 3, abaixo; RECANAGE e SIAGECRI passaram à L6-04"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py + verificar_mapa.py",
    "mudanca": "referência declarada por chave alternativa composta: via 'ref:<TABELA>(<COL_ORIGEM_PAI>=<COL_FILHO>,...)' resolve o id do destino do pai pelas colunas de negócio (não só pela chave do pai), com pai_inexistente/pai_pendente como hoje (rodada de cobertura: 'ref:REAGENDA.NOME' já resolve pela chave alternativa de uma coluna, com pai_ambiguo se o nome repetir com outro CRM; o destino já exige nome único por estabelecimento, então a composta NOME+CRM deixa de ser bloqueio e fica como melhoria)",
-   "motivo": "REAGECRI, RECTRAGE e REPACAGI apontam a agenda (REAGENDA) por nome + número do conselho (NOME, CRM), não pelo ID; RECANAGE aponta a marcação por nome + CRM + data + hora. Sem isso agenda_servico_id e marcacao_horario_id (NOT NULL) ficam sem origem"
+   "motivo": "REAGECRI, RECTRAGE e REPACAGI apontam a agenda (REAGENDA) por nome + número do conselho (NOME, CRM), não pelo ID; RECANAGE aponta a marcação por nome + CRM + data + hora. Sem isso agenda_servico_id e marcacao_horario_id (NOT NULL) ficam sem origem",
+   "atendido": "rodada 2: ref:T.(K1,K2)=(C1,C2); usada em REAGECRI, RECTRAGE e SICTRAGE"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "regra 'hora_hhmm_zero_nulo': igual a hora_hhmm, mas '0000' (ou 0) vira NULL sem pendência",
-   "motivo": "RECTRAGE.INTER_INC e INTER_FIN: no sistema antigo '0000' quer dizer sem intervalo (perfil da operação). Com hora_hhmm o intervalo vira 00:00 e o CHECK ck_agenda_escala_intervalo recusa a faixa inteira."
+   "motivo": "RECTRAGE.INTER_INC e INTER_FIN: no sistema antigo '0000' quer dizer sem intervalo (perfil da operação). Com hora_hhmm o intervalo vira 00:00 e o CHECK ck_agenda_escala_intervalo recusa a faixa inteira. INTERINO (rodada 3, correção): INTER_INC/INTER_FIN já declarados com hora_hhmm e o de-para de valores 00:00 -> nulo; o intervalo real fica NULL com valor_fora_do_dominio por faixa, visível no painel"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py ou carga de arquivos",
@@ -49,12 +53,14 @@
   {
    "arquivo": "db/migracoes/05_AGE/01_tabelas.sql (trilha F2.2: modelo)",
    "mudanca": "motivo_marcacao.categoria_agenda_id e canal_marcacao.categoria_agenda_id (NULL = vale para todas as categorias), com FK para categoria_agenda; ou uma tabela de vínculo motivo x categoria",
-   "motivo": "AGCADMOTIVO.ID_RETPAGEN (NOT NULL na origem) e RETIPAGE.TPAGEN restringem o motivo e o canal a um tipo de agenda da recepção (RETPAGEN, que o mapa descarta como duplicado de categoria_agenda). motivo_marcacao.tipo_marcacao_id é outro conceito (primeira vez, retorno, encaixe). Sem a coluna, a restrição se perde; na imagem de referência não há perda (RETPAGEN tem 1 linha)."
+   "motivo": "AGCADMOTIVO.ID_RETPAGEN (NOT NULL na origem) e RETIPAGE.TPAGEN restringem o motivo e o canal a um tipo de agenda da recepção (RETPAGEN, que o mapa descarta como duplicado de categoria_agenda). motivo_marcacao.tipo_marcacao_id é outro conceito (primeira vez, retorno, encaixe). Sem a coluna, a restrição se perde; na imagem de referência não há perda (RETPAGEN tem 1 linha).",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + motor.py (+ conferencia.py)",
    "mudanca": "tabela do mapa com tabelas_destino e sem nenhuma coluna declarada com destino (carga_mapa.planejar a pula) vira pendência por tabela 'tabela_nao_carregada' (gravidade alta, chave_original NULL), com a contagem de registros no resumo do painel, como já se faz com tabela_sem_mapa ('imagem:tabela_nao_carregada:alta'); na conferência de fatia, o esperado aceita essas tabelas com {'gravados': 0, 'pendencias': {'tabela_nao_carregada': 1}} em vez de acusar 'tabela da fatia fora da carga'. Nome distinto de 'sem_carga', que já é estratégia do mapa",
-   "motivo": "as 6 tabelas sem mecanismo da L6-03 (REAGENDA, REAGECRI, SIAGECRI, RECTRAGE, REPACAGI e RECANAGE; cerca de 207 mil linhas na imagem de referência) não são lidas, não vão para conector_origem nem geram pendência: somem sem rastro do painel até os pedidos chegarem. Quando existir, a imagem sintética põe NAO_CARREGADAS no esperado"
+   "motivo": "as 6 tabelas sem mecanismo da L6-03 (REAGENDA, REAGECRI, SIAGECRI, RECTRAGE, REPACAGI e RECANAGE; cerca de 207 mil linhas na imagem de referência) não são lidas, não vão para conector_origem nem geram pendência: somem sem rastro do painel até os pedidos chegarem. Quando existir, a imagem sintética põe NAO_CARREGADAS no esperado",
+   "atendido": "superado: a L6-03 não tem mais tabela sem coluna declarada (REPACAGI tem a declaração pronta comentada e a cobertura a acusa)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (documentação do cabeçalho)",
@@ -64,396 +70,90 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
    "mudanca": "referência a uma linha do destino pelo código de negócio: na via, 'destino:<tabela destino>.<coluna>' resolve o id da linha do destino cuja coluna tem o valor da origem já convertido pelo de-para de valores (ex.: EXAME 'F' -> 'consulta', 'T' -> 'exame' -> categoria_agenda.natureza); várias linhas com o valor: a de menor código, com valor_presumido; nenhuma: pai_inexistente",
-   "motivo": "agenda_servico.categoria_agenda_id é NOT NULL e REAGENDA não aponta uma categoria: tem EXAME T/F (perfil da operação do sistema antigo: 'F' em 137 de 138 agendas), que diz se a agenda é de exame ou de consulta. Sem isso REAGENDA e as filhas (REAGECRI, RECTRAGE, REPACAGI, RECANAGE) ficam sem carga"
+   "motivo": "agenda_servico.categoria_agenda_id é NOT NULL e REAGENDA não aponta uma categoria: tem EXAME T/F (perfil da operação do sistema antigo: 'F' em 137 de 138 agendas), que diz se a agenda é de exame ou de consulta. Sem isso REAGENDA e as filhas (REAGECRI, RECTRAGE, REPACAGI, RECANAGE) ficam sem carga",
+   "atendido": "superado pela opção antes;adotar:codigo + @id:categoria_agenda (rodada 2): a agenda cria ou adota a categoria consulta/exame pela coluna EXAME; cod:categoria_agenda.natureza seria ambíguo (toda categoria do cliente tem natureza presumida consulta)"
   },
   {
    "arquivo": "db/migracoes/05_AGE/01_tabelas.sql (trilha F2.2: modelo)",
    "mudanca": "ck_agenda_servico_dono: aceitar agenda sem dono quando origem='migracao' (ou coluna de dono pendente), com pendência por linha para o cliente vincular profissional, recurso ou setor no painel",
-   "motivo": "na origem a maioria das agendas de consulta tem CRM 0 (agenda por nome, sem profissional); o CHECK recusaria quase todas e, em cadeia, toda grade, escala, horário e cancelamento. Decisão registrada em F4-decisoes-destino.md (L6-03)"
+   "motivo": "na origem a maioria das agendas de consulta tem CRM 0 (agenda por nome, sem profissional); o CHECK recusaria quase todas e, em cadeia, toda grade, escala, horário e cancelamento. Decisão registrada em F4-decisoes-destino.md (L6-03)",
+   "atendido": "superado (rodada 3, correção): decisão L6-03 r3b, o dono da agenda é também o SETOR da unidade (setor_funcional criado ou adotado pela própria linha, agenda_unidade_<UNID> ou agenda_sem_unidade, tipo presumido): a agenda sem profissional carrega sem mudar o modelo"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh",
    "mudanca": "incluir 'python3 -I tools/obra/cobertura_conector.py --fatia <F> --falhar-se-bloqueada' entre os passos da autoconferência (erro com a lista das bloqueadas e a causa)",
-   "motivo": "a autoconferência devolve 'ok' com 6 das 16 tabelas da L6-03 bloqueadas: a conciliação na imagem sintética só prova as tabelas que o motor planeja e não diz nada das que ele pula."
+   "motivo": "a autoconferência devolve 'ok' com 6 das 16 tabelas da L6-03 bloqueadas: a conciliação na imagem sintética só prova as tabelas que o motor planeja e não diz nada das que ele pula.",
+   "atendido": "rodada 2: passo 6 da autoconferência (cobertura da fatia)"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-04.tsv (fatia L6-04, orquestrador)",
    "mudanca": "descomentar a declaração de REPACAGD_EXCLUSAO (destino trilha_auditoria), se o resto do que a trava (regra pedida na L6-04) já estiver lá, e rodar tools/obra/conferir-fatia-f4.sh L6-04",
-   "motivo": "a L6-03 tirou as 60 linhas antigas de REPACAGD_EXCLUSAO (a tabela é da L6-04: ordem 1016 e ficha L6-04.md), do test_l6_03.py e da imagem sintética l6_03.py."
+   "motivo": "a L6-03 tirou as 60 linhas antigas de REPACAGD_EXCLUSAO (a tabela é da L6-04: ordem 1016 e ficha L6-04.md), do test_l6_03.py e da imagem sintética l6_03.py.",
+   "atendido": "a L6-04 já declara REPACAGD_EXCLUSAO"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + regerar tabelas.tsv e as fatias (compartilhados)",
+   "mudanca": "arestas novas (pai antes do filho): REAGECRI -> REAGENDA, RECTRAGE -> REAGENDA, SICTRAGE -> SIAGENDA e REAGENDA -> TBPROFIS; depois, atualizar o esperado de REAGECRI, RECTRAGE e SICTRAGE em sintetica_d/l6_03.py (as linhas passam a ser gravadas; anomalias anotadas em linhas())",
+   "motivo": "ordem atual: REAGECRI 257, RECTRAGE 258, REAGENDA 262, SICTRAGE 265, SIAGENDA 665, TBPROFIS 833. A agenda é NOT NULL na geração e na escala e é resolvida pela chave alternativa NOME+CRM: com o filho antes do pai, toda linha é recusada com pai_inexistente (medido na conferência: REAGECRI 5 de 5, RECTRAGE 6 de 6, SICTRAGE 5 de 5); o profissional da agenda (anulável) fica NULL na carga real",
+   "atendido": "rodada 3 (fatia, a pedido do conferidor): as 4 arestas em declarado/dependencias.tsv, mapa e fatias regerados (gerar_mapa_conector.py, fatiar_conector.py); esperado de REAGECRI, RECTRAGE e SICTRAGE atualizado em sintetica_d/l6_03.py (linhas gravadas) e a ordem em CARREGADAS"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
+   "mudanca": "especial '#data_hora_mais:<DATA>,<HORA>,<DURACAO>[,<DURACAO_PADRAO>]': DATETIME de data + hora HHMM somado da duração HHMM (regra minutos_hhmm) da linha; sem duração na linha, a de outra coluna (ex.: a da agenda pela encadeada terminada em coluna, ref:REAGENDA.(NOME,CRM)=(NOME,CRM)>DURACAO); sem nenhuma, NULL com unidade_ausente",
+   "motivo": "REPACAGI (177.897 horários na imagem de referência) -> horario_agenda.fim_em é DATETIME NOT NULL com CHECK fim_em > inicio_em, e a origem só guarda DATA, HORA (HHMM) e DURACAO (HHMM, por horário, anulável). Sem a regra a tabela fica BLOQUEADA (declaração pronta e comentada em colunas.d/L6-03.tsv); é ela que leva as marcações de consulta (REPACAGD, L6-04) ÚNICO bloqueio que resta na fatia (cobertura: REPACAGI regra_faltante, rodada 3): a declaração está pronta e comentada em colunas.d/L6-03.tsv; com o especial, basta descomentá-la e trocar REPACAGI de NAO_CARREGADAS para CARREGADAS em sintetica_d/l6_03.py",
+   "atendido": "rodada 4 (integrador): #data_hora_mais:DATA,HORA,DUR (exemplo_r4, EX4_HOR)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
+   "mudanca": "opção de coluna 'se:<COLUNA>=<valor>[|<valor>]' na via: a coluna do destino só recebe o valor quando a coluna da origem tem um dos valores (senão NULL, sem pendência)",
+   "motivo": "REAGECRI: a linha STATUS 'E' é a reversão da geração e o destino exige revertida_em e reversao_usuario_id quando situacao = revertida (CHECK ck_geracao_grade_reversao); declarar as duas colunas sem condição gravaria data de reversão nas gerações concluídas. Hoje a linha E é recusada pela restrição do destino (4025), visível como pendência. Com a opção: '#data_hora:DT_CRIACAO,HR_CRIACAO' -> revertida_em e USUARIO -> reversao_usuario_id com 'se:STATUS=E' Alternativa equivalente (decisão L6-03 r3b): complementar a geração C do mesmo NOME+CRM+PERINI+PERFIN pela linha E (complementa sobre a própria tabela, chave alternativa com STATUS=C), gravando situacao=revertida, revertida_em e reversao_usuario_id; a linha E não é uma geração própria.",
+   "atendido": "rodada 4 (integrador): se:COL=v1,v2 na via"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'hora_hhmm_zero_nulo' (repetição do pedido 4, ainda aberto): hora_hhmm em que '0000'/0 vira NULL sem pendência",
+   "motivo": "RECTRAGE e SICTRAGE carregam hoje SEM o intervalo (pausa) da faixa: INTER_INC/INTER_FIN '0000' = sem intervalo e, lido como 00:00, recusaria a faixa inteira pelo CHECK ck_agenda_escala_intervalo. Com a regra, a pausa entra e a grade gerada pelo produto deixa de oferecer horário no almoço INTERINO (rodada 3, correção): INTER_INC/INTER_FIN já declarados com hora_hhmm e o de-para de valores 00:00 -> nulo; o intervalo real fica NULL com valor_fora_do_dominio por faixa, visível no painel"
+  },
+  {
+   "arquivo": "db/migracoes/05_AGE/01_tabelas.sql (trilha F2.2: modelo)",
+   "mudanca": "agenda_servico.vigencia_inicio e vigencia_fim (DATE NULL), ou a regra de que a vigência da agenda é a da escala",
+   "motivo": "REAGENDA.PERINI/PERFIN (validade da agenda) não têm coluna no destino; hoje ficam só na origem",
+   "atendido": "rodada 4 (DDL): db/migracoes/05_AGE/06"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-03.tsv (esta fatia, rodada seguinte) + modelo",
+   "mudanca": "SICANAGE definitivo: segue o caminho em dois tempos decidido para RECANAGE (L6-04 r3): a trilha agora; cancelamento_marcacao quando a F2.2 aceitar marcação nula na migração ou o conector criar a marcação cancelada (L6-04.json, pedido 10)",
+   "motivo": "registro_excluido (destino da RECANAGE) exige entidade_id e usuario_id NOT NULL e SICANAGE não tem protocolo próprio: a trilha de auditoria guarda quem, quando, por quê e o retrato sem perder linha"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-04.tsv e sintetica_d/l6_04.py (fatia L6-04)",
+   "mudanca": "apagar as declarações comentadas de #SICANAGE e #SICTRAGE (as duas passaram à L6-03 no índice e estão declaradas aqui) e manter SIAGENDA na imagem com as agendas iguais às da l6_03 (5 desde a rodada 3: a 5, 'Raio X exemplo', CRM 102, tem profissional e carrega) (a L6-03 cria SIAGENDA com a forma inteira do dicionário; numa imagem que junte as fatias vale o CREATE e as linhas da primeira)",
+   "motivo": "evita 'tabela declarada em mais de um arquivo' se a L6-04 descomentar e mantém a mesma agenda de exames nas duas imagens"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py + conector/sante_conector/conferencia.py (compartilhados)",
+   "mudanca": "tabela da fatia cujo esperado na imagem sintética é 'gravados': 0 com todas as linhas lidas recusadas por pai_inexistente de ORDEM (pai declarado que carrega depois do filho) passa a BLOQUEADA (pai_nao_carregado) na cobertura, e a conferência acusa esperado de perda total em tabela que carrega",
+   "motivo": "achado da revisão L6-03: REAGECRI, RECTRAGE e SICTRAGE saem CARREGA e a conferência dá ok provando 0 linhas gravadas até as arestas pedidas entrarem; a meta zero bloqueadas fica só no papel"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-04.tsv (fatia L6-04)",
+   "mudanca": "SIAGENDA: adotar a mesma decisão de dono da agenda de consultas (L6-03 r3b): @id:setor_funcional -> agenda_servico.setor_funcional_id, com setor_funcional criado ou adotado pela linha (#codigo_derivado:UNID:30:agenda_unidade_ com inteiro_zero_nulo e antes;adotar:codigo, concorrente =agenda_sem_unidade, nome por ref:TBUNIDAD>NOME com concorrente fixo, tipo =~assistencial, unidade por ref:TBUNIDAD)",
+   "motivo": "SIAGENDA tem CRM 0 nas agendas de exame e o CHECK ck_agenda_servico_dono as recusa (pedido 2 da L6-04 ao modelo); o mesmo código de setor das duas agendas faz as de consulta e de exame da mesma unidade dividirem o setor"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (gravação condicional de destino secundário) ou db/migracoes/05_AGE (F2.2)",
+   "mudanca": "REPACAGI com LIVRE N (horário bloqueado): criar o bloqueio_agenda pela própria linha só quando bloqueado (opção 'se:LIVRE=N' num secundário antes, motivo de bloqueio pelo código migracao), ou ck_horario_agenda_bloqueio aceitar bloqueio nulo quando origem='migracao'",
+   "motivo": "a declaração pronta de REPACAGI grava situacao bloqueado para LIVRE N e para as situações HR/Q/P sem paciente; o CHECK exige bloqueio_agenda_id e a linha seria recusada (visível, 4025). Sem isso o horário bloqueado some, o que equivale a não oferecer a vaga, mas perde o registro do bloqueio",
+   "atendido": "rodada 4 (integrador): destino_se:LIVRE=N no secundário (bloqueio só do horário bloqueado)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros, como 14_FIN/14)",
+   "mudanca": "Rodada 5 (ADR 0006): semear em parametro_definicao as definições agenda.retorno.tipoRetorno, agenda.retorno.criterioRetorno (tipo lista; opções em parametro_opcao), com módulo, descrição, nível rede e tela",
+   "motivo": "A fatia carrega a lista e os parâmetros do hospital (opções com origem migracao e valores em parametro_valor) pela chave do catálogo do produto (cod:parametro_definicao.chave), que a migração nunca cria; sem a semente cada linha é recusada com codigo_inexistente_destino (visível no relatório de conciliação), nunca perdida em silêncio. A conferência da fatia semeia as mesmas chaves no PREPARO_DESTINO."
   }
  ],
  "declaracao_pronta": {
-  "o_que_e": "colunas das 6 tabelas sem mecanismo (REAGENDA, REAGECRI, SIAGECRI, RECTRAGE, REPACAGI, RECANAGE), no formato de colunas.d; entram em colunas.d/L6-03.tsv no lugar das linhas sem destino quando os pedidos 1 a 5, 13 e 14 chegarem. SIAGECRI repete as colunas de REAGECRI. Pares de valores: REAGENDA.EXAME F -> consulta, T -> exame; REAGECRI/SIAGECRI.STATUS C -> concluida, E -> revertida (com revertida_em pelo #data_hora e reversao_usuario_id pelo USUARIO).",
-  "colunas": [
-   {
-    "tabela": "REAGENDA",
-    "coluna": "@estabelecimento",
-    "destino": "agenda_servico.estabelecimento_id",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "único estabelecimento do cliente"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "NOME",
-    "destino": "agenda_servico.nome",
-    "regra": "texto_nome",
-    "depara": "",
-    "via": "",
-    "nota": "nome da agenda (único por estabelecimento)"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "EXAME",
-    "destino": "agenda_servico.categoria_agenda_id",
-    "regra": "codigo_char",
-    "depara": "valores",
-    "via": "destino:categoria_agenda.natureza",
-    "nota": "pedido 13: 'F' -> natureza consulta, 'T' -> exame (de-para de valores), e a categoria do destino com essa natureza"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "DURACAO",
-    "destino": "agenda_servico.duracao_horario_minutos",
-    "regra": "minutos_hhmm",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 1: HHMM -> minutos"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "CRM",
-    "destino": "agenda_servico.profissional_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:TBCBOPRO.COD>ID_TBPROFIS>TBPROFIS",
-    "nota": "pedidos 3 e 14: profissional pelo número do conselho; CRM 0 = agenda sem dono (CHECK de dono pedido à F2.2)"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "ID_RETP_INTEG_AGENDA_ONLINE",
-    "destino": "agenda_servico.modo_agendamento_online_id",
-    "regra": "chave_origem",
-    "depara": "",
-    "via": "",
-    "nota": "modo online"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "ATIVA",
-    "destino": "agenda_servico.ativo",
-    "regra": "booleano_sn",
-    "depara": "",
-    "via": "",
-    "nota": "S ativa, N inativa"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "PERMITE_TELEATENDIMENTO",
-    "destino": "agenda_servico.teleatendimento",
-    "regra": "booleano_sn",
-    "depara": "",
-    "via": "",
-    "nota": "S/N"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "QTDE_D_RET",
-    "destino": "agenda_servico.dias_retorno",
-    "regra": "inteiro_zero_nulo",
-    "depara": "",
-    "via": "",
-    "nota": "0 = sem prazo de retorno"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "OBS",
-    "destino": "agenda_servico.observacao",
-    "regra": "texto_resumo:2000",
-    "depara": "",
-    "via": "",
-    "nota": "observação (VARCHAR(2000))"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "OBS_PORTAL_PAC_AGEND_ONLINE",
-    "destino": "agenda_servico.orientacao_marcacao",
-    "regra": "texto_longo",
-    "depara": "",
-    "via": "",
-    "nota": "orientação ao paciente"
-   },
-   {
-    "tabela": "REAGENDA",
-    "coluna": "USUARIO",
-    "destino": "agenda_servico.criado_por",
-    "regra": "",
-    "depara": "",
-    "via": "ref:TBUSERS",
-    "nota": "quem criou"
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "@estabelecimento",
-    "destino": "geracao_grade.estabelecimento_id",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "NOME",
-    "destino": "geracao_grade.agenda_servico_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:REAGENDA.NOME",
-    "nota": "pedido 3: REAGENDA antes"
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "PERINI",
-    "destino": "geracao_grade.periodo_inicio",
-    "regra": "data",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "PERFIN",
-    "destino": "geracao_grade.periodo_fim",
-    "regra": "data",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "DURACAO",
-    "destino": "geracao_grade.duracao_horario_minutos",
-    "regra": "minutos_hhmm",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 1"
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "STATUS",
-    "destino": "geracao_grade.situacao",
-    "regra": "codigo_char",
-    "depara": "valores",
-    "via": "",
-    "nota": "C -> concluida; E (linha de reversão) -> revertida"
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "#data_hora:DT_CRIACAO,HR_CRIACAO",
-    "destino": "geracao_grade.solicitada_em",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 2"
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "USUARIO",
-    "destino": "geracao_grade.responsavel_usuario_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:TBUSERS",
-    "nota": ""
-   },
-   {
-    "tabela": "REAGECRI",
-    "coluna": "#retrato",
-    "destino": "geracao_grade.mensagem_processo",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "dias SEM1..SEM7 sem hora: sem geracao_grade_periodo"
-   },
-   {
-    "tabela": "SIAGECRI",
-    "coluna": "NOME",
-    "destino": "geracao_grade.agenda_servico_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:SIAGENDA.NOME",
-    "nota": "demais colunas iguais às de REAGECRI"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "AGENDA",
-    "destino": "agenda_escala.agenda_servico_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:REAGENDA.NOME",
-    "nota": "pedido 3"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "SEMANA",
-    "destino": "agenda_escala.dia_semana",
-    "regra": "faixa:1,7",
-    "depara": "",
-    "via": "",
-    "nota": "1 = domingo ... 7 = sábado"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "HOR_INC",
-    "destino": "agenda_escala.hora_inicio",
-    "regra": "hora_hhmm",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "HOR_FIN",
-    "destino": "agenda_escala.hora_fim",
-    "regra": "hora_hhmm",
-    "depara": "",
-    "via": "",
-    "nota": "fim exclusivo"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "INTER_INC",
-    "destino": "agenda_escala.intervalo_inicio",
-    "regra": "hora_hhmm_zero_nulo",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 5: '0000' = sem intervalo"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "INTER_FIN",
-    "destino": "agenda_escala.intervalo_fim",
-    "regra": "hora_hhmm_zero_nulo",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 5"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "DURACAO",
-    "destino": "agenda_escala.duracao_horario_minutos",
-    "regra": "minutos_hhmm",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 1"
-   },
-   {
-    "tabela": "RECTRAGE",
-    "coluna": "@vigencia_carga",
-    "destino": "agenda_escala.vigencia_inicio",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "vigência sem fonte"
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "@estabelecimento",
-    "destino": "horario_agenda.estabelecimento_id",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "NOME",
-    "destino": "horario_agenda.agenda_servico_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:REAGENDA.NOME",
-    "nota": "pedido 3"
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "DATA",
-    "destino": "horario_agenda.data_referencia",
-    "regra": "data",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "#data_hora:DATA,HORA",
-    "destino": "horario_agenda.inicio_em",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 2"
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "#data_hora:DATA,HORA,DURACAO",
-    "destino": "horario_agenda.fim_em",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 2: início + duração HHMM"
-   },
-   {
-    "tabela": "REPACAGI",
-    "coluna": "TELEATENDIMENTO",
-    "destino": "horario_agenda.teleatendimento",
-    "regra": "booleano_sn",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "RECANAGE",
-    "coluna": "NOME",
-    "destino": "cancelamento_marcacao.marcacao_horario_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:REPACAGD(NOME=NOME,CRM=CRM,DATA=DATA,HORA=HORA)",
-    "nota": "pedidos 3 e 4: chave alternativa composta, REPACAGD antes"
-   },
-   {
-    "tabela": "RECANAGE",
-    "coluna": "#data_hora:DT_CAN,HR_CAN",
-    "destino": "cancelamento_marcacao.cancelado_em",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "pedido 2"
-   },
-   {
-    "tabela": "RECANAGE",
-    "coluna": "MOTIVO",
-    "destino": "cancelamento_marcacao.complemento",
-    "regra": "texto",
-    "depara": "",
-    "via": "",
-    "nota": ""
-   },
-   {
-    "tabela": "RECANAGE",
-    "coluna": "=~paciente",
-    "destino": "cancelamento_marcacao.solicitante",
-    "regra": "",
-    "depara": "",
-    "via": "",
-    "nota": "presumido"
-   },
-   {
-    "tabela": "RECANAGE",
-    "coluna": "USU_CAN",
-    "destino": "cancelamento_marcacao.responsavel_usuario_id",
-    "regra": "",
-    "depara": "",
-    "via": "ref:TBUSERS",
-    "nota": ""
-   }
-  ]
+  "o_que_e": "REPACAGI segue pronta e COMENTADA em colunas.d/L6-03.tsv (#REPACAGI), agora com todas as colunas: situacao por PACIENTE (ocupado), SITUACAO (HR/Q/P bloqueado) e LIVRE (livre/bloqueado) concorrentes, vagas_ocupadas, tipo_horario e encaixe_ordem por TIPOHR, autor pelo login e motivo por coluna nas demais; pares em valores.d/L6-03.tsv (linhas #REPACAGI). Ao descomentar (motor com #data_hora_mais), descomentar também os pares e pôr REPACAGI no esperado.",
+  "colunas": []
  }
 }

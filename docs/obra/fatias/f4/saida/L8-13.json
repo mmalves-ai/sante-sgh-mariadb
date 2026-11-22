@@ -23,7 +23,23 @@
   {
    "arquivo": "db/migracoes/16_SGO (modelo)",
    "mudanca": "avaliar motivo_movimento_cadastral.situacao_cadastral_beneficiario_id (FK opcional)",
-   "motivo": "L8-13: a origem liga o motivo de movimento à situação cadastral (ID_CDSTATUSCAD); o destino não guarda essa ligação, que hoje se perde"
+   "motivo": "L8-13: a origem liga o motivo de movimento à situação cadastral (ID_CDSTATUSCAD); o destino não guarda essa ligação, que hoje se perde",
+   "atendido": "rodada 4 (DDL): db/migracoes/16_SGO/12"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_provas) + sentinela (regra de prova)",
+   "mudanca": "r5-5 (motor, genérico): regra de VALOR de prova que compare o RÓTULO da origem por palavra-chave, sem copiar o rótulo real para o código: o SQL da prova devolve, por item, um padrão (ex.: 'VENDA', 'REMESSA') e o comparador aceita quando o rótulo normalizado da origem (maiúsculas, sem acento, espaços colapsados) CONTÉM o padrão (ex.: valores `ID!inteiro,NOME!rotulo_contem`). Com ela, as provas das listas fixas passam a conferir ID e significado; ordem diferente de IDs num cliente vira prova_nao_conferida (alta).",
+   "motivo": "Achado da rodada 5: a prova compara só o ID com a sequência 1..N. Igualdade exata com o rótulo não é possível sem copiar texto da imagem real para o código (regra 5); hoje a troca de significado com o mesmo ID passaria. Tabelas desta fatia: CDFAIXAETATP, CDMSGLINHA, CDPARDIGOBG, CDPGTOCOOPART, CDTPCOPART, CDTPCTRCONTRAT."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-05.tsv (dono: fatia L7-05)",
+   "mudanca": "GECOMPRA: declarar historico_compra_insumo entre os destinos da tabela (via/opção de destino) ou retirar as 11 colunas declaradas para ele",
+   "motivo": "L8-13 rodada 6: o verificador do mapa é global e recusa 11 colunas de GECOMPRA (coluna de destino fora dos destinos da tabela); nenhuma é desta fatia"
+  },
+  {
+   "arquivo": "docs/obra/fatias/f4/L7-07.md, L7-08.md, indice.tsv (orquestrador: fatiar_conector)",
+   "mudanca": "regenerar as fatias L7-07 e L7-08 e o indice.tsv depois das mudanças do mapa",
+   "motivo": "L8-13 rodada 6: fatiar_conector --conferir acusa arquivo diferente do gerado em fatias de outro lote; nenhuma é desta fatia"
   }
  ]
 }

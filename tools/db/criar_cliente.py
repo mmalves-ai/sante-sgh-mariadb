@@ -5,9 +5,12 @@ contratos do produto (tools/db/carregar_acoes.py; decisão do dono 2026-11-20, a
 numerações de negócio de cada estabelecimento (tools/db/configurar_numeracoes.py; rode de novo quando entrar
 estabelecimento novo). A carga dos catálogos públicos é um passo seguinte
 (catalogos/carregar.py), e a importação do SPDATA é do conector (só para cliente com origem conector_spdata).
+O ESPELHO PADRÃO DA BASE (ADR 0006: catálogos oficiais e licenciados por edição; tools/db/espelho.py) é levado a
+todo cliente novo aqui, quando existir (--espelho BANCO ou ESPELHO_BANCO; padrão "espelho"); sem espelho, o cliente
+nasce sem catálogos e o resultado avisa. Atualização de edição nos existentes: tools/db/espelho.py atualizar.
 
 uso: python3 -I tools/db/criar_cliente.py <codigo> "<nome>" [--origem vazio|conector_spdata] [--cnpj N]
-                                          [--plataforma BANCO] [--admin ID] [--json]
+                                          [--plataforma BANCO] [--espelho BANCO] [--admin ID] [--json]
      python3 -I tools/db/criar_cliente.py --listar
 
 É também o serviço do painel da plataforma (F4 L3): a API chama este comando (função `criar`) com --json, o id do
@@ -79,7 +82,14 @@ def carregador(nome="carregar_acoes"):
     return mod
 
 
-def criar(codigo, nome, origem="vazio", cnpj=None, admin=None):
+def espelho_mod():
+    spec = importlib.util.spec_from_file_location("espelho_mod", RAIZ / "tools/db/espelho.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def criar(codigo, nome, origem="vazio", cnpj=None, admin=None, espelho=None):
     """Cria o banco cliente_<codigo>, aplica as migrações e as ações do sistema e registra na plataforma (com o
     evento 'criado'). Recusa (Recusa) se o código for inválido ou o cliente/banco já existir."""
     garantir_plataforma()
@@ -118,12 +128,29 @@ def criar(codigo, nome, origem="vazio", cnpj=None, admin=None):
     except SystemExit as e:
         sql(None, None, "-e", f"DROP DATABASE {banco}")
         raise Recusa("numeracoes-falharam", f"{e}; banco removido")
+    esp = espelho_mod()
+    nome_esp = esp.nome_banco(espelho) if espelho else esp.ESPELHO
+    if esp.existe(nome_esp):
+        try:
+            r_esp = esp.aplicar(banco, nome_esp)
+        except SystemExit as e:
+            sql(None, None, "-e", f"DROP DATABASE {banco}")
+            raise Recusa("espelho-falhou", f"espelho: {e}; banco removido")
+        if r_esp["orfaos"] or r_esp["divergentes"]:
+            sql(None, None, "-e", f"DROP DATABASE {banco}")
+            raise Recusa("espelho-falhou", f"espelho: órfãos {r_esp['orfaos'][:5]}, divergentes "
+                                           f"{r_esp['divergentes'][:5]}; banco removido")
+        espelho_res = {"espelho": nome_esp, "linhas": r_esp["linhas_no_cliente"], "tabelas": len(r_esp["tabelas"]),
+                       "edicoes": r_esp["edicoes"]}
+    else:
+        espelho_res = {"espelho": nome_esp, "aviso": "espelho inexistente: cliente sem catálogos padrão"}
     tabelas = sql(None, None, "-N", "-e", f"select count(*) from information_schema.tables where table_schema={q(banco)}").stdout.strip()
     versao = sorted(p.parent.name + "/" + p.name for p in MIG.glob("*/*_chaves.sql"))[-1]
     agora = "UTC_TIMESTAMP(3)"
     adm = str(int(admin)) if admin is not None else "NULL"
     detalhe = {'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'],
-               'sementes': sementes['sementes'], 'numeracoes': numeracoes['numeracoes'], 'origem': origem}
+               'sementes': sementes['sementes'], 'numeracoes': numeracoes['numeracoes'], 'origem': origem,
+               'espelho': espelho_res}
     r = sql(PLAT, f"""
 INSERT INTO cliente (codigo, nome, documento_cnpj, situacao, banco_nome, versao_migracao, origem_dados, criado_em, criado_por)
 VALUES ({q(codigo)}, {q(nome.strip())}, {q(cnpj) if cnpj else 'NULL'}, 'implantacao', {q(banco)}, {q(versao)}, {q(origem)}, {agora}, {adm});
@@ -135,6 +162,7 @@ VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps(detalhe))}, {agora}, {adm}, {a
         raise Recusa("registro-falhou", f"registro na plataforma falhou: {r.stderr[:400]}")
     return {"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "acoes_sistema": acoes["ativas"],
             "sementes": sementes["sementes"], "numeracoes": numeracoes["numeracoes"], "origem": origem, "versao_migracao": versao,
+            "espelho": espelho_res,
             "proximo_passo": "catalogos/carregar.py " + codigo + (" e conector" if origem == "conector_spdata" else "")}
 
 
@@ -151,12 +179,13 @@ def main():
         print(sql(PLAT, None, "-e", "select id, codigo, nome, situacao, origem_dados, banco_nome, versao_migracao from cliente").stdout)
         return
     pos = [a for i, a in enumerate(sys.argv[1:], 1)
-           if not a.startswith("--") and not (sys.argv[i - 1] in ("--origem", "--cnpj", "--plataforma", "--admin"))]
+           if not a.startswith("--") and not (sys.argv[i - 1] in ("--origem", "--cnpj", "--plataforma", "--admin", "--espelho"))]
     if len(pos) < 2:
         raise SystemExit(__doc__)
     admin = _arg("--admin")
     try:
-        r = criar(pos[0], pos[1], _arg("--origem") or "vazio", _arg("--cnpj"), int(admin) if admin else None)
+        r = criar(pos[0], pos[1], _arg("--origem") or "vazio", _arg("--cnpj"), int(admin) if admin else None,
+                  _arg("--espelho"))
     except Recusa as e:
         if "--json" in sys.argv:
             print(json.dumps({"erro": str(e)[:600], "codigo": e.codigo}, ensure_ascii=False))

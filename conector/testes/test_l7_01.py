@@ -18,8 +18,10 @@ CARREGADAS = {"SHCONDUTA": "conduta_reacao_transfusional", "SHESTFINAL": "destin
               "PRHEMOTLAN": "hemocomponente", "SHCLIENT": "servico_hemoterapia_fornecedor",
               "SHINTER": "tipo_reacao_transfusional", "SHDOACAO": "doacao_sangue",
               "SHLOCAL": "local_guarda_hemocomponente", "SHRESPOSTA": "grupo_resposta",
-              "SHBOLSA": "bolsa_hemocomponente", "SIASSLAUDO_IMPRESSAO": "trilha_auditoria"}
-DESCARTADAS = {"SHPARAM": "mecanismo_do_produto", "SHREQUISICAO": "sem_valor"}
+              "SHBOLSA": "bolsa_hemocomponente", "SIASSLAUDO_IMPRESSAO": "trilha_auditoria",
+              # r5 (ADR 0006): parâmetros do estabelecimento e pedido ao fornecedor na trilha, com retrato
+              "SHPARAM": "parametro_valor", "SHREQUISICAO": "trilha_auditoria"}
+DESCARTADAS = {}
 
 
 def _decl():
@@ -48,6 +50,14 @@ class L701(unittest.TestCase):
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
             self.assertTrue(sc[t]["motivo"].startswith("L7-01: "), t)
         self.assertFalse(any(l.startswith("#--- ") for l in _decl()))
+        self.assertFalse({"SHPARAM", "SHREQUISICAO"} & set(sc))
+        # r6 (ADR 0006/0003): um valor por chave do produto (desdobrado), definição pela chave do catálogo do produto
+        c = {x["destino"]: x for x in self.m["colunas_decl"] if x["tabela"] == "SHPARAM"}
+        self.assertEqual(c["parametro_valor.valor"]["coluna"], "#item")
+        self.assertIn("desdobrar:CEVS=sadt.hemoterapia.codigoCevs", c["parametro_valor.valor"]["via"])
+        self.assertEqual(c["parametro_valor.parametro_definicao_id"]["coluna"], "#rotulo")
+        self.assertEqual(c["parametro_valor.parametro_definicao_id"]["via"], "cod:parametro_definicao.chave")
+        self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER")
 
     def test_literais_e_presumidos(self):
         # nada presumido que mexa no estoque: situação e natureza pelo de-para do NOME; sem par, recusa visível
@@ -157,8 +167,34 @@ class L701(unittest.TestCase):
         for t, e in esp.items():
             recusas = sum(n for r, n in e["pendencias"].items()
                           if r.startswith("restricao_destino_") or r == "pai_pendente")
+            if t == "SHPARAM":  # r6: desdobrado, "gravados" conta itens (um por coluna preenchida da linha única)
+                self.assertEqual((lidas.count(t), e["gravados"]), (1, 10))
+                continue
             self.assertEqual(e["gravados"] + recusas, lidas.count(t), t)
         self.assertNotIn("TBFORNEC", l7_01.PAIS_EXTERNOS)  # alternativa lê a origem: fornecedor ausente
+
+    def test_bolsa_liga_o_pedido_ao_fornecedor_r5(self):
+        # r5 (achado): o pedido ao fornecedor grava o número na trilha (correlacao) e não se perde sem data
+        # (vigência pela evidência, só quando a data falta); a trilha de cada bolsa copia o número do pedido gravado
+        # (referência validada) e guarda o retrato da linha
+        req = self.cols("SHREQUISICAO")
+        self.assertEqual(req["trilha_auditoria.correlacao"]["coluna"] if "trilha_auditoria.correlacao" in req
+                         else req["correlacao"]["coluna"], "ID_SHREQUISICAO")
+        bt = {c["destino"]: c for c in self.plano["SHBOLSA"]["colunas"]["trilha_auditoria"]}
+        self.assertIn("trilha_auditoria", self.plano["SHBOLSA"]["destinos"])
+        self.assertEqual(bt["correlacao"]["coluna"], "ID_SHREQUISICAO")
+        self.assertEqual(bt["entidade_id"]["coluna"], "@id")
+        self.assertEqual(bt["acao"]["coluna"], "=operacao")
+        self.assertTrue(bt["dados_depois"]["coluna"].startswith("#retrato:*"))
+        rows = [r for r in csv.DictReader(_decl(), delimiter="\t")]
+        via = {(r["tabela"], r["coluna"], r["destino"]): r["via"] for r in rows}
+        self.assertEqual(via[("SHBOLSA", "ID_SHREQUISICAO", "trilha_auditoria.correlacao")],
+                         "ref:SHREQUISICAO@correlacao;trilha_auditoria")
+        self.assertEqual(via[("SHREQUISICAO", "#vigencia", "trilha_auditoria.ocorrido_em")],
+                         "se:DATA_HORA=;trilha_auditoria")
+        self.assertFalse([r for r in rows if r["tabela"] == "SHBOLSA" and r["coluna"] == "ID_SHREQUISICAO"
+                          and not r["destino"]])
+        self.assertNotIn("sem_valor", " ".join(r["motivo"] for r in rows if "SHREQUISICAO" in r["coluna"]))
 
 
 if __name__ == "__main__":

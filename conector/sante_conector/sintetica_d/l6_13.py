@@ -1,7 +1,9 @@
 """Fatia L6-13 (prontuário, assinatura e assistência, módulo PEP): imagem SINTÉTICA, dados 100% falsos.
 
-Rodada de cobertura total: 20 das 23 tabelas carregam pelo mapa (PRASSINAT_DOC_PRCHKGERAL espera a troca do destino no
-mapa; PRLANCREGISTROTEMPO e HTPARAMORIGEMCABIMP são descarte). O DDL sai do dicionário (`mapa/colunas.tsv`: todas as
+Rodada de cobertura total: 22 das 23 tabelas carregam pelo mapa (PRASSINAT_DOC_PRCHKGERAL e HTPARAMORIGEMCABIMP na
+trilha de auditoria; rodada 5, ADR 0006: PRLANCREGISTROTEMPO também, na trilha do envio). Rodada 3: item prescritível pela linha de parâmetros do insumo
+(faixa padronizada com dose > 0 grava), evento da situação atual do horário, evento derivado da situação, pressão em
+mmHg na observação e histórico da configuração do cabeçalho de impressão na trilha. O DDL sai do dicionário (`mapa/colunas.tsv`: todas as
 colunas, mesmos nomes e tipos; só a chave é NOT NULL). Pais de fora da fatia lidos pelas referências encadeadas
 (inscrição -> profissional, histórico do atendimento -> atendimento -> paciente, item -> prescrição, detalhe do item ->
 item, modo da origem -> modo ventilatório pelo nome, unidade pela sigla de integração, alta vigente pelo cabeçalho, campo autopreenchido pelo nome) entram na
@@ -21,7 +23,8 @@ FATIA = ["PRITENSGLICEMIA", "PRPRESCSOL", "PRITENSESQ", "PRPRESCVI", "PRPRESCVNI
          "PRLANCEXAMEESTRUTURADO", "PRLANCREGISTROTEMPO", "HTATENDALTA", "HTCABECFORMULCOMP", "HTCHKGERAL",
          "HTFORMULCOMP", "HTPARAMORIGEMCABIMP"]
 PAIS_ORIGEM = ["TBCBOPRO", "HTPACIENTE", "ATCABECATEND", "HTATENDIMENTO", "PRPRESC", "PRLANGERAL", "PRPRESCPROCED",
-               "PRPRESCMED", "PRASSINATURA_DOC", "TBUNIDADEMEDIDA", "PRMODOVENT", "PRFA_CAD_MODO_RESPIR", "TBTABELA_CAMPO"]
+               "PRPRESCMED", "PRASSINATURA_DOC", "TBUNIDADEMEDIDA", "PRMODOVENT", "PRFA_CAD_MODO_RESPIR", "TBTABELA_CAMPO",
+               "PRPARAMORIGEMCABIMP"]
 
 
 def _ler(arq):
@@ -52,8 +55,9 @@ DDL = "".join('CREATE TABLE %s (%s, PRIMARY KEY (%s));\n' % (
 PAIS_EXTERNOS = {
     "ATCABECATEND": ["1", "2", "3"], "GETABVIA": ["SC"], "HTATENDIMENTO": ["1", "2", "3", "4", "5"], "HTPACIENTE": ["1", "2"],
     "PREVOLUCAO": ["1"], "PRFA_CAD_MODO_RESPIR": ["1"], "PRITEMNAOPAD": ["1"], "PRLANGERAL": ["1", "2", "3"],
-    "PRMODOVENT": ["1", "2"], "PRPRESC": ["1"], "PRPRESCMED": ["1", "2"], "PRPRESCPROCED": ["1", "2"],
-    "PRPROTGERAL": ["1"], "PRSENECESSARIO": ["1", "2"], "PRSITUACAOCHECAGEM": ["A", "C"], "PRTPRECMED": ["1"],
+    "PRMODOVENT": ["1", "2"], "PRASSINATURA_CAB": ["1"], "PRPRESC": ["1"], "PRPRESCMED": ["1", "2"], "PRPRESCPROCED": ["1", "2"],
+    "PRPROTGERAL": ["1"], "PRSENECESSARIO": ["1", "2"], "PRSITUACAOCHECAGEM": ["A", "N", "O", "P", "S"], "PRTPRECMED": ["1"],
+    "PRITEM_GEITENS": ["5/item_prescritivel"], "PRPARAMORIGEMCABIMP": ["1"],
     "PRUNIDINFUSAO": ["1"], "PRVIAAEREA": ["1"], "RICADPAC": ["1", "2"], "TBCBOPRO": ["1", "2", "3"],
     "TBMOTALT": ["1"], "TBPROFIS": ["1", "2"], "TBTABELA_CAMPO": ["1", "2", "3"], "TBUNIDADEMEDIDA": ["1", "2", "3"],
     "TBUSERS": ["ADMIN"]}
@@ -110,9 +114,11 @@ def linhas(r, ins):
         q("HTPACIENTE", ID=i, ID_RICADPAC=i)
     # estado vigente da alta no atendimento: 1 alta efetivada; 2 sem alta (só prevista); 3 alta sem motivo
     q("ATCABECATEND", ID=1, ID_RICADPAC=1, DATA_HORA_ALTA_MEDICA=T(5, 11), ID_TBMOTALT=1, DATA_HORA_SAIDA_LEITO=T(5, 13),
-      ID_TBCBOPRO_ALTA_MEDICA=1)
-    q("ATCABECATEND", ID=2, ID_RICADPAC=2)
-    q("ATCABECATEND", ID=3, ID_RICADPAC=1, DATA_HORA_ALTA_MEDICA=T(6, 12), ID_TBCBOPRO_ALTA_MEDICA=2)
+      ID_TBCBOPRO_ALTA_MEDICA=1, ID_TBCBOPRO_ATENDIMENTO=2)
+    q("ATCABECATEND", ID=2, ID_RICADPAC=2, ID_TBCBOPRO_ATENDIMENTO=2)
+    q("ATCABECATEND", ID=3, ID_RICADPAC=1, DATA_HORA_ALTA_MEDICA=T(6, 12), ID_TBCBOPRO_ALTA_MEDICA=2,
+      ID_TBCBOPRO_ATENDIMENTO=1)
+    q("PRPARAMORIGEMCABIMP", ID=1, ID_PRTPASSINATURA=1, ORIGEM_DADOS="E", GERENCIAVEL="S")
     for i, at, ass in ((1, 1, 1), (2, 2, 2), (3, 1, 3), (4, 2, 1), (5, 3, 1)):
         q("HTATENDIMENTO", ID=i, ID_ATCABECATEND=at, ID_TBCBOPRO_ASSISTENTE=ass, DATA_HORA_HISTORICO=T(1, 7))
     q("PRPRESC", ID=1, ID_HTATENDIMENTO=1, DATA_HORA_PRESCRICAO=T(2, 7, 30))
@@ -122,7 +128,9 @@ def linhas(r, ins):
     q("PRPRESCPROCED", ID=2, ID_PRLANGERAL=2)
     q("PRPRESCMED", ID=1, ID_PRLANGERAL=3)
     q("PRPRESCMED", ID=2, ID_PRLANGERAL=8)
-    q("PRASSINATURA_DOC", ID=1, DATA_HORA_EVENTO=T(2, 9))
+    q("PRASSINATURA_DOC", ID=1, ID_PRASSINATURA_CAB=1, DATA_HORA_EVENTO=T(2, 9))
+    q("PRASSINATURA_DOC", ID=2, ID_PRASSINATURA_CAB=9, DATA_HORA_EVENTO=T(2, 12, 30))
+    q("PRASSINATURA_DOC", ID=3, ID_PRASSINATURA_CAB=1)
     for i, nome, simb in ((1, "Unidade internacional", "UI"), (2, "Mililitro", "mL"), (3, "Miligrama", "mg")):
         q("TBUNIDADEMEDIDA", ID=i, NOME=nome, SIMBOLO=simb.lower(), SIGLA_API=simb, SITUACAO="A")
     q("PRMODOVENT", ID=1, NOME="Pressão controlada")
@@ -142,7 +150,13 @@ def linhas(r, ins):
       ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
     q(t, ID=4, ID_PRPRESCPROCED=2, INTERVALO_INICIAL_DOSE=80, INTERVALO_FINAL_DOSE=120, QTDE_DOSE=D("0.000"),
       ID_TBUNICON_UNI_PRESC="XX", ID_GETABVIA="SC")
-    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
+    # 5 faixa PADRONIZADA com dose > 0 (insulina do insumo 5, item prescritível da L6-11): grava; 6 insumo sem item
+    # prescritível (pai_inexistente) com dose: recusa pelo CHECK
+    q(t, ID=5, ID_PRPRESCPROCED=1, INTERVALO_INICIAL_DOSE=251, INTERVALO_FINAL_DOSE=400, QTDE_DOSE=D("4.000"), ID_GEITENS=5,
+      ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
+    q(t, ID=6, ID_PRPRESCPROCED=2, INTERVALO_INICIAL_DOSE=300, INTERVALO_FINAL_DOSE=400, QTDE_DOSE=D("3.000"), ID_GEITENS=6,
+      ID_TBUNICON_UNI_PRESC="UI", ID_GETABVIA="SC")
+    e[t] = {"gravados": 3, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2, "restricao_destino_1048": 1}}
 
     # solução: 3 volume total sem unidade (CHECK); 4 item nunca visto (pai_inexistente, 1048)
     t = "PRPRESCSOL"
@@ -153,7 +167,7 @@ def linhas(r, ins):
     q(t, ID=4, ID_PRLANGERAL=9)
     e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
 
-    # etapas: 2 item padronizado sem item prescritível (CHECK); 3 solução recusada; 4 quantidade zero
+    # etapas: 2 item padronizado (item prescritível do insumo 5): grava; 3 solução recusada; 4 quantidade zero
     t = "PRITENSESQ"
     q(t, ID=1, ID_PRPRESCSOL=1, ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="Sem padrão", ITEM_PRINCIPAL=1, ETAPA=1,
       QTDE=D("10.000"), QTDE_DOSE=D("10.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="N")
@@ -163,7 +177,7 @@ def linhas(r, ins):
       QTDE_DOSE=D("1.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="N")
     q(t, ID=4, ID_PRPRESCSOL=2, ID_PRITEMNAOPAD=1, JUSTIFICATIVA_NAO_PADRONIZ="Sem padrão", ITEM_PRINCIPAL=1, ETAPA=1,
       QTDE=D("0.000"), QTDE_DOSE=D("5.000"), ID_TBUNICON_UNI_PRESC="mL", DOSE_EXTRA_ANTIMICROBIANO="S")
-    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1, "valor_fora_do_dominio": 1}}
+    e[t] = {"gravados": 3, "pendencias": {"pai_pendente": 1, "valor_fora_do_dominio": 1}}
 
     # ventilação: invasiva 2 com modo sem par (CHECK do modo) e FiO2 fora da faixa; não invasiva 2 repete o item (1062)
     t = "PRPRESCVI"
@@ -181,26 +195,43 @@ def linhas(r, ins):
     t = "PRCHKGERAL"
     q(t, ID=1, ID_PRLANGERAL=1, DATA_HORA_CHECAR=T(2, 8), SITUACAO_CHECAGEM="A", DATA_HORA_SITUACAO_CHECAGEM=T(2, 8, 10),
       QTDE_ADMINISTRADA=D("1.000"), ID_TBCBOPRO_APZ=1, DATA_HORA_APZ=T(2, 7, 40), ETIQUETA_CHECAGEM_IMPRESSA="N",
-      SINAIS_ALFA="98", ID_TBPROFIS_ACOMP_RESP_CHK=2, DATA_HORA_ACOMP_RESP_CHK=T(2, 8, 20))
+      SINAIS_ALFA="98", ID_TBPROFIS_ACOMP_RESP_CHK=2, DATA_HORA_ACOMP_RESP_CHK=T(2, 8, 20), ID_TBCBOPRO_SITUACAO_CHECAGEM=1,
+      DATA_HORA_GRAVACAO=T(2, 8, 11))
     q(t, ID=2, ID_PRLANGERAL=1, DATA_HORA_CHECAR=T(2, 8), SITUACAO_CHECAGEM="A", ETIQUETA_CHECAGEM_IMPRESSA="N")
     q(t, ID=3, ID_PRLANGERAL=2, DATA_HORA_CHECAR=T(2, 10), SITUACAO_CHECAGEM="Z", ETIQUETA_CHECAGEM_IMPRESSA="N")
-    q(t, ID=4, ID_PRLANGERAL=3, DATA_HORA_CHECAR=T(2, 12), SITUACAO_CHECAGEM="C", ETIQUETA_CHECAGEM_IMPRESSA="N",
+    q(t, ID=4, ID_PRLANGERAL=3, DATA_HORA_CHECAR=T(2, 12), SITUACAO_CHECAGEM="P", ETIQUETA_CHECAGEM_IMPRESSA="N",
       JUSTIFICATIVA_LANC_RETROATIVO="Registro tardio", ID_TBCBOPRO_APZ=3, DATA_HORA_APZ=T(2, 11))
-    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 2, "restricao_destino_1048": 1}}
+    # evento da situação atual: 1 checagem (administrado); 5 suspenso com suspensão retroativa (motivo e retroativo no
+    # horário); 6 não administrado sem justificativa (motivo fixo verdadeiro); 4 prescrito: sem evento
+    q(t, ID=5, ID_PRLANGERAL=2, DATA_HORA_CHECAR=T(2, 14), SITUACAO_CHECAGEM="S", DATA_HORA_SITUACAO_CHECAGEM=T(2, 15),
+      ID_TBCBOPRO_SITUACAO_CHECAGEM=2, JUSTIFICATIVA_SUSP_RETROATIVA="Suspensão lançada depois", ETIQUETA_CHECAGEM_IMPRESSA="N")
+    q(t, ID=6, ID_PRLANGERAL=3, DATA_HORA_CHECAR=T(2, 16), SITUACAO_CHECAGEM="N", DATA_HORA_SITUACAO_CHECAGEM=T(2, 16, 30),
+      ID_TBCBOPRO_SITUACAO_CHECAGEM=1, ETIQUETA_CHECAGEM_IMPRESSA="N")
+    e[t] = {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 2, "restricao_destino_1048": 1,
+                                          "valor_fora_do_dominio": 1}}
 
-    # ligação documento assinado x horário: na imagem, sem carga até a troca do destino no mapa
-    q("PRASSINAT_DOC_PRCHKGERAL", ID=1, ID_PRASSINATURA_DOC=1, ID_PRCHKGERAL=1)
+    # ligação documento assinado x horário, na trilha do horário: 1 grava (documento e horário); 2 documento sem cabeçalho
+    # (correlação NULL, pai_inexistente); 3 evento sem momento (ocorrido_em NOT NULL, 1048); 4 horário nunca visto
+    t = "PRASSINAT_DOC_PRCHKGERAL"
+    q(t, ID=1, ID_PRASSINATURA_DOC=1, ID_PRCHKGERAL=1)
+    q(t, ID=2, ID_PRASSINATURA_DOC=2, ID_PRCHKGERAL=4)
+    q(t, ID=3, ID_PRASSINATURA_DOC=3, ID_PRCHKGERAL=1)
+    q(t, ID=4, ID_PRASSINATURA_DOC=1, ID_PRCHKGERAL=7)
+    e[t] = {"gravados": 3, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 1}}
 
-    # eventos do horário: 2 reaprazamento com motivo; 3 sem motivo (CHECK); 4 horário recusado
+    # eventos do horário (evento pela situação; novo horário = reaprazamento): 2 reaprazamento com motivo; 3 sem motivo
+    # (motivo fixo verdadeiro); 4 horário recusado; 5 não administrado sem motivo (motivo fixo); 6 prescrito = geração
     t = "PREXTRATOITEM_PRCHKGERAL"
     q(t, ID=1, ID_PRCHKGERAL=1, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_HISTORICO=T(2, 8, 10),
       DATA_HORA_HISTORICO_UTC="2026-01-02T11:10:00Z")
-    q(t, ID=2, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="C", ID_TBCBOPRO=2, DATA_HORA_APRAZADO=T(2, 13),
+    q(t, ID=2, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="S", ID_TBCBOPRO=2, DATA_HORA_APRAZADO=T(2, 13),
       JUSTIFICATIVA_REAPRAZAMENTO="Paciente em exame", DATA_HORA_HISTORICO=T(2, 11, 50))
     q(t, ID=3, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_APRAZADO=T(2, 14),
       DATA_HORA_HISTORICO=T(2, 12, 50))
     q(t, ID=4, ID_PRCHKGERAL=3, ID_PRSITUACAOCHECAGEM="A", ID_TBCBOPRO=1, DATA_HORA_HISTORICO=T(2, 10, 5))
-    e[t] = {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}}
+    q(t, ID=5, ID_PRCHKGERAL=1, ID_PRSITUACAOCHECAGEM="N", ID_TBCBOPRO=1, DATA_HORA_HISTORICO=T(2, 8, 30))
+    q(t, ID=6, ID_PRCHKGERAL=4, ID_PRSITUACAOCHECAGEM="P", ID_TBCBOPRO=2, DATA_HORA_HISTORICO=T(2, 7))
+    e[t] = {"gravados": 5, "pendencias": {"pai_pendente": 1}}
 
     # campos autopreenchidos: marcam o item já gravado (uma marca por item: a conciliação do complemento relê a linha
     # inteira, e duas marcas no mesmo item divergem; pedido no L6-13.json); 2 campo sem par (2 destinos); 4 item
@@ -281,13 +312,25 @@ def linhas(r, ins):
     q(t, ID=3, ID_PRLANCAMENTOEXAME=5, ELEMENTO="Ureia", RESULTADO="30")
     e[t] = {"gravados": 1, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}}
 
-    # descartes (sem carga): ficam na imagem para provar que não entram no plano
+    # rodada 5 (ADR 0006): horário de situação do envio à plataforma na trilha do envio (retrato completo); o envio
+    # (L8-17) não está na imagem: pai_inexistente, gravada com a chave original no retrato. 1 com horário; 2 sem
+    # horário (a gravação, concorrente); 3 sem nenhum (NOT NULL)
     q("PRLANCREGISTROTEMPO", ID=1, ID_TBCBOPRO=1, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=1, DATA_HORA=T(2, 8))
-    q("HTPARAMORIGEMCABIMP", ID=1, DATA=T(1, 8), ID_PRTPASSINATURA=1, ORIGEM_DADOS="A", ID_TBUSERS="ADMIN")
+    q("PRLANCREGISTROTEMPO", ID=2, ID_TBCBOPRO=2, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=1, DATA_HORA_GRAVACAO=T(2, 9),
+      JUSTIFICATIVA_SUSPENSAO="Reenvio exemplo")
+    q("PRLANCREGISTROTEMPO", ID=3, ID_TBCBOPRO=1, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=2)
+    e["PRLANCREGISTROTEMPO"] = {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 1}}
+
+    # histórico da configuração do cabeçalho de impressão, na trilha da entidade: 2 tipo sem configuração vigente
+    t = "HTPARAMORIGEMCABIMP"
+    q(t, ID=1, DATA=T(1, 8), ID_PRTPASSINATURA=1, ORIGEM_DADOS="A", ID_TBUSERS="ADMIN")
+    q(t, ID=2, DATA=T(1, 9), ID_PRTPASSINATURA=9, ORIGEM_DADOS="E")
+    e[t] = {"gravados": 2, "pendencias": {"pai_inexistente": 1}}
 
     # alta: histórico por versão do atendimento; o estado vigente (data, motivo, saída do leito, quem deu a alta) vem
     # do cabeçalho. 1 grava (efetivada); 3 é outra versão do atendimento 1 (adotada, sem alta duplicada); 2 e 4 (a 4
-    # é a exclusão) são do atendimento sem alta vigente: sem profissional da alta (1048); 5 alta sem motivo (CHECK)
+    # é a exclusão) são do atendimento sem profissional da alta no cabeçalho: recusa (1048; o profissional do atendimento
+    # como concorrente espera o pedido ao verificador); 5 alta sem motivo (CHECK)
     t = "HTATENDALTA"
     q(t, ID_HTATENDIMENTO=1, DATA_HORA_PREVISTA=T(5, 10), ID_TBMOTALT=1, DATA_HORA_ALTA_MEDICA=T(5, 11),
       DATA_HORA_SAIDA_LEITO=T(5, 13), OBSERVACAO=b"Alta  com\r\norientacoes", DIAGNOSTICO=b"Quadro resolvido",
@@ -297,7 +340,9 @@ def linhas(r, ins):
     q(t, ID_HTATENDIMENTO=2, DATA_HORA_PREVISTA=T(6, 10), TIPO_ALTERACAO="I")
     q(t, ID_HTATENDIMENTO=4, DATA_HORA_PREVISTA=T(6, 10), DATA_HORA_ALTA_MEDICA=T(6, 11), TIPO_ALTERACAO="E")
     q(t, ID_HTATENDIMENTO=5, DATA_HORA_PREVISTA=T(6, 11), TIPO_ALTERACAO="I")
-    e[t] = {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1}}
+    # rodada 5 (ADR 0007, 20): a alta adotada MESCLA; o conflito fica com o destino e guarda a origem no histórico
+    e[t] = {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1,
+                                          "mescla_conflito_origem_guardada": 1}}
 
     # versão do formulário: 2 usuário sem par; 3 repete a versão (1062); componente da versão recusada
     t = "HTCABECFORMULCOMP"
@@ -306,17 +351,19 @@ def linhas(r, ins):
     q(t, ID=3, ID_PREVOLUCAO=1, DATA_HORA_GRAVACAO=T(3, 9), ID_TBUSERS="ADMIN", VERSAO=2)
     e[t] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1062": 1}}
 
-    # histórico de checagem: evento presumido em toda linha; 2 quantidade negativa; 3 horário nunca visto (1048)
+    # histórico de checagem (evento pela situação): 1 checagem; 2 suspensão com quantidade negativa; 3 horário nunca
+    # visto (1048); 4 prescrito = geração
     t = "HTCHKGERAL"
     q(t, ID=1, ID_PRCHKGERAL=1, DATA_HORA_HISTORICO=T(2, 8, 10), DATA_HORA_CHECAR=T(2, 8),
       ID_TBCBOPRO_SITUACAO_CHECAGEM=1, QTDE_ADMINISTRADA=D("1.000"), ID_PRSITUACAOCHECAGEM="A", DATA_HORA_GRAVACAO=T(2, 8, 10))
     q(t, ID=2, ID_PRCHKGERAL=4, DATA_HORA_HISTORICO=T(2, 12, 5), DATA_HORA_CHECAR=T(2, 12),
       ID_TBCBOPRO_SITUACAO_CHECAGEM=2, QTDE_ADMINISTRADA=D("-1.000"), JUSTIFICATIVA_LANC_RETROATIVO="Atraso",
-      ID_PRSITUACAOCHECAGEM="C", DATA_HORA_GRAVACAO=T(2, 12, 5))
+      ID_PRSITUACAOCHECAGEM="S", DATA_HORA_GRAVACAO=T(2, 12, 5))
     q(t, ID=3, ID_PRCHKGERAL=7, DATA_HORA_HISTORICO=T(2, 9), DATA_HORA_CHECAR=T(2, 9), ID_TBCBOPRO_SITUACAO_CHECAGEM=1,
       ID_PRSITUACAOCHECAGEM="A", DATA_HORA_GRAVACAO=T(2, 9))
-    e[t] = {"gravados": 2, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 1, "pai_inexistente": 1,
-                                          "restricao_destino_1048": 1}}
+    q(t, ID=4, ID_PRCHKGERAL=1, DATA_HORA_HISTORICO=T(2, 7), DATA_HORA_CHECAR=T(2, 8), ID_TBCBOPRO_SITUACAO_CHECAGEM=2,
+      ID_PRSITUACAOCHECAGEM="P", DATA_HORA_GRAVACAO=T(2, 7))
+    e[t] = {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1, "restricao_destino_1048": 1}}
 
     t = "HTFORMULCOMP"
     q(t, ID=1, ID_HTCABECFORMULCOMP=1, ID_PRPADEVOL=1, NOME_CLASSE="CampoTexto", NOME_COMPONENTE_PAI="Painel",

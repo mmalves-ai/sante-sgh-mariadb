@@ -85,10 +85,15 @@ def vincular_origem(conn, codigo, relativo, admin_id=None, sha256=None):
     return {"cliente_origem_id": oid, "arquivo": v["relativo"], "tamanho_bytes": v["tamanho"], "sha256": sha}
 
 
-def enfileirar(conn, codigo, tipo, admin_id=None):
-    """Põe uma execução na fila. ExecucaoAtiva (409) se já houver uma ativa para o cliente (índice único)."""
+def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False):
+    """Põe uma execução na fila. ExecucaoAtiva (409) se já houver uma ativa para o cliente (índice único).
+    `confirmar_exclusao_em_massa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu
+    fica no evento."""
     if tipo not in EVENTO:
         raise PlataformaErro("tipo inválido: importar ou sincronizar")
+    confirmar = bool(confirmar_exclusao_em_massa)
+    if confirmar and tipo != "sincronizar":
+        raise PlataformaErro("a confirmação da exclusão em massa só vale para o Sincronizar")
     try:
         with _Tx(conn) as cur:
             cli = _cliente(cur, codigo)
@@ -102,11 +107,14 @@ def enfileirar(conn, codigo, tipo, admin_id=None):
                 if not cur.fetchone()[0]:
                     raise PlataformaErro("sincronizar exige uma importação concluída")
             cur.execute("INSERT INTO conector_execucao (cliente_id, cliente_origem_id, tipo, estado, etapa,"
-                        " solicitado_em, solicitado_por, criado_em, criado_por) VALUES (%s, %s, %s, 'fila',"
-                        " 'aguardando o motor', " + AGORA + ", %s, " + AGORA + ", %s)",
-                        (cli["id"], r[0], tipo, admin_id, admin_id))
+                        " confirmar_exclusao_em_massa, solicitado_em, solicitado_por, criado_em, criado_por) VALUES"
+                        " (%s, %s, %s, 'fila', 'aguardando o motor', %s, " + AGORA + ", %s, " + AGORA + ", %s)",
+                        (cli["id"], r[0], tipo, confirmar, admin_id, admin_id))
             eid = cur.lastrowid
-            _evento(cur, cli["id"], EVENTO[tipo], {"execucao_id": eid, "estado": "fila", "tipo": tipo}, admin_id)
+            det = {"execucao_id": eid, "estado": "fila", "tipo": tipo}
+            if confirmar:
+                det.update(confirmar_exclusao_em_massa=True, confirmado_por=admin_id)
+            _evento(cur, cli["id"], EVENTO[tipo], det, admin_id)
         return eid
     except pymysql.err.IntegrityError as e:
         if e.args and e.args[0] == 1062:
@@ -117,7 +125,8 @@ def enfileirar(conn, codigo, tipo, admin_id=None):
 def _ler_execucao(cur, eid, travar=False):
     cur.execute("SELECT e.id, e.cliente_id, e.tipo, e.estado, e.etapa, e.percentual, e.contadores, e.motivo_falha,"
                 " e.trabalhador, e.imagem_sha256, e.versao_schema, e.solicitado_em, e.iniciado_em, e.concluido_em,"
-                " c.codigo, c.banco_nome, c.versao_migracao, o.id, o.caminho_relativo, o.tamanho_bytes, o.sha256"
+                " c.codigo, c.banco_nome, c.versao_migracao, o.id, o.caminho_relativo, o.tamanho_bytes, o.sha256,"
+                " e.confirmar_exclusao_em_massa"
                 " FROM conector_execucao e JOIN cliente c ON c.id=e.cliente_id"
                 " JOIN cliente_origem o ON o.id=e.cliente_origem_id WHERE e.id=%s"
                 + (" FOR UPDATE" if travar else ""), (eid,))
@@ -126,7 +135,7 @@ def _ler_execucao(cur, eid, travar=False):
         raise PlataformaErro("execução inexistente")
     k = ("id cliente_id tipo estado etapa percentual contadores motivo_falha trabalhador imagem_sha256 versao_schema"
          " solicitado_em iniciado_em concluido_em codigo banco_nome versao_migracao origem_id origem_caminho"
-         " origem_tamanho origem_sha256").split()
+         " origem_tamanho origem_sha256 confirmar_exclusao_em_massa").split()
     d = dict(zip(k, r))
     d["percentual"] = float(d["percentual"])
     d["contadores"] = json.loads(d["contadores"]) if d["contadores"] else {}

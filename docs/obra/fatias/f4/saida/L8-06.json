@@ -3,32 +3,38 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py + verificar_mapa.py (id por código no destino; o mesmo M2 da L6-15) + criação do cliente (semente)",
    "mudanca": "(1) id por código no catálogo do produto: via 'cod:<tabela>.<coluna>' (valor da coluna, de-para de valores ou literal procura a linha pelo código; ausente: codigo_inexistente_destino; repetido: pai_ambiguo); (2) semente dos catálogos-base tipo_conta (externa, internacao, ambulatorial, urgencia) e tipo_auditoria ('migracao': auditoria trazida do sistema anterior) na criação do cliente. Aplicado: descomentar FCCTAEXT em colunas.d/L8-06.tsv com 'TIPO_CTA' -> conta_hospitalar.tipo_conta_id via 'cod:tipo_conta.codigo' (pares A/E/U/I em valores.d) e declarar RICONTAS (linha de causa do arquivo)",
-   "motivo": "conta_hospitalar.tipo_conta_id e auditoria_conta.tipo_auditoria_id são NOT NULL e nenhuma tabela da origem alimenta tipo_conta nem tipo_auditoria: sem isso FCCTAEXT (214 mil contas), RICONTAS e FCCTAAUD não carregam e, em cadeia, os filhos (FCFAIPAC, FCIRREGULARID, FCCTAEXT_FCTISSLOTEPROT, FCLANEXT...) ficam com pai_inexistente"
+   "motivo": "conta_hospitalar.tipo_conta_id e auditoria_conta.tipo_auditoria_id são NOT NULL e nenhuma tabela da origem alimenta tipo_conta nem tipo_auditoria: sem isso FCCTAEXT (214 mil contas), RICONTAS e FCCTAAUD não carregam e, em cadeia, os filhos (FCFAIPAC, FCIRREGULARID, FCCTAEXT_FCTISSLOTEPROT, FCLANEXT...) ficam com pai_inexistente",
+   "atendido": "rodada 2 (cod:) e rodada 3: RICONTAS cria/adota tipo_conta; FCCTAEXT e FCCTAAUD são da L8-05"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (chave alternativa composta; o mesmo M4 da L6-15)",
    "mudanca": "'ref:T.(K1,K2,K3)=(C1,C2,C3)': FCCTAAUD -> auditoria_conta.conta_hospitalar_id por FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,COD); FCLANAUD -> auditoria_conta_item.conta_hospitalar_item_id por FCLANEXT.(TIPO,DATA,HORA,PROCTO,LOCAL,ATO) mais a conta; auditoria_conta_id por 'ref:FCCTAAUD(ANOPRO,MESPRO,TIPO_CTA,CONTA)' (já disponível)",
-   "motivo": "a auditoria aponta a conta e o item pelos campos de negócio, não pelo ID; as duas colunas são NOT NULL"
+   "motivo": "a auditoria aponta a conta e o item pelos campos de negócio, não pelo ID; as duas colunas são NOT NULL",
+   "atendido": "rodada 2 (ref:T.(K)=(C)); FCLANAUD segue por pedido novo (referência com parte de outra referência)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (referência ao destino secundário; o mesmo M1 da L6-15) + colunas.d das fatias de preço (L8: TBTABTHM, TBTABDTH, TBPROCTO, TBMATMED)",
    "mudanca": "(a) 'ref:T/<destino>' para FCLANEXT -> conta_hospitalar_item.item_faturavel_id pelo item faturável do procedimento, diária/taxa ou mat/med (o tipo do lançamento escolhe a coluna: ID_TBPROCTO, ID_TBTABDTH, ID_TBMATMED; com três colunas declaradas ao mesmo destino, o motor usa a primeira com valor: 'primeiro_preenchido'); (b) as fatias de TBTABTHM e TBTABDTH declaram o destino secundário item_faturavel (hoje ninguém o alimenta); mat/med comercial fica como de-para do cliente (regra 7); (c) glosa_item exige glosa_id (cabeçalho da glosa da conta): destino condicional 'opcional' já existe, falta o cabeçalho; até lá FCLANEXT carrega só o item, sem a glosa",
-   "motivo": "conta_hospitalar_item.item_faturavel_id é NOT NULL e item_faturavel não tem alimentadora principal; 4,3 milhões de itens de conta (e FCINTEGRPA, FCLANAUD em cadeia)"
+   "motivo": "conta_hospitalar_item.item_faturavel_id é NOT NULL e item_faturavel não tem alimentadora principal; 4,3 milhões de itens de conta (e FCINTEGRPA, FCLANAUD em cadeia)",
+   "atendido": "rodada 2/3 (ref:T/<destino>, concorrentes); FCLANEXT declarado"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L5-*.tsv (fatia de TBCONVEN) + M1 acima",
    "mudanca": "TBCONVEN com destino secundário contrato_fonte_pagadora (um acordo migrado por fonte pagadora: número = código da fonte, descrição = nome, @vigencia_carga); TBHISTTABDTH/MM/THME/THMI -> contrato_tabela_vigencia com 'ref:TBCONVEN/contrato_fonte_pagadora', tabela_preco_id pela ref ao contrato de preço (TBCTRDTH, TBCTRMEM, TBCTRTHM), tipo_item literal (diaria_taxa, matmed, honorario_ambulatorial, honorario_internacao), PERIODO_INICIAL/FINAL na vigência (declaração pronta na linha de causa)",
-   "motivo": "contrato_tabela_vigencia.contrato_fonte_pagadora_id é NOT NULL e nenhuma tabela da origem alimenta contrato_fonte_pagadora"
+   "motivo": "contrato_tabela_vigencia.contrato_fonte_pagadora_id é NOT NULL e nenhuma tabela da origem alimenta contrato_fonte_pagadora",
+   "atendido": "feito na fatia: acordo como secundário adotado das TBHISTTAB*"
   },
   {
    "arquivo": "conector/sante_conector/depara.py + mapa (versão do padrão TISS)",
    "mudanca": "FCTISSLOTEPROT -> lote_tiss: versao_padrao_tiss_id pelo nome do esquema da transação ('ref:TBTISSSCHEMA>NOME' terminado em coluna + de-para oficial 'versao_tiss' pelo código extraído do nome) ou pela versão configurada da fonte pagadora; tipo_guia por de-para de valores do id do tipo de guia (TBTISSTPGUIA precisa entrar no dicionário de colunas para a cadeia ler o nome); protocolo_recebimento opcional (só com NUM_PROTOCOLO) e recurso_glosa opcional (só com NUM_DEMONSTRATIVO_RECURSO_GLOSA)",
-   "motivo": "lote_tiss.versao_padrao_tiss_id e tipo_guia são NOT NULL sem coluna na linha; FCCTAEXT_FCTISSLOTEPROT (168 mil ligações) já está declarada e espera o lote"
+   "motivo": "lote_tiss.versao_padrao_tiss_id e tipo_guia são NOT NULL sem coluna na linha; FCCTAEXT_FCTISSLOTEPROT (168 mil ligações) já está declarada e espera o lote",
+   "atendido": "rodada 3 (versao_tiss); FCTISSLOTEPROT declarado, com o pedido novo da regra antes do de-para"
   },
   {
    "arquivo": "decisão de mapa (função da equipe do lançamento)",
    "mudanca": "FCINTEGRPA -> producao_repasse: funcao_equipe_cobranca_id NOT NULL pela 'ref:FCLANEXT>ATO><tabela do ato>' (confirmar qual cadastro da origem o ATO do lançamento usa: TBGRAUPARTPROC, TBTPPROFPROC ou TBCOSPPROF); conta_hospitalar_item_id ID_FCLANEXT, conta_hospitalar_id 'ref:FCLANEXT>ID_FCCTAEXT>FCCTAEXT', quantidade 'ref:FCLANEXT>QTDE', valor_base VALOR, integrado_em DATA_HORA_INTEGRACAO, profissional pela 'ref:RPLANEVE>COD_PRESTADOR>...'",
-   "motivo": "sem a função e sem o item (pedido 3) a produção do repasse não carrega"
+   "motivo": "sem a função e sem o item (pedido 3) a produção do repasse não carrega",
+   "atendido": "decidido na fatia: ATO do lançamento -> TBGRAUPARTPROC"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (literal condicional; o mesmo pedido da L6-15)",
@@ -38,12 +44,14 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py (regra hora_hhmm) — pedido 13",
    "mudanca": "hora_hhmm não decodifica o texto em bytes que a origem devolve (VARCHAR 'HHMM' com charset NONE): aplicar('hora_hhmm', b'0700') dá hora_invalida e aplicar('hora_hhmm', '0700') dá 07:00. Decodificar CP1252 antes do parse, como as regras de texto",
-   "motivo": "TBREPGER.HORA_INI/HORA_FIN (faixa de horário da regra de repasse): hoje toda hora preenchida vira NULL com hora_invalida e a faixa se perde; a sintética da L8-06 segue sentinela (HHMM_TEXTO) e muda o esperado sozinha quando corrigir"
+   "motivo": "TBREPGER.HORA_INI/HORA_FIN (faixa de horário da regra de repasse): hoje toda hora preenchida vira NULL com hora_invalida e a faixa se perde; a sintética da L8-06 segue sentinela (HHMM_TEXTO) e muda o esperado sozinha quando corrigir",
+   "atendido": "rodada 2 (hora_hhmm aceita o texto cru)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (data + hora HHMM; o mesmo M3 da L6-15)",
    "mudanca": "'#data_hora:<DATA>,<HORA>' para FCFAIPAC (DATAI+HORAI, DATAF+HORAF) e, na conta, BAIXA+HOR_BAI e ALTA+HOR_ALT",
-   "motivo": "o período e a conta perdem a hora (ficam à meia-noite), sem recusa"
+   "motivo": "o período e a conta perdem a hora (ficam à meia-noite), sem recusa",
+   "atendido": "rodada 2/3 (#data_hora): FCFAIPAC com data + hora"
   },
   {
    "arquivo": "conector (cofre de segredos) + conector/sante_conector/sentinela.py + conector/sante_conector/sintetica.py",
@@ -58,7 +66,8 @@
   {
    "arquivo": "tools/obra/cobertura_conector.py (avaliar)",
    "mudanca": "para tabela planejada, BLOQUEADA com causa 'pai_nao_carregado:<PAI>' quando uma coluna NOT NULL do destino vem de ref (simples, composta, alternativa ou encadeada) a um pai BLOQUEADA ou DESCARTE (FCFAIPAC, FCIRREGULARID e FCCTAEXT_FCTISSLOTEPROT pelo FCCTAEXT/FCTISSLOTEPROT); idem, como aviso 'referencia_a_pai_nao_carregado', para coluna anulável cuja referência é o sentido da linha (HTPROCTO.entidade_id -> TBPROCTO); exigir que todo destino de tabelas_destino seja declarado, marcado 'opcional' ou recusado com motivo em F4-decisoes-destino.md; depois, regravar docs/obra/fatias/f4/cobertura.tsv com --saida (arquivo comum, defasado)",
-   "motivo": "a cobertura conta como CARREGA tabelas cujas linhas serão todas recusadas na carga real (o pai obrigatório está bloqueado) e não acusa destino previsto sem declaração (achado da revisão da L8-06)"
+   "motivo": "a cobertura conta como CARREGA tabelas cujas linhas serão todas recusadas na carga real (o pai obrigatório está bloqueado) e não acusa destino previsto sem declaração (achado da revisão da L8-06)",
+   "atendido": "cobertura com pai_nao_carregado entregue"
   },
   {
    "arquivo": "conector/verificar_mapa.py + declarado (descarte de coluna)",
@@ -68,7 +77,58 @@
   {
    "arquivo": "db/migracoes/12_FAT (modelo) — pedido de modelo",
    "mudanca": "conta_hospitalar_item: validade do lote (DATE, 'validade_lote'), CID do item ('cid_termo_terminologia_id', de-para cid10), número da guia complementar e ligação à APAC ('apac_id' ou número e data da APAC); ou, para o imunobiológico, ligar o item a vacina_aplicada (lote e validade). Depois disso REPROEXT/RIPROEXT (complemento do item, declaração pronta e comentada em colunas.d/L8-06.tsv) levam VALVACINA, CID10, GUIACOMPL, TECNICA (via tecnica_termo_terminologia_id) e APAC/DTAPAC",
-   "motivo": "REPROEXT e RIPROEXT deixaram de ser descarte (o 'duplicado' não tinha prova: ID_FCLANEXT é anulável e elas trazem rastreabilidade de vacina, CID e APAC que o lançamento não tem); sem essas colunas, o complemento só leva o lote"
+   "motivo": "REPROEXT e RIPROEXT deixaram de ser descarte (o 'duplicado' não tinha prova: ID_FCLANEXT é anulável e elas trazem rastreabilidade de vacina, CID e APAC que o lançamento não tem); sem essas colunas, o complemento só leva o lote",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: REPROEXT/RIPROEXT pela declaração comentada"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter)",
+   "mudanca": "aplicar a regra DECLARADA ao valor antes do de-para oficial quando ela é de formatação (ex.: inteiro_zeros_esquerda:n): hoje, com depara, o valor cru vai direto ao resolver e a regra é ignorada",
+   "motivo": "FCTISSLOTEPROT -> lote_tiss.versao_padrao_tiss_id pela ref:TBTISS>VERSAO_TISS (SMALLINT) com inteiro_zeros_esquerda:6 + versao_tiss: hoje todo lote fica catalogo_codigo_invalido e é recusado (e lote_tiss_conta com pai_pendente). A sintética da L8-06 muda o esperado (FCTISSLOTEPROT e FCCTAEXT_FCTISSLOTEPROT) quando entrar; confirmar o formato de VERSAO_TISS por agregado na carga real Ao entrar, a versão segue presumida (pedido 19)."
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py (referência)",
+   "mudanca": "chave alternativa composta com uma parte vinda de outra referência, ex.: 'ref:FCLANEXT.(ID_FCCTAEXT,TIPO,DATA,HORA,PROCTO,LOCAL,ATO)=(@ref:FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA),TIPO,DATA,HORA,PROCTO,LOCAL,ATO)'",
+   "motivo": "promover FCLANAUD (1,4 milhão de itens auditados, hoje trilha_auditoria com retrato completo) a auditoria_conta_item, que exige o item da conta (NOT NULL); a auditoria aponta o item pela chave antiga da conta"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d da L8-05 (TBTABDTH) e da L8-03 (TBMATMED)",
+   "mudanca": "declarar item_faturavel como destino secundário de TBTABDTH (diária/taxa) e dar item faturável ao mat/med de tabela própria (TBMATMED)",
+   "motivo": "FCLANEXT -> conta_hospitalar_item.item_faturavel_id (NOT NULL) já lê ref:TBTABDTH/item_faturavel; sem o secundário, o lançamento de diária e o de mat/med são recusados com 1048, visíveis"
+  },
+  {
+   "arquivo": "db/migracoes/12_FAT (modelo) + colunas.d/L8-06",
+   "mudanca": "glosa por item migrada: cabeçalho glosa por conta como destino secundário AGRUPADO e só para o item com glosa (hoje 'agrupar' não combina com 'opcional': sem isso toda conta ganharia um cabeçalho de glosa vazio) e glosa_item com motivo (MOTGLO, cod:motivo_glosa.codigo_tuss), valores (VLR_PG, VLR_RE, VLR_RP), quantidades, datas, motivo do retorno (MOTREA) e processo (N_PROCES); ligação da conta de internação à AIH (ID_FHCADAIH)",
+   "motivo": "hoje o resultado da glosa fica no item (situacao, motivo_glosa_id, valor_pago) e o recurso numa trilha do item com retrato (revisão r3); glosa_item é o lugar de produto do histórico de glosa e recurso. RICONTAS perde a ligação à AIH"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (chave alternativa composta)",
+   "mudanca": "parte vazia na chave alternativa composta: sem referência e sem pendência (como o valor nulo da referência simples)",
+   "motivo": "RICGUIAS sem CONTA fica com pai_inexistente, que sugere um pai que falta quando a guia só não tem conta"
+  },
+  {
+   "n": 19,
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica)",
+   "mudanca": "(a) opção 'presumido' na via de uma coluna lida: o valor vem da origem, mas a linha leva a pendência baixa valor_presumido (como o literal '=~'); (b) de-para 'versao_tiss_na_data:<COLUNA DATA>': versão de troca vigente no catálogo oficial na data da linha (vigencia_inicio <= data < vigencia_fim), preferindo a da fonte pagadora quando vigente na data",
+   "motivo": "FCTISSLOTEPROT -> lote_tiss.versao_padrao_tiss_id vem da versão configurada HOJE para a fonte (TBTISS): lote antigo recebe a versão atual sem pendência (achado da revisão r3). A origem não guarda a versão por lote (TBTISSSCHEMA só tem nome e tipo)"
+  },
+  {
+   "n": 20,
+   "arquivo": "db/migracoes/12_FAT/01_tabelas.sql (modelo, trilha F2.2) + colunas.d/L8-06",
+   "mudanca": "conta_hospitalar_item: sequencial_item_guia SMALLINT UNSIGNED NULL ('Sequencial do item na guia TISS enviada'), codigo_autorizacao VARCHAR(20) NULL, local_atendimento_id BIGINT UNSIGNED NULL (FK local_atendimento) e funcao_equipe_cobranca_id BIGINT UNSIGNED NULL (FK funcao_equipe_cobranca). Depois: FCLANEXT SEQUENCIAL_ITEM_FATURADO, COD_AUTORIZ (texto), LOCAL (ref:TBLOCAL) e ATO (ref:TBGRAUPARTPROC); trocar a declaração de FCLANEXTSEQITEM em colunas.d/L8-06.tsv (hoje trilha_auditoria do item com retrato) por 'ref:FCLANEXT;complementa' com SEQUENCIAL_ITEM -> conta_hospitalar_item.sequencial_item_guia",
+   "motivo": "o sequencialItem casa o item no demonstrativo de análise e no recurso de glosa (FCLANEXTSEQITEM, 2,9 milhões, hoje carregada como trilha do item com retrato); código de autorização, local e função da equipe do lançamento são usados no faturamento e no repasse e o item não tem coluna para eles. conta_hospitalar_item_autorizacao não serve: exige guia ou resposta de autorização, que a origem não liga ao lançamento",
+   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: FCLANEXT e FCLANEXTSEQITEM"
+  },
+  {
+   "n": 21,
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (regra genérica)",
+   "mudanca": "(a) opção 'nao_recusa' na via de uma referência a coluna ANULÁVEL: pai pendente ou recusado deixa NULL com pai_pendente, sem recusar o filho; com ela, FCLANEXT GUIA_SUPLE -> conta_hospitalar_item.guia_fonte_pagadora_id por ref:FCGUIAS.GUIA_S;nao_recusa; (b) especial '#diferenca:A,B' (A - B, nulo quando A é nulo; B nulo = 0) para conta_hospitalar_item.valor_glosado = VALOR_C - VLR_PG quando GLOSADO; (c) criado_em declarável (data de inclusão da origem, DATA_HORA_INCLUSAO)",
+   "motivo": "hoje o item (4,3 milhões, dado financeiro) é recusado inteiro quando a guia suplementar é recusada (conferido na sintética: pai_pendente recusa o item); valor glosado do item fica 0; a data de inclusão do lançamento se perde"
+  },
+  {
+   "n": 22,
+   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv -> conector/mapa/tabelas.tsv (gerado)",
+   "mudanca": "motivo do mapa de FCLANEXT: trocar 'glosa e recurso do item saem do item e vão para glosa_item' por 'glosa e pagamento ficam no item (situação, motivo, valor pago); o recurso vai à trilha do item até glosa_item ter o cabeçalho (pedido 17)'; destinos conta_hospitalar_item;trilha_auditoria (glosa_item quando o pedido 17 entrar)",
+   "motivo": "o motivo do mapa contradiz a carga declarada (achado da revisão r3); tabelas.tsv é gerado e não se edita na fatia"
   }
  ]
 }

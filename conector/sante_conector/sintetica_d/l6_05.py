@@ -1,7 +1,14 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
-As 18 tabelas carregadas pela carga dirigida pelo mapa (das outras 6 da fatia, 5 são descarte de produto em
-declarado/sem_carga.tsv e PRDADOSENVIOOPERADORA aguarda o motor, com a declaração pronta comentada). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
+As 24 tabelas carregadas pela carga dirigida pelo mapa (rodada 5, ADR 0006: respostas padrão, opções de e-mail e
+leiautes da prescrição, antes descarte, carregam como opções dos parâmetros de lista do produto, parametro_opcao).
+GECADANTIMI grava a ficha do antimicrobiano migrada (origem 'migracao', 06_PEP/18): atendimento pelo registro, paciente
+pela encadeada RECADATE > PRONT > RICADPAC (pais de L3 na imagem só com as colunas da referência), prescritor pela
+inscrição no conselho (TBCBOPRO > profissional), convênio e finalidade nativa pela inicial do tipo; anomalias: convênio e
+profissional nunca carregados (NULL com pai_inexistente, a ficha migrada aceita), tipo sem par (valor_fora_do_dominio),
+atendimento nunca carregado e atendimento sem paciente (pai_inexistente e recusa 1048). PRFICHAREL grava um leiaute de impressão por
+COD (agrupar no principal), com os componentes numa lista JSON e o tipo de migração criado antes e adotado. PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
+pela primeira linha, adotado pelas seguintes). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
 de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
 colisão de caixa (codigo_colisao_caixa nas duas linhas), S/N fora do domínio (padrão do destino), pai recusado
 (pai_pendente), pai nunca visto (pai_inexistente + 1048), chave única repetida (1062), fórmula migrada
@@ -13,7 +20,12 @@ código da via na prescrição digital.
 """
 import datetime
 
+from .l6_06 import preparo_parametros
+
 DDL = """
+CREATE TABLE PRCADRESP (COD INTEGER NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(255));
+CREATE TABLE PREMAILOPCAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME_OPCAO VARCHAR(45) NOT NULL, ID_PREMAILMODULO SMALLINT);
+CREATE TABLE PRLAYIMPPRESC (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 CREATE TABLE GETABVIA (COD VARCHAR(2) NOT NULL PRIMARY KEY, NOME VARCHAR(35), ATIVO CHAR(1), ID_TBTISSVIAADMIN SMALLINT,
   ID_DIGITAL VARCHAR(36));
 CREATE TABLE PRAGRAVOTPARQUETIPO (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL);
@@ -44,12 +56,41 @@ CREATE TABLE PRLOCPACDEFAULT (ID INTEGER NOT NULL PRIMARY KEY, USUARIO VARCHAR(3
   PERMITE_SOMENTE_SALVAR VARCHAR(1), PERMITE_AVALIAR VARCHAR(1), ALERTAR_EXAMES_LIBERADOS VARCHAR(1),
   ALERTAR_EXAMES_LIB_PERIODO TIME, ALERTAR_PEND_AVAL_PRESC_O_PROF VARCHAR(1), PERMITE_CRIAR_EXCL_PRESC_FUTURA CHAR(1),
   ALE_EXA_REP_D4H_CON CHAR(1));
+CREATE TABLE PRDADOSENVIOOPERADORA (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(80));
 CREATE TABLE PRFAVORITO_EXIBIR (ID INTEGER NOT NULL PRIMARY KEY, LOCPACDEFAULT INTEGER NOT NULL,
   CAMPOSLOCALIZACAOPACIENTE SMALLINT NOT NULL, ORDEM SMALLINT, EXIBIR CHAR(1));
+CREATE TABLE PRFICHAREL (ID_FICHAREL INTEGER NOT NULL PRIMARY KEY, COD SMALLINT NOT NULL, NOMECOMP VARCHAR(30) NOT NULL,
+  NOMECLASSE VARCHAR(30), NOME VARCHAR(50), COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1, PARENT VARCHAR(30),
+  TIPO SMALLINT NOT NULL, SEQUENCIA SMALLINT);
+CREATE TABLE GECADANTIMI (ID_GECADANTIMI INTEGER NOT NULL PRIMARY KEY, REG INTEGER NOT NULL, TIPO VARCHAR(1) NOT NULL,
+  CRM INTEGER NOT NULL, ID_TBCBOPRO INTEGER NOT NULL, CONV SMALLINT NOT NULL);
+CREATE TABLE RICADPAC ("ID" INTEGER NOT NULL, "PRONT" INTEGER NOT NULL, CONSTRAINT PK_L605_RICADPAC PRIMARY KEY ("ID"));
+CREATE TABLE RECADATE ("REG" INTEGER NOT NULL, "PRONT" INTEGER, CONSTRAINT PK_L605_RECADATE PRIMARY KEY ("REG"));
+CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL, "ID_TBCBOSUS" INTEGER NOT NULL, "UF" VARCHAR(2) NOT NULL, "COD"
+  INTEGER NOT NULL, "ID_TBPROFIS" INTEGER NOT NULL, "VINC_EMPR" VARCHAR(1) NOT NULL, "CONS_PROF" VARCHAR(7), "ATIVO"
+  VARCHAR(1), "VINCULO" SMALLINT, "COMP_INICIAL" INTEGER, "COMP_FINAL" INTEGER, "ATENDE_SUS" CHAR(1), "CRM_DIGITO"
+  VARCHAR(1), "REGIONAL" INTEGER, "ID_TBSIGLACONSPROF" SMALLINT, "REG_QUALIF_ESPECIALISTA" VARCHAR(9),
+  "AXREG_ID_ANESTHESIOLOGISTS" BIGINT, "ID_DIGITAL" VARCHAR(36), CONSTRAINT PK_L605_TBCBOPRO PRIMARY KEY ("ID"));
 """
 
+# rodada 5: listas do hospital como opções de parâmetro do produto (definição semeada pelo produto, pedido)
+PARAMETROS_LISTA = {"PRCADRESP": "pep.formulario.respostaPadrao", "PREMAILOPCAO": "pep.email.opcaoEnvio",
+                    "PRLAYIMPPRESC": "pep.impressaoPrescricao.leiaute"}
 # logins inventados de usuários já carregados (L3)
-PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"]}
+PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"],
+                 # atendimentos e pacientes (L3), convênio e profissional (L3/L5) já carregados; 5002 nunca carregado
+                 "RECADATE": ["5000", "5001", "5003"], "RICADPAC": ["1", "2"], "TBCONVEN": ["3"], "TBPROFIS": ["900"]}
+# pais de outras fatias na imagem só como origem das ref: encadeadas (sem esperado desta fatia)
+PAIS_ORIGEM = ("PRLOCPACDEFAULT", "RECADATE", "RICADPAC", "TBCBOPRO")
+# a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo e as finalidades
+# nativas do antimicrobiano (semente de 06_PEP/18_chaves.sql) vêm daqui
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
+                   " CREATE TABLE IF NOT EXISTS finalidade_terapeutica (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo VARCHAR(30) NOT NULL UNIQUE, descricao VARCHAR(150) NOT NULL);"
+                   " INSERT INTO finalidade_terapeutica (codigo, descricao) VALUES ('profilatica', 'Profilática'),"
+                   " ('empirica', 'Empírica'), ('terapeutica', 'Terapêutica'); "
+                   + preparo_parametros())
 
 
 U1, U2 = PAIS_EXTERNOS["TBUSERS"]
@@ -62,6 +103,12 @@ def _pref(i, login):
 
 # (tabela, linhas, esperado)
 DADOS = [
+    # rodada 5: resposta sem descrição usa o código como rótulo; código acima de SMALLINT na sequência (1264)
+    ("PRCADRESP", [[1, "Sim"], [2, "Não  sei €"], [3, None], [70000, "Resposta fora da faixa"]],
+     {"gravados": 3, "pendencias": {"restricao_destino_1264": 1}}),
+    ("PREMAILOPCAO", [[1, "Enviar resumo de alta", 1], [2, "Enviar laudo", None]], {"gravados": 2, "pendencias": {}}),
+    ("PRLAYIMPPRESC", [[1, "Horários em colunas"], [2, "Compacto"], [3, "   "]],
+     {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}),
     ("GETABVIA", [["VO", "Via oral", "S", 1, None], ["IV", "Intravenosa", "S", 2, None],
                   ["SC", " Subcutânea  ", "N", None, "00000000-0000-0000-0000-000000000001"],
                   ["Ab", "Via exemplo caixa mista", "S", None, None], ["AB", "Via exemplo caixa alta", "S", None, None],
@@ -87,8 +134,12 @@ DADOS = [
      {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}),
     ("PRCAB_IDENTIFIC_PAC", [[1, "Dados atuais do paciente", "S"], [2, "Dados da emissão", "S"], [3, None, "N"]],
      {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}),
-    ("PRCAMPOSLOCALIZACAOPACIENTE", [[1, "Leito"], [2, "Dias de internação"], [3, "Alergia"]],
-     {"gravados": 3, "pendencias": {}}),
+    # chave do atributo do produto pelo nome (valores.d): 4 sem par recusa (nunca grava o id); 6 é a mesma chave da 3
+    # (alergias) e recusa pela chave única
+    ("PRCAMPOSLOCALIZACAOPACIENTE", [[1, "Leito"], [2, "Dias de internação"], [3, "Alergia"], [4, "Coluna exemplo"],
+                                     [5, "MÉDICO"], [6, "Alergias"]],
+     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+                                    "restricao_destino_1062": 1}}),
     ("PRFA_UTILIZACAO", [[1, "Medicamento", "S"], [2, "Uso em bomba de infusão", "S"], [3, "Material", "N"]],
      {"gravados": 3, "pendencias": {}}),
     ("PRFILTROCLASSIF", [[1, "Classificação exemplo"]], {"gravados": 1, "pendencias": {}}),
@@ -127,19 +178,50 @@ DADOS = [
                       [6, 2, "   ", 1, H(1899, 12, 30, 8, 0)], [7, 1, "Repetida", 2, H(1899, 12, 30, 9, 0)]],
      {"gravados": 3, "pendencias": {"hora_com_data": 1, "pai_pendente": 1, "pai_inexistente": 1,
                                     "restricao_destino_1048": 2, "restricao_destino_1062": 1}}),
-    # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio
+    # informação enviada à operadora: grupo padrão criado pela 1, adotado por 2 e 4 (adotado_existente); a 3, de
+    # descrição vazia, é recusada (1048) e não deixa adoção
+    ("PRDADOSENVIOOPERADORA", [[1, "Indicação clínica"], [2, "  Estadiamento   do tumor "], [3, "   "],
+                               [4, "Peso exemplo"]],
+     {"gravados": 3, "pendencias": {"adotado_existente": 2, "restricao_destino_1048": 1}}),
+    # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio;
+    # coluna da tela = chave do atributo gravada pela coluna do painel; 7 aponta a coluna 4, recusada (pai_pendente)
     ("PRFAVORITO_EXIBIR", [[1, 10, 1, 1, "S"], [2, 10, 2, 2, "N"], [3, 20, 1, 1, "S"], [4, 20, 3, None, "X"],
-                           [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"]],
-     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2}}),
+                           [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"], [7, 10, 4, 3, "S"]],
+     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2,
+                                    "pai_pendente": 1}}),
+    # leiaute de impressão: COD 1 com três componentes fora da ordem da chave (sequência 2, 1 e uma sem sequência)
+    # e propriedades com quebra de linha e acento; COD 2 com um componente; o tipo de migração é criado pela
+    # primeira linha e adotado pelas seguintes; o leiaute entra inativo
+    ("PRFICHAREL", [[1, 1, "Painel1", "TPanel", "Cabeçalho exemplo", b"Left = 8\r\nTop = 4", "Título falso".encode("cp1252"), None, 1, 2],
+                    [2, 1, "Label1", "TLabel", None, b"Caption = 'Nome'", None, "Painel1", 2, 1],
+                    [3, 2, "Memo1", "TMemo", "Observação", None, "Texto de exemplo\nlinha 2".encode("cp1252"), None, 3, 1],
+                    [4, 1, "Image1", "TImage", None, None, None, "Painel1", 4, None]],
+     {"gravados": 4, "pendencias": {"adotado_existente": 3}}),
 ]
 # pai de fora da fatia (L5-01) presente na imagem só para a ref: encadeada; o esperado dele não é desta fatia
 PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")]
+
+
+# ficha do antimicrobiano (ID, REG, TIPO, CRM, ID_TBCBOPRO, CONV): 1 completa; 2 convênio nunca carregado; 3 tipo sem
+# par e profissional nunca carregado (inscrição 51); 4 atendimento nunca carregado (recusa); 5 atendimento sem paciente
+FICHAS = [[1, 5000, "P", 1234, 50, 3], [2, 5001, "E", 1234, 50, 9], [3, 5001, "X", 4321, 51, 3],
+          [4, 5002, "T", 1234, 50, 3], [5, 5003, "T", 1234, 50, 3]]
 
 
 def linhas(r, ins):
     esperado = {}
     for v in PREFERENCIAS:
         ins("PRLOCPACDEFAULT", list(v))
+    for v in [(5000, 700), (5001, 701), (5002, 700), (5003, 702)]:   # 702: prontuário sem paciente
+        ins("RECADATE", list(v))
+    for v in [(1, 700), (2, 701)]:
+        ins("RICADPAC", list(v))
+    for i, prof in [(50, 900), (51, 999)]:                           # 999: profissional nunca carregado
+        ins("TBCBOPRO", [i, 1, "SP", 1000 + i, prof, "N"] + [None] * 12)
+    for v in FICHAS:
+        ins("GECADANTIMI", list(v))
+    esperado["GECADANTIMI"] = {"gravados": 3, "pendencias": {"pai_inexistente": 4, "valor_fora_do_dominio": 1,
+                                                             "restricao_destino_1048": 2}}
     for tab, ls, esp in DADOS:
         for v in ls:
             ins(tab, list(v))

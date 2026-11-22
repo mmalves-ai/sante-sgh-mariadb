@@ -76,12 +76,62 @@ RESEGUR	ENDERECO	titular_cobertura.logradouro	texto			L5-04:
 RESEGUR	NUMERO	titular_cobertura.numero_endereco	inteiro_zero_nulo			L5-04: 
 RESEGUR	COMPL	titular_cobertura.complemento	texto			L5-04: 
 RESEGUR	BAIRRO	titular_cobertura.bairro	texto			L5-04: 
-SITECNIC	CPF	pessoa_fisica.cpf	cpf		adotar:cpf;pessoa_fisica	L5-04: técnico como pessoa única pelo CPF (adotado_existente se já existe); o papel de profissional espera o destino pessoa_fisica antes de profissional no mapa (pedido)
-SITECNIC	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	L5-04: 
-SITECNIC	APELIDO	pessoa_fisica.apelido	texto_nome		pessoa_fisica	L5-04: 
+SHTECNIC	@id:pessoa_fisica	profissional.pessoa_fisica_id			adotar:pessoa_fisica_id	L5-04 r3: o técnico é um PROFISSIONAL (destino principal: a referência ao técnico da hemoterapia (SHDOACAO, SHBOLSA) acha o profissional) da pessoa física gravada ou adotada antes na mesma linha; a pessoa que já é profissional (outro cadastro de técnicos, o cadastro de profissionais) é ADOTADA sem sobrescrever (adotado_existente: um profissional por pessoa, UNIQUE do destino)
+SHTECNIC	CPF	pessoa_fisica.cpf	cpf		pessoa_fisica;antes;adotar:cpf	L5-04 r3: pessoa única pelo CPF (adotado_existente se já existe); CPF em DOUBLE: só dígitos, 11 com zeros (pedido de _digitos em saida/L5-04.json; até lá documento_invalido e a pessoa nasce só pelo nome)
+SHTECNIC	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	L5-04 r3: nome civil; nulo (linha marcadora sem pessoa) recusa SÓ a linha, visível (1048), nunca a tabela inteira
+SHTECNIC	=~assistencial	profissional.tipo				L5-04 r3: a origem não diz a relação com a instituição: literal presumido (valor_presumido), o cliente reclassifica (como TBPROFIS)
+SHTECNIC	SITUACAO	profissional.situacao	codigo_char	valores		L5-04 r3: A ativo, I inativo (valores.d); outro: NULL com valor_fora_do_dominio e o padrão ativo; inativo sem data de inativação na origem recusa a linha pelo CHECK do destino (4025, visível), como TBPROFIS, até a data presumida condicional (pedido em saida/L5-04.json)
+SHTECNIC	FONE	profissional.telefone_comercial	texto			L5-04 r3: telefone de contato do técnico
+SHTECNIC	CELULAR	profissional.celular	texto			L5-04 r3: celular do técnico
+SHTECNIC	CONSELHO_PROFISSIONAL		inteiro			L5-04 r5: código do conselho sem domínio na origem (1 linha na imagem de referência, sem sigla nem FK; não há evidência para estimar, ADR 0007/18): guardado com o número no retrato do profissional (profissional_versao.dados); inscrição não presumida (decisão em F4-decisoes-destino.md)
+SHTECNIC	NCONSELHO		inteiro			L5-04 r5: número no conselho guardado no retrato do profissional (profissional_versao.dados) junto do código do conselho
+SHTECNIC	@id	profissional_versao.profissional_id			profissional_versao	L5-04 r5 achado: versão do cadastro do profissional gravado ou adotado
+SHTECNIC	=inclusao	profissional_versao.operacao			profissional_versao	L5-04 r5 achado
+SHTECNIC	#retrato:*	profissional_versao.dados			profissional_versao	L5-04 r5 achado: retrato completo da linha (conselho, número no conselho e endereço do técnico incluídos), sem segredo
+SHTECNIC	#sha256:#retrato:*	profissional_versao.hash_dados			profissional_versao	L5-04 r5 achado: SHA-256 do mesmo JSON
+SHTECNIC	=@data_carga	profissional_versao.ocorrido_em			profissional_versao	L5-04 r5 achado: a origem não data o cadastro; versão registrada na carga (não é vigência)
+SITECNIC	@id:pessoa_fisica	profissional.pessoa_fisica_id			adotar:pessoa_fisica_id	L5-04 r3: o técnico é um PROFISSIONAL (destino principal: a referência ao técnico do laboratório (SILANEXA.TECNICO, pela chave CRM) acha o profissional) da pessoa física gravada ou adotada antes na mesma linha; a pessoa que já é profissional (outro cadastro de técnicos, o cadastro de profissionais) é ADOTADA sem sobrescrever (adotado_existente: um profissional por pessoa, UNIQUE do destino)
+SITECNIC	CPF	pessoa_fisica.cpf	cpf		pessoa_fisica;antes;adotar:cpf	L5-04 r3: pessoa única pelo CPF (adotado_existente se já existe); dígitos verificadores conferidos (inválido: documento_invalido e a pessoa nasce só pelo nome)
+SITECNIC	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	L5-04 r3: nome civil; nulo (linha marcadora sem pessoa) recusa SÓ a linha, visível (1048), nunca a tabela inteira
+SITECNIC	=~assistencial	profissional.tipo				L5-04 r3: a origem não diz a relação com a instituição: literal presumido (valor_presumido), o cliente reclassifica (como TBPROFIS)
+SITECNIC	ATIVO	profissional.situacao	booleano_sn	valores		L5-04 r3: S ativo, N inativo (valores.d); fora do domínio: o padrão ativo com pendência; inativo sem data de inativação na origem recusa a linha pelo CHECK do destino (4025, visível), como TBPROFIS, até a data presumida condicional (pedido em saida/L5-04.json)
+SITECNIC	FONE	profissional.telefone_comercial	texto			L5-04 r3: telefone de contato do técnico
+SITECNIC	CELULAR	profissional.celular	texto			L5-04 r3: celular do técnico
+SITECNIC	APELIDO	profissional.nome_exibicao	texto_nome			L5-04 r3: nome curto em agendas, laudos e listas
+SITECNIC	CRM		inteiro			L5-04 r3: chave de negócio do técnico (conector_origem: é por ela que SILANEXA.TECNICO acha o profissional); a origem não diz o conselho (técnico de laboratório: CRBM, CRF, CRQ...), então não vira inscricao_conselho presumida (decisão em F4-decisoes-destino.md)
+SITECNIC	@id	profissional_versao.profissional_id			profissional_versao	L5-04 r5 achado: versão do cadastro do profissional gravado ou adotado
+SITECNIC	=inclusao	profissional_versao.operacao			profissional_versao	L5-04 r5 achado
+SITECNIC	#retrato:*	profissional_versao.dados			profissional_versao	L5-04 r5 achado: retrato completo da linha (conselho, número no conselho e endereço do técnico incluídos), sem segredo
+SITECNIC	#sha256:#retrato:*	profissional_versao.hash_dados			profissional_versao	L5-04 r5 achado: SHA-256 do mesmo JSON
+SITECNIC	=@data_carga	profissional_versao.ocorrido_em			profissional_versao	L5-04 r5 achado: a origem não data o cadastro; versão registrada na carga (não é vigência)
 TBCLINICA	COD	clinica_assistencial.codigo	codigo_char			L5-04: código de 1 caractere com a caixa preservada; colisão de caixa: codigo_colisao_caixa
 TBCLINICA	NOME	clinica_assistencial.descricao	texto_nome			L5-04: 
 TBCLINICA	SITUACAO	clinica_assistencial.ativo	booleano_ai			L5-04: A ativa, I inativa; vazio fica o padrão (ativa)
 TBCLINICA	=~outra	clinica_assistencial.natureza				L5-04: natureza PRESUMIDA (pendência baixa valor_presumido): o tipo de internação da TISS (ID_TBTISSTPINTER) é id de terminologia sem carregador oficial nem colunas no mapa, então não prova o código nem a natureza; o cliente classifica as clínicas
 TBECIV	COD	estado_civil.codigo	texto		adotar:codigo	L5-04: o código de negócio é COD (uma linha por sexo): as variantes do mesmo COD são ADOTADAS num id só (adotado_existente); o código da folha vem com prefixo e nunca é adotado aqui
 TBECIV	NOME	estado_civil.descricao	texto_nome			L5-04: 
+TBCBOPRO	ID	inscricao_conselho.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L5-04 r3: profissional da inscrição, pela própria linha (encadeada: ID_TBPROFIS leva ao profissional) para NÃO cair nas duas fases do ciclo TBCBOPRO>TBPROFIS (profissional_id é NOT NULL: o INSERT sem ele seria recusado); a quebra do ciclo e a ordem (TBPROFIS antes) são pedido em saida/L5-04.json; ausente: pai_inexistente e recusa (1048)
+TBCBOPRO	#seq:ID_TBPROFIS	inscricao_conselho.sequencia				L5-04 r3: 1..n por profissional, na ordem da chave (estável no diferencial)
+TBCBOPRO	CONS_PROF	inscricao_conselho.conselho_classe_id	texto	conselho_classe		L5-04 r3: conselho pela sigla (de-para oficial conselho_classe, nunca criado); sigla fora do catálogo: catalogo_codigo_*; sem sigla: recusa visível (1048). ID_TBSIGLACONSPROF aponta tabela fora do mapa (sem via)
+TBCBOPRO	UF	inscricao_conselho.unidade_federativa_id	texto	ibge_uf		L5-04 r3: UF da inscrição pela sigla (de-para oficial ibge_uf)
+TBCBOPRO	COD	inscricao_conselho.numero_inscricao	texto			L5-04 r3: número no conselho, gravado como texto
+TBCBOPRO	CRM_DIGITO	inscricao_conselho.digito	texto			L5-04 r3: dígito do número no conselho
+TBCBOPRO	ID_TBCBOSUS	inscricao_conselho.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	L5-04 r3: ocupação pelo código CBO guardado na tabela de CBO da origem (encadeada terminada em coluna; de-para oficial cbo); ausente: NULL com pendência
+TBCBOPRO	ATIVO	inscricao_conselho.situacao	booleano_sn	valores		L5-04 r3: S ativa, N inativa (valores.d); vazio: padrão do destino (ativa)
+TBCBOPRO	VINC_EMPR	inscricao_conselho.vinculo_empregaticio	booleano_sn			L5-04 r3: vínculo empregatício S/N
+TBCBOPRO	ATENDE_SUS	inscricao_conselho.atende_sus	booleano_sn			L5-04 r3: atende pelo SUS S/N
+TBCBOPRO	COMP_INICIAL	inscricao_conselho.competencia_inicio	competencia_aaaamm			L5-04 r3: primeira competência no cadastro nacional (AAAAMM -> 1º dia do mês)
+TBCBOPRO	COMP_FINAL	inscricao_conselho.competencia_fim	competencia_aaaamm			L5-04 r3: última competência (AAAAMM); fim antes do início: restrição do destino recusa a linha
+TBESPPRO	ESP	especialidade_procedimento.especialidade_medica_id	chave_origem		ref:TBESPEC	L5-04 r3: especialidade pela chave de TBESPEC (dependência TBESPPRO>TBESPEC pedida); ausente: pai_inexistente e recusa
+TBESPPRO	PROCTO	especialidade_procedimento.item_faturavel_id	chave_origem		ref:TBPROCTO.COD_PROCEDIMENTO	L5-04 r3: procedimento pelo CÓDIGO no cadastro de procedimentos da origem (chave alternativa; TBPROCTO vira item_faturavel, decisão L8-03); código em mais de uma tabela de honorários: pai_ambiguo e recusa visível (decisão em F4-decisoes-destino.md)
+TBESPPRO	@vigencia_carga	especialidade_procedimento.vigencia_inicio				L5-04 r3: a origem não guarda vigência: data da carga com pendência baixa vigencia_sem_fonte
+TBFERIAD	NOME	dia_nao_util.descricao	texto_nome			L5-04 r3: nome do feriado; nulo recusa a linha (1048)
+TBFERIAD	DATA	dia_nao_util.recorrencia	ano_recorrente:9999	valores		L5-04 r3: ano-marca 9999 = todo ano (anual); outro ano = data_unica (valores.d)
+TBFERIAD	DATA	dia_nao_util.dia	dia_recorrente:9999			L5-04 r3: dia do mês só no feriado anual
+TBFERIAD	DATA	dia_nao_util.mes	mes_recorrente:9999			L5-04 r3: mês só no feriado anual
+TBFERIAD	DATA	dia_nao_util.data	data_nao_recorrente:9999			L5-04 r3: a data no feriado de data única; data sentinela: data_sentinela e recusa pela restrição de recorrência
+TBFERIAD	FACULTATIVO	dia_nao_util.facultativo	booleano_sn			L5-04 r3: ponto facultativo S/N; fora do domínio fica o padrão (falso) com pendência
+TBFERIAD	=estabelecimento	dia_nao_util.abrangencia				L5-04 r3: o calendário é do próprio hospital (a origem não distingue nacional, estadual ou municipal): abrangência do estabelecimento, sem presumir esfera (decisão em F4-decisoes-destino.md)
+TBFERIAD	@estabelecimento	dia_nao_util.estabelecimento_id				L5-04 r3: o estabelecimento do cliente dono do calendário
+TBFONTE_PAGADORA	ID	origem_recurso_compra.codigo	texto		origem_recurso_compra	L5-04 r3: a fonte pagadora das compras (GECADPED.FONTE_PAG, GECADNFS.FONTE_PAG e o padrão GEPARAM.FONTE_PAG) é a FONTE DO RECURSO que financia a compra (origem_recurso_compra), não a classe da fonte pagadora do faturamento: código = número da origem, como texto
+TBFONTE_PAGADORA	NOME	origem_recurso_compra.descricao	texto_nome		origem_recurso_compra	L5-04 r3: descrição obrigatória; nula recusa só a linha (1048). A esfera (federal, estadual...) a origem não traz: NULL, o cliente classifica

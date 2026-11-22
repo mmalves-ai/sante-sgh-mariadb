@@ -718,3 +718,24 @@ ok; `fatiar_conector --conferir` ok; `conector.sh testes` 934 ok (8 pulados, 1 f
   refazer (39): L5-01 L5-02 L5-04 L5-05 L5-06 L5-12 L6-01 L6-02 L6-03 L6-04 L6-05 L6-09 L6-10 L6-11 L6-12 L6-13 L6-14
   L6-15 L6-16 L6-18 L7-03 L7-04 L7-05 L7-07 L7-08 L8-01 L8-02 L8-03 L8-04 L8-05 L8-06 L8-08 L8-09 L8-10 L8-11 L8-12
   L8-14 L8-15 L8-16.
+
+## 20. Conferidor da rodada 3 de cobertura (2026-11-21, tentativa 1): esteira NÃO verde, cobertura NÃO fecha
+
+- Pedidos pequenos e genéricos aplicados: 40 arestas de ordem de `declarado/dependencias.tsv` pedidas pelas fatias
+  (referência declarada sem FK na origem, pai depois do filho), conferidas contra uma `ref:` da própria fatia
+  (motivo `r3 (conferidor)`). 15 arestas pedidas ficaram de fora porque mudam o esperado da imagem sintética ou a
+  ordem fixada nos testes da fatia (a fatia aplica e ajusta o esperado): FPRUBRICA{FGTS,INSS,IRRF,SIND}_FPEVENTO ->
+  TBTPTRIBUTO (L5-12); REAGECRI, RECTRAGE -> REAGENDA, REAGENDA -> TBPROFIS, SICTRAGE -> SIAGENDA (L6-03);
+  TBUNIDADEMEDIDA -> TBUNICON (L6-10); SIRES01_DELETE -> SILANEXA (L7-04); TBNIVEL -> TBNIVSUS (L8-08);
+  TBITEDES -> TBSUBDES, TBCENCUS, TBGRUDES e MFLANCTO -> TBITEDES (L8-11/L8-12). FCGUIAS -> TBPROFIS não entrou
+  (nenhuma `ref:` a sustenta).
+- `fatiar_conector.py`: a fatia de cada tabela fica FIXADA pelo `indice.tsv` gravado (a fatia é a dona do
+  `colunas.d`, da imagem sintética e dos testes); aresta nova muda a ordem, nunca a fatia (antes, as 40 arestas
+  moviam 119 tabelas de fatia). `--refatiar` refaz os blocos do zero.
+- Prova: `verificar_mapa` ok; `fatiar_conector --conferir` ok; `conector.sh testes` 1098 (6 falhas, todas já
+  existentes antes das arestas: test_l6_10, test_l6_12, 4 de test_l8_04); ponta a ponta do painel 3/4 (Importar:
+  `horario_normal_tabela` 4 de 9, FCHORATE, também sem as arestas); conferir-fatia com erro fora da cobertura em
+  L5-12 (TBCBOPRO sem colunas na imagem), L6-10, L6-11 (conciliação não roda), L6-12 (PREVOLPAC), L6-14 (RILEITOS),
+  L8-02 (TBCOOPER), L8-04 (testes). As arestas de PREXAMEASSINATURA consertaram a L7-04.
+- Cobertura: 1.185 carregáveis; CARREGA 827, DESCARTE 284, BLOQUEADA 74 em 23 fatias
+  (`docs/obra/fatias/f4/cobertura-r3.tsv`).

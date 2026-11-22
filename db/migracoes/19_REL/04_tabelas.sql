@@ -1,9 +1,14 @@
--- REL, lote 04 (F2.2 ondas finais, onda 5; pedido do lote 05-11). Convenções do ADR 0002 (parte 2). Só para frente.
+-- REL, lote 4 (F4 conector, rodada 4: pedidos de modelo das fatias, registrados para a trilha F2.2 em
+-- docs/obra/passagens/F4-pedidos-f22.md). Convenções do ADR 0002 (parte 2). Só para frente.
+-- Sem FOREIGN KEY aqui (04_chaves.sql).
 
--- 05-11: a área dona da triagem é a chave de negócio do domínio (PAPEIS_TRIAGEM de @sgh/dominio-relatorio), e toda
--- triagem decidida tem área.
-ALTER TABLE triagem_relatorio_legado
-  MODIFY COLUMN area VARCHAR(60) NULL COMMENT 'Área dona (chave do domínio)',
-  ADD CONSTRAINT ck_triagem_relatorio_legado_area CHECK (area IS NULL OR area IN ('folha','faturamento','financeiro',
-    'contabilidade','repasse','estoque','pep','leitos','recepcao','sadt','bloco','diretoria','cadastros','curador')),
-  ADD CONSTRAINT ck_triagem_relatorio_legado_area_decidida CHECK (situacao = 'pendente' OR area IS NOT NULL);
+-- L8-18 (6, 11)
+ALTER TABLE relatorio_parametro
+  ADD COLUMN visivel BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Falso: parâmetro oculto na tela';
+ALTER TABLE relatorio_parametro_pesquisa
+  ADD COLUMN especificacao TEXT NULL COMMENT 'Texto da busca do sistema anterior, nunca executado';
+ALTER TABLE relatorio_tela
+  MODIFY COLUMN relatorio_id BIGINT UNSIGNED NULL DEFAULT NULL,
+  ADD COLUMN agrupamento_relatorio_id BIGINT UNSIGNED NULL COMMENT 'Botão que imprime um agrupamento de relatórios' AFTER relatorio_id,
+  ADD KEY ix_relatorio_tela_agrupamento_relatorio_id (agrupamento_relatorio_id),
+  ADD CONSTRAINT ck_relatorio_tela_alvo CHECK ((relatorio_id IS NULL) <> (agrupamento_relatorio_id IS NULL));

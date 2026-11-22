@@ -18,7 +18,8 @@
   {
    "arquivo": "docs/obra/passagens/F4-decisoes-destino.md (dono) / trilha F2.2 (modelo)",
    "mudanca": "doacao_sangue sem coluna para a intercorrência da doação (SHDOACAO.CODINTER -> tipo_reacao_transfusional de natureza 'intercorrencia'): propor intercorrencia_tipo_reacao_transfusional_id anulável",
-   "motivo": "o catálogo de intercorrências entra (SHINTER), mas a ligação com a doação fica fora"
+   "motivo": "o catálogo de intercorrências entra (SHINTER), mas a ligação com a doação fica fora",
+   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09; falta na fatia: declarar SHDOACAO.CODINTER"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L7-01.tsv (revisão do cliente no painel)",
@@ -59,6 +60,30 @@
    "arquivo": "tools/obra/fatiar_conector.py (orquestrador)",
    "mudanca": "regerar as fatias depois do novo gerar_mapa_conector.py (arestas L7-01 mudam a ordem)",
    "motivo": "fatiar --conferir acusa L8-12, L8-16 e indice.tsv diferentes do gerado; fora da fatia L7-01"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "rodada": "r5",
+   "mudanca": "aresta SHREQUISICAO -> SHCLIENT (ordem de carga)",
+   "motivo": "SHREQUISICAO.COD_FORNEC liga o pedido ao fornecedor por ref:SHCLIENT (trilha_auditoria.entidade_id); sem a aresta o pedido é carregado antes e o fornecedor fica pai_inexistente (esperado da sintética: 3 -> 1 depois da aresta)",
+   "atendido": false
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (destino secundário com #cofre)",
+   "rodada": "r5",
+   "mudanca": "opção de destino 'cofre_opcional' (ou regra genérica): secundário cuja coluna #cofre ficou NULL por falta de PLATAFORMA_CHAVE_MESTRA não grava (fica só a pendência segredo_aguarda_cofre), em vez de recusar a linha inteira pela NOT NULL de credencial_integracao.referencia_cofre",
+   "motivo": "sem a chave mestra (conferência, homologação) a linha de parâmetros com senha é recusada inteira (1048) e o parâmetro do hospital não entra; com a chave a carga já funciona. Afeta CVPARAM (L6-18), SHPARAM (L7-01) e SIPARLAB (L7-02)",
+   "atendido": false
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT (DDL para a trilha F2.2)",
+   "mudanca": "Pedido de hemocomponentes ao serviço fornecedor: tabela pedido_hemocomponente_fornecedor (estabelecimento_id NOT NULL, numero VARCHAR(30) NOT NULL, servico_hemoterapia_fornecedor_id NULL, solicitante_inscricao_conselho_id NULL FK inscricao_conselho, solicitado_em DATETIME(3) NOT NULL, origem, auditoria) e bolsa_hemocomponente.pedido_hemocomponente_fornecedor_id NULL (FK). Depois: SHREQUISICAO principal nesse destino (numero = ID_SHREQUISICAO, fornecedor ref:SHCLIENT, solicitante ref:TBCBOPRO por ID_TBCBOPRO_SOLICITANTE, solicitado_em = DATA_HORA com #vigencia se:DATA_HORA=), a trilha atual vira secundária com o retrato, e SHBOLSA.ID_SHREQUISICAO vai a bolsa_hemocomponente.pedido_hemocomponente_fornecedor_id por ref:SHREQUISICAO.",
+   "motivo": "Achado r5: o pedido ao fornecedor (sem paciente) não cabe em requisicao_transfusao (paciente e atendimento NOT NULL). Hoje ele carrega na trilha do fornecedor com o número em correlacao, e a trilha de cada bolsa copia esse número (ref:SHREQUISICAO@correlacao, referência validada): a ligação bolsa -> pedido não se perde, mas o solicitante só fica no retrato JSON. Na imagem de referência a tabela tem 1 linha (placeholder)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "SHREQUISICAO\tSHCLIENT (o fornecedor do pedido)",
+   "motivo": "Reiterado: sem a aresta o pedido carrega antes do fornecedor e toda linha leva pai_inexistente (3 na sintética)."
   }
  ]
 }

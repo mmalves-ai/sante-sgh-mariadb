@@ -8,7 +8,10 @@ Carregável: tabela do mapa (`conector/mapa/tabelas.tsv`) com tabela física de 
   as declarações atuais) e toda coluna obrigatória do destino (NOT NULL, sem padrão, sem AUTO_INCREMENT; `criado_em`
   e `origem` são do motor) tem fonte declarada. Destino secundário opcional (`via` com `opcional`) não exige.
 - DESCARTE: `conector/mapa/declarado/sem_carga.tsv` com situacao=descarte e causa de produto aceitável
-  (`sem_valor`, `duplicado`, `licenciado`, `catalogo_oficial`, `mecanismo_do_produto`), sempre com motivo.
+  (`sem_valor`, `duplicado`, `licenciado`, `catalogo_oficial`, `mecanismo_do_produto`, `derivado`), sempre com
+  motivo; desde a rodada 5 (ADR 0006, item 1) `sem_valor`, `duplicado`, `mecanismo_do_produto` e `derivado` só valem
+  com PROVA declarada em `declarado/provas.tsv` (sem ela: BLOQUEADA `descarte_sem_prova:<causa>`); tabela que grava
+  conteúdo licenciado do espelho fica BLOQUEADA `licenciado_copiado:<tabela>` (o conector só liga, `espelho:`).
 - BLOQUEADA: o resto, com a causa:
   - declarada em `sem_carga.tsv` (situacao=bloqueada; causa e motivo livres, para o dono revisar);
   - `coluna_obrigatoria_sem_fonte:<destino.coluna>` (declarada, mas o destino recusaria toda linha; destino
@@ -61,7 +64,12 @@ for _m in ("pymysql", "firebird", "firebird.driver"):
 from sante_conector import carga, carga_mapa, mapa  # noqa: E402
 
 SEM_CARGA = "declarado/sem_carga.tsv"
-CAUSAS_DESCARTE = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
+CAUSAS_DESCARTE = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto", "derivado"}
+# ADR 0006 (item 1, rodada 5): descarte por julgamento não basta; estas causas só valem com PROVA de conciliação
+# declarada (`declarado/provas.tsv` + `provas.d/<TABELA>.sql`): derivado recalculado linha a linha, mecanismo com o
+# estado carregado. Sem prova: BLOQUEADA `descarte_sem_prova:<causa>`. Licenciado (espelho) e catálogo oficial
+# (de-para pelo código) seguem pelos itens 3 e 4 do ADR.
+CAUSAS_COM_PROVA = {"sem_valor", "duplicado", "mecanismo_do_produto", "derivado"}
 AUTOMATICAS = {"id", "criado_em", "origem"}
 # causa inferida do texto do pedido da fatia ou do motivo comentado (primeira que casar)
 PALAVRAS = [
@@ -86,7 +94,21 @@ PALAVRAS = [
 
 # causas que já têm mecanismo genérico no motor (rodada de cobertura) ou decisão registrada em
 # docs/obra/passagens/F4-decisoes-destino.md: a fatia só precisa ser REFEITA (declarar), sem esperar ninguém
-COM_MECANISMO = {"sem_declaracao", "pai_nao_carregado", "referencia_composta", "referencia_encadeada",
+# ADR 0006 (3), pedidos R5-1/R5-4 (rodada 5): a linha DO HOSPITAL (item ou preço da tabela PRÓPRIA) gravada numa
+# tabela do espelho entra pelo conector. Vale só quando a tabela filtra a licença por linha (`so_se:...!licenca_nao_
+# comprovada`, a tabela licenciada é pulada) e não grava fonte licenciada por literal.
+FONTES_LICENCIADAS = re.compile(r"^=~?(brasindice|simpro|cbhpm|correios)", re.I)
+
+
+def _so_proprio(decl, t):
+    linhas = [c for c in decl if c["tabela"] == t]
+    filtra = any("!licenca_nao_comprovada" in x for c in linhas for x in (c.get("via") or "").split(";")
+                 if x.startswith("so_se:"))
+    literal = any(FONTES_LICENCIADAS.match(c.get("coluna") or "") for c in linhas if c.get("destino"))
+    return filtra and not literal
+
+
+COM_MECANISMO = {"descarte_sem_prova", "licenciado_copiado", "sem_declaracao", "pai_nao_carregado", "referencia_composta", "referencia_encadeada",
                  "vigencia_sem_fonte", "desdobrar_coluna", "regra_disponivel", "segredo", "depara_valores",
                  "destino_decidido", "declaracao_comentada", "retrato_historico", "catalogo_oficial_faltante",
                  "coluna_obrigatoria_sem_fonte", "complementa"}
@@ -99,7 +121,8 @@ def _colunas_ddl(ddl, t):
     saida = {}
     for txt in [x.get("create", "")] + x.get("alter", []):
         for linha in txt.splitlines():
-            m = re.match(r"\s*(?:ALTER TABLE \S+\s+)?(?:ADD COLUMN (?:IF NOT EXISTS )?)?`?(\w+)`?\s+(\w+)(.*)", linha)
+            m = re.match(r"\s*(?:ALTER TABLE \S+\s+)?(?:(?:ADD|MODIFY) COLUMN (?:IF NOT EXISTS )?)?`?(\w+)`?\s+(\w+)(.*)",
+                         linha)
             if not m or m.group(1).upper() in mapa._RESERV or m.group(1).upper() in ("CREATE", "ALTER", "ADD"):
                 continue
             resto = m.group(3).upper()
@@ -119,13 +142,15 @@ def _indice():
 
 
 def _pedidos(fatias):
-    """{fatia: [texto do pedido]} (mudança + motivo), em minúsculas."""
+    """{fatia: [texto do pedido]} (mudança + motivo) dos pedidos ainda não atendidos."""
     saida = {}
     for f in fatias:
         p = RAIZ / ("docs/obra/fatias/f4/saida/%s.json" % f)
         if p.exists():
             d = json.loads(p.read_text(encoding="utf-8"))
-            saida[f] = [(x.get("mudanca", "") + " " + x.get("motivo", "")) for x in d.get("pedidos", [])]
+            # pedido atendido (campo `atendido`: mecanismo ou modelo entregue) não bloqueia mais: a fatia é refeita
+            saida[f] = [(x.get("mudanca", "") + " " + x.get("motivo", "")) for x in d.get("pedidos", [])
+                        if not x.get("atendido")]
     return saida
 
 
@@ -152,6 +177,7 @@ def avaliar(raiz=RAIZ):
     d = mapa.carregar(raiz)
     mdir = Path(raiz) / mapa.DIR
     sem_carga = {r["tabela"]: r for r in (mapa.ler_tsv(mdir / SEM_CARGA) if (mdir / SEM_CARGA).exists() else [])}
+    provadas = {pv["tabela"] for pv in d.get("provas") or [] if pv["sql"]}
     ddl = d["ddl"]
     carregaveis = [r for r in d["tabelas"] if r["tabelas_destino"] and r["tipo"] in ("TABELA", "MECANISMO")]
     nomes = {r["tabela"] for r in carregaveis}
@@ -161,7 +187,8 @@ def avaliar(raiz=RAIZ):
     opcionais = {}
     for c in d["colunas_decl"]:
         via = (c.get("via") or "").split(";")
-        if ("opcional" in via or "complementa" in via) and c.get("destino"):
+        if ("opcional" in via or "complementa" in via or any(x.startswith("destino_se:") for x in via)) \
+                and c.get("destino"):
             opcionais.setdefault(c["tabela"], set()).add(c["destino"].split(".")[0])
     fat = _indice()
     for c in d["colunas_decl"]:  # tabela já declarada fica com a fatia que a declarou (o índice pode ter mudado)
@@ -171,7 +198,10 @@ def avaliar(raiz=RAIZ):
     pedidos = _pedidos(sorted(set(fat.values())))
     coment = _comentadas()
     dec = Path(raiz) / DECISOES
-    decididas = set(re.findall(r"^\| `?([A-Z0-9_]+)`? \|", dec.read_text(encoding="utf-8"), re.M)) if dec.exists() else set()
+    # primeira célula da linha da tabela: um nome ou vários separados por vírgula ("GELANSAI, GELANSAIREQ, ...")
+    decididas = {n for cel in re.findall(r"^\| ((?:`?[A-Z0-9_]+`?)(?:, `?[A-Z0-9_]+`?)*) \|",
+                                         dec.read_text(encoding="utf-8"), re.M)
+                 for n in re.findall(r"[A-Z0-9_]+", cel)} if dec.exists() else set()
     pais = {}
     for x in d["deps"]:
         if not x.get("quebra"):
@@ -185,7 +215,15 @@ def avaliar(raiz=RAIZ):
             res[t] = (f, "CARREGA", "carga_l3")
             continue
         if sc and sc.get("situacao") == "descarte" and sc.get("causa") in CAUSAS_DESCARTE and sc.get("motivo"):
-            res[t] = (f, "DESCARTE", sc["causa"])
+            if sc["causa"] in CAUSAS_COM_PROVA and t not in provadas:
+                res[t] = (f, "BLOQUEADA", "descarte_sem_prova:" + sc["causa"])
+            else:
+                res[t] = (f, "DESCARTE", sc["causa"])
+            continue
+        lic = sorted({c["destino"].split(".")[0] for c in d["colunas_decl"] if c["tabela"] == t and c.get("destino")
+                      and c["destino"].split(".")[0] in mapa.LICENCIADAS_ESPELHO}) if t in plano else []
+        if lic and not _so_proprio(d["colunas_decl"], t):  # ADR 0006 (3): o licenciado vive no espelho; o conector só liga
+            res[t] = (f, "BLOQUEADA", "licenciado_copiado:" + ",".join(lic))
             continue
         if t in plano:
             p = plano[t]

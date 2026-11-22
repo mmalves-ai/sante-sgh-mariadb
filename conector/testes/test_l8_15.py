@@ -2,11 +2,12 @@
 sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L8-15`."""
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_15
 
-TABELAS = set(l8_15.CARREGADAS)
+TABELAS = set(l8_15.CARREGADAS) | set(l8_15.NOVAS) | {"PSBENCPL"}
 FORA = set(l8_15.NAO_CARREGADAS)
 # tabelas cujo destino recebe códigos de várias origens: código = prefixo de domínio + chave, adoção pela descrição
 POR_PREFIXO = {"PSTIPMEN": "origem_cobranca_plano", "PSTIPOGUIA": "tipo_guia_plano",
@@ -26,9 +27,22 @@ class Plano(unittest.TestCase):
 
     def test_tabelas_e_destinos(self):
         self.assertEqual(set(self.plano), TABELAS)
-        for t in TABELAS:
+        for t in TABELAS - {"PSBENEFI", "PSBENCPL"} - set(l8_15.NOVAS):
             self.assertEqual(len(self.plano[t]["destinos"]), 1, t)
-        self.assertEqual(self.plano["PSBENEFI"]["destinos"], ["beneficiario_plano"])
+        # rodada 5 (ADR 0006): lista do hospital (opção, módulo e definição) e mescla do complemento
+        for t in set(l8_15.NOVAS) - {"PSTPSVIGENCIA"}:
+            self.assertEqual(self.plano[t]["destinos"], ["parametro_opcao", "modulo_sistema", "parametro_definicao"], t)
+        # r5c (ADR 0006): a taxa por vigência carrega na trilha com o retrato até o carregador oficial da ANS
+        self.assertEqual(self.plano["PSTPSVIGENCIA"]["destinos"], ["trilha_auditoria"])
+        self.assertEqual(self.plano["PSBENCPL"]["destinos"][:2], ["beneficiario_plano", "pessoa_fisica"])
+        # r5b: e-mail do complemento e a linha inteira em retrato no histórico do beneficiário (nada se perde)
+        # r5c (ADR 0007, 17 e 20): a senha web do complemento vai à credencial do usuário do beneficiário (mescla)
+        self.assertEqual(set(self.plano["PSBENCPL"]["destinos"][2:]),
+                         {"email_pessoa", "movimento_cadastral_beneficiario", "credencial_usuario"})
+        self.assertEqual(self.plano["PSBENEFI"]["destinos"],
+                         ["beneficiario_plano", "pessoa_fisica", "documento_pessoa", "email_pessoa",
+                          "grau_parentesco_dependente", "movimento_cadastral_beneficiario", "usuario",
+                          "credencial_usuario", "conta_portal_beneficiario"])  # r5c: retrato e acesso ao portal
         self.assertEqual(self.plano["PSVENDAS"]["destinos"], ["proposta_adesao"])
 
     def test_codigo_com_prefixo_e_adocao_onde_o_destino_e_compartilhado(self):
@@ -76,35 +90,108 @@ class Plano(unittest.TestCase):
     def test_descartadas_com_causa_de_produto(self):
         # cobertura total: toda tabela fora da carga tem descarte com causa aceita e motivo (declarado/sem_carga.tsv)
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        causas = {"TBTPFAVORECIDO": "catalogo_oficial", "TBTPFORMAREAJ": "catalogo_oficial",
-                  "TBTPVIGCONTRATO": "catalogo_oficial", "PSTPSVIGENCIA": "catalogo_oficial",
-                  "PSBENCPL": "duplicado"}
+        # rodada 5 (ADR 0006): listas e complemento carregam; só o catálogo oficial da ANS fica de fora
+        causas = {}  # r5c: PSTPSVIGENCIA carrega na trilha (retrato) até o carregador da ANS
+        for t in list(l8_15.NOVAS) + ["PSBENCPL"]:
+            self.assertNotIn(t, sc, t)
         self.assertNotIn("PSVENDAS", sc)
         # o descarte como catálogo oficial é coerente com declarado/catalogos.tsv
         cat = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/catalogos.tsv")}
         self.assertTrue({t for t, c in causas.items() if c == "catalogo_oficial"} <= cat)
+        # prova do motivo fora da própria fatia: os três domínios são valores fixos do produto por CHECK no DDL
+        arq = [r / "db/migracoes/16_SGO/02_tabelas.sql" for r in (Path(__file__).resolve().parents[2], Path("/app"))]
+        arq = [x for x in arq if x.is_file()]
+        if not arq:
+            self.skipTest("DDL fora do alcance")
+        ddl = arq[0].read_text(encoding="utf-8")
+        for chk in (r"favorecido IN \('operadora','prestador','ambos','beneficiario'\)",
+                    r"forma_reajuste IN \('ipca','igpm'", r"tipo_vigencia IN \('determinada','indeterminada'\)"):
+            self.assertRegex(ddl, chk)
         self.assertEqual(set(causas), FORA)
-        for t, causa in causas.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
+        for t, causa in causas.items():  # r5b: sem carregador oficial não é descarte resolvido: bloqueada, visível
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", causa + "_faltante"), t)
             self.assertTrue(sc[t]["motivo"], t)
 
     def test_beneficiario_nunca_sem_contrato_plano_e_pessoa(self):
         cs = self.cols("PSBENEFI", "beneficiario_plano")
-        decl = {c["destino"]: (c["coluna"], c.get("via")) for c in self.mapa["colunas_decl"]
+        decl = {c["destino"]: (c["coluna"], c.get("via") or "") for c in self.mapa["colunas_decl"]
                 if c["tabela"] == "PSBENEFI" and c.get("destino")}
         self.assertEqual(decl["beneficiario_plano.contrato_plano_id"], ("EMP", "ref:PSEMPBEN"))
         self.assertEqual(decl["beneficiario_plano.plano_comercializado_id"], ("PLANO", "ref:PSPLANOS"))
-        self.assertEqual(decl["beneficiario_plano.pessoa_fisica_id"], ("CPF", "ref:TBPESSOA.CPF_CNPJ"))
+        self.assertEqual(decl["beneficiario_plano.pessoa_fisica_id"], ("@id:pessoa_fisica", ""))
         # obrigatórias do destino todas com fonte; situação presumida, nunca afirmada
         for c in ("tipo", "matricula", "data_adesao", "inicio_vigencia"):
             self.assertIn(c, cs)
-        self.assertEqual((cs["situacao"]["coluna"], cs["situacao"]["depara"]), ("STATUS", "valores"))
+        sit = [c for c in self.plano["PSBENEFI"]["colunas"]["beneficiario_plano"] if c["destino"] == "situacao"]
+        self.assertEqual((sit[0]["coluna"], sit[0]["depara"]), ("STATUS", "valores"))
         self.assertEqual((cs["tipo"]["coluna"], cs["tipo"]["depara"]), ("DEP", "valores"))
         self.assertEqual(decl["beneficiario_plano.titular_beneficiario_plano_id"],
                          ("ID_PSBENEFI_VINCULO", "ref:PSBENEFI.ID"))
         self.assertEqual(cs["fim_vigencia"]["coluna"], "FIM_VIG")
-        # nenhuma coluna do destino com duas origens (PSBENCPL é descarte; a venda só em PSVENDAS)
-        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENCPL" and c.get("destino")])
+        # PSBENCPL (rodada 5) só MESCLA no beneficiário e na pessoa adotados pelo id (adotar:id): nunca sobrescreve
+        vias = [c.get("via") or "" for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENCPL" and c.get("destino", "").endswith(".id")]
+        self.assertEqual(sorted(v.split(";")[-1] for v in vias), ["adotar:id", "adotar:id"])
+        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENCPL" and "complementa" in (c.get("via") or "")])
+
+    def test_pessoa_nasce_do_beneficiario_e_grau_do_parentesco(self):
+        # a pessoa física é gravada ANTES do beneficiário e adotada pelo CPF; nunca pelo índice descartado da origem
+        op = self.plano["PSBENEFI"]["opcoes"]
+        self.assertTrue(op["pessoa_fisica"]["antes"])
+        self.assertEqual(op["pessoa_fisica"]["adotar"], ["cpf"])
+        self.assertFalse(op["pessoa_fisica"]["opcional"])  # todo beneficiário tem pessoa (NOT NULL)
+        pf = self.cols("PSBENEFI", "pessoa_fisica")
+        self.assertEqual({c: pf[c]["coluna"] for c in ("nome", "cpf", "data_nascimento", "nome_mae", "cns")},
+                         {"nome": "NOME", "cpf": "CPF", "data_nascimento": "NASC", "nome_mae": "MAE", "cns": "CNS"})
+        self.assertEqual(pf["cpf"]["regra"], "cpf")
+        self.assertEqual(pf["cns"]["regra"], "inteiro_zeros_esquerda:15")  # nunca recusa pelo CHECK de 15 dígitos
+        self.assertEqual(pf["sexo_id"]["cod"], ("sexo", "sigla"))
+        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENEFI"
+                          and "TBPESSOA" in (c.get("via") or "")])
+        # grau: criado ou adotado pelo código do parentesco, só no dependente (opcional), antes do beneficiário
+        self.assertTrue(op["grau_parentesco_dependente"]["antes"] and op["grau_parentesco_dependente"]["opcional"])
+        self.assertEqual(op["grau_parentesco_dependente"]["adotar"], ["codigo"])
+        gr = self.cols("PSBENEFI", "grau_parentesco_dependente")
+        self.assertEqual(gr["tipo_beneficiario"]["coluna"], "=dependente")
+        self.assertEqual(gr["descricao"]["passos"][-1], {"coluna": "NOME"})
+        bp = self.cols("PSBENEFI", "beneficiario_plano")
+        self.assertEqual(bp["grau_parentesco_dependente_id"]["coluna"], "@id:grau_parentesco_dependente")
+
+    def test_contato_e_documento_na_pessoa_do_beneficiario(self):
+        op = self.plano["PSBENEFI"]["opcoes"]
+        # identidade: uma linha só quando há número; adotada pela sequência da pessoa já cadastrada (sem choque)
+        self.assertEqual(op["documento_pessoa"]["desdobrar"], [("IDENT", "1")])
+        self.assertEqual(op["documento_pessoa"]["adotar"], ["pessoa_fisica_id", "sequencia"])
+        doc = self.cols("PSBENEFI", "documento_pessoa")
+        self.assertEqual(doc["pessoa_fisica_id"]["coluna"], "@id:pessoa_fisica")
+        self.assertEqual((doc["tipo_documento_identificacao_id"]["coluna"],
+                          doc["tipo_documento_identificacao_id"]["cod"]), ("=rg", ("tipo_documento_identificacao", "codigo")))
+        self.assertEqual(doc["data_emissao"]["coluna"], "EXPEDICAO")
+        # e-mail: opcional (inválido não grava), regra email, ligado à pessoa
+        self.assertTrue(op["email_pessoa"]["opcional"])
+        self.assertEqual(op["email_pessoa"]["adotar"], ["pessoa_fisica_id", "sequencia"])
+        em = self.cols("PSBENEFI", "email_pessoa")
+        self.assertEqual((em["email"]["coluna"], em["email"]["regra"]), ("EMAIL", "email"))
+        self.assertEqual(em["pessoa_fisica_id"]["coluna"], "@id:pessoa_fisica")
+        # telefone e endereço: sem destino estruturado (pedido r5c-1), preservados no retrato do movimento (ADR 0006)
+        decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENEFI"}
+        self.assertEqual(self.cols("PSBENEFI", "movimento_cadastral_beneficiario")["dados"]["coluna"], "#retrato:*")
+        for c, ped in (("FONE", "r5c-1"), ("CELULAR", "r5c-1"), ("ENDER", "r5c-1"), ("CEP", "r5c-1")):
+            self.assertFalse(decl[c].get("destino"), c)
+            self.assertIn(ped, decl[c]["motivo"], c)
+
+    def test_obito_marca_a_pessoa_falecida(self):
+        pf = [c for c in self.plano["PSBENEFI"]["colunas"]["pessoa_fisica"] if c["destino"] == "falecida"]
+        self.assertEqual([(c["coluna"], c["regra"]) for c in pf],
+                         [("NUM_DECLARACAO_OBITO", "preenchido"), ("ID_PFGUIAS_OBITO", "preenchido")])
+        self.assertEqual(sentinela.aplicar("preenchido", "99999999"), (True, None))
+        self.assertEqual(sentinela.aplicar("preenchido", None), (None, None))  # sem óbito: padrão falso do destino
+        decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENEFI"}
+        self.assertIn("r5c-1", decl["ID_TBCID10_OBITO"]["motivo"])  # causa no retrato do movimento
+        self.assertNotIn("pedido 8", decl["NUM_DECLARACAO_OBITO"]["motivo"])
+
+    def test_cpf_falso_valido(self):
+        for x in (l8_15.CPF_NOVO, l8_15.CPF_JA_CADASTRADO):
+            self.assertEqual(sentinela.aplicar("cpf", x)[0], "%011d" % x)
 
     def test_situacao_e_tipo_pela_evidencia_nunca_ativo_presumido(self):
         pares = {}
@@ -114,10 +201,13 @@ class Plano(unittest.TestCase):
         self.assertEqual(pares["DEP"]["0"], "titular")
         self.assertEqual({pares["DEP"][str(i)] for i in range(1, 100)}, {"dependente"})
         st = pares["STATUS"]
-        self.assertEqual([k for k, x in st.items() if x == "ativo"], ["A"])
-        self.assertEqual(st[""], "suspenso")  # nulo nunca vira o padrão 'ativo' do destino
-        self.assertNotIn("excluido", st.values())  # excluído exige motivo e data, sem fonte na origem
-        self.assertEqual(len(st), 1 + 26 * 2 + 10)  # todo código de 1 caractere tem par: nada cai no padrão
+        # só A tem domínio documentado; nulo (sem código) é suspenso; nenhum outro código vira fato por par fixo
+        self.assertEqual(st, {"A": "ativo", "": "suspenso"})
+        # código sem par: NULL com valor_fora_do_dominio por linha, e o concorrente grava suspenso (nunca o padrão
+        # 'ativo' do destino); a ordem declarada põe STATUS antes do literal
+        sit = [c["coluna"] for c in self.plano["PSBENEFI"]["colunas"]["beneficiario_plano"]
+               if c["destino"] == "situacao"]
+        self.assertEqual(sit, ["STATUS", "=suspenso"])
 
     def test_venda_vira_proposta_efetivada_com_plano_e_contrato_do_beneficiario(self):
         cs = self.cols("PSVENDAS", "proposta_adesao")
@@ -136,7 +226,7 @@ class Plano(unittest.TestCase):
 
     def test_descartadas_sem_destino(self):
         decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] in FORA]
-        self.assertTrue(decl)
+        self.assertEqual(bool(decl), bool(FORA))  # r5c: nada fora da carga
         self.assertFalse([c for c in decl if c.get("destino")])
 
 
@@ -155,6 +245,9 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(esp), TABELAS)
         self.assertTrue(FORA <= set(cont))
         for t, e in esp.items():
+            if t == "PSBENCPL":  # a linha sem beneficiário leva uma pai_inexistente por referência e a recusa
+                self.assertEqual(cont[t], len(l8_15.PSBENCPL_LINHAS))
+                continue
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 

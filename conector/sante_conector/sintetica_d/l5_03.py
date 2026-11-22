@@ -70,11 +70,12 @@ def _create(t):
     return "CREATE TABLE %s (%s);" % (t, ", ".join(partes))
 
 
-TABELAS = ("TBUNIUSE", "TBUSERCON", "TBUSERSCOMPL", "TBUSERS_TBPAPEL", "TBALERTA_TBOPCOES_TBEVENTOS",
+TABELAS = ("TBHISTSENHA", "TBUNIUSE", "TBUSERCON", "TBUSERSCOMPL", "TBUSERS_TBPAPEL", "TBALERTA_TBOPCOES_TBEVENTOS",
            "TBUSERS_TBALERTA", "TBLOCAL_TBUSERS", "PRJUSTIF_IMP_EXPORTACAO", "CCCADCIR_EXCLUSAO", "TBUSUCPL",
            "TBUSERS_TBCONVEN", "SIPACAGD_EXCLUSAO", "TBCABTRILHA", "TBLANTRALERTA", "TBLANTRILHASGH")
-CADEIA = ("TBCBOPRO", "TBSEXO", "HTPACIENTE")  # de outras fatias: só lidas pela referência encadeada
+CADEIA = ("TBCBOPRO", "TBSEXO", "HTPACIENTE", "TBTIPOOID")  # de outras fatias: só lidas pela referência encadeada
 DDL = """
+CREATE TABLE TBTPPERM_RICADPAC (ID INTEGER NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(23));
 CREATE TABLE TBOID (ID SMALLINT NOT NULL PRIMARY KEY, OID VARCHAR(30) NOT NULL, DESCRICAO VARCHAR(100) NOT NULL,
   ID_TBCONSPROF SMALLINT, ID_TBTIPOOID SMALLINT);
 CREATE TABLE TBTPMINISTCER (ID SMALLINT NOT NULL PRIMARY KEY, COD_TBTPMINISTCER VARCHAR(8), NOME VARCHAR(60));
@@ -245,7 +246,22 @@ def linhas(r, ins):
                              (1, "TABELA_EXEMPLO.NOME", 700), (2, "TABELA_EXEMPLO.X", 1), (6, "OUTRA_EXEMPLO.ALTA", 5000)]:
         ins("TBLANTRILHASGH", [tr, campo, ident])
 
+    # r5: tipos de OID (lidos pela referência encadeada do TBOID; provados em provas.tsv)
+    for i, d in enumerate(["Política", "CPF", "CNPJ", "Nome", "Data de nascimento", "Título de eleitor",
+                           "Registro no conselho", "UF do conselho", "Especialidade", "CNES"], 1):
+        ins("TBTIPOOID", [i, d])
+    # r5 (revisão): modo da restrição de prontuário, provado por código e rótulo (provas.tsv)
+    for i, d in [(1, "Restrito"), (2, "Consentido")]:
+        ins("TBTPPERM_RICADPAC", [i, d])
+    # r5 (ADR 0007, 17): histórico de senhas com o resumo importado (falso: SHA-256 de textos de exemplo)
+    import base64 as _b64, hashlib as _hl
+    _h = lambda s: _hl.sha256(s.encode()).hexdigest()
+    for u, s, salt in [(A, _h("exemplo-1"), "sal-1"), (B, _b64.b64encode(_hl.sha256(b"exemplo-2").digest()).decode(), None),
+                       (C, "nao-e-resumo", None), ("zeca", _h("exemplo-3"), None)]:
+        ins("TBHISTSENHA", [u, ts, s, salt])
     return {
+        "TBHISTSENHA": {"gravados": 2, "pendencias": {"senha_hash_invalido": 1, "pai_inexistente": 1,
+                                                      "restricao_destino_1048": 2}},
         "TBOID": {"gravados": 11, "pendencias": {"restricao_destino_1062": 1}},
         "TBTPMINISTCER": {"gravados": 2, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1062": 1}},
         "TBTPACAOAUDIT": {"gravados": 7, "pendencias": {"restricao_destino_1048": 1}},

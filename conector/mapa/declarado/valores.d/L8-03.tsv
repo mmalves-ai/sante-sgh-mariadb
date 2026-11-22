@@ -5,3 +5,23 @@ TBCTRMEM	SITUACAO	tabela_preco.situacao	A	ativa	L8-03: A/I, a convenção de sit
 TBCTRMEM	SITUACAO	tabela_preco.situacao	I	inativa	L8-03: A/I, a convenção de situação da origem
 TBCTRTHM	SITUACAO	tabela_preco.situacao	A	ativa	L8-03: A/I, a convenção de situação da origem
 TBCTRTHM	SITUACAO	tabela_preco.situacao	I	inativa	L8-03: A/I, a convenção de situação da origem
+TBCREMED	CONTAS	credenciamento_cobranca.tipo_conta_id	I	internacao	L8-03 r3: conta de internação (mesmos pares de FCCRECUN, L8-04)
+TBCREMED	CONTAS	credenciamento_cobranca.tipo_conta_id	E	externa	L8-03 r3: conta externa (mesmos pares de FCCRECUN, L8-04)
+TBCREMED	CONTAS	credenciamento_cobranca.tipo_conta_id	A	ambulatorial	L8-03 r3: conta ambulatorial (mesmos pares de FCCRECUN, L8-04)
+TBCREMED	CONTAS	credenciamento_cobranca.tipo_conta_id	U	urgencia	L8-03 r3: conta de pronto atendimento (mesmos pares de FCCRECUN, L8-04)
+TBCREMED	CONTAS	credenciamento_cobranca.tipo_conta_id	T		L8-03 r3: todos os tipos de conta: NULL sem pendência (credenciamento vale para todos) (mesmos pares de FCCRECUN, L8-04)
+TBCREPRS	CONTAS	credenciamento_cobranca.tipo_conta_id	I	internacao	L8-03 r3: conta de internação (mesmos pares de FCCRECUN, L8-04)
+TBCREPRS	CONTAS	credenciamento_cobranca.tipo_conta_id	E	externa	L8-03 r3: conta externa (mesmos pares de FCCRECUN, L8-04)
+TBCREPRS	CONTAS	credenciamento_cobranca.tipo_conta_id	A	ambulatorial	L8-03 r3: conta ambulatorial (mesmos pares de FCCRECUN, L8-04)
+TBCREPRS	CONTAS	credenciamento_cobranca.tipo_conta_id	U	urgencia	L8-03 r3: conta de pronto atendimento (mesmos pares de FCCRECUN, L8-04)
+TBCREPRS	CONTAS	credenciamento_cobranca.tipo_conta_id	T		L8-03 r3: todos os tipos de conta: NULL sem pendência (credenciamento vale para todos) (mesmos pares de FCCRECUN, L8-04)
+TBMATMED	SITUACAO	item_referencia_matmed.situacao	A	ativo	L8-03 r4: A/I, a convenção de situação da origem
+TBMATMED	SITUACAO	item_referencia_matmed.situacao	I	inativo	L8-03 r4: A/I, a convenção de situação da origem
+TBPERTHM	TIPO_PAC	regra_percentual_cobranca.tipo_paciente	T	todos	L8-03 r4: tipo de paciente do percentual (T todos, I internado, E externo); a confirmar com o domínio da imagem de referência; sem par: padrão todos com valor_fora_do_dominio
+TBPERTHM	TIPO_PAC	regra_percentual_cobranca.tipo_paciente	I	internado	L8-03 r4: tipo de paciente do percentual (T todos, I internado, E externo); a confirmar com o domínio da imagem de referência; sem par: padrão todos com valor_fora_do_dominio
+TBPERTHM	TIPO_PAC	regra_percentual_cobranca.tipo_paciente	E	externo	L8-03 r4: tipo de paciente do percentual (T todos, I internado, E externo); a confirmar com o domínio da imagem de referência; sem par: padrão todos com valor_fora_do_dominio
+TBITEATE	TAB	tipo_atendimento_tabela.padrao	SUS	sus	L8-03 r4: nome da tabela do tipo de atendimento (lista de 3 linhas da origem) -> padrão; a confirmar com os nomes da imagem de referência; sem par: valor_fora_do_dominio e próprio presumido
+TBITEATE	TAB	tipo_atendimento_tabela.padrao	TUSS	tuss	L8-03 r4: nome da tabela do tipo de atendimento (lista de 3 linhas da origem) -> padrão; a confirmar com os nomes da imagem de referência; sem par: valor_fora_do_dominio e próprio presumido
+TBITEATE	TAB	tipo_atendimento_tabela.padrao	PRESENCIAL	presencial	L8-03 r4: nome da tabela do tipo de atendimento (lista de 3 linhas da origem) -> padrão; a confirmar com os nomes da imagem de referência; sem par: valor_fora_do_dominio e próprio presumido
+TBITEATE	TAB	tipo_atendimento_tabela.padrao	PROPRIA	proprio	L8-03 r4: nome da tabela do tipo de atendimento (lista de 3 linhas da origem) -> padrão; a confirmar com os nomes da imagem de referência; sem par: valor_fora_do_dominio e próprio presumido
+TBITEATE	TAB	tipo_atendimento_tabela.padrao	PRÓPRIA	proprio	L8-03 r4: nome da tabela do tipo de atendimento (lista de 3 linhas da origem) -> padrão; a confirmar com os nomes da imagem de referência; sem par: valor_fora_do_dominio e próprio presumido

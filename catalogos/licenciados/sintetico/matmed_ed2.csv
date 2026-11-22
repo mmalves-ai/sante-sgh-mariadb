@@ -1,0 +1,4 @@
+codigo;descricao;tipo_produto;preco_fabrica;preco_maximo_consumidor;tipo_alteracao
+SINT0001;PRODUTO FICTICIO ALFA 10 MG;medicamento;13,10;17,50;alteracao_preco
+SINT0002;PRODUTO FICTICIO BETA SOL INJ;medicamento;3,40;4,70;
+SINT0007;PRODUTO FICTICIO EPSILON 5 MG;medicamento;2,00;2,80;inclusao

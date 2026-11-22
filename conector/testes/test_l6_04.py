@@ -1,6 +1,7 @@
-"""Fatia L6-04 (agenda: situações, vínculos da agenda, escala e trilha das marcações canceladas e excluídas):
-declarações, plano da carga dirigida pelo mapa, descartes e regras das colunas. Sem banco; só valores inventados (a
-conciliação na imagem SINTÉTICA roda em `conector.sh conferir-fatia L6-04`)."""
+"""Fatia L6-04 (agenda: situações da marcação de exame, agenda de exames, vínculos da agenda, grade gerada e cópias
+das marcações de consulta canceladas e excluídas): declarações, plano da carga dirigida pelo mapa, descartes e regras
+das colunas. Sem banco; só valores inventados (a conciliação na imagem SINTÉTICA roda em
+`conector.sh conferir-fatia L6-04`)."""
 import csv
 import datetime
 import unittest
@@ -8,19 +9,22 @@ import unittest
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_04
 
-FATIA = ["SICANAGE", "SICTRAGE", "SIPACAGI", "TBESTADOCONFIRMACAO", "TBSITAGE", "AGPARAM", "SIAGENDA",
-         "REAGENDA_TBCONVEN", "SIAGENDA_TBCONVEN", "AGCADAGENDA", "AGCADEIRA", "AGDIASINDISP", "REAGENDA_TBESPEC",
-         "REPACAGD", "REPACAGD_EXCLUSAO", "SIPACAGD"]
-CARREGADAS = {"TBSITAGE": "situacao_marcacao",
-              "REAGENDA_TBCONVEN": "agenda_fonte_pagadora", "REAGENDA_TBESPEC": "agenda_especialidade",
-              "REPACAGD_EXCLUSAO": "registro_excluido"}
-# declaração pronta e comentada até SIAGENDA carregar e até as regras pedidas (L6-04.json)
-PRONTAS = {"SIAGENDA_TBCONVEN": "agenda_fonte_pagadora", "SICTRAGE": "agenda_escala",
-           "SICANAGE": "trilha_auditoria"}
+FATIA = list(l6_04.FATIA)
+CARREGADAS = {"TBSITAGE": "situacao_marcacao", "SIAGENDA": "agenda_servico", "SIAGECRI": "geracao_grade",
+              "REAGENDA_TBCONVEN": "agenda_fonte_pagadora", "SIAGENDA_TBCONVEN": "agenda_fonte_pagadora",
+              "REAGENDA_TBESPEC": "agenda_especialidade", "RECANAGE": "registro_excluido",
+              "REPACAGD_EXCLUSAO": "registro_excluido", "SIPACAGI": "horario_agenda",
+              "SIPACAGD": "marcacao_horario", "REPACAGD": "marcacao_horario",
+              # rodada 5 (ADR 0006): as antes descartadas carregam
+              "TBESTADOCONFIRMACAO": "parametro_opcao", "AGPARAM": "parametro_valor", "AGCADAGENDA": "agenda_servico",
+              "AGCADEIRA": "recurso_agendavel", "AGDIASINDISP": "bloqueio_agenda"}
+# rodada 4: as declarações prontas carregam (fim do horário por #data_hora_mais)
+PRONTAS = {}
 SIGNIFICADOS = {"aguardando", "confirmada", "chegou", "em_atendimento", "realizada", "cancelada", "falta", "bloqueada"}
-DESCARTES = {"TBESTADOCONFIRMACAO": "mecanismo_do_produto", "AGPARAM": "mecanismo_do_produto",
-             "AGCADAGENDA": "sem_valor", "AGCADEIRA": "sem_valor", "AGDIASINDISP": "sem_valor"}
-BLOQUEADAS = {"SIAGENDA", "SIPACAGI", "SIPACAGD", "REPACAGD"} | set(PRONTAS)
+DESCARTES = {}
+BLOQUEADAS = set(PRONTAS)
+# a agenda de exames é identificada por NOME e CRM, a junção do próprio sistema antigo (o EXAME é atributo)
+AGENDA_EXAME = [{"tabela": "SIAGENDA", "modo": "alt_composta", "arg": ["NOME", "CRM"], "cols": ["NOME", "CRM"]}]
 
 
 def _tsv(nome):
@@ -29,7 +33,7 @@ def _tsv(nome):
 
 
 def _prontas():
-    """Declarações comentadas (prontas) da fatia, por tabela e destino, como `mapa.carregar_execucao` as leria."""
+    """Declarações comentadas (prontas) da fatia, por tabela e coluna de destino."""
     with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L6-04.tsv", encoding="utf-8") as f:
         linhas = f.read().splitlines()
     cab = linhas[0].split("\t")
@@ -37,7 +41,7 @@ def _prontas():
     for x in linhas[1:]:
         if x.startswith("#"):
             r = dict(zip(cab, x[1:].split("\t")))
-            if r["tabela"] in PRONTAS and r["destino"]:
+            if r["destino"]:
                 saida.setdefault(r["tabela"], {})[r["destino"].split(".")[1]] = r
     return saida
 
@@ -51,10 +55,13 @@ class L604(unittest.TestCase):
     def cols(self, t):
         return {c["destino"]: c for c in self.plano[t]["colunas"][CARREGADAS[t]]}
 
+    def todas(self, t, dc):
+        return [c for c in self.plano[t]["colunas"][CARREGADAS[t]] if c["destino"] == dc]
+
     def test_cobertura_da_fatia(self):
         self.assertEqual(set(self.plano), set(CARREGADAS))
         for t, dt in CARREGADAS.items():
-            self.assertEqual(self.plano[t]["destinos"], [dt])
+            self.assertEqual(self.plano[t]["destinos"][0], dt)
         sc = {r["tabela"]: r for r in _tsv("sem_carga.tsv")}
         for t, causa in DESCARTES.items():
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
@@ -64,8 +71,103 @@ class L604(unittest.TestCase):
     def test_literais_e_padroes(self):
         # o convênio da agenda era oferecido na marcação online (o portão é o modo online da agenda): padrão TRUE
         self.assertNotIn("aceita_marcacao_online", self.cols("REAGENDA_TBCONVEN"))
-        self.assertNotIn("aceita_marcacao_online", _prontas()["SIAGENDA_TBCONVEN"])
+        self.assertNotIn("aceita_marcacao_online", self.cols("SIAGENDA_TBCONVEN"))
         self.assertEqual(self.cols("REAGENDA_TBESPEC")["principal"]["coluna"], "=~0")
+
+    def test_agenda_de_exames(self):
+        c = self.cols("SIAGENDA")
+        # categoria pelo cadastro do cliente com a natureza fixa do produto, nunca id fixo
+        self.assertEqual((c["categoria_agenda_id"]["coluna"], c["categoria_agenda_id"]["cod"]),
+                         ("=exame", ("categoria_agenda", "natureza")))
+        self.assertEqual(c["duracao_horario_minutos"]["regra"], "minutos_hhmm")
+        self.assertEqual(sentinela.aplicar("minutos_hhmm", b"0030"), (30, None))
+        self.assertEqual(sentinela.aplicar("minutos_hhmm", "0000"), (None, None))
+        self.assertEqual([x.get("tabela") or x.get("coluna") for x in c["profissional_id"]["passos"]],
+                         ["TBCBOPRO", "ID_TBPROFIS", "TBPROFIS"])
+        self.assertEqual(c["profissional_id"]["passos"][0]["modo"], "alt")
+        self.assertEqual(c["ativo"]["regra"], "booleano_sn")
+        self.assertEqual(c["dias_retorno"]["regra"], "inteiro_zero_nulo")
+        self.assertEqual(c["estabelecimento_id"]["coluna"], "@estabelecimento")
+        # a agenda de exames é identificada por nome e número do conselho (chave alternativa composta)
+        self.assertEqual(self.cols("SIAGECRI")["agenda_servico_id"]["passos"], AGENDA_EXAME)
+
+    def test_grade_gerada(self):
+        c = self.cols("SIAGECRI")
+        st = self.todas("SIAGECRI", "situacao")
+        self.assertEqual([(x["coluna"], x["depara"]) for x in st], [("STATUS", "valores"), ("=concluida", "")])
+        self.assertEqual((st[0]["valores"]["C"], st[0]["valores"]["E"]), ("concluida", "revertida"))
+        self.assertEqual(c["solicitada_em"]["coluna"], "#data_hora:DT_CRIACAO,HR_CRIACAO")
+        self.assertEqual(carga_mapa.data_hora_composta(datetime.date(2026, 2, 20), b"1015"),
+                         (datetime.datetime(2026, 2, 20, 10, 15), None))
+        self.assertEqual(carga_mapa.data_hora_composta(datetime.date(2026, 2, 20), "2575")[1], "hora_invalida")
+        self.assertTrue(c["mensagem_processo"]["coluna"].startswith("#retrato:SEM1,"))
+        self.assertEqual(c["responsavel_usuario_id"]["referencia"], "TBUSERS")
+
+    def test_cancelamento_de_consulta_vira_registro_cancelado(self):
+        c = self.cols("RECANAGE")
+        # o PROTOCOLO é a sequência própria do cancelamento, não o id da marcação: entidade própria, para não
+        # misturar dois espaços de números sob (entidade, entidade_id) com as cópias de marcação excluída
+        self.assertEqual((c["entidade"]["coluna"], c["operacao"]["coluna"]),
+                         ("=cancelamento_marcacao", "=cancelamento"))
+        self.assertNotEqual(c["entidade"]["coluna"], self.cols("REPACAGD_EXCLUSAO")["entidade"]["coluna"])
+        self.assertEqual((c["entidade_id"]["coluna"], c["dados"]["coluna"]), ("PROTOCOLO", "#retrato:*"))
+        self.assertEqual(c["ocorrido_em"]["coluna"], "#data_hora:DT_CAN,HR_CAN")
+        j = self.todas("RECANAGE", "justificativa")
+        self.assertEqual(j[0]["coluna"], "MOTIVO")
+        self.assertTrue(j[1]["coluna"].startswith("="))
+        self.assertNotIn("marcacao_horario_id", c)   # a marcação foi apagada na origem: nada a ligar
+
+    def test_horario_e_marcacao_carregam(self):
+        self.assertEqual(_prontas(), {})
+        self.assertEqual(set(self.plano["SIPACAGI"]["destinos"]),
+                         {"horario_agenda", "bloqueio_agenda", "motivo_bloqueio_agenda"})
+        for t in ("SIPACAGD", "REPACAGD"):
+            self.assertEqual(set(self.plano[t]["destinos"]),
+                             {"marcacao_horario", "pre_cadastro", "marcacao_horario_item", "trilha_auditoria"})
+        fim = self.todas("SIPACAGI", "fim_em")[0]
+        self.assertEqual((fim["coluna"], fim["regra"]), ("#data_hora_mais:DATA,HORA,DATA", "data_fim_aberta:1801"))
+        dc = [c for c in self.m["colunas_decl"] if (c["tabela"], c["destino"]) == ("SIPACAGI", "horario_agenda.fim_em")]
+        self.assertEqual(dc[0]["via"], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos")
+        # a coluna de minutos anulada sem pendência: a duração vem da agenda
+        self.assertEqual(sentinela.aplicar("data_fim_aberta:1801", datetime.date(2026, 3, 2)), (None, None))
+        via = {(c["tabela"], c["destino"]): c["via"] for c in self.m["colunas_decl"] if c["destino"]}
+        self.assertEqual(via[("SIPACAGI", "horario_agenda.agenda_servico_id")], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)")
+        # a marcação não traz EXAME e acha o horário como o sistema antigo: NOME, CRM, DATA e HORA
+        self.assertEqual(via[("SIPACAGD", "marcacao_horario.horario_agenda_id")],
+                         "ref:SIPACAGI.(NOME,CRM,DATA,HORA)=(NOME,CRM,DATA,HORA)")
+        self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "duracao_minutos")], ["HORA", "NOME"])
+        self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "tipo_marcacao_id")], ["RETORNO", "=primeira_vez"])
+        self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "responsavel_usuario_id")],
+                         ["USUARIO", "ID_TBUSERS_INCLUSAO"])
+        for t in ("SIPACAGD", "REPACAGD"):
+            self.assertIn("destino_se:ID_RICADPAC=", via[(t, "pre_cadastro.estabelecimento_id")])
+
+    def test_marcacao_carrega_procedimento_solicitante_municipio_e_retrato(self):
+        """r4b: nada da marcação fica sem carga por falta de coluna: procedimento no item, solicitante externo pelo
+        nome, município pelo IBGE e todas as colunas no retrato da trilha (sem segredo)."""
+        via = {(c["tabela"], c["destino"], c["coluna"]): c for c in self.m["colunas_decl"] if c["destino"]}
+        for t in ("SIPACAGD", "REPACAGD"):
+            p = via[(t, "marcacao_horario_item.item_faturavel_id", "PROCED")]
+            self.assertEqual(p["regra"], "inteiro_zero_nulo")
+            self.assertIn("ref:TBPROCTO.COD_PROCEDIMENTO", p["via"])
+            self.assertIn("opcional", p["via"])
+            s = via[(t, "marcacao_horario.solicitante_externo_id", "MED_SOL")]
+            self.assertIn("ref:TBMEDSOL.NOME", s["via"])
+            self.assertIn("se:CRM_SOL=,0", s["via"])
+            self.assertEqual(via[(t, "pre_cadastro.municipio_ibge_id", "IBGE")]["depara"], "ibge_municipio")
+            self.assertEqual(via[(t, "pre_cadastro.cep", "CEP")]["regra"], "inteiro_zeros_esquerda:8")
+            self.assertIn((t, "trilha_auditoria.dados_depois", "#retrato:*"), via)
+            self.assertIn((t, "trilha_auditoria.entidade_id", "@id"), via)
+        self.assertEqual(sentinela.aplicar("inteiro_zeros_esquerda:8", 1310100)[0], "01310100")
+        # a coluna de minutos do horário de exame é a DATA anulada: ano < 1801 ou sentinela nunca vira minutos
+        self.assertEqual(sentinela.aplicar("data_fim_aberta:1801", datetime.date(1700, 1, 1)), (None, "data_sentinela"))
+        self.assertEqual(sentinela.aplicar("data_fim_aberta:1801", datetime.date(1899, 12, 30)),
+                         (None, "data_sentinela"))
+
+    def test_horario_fechado_sem_motivo_carrega_indisponivel(self):
+        vs = {v["valor_origem"]: v["valor_destino"] for v in self.m["valores"]
+              if (v["tabela"], v["coluna"], v["destino"]) == ("SIPACAGI", "LIVRE", "horario_agenda.situacao")}
+        self.assertEqual((vs["S"], vs["N"]), ("livre", "cancelado"))
 
     def test_significado_pelo_de_para_de_valores(self):
         c = self.cols("TBSITAGE")["significado"]
@@ -77,56 +179,30 @@ class L604(unittest.TestCase):
                          ("confirmada", "cancelada", "falta", "realizada", "chegou", "bloqueada"))
 
     def test_estado_de_confirmacao_de_alergia_nao_vai_para_a_agenda(self):
-        self.assertNotIn("TBESTADOCONFIRMACAO", self.plano)
+        self.assertEqual(self.plano["TBESTADOCONFIRMACAO"]["destinos"], ["parametro_opcao"])
+        self.assertEqual(self.cols("TBESTADOCONFIRMACAO")["parametro_definicao_id"]["coluna"],
+                         "=" + l6_04.PARAMETROS_LISTA["TBESTADOCONFIRMACAO"])
         for p in self.plano.values():
             self.assertNotIn("situacao_confirmacao", p["destinos"])
 
     def test_referencias_pelos_pais_da_origem(self):
-        c = self.cols("REAGENDA_TBCONVEN")
-        self.assertEqual(c["agenda_servico_id"]["referencia"], "REAGENDA")
-        self.assertEqual(c["fonte_pagadora_id"]["referencia"], "TBCONVEN")
-        self.assertEqual(c["observacao_marcacao_online"]["regra"], "texto_longo")
-        si = _prontas()["SIAGENDA_TBCONVEN"]
-        self.assertEqual((si["agenda_servico_id"]["coluna"], si["fonte_pagadora_id"]["coluna"]),
-                         ("ID_SIAGENDA", "ID_TBCONVEN"))
-        self.assertEqual(si["observacao_marcacao_online"]["regra"], "texto_longo")
+        for t, ag in (("REAGENDA_TBCONVEN", "REAGENDA"), ("SIAGENDA_TBCONVEN", "SIAGENDA")):
+            c = self.cols(t)
+            self.assertEqual(c["agenda_servico_id"]["referencia"], ag)
+            self.assertEqual(c["fonte_pagadora_id"]["referencia"], "TBCONVEN")
+            self.assertEqual(c["observacao_marcacao_online"]["regra"], "texto_longo")
         c = self.cols("REAGENDA_TBESPEC")
         self.assertEqual(c["agenda_servico_id"]["referencia"], "REAGENDA")
         self.assertEqual(c["especialidade_medica_id"]["referencia"], "TBESPEC")
-
-    def test_escala_da_agenda_de_exames(self):
-        c = _prontas()["SICTRAGE"]
-        # a agenda de exames não tem profissional (CRM 0): o nome é a chave alternativa
-        self.assertEqual(mapa.passos_ref(mapa.referencia_declarada(c["agenda_servico_id"])),
-                         [{"tabela": "SIAGENDA", "modo": "alt", "arg": "NOME"}])
-        self.assertEqual(c["dia_semana"]["regra"], "inteiro_faixa:1,7")
-        self.assertEqual((c["hora_inicio"]["regra"], c["hora_fim"]["regra"]), ("hora_hhmm", "hora_hhmm"))
-        self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
-        # '0000' é "sem pausa" e viraria 00:00: o intervalo fica fora até a regra pedida
-        self.assertNotIn("intervalo_inicio", c)
-        self.assertEqual(sentinela.aplicar("hora_hhmm", "0800"), (datetime.time(8, 0), None))
-        self.assertEqual(sentinela.aplicar("hora_hhmm", "2575")[1], "hora_invalida")
-        self.assertEqual(sentinela.aplicar("inteiro_faixa:1,7", "9")[1], "valor_fora_do_dominio")
-
-    def test_cancelamento_na_trilha_e_exclusao_em_registro_excluido(self):
-        pr = _prontas()
-        c = pr["SICANAGE"]
-        self.assertTrue(all("trilha_auditoria" in x["via"].split(";") for x in c.values()))
-        self.assertEqual((c["acao"]["coluna"], c["entidade"]["coluna"]), ("=operacao", "=marcacao_horario"))
-        self.assertEqual(c["dados_antes"]["coluna"], "#retrato")
-        self.assertNotIn("entidade_id", c)   # o cancelamento da origem não tem id da marcação apagada
-        self.assertEqual(mapa.referencia_declarada(c["usuario_id"]), "TBUSERS")
-        # mesma decisão das outras cópias de registro excluído (SIPACAGD_EXCLUSAO, CCCADCIR_EXCLUSAO)
         e = self.cols("REPACAGD_EXCLUSAO")
         self.assertEqual((e["entidade"]["coluna"], e["operacao"]["coluna"]), ("=marcacao_horario", "=exclusao"))
         self.assertEqual((e["entidade_id"]["coluna"], e["entidade_id"]["regra"]), ("ID_REPACAGD", "inteiro"))
-        self.assertEqual(e["dados"]["coluna"], "#retrato")
-        self.assertEqual(e["estabelecimento_id"]["coluna"], "@estabelecimento")
-        self.assertEqual(e["ocorrido_em"]["regra"], "data_hora")
         self.assertEqual(e["usuario_id"]["referencia"], "TBUSERS")
+        # decisão única das *_EXCLUSAO: retrato completo e justificativa/autor presumidos (valor_presumido)
+        self.assertEqual(e["dados"]["coluna"], "#retrato:*")
+        self.assertTrue(e["justificativa"]["coluna"].startswith("=~"))
+        self.assertIn("usuário presumido", e["justificativa"]["coluna"])
         self.assertEqual(e["paciente_id"]["referencia"], "RICADPAC")
-        self.assertTrue(e["justificativa"]["coluna"].startswith("="))
-        self.assertEqual(set(pr), set(PRONTAS))
 
     def test_codigo_da_situacao_tem_prefixo_do_dominio_de_exame(self):
         c = self.cols("TBSITAGE")["codigo"]
@@ -149,21 +225,50 @@ class L604(unittest.TestCase):
         self.assertEqual({r["tabela"] for r in decl if r["destino"]}, set(CARREGADAS))
         for r in decl:
             self.assertTrue(r["motivo"])
-        comentadas = {x[1:].split("\t")[0] for x in linhas if x.startswith("#")}
-        self.assertEqual(comentadas, BLOQUEADAS)
-        for t, dt in PRONTAS.items():
-            self.assertEqual({r["destino"].split(".")[0] for r in _prontas()[t].values()}, {dt})
+        self.assertEqual({x[1:].split("\t")[0] for x in linhas if x.startswith("#")}, BLOQUEADAS)
 
     def test_imagem_sintetica_cobre_as_carregadas(self):
         linhas = []
         esp = l6_04.linhas(__import__("random").Random(1), lambda t, v: linhas.append(t))
         self.assertEqual(set(esp), set(CARREGADAS))
-        self.assertEqual(set(l6_04.ESPERADO_PRONTO), set(PRONTAS))
-        for t, e in l6_04._esperado().items():
-            lidas = linhas.count(t)
-            recusas = sum(n for r, n in e["pendencias"].items()
-                          if r.startswith("restricao_destino_") or r == "codigo_colisao_caixa")
-            self.assertEqual(e["gravados"] + recusas, lidas, t)
+        for t, e in esp.items():
+            if t in l6_04.LINHAS_COM_ITEM:  # desdobrar: "gravados" conta itens
+                self.assertEqual(linhas.count(t), l6_04.LINHAS_COM_ITEM[t], t)
+                continue
+            recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
+            self.assertEqual(e["gravados"] + recusas + l6_04.RECUSAS_SEM_RESTRICAO.get(t, 0), linhas.count(t), t)
+
+    def test_r5_agenda_de_cadeiras_e_parametros(self):
+        self.assertEqual(self.plano["AGCADAGENDA"]["destinos"][0], "agenda_servico")
+        self.assertEqual(set(self.plano["AGCADAGENDA"]["destinos"]), {"agenda_servico", "categoria_agenda", "setor_funcional"})
+        self.assertEqual(set(self.plano["AGCADEIRA"]["destinos"]), {"recurso_agendavel", "agenda_recurso"})
+        tipos = [c["coluna"] for c in self.todas("AGCADEIRA", "tipo")]
+        self.assertEqual(tipos, ["TIPO", "=~cadeira"])
+        self.assertEqual([c["coluna"] for c in self.todas("AGCADEIRA", "codigo")][0], "COD_IDENT")
+        self.assertFalse(self.todas("AGCADEIRA", "codigo_integracao"))
+        self.assertEqual(self.cols("AGDIASINDISP")["criado_em"]["coluna"], "DATA_GRAV")
+        # o plano não leva a "via" crua (o motor a desmonta em passos/condição): confere a declaração da fatia
+        with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L6-04.tsv", encoding="utf-8") as f:
+            decl = list(csv.DictReader((x for x in f.read().splitlines() if not x.startswith("#")), delimiter="\t"))
+        via = {}
+        for r in decl:
+            if r["tabela"] == "AGCADAGENDA":
+                via[(r["tabela"], r["destino"])] = via.get((r["tabela"], r["destino"]), "") + "|" + (r["via"] or "")
+        self.assertIn("ref:TBCENCUS.ID", via[("AGCADAGENDA", "setor_funcional.centro_custo_id")])
+        self.assertIn("se:AGENDA_DOMICILIAR=S", via[("AGCADAGENDA", "categoria_agenda.codigo")])
+        ag = self.plano["AGCADAGENDA"]["colunas"]
+        self.assertTrue(next(c for c in ag["setor_funcional"] if c["destino"] == "centro_custo_id")["passos"])
+        self.assertTrue(any(c.get("se") for c in ag["categoria_agenda"] if c["destino"] == "codigo"))
+        self.assertEqual(set(self.plano["AGDIASINDISP"]["destinos"]), {"bloqueio_agenda", "motivo_bloqueio_agenda"})
+        item = self.todas("AGPARAM", "valor")[0]
+        self.assertEqual(item["coluna"], "#item")
+        for c in ("agenda.cadeira.quantidadeAgendas", "agenda.cadeira.digitarEnfermeiroResponsavel"):
+            self.assertIn(c, l6_04.PREPARO_DESTINO)
+
+    def test_mapa_da_conferencia_so_com_esta_fatia(self):
+        m = l6_04.MAPA_TESTE
+        self.assertTrue(m["colunas_decl"])
+        self.assertTrue(all(c["tabela"] in l6_04.FATIA for c in m["colunas_decl"]))
 
 
 if __name__ == "__main__":

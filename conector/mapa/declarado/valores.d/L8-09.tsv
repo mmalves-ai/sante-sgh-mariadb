@@ -83,14 +83,37 @@ COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_m
 COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	LANÇAMENTO MANUAL	manual	L8-09: nome genérico do módulo (o cliente acrescenta outros pares no painel)
 COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	LANÇAMENTO MANUAL	0	L8-09: derivado do módulo
 COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	LANÇAMENTO MANUAL	1	L8-09: derivado do módulo
-#FCRECIBO	CANCELADO	recibo.situacao	S	cancelado	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
-#FCRECIBO	CANCELADO	recibo.situacao	N	emitido	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
-#FCRECIBO	EMITIDO	recibo.vias_impressas	S	1	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
-#FCRECIBO	EMITIDO	recibo.vias_impressas	N	0	L8-09: comentado até a declaração de FCRECIBO valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	1	extincao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	2	fusao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	3	incorporacao_incorporada	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	4	incorporacao_incorporadora	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	5	cisao_total	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	6	cisao_parcial	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	7	transformacao	L8-09: código oficial público da situação especial; comentado até a declaração valer (pedido 1)
+FCRECIBO	CANCELADO	recibo.situacao	S	cancelado	L8-09: ativo na rodada 3
+FCRECIBO	CANCELADO	recibo.situacao	N	emitido	L8-09: ativo na rodada 3
+FCRECIBO	EMITIDO	recibo.vias_impressas	S	1	L8-09: ativo na rodada 3
+FCRECIBO	EMITIDO	recibo.vias_impressas	N	0	L8-09: ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	1	extincao	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	2	fusao	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	3	incorporacao_incorporada	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	4	incorporacao_incorporadora	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	5	cisao_total	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	6	cisao_parcial	L8-09: código oficial público da situação especial; ativo na rodada 3
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	7	transformacao	L8-09: código oficial público da situação especial; ativo na rodada 3
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	Mensal	mensal	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	MENSAL	mensal	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	mensal	mensal	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	Trimestral	trimestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	TRIMESTRAL	trimestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	trimestral	trimestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	Semestral	semestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	SEMESTRAL	semestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	semestral	semestral	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	Anual	anual	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	ANUAL	anual	L8-09 r3: forma pela descrição
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	anual	anual	L8-09 r3: forma pela descrição
+CTCTARECEITANCI	GRUPO	conta_receita_custeio.grupo	H	servico	L8-09 r3: serviços hospitalares (lista fechada da tela do programa antigo)
+CTCTARECEITANCI	GRUPO	conta_receita_custeio.grupo	S	servico	L8-09 r3: serviços de diagnóstico e terapia (lista fechada da tela do programa antigo)
+CTCTARECEITANCI	GRUPO	conta_receita_custeio.grupo	M	honorario	L8-09 r3: honorários médicos (lista fechada da tela do programa antigo)
+FCRECIBO	ID_TBCBOPRO	recibo.tipo	1	honorario	L8-09 r3: com profissional
+FCRECIBO	ID_TBCBOPRO	recibo.tipo		recebimento	L8-09 r3: sem profissional
+FCRECIBO	CANCELADO	recibo.cancelado_em	S	@data_carga	L8-09 r3: cancelado sem data na origem: data da carga
+FCRECIBO	CANCELADO	recibo.cancelado_em	N		L8-09 r3: emitido sem data de cancelamento
+FCRECIBO	CANCELADO	recibo.cancelado_em			L8-09 r3: emitido sem data de cancelamento
+FCRECIBO	CANCELADO	recibo.motivo_cancelamento	S	Cancelado no sistema anterior; motivo e data não informados na origem	L8-09 r3: cancelado sem motivo na origem
+FCRECIBO	CANCELADO	recibo.motivo_cancelamento	N		L8-09 r3: emitido
+FCRECIBO	CANCELADO	recibo.motivo_cancelamento			L8-09 r3: emitido

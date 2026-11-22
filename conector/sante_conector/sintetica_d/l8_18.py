@@ -15,7 +15,8 @@ Anomalias cobertas:
   linhas recusadas pela restrição do destino, que já passaram pelo literal);
 - quantidade de parâmetros e acesso restrito da triagem presumidos (=~0: valor_presumido por coluna e linha,
   8 x 2 = 16), pois vêm das filhas e o motor não agrega;
-- parâmetro oculto (VISIVEL='N', id 3) entra como comum: perda declarada;
+- parâmetro oculto (VISIVEL='N', id 3) entra com visivel = FALSE (coluna do modelo, 19_REL/04);
+- portal de configuração de painel nunca vista (PNCONFIG 2): pai_inexistente pela ligação ao painel de chamada;
 - módulo nunca visto numa linha com dois destinos: pai_inexistente uma vez por destino (TBEDITREL 4: 2 + 5: 1);
 - vínculo opcional do relatório com a tela do menu (relatorio_tela): tela nunca vista não grava o vínculo nem recusa
   o relatório (TBEDITREL 8: pai_inexistente);
@@ -68,13 +69,15 @@ CREATE TABLE TBEDITREL_AGENDA_LOG (ID_TBEDITREL INTEGER NOT NULL, DATA_HORA_ENVI
 """
 CARREGADAS = ("TBAGRUPRELAT", "TBEDITREL", "TBAGRUPRELAT_TBEDITREL", "TBEDITPARAM", "TBEDITREL_GRUUSU",
               "TBEDITREL_TBUSERS", "TBOPCAOREL", "TBEDITPESQ", "TBEDITREL_AGENDA", "TBEDITREL_AGENDA_LOG",
-              "TBBTNOPREL", "TBPARAMOPREL")
+              "TBBTNOPREL", "TBPARAMOPREL", "PNCONFIGPORTAL", "TBEDITQRP", "TBEDITREL_PRMODELOREL",
+              "TBEDITREL_AGENDA_SITUACAO")
 # descartadas com motivo de produto em declarado/sem_carga.tsv (ficam na imagem e não são carregadas)
-NAO_CARREGADAS = ("PNCONFIGPORTAL", "TBEDITQRP", "TBEDITREL_AGENDA_SITUACAO", "TBEDITREL_PRMODELOREL")
+NAO_CARREGADAS = ()
 # recusa da linha por regra que não é restrição nem pai_pendente (complemento sem pai: pai_inexistente)
 RECUSAS_POR_REGRA = {"TBEDITPESQ": {"pai_inexistente": 1}}
 PAIS_EXTERNOS = {"TBMODULO": ["1", "2", "3"], "TBUSERS": ["rel.exemplo", "adm.exemplo"],
-                 "TBGRUUSU": ["GRUPO EXEMPLO A", "GRUPO EXEMPLO B"], "TBOPCOES": ["10", "11"]}
+                 "TBGRUUSU": ["GRUPO EXEMPLO A", "GRUPO EXEMPLO B"], "TBOPCOES": ["10", "11"], "PRMODELOREL": ["1"],
+                 "PNCONFIG": ["1"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
 CONSULTA = "SELECT campo_falso\r\n  FROM tabela_falsa\r\n WHERE   x = :DATA_INI"
@@ -117,15 +120,23 @@ def linhas(r, ins):
         ins("TBEDITREL_TBUSERS", list(u))
     for o in [(1, 1, 10), (2, 2, 11), (3, 99, 12)]:
         ins("TBOPCAOREL", list(o))
-    # descartadas (sem_carga.tsv): só presença na imagem; dados falsos
+    # ADR 0006: portal do painel (um painel por configuração, páginas na lista JSON), leiaute do relatório (uma versão
+    # por relatório, componentes na lista JSON; relatório 3 recusado: pai_pendente; 99 nunca visto: 3 pai_inexistente
+    # e 1048) e relatório como
+    # modelo de impressão (tipo 2 nunca visto: pai_inexistente + 1048; relatório 3 sem nome: 1048 pelo nome encadeado)
     ins("PNCONFIGPORTAL", [1, 1, "Portal exemplo", b'{"cor": "azul"}'])
     ins("PNCONFIGPORTAL", [1, 2, "Portal exemplo dois", None])
+    ins("PNCONFIGPORTAL", [2, 1, "Portal exemplo tres", "Configura\xe7\xe3o".encode("cp1252")])
     for i, c in enumerate(["Titulo", "Banda", "Campo"], 1):
         ins("TBEDITQRP", [1, "Componente%d" % i, i, "TClasseFalsa", b"prop=1", None, "Raiz", None])
+    ins("TBEDITQRP", [2, "Componente1", 1, "TClasseFalsa", None, "Conte\xfado".encode("cp1252"), "Raiz", "CAMPO"])
+    ins("TBEDITQRP", [3, "Componente1", 1, "TClasseFalsa", None, None, "Raiz", None])
+    ins("TBEDITQRP", [99, "Componente1", 1, "TClasseFalsa", None, None, "Raiz", None])
     # lista fixa de situações: o de-para é pelo NOME (variantes de caixa e acento), nunca pela ordem do código
     for i, n in [(1, "Enviado"), (2, "Não conectado"), (3, "NAO ENVIADO"), (4, "Outro exemplo")]:
         ins("TBEDITREL_AGENDA_SITUACAO", [i, n])
-    ins("TBEDITREL_PRMODELOREL", [1, 1])
+    for m in [(1, 1), (3, 1), (2, 2)]:
+        ins("TBEDITREL_PRMODELOREL", list(m))
     # pesquisas: 3 e 1 ligadas ao parâmetro (UPDATE); 5 parâmetro recusado (pai_pendente); 9 parâmetro nunca visto
     # (complemento sem pai: recusa pai_inexistente); entidade e campo presumidos (2 por linha não recusada)
     for q in [(3, b"SELECT id, nome FROM tabela_falsa", 1), (1, b"SELECT data FROM tabela_falsa", 2),
@@ -154,17 +165,24 @@ def linhas(r, ins):
               (5, dia(5), 1, None), (8, dia(5), 1, None), (2, dia(7), 9, None)]:
         ins("TBEDITREL_AGENDA_LOG", [g[0], g[1], "origem@exemplo.invalid", "destino@exemplo.invalid", g[2],
                                      b"Conteudo falso", None, g[3]])
-    # botões: 1 e 5 gravados; 2 só de agrupamento (1048); 3 tela nunca vista pela opção 3 (pai_inexistente + 1048);
+    # botões: 1 e 5 gravados; 2 só de agrupamento (gravado pelo agrupamento, r5); 3 tela nunca vista pela opção 3 (pai_inexistente + 1048);
     # 4 sem rótulo (1048); 6 relatório recusado (pai_pendente)
     for b in [(1, 1, "Imprimir", 1, None), (2, 1, "Agrupado", None, 1), (3, 3, "Imprimir", 2, None),
               (4, 2, None, 7, None), (5, 2, "Rel oito", 8, None), (6, 1, "Rel tres", 3, None)]:
         ins("TBBTNOPREL", list(b))
     # parâmetros do botão: DATA_INI repetido em relatórios (pai_ambiguo + 1048); nome inexistente (pai_inexistente +
-    # 1048); botão recusado (pai_pendente); CONVENIO e DATA_FIM únicos, gravados
+    # 1048); SETOR do botão 2 (de agrupamento, gravado desde a r5); CONVENIO e DATA_FIM únicos, gravados
     for q in [(1, 1, "edtData", "DATA_INI"), (2, 5, "edtConvenio", "CONVENIO"), (3, 5, "edtFalta", "INEXISTENTE"),
               (4, 2, "edtSetor", "SETOR"), (5, 1, "edtFim", "DATA_FIM")]:
         ins("TBPARAMOPREL", list(q))
     return {
+        "PNCONFIGPORTAL": {"gravados": 3, "pendencias": {"adotado_existente": 2, "pai_inexistente": 1}},
+        "TBEDITQRP": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 3,
+                                                    "restricao_destino_1048": 1}},
+        # (1,1) grava com o leiaute do relatório 1 copiado de relatorio_versao; (3,1) relatório 3 recusado: o leiaute
+        # dele também, pai_pendente; (2,2) tipo nunca visto: pai_inexistente + 1048
+        "TBEDITREL_PRMODELOREL": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
+                                                                "restricao_destino_1048": 1}},
         "TBAGRUPRELAT": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                        "valor_fora_do_dominio": 1}},
         "TBEDITREL": {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 4,
@@ -179,15 +197,17 @@ def linhas(r, ins):
                                                             "restricao_destino_4025": 1}},
         "TBOPCAOREL": {"gravados": 3, "pendencias": {"valor_presumido": 3, "pai_inexistente": 1}},
         "TBEDITPESQ": {"gravados": 2, "pendencias": {"valor_presumido": 4, "pai_pendente": 1, "pai_inexistente": 1}},
-        "TBEDITREL_AGENDA": {"gravados": 2, "pendencias": {"valor_presumido": 8, "texto_resumido": 1,
+        # periodicidade presumida só com dias específicos ("2,4"); sem eles diária é fato
+        "TBEDITREL_AGENDA": {"gravados": 2, "pendencias": {"valor_presumido": 5, "texto_resumido": 1,
                                                            "restricao_destino_1062": 1, "pai_inexistente": 1,
                                                            "restricao_destino_1048": 1, "pai_pendente": 1}},
         "TBEDITREL_AGENDA_LOG": {"gravados": 3, "pendencias": {"pai_ambiguo": 1, "pai_pendente": 1,
                                                                "pai_inexistente": 2, "valor_fora_do_dominio": 1,
                                                                "restricao_destino_1048": 4,
                                                                "restricao_destino_4025": 1}},
-        "TBBTNOPREL": {"gravados": 2, "pendencias": {"restricao_destino_1048": 3, "pai_inexistente": 1,
+        "TBBTNOPREL": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 1,
                                                      "pai_pendente": 1}},
-        "TBPARAMOPREL": {"gravados": 2, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 1,
-                                                       "restricao_destino_1048": 2, "pai_pendente": 1}},
+        "TBPARAMOPREL": {"gravados": 3, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 1,
+                                                       "restricao_destino_1048": 2}},
+        "TBEDITREL_AGENDA_SITUACAO": {"gravados": 4, "pendencias": {"adotado_existente": 6}},
     }

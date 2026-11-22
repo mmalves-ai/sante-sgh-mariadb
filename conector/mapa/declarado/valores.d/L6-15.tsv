@@ -149,3 +149,23 @@ RELOCLEITO	ID_TBSEXO	local_observacao.sexo_permitido	M	masculino	L6-15: sigla do
 RELOCLEITO	ID_TBSEXO	local_observacao.sexo_permitido	I	qualquer	L6-15: sexo ignorado/indiferente: sem restrição
 REOCUPLEITO	DATA_HORA_SAIDA	ocupacao_leito_observacao.situacao	1	encerrada	L6-15: saída preenchida na origem (mesmo data sentinela): ocupação encerrada
 REOCUPLEITO	DATA_HORA_SAIDA	ocupacao_leito_observacao.situacao		ativa	L6-15: sem saída na origem: ocupação aberta
+RICADINT	CARINT	internacao.carater_admissao_id	1	eletiva	L6-15 r3b: caráter 1 eletivo (AIH/TISS); medido
+RICADINT	CARINT	internacao.carater_admissao_id	2	urgencia	L6-15 r3b: caráter 2 urgência/emergência (AIH/TISS); medido
+RICADINT	REGIME	internacao.regime_atendimento_internacao_id	1	1	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RICADINT	REGIME	internacao.regime_atendimento_internacao_id	2	2	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RICADINT	REGIME	internacao.regime_atendimento_internacao_id	3	3	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RIPREINT	CARINT	agendamento_internacao.carater_admissao_id	1	eletiva	L6-15 r3b: caráter 1 eletivo (AIH/TISS); medido
+RIPREINT	CARINT	agendamento_internacao.carater_admissao_id	2	urgencia	L6-15 r3b: caráter 2 urgência/emergência (AIH/TISS); medido
+RIPREINT	REGIME	agendamento_internacao.regime_atendimento_internacao_id	1	1	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RIPREINT	REGIME	agendamento_internacao.regime_atendimento_internacao_id	2	2	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RIPREINT	REGIME	agendamento_internacao.regime_atendimento_internacao_id	3	3	L6-15 r3b: regime de internação pelo código TISS (1 hospitalar, 2 hospital-dia, 3 domiciliar)
+RILEITOS	STATUS	leito_hospitalar.situacao_leito_id	A	livre	L6-15 r3b: A ativo (medido 61): livre; a ocupação vem das internações
+RILEITOS	STATUS	leito_hospitalar.situacao_leito_id	I	inativo	L6-15 r3b: I inativo (medido 48)
+TBACOMODLEITO	TP_ATENDIMENTO	acomodacao.tipo_atendimento	I	internacao	L6-15 r3b: I internação (medido 10); E (2) sem par, a revisar
+RICADINT	MOTIVO	internacao.situacao	1	alta	L6-15 r3b: com motivo de saída: alta
+RICADINT	ID_TBCBOPRO_ALTA_MEDICA	internacao.situacao	1	alta_medica	L6-15 r3b: médico da alta sem motivo de saída: alta médica
+RICADINT	ACOMP	internacao.tem_acompanhante	1	1	L6-15 r3b: com nome de acompanhante
+RICADINT	ACOMP	internacao.tem_acompanhante		0	L6-15 r3b: sem nome de acompanhante
+RIPREINT	PRONT	agendamento_internacao.situacao	1	internado	L6-15 r3b: internação correspondente achada
+RIPREINT	ACOMP	agendamento_internacao.necessita_acompanhante	1	1	L6-15 r3b: com nome de acompanhante
+RIPREINT	ACOMP	agendamento_internacao.necessita_acompanhante		0	L6-15 r3b: sem nome de acompanhante

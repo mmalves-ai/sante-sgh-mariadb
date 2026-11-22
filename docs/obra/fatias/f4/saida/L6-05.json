@@ -27,8 +27,8 @@
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-08.tsv (fatia L7-08)",
-   "mudanca": "a ficha do antimicrobiano nasce da carga de GEANTIMI (destino ficha_antimicrobiano já no mapa), não de GECADANTIMI; ID_GECADANTIMI deixa de ser pai obrigatório; prescritor, se preciso, por `ref:GECADANTIMI>ID_TBCBOPRO>TBCBOPRO` (origem)",
-   "motivo": "GECADANTIMI foi descartado no L6-05 como `duplicado`: atendimento e tipo estão em cada liberação, convênio é do atendimento e prescritor da prescrição; a ficha exige paciente, item, antimicrobiano e datas que só GEANTIMI tem"
+   "mudanca": "SUBSTITUI o pedido anterior (revisão do achado da rodada 3): a ficha do antimicrobiano NASCE de GECADANTIMI (L6-05, uma ficha por ID_GECADANTIMI, declaração pronta comentada em colunas.d/L6-05.tsv), não de GEANTIMI. GEANTIMI -> liberacao_antimicrobiano com ficha_antimicrobiano_id por `ref:GECADANTIMI` (pai obrigatório: 1 ficha para N liberações; anterior_liberacao_antimicrobiano_id entre as liberações da mesma ficha) e, por `complementa` com `ref:GECADANTIMI`, os campos da ficha que só a liberação tem (antimicrobiano, data de início, dias previstos, fim previsto) pela primeira liberação. Tirar ficha_antimicrobiano dos destinos de GEANTIMI.",
+   "motivo": "o descarte de GECADANTIMI como duplicado foi revogado: sem ela a ficha não tem chave de adoção (cada liberação ou prorrogação criaria a sua) e a ficha sem liberação na origem (negada, pendente ou nunca dispensada) sumiria. Com a ficha nascendo da GECADANTIMI, toda ficha da origem chega ao destino, com ou sem liberação (não depende de contagem)."
   },
   {
    "arquivo": "conector/sante_conector/sintetica_d/l5_01.py (fatia L5-01) e sintetica.py",
@@ -43,22 +43,58 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (_ESPECIAIS, OPCOES_DESTINO)",
    "mudanca": "opção de destino `antes` (destino secundário gravado ANTES do principal; com `adotar:` cria uma vez e adota nas linhas seguintes) e especial `@id:<destino>` no principal (recebe o id da linha gravada/adotada nesse secundário). A conciliação do secundário adotado já existe (adotado_existente). Declaração pronta comentada em colunas.d/L6-05.tsv (#PRDADOSENVIOOPERADORA)",
-   "motivo": "PRDADOSENVIOOPERADORA -> informacao_clinica_operadora exige grupo (NOT NULL) que a origem não tem; o principal tem de ser a informação, porque PRTPRESPOSTA (L6-08) a aponta por ref:PRDADOSENVIOOPERADORA. Genérico: qualquer catálogo filho sem pai na origem que o modelo exige (grupo padrão)"
+   "motivo": "PRDADOSENVIOOPERADORA -> informacao_clinica_operadora exige grupo (NOT NULL) que a origem não tem; o principal tem de ser a informação, porque PRTPRESPOSTA (L6-08) a aponta por ref:PRDADOSENVIOOPERADORA. Genérico: qualquer catálogo filho sem pai na origem que o modelo exige (grupo padrão)",
+   "atendido": "rodada 2 (antes + @id:<destino>); L6-05 rodada 3: PRDADOSENVIOOPERADORA carrega (declaração descomentada, sai de sem_carga.tsv)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_valores)",
    "mudanca": "opção `senao` na via: a declaração só preenche o destino se as anteriores para a mesma coluna deram NULL (sem a pendência valor_fora_do_dominio delas); hoje a última declaração vence, mesmo NULL",
-   "motivo": "PRFREQUENCIA.tipo: NUM_DOSE 1..48 -> vezes_ao_dia; nulo -> pelo NOME (valores: AGORA, SN/SE NECESSARIO, CONTINUO, DOSE UNICA) e só o resto `~a_criterio_medico` (presumido no de-para, pedido já feito); também PRRESPOSTA rótulo COD/CONTEVOL"
+   "motivo": "PRFREQUENCIA.tipo: NUM_DOSE 1..48 -> vezes_ao_dia; nulo -> pelo NOME (valores: AGORA, SN/SE NECESSARIO, CONTINUO, DOSE UNICA) e só o resto `~a_criterio_medico` (presumido no de-para, pedido já feito); também PRRESPOSTA rótulo COD/CONTEVOL",
+   "atendido": "rodada 4, resíduo do motor (integrador): opção de coluna senao (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS_PARAMETRO) + carregador oficial TISS (F3) + colunas das tabelas TISS da origem em conector/mapa/colunas.tsv",
    "mudanca": "de-para `tiss:<código da terminologia>` (termo_terminologia filtrado pela terminologia) e as colunas de TBTISSVIAADMIN e TBTISSFINTRAT no mapa, para a ref encadeada ler o código do termo",
-   "motivo": "GETABVIA.ID_TBTISSVIAADMIN -> via_de_uso.via_tiss_termo_terminologia_id e PRFINALIDADETRAT.ID_TBTISSFINTRAT -> intencao_tratamento_oncologico.codigo_tiss/termo_terminologia_id ficam declaradas sem destino até lá (código ausente vira catalogo_codigo_*, não omissão)"
+   "motivo": "GETABVIA.ID_TBTISSVIAADMIN -> via_de_uso.via_tiss_termo_terminologia_id e PRFINALIDADETRAT.ID_TBTISSFINTRAT -> intencao_tratamento_oncologico.codigo_tiss/termo_terminologia_id ficam declaradas sem destino até lá (código ausente vira catalogo_codigo_*, não omissão)",
+   "atendido": "rodada 3, grupo 3: de-para tiss:<número da tabela> em depara.CATALOGOS_PARAMETRO; refazer a fatia",
+   "pendente": "o de-para tiss:<n> existe, mas TBTISSVIAADMIN e TBTISSFINTRAT não têm colunas em conector/mapa/colunas.tsv (a ref encadeada ref:TBTISSVIAADMIN>CODIGO precisa delas). Falta só isso (mapa gerado, compartilhado); as colunas seguem declaradas sem destino, com motivo, e não bloqueiam a tabela"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py e tools/obra/conferir-fatia-f4.sh",
    "mudanca": "conferir (1) toda coluna de conector/mapa/colunas.tsv de tabela carregada tem linha em colunas.d (com destino ou motivo); (2) toda ref:T (simples, ou a última tabela da encadeada) aponta tabela que carrega, nunca descarte de sem_carga.tsv; (3) motivo de descarte que cita ref:/pedido a outra fatia é conferido contra a declaração dela",
    "motivo": "a L6-05 tinha 6 colunas sem declaração e descartes com ref inexistente, e a conferência devolvia ok; a prova por coluna e por ref já está no test_l6_05.py (test_cobertura_por_coluna), mas só para esta fatia"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-08.tsv e sem_carga.tsv (fatia L6-08)",
+   "mudanca": "rever PRTPRESPOSTA: o pai PRDADOSENVIOOPERADORA agora CARREGA (informacao_clinica_operadora, código envio_<ID>), então o descarte da L6-08 'depende de pai descartado' perdeu a base; o tipo de campo pode ir para informacao_clinica_operadora.tipo_dado por `complementa` (ref:PRDADOSENVIOOPERADORA) com de-para de valores, ou o descarte é reavaliado com outro motivo",
+   "motivo": "F4-decisoes-destino.md: a linha da L6-08 sobre PRDADOSENVIOOPERADORA foi marcada como superada pela decisão única da L6-05"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP/04_tabelas.sql (trilha F2.2), junto do pedido 6 da L7-08",
+   "mudanca": "ficha_antimicrobiano migrada (origem='migracao'): além de prescricao_item_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao e justificativa (pedido 6 da L7-08), também antimicrobiano_id, data_inicio, dias_previstos e data_fim_prevista aceitam nulo quando origem='migracao' (CHECK: origem<>'migracao' exige todos), avaliação 'pendente'; os CHECK de dias e datas só valem com valor",
+   "motivo": "GECADANTIMI (45 fichas na referência, dado clínico da comissão de controle de infecção) é a ficha: tem atendimento, tipo de tratamento, prescritor e convênio, mas não o antimicrobiano nem as datas, que vêm da liberação (GEANTIMI, complementa) e podem não existir (ficha sem liberação). Declaração pronta e comentada em colunas.d/L6-05.tsv (#GECADANTIMI); a tabela fica BLOQUEADA até o modelo, nunca descarte. De-para TIPO -> finalidade_terapeutica.codigo depois da contagem por valor.",
+   "atendido": "rodada 4 (L6-05): db/migracoes/06_PEP/18_tabelas.sql (MODIFY ... NULL + ck_ficha_antimicrobiano_completa) e 18_chaves.sql (finalidades nativas profilatica, empirica, terapeutica); GECADANTIMI carrega"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (agrupar, agregados #grupo_*)",
+   "mudanca": "(a) `agrupar:C1,..` também no destino PRINCIPAL: uma linha do destino por grupo (conector_origem = valores do grupo), as linhas da origem do grupo conciliadas como itens; recusa de uma linha não recusa o grupo, só a tira do agregado com pendência. (b) agregado `#grupo_json:C1,C2,..`: lista JSON das colunas listadas de todas as linhas lidas do grupo, na ordem de C1 e da chave (BLOB de texto convertido, BLOB binário como sha256:<hex>, nunca coluna de segredo). Grupo com linha nova, alterada ou apagada na origem: o mesmo tratamento do agregado divergente (grupo_divergente_aguarda_sincronizar; no Sincronizar a origem vence e a edição do destino fica guardada). (c) modelo: tipo nativo de migração `tipo_modelo_impressao.codigo='leiaute_migrado'` (como os tipos nativos de migração do estoque)",
+   "motivo": "PRFICHAREL (678 linhas) são os leiautes de impressão que o hospital montou (receitas, fichas), um componente por linha: descarte revogado (era custo de trabalho, não falta de valor). Carrega como modelo_impressao_clinica inativo (ativo=0, revisão no editor), um por COD, com o conteúdo = lista de componentes. Declaração pronta e comentada em colunas.d/L6-05.tsv (#PRFICHAREL); fica BLOQUEADA até o motor. Genérico: TBEDITQRP (L8-18) tem o mesmo formato e pode usar o mesmo mecanismo.",
+   "atendido": "rodada 4 (integrador): agrupar: no principal e #grupo_json:C1,C2 (exemplo_r4, EX4_KON); (c) tipo nativo de modelo fica com a F2.2"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-08.tsv e sem_carga.tsv (fatia L6-08)",
+   "mudanca": "rever o descarte de PRPARRECMED: com PRFICHAREL carregando (pedido 15), o vínculo do tipo de receita com o leiaute vai para modelo_impressao_clinica.tipo_receita_id por `complementa` (leiaute pela `ref:PRFICHAREL.COD` ou pelo código do grupo)",
+   "motivo": "o descarte de PRPARRECMED dependia do descarte de PRFICHAREL (sem_valor), revogado na rodada 3 da L6-05"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-18.tsv e sem_carga.tsv (fatia L8-18)",
+   "mudanca": "rever o descarte de TBEDITQRP (e TBEDITREL_PRMODELOREL): mesmo formato de PRFICHAREL, carga como leiaute inativo pelo mecanismo do pedido 15",
+   "motivo": "o motivo do descarte cita PRFICHAREL como precedente; esse descarte foi revogado (custo de trabalho não é causa de produto)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros, como 14_FIN/14)",
+   "mudanca": "Rodada 5 (ADR 0006): semear em parametro_definicao as definições pep.formulario.respostaPadrao, pep.email.opcaoEnvio, pep.impressaoPrescricao.leiaute (tipo lista; opções em parametro_opcao), com módulo, descrição, nível rede e tela",
+   "motivo": "A fatia carrega a lista e os parâmetros do hospital (opções com origem migracao e valores em parametro_valor) pela chave do catálogo do produto (cod:parametro_definicao.chave), que a migração nunca cria; sem a semente cada linha é recusada com codigo_inexistente_destino (visível no relatório de conciliação), nunca perdida em silêncio. A conferência da fatia semeia as mesmas chaves no PREPARO_DESTINO."
   }
  ]
 }

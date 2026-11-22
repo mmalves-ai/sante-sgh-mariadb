@@ -7,19 +7,28 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_05
 
-CARREGADAS = ["GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
-              "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC",
-              "PRCAMPOSLOCALIZACAOPACIENTE", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
-              "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA"]
+CARREGADAS = ["GECADANTIMI", "GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
+              "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC", "PRCADRESP",
+              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PREMAILOPCAO", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFICHAREL", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
+              "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA", "PRLAYIMPPRESC"]
 # descarte de produto (declarado/sem_carga.tsv), com a causa aceita
-DESCARTADAS = {"GECADANTIMI": "duplicado", "PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
-               "PRFICHAREL": "sem_valor", "PRLAYIMPPRESC": "mecanismo_do_produto"}
-# decisão tomada, declaração pronta comentada; falta regra genérica no motor (pedido no saida/L6-05.json)
-BLOQUEADAS = {"PRDADOSENVIOOPERADORA": "regra_faltante"}
+# rodada 5 (ADR 0006): nenhuma; as três antes descartadas carregam como opções de parâmetro do produto
+DESCARTADAS = {}
+# dado que o hospital usa e que ainda não carrega: declaração pronta, comentada, à espera do pedido (saida/L6-05.json);
+# nunca descarte (a ficha do antimicrobiano é clínica; o leiaute é do hospital)
+BLOQUEADAS = {}
 AGUARDAM = list(DESCARTADAS) + list(BLOQUEADAS)
+# chaves de atributo que a tela do painel exibe (COLUNAS_PAINEL, packages/contratos/src/pep/documentos.ts)
+COLUNAS_PAINEL = {"leito", "paciente", "idade", "atendimento", "entrada", "dias", "convenio", "medico", "alergias",
+                  "alertas"}
+# tabela -> destinos (principal primeiro); as outras têm um destino só
+MULTIDESTINO = {"GECADANTIMI": ["ficha_antimicrobiano"], "PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"],
+                "PRFICHAREL": ["modelo_impressao_clinica", "tipo_modelo_impressao"]}
 # colunas da origem declaradas sem destino, de propósito (motivo na declaração)
-SEM_DESTINO = {("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
-               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")}
+SEM_DESTINO = {("GECADANTIMI", "ID_GECADANTIMI"), ("GECADANTIMI", "CRM"), ("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
+               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO"),
+               ("PREMAILOPCAO", "ID_PREMAILMODULO")} | {("PRFICHAREL", c) for c in ("ID_FICHAREL", "COD", "NOMECOMP", "NOMECLASSE", "NOME",
+                                                 "COMPONENTE", "CONTEUDO", "PARENT", "TIPO", "SEQUENCIA")}
 DECLARADO = Path(__file__).resolve().parents[1] / "mapa" / "declarado"
 # coluna clínica sem fonte direta: de-para de valores pelo nome ou pelo número de doses, nunca literal presumido
 POR_VALORES = {("PRAGRUPBALANCO", "tipo"), ("PRASSINANTE", "papel"), ("PRBHTIPOFECHAMENTO", "periodo_horas"),
@@ -66,18 +75,54 @@ class Plano(unittest.TestCase):
             self.assertTrue(sc[t]["motivo"].strip(), t)
             self.assertNotIn(t, self.por)
 
-    def test_bloqueadas_com_declaracao_pronta(self):
+    def test_bloqueadas_so_com_declaracao_pronta_e_pedido(self):
+        """Só GECADANTIMI fica de fora sem descarte: declaração pronta comentada (motivo cita o pedido),
+        nenhuma linha em sem_carga.tsv (não é descarte) e o pedido em aberto no saida/L6-05.json."""
         if not (DECLARADO / "sem_carga.tsv").exists():
             self.skipTest("mapa do conector ausente")
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(DECLARADO / "sem_carga.tsv")}
+        sc = {r["tabela"] for r in mapa.ler_tsv(DECLARADO / "sem_carga.tsv")}
+        self.assertFalse(sc & (set(CARREGADAS) | set(BLOQUEADAS)))
         txt = (DECLARADO / "colunas.d" / "L6-05.tsv").read_text(encoding="utf-8")
-        for t, causa in BLOQUEADAS.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", causa), t)
-            self.assertNotIn(t, self.por)
-            pronta = [l.split("\t") for l in txt.splitlines() if l.startswith("#" + t + "\t")]
-            destinos = {x[2] for x in pronta}
-            self.assertIn("informacao_clinica_operadora.grupo_informacao_clinica_operadora_id", destinos)
-            self.assertIn("informacao_clinica_operadora.codigo", destinos)
+        coment = [l.split("\t") for l in txt.splitlines() if l.startswith("#")]
+        self.assertEqual({c[0][1:] for c in coment}, set(BLOQUEADAS))
+        for c in coment:
+            self.assertIn(BLOQUEADAS[c[0][1:]], c[-1], c[:3])
+        import json
+        saida = Path(__file__).resolve().parents[2] / "docs/obra/fatias/f4/saida/L6-05.json"
+        if saida.exists():
+            abertos = [p for p in json.loads(saida.read_text(encoding="utf-8"))["pedidos"] if not p.get("atendido")]
+            for t in BLOQUEADAS:
+                self.assertTrue(any(t in p["mudanca"] + p["motivo"] for p in abertos), t)
+
+    def test_coluna_do_painel_pela_chave_do_produto(self):
+        """A chave do atributo vem do NOME por de-para para as chaves que a tela exibe (nunca o id da origem), e a
+        preferência do usuário copia a chave que a coluna do painel gravou."""
+        c = self._col("PRCAMPOSLOCALIZACAOPACIENTE", "chave_atributo")
+        self.assertEqual([(x["coluna"], x["regra"]) for x in c], [("NOME", "texto_nome")])
+        self.assertTrue(c[0]["valores"])
+        self.assertLessEqual(set(c[0]["valores"].values()), COLUNAS_PAINEL)
+        self.assertEqual(c[0]["valores"].get("Dias de internação"), "dias")
+        u = self._col("PRFAVORITO_EXIBIR", "coluna")
+        self.assertEqual(len(u), 1)
+        decl = [r for r in mapa.ler_tsv(DECLARADO / "colunas.d" / "L6-05.tsv")
+                if r["tabela"] == "PRFAVORITO_EXIBIR" and r["destino"] == "painel_coluna_usuario.coluna"]
+        self.assertEqual(decl[0]["via"], "ref:PRCAMPOSLOCALIZACAOPACIENTE@chave_atributo")
+
+    def test_informacao_operadora_com_grupo_padrao_gravado_antes(self):
+        """A informação é o principal (PRTPRESPOSTA a aponta por ref:); o grupo, que a origem não tem e o modelo exige,
+        é gravado antes, criado uma vez e adotado pelo código, e o principal recebe o id dele."""
+        p = self.por["PRDADOSENVIOOPERADORA"]
+        dp, dg = MULTIDESTINO["PRDADOSENVIOOPERADORA"]
+        self.assertEqual(p["destinos"], [dp, dg])
+        og = (p.get("opcoes") or {}).get(dg) or {}
+        self.assertTrue(og.get("antes"))
+        self.assertEqual(og.get("adotar"), ["codigo"])
+        g = {c["destino"]: c["coluna"] for c in p["colunas"][dg]}
+        self.assertEqual(g["codigo"], "=envio_operadora")
+        d = {c["destino"]: c["coluna"] for c in p["colunas"][dp]}
+        self.assertEqual(d["grupo_informacao_clinica_operadora_id"], "@id:" + dg)
+        self.assertEqual(d["codigo"], "#codigo_derivado:ID:30:envio_")
+        self.assertEqual(d["descricao"], "NOME")
 
     def test_cobertura_por_coluna(self):
         """Toda coluna da origem de tabela carregada tem declaração (com destino ou com motivo), e toda ref: termina
@@ -104,6 +149,14 @@ class Plano(unittest.TestCase):
                 elif c.get("referencia"):
                     self.assertNotIn(c["referencia"], descarte, (p["tabela"], c["coluna"]))
 
+    def test_r5_listas_viram_opcoes_de_parametro(self):
+        for t, chave in l6_05.PARAMETROS_LISTA.items():
+            self.assertEqual(self.por[t]["destinos"], ["parametro_opcao"], t)
+            lit = {c["destino"]: c["coluna"] for c in self.por[t]["colunas"]["parametro_opcao"]}
+            self.assertEqual(lit["parametro_definicao_id"], "=" + chave, t)
+            self.assertEqual(lit["origem"], "=migracao", t)
+            self.assertIn(chave, l6_05.PREPARO_DESTINO)
+
     def test_codigo_da_via_e_escopo_do_filtro(self):
         d = self._col("GETABVIA", "codigo_interoperabilidade")[0]
         self.assertEqual((d["coluna"], d["regra"]), ("ID_DIGITAL", "texto"))
@@ -119,7 +172,8 @@ class Plano(unittest.TestCase):
 
     def test_um_destino_por_tabela(self):
         for p in self.plano:
-            self.assertEqual(len(p["destinos"]), 1, p["tabela"])
+            self.assertEqual(p["destinos"] if p["tabela"] in MULTIDESTINO else len(p["destinos"]),
+                             MULTIDESTINO.get(p["tabela"], 1), p["tabela"])
 
     def test_referencias(self):
         self.assertEqual(self._col("PRAGRAVOPERGUNTA", "agravo_notificavel_id")[0]["referencia"], "PRAGRAVOTPARQUETIPO")
@@ -178,7 +232,7 @@ class Plano(unittest.TestCase):
             self.assertEqual(self._col("PRBHTPELIMINA", d)[0]["regra"], "booleano_sn", d)
         for p in self.plano:
             for c in p["colunas"][p["destinos"][0]]:
-                if c["destino"] == "codigo":
+                if c["destino"] == "codigo" and not c["coluna"].startswith("#codigo_derivado:"):
                     self.assertIn(c["regra"], ("texto", "codigo_char"), p["tabela"])
 
     def test_obrigatorias_do_destino_cobertas(self):
@@ -191,13 +245,39 @@ class Plano(unittest.TestCase):
         for p in self.plano:
             dt = p["destinos"][0]
             decl = {c["destino"] for c in p["colunas"][dt]}
+            # NOT NULL afrouxado em lote posterior (MODIFY COLUMN ... NULL, ex.: a ficha do antimicrobiano migrada)
+            livres_dt = livres | {c for a in ddl[dt]["alter"]
+                                  for c in re.findall(r"MODIFY COLUMN (\w+) [^,;]*?\bNULL\b(?<!NOT NULL)", a)}
             for linha in ddl[dt]["create"].splitlines()[1:]:
                 x = linha.strip().split()
-                if len(x) < 2 or not re.fullmatch(r"[a-z_0-9]+", x[0]) or x[0] in livres:
+                if len(x) < 2 or not re.fullmatch(r"[a-z_0-9]+", x[0]) or x[0] in livres_dt:
                     continue
                 corpo = linha.upper()
                 if "NOT NULL" in corpo and "DEFAULT" not in corpo and "AUTO_INCREMENT" not in corpo:
                     self.assertIn(x[0], decl, "%s.%s" % (dt, x[0]))
+
+
+class FichaAntimicrobiano(unittest.TestCase):
+    def test_ficha_migrada_anulavel_so_na_migracao(self):
+        """06_PEP/18: os campos que a origem não tem ficam nulos só na ficha migrada (CHECK obriga a ficha do sistema),
+        e a ficha nasce de GECADANTIMI com origem 'migracao' e a finalidade nativa pela inicial do tipo."""
+        raiz = _raiz_ddl()
+        if raiz is None:
+            self.skipTest("DDL do modelo ausente")
+        alt = " ".join(mapa.ler_ddl(raiz)["ficha_antimicrobiano"]["alter"])
+        for c in ("prescricao_item_id", "antimicrobiano_id", "prescritor_profissional_id", "finalidade_terapeutica_id",
+                  "origem_infeccao", "justificativa", "data_inicio", "dias_previstos", "data_fim_prevista"):
+            self.assertRegex(alt, r"MODIFY COLUMN %s \w+[^,;]* NULL" % c)
+            self.assertRegex(alt, r"ck_ficha_antimicrobiano_completa CHECK \(origem = 'migracao' OR \(.*%s IS NOT NULL" % c)
+        sem = (raiz / "db/migracoes/06_PEP/18_chaves.sql").read_text(encoding="utf-8")
+        for cod in ("profilatica", "empirica", "terapeutica"):
+            self.assertIn("('%s'," % cod, sem)
+        val = {(r["valor_origem"], r["valor_destino"]) for r in mapa.ler_tsv(DECLARADO / "valores.d" / "L6-05.tsv")
+               if r["tabela"] == "GECADANTIMI"}
+        self.assertEqual(val, {("P", "profilatica"), ("E", "empirica"), ("T", "terapeutica")})
+        dec = {r["coluna"]: r for r in mapa.ler_tsv(DECLARADO / "colunas.d" / "L6-05.tsv") if r["tabela"] == "GECADANTIMI"}
+        self.assertEqual(dec["=migracao"]["destino"], "ficha_antimicrobiano.origem")
+        self.assertEqual(dec["TIPO"]["via"], "cod:finalidade_terapeutica.codigo")
 
 
 class Regras(unittest.TestCase):
@@ -231,11 +311,32 @@ class Sintetica(unittest.TestCase):
             self.assertNotIn("CREATE TABLE %s " % t, l6_05.DDL)
         # pai de fora da fatia só como origem da ref: encadeada (sem esperado desta fatia)
         self.assertIn("CREATE TABLE PRLOCPACDEFAULT ", l6_05.DDL)
-        self.assertNotIn("PRLOCPACDEFAULT", esp)
+        for t in l6_05.PAIS_ORIGEM:
+            self.assertIn("CREATE TABLE %s " % t, l6_05.DDL)
+            self.assertNotIn(t, esp)
         self.assertEqual(cont["PRLOCPACDEFAULT"], len(l6_05.PREFERENCIAS))
 
     def test_so_dados_inventados(self):
         self.assertTrue(all(u.startswith("usuario.exemplo.") for u in l6_05.PAIS_EXTERNOS["TBUSERS"]))
+
+
+class LeiauteSemPerda(unittest.TestCase):
+    def test_componentes_em_texto_no_json(self):
+        """COMPONENTE e CONTEUDO são BLOB de TEXTO (SUB_TYPE 1 no dicionário vivo): o #grupo_json guarda as
+        propriedades do leiaute como texto, nunca como hash (sha256:)."""
+        self.assertRegex(l6_05.DDL, r"COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1")
+        linhas = next(v for t, v, _ in l6_05.DADOS if t == "PRFICHAREL")
+        amostras = [x for ln in linhas for x in ln[5:7] if x is not None]
+        self.assertEqual(len(amostras), 4)
+        for b in amostras:
+            v = sentinela.aplicar(sentinela.regra_efetiva("texto_longo", 1), b)[0]
+            j = carga_mapa._valor_json(v)
+            self.assertIsInstance(j, str)
+            self.assertFalse(j.startswith("sha256:"), j)
+        self.assertIn("Left = 8", carga_mapa._valor_json(sentinela.aplicar("texto_longo", amostras[0])[0]))
+        self.assertIn("Título falso", [carga_mapa._valor_json(sentinela.aplicar("texto_longo", b)[0]) for b in amostras])
+        # a regra só viraria bytes (hash) num BLOB binário: é o subtipo vivo que decide, não o gerado
+        self.assertEqual(sentinela.regra_efetiva("texto_longo", 0), "blob")
 
 
 if __name__ == "__main__":

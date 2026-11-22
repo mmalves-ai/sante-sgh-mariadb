@@ -1,11 +1,6 @@
 {
  "pedidos": [
   {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-11.tsv",
-   "mudanca": "TBCTABAN (fatia L8-11): banco da conta pela ref:TBBANCOS(EMPRESA,BANCO)>CODBCOCENTRAL com depara banco; contrato_cobranca_bancaria opcional da conta com codigo_convenio pela ref:TBBANCOS(EMPRESA,BANCO)>CODCEDENTE, carteira >CARTEIRA, variação >VARIACAO_CARTEIRA, tipo presumido e conta @id",
-   "motivo": "13: com o descarte de TBBANCOS, o banco e a cobrança chegam pela conta, que conhece o seu banco (EMPRESA, BANCO)"
-  },
-  {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "Não exigir as colunas obrigatórias de um destino com a opção complementa (o UPDATE grava só as colunas declaradas numa linha que o pai já gravou)",
    "motivo": "15: SDGECADNFS complementa nota_entrada.chave_acesso pela ref:GECADNFS e aparece como coluna_obrigatoria_sem_fonte (estabelecimento, número, datas da nota), que são do pai. O mesmo vale para o exemplo_cob (EXC_COMPL)"
@@ -23,7 +18,8 @@
   {
    "arquivo": "conector/sante_conector/depara.py",
    "mudanca": "De-para oficial 'cfop' em depara.CATALOGOS (tabela cfop do catálogo oficial, coluna do código de 4 dígitos; código ausente: catalogo_codigo_*), o mesmo pedido B da L8-10",
-   "motivo": "16: SDGECADNFS.ID_SDCFOP (13.794/13.794 com CFOP na imagem de referência) vai a nota_entrada.cfop_id por ref:SDCFOP>CODIGO com depara cfop; sem o de-para a coluna fica sem destino nesta rodada"
+   "motivo": "16: SDGECADNFS.ID_SDCFOP (13.794/13.794 com CFOP na imagem de referência) vai a nota_entrada.cfop_id por ref:SDCFOP>CODIGO com depara cfop; sem o de-para a coluna fica sem destino nesta rodada",
+   "atendido": "rodada 3, grupo 3: de-para oficial cfop em depara.CATALOGOS e carregador oficial catalogos/carregadores/cfop.py; refazer a fatia"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-08.tsv",
@@ -33,12 +29,91 @@
   {
    "arquivo": "db/migracoes (F2.2) e semente de parametro_definicao",
    "mudanca": "Definir o parâmetro do produto 'financeiro.naturezaFinanceiraPadrao' (nível estabelecimento, tipo inteiro = id da natureza_financeira); depois, MFPARAM.GRUPO/SUBGRUPO/ITEM_TBITEDES entra como parametro_valor pela ref:TBITEDES(GRUPO_TBITEDES,SUBGRUPO_TBITEDES,ITEM_TBITEDES)",
-   "motivo": "18: a natureza padrão por empresa é a única configuração do cliente com valor em MFPARAM (2/2 válidas na imagem de referência); parametro_definicao é catálogo do produto e não tem semente, por isso MFPARAM fica descarte com o resto do conteúdo sem valor ou legal (F4-decisoes-destino.md)"
+   "motivo": "18: a natureza padrão por empresa é a única configuração do cliente com valor em MFPARAM (2/2 válidas na imagem de referência); parametro_definicao é catálogo do produto e não tem semente, por isso MFPARAM fica descarte com o resto do conteúdo sem valor ou legal (F4-decisoes-destino.md)",
+   "atendido": "rodada 4 (DDL): db/migracoes/14_FIN/14"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Opção genérica de coluna 'exige_dominio' na via: valor fora do de-para de valores recusa a linha (valor_fora_do_dominio, gravidade media) em vez de cair no padrão do destino",
-   "motivo": "19: quando o código da origem tem sentido de estado (ex.: devolução de crédito), o padrão do destino em silêncio pode contradizer outra coluna; nesta fatia contornado com a situação presumida =~aplicado (MFCCCONV.DEV não vai a destino, código único C nas 2.512 linhas)"
+   "motivo": "19: quando o código da origem tem sentido de estado (ex.: devolução de crédito), o padrão do destino em silêncio pode contradizer outra coluna; nesta fatia contornado com a situação presumida =~aplicado (MFCCCONV.DEV não vai a destino, código único C nas 2.512 linhas)",
+   "atendido": "rodada 4, resíduo do motor (integrador): opção de coluna exige_dominio (exemplo_r4b, test_carga_mapa_r4b)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.passos_ref",
+   "mudanca": "Pedido 20. Natureza do título pelo MAIOR rateio (referência ao FILHO): na referência por chave alternativa composta aceitar (a) literal entre as colunas desta linha ('=1' casa com a constante: TP_LAN de pagar), (b) passo 'max:<COL>' logo depois (vários filhos casam: escolhe o de maior COL, empate pela menor chave, pendência baixa 'escolha_pelo_maior'; nenhum: pai_inexistente) e (c) chave composta num passo SEGUINTE da encadeada '>(C1,C2,C3)>T' (a chave de T montada pelas colunas da linha do passo anterior). Uso: titulo_pagar.natureza_financeira_id por 'ref:MFLANGSI.(EMPRESA,FORN,DOC,TIPO,SERIE,TP_LAN)=(EMPRESA,FORN,DOC,TIPO,SERIE,=<pagar>)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES' (também MFCTAREC, L8-11). É o pedido 3a da L8-11, detalhado",
+   "motivo": "titulo_pagar.natureza_financeira_id é NOT NULL e a única fonte é o rateio (MFLANGSI, 117.182 linhas para 71.267 parcelas, chave EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM); a decisão 'natureza principal = a do maior rateio' já está em F4-decisoes-destino.md. Sem isso MFCONPAG e as 4 filhas (MFCONPAG_TBCBOPRO, MFDESACR, MFPAGADF, SDMFCONPAG) ficam BLOQUEADAS; rascunho completo comentado em colunas.d/L8-12.tsv (#MFCONPAG...)",
+   "atendido": "rodada 4 (integrador): literal na chave alternativa composta, max:COL e (C1,C2,C3)>T (exemplo_r4, EX4_TT)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Pedido 21. Regra condicional por linha 'se:<COLUNA>[=v1,v2]' na via de uma coluna e, na coluna que abre um destino SECUNDÁRIO, condição do destino inteiro (sem valor ou fora da lista: o secundário não grava, sem pendência); a coluna pode vir pela encadeada ('se:TPDES_ACR>MFREFDES>TIPO=0,1'). É o pedido 2 da L8-11",
+   "motivo": "MFCONPAG: baixa_titulo só da parcela paga (DT_PGTO preenchida; 'opcional' não serve porque EMPRESA sempre tem valor). MFDESACR: desconto/acréscimo (MFREFDES.TIPO 0 e 1) vão a ajuste_titulo e retenções (2 a 13) a retencao_titulo. Também MFADIFOR e MFCTAREC (L8-11)",
+   "atendido": "rodada 4 (integrador): se:COL[=v] (também pela encadeada) e destino_se: no secundário"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Pedido 22. Aritmética simples entre colunas da linha: especial '#dif:A,B' (A - B, nulo = 0; regra da linha depois da conta, ex. piso:0) e '#soma:A,B,...'",
+   "motivo": "parcela_pagar.saldo NOT NULL = VALOR - PAGO (a origem não guarda o saldo); também o líquido do título se o desconto e o acréscimo das parcelas forem ao cabeçalho",
+   "atendido": "rodada 4, resíduo do motor (integrador): #dif:A,B e #soma:A,B,.. (exemplo_r4b, test_carga_mapa_r4b)"
+  },
+  {
+   "arquivo": "medição na imagem de referência (orquestrador)",
+   "mudanca": "Medir (só contagens) ao tirar o '#': MFCONPAG.FORN casa com TBFORNEC.COD por TP_FORNPRES (F, P, vazio) e com TBPROFIS.FORN; domínios de STATUS, PAGO_COM, TP_DOCTO e TIPO; grupos (EMPRESA,FORN,DOC,SERIE,TIPO) com PARC repetida; ID_MFCONPAG é a chave do título?; TP_LAN de pagar no MFLANGSI; MFPAGADF.ID_MFCONPAG casa com MFCONPAG.ID_MFCONPAG ou ID; colunas de código de SDCSTPIS, SDCSTCOFINS, SDNATCREDITO; RODADA 3, também: EMPRESA de MFCCCONV, MFPARAM_MFTIPOLANC (EMPRESA_MFPARAM) e MFCONPAG contra TBEMPHOS.COD e TBHOSPIT.COD (confirma o @estabelecimento); TBTPCONTA: classe de cada ID pela palavra da DESCRICAO (corrente, aplicação, poupança, outra) e se a grafia casa com o de-para de valores; TBBANCOS com cedente: quantos casam com exatamente uma conta por (EMPRESA, COD=BANCO, AGENCIA, CONTA=COD) com o texto aparado (0, 1, mais de 1), AGENCIA/CONTA só dígitos ou com dígito/traço, CEDENTE_DEBITO_AUTO, CODCEDENTEEXP, CARTEIRA, VARIACAO_CARTEIRA, COD_OPE e LAYOUT_* preenchidos, domínio de SITUACAO, CODCEDENTE com mais de 20 caracteres",
+   "motivo": "a medição pela imagem de referência foi negada pelo controle de permissões nesta sessão; as declarações dependem desses números; rodada 3: negada de novo pelo controle de permissões (isql só leitura, só agregados, pelo tools/obra/medir_origem_fb.py). Nota: no worktree o medir_origem_fb.py procura o .env do banco-dev em sante-sgh-wt/banco-dev (RAIZ/..), que não existe; o caminho certo é redesante/banco-dev/.env",
+   "atendido": "rodada 4 (revisão L8-12): medidos STATUS, PAGO_COM, TP_LAN (MFLANGSI, MFDESACR), DT_PGTO sentinela, EMPRESA única, MFPAGADF pela chave da parcela, TPDES_ACR; falta SDCSTPIS/SDCSTCOFINS/SDNATCREDITO (pedido 28)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (e tabelas.tsv regerado)",
+   "mudanca": "Pedido 24. Arestas de ordem: TBITEDES -> TBSUBDES, TBITEDES -> TBCENCUS, TBITEDES -> TBGRUDES; e as consumidoras da natureza sem aresta: MFLANCTO -> TBITEDES, TBINTCRC -> TBITEDES (MFREFDES e RPINTEVE já têm). Conferir que a nova ordem põe TBITEDES depois de TBSUBDES e antes de MFLANCTO, MFREFDES, RPINTEVE e TBINTCRC",
+   "motivo": "TBITEDES (natureza_financeira) lê o subgrupo por ref:TBSUBDES(GRUPO,SUBGRUPO) (NOT NULL) e o centro de custo por ref:TBCENCUS, que vêm DEPOIS na ordem do mapa; na primeira carga as 533 naturezas seriam recusadas (pai_inexistente) e o centro ficaria nulo, em cascata no movimento bancário e no título",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Pedido 25. Em colunas CONCORRENTES (várias declarações para a mesma coluna do destino), a pendência própria de um literal presumido (=~x: valor_presumido) só é registrada quando o literal é o valor gravado (nenhuma declaração anterior teve valor)",
+   "motivo": "TBTPCONTA: natureza pelo de-para da descrição e sobra =~corrente; hoje toda linha leva valor_presumido mesmo quando a descrição casou, o que diz ao cliente no painel que um valor certo foi presumido",
+   "atendido": "rodada 4, resíduo do motor (integrador): =~x em concorrente: valor_presumido só quando gravado (exemplo_r4b, test_carga_mapa_r4b)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sintetica_d/l8_11.py (fatia L8-11)",
+   "mudanca": "Pedido 26. Completar o DDL de TBBANCOS da imagem sintética da L8-11 com as colunas reais da origem (AGENCIA VARCHAR(20), CONTA VARCHAR(20), CARTEIRA SMALLINT, CODCEDENTE VARCHAR(18), SITUACAO VARCHAR(1), CODCEDENTEEXP VARCHAR(18), CEDENTE_DEBITO_AUTO VARCHAR(18), VARIACAO_CARTEIRA SMALLINT e as demais do dicionário; o DDL completo está em sintetica_d/l8_12.py), todas nulas. Com isso a TBBANCOS entra na carga da conferência da L8-11 e cada cadastro dela, sem cedente, fica recusado com sem_item_a_gravar (conciliação certa; não é tabela esperada da L8-11)",
+   "motivo": "TBBANCOS agora carrega (contrato de cobrança); a conferência da L8-11 (conector.sh conferir-fatia L8-11) para com 'tabela TBBANCOS sem as colunas do mapa: CONTA, AGENCIA, CODCEDENTEEXP, CARTEIRA, VARIACAO_CARTEIRA, SITUACAO, CODCEDENTE, CEDENTE_DEBITO_AUTO'. Esta fatia não pode editar a imagem da L8-11; o validador global fica vermelho nesse ponto até o pedido ser aplicado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (gravar)",
+   "mudanca": "Pedido 26 (rodada 4). Gravar os destinos secundários `antes` em ordem de DEPENDÊNCIA: um secundário cuja coluna usa `@id:<X>` vai depois de X (hoje a ordem é a de tabelas_destino, e titulo_pagar vem antes de tipo_documento_financeiro)",
+   "motivo": "MFCONPAG: o título (antes;agrupar) usa @id:tipo_documento_financeiro (antes;adotar:codigo); gravado antes do tipo, sai com tipo_documento_financeiro_id NULL e TODA parcela é recusada (1048). Declarações prontas; a imagem sintética registra o efeito real e o esperado com a correção (sintetica_d/l8_12.py). Sem isso MFCONPAG e as 4 filhas carregam zero linhas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",
+   "mudanca": "Pedido 27 (rodada 4, revisto). Vínculo da retenção ao tributo: hoje a retenção (TPDES_ACR 2 a 13) entra como ajuste_titulo tipo abatimento com o motivo à vista; com a semente de tributo (trilha F2.2) e um destino alternativo por linha, levá-la a retencao_titulo pelo tributo da natureza",
+   "motivo": "O valor já carrega (decisão da revisão da rodada 4); falta só a classificação fiscal"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (dicionário)",
+   "mudanca": "Pedido 28 (rodada 4). Trazer as colunas de SDCSTPIS, SDCSTCOFINS, SDNATCREDITO e SDITEMSERVICO (hoje sem nenhuma coluna no dicionário)",
+   "motivo": "SDMFCONPAG: CST do PIS, CST da COFINS e natureza do crédito ligam pela encadeada ao código (ref:SDCSTPIS>CODIGO, inteiro_zeros_esquerda:2) quando o dicionário trouxer a coluna; até lá declaradas sem destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (condicao)",
+   "mudanca": "Pedido 29 (rodada 4, revisto com medição). Negação na condição (`se:`/`destino_se:` COL!=v1,v2) ou E de condições",
+   "motivo": "MFCONPAG: a parcela aberta guarda a data sentinela 1899-12-30 (1.665); 181 delas têm conta prevista, e a baixa `opcional` vê a conta e é recusada pelo NOT NULL da data. Com `destino_se:DT_PGTO!=1899-12-30,` a baixa sai só da paga"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-11.tsv",
+   "mudanca": "(feito pela L8-12, rodada 4) retiradas as 5 linhas antigas 'não carregada: falta mecanismo' de MFPAGADF, MFCONPAG, MFCONPAG_TBCBOPRO, SDMFCONPAG e MFDESACR (tabelas da fatia L8-12)",
+   "motivo": "tabela declarada em dois arquivos é erro do verificador global; as tabelas são da L8-12",
+   "atendido": "rodada 4 (L8-12)"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Pedido 30 (rodada 4). Não contar como CARREGA a tabela cujo esperado na imagem sintética da fatia tem gravados 0 (ou marcar 'carrega, aguarda motor')",
+   "motivo": "MFCONPAG e as 4 filhas aparecem como carrega, mas gravam 0 até o pedido 26 (ordem dos `antes` pela dependência @id:); provado numa cópia isolada do conector com o motor corrigido: gravados MFCONPAG 4, MFCONPAG_TBCBOPRO 2, SDMFCONPAG 1, MFDESACR 3, MFPAGADF 1 (COM_ORDEM_POR_ID em sintetica_d/l8_12.py)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_provas) + sentinela (regra de prova)",
+   "mudanca": "r5-5 (motor, genérico): regra de VALOR de prova que compare o RÓTULO da origem por palavra-chave, sem copiar o rótulo real para o código: o SQL da prova devolve, por item, um padrão (ex.: 'VENDA', 'REMESSA') e o comparador aceita quando o rótulo normalizado da origem (maiúsculas, sem acento, espaços colapsados) CONTÉM o padrão (ex.: valores `ID!inteiro,NOME!rotulo_contem`). Com ela, as provas das listas fixas passam a conferir ID e significado; ordem diferente de IDs num cliente vira prova_nao_conferida (alta).",
+   "motivo": "Achado da rodada 5: a prova compara só o ID com a sequência 1..N. Igualdade exata com o rótulo não é possível sem copiar texto da imagem real para o código (regra 5); hoje a troca de significado com o mesmo ID passaria. Tabelas desta fatia: TBTPNATOPENF, TBTIPOCARTAO, TBTIPOTAXACARTAO, TBTIPOPERMISSAO."
   }
  ],
  "retirados": [
@@ -53,6 +128,10 @@
   {
    "pedido": "12 (confirmar principal de GECADNFS)",
    "motivo": "registrado em F4-decisoes-destino.md (L8-12): nota_entrada é o principal; a escrituração é secundário da GECADNFS (pedido 17)"
+  },
+  {
+   "pedido": "13 (contrato de cobrança pela conta, TBCTABAN da L8-11)",
+   "motivo": "rodada 3: a L8-11 rejeitou com medição (489 contratos para 41 convênios) e a TBBANCOS passou a carregar o contrato_cobranca_bancaria nesta fatia (descarte revogado); a L8-11 não precisa declarar nada"
   }
  ]
 }

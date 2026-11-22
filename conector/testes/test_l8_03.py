@@ -11,19 +11,37 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_03
 
 CARREGADAS = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC",
-              "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON"]
-# descarte de produto (linha em sem_carga.tsv pedida no L8-03.json; TBIRREGCTRCTA já está lá)
-DESCARTE = ["TBIRREGCTRCTA", "TBCONVPERCTAPAC", "TBCTRTAT"]
+              "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED",
+              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI",
+              # R5 (ADR 0006): listas de opções carregadas como opções de um parâmetro de lista
+              "TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC",
+              # r6 (ADR 0006): o pacote carrega pela chave composta com componente encadeado (mecanismo f da R5)
+              "TBPACTHM"]
+LISTAS_R5 = ["TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC"]
+# R5 (ADR 0006): nenhum descarte por julgamento
+DESCARTE = []
 # aguardam regra genérica do motor (pedidos em docs/obra/fatias/f4/saida/L8-03.json)
-BLOQUEADAS = ["TBCOOPER", "TBINDPRO", "TBMATMED", "TBPACTHM", "TBPORMED", "TBPROCTO"]
+# r4: TBMATMED, TBREFMEMTUSS e TBPERTHM carregam; TBPACTHM espera o componente encadeado na chave composta (pedido 3)
+# r4 (revisão): TBCONVPERCTAPAC volta a bloqueada (a escolha da fonte pagadora em TBCONVEN, L5-06, ainda não carrega)
+# r6: nenhuma bloqueada (TBPACTHM carrega; o domínio do TIPO é decisão registrada, F4-decisoes-destino.md)
+BLOQUEADAS = []
 DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_cooperativa"],
             "TBCREMED": ["credenciamento_cobranca"],
             "TBCREPRS": ["credenciamento_cobranca"], "TBCTRDTH": ["tabela_preco"], "TBCTRMEM": ["tabela_preco"],
             "TBCTRTHM": ["tabela_preco"], "TBDTHCDC": ["diaria_taxa_centro_custo"],
-            "TBINDICE": ["indice_cobranca", "valor_indice"], "FCPARAM": ["competencia_faturamento"],
+            "TBINDICE": ["indice_cobranca", "valor_indice"], "FCPARAM": ["competencia_faturamento", "sequencia_negocio"],
             "TBIRREGULARID": ["tipo_pendencia_conta"], "TBIRREGULARID_TBMODULO": ["tipo_pendencia_conta_modulo"],
-            "TBITEATE": ["tipo_atendimento_tabela"], "TBLOCCON": ["local_cobranca"]}
+            "TBITEATE": ["tipo_atendimento_tabela"], "TBLOCCON": ["local_cobranca"],
+            "TBPROCTO": ["item_faturavel", "grupo_faturamento"], "TBPORMED": ["valor_porte_medico", "porte_procedimento"],
+            "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed"],
+            "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"],
+            "TBPACTHM": ["pacote_item_incluso", "pacote", "pacote_contrato"]}
+DESTINOS.update({t: ["parametro_opcao", "modulo_sistema", "parametro_definicao"] for t in LISTAS_R5})
 OBRIGATORIAS = {
+    "pacote": {"codigo", "descricao", "tipo_pacote", "item_faturavel_id", "cobranca_item_faturavel_id",
+               "vigencia_inicio"},
+    "pacote_item_incluso": {"pacote_id", "sequencia"},
+    "pacote_contrato": {"pacote_id", "fonte_pagadora_id", "vigencia_inicio"},
     "funcao_equipe_cobranca": {"codigo", "descricao", "tipo_funcao"},
     "membro_cooperativa": {"cooperativa_medica_id", "profissional_id", "vigencia_inicio"},
     "credenciamento_cobranca": {"estabelecimento_id", "fonte_pagadora_id", "vigencia_inicio"},
@@ -35,7 +53,20 @@ OBRIGATORIAS = {
     "tipo_pendencia_conta": {"codigo", "descricao", "categoria"},
     "tipo_pendencia_conta_modulo": {"tipo_pendencia_conta_id", "modulo_sistema_id"},
     "tipo_atendimento_tabela": {"codigo", "descricao", "padrao"},
-    "local_cobranca": {"codigo", "descricao", "tipo_local"}}
+    "local_cobranca": {"codigo", "descricao", "tipo_local"},
+    "item_faturavel": {"codigo", "descricao", "tipo_item", "grupo_faturamento_id"},
+    "grupo_faturamento": {"codigo", "descricao", "tipo_grupo"},
+    "valor_porte_medico": {"porte_procedimento_id", "ocorrido_em", "vigencia_inicio", "valor"},
+    "porte_procedimento": {"codigo", "descricao", "tipo_porte"},
+    "tipo_servico_faturavel": {"codigo", "descricao"},
+    "sequencia_negocio": {"tipo", "proximo_valor"},
+    "item_referencia_matmed": {"fonte_referencia", "codigo_referencia", "descricao", "tipo_produto"},
+    "equivalencia_matmed_tuss": {"item_referencia_matmed_id", "termo_terminologia_id", "vigencia_inicio"},
+    "regra_percentual_cobranca": {"fonte_pagadora_id", "tabela_preco_id", "componente", "vigencia_inicio"},
+    "parametro_opcao": {"parametro_definicao_id", "sequencia", "valor", "rotulo"},
+    "equivalencia_matmed_fonte_pagadora": {"item_referencia_matmed_id", "codigo_na_fonte", "vigencia_inicio"},
+    "modulo_sistema": {"codigo", "descricao"},
+    "parametro_definicao": {"chave", "modulo_sistema_id", "descricao", "tipo"}}
 CADEIA_PROFISSIONAL = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 
 
@@ -86,10 +117,33 @@ class Plano(unittest.TestCase):
             self.assertEqual([x.get("tabela") for x in c["passos"] if x.get("tabela")], ["TBCBOPRO", "TBPROFIS"])
 
     def test_chave_alternativa_onde_a_origem_nao_tem_id(self):
+        # r3 (correção): chave alternativa COMPOSTA (o código e a operação repetem entre atos e tabelas)
         self.assertEqual(self._col("TBCREPRS", "prestador_terceiro_id")[0]["passos"],
-                         [{"tabela": "TBPRESER", "modo": "alt", "arg": "COD"}])
+                         [{"tabela": "TBPRESER", "modo": "alt_composta", "arg": ["ATO", "COD"], "cols": ["ATO", "PS"]}])
         self.assertEqual(self._col("TBDTHCDC", "preco_diaria_taxa_id")[0]["passos"],
-                         [{"tabela": "TBTABDTH", "modo": "alt", "arg": "OPE"}])
+                         [{"tabela": "TBTABDTH", "modo": "alt_composta", "arg": ["TAB", "OPE"], "cols": ["TAB", "DTH"]}])
+
+    def test_tipo_de_conta_do_credenciamento_pelo_codigo(self):
+        for t in ("TBCREMED", "TBCREPRS"):
+            c = self._col(t, "tipo_conta_id")[0]
+            self.assertEqual((c["coluna"], c["depara"]), ("CONTAS", "valores"), t)
+            self.assertIn("cod:tipo_conta.codigo", self._via(t, "CONTAS"), t)
+
+    def test_numeracao_fiscal_em_sequencia_de_negocio(self):
+        ds = self.por["FCPARAM"]["destinos"]
+        self.assertEqual(ds[0], "competencia_faturamento")
+        self.assertIn("sequencia_negocio", ds)
+        via = self._via("FCPARAM", "#item")
+        for col in ("ULTNOTA_H", "ULTNOTA_C", "ULTNOTA_LOJA", "NUMERONOTANFS", "NUMEROLOTENFS", "NUMEROLOTERPS"):
+            self.assertIn(col + "=origem_faturamento_", via)
+        self.assertEqual(self._col("FCPARAM", "ativo", "sequencia_negocio")[0]["coluna"], "=~0")
+
+    def test_tipo_de_servico_adotado_pelo_codigo(self):
+        self.assertEqual(self.por["TBTIPPRO"]["opcoes"]["tipo_servico_faturavel"]["adotar"], ["codigo"])
+        self.assertEqual(self._col("TBTIPPRO", "codigo")[0]["coluna"], "#codigo_derivado:TIPO:30:tipo_servico_")
+
+    def _via(self, t, col):
+        return next(c.get("via", "") for c in self.m["colunas_decl"] if c["tabela"] == t and c["coluna"] == col)
 
     def test_referencias_simples(self):
         for t, d, ref in (("TBCRECOO", "cooperativa_medica_id", "TBCOOPER"), ("TBCREMED", "fonte_pagadora_id", "TBCONVEN"),
@@ -114,16 +168,30 @@ class Plano(unittest.TestCase):
     def test_presumidos_e_vigencia_sem_fonte(self):
         for t, d, lit in (("TBCTRDTH", "referencia", "=~propria"), ("TBCTRMEM", "tipo_item", "=~misto"),
                           ("TBCTRTHM", "tipo_item", "=~honorario"), ("TBCTRDTH", "tipo_item", "=diaria_taxa"),
-                          ("TBITEATE", "padrao", "=~proprio"), ("FCPARAM", "modulo", "=~fonte_pagadora"),
+                          ("FCPARAM", "modulo", "=~fonte_pagadora"),
                           ("FCPARAM", "aberta_em", "=~@data_carga"), ("TBINDICE", "tipo_indice", "=~outro"),
                           ("TBCRECOO", "vigencia_inicio", "@vigencia_carga"),
                           ("TBCREPRS", "vigencia_inicio", "@vigencia_carga"),
                           ("TBDTHCDC", "vigencia_inicio", "@vigencia_carga")):
             self.assertEqual(self._col(t, d)[0]["coluna"], lit, (t, d))
+        # r4: o padrão do tipo de atendimento vem da TAB (lista lida pelo nome); o presumido é só a reserva
+        self.assertEqual([c["coluna"] for c in self._col("TBITEATE", "padrao")], ["TAB", "=~proprio"])
 
     def test_competencia_composta_de_ano_e_mes(self):
         self.assertEqual(self._col("FCPARAM", "competencia")[0]["coluna"], "#data:ANOPRO,MESPRO")
         self.assertIn("ANOPRO", self.por["FCPARAM"]["lidas"])
+
+    def test_cabecalho_agrupado_antes_do_principal(self):
+        # rodada 3: o grupo de migração (um por tabela de honorários) e o porte (um por código) são cabeçalhos
+        # agrupados gravados antes, e o principal liga pelo @id do secundário
+        for t, dt, grupo, col in (("TBPROCTO", "grupo_faturamento", ["ID_TBCTRTHM"], "grupo_faturamento_id"),
+                                  ("TBPORMED", "porte_procedimento", ["PORTE"], "porte_procedimento_id")):
+            op = self.por[t]["opcoes"][dt]
+            self.assertEqual((op["antes"], op["agrupar"]), (True, grupo), t)
+            self.assertEqual(self._col(t, col)[0]["coluna"], "@id:" + dt, t)
+        self.assertEqual(self._col("TBPROCTO", "codigo")[0]["coluna"], "#codigo_derivado:ID:20:proc_")
+        self.assertEqual(self._col("TBPROCTO", "descricao", "grupo_faturamento")[0]["passos"],
+                         [{"tabela": "TBCTRTHM", "modo": "chave", "arg": None}, {"coluna": "NOME"}])
 
     def test_situacao_por_depara_de_valores(self):
         for t in ("TBCTRDTH", "TBCTRMEM", "TBCTRTHM"):
@@ -145,25 +213,37 @@ class Declaracoes(unittest.TestCase):
         for l in self.linhas:
             if l["tabela"] in DESCARTE + BLOQUEADAS:
                 self.assertEqual(l["destino"], "", l["tabela"])
-                self.assertTrue(l["motivo"].startswith("L8-03: "), l["tabela"])
+                self.assertTrue(l["motivo"].startswith(("L8-03: ", "L8-03 r3", "L8-03 r4")), l["tabela"])
 
-    def test_cooperativa_pronta_e_comentada(self):
-        co = [l for l in self.linhas if l["tabela"] == "#TBCOOPER"]
-        self.assertTrue(co)
-        self.assertEqual({l["destino"].split(".")[0] for l in co}, {"pessoa_juridica", "cooperativa_medica"})
+    def test_cooperativa_e_indice_por_procedimento_na_l8_02(self):
+        # rodada 3: TBCOOPER e TBINDPRO foram declaradas pela L8-02 (uma tabela, um arquivo)
+        self.assertFalse([l for l in self.linhas if l["tabela"].lstrip("#") in ("TBCOOPER", "TBINDPRO")])
+
+    def test_percentuais_declarados(self):
+        # r4: descomentada (as linhas sem destino saíram do L8-04.tsv)
+        self.assertFalse([l for l in self.linhas if l["tabela"] == "#TBPERTHM"])
+        pe = [l for l in self.linhas if l["tabela"] == "TBPERTHM"]
+        # CH_VALOR_CRED sem coluna no destino (pedido 1: usa_ch_credenciado à F2.2)
+        self.assertEqual({l["destino"].split(".")[0] for l in pe if l["coluna"] != "CH_VALOR_CRED"},
+                         {"regra_percentual_cobranca"})
 
     def test_catalogo_licenciado_nunca_carregado(self):
-        self.assertFalse([l for l in self.linhas if l["tabela"] == "TBMATMED" and l["destino"]])
+        # r4: o item de mat/med só entra pela tabela PRÓPRIA (filtro de linha pela marca da tabela, pendência baixa)
+        for t, col in (("TBMATMED", "TAB"), ("TBREFMEMTUSS", "TAB_FCREFUND")):
+            vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == t)
+            for marca in ("REF_BRA", "REF_SIMP"):
+                self.assertIn("so_se:%s>TBCTRMEM>%s=N,F,!licenca_nao_comprovada" % (col, marca), vias, t)
+        self.assertTrue([l for l in self.linhas if l["tabela"] == "TBMATMED" and l["coluna"] == "=outra"])
 
     def test_credenciamento_do_medico_num_so_cadastro(self):
         # profissional_fonte_pagadora vem de TBCBOPRO_TBCONVEN (L5-06): gravar TBCREMED nos dois duplicaria o fato
         ds = {l["destino"].split(".")[0] for l in self.linhas if l["tabela"] == "TBCREMED" and l["destino"]}
         self.assertEqual(ds, {"credenciamento_cobranca"})
 
-    def test_matmed_bloqueada_com_decisao_por_tabela(self):
-        ms = {l["motivo"] for l in self.linhas if l["tabela"] == "TBMATMED"}
-        self.assertEqual(len(ms), 1)
-        self.assertIn("PRÓPRIAS", ms.pop())
+    def test_matmed_com_decisao_por_tabela(self):
+        ms = [l["motivo"] for l in self.linhas if l["tabela"] == "TBMATMED" and l["destino"]]
+        self.assertTrue(ms)
+        self.assertIn("PRÓPRIA", ms[0])
 
     def test_tipo_de_pendencia_so_na_conta(self):
         ds = {l["destino"].split(".")[0] for l in self.linhas if l["tabela"] == "TBIRREGULARID" and l["destino"]}
@@ -183,24 +263,117 @@ class Declaracoes(unittest.TestCase):
         with open(_raiz() / "valores.d/L8-03.tsv", newline="", encoding="utf-8") as f:
             pares = {(v["tabela"], v["valor_origem"], v["valor_destino"]) for v in csv.DictReader(f, delimiter="\t")}
         self.assertEqual(pares, {(t, a, b) for t in ("TBCTRDTH", "TBCTRMEM", "TBCTRTHM")
-                                 for a, b in (("A", "ativa"), ("I", "inativa"))})
+                                 for a, b in (("A", "ativa"), ("I", "inativa"))} |
+                         {(t, a, b) for t in ("TBCREMED", "TBCREPRS")
+                          for a, b in (("I", "internacao"), ("E", "externa"), ("A", "ambulatorial"), ("U", "urgencia"),
+                                       ("T", ""))} |
+                         {("TBMATMED", "A", "ativo"), ("TBMATMED", "I", "inativo"), ("TBPERTHM", "T", "todos"),
+                          ("TBPERTHM", "I", "internado"), ("TBPERTHM", "E", "externo"), ("TBITEATE", "SUS", "sus"),
+                          ("TBITEATE", "TUSS", "tuss"), ("TBITEATE", "PRESENCIAL", "presencial"),
+                          ("TBITEATE", "PROPRIA", "proprio"), ("TBITEATE", "PRÓPRIA", "proprio")})
+
+    def test_referencia_licenciada_bloqueada_nunca_descartada(self):
+        # r3 (correção): equivalências do item de mat/med carregam nas tabelas PRÓPRIAS; só a licenciada espera licença
+        with open(_raiz() / "sem_carga.tsv", newline="", encoding="utf-8") as f:
+            sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
+        # r4: TBREFMEMTUSS carrega (filtro de licença); TBREFUNI carrega com fonte nula = referência unificada
+        # (modelo 12_FAT/13, conferidor r4)
+        self.assertNotIn("TBREFMEMTUSS", sc)
+        self.assertNotIn("TBREFUNI", sc)
+        self.assertNotIn("TBTIPPRO", sc)
+
+
+# pedido 9 do saida/L8-03.json: arestas de ordem que faltam no mapa (o pai vem depois do filho na carga real)
+ARESTAS_PEDIDAS = ("TBCRECOO->TBPROFIS", "TBINDICE->TBCONVEN", "TBPORMED->TBCONVEN", "TBLOCCON->TBCENCUS",
+                  # r6: pedido R6-1 (pais do pacote)
+                  "TBPACTHM->TBCONVEN", "TBPACTHM->TBTABTHM", "TBPACTHM->TBTABDTH", "TBPACTHM->TBGRAUPARTPROC",
+                  "TBPACTHM->TBLOCCON", "TBPACTHM->TBCENCUS")
+
+
+class OrdemDasReferencias(unittest.TestCase):
+    """Todo pai referenciado pela fatia vem ANTES na ordem real do mapa, ou a aresta (ou o ciclo) está num pedido
+    ABERTO do saida/L8-03.json. A imagem sintética dá alguns pais como externos (já carregados) e não pegaria isso."""
+
+    def test_pai_antes_do_filho_ou_pedido_aberto(self):
+        import json
+        r = _raiz()
+        if r is None:
+            self.skipTest("declarações ausentes")
+        with open(r.parent / "tabelas.tsv", newline="", encoding="utf-8") as f:
+            ordem = {x["tabela"]: int(x["ordem"]) for x in csv.DictReader(f, delimiter="\t") if x["ordem"].isdigit()}
+        with open(r / "colunas.d/L8-03.tsv", newline="", encoding="utf-8") as f:
+            linhas = [x for x in csv.DictReader(f, delimiter="\t") if not x["tabela"].startswith("#")]
+        saida = Path(__file__).resolve().parents[2] / "docs/obra/fatias/f4/saida/L8-03.json"
+        if saida.exists():  # no repositório: a aresta tem de estar num pedido ABERTO
+            d = json.loads(saida.read_text(encoding="utf-8"))
+            abertos = " ".join(p["mudanca"] for k in d for p in d[k] if not p.get("atendido"))
+        else:  # no container (sem docs/): as arestas do pedido 9
+            abertos = " ".join(ARESTAS_PEDIDAS)
+        fora = []
+        for x in linhas:
+            for parte in (x.get("via") or "").split(";"):
+                if not parte.startswith("ref:"):
+                    continue
+                for pai in re.findall(r"(?:^|>)([A-Z][A-Z0-9_]+)(?=[.(/@>]|$)", parte[4:]):
+                    if pai in ordem and x["tabela"] in ordem and ordem[pai] > ordem[x["tabela"]] \
+                            and "%s->%s" % (x["tabela"], pai) not in abertos:
+                        fora.append("%s->%s" % (x["tabela"], pai))
+        self.assertEqual(sorted(set(fora)), [])
+
+
+class Pacote(unittest.TestCase):
+    """r6 (ADR 0006): TBPACTHM vira pacote (agrupado por convênio, tipo de conta e procedimento), item incluso por
+    linha e acordo por convênio; o procedimento do pacote pela tabela de honorários do convênio."""
+
+    def setUp(self):
+        r = _raiz()
+        if r is None:
+            self.skipTest("declarações ausentes")
+        with open(r / "colunas.d/L8-03.tsv", newline="", encoding="utf-8") as f:
+            self.l = [x for x in csv.DictReader(f, delimiter="\t") if x["tabela"] == "TBPACTHM"]
+
+    def _via(self, destino):
+        return [x["via"] for x in self.l if x["destino"] == destino]
+
+    def test_procedimento_do_pacote_pela_tabela_do_convenio(self):
+        for d in ("pacote.item_faturavel_id", "pacote.cobranca_item_faturavel_id"):
+            self.assertEqual(self._via(d), ["ref:TBTABTHM(CON>TBCONVEN>THM,THM)@item_faturavel_id"], d)
+
+    def test_item_incluso_condicionado_ao_tipo(self):
+        self.assertEqual(self._via("pacote_item_incluso.item_faturavel_id"),
+                         ["ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id;se:TIPO=1",
+                          "ref:TBTABDTH.(TAB,OPE)=(TABELA,PROCTO)/item_faturavel;se:TIPO=2"])
+        # conferidor r6: o mat/med (TIPO 3) tem destino próprio, nunca fica sem alvo
+        self.assertEqual(self._via("pacote_item_incluso.item_referencia_matmed_id"),
+                         ["ref:TBMATMED.(TAB,COD)=(TABELA,PROCTO);se:TIPO=3"])
+        self.assertEqual(self._via("pacote_item_incluso.centro_custo_id"), ["ref:TBCENCUS"])
+
+    def test_agrupado_e_vigencia_pela_evidencia(self):
+        self.assertIn("antes;agrupar:CON,CONTAS,THM", self._via("pacote.codigo"))
+        for x in self.l:
+            self.assertNotIn("@vigencia_carga", x["coluna"])
+        self.assertEqual({x["coluna"] for x in self.l if x["destino"].endswith(".vigencia_inicio")}, {"#vigencia"})
 
 
 class Sintetica(unittest.TestCase):
     def test_so_tabelas_carregaveis_e_pais_lidos_no_ddl(self):
-        self.assertEqual(re.findall(r"CREATE TABLE (\w+)", l8_03.DDL), CARREGADAS + l8_03.PAIS_ORIGEM)
+        # R5: TBCTRTAT carrega e continua lida pelo TBITEATE (criada uma vez, entre os pais lidos)
+        self.assertEqual(re.findall(r"CREATE TABLE (\w+)", l8_03.DDL),
+                         [t for t in CARREGADAS if t not in l8_03.PAIS_ORIGEM] + l8_03.PAIS_ORIGEM)
 
     def test_esperado_coerente_com_as_linhas(self):
         ins = []
         esp = l8_03.linhas(None, lambda t, v: ins.append(t))
         self.assertEqual(set(esp), set(CARREGADAS))
         for t, e in esp.items():
+            if t == "TBPERTHM":  # desdobrado: "gravados" conta itens, não linhas
+                continue
             recusas = sum(n for rg, n in e["pendencias"].items()
-                          if rg.startswith("restricao_destino_") or rg == "pai_pendente")
+                          if rg.startswith("restricao_destino_") or rg in ("pai_pendente", "licenca_nao_comprovada"))
             self.assertEqual(e["gravados"] + recusas, ins.count(t), t)
 
     def test_bloqueadas_fora_da_imagem(self):
-        for t in BLOQUEADAS + DESCARTE:
+        for t in [x for x in BLOQUEADAS + DESCARTE if x not in l8_03.PAIS_ORIGEM]:
             self.assertNotIn("CREATE TABLE %s " % t, l8_03.DDL)
 
 
@@ -269,6 +442,20 @@ class ValoresNoDestino(unittest.TestCase):
             "competencia_faturamento": "SELECT modulo, competencia, situacao FROM competencia_faturamento",
             "tipo_atendimento_tabela": "SELECT codigo, descricao, padrao, codigo_externo FROM tipo_atendimento_tabela"
                                        " ORDER BY codigo",
+            "item_faturavel": "SELECT i.codigo, i.descricao, i.tipo_item, g.codigo, g.descricao, g.tipo_grupo"
+                              " FROM item_faturavel i JOIN grupo_faturamento g ON g.id = i.grupo_faturamento_id"
+                              # r6: os itens ex_* são a semente dos pais externos (PREPARO_DESTINO), não da carga
+                              " WHERE i.codigo NOT LIKE 'ex\\_%' ORDER BY i.codigo",
+            "grupos": "SELECT COUNT(*) FROM grupo_faturamento",
+            "valor_porte_medico": "SELECT p.codigo, p.descricao, p.tipo_porte, v.vigencia_inicio, v.ocorrido_em, v.valor,"
+                                  " v.fonte_pagadora_id IS NOT NULL FROM valor_porte_medico v JOIN porte_procedimento p"
+                                  " ON p.id = v.porte_procedimento_id ORDER BY p.codigo, v.vigencia_inicio",
+            "portes": "SELECT codigo FROM porte_procedimento ORDER BY codigo",
+            "sequencias": "SELECT tipo, proximo_valor, ativo FROM sequencia_negocio"
+                          " WHERE tipo LIKE 'origem_faturamento_%' ORDER BY tipo",
+            "tipo_conta_credenciamento": "SELECT t.codigo FROM credenciamento_cobranca c JOIN tipo_conta t"
+                                         " ON t.id = c.tipo_conta_id",
+            "tipos_servico": "SELECT codigo, descricao FROM tipo_servico_faturavel ORDER BY codigo",
             "contagens": "SELECT (SELECT COUNT(*) FROM membro_cooperativa), (SELECT COUNT(*) FROM"
                          " credenciamento_cobranca),"
                          " (SELECT COUNT(*) FROM diaria_taxa_centro_custo),"
@@ -284,6 +471,25 @@ class ValoresNoDestino(unittest.TestCase):
 
     def test_conferencia_ok(self):
         self.assertEqual(self.r["erros"], [])
+
+    def test_item_faturavel_do_procedimento_com_grupo_por_tabela(self):
+        self.assertEqual(self.lido["item_faturavel"], [
+            ("proc_1", "Consulta exemplo em consultório", "procedimento", "tabela_honorario_1", "Tabela exemplo honorários",
+             "honorario"),
+            ("proc_2", "Procedimento exemplo cirúrgico", "procedimento", "tabela_honorario_1",
+             "Tabela exemplo honorários", "honorario"),
+            ("proc_3", "Consulta exemplo", "procedimento", "tabela_honorario_2", "Tabela exemplo inativa", "honorario")])
+        self.assertEqual(self.lido["grupos"], [(2,)])  # o grupo da tabela inexistente foi desfeito com a linha
+
+    def test_valor_do_porte_por_fonte_e_vigencia(self):
+        import datetime
+        from decimal import Decimal
+        d = datetime.date
+        self.assertEqual(self.lido["valor_porte_medico"], [
+            ("1A", "1A", "honorario", d(2025, 1, 1), datetime.datetime(2025, 1, 1), Decimal("100.00"), 1),
+            ("1A", "1A", "honorario", d(2026, 1, 1), datetime.datetime(2026, 1, 1), Decimal("110.00"), 1),
+            ("2B", "2B", "honorario", d(2025, 1, 1), datetime.datetime(2025, 1, 1), Decimal("200.00"), 1)])
+        self.assertEqual(self.lido["portes"], [("1A",), ("2B",)])  # 3C e 4A desfeitos com a linha recusada
 
     def test_funcao(self):
         self.assertEqual(self.lido["funcao_equipe_cobranca"],
@@ -327,8 +533,21 @@ class ValoresNoDestino(unittest.TestCase):
 
     def test_tipo_de_atendimento(self):
         self.assertEqual(self.lido["tipo_atendimento_tabela"],
-                         [("atendimento_1", "Consulta exemplo", "proprio", "1"),
-                          ("atendimento_2", "Exame exemplo", "proprio", "2")])
+                         [("atendimento_1", "Consulta exemplo", "tuss", "1"),
+                          ("atendimento_2", "Exame exemplo", "tuss", "2"),
+                          ("atendimento_5", "Tipo exemplo sem tabela", "proprio", "5")])
+
+    def test_numeracao_fiscal_inativa_para_conferir(self):
+        self.assertEqual(self.lido["sequencias"], [
+            ("origem_faturamento_ultima_nfse", 321, 0), ("origem_faturamento_ultima_nota_loja", 0, 0),
+            ("origem_faturamento_ultima_nota_serie_h", 150, 0), ("origem_faturamento_ultimo_lote_rps", 12, 0)])
+
+    def test_credenciamento_com_tipo_de_conta(self):
+        self.assertEqual(self.lido["tipo_conta_credenciamento"], [("ambulatorial",)])
+
+    def test_tipo_de_servico_por_codigo(self):
+        self.assertEqual(self.lido["tipos_servico"], [("tipo_servico_1", "Tipo de serviço migrado"),
+                                                     ("tipo_servico_2", "Tipo de serviço migrado")])
 
     def test_contagens_dos_vinculos(self):
         # membro, credenciamento (só o médico: o prestador e a diária carregam depois, na ordem do mapa),

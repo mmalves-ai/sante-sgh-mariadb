@@ -3,3 +3,8 @@ FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	S	parcelado	L8-01: indic
 FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	s	parcelado	L8-01: indicador sim (minúsculo): orçamento parcelado
 FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	N	a_vista	L8-01: indicador não: pagamento de uma vez
 FCORCAME	PARCELADO	orcamento_particular.forma_pagamento	n	a_vista	L8-01: indicador não (minúsculo): pagamento de uma vez
+FCGUIAS	TP_GUIA	guia_fonte_pagadora.tipo_guia	S	sp_sadt	L8-01 r3: guia de conta externa (agregado: TP_GUIA S = as 51.365 guias de conta TIPO_CTA E)
+FCGUIAS	TP_GUIA	guia_fonte_pagadora.tipo_guia	R	internacao	L8-01 r3: guia de internação (agregado: TP_GUIA R = as 10.596 guias de conta TIPO_CTA I)
+RPLANEVE	TIPO	lancamento_repasse.tipo_favorecido	M	medico	L8-01 r3: médico (agregado: os 8.102 M têm a inscrição do profissional)
+RPLANEVE	TIPO	lancamento_repasse.tipo_favorecido	E	empresa	L8-01 r3: empresa (agregado: os 573 E não têm inscrição de profissional)
+RPLANEVE	ID_RPLANEVE	lancamento_repasse.situacao	1	aprovado	L8-01 r3: lançamento ligado a RPA emitido (RPLANRPA): fora de nova apuração ou pagamento

@@ -17,38 +17,37 @@ GEUSERS_TBCENCUS	@vigencia_carga	usuario_estoque_centro_custo.vigencia_inicio			
 PRPARINTEGEST	@estabelecimento	regra_integracao_prescricao.estabelecimento_id				L7-08: único estabelecimento do cliente
 PRPARINTEGEST	ID_TBCENCUS	regra_integracao_prescricao.centro_custo_id	chave_origem		ref:TBCENCUS.ID	L7-08: escopo da regra: centro de custo pela coluna ID de TBCENCUS (chave alternativa)
 PRPARINTEGEST	ID_TBCENCUS	regra_integracao_prescricao.atendente_local_estoque_id	chave_origem		ref:TBCENCUS.ID>LOCARM>GELOCARM	L7-08: local que atende = armazém do centro de custo na origem (encadeada a partir de TBCENCUS.ID); sem armazém: NOT NULL recusa
-PRPARINTEGEST	=~requisicao_automatica	regra_integracao_prescricao.tipo_integracao				L7-08: TP_INTEGRACAO sem evidência do significado dos códigos: presumido com valor_presumido; a regra entra INATIVA
-PRPARINTEGEST	=~na_prescricao	regra_integracao_prescricao.momento_integracao				L7-08: MOMENTO_INTEGRACAO sem evidência: presumido com valor_presumido; a regra entra INATIVA
+PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	inteiro	valores		L7-08 (rodada 3, revisão): tipo pelo código da origem (CHECK da origem: 1 ou 2), de-para em valores.d/L7-08.tsv (1 requisicao_automatica, 2 dispensacao_direta; leitura da ordem das opções, a confirmar pelo cliente: a regra entra INATIVA). Medido: 4 linhas com 1, 1 com 2
+PRPARINTEGEST	=~requisicao_automatica	regra_integracao_prescricao.tipo_integracao				L7-08: reserva (coluna concorrente) só para código fora do de-para, com valor_presumido; a regra entra INATIVA
+PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	inteiro	valores		L7-08 (rodada 3, revisão): momento pelo código da origem (CHECK da origem: 1 ou 2), de-para em valores.d/L7-08.tsv (1 na_prescricao, 2 no_aprazamento; a confirmar pelo cliente: a regra entra INATIVA). Medido: 5 de 5 linhas com 1
+PRPARINTEGEST	=~na_prescricao	regra_integracao_prescricao.momento_integracao				L7-08: reserva (coluna concorrente) só para código fora do de-para, com valor_presumido; a regra entra INATIVA
 PRPARINTEGEST	=~dose_individualizada	regra_integracao_prescricao.forma_dispensacao				L7-08: a origem não diz a forma de dispensar: presumida com valor_presumido; a regra entra INATIVA
 PRPARINTEGEST	=0	regra_integracao_prescricao.ativo				L7-08 (decisão): regra com campos presumidos e escopo incompleto (TP_PRESCRICAO sem de-para) nunca age sozinha: entra inativa, o cliente revisa e ativa no painel
 PRPARINTEGEST	GERAR_DADOS_AUTORIZ_MANIPUL	regra_integracao_prescricao.gera_autorizacao_manipulacao	booleano_01			L7-08: 0/1; nulo fica com o padrão FALSE
 PRPARINTEGEST	ID_TBTP_ENV_LISTA_AVAL_FARM	regra_integracao_prescricao.regra_envio_avaliacao_farmaceutica_id	chave_origem			L7-08: regra de envio à avaliação farmacêutica
 PRPARINTEGEST	TP_PRESCRICAO		inteiro			L7-08: não carregada: tipo de prescrição sem evidência do significado; fica na chave (conector_origem). Como a regra entra inativa, duas linhas do mesmo centro de custo não agem com o mesmo escopo
-PRPARINTEGEST	TP_INTEGRACAO		inteiro			L7-08: não carregada: código sem evidência; o destino recebe o presumido (lida no hash: mudança aparece no Sincronizar)
-PRPARINTEGEST	MOMENTO_INTEGRACAO		inteiro			L7-08: não carregada: código sem evidência; destino presumido
 GECADSAI	#codigo_derivado:ID:18:1	documento_estoque.numero	inteiro			L7-08: número do documento = prefixo de domínio 1 + ID (1 saída, 2 devolução: não colide entre as tabelas no uq por estabelecimento)
 GECADSAI	@estabelecimento	documento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
-GECADSAI	=~saida_setor	documento_estoque.tipo				L7-08: saída de estoque; tipo presumido saida_setor com valor_presumido (ORIGEM e DOC_DISP sem evidência do significado)
+GECADSAI	DEST	documento_estoque.tipo	inteiro	valores		L7-08 (rodada 3, revisão): tipo pelo destino da saída (de-para em valores.d/L7-08.tsv): 1 paciente internado e 3 paciente em atendimento = saida_paciente, 2 setor = saida_setor, 5 venda externa = venda. Medido na referência: 1 504.292 (396.510 com paciente; PAC casa com o registro de internação em 504.291), 2 69.884 (nenhum com paciente), 3 65.396 (PAC casa com o atendimento em 65.378), 5 206 (todos com terceiro e com o complemento de venda externa); nenhum outro código. Código fora do de-para: valor_fora_do_dominio e recusa (1048), visível
 GECADSAI	ARM	documento_estoque.origem_local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém pelo código (chave COD do pai); nunca visto: NOT NULL recusa
 GECADSAI	CDC	documento_estoque.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo CÓDIGO (CDC guarda o código, chave COD do pai)
 GECADSAI	ID_RICADPAC	documento_estoque.paciente_id	chave_origem			L7-08: paciente
-GECADSAI	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão; nulo: NOT NULL recusa. A data do documento (DATA) é a preferida quando a regra DATE em DATETIME existir (pedido 3: coalescência DATA_HORA_INCLUSAO ou DATA à meia-noite; contagem de nulos na referência pedida)
-GECADSAI	DATA		data			L7-08: não carregada por ora: data sem hora; entra pela coalescência do pedido 3
+GECADSAI	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão (1ª fonte, concorrente). Medido: 0 de 639.778 nulos
+GECADSAI	DATA	documento_estoque.movimentado_em	data			L7-08 (rodada 3, decisão aplicada): sem a inclusão, a data do documento à meia-noite (2ª fonte, tipar); sem as duas: NOT NULL recusa
 GECADSAI	CONSOL	documento_estoque.consolidado	booleano_sn			L7-08: já lançado no saldo; nulo fica FALSE (padrão)
 GECADSAI	CONSOL	documento_estoque.situacao	codigo_char	valores		L7-08 (decisão): situação derivada da consolidação: S concluido, N ou vazio aberto (não lançado no saldo); fora do domínio: padrão aberto com pendência
 GECADSAI	OBS	documento_estoque.observacao	texto			L7-08: observação
 GECADSAI	USUARIO	documento_estoque.criado_por			ref:TBUSERS	L7-08: usuário que gravou o documento, pelo login
 GECADSAI	USU_CONS	documento_estoque.concluido_usuario_id			ref:TBUSERS	L7-08: usuário que consolidou (lançou no saldo), pelo login; concluido_em sem fonte (NULL)
 GECADSAI	TERCEIRO	documento_estoque.destinatario_terceiro	texto			L7-08: destinatário sem cadastro
-GECADSAI	PAC		inteiro			L7-08: não carregada: não há evidência se é o atendimento ou o prontuário; o paciente vem de ID_RICADPAC
+GECADSAI	PAC	documento_estoque.atendimento_id	chave_origem		ref:RICADINT>ID_ATCABECATEND>ATCABECATEND	L7-08 (rodada 3, revisão): atendimento da saída a paciente internado (destino 1: PAC é o registro da internação; medido 504.291 de 504.292 casam com a internação, todas com atendimento) -> internação > atendimento. 1ª fonte (concorrente); 0 = sem paciente. Exigido pelo CHECK da saída a paciente
 GECADSAI	REQ		inteiro			L7-08: não carregada: requisição não é registro próprio na origem (requisicao_material não é destino)
 GECADSAI	MED_SOL		texto			L7-08: não carregada: nome livre do médico solicitante sem campo no documento de estoque
 GECADSAI	ANO		inteiro			L7-08: não carregada por ora: número original ANO/MES/DOC (o que o usuário conhece) pede a coluna numero_origem no documento (pedido 10); o numero do produto é o ID com prefixo
 GECADSAI	MES		inteiro			L7-08: não carregada por ora: ver ANO (pedido 10)
 GECADSAI	DOC		inteiro			L7-08: não carregada por ora: ver ANO (pedido 10)
-GECADSAI	DEST		inteiro			L7-08: não carregada: código de destino sem evidência do significado (sem tabela de domínio na origem)
 GECADSAI	EMIT		codigo_char			L7-08: não carregada: marca de impressão do documento (estado de tela)
-GECADSAI	CONTA		inteiro			L7-08: não carregada: conta de faturamento do paciente; o lançamento na conta é do faturamento, e o paciente vem de ID_RICADPAC
+GECADSAI	CONTA	documento_estoque.atendimento_id	chave_origem		ref:RECADATE	L7-08 (rodada 3, revisão): 2ª fonte do atendimento: saída a paciente em atendimento (destino 3: CONTA guarda o registro do atendimento, igual a PAC em 65.394 de 65.396; casa com o atendimento em 65.376). Medido: nenhum PAC do destino 1 casa com atendimento, nenhum do destino 3 com internação, CONTA 0 nos destinos 2 e 5. No destino 1 CONTA é o número da conta, não carregado (o lançamento na conta é do faturamento): a fonte que não casa deixa pai_inexistente até o pedido 15
 GECADSAI	CONS		inteiro			L7-08: não carregada: local de consumo; setor_funcional não é carregado (decisão do pedido 5)
 GECADSAI	CONV		inteiro			L7-08: não carregada: convênio do paciente na saída; pertence à conta (faturamento)
 GECADSAI	EMP		inteiro			L7-08: não carregada: empresa; o banco é de um cliente com um estabelecimento
@@ -77,8 +76,8 @@ GECADDEV	=devolucao_interna	documento_estoque.tipo				L7-08: devolução interna
 GECADDEV	ARM	documento_estoque.origem_local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém pelo código (chave COD do pai); nunca visto: NOT NULL recusa
 GECADDEV	CDC	documento_estoque.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo CÓDIGO (chave COD do pai)
 GECADDEV	ID_RICADPAC	documento_estoque.paciente_id	chave_origem			L7-08: paciente
-GECADDEV	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão; nulo: NOT NULL recusa (DATA entra pela coalescência do pedido 3)
-GECADDEV	DATA		data			L7-08: não carregada por ora: data sem hora; entra pela coalescência do pedido 3
+GECADDEV	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão (1ª fonte, concorrente). Medido: 0 de 67.192 nulos
+GECADDEV	DATA	documento_estoque.movimentado_em	data			L7-08 (rodada 3, decisão aplicada): sem a inclusão, a data do documento à meia-noite (2ª fonte, tipar); sem as duas: NOT NULL recusa
 GECADDEV	CONSOL	documento_estoque.consolidado	booleano_sn			L7-08: já lançado no saldo; nulo fica FALSE (padrão)
 GECADDEV	CONSOL	documento_estoque.situacao	codigo_char	valores		L7-08 (decisão): S concluido, N ou vazio aberto; fora do domínio: padrão aberto com pendência
 GECADDEV	OBS	documento_estoque.observacao	texto			L7-08: observação
@@ -119,10 +118,8 @@ GELANDEV	VALIDADE	documento_estoque_item.data_validade	data			L7-08: validade do
 GELANDEV	VLRMED	documento_estoque_item.valor_total	decimal			L7-08: valor da linha ao custo médio (escala 2)
 GELANDEV	LOTE		texto			L7-08: não carregada: o lote da devolução vem de GERASVALDEVLOTE (lote por movimento)
 GELANDEV	ID_GELANSAI		chave_origem			L7-08: não carregada por ora: a saída devolvida liga ao movimento de estoque, que aguarda GELANSAI (pedidos 2 e 4)
-GELANDEV	OLD_ANO		inteiro			L7-08: não carregada: número antigo do documento (substituído por ID_GECADDEV)
 GELANDEV	OLD_MES		inteiro			L7-08: não carregada: ver OLD_ANO
 GELANDEV	OLD_DOC		inteiro			L7-08: não carregada: ver OLD_ANO
-GELANDEV	DATA		data			L7-08: não carregada: data do documento (é a do cabeçalho GECADDEV)
 GELANDEV	LOCAL		inteiro			L7-08: não carregada: local do documento (é o do cabeçalho GECADDEV)
 GELANDEV	CONSOL		codigo_char			L7-08: não carregada: consolidação (é a do cabeçalho GECADDEV)
 GELANDEV	NOC		inteiro			L7-08: não carregada: código sem evidência do significado
@@ -133,7 +130,6 @@ GELANDEV	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem ev
 GELANDEV	VALOR_MANUAL		codigo_char			L7-08: não carregada: marca de valor digitado (o valor vem em VLRMED)
 GELANDEV	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7), fica no de-para do cliente
 GELANDEV	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADDEV
-GELANDEV	DATA_HORA_INCLUSAO		data_hora			L7-08: não carregada no item: o momento é o do cabeçalho; lida pela origem no kit (GEITEMKITRAS_GELANDEV)
 GELANDEV	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-08: não carregada: coluna de alteração do diferencial
 GEITEMKITRAS_GELANSAI	ID_GEITEMKITRAS	movimento_kit_rastreavel.kit_rastreavel_id	chave_origem		ref:GEITEMKITRAS>ID_GEKITRAS>GEKITRAS	L7-08: kit do item (encadeada); sem kit: NOT NULL recusa
 GEITEMKITRAS_GELANSAI	ID_GEITEMKITRAS	movimento_kit_rastreavel.kit_rastreavel_item_id	chave_origem			L7-08: item do kit consumido
@@ -182,3 +178,427 @@ PRINTEGRACAOESTOQUE	QTDE_DOSE		decimal			L7-08: não carregada: a quantidade pre
 PRINTEGRACAOESTOQUE	ID_GELANSAI		chave_origem			L7-08: não carregada por ora: a saída liga pelo movimento (aguarda GELANSAI)
 PRINTEGRACAOESTOQUE	ID_GELANPAC		chave_origem			L7-08: não carregada: lançamento ao paciente já ligado ao horário pela dispensação (duplicado do caminho por ID_GEDISPHOR)
 PRINTEGRACAOESTOQUE	ID_TBUNICON		texto			L7-08: não carregada: unidade da dose é a do horário prescrito
+GELANSAI	@estabelecimento	movimento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
+GELANSAI	DOC	movimento_estoque.documento_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)	L7-08: documento de saída (GECADSAI) pela chave alternativa composta ANO, MES, DOC; repetida: pai_ambiguo
+GELANSAI	ANO	movimento_estoque.local_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM>GELOCARM	L7-08: local que baixou = armazém do documento (encadeada); sem armazém: NOT NULL recusa
+GELANSAI	DATA_HORA_INCLUSAO	movimento_estoque.ocorrido_em	data_hora			L7-08: momento da saída (1ª fonte)
+GELANSAI	MES	movimento_estoque.ocorrido_em	data_hora		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA_HORA_INCLUSAO	L7-08: sem momento no item: o do documento (2ª fonte, coluna concorrente)
+GELANSAI	SEQ	movimento_estoque.ocorrido_em	data		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA	L7-08: sem momento no item nem no documento: a data do documento à meia-noite (3ª fonte, tipar)
+GELANSAI	#data:ANO,MES	movimento_estoque.competencia				L7-08: competência do documento (dia 1)
+GELANSAI	=migracao_saida	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-08: a origem não tem tipo de movimento: tipo NATIVO de migração (semente 11_SUP/07), verdade e não presunção
+GELANSAI	=saida	movimento_estoque.natureza				L7-08: saída do estoque
+GELANSAI	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANSAI	ITEM	movimento_estoque.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo (encadeada); sem unidade: NOT NULL recusa
+GELANSAI	QTDE	movimento_estoque.quantidade	decimal			L7-08: quantidade baixada; zero ou negativa: CHECK recusa
+GELANSAI	QTDE	movimento_estoque.quantidade_estoque	decimal			L7-08: a quantidade já está na unidade de estoque
+GELANSAI	VLR_UNI	movimento_estoque.custo_unitario	decimal			L7-08: custo unitário da saída
+GELANSAI	VLRMED	movimento_estoque.valor_total	decimal			L7-08: valor da saída ao custo médio
+GELANSAI	DOC	movimento_estoque.usuario_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>USUARIO>TBUSERS	L7-08: quem lançou = usuário do documento; sem usuário: NOT NULL recusa
+GELANSAI	DOC	movimento_estoque.centro_custo_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>CDC>TBCENCUS	L7-08: centro de custo do documento (pelo código)
+GELANSAI	DOC	movimento_estoque.paciente_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ID_RICADPAC>RICADPAC	L7-08: paciente do documento
+GELANSAI	ID_TBCBOPRO_MAT_MED_CONTROLADO	movimento_estoque.solicitante_profissional_id	chave_origem		ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L7-08: prescritor do medicamento controlado (0 = sem prescritor, sem pendência)
+GELANSAI	DOC	documento_estoque_item.documento_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC);documento_estoque_item	L7-08: item do documento de saída (como GELANDEV na devolução)
+GELANSAI	SEQ	documento_estoque_item.sequencia	inteiro		documento_estoque_item	L7-08: linha do documento na origem; repetida no documento: 1062 recusa
+GELANSAI	ITEM	documento_estoque_item.insumo_id	chave_origem		ref:GEITENS;documento_estoque_item	L7-08: insumo pelo código
+GELANSAI	ITEM	documento_estoque_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON;documento_estoque_item	L7-08: unidade de estoque do insumo
+GELANSAI	QTDE	documento_estoque_item.quantidade	decimal		documento_estoque_item	L7-08: quantidade do item
+GELANSAI	VLR_UNI	documento_estoque_item.custo_unitario	decimal		documento_estoque_item	L7-08: custo unitário
+GELANSAI	VLRMED	documento_estoque_item.valor_total	decimal		documento_estoque_item	L7-08: valor da linha ao custo médio
+GELANSAI	@id	documento_estoque_item.movimento_estoque_id			documento_estoque_item	L7-08: o item aponta o movimento que o baixou
+GELANSAI	CONSOL		codigo_char			L7-08: não carregada: consolidação (é a do documento GECADSAI)
+GELANSAI	HM		inteiro			L7-08: não carregada: horário da prescrição atendida: o horário vem por GEDISPHOR/PRINTEGRACAOESTOQUE
+GELANSAI	COD_NOC		inteiro			L7-08: não carregada: código sem evidência do significado
+GELANSAI	ETIQ		inteiro			L7-08: não carregada: número da etiqueta impressa (a etiqueta não é destino)
+GELANSAI	KIT		inteiro			L7-08: não carregada: o kit da saída vem de GEITEMKITRAS_GELANSAI
+GELANSAI	VIA		texto			L7-08: não carregada: via de administração da prescrição (é a do item prescrito)
+GELANSAI	DOSE1		texto			L7-08: não carregada: hora da primeira dose da prescrição (é do horário prescrito)
+GELANSAI	ORIGINAL		inteiro			L7-08: não carregada: item original antes de troca: a troca vem de PREXTRATOITEM_SUBST
+GELANSAI	TIPO_ANT		codigo_char			L7-08: não carregada: marca sem evidência do significado
+GELANSAI	PAGO		codigo_char			L7-08: não carregada: marca de faturamento da conta (o faturamento é da conta hospitalar)
+GELANSAI	STATUS		codigo_char			L7-08: não carregada: situação sem evidência do significado
+GELANSAI	FORN		inteiro			L7-08: não carregada: fornecedor do consignado sem evidência de uso no item (fica no hash)
+GELANSAI	QTDE_REQ		decimal			L7-08: não carregada: quantidade requisitada: vem da requisição (GELANSAIREQ)
+GELANSAI	MOT_INC		inteiro			L7-08: não carregada: motivo sem cadastro identificado na origem
+GELANSAI	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem evidência
+GELANSAI	RET_DIAS		inteiro			L7-08: não carregada: retorno em dias sem evidência do significado
+GELANSAI	TRANSICAO		codigo_char			L7-08: não carregada: marca de transição do sistema antigo
+GELANSAI	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7), fica no de-para do cliente
+GELANSAI	CRM_MAT_MED_CONT		inteiro			L7-08: não carregada: número do conselho repetido do prescritor (vem por ID_TBCBOPRO_MAT_MED_CONTROLADO)
+GELANSAI	STATUSPEP		codigo_char			L7-08: não carregada: marca de integração com o prontuário antigo
+GELANSAI	PROCESSADO		codigo_char			L7-08: não carregada: marca de processamento do sistema antigo
+GELANSAI	OBS		texto			L7-08: não carregada: o movimento e o item do documento não têm observação (a do documento vem de GECADSAI)
+GELANSAI	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-08: não carregada: coluna de alteração do diferencial
+GELANSAI	ID_GEANTIMI		chave_origem			L7-08: não carregada: o movimento não tem coluna da liberação; a liberação (GEANTIMI) carrega com a ficha, o insumo e a vigência
+GELANSAI	JUSTIFICA_ITEM_NAO_PRESC		texto			L7-08: não carregada: justificativa do item não prescrito: fica na dispensação (GELANDISPENSACAO)
+GELANSAI	JUSTIFICA_QTDE_PRESC_X_DISP		texto			L7-08: não carregada: justificativa da diferença prescrito x dispensado sem campo no movimento (fica no hash)
+GELANSAIREQ	@id:requisicao_material	requisicao_material_item.requisicao_material_id				L7-08: requisição do documento (cabeçalho agrupado por ANO, MES, DOC)
+GELANSAIREQ	#grupo_seq	requisicao_material_item.sequencia				L7-08: posição do item na requisição (ordem da chave)
+GELANSAIREQ	ITEM	requisicao_material_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANSAIREQ	ITEM	requisicao_material_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: NOT NULL recusa
+GELANSAIREQ	QTDE_REQ	requisicao_material_item.quantidade_solicitada	decimal_zero_nulo			L7-08: quantidade pedida (1ª fonte; 0 = não informada)
+GELANSAIREQ	QTDE	requisicao_material_item.quantidade_solicitada	decimal_zero_nulo			L7-08: sem quantidade pedida: a atendida (2ª fonte, coluna concorrente); nenhuma: NOT NULL recusa
+GELANSAIREQ	QTDE	requisicao_material_item.quantidade_atendida	decimal			L7-08: quantidade entregue; nula: padrão 0
+GELANSAIREQ	OBS	requisicao_material_item.observacao	texto			L7-08: observação do item
+GELANSAIREQ	@estabelecimento	requisicao_material.estabelecimento_id			antes;agrupar:ANO,MES,DOC;requisicao_material	L7-08: uma requisição por documento ANO, MES, DOC (cabeçalho agrupado, sem pendência nas linhas seguintes); único estabelecimento do cliente
+GELANSAIREQ	DOC	requisicao_material.numero	inteiro		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ID;requisicao_material	L7-08: número da requisição = número do documento de saída (ID de GECADSAI, único); sem documento: NOT NULL recusa
+GELANSAIREQ	=setor	requisicao_material.tipo			requisicao_material	L7-08: requisição da origem é por centro de custo (CDC do documento): tipo setor
+GELANSAIREQ	ANO	requisicao_material.centro_custo_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>CDC>TBCENCUS;requisicao_material	L7-08: centro de custo do documento (pelo código); CHECK do tipo setor
+GELANSAIREQ	MES	requisicao_material.atendente_local_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM>GELOCARM;requisicao_material	L7-08: armazém que atendeu (documento)
+GELANSAIREQ	SEQ	requisicao_material.solicitante_usuario_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>USUARIO>TBUSERS;requisicao_material	L7-08: usuário do documento
+GELANSAIREQ	DATA_HORA_INCLUSAO	requisicao_material.solicitado_em	data_hora		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA_HORA_INCLUSAO;requisicao_material	L7-08: momento do documento (1ª fonte)
+GELANSAIREQ	DATA_HORA_ULTIMA_ATUALIZACAO	requisicao_material.solicitado_em	data		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA;requisicao_material	L7-08: sem momento: a data do documento à meia-noite (2ª fonte, concorrente)
+GELANSAIREQ	=atendida	requisicao_material.situacao			requisicao_material	L7-08: a requisição da origem só existe com o documento de saída que a atendeu
+GELANSAIREQ	HM		inteiro			L7-08: não carregada: horário da prescrição (vem por GEDISPHOR)
+GELANSAIREQ	COD_NOC		inteiro			L7-08: não carregada: código sem evidência do significado
+GELANSAIREQ	ETIQ		inteiro			L7-08: não carregada: número da etiqueta impressa
+GELANSAIREQ	KIT		inteiro			L7-08: não carregada: kit sem evidência no item requisitado
+GELANSAIREQ	VIA		texto			L7-08: não carregada: via da prescrição (é a do item prescrito)
+GELANSAIREQ	DOSE1		texto			L7-08: não carregada: hora da primeira dose (é do horário prescrito)
+GELANSAIREQ	ORIGINAL		inteiro			L7-08: não carregada: item original sem evidência
+GELANSAIREQ	TIPO_ANT		codigo_char			L7-08: não carregada: marca sem evidência
+GELANSAIREQ	PAGO		codigo_char			L7-08: não carregada: marca de faturamento da conta
+GELANSAIREQ	VLRMED		decimal			L7-08: não carregada: valor ao custo médio: é do movimento (GELANSAI)
+GELANSAIREQ	STATUS		codigo_char			L7-08: não carregada: situação sem evidência do significado
+GELANSAIREQ	FORN		inteiro			L7-08: não carregada: fornecedor sem evidência de uso no item requisitado
+GELANSAIREQ	VLR_UNI		decimal			L7-08: não carregada: custo unitário: é do movimento (GELANSAI)
+GELANSAIREQ	MOT_INC		inteiro			L7-08: não carregada: motivo sem cadastro identificado
+GELANSAIREQ	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem evidência
+GELANSAIREQ	RET_DIAS		inteiro			L7-08: não carregada: retorno em dias sem evidência
+GELANSAIREQ	TRANSICAO		codigo_char			L7-08: não carregada: marca de transição do sistema antigo
+GELANSAIREQ	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7)
+GELANSAIREQ	CRM_MAT_MED_CONT		inteiro			L7-08: não carregada: número do conselho do prescritor (o movimento o leva)
+GELANSAIREQ	ID_TBCBOPRO_MAT_MED_CONTROLADO		chave_origem			L7-08: não carregada: prescritor do controlado: vai no movimento (GELANSAI)
+GELANSAIREQ	STATUSPEP		codigo_char			L7-08: não carregada: marca de integração com o prontuário antigo
+GELANSAIREQ	PROCESSADO		codigo_char			L7-08: não carregada: marca de processamento do sistema antigo
+GELANSAIREQ	ID_GELANSAI_SUBSTITUIDO		chave_origem			L7-08: não carregada: saída que substituiu o item pedido: a ligação item pedido x atendido não tem destino próprio (atendimento_requisicao exige quantidade, local e usuário da saída; fica no hash)
+GELANDEV	@estabelecimento	movimento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
+GELANDEV	ID_GECADDEV	movimento_estoque.local_estoque_id	chave_origem		ref:GECADDEV>ARM>GELOCARM	L7-08: local que recebeu = armazém do documento de devolução
+GELANDEV	DATA_HORA_INCLUSAO	movimento_estoque.ocorrido_em	data_hora			L7-08: momento da devolução (1ª fonte)
+GELANDEV	DATA	movimento_estoque.ocorrido_em	data			L7-08: sem momento: a data do item à meia-noite (2ª fonte, concorrente, tipar)
+GELANDEV	DATA	movimento_estoque.competencia	data_primeiro_dia_mes			L7-08: competência = mês da data do item da devolução (dia 1)
+GELANDEV	OLD_ANO		inteiro			L7-08: não carregada: número antigo do documento (substituído por ID_GECADDEV)
+GELANDEV	=migracao_entrada	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-08: tipo NATIVO de migração (semente 11_SUP/07): a origem não tem tipo
+GELANDEV	=entrada	movimento_estoque.natureza				L7-08: devolução volta ao estoque
+GELANDEV	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANDEV	ITEM	movimento_estoque.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo
+GELANDEV	QTDE	movimento_estoque.quantidade	decimal			L7-08: quantidade devolvida
+GELANDEV	QTDE	movimento_estoque.quantidade_estoque	decimal			L7-08: já na unidade de estoque
+GELANDEV	VLRMED	movimento_estoque.valor_total	decimal			L7-08: valor ao custo médio
+GELANDEV	ID_GECADDEV	movimento_estoque.documento_estoque_id	chave_origem			L7-08: documento de devolução
+GELANDEV	@id	movimento_estoque.documento_estoque_item_id				L7-08: item do documento que o movimento lança
+GELANDEV	ID_GECADDEV	movimento_estoque.usuario_id	chave_origem		ref:GECADDEV>USUARIO>TBUSERS	L7-08: usuário do documento; sem usuário: NOT NULL recusa
+GELANDEV	ID_GECADDEV	movimento_estoque.centro_custo_id	chave_origem		ref:GECADDEV>CDC>TBCENCUS	L7-08: centro de custo do documento
+GELANDEV	ID_GECADDEV	movimento_estoque.paciente_id	chave_origem		ref:GECADDEV>ID_RICADPAC>RICADPAC	L7-08: paciente do documento
+GERASVALDEVLOTE	ID_GELANDEV	movimento_lote.movimento_estoque_id	chave_origem		ref:GELANDEV/movimento_estoque	L7-08: movimento de entrada da devolução (destino secundário de GELANDEV); sem devolução: NOT NULL recusa
+GERASVALDEVLOTE	#seq:ID_GELANDEV	movimento_lote.sequencia				L7-08: ordem do lote no movimento
+GERASVALDEVLOTE	ID_GEVALMEM	movimento_lote.lote_insumo_id	chave_origem			L7-08: lote devolvido; sem lote: NOT NULL recusa
+GERASVALDEVLOTE	QTDE	movimento_lote.quantidade	decimal			L7-08: quantidade devolvida no lote; zero ou negativa: CHECK recusa
+GERASVALDEVLOTE	ID_GERASVALSAIDLOTE		chave_origem			L7-08: não carregada: lote da saída devolvida: o mesmo lote vem por ID_GEVALMEM
+GERASVALDEVLOTE	DATA		data			L7-08: não carregada: validade repetida do cadastro do lote
+GERASVALDEVLOTE	LOTE		texto			L7-08: não carregada: número do lote repetido do cadastro
+GERASVALDEVLOTE	ID_GERASVALFINAL		chave_origem			L7-08: não carregada: saldo vigente do lote (não é dado do movimento)
+GERASVALDEVLOTE	ID_TBLABORA		chave_origem			L7-08: não carregada: fabricante repetido do cadastro do lote
+GECADDISPENSACAO	@estabelecimento	dispensacao.estabelecimento_id				L7-08: único estabelecimento do cliente
+GECADDISPENSACAO	ID	dispensacao.numero	inteiro			L7-08: número da dispensação = ID da origem (único)
+GECADDISPENSACAO	=horario	dispensacao.tipo				L7-08: dispensação por prescrição (COD_PRESCRI obrigatório na origem): tipo horario; sem prescrição carregada: CHECK recusa
+GECADDISPENSACAO	REG	dispensacao.atendimento_id	chave_origem		ref:RECADATE	L7-08: atendimento; inexistente: NOT NULL recusa
+GECADDISPENSACAO	ID_RICADPAC	dispensacao.paciente_id	chave_origem			L7-08: paciente
+GECADDISPENSACAO	COD_PRESCRI	dispensacao.prescricao_id	chave_origem		ref:PRPRESC	L7-08: prescrição atendida
+GECADDISPENSACAO	LOC_ARM	dispensacao.local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém que dispensou
+GECADDISPENSACAO	@id:setor_funcional	dispensacao.setor_funcional_id				L7-08: setor funcional do local de consumo (cabeçalho agrupado por LOC_CONS)
+GECADDISPENSACAO	CDC	dispensacao.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo código (1ª fonte)
+GECADDISPENSACAO	LOC_CONS	dispensacao.centro_custo_id	chave_origem		ref:TBLOCCON>CDC>TBCENCUS	L7-08: sem centro de custo na dispensação: o do local de consumo (2ª fonte, concorrente)
+GECADDISPENSACAO	DATA	dispensacao.dispensado_em	data_hora			L7-08: momento da dispensação
+GECADDISPENSACAO	USUARIO	dispensacao.dispensado_usuario_id			ref:TBUSERS	L7-08: quem dispensou; sem usuário: NOT NULL recusa
+GECADDISPENSACAO	ID_TBCBOPRO	dispensacao.solicitante_profissional_id	chave_origem		ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L7-08: profissional da prescrição
+GECADDISPENSACAO	=dispensada	dispensacao.situacao				L7-08: registro histórico da dispensação feita
+GECADDISPENSACAO	LOC_CONS	setor_funcional.codigo	inteiro		antes;agrupar:LOC_CONS;setor_funcional	L7-08: decisão: um setor funcional por local de consumo da origem (código = LOC_CONS), criado pela primeira dispensação do local e usado pelas outras (agrupamento); entrega ao setor (GECTRLENTREGADOCSAIDA) o acha pelo código
+GECADDISPENSACAO	@estabelecimento	setor_funcional.estabelecimento_id			setor_funcional	L7-08: único estabelecimento do cliente
+GECADDISPENSACAO	LOC_CONS	setor_funcional.nome	texto_nome		ref:TBLOCCON>NOME;setor_funcional	L7-08: nome do local de consumo (TBLOCCON, encadeada terminada em coluna; 1ª fonte)
+GECADDISPENSACAO	#codigo_derivado:LOC_CONS:150:local_consumo_	setor_funcional.nome			setor_funcional	L7-08: local sem cadastro: nome derivado do código (2ª fonte, concorrente)
+GECADDISPENSACAO	=assistencial	setor_funcional.tipo			setor_funcional	L7-08: local de consumo que recebe dispensação de paciente é assistencial; o cliente reclassifica no painel
+GECADDISPENSACAO	LOC_CONS	setor_funcional.centro_custo_id	chave_origem		ref:TBLOCCON>CDC>TBCENCUS;setor_funcional	L7-08: centro de custo do local de consumo
+GECADDISPENSACAO	DOC		inteiro			L7-08: não carregada: número antigo ANO/MES/DOC (o número do produto é o ID; pedido 10 vale também aqui)
+GECADDISPENSACAO	MES		inteiro			L7-08: não carregada: ver DOC
+GECADDISPENSACAO	ANO		inteiro			L7-08: não carregada: ver DOC
+GECADDISPENSACAO	TIPO_CONTA		inteiro			L7-08: não carregada: tipo da conta sem evidência do significado (a conta vem pelo atendimento)
+GECADDISPENSACAO	CONTA		inteiro			L7-08: não carregada: conta hospitalar: a cobrança vem pela conta do atendimento (faturamento)
+GECADDISPENSACAO	CONV		inteiro			L7-08: não carregada: convênio: vem do atendimento
+GECADDISPENSACAO	OLD_ID_PRPRESC		inteiro			L7-08: não carregada: prescrição do modelo antigo da origem (substituída por COD_PRESCRI)
+GECADDISPENSACAO	CDC_BK		inteiro			L7-08: não carregada: cópia de CDC
+GECADDISPENSACAO	DATA_CADASTRO		data_hora			L7-08: não carregada: momento de digitação (o momento da dispensação é DATA)
+GELANDISPENSACAO	ID_GECADDISPENSACAO	dispensacao_item.dispensacao_id	chave_origem			L7-08: dispensação; sem dispensação: NOT NULL recusa
+GELANDISPENSACAO	#seq:ID_GECADDISPENSACAO	dispensacao_item.sequencia				L7-08: linha da dispensação (ordem da chave)
+GELANDISPENSACAO	ITEM	dispensacao_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANDISPENSACAO	ITEM	dispensacao_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: NOT NULL recusa
+GELANDISPENSACAO	QTDE	dispensacao_item.quantidade	decimal			L7-08: quantidade dispensada; nula: NOT NULL recusa; zero: CHECK recusa
+GELANDISPENSACAO	PRIMEIRA_DOSE_REF	dispensacao_item.primeira_dose	booleano_sn			L7-08: primeira dose (S/N)
+GELANDISPENSACAO	VIA	dispensacao_item.via_de_uso_id	chave_origem		ref:GETABVIA	L7-08: via de uso pelo código (como GEVIASITEM)
+GELANDISPENSACAO	JUSTIFICA_ITEM_NAO_PRESC	dispensacao_item.justificativa_nao_prescrito	texto			L7-08: justificativa do item não prescrito (1ª fonte)
+GELANDISPENSACAO	=sem vínculo com o item prescrito na origem	dispensacao_item.justificativa_nao_prescrito				L7-08: a origem não liga o item dispensado ao item prescrito: o fato é registrado (2ª fonte, concorrente; CHECK prescrito ou justificativa)
+GELANDISPENSACAO	=dispensado	dispensacao_item.situacao				L7-08: registro histórico do item dispensado
+GELANDISPENSACAO	HM		inteiro			L7-08: não carregada: horário: as doses vêm de GEDISPHOR
+GELANDISPENSACAO	DOSE		data_hora			L7-08: não carregada: momento da dose: vem de GEDISPHOR
+GELANDISPENSACAO	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADDISPENSACAO
+GECTRLENTREGADOCSAIDA	@estabelecimento	entrega_setor.estabelecimento_id				L7-08: único estabelecimento do cliente
+GECTRLENTREGADOCSAIDA	ID_GECADSAI	entrega_setor.setor_funcional_id	inteiro		ref:GECADSAI>CONS;cod:setor_funcional.codigo	L7-08: setor = local de consumo do documento de saída, achado pelo código no setor funcional (criado pela dispensação); ausente: codigo_inexistente_destino e NOT NULL recusa
+GECTRLENTREGADOCSAIDA	ID_GECADSAI	entrega_setor.origem_local_estoque_id	chave_origem		ref:GECADSAI>ARM>GELOCARM	L7-08: armazém do documento (1ª fonte)
+GECTRLENTREGADOCSAIDA	ID_GELANPAC	entrega_setor.origem_local_estoque_id	chave_origem		ref:GELANPAC>LOCAL>GELOCARM	L7-08: lançamento ao paciente: o local dele (2ª fonte, concorrente; lido na origem)
+GECTRLENTREGADOCSAIDA	ID_TBSITUACAOFARMACIA	entrega_setor.situacao_farmaceutica_id	chave_origem			L7-08: situação farmacêutica da entrega
+GECTRLENTREGADOCSAIDA	ID_TBUSERS	entrega_setor.entregador_usuario_id			ref:TBUSERS	L7-08: quem registrou a entrega
+GECTRLENTREGADOCSAIDA	DATA_HORA	entrega_setor.saida_em	data_hora			L7-08: momento da entrega
+GECTRLENTREGADOCSAIDA	MOTIVO_ESTORNO	entrega_setor.motivo_estorno	texto_longo			L7-08: motivo do estorno (a situação vem da situação farmacêutica; estornada exige momento do estorno, que a origem não tem)
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.dispensacao_item_id	chave_origem		ref:GEDISPHOR.ID_PRCHKGERAL>ID_GELANDISPENSACAO>GELANDISPENSACAO	L7-08: item dispensado no horário (dose dispensada do horário, chave alternativa); várias doses: pai_ambiguo; nenhuma: NOT NULL recusa
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.prescricao_item_id	chave_origem		ref:PRCHKGERAL>ID_PRLANGERAL>PRLANGERAL	L7-08: item prescrito do horário
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.anterior_insumo_id	chave_origem		ref:PRCHKGERAL>ID_PRPRESCMED>PRPRESCMED>ID_GEITENS>GEITENS	L7-08: insumo prescrito (medicamento do horário, encadeada); sem ele: NOT NULL recusa
+PREXTRATOITEM_SUBST	ID_GEITENS	substituicao_dispensacao.novo_insumo_id	chave_origem			L7-08: insumo que substituiu; igual ao prescrito: CHECK recusa
+PREXTRATOITEM_SUBST	QTDE_DOSE	substituicao_dispensacao.quantidade_dose	decimal			L7-08: dose do substituto
+PREXTRATOITEM_SUBST	ID_TBUNICON_UNI_PRESC	substituicao_dispensacao.unidade_medida_id	chave_origem		ref:TBUNICON	L7-08: unidade da dose
+PREXTRATOITEM_SUBST	=sem motivo registrado na origem	substituicao_dispensacao.motivo				L7-08: a origem não guarda o motivo da troca: o fato é registrado, sem presumir motivo
+PREXTRATOITEM_SUBST	DATA_HORA_HISTORICO	substituicao_dispensacao.ocorrido_em	data_hora			L7-08: momento da troca
+PREXTRATOITEM_SUBST	ID_TBUSERS	substituicao_dispensacao.usuario_id			ref:TBUSERS	L7-08: quem trocou
+PREXTRATOITEM_SUBST	ID_GENOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7)
+PREXTRATOITEM_SUBST	DATA_HORA_HISTORICO_UTC		texto			L7-08: não carregada: mesma hora em texto UTC (redundante)
+PREXTRATOITEM_SUBST	FUSO_HORARIO_HISTORICO		inteiro			L7-08: não carregada: fuso do registro (a hora local já vem)
+GELANPED	ID_GECADPED	pedido_compra_item.pedido_compra_id	chave_origem			L7-08: pedido de compra (GECADPED, L7-07); cabeçalho que não virou pedido (cotação, licitação): pai_inexistente e NOT NULL recusa
+GELANPED	#seq:ID_GECADPED	pedido_compra_item.sequencia				L7-08: linha do pedido (ordem da chave)
+GELANPED	ITEM	pedido_compra_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANPED	ITEM	pedido_compra_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: CHECK recusa
+GELANPED	FATOR	pedido_compra_item.fator_conversao	decimal_zero_nulo			L7-08: fator da unidade de compra; vazio ou 0: padrão do destino
+GELANPED	QTDE	pedido_compra_item.quantidade	decimal			L7-08: quantidade pedida; zero: CHECK recusa
+GELANPED	VLR_UNI	pedido_compra_item.valor_unitario	decimal			L7-08: valor unitário
+GELANPED	PER_DES	pedido_compra_item.percentual_desconto	decimal			L7-08: percentual de desconto
+GELANPED	VLR_DES	pedido_compra_item.valor_desconto	decimal			L7-08: valor de desconto
+GELANPED	PER_IPI	pedido_compra_item.percentual_ipi	decimal			L7-08: percentual de IPI
+GELANPED	VLR_IPI	pedido_compra_item.valor_ipi	decimal			L7-08: valor de IPI
+GELANPED	VLR_TOT	pedido_compra_item.valor_total	decimal			L7-08: valor total do item
+GELANPED	MARCA	pedido_compra_item.marca	texto			L7-08: marca ofertada
+GELANPED	ENTREGA	pedido_compra_item.data_prevista_entrega	data			L7-08: entrega prevista (as programadas vêm de GELANPEDENTREGA)
+GELANPED	VENCEDOR	pedido_compra_item.adjudicado	booleano_sn			L7-08: item adjudicado ao fornecedor (S/N)
+GELANPED	OBS	pedido_compra_item.observacao	texto			L7-08: observação do item
+GELANPED	OQUE		codigo_char			L7-08: não carregada: natureza do cabeçalho (pedido, cotação, licitação) é do GECADPED
+GELANPED	ANO		inteiro			L7-08: não carregada: número antigo do pedido (vem por ID_GECADPED)
+GELANPED	DOC		inteiro			L7-08: não carregada: ver ANO
+GELANPED	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADPED
+GELANPED	FORN		inteiro			L7-08: não carregada: fornecedor do pedido é do cabeçalho (GECADPED)
+GELANPED	TIPO		codigo_char			L7-08: não carregada: tipo sem evidência do significado
+GELANPED	CONDI		inteiro			L7-08: não carregada: condição de pagamento é do cabeçalho
+GELANPED	CONDICAO		texto			L7-08: não carregada: ver CONDI
+GELANPED	COMPRADA		decimal			L7-08: não carregada: quantidade comprada na cotação sem evidência (o recebido vem das notas de entrada)
+GELANPED	QTDE1		decimal			L7-08: não carregada: quantidades por proposta da cotação (sem destino no item do pedido)
+GELANPED	QTDE2		decimal			L7-08: não carregada: ver QTDE1
+GELANPED	QTDE3		decimal			L7-08: não carregada: ver QTDE1
+GELANPED	REG_MS		texto			L7-08: não carregada: registro sanitário em texto: o cadastro do registro vem do insumo
+GELANPED	APRES		texto			L7-08: não carregada: apresentação ofertada em texto (sem cadastro)
+GELANPED	QTDE_ARM		decimal			L7-08: não carregada: quantidade na unidade de estoque: derivada de QTDE x FATOR
+GELANPED	VLR_ARM		decimal			L7-08: não carregada: valor na unidade de estoque: derivado
+GELANPED	VLR_MAX_SUG		flutuante			L7-08: não carregada: valor máximo sugerido é da cotação
+GELANPED	DATA1		data			L7-08: não carregada: datas das propostas da cotação
+GELANPED	DATA2		data			L7-08: não carregada: ver DATA1
+GELANPED	DATA3		data			L7-08: não carregada: ver DATA1
+GELANPED	ITEM_AUTORIZADO_ORCAMENTO		codigo_char			L7-08: não carregada: marca de autorização de orçamento sem destino no item
+GEANTIMI	ID_GECADANTIMI	liberacao_antimicrobiano.ficha_antimicrobiano_id	chave_origem		ref:GECADANTIMI	L7-08: ficha da comissão de controle de infecção (nasce de GECADANTIMI, L6-05); inexistente: NOT NULL recusa
+GEANTIMI	=inclusao	liberacao_antimicrobiano.operacao				L7-08: liberação migrada: registro de inclusão
+GEANTIMI	DATA	liberacao_antimicrobiano.ocorrido_em	data			L7-08: data da liberação à meia-noite (tipar)
+GEANTIMI	USUARIO	liberacao_antimicrobiano.usuario_id			ref:TBUSERS	L7-08: usuário que liberou, pelo login; sem usuário ou inexistente: NOT NULL recusa
+GEANTIMI	DATA_INT	liberacao_antimicrobiano.decisao	preenchido	valores		L7-08: interrompida (DATA_INT preenchida): suspenso; senão liberado (pares em valores.d/L7-08.tsv); a continuação fica na liberação anterior
+GEANTIMI	TIPO	liberacao_antimicrobiano.tipo_tratamento	codigo_char	valores		L7-08: tipo do tratamento P/E/T (pares em valores.d/L7-08.tsv); outro valor: NULL com valor_fora_do_dominio
+GEANTIMI	ITEM	liberacao_antimicrobiano.insumo_id	chave_origem		ref:GEITENS	L7-08: antimicrobiano liberado (insumo pelo código); inexistente: NOT NULL recusa
+GEANTIMI	DATA_VIGENCIA_INICIAL	liberacao_antimicrobiano.vigencia_inicio	data_hora			L7-08: início da vigência
+GEANTIMI	DATA_VIGENCIA_FINAL	liberacao_antimicrobiano.vigencia_fim	data_hora			L7-08: fim da vigência; antes do início: CHECK recusa
+GEANTIMI	DIAS	liberacao_antimicrobiano.dias_tratamento	inteiro			L7-08: dias de tratamento liberados; zero: CHECK recusa
+GEANTIMI	DIA_INICIO	liberacao_antimicrobiano.dia_inicio	inteiro			L7-08: dia do tratamento em que a liberação começa
+GEANTIMI	QUANTIDADE_DOSE	liberacao_antimicrobiano.quantidade_dose	decimal			L7-08: quantidade por dose; zero: CHECK recusa
+GEANTIMI	ID_TBUNICON	liberacao_antimicrobiano.unidade_medida_id	chave_origem		ref:TBUNICON	L7-08: unidade da dose; inexistente: NOT NULL recusa
+GEANTIMI	ID_PRFREQUENCIA	liberacao_antimicrobiano.frequencia_administracao_id	chave_origem		ref:PRFREQUENCIA	L7-08: frequência (L6-05)
+GEANTIMI	QTDE_TOTAL	liberacao_antimicrobiano.quantidade_total	decimal			L7-08: quantidade total liberada
+GEANTIMI	DOSE_EXTRA	liberacao_antimicrobiano.dose_extra	booleano_sn			L7-08: dose extra S/N; fora do domínio: NULL e o padrão do destino (falso)
+GEANTIMI	ID_GEANTIMI_ORIGEM_TRAT	liberacao_antimicrobiano.anterior_liberacao_antimicrobiano_id	chave_origem		ref:GEANTIMI	L7-08: liberação de que esta é continuação (autorreferência)
+GEANTIMI	#retrato:*	liberacao_antimicrobiano.dados				L7-08: retrato de todas as colunas da linha (dose tomada, início e interrupção, quem interrompeu, marca PRO_TER) sem campo próprio
+GEANTIMI	REG		inteiro			L7-08: não carregada: o atendimento é o da ficha (GECADANTIMI)
+GEANTIMI	ID_RICADPAC		chave_origem			L7-08: não carregada: o paciente é o da ficha (GECADANTIMI)
+GEANTIMI	QTDE_TOMADA		decimal			L7-08: não carregada em coluna: fica no retrato (dados)
+GEANTIMI	DATA_INI		data_hora			L7-08: não carregada em coluna: fica no retrato (dados)
+GEANTIMI	USU_INT		texto			L7-08: não carregada em coluna: quem interrompeu fica no retrato (dados); a decisão suspenso vem de DATA_INT
+GEANTIMI	PRO_TER		codigo_char			L7-08: não carregada em coluna: marca sem evidência do significado; fica no retrato (dados)
+GEQTDELOTEVALLOTEDOCSAIDA	ID_GERASVALSAIDLOTE	movimento_lote.id	chave_origem		ref:GERASVALSAIDLOTE;complementa	L7-08 r6 (ADR 0006): quantidade líquida do lote na saída em movimento_lote.quantidade_liquida (pedido r5b_lote_liquido atendido): mesma chave do lote da saída: UPDATE da linha do lote (cópia exata, sem recálculo)
+GEQTDELOTEVALLOTEDOCSAIDA	QTDE	movimento_lote.quantidade_liquida	decimal			L7-08 r6 (ADR 0006): quantidade líquida do lote na saída em movimento_lote.quantidade_liquida (pedido r5b_lote_liquido atendido): maior que a bruta ou negativa: o CHECK recusa
+GEPARAM	#item	parametro_valor.valor	texto		parametro_valor;principal;desdobrar:EMPRES=estoque.nomeEmpresaCabecalho,ENDERECO=estoque.enderecoCabecalho,CIDADE=estoque.cidadeCabecalho,FONE=estoque.telefoneCabecalho,CEP=estoque.cepCabecalho,IMPOK=estoque.impressaoConfirmada,ESTADO=estoque.ufCabecalho,MESPRO=estoque.mesProcessamento,ANOPRO=estoque.anoProcessamento,GER_DMM=estoque.geraDemonstrativoMensal,DIG_DOC=estoque.digitaDocumento,ARM_UNI=estoque.armazenaPorUnidade,DATVAL=estoque.controlaDataValidade,INF_MED=estoque.informaMedico,CONS_QTDE=estoque.consisteQuantidade,VLR_SAI=estoque.valorizaSaida,HOR_MED=estoque.informaHorarioMedicacao,VENC_NF=estoque.informaVencimentoNota,CONS_AUT=estoque.consumoAutomatico,SERIAL=estoque.serieDocumento,COD_BARRAS=estoque.usaCodigoBarras,CONS_EST_MIN=estoque.consisteEstoqueMinimo,GERAR_DOCS=estoque.geraDocumentos,DIG_VIA=estoque.digitaViaAdministracao,VLR_DEV=estoque.valorizaDevolucao,VLR_REQ=estoque.valorizaRequisicao,VLR_VEXT=estoque.valorizaVendaExterna,ITEVAL=estoque.itemValorizado,PERC_CPA=estoque.percentualCompra,BARRAS_TR=estoque.codigoBarrasNaTransferencia,BARRAS_DV=estoque.codigoBarrasNaDevolucao,TRCB=estoque.transferePorCodigoBarras,VLR_VEXT_T=estoque.valorizaVendaExternaTerceiros,PERC_VE_F=estoque.percentualVendaExternaFaturada,PERC_VE_T=estoque.percentualVendaExternaTerceiros,ATU_FAT=estoque.atualizaFaturamento,GRA_01=estoque.gravacaoAdicional,DEV_PACCDC=estoque.devolucaoPacienteCentroCusto,DIG_CRM=estoque.digitaRegistroConselho,DIG_TRANSP=estoque.digitaTransportadora,DIG_CONHEC=estoque.digitaConhecimentoTransporte,EMI_NF=estoque.emiteNotaFiscal,PED_NF=estoque.exigePedidoNaNota,REQ_ENT=estoque.formularioEntrada,REQ_SAI=estoque.formularioSaida,REQ_DEV=estoque.formularioDevolucao,REQ_REQ=estoque.formularioRequisicao,SEQ_478=estoque.sequenciaRelatorioControlado,REQ_HOR=estoque.requisicaoPorHorario,PESQ_ITE=estoque.pesquisaItem,DIG_MAR=estoque.digitaMarca,MML=estoque.exibeMaterialMedicamentoLista,ETIQ_DOSE=estoque.modeloEtiquetaDose,HOSP=estoque.hospitalPadrao,DATA_EI=estoque.dataEstoqueInicial,PI_ENT=estoque.periodoInicioEntrada,PF_ENT=estoque.periodoFimEntrada,PI_SAI=estoque.periodoInicioSaida,PF_SAI=estoque.periodoFimSaida,PI_DEV=estoque.periodoInicioDevolucao,PF_DEV=estoque.periodoFimDevolucao,PI_TRA=estoque.periodoInicioTransferencia,PF_TRA=estoque.periodoFimTransferencia,VLR_TRANSF=estoque.valorizaTransferencia,CDC_INT=estoque.centroCustoIntegrado,PI_PED=estoque.periodoInicioPedido,PF_PED=estoque.periodoFimPedido,DIG_LAB=estoque.digitaLaboratorio,CONS_ORC=estoque.consisteOrcamento,SAI_DEV=estoque.saidaComDevolucao,QDO_ESC=estoque.momentoEscolhaLote,IND_ATU_FAT=estoque.indicadorAtualizacaoFaturamento,PATH=estoque.caminhoArquivos,PATHI=estoque.caminhoImportacao,DEST_NF=estoque.destinoNotaFiscal,RESP_TEC=estoque.responsavelTecnico,COM_FONE=estoque.compraTelefone,COM_FAX=estoque.compraFax,COM_EMAIL=estoque.compraEmail,COM_PRESID=estoque.compraPresidente,COM_ENCARR=estoque.compraEncarregado,DIAS_PESQ_EXT=estoque.diasPesquisaVendaExterna,COM_EMAIL_SERV=estoque.compraServidorEmail,COM_EMAIL_USER=estoque.compraUsuarioEmail,FATOR_ENT=estoque.fatorConversaoEntrada,GSI_VENC=estoque.alertaVencimentoGestao,VISUAL_REQ=estoque.visualizacaoRequisicao,ORDEM_REQ=estoque.ordemRequisicao,COM_RAMAL=estoque.compraRamal,VAL_DEV=estoque.validaDevolucao,MOD_PED=estoque.modeloPedido,REQ_SEM_QTDE=estoque.requisicaoSemQuantidade,AVISO_PED=estoque.avisoPedido,FONTE_PAG=estoque.informaFontePagadora,EMPENHO=estoque.informaEmpenho,FIN_OBJ=estoque.informaFinalidadeObjeto,REG_MS=estoque.informaRegistroSanitario,MARCA=estoque.informaMarca,SETOR=estoque.informaSetor,REQUIS=estoque.informaRequisitante,SOLIC=estoque.informaSolicitante,MOT_INC_REQ=estoque.motivoInclusaoRequisicao,OBS_CONPAG=estoque.observacaoCondicaoPagamento,INTEG_FIN=estoque.integraFinanceiro,INTEG_CONT=estoque.integraContabilidade,RASTREAR=estoque.rastreiaItem,LANC_AVISTA=estoque.lancamentoAVista,HIS_PAD=estoque.historicoPadraoContabil,CDC_CRE=estoque.centroCustoCredito,CDC_DEB=estoque.centroCustoDebito,IMP_AP=estoque.imprimeAutorizacaoPagamento,PER_CHE_REQ=estoque.periodoConferenciaRequisicao,NAT_OP=estoque.informaNaturezaOperacao,CONS_DOC_ANT_EXT=estoque.consisteDocumentoAnteriorVendaExterna,DIAS_PES_CONS=estoque.diasPesquisaConsumo,VENC_ANT_EMI=estoque.vencimentoAnteriorEmissao,OBSTRA=estoque.observacaoTransferencia,VISU_QTDE_VLR_REQ=estoque.visualizaQuantidadeValorRequisicao,GRAVA_MES_REQ=estoque.gravaMesRequisicao,ANO_SALDO=estoque.anoSaldo,MES_SALDO=estoque.mesSaldo,QTD_LIN_REQ=estoque.linhasRequisicao,DIG_FATOR_PED=estoque.digitaFatorPedido,INC_FORN_COMP=estoque.incluiFornecedorCompra,SEP_MED_CONT_REQ=estoque.separaControladoRequisicao,SGHCOT_PRAZ_ENT=estoque.cotacaoPrazoEntrega,SGHCOT_VLR_FRETE=estoque.cotacaoValorFrete,SGHCOT_VLR_MIN=estoque.cotacaoValorMinimo,DIG_FATOR_NEC=estoque.digitaFatorNecessidade,CONT_PROV_NOTA=estoque.contabilizaProvisaoNota,UNID_GEST=estoque.unidadeGestora,DT_INIC_GEST_RESP=estoque.inicioGestaoResponsavel,DT_INIC_GEST_RATIA=estoque.inicioGestaoRatificador,INF_REG_EXEC=estoque.informaRegimeExecucao,INF_TIP_RESP=estoque.informaTipoResponsavel,INF_TIP_DISP=estoque.informaTipoDispensa,CPF_RESP=estoque.cpfResponsavelGestao,CPF_RATIA=estoque.cpfRatificador,INC_TIP_DOC_COMP=estoque.incluiTipoDocumentoCompra,INC_SERIE_COMP=estoque.incluiSerieCompra,IMP_NUM_PED_ENT=estoque.imprimeNumeroPedidoEntrada,IMP_VENC_NF=estoque.imprimeVencimentoNota,LANC_CONT_EMIS=estoque.lancaContabilidadeEmissao,PER_DIST_MATMED=estoque.periodoDistribuicaoMaterialMedicamento,VIS_RET_DIST_MATMED=estoque.visualizaRetornoDistribuicao,CONS_GSI=estoque.consisteGestaoSuprimento,INTEG_PRONT=estoque.integraProntuario,CONS_DOC_FOR=estoque.consisteDocumentoFornecedor,GER_REG_PREC=estoque.geraRegistroPreco,CONS_REG_ALL_FORN=estoque.consultaRegistroPrecoTodosFornecedores,QTD_LIN_ENT=estoque.linhasEntrada,CHE_PRIN_ATI=estoque.verificaPrincipioAtivo,NUM_VIAS=estoque.numeroVias,SGHCOT_RESPON=estoque.cotacaoResponsavel,SGHCOT_DOC=estoque.cotacaoDocumento,COT_DOC_VENC=estoque.cotacaoDocumentoVencido,NUMERO_PROCESSO=estoque.informaNumeroProcesso,LIST_DOC_VENC=estoque.listaDocumentoVencido,COPIA_SETOR_COMPRA=estoque.copiaSetorCompra,INF_FINAN_PED=estoque.informaFinanceiroPedido,INF_FINAN_LIC=estoque.informaFinanceiroLicitacao,QTD_LIN_DEV=estoque.linhasDevolucao,QTD_LIN_TRAN=estoque.linhasTransferencia,QTDE_DIFER_PED=estoque.quantidadeDiferentePedido,IMP_OBS_REQ_ENT=estoque.imprimeObservacaoRequisicaoEntrada,INTEG_SAIDA_CONT=estoque.integraSaidaContabilidade,INTEG_SAIDA_CUST=estoque.integraSaidaCustos,HIS_PAD_SAIDA=estoque.historicoPadraoSaida,CRM_MATMEDCONT=estoque.registroConselhoControlado,LOTE_VALIDADE_SAID_DEVOL=estoque.loteValidadeSaidaDevolucao,FARM_RESP=estoque.farmaceuticoResponsavel,ID_GESALDO=estoque.saldoReferencia,UNI_DIG_EST_INI=estoque.unidadeDigitacaoEstoqueInicial,UNI_VIS_EST_INI=estoque.unidadeVisualizacaoEstoqueInicial,UNI_DIG_BALANCO=estoque.unidadeDigitacaoInventario,UNI_VIS_BALANCO=estoque.unidadeVisualizacaoInventario,UNI_DIG_MOV_PAC=estoque.unidadeDigitacaoMovimentoPaciente,UNI_VIS_MOV_PAC=estoque.unidadeVisualizacaoMovimentoPaciente,UNI_DIG_MOV_CDC=estoque.unidadeDigitacaoMovimentoCentroCusto,UNI_VIS_MOV_CDC=estoque.unidadeVisualizacaoMovimentoCentroCusto,UNI_DIG_TRA=estoque.unidadeDigitacaoTransferencia,UNI_VIS_TRA=estoque.unidadeVisualizacaoTransferencia,UNI_DIG_COMP=estoque.unidadeDigitacaoCompra,UNI_VIS_COMP=estoque.unidadeVisualizacaoCompra,UNI_DIG_ENT=estoque.unidadeDigitacaoEntrada,UNI_VIS_ENT=estoque.unidadeVisualizacaoEntrada,PERM_ANTI_SUP1=estoque.permiteAntimicrobianoSuperior,DIG_JUST_PERM_ANTI_SUP1=estoque.justificaAntimicrobianoSuperior,BARRAS_BALANCO=estoque.codigoBarrasInventario,LOTE_VALIDADE_TRANSF=estoque.loteValidadeTransferencia,SUG_LT_VAL_AUT=estoque.sugereLoteValidadeAutomatico,CONS_DISP_HOR=estoque.consisteDispensacaoHorario,SUG_MOV_TRANS_DISP_HOR=estoque.sugereTransferenciaDispensacaoHorario,SUG_LOT_VAL_DISP_HOR=estoque.sugereLoteDispensacaoHorario,TEMP_ATU_LISTA_MP=estoque.tempoAtualizacaoListaManipulacao,TEMPO_MP=estoque.tempoManipulacao,RASTREAR_LOTE=estoque.rastreiaLote,OLD_DIG_CRM_LANPAC=estoque.digitaConselhoLancamentoPacienteAnterior,GER_DOC_SAID_COMPL_DISP_HOR=estoque.geraSaidaComplementarDispensacaoHorario,EXIGIR_PRAZO_ENT=estoque.exigePrazoEntrega,CONS_DT_POST_LANC_POST_DOSE1=estoque.consisteDataPosteriorPrimeiraDose,CONS_DT_ATUAL_LANC_ENTRE_DOSE1=estoque.consisteDataAtualEntreDoses,DESCTABKITS=estoque.descontaTabelaKits,FARM_RESP_MP=estoque.farmaceuticoResponsavelManipulacao,PMS_OBRIG=estoque.precoMaximoObrigatorio,DATA_INICIO_RASTREABILIDADE=estoque.inicioRastreabilidade,UNI_VIS_CAD_ITEM=estoque.unidadeVisualizacaoCadastroItem,BARRAS_ESTINI=estoque.codigoBarrasEstoqueInicial,UNI_DIG_CAD_ITEM=estoque.unidadeDigitacaoCadastroItem,INTEG_CONT_FRETE_N_INCL=estoque.integraFreteNaoInclusoContabilidade,LOCAL_MANIPULACAO=estoque.localManipulacao,COD_SIMPAS=estoque.informaCodigoCompraPublica,GERAR_DOC_TRANSF_MANIP=estoque.geraTransferenciaManipulacao,UNI_VIS_MOV_VE=estoque.unidadeVisualizacaoVendaExterna,UNI_DIG_MOV_VE=estoque.unidadeDigitacaoVendaExterna,PROG_ENTREGA=estoque.programacaoEntrega,DIG_QTDE_ENT=estoque.digitaQuantidadeEntrada,INTEG_DT_ENTRADA=estoque.integraDataEntrada,ALERTA_SEM_ESTOQUE=estoque.alertaSemEstoque,NUMERO_PED_ITEM=estoque.numeroPedidoPorItem,TIPO_INTEGRACAO_CONTABIL=estoque.tipoIntegracaoContabil,DIG_OBRIGATORIA_PEDIDO_NF=estoque.pedidoObrigatorioNota,DIG_CFOP_GECADNFS=estoque.digitaCfopNota,DIG_CFOP_GELANNFS=estoque.digitaCfopItemNota,LANCAR_ITEM_SIMILAR=estoque.lancaItemSimilar,APRESENTAR_PAC_ENT_CONSIGNADO=estoque.exibePacienteEntradaConsignado,DIGITAR_CDC_NECESSIDADE_COMPRA=estoque.digitaCentroCustoNecessidade,DIGITAR_CDC_PEDIDO=estoque.digitaCentroCustoPedido,PERMITIR_SAIDA_KIT_ITEM_RASTRE=estoque.permiteSaidaKitRastreado,UTILIZAR_AUTORIZACAO_PEDIDO=estoque.usaAutorizacaoPedido,GERAR_PEDIDO_OPME_DOC_SAIDA=estoque.geraPedidoOpmeSaida,ENVIAR_EMAIL_PEDIDO_COMPRA=estoque.enviaEmailPedidoCompra,DIGITAR_NUM_CTR_VENDA_EXT_TERC=estoque.digitaContratoVendaExterna,INCLUIR_DT_EMISSAO_COMPL_CONT=estoque.incluiEmissaoComplementoContabil,INTEGRAR_APOIO_COTACAO=estoque.integraApoioCotacao,INTEGRAR_FRETE_NAO_INCLUSO_FIN=estoque.integraFreteNaoInclusoFinanceiro,ID_TBCBOPRO_FARM_RESP_GERAL=estoque.farmaceuticoResponsavelGeral,PERMITIR_ALT_EXC_ITEM_REQ_SAI=estoque.permiteAlterarItemRequisicaoSaida,GRAVAR_QTDE_REQ_FAT_CONV=estoque.gravaQuantidadeFatorConversao,UTILIZAR_COD_BARRAS_REQUISICAO=estoque.codigoBarrasRequisicao,UTILIZAR_CTR_CONSIGNADOS_OPME=estoque.controlaConsignadoOpme,TP_EMISSAO_DISPENSACAO=estoque.tipoEmissaoDispensacao,OLD_ID_TBCBOPRO_RESP_MANIPULACA=estoque.responsavelManipulacaoAnterior,CARGO_COMPRA=estoque.cargoCompra,BUSCAR_QTD_GRAV_DOC_COD_BARRA=estoque.buscaQuantidadeCodigoBarras,PERMITIR_DISP_ATEND_EXT_SUP_24H=estoque.permiteDispensacaoExternaMais24h,INTEGRAR_DESCONTO_NF_FIN_CONT=estoque.integraDescontoNota,DIGITAR_DTA_HR_USU_EMAIL_PED=estoque.digitaEnvioEmailPedido,INTEGRAR_NF_CFOP_DOACAO_CONT=estoque.integraNotaDoacao,DIGITAR_LABORA_ITEM_ENTRADA=estoque.digitaLaboratorioEntrada,CONTROLAR_SAIDA_PROFILATICO=estoque.controlaSaidaProfilatico,PERMITIR_ENT_PED_ITEM_QTDE_DIF=estoque.permiteEntradaQuantidadeDiferente,ENDERECO_WS_APOIO_COTACAO=estoque.enderecoServicoCotacao,UTILIZAR_LEITOR_COD_BARRA_DISP=estoque.leitorCodigoBarrasDispensacao,ID_TBEDITREL_ORDEM_COMPRA=estoque.relatorioOrdemCompra,PERM_ANEXAR_QTD_DISP_COD_BARRA=estoque.anexaQuantidadeCodigoBarras,ID_TBEMPHOS_INTEG_CONT_CUSTO=estoque.mantenedoraIntegracaoCusto,OBS_MOV_CDC_ACERTO_OBRIGATORIO=estoque.observacaoAcertoObrigatoria,ENVIA_EMAIL_ALTERA_SIT_PEDIDO=estoque.emailSituacaoPedido,CONTA_DESCONTO=estoque.contaContabilDesconto,ANEXAR_QUANTIDADE_TOTAL_LOTE=estoque.anexaQuantidadeTotalLote,INFORMAR_MOT_EXC_ITEM_SAIDA=estoque.motivoExclusaoItemSaida,API_CONTROLE_BLOQUEIO=estoque.servicoControleBloqueio,SUBSTITUICAO_ITENS_PRESCRITOS=estoque.substituiItemPrescrito,LANCAR_ITENS_NAO_PRESCRITOS=estoque.lancaItemNaoPrescrito,CONSIDERA_NOME_COMERC_LOTE_MOV=estoque.nomeComercialLote,OBRIG_JUSTIF_SUBSTITUICAO=estoque.justificaSubstituicao,OBRIG_JUST_INCL_ITEM_NAO_PRESC=estoque.justificaItemNaoPrescrito,DIG_LOTE_VAL_ITE_CONSIG_REQ=estoque.loteConsignadoRequisicao,UTILIZAR_DATAMATRIX_QRCODE=estoque.usaCodigoBidimensional,CONSISTIR_QTDE_PRESC_X_DISP=estoque.consisteQuantidadePrescritaDispensada	L7-08 r6 (ADR 0006): opções do estoque por usuário -> parametro_valor do usuário, uma linha por opção com valor (desdobrar), definição estoque.* pela chave (semente 11_SUP/09); valor como texto da origem (número, data AAAA-MM-DD)
+GEPARAM	#rotulo	parametro_valor.parametro_definicao_id			cod:parametro_definicao.chave	L7-08 r6 (ADR 0006): opções do estoque por usuário -> parametro_valor do usuário, uma linha por opção com valor (desdobrar), definição estoque.* pela chave (semente 11_SUP/09)
+GEPARAM	=usuario	parametro_valor.nivel				L7-08 r6 (ADR 0006): opções do estoque por usuário -> parametro_valor do usuário, uma linha por opção com valor (desdobrar), definição estoque.* pela chave (semente 11_SUP/09); nível do usuário (a origem guarda uma ficha por login)
+GEPARAM	USUARIO	parametro_valor.usuario_id	chave_origem		ref:TBUSERS	L7-08 r6 (ADR 0006): opções do estoque por usuário -> parametro_valor do usuário, uma linha por opção com valor (desdobrar), definição estoque.* pela chave (semente 11_SUP/09); usuário pelo login; nunca visto: pai_inexistente e o escopo recusa (4025), visível
+GEPARAM	@vigencia_carga	parametro_valor.vigencia_inicio				L7-08 r6: vigência pela evidência (ADR 0007, 16): a ficha de opções não tem data própria
+GEPARAM	=opção do estoque do usuário trazida da origem	parametro_valor.motivo				L7-08 r6 (ADR 0006): opções do estoque por usuário -> parametro_valor do usuário, uma linha por opção com valor (desdobrar), definição estoque.* pela chave (semente 11_SUP/09)
+GEPARAM	#item@IMPOK	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.impressaoConfirmada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GER_DMM	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraDemonstrativoMensal (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_DOC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaDocumento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ARM_UNI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.armazenaPorUnidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DATVAL	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.controlaDataValidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_MED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaMedico (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_QTDE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteQuantidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_SAI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaSaida (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@HOR_MED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaHorarioMedicacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VENC_NF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaVencimentoNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_AUT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consumoAutomatico (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@COD_BARRAS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.usaCodigoBarras (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_EST_MIN	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteEstoqueMinimo (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GERAR_DOCS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraDocumentos (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_VIA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaViaAdministracao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_DEV	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaDevolucao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_VEXT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaVendaExterna (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ITEVAL	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.itemValorizado (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@BARRAS_TR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.codigoBarrasNaTransferencia (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@BARRAS_DV	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.codigoBarrasNaDevolucao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@TRCB	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.transferePorCodigoBarras (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_VEXT_T	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaVendaExternaTerceiros (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ATU_FAT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.atualizaFaturamento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GRA_01	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.gravacaoAdicional (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DEV_PACCDC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.devolucaoPacienteCentroCusto (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_CRM	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaRegistroConselho (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_TRANSP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaTransportadora (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_CONHEC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaConhecimentoTransporte (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@EMI_NF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.emiteNotaFiscal (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PED_NF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.exigePedidoNaNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@REQ_HOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.requisicaoPorHorario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PESQ_ITE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.pesquisaItem (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_MAR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaMarca (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@MML	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.exibeMaterialMedicamentoLista (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VLR_TRANSF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.valorizaTransferencia (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CDC_INT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.centroCustoIntegrado (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_LAB	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaLaboratorio (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_ORC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteOrcamento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SAI_DEV	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.saidaComDevolucao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@FATOR_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.fatorConversaoEntrada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GSI_VENC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.alertaVencimentoGestao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VAL_DEV	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.validaDevolucao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@REQ_SEM_QTDE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.requisicaoSemQuantidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@AVISO_PED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.avisoPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@FONTE_PAG	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaFontePagadora (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@EMPENHO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaEmpenho (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@FIN_OBJ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaFinalidadeObjeto (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@REG_MS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaRegistroSanitario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@MARCA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaMarca (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SETOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaSetor (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@REQUIS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaRequisitante (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SOLIC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaSolicitante (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@MOT_INC_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.motivoInclusaoRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@OBS_CONPAG	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.observacaoCondicaoPagamento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_FIN	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraFinanceiro (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_CONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraContabilidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@RASTREAR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.rastreiaItem (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@LANC_AVISTA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.lancamentoAVista (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@IMP_AP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.imprimeAutorizacaoPagamento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@NAT_OP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaNaturezaOperacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_DOC_ANT_EXT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteDocumentoAnteriorVendaExterna (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VENC_ANT_EMI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.vencimentoAnteriorEmissao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VISU_QTDE_VLR_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.visualizaQuantidadeValorRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GRAVA_MES_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.gravaMesRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_FATOR_PED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaFatorPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INC_FORN_COMP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.incluiFornecedorCompra (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SEP_MED_CONT_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.separaControladoRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SGHCOT_PRAZ_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoPrazoEntrega (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SGHCOT_VLR_FRETE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoValorFrete (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SGHCOT_VLR_MIN	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoValorMinimo (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_FATOR_NEC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaFatorNecessidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONT_PROV_NOTA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.contabilizaProvisaoNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_REG_EXEC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaRegimeExecucao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_TIP_RESP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaTipoResponsavel (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_TIP_DISP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaTipoDispensa (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INC_TIP_DOC_COMP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.incluiTipoDocumentoCompra (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INC_SERIE_COMP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.incluiSerieCompra (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@IMP_NUM_PED_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.imprimeNumeroPedidoEntrada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@IMP_VENC_NF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.imprimeVencimentoNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@LANC_CONT_EMIS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.lancaContabilidadeEmissao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@VIS_RET_DIST_MATMED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.visualizaRetornoDistribuicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_GSI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteGestaoSuprimento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_PRONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraProntuario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_DOC_FOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteDocumentoFornecedor (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GER_REG_PREC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraRegistroPreco (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_REG_ALL_FORN	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consultaRegistroPrecoTodosFornecedores (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CHE_PRIN_ATI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.verificaPrincipioAtivo (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SGHCOT_RESPON	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoResponsavel (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SGHCOT_DOC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoDocumento (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@COT_DOC_VENC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.cotacaoDocumentoVencido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@NUMERO_PROCESSO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaNumeroProcesso (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@LIST_DOC_VENC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.listaDocumentoVencido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@COPIA_SETOR_COMPRA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.copiaSetorCompra (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_FINAN_PED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaFinanceiroPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INF_FINAN_LIC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaFinanceiroLicitacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@QTDE_DIFER_PED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.quantidadeDiferentePedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@IMP_OBS_REQ_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.imprimeObservacaoRequisicaoEntrada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_SAIDA_CONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraSaidaContabilidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_SAIDA_CUST	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraSaidaCustos (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CRM_MATMEDCONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.registroConselhoControlado (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PERM_ANTI_SUP1	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.permiteAntimicrobianoSuperior (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_JUST_PERM_ANTI_SUP1	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.justificaAntimicrobianoSuperior (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@BARRAS_BALANCO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.codigoBarrasInventario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SUG_LT_VAL_AUT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.sugereLoteValidadeAutomatico (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_DISP_HOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteDispensacaoHorario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SUG_MOV_TRANS_DISP_HOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.sugereTransferenciaDispensacaoHorario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SUG_LOT_VAL_DISP_HOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.sugereLoteDispensacaoHorario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@RASTREAR_LOTE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.rastreiaLote (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@OLD_DIG_CRM_LANPAC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaConselhoLancamentoPacienteAnterior (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GER_DOC_SAID_COMPL_DISP_HOR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraSaidaComplementarDispensacaoHorario (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@EXIGIR_PRAZO_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.exigePrazoEntrega (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_DT_POST_LANC_POST_DOSE1	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteDataPosteriorPrimeiraDose (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONS_DT_ATUAL_LANC_ENTRE_DOSE1	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.consisteDataAtualEntreDoses (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DESCTABKITS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.descontaTabelaKits (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PMS_OBRIG	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.precoMaximoObrigatorio (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@BARRAS_ESTINI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.codigoBarrasEstoqueInicial (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_CONT_FRETE_N_INCL	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraFreteNaoInclusoContabilidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@COD_SIMPAS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.informaCodigoCompraPublica (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GERAR_DOC_TRANSF_MANIP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraTransferenciaManipulacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PROG_ENTREGA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.programacaoEntrega (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_QTDE_ENT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaQuantidadeEntrada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEG_DT_ENTRADA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraDataEntrada (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ALERTA_SEM_ESTOQUE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.alertaSemEstoque (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@NUMERO_PED_ITEM	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.numeroPedidoPorItem (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_OBRIGATORIA_PEDIDO_NF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.pedidoObrigatorioNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_CFOP_GECADNFS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaCfopNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_CFOP_GELANNFS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaCfopItemNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@LANCAR_ITEM_SIMILAR	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.lancaItemSimilar (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@APRESENTAR_PAC_ENT_CONSIGNADO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.exibePacienteEntradaConsignado (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIGITAR_CDC_NECESSIDADE_COMPRA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaCentroCustoNecessidade (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIGITAR_CDC_PEDIDO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaCentroCustoPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PERMITIR_SAIDA_KIT_ITEM_RASTRE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.permiteSaidaKitRastreado (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@UTILIZAR_AUTORIZACAO_PEDIDO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.usaAutorizacaoPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GERAR_PEDIDO_OPME_DOC_SAIDA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.geraPedidoOpmeSaida (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ENVIAR_EMAIL_PEDIDO_COMPRA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.enviaEmailPedidoCompra (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIGITAR_NUM_CTR_VENDA_EXT_TERC	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaContratoVendaExterna (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INCLUIR_DT_EMISSAO_COMPL_CONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.incluiEmissaoComplementoContabil (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEGRAR_APOIO_COTACAO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraApoioCotacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ID_TBCBOPRO_FARM_RESP_GERAL	parametro_valor.valor	chave_origem		ref:TBCBOPRO	L7-08 r6: estoque.farmaceuticoResponsavelGeral guarda o id do cadastro de inscrição no conselho do destino (referência pelo conector_origem)
+GEPARAM	#item@PERMITIR_ALT_EXC_ITEM_REQ_SAI	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.permiteAlterarItemRequisicaoSaida (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@GRAVAR_QTDE_REQ_FAT_CONV	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.gravaQuantidadeFatorConversao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@UTILIZAR_COD_BARRAS_REQUISICAO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.codigoBarrasRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@UTILIZAR_CTR_CONSIGNADOS_OPME	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.controlaConsignadoOpme (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@OLD_ID_TBCBOPRO_RESP_MANIPULACA	parametro_valor.valor	chave_origem		ref:TBCBOPRO	L7-08 r6: estoque.responsavelManipulacaoAnterior guarda o id do cadastro de inscrição no conselho do destino (referência pelo conector_origem)
+GEPARAM	#item@BUSCAR_QTD_GRAV_DOC_COD_BARRA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.buscaQuantidadeCodigoBarras (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PERMITIR_DISP_ATEND_EXT_SUP_24H	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.permiteDispensacaoExternaMais24h (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEGRAR_DESCONTO_NF_FIN_CONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraDescontoNota (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIGITAR_DTA_HR_USU_EMAIL_PED	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.digitaEnvioEmailPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INTEGRAR_NF_CFOP_DOACAO_CONT	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.integraNotaDoacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@CONTROLAR_SAIDA_PROFILATICO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.controlaSaidaProfilatico (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@PERMITIR_ENT_PED_ITEM_QTDE_DIF	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.permiteEntradaQuantidadeDiferente (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@UTILIZAR_LEITOR_COD_BARRA_DISP	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.leitorCodigoBarrasDispensacao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ID_TBEDITREL_ORDEM_COMPRA	parametro_valor.valor	chave_origem		ref:TBEDITREL	L7-08 r6: estoque.relatorioOrdemCompra guarda o id do cadastro de relatório do destino (referência pelo conector_origem)
+GEPARAM	#item@PERM_ANEXAR_QTD_DISP_COD_BARRA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.anexaQuantidadeCodigoBarras (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ID_TBEMPHOS_INTEG_CONT_CUSTO	parametro_valor.valor	chave_origem		ref:TBEMPHOS	L7-08 r6: estoque.mantenedoraIntegracaoCusto guarda o id do cadastro de mantenedora do destino (referência pelo conector_origem)
+GEPARAM	#item@HOSP	parametro_valor.valor	chave_origem		ref:TBHOSPIT	L7-08 conferidor r6 (ADR 0007, 19): estoque.hospitalPadrao guarda o id do estabelecimento do destino (referência pelo conector_origem); ausente: pai_inexistente visível
+GEPARAM	#item@CDC_CRE	parametro_valor.valor	chave_origem		ref:TBCENCUS	L7-08 conferidor r6 (ADR 0007, 19): estoque.centroCustoCredito guarda o id do centro de custo do destino (referência pelo conector_origem); ausente: pai_inexistente visível
+GEPARAM	#item@CDC_DEB	parametro_valor.valor	chave_origem		ref:TBCENCUS	L7-08 conferidor r6 (ADR 0007, 19): estoque.centroCustoDebito guarda o id do centro de custo do destino (referência pelo conector_origem); ausente: pai_inexistente visível
+GEPARAM	#item@OBS_MOV_CDC_ACERTO_OBRIGATORIO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.observacaoAcertoObrigatoria (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ENVIA_EMAIL_ALTERA_SIT_PEDIDO	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.emailSituacaoPedido (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@ANEXAR_QUANTIDADE_TOTAL_LOTE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.anexaQuantidadeTotalLote (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@INFORMAR_MOT_EXC_ITEM_SAIDA	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.motivoExclusaoItemSaida (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@SUBSTITUICAO_ITENS_PRESCRITOS	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.substituiItemPrescrito (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@DIG_LOTE_VAL_ITE_CONSIG_REQ	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.loteConsignadoRequisicao (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#item@UTILIZAR_DATAMATRIX_QRCODE	parametro_valor.valor	texto_char	valores		L7-08 r6: estoque.usaCodigoBidimensional (marcação S/N -> sim/nao, convenção do produto para booleano; outro valor: valor_fora_do_dominio, guardado no retrato)
+GEPARAM	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo)
+GEPARAM	#cofre:SENHA	trilha_auditoria.dados_depois			trilha_auditoria	L7-08 r6 (ADR 0007, 17): senha de operação do estoque do usuário vai ao cofre de segredos do cliente; nunca gravada (segredo_aguarda_cofre); o retrato a exclui
+GEPARAM	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo); momento da inclusão pela migração (não é vigência)
+GEPARAM	=inclusao	trilha_auditoria.acao			trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo)
+GEPARAM	=usuario	trilha_auditoria.entidade			trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo)
+GEPARAM	USUARIO	trilha_auditoria.entidade_id	chave_origem		ref:TBUSERS;trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo); login nunca visto: NULL com pai_inexistente
+GEPARAM	=opções do estoque do usuário na origem	trilha_auditoria.motivo			trilha_auditoria	L7-08 r6 (ADR 0006): a ficha inteira também fica no retrato da trilha do usuário (evidência, sem segredo)

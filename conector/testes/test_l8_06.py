@@ -10,11 +10,9 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_06
 
 TABELAS = set(l8_06.CARREGADAS)
-# sem regra do motor (pedidos em docs/obra/fatias/f4/saida/L8-06.json): declaração pronta, comentada
-BLOQUEADAS = {"FCCTAAUD", "FCCTAEXT", "FCLANAUD", "FCLANEXT", "RICONTAS", "FCINTEGRPA", "FCTISSLOTEPROT",
-              "TBHISTTABDTH", "TBHISTTABMM", "TBHISTTABTHME", "TBHISTTABTHMI",
-              "REPROEXT", "RIPROEXT"}  # as duas últimas: complemento do item de FCLANEXT (não mais descarte)
-DESCARTES = {"FCLANEXTSEQITEM": "sem_valor", "TBHISTBR": "licenciado"}
+# rodada 3: nenhum descarte e nenhuma bloqueada (FCLANEXTSEQITEM e TBHISTBR carregam como trilha)
+BLOQUEADAS = set()
+DESCARTES = {}
 C = "credencial_fonte_pagadora"
 E = "endpoint_tiss_fonte_pagadora"
 RAIZ = Path(__file__).resolve().parents[1]
@@ -94,17 +92,64 @@ class Plano(unittest.TestCase):
         self.assertEqual((lt["lote_tiss_id"]["referencia"], lt["conta_hospitalar_id"]["referencia"]),
                          ("FCTISSLOTEPROT", "FCCTAEXT"))
 
-    def test_bloqueadas_comentadas_e_descartes(self):
-        self.assertFalse(BLOQUEADAS & set(self.plano))
-        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in BLOQUEADAS | set(DESCARTES)])
+    def test_sem_bloqueadas_e_descartes(self):
         texto = (RAIZ / "mapa/declarado/colunas.d/L8-06.tsv").read_text(encoding="utf-8")
-        for t in BLOQUEADAS:
-            self.assertIn("#%s\t-\t" % t, texto, t)  # causa da falta de regra do motor, para a cobertura
+        for t in TABELAS:
+            self.assertNotIn("#%s\t" % t, texto, t)  # nenhuma declaração da fatia fica comentada
+        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in DESCARTES])
         sc = {r["tabela"]: r for r in mapa.ler_tsv(RAIZ / "mapa/declarado/sem_carga.tsv")}
         for t, causa in DESCARTES.items():
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
             self.assertTrue(sc[t]["motivo"].startswith("L8-06"))
+        for t in BLOQUEADAS:  # nunca descarte: o dado carrega quando o pedido for atendido
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "mecanismo_pedido"), t)
+            self.assertIn("#%s\t" % t, texto, t)  # declaração pronta, comentada
 
+    def test_conta_e_guia_da_internacao(self):
+        self.assertEqual(self.plano["RICONTAS"]["destinos"], ["conta_hospitalar", "tipo_conta", "atendimento_conta"])  # pedido L6-02: vínculo opcional
+        c = self.cols("RICONTAS", "conta_hospitalar")
+        self.assertEqual(c["tipo_conta_id"]["coluna"], "@id:tipo_conta")  # criado uma vez e adotado, nunca duplicado
+        self.assertEqual(c["natureza"]["coluna"], "=internacao")
+        op = mapa.opcoes_destino([x for x in self.mapa["colunas_decl"] if x["tabela"] == "RICONTAS"])
+        self.assertEqual(op["tipo_conta"]["adotar"], ["codigo"])
+        s = self.cols("FCDIAINT", "conta_hospitalar_segurado")
+        self.assertEqual(s["conta_hospitalar_id"]["passos"][0]["modo"], "alt_composta")
+        self.assertEqual(s["numero_carteira"]["passos"][-1], {"coluna": "MATRIC"})
+        self.assertEqual(self.cols("FCDIAINT", "conta_hospitalar")["observacao"]["coluna"], "DIAG")
+        g = self.cols("RICGUIAS", "guia_fonte_pagadora")
+        self.assertEqual(g["tipo_guia"]["coluna"], "=internacao")
+        self.assertEqual([x.get("tabela") for x in g["paciente_id"]["passos"] if "tabela" in x], ["RICADINT", "RICADPAC"])
+
+    def test_lote_acordo_itens_e_auditoria(self):
+        lt = self.cols("FCTISSLOTEPROT", "lote_tiss")
+        self.assertEqual(lt["versao_padrao_tiss_id"]["depara"], "versao_tiss")
+        self.assertEqual(set(lt["tipo_guia"]["valores"].values()),
+                         {"consulta", "sp_sadt", "resumo_internacao", "honorario_individual"})
+        for t in ("TBHISTTABDTH", "TBHISTTABMM", "TBHISTTABTHME", "TBHISTTABTHMI"):
+            self.assertEqual(self.plano[t]["destinos"], ["contrato_tabela_vigencia", "contrato_fonte_pagadora"], t)
+            op = mapa.opcoes_destino([x for x in self.mapa["colunas_decl"] if x["tabela"] == t])
+            self.assertEqual(op["contrato_fonte_pagadora"]["adotar"], ["estabelecimento_id", "numero"], t)
+        it = self.cols("FCLANEXT", "conta_hospitalar_item")
+        self.assertEqual(it["sequencia"]["coluna"], "#seq:ID_FCCTAEXT")
+        self.assertEqual(self.plano["FCLANEXT"]["destinos"], ["conta_hospitalar_item", "trilha_auditoria"])
+        self.assertEqual(it["situacao"]["valores"], {"1": "glosado", "0": "lancado", "": "lancado"})
+        self.assertEqual(tuple(it["motivo_glosa_id"]["cod"]), ("motivo_glosa", "codigo_tuss"))
+        self.assertEqual(it["tecnica_termo_terminologia_id"]["depara"], "tiss:48")
+        tr = self.cols("FCLANEXT", "trilha_auditoria")
+        self.assertEqual((tr["entidade"]["coluna"], tr["entidade_id"]["coluna"]), ("=conta_hospitalar_item", "@id"))
+        self.assertTrue(mapa.opcoes_destino([x for x in self.mapa["colunas_decl"]
+                                             if x["tabela"] == "FCLANEXT"])["trilha_auditoria"]["opcional"])
+        pr = self.cols("FCINTEGRPA", "producao_repasse")
+        self.assertEqual([x.get("tabela") or x.get("coluna") for x in pr["funcao_equipe_cobranca_id"]["passos"]],
+                         ["FCLANEXT", "ATO", "TBGRAUPARTPROC"])
+        self.assertEqual(self.plano["FCLANAUD"]["destinos"], ["trilha_auditoria"])
+        self.assertEqual(self.cols("FCLANAUD", "trilha_auditoria")["dados_antes"]["coluna"], "#retrato:*")
+        for t, ent in (("FCLANEXTSEQITEM", "=conta_hospitalar_item"), ("TBHISTBR", "=tabela_preco")):
+            self.assertEqual(self.plano[t]["destinos"], ["trilha_auditoria"], t)
+            self.assertEqual(self.cols(t, "trilha_auditoria")["entidade"]["coluna"], ent, t)
+            self.assertEqual(self.cols(t, "trilha_auditoria")["dados_depois"]["coluna"], "#retrato:*", t)
+        for t in ("REPROEXT", "RIPROEXT"):
+            self.assertEqual(self.cols(t, "conta_hospitalar_item")["tecnica_termo_terminologia_id"]["depara"], "tiss:48")
 
 class Regras(unittest.TestCase):
     def test_conversoes_da_fatia(self):
@@ -124,6 +169,8 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(cont) - TABELAS, set(l8_06.CADEIA))
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
+            if t in ("FCDIAINT", "REPROEXT"):  # complementa sem a linha do pai: recusa com pai_inexistente
+                recusas += e["pendencias"].get("pai_inexistente", 0)
             if t == "TBTISSWEBSERV" and l8_06.REFERENCIA_OBRIGATORIA:
                 recusas += 2  # transação nunca vista para a mesma fonte: recusada com a referência obrigatória
             self.assertEqual(cont[t], e["gravados"] + recusas, t)

@@ -16,7 +16,13 @@ TBEDITREL	TEXTOSQL	triagem_relatorio_legado.especificacao	texto_longo			L8-18: t
 TBEDITREL	@id	triagem_relatorio_legado.relatorio_id				L8-18: liga a triagem ao rascunho criado no catálogo; destino e situação ficam pendentes para a área decidir
 TBEDITREL	=~0	triagem_relatorio_legado.quantidade_parametros				L8-18: PRESUMIDO (valor_presumido por linha): a quantidade de parâmetros vem das linhas filhas (TBEDITPARAM), que o motor não agrega; contagem a confirmar no catálogo (relatorio_parametro) até a agregação pós-carga pedida em saida/L8-18.json
 TBEDITREL	=~0	triagem_relatorio_legado.acesso_restrito				L8-18: PRESUMIDO (valor_presumido por linha): a restrição vem das linhas filhas (TBEDITREL_GRUUSU, TBEDITREL_TBUSERS), que o motor não agrega; a permissão real está em relatorio_permissao; agregação pós-carga pedida em saida/L8-18.json
-TBEDITREL	TIPO		inteiro			L8-18: não carregada: tipo do relatório na origem sem equivalente no catálogo (formato e destino são decididos na triagem)
+TBEDITREL	TIPO		inteiro			L8-18 r5: código sem domínio documentado: guardado no retrato da trilha do relatório; formato e destino decididos na triagem
+TBEDITREL	=relatorio	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: retrato da configuração da origem na trilha do registro (ADR 0006: nada se perde; consultável pelo cliente)
+TBEDITREL	@id	trilha_auditoria.entidade_id			trilha_auditoria	L8-18 r5 achado: registro gravado (destino principal)
+TBEDITREL	=inclusao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: inclusão pela migração
+TBEDITREL	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data a configuração; registro feito na carga (não é vigência)
+TBEDITREL	=tipo do relatório na origem	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado
+TBEDITREL	#retrato:*-TEXTOSQL	trilha_auditoria.dados_depois			trilha_auditoria	L8-18 r5 achado: linha completa da origem em JSON (sem segredo)
 TBEDITREL	ID_TBOPCOES	relatorio_tela.tela_sistema_id	chave_origem		ref:TBOPCOES;opcional;adotar:tela_sistema_id,relatorio_id;relatorio_tela	L8-18 cobertura: tela (opção do menu, L5) de onde o relatório era chamado vira um vínculo relatorio_tela (destino secundário OPCIONAL: sem tela ou tela nunca vista não grava nada, só a pendência pai_inexistente; o relatório entra igual); o mesmo par tela e relatório já gravado é adotado (adotado_existente), sem duplicar. Tela recusada no L5 recusa a linha (pai_pendente), risco pedido em saida/L8-18.json
 TBEDITREL	@id	relatorio_tela.relatorio_id			relatorio_tela	L8-18 cobertura: relatório do vínculo com a tela (o próprio relatório gravado)
 TBEDITREL	=Relatório	relatorio_tela.rotulo_botao			relatorio_tela	L8-18 cobertura: rótulo genérico (a origem não tem rótulo para esse vínculo; o título está no catálogo); literal fixo para não marcar o destino opcional como preenchido; o cliente renomeia pelo painel
@@ -30,11 +36,17 @@ TBEDITPARAM	PARAMETRO	relatorio_parametro.campo	texto			L8-18: nome do parâmetr
 TBEDITPARAM	NOME	relatorio_parametro.rotulo	texto_nome			L8-18: pergunta mostrada ao usuário
 TBEDITPARAM	=~texto	relatorio_parametro.tipo_dado				L8-18: PRESUMIDO (valor_presumido por linha): o tipo da origem é código numérico sem domínio documentado; o cliente reclassifica pelo painel (de-para pedido em saida/L8-18.json)
 TBEDITPARAM	VALOR_DEFAULT	relatorio_parametro.valor_padrao	texto			L8-18: valor padrão do parâmetro
-TBEDITPARAM	TIPO		inteiro			L8-18: não carregada: código de tipo sem domínio documentado (tipo_dado presumido)
-TBEDITPARAM	ORDEM		inteiro			L8-18: não carregada (PERDA DECLARADA): ordem de exibição do parâmetro; o motor só numera a sequência pela chave (ORDEM nula ou repetida na origem não serve de sequência única); pedido '#seq:ID_TBEDITREL:ORDEM' em saida/L8-18.json
-TBEDITPARAM	VISIVEL		booleano_sn			L8-18: não carregada (PERDA DECLARADA): S/N parâmetro oculto, preenchido internamente; relatorio_parametro não tem atributo de parâmetro oculto, então o oculto entra como parâmetro comum e passa a ser perguntado ao usuário (o cliente revisa na triagem); pedido de atributo no modelo em saida/L8-18.json
-TBEDITPARAM	TIPO_DEFAULT		inteiro			L8-18: não carregada (PERDA DECLARADA): diz se VALOR_DEFAULT é fixo ou relativo (código sem domínio documentado); valor_padrao entra como texto da origem e o cliente confirma; de-para para os relativos do destino (hoje, mes_anterior) pedido em saida/L8-18.json
+TBEDITPARAM	TIPO		inteiro			L8-18 r5: código sem domínio documentado: guardado no retrato da trilha do parâmetro; tipo_dado presumido (valor_presumido) até o censo dos códigos (ADR 0007/18, pedido)
+TBEDITPARAM	ORDEM		inteiro			L8-18 r5: a sequência (#seq) numera pela chave; a ORDEM da origem fica no retrato da trilha do parâmetro (trilha_auditoria.dados_depois) e todo parâmetro já entra com valor_presumido (tipo_dado), visível na conciliação. Pedido BLOQUEANTE em saida/L8-18.json: '#seq:<GRUPO>:<ORDEM>' (desempate pela chave) no motor; ao aplicar, a sequência passa a seguir a ORDEM
+TBEDITPARAM	VISIVEL	relatorio_parametro.visivel	booleano_sn			L8-18 r5 achado: parâmetro oculto (S/N; N = preenchido por dentro, nunca perguntado ao usuário) na coluna própria do modelo (19_REL/04); fora do domínio: padrão visível com valor_fora_do_dominio
+TBEDITPARAM	TIPO_DEFAULT		inteiro			L8-18 r5: código sem domínio documentado: guardado no retrato da trilha do parâmetro; estimativa do domínio pelos dados (ADR 0007/18) pedida ao integrador (censo de códigos na imagem real)
 TBEDITPARAM	ID_TBSMSCENARIO		chave_origem			L8-18: não carregada: cenário de mensagem fora do módulo de relatórios
+TBEDITPARAM	=relatorio_parametro	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: retrato da configuração da origem na trilha do registro (ADR 0006: nada se perde; consultável pelo cliente)
+TBEDITPARAM	@id	trilha_auditoria.entidade_id			trilha_auditoria	L8-18 r5 achado: registro gravado (destino principal)
+TBEDITPARAM	=inclusao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: inclusão pela migração
+TBEDITPARAM	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data a configuração; registro feito na carga (não é vigência)
+TBEDITPARAM	=configuração do parâmetro na origem: ordem, oculto, tipo e tipo do valor padrão	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado
+TBEDITPARAM	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L8-18 r5 achado: linha completa da origem em JSON (sem segredo)
 TBEDITREL_GRUUSU	ID_EDITREL	relatorio_permissao.relatorio_id	chave_origem		ref:TBEDITREL	L8-18: relatório (referência gerada veio vazia, declarada na via); recusado: pai_pendente
 TBEDITREL_GRUUSU	NOME_GRUPO	relatorio_permissao.perfil_acesso_id	chave_origem		ref:TBGRUUSU	L8-18: perfil de acesso pela chave do grupo (L5, ordem 1); nunca visto: pai_inexistente e o CHECK de alvo recusa a linha
 TBEDITREL_TBUSERS	ID_TBEDITREL	relatorio_permissao.relatorio_id	chave_origem			L8-18: relatório; recusado: pai_pendente
@@ -50,18 +62,31 @@ TBEDITPESQ	=~descricao	relatorio_parametro_pesquisa.campo_descricao				L8-18 cob
 TBEDITPESQ	=0	relatorio_parametro_pesquisa.ativo				L8-18 cobertura: a pesquisa entra INATIVA até o cliente escolher a entidade (nunca roda presumida)
 TBEDITPESQ	ID_TBEDITPARAM	relatorio_parametro.id	chave_origem		ref:TBEDITPARAM;complementa;relatorio_parametro	L8-18 cobertura: liga a pesquisa ao parâmetro (o modelo guarda a ligação no parâmetro: UPDATE da linha já gravada, sem linha nova); parâmetro recusado: pai_pendente; nunca visto: pai_inexistente
 TBEDITPESQ	@id	relatorio_parametro.relatorio_parametro_pesquisa_id			relatorio_parametro	L8-18 cobertura: id da pesquisa gravada (destino principal) no parâmetro; o modo de exibição do parâmetro segue o padrão até a pesquisa ser ativada
-TBEDITPESQ	BROWSER		texto_longo			L8-18 cobertura: não carregada (PERDA DECLARADA): texto livre da busca no programa antigo (nunca executado no produto); o produto pesquisa por entidade nomeada; pedido de coluna de especificação em saida/L8-18.json
-TBEDITPESQ	TIPO_RETORNO		inteiro			L8-18 cobertura: não carregada: código sem domínio documentado; retorno fica no padrão do destino (único) e o cliente revisa com a entidade
+TBEDITPESQ	BROWSER		texto_longo			L8-18 r5: texto da busca da origem guardado no retrato da trilha da pesquisa (BLOB de texto convertido sem perda); a pesquisa entra inativa
+TBEDITPESQ	TIPO_RETORNO		inteiro			L8-18 r5: código sem domínio documentado: guardado no retrato da trilha da pesquisa; retorno no padrão até o censo (ADR 0007/18, pedido)
+TBEDITPESQ	=relatorio_parametro_pesquisa	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: retrato da configuração da origem na trilha do registro (ADR 0006: nada se perde; consultável pelo cliente)
+TBEDITPESQ	@id	trilha_auditoria.entidade_id			trilha_auditoria	L8-18 r5 achado: registro gravado (destino principal)
+TBEDITPESQ	=inclusao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: inclusão pela migração
+TBEDITPESQ	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data a configuração; registro feito na carga (não é vigência)
+TBEDITPESQ	=texto da busca e tipo de retorno da origem	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado
+TBEDITPESQ	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L8-18 r5 achado: linha completa da origem em JSON (sem segredo)
 TBEDITREL_AGENDA	@estabelecimento	agendamento_relatorio.estabelecimento_id				L8-18 cobertura: agendamento do estabelecimento do cliente (único; nenhum ou vários: estabelecimento_indefinido)
 TBEDITREL_AGENDA	ID_TBEDITREL	agendamento_relatorio.relatorio_id	chave_origem		ref:TBEDITREL	L8-18 cobertura: relatório agendado; recusado: pai_pendente
 TBEDITREL_AGENDA	ID_TBEDITREL	agendamento_relatorio.nome	texto_nome		ref:TBEDITREL>NOME	L8-18 cobertura: nome do agendamento = nome do relatório (a origem não nomeia); segundo agendamento do mesmo relatório recusa só a linha (restricao_destino_1062, único por estabelecimento e nome)
-TBEDITREL_AGENDA	=~diaria	agendamento_relatorio.periodicidade				L8-18 cobertura: PRESUMIDO (valor_presumido): os dias específicos da origem não têm domínio documentado; o agendamento entra desligado e o cliente confirma
+TBEDITREL_AGENDA	=diaria	agendamento_relatorio.periodicidade			se:DIAS_ESPECIFICOS=	L8-18 r5: sem dias específicos na origem o envio era todos os dias: diária como fato (sem presunção)
+TBEDITREL_AGENDA	=~diaria	agendamento_relatorio.periodicidade			se:DIAS_ESPECIFICOS	L8-18 r5: com dias específicos de formato não provado: PRESUMIDO (valor_presumido), agendamento desligado e texto original no retrato da trilha; o cliente confirma antes de ligar (CHECK exige periodicidade)
 TBEDITREL_AGENDA	HORARIO	agendamento_relatorio.hora_envio	hora_em_timestamp			L8-18 cobertura: hora do envio (TIMESTAMP que guarda só a hora)
 TBEDITREL_AGENDA	CONDICOES	agendamento_relatorio.condicao_envio	texto			L8-18 cobertura: condição de envio da origem como texto
 TBEDITREL_AGENDA	=anexo	agendamento_relatorio.entrega				L8-18 cobertura: o programa antigo enviava o relatório anexo ao e-mail (fiel ao antigo; o link exige validade, que a origem não tem)
 TBEDITREL_AGENDA	ID_TBEDITREL	agendamento_relatorio.dono_usuario_id	chave_origem		ref:TBEDITREL>USUARIO>TBUSERS	L8-18 cobertura: dono (recebe o alerta de falha) = quem criou o relatório (referência encadeada ao login); sem criador conhecido: pai_inexistente e recusa pelo NOT NULL
 TBEDITREL_AGENDA	=0	agendamento_relatorio.ativo				L8-18 cobertura: entra DESLIGADO: envio para fora só em produção e ativado pelo cliente na virada (regra 6)
-TBEDITREL_AGENDA	DIAS_ESPECIFICOS		texto			L8-18 cobertura: não carregada (PERDA DECLARADA): dias da semana ou do mês sem formato documentado; periodicidade presumida diária e o cliente confirma antes de ligar; de-para pedido em saida/L8-18.json
+TBEDITREL_AGENDA	DIAS_ESPECIFICOS		texto			L8-18 r5: formato sem evidência (2 linhas na imagem de referência): o texto original fica no retrato da trilha do agendamento; com valor, a periodicidade é presumida (valor_presumido) e o agendamento entra DESLIGADO; sem valor, diária é fato (sem restrição de dias)
+TBEDITREL_AGENDA	=agendamento_relatorio	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: retrato da configuração da origem na trilha do registro (ADR 0006: nada se perde; consultável pelo cliente)
+TBEDITREL_AGENDA	@id	trilha_auditoria.entidade_id			trilha_auditoria	L8-18 r5 achado: registro gravado (destino principal)
+TBEDITREL_AGENDA	=inclusao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: inclusão pela migração
+TBEDITREL_AGENDA	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data a configuração; registro feito na carga (não é vigência)
+TBEDITREL_AGENDA	=dias específicos e condições do agendamento na origem	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado
+TBEDITREL_AGENDA	#retrato:*-EMAILS_DESTINO	trilha_auditoria.dados_depois			trilha_auditoria	L8-18 r5 achado: linha completa da origem em JSON (sem segredo)
 TBEDITREL_AGENDA	@id	agendamento_relatorio_destinatario.agendamento_relatorio_id				L8-18 cobertura: destinatário do agendamento
 TBEDITREL_AGENDA	=1	agendamento_relatorio_destinatario.sequencia				L8-18 cobertura: um destinatário por agendamento (a origem guarda a lista num campo)
 TBEDITREL_AGENDA	=~endereco	agendamento_relatorio_destinatario.tipo_destinatario				L8-18 cobertura: PRESUMIDO (valor_presumido): endereço avulso; a lista de endereços da origem fica numa linha até o cliente desdobrar no painel (desdobramento por separador pedido em saida/L8-18.json)
@@ -77,8 +102,67 @@ TBEDITREL_AGENDA_LOG	ANEXO_EMAIL		texto_longo			L8-18 cobertura: não carregada:
 TBBTNOPREL	ID_TBEDITREL	relatorio_tela.relatorio_id	chave_origem		ref:TBEDITREL	L8-18 cobertura: relatório do botão; recusado: pai_pendente; botão só de agrupamento (sem relatório) recusa pelo NOT NULL
 TBBTNOPREL	ID_TBOPCAOREL	relatorio_tela.tela_sistema_id	chave_origem		ref:TBOPCAOREL>ID_TBOPCOES>TBOPCOES	L8-18 cobertura: tela do botão pela opção de relatórios (referência encadeada à tela do sistema, L5); tela nunca vista: pai_inexistente e recusa pelo NOT NULL
 TBBTNOPREL	BOTAO	relatorio_tela.rotulo_botao	texto			L8-18 cobertura: rótulo do botão (nulo recusa pelo NOT NULL)
-TBBTNOPREL	ID_TBAGRUPRELAT		chave_origem			L8-18 cobertura: não carregada (PERDA DECLARADA): botão que imprime um agrupamento; relatorio_tela só liga relatório (pedido de coluna de agrupamento em saida/L8-18.json)
+TBBTNOPREL	ID_TBAGRUPRELAT	relatorio_tela.agrupamento_relatorio_id	chave_origem		ref:TBAGRUPRELAT	L8-18 r5: botão que imprime um agrupamento (coluna do modelo da rodada 4; CHECK: relatório OU agrupamento); agrupamento recusado: pai_pendente; nunca visto: pai_inexistente
 TBPARAMOPREL	ID_TBBTNOPREL	relatorio_tela_parametro.relatorio_tela_id	chave_origem		ref:TBBTNOPREL	L8-18 cobertura: botão (relatorio_tela); recusado: pai_pendente
 TBPARAMOPREL	#seq:ID_TBBTNOPREL	relatorio_tela_parametro.sequencia				L8-18 cobertura: sequência 1..n dentro do botão, na ordem da chave
 TBPARAMOPREL	PARAMETRO	relatorio_tela_parametro.relatorio_parametro_id	chave_origem		ref:TBEDITPARAM.PARAMETRO	L8-18 cobertura: parâmetro pelo nome (chave alternativa); nome repetido em outro relatório: pai_ambiguo e recusa pelo NOT NULL. RISCO: nome único que seja de outro relatório liga o parâmetro errado; referência pelo relatório do botão + nome pedida em saida/L8-18.json
 TBPARAMOPREL	NOME_COMPONENTE	relatorio_tela_parametro.campo_tela	texto			L8-18 cobertura: campo da tela que preenche o parâmetro (nulo recusa pelo NOT NULL)
+PNCONFIGPORTAL	@estabelecimento	painel_tv.estabelecimento_id				L8-18 r5: o portal do painel é do estabelecimento do cliente (único; nenhum ou vários: estabelecimento_indefinido)
+PNCONFIGPORTAL	#codigo_derivado:ID_PNCONFIG:30:portal_	painel_tv.codigo			agrupar:ID_PNCONFIG	L8-18 r5 (ADR 0006): um painel por configuração de painel de chamada da origem (agrupar no principal); as linhas da origem são as páginas dele
+PNCONFIGPORTAL	#codigo_derivado:ID_PNCONFIG:150:portal_painel_	painel_tv.nome				L8-18 r5: a origem não nomeia o portal; o nome leva o número da configuração do painel de chamada e o cliente renomeia
+PNCONFIGPORTAL	=portal_migrado	tipo_painel_tv.codigo			tipo_painel_tv;antes;adotar:codigo	L8-18 r5: tipo do portal migrado, criado pela primeira linha e adotado pelas seguintes (o produto não semeia tipo de migração)
+PNCONFIGPORTAL	=Portal de painel migrado do sistema anterior	tipo_painel_tv.descricao			tipo_painel_tv	L8-18 r5: descrição do tipo de migração
+PNCONFIGPORTAL	=chamada	tipo_painel_tv.categoria			tipo_painel_tv	L8-18 r5: o portal é do painel de chamada (domínio do CHECK)
+PNCONFIGPORTAL	=portal_migrado	tipo_painel_tv.componente			tipo_painel_tv	L8-18 r5: componente de tela do portal migrado (revisão na implantação)
+PNCONFIGPORTAL	@id:tipo_painel_tv	painel_tv.tipo_painel_tv_id				L8-18 r5: tipo gravado ou adotado nesta linha
+PNCONFIGPORTAL	=rascunho	painel_tv.situacao				L8-18 r5: entra como rascunho para revisão (o produto não interpreta o texto de configuração do programa antigo); nada se perde
+PNCONFIGPORTAL	#grupo_json:ORDEM,NOME,CONFIGURACAO	painel_tv.configuracao				L8-18 r5 (ADR 0006): lista JSON das páginas do portal (ordem, nome e texto de configuração convertido de CP1252 sem perda)
+PNCONFIGPORTAL	ID_PNCONFIG	trilha_auditoria.entidade_id	chave_origem		ref:PNCONFIG;trilha_auditoria	L8-18 r5 achado (ADR 0007/19): ligação filho->pai do portal ao painel de chamada carregado (L6-02) por id; configuração recusada: pai_pendente recusa a página; nunca vista: pai_inexistente. FK painel_tv -> painel_chamada pedida à F2.2 (saida/L8-18.json)
+PNCONFIGPORTAL	=painel_chamada	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: painel de chamada dono do portal
+PNCONFIGPORTAL	=operacao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: vínculo registrado pela migração
+PNCONFIGPORTAL	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data a configuração (não é vigência)
+PNCONFIGPORTAL	#codigo_derivado:ID_PNCONFIG:30:portal_	trilha_auditoria.correlacao			trilha_auditoria	L8-18 r5 achado: código do painel_tv do portal (mesmo código derivado): junta o painel_tv ao painel de chamada
+PNCONFIGPORTAL	=portal do painel de chamada migrado (painel_tv de código igual à correlação)	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado: texto do vínculo
+PNCONFIGPORTAL	ORDEM		inteiro			L8-18 r5: sem coluna própria: ordem da página na lista JSON da configuração
+PNCONFIGPORTAL	NOME		texto_nome			L8-18 r5: sem coluna própria: nome da página na lista JSON da configuração
+PNCONFIGPORTAL	CONFIGURACAO		texto_longo			L8-18 r5: sem coluna própria: texto de configuração da página na lista JSON
+TBEDITQRP	ID_EDITREL	relatorio_versao.relatorio_id	chave_origem		ref:TBEDITREL;agrupar:ID_EDITREL	L8-18 r5 (ADR 0006): um retrato de versão por relatório com o leiaute antigo (agrupar no principal); relatório recusado: pai_pendente
+TBEDITQRP	ID_EDITREL	relatorio_versao.numero_versao	chave_origem		ref:TBEDITREL@numero_versao	L8-18 r5: versão = a versão vigente gravada no relatório (o leiaute é o da versão vigente da origem)
+TBEDITQRP	=inclusao	relatorio_versao.operacao				L8-18 r5: versão incluída pela migração
+TBEDITQRP	#grupo_json:SEQUENCIA,NOMECOMP,NOMECLASSE,PARENT,FIELD_NAME,COMPONENTE,CONTEUDO	relatorio_versao.dados				L8-18 r5 (ADR 0006): lista JSON dos componentes do leiaute (sequência, nome, classe, pai, campo, propriedades e conteúdo em TEXTO convertido de CP1252 sem perda), base para o editor do produto, como PRFICHAREL
+TBEDITQRP	=Leiaute de impressão importado do sistema anterior	relatorio_versao.resumo_alteracao				L8-18 r5: marca a versão como a do leiaute importado
+TBEDITQRP	=@data_carga	relatorio_versao.ocorrido_em				L8-18 r5: a origem não data o leiaute (nem o relatório); a versão ocorre no sistema novo na carga (não é vigência)
+TBEDITQRP	ID_EDITREL	relatorio_versao.usuario_id	chave_origem		ref:TBEDITREL>USUARIO>TBUSERS	L8-18 r5: autor da versão = quem criou o relatório (referência encadeada ao usuário, L3); nunca visto: NULL com pai_inexistente
+TBEDITQRP	NOMECOMP		texto			L8-18 r5: sem coluna própria: nome do componente na lista JSON
+TBEDITQRP	SEQUENCIA		inteiro			L8-18 r5: sem coluna própria: ordem do componente na lista JSON
+TBEDITQRP	NOMECLASSE		texto			L8-18 r5: sem coluna própria: classe do componente na lista JSON
+TBEDITQRP	COMPONENTE		texto_longo			L8-18 r5: sem coluna própria: propriedades do componente (texto) na lista JSON
+TBEDITQRP	CONTEUDO		texto_longo			L8-18 r5: sem coluna própria: conteúdo do componente (texto) na lista JSON
+TBEDITQRP	PARENT		texto			L8-18 r5: sem coluna própria: componente pai na lista JSON
+TBEDITQRP	FIELD_NAME		texto			L8-18 r5: sem coluna própria: campo de dados do componente na lista JSON
+TBEDITREL_PRMODELOREL	#codigo_derivado:ID_TBEDITREL+ID_PRMODELOREL:30:relatorio_	modelo_impressao_clinica.codigo			principal;modelo_impressao_clinica	L8-18 r5 (ADR 0006): o relatório usado como modelo de impressão de um tipo entra como leiaute do tipo (modelo_impressao_clinica); relatorio_modelo_documento exige o modelo de documento clínico, que a origem não leva
+TBEDITREL_PRMODELOREL	ID_TBEDITREL	modelo_impressao_clinica.nome	texto_nome		ref:TBEDITREL>NOME;modelo_impressao_clinica	L8-18 r5: nome do leiaute = título do relatório (referência encadeada); relatório sem nome: pendência e recusa pelo NOT NULL
+TBEDITREL_PRMODELOREL	ID_PRMODELOREL	modelo_impressao_clinica.tipo_modelo_impressao_id	chave_origem		ref:PRMODELOREL;modelo_impressao_clinica	L8-18 r5: tipo de modelo de impressão (L6-06); recusado: pai_pendente
+TBEDITREL_PRMODELOREL	ID_TBEDITREL	modelo_impressao_clinica.conteudo			ref:TBEDITQRP.ID_EDITREL@dados;modelo_impressao_clinica	L8-18 r5 achado: conteúdo = o LEIAUTE real do relatório (lista JSON dos componentes gravada em relatorio_versao.dados pelo TBEDITQRP do mesmo relatório, copiada do destino); relatório sem leiaute: a concorrente seguinte (retrato do vínculo) e pai_inexistente visível
+TBEDITREL_PRMODELOREL	#retrato	modelo_impressao_clinica.conteudo			modelo_impressao_clinica	L8-18 r5: conteúdo = retrato do vínculo (relatório e tipo da origem), para o cliente montar o leiaute no editor a partir do relatório do catálogo
+TBEDITREL_PRMODELOREL	=0	modelo_impressao_clinica.ativo			modelo_impressao_clinica	L8-18 r5: entra inativo para revisão no editor (como os leiautes de PRFICHAREL)
+TBEDITREL_PRMODELOREL	ID_TBEDITREL	trilha_auditoria.entidade_id	chave_origem		ref:TBEDITREL;trilha_auditoria	L8-18 r5 achado (ADR 0007/19): vínculo modelo -> relatório do catálogo por id (o relatório com a consulta que traz os dados); relatório recusado: pai_pendente. Coluna modelo_impressao_clinica.relatorio_id pedida à F2.2 (saida/L8-18.json)
+TBEDITREL_PRMODELOREL	=relatorio	trilha_auditoria.entidade			trilha_auditoria	L8-18 r5 achado: relatório usado como modelo de impressão
+TBEDITREL_PRMODELOREL	=operacao	trilha_auditoria.acao			trilha_auditoria	L8-18 r5 achado: vínculo registrado pela migração
+TBEDITREL_PRMODELOREL	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-18 r5 achado: a origem não data o vínculo (não é vigência)
+TBEDITREL_PRMODELOREL	#codigo_derivado:ID_TBEDITREL+ID_PRMODELOREL:30:relatorio_	trilha_auditoria.correlacao			trilha_auditoria	L8-18 r5 achado: código do modelo_impressao_clinica (mesmo código derivado): junta o modelo ao relatório
+TBEDITREL_PRMODELOREL	=relatório usado como modelo de impressão do tipo (modelo_impressao_clinica de código igual à correlação)	trilha_auditoria.motivo			trilha_auditoria	L8-18 r5 achado: texto do vínculo
+TBEDITREL_PRMODELOREL	#retrato	trilha_auditoria.dados_depois			trilha_auditoria	L8-18 r5 achado: retrato do vínculo SEMPRE (relatório e tipo da origem), também quando o conteúdo é o leiaute
+TBEDITREL_AGENDA_SITUACAO	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): valor = código da origem (o de-para do log leva o NOME ao domínio de envio_relatorio.situacao)
+TBEDITREL_AGENDA_SITUACAO	ID	parametro_opcao.sequencia	inteiro		parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): ordem = código da origem
+TBEDITREL_AGENDA_SITUACAO	NOME	parametro_opcao.rotulo	texto_nome		parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): rótulo da origem
+TBEDITREL_AGENDA_SITUACAO	ID	parametro_opcao.rotulo	texto		parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): sem nome na origem, o rótulo é o próprio código (concorrente)
+TBEDITREL_AGENDA_SITUACAO	=migracao	parametro_opcao.origem			parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)
+TBEDITREL_AGENDA_SITUACAO	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): a lista
+TBEDITREL_AGENDA_SITUACAO	=migracao	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBEDITREL_AGENDA_SITUACAO	=Listas de valores trazidas da origem	modulo_sistema.descricao			modulo_sistema	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)
+TBEDITREL_AGENDA_SITUACAO	=0	modulo_sistema.ativo			modulo_sistema	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)
+TBEDITREL_AGENDA_SITUACAO	=migracao.situacao_envio_relatorio	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md): a lista (criada uma vez, adotada pelas linhas seguintes)
+TBEDITREL_AGENDA_SITUACAO	@id:modulo_sistema	parametro_definicao.modulo_sistema_id			parametro_definicao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)
+TBEDITREL_AGENDA_SITUACAO	=Situação do envio de relatório agendado (rótulos da origem; valor do produto em envio_relatorio.situacao)	parametro_definicao.descricao			parametro_definicao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)
+TBEDITREL_AGENDA_SITUACAO	=lista	parametro_definicao.tipo			parametro_definicao	L8-18 r5 (ADR 0006): lista fixa de situações do envio como lista de valores do hospital (como L8-14, decisão em F4-decisoes-destino.md)

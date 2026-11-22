@@ -26,3 +26,7 @@ TBFATORRH	NOME	fator_rh.sinal	Rh Negativo	-	L7-04: sinal do fator Rh pela grafia
 SILANEXA	DATA_HORA_LIBERA_EXAME	exame_item.situacao	1	liberado	L7-04: situação do exame pela data de liberação (regra preenchido): com data, liberado; sem data, o padrão do destino (solicitado)
 SILANEXA	DATA_HORA_LIBERA_EXAME	exame_item.situacao	0		L7-04: situação do exame pela data de liberação (regra preenchido): com data, liberado; sem data, o padrão do destino (solicitado)
 SILANEXA	DATA_HORA_LIBERA_EXAME	exame_item.situacao			L7-04: situação do exame pela data de liberação (regra preenchido): com data, liberado; sem data, o padrão do destino (solicitado)
+SIRES01	ID_SILANEXA	resultado_exame.situacao	1	liberado	L7-04 (rodada 3, revisão): situação do resultado pela data de liberação do exame (regra preenchido, encadeada): com data, liberado; sem data, a concorrente 'digitado'
+SIRES01	ID_SILANEXA	resultado_exame.situacao	0		L7-04 (rodada 3, revisão): situação do resultado pela data de liberação do exame (regra preenchido, encadeada): com data, liberado; sem data, a concorrente 'digitado'
+SIRES01	ID_SILANEXA	resultado_exame.situacao			L7-04 (rodada 3, revisão): situação do resultado pela data de liberação do exame (regra preenchido, encadeada): com data, liberado; sem data, a concorrente 'digitado'
+SILIBERACAOEXAME	SITUACAO	liberacao_exame.etapa		liberacao_clinica	L7-04 (rodada 3, revisão): etapa da liberação: sem código, o registro de liberação é a evidência (liberação clínica); código sem par confirmado recusa (pode ser revogação)

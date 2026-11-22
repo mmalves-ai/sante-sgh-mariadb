@@ -1,0 +1,5 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBDIGITAL_INTEG_TYPE	TABLE_NAME	tipo_evento_publicado.entidade	ENTIDADE_EX	prescricao	r5c: tabela da origem -> entidade do produto
+TBDIGITAL_INTEG_FIELD	FIELD_NAME	parametro_opcao.rotulo	CAMPO_EX_A	Paciente	r5c: campo da origem -> rótulo do produto
+TBDIGITAL_INTEG_FIELD	FIELD_NAME	parametro_opcao.rotulo	CAMPO_EX_B	Medicamento	r5c: campo da origem -> rótulo do produto
+TBDIGITAL_INTEG_TYPE	TABLE_NAME_SECONDARY	tipo_evento_publicado.entidade_secundaria	ENTIDADE_EX	prescricao	r5 conferidor: mesma tabela da origem -> entidade do produto (par igual ao de TABLE_NAME)

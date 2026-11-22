@@ -148,7 +148,7 @@ def linhas(r, ins):
         G: {"gravados": 3, "pendencias": {"texto_resumido": 1, "segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 3,
                                           "codigo_derivado": 1, "hora_com_data": 1, "valor_elevado_ao_minimo": 1,
                                           "valor_fora_do_dominio": 1}},
-        P: {"gravados": 3, "pendencias": {"adotado_existente": 1, "documento_invalido": 1}},
+        P: {"gravados": 3, "pendencias": {"adotado_existente": 1, "mescla_conflito_origem_guardada": 1, "documento_invalido": 1}},
         S: {"gravados": 3, "pendencias": {"pai_inexistente": 1}},
         I: {"gravados": 4, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 5}},
         C: {"gravados": 1, "pendencias": {"pai_inexistente": 1}},

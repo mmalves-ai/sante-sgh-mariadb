@@ -47,19 +47,24 @@ class PlanoL807(unittest.TestCase):
     def cols(self, t, dt):
         return {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
 
-    def test_so_as_listas_entram_na_carga(self):
+    def test_toda_a_fatia_entra_na_carga(self):
         self.assertEqual(len(FATIA), 19)
         self.assertEqual(set(self.plano), set(l8_07.CARREGADAS))
-        self.assertNotIn("CMINCENTIVO", self.plano)
+        self.assertEqual(l8_07.NAO_CARREGADAS, [])
 
-    def test_incentivo_descartado_com_motivo_de_produto(self):
+    def test_incentivo_carrega_inativo_com_presumidos(self):
+        """ADR 0006 (1): o incentivo padrão continua no produto, inativo até o cliente ligar ao contrato."""
         d = Path(os.environ.get("CONECTOR_MAPA_DIR") or mapa.DIR_PACOTE)
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(d / "declarado/sem_carga.tsv")}
-        for t in l8_07.NAO_CARREGADAS:
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "sem_valor"), t)
-            self.assertTrue(sc[t]["motivo"], t)
-            decl = (d / "declarado/colunas.d/L8-07.tsv").read_text()
-            self.assertNotIn(t + "\t", decl, t)
+        sc = {r["tabela"] for r in mapa.ler_tsv(d / "declarado/sem_carga.tsv")}
+        self.assertNotIn("CMINCENTIVO", sc)
+        p = self.plano["CMINCENTIVO"]
+        self.assertEqual(p["destinos"], ["incentivo_contratual_sus"])
+        c = {x["destino"]: x for x in p["colunas"]["incentivo_contratual_sus"]}
+        self.assertEqual((c["codigo"]["coluna"], c["codigo"]["regra"]), ("ID", "texto"))
+        self.assertEqual(c["nome"]["coluna"], "NOME")
+        self.assertIn("CMTPDADOS", repr(c["tipo_dado_dominio_contratualizacao_sus_id"]))
+        self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
+        self.assertEqual((c["percentual"]["coluna"], c["ativo"]["coluna"]), ("=~0", "=~0"))
 
     def test_cada_tabela_grava_sua_lista_codigo_e_descricao(self):
         for t, (_, dt, lista) in l8_07.LISTAS.items():
@@ -133,8 +138,6 @@ class ImagemL807(unittest.TestCase):
         cont = {}
         esp = l8_07.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), set(l8_07.CARREGADAS))
-        for t in l8_07.NAO_CARREGADAS:
-            self.assertGreater(cont.get(t, 0), 0, t)
         for t in l8_07.SENTINELA_ZERO:  # a imagem exercita o id 0
             self.assertGreater(esp[t]["gravados"], 0, t)
         # nenhuma tabela carregada fica com 0 gravados, fora as que aguardam a migração (LISTA_LONGA)

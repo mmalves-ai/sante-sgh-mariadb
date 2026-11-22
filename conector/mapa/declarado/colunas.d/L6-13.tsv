@@ -10,7 +10,7 @@ PRITENSGLICEMIA	ID_TBUNICON_UNI_PRESC	prescricao_item_glicemia.unidade_prescrica
 PRITENSGLICEMIA	ID_GETABVIA	prescricao_item_glicemia.via_de_uso_id			ref:GETABVIA	L6-13: via de uso pelo código (chave do pai)
 PRITENSGLICEMIA	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_glicemia.justificativa_alergia	texto			L6-13: justificativa de item com alergia
 PRITENSGLICEMIA	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
-PRITENSGLICEMIA	ID_GEITENS		chave_origem			L6-13: não aproveitada por ora: o destino é o item prescritível, destino secundário de GEITENS ainda não carregado (pedido); padronizado sem item recusa pelo CHECK do item
+PRITENSGLICEMIA	ID_GEITENS	prescricao_item_glicemia.item_prescritivel_id			ref:PRITEM_GEITENS/item_prescritivel	L6-13: item prescritível do insumo: o que a L6-11 grava (ou adota) pela linha de parâmetros do insumo, um por insumo (PRITEM_GEITENS, chave ID_GEITENS); sem item: pai_inexistente e, com dose, recusa pelo CHECK (medido na imagem de referência, só contagem, 2026-11-21: 330.314 faixas, todas com insumo e dose > 0, 330.314 com o insumo em PRITEM_GEITENS)
 PRITENSGLICEMIA	ID_GENOMCOM		chave_origem			L6-13: não aproveitada: apresentação comercial (licenciado no destino de-para do cliente); o item é o prescritível
 PRITENSGLICEMIA	ID_HTCID_NAO_PADRONIZ		chave_origem			L6-13: não aproveitada: indicação do não padronizado aponta histórico de CID (termo vigente), sem coluna equivalente
 PRITENSGLICEMIA	QTDE		decimal			L6-13: não aproveitada: sem coluna equivalente no destino do produto
@@ -48,7 +48,7 @@ PRITENSESQ	ID_PRKITSOL	prescricao_item_solucao_etapa.kit_prescricao_id				L6-13:
 PRITENSESQ	DOSE_EXTRA_ANTIMICROBIANO	prescricao_item_solucao_etapa.dose_extra_antimicrobiano	booleano_sn			L6-13: S/N
 PRITENSESQ	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_solucao_etapa.justificativa_item_alergico	texto			L6-13: alergia
 PRITENSESQ	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
-PRITENSESQ	ID_GEITENS		chave_origem			L6-13: não aproveitada por ora: o destino é o item prescritível, destino secundário de GEITENS ainda não carregado (pedido); padronizado sem item recusa pelo CHECK do item
+PRITENSESQ	ID_GEITENS	prescricao_item_solucao_etapa.item_prescritivel_id			ref:PRITEM_GEITENS/item_prescritivel	L6-13: item prescritível do insumo: o que a L6-11 grava (ou adota) pela linha de parâmetros do insumo, um por insumo (PRITEM_GEITENS, chave ID_GEITENS); sem item: pai_inexistente e, com dose, recusa pelo CHECK (medido na imagem de referência, só contagem, 2026-11-21: 166.900 de 166.974 componentes com insumo, todos em PRITEM_GEITENS)
 PRITENSESQ	ID_GENOMCOM		chave_origem			L6-13: não aproveitada: apresentação comercial (licenciado no destino de-para do cliente); o item é o prescritível
 PRITENSESQ	ID_HTCID_NAO_PADRONIZ		chave_origem			L6-13: não aproveitada: indicação do não padronizado aponta histórico de CID (termo vigente), sem coluna equivalente
 PRITENSESQ	OLD_ID_GERAL		inteiro			L6-13: descartada: coluna da versão antiga do sistema de origem, sem uso
@@ -63,31 +63,34 @@ PRPRESCVI	ID_PRLANGERAL	prescricao_item_ventilacao.prescricao_item_id				L6-13: 
 PRPRESCVI	=invasiva	prescricao_item_ventilacao.modalidade				L6-13: a tabela da origem é a da ventilação invasiva
 PRPRESCVI	ID_PRVIAAEREA	prescricao_item_ventilacao.via_aerea_id				L6-13: via aérea
 PRPRESCVI	ID_PRMODOVENT	prescricao_item_ventilacao.modo_ventilatorio_id			ref:PRMODOVENT>NOME>PRFA_CAD_MODO_RESPIR.DESCRICAO	L6-13: modo ventilatório pelo nome do modo da origem (decisão); sem par: pai_inexistente e recusa (CHECK do modo)
-PRPRESCVI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	faixa:21,100			L6-13: FiO2 em %; fora de 21..100 vira NULL com pendência
+PRPRESCVI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	faixa:21,100			L6-13: FiO2 em %: a unidade da origem é % (medido na imagem de referência, só contagem, 2026-11-21: 4.610 de 4.610 FiO2 com a unidade 5 de PRUNIDRESPOSTA, nome '%'); fora de 21..100 vira NULL com pendência
 PRPRESCVI	FREQUENCIA_RESPIRATORIA	prescricao_item_ventilacao.frequencia_respiratoria	inteiro			L6-13: frequência
 PRPRESCVI	PEEP	prescricao_item_ventilacao.peep_cmh2o	inteiro			L6-13: PEEP (cmH2O)
 PRPRESCVI	VOLUME_CORRENTE	prescricao_item_ventilacao.volume_corrente_ml	decimal			L6-13: volume corrente (mL)
-PRPRESCVI	PRESSAO	prescricao_item_ventilacao.pressao_controlada_cmh2o	inteiro			L6-13: pressão do modo controlado (cmH2O)
-PRPRESCVI	FLUXO	prescricao_item_ventilacao.fluxo_litros_minuto	inteiro			L6-13: fluxo (L/min)
+PRPRESCVI	#codigo_derivado:PRESSAO:1000:pressao_mmhg_	prescricao_item_ventilacao.observacao	inteiro			L6-13: pressão NÃO vai para pressao_controlada_cmh2o: a unidade da origem é mmHg (medido na imagem de referência, só contagem, 2026-11-21: 1.347 de 1.347 pressões com a unidade 4 de PRUNIDRESPOSTA, cujo nome tem 'mmHg') e o motor não converte (pedido #medida); o valor fica na observação com a unidade no prefixo (pressao_mmhg_<valor>), sem presunção
+PRPRESCVI	FLUXO	prescricao_item_ventilacao.fluxo_litros_minuto	inteiro			L6-13: fluxo em L/min: a unidade da origem é L/min (medido na imagem de referência, só contagem, 2026-11-21: 747 de 747 fluxos com a unidade 4 de PRUNIDINFUSAO, nome com 'L/M' e '/MIN'); unidade diferente só com o pedido #medida
 PRPRESCVI	TEMPO_INSPIRATORIO	prescricao_item_ventilacao.tempo_inspiratorio_segundos	decimal			L6-13: tempo inspiratório
 PRPRESCVI	TEMPO_EXPIRATORIO	prescricao_item_ventilacao.tempo_expiratorio_segundos	decimal			L6-13: tempo expiratório
 PRPRESCVI	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
 PRPRESCVI	ID_TBUNICON_UNI_PRESC		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRPRESCVI	ID_PRUNIDRESPOSTA_PRESSAO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRPRESCVI	ID_PRUNIDINFUSAO_FLUXO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRPRESCVI	ID_PRUNIDRESPOSTA_FIO2		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRPRESCVI	ID_PRUNIDRESPOSTA_PRESSAO		chave_origem			L6-13: unidade da pressão conferida na medição (mmHg em 100%%): por isso a pressão vai para a observação, não para a coluna em cmH2O
+PRPRESCVI	ID_PRUNIDINFUSAO_FLUXO		chave_origem			L6-13: unidade do fluxo conferida na medição (L/min em 100%%, a do destino)
+PRPRESCVI	ID_PRUNIDRESPOSTA_FIO2		chave_origem			L6-13: unidade da FiO2 conferida na medição (%% em 100%%, a do destino)
+PRPRESCVI	PRESSAO		inteiro			L6-13: não vai para a coluna em cmH2O (unidade mmHg na origem, sem conversão no motor: pedido #medida); gravada na observação com a unidade (#codigo_derivado:PRESSAO)
 PRPRESCVNI	ID_PRLANGERAL	prescricao_item_ventilacao.prescricao_item_id				L6-13: item prescrito
 PRPRESCVNI	=nao_invasiva	prescricao_item_ventilacao.modalidade				L6-13: a tabela da origem é a da ventilação nao invasiva
 PRPRESCVNI	ID_PRVIAAEREA	prescricao_item_ventilacao.via_aerea_id				L6-13: via aérea
 PRPRESCVNI	ID_PRMODOVENT	prescricao_item_ventilacao.modo_ventilatorio_id			ref:PRMODOVENT>NOME>PRFA_CAD_MODO_RESPIR.DESCRICAO	L6-13: modo ventilatório pelo nome do modo da origem (decisão); sem par: pai_inexistente e recusa (CHECK do modo)
-PRPRESCVNI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	faixa:21,100			L6-13: FiO2 em %; fora de 21..100 vira NULL com pendência
-PRPRESCVNI	PRESSAO_INSPIRATORIA	prescricao_item_ventilacao.pressao_inspiratoria_cmh2o	inteiro			L6-13: IPAP
-PRPRESCVNI	PRESSAO_EXPIRATORIA	prescricao_item_ventilacao.pressao_expiratoria_cmh2o	inteiro			L6-13: EPAP
+PRPRESCVNI	FIO2	prescricao_item_ventilacao.fracao_inspirada_oxigenio	faixa:21,100			L6-13: FiO2 em %: a unidade da origem é % (medido na imagem de referência, só contagem, 2026-11-21: 830 de 830 FiO2 com a unidade 5 de PRUNIDRESPOSTA); fora de 21..100 vira NULL com pendência
+PRPRESCVNI	#codigo_derivado:PRESSAO_INSPIRATORIA:1000:ipap_mmhg_	prescricao_item_ventilacao.observacao	inteiro			L6-13: IPAP NÃO vai para pressao_inspiratoria_cmh2o: a unidade da origem é mmHg (medido na imagem de referência, só contagem, 2026-11-21: 356 de 356 com a unidade 4 de PRUNIDRESPOSTA) e o motor não converte (pedido #medida); o valor fica na observação com a unidade
+PRPRESCVNI	#codigo_derivado:PRESSAO_EXPIRATORIA:1000:epap_mmhg_	prescricao_item_ventilacao.observacao	inteiro			L6-13: EPAP: mesma regra da IPAP, concorrente na observação (vale a primeira com valor; medido na imagem de referência, só contagem, 2026-11-21: 1 EPAP preenchida, na mesma linha de uma IPAP: essa EPAP espera o pedido #medida, perda registrada)
 PRPRESCVNI	TEMPO_TOTAL	prescricao_item_ventilacao.duracao_minutos	minutos_em_timestamp			L6-13: duração guardada como hora em TIMESTAMP
 PRPRESCVNI	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
-PRPRESCVNI	ID_PRUNIDRESPOSTA_PRESSAO_IN		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRPRESCVNI	ID_PRUNIDRESPOSTA_PRESSAO_EX		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRPRESCVNI	ID_PRUNIDRESPOSTA_FIO2		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRPRESCVNI	ID_PRUNIDRESPOSTA_PRESSAO_IN		chave_origem			L6-13: unidade da IPAP conferida na medição (mmHg em 100%: o valor vai para a observação)
+PRPRESCVNI	ID_PRUNIDRESPOSTA_PRESSAO_EX		chave_origem			L6-13: unidade da EPAP conferida na medição (mmHg em 100%: o valor vai para a observação)
+PRPRESCVNI	ID_PRUNIDRESPOSTA_FIO2		chave_origem			L6-13: unidade da FiO2 conferida na medição (% em 100%, a do destino)
+PRPRESCVNI	PRESSAO_INSPIRATORIA		inteiro			L6-13: não vai para a coluna em cmH2O (unidade mmHg na origem, sem conversão no motor: pedido #medida); gravada na observação com a unidade
+PRPRESCVNI	PRESSAO_EXPIRATORIA		inteiro			L6-13: não vai para a coluna em cmH2O (unidade mmHg na origem, sem conversão no motor: pedido #medida); gravada na observação com a unidade, concorrente da IPAP
 PRCHKGERAL	@estabelecimento	horario_administracao.estabelecimento_id				L6-13: estabelecimento do cliente
 PRCHKGERAL	ID_PRLANGERAL	horario_administracao.atendimento_id			ref:PRLANGERAL>ID_PRPRESC>PRPRESC>ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-13: atendimento: item -> prescrição -> histórico do atendimento -> atendimento, pela origem
 PRCHKGERAL	ID_PRLANGERAL	horario_administracao.prescricao_id			ref:PRLANGERAL>ID_PRPRESC>PRPRESC	L6-13: prescrição do item
@@ -103,7 +106,7 @@ PRCHKGERAL	JUSTIFICATIVA_NOVO_HORARIO	horario_administracao.observacao_aprazamen
 PRCHKGERAL	QTDE_ADMINISTRADA	horario_administracao.quantidade_administrada	decimal_nao_negativo			L6-13: quantidade administrada
 PRCHKGERAL	JUSTIFICATIVA_SITUACAO_CHECAGEM	horario_administracao.justificativa	texto			L6-13: justificativa da situação
 PRCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO	horario_administracao.justificativa_retroativo	texto			L6-13: lançamento retroativo
-PRCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO	horario_administracao.lancamento_retroativo	preenchido			L6-13: retroativo quando há justificativa
+PRCHKGERAL	JUSTIFICATIVA_LANC_RETROATIVO	horario_administracao.lancamento_retroativo	preenchido	valores		L6-13: retroativo quando há justificativa (vazio = sem valor, valores.d, para a concorrente da suspensão retroativa valer)
 PRCHKGERAL	OBS_MONITORIZACAO	horario_administracao.observacao_monitorizacao	texto			L6-13: observação de monitorização
 PRCHKGERAL	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
 PRCHKGERAL	ID_PRITENSGERAL		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
@@ -119,8 +122,15 @@ PRCHKGERAL	ID_PRPRESCMED		chave_origem			L6-13: não aproveitada: sem coluna equ
 PRCHKGERAL	ID_PRPRESCATIV		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 PRCHKGERAL	ID_PRPRESCHEMO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 PRCHKGERAL	ID_PRPRESC_PROD_LEITE		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM		chave_origem			L6-13: não aproveitada por ora: quem registrou a situação só é 'administrado por' quando a situação é de administração; aguarda a regra de valor condicionado (pedido L6-13.json, prioridade alta); até lá o quem/quando fica nos eventos
-PRCHKGERAL	ID_TBCBOPRO_NOVO_HORARIO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRCHKGERAL	@id	horario_administracao_evento.horario_administracao_id			horario_administracao_evento;opcional	L6-13: evento da situação atual do horário (quem registrou a situação e quando), para nenhum 'quem checou' se perder: o horário gravado. Opcional: horário sem quem/quando da situação (prescrito ou omisso, medido na imagem de referência, só contagem, 2026-11-21: 0 de 6.089.567) não gera evento
+PRCHKGERAL	=inclusao	horario_administracao_evento.operacao			horario_administracao_evento	L6-13: o evento é um registro
+PRCHKGERAL	SITUACAO_CHECAGEM	horario_administracao_evento.evento	codigo_char	valores	horario_administracao_evento	L6-13: evento derivado da situação (valores.d): A administrado = checagem, N não administrado = nao_administrado, S suspenso = suspensao; P prescrito e O omisso sem evento (vazio). Sem par: valor_fora_do_dominio e a linha recusada (NOT NULL), visível (0 na referência)
+PRCHKGERAL	DATA_HORA_SITUACAO_CHECAGEM	horario_administracao_evento.ocorrido_em	data_hora		horario_administracao_evento	L6-13: momento da situação (medido na imagem de referência, só contagem, 2026-11-21: preenchido em 194.417 de 194.417 horários A, N e S)
+PRCHKGERAL	ID_TBCBOPRO_SITUACAO_CHECAGEM	horario_administracao_evento.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS;horario_administracao_evento	L6-13: quem registrou a situação: administrou (A), não administrou (N) ou suspendeu (S); administrado_por/administrado_em do horário seguem esperando a regra de valor condicionado (pedido); até lá o fato fica no evento
+PRCHKGERAL	JUSTIFICATIVA_SUSP_RETROATIVA	horario_administracao_evento.motivo	texto		horario_administracao_evento	L6-13: justificativa da suspensão retroativa (medido na imagem de referência, só contagem, 2026-11-21: 151.887, todas em horário S)
+PRCHKGERAL	=sem motivo próprio na origem (ver a justificativa do horário)	horario_administracao_evento.motivo			horario_administracao_evento	L6-13: concorrente: o evento não administrado exige motivo (CHECK) e a justificativa da situação fica no horário; texto verdadeiro, não presunção
+PRCHKGERAL	#retrato:DATA_HORA_GRAVACAO,DATA_HORA_INCLUSAO,ID_TBCBOPRO_INCLUSAO,ID_TBCBOPRO_NOVO_HORARIO,OBSERVACAO_ENFERMAGEM,MEDICAMENTO_URGENTE	horario_administracao_evento.dados			horario_administracao_evento	L6-13: retrato do horário no evento, com gravação, inclusão, quem gerou o novo horário, observação de enfermagem e marca de urgência (sem coluna própria no horário: pedido à F2.2)
+PRCHKGERAL	ID_TBCBOPRO_NOVO_HORARIO		chave_origem			L6-13: no retrato do evento da situação (medido na imagem de referência, só contagem, 2026-11-21: 0 preenchidas)
 PRCHKGERAL	SINAIS_ALFA	horario_administracao.resultado_registrado	texto			L6-13: valor lido no horário (ex.: glicemia capilar, sinal vital)
 PRCHKGERAL	OLD_ID_GERAL		inteiro			L6-13: descartada: coluna da versão antiga do sistema de origem, sem uso
 PRCHKGERAL	OLD_ID_CHK		inteiro			L6-13: descartada: coluna da versão antiga do sistema de origem, sem uso
@@ -148,13 +158,14 @@ PRCHKGERAL	DATA_HORA_ACOMP_RESP_CHK	horario_administracao.conferido_em	data_hora
 PRCHKGERAL	DATA_HORA_ACOMP_RESP_CHK_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
 PRCHKGERAL	SITUACAO_ACOMP_RESP_CHK		codigo_char			L6-13: não aproveitada: situação interna do fluxo de acompanhamento; a conferência fica em conferido_por/conferido_em
 PRCHKGERAL	CHECAGEM_AVALIADA		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	DATA_HORA_GRAVACAO		data_hora			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRCHKGERAL	DATA_HORA_GRAVACAO		data_hora			L6-13: no retrato do evento da situação (momento técnico da gravação; criado_em é o da carga)
 PRCHKGERAL	FUSO_HORARIO_GRAVACAO		inteiro			L6-13: descartada: fuso da data; a data já é local
 PRCHKGERAL	HORARIO_VERAO_GRAVACAO		codigo_char			L6-13: descartada: marca de horário de verão da data
 PRCHKGERAL	DATA_HORA_GRAVACAO_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
-PRCHKGERAL	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	ID_TBCBOPRO_INCLUSAO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	DATA_HORA_INCLUSAO		data_hora			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRCHKGERAL	JUSTIFICATIVA_SUSP_RETROATIVA	horario_administracao.justificativa_retroativo	texto			L6-13: concorrente depois da justificativa do lançamento retroativo (medido na imagem de referência, só contagem, 2026-11-21: as duas nunca juntas): a suspensão retroativa também é lançamento retroativo
+PRCHKGERAL	JUSTIFICATIVA_SUSP_RETROATIVA	horario_administracao.lancamento_retroativo	preenchido	valores		L6-13: concorrente: retroativo quando há justificativa de suspensão retroativa (vazio = sem valor, valores.d)
+PRCHKGERAL	ID_TBCBOPRO_INCLUSAO		chave_origem			L6-13: no retrato do evento da situação (medido na imagem de referência, só contagem, 2026-11-21: 0 preenchidas)
+PRCHKGERAL	DATA_HORA_INCLUSAO		data_hora			L6-13: no retrato do evento da situação (medido na imagem de referência, só contagem, 2026-11-21: 0 preenchidas)
 PRCHKGERAL	FUSO_HORARIO_INCLUSAO		inteiro			L6-13: descartada: fuso da data; a data já é local
 PRCHKGERAL	HORARIO_VERAO_INCLUSAO		codigo_char			L6-13: descartada: marca de horário de verão da data
 PRCHKGERAL	DATA_HORA_INCLUSAO_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
@@ -166,30 +177,32 @@ PRCHKGERAL	FUSO_HORARIO_APZ		inteiro			L6-13: descartada: fuso da data; a data j
 PRCHKGERAL	HORARIO_VERAO_APZ		codigo_char			L6-13: descartada: marca de horário de verão da data
 PRCHKGERAL	DATA_HORA_APZ_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
 PRCHKGERAL	INTEGRACAO_ESTOQUE		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	MEDICAMENTO_URGENTE		booleano_sn			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRCHKGERAL	MEDICAMENTO_URGENTE		booleano_sn			L6-13: no retrato do evento da situação; pedido à F2.2 de horario_administracao.urgente (medido na imagem de referência, só contagem, 2026-11-21: 0 marcadas S em 6.284.430)
 PRCHKGERAL	ID_PRCHKGERAL_AGRUPAMENTO		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 PRCHKGERAL	ITEM_INCLUIDO_JSON_DIGITAL		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 PRCHKGERAL	ID_DIGITAL		texto			L6-13: descartada: identificador de integração do sistema de origem
 PRCHKGERAL	ETIQUETA_CHECAGEM_IMPRESSA		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRCHKGERAL	OBSERVACAO_ENFERMAGEM		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-#--- PRASSINAT_DOC_PRCHKGERAL: destino decidido (F4-decisoes-destino.md): trilha_auditoria do horário checado até a coluna do modelo; o verificador recusa destino fora do mapa, então a troca do destino no gerador do mapa (documento_prontuario -> trilha_auditoria) está pedida em saida/L6-13.json; declaração pronta comentada abaixo
-#PRASSINAT_DOC_PRCHKGERAL	=horario_administracao	trilha_auditoria.entidade				L6-13: ligação documento assinado x horário checado guardada na trilha (decisão; modelo pedido)
-#PRASSINAT_DOC_PRCHKGERAL	ID_PRCHKGERAL	trilha_auditoria.entidade_id			ref:PRCHKGERAL	L6-13: horário checado
-#PRASSINAT_DOC_PRCHKGERAL	=operacao	trilha_auditoria.acao				L6-13: assinatura do horário
-#PRASSINAT_DOC_PRCHKGERAL	ID_PRASSINATURA_DOC	trilha_auditoria.ocorrido_em	data_hora		ref:PRASSINATURA_DOC>DATA_HORA_EVENTO	L6-13: momento do documento assinado
-#PRASSINAT_DOC_PRCHKGERAL	=assinatura do horario checado	trilha_auditoria.motivo				L6-13: o que a linha registra
-#PRASSINAT_DOC_PRCHKGERAL	#retrato	trilha_auditoria.dados_depois				L6-13: retrato da ligação (documento e horário)
-PRASSINAT_DOC_PRCHKGERAL	ID		chave_origem			L6-13: lida pela declaração comentada acima quando o destino for trocado no mapa
-PRASSINAT_DOC_PRCHKGERAL	ID_PRASSINATURA_DOC		chave_origem			L6-13: lida pela declaração comentada acima quando o destino for trocado no mapa
-PRASSINAT_DOC_PRCHKGERAL	ID_PRCHKGERAL		chave_origem			L6-13: lida pela declaração comentada acima quando o destino for trocado no mapa
+PRCHKGERAL	OBSERVACAO_ENFERMAGEM		texto			L6-13: no retrato do evento da situação; pedido à F2.2 de horario_administracao.observacao_enfermagem (medido na imagem de referência, só contagem, 2026-11-21: 0 preenchidas)
+#--- PRASSINAT_DOC_PRCHKGERAL: decisão (F4-decisoes-destino.md, L6-13 rodada 3): ligação documento assinado x horário checado guardada na trilha_auditoria do horário (destino extra pela via), até a coluna/ligação do modelo pedida à F2.2; nunca documento_prontuario (criaria documentos sem paciente)
+PRASSINAT_DOC_PRCHKGERAL	=horario_administracao	trilha_auditoria.entidade			trilha_auditoria	L6-13: entidade da trilha: o horário de administração checado
+PRASSINAT_DOC_PRCHKGERAL	ID_PRCHKGERAL	trilha_auditoria.entidade_id			ref:PRCHKGERAL;trilha_auditoria	L6-13: o horário checado (horario_administracao); nunca visto: NULL com pai_inexistente
+PRASSINAT_DOC_PRCHKGERAL	ID_PRCHKGERAL	trilha_auditoria.estabelecimento_id			ref:PRCHKGERAL@estabelecimento_id;trilha_auditoria	L6-13: estabelecimento do horário (cópia da coluna do horário gravado)
+PRASSINAT_DOC_PRCHKGERAL	=operacao	trilha_auditoria.acao			trilha_auditoria	L6-13: assinatura do horário checado
+PRASSINAT_DOC_PRCHKGERAL	ID_PRASSINATURA_DOC	trilha_auditoria.ocorrido_em	data_hora		ref:PRASSINATURA_DOC>DATA_HORA_EVENTO;trilha_auditoria	L6-13: momento do evento de assinatura (lido na origem pela encadeada); sem evento: recusa (NOT NULL)
+PRASSINAT_DOC_PRCHKGERAL	ID_PRASSINATURA_DOC	trilha_auditoria.correlacao			ref:PRASSINATURA_DOC>ID_PRASSINATURA_CAB>PRASSINATURA_CAB;trilha_auditoria	L6-13: documento do prontuário assinado (id do documento_prontuario que o cabeçalho da assinatura grava na L6-11): junta o horário ao documento; cabeçalho recusado ou ausente: NULL com pai_inexistente
+PRASSINAT_DOC_PRCHKGERAL	=assinatura do horario checado	trilha_auditoria.motivo			trilha_auditoria	L6-13: o que a linha registra
+PRASSINAT_DOC_PRCHKGERAL	#retrato	trilha_auditoria.dados_depois			trilha_auditoria	L6-13: retrato da ligação (evento de assinatura e horário)
+PRASSINAT_DOC_PRCHKGERAL	ID		chave_origem			L6-13: chave da ligação (conector_origem)
 PREXTRATOITEM_PRCHKGERAL	ID_PRCHKGERAL	horario_administracao_evento.horario_administracao_id				L6-13: horário
 PREXTRATOITEM_PRCHKGERAL	=inclusao	horario_administracao_evento.operacao				L6-13: cada linha é um evento registrado
 PREXTRATOITEM_PRCHKGERAL	DATA_HORA_HISTORICO	horario_administracao_evento.ocorrido_em	data_hora			L6-13: momento do evento
-PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO	horario_administracao_evento.evento	preenchido	valores		L6-13: novo horário preenchido = reaprazamento, senão checagem (valores.d)
+PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO	horario_administracao_evento.evento	preenchido	valores		L6-13: novo horário preenchido = reaprazamento (valores.d); vazio não decide e vale a situação, concorrente (medido na imagem de referência, só contagem, 2026-11-21: 0 de 3.191.334 com novo horário)
+PREXTRATOITEM_PRCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.evento	codigo_char	valores		L6-13: concorrente: evento pela situação (valores.d), como no histórico: A e O = checagem, N = nao_administrado, S = suspensao, P = geracao
 PREXTRATOITEM_PRCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.situacao_checagem_id			ref:PRSITUACAOCHECAGEM	L6-13: situação pelo código
 PREXTRATOITEM_PRCHKGERAL	ID_PRSITAPRAZAM	horario_administracao_evento.situacao_aprazamento_id				L6-13: situação do aprazamento
 PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO	horario_administracao_evento.previsto_novo_em	data_hora			L6-13: novo horário
-PREXTRATOITEM_PRCHKGERAL	JUSTIFICATIVA_REAPRAZAMENTO	horario_administracao_evento.motivo	texto			L6-13: motivo; reaprazamento sem motivo recusa (CHECK)
+PREXTRATOITEM_PRCHKGERAL	JUSTIFICATIVA_REAPRAZAMENTO	horario_administracao_evento.motivo	texto			L6-13: motivo do reaprazamento
+PREXTRATOITEM_PRCHKGERAL	=sem motivo registrado na origem	horario_administracao_evento.motivo				L6-13: concorrente: reaprazamento e não administrado exigem motivo (CHECK) e a origem não o tem no extrato (medido na imagem de referência, só contagem, 2026-11-21: 0 de 3.191.334 com motivo); texto verdadeiro, não presunção
 PREXTRATOITEM_PRCHKGERAL	ID_TBCBOPRO	horario_administracao_evento.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-13: profissional
 PREXTRATOITEM_PRCHKGERAL	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
 PREXTRATOITEM_PRCHKGERAL	DATA_HORA_APRAZADO_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
@@ -202,9 +215,9 @@ PRPRESC_AUTOPREENCHIDO	ID_TBTABELA_CAMPO	prescricao_item.dose_autopreenchida	tex
 PRPRESC_AUTOPREENCHIDO	ID_TBTABELA_CAMPO	prescricao_item.quantidade_autopreenchida	texto	valores	ref:TBTABELA_CAMPO>NOME	L6-13: idem, quantidade
 PRPRESC_AUTOPREENCHIDO	SOLUCAO_ETAPA	prescricao_item.etapa_autopreenchida	preenchido			L6-13: etapa da solução preenchida = etapa autopreenchida
 PRPRESC_AUTOPREENCHIDO	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
-PRPRESC_AUTOPREENCHIDO	ID_GEITENS		chave_origem			L6-13: não aproveitada por ora: o destino é o item prescritível, destino secundário de GEITENS ainda não carregado (pedido); padronizado sem item recusa pelo CHECK do item
+PRPRESC_AUTOPREENCHIDO	ID_GEITENS		chave_origem			L6-13: não aproveitada: a linha só marca qual campo do item prescrito foi autopreenchido (complementa); o insumo do item já vem da carga do próprio item prescrito (L6-12)
 PRPRESC_AUTOPREENCHIDO	ID_GENOMCOM		chave_origem			L6-13: não aproveitada: apresentação comercial (licenciado no destino de-para do cliente); o item é o prescritível
-PRPRESC_AUTOPREENCHIDO	ID_PRITEMNAOPAD		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
+PRPRESC_AUTOPREENCHIDO	ID_PRITEMNAOPAD		chave_origem			L6-13: não aproveitada: o item não padronizado do item já vem da carga do próprio item prescrito (L6-12); a linha só marca o campo autopreenchido
 PRPRESC_PRPROTGERAL	ID_PRPRESC	prescricao_protocolo_aplicado.prescricao_id				L6-13: prescrição
 PRPRESC_PRPROTGERAL	ID_PROTGERAL	prescricao_protocolo_aplicado.protocolo_prescricao_id			ref:PRPROTGERAL	L6-13: protocolo pela chave
 PRPRESC_PRPROTGERAL	ID_PRPRESC	prescricao_protocolo_aplicado.aplicado_em	data_hora		ref:PRPRESC>DATA_HORA_PRESCRICAO	L6-13: o protocolo é aplicado ao montar a prescrição: vale o momento da prescrição (fato, não presunção)
@@ -213,7 +226,7 @@ PRRECEITA	ID_RECEITA	receita_medica.numero	inteiro			L6-13: número da receita (
 PRRECEITA	ID_HTPACIENTE	receita_medica.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-13: paciente pela versão do cadastro
 PRRECEITA	ID_HTATENDIMENTO	receita_medica.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-13: atendimento pelo histórico
 PRRECEITA	ID_TBCBOPRO_LANCAMENTO	receita_medica.prescritor_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-13: prescritor
-PRRECEITA	TP_RECEITA_PADRAO_PSICOTROPICO	receita_medica.tipo_receita_id			ref:PRTPRECMED	L6-13: tipo da receita pela chave do tipo (decisão); sem par: pai_inexistente e recusa (NOT NULL)
+PRRECEITA	TP_RECEITA_PADRAO_PSICOTROPICO	receita_medica.tipo_receita_id			ref:PRTPRECMED	L6-13: tipo da receita pela chave do tipo (medido na imagem de referência, só contagem, 2026-11-21: os 4 valores usados, 1 a 4, são todos chaves de PRTPRECMED e cobrem 79.101 de 79.101 receitas; o 1 é o tipo marcado PADRAO); sem par: pai_inexistente e recusa (NOT NULL)
 PRRECEITA	DATA_HORA_LANCAMENTO	receita_medica.emitida_em	data_hora			L6-13: emissão
 PRRECEITA	DATA_HORA_GRAVACAO	receita_medica.registrada_em	data_hora			L6-13: gravação
 PRRECEITA	JUSTIFICATIVA_LANC_RETROATIVO	receita_medica.justificativa_retroativa	texto			L6-13: retroativo
@@ -263,13 +276,13 @@ PRITEMRECEITA	INICIO_TRATAMENTO	receita_medica_item.inicio_tratamento	data			L6-
 PRITEMRECEITA	USO_CONTINUO	receita_medica_item.uso_continuo	booleano_sn			L6-13: uso contínuo
 PRITEMRECEITA	OBSERVACAO	receita_medica_item.observacao	texto_longo			L6-13: observação
 PRITEMRECEITA	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
-PRITEMRECEITA	DURACAO_TRATAMENTO		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	UNIDADE_MEDICA		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	FREQUENCIA		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	PRAZO_UTILIZACAO		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	ID_TBUNID_IDADE_DURACAO_TRAT		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	ID_TBUNID_IDADE_PRAZO_UTILI		chave_origem			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRITEMRECEITA	ID_GEITENS		chave_origem			L6-13: não aproveitada por ora: o destino é o item prescritível, destino secundário de GEITENS ainda não carregado (pedido); padronizado sem item recusa pelo CHECK do item
+PRITEMRECEITA	DURACAO_TRATAMENTO		texto			L6-13: não gravada por ora (perda registrada, pedido de coluna): texto livre como sai impresso (medido na imagem de referência, só contagem, 2026-11-21: 1.763 de 1.763 preenchidas, só 14 numéricas e 0 com unidade). duracao_tratamento exige a unidade (CHECK) e a origem não a tem; observacao já leva OBSERVACAO (1.763 de 1.763). Pedido à F2.2: receita_medica_item.duracao_descricao (como quantidade_descricao)
+PRITEMRECEITA	UNIDADE_MEDICA		texto			L6-13: não gravada por ora: texto livre da unidade (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 preenchidas)
+PRITEMRECEITA	FREQUENCIA		texto			L6-13: não gravada por ora: texto livre (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 preenchidas); frequencia_administracao_id é cadastro, sem regra segura do texto; pedido à F2.2 de frequencia_descricao junto da duração
+PRITEMRECEITA	PRAZO_UTILIZACAO		texto			L6-13: não gravada por ora: texto livre (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 preenchidas); prazo_utilizacao exige a unidade (CHECK); pedido à F2.2 de prazo_descricao junto da duração
+PRITEMRECEITA	ID_TBUNID_IDADE_DURACAO_TRAT		chave_origem			L6-13: não gravada por ora: unidade da duração (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 preenchidas). O destino duracao_unidade_duracao_tratamento_id aponta unidade_duracao_tratamento, cadastro do produto sem carga nem semente; quando a origem trouxer a unidade, entra com #dias e a semente (pedido)
+PRITEMRECEITA	ID_TBUNID_IDADE_PRAZO_UTILI		chave_origem			L6-13: não gravada por ora: unidade do prazo (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 preenchidas); mesmo caso da unidade da duração
+PRITEMRECEITA	ID_GEITENS	receita_medica_item.item_prescritivel_id			ref:PRITEM_GEITENS/item_prescritivel	L6-13: item prescritível do insumo: o que a L6-11 grava (ou adota) pela linha de parâmetros do insumo, um por insumo (PRITEM_GEITENS, chave ID_GEITENS); sem item: pai_inexistente e, com dose, recusa pelo CHECK (medido na imagem de referência, só contagem, 2026-11-21: 0 de 1.763 itens com insumo)
 PRITEMRECEITA	ID_GENOMCOM		chave_origem			L6-13: não aproveitada: apresentação comercial (licenciado no destino de-para do cliente); o item é o prescritível
 PRSENECESSARIO_PRPRESCMED	ID_PRPRESCMED	prescricao_item_se_necessario.prescricao_item_id			ref:PRPRESCMED>ID_PRLANGERAL>PRLANGERAL	L6-13: item prescrito pela origem do detalhe
 PRSENECESSARIO_PRPRESCMED	ID_PRSENECESSARIO	prescricao_item_se_necessario.condicao_se_necessario_id				L6-13: condição se necessário
@@ -339,24 +352,10 @@ PRLANCEXAMEESTRUTURADO	UNIDADE	exame_lancado_valor.unidade_texto	texto			L6-13: 
 PRLANCEXAMEESTRUTURADO	FAIXA_NORMALIDADE	exame_lancado_valor.faixa_normalidade	texto			L6-13: faixa
 PRLANCEXAMEESTRUTURADO	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
 PRLANCEXAMEESTRUTURADO	TIPO_RESULTADO		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRLANCREGISTROTEMPO	ID		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_TBCBOPRO		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_PRCABNEXODATA		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA		data_hora			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	FUSO_HORARIO		inteiro			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	HORARIO_VERAO		codigo_char			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_UTC		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO		data_hora			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	FUSO_HORARIO_GRAVACAO		inteiro			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	HORARIO_VERAO_GRAVACAO		codigo_char			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO_UTC		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
 HTATENDALTA	@estabelecimento	alta_medica.estabelecimento_id				L6-13: estabelecimento do cliente
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND;adotar:atendimento_id	L6-13: uma alta por atendimento: a primeira versão grava e as demais versões do mesmo atendimento ADOTAM a linha (adotado_existente), sem alta duplicada
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.paciente_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>ID_RICADPAC>RICADPAC	L6-13: paciente do atendimento
-HTATENDALTA	ID_HTATENDIMENTO	alta_medica.profissional_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>ID_TBCBOPRO_ALTA_MEDICA>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-13: quem deu a alta, do estado vigente do atendimento (fato, não presumido); sem profissional da alta recusa (NOT NULL)
+HTATENDALTA	ID_HTATENDIMENTO	alta_medica.profissional_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>ID_TBCBOPRO_ALTA_MEDICA>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-13: quem deu a alta, do estado vigente do atendimento (fato, não presumido). Medido na imagem de referência (só contagem, 2026-11-21): 199.220 de 209.138 atendimentos com alta NÃO têm o profissional da alta no cabeçalho (todos têm o profissional do atendimento) e são recusados (NOT NULL), visíveis. A concorrente pelo profissional do atendimento é recusada pelo verificador (mesma coluna declarada duas vezes): pedido de prioridade alta no L6-13.json
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.alta_medica_em	data_hora		ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_ALTA_MEDICA	L6-13: alta médica do estado vigente do atendimento (versão excluída ou alterada não vira alta)
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.situacao	preenchido	valores	ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_ALTA_MEDICA	L6-13: alta vigente preenchida = efetivada (exige motivo), senão prevista (valores.d)
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.motivo_saida_hospitalar_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>ID_TBMOTALT>TBMOTALT	L6-13: motivo da saída do estado vigente
@@ -383,7 +382,7 @@ HTCABECFORMULCOMP	ID		chave_origem			L6-13: não aproveitada: chave da origem: f
 HTCABECFORMULCOMP	DATA_HORA_GRAVACAO_UTC		texto			L6-13: descartada: a mesma data em texto UTC; vale a coluna de data
 HTCHKGERAL	ID_PRCHKGERAL	horario_administracao_evento.horario_administracao_id				L6-13: horário
 HTCHKGERAL	=inclusao	horario_administracao_evento.operacao				L6-13: cada linha é um evento registrado
-HTCHKGERAL	=~checagem	horario_administracao_evento.evento				L6-13: a origem não diz o tipo do evento no histórico: checagem PRESUMIDA (valor_presumido)
+HTCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.evento	codigo_char	valores		L6-13: evento derivado da situação do histórico (valores.d): A e O = checagem (a situação registrada fica em situacao_checagem_id), N = nao_administrado, S = suspensao, P (prescrito) = geracao; sem par: valor_fora_do_dominio e recusa visível (NOT NULL)
 HTCHKGERAL	DATA_HORA_HISTORICO	horario_administracao_evento.ocorrido_em	data_hora			L6-13: momento do evento
 HTCHKGERAL	DATA_HORA_CHECAR	horario_administracao_evento.previsto_anterior_em	data_hora			L6-13: horário previsto no evento
 HTCHKGERAL	ID_PRSITUACAOCHECAGEM	horario_administracao_evento.situacao_checagem_id			ref:PRSITUACAOCHECAGEM	L6-13: situação pelo código
@@ -405,8 +404,32 @@ HTFORMULCOMP	NOME_CLASSE		texto_nome			L6-13: não aproveitada: sem coluna equiv
 HTFORMULCOMP	NOME_COMPONENTE_PAI		texto			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 HTFORMULCOMP	COMPONENTE		texto_longo			L6-13: não aproveitada: sem coluna equivalente no destino do produto
 HTFORMULCOMP	ORDEM_CRIACAO		inteiro			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-HTPARAMORIGEMCABIMP	ID		chave_origem			L6-13: descarte (duplicado) em sem_carga.tsv: espelha PRPARAMORIGEMCABIMP
-HTPARAMORIGEMCABIMP	DATA		data_hora			L6-13: descarte (duplicado) em sem_carga.tsv: espelha PRPARAMORIGEMCABIMP
-HTPARAMORIGEMCABIMP	ID_PRTPASSINATURA		chave_origem			L6-13: descarte (duplicado) em sem_carga.tsv: espelha PRPARAMORIGEMCABIMP
-HTPARAMORIGEMCABIMP	ORIGEM_DADOS		codigo_char			L6-13: descarte (duplicado) em sem_carga.tsv: espelha PRPARAMORIGEMCABIMP
-HTPARAMORIGEMCABIMP	ID_TBUSERS		texto			L6-13: descarte (duplicado) em sem_carga.tsv: espelha PRPARAMORIGEMCABIMP
+HTPARAMORIGEMCABIMP	=cabecalho_impressao_documento	trilha_auditoria.entidade			trilha_auditoria	L6-13: histórico da configuração da origem dos dados do cabeçalho de impressão: trilha da entidade
+HTPARAMORIGEMCABIMP	ID_PRTPASSINATURA	trilha_auditoria.entidade_id			ref:PRPARAMORIGEMCABIMP.ID_PRTPASSINATURA;trilha_auditoria	L6-13: o cabeçalho configurado do mesmo tipo de documento (chave alternativa; medido na imagem de referência, só contagem, 2026-11-21: 79 de 79 casam, um por tipo); sem par: NULL com pai_inexistente
+HTPARAMORIGEMCABIMP	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L6-13: estabelecimento do cliente
+HTPARAMORIGEMCABIMP	=alteracao	trilha_auditoria.acao			trilha_auditoria	L6-13: registro da configuração naquela data
+HTPARAMORIGEMCABIMP	DATA	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-13: quando (medido na imagem de referência, só contagem, 2026-11-21: 79 de 79 preenchidas); sem data: recusa (NOT NULL)
+HTPARAMORIGEMCABIMP	ID_TBUSERS	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L6-13: quem (medido na imagem de referência, só contagem, 2026-11-21: 0 de 79 preenchidas)
+HTPARAMORIGEMCABIMP	=histórico da origem dos dados do cabeçalho de impressão	trilha_auditoria.motivo			trilha_auditoria	L6-13: o que a linha registra
+HTPARAMORIGEMCABIMP	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L6-13: retrato completo da versão (tipo, origem dos dados, data, usuário)
+HTPARAMORIGEMCABIMP	ID		chave_origem			L6-13: chave da versão (conector_origem)
+HTPARAMORIGEMCABIMP	ORIGEM_DADOS		codigo_char			L6-13: no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	=envio_prescricao_plataforma	trilha_auditoria.entidade			trilha_auditoria;principal	L6-13 r5 (ADR 0006): horário de situação do envio à plataforma de prescrição digital, guardado na trilha do envio
+PRLANCREGISTROTEMPO	ID_PRCABNEXODATA	trilha_auditoria.entidade_id			ref:PRCABNEXODATA;trilha_auditoria	L6-13 r5 (ADR 0006): o envio (L8-17); não carregado: pendência, a chave original fica no retrato
+PRLANCREGISTROTEMPO	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L6-13 r5 (ADR 0006): único estabelecimento
+PRLANCREGISTROTEMPO	=alteracao	trilha_auditoria.acao			trilha_auditoria	L6-13 r5 (ADR 0006): mudança de situação do envio
+PRLANCREGISTROTEMPO	DATA_HORA	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-13 r5 (ADR 0006): horário do evento
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-13 r5 (ADR 0006): sem horário: a gravação (concorrente)
+PRLANCREGISTROTEMPO	=horário de situação do envio à plataforma de prescrição digital	trilha_auditoria.motivo			trilha_auditoria	L6-13 r5 (ADR 0006): o que a linha registra
+PRLANCREGISTROTEMPO	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L6-13 r5 (ADR 0006): retrato completo (profissional, situação, justificativas)
+PRLANCREGISTROTEMPO	ID		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	ID_TBCBOPRO		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	FUSO_HORARIO		inteiro			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	HORARIO_VERAO		codigo_char			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	DATA_HORA_UTC		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	FUSO_HORARIO_GRAVACAO		inteiro			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	HORARIO_VERAO_GRAVACAO		codigo_char			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO_UTC		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)

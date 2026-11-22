@@ -1,54 +1,133 @@
 {
- "fatia": "L5-04",
- "pedidos": [
-  {
-   "arquivo": "tools/obra/cobertura_conector.py",
-   "mudanca": "destino com a opção complementa não exige as colunas obrigatórias do destino (é UPDATE da linha do pai, sem linha nova)",
-   "motivo": "FAMEDSOL declara complementa e a ferramenta o conta como coluna_obrigatoria_sem_fonte (nome, conselho, número e UF do solicitante já estão na linha do pai). Mesmo com a ferramenta, FAMEDSOL só carrega quando TBMEDSOL (L5-05) carregar, o que depende do de-para oficial conselho_classe"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "_digitos: float de valor inteiro (DOUBLE da origem) vira os dígitos do inteiro (hoje '52998224725.0' vira 12 dígitos e cai em documento_invalido)",
-   "motivo": "CPF, CNS e CNPJ guardados em DOUBLE PRECISION: FAMEDSOL (CPF, CNS), RESEGUR (CPF, CNPJ). O esperado da L5-04 acompanha o motor (MOTOR_CPF_DOUBLE) e passa sozinho quando a correção entrar"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py",
-   "mudanca": "catálogo oficial conselho_classe pela sigla (CRM, COREN...) no de-para, como os demais oficiais, nunca criado",
-   "motivo": "TBCBOPRO: inscricao_conselho exige conselho_classe_id (catálogo oficial da TISS); a origem traz a sigla em CONS_PROF ou pela tabela de siglas (ID_TBSIGLACONSPROF); sem o de-para oficial do conselho a inscrição não carrega"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "regra genérica nova de referência: pelo código gravado num destino SECUNDÁRIO do pai (ou pela coluna codigo do destino), ex.: ref ao item_faturavel criado pelas tabelas de preço",
-   "motivo": "TBESPPRO: o procedimento (PROCTO) é item_faturavel, gravado como destino secundário de TBTABTHM/TBTABDTH/HTPROCTO; o par especialidade x procedimento não tem como achar o item"
-  },
-  {
-   "arquivo": "conector/sante_conector/sentinela.py e carga_mapa.py",
-   "mudanca": "regra genérica de recorrência de feriado: ano 9999 = todo ano (recorrencia 'anual' com dia e mês, data NULL); outro ano = 'data_unica' com a data. A mesma coluna DATA declarável para recorrencia, dia, mes e data com regras distintas",
-   "motivo": "TBFERIAD: gravar tudo como data única tornaria o feriado fixo dia útil a partir do ano seguinte"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "SITECNIC: tabelas_destino pessoa_fisica;profissional (a pessoa antes, o papel com @id e tipo); tirar responsavel_laudo_setor (a origem não traz setor nem início)",
-   "motivo": "o profissional exige pessoa_fisica_id: hoje só a pessoa física do técnico carrega (adotada pelo CPF); com a ordem nova a fatia declara o profissional"
-  },
-  {
-   "arquivo": "db/migracoes/03_CAD (trilha F2.2)",
-   "mudanca": "pre_cadastro.data_nascimento NULL permitido, exigida só na conversão em paciente (CHECK situacao <> 'convertido' OR data_nascimento IS NOT NULL)",
-   "motivo": "SIPACAGN: a agenda de exames não guarda data de nascimento (marcação por telefone). Até lá a data vem do paciente pelo prontuário e o pré-cadastro sem prontuário é recusado com restrição do destino (visível ao cliente)"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py e carga_mapa.py",
-   "mudanca": "referência composta depois de passo encadeado: ref:T>U(C1,C2) com C1, C2 da linha de T (ex.: paciente e convênio do atendimento)",
-   "motivo": "RESEGUR: hoje a cobertura do paciente do atendimento é achada pelo paciente só (chave alternativa ID_RICADPAC); paciente com mais de uma cobertura fica pai_ambiguo e o titular é recusado"
-  },
-  {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "CDTPENDERECO: destino tipo_endereco em vez de endereco_pessoa",
-   "motivo": "a tabela é o domínio da finalidade do endereço; contornado com via=tipo_endereco no colunas.d"
-  }
- ],
- "aplicado_pela_fatia": [
-  "declarado/sem_carga.tsv: SHTECNIC e TBFONTE_PAGADORA descarte sem_valor (linhas acrescentadas)",
-  "declarado/dependencias.tsv: RESEGUR>TBPARENTE e FAMEDSOL>TBMEDSOL (linhas acrescentadas; o mapa gerado precisa ser refeito por gerar_mapa_conector.py)"
- ]
+  "fatia": "L5-04",
+  "pedidos": [
+    {
+      "arquivo": "tools/obra/cobertura_conector.py",
+      "mudanca": "destino com a opção complementa não exige as colunas obrigatórias do destino (é UPDATE da linha do pai, sem linha nova)",
+      "motivo": "FAMEDSOL declara complementa e a ferramenta o conta como coluna_obrigatoria_sem_fonte (nome, conselho, número e UF do solicitante já estão na linha do pai). Mesmo com a ferramenta, FAMEDSOL só carrega quando TBMEDSOL (L5-05) carregar, o que depende do de-para oficial conselho_classe",
+      "atendido": "rodada 2: a cobertura não exige NOT NULL em complementa"
+    },
+    {
+      "arquivo": "conector/sante_conector/sentinela.py",
+      "mudanca": "_digitos: float de valor inteiro (DOUBLE da origem) vira os dígitos do inteiro (hoje '52998224725.0' vira 12 dígitos e cai em documento_invalido)",
+      "motivo": "CPF, CNS e CNPJ guardados em DOUBLE PRECISION: FAMEDSOL (CPF, CNS), RESEGUR (CPF, CNPJ). O esperado da L5-04 acompanha o motor (MOTOR_CPF_DOUBLE) e passa sozinho quando a correção entrar",
+      "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro"
+    },
+    {
+      "arquivo": "conector/sante_conector/depara.py",
+      "mudanca": "catálogo oficial conselho_classe pela sigla (CRM, COREN...) no de-para, como os demais oficiais, nunca criado",
+      "motivo": "TBCBOPRO: inscricao_conselho exige conselho_classe_id (catálogo oficial da TISS); a origem traz a sigla em CONS_PROF ou pela tabela de siglas (ID_TBSIGLACONSPROF); sem o de-para oficial do conselho a inscrição não carrega",
+      "atendido": "rodada 3: depara.CATALOGOS conselho_classe; TBCBOPRO declarada"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "regra genérica nova de referência: pelo código gravado num destino SECUNDÁRIO do pai (ou pela coluna codigo do destino), ex.: ref ao item_faturavel criado pelas tabelas de preço",
+      "motivo": "TBESPPRO: o procedimento (PROCTO) é item_faturavel, gravado como destino secundário de TBTABTHM/TBTABDTH/HTPROCTO; o par especialidade x procedimento não tem como achar o item",
+      "atendido": "rodada 2: ref:T/<destino>; TBESPPRO declarada pelo código (ref:TBPROCTO.COD_PROCEDIMENTO)"
+    },
+    {
+      "arquivo": "conector/sante_conector/sentinela.py e carga_mapa.py",
+      "mudanca": "regra genérica de recorrência de feriado: ano 9999 = todo ano (recorrencia 'anual' com dia e mês, data NULL); outro ano = 'data_unica' com a data. A mesma coluna DATA declarável para recorrencia, dia, mes e data com regras distintas",
+      "motivo": "TBFERIAD: gravar tudo como data única tornaria o feriado fixo dia útil a partir do ano seguinte",
+      "atendido": "rodada 3 grupo 1: ano_recorrente/dia/mes/data_nao_recorrente; TBFERIAD declarada"
+    },
+    {
+      "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
+      "mudanca": "SITECNIC: tabelas_destino pessoa_fisica;profissional (a pessoa antes, o papel com @id e tipo); tirar responsavel_laudo_setor (a origem não traz setor nem início)",
+      "motivo": "o profissional exige pessoa_fisica_id: hoje só a pessoa física do técnico carrega (adotada pelo CPF); com a ordem nova a fatia declara o profissional",
+      "atendido": "rodada 3 (pela fatia): profissional é o principal e a pessoa física é secundário antes;adotar:cpf (@id:pessoa_fisica); responsavel_laudo_setor não é declarado"
+    },
+    {
+      "arquivo": "db/migracoes/03_CAD (trilha F2.2)",
+      "mudanca": "pre_cadastro.data_nascimento NULL permitido, exigida só na conversão em paciente (CHECK situacao <> 'convertido' OR data_nascimento IS NOT NULL)",
+      "motivo": "SIPACAGN: a agenda de exames não guarda data de nascimento (marcação por telefone). Até lá a data vem do paciente pelo prontuário e o pré-cadastro sem prontuário é recusado com restrição do destino (visível ao cliente)",
+      "atendido": "rodada 4 (DDL): db/migracoes/03_CAD/08"
+    },
+    {
+      "arquivo": "conector/sante_conector/mapa.py e carga_mapa.py",
+      "mudanca": "referência composta depois de passo encadeado: ref:T>U(C1,C2) com C1, C2 da linha de T (ex.: paciente e convênio do atendimento)",
+      "motivo": "RESEGUR: hoje a cobertura do paciente do atendimento é achada pelo paciente só (chave alternativa ID_RICADPAC); paciente com mais de uma cobertura fica pai_ambiguo e o titular é recusado"
+    },
+    {
+      "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
+      "mudanca": "CDTPENDERECO: destino tipo_endereco em vez de endereco_pessoa",
+      "motivo": "a tabela é o domínio da finalidade do endereço; contornado com via=tipo_endereco no colunas.d"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/ciclos.tsv (e o mapa gerado)",
+      "mudanca": "quebrar o ciclo (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD) em TBPROFIS>TBCBOPRO duas_fases, em vez de TBCBOPRO>TBPROFIS: TBCBOPRO passa a vir DEPOIS de TBPROFIS (refazer gerar_mapa_conector.py)",
+      "motivo": "inscricao_conselho.profissional_id é NOT NULL: em duas fases o INSERT sai sem ele (1364 em toda linha). O profissional do destino não referencia a inscrição. A fatia contorna com ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS (fora das duas fases), que só acha o profissional se TBPROFIS já estiver carregada: na ordem atual (TBCBOPRO 61, TBPROFIS 833) a carga real daria pai_inexistente em toda inscrição"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv (e o mapa gerado)",
+      "mudanca": "acrescentar TBESPPRO>TBPROCTO e TBESPPRO>TBESPEC",
+      "motivo": "TBESPPRO declara ref:TBPROCTO.COD_PROCEDIMENTO e ref:TBESPEC sem FK na origem; os pais vêm depois na ordem (TBESPPRO 67, TBESPEC 957, TBPROCTO 658): sem as arestas toda linha cai em pai_inexistente",
+      "atendido": "rodada 4 (integrador): arestas já no mapa"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv (e o mapa gerado)",
+      "mudanca": "acrescentar SITECNIC>TBPROFIS e SHTECNIC>TBPROFIS",
+      "motivo": "profissional tem UNIQUE por pessoa física: o técnico (ordem 57 e 59) vem antes do cadastro de profissionais (833) e, quando a mesma pessoa está nos dois, a linha de TBPROFIS cai em 1062. Com a aresta, o técnico ADOTA o profissional já gravado (adotar:pessoa_fisica_id, declarado). Alternativa equivalente: TBPROFIS com adotar:pessoa_fisica_id no profissional (L5-06)",
+      "atendido": "rodada 4 (integrador): arestas já no mapa"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "data presumida condicional: data_inativacao = data da carga (valor_presumido) só quando a situação gravada é inativo e a origem não traz a data",
+      "motivo": "SITECNIC.ATIVO=N e SHTECNIC.SITUACAO=I: o CHECK ck_profissional_inativacao recusa o inativo sem data (4025, visível). Mesmo pedido de TBPROFIS (L5-06)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L7-04.tsv (fatia L7-04)",
+      "mudanca": "SILANEXA.TECNICO -> exame_item.tecnico_profissional_id por ref:SITECNIC",
+      "motivo": "o profissional agora é o destino PRINCIPAL de SITECNIC: a referência simples pela chave CRM alcança o profissional"
+    },
+    {
+      "arquivo": "db/migracoes/11_SUP (trilha F2.2) e colunas.d/L7-07.tsv",
+      "mudanca": "pedido_compra.origem_recurso_compra_id e nota_entrada.origem_recurso_compra_id (FK origem_recurso_compra, NULL); GECADPED.FONTE_PAG e GECADNFS.FONTE_PAG por ref:TBFONTE_PAGADORA",
+      "motivo": "TBFONTE_PAGADORA carrega em origem_recurso_compra (fonte do recurso da compra); hoje só solicitacao_compra tem a coluna e o pedido e a nota ficam sem a fonte",
+      "atendido": "rodada 4 (DDL): db/migracoes/11_SUP/08; falta na fatia: declarar GECADPED/GECADNFS.FONTE_PAG (pedido_compra já tinha a coluna)"
+    },
+    {
+      "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
+      "mudanca": "SHTECNIC: tabelas_destino profissional (sem ato_transfusional, motivo 'só placeholder' sai); TBFONTE_PAGADORA: origem_recurso_compra em vez de classe_fonte_pagadora",
+      "motivo": "contornado na fatia (destino declarado); o mapa gerado deve dizer o mesmo"
+    },
+    {
+      "arquivo": "db/migracoes/03_CAD (trilha F2.2) e carga_mapa.py",
+      "mudanca": "tipo_endereco nativo 'residencial' (código do produto) e destino secundário cuja restrição recusa só o secundário (pendência) e não a linha",
+      "motivo": "endereço do técnico (CEP, logradouro, número, bairro, IBGE) em endereco_pessoa: exige tipo_endereco_id e CHECK de CEP+município; sem código nativo e com recusa da linha inteira, gravar o endereço faria perder o técnico. Até lá o endereço do técnico fica fora (contato vai para profissional)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (mescla do adotar, rodada 5)",
+      "mudanca": "a conciliação da entidade que CRIOU a linha não pode divergir quando uma tabela posterior a ADOTA e a mescla preenche colunas vazias (ex.: profissional criado por SHTECNIC e mesclado por SITECNIC): conferir pelo hash do que a própria tabela gravou, ou recalcular o hash_destino da criadora após a mescla",
+      "motivo": "L5-04 r5: conferir-fatia L5-04 acusa 'conciliação divergiu em profissional (origem 4, destino 2, recusados 2)' nas duas cargas, sem mudança nos arquivos da fatia desde a r4; e o esperado da imagem sintética precisa ser refeito para o motor r5: mescla_conflito_origem_guardada (GETABFUN 1, SITECNIC 3, TBECIV 2), REPACAGN grava 5 (era 4 com 1 recusa 1048) e SIPACAGN grava 2 (era 0 com 2 recusas 1048) — mudança de comportamento do motor r5 a confirmar pelo integrador antes de aceitar o novo esperado"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (conciliar/_mesclar)",
+      "mudanca": "REFORÇO r5 do pedido da mescla: quando _mesclar preenche colunas vazias de uma linha criada por OUTRA tabela, recalcular o hash de origem da entidade criadora (self.origem[ent_criadora][chave]) com os valores relidos, ou excluir da soma as colunas preenchidas por mescla",
+      "motivo": "conferir-fatia L5-04 r5 com o esperado refeito: único erro restante é 'conciliação divergiu em profissional (origem 4, destino 2, recusados 2)' nas duas cargas (SITECNIC adota e completa o profissional criado por SHTECNIC, mescla_preenchidas=2); contagens batem (2 + 2 = 4), só a soma de controle diverge"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "destino secundário cuja restrição recusa só o secundário (pendência) e não a linha",
+      "motivo": "r5 achado: endereço do técnico hoje fica no retrato (profissional_versao.dados); com a regra, declarar endereco_pessoa (tipo_endereco residencial por antes;adotar:codigo) sem risco de perder o técnico pelo CHECK de CEP + município"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "conciliar: na tabela que criou a linha, coluna vazia que uma tabela carregada depois preencheu por mescla não destrutiva (ADR 0007/20, registrada em historico_mescla_migracao ou no contador mescla_preenchidas) não diverge a soma de controle",
+      "motivo": "r6: SHTECNIC x SITECNIC (mesma pessoa e profissional adotado): o preenchimento do celular quebrava a conciliação do SHTECNIC; a imagem sintética foi ajustada (celular igual) para a fatia fechar, o caso geral continua sem cobertura no motor"
+    }
+  ],
+  "aplicado_pela_fatia": [
+    "declarado/sem_carga.tsv: SHTECNIC e TBFONTE_PAGADORA descarte sem_valor (linhas acrescentadas)",
+    "declarado/dependencias.tsv: RESEGUR>TBPARENTE e FAMEDSOL>TBMEDSOL (linhas acrescentadas; o mapa gerado precisa ser refeito por gerar_mapa_conector.py)"
+  ],
+  "aplicado_pela_fatia_r3": [
+    "colunas.d/L5-04.tsv: TBCBOPRO, TBESPPRO, TBFERIAD declaradas",
+    "valores.d/L5-04.tsv: situação da inscrição e recorrência do feriado",
+    "F4-decisoes-destino.md: seção L5-04, rodada 3",
+    "sem_carga.tsv: SHTECNIC e TBFONTE_PAGADORA RETIRADAS (descarte sem motivo de produto)",
+    "colunas.d/L5-04.tsv: SHTECNIC e SITECNIC como profissional (principal) + pessoa_fisica antes;adotar:cpf; TBFONTE_PAGADORA -> origem_recurso_compra",
+    "valores.d/L5-04.tsv: situação do técnico (A/I, S/N)",
+    "sintetica_d/l5_04.py: MAPA_TESTE sem as declarações dos pais só lidos (TBPROCTO, TBCBOSUS)"
+  ]
 }

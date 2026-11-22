@@ -27,8 +27,10 @@ Dados 100% falsos (nomes, códigos, logins e identificadores inventados). Carreg
   (TBCBOPRO entra só com a forma do dicionário, TBPROFIS é pai externo); hospital sem setor (1048); outro hospital com
   o mesmo setor e responsável adota a linha (adotado_existente).
 Não carregadas (NAO_CARREGADAS: na imagem, sem coluna com destino): descartadas com motivo de produto em
-`declarado/sem_carga.tsv` (SIPACSVISIMG sem_valor; SIPAR* de usuário e SIFORMUL mecanismo_do_produto; SIFORMUL tem a
-declaração pronta comentada, pedidos 2 e 3 do L7-02.json).
+nenhuma desde a rodada 5 (ADR 0006): SIPACSVISIMG carrega INATIVO com endereço presumido; SIPAR* viram
+parametro_valor de nível usuário (linha inteira em JSON; usuário pelo login; 'zeca' nunca visto: pai_inexistente e
+recusa pelo escopo), a senha gerencial do laboratório vai ao cofre (credencial_integracao, só com senha). SIFORMUL passou à L7-03 na rodada 4 (conferidor): a
+fórmula liga ao analito no exame que a SITABELE grava lá (ref:SITABELE(EXAME,CODELE)/exame_analito).
 """
 import datetime
 import re
@@ -42,8 +44,6 @@ CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL PRIMARY KEY, "ID_TBCBOSUS" INTEGER 
 CREATE TABLE SICTRPSR ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(40), PRIMARY KEY ("COD"));
 CREATE TABLE SIESPEC ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(50), "INTERFACE" VARCHAR(50), "ATIVO" CHAR(1), PRIMARY
   KEY ("COD"));
-CREATE TABLE SIFORMUL ("ATO" INTEGER NOT NULL, "CODELE" INTEGER NOT NULL, "EXAME" VARCHAR(4) NOT NULL, "FORMULA"
-  BLOB SUB_TYPE 1, PRIMARY KEY ("ATO", "CODELE", "EXAME"));
 CREATE TABLE SIKITEXA ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(30) NOT NULL, "GERARBATERIAEXAME" VARCHAR(1),
   "HORA_SUGERIDA_COLETA_PEP" TIMESTAMP, "ATIVO" CHAR(1), PRIMARY KEY ("COD"));
 CREATE TABLE SIKITITE ("ATO" SMALLINT NOT NULL, "EXAME" VARCHAR(4) NOT NULL, "KIT" SMALLINT NOT NULL, "QTDE"
@@ -248,16 +248,16 @@ CREATE TABLE SIPARULT ("USUARIO" VARCHAR(31) NOT NULL, "DIGCLI" CHAR(1), "DIGCDC
   CHAR(1), "VALIDAR_DATA_HORA_LANCAMENTO" CHAR(1), "VALIDAR_DATA_HORA_COLETA" CHAR(1), "CONTAGEM_SOMENTE_DIAS_UTEIS"
   CHAR(1), "CONSIDERAR_SABADO_DIA_UTIL" CHAR(1), "DEFAULT_CDC_LANCTOS" SMALLINT NOT NULL, PRIMARY KEY ("USUARIO"));
 """
+SIPAR = ("SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX", "SIPARTM", "SIPARULT")
 CARREGADAS = ("SICTRPSR", "SIESPEC", "SIKITEXA", "SIKITITE", "SIMATERI", "SIMETODO", "SIMODULO", "SIOBSERV",
-              "SIPACSMODALID", "SIPARGER")
+              "SIPACSMODALID", "SIPARGER", "SIPACSVISIMG") + SIPAR
 AGUARDAM_REGRA = ()
-DESCARTADAS = ("SIFORMUL", "SIPACSVISIMG", "SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX",
-               "SIPARTM", "SIPARULT")
+DESCARTADAS = ()
 NAO_CARREGADAS = DESCARTADAS
 # só a forma, para a referência encadeada (inscrição -> profissional); a tabela é de outra fatia (L5)
 FORMA_SO = ("TBCBOPRO",)
 # exame do item do kit: SITABPRO (L7-03) pela chave composta ATO|CODALF; profissional do responsável (TBPROFIS, L5)
-PAIS_EXTERNOS = {"SITABPRO": ["1|GLI", "1|COL"], "TBPROFIS": ["9001"]}
+PAIS_EXTERNOS = {"SITABPRO": ["1|GLI", "1|COL"], "TBPROFIS": ["9001"], "TBUSERS": ["ana", "bia"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
@@ -321,8 +321,6 @@ def linhas(r, ins):
         ins("SIKITITE", list(x))
     # não carregadas: formas da origem só para a imagem (dependem dos pedidos do L7-02.json)
     f = formas()
-    for x in [(1, 10, "GLI", "(A+B)/2".encode("cp1252")), (1, 11, "CRE", None)]:
-        ins("SIFORMUL", list(x))
     # SIOBSERV: (1,3) texto longo (codigo_derivado); (1,2) sem título nem texto (1048); (2,2) o mesmo texto de (1,1)
     # em outro setor: mesmo código derivado (1062)
     longo = "Amostra coletada fora do prazo de estabilidade; repetir a coleta.".encode("cp1252")
@@ -333,8 +331,11 @@ def linhas(r, ins):
     for x in [(1, "Visualizador exemplo"), (2, "Visualizador local")]:
         ins("SIPACSVISIMG", list(x))
     for t in ("SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX", "SIPARTM", "SIPARULT"):
-        for u in ("ana", "bia"):
-            ins(t, _neutra(f[t], r, {"USUARIO": u}))
+        for u in ("ana", "bia", "zeca"):
+            fx = {"USUARIO": u}
+            if t == "SIPARLAB":
+                fx["SENHAGERENCIAL"] = "senha-falsa" if u == "ana" else None
+            ins(t, _neutra(f[t], r, fx))
     # SIPARGER: hospital 1 com setor LAB 1 e responsável 501; hospital 2 sem setor (1048); hospital 3 com o mesmo
     # setor e responsável do 1 (adota a linha, adotado_existente)
     for hosp, lab in ((1, 1), (2, None), (3, 1)):
@@ -357,6 +358,22 @@ def linhas(r, ins):
                                                    "vigencia_sem_fonte": 3}},
         # CT/CT/ct (2, 5, 7): todas recusadas por caixa; MG/MG (8, 9): repetição exata, a segunda 1062 até o
         # pedido 10 do L7-02.json (depois: as duas recusadas, valor_repetido_unico 2, gravados 3, sem 1062)
+        # r5 (ADR 0006): visualizador inativo com endereço presumido; preferências por usuário ('zeca' nunca visto:
+        # pai_inexistente e o escopo de usuário recusa, 4025; vigência pela evidência); SIPARLAB 'ana' tem senha
+        # gerencial e sem chave mestra na conferência o cofre falha fechado (credencial opcional não grava)
+        "SIPACSVISIMG": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
+        # módulo 'migracao' e definição criados pela 1ª linha gravada e adotados pelas seguintes (padrão L8-14):
+        # SIPARANA cria o módulo (bia adota os dois: 2); nas outras, ana adota o módulo e bia os dois (3); a linha
+        # recusada não deixa adoção
+        **{t: {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
+                                             "vigencia_sem_fonte": 3,
+                                             "adotado_existente": 2 if t == "SIPARANA" else 3}}
+           for t in SIPAR if t != "SIPARLAB"},
+        # r6: a credencial é destino OPCIONAL (destino_se): sem chave mestra não grava e a linha de 'ana' entra
+        # como as das outras tabelas (só segredo_aguarda_cofre a mais)
+        "SIPARLAB": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
+                                                   "adotado_existente": 3, "segredo_aguarda_cofre": 1,
+                                                   "vigencia_sem_fonte": 3}},
         "SIPACSMODALID": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                         "codigo_colisao_caixa": 3, "valor_fora_do_dominio": 1}},
     }

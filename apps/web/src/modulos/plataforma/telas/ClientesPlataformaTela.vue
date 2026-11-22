@@ -12,11 +12,13 @@ import {
   execucaoAtiva,
   lerExecucao,
   listarClientes,
+  listarExecucoes,
   listarOrigens,
   pedirExecucao,
   tamanhoLegivel,
   vincularOrigem,
 } from '../api-onboarding.js';
+import RelatorioExecucao from './RelatorioExecucao.vue';
 
 const { t, te } = useI18n();
 const clientes = ref<ClienteOnboarding[] | null>(null);
@@ -28,6 +30,15 @@ const nome = ref('');
 const aberto = ref<string | null>(null);
 const origens = ref<OrigemDisponivel[] | null>(null);
 const execucao = ref<ExecucaoConector | null>(null);
+const historico = ref<ExecucaoConector[]>([]);
+
+async function carregarHistorico(cod: string): Promise<void> {
+  try {
+    historico.value = (await listarExecucoes(cod)).execucoes;
+  } catch (e) {
+    erro.value = mensagem(e);
+  }
+}
 let relogio: ReturnType<typeof setInterval> | null = null;
 
 const cliente = computed(() => clientes.value?.find((c) => c.codigo === aberto.value) ?? null);
@@ -57,6 +68,7 @@ async function acompanhar(cod: string, id: number): Promise<void> {
       if (!execucaoAtiva(execucao.value)) {
         parar();
         await carregar();
+        await carregarHistorico(cod);
       }
     } catch (e) {
       erro.value = mensagem(e);
@@ -72,7 +84,9 @@ async function abrir(c: ClienteOnboarding): Promise<void> {
   execucao.value = c.ultimaExecucao;
   aviso.value = null;
   origens.value = null;
+  historico.value = [];
   if (c.ultimaExecucao) await acompanhar(c.codigo, c.ultimaExecucao.id);
+  await carregarHistorico(c.codigo);
   try {
     origens.value = (await listarOrigens()).origens;
   } catch (e) {
@@ -114,12 +128,12 @@ async function vincular(arquivo: string): Promise<void> {
   }
 }
 
-async function executar(tipo: 'importar' | 'sincronizar'): Promise<void> {
+async function executar(tipo: 'importar' | 'sincronizar', confirmarExclusaoEmMassa = false): Promise<void> {
   const c = cliente.value;
   if (!c) return;
   ocupado.value = true;
   try {
-    const { execucao: id } = await pedirExecucao(c.codigo, tipo);
+    const { execucao: id } = await pedirExecucao(c.codigo, tipo, confirmarExclusaoEmMassa);
     erro.value = null;
     await acompanhar(c.codigo, id);
     await carregar();
@@ -292,6 +306,57 @@ onBeforeUnmount(parar);
             </tr>
           </tbody>
         </table>
+        <template v-if="execucao.sincronizar">
+          <h4>{{ t('onboarding.sincronizar.titulo') }}</h4>
+          <p data-testid="onb-sinc-resumo">{{ t('onboarding.sincronizar.resumo', execucao.sincronizar) }}</p>
+          <SanteAlerta
+            v-for="a in execucao.sincronizar.alertasExclusaoEmMassa"
+            :key="`massa:${a.entidade}`"
+            variante="alerta"
+            :texto="t('onboarding.sincronizar.massa', { ...a, entidade: rotuloEntidade(a.entidade) })"
+          />
+          <SanteBotao
+            v-if="execucao.sincronizar.alertasExclusaoEmMassa.length"
+            variante="secundario"
+            :rotulo="t('onboarding.sincronizar.confirmarMassa')"
+            :desabilitado="ocupado || !cliente.origem || execucaoAtiva(execucao)"
+            :confirmacao="
+              t('onboarding.sincronizar.confirmaMassa', {
+                apagadas: execucao.sincronizar.alertasExclusaoEmMassa.reduce((n, a) => n + a.apagadas, 0),
+                codigo: cliente.codigo,
+              })
+            "
+            data-testid="onb-confirmar-massa"
+            @acionar="executar('sincronizar', true)"
+          />
+          <SanteAlerta
+            v-if="execucao.sincronizar.exclusoesSemSuporte"
+            variante="alerta"
+            :texto="t('onboarding.sincronizar.semSuporte', { n: execucao.sincronizar.exclusoesSemSuporte })"
+            data-testid="onb-sem-suporte"
+          />
+          <table v-if="execucao.sincronizar.conflitosItens.length" class="tabela" data-testid="onb-conflitos">
+            <caption>
+              {{
+                t('onboarding.sincronizar.conflitos')
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ t('onboarding.execucao.entidade') }}</th>
+                <th scope="col">{{ t('onboarding.sincronizar.registro') }}</th>
+                <th scope="col">{{ t('onboarding.sincronizar.colunas') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in execucao.sincronizar.conflitosItens" :key="`${c.tabelaDestino}:${c.idDestino}`">
+                <td>{{ rotuloEntidade(c.tabelaDestino) }}</td>
+                <td>{{ c.idDestino }}</td>
+                <td>{{ c.colunas.join(', ') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
         <template v-if="execucao.pendencias.total">
           <h4>{{ t('onboarding.execucao.pendencias', execucao.pendencias) }}</h4>
           <table class="tabela" data-testid="onb-pendencias">
@@ -313,7 +378,33 @@ onBeforeUnmount(parar);
             </tbody>
           </table>
         </template>
+        <RelatorioExecucao :codigo="cliente.codigo" :execucao="execucao" />
       </section>
+      <table v-if="historico.length" class="tabela" data-testid="onb-historico">
+        <caption>
+          {{
+            t('onboarding.historico.titulo')
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ t('onboarding.historico.execucao') }}</th>
+            <th scope="col">{{ t('onboarding.historico.tipo') }}</th>
+            <th scope="col">{{ t('onboarding.historico.estado') }}</th>
+            <th scope="col">{{ t('onboarding.historico.concluida') }}</th>
+            <th scope="col">{{ t('onboarding.historico.conflitos') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="h in historico" :key="h.id">
+            <td>{{ h.id }}</td>
+            <td>{{ t(`onboarding.tipos.${h.tipo}`) }}</td>
+            <td>{{ t(`onboarding.estados.${h.estado}`) }}</td>
+            <td>{{ h.concluidoEm ? new Date(h.concluidoEm).toLocaleString('pt-BR') : '' }}</td>
+            <td>{{ h.sincronizar ? h.sincronizar.conflitos : '' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <section class="bloco" aria-labelledby="onb-novo" data-testid="onb-novo">

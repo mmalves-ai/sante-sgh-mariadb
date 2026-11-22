@@ -72,6 +72,8 @@ _COM_NULO = {
 _FORA = {"CDFAIXAETATP": 3, "CDMSGLINHA": 7, "CDPARDIGOBG": 4, "CDPGTOCOOPART": 2, "CDTPCOPART": 3,
          "CDTPCTRCONTRAT": 2}
 
+_ROTULOS_R5 = {'CDFAIXAETATP': [(1, 'Dez faixas'), (2, 'Sete faixas'), (3, 'Anterior à lei')], 'CDMSGLINHA': [(1, 'Linha 1'), (2, 'Linha 2'), (3, 'Linha 3'), (4, 'Linha 4'), (5, 'Linha 5'), (6, 'Linha 6'), (7, 'Linha 7')], 'CDPARDIGOBG': [(1, 'Todos'), (2, 'Nenhum'), (3, 'Só titular'), (4, 'Só dependente')], 'CDPGTOCOOPART': [(1, 'Na fatura'), (2, 'No balcão')], 'CDTPCOPART': [(1, 'Percentual'), (2, 'Valor fixo'), (3, 'Nenhuma')], 'CDTPCTRCONTRAT': [(1, 'Com patrocínio'), (2, 'Sem patrocínio')]}
+
 
 def linhas(r, ins):
     esperado = {}
@@ -104,7 +106,7 @@ def linhas(r, ins):
     for i, n in enumerate(["Situação cartão A", "Situação  cartão B", "Situação cartão C"], 1):
         ins("CDSTATUSSOLCART", [i, n])
     esperado["CDSTATUSSOLCART"] = {"gravados": 3, "pendencias": {}}
-    for t, n in _FORA.items():
-        for i in range(1, n + 1):
-            ins(t, [i, "Opção %d" % i])
+    for t, n in _FORA.items():  # rodada 5 (revisão): código E rótulo da prova (provas.d/<T>.sql)
+        for i, rot in _ROTULOS_R5[t]:
+            ins(t, [i, rot])
     return esperado

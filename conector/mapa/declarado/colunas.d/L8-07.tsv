@@ -63,3 +63,10 @@ FHLEITOUTITP	=tipo_leito_uti	dominio_sus.lista				L8-07: lista 'tipo_leito_uti' 
 FHLEITOUTITP	ID	dominio_sus.codigo	texto			L8-07: código = id da origem em texto (soma de controle em texto dos dois lados)
 FHLEITOUTITP	ID	dominio_sus.codigo_oficial	texto			L8-07: código do leiaute do gestor (SIH/SIA) em texto: nesta tabela o id é o código do Ministério, digitado e nunca sequencial (evidência: carga dos domínios dos leiautes do SIH e do SIA no new-sgh, packages/legado/src/catalogo/gravacao/importarSimples.ts); mesma prática da L8-08
 FHLEITOUTITP	NOME	dominio_sus.descricao	texto_nome			L8-07: nome do item (espaços colapsados; vazio recusa só a linha pelo NOT NULL)
+CMINCENTIVO	@estabelecimento	incentivo_contratual_sus.estabelecimento_id				L8-07 r5 (ADR 0006): incentivo do único estabelecimento do cliente; vários: estabelecimento_indefinido
+CMINCENTIVO	ID	incentivo_contratual_sus.codigo	texto			L8-07 r5 (ADR 0006): código = id da origem em texto (único por estabelecimento)
+CMINCENTIVO	NOME	incentivo_contratual_sus.nome	texto_nome			L8-07 r5 (ADR 0006): nome do incentivo (espaços colapsados; vazio recusa pelo NOT NULL)
+CMINCENTIVO	ID_CMTPDADOS	incentivo_contratual_sus.tipo_dado_dominio_contratualizacao_sus_id	chave_origem		ref:CMTPDADOS	L8-07 r5 (ADR 0006): tipo de dado pela lista tipo_dado (CMTPDADOS, mesma fatia); vazio: NULL; ausente: pai_inexistente
+CMINCENTIVO	@vigencia_carga	incentivo_contratual_sus.vigencia_inicio				L8-07 r5 (ADR 0006): a origem não tem vigência: evidência pela regra 16 do ADR 0007 (data mais antiga com evidência), nunca a data da carga
+CMINCENTIVO	=~0	incentivo_contratual_sus.percentual				L8-07 r5 (ADR 0006): a origem não traz valor nem percentual (linha padrão sem contrato); 0 PRESUMIDO e visível (valor_presumido) só para atender o CHECK valor ou percentual; o cliente informa ao ligar ao contrato
+CMINCENTIVO	=~0	incentivo_contratual_sus.ativo				L8-07 r5 (ADR 0006): entra INATIVO e presumido: não entra em cálculo até o cliente ligar ao contrato com gestor e informar o valor

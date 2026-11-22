@@ -28,12 +28,61 @@
   {
    "arquivo": "db/migracoes/15_RH/02_tabelas.sql (trilha F2: vinculo_trabalho e estrangeiro_colaborador)",
    "mudanca": "ck_vinculo_trabalho_tipo_admissao: acrescentar transferencia_consorcio (tpAdmissao 3), transferencia_domestico (5) e transferencia_sucedida_inapta (7); ck_estrangeiro_colaborador_condicao_ingresso: acrescentar reuniao_familiar (condIng 3) e tratado_brasil_portugal (6). Os valores sem código oficial (transferencia_cessao, reintegracao, transferencia_regime, residencia_humanitaria, residencia_trabalho) ficam para revisão do dono",
-   "motivo": "decisão de modelo registrada em F4-decisoes-destino.md (seção L5-07): todo código oficial precisa de um valor de domínio para a ida e volta do eSocial; até a migração, esses códigos dão valor_fora_do_dominio por linha, nunca valor presumido."
+   "motivo": "decisão de modelo registrada em F4-decisoes-destino.md (seção L5-07): todo código oficial precisa de um valor de domínio para a ida e volta do eSocial; até a migração, esses códigos dão valor_fora_do_dominio por linha, nunca valor presumido.",
+   "atendido": "rodada 4 (DDL): db/migracoes/15_RH/06"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d e valores.d das fatias consumidoras (vínculo, estrangeiro, ASO, exame, CAT, deficiência, vacina, colaborador, documento)",
    "mudanca": "traduzir as listas fixas do eSocial pela DESCRIÇÃO da linha da origem (ref:<T>>DESCRICAO ou ref:<T>>NOME), com os pares da descrição oficial normalizada (sem acento, minúsculas, espaços colapsados) -> valor do CHECK listados em conector/testes/test_l5_07.py (PARES), nunca pela chave sintética ID. FPCOR é a exceção: tem COD_ESOCIAL (ref:FPCOR>COD_ESOCIAL, pares 1..6). FPBANCOPIS: par código da origem -> COMPE conferido pela descrição, contra o catálogo banco. Descrição sem par = valor_fora_do_dominio. Se o de-para de valores precisar comparar a descrição normalizada (e não o texto exato), pedir a regra genérica ao motor",
    "motivo": "achado médio: a chave da origem não é o código oficial (FPADMESOCIAL tem 6 linhas, a tabela oficial 7). Hoje nenhuma tabela mapeada referencia essas listas (o consumidor ainda não está no mapa), então o pedido é orientação para quando entrar."
+  },
+  {
+   "id": "r5-1",
+   "rodada": 5,
+   "arquivo": "conector/sante_conector/mapa.py (verificador) e carga_mapa.py; modelo 15_RH (domínios CHECK)",
+   "mudanca": "Item do hospital nas listas legais (ADR 0006, item 4): (a) permitir que a carga grave em codigo_esocial SÓ linha com item_hospital = TRUE e motivo_item_hospital codigo_local/versao_antiga (hoje o verificador recusa qualquer destino oficial), para o código da lista da origem que não existe na fonte oficial; (b) para as listas que o modelo guarda como CHECK (aso.tipo, comunicacao_acidente.tipo, vinculo_trabalho.tipo_contrato e outras desta fatia), uma forma de o hospital ter o item local ativo (ex.: coluna *_codigo_esocial_id com FK para codigo_esocial ao lado do domínio, ou o CHECK aceitando 'item_hospital' com o código guardado).",
+   "motivo": "ADR 0006, itens 1 e 4: a lista legal da origem não pode ser descartada sem prova; o código oficial liga pelo código e o código local ou de versão antiga tem de entrar como item do hospital ATIVO. O modelo já tem as colunas (15_RH/40_tabelas.sql: item_hospital, motivo_item_hospital), mas o verificador (mapa.py, 'grava em catálogo oficial') e o motor recusam qualquer destino oficial, e os domínios CHECK não guardam item local. Até lá as tabelas ficam bloqueada/mecanismo_pedido (sem_carga.tsv).",
+   "tabelas_bloqueadas": [
+    "FPADMESOCIAL",
+    "FPAFAST_COD",
+    "FPAFAST_RAIS",
+    "FPALIQRATCNAE",
+    "FPASOEXAMEORD",
+    "FPASOINDRESUL",
+    "FPASOINTEXAME",
+    "FPASORESULTADO",
+    "FPASOTIPO",
+    "FPBR_PDH",
+    "FPCATTIPO",
+    "FPCATTPEMIS",
+    "FPCATTPLOCACD",
+    "FPCATTPREG",
+    "FPCAUSA_AFASTAMENTO",
+    "FPCLASSIFTRIB",
+    "FPCODALIQFPAS",
+    "FPCOND_TRAB_IMIGRANTE",
+    "FPCOR"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; a conciliação compara cada código e descrição da origem com o catálogo oficial carregado (casados, locais, divergentes); fonte extinta (FPAFAST_COD, FPAFAST_RAIS, FPRESC_SEFIP, FPOCOR_SEFIP, FPRESC_CAGED, FPRESC_RAIS) entra inteira como versao_antiga, ligada ao motivo atual por de-para declarado. Também falta o carregador oficial versionado de codigo_esocial, aliquota_rat_cnae, aliquota_terceiros e codigo_retorno_esocial.",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "id": "r5-2",
+   "rodada": 5,
+   "arquivo": "db/migracoes (trilha F2.2: tabela nova) e conector/mapa/declarado/colunas.d da fatia",
+   "mudanca": "Tabela genérica de listas próprias do hospital (lista_hospital_valor: lista, codigo, descricao, valor_produto NULL, ativo, UNIQUE(lista, codigo))",
+   "tabelas_bloqueadas": [
+    "FPDOSE_VACINA"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; inclui tipo_rescisao.causa_demissao_id (FPTIPORESC.ID_FPRESC_CAUSA, tese de duplicado retirada) e o de-para dos consumidores FPTPEVENTOAUT_TBEMPHOS (L5-12, evento_gatilho) e FPVALE (L5-11, beneficio.tipo) no lugar do =~outro, outro só para código sem par.",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (motor, genérico)",
+   "mudanca": "(a) especial de posição na leitura da tabela inteira pela chave (ex.: `#seq:*` ou `#grupo_seq@*`), para a ordem de lista com código alfanumérico; (b) _colisoes/_unicos_sem_caixa: considerar a chave única composta cujas demais colunas são fixas por tabela (parametro_opcao: parametro_definicao_id, valor), para a colisão de caixa virar codigo_colisao_caixa em vez de restricao_destino_1062",
+   "motivo": "L5-07 r5: hoje a ordem dos códigos texto (FPAFAST_COD, FPAFAST_RAIS, FPBR_PDH, FPCAUSA_AFASTAMENTO, FPCLASSIFTRIB) vem de pares gerados em valores.d/L5-07.tsv (todo código de 1-2 caracteres [0-9A-Z], 3 dígitos; FPBR_PDH com minúsculas): código fora desse domínio é recusado com valor_fora_do_dominio visível; com (a) os 6390 pares saem. Em FPBR_PDH 'a' e 'A' colidem pela collation do valor (1062, visível na sintética)."
   }
  ]
 }

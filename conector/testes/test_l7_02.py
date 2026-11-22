@@ -14,11 +14,14 @@ DESTINO = {"SICTRPSR": "grupo_resposta", "SIESPEC": "especialidade_diagnostica",
            "SIKITITE": "kit_exame_item",
            "SIMATERI": "material_biologico", "SIMETODO": "metodo_analitico", "SIMODULO": "setor_diagnostico",
            "SIPACSMODALID": "modalidade_imagem", "SIOBSERV": "texto_padrao_resultado",
-           "SIPARGER": "responsavel_laudo_setor"}
+           "SIPARGER": "responsavel_laudo_setor", "SIPACSVISIMG": "visualizador_imagem",
+           **{t: "parametro_valor" for t in l7_02.SIPAR}}
 # outras alimentadoras conhecidas do mesmo destino, em domínio de código disjunto (prefixo próprio)
 # (SIMODULO_SIWEBATOS, L8-16, só complementa o setor com o canal de aviso, coluna que SIMODULO não grava)
 # SIMODULO_SIWEBATOS virou descarte (mecanismo_do_produto) na rodada 2 (L8-16): só SIMODULO alimenta o setor
-OUTRAS_ALIMENTADORAS = {"grupo_resposta": {"SHRESPOSTA"}}
+OUTRAS_ALIMENTADORAS = {"grupo_resposta": {"SHRESPOSTA"},
+                        # r5: o visualizador do portal (L7-03) usa o código = ID; o desta fatia, visualizador_<ID>
+                        "visualizador_imagem": {"SIWEBVISULIMG"}}
 
 
 class Plano(unittest.TestCase):
@@ -33,7 +36,7 @@ class Plano(unittest.TestCase):
     def test_tabelas_e_destinos(self):
         self.assertEqual(set(self.plano), TABELAS)
         for t, d in DESTINO.items():
-            self.assertEqual(self.plano[t]["destinos"], [d], t)
+            self.assertEqual(self.plano[t]["destinos"][0], d, t)
 
     def test_obrigatorias_do_destino_cobertas(self):
         obrig = {"SICTRPSR": {"codigo", "descricao"}, "SIESPEC": {"codigo", "descricao"},
@@ -63,11 +66,15 @@ class Plano(unittest.TestCase):
 
     def test_unica_alimentadora(self):
         for t, dt in DESTINO.items():
+            if dt == "parametro_valor":  # r5: valor por definição (escopo próprio), muitas alimentadoras
+                continue
             outras = {c["tabela"] for c in self.mapa["colunas_decl"]
                       if (c.get("destino") or "").startswith(dt + ".")} - {t}
             self.assertEqual(outras, OUTRAS_ALIMENTADORAS.get(dt, set()), dt)
         comp = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "SIMODULO_SIWEBATOS"]
-        self.assertTrue(not comp or any("complementa" in (c.get("via") or "").split(";") for c in comp))
+        # r5 (L8-16): virou lista do hospital (parametro_opcao); se voltar ao setor, só por complementa
+        no_setor = [c for c in comp if (c.get("destino") or "").startswith("setor_diagnostico.")]
+        self.assertTrue(not no_setor or any("complementa" in (c.get("via") or "").split(";") for c in no_setor))
         proprias = set(self.cols("SIMODULO")) - {"setor_diagnostico.id"}
         self.assertFalse(proprias & {c.get("destino") for c in comp})
 
@@ -108,10 +115,13 @@ class Plano(unittest.TestCase):
         self.assertEqual(c["assina_laudo"]["coluna"], "=1")
         self.assertEqual(c["responsavel_tecnico"]["coluna"], "=1")
         self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
-        # SIPARRX segue descarte até a referência à linha única (pedido 8): o motivo cita o responsável
+        # r5: SIPARRX (com o responsável padrão do digitador) carrega como preferência do usuário, linha inteira
         sc = {r["tabela"]: r for r in mapa.ler_tsv(Path(mapa.__file__).resolve().parents[1] / "mapa/declarado/sem_carga.tsv")}
-        self.assertIn("ID_TBCBOPRO_RESP_LAUDO", sc["SIPARRX"]["motivo"])
-        self.assertNotIn("SIPARGER", sc)
+        self.assertFalse(({"SIPARGER", "SIPACSVISIMG"} | set(l7_02.SIPAR)) & set(sc))
+        rx = {x["destino"]: x["coluna"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIPARRX"}
+        self.assertEqual(rx["parametro_valor.valor"], "#retrato:*")
+        # r6: chave no espaço do módulo real do produto (sadt), não num módulo "migracao"
+        self.assertEqual(rx["parametro_definicao.chave"], "=sadt.preferenciasOrigem.imagem")
 
     def test_bloqueadas_sem_destino(self):
         # dependem de regra genérica, de ordem do mapa ou de decisão do dono (docs/obra/fatias/f4/saida/L7-02.json)
@@ -200,12 +210,19 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(a("piso:1", 3), (3, None))
         self.assertEqual(a("piso:1", None), (None, None))
 
-    def test_senha_gerencial_nunca_na_imagem(self):
+    def test_senha_gerencial_so_no_cofre(self):
+        # ADR 0007 (17): a senha (falsa) da imagem vai ao cofre pela credencial; nunca entra no retrato
         f = [c for c, _, _ in l7_02.formas()["SIPARLAB"]]
         i = f.index("SENHAGERENCIAL")
         linhas = []
         l7_02.linhas(random.Random(3), lambda t, v: linhas.append(v) if t == "SIPARLAB" else None)
-        self.assertTrue(linhas and all(v[i] is None for v in linhas))
+        self.assertEqual(sum(1 for v in linhas if v[i] is not None), 1)
+        self.assertTrue(mapa.SEGREDO_NOME.search("SENHAGERENCIAL") if hasattr(mapa.SEGREDO_NOME, "search")
+                        else any(s in "SENHAGERENCIAL" for s in mapa.SEGREDO_NOME))
+        m = mapa.carregar_execucao()
+        d = {x["destino"]: x for x in m["colunas_decl"] if x["tabela"] == "SIPARLAB"}
+        self.assertEqual(d["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHAGERENCIAL")
+        self.assertIn("destino_se:SENHAGERENCIAL", d["credencial_integracao.referencia_cofre"]["via"])
 
 
 if __name__ == "__main__":

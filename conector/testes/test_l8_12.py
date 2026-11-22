@@ -7,15 +7,17 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_12
 
-CARREGADAS = ["TBITEDES", "MFPARAM_MFTIPOLANC", "TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG",
-              "MFCCCONV", "TBTIPOLANCVLR", "TBTIPOPAGFOR", "TBTPCONTA", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO",
-              "TBUNIMEN"]
+CARREGADAS = ["TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG", "TBTIPOLANCVLR", "TBTIPOPAGFOR",
+              "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO", "TBUNIMEN", "TBITEDES", "MFCONPAG",
+              "MFCONPAG_TBCBOPRO", "MFCCCONV", "MFPAGADF", "MFPARAM_MFTIPOLANC", "MFDESACR", "SDMFCONPAG"]
+# títulos a pagar (rodada 4): vários destinos por linha (parcela principal, título agrupado, tipo de documento, baixa)
+VARIOS_DESTINOS = {"MFCONPAG": {"parcela_pagar", "titulo_pagar", "tipo_documento_financeiro", "baixa_titulo"}}
 # nenhuma tabela da fatia fica sem mecanismo nem esperando decisão (rodada de cobertura total)
 AGUARDAM = []
 # descartes de produto (declarado/sem_carga.tsv): domínio fixo do produto, parâmetros do software antigo ou duplicado
-DESCARTES = {"MFPARAM": "mecanismo_do_produto", "TBTIPOCARTAO": "mecanismo_do_produto",
-             "TBTIPOTAXACARTAO": "mecanismo_do_produto", "TBTIPOPERMISSAO": "mecanismo_do_produto",
-             "TBTPNATOPENF": "mecanismo_do_produto", "TBINTIMP": "mecanismo_do_produto", "TBBANCOS": "duplicado"}
+# (MFPARAM e TBINTIMP são da L8-11, que os revisou na rodada 3: não são mais conferidos aqui)
+DESCARTES = {"TBTIPOCARTAO": "mecanismo_do_produto", "TBTIPOTAXACARTAO": "mecanismo_do_produto",
+             "TBTIPOPERMISSAO": "mecanismo_do_produto", "TBTPNATOPENF": "mecanismo_do_produto"}
 # NOT NULL sem padrão e sem fonte na origem, de propósito (nenhuma desde a rodada de cobertura)
 SEM_FONTE = set()
 # destino complementado (UPDATE da linha do pai): as obrigatórias são do pai
@@ -57,12 +59,56 @@ class Plano(unittest.TestCase):
     def test_um_destino_por_tabela(self):
         """Destinos transacionais (meio_recebimento_particular, retorno_bancario_item) não recebem catálogo."""
         for p in self.plano:
+            if p["tabela"] in VARIOS_DESTINOS:
+                self.assertEqual(set(p["destinos"]), VARIOS_DESTINOS[p["tabela"]], p["tabela"])
+                continue
             self.assertEqual(len(p["destinos"]), 1, p["tabela"])
+        self.assertEqual(self.por["MFCONPAG"]["destinos"][0], "parcela_pagar")
+        self.assertEqual(self.por["MFDESACR"]["destinos"], ["ajuste_titulo"])
         self.assertEqual(self.por["TBCADPAG"]["destinos"], ["forma_recebimento"])
         self.assertEqual(self.por["TBTPOCORBANCOPGTO"]["destinos"], ["ocorrencia_bancaria"])
         self.assertEqual(self.por["MFCCCONV"]["destinos"], ["credito_fonte_pagadora"])
         self.assertEqual(self.por["SDGECADNFS"]["destinos"], ["nota_entrada"])
         self.assertTrue(self.por["SDGECADNFS"]["opcoes"]["nota_entrada"]["complementa"])
+
+    @staticmethod
+    def _arquivo(rel):
+        for r in (Path(__file__).resolve().parents[1] / "mapa", Path("/app/mapa")):
+            if (r / rel).is_file():
+                return (r / rel).read_text().splitlines()
+        raise unittest.SkipTest("declarações ausentes")
+
+    def _decl(self, tab, destino):
+        """Linhas declaradas (coluna, regra, via) para tabela.destino, na ordem do arquivo da fatia."""
+        return [(x[1], x[3], x[5]) for x in (l.split("\t") for l in self._arquivo("declarado/colunas.d/L8-12.tsv"))
+                if len(x) > 5 and x[0] == tab and x[2] == destino]
+
+    def test_contas_a_pagar_pela_medicao(self):
+        """Rodada 4 (medição só de contagens): TP_LAN 0 = a pagar; DT_PGTO sentinela = aberta; a compensação liga à
+        baixa da própria parcela (sem baixa em dobro); a natureza do ajuste é o próprio TPDES_ACR."""
+        nat = self._decl("MFCONPAG", "titulo_pagar.natureza_financeira_id")
+        self.assertEqual(len(nat), 1)
+        self.assertIn("=0)>max:VALOR", nat[0][2])
+        sit = self._decl("MFCONPAG", "parcela_pagar.situacao")
+        self.assertEqual([c[0] for c in sit], ["=aberta", "=paga"])
+        self.assertIn("se:DT_PGTO=1899-12-30", sit[0][2])
+        self.assertTrue(self.por["MFCONPAG"]["opcoes"]["baixa_titulo"]["opcional"])
+        self.assertEqual([c[1] for c in self._decl("MFCONPAG", "baixa_titulo.valor_pago")], ["decimal_zero_nulo"])
+        self.assertEqual(self.por["MFPAGADF"]["destinos"], ["compensacao_adiantamento"])
+        self.assertEqual(self._decl("MFPAGADF", "compensacao_adiantamento.baixa_titulo_id")[0][2],
+                         "ref:MFCONPAG/baixa_titulo")
+        pag = self._decl("MFDESACR", "ajuste_titulo.parcela_pagar_id")[0][2]
+        rec = self._decl("MFDESACR", "ajuste_titulo.parcela_receber_id")[0][2]
+        self.assertTrue(pag.endswith(";se:TP_LAN=0"))
+        self.assertTrue(rec.startswith("ref:MFCTAREC.") and rec.endswith(";se:TP_LAN=1"))
+        self.assertEqual(self._decl("MFDESACR", "ajuste_titulo.tipo_ajuste_titulo_id"), [])
+
+    def test_natureza_do_ajuste_cobre_0_a_13(self):
+        pares = {l.split("\t")[3]: l.split("\t")[4] for l in self._arquivo("declarado/valores.d/L8-12.tsv")
+                 if l.startswith("MFDESACR\tTPDES_ACR\tajuste_titulo.tipo\t")}
+        self.assertEqual(set(pares), {str(k) for k in range(14)})
+        self.assertEqual((pares["0"], pares["1"]), ("desconto", "acrescimo"))
+        self.assertEqual({pares[str(k)] for k in range(2, 14)}, {"abatimento"})
 
     def test_codigo_numerico_vira_texto(self):
         for p in self.plano:
@@ -85,21 +131,45 @@ class Plano(unittest.TestCase):
                                  ("TBORGAOPUBLICO", "orgao_arrecadador", "esfera", "=~federal"),
                                  ("MFCCCONV", "credito_fonte_pagadora", "situacao", "=~aplicado")):
             cs = [c for c in self.por[t]["colunas"][dt] if c["destino"] == dest]
-            self.assertEqual([c["coluna"] for c in cs], [lit], t)
+            # TBTPCONTA: a descrição pelo de-para vem antes; o literal presumido é a sobra (coluna concorrente)
+            self.assertEqual([c["coluna"] for c in cs], ["DESCRICAO", lit] if t == "TBTPCONTA" else [lit], t)
             pend = l8_12_esperado()[t]["pendencias"]
             n = len([d for d in l8_12.DADOS if d[0] == t][0][1])
             # toda linha, salvo as recusadas antes por pai_pendente
+            if t == "TBTPCONTA":  # rodada 4 (pedido 25): o literal concorrente só presume onde a descrição não casou
+                self.assertEqual(pend.get("valor_presumido"), 1, t)
+                continue
             self.assertEqual(pend.get("valor_presumido"), n - pend.get("pai_pendente", 0), t)
 
-    def test_empresa_pela_referencia_ao_estabelecimento(self):
-        """A empresa da origem vira o estabelecimento pela referência (TBHOSPIT), nunca o estabelecimento único em
-        silêncio: empresa sem estabelecimento recusa a linha (pai_inexistente no NOT NULL)."""
+    def test_empresa_do_financeiro_e_a_mantenedora(self):
+        """A EMPRESA do financeiro é a mantenedora (medição da L8-11): o estabelecimento é o único do cliente
+        (@estabelecimento; vários: estabelecimento_indefinido), nunca a referência ao cadastro de estabelecimentos."""
         decl = mapa.ler_tsv(DECL)
-        for t, col in (("MFPARAM_MFTIPOLANC", "EMPRESA_MFPARAM"), ("MFCCCONV", "EMPRESA")):
+        for t, col in (("MFPARAM_MFTIPOLANC", "EMPRESA_MFPARAM"), ("MFCCCONV", "EMPRESA"), ("TBBANCOS", "EMPRESA")):
             c = [x for x in decl if x["tabela"] == t and x["coluna"] == col][0]
-            self.assertTrue(c["destino"].endswith(".estabelecimento_id"), t)
-            self.assertEqual(mapa.referencia_declarada(c), "TBHOSPIT", t)
-            self.assertNotIn("@estabelecimento", {x["coluna"] for x in decl if x["tabela"] == t})
+            self.assertEqual(c["destino"], "", t)
+            e = [x for x in decl if x["tabela"] == t and x["coluna"] == "@estabelecimento"]
+            self.assertEqual(len(e), 1, t)
+            self.assertTrue(e[0]["destino"].endswith(".estabelecimento_id"), t)
+        self.assertFalse([x for x in decl if "ref:TBHOSPIT" in x["via"]])
+        self.assertEqual(self.por["MFPARAM_MFTIPOLANC"]["opcoes"]["tipo_lancamento_estabelecimento"]["adotar"],
+                         ["estabelecimento_id", "tipo_credor_id"])
+
+    def test_contrato_de_cobranca(self):
+        """TBBANCOS carrega o contrato de cobrança: um por código de beneficiário (cobrança registrada e débito
+        automático), ligado à conta pela chave alternativa composta (empresa, banco, agência, número)."""
+        p = self.por["TBBANCOS"]
+        self.assertEqual(p["destinos"], ["contrato_cobranca_bancaria"])
+        op = p["opcoes"]["contrato_cobranca_bancaria"]
+        self.assertTrue(op.get("desdobrar"))
+        cs = {c["destino"]: c for c in p["colunas"]["contrato_cobranca_bancaria"]}
+        self.assertEqual(cs["conta_bancaria_id"]["passos"][0]["tabela"], "TBCTABAN")
+        self.assertEqual(cs["conta_bancaria_id"]["passos"][0]["arg"], ["EMPRESA", "BANCO", "AGENCIA", "COD"])
+        self.assertEqual(cs["situacao"]["depara"], "valores")
+        pares = {(r["tabela"], r["coluna"], r["valor_origem"]): r["valor_destino"] for r in mapa.ler_tsv(VALORES)}
+        self.assertEqual(pares[("TBBANCOS", "SITUACAO", "I")], "suspenso")
+        for w, nat in (("Corrente", "corrente"), ("APLICAÇÃO", "aplicacao"), ("Poupança", "poupanca")):
+            self.assertEqual(pares[("TBTPCONTA", "DESCRICAO", w)], nat)
 
     def test_subgrupo_pela_chave_composta(self):
         c = [x for x in self.por["TBITEDES"]["colunas"]["natureza_financeira"]
@@ -195,8 +265,6 @@ class Plano(unittest.TestCase):
                 self.assertTrue(c["motivo"].startswith("L8-12: "), t)
         for c in decl:
             self.assertTrue(c["motivo"].startswith("L8-12: "), "%s.%s" % (c["tabela"], c["coluna"]))
-        self.assertNotIn("TBBANCOS", {c["tabela"] for c in decl})  # descarte duplicado (sem_carga.tsv)
-        self.assertNotIn("TBINTIMP", {c["tabela"] for c in decl})  # descarte de produto (sem_carga.tsv)
         for c in decl:
             self.assertNotIn("por ora", c["motivo"], "%s.%s" % (c["tabela"], c["coluna"]))
             self.assertNotIn("sem mecanismo", c["motivo"], "%s.%s" % (c["tabela"], c["coluna"]))
@@ -236,15 +304,72 @@ class Sintetica(unittest.TestCase):
         esp = l8_12.linhas(None, lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(sorted(esp), sorted(CARREGADAS))
         compl = {t for t, _ in COMPLEMENTA}
+        itens_a_mais = {"TBBANCOS": 1}  # desdobrado: o cadastro 1 grava dois contratos (gravados = itens)
         for t, e in esp.items():
             # no complemento, o pai não carregado recusa a linha (pai_inexistente)
             recusas = sum(n for r, n in e["pendencias"].items()
-                          if r.startswith("restricao_destino_") or r in ("codigo_colisao_caixa", "pai_pendente")
+                          if r.startswith("restricao_destino_") or r in ("codigo_colisao_caixa", "pai_pendente",
+                                                                         "sem_item_a_gravar")
                           or (t in compl and r == "pai_inexistente"))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            self.assertEqual(cont[t], e["gravados"] - itens_a_mais.get(t, 0) + recusas, t)
         for t in AGUARDAM + list(DESCARTES):
+            if t in PROVADAS_R5:  # rodada 5: lista provada entra na imagem para a prova rodar
+                self.assertIn("CREATE TABLE %s " % t, l8_12.DDL)
+                continue
             self.assertNotIn("CREATE TABLE %s " % t, l8_12.DDL)
 
+
+
+# ---- rodada 5 (ADR 0006, item 1): prova de "não copiar" das listas fixas ----
+PROVADAS_R5 = ['TBTIPOCARTAO', 'TBTIPOTAXACARTAO', 'TBTIPOPERMISSAO', 'TBTPNATOPENF']
+
+
+class ProvaListaFixaR5(unittest.TestCase):
+    """Cada lista fixa provada tem a linha em declarado/provas.tsv e o SQL em provas.d/<T>.sql; cada valor do produto
+    pareado com um item existe no domínio do modelo (CHECK da coluna, ou a coluna, quando não há CHECK)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import re as _re
+        base = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado"
+        cls.provas = {p["tabela"]: p for p in mapa.ler_provas(base.parent)}
+        cls.sem_carga = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
+        ddl = ""
+        for r in (Path(mapa.__file__).resolve().parents[2], Path("/app")):
+            if (r / "db" / "migracoes").is_dir():
+                ddl = "\n".join(p.read_text(encoding="utf-8") for p in sorted((r / "db" / "migracoes").rglob("*.sql")))
+                break
+        cls.ddl, cls.re = ddl, _re
+
+    def _bloco(self, tabela):
+        m = self.re.search(r"CREATE TABLE %s \((.*?)\n\)" % tabela, self.ddl, self.re.S)
+        self.assertIsNotNone(m, tabela)
+        return m.group(1)
+
+    def test_prova_declarada_e_dominio_do_produto(self):
+        for t in PROVADAS_R5:
+            pv = self.provas.get(t)
+            self.assertIsNotNone(pv, t)
+            self.assertEqual((pv["tipo"], pv["chave"], [c for c, _ in pv["valores"]][:1], len(pv["valores"])),
+                             ("derivado", ["ID"], ["ID"], 2), t)
+            self.assertEqual(pv["valores"][1][1], "texto_nome", t)  # rodada 5 (revisão): código E rótulo
+            self.assertTrue(self.re.findall(r"AS valor_produto, '[^']+' AS rotulo", pv["sql"]), t)
+            self.assertEqual(self.sem_carga[t]["situacao"], "descarte", t)
+            m = self.re.search(r"domínio do produto \((\w+)\.(\w+),", pv["sql"])
+            self.assertIsNotNone(m, t)
+            tabela, coluna = m.groups()
+            pares = self.re.findall(r"SELECT (\d+) AS item, '([^']*)' AS valor_produto", pv["sql"])
+            self.assertTrue(pares, t)
+            self.assertEqual([int(k) for k, _ in pares], list(range(1, len(pares) + 1)), t)
+            bloco = self._bloco(tabela)
+            self.assertRegex(bloco, r"\n\s+%s\s" % coluna, (t, coluna))
+            checks = [c for c in self.re.findall(r"CONSTRAINT \w+ CHECK \((.*)\),?\n", bloco)
+                      if self.re.search(r"\b%s\b" % coluna, c) and "'" in c]
+            for _, v in pares:
+                if checks:
+                    self.assertTrue(any("'%s'" % v in c for c in checks), (t, v))
+                else:
+                    self.assertRegex(v, r"^\d+$", (t, v))  # coluna numérica ou booleana sem CHECK de lista
 
 if __name__ == "__main__":
     unittest.main()

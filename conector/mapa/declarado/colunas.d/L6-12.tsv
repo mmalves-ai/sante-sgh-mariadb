@@ -21,7 +21,8 @@ PRPRESC	OLD_PESO	prescricao.peso_kg	decimal			peso do sistema anterior da origem
 PRPRESC	OLD_ALTURA		decimal			não aproveitada: unidade sem evidência (escala de 2 decimais sugere metros; destino em cm) e 0 preenchidas na referência; mesmo critério de SHDOACAO.ALTURA (L7-01)
 PRPRESC	OLD_SC	prescricao.superficie_corporal_m2	decimal			superfície corporal do sistema anterior
 PRPRESC	OLD_TFG		decimal			não aproveitada: taxa de filtração glomerular (mL/min/1,73m²) não é clearance de creatinina (mL/min) e 0 preenchidas na referência
-PRLANGERAL	ID_PRPRESC	prescricao_item.prescricao_id				prescrição (mesma fatia); item de planejamento (sem prescrição) recusa pelo NOT NULL: o planejamento é descarte (F4-decisoes-destino)
+PRLANGERAL	ID_PRPRESC	prescricao_item.prescricao_id				prescrição (mesma fatia); item de planejamento (sem prescrição) liga à prescrição FUTURA do planejamento (concorrente abaixo)
+PRLANGERAL	ID_PRPLANPRESC	prescricao_item.prescricao_id			ref:PRPLANPRESC/prescricao	L6-12 r5 (ADR 0006): item do planejamento = item da prescrição futura que o planejamento grava (destino secundário do pai)
 PRLANGERAL	#seq:ID_PRPRESC	prescricao_item.sequencia				sequência do item dentro da prescrição, na ordem da chave
 PRLANGERAL	ID_PRTPLAN	prescricao_item.tipo_item_prescricao_id				tipo do item
 PRLANGERAL	ID_PRFREQUENCIA	prescricao_item.frequencia_administracao_id				frequência
@@ -56,7 +57,7 @@ PRCABEVOL	ID_TBCBOPRO_EVOLUCAO	registro_assistencial.autor_usuario_id			ref:TBCB
 PRCABEVOL	ID_PRLOCAL_ASSISTENCIA	registro_assistencial.local_assistencia_id				local de assistência
 PRCABEVOL	DATA_HORA_EVOLUCAO	registro_assistencial.data_hora_clinica	data_hora			data clínica
 PRCABEVOL	DATA_HORA_LANCAMENTO	registro_assistencial.data_hora_lancamento	data_hora			lançamento
-PRCABEVOL	=~e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	registro_assistencial.impressao_digital				decisão (F4-decisoes-destino, L6-12): marca PRESUMIDA (valor_presumido por linha): a origem não guarda a representação exibida na finalização; o SHA-256 do texto migrado (PRCONTEVOL, #sha256:EVOLUCAO, declaração pronta abaixo, comentada) espera o motor tirar do resumo do pai a coluna regravada pelo complemento (pedido)
+PRCABEVOL	=~0000000000000000000000000000000000000000000000000000000000000000	registro_assistencial.impressao_digital				decisão (F4-decisoes-destino, L6-12, rodada 3): impressão NÃO CALCULADA, marca de zeros (valor_presumido por linha), nunca um hash que pareça válido (o SHA-256 do vazio afirmaria texto vazio): o CHECK exige 64 hex e a origem não guarda a representação exibida na finalização; o SHA-256 do texto migrado (#sha256:EVOLUCAO em PRCONTEVOL, comentada) espera o motor tirar do resumo do pai a coluna regravada pelo complemento (pedido em saida/L6-12.json)
 PRCABEVOL	JUSTIFICATIVA_LANC_RETROATIVO	registro_assistencial.justificativa_retroativo	texto			justificativa
 PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.suspenso_em	data_hora			suspensão
 PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao	preenchido	valores		decisão (F4-decisoes-destino, L6-12): suspenso na origem = situacao suspenso (valores.d/L6-12.tsv), com suspenso_em, quem suspendeu e justificativa (o CHECK exige os três; na referência os 26.622 suspensos têm os três); nunca exclusão lógica: o registro suspenso continua no prontuário legal
@@ -106,16 +107,17 @@ PRATESTREQIMP	REGISTRO_VALIDO		codigo_char			não aproveitada: 100% 'T' (válido
 PRATESTREQIMP	DATA_HORA_EXCLUSAO	documento_emitido.excluido_em	data_hora			exclusão na origem = exclusão lógica no destino
 PRATESTREQIMP	ID_PRATESTREQIMP_ORIG_CORREC	documento_emitido.corrige_documento_emitido_id			ref:PRATESTREQIMP	documento original que este corrige (autorreferência, duas fases)
 PRATESTREQIMP	ID_TBPROFIS_ACOMP_RESP	documento_emitido.acompanhante_responsavel_profissional_id				profissional responsável pelo acompanhamento (referência direta ao profissional)
-PRASSINATURA_DOC	ID_PRASSINATURA_CAB	documento_prontuario_evento.documento_prontuario_id				documento do prontuário (L6-11, ordem 1106)
+PRASSINATURA_DOC	ID_PRASSINATURA_CAB	documento_prontuario_evento.documento_prontuario_id	chave_origem		ref:PRASSINATURA_CAB	L6-12 r4: documento criado pelo cabeçalho (PRASSINATURA_CAB, L6-11: autor e momento do primeiro evento, situação do último); cabeçalho recusado: pai_pendente
 PRASSINATURA_DOC	=inclusao	documento_prontuario_evento.operacao				cada linha é um evento registrado
 PRASSINATURA_DOC	=assinatura	documento_prontuario_evento.acao				decisão (F4-decisoes-destino, L6-12): a tabela da origem é a dos eventos de assinatura do documento; a situação vai em situacao_documento_prontuario_id
 PRASSINATURA_DOC	ID_PRSITDOCUMENTO	documento_prontuario_evento.situacao_documento_prontuario_id				situação do documento no evento
 PRASSINATURA_DOC	ID_TBCBOPRO	documento_prontuario_evento.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	profissional pela inscrição no conselho (referência encadeada)
 PRASSINATURA_DOC	DATA_HORA_EVENTO	documento_prontuario_evento.evento_em	data_hora			momento do evento; nulo recusa (NOT NULL)
 PRASSINATURA_DOC	DATA_HORA_GRAVACAO	documento_prontuario_evento.ocorrido_em	data_hora			gravação do evento
-PRASSINATURA_DOC	ID_PRTPDOCUMENTO		chave_origem			não aproveitada: o tipo do documento já está no documento do prontuário (documento_prontuario, L6-11)
-PRASSINATURA_DOC	DOCUMENTO_ORIGINAL		texto_longo			decisão (F4-decisoes-destino, L6-12): documento assinado é arquivo (arquivo_id); o conector não grava arquivos (pedido do mecanismo de arquivo)
-PRASSINATURA_DOC	DOCUMENTO_XML_IMPRESSAO		texto_longo			mesmo motivo de DOCUMENTO_ORIGINAL
+PRASSINATURA_DOC	ID_PRTPDOCUMENTO		chave_origem			não aproveitada: o tipo do documento vem do tipo de assinatura do cabeçalho (documento_prontuario.tipo_documento_clinico_id)
+PRASSINATURA_DOC	DOCUMENTO_ORIGINAL		texto_longo			decisão (F4-decisoes-destino, L6-12, rodada 3): documento assinado (prova legal) vai SEM PERDA no retrato do evento (documento_prontuario_evento.dados, #retrato abaixo) até o mecanismo de arquivo (#arquivo, M4) gravar arquivo_id, assinatura_documento e documento_assinado (NOT NULL arquivo_id e hash): pendência alta registrada
+PRASSINATURA_DOC	DOCUMENTO_XML_IMPRESSAO		texto_longo			mesmo motivo de DOCUMENTO_ORIGINAL: entra no retrato do evento (dados) até o #arquivo (M4)
+PRASSINATURA_DOC	#retrato:DOCUMENTO_ORIGINAL,DOCUMENTO_XML_IMPRESSAO	documento_prontuario_evento.dados				L6-12 (rodada 3): retrato JSON do evento com o documento assinado e o XML de impressão (texto, sem perda) até o #arquivo (M4)
 PRPRESCHEMO	ID_PRLANGERAL	prescricao_item_hemocomponente.prescricao_item_id				item da prescrição (mesma fatia); item recusado: pai_pendente
 PRPRESCHEMO	CODALF_SITABPRO	prescricao_item_hemocomponente.hemocomponente_id			ref:PRHEMOTLAN.CODALF	hemocomponente pela sigla (chave alternativa, como SHBOLSA); sigla sem cadastro: pai_inexistente e recusa (NOT NULL). Na referência 0 de 910 casam (o cadastro tem 1 sigla): o cliente cadastra os hemocomponentes e sincroniza
 PRPRESCHEMO	ATO_SITABPRO		inteiro			não aproveitada: o ato do procedimento não identifica o hemocomponente
@@ -164,7 +166,12 @@ PRITENSGERAL	JUSTIFICATIVA_ITEM_ALERGICO	prescricao_item_material.justificativa_
 PREVOLPAC	ID_CABEVOL	registro_assistencial_resposta.registro_assistencial_id			ref:PRCABEVOL	registro clínico (mesma fatia); registro recusado: pai_pendente
 PREVOLPAC	#seq:ID_CABEVOL	registro_assistencial_resposta.sequencia				ordem da resposta no registro, na ordem da chave (SEQ repete no registro)
 PREVOLPAC	ID_RESPOSTA	registro_assistencial_resposta.modelo_campo_id			ref:PRRESPOSTA>ID_PRPERGUNTA>PRPADEVOL.ID_PRPERGUNTA	campo do modelo pela opção -> pergunta -> ligação modelo x pergunta (encadeada, como PRRESPOSTA na L6-10); pergunta em mais de um modelo: pai_ambiguo (559 de 1.466 na referência; pedido: chave composta com o modelo do registro)
-PREVOLPAC	ID_RESPOSTA	registro_assistencial_resposta.modelo_campo_opcao_id			ref:PRRESPOSTA	opção respondida (100% casam na amostra da referência)
+PREVOLPAC	ID_RESPOSTA	modelo_campo_opcao.modelo_campo_id	chave_origem		modelo_campo_opcao;ref:PRRESPOSTA>ID_PRPERGUNTA>PRPADEVOL.ID_PRPERGUNTA;antes;adotar:modelo_campo_id,codigo	L6-12 r3: opção do campo criada (ou adotada) pela resposta, uma por campo x código (a opção da origem é da pergunta global; PRRESPOSTA está bloqueada na L6-11 até a opção replicada por campo): campo pela opção -> pergunta -> ligação modelo x pergunta
+PREVOLPAC	ID_RESPOSTA	modelo_campo_opcao.codigo	inteiro		modelo_campo_opcao	L6-12 r3: código estável da opção = chave da opção na origem (mesmo código da declaração da L6-11: a carga dela adota a mesma linha)
+PREVOLPAC	ID_RESPOSTA	modelo_campo_opcao.rotulo	texto		modelo_campo_opcao;ref:PRRESPOSTA>COD>PRCADRESP>DESCRICAO	L6-12 r3: rótulo = texto da resposta do catálogo de respostas pelo COD da opção (como a L6-11); sem texto recusa (NOT NULL) com pendência
+PREVOLPAC	ID_RESPOSTA	modelo_campo_opcao.sequencia	inteiro_nao_negativo		modelo_campo_opcao;ref:PRRESPOSTA>ORDEM	L6-12 r3: ordem da opção no campo (como a L6-11); repetida no mesmo campo: restricao_destino_1062
+PREVOLPAC	ID_RESPOSTA	modelo_campo_opcao.ativo	booleano_sn		modelo_campo_opcao;ref:PRRESPOSTA>ATIVO	L6-12 r3: opção ativa S/N
+PREVOLPAC	@id:modelo_campo_opcao	registro_assistencial_resposta.modelo_campo_opcao_id				L6-12 r3: opção respondida = a criada ou adotada nesta linha (antes: ref:PRRESPOSTA, bloqueada na L6-11)
 PREVOLPAC	=opcao	registro_assistencial_resposta.tipo_valor				decisão (F4-decisoes-destino, L6-12): toda linha da origem é a resposta a uma opção (PRRESPOSTA) da pergunta; o valor digitado na opção vai nas colunas tipadas
 PREVOLPAC	RESPALFA	registro_assistencial_resposta.valor_texto	texto			decisão (F4-decisoes-destino, L6-12): resposta em texto (71% na amostra da referência)
 PREVOLPAC	CONTEVOL		texto_longo			decisão (F4-decisoes-destino, L6-12): o texto longo divide valor_texto com RESPALFA (os dois em ~46% das linhas); sem o primeiro preenchido no motor (pedido), fica a resposta curta
@@ -180,5 +187,175 @@ PREVOLPAC	AUTOPREENCHIDO	registro_assistencial_resposta.autopreenchido	booleano_
 PREVOLPAC	ID_HTPROCTO		chave_origem			não aproveitada: procedimento da resposta sem coluna no destino (pedido F2.2)
 PREVOLPAC	TAB		inteiro			não aproveitada: posição de tela
 PREVOLPAC	ORDEM		texto			não aproveitada: ordem de layout; a sequência é a da chave
-#PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id				BLOQUEADA por catálogo oficial sem de-para: principio_ativo é catálogo oficial (DCB) e o princípio da origem (TBPRINC) só chega a ele pelo COD_DCB (ref:TBPRINC>COD_DCB com de-para oficial dcb, que depara.py não tem; pedido em saida/L6-12.json, o mesmo da L7-07)
-#PRALERGIAPAC_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id		dcb	ref:TBPRINC>COD_DCB	aguarda o de-para oficial dcb (pedido)
+PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id	chave_origem		ref:PRALERGIAPAC	alerta de alergia do paciente (mesma fatia); alerta recusado: pai_pendente
+PRALERGIAPAC_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id	inteiro_zeros_esquerda:5		ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb	decisão (F4-decisoes-destino, L6-12, rodada 3): princípio ativo é o catálogo oficial DCB (regra 7, nunca gravado): o código DCB guardado no princípio da origem (encadeada terminada em coluna, 5 dígitos com zeros à esquerda) acha o id no catálogo já carregado (cod:); código ausente no catálogo: codigo_inexistente_destino e a linha recusa (NOT NULL) até o carregador oficial trazê-lo; princípio sem código DCB: NULL e recusa
+PRGEDIMP	@estabelecimento	anexo_prontuario.estabelecimento_id				L6-12 conferidor r4: único estabelecimento
+PRGEDIMP	ID_RICADPAC	anexo_prontuario.paciente_id				L6-12 conferidor r4: paciente (chave do cadastro)
+PRGEDIMP	ID_ATCABECATEND	anexo_prontuario.atendimento_id				L6-12 conferidor r4: atendimento (opcional)
+PRGEDIMP	ID_PRTIPODOCANEXO	anexo_prontuario.tipo_anexo_id				L6-12 conferidor r4: tipo de anexo; sem tipo recusa (NOT NULL)
+PRGEDIMP	#arquivo:DOCUMENTO:anexo	anexo_prontuario.arquivo_id				L6-12 conferidor r4: binário do anexo no armazenamento de arquivos (#arquivo, ADR 0004), gravado como veio da origem
+PRGEDIMP	#arquivo:IMAGEM:anexo	anexo_prontuario.arquivo_id				L6-12 conferidor r4: sem DOCUMENTO, o binário da IMAGEM (concorrente)
+PRGEDIMP	NOME_DOCUMENTO	anexo_prontuario.titulo	texto_nome			L6-12 conferidor r4: nome do documento; sem nome recusa (NOT NULL)
+PRGEDIMP	=~Documento migrado	anexo_prontuario.titulo				L6-12 conferidor r4: sem nome na origem: título presumido (valor_presumido), o documento do paciente não se perde
+PRGEDIMP	REFERENCIA	anexo_prontuario.referencia_em	data			L6-12 conferidor r4: data do documento original
+PRGEDIMP	DATA_HORA_EVENTO	anexo_prontuario.evento_em	data_hora			L6-12 conferidor r4: evento clínico
+PRGEDIMP	JUSTIFICATIVA_EVENTO_RETROATIVO	anexo_prontuario.justificativa_retroativo	texto			L6-12 conferidor r4: justificativa
+PRGEDIMP	LOCAL_ORIGEM	anexo_prontuario.local_origem	texto			L6-12 conferidor r4: serviço de origem
+PRGEDIMP	DATA_HORA_IMPORTACAO	anexo_prontuario.importado_em	data_hora			L6-12 conferidor r4: importação
+PRGEDIMP	ID_TBCBOPRO_IMPORTACAO	anexo_prontuario.importado_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-12 conferidor r4: quem importou
+PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.suspenso_em	data_hora			L6-12 conferidor r4: suspensão
+PRGEDIMP	JUSTIFICATIVA_SUSPENSAO	anexo_prontuario.justificativa_suspensao	texto			L6-12 conferidor r4: justificativa da suspensão
+PRGEDIMP	=suspenso	anexo_prontuario.situacao			se:DATA_HORA_SUSPENSAO	L6-12 conferidor r4: suspenso quando a origem tem a data da suspensão (senão o padrão ativo)
+PRCABEVOLTMP	@estabelecimento	registro_assistencial_rascunho.estabelecimento_id				L6-12 r5 (ADR 0006): único estabelecimento
+PRCABEVOLTMP	ID_HTPACIENTE	registro_assistencial_rascunho.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-12 r5 (ADR 0006): paciente pela versão do cadastro (encadeada, como PRCABEVOL)
+PRCABEVOLTMP	ID_HTATENDIMENTO	registro_assistencial_rascunho.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-12 r5 (ADR 0006): atendimento pelo histórico (encadeada)
+PRCABEVOLTMP	ID_EVOLUCAO	registro_assistencial_rascunho.modelo_documento_clinico_id			ref:PREVOLUCAO	L6-12 r5 (ADR 0006): modelo do rascunho
+PRCABEVOLTMP	ID_TBCBOPRO_EVOLUCAO	registro_assistencial_rascunho.autor_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-12 r5 (ADR 0006): AUTOR do rascunho (só ele finaliza ou descarta, com trilha)
+PRCABEVOLTMP	ID_TBCBOPRO_EVOLUCAO	registro_assistencial_rascunho.autor_usuario_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS>ID_TBUSERS>TBUSERS;autor	L6-12 r5 (ADR 0006): usuário do autor (opção autor: sem login no destino entra sem usuário com a pendência alta rascunho_sem_autor)
+PRCABEVOLTMP	ID_PRLOCAL_ASSISTENCIA	registro_assistencial_rascunho.local_assistencia_id				L6-12 r5 (ADR 0006): local de assistência
+PRCABEVOLTMP	DATA_HORA_EVOLUCAO	registro_assistencial_rascunho.data_hora_clinica	data_hora			L6-12 r5 (ADR 0006): momento clínico informado no rascunho
+PRCABEVOLTMP	DATA_HORA_LANCAMENTO	registro_assistencial_rascunho.iniciado_em	data_hora			L6-12 r5 (ADR 0006): data ORIGINAL em que o autor abriu o rascunho (nunca a da carga)
+PRCABEVOLTMP	DATA_HORA_EVOLUCAO	registro_assistencial_rascunho.iniciado_em	data_hora			L6-12 r5 (ADR 0006): sem lançamento: o momento clínico (concorrente)
+PRCABEVOLTMP	JUSTIFICATIVA_LANC_RETROATIVO	registro_assistencial_rascunho.justificativa_retroativo	texto			L6-12 r5 (ADR 0006): justificativa do retroativo
+PRCABEVOLTMP	ID_PRCABEVOL_ORIG_CORREC	registro_assistencial_rascunho.corrige_registro_assistencial_id			ref:PRCABEVOL	L6-12 r5 (ADR 0006): rascunho de correção do registro finalizado
+PRCABEVOLTMP	=[]	registro_assistencial_rascunho.respostas				L6-12 r5 (ADR 0006, achados): valor inicial obrigatório (NOT NULL); as respostas em edição chegam de PREVOLPACTMP por complementa (#grupo_json do rascunho), na mesma carga
+PRCABEVOLTMP	=descartado	registro_assistencial_rascunho.situacao			se:DATA_HORA_EXCLUSAO	L6-12 r5 (ADR 0006): excluído na origem = descartado pelo autor (encerrado_em = exclusão)
+PRCABEVOLTMP	=arquivado	registro_assistencial_rascunho.situacao			se:DATA_HORA_ARQUIVADO	L6-12 r5 (ADR 0006): arquivado na origem = arquivado
+PRCABEVOLTMP	DATA_HORA_SUSPENSAO	registro_assistencial_rascunho.situacao	preenchido	valores	se:DATA_HORA_SUSPENSAO	L6-12 r5 (ADR 0006, achados): rascunho SUSPENSO na origem não volta aberto: entra descartado, com o momento e a justificativa na trilha
+PRCABEVOLTMP	=aberto	registro_assistencial_rascunho.situacao				L6-12 r5 (ADR 0006): senão: rascunho ABERTO, nunca registro finalizado
+PRCABEVOLTMP	DATA_HORA_EXCLUSAO	registro_assistencial_rascunho.encerrado_em	data_hora			L6-12 r5 (ADR 0006): momento do descarte
+PRCABEVOLTMP	DATA_HORA_ARQUIVADO	registro_assistencial_rascunho.encerrado_em	data_hora			L6-12 r5 (ADR 0006): momento do arquivamento (concorrente)
+PRCABEVOLTMP	ID_CABEVOL		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	ID_TBCBOPRO_SUSPENSAO		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_SUSPENSAO	registro_assistencial_rascunho.encerrado_em	data_hora			L6-12 r5 (ADR 0006, achados): momento da suspensão
+PRCABEVOLTMP	=registro_assistencial_rascunho	trilha_auditoria.entidade			trilha_auditoria;destino_se:DATA_HORA_SUSPENSAO	L6-12 r5 (ADR 0006, achados): suspensão do rascunho na trilha
+PRCABEVOLTMP	@id	trilha_auditoria.entidade_id			trilha_auditoria	L6-12 r5 (ADR 0006, achados): o rascunho gravado
+PRCABEVOLTMP	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L6-12 r5 (ADR 0006, achados): único estabelecimento
+PRCABEVOLTMP	=alteracao	trilha_auditoria.acao			trilha_auditoria	L6-12 r5 (ADR 0006, achados): suspensão
+PRCABEVOLTMP	DATA_HORA_SUSPENSAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-12 r5 (ADR 0006, achados): momento da suspensão
+PRCABEVOLTMP	JUSTIFICATIVA_SUSPENSAO	trilha_auditoria.motivo	texto_resumo:500		trilha_auditoria	L6-12 r5 (ADR 0006, achados): justificativa da suspensão
+PRCABEVOLTMP	#retrato:ID_TBCBOPRO_SUSPENSAO,JUSTIFICATIVA_SUSPENSAO,JUSTIFICATIVA_SUSP_RETROATIVA,DATA_HORA_GRAVACAO_SUSPENSAO,DATA_HORA_SUSPENSAO_UTC	trilha_auditoria.dados_depois			trilha_auditoria	L6-12 r5 (ADR 0006, achados): retrato com quem suspendeu, justificativas e gravação
+PRCABEVOLTMP	HORARIO_VERAO_EVOLUCAO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	HORARIO_VERAO_LANCAMENTO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	HORARIO_VERAO_SUSPENSAO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	PRE_IMPRESSO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	ID_PRLANIMAG		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	ID_TBPROFIS_ACOMP_RESP		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	FUSO_HORARIO_SUSPENSAO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	FUSO_HORARIO_LANCAMENTO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	FUSO_HORARIO_EVOLUCAO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_GRAVACAO_SUSPENSAO		data_hora			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	FUSO_HORARIO_GRAVACAO_SUSPENSAO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	HORARIO_VERAO_GRAVACAO_SUSPENSA		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_GRAVACAO_SUSPENSA_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_EVOLUCAO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	ID_PRCABEVOLTMP		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_LANCAMENTO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	DATA_HORA_SUSPENSAO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEVOLTMP	ARQUIVO_EXPORTADO		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRALERGIAPACTMP	@estabelecimento	alergia_paciente.estabelecimento_id			alergia_paciente;principal	L6-12 r5 (ADR 0006): único estabelecimento
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.paciente_id			ref:PRCABEVOLTMP>ID_HTPACIENTE>HTPACIENTE>ID_RICADPAC>RICADPAC;alergia_paciente	L6-12 r5 (ADR 0006): paciente do rascunho (a chave aponta o rascunho de evolução, PRCABEVOLTMP, pela dependência do mapa)
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.atendimento_id			ref:PRCABEVOLTMP>ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND;alergia_paciente	L6-12 r5 (ADR 0006): atendimento do rascunho
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.registro_assistencial_rascunho_id			ref:PRCABEVOLTMP;alergia_paciente	L6-12 r5 (ADR 0006): rascunho de evolução em que a alergia está sendo informada; rascunho recusado: pai_pendente
+PRALERGIAPACTMP	ID_TBALERGIA	alergia_paciente.alergeno_id			alergia_paciente;so_se:RETIRAR_VINCULO_PACIENTE=N,F,!retirada_proposta_aguarda_modelo	L6-12 r5 (ADR 0006): alérgeno; sem pai o CHECK de alergia recusa; só sem retirada proposta (so_se)
+PRALERGIAPACTMP	=alergia	alergia_paciente.tipo_registro			alergia_paciente	L6-12 r5 (ADR 0006): a origem só registra alergia
+PRALERGIAPACTMP	=descartado	alergia_paciente.situacao_registro			se:ID_PRCABEVOL>PRCABEVOLTMP>DATA_HORA_EXCLUSAO;alergia_paciente	L6-12 r6 (ADR 0006): estado da alergia em rascunho pelo estado do rascunho pai na origem (as mesmas condições de PRCABEVOLTMP): rascunho excluído = alergia descartada
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.situacao_registro	preenchido	valores	se:ID_PRCABEVOL>PRCABEVOLTMP>DATA_HORA_ARQUIVADO;alergia_paciente	L6-12 r6 (ADR 0006): estado da alergia em rascunho pelo estado do rascunho pai na origem (as mesmas condições de PRCABEVOLTMP): rascunho arquivado = alergia descartada (valores.d/L6-12.tsv; concorrente)
+PRALERGIAPACTMP	ID	alergia_paciente.situacao_registro	preenchido	valores	se:ID_PRCABEVOL>PRCABEVOLTMP>DATA_HORA_SUSPENSAO;alergia_paciente	L6-12 r6 (ADR 0006): estado da alergia em rascunho pelo estado do rascunho pai na origem (as mesmas condições de PRCABEVOLTMP): rascunho suspenso = alergia descartada (valores.d/L6-12.tsv; concorrente)
+PRALERGIAPACTMP	=rascunho	alergia_paciente.situacao_registro			alergia_paciente	L6-12 r6 (ADR 0006): estado da alergia em rascunho pelo estado do rascunho pai na origem (as mesmas condições de PRCABEVOLTMP): senão: rascunho aberto do autor, nunca registro finalizado (a cópia ref:@situacao não passa pelo de-para de valores no motor)
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.encerrado_em			ref:PRCABEVOLTMP@encerrado_em;alergia_paciente	L6-12 r5 (ADR 0006, achado): momento do descarte ou arquivamento do rascunho pai (CHECK do descartado)
+PRALERGIAPACTMP	OBSERVACAO	alergia_paciente.observacao	texto		alergia_paciente	L6-12 r5 (ADR 0006): observação
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.registrado_em	data_hora		ref:PRCABEVOLTMP>DATA_HORA_EVOLUCAO;alergia_paciente	L6-12 r5 (ADR 0006): data original: momento clínico do rascunho (encadeada terminada em coluna)
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.registrado_profissional_id			ref:PRCABEVOLTMP>ID_TBCBOPRO_EVOLUCAO>TBCBOPRO>ID_TBPROFIS>TBPROFIS;alergia_paciente	L6-12 r5 (ADR 0006): autor do rascunho (CHECK: rascunho exige o autor)
+PRALERGIAPACTMP	ID_PRCABEVOL	alergia_paciente.rascunho_autor_usuario_id			ref:PRCABEVOLTMP>ID_TBCBOPRO_EVOLUCAO>TBCBOPRO>ID_TBPROFIS>TBPROFIS>ID_TBUSERS>TBUSERS;autor;alergia_paciente	L6-12 r5 (ADR 0006): usuário do autor (opção autor)
+PRALERGIAPACTMP	RETIRAR_VINCULO_PACIENTE		booleano_sn			L6-12 r5 (ADR 0006, achado): retirada PROPOSTA de uma alergia JÁ confirmada não é alergia nova: lida pela condição so_se do alérgeno; a linha com retirada fica recusada com a pendência baixa retirada_proposta_aguarda_modelo até o vínculo com a alergia confirmada (pedido em saida/L6-12.json)
+PRALERGIAPACTMP	ID		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRALERGIAPACTMP_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id	chave_origem		ref:PRALERGIAPACTMP;alergia_paciente_principio;principal	L6-12 r5 (ADR 0006): alergia em rascunho (mesma fatia); recusada: pai_pendente
+PRALERGIAPACTMP_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id	inteiro_zeros_esquerda:5		ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb;alergia_paciente_principio	L6-12 r5 (ADR 0006): princípio ativo pelo catálogo oficial DCB (como PRALERGIAPAC_TBPRINC)
+PRALERGIAPACTMP_TBPRINC	ID		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PREVOLPACTMP	=registro_assistencial_rascunho	trilha_auditoria.entidade			trilha_auditoria;agrupar:ID_CABEVOL;principal	L6-12 r5 (ADR 0006): respostas em edição do rascunho: UMA linha da trilha do rascunho por rascunho (agrupada pela chave do rascunho), com a lista completa das respostas; decisão em F4-decisoes-destino.md (o rascunho guarda respostas vazias até o pedido de padrão do modelo/motor em saida/L6-12.json)
+PREVOLPACTMP	ID_CABEVOL	trilha_auditoria.entidade_id			ref:PRCABEVOLTMP;trilha_auditoria	L6-12 r5 (ADR 0006): o rascunho (PRCABEVOLTMP); recusado: pai_pendente
+PREVOLPACTMP	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L6-12 r5 (ADR 0006): único estabelecimento
+PREVOLPACTMP	=inclusao	trilha_auditoria.acao			trilha_auditoria	L6-12 r5 (ADR 0006): inclusão das respostas em edição pela migração
+PREVOLPACTMP	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L6-12 r5 (ADR 0006): momento da migração (a origem não data a resposta; não é vigência)
+PREVOLPACTMP	=respostas em edição do rascunho no sistema anterior	trilha_auditoria.motivo			trilha_auditoria	L6-12 r5 (ADR 0006): o que a linha registra
+PREVOLPACTMP	#grupo_json:ID_RESPOSTA,SEQ,ORDEM,TAB,RESPALFA,CONTEVOL,RESPVALOR,RESPDATA,RESPHORA,RESPSNAO,UNIDRESP,ID_HTCID,ID_HTPROCTO,OBSERVACAO,AUTOPREENCHIDO,JUSTIFICATIVA_DIAGNOSTICO	trilha_auditoria.dados_depois			trilha_auditoria	L6-12 r5 (ADR 0006): TODAS as respostas em edição do rascunho (lista JSON do grupo: opção, sequência, ordem, valores tipados, CID e procedimento da origem)
+PREVOLPACTMP	ID_RESPOSTA		chave_origem			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	SEQ		inteiro			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	UNIDRESP		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	CONTEVOL		texto_longo			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	RESPDATA		data			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	RESPHORA		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	RESPSNAO		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	RESPVALOR		decimal			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	RESPALFA		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	ORDEM		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	TAB		inteiro			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	ID_HTPROCTO		chave_origem			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	ID_HTCID		chave_origem			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	OBSERVACAO		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	AUTOPREENCHIDO		codigo_char			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PREVOLPACTMP	JUSTIFICATIVA_DIAGNOSTICO		texto			L6-12 r5 (ADR 0006): na lista do grupo (trilha_auditoria.dados_depois)
+PRCABEC_MONITORIZACAO	@estabelecimento	monitorizacao_paciente.estabelecimento_id				L6-12 r5 (ADR 0006): único estabelecimento
+PRCABEC_MONITORIZACAO	ID_HTATENDIMENTO	monitorizacao_paciente.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-12 r5 (ADR 0006): atendimento (encadeada)
+PRCABEC_MONITORIZACAO	ID_HTPACIENTE	monitorizacao_paciente.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-12 r5 (ADR 0006): paciente (encadeada)
+PRCABEC_MONITORIZACAO	ID_HTATENDIMENTO	monitorizacao_paciente.responsavel_profissional_id			ref:HTATENDIMENTO>ID_TBCBOPRO_ASSISTENTE>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-12 r5 (ADR 0007, 18): melhor estimativa = médico assistente do atendimento na versão do histórico; as alternativas (solicitante, quem abriu o atendimento) pedem concorrentes pela MESMA coluna da origem (pedido ao motor em saida/L6-12.json); sem nenhuma: recusa visível (presumir um profissional atribuiria responsabilidade clínica falsa; nulo na migração pedido ao modelo)
+PRCABEC_MONITORIZACAO	VIGENCIA_INICIAL	monitorizacao_paciente.inicio_em	data_hora			L6-12 r5 (ADR 0006): início
+PRCABEC_MONITORIZACAO	VIGENCIA_FINAL	monitorizacao_paciente.fim_em	data_hora			L6-12 r5 (ADR 0006): fim (obrigatório na origem)
+PRCABEC_MONITORIZACAO	=encerrada	monitorizacao_paciente.situacao			se:ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_SAIDA_EFETIVA	L6-12 r5 (ADR 0006, achados): encerrada quando o atendimento já teve saída na origem
+PRCABEC_MONITORIZACAO	=ativa	monitorizacao_paciente.situacao				L6-12 r5 (ADR 0006, achados): atendimento em curso: a monitorização continua (o fim previsto segue em fim_em); comparação com a data da carga pedida ao motor
+PRCABEC_MONITORIZACAO	JUSTIFICATIVA_LANC_RETROATIVO	monitorizacao_paciente.lancamento_retroativo	preenchido			L6-12 r5 (ADR 0006): com justificativa = retroativo
+PRCABEC_MONITORIZACAO	JUSTIFICATIVA_LANC_RETROATIVO	monitorizacao_paciente.justificativa_retroativo	texto			L6-12 r5 (ADR 0006): justificativa
+PRCABEC_MONITORIZACAO	ID		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	VIGENCIA_INICIAL_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	VIGENCIA_FINAL_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	DATA_HORA_GRAVACAO		data_hora			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	DATA_HORA_GRAVACAO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	FUSO_HORARIO_VIGENCIA_INICIAL		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	HORARIO_VERAO_VIGENCIA_INICIAL		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	FUSO_HORARIO_VIGENCIA_FINAL		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	HORARIO_VERAO_VIGENCIA_FINAL		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	FUSO_HORARIO_GRAVACAO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRCABEC_MONITORIZACAO	HORARIO_VERAO_GRAVACAO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	@estabelecimento	planejamento_prescricao.estabelecimento_id				L6-12 r5 (ADR 0006): único estabelecimento
+PRPLANPRESC	ID_HTPACIENTE	planejamento_prescricao.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-12 r5 (ADR 0006): paciente (encadeada)
+PRPLANPRESC	ID_HTATENDIMENTO	planejamento_prescricao.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-12 r5 (ADR 0006): atendimento (encadeada)
+PRPLANPRESC	@id:prescricao	planejamento_prescricao.prescricao_id				L6-12 r5 (ADR 0006): a prescrição FUTURA criada nesta linha (secundário antes)
+PRPLANPRESC	=data	planejamento_prescricao.gatilho				L6-12 r5 (ADR 0006): liberação na data do início da vigência
+PRPLANPRESC	DATA_HORA_INICIAL_VIGENCIA	planejamento_prescricao.liberar_em	data_hora			L6-12 r5 (ADR 0006): liberar no início da vigência planejada
+PRPLANPRESC	ID_TBCBOPRO_PRESCRICAO	planejamento_prescricao.prescritor_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-12 r5 (ADR 0006): prescritor (encadeada)
+PRPLANPRESC	ID_PRLOCAL_ASSISTENCIA	planejamento_prescricao.local_assistencia_id				L6-12 r5 (ADR 0006): local
+PRPLANPRESC	DATA_HORA_GRAVACAO	planejamento_prescricao.planejado_em	data_hora			L6-12 r5 (ADR 0006): quando foi planejada
+PRPLANPRESC	=cancelada	planejamento_prescricao.situacao			se:ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_SAIDA_EFETIVA	L6-12 r5 (ADR 0006, achados): atendimento já encerrado na origem: o planejamento NÃO é liberado (nunca reativar prescrição antiga)
+PRPLANPRESC	=atendimento encerrado na origem antes da liberação (migração)	planejamento_prescricao.motivo_cancelamento			se:ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_SAIDA_EFETIVA	L6-12 r5 (ADR 0006, achados): motivo
+PRPLANPRESC	=programada	planejamento_prescricao.situacao				L6-12 r5 (ADR 0006): planejamento ainda a liberar (continua no produto)
+PRPLANPRESC	LANCAMENTO_RETROATIVO	planejamento_prescricao.retroativo	booleano_sn			L6-12 r5 (ADR 0006): S/N
+PRPLANPRESC	JUSTIFICATIVA_LANC_RETROATIVO	planejamento_prescricao.justificativa_retroativo	texto			L6-12 r5 (ADR 0006): justificativa
+PRPLANPRESC	@estabelecimento	prescricao.estabelecimento_id			prescricao;antes	L6-12 r5 (ADR 0006): prescrição futura do planejamento, gravada antes
+PRPLANPRESC	#codigo_derivado:ID:18:9000000	prescricao.numero			prescricao	L6-12 r5 (ADR 0006): número de negócio: prefixo de domínio 9000000 + chave (não colide com o número das prescrições = chave de PRPRESC); pedido de numeração pela sequência em saida/L6-12.json
+PRPLANPRESC	ID_HTPACIENTE	prescricao.paciente_id			ref:HTPACIENTE>ID_RICADPAC>RICADPAC;prescricao	L6-12 r5 (ADR 0006): paciente
+PRPLANPRESC	ID_HTATENDIMENTO	prescricao.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND;prescricao	L6-12 r5 (ADR 0006): atendimento
+PRPLANPRESC	ID_TBCBOPRO_PRESCRICAO	prescricao.prescritor_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS;prescricao	L6-12 r5 (ADR 0006): prescritor
+PRPLANPRESC	TP_PRESCRICAO	prescricao.tipo	codigo_char	valores	prescricao	L6-12 r5 (ADR 0006): tipo pelo de-para (como PRPRESC)
+PRPLANPRESC	=cancelada	prescricao.situacao			prescricao;se:ID_HTATENDIMENTO>HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>DATA_HORA_SAIDA_EFETIVA	L6-12 r5 (ADR 0006, achados): prescrição do planejamento não liberado
+PRPLANPRESC	=futura	prescricao.situacao			prescricao	L6-12 r5 (ADR 0006): prescrição FUTURA que o planejamento libera
+PRPLANPRESC	DATA_HORA_PRESCRICAO	prescricao.prescrito_em	data_hora		prescricao	L6-12 r5 (ADR 0006): horário clínico
+PRPLANPRESC	DATA_HORA_INICIAL_VIGENCIA	prescricao.vigencia_inicio_em	data_hora		prescricao	L6-12 r5 (ADR 0006): início
+PRPLANPRESC	DATA_HORA_FINAL_VIGENCIA	prescricao.vigencia_fim_em	data_hora		prescricao	L6-12 r5 (ADR 0006): fim; fim <= início recusa (CHECK)
+PRPLANPRESC	LANCAMENTO_RETROATIVO	prescricao.retroativo	booleano_sn		prescricao	L6-12 r5 (ADR 0006): S/N
+PRPLANPRESC	JUSTIFICATIVA_LANC_RETROATIVO	prescricao.justificativa_retroativo	texto		prescricao	L6-12 r5 (ADR 0006): justificativa
+PRPLANPRESC	OBS_GERAL_PRESCRICAO	prescricao.observacao_geral	texto_longo		prescricao	L6-12 r5 (ADR 0006): observação geral
+PRPLANPRESC	ID_PRLOCAL_ASSISTENCIA	prescricao.local_assistencia_id			ref:PRLOCAL_ASSISTENCIA;prescricao	L6-12 r5 (ADR 0006): local
+PRPLANPRESC	ID		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	ID_ATCABECATEND_INTEGRACAO		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	ID_TBPROFIS_ACOMP_RESP		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	FUSO_HORARIO_PRESCRICAO		inteiro			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	HORARIO_VERAO_PRESCRICAO		codigo_char			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	DATA_HORA_INICIAL_VIGENCIA_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	DATA_HORA_FINAL_VIGENCIA_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	DATA_HORA_PRESCRICAO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRPLANPRESC	DATA_HORA_GRAVACAO_UTC		texto			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)
+PRASS_DOC_PREXAMEASS	ID_PREXAMEASSINATURA	exame_item_assinatura.id			ref:PREXAMEASSINATURA;complementa	L6-12 r5 (ADR 0006): COMPLEMENTA a assinatura do exame (L7-04) com o documento desta ligação; assinatura recusada: pai_pendente
+PRASS_DOC_PREXAMEASS	ID_PRASSINATURA_DOC	exame_item_assinatura.documento_prontuario_id			ref:PRASSINATURA_DOC>ID_PRASSINATURA_CAB>PRASSINATURA_CAB	L6-12 r5 (ADR 0006): documento do prontuário pelo evento -> cabeçalho (mesmo caminho da L7-04, gravado de novo pela ligação: idempotente)
+PRASS_DOC_PREXAMEASS	ID		chave_origem			L6-12 r5 (ADR 0006): não aproveitada: sem coluna no destino (lida pela via de outra coluna ou só da tela antiga)

@@ -50,6 +50,8 @@ REGRAS = {
                 "inválido: NULL com documento_invalido",
     "decimal_nao_negativo": "NUMERIC em que negativo não tem sentido (CHECK >= 0): negativo vira NULL com "
                             "valor_fora_do_dominio (linha gravada); zero fica",
+    "ano_competencia": "rodada 6: ano da competência AAAAMM (inteiro ou texto); inválida: NULL e valor_fora_do_dominio",
+    "mes_competencia": "rodada 6: mês (1..12) da competência AAAAMM; inválida: NULL e valor_fora_do_dominio",
     "competencia_aaaamm": "competência em inteiro ou texto AAAAMM vira DATE do 1º dia do mês; mês fora de 1..12, ano "
                           "< 1800 ou forma inválida: NULL com valor_fora_do_dominio; 0 ou vazio vira NULL",
     "data_primeiro_dia_mes": "DATE/TIMESTAMP vira DATE do 1º dia do mês (competência); data sentinela vira NULL com "
@@ -60,6 +62,18 @@ REGRAS = {
                     "('0030' -> 30, '0100' -> 60); vazio ou 0000 vira NULL; minuto >= 60 ou forma inválida: NULL com "
                     "valor_fora_do_dominio",
     "email": "endereço de e-mail (local@dominio.tld, pontas aparadas); sem esse formato: NULL com valor_fora_do_dominio",
+    # rodada 4 de cobertura (pedidos das fatias L8-04, L8-05)
+    "inteiro_mais_um": "contador que guarda o ÚLTIMO número usado (inteiro ou texto de dígitos) vira o PRÓXIMO (+1), "
+                       "para o destino que guarda o próximo; vazio vira NULL; não numérico ou negativo: NULL com "
+                       "valor_fora_do_dominio",
+    "tipo_pessoa_documento": "documento de pessoa num campo só (inteiro, DOUBLE de valor inteiro ou texto): até 11 "
+                             "dígitos vira 'fisica', 12 a 14 'juridica' (dígito verificador conferido); inválido: NULL "
+                             "com documento_invalido; 0 ou vazio vira NULL",
+    "cpf_de_documento": "documento de pessoa num campo só: o CPF (11 dígitos) quando o documento tem até 11 dígitos; "
+                        "documento de CNPJ: NULL sem pendência (outra coluna o grava); inválido: NULL com "
+                        "documento_invalido",
+    "cnpj_de_documento": "documento de pessoa num campo só: o CNPJ (14 dígitos) quando o documento tem 12 a 14 "
+                         "dígitos; documento de CPF: NULL sem pendência; inválido: NULL com documento_invalido",
 }
 # regras cujo destino é coluna TIME / DATETIME (o verificador confere contra o tipo da coluna declarada no DDL)
 REGRAS_TIME = {"hora", "hora_hhmm", "hora_em_timestamp"}
@@ -77,7 +91,27 @@ REGRAS_PARAMETRO = {
     "texto_resumo": "texto_resumo:<n>: texto (pontas aparadas) maior que n é cortado na última fronteira de palavra até "
                     "n (sem fronteira: corte em n) com a pendência informativa texto_resumido (baixa); use quando o "
                     "texto integral vai para outra coluna",
+    # recorrência de datas (rodada 3): a origem marca a data que se repete todo ano com um ANO convencional (ex.: 9999)
+    "ano_recorrente": "ano_recorrente:<ano>: DATE cujo ano é o ano-marca vira TRUE (a data se repete todo ano: só dia "
+                      "e mês valem), outro ano FALSE (data única); com depara=valores, 1/0 viram o domínio do destino "
+                      "(ex.: anual/data_unica); data sentinela: NULL com data_sentinela",
+    "data_nao_recorrente": "data_nao_recorrente:<ano>: a DATE quando o ano não é o ano-marca (data única); no ano-marca, "
+                           "NULL sem pendência (a data recorrente não tem ano); data sentinela: NULL com data_sentinela",
+    "dia_recorrente": "dia_recorrente:<ano>: dia do mês (1..31) da DATE no ano-marca; outro ano: NULL sem pendência",
+    "mes_recorrente": "mes_recorrente:<ano>: mês (1..12) da DATE no ano-marca; outro ano: NULL sem pendência",
+    # rodada 4 (pedido 15c da L8-11): vigência sem fim guardada como data distante
+    "data_fim_aberta": "data_fim_aberta:<ano>: DATE/TIMESTAMP com ano >= <ano> (fim de vigência em aberto, ex.: "
+                       "31/12/2999) vira NULL sem pendência; data sentinela: NULL com data_sentinela; o resto fica",
 }
+REGRAS_RECORRENCIA = ("ano_recorrente", "data_nao_recorrente", "dia_recorrente", "mes_recorrente")
+
+# período com a unidade em outra coluna (`#dias:<VALOR>,<UNIDADE>` na carga dirigida pelo mapa): dias por unidade.
+# mês e ano são convenção (30 e 365 dias): o resultado leva a pendência baixa periodo_aproximado
+DIAS_POR_UNIDADE = {"minuto": (1, 1440), "hora": (1, 24), "dia": (1, 1), "semana": (7, 1), "mes": (30, 1),
+                    "ano": (365, 1)}  # (multiplicador, divisor): conta exata em Decimal
+_UNIDADE_SINONIMO = {"minutos": "minuto", "min": "minuto", "horas": "hora", "h": "hora", "dias": "dia", "d": "dia",
+                     "semanas": "semana", "s": "semana", "meses": "mes", "mês": "mes", "m": "mes", "anos": "ano",
+                     "a": "ano"}
 
 
 def _parametro(regra):
@@ -91,6 +125,9 @@ def _parametro(regra):
             if any(not x.is_finite() for x in xs) or len(xs) != (2 if nome == "faixa" else 1):
                 return None
             return (nome, xs) if nome == "piso" or xs[0] <= xs[1] else None
+        if nome == "data_fim_aberta":
+            n = int(arg)
+            return (nome, (n,)) if 1800 < n <= 9999 else None
         if nome == "inteiro_faixa":
             a, b = (int(x) for x in arg.split(","))
             return (nome, (a, b)) if a <= b else None
@@ -98,6 +135,41 @@ def _parametro(regra):
         return (nome, (n,)) if n > 0 else None
     except (ValueError, decimal.InvalidOperation):
         return None
+
+
+def unidade_periodo(u):
+    """Unidade de período canônica (minuto, hora, dia, semana, mes, ano) de um texto da origem (nome, plural ou letra
+    D/S/M/A/H, sem caixa); None se desconhecida."""
+    if u is None:
+        return None
+    s = _str(u).strip().lower()
+    s = _UNIDADE_SINONIMO.get(s, s)
+    return s if s in DIAS_POR_UNIDADE else None
+
+
+def periodo_em_dias(valor, unidade):
+    """(dias inteiros, pendência) de uma quantidade e da unidade CANÔNICA (`unidade_periodo`). Vazio: (None, None);
+    negativo ou não numérico: NULL com valor_fora_do_dominio; unidade desconhecida: NULL com valor_fora_do_dominio;
+    sem unidade: NULL com unidade_ausente. Mês e ano (30 e 365 dias) ou fração de dia truncada: periodo_aproximado."""
+    if valor is None or (isinstance(valor, (str, bytes, bytearray)) and not _str(valor).strip()):
+        return None, None
+    try:
+        x = valor if isinstance(valor, decimal.Decimal) else decimal.Decimal(
+            repr(valor) if isinstance(valor, float) else _str(valor).strip() if isinstance(
+                valor, (str, bytes, bytearray)) else str(valor))
+    except decimal.InvalidOperation:
+        return None, "valor_fora_do_dominio"
+    if isinstance(valor, bool) or not x.is_finite() or x < 0:
+        return None, "valor_fora_do_dominio"
+    if unidade is None:
+        return None, "unidade_ausente"
+    u = unidade_periodo(unidade)
+    if u is None:
+        return None, "valor_fora_do_dominio"
+    mult, div = DIAS_POR_UNIDADE[u]
+    bruto = x * mult / div
+    dias = int(bruto.to_integral_value(rounding=decimal.ROUND_FLOOR))
+    return dias, ("periodo_aproximado" if u in ("mes", "ano") or bruto != dias else None)
 
 
 def regra_conhecida(regra):
@@ -113,7 +185,11 @@ def _digitos(v):
         return str(v) if v >= 0 else None
     if isinstance(v, decimal.Decimal):
         return str(int(v)) if v == v.to_integral_value() and v >= 0 else None
+    if isinstance(v, float):  # DOUBLE da origem de valor inteiro (rodada 4): os dígitos do inteiro, nunca o '.0'
+        return str(int(v)) if v.is_integer() and v >= 0 else None
     s = _str(v).strip()
+    if re.fullmatch(r"\d+\.0+", s):  # texto de um DOUBLE inteiro ('52998224725.0')
+        s = s.split(".")[0]
     if not re.fullmatch(r"[\d.\-/ ]*", s):
         return None
     return re.sub(r"\D", "", s)
@@ -145,6 +221,20 @@ def _documento(v, tamanhos):
             d = d.zfill(n)
             return (d, None) if _dv_ok(d) else (None, "documento_invalido")
     return None, "documento_invalido"
+
+
+def _documento_pessoa(v):
+    """('fisica'|'juridica', documento) de um campo só (CPF ou CNPJ pelo tamanho, dígito conferido); (None, None) se
+    vazio; (None, 'documento_invalido') se inválido."""
+    d = _digitos(v)
+    if d is None:
+        return None, "documento_invalido"
+    if not d or int(d) == 0:
+        return None, None
+    x, pr = _documento(d, (11, 14))
+    if pr or x is None:
+        return None, pr
+    return ("fisica" if len(d) <= 11 else "juridica"), x
 DATA_ZERO = datetime.date(1899, 12, 30)
 SENTINELAS_DATA = {datetime.date(1899, 12, 30), datetime.date(1900, 1, 1)}
 VERDADEIRO = {"S", "T", "V", "Y", "1"}
@@ -294,6 +384,42 @@ def aplicar(regra, v):
             return None, "valor_fora_do_dominio"
         m = h.hour * 60 + h.minute
         return (m or None), (pend if m else None)
+    if par and par[0] in REGRAS_RECORRENCIA:
+        if not isinstance(v, (datetime.date, datetime.datetime)):
+            return None, "valor_fora_do_dominio"
+        if _data(v):
+            return None, "data_sentinela"
+        d = v.date() if isinstance(v, datetime.datetime) else v
+        marca = d.year == par[1][0]
+        if par[0] == "ano_recorrente":
+            return marca, None
+        if par[0] == "data_nao_recorrente":
+            return (None if marca else d), None
+        return ((d.day if par[0] == "dia_recorrente" else d.month) if marca else None), None
+    if par and par[0] == "data_fim_aberta":
+        if not isinstance(v, (datetime.date, datetime.datetime)):
+            return None, "valor_fora_do_dominio"
+        if _data(v):
+            return None, "data_sentinela"
+        return (None if v.year >= par[1][0] else v), None
+    if regra == "inteiro_mais_um":
+        t = _str(v).strip() if isinstance(v, (str, bytes, bytearray)) else v
+        if t == "":
+            return None, None
+        if isinstance(t, str):
+            if not re.fullmatch(r"\d+", t):
+                return None, "valor_fora_do_dominio"
+            t = int(t)
+        if isinstance(t, bool) or not isinstance(t, (int, decimal.Decimal, float)) or t != int(t) or t < 0:
+            return None, "valor_fora_do_dominio"
+        return int(t) + 1, None
+    if regra in ("tipo_pessoa_documento", "cpf_de_documento", "cnpj_de_documento"):
+        tp, x = _documento_pessoa(v)
+        if tp is None:
+            return None, x
+        if regra == "tipo_pessoa_documento":
+            return tp, None
+        return (x if (tp == "fisica") == (regra == "cpf_de_documento") else None), None
     if par and par[0] == "inteiro_faixa":
         a, b = par[1]
         try:
@@ -316,6 +442,11 @@ def aplicar(regra, v):
     if regra == "decimal_nao_negativo":
         x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))
         return (x, None) if x >= 0 else (None, "valor_fora_do_dominio")
+    if regra in ("ano_competencia", "mes_competencia"):
+        d, e = aplicar("competencia_aaaamm", v)
+        if d is None:
+            return None, e
+        return (d.year if regra == "ano_competencia" else d.month), None
     if regra == "competencia_aaaamm":
         t = _str(v).strip() if isinstance(v, (str, bytes, bytearray)) else v
         if t == "" or t == 0:

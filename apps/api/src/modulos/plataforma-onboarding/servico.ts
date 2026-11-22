@@ -48,7 +48,16 @@ export class ServicoOnboarding {
   pedirExecucao(codigo: string, corpo: unknown, admin: number | null): Promise<number> {
     const r = esquemaPedirExecucaoEntrada.safeParse(corpo);
     if (!r.success) throw new ErroOnboarding('invalido', 'Tipo: importar ou sincronizar.');
-    return this.repo.enfileirar(codigoValido(codigo), r.data.tipo, admin);
+    const confirmar = r.data.confirmarExclusaoEmMassa === true;
+    if (confirmar && r.data.tipo !== 'sincronizar')
+      throw new ErroOnboarding('invalido', 'A confirmação da exclusão em massa só vale para o Sincronizar.');
+    return confirmar
+      ? this.repo.enfileirar(codigoValido(codigo), r.data.tipo, admin, true)
+      : this.repo.enfileirar(codigoValido(codigo), r.data.tipo, admin);
+  }
+
+  async historico(codigo: string): Promise<ExecucaoConector[]> {
+    return this.repo.historico(codigoValido(codigo), 20);
   }
 
   async execucao(codigo: string, id: number): Promise<ExecucaoConector> {

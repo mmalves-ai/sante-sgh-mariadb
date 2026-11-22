@@ -5,3 +5,11 @@ RESEGUR	TIPO	titular_cobertura.tipo_titular	F	pessoa_fisica	L5-04: tipo do titul
 RESEGUR	TIPO	titular_cobertura.tipo_titular	f	pessoa_fisica	L5-04: tipo do titular (F física, J jurídica)
 RESEGUR	TIPO	titular_cobertura.tipo_titular	J	pessoa_juridica	L5-04: tipo do titular (F física, J jurídica)
 RESEGUR	TIPO	titular_cobertura.tipo_titular	j	pessoa_juridica	L5-04: tipo do titular (F física, J jurídica)
+TBCBOPRO	ATIVO	inscricao_conselho.situacao	1	ativa	L5-04 r3: S ativa
+TBCBOPRO	ATIVO	inscricao_conselho.situacao	0	inativa	L5-04 r3: N inativa
+TBFERIAD	DATA	dia_nao_util.recorrencia	1	anual	L5-04 r3: ano-marca 9999: repete todo ano
+TBFERIAD	DATA	dia_nao_util.recorrencia	0	data_unica	L5-04 r3: data de um ano só
+SHTECNIC	SITUACAO	profissional.situacao	A	ativo	L5-04 r3: A ativo
+SHTECNIC	SITUACAO	profissional.situacao	I	inativo	L5-04 r3: I inativo
+SITECNIC	ATIVO	profissional.situacao	1	ativo	L5-04 r3: S ativo
+SITECNIC	ATIVO	profissional.situacao	0	inativo	L5-04 r3: N inativo

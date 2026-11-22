@@ -1,8 +1,8 @@
 """Fatia L5-06 (cadastros e administração, módulo CAD): tabelas da origem com coluna declarada e anomalias.
 
-Carga dirigida pelo mapa das 13 tabelas de CARREGADAS (`conector/mapa/declarado/colunas.d/L5-06.tsv`). As 7 de
-SEM_CARGA esperam regra genérica do motor (pedidos em `docs/obra/fatias/f4/saida/L5-06.json`) ou são descarte de
-produto (TBEMPHOSLOGO, em `declarado/sem_carga.tsv`). O credenciamento (TBCBOPRO_TBCONVEN) só grava com TBPROFIS antes
+Carga dirigida pelo mapa das 19 tabelas de CARREGADAS (`conector/mapa/declarado/colunas.d/L5-06.tsv`); TBEMPHOSLOGO
+é descarte de produto (`declarado/sem_carga.tsv`). Rodada 3: históricos com retrato de todas as colunas e SHA-256
+(HTPACIENTE, HTPACTELEFONE, HTPROFIS, HTPROFISTEL, HTATENDRESP) e regra do cadastro desdobrada (ATPARAMGERAL). O credenciamento (TBCBOPRO_TBCONVEN) só grava com TBPROFIS antes
 na ordem do mapa: o esperado é sempre o da carga completa (nunca aceita carga vazia).
 DDL com as colunas e tipos do dicionário (chave como PK); dados 100% falsos. TBCBOPRO e TBCBOSUS entram só como pais
 de fora da fatia lidos pela referência encadeada (inscrição -> profissional; ID substituto -> código CBO). Anomalias:
@@ -14,9 +14,16 @@ valor (não grava).
 """
 import datetime
 import os
+import random
 import re
 
 DDL = """
+CREATE TABLE TBCONSBRASINATIVO ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONSIDCALCVLR ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVCOBTXPA ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVCONSMAT ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVMEDREQATD ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCONVPERCTAPAC ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(25) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE TBCONVEN ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(75), "DTH" SMALLINT, "THM" SMALLINT, "THM_E" SMALLINT,
   "MEM" SMALLINT, "DTH_VI" VARCHAR(1), "THM_VI" VARCHAR(1), "THM_VI_E" VARCHAR(1), "CLASSE" SMALLINT, "TATO"
   VARCHAR(40), "TRTC" VARCHAR(1), "TSTC" VARCHAR(1), "LANDEP" VARCHAR(1), "LOCAL" VARCHAR(40), "NUMERO" INTEGER,
@@ -239,22 +246,67 @@ CREATE TABLE RICADPAC_TBCONVEN ("ID_RICADPAC" INTEGER NOT NULL, "ID_TBCONVEN" SM
   ("ID_RICADPAC", "ID_TBCONVEN"));
 CREATE TABLE HTPRONTUNIF ("ID_RICADPAC_UNIFICADO" INTEGER NOT NULL, "ID_RICADPAC" INTEGER NOT NULL,
   "DATA_HORA_UNIFICACAO" TIMESTAMP NOT NULL, "USUARIO_UNIFICACAO" VARCHAR(31), PRIMARY KEY ("ID_RICADPAC_UNIFICADO"));
+CREATE TABLE ATPARAMGERAL ("MODULO" SMALLINT NOT NULL, "DIGITAR_APELIDO" CHAR(1), "DIGITAR_TP_SANGUINEO" CHAR(1),
+  "DIGITAR_TELEFONE" CHAR(1), "DIGITAR_TEL_CONTATO" CHAR(1), "DIGITAR_CELULAR" CHAR(1), "DIGITAR_EMAIL" CHAR(1),
+  "DIGITAR_END_RESIDENCIAL" SMALLINT, "DIGITAR_DISTRITO_SANITARIO" CHAR(1), "DIGITAR_IDENTIDADE" SMALLINT,
+  "DIGITAR_CERTIDAO_NASC" SMALLINT, "DIGITAR_CTPS" SMALLINT, "DIGITAR_TITULO_ELEITOR" SMALLINT, "DIGITAR_PIS_PASEP"
+  SMALLINT, "DIGITAR_ESCOLARIDADE" SMALLINT, "DIGITAR_PROFISSAO" SMALLINT, "DIGITAR_RELIGIAO" SMALLINT,
+  "DIGITAR_SIT_FAM_CONJUGAL" SMALLINT, "DIGITAR_ESTADO_CIVIL" SMALLINT, "DIGITAR_NATURALIDADE" SMALLINT,
+  "DIGITAR_RACA_COR" SMALLINT, "DIGITAR_UNIDADE" SMALLINT, "DIGITAR_PRONTUARIO_FAMILIA" CHAR(1),
+  "DIGITAR_PRONTUARIO_UNIDADE" CHAR(1), "UTILIZAR_CTR_BIOMETRICO" SMALLINT, "DIGITAR_OBS_CAD_PAC" CHAR(1),
+  "DIGITAR_CPF_CAD_PAC" SMALLINT, "DIGITAR_CNS_CAD_PAC" SMALLINT, "DIGITAR_EMPRESA_CAD_PAC" CHAR(1),
+  "GRAVAR_FOTO_BANCO" CHAR(1), "COMPATIBILIZAR_DADOS_PAC_CADWEB" CHAR(1), "DIGITAR_TCLE" SMALLINT, "ID_TBPESQUIPLANO"
+  SMALLINT, "ID_TBPESQUIPLANO_GERAR_GUIA" SMALLINT, "INTEGRA_PAC_UNIMED" CHAR(1), "CONTROLE_PRONTUARIO" CHAR(1),
+  "DIGITAR_CNH_CAD_PAC" SMALLINT, "DIGITAR_RESPONSAVEL_ATEND" SMALLINT, "DIGITAR_CAPACIDADE_CIVIL" SMALLINT,
+  "DIGITAR_FILIACAO" SMALLINT, "FILIACAO_OBRIGATORIO" CHAR(1), "ID_TBDIGITAR_GENERO_SOCIAL" SMALLINT,
+  "ID_TBDIGITAR_PASSAPORTE" SMALLINT, "ID_TBDIGITAR_GUARDIAO_LEGAL" SMALLINT, "UNIFICACAO_PRONTUARIO_SBIS" CHAR(1),
+  "ID_TBDIGITAR_AREA_RESIDENCIAL" SMALLINT, "ID_TBDIGITAR_SITUACAO_RUA" SMALLINT, "ID_TBDIGITAR_VULNERABILID_SOC"
+  SMALLINT, "ROTINA_FLUXO_SENHA" CHAR(1), "DIGITAR_NOME_SOCIAL" SMALLINT, "DIGITAR_NACIONALIDADE" SMALLINT,
+  "DIGITAR_DATA_NATURALIZACAO" SMALLINT, "DIGITAR_PAIS_NASCIMENTO" SMALLINT, "DIGITAR_TELEFONE_PESSOAL" SMALLINT,
+  "DIGITAR_FONE_CONTATO" SMALLINT, "DIGITAR_CEL" SMALLINT, PRIMARY KEY ("MODULO"));
+CREATE TABLE HTATENDRESP ("ID_HTATENDIMENTO" BIGINT NOT NULL, "CPF" DOUBLE PRECISION, "NOME" VARCHAR(70), "ID_TBSEXO"
+  INTEGER, "DATA_NASCIMENTO" DATE, "NUM_IDENTIDADE" VARCHAR(15), "NOME_PROFISSAO" VARCHAR(70), "NUM_TELEFONE"
+  VARCHAR(15), "ID_TBECIV" SMALLINT, "ID_TBCEP" INTEGER, "ENDERECO" VARCHAR(40), "NUM_ENDERECO" INTEGER,
+  "COMPL_ENDERECO" VARCHAR(15), "BAIRRO" VARCHAR(30), "CIDADE" VARCHAR(30), "ID_TBUF" VARCHAR(2), "NOME_MAE"
+  VARCHAR(70), "NOME_PAI" VARCHAR(70), "PARENTESCO" SMALLINT, "NOME_CONJUGE" VARCHAR(70), "CPF_CONJUGE" BIGINT,
+  "NUM_IDENT_CONJUGE" VARCHAR(15), PRIMARY KEY ("ID_HTATENDIMENTO"));
+CREATE TABLE HTPACTELEFONE ("ID_HTPACIENTE" BIGINT NOT NULL, "ID_TBTIPOTELEFONE" SMALLINT NOT NULL, "TELEFONE"
+  VARCHAR(15), "NOME_CONTATO" VARCHAR(70), PRIMARY KEY ("ID_HTPACIENTE", "ID_TBTIPOTELEFONE"));
+CREATE TABLE HTPROFISTEL ("ID_HTPROFIS" INTEGER NOT NULL, "ID_TBTIPOTELEFONE" SMALLINT NOT NULL, "TELEFONE"
+  VARCHAR(15), PRIMARY KEY ("ID_HTPROFIS", "ID_TBTIPOTELEFONE"));
+CREATE TABLE TBPESSOA ("ID" INTEGER NOT NULL, "CPF_CNPJ" VARCHAR(14), "TIPO_PESSOA" CHAR(1), PRIMARY KEY ("ID"));
+CREATE TABLE HTATENDIMENTO ("ID" BIGINT NOT NULL, "ID_ATCABECATEND" BIGINT NOT NULL, "DATA_HORA_HISTORICO" TIMESTAMP
+  NOT NULL, "DATA_HORA_ENTRADA" TIMESTAMP NOT NULL, "ID_HTCONVEN" SMALLINT NOT NULL, "MATRICULA" VARCHAR(24),
+  "JUSTIFICATIVA_ALTA_RETROATIVA" VARCHAR(255), PRIMARY KEY ("ID"));
 """
 PAIS_EXTERNOS = {"TBGRUCONVEN": ["1", "2"], "TBMEDSOL": ["1", "2", "3"], "TBPESSOA": [str(i) for i in range(1, 9)],
                  "TBCOOPER": ["1"], "RICADPAC": [str(i) for i in range(1, 6)], "TBCBOPRO": ["1", "2", "3", "4"],
                  "TBCLASSC": ["1", "2"], "TBUSERS": ["USUARIO1", "USUARIO2"],
-                 "TBCBOPRO_TBUNIDAD": ["1|1", "2|1"], "TBHOSPIT": ["1"]}
+                 "TBCBOPRO_TBUNIDAD": ["1|1", "2|1"], "TBHOSPIT": ["1"],
+                 "TBMODULO_RECEPCAO": ["1", "2"], "ATCABECATEND": ["1", "2"]}
 # códigos do catálogo oficial de ocupações usados pelo COD da linha pai de TBCBOSUS (o ID nunca é o código)
-PREPARO_DESTINO = ("INSERT INTO ocupacao_cbo (codigo_cbo, descricao, criado_em) VALUES"
+# sexo do cadastro do produto (lido por cod:sexo.sigla; a conferência cria só os destinos da fatia)
+PREPARO_SEXO = ("CREATE TABLE IF NOT EXISTS sexo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, sigla CHAR(1));"
+                "INSERT INTO sexo (codigo, descricao, sigla, criado_em) VALUES ('masculino', 'Masculino', 'M', UTC_TIMESTAMP(3)),"
+                " ('feminino', 'Feminino', 'F', UTC_TIMESTAMP(3));")
+PREPARO_DESTINO = PREPARO_SEXO + ("INSERT INTO ocupacao_cbo (codigo_cbo, descricao, criado_em) VALUES"
                    " ('225125', 'Ocupação exemplo um', UTC_TIMESTAMP(3)), ('225124', 'Ocupação exemplo dois', UTC_TIMESTAMP(3)),"
                    " ('223505', 'Ocupação exemplo três', UTC_TIMESTAMP(3)), ('225170', 'Ocupação exemplo quatro', UTC_TIMESTAMP(3))")
 
 # carregadas pelo mapa (colunas.d/L5-06.tsv), na ordem do mapa com a aresta TBCBOPRO_TBCONVEN -> TBPROFIS
-CARREGADAS = ["TBCONVEN", "TBMEDSOL_CODCON", "TBPROFIS", "TBCBOPRO_TBCONVEN", "TBESPEC", "TBCBOSUS_TBESPEC", "TBMEDESP",
-              "RICADPAC_TBCONVEN", "HTCONVEN", "HTPRONTUNIF", "HTTBCBOPRO", "HTTBCBOPRO_TBUNIDAD", "HTTBHOSPIT"]
-# sem carga nesta rodada: regra genérica que o motor ainda não tem (pedidos em docs/obra/fatias/f4/saida/L5-06.json;
-# declarações prontas e comentadas em colunas.d/L5-06.tsv) ou descarte de produto pedido ao integrador
-SEM_CARGA = ["TBEMPHOSLOGO", "ATPARAMGERAL", "HTPACIENTE", "HTPACTELEFONE", "HTPROFIS", "HTPROFISTEL", "HTATENDRESP"]
+# r4 (conferidor): TBESPEC vem antes (ciclo da L8-16) e TBMEDESP depois do profissional (dependência declarada)
+CARREGADAS = ["TBESPEC", "TBCBOSUS_TBESPEC", "ATPARAMGERAL", "TBCONVEN", "TBMEDSOL_CODCON", "TBPROFIS",
+              "TBCBOPRO_TBCONVEN", "TBMEDESP", "RICADPAC_TBCONVEN", "HTCONVEN", "HTPACIENTE", "HTPROFIS", "HTATENDRESP",
+              "HTPACTELEFONE", "HTPROFISTEL", "HTPRONTUNIF", "HTTBCBOPRO", "HTTBCBOPRO_TBUNIDAD", "HTTBHOSPIT"]
+# sem carga: nenhuma (r6: TBEMPHOSLOGO carrega na L5-05, logotipo ao armazenamento de arquivos, ADR 0004/0006)
+SEM_CARGA = []
+# pais de fora da fatia criados na imagem só para a referência encadeada (inscrição -> profissional, ID -> código CBO,
+# responsável -> versão do atendimento); ficam fora do plano da conferência (MAPA_TESTE abaixo)
+# r6: as listas de opção da fonte pagadora (L8-02/L8-03 carregam) estão na imagem só para o nome lido pela encadeada
+PAIS_NA_IMAGEM = ["TBCBOPRO", "TBCBOSUS", "HTATENDIMENTO", "TBPESSOA", "TBCONSBRASINATIVO", "TBCONSIDCALCVLR",
+                  "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD", "TBCONVPERCTAPAC"]
+# campos da regra do cadastro desdobrados de ATPARAMGERAL (colunas do desdobrar declarado)
+CAMPOS_REGRA = 42
 # ID substituto de TBCBOSUS -> código CBO (o ID nunca é o código: a ocupação sai do COD da linha pai)
 CBO_POR_ID = {1: "225125", 2: "225124", 3: "223505", 4: "999999", 5: "12", 6: "225170"}
 # inscrição no conselho (TBCBOPRO) -> profissional (TBPROFIS): 3 aponta profissional recusado, 4 um nunca visto
@@ -264,7 +316,29 @@ COLUNAS = {m.group(1): re.findall(r'"([A-Z0-9_]+)"\s+[A-Z]', m.group(2))
            for m in re.finditer(r"CREATE TABLE (\w+) \((.*?)\);", DDL, re.S)}
 D = datetime.date
 DH = datetime.datetime
+# colunas T/F (CHAR) de ATPARAMGERAL (marcação da imagem de referência); as outras são códigos da lista fixa
+CHAR_TF = {"DIGITAR_APELIDO", "DIGITAR_TP_SANGUINEO", "DIGITAR_EMAIL", "DIGITAR_DISTRITO_SANITARIO",
+           "DIGITAR_PRONTUARIO_FAMILIA", "DIGITAR_PRONTUARIO_UNIDADE", "DIGITAR_OBS_CAD_PAC", "DIGITAR_EMPRESA_CAD_PAC"}
 SENT = DH(1899, 12, 30)
+
+
+def _doc_invalido(v):
+    """Documento falso garantidamente inválido como CPF (dígito verificador trocado quando o acaso o fez válido)."""
+    t = str(v).zfill(11)
+    d = [int(c) for c in t[:9]]
+    for n in (10, 11):
+        x = sum(a * b for a, b in zip(d, range(n, 1, -1))) * 10 % 11
+        d.append(0 if x == 10 else x)
+    return v + 1 if "".join(map(str, d)) == t else v
+
+
+def _cpf_falso(r):
+    """CPF inventado com dígitos verificadores válidos (prova o documento lido pelo índice de identidade)."""
+    d = [r.randint(0, 9) for _ in range(9)]
+    for n in (10, 11):
+        x = sum(a * b for a, b in zip(d, range(n, 1, -1))) * 10 % 11
+        d.append(0 if x == 10 else x)
+    return "".join(map(str, d))
 
 
 def _ins(ins, t, **v):
@@ -272,6 +346,19 @@ def _ins(ins, t, **v):
     if faltam:
         raise KeyError("%s sem as colunas %s" % (t, sorted(faltam)))
     ins(t, [v.get(c) for c in COLUNAS[t]])
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE`: o mapa REAL sem as declarações dos pais de PAIS_NA_IMAGEM (como na L6-13). Na carga real eles vêm
+    das próprias fatias (TBCBOPRO na L5-04, HTATENDIMENTO na L6-02); aqui estão na imagem só para as referências
+    encadeadas lerem a origem, e o pai externo (PAIS_EXTERNOS) já conta como carregado: planejá-lo de novo daria
+    conciliação falsa (alteracao_aguarda_sincronizar) e acoplaria esta conferência ao estado de outra fatia."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    fora = set(PAIS_NA_IMAGEM)
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in fora])
 
 
 def profissional_antes_do_vinculo():
@@ -284,7 +371,14 @@ def profissional_antes_do_vinculo():
     return o["TBPROFIS"] < o["TBCBOPRO_TBCONVEN"]
 
 
+ESCOLHAS = ('ID_TBCONVCONSMAT', 'ID_TBCONSBRASINATIVO', 'ID_TBCONSIDCALCVLR_CLI', 'ID_TBCONSIDCALCVLR_CIR', 'ID_TBCONSIDCALCVLR_MATMED', 'ID_TBCONSIDCALCVLR_FILME', 'ID_TBCONSIDCALCVLR_DTH', 'ID_TBCONVMEDREQATD', 'ID_TBCONVCOBTXPA', 'ID_TBCONVPERCTAPAC')
+
+
 def linhas(r, ins):
+    # conferidor r4: listas de opção das regras de consistência do convênio (lidas pela encadeada, descarte de produto)
+    for t in ['TBCONSBRASINATIVO', 'TBCONSIDCALCVLR', 'TBCONVCOBTXPA', 'TBCONVCONSMAT', 'TBCONVMEDREQATD', 'TBCONVPERCTAPAC']:
+        for i, n in ((1, "Opcao exemplo um"), (2, "Opcao exemplo dois")):
+            _ins(ins, t, ID=i, NOME=n)
     # fontes pagadoras: 2 registro ANS com zero à esquerda, 3 inativa, 4 situação fora do domínio (fica com o padrão),
     # 5 retorno negativo, 6 registro ANS zero e classe nunca vista, 7 sem nome (1048), 8 grupo nunca visto
     for cod in range(1, 9):
@@ -293,7 +387,9 @@ def linhas(r, ins):
              CLASSE=9 if cod == 6 else 1 + cod % 2, ID_TBGRUCONVEN=99 if cod == 8 else 1 + cod % 2,
              RETORNO=-1 if cod == 5 else 30, PRAZO_PGTO=r.randint(10, 90), CONV_CONTATO="  Contato ação %d " % cod,
              CONV_EMAIL="fonte%d@exemplo.invalid" % cod, FONE="0000-000%d" % cod,
-             OBS=("Observação %d\r\n  segunda  linha " % cod).encode("cp1252"))
+             OBS=("Observação %d\r\n  segunda  linha " % cod).encode("cp1252"),
+             # conferidor r4: escolha nas listas das regras de consistência (taxa de porte só nas fontes pares)
+             **dict({c: 1 + cod % 2 for c in ESCOLHAS}, ID_TBCONVCOBTXPA=1 if cod % 2 == 0 else None))
     # inscrições no conselho (pais de fora da fatia, só para a referência encadeada ao profissional)
     for i, prof in PROF_POR_INSCRICAO.items():
         _ins(ins, "TBCBOPRO", ID=i, ID_TBCBOSUS=1, UF="SP", COD=1000 + i, ID_TBPROFIS=prof, VINC_EMPR="N")
@@ -311,18 +407,32 @@ def linhas(r, ins):
     for i in range(1, 9):
         fiscal = {} if i == 7 else {"NUM_PIS": 123456789012 if i == 1 else 10000000000 + i, "INSS": "INSS%d" % i,
                                     "ISS": "ISS%d" % i, "ALIQ_ISS": 150 if i == 2 else 5, "PER_INSS": 11, "NDEP": i % 3}
-        _ins(ins, "TBPROFIS", ID=i, ID_TBPESSOA={4: None, 5: 1}.get(i, i), APELIDO="  Dr.  Exemplo   %d " % i,
+        _ins(ins, "TBPROFIS", ID=i, ID_TBPESSOA={5: 1}.get(i, i), APELIDO="  Dr.  Exemplo   %d " % i,
              EMAIL="prof%d@exemplo.invalid" % i, CELULAR="90000-000%d" % i, FONE="3000-000%d" % i,
              DATA_INICIO=SENT.date() if i == 6 else D(2020, 1, i), DATA_DESLIGAMENTO=D(2025, 6, 1) if i == 2 else None,
              MOTIVO_DESLIGAMENTO="Mudança de cidade" if i == 2 else None, SITUACAO="I" if i in (2, 8) else "A",
              PANEST={1: "S", 2: "N", 3: "X"}.get(i), PLANTAO="S" if i % 2 == 0 else "N",
              ID_TBCOOPER=9 if i == 7 else (1 if i == 1 else None), NOME="Nome falso %d" % i,
-             CPF=r.randint(10 ** 9, 10 ** 10), **fiscal)
+             CNPJ_CPF=None if i == 4 else _doc_invalido(r.randint(10 ** 9, 10 ** 10)), CPF=0, PESSOA="F",
+             NASC=D(1970, 2, i), SEXO={1: "M", 2: "F", 3: "X"}.get(i), NOME_MAE="Mãe falsa %d" % i if i < 4 else None,
+             CNS=123456789012345 if i == 1 else None, ID_TBUSERS={1: "USUARIO1", 2: "USUARIO1", 3: "NINGUEM",
+                                                                   5: "USUARIO2"}.get(i), **fiscal)
+    # índice de identidade da origem (r6, prova de não copiar de TBPESSOA, ADR 0006): COERENTE com quem o usa: cada
+    # documento é CPF válido (falso) de um profissional gravado (o 5 repete a pessoa 1: adota a pessoa do 1); sem a
+    # pessoa 5 (ninguém a usa) e a 8 (só o profissional 8, recusado: pai_inexistente); o gerador `r` é consumido
+    # como antes para não mudar as linhas seguintes
+    docs = random.Random(5606)
+    for i in range(1, 9):
+        _ = _cpf_falso(r) if i == 4 else r.randint(10 ** 9, 10 ** 10)
+        doc = _cpf_falso(docs)
+        if i not in (5, 8):
+            _ins(ins, "TBPESSOA", ID=i, CPF_CNPJ=doc, TIPO_PESSOA="F")
     # especialidades: 4 sem nome (1048), 5 com faixa etária invertida (CHECK 4025)
     for cod, nome, sigla, ini, fim in [(1, "Clínica  médica", "CM", 0, 130), (2, "Pediatria", "PED", 0, 18),
                                        (3, "Geriatria", "GER", 60, 130), (4, None, "X", 0, 1),
                                        (5, "Faixa invertida", "FI", 50, 20)]:
-        _ins(ins, "TBESPEC", COD=cod, NOME=nome, SIGLA=sigla, IDADE_INICIAL=ini, IDADE_FINAL=fim)
+        _ins(ins, "TBESPEC", COD=cod, NOME=nome, SIGLA=sigla, IDADE_INICIAL=ini, IDADE_FINAL=fim,
+             SEXO={2: "A", 3: "F", 5: "Z"}.get(cod, "A" if cod == 1 else "M"))
     # ocupação da especialidade: 999999 fora do catálogo e 12 inválido (NOT NULL: 1048), 225170 com especialidade
     # recusada; o ID de TBCBOSUS é chave substituta: o código CBO está no COD da linha pai
     for i, cod in CBO_POR_ID.items():
@@ -340,14 +450,56 @@ def linhas(r, ins):
     for i, conv, nome in [(1, 1, "Fonte exemplo 1"), (2, 2, "Fonte  exemplo 2"), (3, 7, "Fonte exemplo 7"), (4, 3, None)]:
         _ins(ins, "HTCONVEN", ID=i, ID_TBCONVEN=conv, DATA_HORA_HISTORICO=DH(2025, 1, i, 10, 30, 15), NOME=nome,
              CLASSIFICACAO=9 if i == 2 else 1)
-    # histórico do paciente (sem carga nesta rodada; linhas para quando o hash do retrato existir)
-    for i, pac, nome, nasc in [(1, 1, "Paciente exemplo um", D(1980, 5, 1)), (2, 2, "Paciente exemplo dois", D(1990, 2, 3))]:
-        _ins(ins, "HTPACIENTE", ID=1000 + i * 7, ID_RICADPAC=pac, DATA_HORA_HISTORICO=DH(2025, 2, i, 8, 0, 0, 123000),
-             NOME=nome, DATA_NASCIMENTO=nasc, CPF=r.randint(10 ** 9, 10 ** 10))
-    # histórico do profissional (sem carga nesta rodada; linhas para quando o retrato de todas as colunas existir)
+    # parâmetros do cadastro por módulo: 1 todos os campos (S/N e códigos 0 a 3 da lista fixa), 2 só 3 campos com
+    # valor (vazio não gera regra) e um código fora da lista (4: padrão do destino com valor_fora_do_dominio),
+    # 3 módulo nunca visto (NULL = todos os módulos, com pai_inexistente) e um 'X' fora do domínio
+    cols = [c for c in COLUNAS["ATPARAMGERAL"] if c.startswith(("DIGITAR_", "ID_TBDIGITAR_"))
+            and c not in ("DIGITAR_TELEFONE", "DIGITAR_TEL_CONTATO", "DIGITAR_CELULAR")]
+    assert len(cols) == CAMPOS_REGRA, len(cols)
+    tf = {c for c in cols if c in CHAR_TF}
+    um = {c: ("TF"[i % 2] if c in tf else i % 5) for i, c in enumerate(cols)}
+    _ins(ins, "ATPARAMGERAL", MODULO=1, INTEGRA_PAC_UNIMED="N", UNIFICACAO_PRONTUARIO_SBIS="N", **um)
+    _ins(ins, "ATPARAMGERAL", MODULO=2, INTEGRA_PAC_UNIMED="N", UNIFICACAO_PRONTUARIO_SBIS="N",
+         DIGITAR_APELIDO="S", DIGITAR_CPF_CAD_PAC=2, DIGITAR_CNS_CAD_PAC=7)
+    _ins(ins, "ATPARAMGERAL", MODULO=9, INTEGRA_PAC_UNIMED="N", UNIFICACAO_PRONTUARIO_SBIS="N",
+         DIGITAR_EMAIL="X", DIGITAR_NOME_SOCIAL=1)
+    # histórico do paciente: 3 paciente nunca visto (1048), 4 sem nome (1048), 5 usuário nunca visto (grava),
+    # 6 momento sentinela (1048); retrato de todas as colunas com o SHA-256 do mesmo JSON
+    for i, pac, nome, nasc, usu, dth in [
+            (1, 1, "Paciente exemplo um", D(1980, 5, 1), "USUARIO1", DH(2025, 2, 1, 8, 0, 0, 123000)),
+            (2, 2, "Paciente exemplo dois", D(1990, 2, 3), "USUARIO2", DH(2025, 2, 2, 8, 0)),
+            (3, 99, "Paciente exemplo três", None, "USUARIO1", DH(2025, 2, 3, 8, 0)),
+            (4, 3, None, D(2001, 7, 9), "USUARIO1", DH(2025, 2, 4, 8, 0)),
+            (5, 4, "Paciente  exemplo cinco", D(1975, 1, 1), "NINGUEM", DH(2025, 2, 5, 8, 0)),
+            (6, 5, "Paciente exemplo seis", D(1960, 3, 3), "USUARIO1", SENT)]:
+        _ins(ins, "HTPACIENTE", ID=1000 + i * 7, ID_RICADPAC=pac, DATA_HORA_HISTORICO=dth, NOME=nome,
+             DATA_NASCIMENTO=nasc, CPF=r.randint(10 ** 9, 10 ** 10), ID_TBUSERS=usu, NOME_MAE="Mãe exemplo %d" % i,
+             LOGRADOURO="Rua  exemplo %d" % i, PESO_RN=None if i % 2 else 3.25)
+    # telefone da versão do paciente (trilha do cadastro no instante da versão pai, ligada pelo hash dos dados):
+    # 1021 e 1028 versões recusadas (pai_pendente), 5555 versão nunca vista (pai_inexistente, 1048)
+    for hp, tipo in [(1007, 1), (1007, 2), (1014, 1), (1021, 1), (1028, 1), (5555, 1)]:
+        _ins(ins, "HTPACTELEFONE", ID_HTPACIENTE=hp, ID_TBTIPOTELEFONE=tipo, TELEFONE="0000-%04d" % (hp + tipo),
+             NOME_CONTATO="Contato exemplo" if tipo == 2 else None)
+    # histórico do profissional: 2 usuário nunca visto (grava), 4 profissional recusado (pai_pendente),
+    # 5 momento sentinela (1048)
     for i, prof in [(1, 1), (2, 2), (3, 4), (4, 8), (5, 1)]:
         _ins(ins, "HTPROFIS", ID=i, ID_TBPROFIS=prof, DATA_HORA_HISTORICO=SENT if i == 5 else DH(2025, 3, i, 9, 15),
-             NOME="Profissional exemplo %d" % prof, ID_TBUSERS="NINGUEM" if i == 2 else "USUARIO1")
+             NOME="Profissional exemplo %d" % prof, ID_TBUSERS="NINGUEM" if i == 2 else "USUARIO1",
+             EMAIL="hist%d@exemplo.invalid" % i, NASC=D(1970, 1, i))
+    # telefone da versão do profissional: (2,1) usuário da versão nunca visto (grava), (4,1) e (5,1) versões
+    # recusadas (pai_pendente), (77,1) versão nunca vista (pai_inexistente, 1048)
+    for hp, tipo in [(1, 1), (1, 2), (2, 1), (4, 1), (5, 1), (77, 1)]:
+        _ins(ins, "HTPROFISTEL", ID_HTPROFIS=hp, ID_TBTIPOTELEFONE=tipo, TELEFONE="9000-%04d" % (hp * 10 + tipo))
+    # versões do atendimento (pai da L6-02 só para a referência encadeada): 3 atendimento nunca visto, 4 sentinela
+    for i, cab, dth in [(1, 1, DH(2025, 7, 1, 10, 0)), (2, 2, DH(2025, 7, 2, 10, 0)), (3, 99, DH(2025, 7, 3, 10, 0)),
+                        (4, 1, SENT)]:
+        _ins(ins, "HTATENDIMENTO", ID=i, ID_ATCABECATEND=cab, DATA_HORA_HISTORICO=dth,
+             DATA_HORA_ENTRADA=DH(2025, 7, 1, 9, 0), ID_HTCONVEN=1)
+    # responsável do atendimento no histórico: 3 atendimento nunca visto (entidade_id NULL, pai_inexistente),
+    # 4 versão com momento sentinela (1048), 50 versão nunca vista (pai_inexistente, 1048)
+    for i in (1, 2, 3, 4, 50):
+        _ins(ins, "HTATENDRESP", ID_HTATENDIMENTO=i, NOME="Responsável exemplo %d" % i, CPF=float(r.randint(10 ** 9, 10 ** 10)),
+             PARENTESCO=1, CIDADE="Cidade exemplo", DATA_NASCIMENTO=D(1950, 1, 1 + i % 28))
     # unificação de prontuários: 3 sem usuário (1048), 98 paciente absorvido nunca visto (1048), 2 unifica o paciente
     # com ele mesmo (CHECK 4025)
     for absorvido, mantido, usuario in [(5, 1, "USUARIO1"), (4, 2, "USUARIO2"), (3, 3, None), (98, 1, "USUARIO1"),
@@ -380,11 +532,22 @@ def linhas(r, ins):
         "TBCBOPRO_TBCONVEN": vinculo,
         "TBMEDSOL_CODCON": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 2,
                                                           "restricao_destino_1062": 1, "pai_inexistente": 1}},
-        "TBPROFIS": {"gravados": 7, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
-                                                   "documento_invalido": 6,
-                                                   "restricao_destino_4025": 1, "data_sentinela": 1,
-                                                   "pai_inexistente": 1}},
-        "TBESPEC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1}},
+        # r3 (revisão): documento concorrente CNPJ_CPF, CPF, TBPESSOA (cada coluna inválida deixa a própria
+        # pendência; o 4 tem só o documento válido do índice), sexo 'X' sem sigla no cadastro, usuário nunca visto
+        # (o vínculo opcional não grava) e USUARIO1 repetido (o 2 adota o vínculo do 1)
+        # r6 (prova de não copiar de TBPESSOA, ADR 0006; mescla e vigência, ADR 0007): o índice coerente dá CPF
+        # válido a quem o usa: o 5, MESMA pessoa do 1 no índice, adota a pessoa (nome da origem guardado no histórico
+        # da mescla) e é recusado por ser o segundo profissional da mesma pessoa (1062, visível para o hospital
+        # resolver); o 8 aponta pessoa ausente do índice (pai_inexistente); sem data de início: vigência pela
+        # evidência (vigencia_sem_fonte)
+        "TBPROFIS": {"gravados": 6, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
+                                                   "documento_invalido": 7, "codigo_inexistente_destino": 1,
+                                                   "adotado_existente": 1, "mescla_conflito_origem_guardada": 1,
+                                                   "restricao_destino_4025": 1, "restricao_destino_1062": 1,
+                                                   "data_sentinela": 1, "vigencia_sem_fonte": 2,
+                                                   "pai_inexistente": 3}},
+        "TBESPEC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1,
+                                                  "valor_fora_do_dominio": 1}},
         "TBCBOSUS_TBESPEC": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 1,
                                                            "catalogo_codigo_invalido": 1,
                                                            "restricao_destino_1048": 2, "pai_pendente": 1}},
@@ -400,4 +563,21 @@ def linhas(r, ins):
         "HTTBCBOPRO_TBUNIDAD": {"gravados": 2, "pendencias": {"data_sentinela": 1, "hora_sem_data": 1,
                                                               "restricao_destino_1048": 2, "pai_inexistente": 2}},
         "HTTBHOSPIT": {"gravados": 3, "pendencias": {"pai_inexistente": 2}},
+        # desdobrado: "gravados" = regras (itens): 42 do módulo 1, 2 do 2 e 1 do módulo nunca visto; o código fora da
+        # lista (4) e o 'X' não geram regra (o campo fica com o padrão do produto) e deixam valor_fora_do_dominio
+        "ATPARAMGERAL": {"gravados": CAMPOS_REGRA + 2 + 1, "pendencias": {"valor_fora_do_dominio": 2,
+                                                                        "pai_inexistente": 1}},
+        "HTPACIENTE": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3,
+                                                     "data_sentinela": 1}},
+        # r3 (revisão): telefone vira trilha do cadastro ligada à versão pelo hash (nunca versão própria): versão
+        # recusada (paciente nunca visto, sem nome) deixa o telefone com pai_pendente; a versão nunca vista deixa uma
+        # pai_inexistente por referência (paciente, momento, usuário, hash) e o momento NOT NULL recusa (1048)
+        "HTPACTELEFONE": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "pai_pendente": 2,
+                                                        "restricao_destino_1048": 1}},
+        "HTPROFIS": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "data_sentinela": 1,
+                                                   "restricao_destino_1048": 1}},
+        "HTPROFISTEL": {"gravados": 3, "pendencias": {"pai_inexistente": 5, "pai_pendente": 2,
+                                                      "restricao_destino_1048": 1}},
+        "HTATENDRESP": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "data_sentinela": 1,
+                                                      "restricao_destino_1048": 2}},
     }

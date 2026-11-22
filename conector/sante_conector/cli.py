@@ -15,7 +15,7 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
                                           vezes (sintetica_d/<fatia>.py; banco descartável cliente_cf<fatia>)
 Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
-  enfileirar <codigo> importar|sincronizar   põe na fila (erro 409 se já há execução ativa do cliente)
+  enfileirar <codigo> importar|sincronizar [--confirmar-exclusao-em-massa]   põe na fila (409 se já há execução ativa)
   cancelar <id>                           cancela execução ainda na fila
   execucao <id>                           estado, etapa, % e contadores
   fila [--limite N]                       últimas execuções
@@ -62,12 +62,16 @@ def main(argv=None):
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
     p.add_argument("--admin", type=int)
     p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
+    p.add_argument("--confirmar-exclusao-em-massa", action="store_true")
     p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
     p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
     sub.add_parser("worker-separado")
     p = sub.add_parser("conta-motor"); p.add_argument("--rede", required=True)
+    # rodada 5 (ADR 0006, item 3): semente do espelho padrão da base a partir da cópia da origem (uma vez)
+    p = sub.add_parser("semear-espelho"); p.add_argument("relativo"); p.add_argument("--espelho", default="espelho")
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["worker-separado"]:
         from . import separado
@@ -87,7 +91,9 @@ def main(argv=None):
                     _json({"erro": 400, "motivo": str(e)}); return 3
             if a.cmd == "enfileirar":
                 try:
-                    return _json({"execucao_id": plataforma.enfileirar(conn, a.codigo, a.tipo)})
+                    eid = plataforma.enfileirar(conn, a.codigo, a.tipo,
+                                                confirmar_exclusao_em_massa=a.confirmar_exclusao_em_massa)
+                    return _json({"execucao_id": eid})
                 except plataforma.ExecucaoAtiva as e:
                     _json({"erro": 409, "motivo": str(e)}); return 3
             if a.cmd == "cancelar":
@@ -171,6 +177,14 @@ def main(argv=None):
         if uid:
             os.chown(a.saida, int(uid), int(os.environ.get("CONECTOR_GID", uid)))
         return _json({"colunas": n, "modo": ab.modo})
+    if a.cmd == "semear-espelho":
+        from . import banco, semente_espelho
+        with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
+            cx = banco.conectar(banco.nome_seguro(a.espelho), autocommit=False, multi=True)
+            try:
+                return _json(semente_espelho.semear(lt, cx))
+            finally:
+                cx.close()
     if a.cmd == "ler-faixa":
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab:
             with Leitor(ab.dispositivo) as lt:

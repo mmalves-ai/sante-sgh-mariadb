@@ -191,3 +191,72 @@ TBANESTESIA	NOME	tipo_anestesia.grupo	geral/peridural	combinada	L6-16: grupo da 
 TBANESTESIA	NOME	tipo_anestesia.grupo	GERAL/RAQUI	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
 TBANESTESIA	NOME	tipo_anestesia.grupo	Geral/raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
 TBANESTESIA	NOME	tipo_anestesia.grupo	geral/raqui	combinada	L6-16: grupo da técnica pelo nome (NOME tem até 20 caracteres)
+CCAGENDA	ATEND	agendamento_cirurgico.regime_paciente	I	internado	L6-16 r3: paciente internado (registro de internação)
+CCAGENDA	ATEND	agendamento_cirurgico.regime_paciente	E	externo	L6-16 r3: paciente externo (ambulatorial ou cirurgia-dia)
+CCAGENDA	HORA_BLOQUEADA	agendamento_cirurgico.situacao	1	horario_bloqueado	L6-16 r3b: horário bloqueado na grade não é cirurgia: valor fora do CHECK, a linha é recusada (restricao_destino_4025)
+CCAGENDA	HORA_BLOQUEADA	agendamento_cirurgico.situacao	0		L6-16 r3b: horário livre: sem valor aqui, vale a situação da origem (concorrente)
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	A	confirmado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Aguardando (paciente chegou)
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	C	confirmado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Confirmado
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	S	realizado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Realizado
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	R	agendado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Outros: marcada
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	N	agendado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Não informado: marcada
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	F	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Faltou
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	T	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Transferido: a marcação original deixa de valer
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	X	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Cancelado
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	V	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Óbito
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	W	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Alta
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	Z	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Outras intercorrências
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	U	suspenso	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Suspenso
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	HR	horario_bloqueado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Horário reservado: não é cirurgia (recusa)
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	Q	horario_bloqueado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Feriado: não é cirurgia (recusa)
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	P	horario_bloqueado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Manutenção: não é cirurgia (recusa)
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	1.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	2.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	3.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	4.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	5.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	6.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	7.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	8.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	9.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	10.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	11.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	12.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	13.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	14.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	15.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	16.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	17.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	18.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	19.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	20.000	1	L6-16 r3b: sangue reservado (quantidade maior que zero) -> TRUE
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	L	limpa	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	l	limpa	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	P	potencialmente_contaminada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	p	potencialmente_contaminada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	C	contaminada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	c	contaminada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	I	infectada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	i	infectada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	S	infectada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH) (S = suja: infectada)
+CCCADCIR	POT_CONT	ato_cirurgico.classe_contaminacao_cirurgica_id	s	infectada	L6-16 r3b: potencial de contaminação (classificação padrão da CCIH) (S = suja: infectada)
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	1	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	2	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	3	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	4	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	5	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	6	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	7	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	8	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	9	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	10	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	11	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	12	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	13	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	14	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	15	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	16	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	17	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	18	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	19	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE
+CCAGENDA	QTSAN	agendamento_cirurgico.reserva_hemocomponente	20	1	L6-16 r3b: sangue reservado (quantidade maior que zero, lida sem as casas decimais) -> TRUE

@@ -44,6 +44,7 @@ evento_auditoria	ADM	principal	F3	Evento da trilha única: quem, quando, de onde
 evento_auditoria_alerta	ADM	item	F3	Alerta gerado por um evento da trilha (ação crítica, acesso fora do padrão), com nível e quem tratou	SPDATA TBLANTRALERTA (1001)	01	1
 evento_auditoria_registro	ADM	item	F3	Registro afetado por cada evento, com tabela, chave e valores antes e depois	SPDATA TBLANTRILHASGH (1001); DBAMV AUDIT_COLUNA*, HIST_*	01	1
 evento_sessao	ADM	historico	F3	Entradas, saídas, falhas de login, expirações e trocas de estabelecimento, com origem e estação	DBASGU LOG_ACESSO_MV2000, MOD_LOG_ACESSO_MV2000, ESTAT_*; DBAMV LOG_ACESSO_PEP, LOG_CONTAGEM_USUARIO; SPDATA FPCON	01	8
+exame_item_assinatura	SADT	item	F3	Exames cobertos por cada assinatura de documento do prontuário (exames assinados em conjunto)	F4 conector L7-04 (pedido de modelo, rodada 3 de cobertura)	05	0
 exportacao_documento	ADM	historico	F3	Cada impressão ou exportação de documento do prontuário, com justificativa, usuário, formato e destino	SPDATA PRJUSTIF_IMP_EXPORTACAO (1001); DBAMV ACESSO_DOCUMENTO	01	1
 favorito_usuario	ADM	vinculo	F3	Telas marcadas como favoritas pelo usuário, com ordem	DBASGU USUARIO_MENU_FAVORITO	01	4
 finalidade_email	ADM	dominio	F3	Finalidades que enviam e-mail (laudo, relatório agendado, convite de conta, assinatura, notificação)	SPDATA PREMAILMODULO (4); DBASGU TIPO_EMAIL; DBAMV PROCESSO_EMAIL	01	5
@@ -3661,3 +3662,10 @@ decisao_antimicrobiano	QUA	principal	F7	Decisão da CCIH sobre o antimicrobiano 
 revisao_decisao_antimicrobiano	QUA	historico	F7	Revisões do 3º e do 7º dia da terapia antimicrobiana decidida pela CCIH	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-ccih	10	0
 configuracao_antimicrobiano_insumo	QUA	configuracao	F7	Configuração do insumo antimicrobiano pela CCIH (restrito, ATC, DDD e gramas por unidade)	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-ccih	10	0
 envio_regulatorio_qualidade	QUA	principal	F7	Envios regulatórios da qualidade por competência, com revisão	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-gestao	10	0
+principio_ativo_cliente	SUP	principal	F4	Princípio ativo do cadastro próprio do hospital sem código oficial, ligado ao catálogo oficial quando houver par	F4 rodada 4, pedido L7-07; SPDATA: TBPRINC	05	1
+item_faturavel_tipo_servico	FAT	vinculo	F4	Tipos de serviço em que o item faturável se enquadra	F4 rodada 4, pedidos L8-03 e L8-04; SPDATA: TBTIPPRO	06	1
+tabela_preco_item_padrao	FAT	configuracao	F4	Item cobrado por padrão em cada finalidade (consulta, consulta eletiva, visita, pedido), por tabela de preço	F4 rodada 4, pedido L8-03; SPDATA: TBCTRTHM	06	1
+segredo_cofre	INTG	principal	F3	Cofre de segredos do cliente: credencial migrada ou cadastrada, cifrada com a chave mestra do deploy; a tabela de uso guarda só a referência	ADR 0007 item 17 (credenciais copiadas)	08	1
+historico_mescla_migracao	INTG	historico	F3	Mescla não destrutiva da migração: valor da origem guardado quando o registro adotado já tinha outro	ADR 0007 item 20	08	1
+classificacao_filtro_painel_despesa	PEP	item	F3	Classificações de despesa dos itens que entram em cada filtro do painel do profissional	F4 conector L6-11 (pedido de modelo, rodada 6): PRAGRUP_PRFILTROCLASSIF	03	1
+historico_compra_insumo	SUP	movimento	F3	Histórico de compra de cada insumo (data, fornecedor, nota, quantidade, valores e marca) para cotação e reposição	F4 conector L7-05 (pedido de modelo, rodada 6): GECOMPRA	05	1

@@ -41,9 +41,15 @@ class PlanoL707(unittest.TestCase):
     def test_destinos(self):
         esperado = {"TBTP_ENV_LISTA_AVAL_FARM": ["regra_envio_avaliacao_farmaceutica"], "TBUNICON": ["unidade_medida"],
                     "GEITENS": ["insumo"], "GENOMCOM": ["apresentacao_comercial"], "GEUNIPRESC": ["insumo_unidade"],
-                    "GEVALMEM": ["lote_insumo"], "GEITEMKITRAS": ["kit_rastreavel_item"],
+                    "GEVALMEM": ["lote_insumo", "saldo_lote"], "GEITEMKITRAS": ["kit_rastreavel_item", "kit_rastreavel_lote"],
                     "GERASVALESTINI": ["inventario_estoque_lote"], "GEVIASITEM": ["insumo_via"],
-                    "GEKITITE": ["kit_material_item"], "GESALDOKITRAS": ["kit_rastreavel_item"]}
+                    "GEKITITE": ["kit_material_item"], "GESALDOKITRAS": ["kit_rastreavel_lote"],
+                    "GECADBAL": ["inventario_estoque", "inventario_estoque_contagem"],
+                    "GELANBAL": ["inventario_estoque_item"], "GECADPED": ["pedido_compra"],
+                    "GELANNFS": ["nota_entrada_item", "nota_entrada", "movimento_estoque"],
+                    "GECADNFS": ["nota_entrada"], "GERASVALNFS": ["movimento_lote"],
+                    "GERASVALTRANSFLOTE": ["movimento_lote"], "GELANPAC": ["movimento_estoque"],
+                    "GEITENS_TBPRINC": ["insumo_principio_ativo"], "TBPRINC": ["principio_ativo_cliente"]}
         for t, dts in esperado.items():
             self.assertEqual(self.plano[t]["destinos"], dts, t)
 
@@ -87,23 +93,39 @@ class PlanoL707(unittest.TestCase):
         self.assertEqual([x.get("tabela") or x.get("coluna") for x in u["passos"]], ["GEITENS", "UNI_ARM", "TBUNICON"])
 
     def test_complementos_sem_linha_nova(self):
-        for t, dt, ref in [("GESALDOKITRAS", "kit_rastreavel_item", "GEITEMKITRAS")]:
-            self.assertTrue(self.plano[t]["opcoes"][dt]["complementa"], t)
-            self.assertEqual(self.cols(t, dt)["id"]["referencia"], ref, t)
-        self.assertEqual(self.cols("GESALDOKITRAS", "kit_rastreavel_item")["saldo_atual"]["regra"],
+        # o saldo é do LOTE no kit: UPDATE do kit_rastreavel_lote que a linha do pai gravou (secundário do pai)
+        self.assertTrue(self.plano["GESALDOKITRAS"]["opcoes"]["kit_rastreavel_lote"]["complementa"])
+        p = self.cols("GESALDOKITRAS", "kit_rastreavel_lote")["id"]["passos"][0]
+        self.assertEqual((p["tabela"], p["destino"]), ("GEITEMKITRAS", "kit_rastreavel_lote"))
+        self.assertEqual(self.cols("GESALDOKITRAS", "kit_rastreavel_lote")["quantidade"]["regra"],
                          "decimal_nao_negativo")
+
+    def test_kit_rastreavel_por_insumo_e_lote(self):
+        # uma linha da origem por insumo E lote: o par (kit, insumo) repetido adota o item; cada lote grava o seu
+        # kit_rastreavel_lote (opcional: sem lote na origem fica só o item)
+        op = self.plano["GEITEMKITRAS"]["opcoes"]
+        self.assertEqual(op["kit_rastreavel_item"]["adotar"], ["kit_rastreavel_id", "insumo_id"])
+        self.assertTrue(op["kit_rastreavel_lote"]["opcional"])
+        lt = self.cols("GEITEMKITRAS", "kit_rastreavel_lote")
+        self.assertEqual(lt["kit_rastreavel_item_id"]["coluna"], "@id")
+        self.assertEqual((lt["lote_insumo_id"]["coluna"], lt["lote_insumo_id"]["referencia"]),
+                         ("ID_GEVALMEM", "GEVALMEM"))
 
     def test_lote_por_local_adota_o_lote_fisico(self):
         # GEVALMEM é o lote POR LOCAL: o mesmo lote em outro local adota a linha pela identificação do lote
         self.assertEqual(self.plano["GEVALMEM"]["opcoes"]["lote_insumo"]["adotar"],
                          ["estabelecimento_id", "insumo_id", "numero_lote", "validade"])
 
-    def test_saldo_atual_do_lote_pronto_e_fotografias_descartadas(self):
-        txt = (MAPA_DIR / mapa.COLUNAS_D / "L7-07.tsv").read_text(encoding="utf-8")
-        for dc in ("quantidade", "quantidade_em_kit", "competencia", "local_estoque_id", "lote_insumo_id"):
-            self.assertIn("\tsaldo_lote.%s\t" % dc, txt, dc)
-        self.assertNotIn("\nGERASVALFINAL\t", txt)
-        self.assertNotIn("\nGERASVALINICIAL\t", txt)
+    def test_fotografias_do_saldo_carregam_como_historico(self):
+        # r4 (correção): GERASVALFINAL/GERASVALINICIAL não são recalculáveis (o último retrato difere do saldo atual
+        # em 98 de 808 lotes na referência): carregam como histórico do lote na trilha_auditoria, com retrato completo
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(MAPA_DIR / "declarado/sem_carga.tsv")}
+        ativas = [c for c in self.m["colunas_decl"] if (c.get("destino") or "").startswith("saldo_lote.")]
+        self.assertTrue(ativas, "o saldo atual do lote por local carrega (GEVALMEM -> saldo_lote)")
+        for t in ("GERASVALFINAL", "GERASVALINICIAL"):
+            self.assertNotIn(t, sc)
+            c = self.cols(t, "trilha_auditoria")
+            self.assertEqual({"ocorrido_em", "acao", "entidade", "entidade_id", "dados_depois", "motivo"} <= set(c), True, t)
 
     def test_toda_coluna_da_origem_declarada_nas_carregadas(self):
         lidas = {(c["tabela"], c["coluna"]) for c in self.m["colunas_decl"]}
@@ -158,6 +180,9 @@ class PlanoL707(unittest.TestCase):
     def test_nada_de_destino_oficial(self):
         por = {r["tabela"]: r for r in self.m["tabelas"]}
         for t in self.plano:
+            if t == "TBPRINC":  # o oficial só dá de-para pelo código (catalogos.tsv); nunca é destino declarado
+                self.assertNotIn("principio_ativo", self.plano[t]["destinos"])
+                continue
             self.assertEqual(por[t].get("destinos_oficiais") or "", "", t)
 
     def test_descartadas_com_causa_de_produto(self):
@@ -168,12 +193,71 @@ class PlanoL707(unittest.TestCase):
                                            "mecanismo_do_produto"), t)
             self.assertTrue(sc[t]["motivo"].startswith("L7-07:"), t)
 
-    def test_bloqueadas_com_declaracao_pronta_e_comentada(self):
+    def test_bloqueadas_visiveis_com_o_pedido(self):
         decl = {c["tabela"] for c in self.m["colunas_decl"] if c.get("destino")}
-        txt = (MAPA_DIR / mapa.COLUNAS_D / "L7-07.tsv").read_text(encoding="utf-8")
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(MAPA_DIR / "declarado/sem_carga.tsv")}
         for t in l7_07.BLOQUEADAS:
             self.assertNotIn(t, decl, t)
-            self.assertIn("\n#%s\t" % t, txt, t)
+            self.assertEqual(sc[t]["situacao"], "bloqueada", t)
+            self.assertTrue(sc[t]["motivo"].startswith("L7-07"), t)
+            self.assertIn("saida/L7-07.json", sc[t]["motivo"], t)
+
+    def test_principio_do_hospital_carrega_e_liga_ao_oficial(self):
+        # rodada 4: TBPRINC é o cadastro do hospital (principio_ativo_cliente), nunca o catálogo oficial; o insumo
+        # liga sempre ao princípio do hospital, que guarda a ligação ao oficial
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(MAPA_DIR / "declarado/sem_carga.tsv")}
+        self.assertNotIn("TBPRINC", sc)
+        self.assertIn("principio_ativo_cliente", self.plano["TBPRINC"]["destinos"])
+        p = self.cols("TBPRINC", "principio_ativo_cliente")
+        self.assertEqual(p["principio_ativo_id"]["cod"][0], "principio_ativo")
+        c = self.cols("GEITENS_TBPRINC", "insumo_principio_ativo")
+        # r4 (correção): sempre o princípio do hospital (que liga ao oficial); nunca o oficial direto (DCB fora do
+        # catálogo recusava a linha pelo CHECK de um só e a composição do medicamento se perdia)
+        self.assertNotIn("principio_ativo_id", c)
+        self.assertIn("principio_ativo_cliente_id", c)
+
+    def test_consumo_do_paciente_com_solicitante(self):
+        s = self.cols("GELANPAC", "movimento_estoque")["solicitante_profissional_id"]
+        self.assertEqual([x.get("tabela") or x.get("coluna") for x in s["passos"]],
+                         ["TBCBOPRO", "ID_TBPROFIS", "TBPROFIS"])
+
+
+    def test_nota_criada_pelos_itens_e_completada_pelo_cabecalho(self):
+        # o local de estoque (obrigatório na nota) só existe no item: os itens criam o cabeçalho agrupado por
+        # ANO, MES, DOC, com os campos do cabeçalho da origem pela chave alternativa composta; o cabeçalho completa
+        self.assertEqual(self.plano["GELANNFS"]["opcoes"]["nota_entrada"]["agrupar"], ["ANO", "MES", "DOC"])
+        self.assertTrue(self.plano["GELANNFS"]["opcoes"]["nota_entrada"]["antes"])
+        n = self.cols("GELANNFS", "nota_entrada")
+        self.assertEqual(n["numero"]["passos"][0]["modo"], "alt_composta")
+        self.assertEqual(n["numero"]["passos"][-1], {"coluna": "ID"})
+        self.assertTrue(self.plano["GECADNFS"]["opcoes"]["nota_entrada"]["complementa"])
+        self.assertEqual(self.cols("GECADNFS", "nota_entrada")["id"]["cod"], ("nota_entrada", "numero"))
+        ordem = [p["tabela"] for p in carga_mapa.planejar(self.m, FATIA)]
+        self.assertLess(ordem.index("GELANNFS"), ordem.index("GECADNFS"))
+        self.assertLess(ordem.index("GELANNFS"), ordem.index("GERASVALNFS"))
+
+    def test_movimentos_com_tipo_nativo_de_migracao(self):
+        for t, dt, cod in [("GELANPAC", "movimento_estoque", "=migracao_saida"),
+                           ("GELANNFS", "movimento_estoque", "=migracao_entrada"),
+                           ("GELANNFS", "nota_entrada", "=migracao")]:
+            c = [x for x in self.plano[t]["colunas"][dt] if x["coluna"] == cod]
+            self.assertEqual(len(c), 1, (t, dt, cod))
+            self.assertEqual(c[0]["cod"][1], "codigo")
+
+    def test_balanco_com_rodada_unica_e_itens_pelo_secundario(self):
+        b = self.cols("GECADBAL", "inventario_estoque_contagem")
+        self.assertEqual(b["sequencia"]["coluna"], "=1")
+        i = self.cols("GELANBAL", "inventario_estoque_item")
+        self.assertEqual(i["inventario_estoque_contagem_id"]["passos"][0].get("destino"), "inventario_estoque_contagem")
+        self.assertEqual(i["sequencia"]["coluna"], "#seq:DOC")
+
+    def test_lote_por_movimento_pelo_secundario_do_pai(self):
+        for t, pai in [("GERASVALNFS", "GELANNFS"), ("GERASVALTRANSFLOTE", "GELANTRA")]:
+            p = self.cols(t, "movimento_lote")["movimento_estoque_id"]["passos"][0]
+            self.assertEqual((p["tabela"], p["destino"]), (pai, "movimento_estoque"), t)
+
+    def test_bloqueadas_so_as_que_esperam_pedido(self):
+        self.assertEqual(set(l7_07.BLOQUEADAS), set())
 
 
 class RegrasL707(unittest.TestCase):
@@ -212,14 +296,17 @@ class ImagemL707(unittest.TestCase):
         linhas = []
         esp = l7_07.linhas(random.Random(1), lambda t, v: linhas.append((t, v)))
         self.assertEqual(set(esp), set(l7_07.CARREGADAS))
-        self.assertEqual({t for t, _ in linhas}, set(l7_07.CARREGADAS))
+        self.assertEqual({t for t, _ in linhas}, set(l7_07.CARREGADAS) | set(l7_07.ORIGEM_PAIS))
         for t, e in esp.items():
             n = sum(1 for x, _ in linhas if x == t)
             self.assertLessEqual(e["gravados"], n, t)
 
     def test_pais_externos_cobrem_as_referencias_de_fora(self):
         self.assertEqual(set(l7_07.PAIS_EXTERNOS), {"GEGRUPOS", "TBLABORA", "GEKITRAS", "GETABVIA", "GELANESI",
-                                                    "GEKITS", "GELOCARM"})
+                                                    "GEKITS", "GELOCARM", "TBUSERS", "TBFORNEC", "TBNATOPE",
+                                                    "TBCENCUS", "RECADATE", "GELANTRA", "TBPROFIS", "TBCLASSI"})
+        # o movimento da transferência é destino SECUNDÁRIO do item (chave <chave>/movimento_estoque)
+        self.assertTrue(all(k.endswith("/movimento_estoque") for k in l7_07.PAIS_EXTERNOS["GELANTRA"]))
 
 
 if __name__ == "__main__":

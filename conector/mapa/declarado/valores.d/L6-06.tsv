@@ -423,3 +423,5 @@ PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.atendimento_inteiro	168 HORAS	
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.horas_retroativas	168 HORAS	168	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.atendimento_inteiro	Últimas 168 Horas	0	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.horas_retroativas	Últimas 168 Horas	168	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
+PRPARAM_CHECAGEM	#item	parametro_valor.valor	S	sim	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto (sim/nao)
+PRPARAM_CHECAGEM	#item	parametro_valor.valor	N	nao	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto (sim/nao)

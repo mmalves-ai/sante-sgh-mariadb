@@ -3,41 +3,51 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
    "mudanca": "Data em coluna DATETIME/TIMESTAMP do destino vira datetime à meia-noite antes do resumo: em tipar(), `if tipo in (\"datetime\", \"timestamp\") and type(x) is datetime.date: return datetime.datetime(x.year, x.month, x.day)`.",
-   "motivo": "`@data_carga` (literal ou par de valores) gravado em DATETIME: o resumo da origem usa a data e o relido do banco é datetime, e a conciliação diverge (L7-03: exame.desativado_em do exame inativo; também L5-06 e L8-09 usam =@data_carga). É a única falha da conferência da L7-03; contagens e pendências conferem."
+   "motivo": "`@data_carga` (literal ou par de valores) gravado em DATETIME: o resumo da origem usa a data e o relido do banco é datetime, e a conciliação diverge (L7-03: exame.desativado_em do exame inativo; também L5-06 e L8-09 usam =@data_carga). É a única falha da conferência da L7-03; contagens e pendências conferem.",
+   "atendido": "rodada 2 do integrador (tipar: data em DATETIME); conciliação da L7-03 confere"
   },
   {
-   "arquivo": "db/migracoes/10_SADT/02_tabelas.sql (F2.2)",
-   "mudanca": "ck_interface_equipamento_alvo: CHECK (equipamento_analitico_id IS NOT NULL OR laboratorio_apoio_id IS NOT NULL OR ativo = FALSE). Depois: descomentar as linhas #SITPEQV de colunas.d/L7-03.tsv e pôr os casos na sintetica_d/l7_03.py.",
-   "motivo": "Única trava de SITPEQV (20 interfaces) e, em cadeia, de SITBEXHP, SIMATHP, SITBELHP, SITBEXEQ e da interface de SIRES01/SILANEXA. A carga não consegue criar o alvo (equipamento exige setor; apoio exige empresa fornecedora). Interface sem alvo entra inativa até o cliente ligar o alvo. Decisão em F4-decisoes-destino.md (SITPEQV)."
+   "arquivo": "db/migracoes/10_SADT/02_tabelas.sql e 03_tabelas.sql (DDL para a trilha F2.2, como os da rodada 3 grupo 3)",
+   "mudanca": "(1) interface_equipamento: ck_interface_equipamento_alvo CHECK (equipamento_analitico_id IS NOT NULL OR laboratorio_apoio_id IS NOT NULL OR ativo = FALSE). (2) laboratorio_apoio: empresa_fornecedora_id NULL e CONSTRAINT ck_laboratorio_apoio_empresa CHECK (empresa_fornecedora_id IS NOT NULL OR ativo = FALSE). (3) mapa: laboratorio_apoio em tabelas_destino de SITPEQV (secundário `antes`, o apoio da interface). Depois: descomentar as linhas #SITPEQV e #SITBEXHP de colunas.d/L7-03.tsv (declaração pronta) e pôr os casos na sintetica_d/l7_03.py.",
+   "motivo": "Única trava de SITPEQV (20 interfaces) e de SITBEXHP (3084 exames do apoio, com exige peso, altura e diurese), e em cadeia de SITBEXEQ, SIRES01/SILANEXA (interface), SIMATHP e SITBELHP. A carga não consegue criar o alvo: equipamento_analitico exige setor e laboratorio_apoio exige empresa fornecedora (com CNPJ), que a origem não tem. Com (2) a interface com COD_LABORATORIO cria o apoio inativo e já cumpre o CHECK atual; com (1) a interface de equipamento entra inativa até o cliente ligar o equipamento. Sem ligar alvo nenhum nada opera: inativo é a forma visível e segura. Testado só na declaração (comentada): sem o DDL a conferência recusaria todas as linhas.",
+   "sql": "-- 10_SADT/02_tabelas.sql (interface_equipamento):\nCONSTRAINT ck_interface_equipamento_alvo CHECK (equipamento_analitico_id IS NOT NULL OR laboratorio_apoio_id IS NOT NULL OR ativo = FALSE)\n-- 10_SADT/02 ou 03_tabelas.sql (laboratorio_apoio):\nempresa_fornecedora_id BIGINT UNSIGNED NULL,\nCONSTRAINT ck_laboratorio_apoio_empresa CHECK (empresa_fornecedora_id IS NOT NULL OR ativo = FALSE)\n-- conector/mapa/tabelas.tsv: SITPEQV com laboratorio_apoio nos destinos (secundário 'antes')",
+   "bloqueia": "SITPEQV e SITBEXHP (L7-03); em cadeia SITBEXEQ, SIRES01/SILANEXA (interface), SIMATHP e SITBELHP (L8-16). Última trava da fatia L7-03 junto do pedido 19 (L7-02 carregar SIFORMUL, pai de SIVARFORMULA).",
+   "atendido_parcial": "rodada 4 (DDL): db/migracoes/10_SADT/09; falta na fatia: descomentar #SITPEQV e #SITBEXHP; não aplicado: (3) laboratorio_apoio nos destinos de SITPEQV é do gerador do mapa",
+   "atendido": "rodada 4: DDL 10_SADT/09 e declaração da fatia ativa (SITPEQV com laboratorio_apoio secundário antes/opcional/adotar:codigo, SITBEXHP); ambas CARREGAM"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
    "mudanca": "`@id:<destino>`: id da linha gravada num destino SECUNDÁRIO da mesma tabela (ids[dts.index(destino)]), para os destinos seguintes.",
-   "motivo": "SITABELE: faixa_referencia.exame_analito_id (REFINI, REFFIN, VLRREF -> referencia_minima/maxima/texto) e analito.unidade_resultado_id (fase 2) dependem de destinos secundários. Hoje a faixa não migra e a unidade é criada sem ligação."
+   "motivo": "SITABELE: faixa_referencia.exame_analito_id (REFINI, REFFIN, VLRREF -> referencia_minima/maxima/texto) e analito.unidade_resultado_id (fase 2) dependem de destinos secundários. Hoje a faixa não migra e a unidade é criada sem ligação.",
+   "atendido": "rodada 2/3 do integrador (tipar, ref:T.(K1,K2)=(C1,C2), @id:<destino>, cobertura com complementa); PARCIAL para a SITABELE: o verificador (mapa.py) só aceita @id:<destino> de secundário 'antes', e exame_analito não pode ser 'antes' (precisa do analito principal): ver o pedido 15. A ligação analito -> unidade já carrega (unidade 'antes', rodada 3 revisão)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (mapa.passos_ref)",
    "mudanca": "Chave alternativa composta `ref:T.(K1,K2)` montada por colunas desta linha.",
-   "motivo": "SITBEXHP -> exame próprio pela equivalência SITBEXEQ (TIPO + COD_EXAME)."
+   "motivo": "SITBEXHP -> exame próprio pela equivalência SITBEXEQ (TIPO + COD_EXAME).",
+   "atendido": "rodada 2/3 do integrador (tipar, ref:T.(K1,K2)=(C1,C2), @id:<destino>, cobertura com complementa)"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "(reiterado) destino com `complementa` não exige as colunas NOT NULL do destino, só a coluna id com ref:.",
-   "motivo": "SIWEBPARPERFIL aparece como BLOQUEADA (coluna_obrigatoria_sem_fonte) mas carrega e concilia na conferência da fatia."
+   "motivo": "SIWEBPARPERFIL aparece como BLOQUEADA (coluna_obrigatoria_sem_fonte) mas carrega e concilia na conferência da fatia.",
+   "atendido": "rodada 2/3 do integrador (tipar, ref:T.(K1,K2)=(C1,C2), @id:<destino>, cobertura com complementa)"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "Destino com `complementa` (UPDATE da linha do pai) não exige as colunas NOT NULL do destino: só a coluna `id` com ref:.",
-   "motivo": "SIWEBPARPERFIL e SITPEQV_SITPEQVMODELO (e PRPARRECMED, FAMEDSOL de outras fatias) aparecem como coluna_obrigatoria_sem_fonte, mas a carga é UPDATE e concilia (conferência da fatia ok)."
+   "motivo": "SIWEBPARPERFIL e SITPEQV_SITPEQVMODELO (e PRPARRECMED, FAMEDSOL de outras fatias) aparecem como coluna_obrigatoria_sem_fonte, mas a carga é UPDATE e concilia (conferência da fatia ok).",
+   "atendido": "rodada 2/3 do integrador (tipar, ref:T.(K1,K2)=(C1,C2), @id:<destino>, cobertura com complementa)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Especial de primeira coluna com valor (`#primeiro:RESULTADO_HTML,DESCR`), para o resultado padrão sem HTML levar o texto simples.",
-   "motivo": "SIRESPAD.DESCR fica não aproveitada (o HTML é a forma atual); linhas antigas só com DESCR ficariam sem texto."
+   "motivo": "SIRESPAD.DESCR fica não aproveitada (o HTML é a forma atual); linhas antigas só com DESCR ficariam sem texto.",
+   "atendido": "rodada 3 grupo 2 (colunas concorrentes): RESULTADO_HTML e DESCR declaradas, nessa ordem, para modelo_resultado.texto_html"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Literal composto de colunas: coluna especial `#concat:<COL1>,<COL2>[:<sep>]` grava o texto das colunas juntas (ex.: exame.codigo = ATO-CODALF; modelo_laudo.codigo = EXAME-COD-TIPO-ATO).",
+   "mudanca": "Literal composto de colunas: coluna especial `#concat:<COL1>,<COL2>[:<sep>]` grava o texto das colunas juntas (ex.: exame.codigo = ATO-CODALF; modelo_laudo.codigo = EXAME-COD-TIPO-ATO). Também SIRESPAD -> modelo_laudo (codigo = EXAME-COD-TIPO-ATO, tipo por de-para de TIPO: N -> normal, A -> alterado, fora do domínio: padrão 'texto' com pendência; texto = RESULTADO_HTML e DESCR concorrentes; @estabelecimento; exame pela ref composta) no lugar de modelo_resultado, cujo numero_versao hoje guarda a variante (decisão registrada).",
    "motivo": "Código único no destino com chave composta na origem. Hoje exame.codigo usa o ID inteiro da origem e exame.sigla o CODALF: o mesmo mnemônico em dois atos recusa o segundo exame (restricao_destino_1062)."
   },
   {
@@ -52,7 +62,7 @@
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
-   "mudanca": "Regra `idade_em_dias` com a unidade em outra coluna (SITABPRO.IDADEI/IDADEF com ID_TBUNID_IDADE_MIN/MAX -> exame.idade_minima_dias/idade_maxima_dias).",
+   "mudanca": "Regra `idade_em_dias` com a unidade em outra coluna (SITABPRO.IDADEI/IDADEF com ID_TBUNID_IDADE_MIN/MAX -> exame.idade_minima_dias/idade_maxima_dias). Mecanismo já disponível (`#dias:<VALOR>,<UNIDADE>` com `ref:TBUNID_IDADE>UNIDADE_CALCULO`, rodada 3 grupo 1): falta a fatia declarar (não bloqueia a tabela, que carrega).",
    "motivo": "O destino guarda a idade em dias; a origem guarda número e unidade."
   },
   {
@@ -74,6 +84,45 @@
    "arquivo": "verificação na imagem de referência (só contagem)",
    "mudanca": "Contar em SITABELE as linhas com MIN_ABE=0, MAX_ABE=0 e ambos 0, e com MIN_ABE<0, para confirmar a sentinela decimal_zero_nulo dos limites de valor absurdo.",
    "motivo": "A contagem não pôde ser feita pela fatia (acesso à imagem negado na sessão); a regra foi escolhida pelo lado seguro (limite perdido só afrouxa a digitação)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + mapa regenerado",
+   "mudanca": "Aresta SITBEXHP -> SITBEXEQ (e SITBEXHP -> SITPEQV, já no mapa).",
+   "motivo": "SITBEXHP.exame_id copia o exame que a equivalência (L8-16) gravou: `ref:SITBEXEQ.(TIPO,COD_EXAME)=(TIPO,COD_EXAME)@exame_id`; sem a aresta, SITBEXHP (ordem 495) carrega antes de SITBEXEQ (L8) e todo exame vira pai_inexistente.",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (verificar: checagem de @id:<destino>, ~linha 243)",
+   "mudanca": "Aceitar @id:<alvo> também quando o alvo é destino SECUNDÁRIO não 'antes' que vem ANTES, na ordem de tabelas_destino, do destino que o usa (e este não é 'antes' nem o principal): ex. condição de erro `alvo not in dts or alvo == proprio or not (ops[alvo].antes or (proprio != dts[0] and not ops[proprio].antes and dts.index(alvo) < dts.index(proprio)))`. A gravação (carga_mapa.gravar) já grava os 'antes', depois os demais na ordem de dts e enche `ids` a cada destino, então `ids.get(alvo)` já tem o id.",
+   "motivo": "SITABELE: faixa_referencia.exame_analito_id = @id:exame_analito (REFINI/REFFIN -> referencia_minima/maxima com decimal_zero_nulo e opcional, VLRREF -> referencia_texto texto_resumo:300, @vigencia_carga). Declaração pronta e comentada (#SITABELE) em colunas.d/L7-03.tsv. Hoje NENHUMA faixa de referência migra (a vigente). Depois: descomentar e pôr na sintética a faixa invertida (recusa a linha, 4025), a linha só com texto e a linha sem referência (sem faixa, opcional)."
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Causa 'ddl_pedido' para tabela com declaração comentada cuja trava é DDL pedido (pedido com 'db/migracoes' no arquivo em saida/<fatia>.json, não atendido), separada de 'declaracao_comentada' (que diz 'só pede refazer a fatia').",
+   "motivo": "SITPEQV e SITBEXHP aparecem como 'só pedem refazer a fatia', mas a trava é o DDL do pedido 1 (trilha F2.2). As declarações prontas NÃO podem ser descomentadas antes do DDL: com o CHECK atual toda linha de SITPEQV seria recusada e a cobertura mostraria CARREGA falso."
+  },
+  {
+   "arquivo": "fatia L7-02 (colunas.d/L7-02.tsv, sem_carga.tsv linha SIFORMUL, declarado/dependencias.tsv)",
+   "mudanca": "Reabrir SIFORMUL como CARREGA: tirar o descarte (as travas citadas caíram: a L7-03 grava exame_analito e ref:T/<destino> existe), descomentar a declaração pronta (formula_calculo.codigo espera #concat, pedido 8, ou outra regra de código único) e declarar a aresta de ordem SIFORMUL -> SITABELE (ordem 467 < 491).",
+   "motivo": "SIVARFORMULA (19 variáveis) agora CARREGA pela L7-03 (formula_calculo_id por ref:SIFORMUL.(ATO,EXAME)=(ATO,EXAME), fonte 'digitado' presumida) e só está BLOQUEADA por pai_nao_carregado:SIFORMUL. Conferida na sintética com a SIFORMUL como pai externo (3 gravadas, 2 recusadas).",
+   "atendido": "rodada 4 (conferidor): SIFORMUL passou à L7-03 e carrega (#codigo_derivado:ATO+EXAME+CODELE:30, analito pela ref:SITABELE(EXAME,CODELE)/exame_analito); SIVARFORMULA e SIRESVAR deixam de estar bloqueadas"
+  },
+  {
+   "arquivo": "fatia L7-04 (sem_carga.tsv linhas SIRESVAR e SIHISTVLREFELEMENTO)",
+   "mudanca": "Reabrir SIRESVAR (valor digitado de cada variável por resultado: variável por ref:SIVARFORMULA pela CODIGOVARFORMULA, resultado pela SILANEXA) e rever o motivo do descarte de SIHISTVLREFELEMENTO.",
+   "motivo": "O motivo de SIRESVAR ('a variável não migra, SIVARFORMULA descartada') deixou de valer; o de SIHISTVLREFELEMENTO ('a vigente vem de faixa_referencia') só vale depois do pedido 15."
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT (modelo)",
+   "rodada": "r5",
+   "mudanca": "tabela de modelos de comunicação alternativos da interface (interface_equipamento_modelo: interface, modelo, ativo)",
+   "motivo": "SITPEQV_SITPEQVMODELO carrega hoje na trilha da interface com o retrato; com a tabela, as ligações viram dado operacional (a escolhida continua em interface_equipamento.modelo_comunicacao_id)",
+   "atendido": false
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT (DDL para a trilha F2.2) + conector/mapa/declarado/provas.tsv",
+   "mudanca": "(a) Vínculo interface_equipamento_modelo (interface_equipamento_id, modelo_comunicacao_id, escolhido BOOLEAN; UNIQUE par) para as ligações N:N; SITPEQV_SITPEQVMODELO passa a carregar nele (a trilha fica secundária com o retrato). (b) Enquanto isso, prova em provas.tsv: `SITPEQV\tderivado\tCODIGO\tID_SITPEQV_SITPEQVMODELO!inteiro\tmodelo escolhido pertence às ligações da interface` com provas.d/SITPEQV.sql: SELECT ci.chave_original, CAST(cl.chave_original AS UNSIGNED) FROM interface_equipamento ie JOIN {ctl}.conector_origem ci ON ci.tabela_origem='SITPEQV' AND ci.entidade_destino='interface_equipamento' AND ci.id_destino=ie.id AND ci.excluido_em IS NULL JOIN trilha_auditoria ta ON ta.entidade='interface_equipamento' AND ta.entidade_id=ie.id JOIN {ctl}.conector_origem cl ON cl.tabela_origem='SITPEQV_SITPEQVMODELO' AND cl.id_destino=ta.id AND cl.excluido_em IS NULL JOIN {ctl}.conector_origem cm ON cm.tabela_origem='SITPEQVMODELO' AND cm.id_destino=ie.modelo_comunicacao_id AND cm.chave_original=JSON_UNQUOTE(JSON_EXTRACT(ta.dados_depois,'$.ID_SITPEQVMODELO'))",
+   "motivo": "Achado r5: as 6 ligações da origem hoje ficam só na trilha (operacao, data pela evidência, retrato); a conciliação de que o modelo escolhido pertence às ligações da interface está só na sintética (test_l7_03.test_ligacao_interface_modelo_r5). provas.tsv é compartilhado."
   }
  ]
 }

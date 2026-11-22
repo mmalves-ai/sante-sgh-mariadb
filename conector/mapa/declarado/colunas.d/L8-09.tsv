@@ -1,7 +1,7 @@
 tabela	coluna	destino	regra	depara	via	motivo
 COPERIODESCRIT	@estabelecimento	periodo_escrituracao.estabelecimento_id				L8-09: a origem não traz o estabelecimento do período: id do único estabelecimento do cliente (vários: estabelecimento_indefinido)
 COPERIODESCRIT	NOME	periodo_escrituracao.descricao	texto_nome			L8-09: descrição; vazia recusa a linha (NOT NULL)
-COPERIODESCRIT	=~mensal	periodo_escrituracao.forma				L8-09: forma PRESUMIDA (valor_presumido por linha) até o de-para pela descrição revisada pelo cliente (pedido em saida/L8-09.json)
+COPERIODESCRIT	NOME	periodo_escrituracao.forma	texto_nome	valores		L8-09 r3: forma pela descrição (valores.d/L8-09.tsv: mensal, trimestral, semestral, anual, com e sem caixa alta); descrição fora da lista: valor_fora_do_dominio e recusa (NOT NULL), visível na conciliação até o cliente acrescentar o par no painel; nunca presumida (trocaria o significado do período)
 COPERIODESCRIT	DATA_VIGENCIA_INICIAL	periodo_escrituracao.vigencia_inicio	data			L8-09: início da vigência; ausente ou sentinela recusa a linha (NOT NULL); repetida no estabelecimento: restricao_destino_1062
 COPERIODESCRIT	DATA_VIGENCIA_FINAL	periodo_escrituracao.vigencia_fim	data			L8-09: fim da vigência; antes do início: CHECK recusa a linha
 COPERIODESCRIT	ID		chave_origem			L8-09: não aproveitada: chave da origem (conector_origem)
@@ -12,9 +12,9 @@ COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	texto	val
 COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	texto	valores		L8-09: derivado do mesmo de-para do módulo (só a origem manual aceita digitação); sem par: padrão do DDL (FALSE), o lado seguro
 CTCTARECEITANCI	ID	conta_receita_custeio.codigo	inteiro			L8-09: código de negócio (número gravado como texto)
 CTCTARECEITANCI	NOME	conta_receita_custeio.descricao	texto_nome			L8-09: descrição; vazia recusa a linha (NOT NULL)
-CTCTARECEITANCI	=~outro	conta_receita_custeio.grupo				L8-09: grupo PRESUMIDO (valor_presumido por linha): o código de 1 caractere da origem pede de-para por cliente (pedido)
+CTCTARECEITANCI	GRUPO	conta_receita_custeio.grupo	codigo_char	valores		L8-09 r3: grupo pelo código de 1 caractere do programa antigo (H serviços hospitalares e S diagnóstico e terapia -> servico; M honorários médicos -> honorario; valores.d/L8-09.tsv); código sem par: valor_fora_do_dominio
+CTCTARECEITANCI	=outro	conta_receita_custeio.grupo				L8-09 r3: concorrente da linha acima (vale só quando ela fica NULL, código sem par): classe genérica 'outro' do domínio, com a pendência valor_fora_do_dominio da linha acima para o cliente reclassificar
 CTCTARECEITANCI	ORDEM	conta_receita_custeio.ordem	texto			L8-09: ordem de exibição (texto de dígitos vira número); não numérica: NULL com valor_fora_do_dominio e padrão 0
-CTCTARECEITANCI	GRUPO		codigo_char			L8-09: não aproveitada: código de grupo sem de-para conhecido: grupo entra presumido até o de-para por cliente (pedido)
 CTTIPODADO	ID	tipo_dado_estatistico.codigo	inteiro			L8-09: código de negócio (número gravado como texto)
 CTTIPODADO	NOME	tipo_dado_estatistico.descricao	texto_nome			L8-09: descrição; vazia recusa a linha (NOT NULL)
 CTTIPODADO	=~unidade	tipo_dado_estatistico.unidade_medida				L8-09: unidade de medida PRESUMIDA (valor_presumido por linha); a origem não a traz (pedido)
@@ -80,44 +80,216 @@ CTPARAM	ANO_MES		inteiro			L8-09: não aproveitada: repete ANO+MES em outra form
 CTPARAM	RECCOMP		codigo_char			L8-09: não aproveitada: opção do cálculo do custeio guardada por usuário no programa antigo; no produto é regra do custeio do estabelecimento, confirmada na implantação
 CTPARAM	TAB_OCUP		codigo_char			L8-09: não aproveitada: opção do cálculo do custeio guardada por usuário no programa antigo; no produto é regra do custeio do estabelecimento, confirmada na implantação
 CTPARAM	REC_NAO_OPER		codigo_char			L8-09: não aproveitada: opção do cálculo do custeio guardada por usuário no programa antigo; no produto é regra do custeio do estabelecimento, confirmada na implantação
-#FCRECIBO	@estabelecimento	recibo.estabelecimento_id				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); recibo do único estabelecimento do cliente
-#FCRECIBO	ID		chave_origem			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); chave da origem (conector_origem)
-#FCRECIBO	REC	recibo.numero	inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); número do recibo; repetido no estabelecimento: 1062
-#FCRECIBO	=migracao	recibo.origem				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); recibo trazido pela migração
-#FCRECIBO	=~recebimento	recibo.tipo				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); tipo PRESUMIDO (valor_presumido por linha) até o literal condicional: honorario quando houver profissional (pedido 5)
-#FCRECIBO	DATA	recibo.emitido_em	data			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); data da emissão; a hora (HORA) entra com #data_hora (pedido 2)
-#FCRECIBO	VALOR	recibo.valor	decimal			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); valor; zero recusa pelo CHECK ck_recibo_valor
-#FCRECIBO	=~valor por extenso não migrado	recibo.valor_extenso				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); PRESUMIDO (valor_presumido por linha) até a regra valor_extenso calculada de VALOR (pedido 3)
-#FCRECIBO	PAGADOR	recibo.pagador_nome	texto_nome			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); pagador; vazio recusa (NOT NULL)
-#FCRECIBO	CGC_CPF	recibo.pagador_cpf	cpf			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); documento do pagador; CNPJ vai para pagador_cnpj com o documento roteado (pedido 4)
-#FCRECIBO	DESC_REF	recibo.referente	texto_longo			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); texto do referente impresso
-#FCRECIBO	CANCELADO	recibo.situacao	codigo_char	valores		L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); S cancelado, N emitido (valores.d); cancelado sem cancelado_em recusa pelo CHECK até o literal condicional (pedido 5)
-#FCRECIBO	ID_TBMOTEXC	recibo.motivo_cancelamento	texto_nome		ref:TBMOTEXC>NOME	L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); motivo do cancelamento pelo cadastro de motivos
-#FCRECIBO	VALIDADO_DMED	recibo.declarado_dmed	booleano_sn			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); já declarado na DMED
-#FCRECIBO	OBSERVACOES	recibo.observacao	texto_longo			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); observação
-#FCRECIBO	USUARIO	recibo.criado_por			ref:TBUSERS	L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); usuário emissor pelo login
-#FCRECIBO	EMITIDO	recibo.vias_impressas	codigo_char	valores		L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); S: 1 via impressa, N: 0 (valores.d)
-#FCRECIBO	ID_TBCBOPRO	recibo.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); profissional do honorário pela inscrição no conselho
-#FCRECIBO	TIPO_CTA		codigo_char			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada até o vínculo à conta hospitalar por TIPO_CTA+CONTA (a conta fica em tabelas diferentes conforme o tipo; pedido 5)
-#FCRECIBO	CONTA		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada até o vínculo à conta hospitalar por TIPO_CTA+CONTA (pedido 5)
-#FCRECIBO	REF		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: parte da chave da conta na origem, usada no vínculo à conta (pedido 5)
-#FCRECIBO	PACIENTE		texto_nome			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: nome livre do paciente, sem chave; paciente_id vem da conta hospitalar vinculada (pedido 5), nunca por nome
-#FCRECIBO	CRM		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: número do conselho já está na inscrição (ID_TBCBOPRO)
-#FCRECIBO	TIPO_PRESTADOR		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: o tipo do prestador é do cadastro do profissional
-#FCRECIBO	MESPRO		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: competência de produção é da conta hospitalar vinculada
-#FCRECIBO	ANOPRO		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: competência de produção é da conta hospitalar vinculada
-#FCRECIBO	PROCTO		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: procedimento é item da conta hospitalar vinculada
-#FCRECIBO	CONV		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: fonte pagadora é da conta hospitalar vinculada
-#FCRECIBO	HORA		texto			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada até #data_hora:DATA,HORA (pedido 2)
-#FCRECIBO	BANCO		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
-#FCRECIBO	AGENCIA		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
-#FCRECIBO	C_CORRENTE		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
-#FCRECIBO	CHEQUE		inteiro			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
-#FCRECIBO	DT_CHEQUE		data			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
-#COSPEDHSTSEMP	@estabelecimento	situacao_especial_empresa.estabelecimento_id				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); situação do único estabelecimento do cliente
-#COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	inteiro	valores	ref:COSPEDSITEMP>CODIGO	L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); código oficial da situação pelo cadastro da origem e de-para (valores.d); código fora: valor_fora_do_dominio e recusa
-#COSPEDHSTSEMP	DATA_VIGENCIA_INICIAL	situacao_especial_empresa.vigencia_inicio	data			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); início da vigência
-#COSPEDHSTSEMP	DATA_VIGENCIA_INICIAL	situacao_especial_empresa.data_evento	data			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); data do ato societário: a origem só guarda o início da vigência, que é a data do ato
-#COSPEDHSTSEMP	DATA_VIGENCIA_FINAL	situacao_especial_empresa.vigencia_fim	data			L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); fim da vigência; antes do início: CHECK (4025)
-#COSPEDHSTSEMP	=inclusao	situacao_especial_empresa.operacao				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); operação do histórico na carga
-#COSPEDHSTSEMP	=@data_carga	situacao_especial_empresa.ocorrido_em				L8-09: aguarda DATE em DATETIME no motor (pedido 1 de saida/L8-09.json); momento do registro = data da carga
+FCRECIBO	@estabelecimento	recibo.estabelecimento_id				L8-09 rodada 3: recibo do único estabelecimento do cliente
+FCRECIBO	ID		chave_origem			L8-09 rodada 3: chave da origem (conector_origem)
+FCRECIBO	REC	recibo.numero	inteiro			L8-09 rodada 3: número do recibo; repetido no estabelecimento: 1062
+FCRECIBO	=migracao	recibo.origem				L8-09 rodada 3: recibo trazido pela migração
+FCRECIBO	ID_TBCBOPRO	recibo.tipo	preenchido	valores		L8-09 r3: com profissional (inscrição no conselho) é recibo de honorário; sem profissional, recebimento do hospital (valores.d/L8-09.tsv); nada presumido
+FCRECIBO	#data_hora:DATA,HORA	recibo.emitido_em				L8-09 rodada 3: emissão = DATA + hora HHMM de HORA (#data_hora, rodada 2; DATETIME pelo tipar); sem data: NULL e a NOT NULL recusa (1048); data sentinela: data_sentinela + 1048
+FCRECIBO	DATA		data			L8-09 rodada 3: parte de #data_hora:DATA,HORA (emissão)
+FCRECIBO	VALOR	recibo.valor	decimal			L8-09 rodada 3: valor; zero recusa pelo CHECK ck_recibo_valor
+FCRECIBO	=~valor por extenso não migrado	recibo.valor_extenso				L8-09 r3: PRESUMIDO (valor_presumido por linha) até a regra valor_extenso calculada de VALOR (pedido 3, prioritário: o texto sai na reemissão)
+FCRECIBO	PAGADOR	recibo.pagador_nome	texto_nome			L8-09 rodada 3: pagador; vazio recusa (NOT NULL)
+FCRECIBO	=Pagador não informado na origem	recibo.pagador_nome				L8-09 r3: concorrente da linha acima, só para o pagador vazio: texto literal 'Pagador não informado na origem', visível no recibo; o recibo carrega em vez de ser recusado
+FCRECIBO	CGC_CPF	recibo.pagador_cpf	cpf			L8-09 r3: documento do pagador; CNPJ (pessoa jurídica) fica NULL com documento_invalido, visível, até o documento roteado a pagador_cnpj (pedido 4)
+FCRECIBO	DESC_REF	recibo.referente	texto_longo			L8-09 rodada 3: texto do referente impresso
+FCRECIBO	=Referente não informado na origem	recibo.referente				L8-09 r3: concorrente da linha acima, só para o referente vazio: texto literal 'Referente não informado na origem', visível no recibo
+FCRECIBO	CANCELADO	recibo.situacao	codigo_char	valores		L8-09 r3: S cancelado, N emitido (valores.d); outro valor: padrão emitido com valor_fora_do_dominio
+FCRECIBO	CANCELADO	recibo.cancelado_em	codigo_char	valores		L8-09 r3: a origem não guarda a data do cancelamento: o cancelado recebe a data da carga (S -> @data_carga, valores.d), marcada no motivo quando a origem não tem motivo; emitido fica NULL. O recibo cancelado carrega (histórico fiscal, lacuna de numeração, DMED) em vez de ser recusado pelo CHECK
+FCRECIBO	ID_TBMOTEXC	recibo.motivo_cancelamento	texto_nome		ref:TBMOTEXC>NOME	L8-09 rodada 3: motivo do cancelamento pelo cadastro de motivos
+FCRECIBO	CANCELADO	recibo.motivo_cancelamento	codigo_char	valores		L8-09 r3: concorrente da linha acima, só para o cancelado sem motivo na origem: texto 'Cancelado no sistema anterior; motivo e data não informados na origem' (valores.d); emitido fica NULL
+FCRECIBO	VALIDADO_DMED	recibo.declarado_dmed	booleano_sn			L8-09 rodada 3: já declarado na DMED
+FCRECIBO	OBSERVACOES	recibo.observacao	texto_longo			L8-09 rodada 3: observação
+FCRECIBO	USUARIO	recibo.criado_por			ref:TBUSERS	L8-09 rodada 3: usuário emissor pelo login
+FCRECIBO	EMITIDO	recibo.vias_impressas	codigo_char	valores		L8-09 rodada 3: S: 1 via impressa, N: 0 (valores.d)
+FCRECIBO	ID_TBCBOPRO	recibo.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-09 rodada 3: profissional do honorário pela inscrição no conselho
+FCRECIBO	CONTA	recibo.conta_hospitalar_id			ref:FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)	L8-09 r3: conta do recibo pela chave alternativa COMPOSTA da conta (competência, tipo e número; nunca só o número); conta não vista: NULL com pai_inexistente (coluna anulável, a conciliação mostra o volume); repetida: pai_ambiguo; dependência FCRECIBO -> FCCTAEXT pedida
+FCRECIBO	CONTA	recibo.paciente_id			ref:FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)>REG_ATE>RECADATE>PRONT>RICADPAC.PRONT	L8-09 r3: paciente pelo atendimento da conta e prontuário (encadeada lida na origem, como na guia); nunca pelo nome livre
+FCRECIBO	TIPO_CTA		codigo_char			L8-09 r3: parte da chave alternativa da conta (referência de CONTA)
+FCRECIBO	REF		inteiro			L8-09 r3: não aproveitada: a conta é achada por competência, tipo e número (a chave da conta não usa REF)
+FCRECIBO	PACIENTE		texto_nome			L8-09 r3: não aproveitada: nome livre do paciente, sem chave; paciente_id vem da conta vinculada, nunca por nome
+FCRECIBO	CRM		inteiro			L8-09 rodada 3: não aproveitada: número do conselho já está na inscrição (ID_TBCBOPRO)
+FCRECIBO	TIPO_PRESTADOR		inteiro			L8-09 rodada 3: não aproveitada: o tipo do prestador é do cadastro do profissional
+FCRECIBO	MESPRO		inteiro			L8-09 r3: parte da chave alternativa da conta (referência de CONTA)
+FCRECIBO	ANOPRO		inteiro			L8-09 r3: parte da chave alternativa da conta (referência de CONTA)
+FCRECIBO	PROCTO		inteiro			L8-09 rodada 3: não aproveitada: procedimento é item da conta hospitalar vinculada
+FCRECIBO	CONV		inteiro			L8-09 rodada 3: não aproveitada: fonte pagadora é da conta hospitalar vinculada
+FCRECIBO	HORA		hora_hhmm			L8-09 rodada 3: parte de #data_hora:DATA,HORA (hora da emissão, texto HHMM); inválida: hora_invalida
+FCRECIBO	BANCO		inteiro			L8-09 rodada 3: não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
+FCRECIBO	AGENCIA		inteiro			L8-09 rodada 3: não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
+FCRECIBO	C_CORRENTE		inteiro			L8-09 rodada 3: não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
+FCRECIBO	CHEQUE		inteiro			L8-09 rodada 3: não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
+FCRECIBO	DT_CHEQUE		data			L8-09 rodada 3: não aproveitada: dados do cheque pertencem ao recebimento e ao movimento de caixa, não ao recibo
+COSPEDHSTSEMP	@estabelecimento	situacao_especial_empresa.estabelecimento_id				L8-09 rodada 3: situação do único estabelecimento do cliente
+COSPEDHSTSEMP	ID_COSPEDSITEMP	situacao_especial_empresa.situacao	inteiro	valores	ref:COSPEDSITEMP>CODIGO	L8-09 rodada 3: código oficial da situação pelo cadastro da origem e de-para (valores.d); código fora: valor_fora_do_dominio e recusa
+COSPEDHSTSEMP	DATA_VIGENCIA_INICIAL	situacao_especial_empresa.vigencia_inicio	data			L8-09 rodada 3: início da vigência
+COSPEDHSTSEMP	DATA_VIGENCIA_INICIAL	situacao_especial_empresa.data_evento	data			L8-09 rodada 3: data do ato societário: a origem só guarda o início da vigência, que é a data do ato
+COSPEDHSTSEMP	DATA_VIGENCIA_FINAL	situacao_especial_empresa.vigencia_fim	data			L8-09 rodada 3: fim da vigência; antes do início: CHECK (4025)
+COSPEDHSTSEMP	=inclusao	situacao_especial_empresa.operacao				L8-09 rodada 3: operação do histórico na carga
+COSPEDHSTSEMP	=@data_carga	situacao_especial_empresa.ocorrido_em				L8-09 rodada 3: momento do registro = data da carga
+CDTPCONTRCAIXA	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+CDTPCONTRCAIXA	=financeiro	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+CDTPCONTRCAIXA	=Financeiro	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+CDTPCONTRCAIXA	=financeiro.caixaTipoControle	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+CDTPCONTRCAIXA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+CDTPCONTRCAIXA	=Opções do tipo de controle do caixa	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+CDTPCONTRCAIXA	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+CDTPCONTRCAIXA	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+CDTPCONTRCAIXA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); lista do tipo de controle do caixa (nenhuma tabela a referencia): o hospital mantém as opções e os nomes
+CDTPCONTRCAIXA	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+CDTPCONTRCAIXA	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+CDTPCONTRCAIXA	NOME	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+CDTPCONTRCAIXA	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+CONIRE	ID_TBUF		texto			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+CONIRE	COD_NIRE		inteiro			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+CONIRE	=contabilidade	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+CONIRE	=Contabilidade	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+CONIRE	=contabilidade.prefixoNireUf	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+CONIRE	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+CONIRE	=Prefixo do NIRE por UF	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+CONIRE	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+CONIRE	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+CONIRE	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); prefixo do NIRE por UF (sem carregador oficial; ADR 0006, 4: entra como item do hospital, ativo)
+CONIRE	COD_NIRE	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+CONIRE	COD_NIRE	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+CONIRE	ID_TBUF	parametro_opcao.rotulo	texto			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+CONIRE	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+CONIRE	=0	parametro_opcao.ativo			se:DATA_VIGENCIA_FINAL	L8-09 r5 (ADR 0006): opção com fim de vigência na origem entra inativa
+CONIRE	DATA_VIGENCIA_FINAL		data			L8-09 r5 (ADR 0006): fim da vigência: decide a opção inativa (a opção não guarda datas)
+CONIRE	DATA_VIGENCIA_INICIAL		data			L8-09 r5 (ADR 0006): início da vigência: a opção não guarda datas; sem fim fica ativa
+COSPEDSITEMP	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+COSPEDSITEMP	=contabilidade	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+COSPEDSITEMP	=Contabilidade	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+COSPEDSITEMP	=contabilidade.situacaoEspecialEscrituracao	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+COSPEDSITEMP	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+COSPEDSITEMP	=Situações especiais da escrituração	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+COSPEDSITEMP	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+COSPEDSITEMP	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+COSPEDSITEMP	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); situações especiais da escrituração: o histórico liga o código oficial pelo de-para (valores.d); a lista do hospital, com os nomes e os códigos locais, entra como item do hospital (ADR 0006, 4)
+COSPEDSITEMP	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+COSPEDSITEMP	CODIGO	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+COSPEDSITEMP	NOME	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+COSPEDSITEMP	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+COTIPOSOLICITACAOSENHA	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+COTIPOSOLICITACAOSENHA	=contabilidade	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+COTIPOSOLICITACAOSENHA	=Contabilidade	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+COTIPOSOLICITACAOSENHA	=contabilidade.exigenciaSenhaPeriodoFechado	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+COTIPOSOLICITACAOSENHA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+COTIPOSOLICITACAOSENHA	=Opções de exigência de senha para lançar em período fechado	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+COTIPOSOLICITACAOSENHA	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+COTIPOSOLICITACAOSENHA	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+COTIPOSOLICITACAOSENHA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); lista dos tipos de exigência de senha em período fechado: carrega com os nomes da origem (substitui a prova de não copiar; o pareamento com o domínio de regra_bloqueio_periodo_contabil fica visível ao cliente)
+COTIPOSOLICITACAOSENHA	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+COTIPOSOLICITACAOSENHA	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+COTIPOSOLICITACAOSENHA	NOME	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+COTIPOSOLICITACAOSENHA	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+COTPSUBSTECD	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+COTPSUBSTECD	=contabilidade	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+COTPSUBSTECD	=Contabilidade	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+COTPSUBSTECD	=contabilidade.motivoEscrituracaoSubstituta	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+COTPSUBSTECD	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+COTPSUBSTECD	=Motivos de escrituração contábil substituta	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+COTPSUBSTECD	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+COTPSUBSTECD	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+COTPSUBSTECD	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); motivos de escrituração substituta (sem carregador oficial; ADR 0006, 4: item do hospital, ativo)
+COTPSUBSTECD	ID	parametro_opcao.sequencia	faixa:0,65535			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+COTPSUBSTECD	ID	parametro_opcao.valor	texto_char			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+COTPSUBSTECD	NOME	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+COTPSUBSTECD	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+CTWTPREGRA	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+CTWTPREGRA	=custos	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+CTWTPREGRA	=Custos	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+CTWTPREGRA	=custos.tipoRegraRateio	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+CTWTPREGRA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+CTWTPREGRA	=Opções do tipo de regra de rateio	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+CTWTPREGRA	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+CTWTPREGRA	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+CTWTPREGRA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); lista dos tipos de regra de rateio: carrega com os nomes da origem (substitui a prova de não copiar; o pareamento com criterio_rateio.tipo fica visível ao cliente)
+CTWTPREGRA	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+CTWTPREGRA	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+CTWTPREGRA	NOME	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+CTWTPREGRA	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+DMCADLEIAUTE	ANO_REFERENCIA_LEIAUTE		inteiro			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+DMCADLEIAUTE	=fiscal	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+DMCADLEIAUTE	=Fiscal	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+DMCADLEIAUTE	=fiscal.leiauteDeclaracaoServicosMedicos	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+DMCADLEIAUTE	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+DMCADLEIAUTE	=Leiaute da declaração de serviços médicos por ano-calendário	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+DMCADLEIAUTE	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+DMCADLEIAUTE	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+DMCADLEIAUTE	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); leiaute por ano-calendário (sem carregador oficial; ADR 0006, 4: item do hospital): ordem e rótulo = ano
+DMCADLEIAUTE	ANO_REFERENCIA_LEIAUTE	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+DMCADLEIAUTE	COD_IDENT_ESTRUTURA_LEIAUTE	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+DMCADLEIAUTE	ANO_REFERENCIA_LEIAUTE	parametro_opcao.rotulo	texto			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+DMCADLEIAUTE	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+ESTPCODAJUSTE	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+ESTPCODAJUSTE	=fiscal	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+ESTPCODAJUSTE	=Fiscal	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+ESTPCODAJUSTE	=fiscal.ajusteContribuicaoReceitaBruta	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+ESTPCODAJUSTE	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+ESTPCODAJUSTE	=Códigos de ajuste da contribuição previdenciária sobre a receita bruta	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+ESTPCODAJUSTE	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+ESTPCODAJUSTE	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+ESTPCODAJUSTE	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); códigos de ajuste da contribuição sobre a receita (sem carregador oficial; ADR 0006, 4: item do hospital); nome maior que o rótulo: cortado com texto_resumido (baixa, visível)
+ESTPCODAJUSTE	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+ESTPCODAJUSTE	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+ESTPCODAJUSTE	NOME	parametro_opcao.rotulo	texto_resumo:150			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+ESTPCODAJUSTE	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+FPFORMATRIBRENDEXT	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+FPFORMATRIBRENDEXT	=fiscal	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+FPFORMATRIBRENDEXT	=Fiscal	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+FPFORMATRIBRENDEXT	=fiscal.formaTributacaoRendimentoExterior	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+FPFORMATRIBRENDEXT	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+FPFORMATRIBRENDEXT	=Formas de tributação de rendimento pago ao exterior	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+FPFORMATRIBRENDEXT	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+FPFORMATRIBRENDEXT	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+FPFORMATRIBRENDEXT	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); formas de tributação do rendimento no exterior (sem carregador oficial; ADR 0006, 4: item do hospital); sem código: o código da linha; sem descrição: rótulo presumido (valor_presumido)
+FPFORMATRIBRENDEXT	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+FPFORMATRIBRENDEXT	CODIGO	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+FPFORMATRIBRENDEXT	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+FPFORMATRIBRENDEXT	DESCRICAO	parametro_opcao.rotulo	texto_resumo:150			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+FPFORMATRIBRENDEXT	=~opção sem nome no sistema anterior	parametro_opcao.rotulo				L8-09 r5 (ADR 0006): nome vazio na origem: rótulo presumido (valor_presumido)
+FPFORMATRIBRENDEXT	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+FPINFOBENEFRENDEXT	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+FPINFOBENEFRENDEXT	=fiscal	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+FPINFOBENEFRENDEXT	=Fiscal	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+FPINFOBENEFRENDEXT	=fiscal.relacaoBeneficiarioExterior	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+FPINFOBENEFRENDEXT	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+FPINFOBENEFRENDEXT	=Relação do beneficiário no exterior com a fonte pagadora	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+FPINFOBENEFRENDEXT	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+FPINFOBENEFRENDEXT	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+FPINFOBENEFRENDEXT	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); relação do beneficiário no exterior (sem carregador oficial; ADR 0006, 4: item do hospital); sem código: o código da linha; sem descrição: rótulo presumido (valor_presumido)
+FPINFOBENEFRENDEXT	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+FPINFOBENEFRENDEXT	CODIGO	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+FPINFOBENEFRENDEXT	ID	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+FPINFOBENEFRENDEXT	DESCRICAO	parametro_opcao.rotulo	texto_resumo:150			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+FPINFOBENEFRENDEXT	=~opção sem nome no sistema anterior	parametro_opcao.rotulo				L8-09 r5 (ADR 0006): nome vazio na origem: rótulo presumido (valor_presumido)
+FPINFOBENEFRENDEXT	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+FPTP_SERV_NF_TO	COD_TP_SERV		inteiro			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+FPTP_SERV_NF_TO	=fiscal	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+FPTP_SERV_NF_TO	=Fiscal	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+FPTP_SERV_NF_TO	=fiscal.tipoServicoTomadoRetencao	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+FPTP_SERV_NF_TO	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+FPTP_SERV_NF_TO	=Tipos de serviço tomado com retenção	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+FPTP_SERV_NF_TO	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+FPTP_SERV_NF_TO	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+FPTP_SERV_NF_TO	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); tipos de serviço tomado (sem carregador oficial; ADR 0006, 4: item do hospital); código maior que a ordem aceita: valor_fora_do_dominio e recusa visível (1048)
+FPTP_SERV_NF_TO	COD_TP_SERV	parametro_opcao.sequencia	faixa:0,65535			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+FPTP_SERV_NF_TO	COD_TP_SERV	parametro_opcao.valor	texto			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+FPTP_SERV_NF_TO	DESCRICAO	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+FPTP_SERV_NF_TO	=~opção sem nome no sistema anterior	parametro_opcao.rotulo				L8-09 r5 (ADR 0006): nome vazio na origem: rótulo presumido (valor_presumido)
+FPTP_SERV_NF_TO	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração
+GPCOEFICIENTE_DEPREC	ID		chave_origem			L8-09 r5 (ADR 0006): chave da origem (conector_origem)
+GPCOEFICIENTE_DEPREC	=patrimonio	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-09 r5 (ADR 0006): módulo do parâmetro, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+GPCOEFICIENTE_DEPREC	=Patrimônio	modulo_sistema.descricao				L8-09 r5 (ADR 0006): nome do módulo quando criado pela migração
+GPCOEFICIENTE_DEPREC	=patrimonio.coeficienteDepreciacaoTurno	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-09 r5 (ADR 0006): a lista do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes)
+GPCOEFICIENTE_DEPREC	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-09 r5 (ADR 0006): módulo gravado ou adotado acima
+GPCOEFICIENTE_DEPREC	=Coeficientes de depreciação acelerada por turno	parametro_definicao.descricao				L8-09 r5 (ADR 0006): descrição do parâmetro
+GPCOEFICIENTE_DEPREC	=lista	parametro_definicao.tipo				L8-09 r5 (ADR 0006): parâmetro de lista
+GPCOEFICIENTE_DEPREC	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-09 r5 (ADR 0006): origem da lista, visível na tela de parâmetros
+GPCOEFICIENTE_DEPREC	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-09 r5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção); coeficientes de depreciação por turno ajustados pelo hospital (o destino coeficiente_turno ainda não existe): o percentual é o valor da opção; sem percentual: presumido (valor_presumido)
+GPCOEFICIENTE_DEPREC	ID	parametro_opcao.sequencia	inteiro			L8-09 r5 (ADR 0006): ordem da opção = código da origem
+GPCOEFICIENTE_DEPREC	PERCENTUAL	parametro_opcao.valor	decimal			L8-09 r5 (ADR 0006): valor da opção (o que as colunas consumidoras guardavam)
+GPCOEFICIENTE_DEPREC	=~sem percentual na origem	parametro_opcao.valor				L8-09 r5 (ADR 0006): sem valor na origem: presumido (valor_presumido)
+GPCOEFICIENTE_DEPREC	DESCRICAO	parametro_opcao.rotulo	texto_nome			L8-09 r5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL) salvo presumido abaixo
+GPCOEFICIENTE_DEPREC	=migracao	parametro_opcao.origem				L8-09 r5 (ADR 0006): opção trazida pela migração

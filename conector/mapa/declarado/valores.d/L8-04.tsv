@@ -14,3 +14,36 @@ TBPRESER	REP_SOBRE	prestador_terceiro.base_repasse	C	cobrado	L8-04: repasse sobr
 TBPRESER	REP_SOBRE	prestador_terceiro.base_repasse	R	recebido	L8-04: repasse sobre o valor recebido
 TBTABTHM	CH	preco_procedimento.modelo_valor	1	indice	L8-04: CH preenchido: preço por índice
 TBTABTHM	CH	preco_procedimento.modelo_valor	0	valor	L8-04: sem CH: valor direto
+FCCRECUN	CONTAS	regra_credito_producao.tipo_conta_id	I	internacao	L8-04 r3: conta de internação
+FCCRECUN	CONTAS	regra_credito_producao.tipo_conta_id	E	externa	L8-04 r3: conta externa
+FCCRECUN	CONTAS	regra_credito_producao.tipo_conta_id	A	ambulatorial	L8-04 r3: conta ambulatorial
+FCCRECUN	CONTAS	regra_credito_producao.tipo_conta_id	U	urgencia	L8-04 r3: conta de pronto atendimento
+FCCRECUN	CONTAS	regra_credito_producao.tipo_conta_id	T		L8-04 r3: todas as contas: sem tipo (NULL = vale para todos os tipos), sem pendência
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	0	cirurgiao	L8-04 r3: grau TISS 00 (cirurgião)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	1	auxiliar	L8-04 r3: grau TISS 01 (primeiro auxiliar)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	2	auxiliar	L8-04 r3: grau TISS 02 (segundo auxiliar)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	3	auxiliar	L8-04 r3: grau TISS 03 (terceiro auxiliar)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	4	auxiliar	L8-04 r3: grau TISS 04 (quarto auxiliar)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	5	instrumentador	L8-04 r3: grau TISS 05 (instrumentador)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	6	anestesista	L8-04 r3: grau TISS 06 (anestesista)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	7	outro	L8-04 r3: grau TISS 07 (auxiliar de anestesista)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	8	outro	L8-04 r3: grau TISS 08 (consultor)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	9	perfusionista	L8-04 r3: grau TISS 09 (perfusionista)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	10	clinico	L8-04 r3: grau TISS 10 (pediatra na sala de parto)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	11	outro	L8-04 r3: grau TISS 11 (auxiliar de SADT)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	12	clinico	L8-04 r3: grau TISS 12 (clínico)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.tipo_funcao	13	clinico	L8-04 r3: grau TISS 13 (intensivista)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	0		L8-04 r3: grau TISS 00: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	1	1	L8-04 r3: grau TISS 01: 1º auxiliar
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	2	2	L8-04 r3: grau TISS 02: 2º auxiliar
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	3	3	L8-04 r3: grau TISS 03: 3º auxiliar
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	4	4	L8-04 r3: grau TISS 04: 4º auxiliar
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	5		L8-04 r3: grau TISS 05: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	6		L8-04 r3: grau TISS 06: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	7		L8-04 r3: grau TISS 07: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	8		L8-04 r3: grau TISS 08: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	9		L8-04 r3: grau TISS 09: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	10		L8-04 r3: grau TISS 10: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	11		L8-04 r3: grau TISS 11: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	12		L8-04 r3: grau TISS 12: não é auxiliar (NULL)
+TBGRAUPARTPROC	ID_TBTISSPOSPROF	funcao_equipe_cobranca.ordem_auxiliar	13		L8-04 r3: grau TISS 13: não é auxiliar (NULL)

@@ -9,7 +9,8 @@
   {
    "arquivo": "tools/obra/gerar_mapa_conector.py (destino no mapa) + F2.2 (modelo)",
    "mudanca": "PRASSINAT_DOC_PRCHKGERAL: trocar o destino documento_prontuario por trilha_auditoria (declaração pronta comentada em colunas.d/L6-13.tsv); no modelo, propor horario_administracao.documento_assinado_id (ou ligação horario_administracao x documento_assinado) e então declarar por complementa",
-   "motivo": "o verificador recusa destino fora do mapa; documento_prontuario criaria 4,6 milhões de documentos sem paciente, tipo, título nem autor"
+   "motivo": "o verificador recusa destino fora do mapa; documento_prontuario criaria 4,6 milhões de documentos sem paciente, tipo, título nem autor",
+   "atendido": "rodada 3: destino extra trilha_auditoria declarado na via (o verificador aceita destino na via); a troca no gerador do mapa deixa de ser necessária; resta só o modelo (F2.2: horario_administracao x documento assinado) para depois virar complementa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py; colunas.d/L7-07.tsv (GEITENS)",
@@ -39,7 +40,7 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra)",
    "mudanca": "valor condicionado a outra coluna (ex.: administrado_em <- DATA_HORA_SITUACAO_CHECAGEM e administrado_por <- ID_TBCBOPRO_SITUACAO_CHECAGEM só quando SITUACAO_CHECAGEM for de administração, por de-para de valores da situação); PRIORIDADE ALTA",
-   "motivo": "6,28 milhões de horários sem quem/quando administrou; os eventos (HTCHKGERAL, 1,39 milhão) não cobrem o estado atual de todos"
+   "motivo": "6,28 milhões de horários sem quem/quando administrou; os eventos (HTCHKGERAL, 1,39 milhão) não cobrem o estado atual de todos; rodada 3: até lá o evento da situação atual (opcional) guarda quem/quando de A, N e S (194.417 horários; P e O não têm)"
   },
   {
    "arquivo": "coordenação com L6-12 (índice das fatias mudou)",
@@ -65,6 +66,39 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (referência presumida)",
    "mudanca": "marca de presunção em coluna com valor de origem ou referência (ex.: `~ref:` ou `presumido` na via), com a pendência baixa valor_presumido",
    "motivo": "hoje só o literal `=~` marca presunção; PRVELOCINFUSAO usa `=~inclusao` na operação para marcar a linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (verificador: coluna declarada duas vezes) + carga_mapa.py",
+   "mudanca": "aceitar a MESMA coluna da origem declarada mais de uma vez para o mesmo destino quando a via difere (colunas concorrentes, a primeira com valor vence, como já faz o motor); ex.: HTATENDALTA.ID_HTATENDIMENTO -> alta_medica.profissional_id pela inscrição da alta e, concorrente, pela do atendimento (com marca de presunção na referência, pedido existente)",
+   "motivo": "PRIORIDADE ALTA: medido na referência, 199.220 de 209.138 atendimentos com alta não têm o profissional da alta no cabeçalho: 95% das altas são recusadas (NOT NULL). Alternativa de modelo (F2.2): alta_medica.profissional_id anulável quando situacao <> 'efetivada'"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (especial)",
+   "mudanca": "#medida:<VALOR>,<UNIDADE>: valor com a unidade em outra coluna convertido à unidade do destino por fator (pares unidade da origem -> fator em valores.d); unidade sem fator ou ausente: NULL com valor_fora_do_dominio/unidade_ausente",
+   "motivo": "PRPRESCVI/PRPRESCVNI: pressões em mmHg (1.347 + 357 na referência) não podem ir às colunas em cmH2O sem conversão; hoje ficam na observação"
+  },
+  {
+   "arquivo": "db/migracoes 06_PEP (F2.2)",
+   "mudanca": "horario_administracao.observacao_enfermagem (TEXT) e horario_administracao.urgente (BOOLEAN)",
+   "motivo": "PRCHKGERAL.OBSERVACAO_ENFERMAGEM e MEDICAMENTO_URGENTE hoje só no retrato do evento (0 preenchidas/marcadas na referência, mas são campos do prontuário)",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
+  },
+  {
+   "arquivo": "db/migracoes 06_PEP (F2.2)",
+   "mudanca": "receita_medica_item.duracao_descricao, frequencia_descricao e prazo_descricao (VARCHAR, texto como sai impresso, como quantidade_descricao) e semente de unidade_duracao_tratamento (dia, semana, mes, ano)",
+   "motivo": "PRITEMRECEITA: duração em texto em 1.763 de 1.763 itens (14 numéricas, 0 com unidade): sem a coluna, o texto impresso da duração se perde",
+   "atendido": "rodada 4 (DDL): db/migracoes/06_PEP/17"
+  },
+  {
+   "arquivo": "tools/obra/gerar_mapa_conector.py (rodar) + mapa/tabelas.tsv",
+   "mudanca": "regenerar o mapa: HTPARAMORIGEMCABIMP saiu de sem_carga.tsv (carrega na trilha_auditoria); destino de PRASSINAT_DOC_PRCHKGERAL e HTPARAMORIGEMCABIMP = trilha_auditoria; PRCHKGERAL ganha horario_administracao_evento como destino secundário",
+   "motivo": "o verificador acusa tabelas.tsv e dependencias.tsv desatualizados depois da troca do descarte"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "PRITENSGLICEMIA, PRITENSESQ e PRITEMRECEITA dependem de PRITEM_GEITENS (ref:PRITEM_GEITENS/item_prescritivel); HTPARAMORIGEMCABIMP depende de PRPARAMORIGEMCABIMP",
+   "motivo": "a ordem já satisfaz (576 e 329 antes de 1130 e 1174), mas a aresta deve ficar declarada",
+   "atendido": "rodada 4 (integrador): arestas já no mapa"
   }
  ]
 }

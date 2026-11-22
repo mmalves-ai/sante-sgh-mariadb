@@ -9,17 +9,32 @@ import unittest
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_02
 
-FATIA = tuple(l8_02.FORMAS)
-AGUARDAM = {"RPEVENTOESOC", "RPLANEVE", "RPLANEVE_COMPOSICAOBASE", "RPLANRPA", "SIREFCON"}
-DESCARTES = {"RPPARAM", "RPRPA_TBCBOPRO", "RPLANEVE_TBCBOPRO", "TBCONSBRASINATIVO", "TBCONSIDCALCVLR",
-             "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD"}
+FATIA = tuple(l8_02.FORMAS) + tuple(l8_02.NOVAS_R3)
+AGUARDAM = set()  # RPLANRPA passou à L8-05 (dona pelo índice), rodada 4
+DESCARTES = {"RPRPA_TBCBOPRO"}
+# revisão da rodada 3: bloqueadas em sem_carga.tsv (não descarte) até outra fatia gravar o dado que justificaria o
+# descarte (a escolha de cada fonte pagadora; o padrão do tipo de atendimento) ou o pai carregar (item do exame)
+# r4: SIREFCON carrega (item pelo procedimento do exame); as listas de opções são descarte de produto
+# r4 (revisão adversarial): as listas de opções seguem BLOQUEADAS até a L5-06 declarar a escolha de cada fonte pagadora
+LISTAS_OPCOES = {"TBCONSBRASINATIVO", "TBCONSIDCALCVLR", "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD"}
+# R5 (ADR 0006): as listas CARREGAM como opções de um parâmetro de lista (parametro_opcao), nunca descarte
+BLOQUEADAS = set()
+LISTAS_SEM_CARGA = LISTAS_OPCOES | {"TBCONVPERCTAPAC", "TBCTRTAT"}
+# colunas de TBCONVEN com a escolha da fonte pagadora (L5-06): só com elas declaradas a lista vira descarte
+ESCOLHA_TBCONVEN = ("ID_TBCONVMEDREQATD", "ID_TBCONVCOBTXPA", "ID_TBCONVCONSMAT", "ID_TBCONVPERCTAPAC",
+                    "ID_TBCONSBRASINATIVO", "ID_TBCONSIDCALCVLR_")
+# rodada 3: declaradas aqui (índice da L8-02) e ainda com linhas sem destino em colunas.d/L8-03.tsv até o integrador
+# tirá-las de lá (pedido em saida/L8-02.json)
+EM_OUTRO_ARQUIVO_PEDIDO = {"TBCOOPER", "TBINDPRO"}
 
 
 class FatiaL802(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.m = mapa.carregar_execucao()
-        cls.decl = [c for c in cls.m["colunas_decl"] if c["tabela"] in FATIA]
+        cls.decl = [c for c in cls.m["colunas_decl"] if c["tabela"] in FATIA and c["_arquivo"].endswith("L8-02.tsv")]
+        cls.fora = {c["tabela"] for c in cls.m["colunas_decl"] if c["tabela"] in FATIA
+                    and not c["_arquivo"].endswith("L8-02.tsv")}
         cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.m, set(FATIA))}
 
     def _col(self, t, dest):
@@ -29,16 +44,15 @@ class FatiaL802(unittest.TestCase):
     def _via(self, t, dest):
         return next(c["via"] for c in self.decl if c["tabela"] == t and c.get("destino") == dest)
 
-    def test_23_tabelas_cobertas(self):
-        self.assertEqual(len(FATIA), 23)
-        self.assertEqual(set(l8_02.CARREGADAS) | AGUARDAM | DESCARTES, set(FATIA))
-        self.assertTrue(all(c.get("_arquivo", "").endswith("L8-02.tsv") for c in self.decl))
+    def test_tabelas_cobertas(self):
+        self.assertEqual(set(l8_02.CARREGADAS) | AGUARDAM | DESCARTES | BLOQUEADAS, set(FATIA))
+        self.assertLessEqual(self.fora, EM_OUTRO_ARQUIVO_PEDIDO)
         for c in self.decl:
             self.assertTrue(c["motivo"].strip(), (c["tabela"], c["coluna"]))
             if c.get("regra"):
                 self.assertTrue(sentinela.regra_conhecida(c["regra"]), c["regra"])
         # descartes não declaram colunas; as que aguardam declaram só colunas sem destino, com o motivo
-        self.assertFalse({c["tabela"] for c in self.decl} & DESCARTES)
+        self.assertFalse({c["tabela"] for c in self.decl} & (DESCARTES | BLOQUEADAS))
         for c in self.decl:
             if c["tabela"] in AGUARDAM:
                 self.assertFalse(c.get("destino"), (c["tabela"], c["coluna"]))
@@ -99,7 +113,8 @@ class FatiaL802(unittest.TestCase):
             if c["coluna"][:1] == "#":
                 decl |= {(c["tabela"], x) for x in re.split(r"[:,]", c["coluna"][1:]) if re.fullmatch(r"[A-Z0-9_]+", x)}
         for t in l8_02.CARREGADAS:
-            falta = [c for c, _, _ in l8_02.COLUNAS[t] if (t, c) not in decl]
+            cols = [c for c, _ in l8_02.COLS_INTER[t]] if t in l8_02.NOVAS_R3 else [c for c, _, _ in l8_02.COLUNAS[t]]
+            falta = [c for c in cols if (t, c) not in decl]
             self.assertFalse(falta, t)
 
     def test_imagem_sintetica_deterministica_e_esperado(self):
@@ -113,7 +128,7 @@ class FatiaL802(unittest.TestCase):
         self.assertEqual(set(esp), set(l8_02.CARREGADAS))
         por = {}
         for t, v in a:
-            n = len(l8_02.COLS_INTER[t]) if t in l8_02.INTERMEDIARIAS else len(l8_02.COLUNAS[t])
+            n = len(l8_02.COLS_INTER[t]) if t in l8_02.DO_DICIONARIO else len(l8_02.COLUNAS[t])
             self.assertEqual(len(v), n, t)
             por[t] = por.get(t, 0) + 1
         self.assertEqual(set(por), set(FATIA) | set(l8_02.INTERMEDIARIAS))
@@ -131,6 +146,65 @@ class FatiaL802(unittest.TestCase):
         self.assertEqual(l8_02.dependencias_fora_de_ordem(errada), [("RPINTEVE", "RPEVENTO"), ("RPRPA", "TBPROFIS")])
         fora = {p for _, p in l8_02.dependencias_fora_de_ordem()}
         self.assertFalse(fora & set(l8_02.PAIS_EXTERNOS))
+
+    def test_rodada3_cooperativa_indice_porte_e_equivalencia(self):
+        # cooperativa: pessoa jurídica gravada ANTES e adotada pelo CNPJ; o principal liga pelo @id
+        self.assertEqual(self.plano["TBCOOPER"]["destinos"][0], "cooperativa_medica")
+        self.assertIn("pessoa_juridica", self.plano["TBCOOPER"]["destinos"])
+        self.assertEqual(self._via("TBCOOPER", "pessoa_juridica.cnpj"), "pessoa_juridica;antes;adotar:cnpj")
+        self.assertEqual(self._col("TBCOOPER", "pessoa_juridica_id")["coluna"], "@id:pessoa_juridica")
+        self.assertEqual(self._col("TBCOOPER", "municipio_ibge_id")["depara"], "ibge_municipio")
+        self.assertEqual(self._col("TBCOOPER", "banco_id")["depara"], "banco")
+        self.assertEqual(self._col("TBCOOPER", "tipo_conta_bancaria")["valores"], {"C": "corrente", "P": "poupanca"})
+        # índice por procedimento: fonte e item faturável (principal de TBPROCTO) pela chave
+        self.assertEqual(self._via("TBINDPRO", "valor_indice_item.item_faturavel_id"), "ref:TBPROCTO.COD_PROCEDIMENTO")
+        self.assertEqual(self._via("TBINDPRO", "valor_indice_item.fonte_pagadora_id"), "ref:TBCONVEN")
+        # porte anestésico: data DATE em DATETIME (tipar) e retrato completo da linha no JSON
+        self.assertEqual(self._col("FCPORANE", "ocorrido_em")["coluna"], "DATA_PORTE")
+        self.assertEqual(self._col("FCPORANE", "dados")["coluna"], "#retrato:*")
+        self.assertFalse([c for c in self.decl if c.get("destino", "").startswith(
+            ("valor_porte_anestesico.porte_procedimento_id", "valor_porte_anestesico.quantidade_porte"))])
+        # percentuais de repasse por tipo: não é descarte, aguarda modelo (pedido)
+        for c in self.decl:
+            if c["tabela"] == "TBCOOPER" and c["coluna"].startswith("P_R_"):
+                self.assertRegex(c["motivo"], "aguarda modelo")
+                self.assertNotRegex(c["motivo"], "TBREPGER, L8-06")
+
+    def test_revisao_r3_bloqueadas_e_nao_descarte(self):
+        from pathlib import Path
+        base = Path(l8_02._MAPA) / "declarado"
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
+        # r4 (revisão): a lista só é descarte (domínio do produto) quando a escolha de cada fonte pagadora (colunas
+        # ID_TBCONS*/ID_TBCONV* de TBCONVEN, L5-06, pedido 19) está declarada com destino; antes, bloqueada e visível
+        # R5 (ADR 0006): as listas saem do sem_carga e carregam em parametro_opcao (parâmetro de lista por lista,
+        # módulo e definição gravados antes e adotados); TBCONVPERCTAPAC e TBCTRTAT carregam pela L8-03
+        for t in LISTAS_SEM_CARGA:
+            self.assertNotIn(t, sc, t)
+        for t in LISTAS_OPCOES:
+            self.assertEqual(self.plano[t]["destinos"], ["parametro_opcao", "modulo_sistema", "parametro_definicao"], t)
+            self.assertEqual(self._via(t, "parametro_definicao.chave"), "parametro_definicao;antes;adotar:chave")
+            self.assertEqual(self._col(t, "parametro_definicao_id")["coluna"], "@id:parametro_definicao")
+        # r4: SIREFCON carrega: item faturável pelo procedimento do exame (não depende de exame.item_faturavel_id)
+        self.assertNotIn("SIREFCON", sc)
+        self.assertIn("SIREFCON", self.plano)
+        texto = (base / "colunas.d" / "L8-02.tsv").read_text(encoding="utf-8")
+        self.assertIn("SIREFCON\tEXAME\tequivalencia_item_fonte_pagadora.item_faturavel_id\t\t\t"
+                      "ref:SITABPRO(ATO,EXAME)>CODAMB>TBPROCTO.COD_PROCEDIMENTO>min:ID", texto)
+        self.assertNotIn("ITEM_DO_EXAME", vars(l8_02))
+
+    def test_rodada3_dependencias_fora_de_ordem_tem_pedido(self):
+        import json
+        from pathlib import Path
+        p = Path(mapa.DIR_PACOTE).parents[1] / "docs/obra/fatias/f4/saida/L8-02.json"
+        if not p.exists():  # no container só o conector é montado
+            self.skipTest("docs fora do container")
+        texto = p.read_text(encoding="utf-8")
+        json.loads(texto)
+        o = l8_02._ordem()
+        for filho, pai in l8_02.DEPENDENCIAS_PEDIDAS_R3:
+            if o.get(pai, 10 ** 9) >= o.get(filho, 0):
+                self.assertIn("%s -> %s" % (filho, pai), texto)
+
 
 if __name__ == "__main__":
     unittest.main()

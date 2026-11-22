@@ -7,7 +7,7 @@ from sante_conector import carga_mapa, mapa
 from sante_conector.sintetica_d import l6_13
 
 FATIA = "colunas.d/L6-13.tsv"
-SEM_CARGA = {"PRLANCREGISTROTEMPO", "HTPARAMORIGEMCABIMP", "PRASSINAT_DOC_PRCHKGERAL"}
+SEM_CARGA = set()  # rodada 5 (ADR 0006): nenhum descarte
 
 
 class L6_13(unittest.TestCase):
@@ -32,10 +32,26 @@ class L6_13(unittest.TestCase):
     def test_profissional_sempre_pela_inscricao(self):
         for c in self.decl:
             if c["coluna"].startswith("ID_TBCBOPRO") and c.get("destino"):
-                self.assertEqual(c["via"], "ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS", c["coluna"])
+                self.assertEqual(c["via"].split(";")[0], "ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS", c["coluna"])
 
-    def test_item_prescritivel_nao_declarado(self):
-        self.assertFalse([c for c in self.decl if (c.get("destino") or "").endswith(".item_prescritivel_id")])
+    def test_item_prescritivel_pela_linha_de_parametros_do_insumo(self):
+        refs = {c["via"] for c in self.decl if (c.get("destino") or "").endswith(".item_prescritivel_id")}
+        self.assertEqual(refs, {"ref:PRITEM_GEITENS/item_prescritivel"})
+
+    def test_evento_derivado_da_situacao(self):
+        v = {(x["tabela"], x["coluna"], x["destino"], x["valor_origem"]): x["valor_destino"] for x in self.m["valores"]}
+        for t in ("HTCHKGERAL", "PREXTRATOITEM_PRCHKGERAL"):
+            k = (t, "ID_PRSITUACAOCHECAGEM", "horario_administracao_evento.evento")
+            self.assertEqual([v[k + (s,)] for s in "ANSPO"], ["checagem", "nao_administrado", "suspensao", "geracao",
+                                                               "checagem"], t)
+        k = ("PRCHKGERAL", "SITUACAO_CHECAGEM", "horario_administracao_evento.evento")
+        self.assertEqual([v[k + (s,)] for s in "ANSPO"], ["checagem", "nao_administrado", "suspensao", "", ""])
+        self.assertFalse([c for c in self.decl if c["coluna"].startswith("=~") and c["tabela"].endswith("CHKGERAL")])
+        self.assertTrue(self.plano["PRCHKGERAL"]["opcoes"]["horario_administracao_evento"]["opcional"])
+
+    def test_pressao_em_mmhg_nao_vai_para_cmh2o(self):
+        d = {c["destino"] for c in self.decl if c["tabela"] in ("PRPRESCVI", "PRPRESCVNI") and c.get("destino")}
+        self.assertFalse([x for x in d if x.endswith("_cmh2o") and "peep" not in x])
 
     def test_situacao_derivada_por_valores(self):
         v = {(x["tabela"], x["destino"], x["valor_origem"]): x["valor_destino"] for x in self.m["valores"]}
@@ -64,6 +80,15 @@ class L6_13(unittest.TestCase):
         self.assertEqual(d["SINAIS_ALFA"], "horario_administracao.resultado_registrado")
         self.assertEqual(d["ID_TBPROFIS_ACOMP_RESP_CHK"], "horario_administracao.conferido_por_profissional_id")
         self.assertEqual(d["DATA_HORA_ACOMP_RESP_CHK"], "horario_administracao.conferido_em")
+
+    def test_assinatura_do_horario_na_trilha_do_horario(self):
+        d = {c["destino"]: c for c in self.decl if c["tabela"] == "PRASSINAT_DOC_PRCHKGERAL" and c.get("destino")}
+        self.assertFalse([x for x in d if x.startswith("documento_prontuario.")])
+        self.assertEqual(d["trilha_auditoria.entidade"]["coluna"], "=horario_administracao")
+        self.assertEqual(d["trilha_auditoria.entidade_id"]["via"], "ref:PRCHKGERAL;trilha_auditoria")
+        self.assertTrue(d["trilha_auditoria.correlacao"]["via"].startswith(
+            "ref:PRASSINATURA_DOC>ID_PRASSINATURA_CAB>PRASSINATURA_CAB"))
+        self.assertTrue(d["trilha_auditoria.ocorrido_em"]["via"].startswith("ref:PRASSINATURA_DOC>DATA_HORA_EVENTO"))
 
     def test_id_externo_e_preparo(self):
         self.assertEqual(l6_13.id_externo("ATCABECATEND", "1"), 1)
