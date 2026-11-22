@@ -2,15 +2,21 @@
 // "Convênios/operadoras, planos e classes" (M12, ficha seção 7): a lista dos convênios do banco do
 // estabelecimento com a busca por palavra (no servidor: sem acento, prefixo nos dois sentidos, palavras
 // coladas) e o filtro de situação; abrir leva ao contrato em abas (com a aba pedida pelo menu, ?aba=).
-import { SanteSelecao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { pode } from '../../../casca/sessao/pode.js';
+import NovoConvenioForm from '../componentes/NovoConvenioForm.vue';
 import { listarConvenios } from '../api-precos.js';
 
 const { t } = useI18n();
+// ADR 0009, decisão 26: criar convênio, com "credenciar todos os profissionais ativos" na criação.
+const podeCriar = computed(() => pode('convenio.contrato.editar'));
+const criando = ref(false);
+const criado = ref<string | null>(null);
 const rota = useRoute();
 const busca = ref('');
 const situacao = ref('todos');
@@ -63,6 +69,19 @@ const tabelas = (x: {
         />
       </div>
     </form>
+    <SanteBotao
+      v-if="podeCriar && !criando"
+      variante="secundario"
+      :rotulo="t('estruturada.novoConvenio.titulo')"
+      data-testid="novo-convenio"
+      @acionar="((criando = true), (criado = null))"
+    />
+    <NovoConvenioForm
+      v-if="criando"
+      @criado="(m) => ((criado = m), (criando = false))"
+      @cancelar="criando = false"
+    />
+    <p v-if="criado" role="status" data-testid="novo-convenio-mensagem">{{ criado }}</p>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <p v-else-if="consulta.isPending.value">{{ t('precos.comum.carregando') }}</p>
     <template v-else-if="consulta.data.value">

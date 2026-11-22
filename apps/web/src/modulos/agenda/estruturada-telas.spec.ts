@@ -56,6 +56,22 @@ const json = (corpo: unknown, status = 200) =>
 const sp = (s: string) => s.replace(/\u00a0/g, ' ');
 const OK = { ok: true, resultado: {}, repetida: false, mensagem: 'Gravado.' };
 
+/** Escolhe na SanteSelecao (PrimeVue, sem <select> nativo) pelo data-testid. */
+const escolher = async (
+  w: { findAllComponents: (s: { name: string }) => unknown[] },
+  testid: string,
+  v: string,
+) => {
+  const c = (
+    w.findAllComponents({ name: 'SanteSelecao' }) as {
+      attributes: (n: string) => string | undefined;
+      vm: { $emit: (e: string, v: string) => void };
+    }[]
+  ).find((x) => x.attributes('data-testid') === testid);
+  if (!c) throw new Error(`SanteSelecao ${testid} não encontrada`);
+  c.vm.$emit('update:modelValue', v);
+  await flushPromises();
+};
 afterEach(() => {
   vi.unstubAllGlobals();
   definirSessaoDaTela(null);
@@ -312,6 +328,25 @@ describe('contrato das URLs do cliente com a API (agenda-preco.controller.ts)', 
         'k',
       ),
     );
+    await tentar(() => api.verificarCredenciamento({ profissionalId: 9, fontePagadoraId: 2 }));
+    const regra = { agendaId: 5, vigenciaInicio: '2026-06-01' };
+    await tentar(() => api.incluirCobertura({ ...regra, fontePagadoraId: 2, aceita: true } as never, 'k'));
+    await tentar(() => api.incluirRestricao({ ...regra, idadeMinimaAnos: 12 } as never, 'k'));
+    await tentar(() => api.incluirPreparo({ ...regra, descricao: 'Jejum' } as never, 'k'));
+    await tentar(() =>
+      api.criarConvenio(
+        {
+          codigo: 'GAMA',
+          nome: 'Gama',
+          tipo: 'operadora',
+          registroAns: null,
+          bloqueiaSemCredenciamento: false,
+          credenciaTodosAoCriar: true,
+          dataInicioRelacao: '2026-06-01',
+        },
+        'k',
+      ),
+    );
     // as entradas vazias são recusadas pelo esquema antes do fetch: confira as rotas de inclusão à parte
     chamadas.push('POST /api/precos-particulares', 'POST /api/credenciamentos');
     const controller = rotasDoController();
@@ -326,6 +361,11 @@ describe('contrato das URLs do cliente com a API (agenda-preco.controller.ts)', 
         'GET /api/credenciamentos',
         'GET /api/convenios/:id/opcoes-credenciamento',
         'PUT /api/convenios/:id/opcoes-credenciamento',
+        'GET /api/credenciamentos/verificacao',
+        'POST /api/agendas/:id/coberturas',
+        'POST /api/agendas/:id/restricoes',
+        'POST /api/agendas/:id/preparos',
+        'POST /api/convenios',
       ]),
     );
   });
@@ -382,7 +422,9 @@ describe('AgendaEstruturadaPainel (teste de aceite da seção 6)', () => {
   it('"o médico atende o meu convênio, plano W": aceita o plano e exclui o subplano', async () => {
     const w = montar(vi.fn(async () => json(AGENDA)));
     await flushPromises();
-    expect(w.get('[data-testid="convenios-da-agenda"]').text()).toContain('PARTICULAR, CONVENIO SINTETICO');
+    expect(w.get('[data-testid="convenios-da-agenda"]').text()).toContain(
+      'PARTICULAR SINTETICO, CONVENIO SINTETICO',
+    );
     expect(w.get('[data-testid="cobertura-31"]').text()).toContain('OURO — Aceita');
     expect(w.get('[data-testid="cobertura-32"]').text()).toContain('BRONZE — Exclui');
     expect(w.get('[data-testid="cobertura-convenio-2"]').text()).toContain('Subplanos de OURO');
@@ -487,8 +529,8 @@ describe('credenciamento', () => {
       /^\/api\/credenciamentos\?profissional=9&data=\d{4}-\d{2}-\d{2}$/,
     );
     expect(w.get('[data-testid="credenciamento-81"]').text()).toContain('CONVENIO SINTETICO');
-    await w.get('[data-testid="cred-outro"]').setValue('2');
-    await w.get('[data-testid="cred-plano"]').setValue('21');
+    await escolher(w, 'cred-convenio', '2');
+    await escolher(w, 'cred-plano', '21');
     await w.get('[data-testid="form-credenciamento"]').trigger('submit');
     await flushPromises();
     const post = buscar.mock.calls.find((c) => c[1]?.method === 'POST');

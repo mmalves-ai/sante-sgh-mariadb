@@ -2,15 +2,26 @@
 // ADR 0009: as regras estruturadas da agenda do profissional (preço particular, convênios e planos atendidos,
 // restrições e preparo), com o TEXTO ORIGINAL inteiro ao lado e o trecho não interpretado destacado (decisão 27: a
 // regra estimada já vale; o trecho não interpretado continua valendo pelo texto). "Ver o texto de origem" destaca o
-// texto de onde a regra saiu. A edição da regra de preço só aparece com a permissão de alterar a agenda.
-import type { CoberturaAgenda, PreparoAgenda, RegraPrecoParticular, RestricaoAgenda } from '@sgh/contratos';
+// texto de onde a regra saiu. A edição da regra de preço só aparece com a permissão de alterar a agenda; a inclusão de
+// cobertura, restrição e preparo, com a permissão agenda.estruturada.editar. Os nomes (convênio, plano, subplano,
+// profissional, estabelecimento) vêm do contrato; os mapas das props só completam o que faltar.
+import type {
+  CoberturaAgenda,
+  PreparoAgenda,
+  RegraPrecoParticular,
+  RestricaoAgenda,
+  TextoOrigemAgenda,
+} from '@sgh/contratos';
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { pode } from '../../../casca/sessao/pode.js';
 import { lerAgendaEstruturada } from '../api-estruturada.js';
+import { nomesDaAgenda } from '../estruturada-edicao.js';
 import { agruparCobertura, dataTela, reais, regrasVigentes } from '../estruturada-tela.js';
 import ErroAgenda from './ErroAgenda.vue';
+import RegraEstruturadaForm, { type TipoRegraEstruturada } from './RegraEstruturadaForm.vue';
 import RegraPrecoForm from './RegraPrecoForm.vue';
 import TextoOriginalAgenda from './TextoOriginalAgenda.vue';
 
@@ -45,8 +56,26 @@ const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${
 // As regras que valem hoje, na ordem de especificidade do cálculo (a primeira vence para o alvo dela).
 const precos = computed(() => (a.value ? regrasVigentes(a.value.precosParticulares, hoje) : []));
 
-const convenio = (id: number | null) => (id === null ? '' : (props.nomesConvenio[id] ?? `#${id}`));
-const plano = (id: number | null) => (id === null ? '' : (props.nomesPlano[id] ?? `#${id}`));
+const nomes = computed(() =>
+  a.value
+    ? nomesDaAgenda(a.value)
+    : { convenios: {} as Record<number, string>, planos: {} as Record<number, string> },
+);
+const convenio = (id: number | null) =>
+  id === null ? '' : (nomes.value.convenios[id] ?? props.nomesConvenio[id] ?? `#${id}`);
+const plano = (id: number | null) =>
+  id === null ? '' : (nomes.value.planos[id] ?? props.nomesPlano[id] ?? `#${id}`);
+// Convênios para a edição: os aceitos pela agenda, com o nome do contrato.
+const conveniosDaAgenda = computed(() =>
+  (a.value?.conveniosAceitos ?? []).map((c) => ({
+    fontePagadoraId: c.fontePagadoraId,
+    nome: convenio(c.fontePagadoraId),
+  })),
+);
+const rotuloTexto = (x: TextoOrigemAgenda) =>
+  t(`estruturada.textoOriginal.campos.${x.campo}`, { convenio: convenio(x.fontePagadoraId) });
+const podeEditarRegras = computed(() => pode('agenda.estruturada.editar'));
+const incluindo = ref<TipoRegraEstruturada | null>(null);
 const vigencia = (x: { vigenciaInicio: string | null; vigenciaFim: string | null }) =>
   x.vigenciaInicio === null
     ? t('estruturada.semVigencia')
@@ -105,6 +134,7 @@ function verTexto(id: number | null): void {
 async function gravado(m: string): Promise<void> {
   mensagem.value = m;
   editando.value = null;
+  incluindo.value = null;
   await cliente.invalidateQueries({ queryKey: ['agenda', 'estruturada'] });
 }
 </script>
@@ -118,6 +148,9 @@ async function gravado(m: string): Promise<void> {
     <div v-else class="lado-a-lado">
       <div class="regras">
         <p class="secundario" data-testid="estruturada-cabecalho">
+          <strong data-testid="estruturada-agenda">{{ a.nome }}</strong> ·
+          {{ t('estruturada.profissional') }}: {{ a.profissionalNome ?? '–' }} ·
+          {{ t('estruturada.estabelecimento') }}: {{ a.estabelecimentoNome }} ·
           {{ t('estruturada.codigoOrigem') }}: {{ a.codigoOrigem ?? '–' }} ·
           {{ t('estruturada.vigenciaAgenda') }}:
           {{ vigencia(a) }}
@@ -206,7 +239,7 @@ async function gravado(m: string): Promise<void> {
           <p data-testid="convenios-da-agenda">
             {{
               t('estruturada.cobertura.aceitosPelaAgenda', {
-                lista: a.convenios.map(convenio).join(', ') || '–',
+                lista: conveniosDaAgenda.map((c) => c.nome).join(', ') || '–',
               })
             }}
           </p>
@@ -224,7 +257,11 @@ async function gravado(m: string): Promise<void> {
               <ul>
                 <li v-for="p in g.planos" :key="p.superiorId ?? 0">
                   <span v-if="p.superiorId !== null">
-                    {{ t('estruturada.cobertura.subplanosDe', { plano: plano(p.superiorId) }) }}:
+                    {{
+                      t('estruturada.cobertura.subplanosDe', {
+                        plano: p.itens[0]?.planoSuperiorNome ?? plano(p.superiorId),
+                      })
+                    }}:
                   </span>
                   <span
                     v-for="c in p.itens"
@@ -233,7 +270,7 @@ async function gravado(m: string): Promise<void> {
                     :class="{ exclui: !c.aceita }"
                     :data-testid="`cobertura-${c.id}`"
                   >
-                    {{ plano(c.planoId) }} — {{ rotuloCobertura(c) }}
+                    {{ c.planoNome ?? plano(c.planoId) }} — {{ rotuloCobertura(c) }}
                     <em v-if="c.situacaoRevisao === 'estimada'">({{ t('estruturada.estimada') }})</em>
                     <SanteBotao
                       v-if="c.textoOrigemId !== null"
@@ -246,6 +283,25 @@ async function gravado(m: string): Promise<void> {
               </ul>
             </li>
           </ul>
+          <SanteBotao
+            v-if="podeEditarRegras && incluindo === null"
+            variante="secundario"
+            :rotulo="t('estruturada.edicao.novas.cobertura')"
+            data-testid="nova-cobertura"
+            @acionar="incluindo = 'cobertura'"
+          />
+          <RegraEstruturadaForm
+            v-if="podeEditarRegras && incluindo === 'cobertura'"
+            :agenda-id="agendaId"
+            tipo="cobertura"
+            :convenios="conveniosDaAgenda"
+            :textos="a.textos"
+            :rotulo-texto="rotuloTexto"
+            :hoje="hoje"
+            @gravado="gravado"
+            @cancelar="incluindo = null"
+            @ver-texto="verTexto"
+          />
         </section>
 
         <!-- Restrições -->
@@ -263,7 +319,7 @@ async function gravado(m: string): Promise<void> {
               {{ t('estruturada.restricao.encaixe') }}: {{ encaixe(a.padrao.permiteEncaixe) }}
             </dd>
           </dl>
-          <ul v-if="a.restricoes.length" class="lista">
+          <ul v-if="a.restricoes.length" class="lista" data-testid="restricoes">
             <li v-for="r in a.restricoes" :key="r.id" :data-testid="`restricao-${r.id}`">
               <strong>{{ escopo(r) }}</strong
               >:
@@ -283,6 +339,25 @@ async function gravado(m: string): Promise<void> {
               />
             </li>
           </ul>
+          <SanteBotao
+            v-if="podeEditarRegras && incluindo === null"
+            variante="secundario"
+            :rotulo="t('estruturada.edicao.novas.restricao')"
+            data-testid="nova-restricao"
+            @acionar="incluindo = 'restricao'"
+          />
+          <RegraEstruturadaForm
+            v-if="podeEditarRegras && incluindo === 'restricao'"
+            :agenda-id="agendaId"
+            tipo="restricao"
+            :convenios="conveniosDaAgenda"
+            :textos="a.textos"
+            :rotulo-texto="rotuloTexto"
+            :hoje="hoje"
+            @gravado="gravado"
+            @cancelar="incluindo = null"
+            @ver-texto="verTexto"
+          />
         </section>
 
         <!-- Preparo -->
@@ -308,6 +383,25 @@ async function gravado(m: string): Promise<void> {
               />
             </li>
           </ul>
+          <SanteBotao
+            v-if="podeEditarRegras && incluindo === null"
+            variante="secundario"
+            :rotulo="t('estruturada.edicao.novas.preparo')"
+            data-testid="nova-preparo"
+            @acionar="incluindo = 'preparo'"
+          />
+          <RegraEstruturadaForm
+            v-if="podeEditarRegras && incluindo === 'preparo'"
+            :agenda-id="agendaId"
+            tipo="preparo"
+            :convenios="conveniosDaAgenda"
+            :textos="a.textos"
+            :rotulo-texto="rotuloTexto"
+            :hoje="hoje"
+            @gravado="gravado"
+            @cancelar="incluindo = null"
+            @ver-texto="verTexto"
+          />
         </section>
       </div>
 

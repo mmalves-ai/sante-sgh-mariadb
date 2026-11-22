@@ -6,19 +6,27 @@
 import {
   type AgendaEstruturada,
   type Credenciamento,
+  type EntradaCoberturaAgenda,
   type EntradaCredenciamento,
+  type EntradaPreparoAgenda,
   type EntradaRegraPrecoParticular,
+  type EntradaRestricaoAgenda,
   esquemaAgendaEstruturada,
   esquemaCredenciamento,
+  esquemaEntradaCoberturaAgenda,
   esquemaEntradaCredenciamento,
+  esquemaEntradaPreparoAgenda,
+  esquemaEntradaRestricaoAgenda,
   esquemaEntradaRegraPrecoParticular,
   esquemaOpcoesCredenciamentoConvenio,
   esquemaResultadoAgenda,
   esquemaResultadoCalculoPreco,
+  esquemaVerificacaoCredenciamento,
   type OpcoesCredenciamentoConvenio,
   type ResultadoAgenda,
   type ResultadoCalculoPreco,
   SITUACOES_REVISAO_REGRA,
+  type VerificacaoCredenciamento,
 } from '@sgh/contratos';
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
@@ -36,8 +44,50 @@ const ATENDIMENTO = '/api/atendimento';
 
 /** Rotas que as telas usam e a API ainda não publica (pedidas ao lote API). Formato "MÉTODO /api/caminho/:id". */
 export const ROTAS_PENDENTES_API: readonly string[] = [
-  // vazia: a revisão da regra (PUT) e a prévia do atendimento foram publicadas na conferência final da rodada
+  // vazia: criar convênio (POST /api/convenios) foi publicado na volta 2
 ];
+
+/** Tipos de fonte pagadora (o CHECK de fonte_pagadora.tipo). */
+export const TIPOS_FONTE_PAGADORA = [
+  'operadora',
+  'seguradora',
+  'autogestao',
+  'cooperativa',
+  'medicina_grupo',
+  'filantropia',
+  'particular',
+  'publico',
+  'empresa',
+  'convenio_proprio',
+  'outro',
+] as const;
+
+/**
+ * Criação de convênio pela tela (o esquemaConvenioNovo do agenda-preco.servico.ts, estrito): a API grava a fonte
+ * pagadora e, com credenciaTodosAoCriar, credencia os profissionais ativos desde dataInicioRelacao (decisão 26).
+ */
+export const esquemaEntradaNovoConvenio = z
+  .object({
+    codigo: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._-]{1,30}$/),
+    nome: z.string().trim().min(2).max(150),
+    tipo: z.enum(TIPOS_FONTE_PAGADORA),
+    registroAns: z
+      .string()
+      .trim()
+      .regex(/^\d{1,10}$/)
+      .nullable(),
+    bloqueiaSemCredenciamento: z.boolean(),
+    credenciaTodosAoCriar: z.boolean(),
+    dataInicioRelacao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .refine((e) => e.tipo !== 'particular' || (!e.bloqueiaSemCredenciamento && !e.credenciaTodosAoCriar), {
+    message: 'O particular não tem credenciamento.',
+    path: ['credenciaTodosAoCriar'],
+  });
+export type EntradaNovoConvenio = z.infer<typeof esquemaEntradaNovoConvenio>;
 
 /** Mensagem da gravação quando a API devolve só o resultado da operação (sem a mensagem). */
 const MENSAGEM_GRAVADO = 'Gravado.';
@@ -126,6 +176,22 @@ export const listarCredenciamentos = (f: {
   );
 export const lerOpcoesCredenciamento = (convenioCodigo: number): Promise<OpcoesCredenciamentoConvenio> =>
   ler(`${CONVENIOS}/${convenioCodigo}/opcoes-credenciamento`, esquemaOpcoesCredenciamentoConvenio);
+/** Credenciamento do profissional no convênio (e plano) na data: nenhum, alerta ou bloqueio (decisão 25). */
+export const verificarCredenciamento = (f: {
+  profissionalId: number;
+  fontePagadoraId: number;
+  planoId?: number | null;
+  data?: string;
+}): Promise<VerificacaoCredenciamento> =>
+  ler(
+    `${CREDENCIAMENTOS}/verificacao${qs({
+      profissional: f.profissionalId,
+      convenio: f.fontePagadoraId,
+      plano: f.planoId ?? null,
+      data: f.data ?? hojeIso(),
+    })}`,
+    esquemaVerificacaoCredenciamento,
+  );
 /** Prévia do preço e do credenciamento de um procedimento no atendimento (antes de lançar). */
 export const calcularPrecoAtendimento = (reg: number, procedimento: number): Promise<ResultadoCalculoPreco> =>
   ler(`${ATENDIMENTO}/${reg}/preco${qs({ procedimento })}`, esquemaResultadoCalculoPreco);
@@ -142,3 +208,24 @@ export const definirOpcoesCredenciamento = (
   opcoes: Pick<OpcoesCredenciamentoConvenio, 'bloqueiaSemCredenciamento' | 'credenciaTodosAoCriar'>,
   chave: string,
 ) => gravar(`${CONVENIOS}/${convenioCodigo}/opcoes-credenciamento`, opcoes, chave, 'PUT');
+/** Regras da agenda (a regra manual entra confirmada; o texto de origem é opcional). O id da agenda vai na URL. */
+const semAgenda = <T extends { agendaId: number }>(e: T): Omit<T, 'agendaId'> => {
+  const resto: Partial<T> = { ...e };
+  delete resto.agendaId;
+  return resto as Omit<T, 'agendaId'>;
+};
+export const incluirCobertura = (entrada: EntradaCoberturaAgenda, chave: string) => {
+  const e = esquemaEntradaCoberturaAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/coberturas`, semAgenda(e), chave);
+};
+export const incluirRestricao = (entrada: EntradaRestricaoAgenda, chave: string) => {
+  const e = esquemaEntradaRestricaoAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/restricoes`, semAgenda(e), chave);
+};
+export const incluirPreparo = (entrada: EntradaPreparoAgenda, chave: string) => {
+  const e = esquemaEntradaPreparoAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/preparos`, semAgenda(e), chave);
+};
+/** Criar convênio (decisão 26). A resposta traz { id, credenciados }. */
+export const criarConvenio = (entrada: EntradaNovoConvenio, chave: string) =>
+  gravar(CONVENIOS, esquemaEntradaNovoConvenio.parse(entrada), chave);

@@ -19,6 +19,7 @@ import {
   marcarConsulta,
   novaChave,
 } from '../api-agenda.js';
+import AlertaCredenciamentoMarcacao from '../componentes/AlertaCredenciamentoMarcacao.vue';
 import AvisoGravacao from '../componentes/AvisoGravacao.vue';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr, horaDoContrato } from '../formato.js';
@@ -175,7 +176,15 @@ function usarSugestao(): void {
 }
 const podeMarcar = pode('agenda.agendarConsulta');
 const podeEncaixar = pode('agenda.encaixar');
-const pronto = computed(() => escolha.value !== null && paciente.value !== null && convenio.value !== '');
+// ADR 0009, decisão 25: profissional não credenciado no convênio gera alerta; com o bloqueio do convênio, não marca.
+const efeitoCredenciamento = ref<'nenhum' | 'alerta' | 'bloqueio' | null>(null);
+const pronto = computed(
+  () =>
+    escolha.value !== null &&
+    paciente.value !== null &&
+    convenio.value !== '' &&
+    efeitoCredenciamento.value !== 'bloqueio',
+);
 
 async function marcar(): Promise<void> {
   const e = escolha.value;
@@ -455,6 +464,13 @@ async function fazerEncaixe(): Promise<void> {
         <SanteSelecao v-model="canal" :rotulo="t('agenda.canal')" :opcoes="canais" />
         <label><input v-model="retorno" type="checkbox" /> {{ t('agenda.marcar.retorno') }}</label>
       </div>
+      <AlertaCredenciamentoMarcacao
+        v-if="escolha"
+        :agenda-id="escolha.agenda"
+        :convenio="convenio ? Number(convenio) : null"
+        :data="escolha.data"
+        @efeito="(e) => (efeitoCredenciamento = e)"
+      />
       <p v-if="canalAConfirmar" class="secundario" data-testid="canal-a-confirmar">
         {{ t('agenda.canalAConfirmar') }}
       </p>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // ADR 0009: inclusão e edição da regra de preço PARTICULAR (decisão 24: nunca de convênio). Na inclusão, o dono é a
-// agenda ou o profissional dela, o alvo é qualquer consulta, um procedimento ou um grupo. Na edição, valor, prioridade
-// e vigência; a regra estimada (extraída do texto) pode ser confirmada ou recusada. A gravação vai com a versão lida.
+// agenda ou o profissional dela, o alvo é qualquer consulta, o exame padrão da agenda (só com dono agenda), um
+// procedimento ou um grupo. Na edição, valor, prioridade e vigência; a regra estimada (extraída do texto) pode ser
+// confirmada ou recusada. A gravação vai com a versão lida.
 import type { RegraPrecoParticular, SituacaoRevisaoRegra } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { novaChave } from '../api-agenda.js';
 import { incluirRegraPreco, revisarRegraPreco } from '../api-estruturada.js';
@@ -28,7 +29,7 @@ const prioridade = ref(r ? r.prioridade : 100);
 const inicio = ref(r ? r.vigenciaInicio : props.hoje);
 const fim = ref(r?.vigenciaFim ?? '');
 const dono = ref<'agenda' | 'profissional'>('agenda');
-const alvo = ref<'consulta' | 'item' | 'grupo'>('consulta');
+const alvo = ref<'consulta' | 'exame' | 'item' | 'grupo'>('consulta');
 const alvoId = ref<number | null>(null);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
@@ -42,9 +43,14 @@ const opcoesDono = computed(() => [
 ]);
 const opcoesAlvo = computed(() => [
   { valor: 'consulta', rotulo: t('estruturada.preco.alvoConsulta') },
+  // o exame padrão da agenda (sem item) só vale com dono agenda (CHECK do alvo)
+  ...(dono.value === 'agenda' ? [{ valor: 'exame', rotulo: t('estruturada.preco.alvoExame') }] : []),
   { valor: 'item', rotulo: t('estruturada.preco.alvoItem', { id: '' }).trim() },
   { valor: 'grupo', rotulo: t('estruturada.preco.alvoGrupo', { id: '' }).trim() },
 ]);
+watch(dono, (d) => {
+  if (d !== 'agenda' && alvo.value === 'exame') alvo.value = 'consulta';
+});
 const valorLido = computed(() => lerValorDigitado(valor.value));
 const vigenciaOk = computed(() => !fim.value || fim.value >= inicio.value);
 const problema = computed(() =>
@@ -57,7 +63,10 @@ const problema = computed(() =>
         : null,
 );
 const podeGravar = computed(
-  () => !ocupado.value && problema.value === null && (alvo.value === 'consulta' || !!alvoId.value),
+  () =>
+    !ocupado.value &&
+    problema.value === null &&
+    (alvo.value === 'consulta' || alvo.value === 'exame' || !!alvoId.value),
 );
 
 async function rodar(fn: () => Promise<{ mensagem: string }>): Promise<void> {
@@ -111,7 +120,9 @@ function gravar(situacao?: SituacaoRevisaoRegra): Promise<void> {
             ? { tipo: 'item', itemFaturavelId: Number(alvoId.value) }
             : alvo.value === 'grupo'
               ? { tipo: 'grupo', grupoFaturamentoId: Number(alvoId.value) }
-              : { tipo: 'consulta' },
+              : alvo.value === 'exame'
+                ? { tipo: 'exame' }
+                : { tipo: 'consulta' },
         valor: v,
         prioridade: prioridade.value,
         vigenciaInicio: inicio.value,
@@ -147,7 +158,7 @@ function gravar(situacao?: SituacaoRevisaoRegra): Promise<void> {
           data-testid="regra-alvo"
         />
       </div>
-      <div v-if="alvo !== 'consulta'" class="campo">
+      <div v-if="alvo === 'item' || alvo === 'grupo'" class="campo">
         <label for="regra-alvo-id">{{ t('estruturada.preco.alvo') }}</label>
         <input id="regra-alvo-id" v-model.number="alvoId" type="number" min="1" data-testid="regra-alvo-id" />
       </div>

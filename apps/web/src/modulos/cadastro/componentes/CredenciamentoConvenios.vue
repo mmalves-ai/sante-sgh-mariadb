@@ -2,16 +2,18 @@
 // ADR 0009 (decisões 25 e 26): credenciamento profissional × convênio, com plano, estabelecimento e vigência. Usado na
 // ficha do profissional (fixa o profissional) e no cadastro do convênio (fixa o convênio). Atender sem credenciamento
 // gera alerta, ou bloqueio quando o convênio liga a opção. Incluir um credenciamento grava uma linha nova; descredenciar
-// é gravar a linha com "credenciado" desligado (a trilha guarda o anterior).
+// é gravar a linha com "credenciado" desligado (a trilha guarda o anterior). A lista mostra os nomes do contrato
+// (profissional, convênio, plano, estabelecimento); na inclusão, o convênio e o plano são escolhidos pelo nome.
 import type { Credenciamento } from '@sgh/contratos';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { novaChave } from '../../agenda/api-agenda.js';
 import { incluirCredenciamento, listarCredenciamentos } from '../../agenda/api-estruturada.js';
 import { dataTela } from '../../agenda/estruturada-tela.js';
+import { buscarContrato, listarConvenios } from '../../precos/api-precos.js';
 
 const props = withDefaults(
   defineProps<{
@@ -40,7 +42,37 @@ const consulta = useQuery({
 const d = new Date();
 const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const outroId = ref<number | null>(null);
-const planoId = ref<number | null>(null);
+const convenioEscolhido = ref('');
+const planoEscolhido = ref('');
+const planoId = computed(() => (planoEscolhido.value ? Number(planoEscolhido.value) : null));
+// Na ficha do profissional, o convênio vem da lista (pelo nome); no convênio, o profissional é o código.
+const listaConvenios = useQuery({
+  queryKey: ['convenios', '', 'ativos'],
+  queryFn: () => listarConvenios('', 'ativos'),
+  enabled: computed(() => props.podeEditar && props.profissionalId !== null),
+});
+const opcoesConvenio = computed(() => [
+  { valor: '', rotulo: t('agenda.escolha') },
+  ...(listaConvenios.data.value?.itens ?? []).map((c) => ({ valor: String(c.codigo), rotulo: c.nome })),
+]);
+watch(convenioEscolhido, (v) => {
+  outroId.value = v ? Number(v) : null;
+  planoEscolhido.value = '';
+});
+const convenioDoPlano = computed(() =>
+  props.profissionalId !== null ? (outroId.value ?? null) : props.fontePagadoraId,
+);
+const planos = useQuery({
+  queryKey: computed(() => ['contrato', convenioDoPlano.value]),
+  queryFn: () => buscarContrato(Number(convenioDoPlano.value)),
+  enabled: computed(() => props.podeEditar && !!convenioDoPlano.value),
+});
+const opcoesPlano = computed(() => [
+  { valor: '', rotulo: t('estruturada.credenciamento.todosPlanos') },
+  ...(planos.data.value?.planos ?? [])
+    .filter((p) => p.ativo)
+    .map((p) => ({ valor: String(p.id), rotulo: p.nome })),
+]);
 const inicio = ref(hoje);
 const fim = ref('');
 const credenciado = ref(true);
@@ -51,7 +83,8 @@ const chave = ref(novaChave('credenciamento'));
 const podeGravar = computed(
   () => !ocupado.value && !!outroId.value && !!inicio.value && (!fim.value || fim.value >= inicio.value),
 );
-const convenio = (id: number) => props.nomesConvenio[id] ?? `#${id}`;
+const convenio = (c: Credenciamento) =>
+  c.fontePagadoraNome || props.nomesConvenio[c.fontePagadoraId] || `#${c.fontePagadoraId}`;
 const vigencia = (c: Credenciamento) =>
   c.vigenciaFim
     ? t('estruturada.vigenciaEntre', { inicio: dataTela(c.vigenciaInicio), fim: dataTela(c.vigenciaFim) })
@@ -69,7 +102,7 @@ async function gravar(): Promise<void> {
         profissionalId: porProfissional.value ? Number(props.profissionalId) : outro,
         fontePagadoraId: porProfissional.value ? outro : Number(props.fontePagadoraId),
         estabelecimentoId: null,
-        planoId: planoId.value || null,
+        planoId: planoId.value,
         credenciado: credenciado.value,
         vigenciaInicio: inicio.value,
         vigenciaFim: fim.value || null,
@@ -78,7 +111,8 @@ async function gravar(): Promise<void> {
     );
     mensagem.value = r.mensagem;
     outroId.value = null;
-    planoId.value = null;
+    convenioEscolhido.value = '';
+    planoEscolhido.value = '';
     await cliente.invalidateQueries({ queryKey: ['credenciamentos'] });
   } catch (e) {
     erro.value = e;
@@ -126,11 +160,19 @@ async function gravar(): Promise<void> {
       </thead>
       <tbody>
         <tr v-for="c in consulta.data.value" :key="c.id" :data-testid="`credenciamento-${c.id}`">
-          <th scope="row">{{ porProfissional ? convenio(c.fontePagadoraId) : `#${c.profissionalId}` }}</th>
-          <td>{{ c.planoId === null ? t('estruturada.credenciamento.todosPlanos') : `#${c.planoId}` }}</td>
+          <th scope="row">{{ porProfissional ? convenio(c) : c.profissionalNome }}</th>
           <td>
             {{
-              c.estabelecimentoId === null ? t('estruturada.credenciamento.rede') : `#${c.estabelecimentoId}`
+              c.planoId === null
+                ? t('estruturada.credenciamento.todosPlanos')
+                : (c.planoNome ?? `#${c.planoId}`)
+            }}
+          </td>
+          <td>
+            {{
+              c.estabelecimentoId === null
+                ? t('estruturada.credenciamento.rede')
+                : (c.estabelecimentoNome ?? `#${c.estabelecimentoId}`)
             }}
           </td>
           <td>{{ vigencia(c) }}</td>
@@ -145,20 +187,25 @@ async function gravar(): Promise<void> {
       </tbody>
     </table>
     <form v-if="podeEditar" class="form" data-testid="form-credenciamento" @submit.prevent="gravar">
-      <div class="campo">
-        <label for="cred-outro">
-          {{
-            porProfissional
-              ? t('estruturada.credenciamento.convenioId')
-              : t('estruturada.credenciamento.profissionalId')
-          }}
-        </label>
+      <SanteSelecao
+        v-if="porProfissional"
+        id="cred-convenio"
+        v-model="convenioEscolhido"
+        :rotulo="t('estruturada.credenciamento.convenio')"
+        :opcoes="opcoesConvenio"
+        data-testid="cred-convenio"
+      />
+      <div v-else class="campo">
+        <label for="cred-outro">{{ t('estruturada.credenciamento.profissionalId') }}</label>
         <input id="cred-outro" v-model.number="outroId" type="number" min="1" data-testid="cred-outro" />
       </div>
-      <div class="campo">
-        <label for="cred-plano">{{ t('estruturada.credenciamento.planoId') }}</label>
-        <input id="cred-plano" v-model.number="planoId" type="number" min="1" data-testid="cred-plano" />
-      </div>
+      <SanteSelecao
+        id="cred-plano"
+        v-model="planoEscolhido"
+        :rotulo="t('estruturada.credenciamento.plano')"
+        :opcoes="opcoesPlano"
+        data-testid="cred-plano"
+      />
       <div class="campo">
         <label for="cred-inicio">{{ t('estruturada.credenciamento.inicio') }}</label>
         <input id="cred-inicio" v-model="inicio" type="date" data-testid="cred-inicio" />
