@@ -253,7 +253,9 @@ def linhas(r, ins):
         ins(t, _linha(f[t], vals))
 
     # bancos da origem (só lidos pela referência): (empresa, código interno, código de compensação)
-    for e, c, cc in [(1, 1, "001"), (1, 237, "237"), (2, 237, "237"), (1, 104, "104"), (1, 341, "341"),
+    # o código vem ora com 3 dígitos, ora com o dígito verificador (0019 = 001-9, como na origem real: causa da
+    # recusa de toda conta bancária na liberação da F4, 2026-11-22)
+    for e, c, cc in [(1, 1, "0019"), (1, 237, "237"), (2, 237, "2372"), (1, 104, "104"), (1, 341, "3417"),
                      (1, 999, None), (1, 500, "777")]:
         put("TBBANCOS", EMPRESA=e, COD=c, NOME="Banco inventado %d" % c, CODBCOCENTRAL=cc)
     for nome, i in [("usr.um", 1), ("usr.dois", 2), ("usr.tres", 3)]:  # usr.tres nunca carregado

@@ -21,6 +21,15 @@ class DeparaFiscal(unittest.TestCase):
             self.assertEqual(depara.norm_cfop(v), k, v)
         for v in ("9102", "0102", "110", "11020", "4102", "AB12"):
             self.assertIsNone(depara.norm_cfop(v), v)
+
+    def test_banco_com_digito_verificador(self):
+        """Causa da liberação F4 (2026-11-22): TBBANCOS guarda o COMPE com o DV (0019); sem tirar o DV, toda agência
+        e conta bancária ficava sem banco (catalogo_codigo_invalido, 1048 e 4025)."""
+        for v, k in [("0019", "001"), ("001-9", "001"), ("1", "001"), ("237", "237"), ("2372", "237"),
+                     ("3417", "341"), ("1040", "104"), (341, "341")]:
+            self.assertEqual(depara.norm_banco(v), k, v)
+        for v in ("0018", "3410", "12345", "", None):
+            self.assertIsNone(depara.norm_banco(v), v)
         d = depara.Depara("cfop", [("1102", 11), ("5102", 12)])
         self.assertEqual(d.resolver("1.102"), (11, None))
         self.assertEqual(d.resolver("2102"), (None, "catalogo_codigo_inexistente"))

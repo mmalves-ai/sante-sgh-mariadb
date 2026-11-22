@@ -54,8 +54,20 @@ def norm_conselho(v):
     return s if re.fullmatch(r"[A-Z]{2,10}", s) else None
 
 
+def _dv_banco(c):
+    """Dígito verificador do código de compensação (módulo 11, pesos 2, 3, 4 da direita; resto 10 ou 11 vira 0):
+    001-9, 104-0, 237-2, 341-7."""
+    r = 11 - sum(int(x) * p for x, p in zip(reversed(c), (2, 3, 4))) % 11
+    return "0" if r >= 10 else str(r)
+
+
 def norm_banco(v):
+    """Código de compensação (COMPE), 3 dígitos. A origem guarda ora o código ('1', '001'), ora o código com o dígito
+    verificador ('0019', '001-9': medido em TBBANCOS.CODBCOCENTRAL da cópia real, 40 de 49 bancos com 4 dígitos):
+    com 4 dígitos, o último só sai quando é o DV do código; DV que não confere: inválido (pendência)."""
     d = _digitos(v)
+    if len(d) == 4 and d[3] == _dv_banco(d[:3]):
+        d = d[:3]
     return d.zfill(3) if 0 < len(d) <= 3 else None
 
 
