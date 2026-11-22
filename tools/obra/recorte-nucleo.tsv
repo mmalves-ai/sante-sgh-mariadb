@@ -1,0 +1,71 @@
+# Recorte da cadeia principal (diagnóstico do núcleo na cópia real; conector.sh medir-carga --recorte).
+# tabela	limite	modulo	filtro	nota
+# limite: 0 = todas as linhas; N = as N primeiras na ordem da chave.
+# modulo: M = só as linhas cuja chave inteira é múltipla de M (amostra espalhada no tempo); vazio = sem amostra.
+# filtro: COL>PAI.COLPAI = só as linhas cujo COL está entre os valores de COLPAI das linhas do PAI que entraram
+#         no recorte (o pai é lido antes, pela ordem do plano). Preserva pai e filho.
+# Tabelas que o fecho de dependências do mapa puxa e que não estão aqui: inteiras até 300 mil linhas, senão as 20 mil
+# primeiras (o filho que apontar para fora vira pai_inexistente, como na carga real).
+# --- estabelecimento, empresa, usuário (carga própria L3)
+TBTPEMP	0			tipo de empresa
+TBHOSPIT	0			estabelecimento
+TBEMPHOS	0			empresa do hospital
+TBUSERS	0			usuário
+# --- profissional, conselho, especialidade, lotação
+TBPROFIS	0			profissional
+TBCBOPRO	0			profissional por conselho e CBO (o atendimento aponta para cá)
+HTPROFIS	0			versões do profissional
+TBESPEC	0			especialidade
+TBMEDESP	0			especialidade do profissional
+TBCBOPRO_TBUNIDAD	0			lotação do profissional
+TBCBOPRO_TBCONVEN	0			profissional por fonte pagadora
+TBUNIDAD	0			unidade
+TBCENCUS	0			centro de custo
+# --- convênio e plano
+TBCONVEN	0			fonte pagadora
+HTCONVEN	0			versões da fonte pagadora
+TBTIPPLANO	0			plano
+FCCODCON	0			código do prestador na fonte pagadora
+# --- agenda e marcação
+AGTPAGENDA	0			categoria de agenda
+RETP_INTEG_AGENDA_ONLINE	0			modo de agendamento
+RESITAGE	0			situação da marcação
+RETIPAGE	0			canal da marcação
+REAGENDA	0			agenda de consultas
+REAGENDA_TBESPEC	0			especialidade da agenda
+REAGENDA_TBCONVEN	0			fonte pagadora da agenda
+RECTRAGE	0			escala da agenda
+REPACAGI	0			horários e bloqueios da agenda
+SIAGENDA	0			agenda de exames
+SIAGENDA_TBCONVEN	0			fonte pagadora da agenda de exames
+SICTRAGE	0			escala da agenda de exames
+# --- paciente e atendimento (L3): amostra de atendimentos e tudo que pende deles
+RICADPAC	0			paciente (inteiro: o atendimento e a marcação apontam para ele)
+# A carga própria lê REALTA e RECADATE ANTES do cabeçalho (carga.ORDEM): a amostra nasce na ficha (1 em cada 50 pelo
+# REG), a alta usa o mesmo módulo na mesma chave (ID_RECADATE = REG) e o cabeçalho entra pelo filtro da ficha.
+REALTA	0	50		alta do atendimento: as das fichas da amostra (mesmo módulo, mesma chave)
+RECADATE	0	50		ficha do atendimento: 1 em cada 50 pelo REG
+ATCABECATEND	0		ID>RECADATE.ID_ATCABECATEND	atendimento (cabeçalho) das fichas da amostra
+REPACAGD	0		ID_RICADPAC>ATCABECATEND.ID_RICADPAC	marcação de consulta dos pacientes da amostra
+SIPACAGD	0		ID_RICADPAC>ATCABECATEND.ID_RICADPAC	marcação de exame dos pacientes da amostra
+# --- conta e itens
+FCCTAEXT	0		REG_ATE>RECADATE.REG	conta do atendimento
+RECONTAS	0		REG>RECADATE.REG	etapa da conta
+FCLANEXT	0		ID_FCCTAEXT>FCCTAEXT.ID	itens da conta
+REPROEXT	0		ID_FCLANEXT>FCLANEXT.ID	complemento do item
+# --- preço (tabelas de preço; o preço particular por médico vem do preco_origem, ADR 0009)
+TBTABTHM	0			preço de procedimento
+TBVLRTHM	0			valor do preço de procedimento
+TBTABDTH	0			preço de diária e taxa
+TBVLRDTH	0			valor do preço de diária e taxa
+TBCTRTHM	0			tabela de preço de procedimento
+TBCTRDTH	0			tabela de preço de diária e taxa
+# --- repasse
+RPTIPOPRESTADOR	0			tipo de prestador do repasse
+RPEVENTO	0			evento de repasse
+TBREPGER	0			regra de repasse
+TBREPGER_TBCBOPRO	0			regra de repasse por profissional
+RPLANEVE	0			lançamento de repasse
+RPLANEVE_TBCBOPRO	0			profissional do lançamento de repasse
+RPLANEVE_COMPOSICAOBASE	0			base do lançamento de repasse
+FCINTEGRPA	0		ID_FCLANEXT>FCLANEXT.ID	produção de repasse dos itens da amostra
