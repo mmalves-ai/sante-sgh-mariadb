@@ -71,3 +71,6 @@ um log por passo e o resumo `passo: verde|vermelho`. Primeira volta: commit `921
 | sbis.spec "matriz cobre o catálogo" e `sbis:verificar --executar` | vermelho (falta) | Lacunas abertas de propósito no lote L4: SBIS-16 (cadeia por hash da trilha sem tabela no modelo: DDL) e SBIS-26 (teste de integração do DELETE clínico negado ao papel). Ficam vermelhas até o DDL e o teste, ou exceção do **dono** (só proposta). |
 | fronteiras:provar | verde | — |
 | ambiente:verificar | verde | — |
+| E2E @M00 | vermelho (falta) | O servidor do E2E (`nx run-many -t serve -p api web`) não ficou pronto em 240 s na worktree limpa e o `web:serve` foi parado; causa a investigar no log `e1/05-e2e.log` (trecho: [WebServer] web: 17:13:32 [vite] http proxy error: /api/saude [WebServer] web: Error: connect ECONNREFUSED 127.0.0.1:3391 [WebServer] > nx run api:serve ). |
+| seguranca:verificar | não concluído | Ainda rodava ao fim do turno do conferidor (teto de ferramentas); rodar `tools/obra/esteira-local.sh --so instalar,seguranca`. |
+| `.int.spec` contra o banco na VM | falta | Passo próprio da esteira local com cliente de teste `ci2f_<rótulo>` e plataforma de teste, apagados no fim. |
