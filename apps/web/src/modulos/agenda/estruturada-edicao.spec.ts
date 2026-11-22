@@ -10,7 +10,8 @@ import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { App } from 'vue';
+import { computed, ref, type App } from 'vue';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { definirSessaoDaTela } from '../../casca/sessao/pode.js';
 import { mensagensWeb } from '../../i18n/pt-BR.js';
 import CredenciamentoConvenios from '../cadastro/componentes/CredenciamentoConvenios.vue';
@@ -18,6 +19,33 @@ import NovoConvenioForm from '../precos/componentes/NovoConvenioForm.vue';
 import AgendaEstruturadaPainel from './componentes/AgendaEstruturadaPainel.vue';
 import AlertaCredenciamentoMarcacao from './componentes/AlertaCredenciamentoMarcacao.vue';
 import { montarCobertura, montarPreparo, montarRestricao, nomesDaAgenda } from './estruturada-edicao.js';
+import MarcarTela from './telas/MarcarTela.vue';
+
+// A MarcarTela é montada inteira: as opções da agenda e a busca de paciente vêm simuladas (dados sintéticos); a
+// conferência de credenciamento passa pelo fetch simulado de cada caso.
+vi.mock('./usar-agenda.js', () => ({
+  usarAgenda: () => ({
+    opcoes: {
+      data: ref({
+        convenios: [{ codigo: 2, nome: 'Convênio Alfa', ativo: true }],
+        canais: [{ codigo: 'telefone', rotulo: 'Telefone', aConfirmar: false }],
+        especialidades: [],
+        unidades: [],
+        locais: [],
+      }),
+    },
+    opcoesAgenda: computed(() => [{ valor: '5', rotulo: 'Agenda Sintética' }]),
+    pode: () => computed(() => true),
+    motivoGravacao: computed(() => null),
+  }),
+}));
+vi.mock('../cadastro/api-cadastro.js', () => ({
+  buscarPacientes: vi.fn(async () => ({
+    tipo: 'nome',
+    itens: [{ id: 41, nome: 'Paciente Sintético', nomeSocial: null }],
+    sugestoes: [],
+  })),
+}));
 
 if (!window.matchMedia) {
   window.matchMedia = (consulta: string) =>
@@ -31,6 +59,14 @@ if (!window.matchMedia) {
       removeListener: () => undefined,
       dispatchEvent: () => false,
     }) as MediaQueryList;
+}
+// O campo de texto multilinha da MarcarTela observa o tamanho; o jsdom não tem o ResizeObserver.
+if (!('ResizeObserver' in window)) {
+  (window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
 }
 const ui = { install: (app: App) => instalarUi(app, resolverMarca(undefined).pacote) };
 const plugins = () =>
@@ -304,6 +340,55 @@ describe('AgendaEstruturadaPainel: nomes e edição (volta 2)', () => {
     expect(w.get('[data-testid="estruturada-mensagem"]').text()).toBe('Gravado.');
   });
 
+  it('cobertura de um convênio que a agenda ainda não aceita, escolhido do cadastro do hospital', async () => {
+    definirSessaoDaTela({ permissoes: ['agenda.estruturada.editar'] } as never);
+    const resumo = (codigo: number, nome: string) => ({
+      codigo,
+      nome,
+      situacao: 'ativo',
+      aceitaAtendimento: { aceita: true, motivo: null },
+      classificacao: null,
+      registroAns: null,
+      tabelas: { honorariosInternacao: null, honorariosExterna: null, diarias: null, matmed: null },
+    });
+    const buscar = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/agendas/5/estruturada')) return json(AGENDA);
+      if (url.startsWith('/api/cadastros/convenios?'))
+        return json({
+          itens: [resumo(2, 'Convênio Alfa'), resumo(4, 'Convênio Gama')],
+          total: 2,
+          destino: 'memoria',
+        });
+      if (url === '/api/agendas/5/coberturas' && init?.method === 'POST') return json({ id: 63 }, 201);
+      return json({ ...CONTRATO, codigo: 4, nome: 'Convênio Gama' });
+    });
+    const w = montar(buscar);
+    await flushPromises();
+    // a agenda aceita só Alfa e Beta: Gama não consta
+    expect(w.get('[data-testid="convenios-da-agenda"]').text()).not.toContain('Convênio Gama');
+    await w.get('[data-testid="nova-cobertura"]').trigger('click');
+    await flushPromises();
+    expect(buscar.mock.calls.map((c) => c[0])).toContain('/api/cadastros/convenios?situacao=ativos');
+    const sel = (
+      w.findAllComponents({ name: 'SanteSelecao' }) as unknown as {
+        attributes: (n: string) => string | undefined;
+        props: (n: string) => { valor: string; rotulo: string }[];
+      }[]
+    ).find((x) => x.attributes('data-testid') === 'cobertura-convenio');
+    const opcoes = sel?.props('opcoes') ?? [];
+    // aceitos primeiro, depois o cadastro, sem repetir
+    expect(opcoes.slice(1).map((o) => o.rotulo)).toEqual(['Convênio Alfa', 'Convênio Beta', 'Convênio Gama']);
+    await escolher(w, 'cobertura-convenio', '4');
+    await w.get('[data-testid="form-cobertura"]').trigger('submit');
+    await flushPromises();
+    const post = buscar.mock.calls.find((c) => c[0] === '/api/agendas/5/coberturas');
+    expect(JSON.parse(String((post?.[1] as RequestInit).body))).toMatchObject({
+      fontePagadoraId: 4,
+      planoId: null,
+      aceita: true,
+    });
+  });
+
   it('restrição "atende criança de 5 anos?" e preparo incluídos pela tela', async () => {
     definirSessaoDaTela({ permissoes: ['agenda.estruturada.editar'] } as never);
     const buscar = vi.fn(async (url: string, init?: RequestInit) => {
@@ -445,7 +530,7 @@ describe('marcação: profissional não credenciado (decisão 25)', () => {
     );
     expect(w.emitted('efeito')?.at(-1)).toEqual(['alerta']);
   });
-  it('bloqueio: avisa e emite o bloqueio (a tela desabilita o botão)', async () => {
+  it('bloqueio: avisa e emite o bloqueio', async () => {
     const { w } = montar('bloqueio');
     await flushPromises();
     expect(w.find('[data-testid="marcacao-credenciamento-bloqueio"]').exists()).toBe(true);
@@ -458,5 +543,53 @@ describe('marcação: profissional não credenciado (decisão 25)', () => {
     const sem = montar('alerta', null);
     await flushPromises();
     expect(sem.w.text()).toBe('');
+  });
+});
+
+describe('MarcarTela: o efeito do credenciamento no botão Marcar (decisão 25)', () => {
+  const montarTela = async (efeito: 'nenhum' | 'alerta' | 'bloqueio') => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.startsWith('/api/agendas/5/estruturada')
+          ? json(AGENDA)
+          : url.startsWith('/api/credenciamentos/verificacao')
+            ? json({ credenciado: efeito === 'nenhum', efeito, credenciamentoId: null, motivo: null })
+            : json({ title: 'não simulado' }, 404),
+      ),
+    );
+    const roteador = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/agenda/consultas/marcar', component: MarcarTela as never }],
+    });
+    await roteador.push('/agenda/consultas/marcar?agenda=5&data=2026-06-10&hora=08:00');
+    await roteador.isReady();
+    const w = mount(MarcarTela as never, { global: { plugins: [...plugins(), roteador] } });
+    await flushPromises();
+    // paciente e convênio escolhidos: só o credenciamento decide se o botão fica livre
+    await w.get('[data-testid="marcar-termo"]').setValue('Paciente');
+    const busca = w
+      .findAll('form[role="search"]')
+      .find((f) => f.find('[data-testid="marcar-termo"]').exists());
+    await busca?.trigger('submit');
+    await flushPromises();
+    await w.get('[data-testid="paciente-41"]').trigger('click');
+    await escolher(w as never, 'marcar-convenio', '2');
+    await flushPromises();
+    return w;
+  };
+  const botao = (w: { get: (s: string) => { attributes: (n: string) => unknown } }) =>
+    w.get('[data-testid="botao-marcar"]').attributes('disabled');
+
+  it('bloqueio do convênio: avisa e desabilita o botão Marcar', async () => {
+    const w = await montarTela('bloqueio');
+    expect(w.get('[data-testid="paciente-escolhido"]').text()).toContain('Paciente Sintético');
+    expect(w.find('[data-testid="marcacao-credenciamento-bloqueio"]').exists()).toBe(true);
+    expect(botao(w as never)).toBeDefined();
+  });
+  it('alerta (padrão): avisa e deixa marcar', async () => {
+    const w = await montarTela('alerta');
+    expect(w.get('[data-testid="marcacao-credenciamento-alerta"]').text()).toContain('não é credenciado');
+    expect(botao(w as never)).toBeUndefined();
   });
 });

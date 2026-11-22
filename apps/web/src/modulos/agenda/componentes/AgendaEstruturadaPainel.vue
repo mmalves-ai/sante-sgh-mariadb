@@ -17,6 +17,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { pode } from '../../../casca/sessao/pode.js';
+import { listarConvenios } from '../../precos/api-precos.js';
 import { lerAgendaEstruturada } from '../api-estruturada.js';
 import { nomesDaAgenda } from '../estruturada-edicao.js';
 import { agruparCobertura, dataTela, reais, regrasVigentes } from '../estruturada-tela.js';
@@ -72,10 +73,27 @@ const conveniosDaAgenda = computed(() =>
     nome: convenio(c.fontePagadoraId),
   })),
 );
+const incluindo = ref<TipoRegraEstruturada | null>(null);
+// Cobertura: a coluna própria que substitui o texto pode incluir um convênio que a agenda ainda não aceita, então a
+// escolha vem do cadastro de convênios ativos do hospital (o mesmo da tela de preços), somado aos aceitos.
+const cadastroConvenios = useQuery({
+  queryKey: ['convenios', '', 'ativos'],
+  queryFn: () => listarConvenios('', 'ativos'),
+  enabled: computed(() => incluindo.value === 'cobertura'),
+});
+const conveniosCobertura = computed(() => {
+  const lista = [...conveniosDaAgenda.value];
+  const vistos = new Set(lista.map((c) => c.fontePagadoraId));
+  for (const c of cadastroConvenios.data.value?.itens ?? []) {
+    if (vistos.has(c.codigo)) continue;
+    vistos.add(c.codigo);
+    lista.push({ fontePagadoraId: c.codigo, nome: c.nome });
+  }
+  return lista;
+});
 const rotuloTexto = (x: TextoOrigemAgenda) =>
   t(`estruturada.textoOriginal.campos.${x.campo}`, { convenio: convenio(x.fontePagadoraId) });
 const podeEditarRegras = computed(() => pode('agenda.estruturada.editar'));
-const incluindo = ref<TipoRegraEstruturada | null>(null);
 const vigencia = (x: { vigenciaInicio: string | null; vigenciaFim: string | null }) =>
   x.vigenciaInicio === null
     ? t('estruturada.semVigencia')
@@ -294,7 +312,7 @@ async function gravado(m: string): Promise<void> {
             v-if="podeEditarRegras && incluindo === 'cobertura'"
             :agenda-id="agendaId"
             tipo="cobertura"
-            :convenios="conveniosDaAgenda"
+            :convenios="conveniosCobertura"
             :textos="a.textos"
             :rotulo-texto="rotuloTexto"
             :hoje="hoje"

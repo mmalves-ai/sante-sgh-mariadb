@@ -460,7 +460,12 @@ async function fazerEncaixe(): Promise<void> {
         }}
       </p>
       <div class="filtros">
-        <SanteSelecao v-model="convenio" :rotulo="t('agenda.convenio')" :opcoes="convenios" />
+        <SanteSelecao
+          v-model="convenio"
+          :rotulo="t('agenda.convenio')"
+          :opcoes="convenios"
+          data-testid="marcar-convenio"
+        />
         <SanteSelecao v-model="canal" :rotulo="t('agenda.canal')" :opcoes="canais" />
         <label><input v-model="retorno" type="checkbox" /> {{ t('agenda.marcar.retorno') }}</label>
       </div>

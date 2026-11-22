@@ -32,3 +32,14 @@
 - Marcação: a tela supõe que o `codigo` do convênio nas opções da agenda é o id da fonte pagadora; a recusa por
   bloqueio na gravação da marcação é do servidor.
 - Credenciamento pelo convênio: escolher o profissional pelo nome pede uma lista de profissionais na tela.
+
+## Volta de correção (achados da revisão)
+- Cobertura: a escolha do convênio passou a vir do cadastro de convênios ativos do hospital (`listarConvenios('',
+  'ativos')`, a mesma consulta da tela de preços), somado aos aceitos pela agenda, sem repetir. Restrição e preparo
+  continuam com os aceitos. Teste novo: cobertura de um convênio fora da lista da agenda.
+- Decisão 25 na `MarcarTela`: dois testes montam a tela inteira (opções e busca de paciente simuladas, sintéticas):
+  com "bloqueio" o botão Marcar fica desabilitado; com "alerta" o aviso aparece e o botão fica livre. Conferido por
+  mutação: sem a condição `efeitoCredenciamento !== 'bloqueio'`, o teste falha. O caso do componente foi renomeado
+  para não prometer o botão. A seleção de convênio da marcação ganhou `data-testid="marcar-convenio"`.
+- `vitest` de agenda, precos e cadastro: 6 arquivos, 60/60 (`estruturada-edicao.spec.ts`: 17). `vue-tsc`, `eslint` e
+  `prettier`: ok. O erro não tratado (`nextSibling`) em `estruturada-telas.spec.ts` já existia antes desta volta.
