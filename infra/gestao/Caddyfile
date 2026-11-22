@@ -1,7 +1,6 @@
 # Acesso de gestão do banco pelo browser (dono, 2026-11-21): HTTPS com certificado interno na frente do Adminer.
 :5320 {
-	tls internal {
-		on_demand
-	}
+	# certificado da CA local da VM (certs/ca-sgh-vm.crt, instalada pelo dono no computador dele; certs/ fora do git)
+	tls /certs/servidor-vm.crt /certs/servidor-vm.key
 	reverse_proxy sgh-gestao-adminer:8080
 }

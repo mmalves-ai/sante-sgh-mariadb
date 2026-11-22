@@ -48,8 +48,8 @@ TBPROFIS	NDEP	profissional_dado_fiscal.dependentes_irrf	inteiro_nao_negativo			d
 TBESPEC	COD	especialidade_medica.codigo	texto			código da especialidade (número gravado como texto)
 TBESPEC	NOME	especialidade_medica.descricao	texto_nome			descrição; vazia recusa (NOT NULL)
 TBESPEC	SIGLA	especialidade_medica.sigla	texto			sigla
-TBESPEC	IDADE_INICIAL	especialidade_medica.idade_minima_anos	inteiro			faixa etária; fora da regra do destino recusa a linha (CHECK)
-TBESPEC	IDADE_FINAL	especialidade_medica.idade_maxima_anos	inteiro			faixa etária
+TBESPEC	IDADE_INICIAL	especialidade_medica.idade_minima_anos	inteiro_faixa:0,130			faixa etária (C4: fora de 0 a 130, limite do CHECK, vira NULL com valor_fora_do_dominio, linha gravada)
+TBESPEC	IDADE_FINAL	especialidade_medica.idade_maxima_anos	idade_maxima_sem_limite:130			faixa etária (C4: 0 ou acima de 130 é a marca de sem limite: NULL com idade_sem_limite, em vez de recusar pelo CHECK)
 TBCBOSUS_TBESPEC	ID_TBESPEC	especialidade_ocupacao.especialidade_medica_id	chave_origem			especialidade (mesma fatia)
 TBCBOSUS_TBESPEC	ID_TBCBOSUS	especialidade_ocupacao.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	o valor é o ID substituto de TBCBOSUS: a referência encadeada lê o COD da linha pai e o de-para oficial cbo acha a ocupação (nunca pelo ID)
 TBMEDESP	ID_TBCBOPRO	profissional_especialidade.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	profissional pela inscrição no conselho (referência encadeada)

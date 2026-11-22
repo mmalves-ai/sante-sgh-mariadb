@@ -5,14 +5,15 @@
 # (conector/sante_conector/diag_cadeia.py). Só contagens e agregados (regra 5).
 #   flock .../sante-sgh-dados/obra/pesado.lock env CONECTOR_GRAVADORES=2 tools/obra/diag-cadeia.sh
 #   DIAG_MANTER=1 mantém os bancos de teste no fim (padrão: apaga cliente, controle e plataforma de teste).
+#   DIAG_CLIENTE=<codigo> usa outro cliente de teste (padrão nucleo_d; a plataforma de teste é <codigo>_plataforma).
 # Saída em sante-sgh-dados/obra/lib/diag-cadeia/: recorte.tsv, resultado.json e diag.log.
 set -euo pipefail
 RAIZ=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$RAIZ"
 D=${DIAG_SAIDA:-$(cd "$RAIZ/.." && pwd)/sante-sgh-dados/obra/lib/diag-cadeia}
 ORIGEM=${DIAG_ORIGEM:-pc-20261019.fdb}
-COD=nucleo_d
-PLAT=nucleo_d_plataforma
+COD=${DIAG_CLIENTE:-nucleo_d}
+PLAT=${COD}_plataforma
 mkdir -p "$D"
 LOG=$D/diag.log
 : > "$LOG"
