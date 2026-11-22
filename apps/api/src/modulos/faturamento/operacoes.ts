@@ -23,9 +23,10 @@ import {
   type LancarItemEntrada,
   type ReabrirContaEntrada,
   type RegraPrecoParticular,
+  type VerificacaoCredenciamento,
 } from '@sgh/contratos';
 import { conferirPrecoManual } from '@sgh/dominio-faturamento';
-import { escolherRegraPrecoParticular } from '@sgh/dominio-preco';
+import { escolherRegraPrecoParticular, verificarCredenciamento } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -38,7 +39,11 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { candidatasPrecoParticular } from '@sgh/persistencia';
+import {
+  candidatasPrecoParticular,
+  credenciamentosVigentes,
+  opcoesCredenciamentoConvenio,
+} from '@sgh/persistencia';
 import { versaoNumero } from './esquemas.js';
 import {
   conferirCompetenciaDaConta,
@@ -366,20 +371,21 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
 });
 
-/**
- * A regra de preço particular que vence para o item na conta (ADR 0009): só na conta de fonte particular; o
- * profissional é o do atendimento e a agenda, a da marcação que o originou. "consulta" vale para o honorário (tipo 2)
- * de atendimento vindo de agenda.
- */
-async function regraParticularDoItem(
+/** Quem atende o item e de onde veio o atendimento: o profissional e a agenda da marcação (ADR 0009). */
+interface AtendimentoDoItem {
+  readonly particular: boolean;
+  /** O executante do item, quando vem no lançamento; senão, o profissional do atendimento. */
+  readonly profissional: number | null;
+  /** A agenda da marcação, só quando o item é do profissional dela (o executante é o do atendimento). */
+  readonly agenda: number | null;
+}
+
+async function atendimentoDoItem(
   tx: TxOperacao,
   conta: { readonly id: number; readonly fonte: number },
-  est: number,
-  item: Linha,
-  e: { readonly tipo: number; readonly data: string },
-): Promise<RegraPrecoParticular | null> {
+  executante: number | null,
+): Promise<AtendimentoDoItem> {
   const f = await tx.uma<Linha>('SELECT tipo FROM fonte_pagadora WHERE id = ?', [conta.fonte]);
-  if (texto(f?.['tipo']) !== 'particular') return null;
   const at = await tx.uma<Linha>(
     `SELECT a.profissional_id, ha.agenda_servico_id
        FROM conta_hospitalar c JOIN atendimento a ON a.id = c.atendimento_id
@@ -388,14 +394,42 @@ async function regraParticularDoItem(
       WHERE c.id = ?`,
     [conta.id],
   );
-  const profissional = at?.['profissional_id'] == null ? null : n(at['profissional_id']);
+  const doAtendimento = at?.['profissional_id'] == null ? null : n(at['profissional_id']);
   const agenda = at?.['agenda_servico_id'] == null ? null : n(at['agenda_servico_id']);
+  const profissional = executante ?? doAtendimento;
+  return {
+    particular: texto(f?.['tipo']) === 'particular',
+    profissional,
+    agenda: profissional !== null && profissional === doAtendimento ? agenda : null,
+  };
+}
+
+/**
+ * A regra de preço particular que vence para o item na conta (ADR 0009): só na conta de fonte particular. O
+ * profissional é o executante do item (ou o do atendimento) e a agenda, a da marcação, só quando o item é do
+ * profissional dela. "consulta" é o item faturável que o catálogo de agendamento marca como consulta (item_agendavel
+ * de tipo consulta), com ou sem marcação: o honorário de um exame ou de outro médico não leva o preço da consulta.
+ */
+async function regraParticularDoItem(
+  tx: TxOperacao,
+  conta: { readonly id: number; readonly fonte: number },
+  est: number,
+  item: Linha,
+  quem: AtendimentoDoItem,
+  data: string,
+): Promise<RegraPrecoParticular | null> {
+  if (!quem.particular) return null;
+  const consulta = await tx.uma<Linha>(
+    `SELECT id FROM item_agendavel WHERE item_faturavel_id = ? AND tipo_item = 'consulta' AND excluido_em IS NULL
+      LIMIT 1`,
+    [n(item['id'])],
+  );
   const pedido = {
     fontePagadoraId: conta.fonte,
-    profissionalId: profissional,
-    agendaId: agenda,
+    profissionalId: quem.profissional,
+    agendaId: quem.agenda,
     estabelecimentoId: est,
-    data: e.data,
+    data,
   };
   const candidatas = await candidatasPrecoParticular(tx, pedido);
   return escolherRegraPrecoParticular(candidatas, {
@@ -403,9 +437,51 @@ async function regraParticularDoItem(
     alvo: {
       itemFaturavelId: n(item['id']),
       grupoFaturamentoId: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
-      consulta: e.tipo === 2 && agenda !== null,
+      consulta: consulta !== null,
     },
   });
+}
+
+/**
+ * Decisão 25 no lançamento: na conta de convênio, o profissional do item sem credenciamento vigente no convênio ou
+ * no plano da conta gera ALERTA (devolvido no resultado e na memória) ou, quando o convênio pede, BLOQUEIO.
+ */
+async function credenciamentoDoItem(
+  tx: TxOperacao,
+  conta: { readonly fonte: number; readonly plano: number | null },
+  est: number,
+  quem: AtendimentoDoItem,
+  data: string,
+): Promise<VerificacaoCredenciamento | null> {
+  if (quem.particular || quem.profissional === null) return null;
+  let planoSuperiorId: number | null = null;
+  if (conta.plano !== null) {
+    const pl = await tx.uma<Linha>('SELECT plano_superior_id FROM plano_fonte_pagadora WHERE id = ?', [
+      conta.plano,
+    ]);
+    planoSuperiorId = pl?.['plano_superior_id'] == null ? null : n(pl['plano_superior_id']);
+  }
+  const q = { profissionalId: quem.profissional, fontePagadoraId: conta.fonte, estabelecimentoId: est, data };
+  const credenciamentos = await credenciamentosVigentes(tx, q);
+  const opcoes = await opcoesCredenciamentoConvenio(tx, conta.fonte);
+  const v = verificarCredenciamento({
+    particular: false,
+    profissionalId: quem.profissional,
+    planoId: conta.plano,
+    planoSuperiorId,
+    data,
+    credenciamentos,
+    opcoes,
+  });
+  if (v.efeito === 'bloqueio')
+    throw recusa(
+      'profissional-nao-credenciado',
+      v.motivo ?? 'O profissional não é credenciado no convênio.',
+      {
+        campos: ['executante'],
+      },
+    );
+  return v.efeito === 'alerta' ? v : null;
 }
 
 export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>({
@@ -433,7 +509,9 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       });
     // ADR 0009: no particular, a regra estruturada do médico ou da agenda vale ANTES da tabela do particular (o
     // convênio segue só a tabela: não há preço por médico em convênio).
-    const regra = e.precoManual ? null : await regraParticularDoItem(tx, conta, est, item, e);
+    const quem = await atendimentoDoItem(tx, conta, e.executante);
+    const alerta = await credenciamentoDoItem(tx, conta, est, quem, e.data);
+    const regra = e.precoManual ? null : await regraParticularDoItem(tx, conta, est, item, quem, e.data);
     const tabelas = await tabelasDePreco(tx, est, conta.fonte, conta.plano, conta.tabela);
     const naTabela = regra
       ? null
@@ -557,6 +635,8 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
           : null,
         ato: e.ato > 0 ? e.ato : null,
         origem: e.origem ?? null,
+        profissional: quem.profissional,
+        credenciamento: alerta ? { efeito: alerta.efeito, motivo: alerta.motivo } : null,
       }),
       ocorrido_em: new Date(),
       usuario_id: ctx.usuario,
@@ -578,7 +658,10 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       valor_filme: n(soma?.['filme']),
       valor_total: Math.max(0, r2(itens + n(cab?.['valor_acrescimo']) - n(cab?.['valor_desconto']))),
     });
-    return { id, conta: conta.id, valor };
+    // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
+    return alerta
+      ? { id, conta: conta.id, valor, alerta: 'profissional-nao-credenciado', alertaMotivo: alerta.motivo }
+      : { id, conta: conta.id, valor };
   },
   eventos: (_e, r) => [
     { tipo: 'faturamento.item.lancado', carga: { conta: Number(r['conta']), item: Number(r['id']) } },

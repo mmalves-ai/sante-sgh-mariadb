@@ -47,3 +47,39 @@ jejum, documento), 6.12 a 6.14 (criança de 5 anos, encaixe, sexo, retorno em 30
    `POST convenios/:id/credenciar-todos`).
 4. Fora do lote: `permissoes:verificar` segue VERMELHO por 4 rotas antigas sem auditoria (config/dominios e
    plataforma-onboarding), nenhuma deste lote; as 5 permissões novas passam.
+
+## Correção após a revisão (2026-11-22)
+Prova: `tsc` de `apps/api` ok; `eslint` e `prettier` ok; unidade `faturamento` e `precos` 46/46; integração no cliente
+`adr9_dapi` (plataforma `plataforma_teste_adr9_dapi`, apagados no fim): `agenda-preco.int.spec.ts` +
+`faturamento/porta-propria.int.spec.ts` 32/32 (4 testes novos de `lancarItem`).
+- **Achado 1 (credenciamento no fluxo real), corrigido no lançamento:** `lancarItem` verifica o credenciamento do
+  profissional do item (executante, ou o do atendimento) no convênio e no plano da conta (com o plano superior). Com
+  bloqueio, recusa `profissional-nao-credenciado`; com alerta, devolve `alerta` e `alertaMotivo` no resultado e grava
+  o aviso na memória. Marcação e abertura de atendimento ficam nos módulos agenda e atendimento, fora deste lote
+  (pendência 5).
+- **Achado 2 (consulta), corrigido:** "consulta" é o item faturável que o catálogo de agendamento marca como consulta
+  (`item_agendavel` de tipo consulta), com ou sem marcação. O profissional é o executante do item, quando vem no
+  lançamento, e a agenda da marcação só vale quando o item é do profissional dela.
+- **Achado 3 (sem teste do lançamento), corrigido:** testes de integração de `lancarItem` cobrem a consulta particular
+  sem marcação, que usa a regra do médico (valor, `regra_preco_particular_id`, `tabela_preco_id` nulo, `origemPreco`,
+  `regraEstimada`). Cobrem também o honorário que não é consulta (vai para a tabela), a consulta de outro executante
+  (usa a regra dele), o convênio com regra particular do mesmo médico (vai para a tabela, com alerta) e o convênio com
+  bloqueio (recusa e, depois de credenciar, aceita). A regra da agenda no lançamento continua sem teste de
+  integração, porque exige a massa de marcação. O domínio e a rota `/calcular` já a cobrem.
+- **Achado 4 (decisão 26 na criação), procedente, mas não há onde ligar neste lote:** a API não tem operação de criar
+  convênio (`fonte-propria.ts` só inclui plano e contato). O convênio entra pela carga ou pelo conector. Fica a
+  pendência 3.
+- **Achado 5 (repasse integral), procedente:** o motor de repasse já calcula sobre o valor do item pela
+  `regra_repasse_item` com percentual. Basta gravar a regra a 100%. Isso é trabalho do conector e da porta de repasse,
+  fora deste lote (pendência 6).
+
+## Pendências (atualizadas)
+1. O parâmetro do particular padrão (sem mudança).
+2. Teste de integração da regra da agenda no lançamento, com marcação sintética.
+3. Ligar `deveCredenciarTodosAoCriar` + `credenciarTodosAtivos` na operação de criar convênio, quando ela existir, e
+   no conector, para o cliente importado.
+4. `permissoes:verificar` (sem mudança).
+5. Credenciamento na marcação (agenda) e na abertura do atendimento (atendimento), com a mesma regra do lançamento.
+6. Gravar `regra_repasse_item` a 100% pela porta de repasse e pelo conector, quando a origem marca a consulta
+   particular integral, e usar `repasseIntegralVale` no cálculo, com teste do repasse sobre o valor cobrado pela regra.
+
