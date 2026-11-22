@@ -134,3 +134,84 @@ Para chegar a 10 vezes é preciso **paralelismo entre processos**:
 
 Isso exige separar o estado em memória (`existente`, `prop`, `origem`) por processo e juntar os resultados na
 conciliação. É mudança de arquitetura do motor e precisa de orçamento próprio.
+
+## Etapa 2: um leitor e N gravadores (orçamento `paralelismo-carga`, 2026-11-22)
+
+**Desenho** (`conector/sante_conector/paralelo.py`, chamado por `CargaMapa.executar`):
+- o processo principal é o **único leitor** do Firebird e serve as leituras dos gravadores por canal, em lotes de 1.000
+  linhas com um lote adiantado por fluxo;
+- **N gravadores** (`CONECTOR_GRAVADORES`, padrão 6) são processos filhos (fork), cada um com a própria conexão ao
+  MariaDB (READ COMMITTED) e o mesmo `_tabela` de antes;
+- **ondas**: B vai para uma onda depois de A (anterior no plano) quando:
+  - uma menciona a outra: dependencias.tsv ou qualquer nome de tabela da origem ou de destino do plano no texto da
+    especificação (`ref:`, `cod:`, `@id:`, encadeadas, filtros, opções);
+  - ou as duas gravam o mesmo destino.
+
+  Assim um destino nunca tem dois gravadores ao mesmo tempo, e o id reservado MAX+1 continua seguro. As tabelas
+  relacionadas seguem a ordem do plano;
+- a onda só começa depois de a anterior terminar, ser commitada e ter o estado juntado. A onda de uma tabela só roda no
+  próprio processo principal. **Nenhuma tabela é dividida por faixa** (na dúvida, um gravador só);
+- o gravador devolve só a diferença do estado em memória: chaves tocadas, cauda das listas e soma dos contadores. A fase
+  2, o Sincronizar, a conciliação, as provas, o relatório e o preço da origem seguem no processo principal, como antes;
+- o código antigo, com a ordem do plano num processo só, vale em três casos:
+  - `CONECTOR_GRAVADORES=1`;
+  - leitor que não seja o Firebird real;
+  - conexão que não seja pymysql.
+- **Correções pedidas pela prova:**
+  - as marcas `_AMBIGUO` e `NAO_NUMERICO` voltam idênticas depois do pickle. Sem isso, `pai_ambiguo` virava
+    `pai_inexistente` no teste L6-12;
+  - os contadores (`cont`) refeitos por atribuição ou criados no gravador são somados, e não substituídos.
+
+**Medida:**
+- **Origem:** cópia real `pc-20261019.fdb`.
+- **Recorte:** PREVOLPAC, GELANSAI, FCLANEXT e TBCABTRILHA com 150.000 linhas cada, e os pais com 20.000. São 124
+  tabelas, 888.330 linhas e 30 ondas, a maior com 50 tabelas.
+- **Bancos:** clientes `vel_p1` e `vel_p6c` na plataforma `plataforma_teste_par`, apagados no fim.
+
+| Passada | 1 gravador | 6 gravadores |
+|---|---:|---:|
+| 1ª (carga) | 196,9 s, **4.511 linhas/s** | 162,7 s, **5.461 linhas/s** (1,2×) |
+| 2ª (idempotência) | 87,9 s, 10.106 linhas/s | 95,4 s, 9.308 linhas/s |
+
+- **Equivalência entre os dois modos:**
+  - o `conector_origem` por tabela e por regra é idêntico nas 124 tabelas;
+  - as pendências por regra são idênticas: 923.948 na 1ª passada e 900.589 na 2ª;
+  - os contadores da carga são idênticos;
+  - 186 de 187 entidades são conferidas nos dois, e a divergente é a mesma, vinda do recorte;
+  - a 2ª passada pula tudo como igual nos dois.
+- **Ganho pequeno no recorte:** o recorte é dominado por cadeias de ondas de uma tabela só e pelas quatro tabelas
+  medidas, cada uma num gravador.
+
+**Previsão da carga completa:**
+- **Comando:** `conector.sh medir-carga <img> --cliente C --tabelas X --prever 6000,25000,6`.
+- **Base:** contagem real de cada tabela do plano, as ondas, 6 gravadores a 6.000 linhas/s cada e o leitor a 25.000
+  linhas/s.
+- **Resultado:** 1.137 tabelas, 166 milhões de linhas no plano e 208 ondas, ou seja, **cerca de 5,3 horas**. Com 4.500
+  linhas/s por gravador, cerca de 7 horas. Antes, de 15 a 18 horas.
+- **A meta de 4 horas não é alcançada sem dividir tabela grande.**
+  - A onda mais longa tem 31 tabelas e 34 milhões de linhas, e leva cerca de 1,5 hora.
+  - Ela é limitada pela TBCABTRILHA (trilha de auditoria), com 32,9 milhões de linhas num gravador só.
+  - Depois vêm TBLANTRILHASGH (17,1 M), PREVOLPAC (14,2 M), PREVOLPACTMP (7,5 M) e PRCHKGERAL (6,3 M).
+- **Próximo passo:** dividir por faixa de chave as tabelas grandes sem autorreferência, adoção nem agrupamento, com
+  reserva de id por faixa para cada gravador. A trilha de auditoria é a primeira candidata.
+
+**Provas:**
+- **(b) `conector/conector.sh testes`:** 1.230 testes OK, com 10 pulados e 2 falhas esperadas, tanto com 6 gravadores
+  (padrão) quanto com `CONECTOR_GRAVADORES=1`.
+- **(c) `tools/obra/conferir-fatia-f4.sh`:**
+  - Fatias: L5-01, L5-03, L6-01, L6-12, L7-01, L7-05, L7-08, L8-01, L8-06 e L8-08.
+  - 8 dão ok.
+  - L7-08 e L8-01 falham com o mesmo erro do HEAD, sem mudança.
+
+**Riscos:**
+- **Memória.** Cada gravador nasce do fork com todo o estado.
+  - O coletor fica congelado no fork, para reduzir a cópia de página.
+  - O estado da tabela grande (`existente`, `origem`) volta por pickle ao processo principal.
+  - Na carga completa, é preciso vigiar a memória (45 GB).
+- **Dependência pelo texto.** Um nome de tabela que não aparece na especificação nem no dependencias.tsv não cria
+  ordem. O critério é conservador (qualquer menção vale), e a prova de equivalência cobre o recorte.
+- **Junção do estado.** Ela é genérica por atributo. Um dicionário grande alterado no lugar, fora das chaves da tabela
+  em gravação, não volta. Os testes e o recorte não mostraram nenhum caso.
+- **Fork com o Firebird carregado.** O filho nunca usa a conexão herdada e sai por `os._exit`.
+- **Trava entre gravadores** no `conector_origem`. A chave única é por tabela da origem, e a sessão usa READ COMMITTED.
+  Não houve deadlock no recorte.

@@ -66,7 +66,7 @@ def main(argv=None):
     p.add_argument("--tabelas", required=True); p.add_argument("--limite", type=int, default=100000)
     p.add_argument("--limite-pais", type=int, default=10000); p.add_argument("--vezes", type=int, default=2)
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--saida")
-    p.add_argument("--perfil")
+    p.add_argument("--perfil"); p.add_argument("--prever")
     p = sub.add_parser("testes"); p.add_argument("--padrao", default="test*.py")
     p = sub.add_parser("conferir-fatia"); p.add_argument("fatia")
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
@@ -198,6 +198,9 @@ def main(argv=None):
     if a.cmd == "medir-carga":
         from . import banco, medir_carga
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
+            if a.prever:  # previsão da carga completa: gravador,leitor em linhas/s e número de gravadores
+                g, r, n = (float(x) for x in a.prever.split(","))
+                return _json(medir_carga.prever(lt, g, r, int(n)), a.saida)
             return _json(medir_carga.medir(lt, origem, banco.nome_seguro(a.cliente), a.tabelas.split(","), a.limite,
                                            a.limite_pais, a.vezes, a.perfil), a.saida)
     if a.cmd == "medir-adr9":

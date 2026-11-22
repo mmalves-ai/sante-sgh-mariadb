@@ -178,7 +178,7 @@ import time
 import pymysql
 
 from . import sincronizar as sincronizar_mod
-from . import carga, continuidade, depara, mapa, sentinela
+from . import carga, continuidade, depara, mapa, paralelo, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_linha
 from .pendencia import Propagador
@@ -218,9 +218,20 @@ TXT_DESTINO = {"char", "varchar", "text", "tinytext", "mediumtext", "longtext"}
 # cadastro provisório do L3 (carga._provisorio): tabela da origem -> tabela do destino do provisório. Só é completado
 # pela linha real quando o destino principal declarado é o mesmo (TBCBOPRO cria profissional, mas carrega inscrição)
 PROVISORIO = {"TBCONVEN": "fonte_pagadora", "TBCBOPRO": "profissional"}
-_AMBIGUO = object()            # valor repetido na chave alternativa do pai (`ref:T.K`)
+
+
+class _Sentinela:
+    """Marca única que volta a ser ELA MESMA depois de passar por pickle (estado juntado dos gravadores)."""
+    def __init__(self, nome):
+        self.nome = nome
+
+    def __reduce__(self):
+        return self.nome
+
+
+_AMBIGUO = _Sentinela("_AMBIGUO")          # valor repetido na chave alternativa do pai (`ref:T.K`)
 # texto não numérico em coluna numérica do destino (L6-06): o chamador grava NULL com valor_fora_do_dominio
-NAO_NUMERICO = object()
+NAO_NUMERICO = _Sentinela("NAO_NUMERICO")
 
 
 def tipar(x, tipo):
@@ -2407,9 +2418,7 @@ class CargaMapa(carga.Carga):
         self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
         self._garantir("segredo_cofre", continuidade.DDL_COFRE)
         self.cr.commit()
-        for i, p in enumerate(self.plano):
-            self.progresso(i / len(self.plano), "carregando %s" % p["destinos"][0])
-            self._tabela(p)
+        paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
         self._fase2()
         if self.sinc:
             sincronizar_mod.excluir_apagadas(self)

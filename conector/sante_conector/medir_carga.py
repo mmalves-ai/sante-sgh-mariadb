@@ -68,7 +68,9 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
     finally:
         root.close()
     cc = banco.conectar("cliente_" + codigo, autocommit=False)
-    saida = {"tabelas_no_recorte": len(nomes), "medidas": sorted(tabelas), "passadas": []}
+    saida = {"tabelas_no_recorte": len(nomes), "medidas": sorted(tabelas), "passadas": [],
+             "gravadores": carga_mapa.paralelo.gravadores(),
+             "ondas": [len(o) for o in carga_mapa.paralelo.ondas([p for p in plano_todo if p["tabela"] in alvo], mapa_exec)]}
     try:
         for vez in range(vezes):
             eid = EID_MEDICAO + int(time.time()) % 1000000
@@ -107,3 +109,27 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
     finally:
         cc.close()
     return saida
+
+
+def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
+    """Previsão da carga completa: contagem de cada tabela do plano inteiro, ondas e gravadores livres (a maior
+    tabela primeiro), com o teto de um gravador e o teto do leitor único. Só contagens."""
+    mapa_exec = mapa.carregar_execucao()
+    plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()))
+    cont = {p["tabela"]: lt.contar(p["tabela"]) for p in plano}
+    ws = carga_mapa.paralelo.ondas(plano, mapa_exec)
+    total_s, por_onda = 0.0, []
+    for onda in ws:
+        livres = [0.0] * min(gravadores, len(onda))
+        for i in sorted(onda, key=lambda i: -cont[plano[i]["tabela"]]):
+            j = livres.index(min(livres))
+            livres[j] += cont[plano[i]["tabela"]] / ritmo_gravador
+        linhas = sum(cont[plano[i]["tabela"]] for i in onda)
+        s = max(max(livres), linhas / ritmo_leitor)
+        total_s += s
+        por_onda.append((len(onda), linhas, round(s)))
+    maiores = sorted(cont.items(), key=lambda x: -x[1])[:8]
+    return {"tabelas": len(plano), "linhas": sum(cont.values()), "ondas": len(ws), "horas": round(total_s / 3600, 2),
+            "ondas_mais_longas": sorted(por_onda, key=lambda x: -x[2])[:8],
+            "maiores_tabelas": [(t, n, ws_i) for t, n in maiores
+                                for ws_i in [next(k for k, o in enumerate(ws) if any(plano[i]["tabela"] == t for i in o))]]}
