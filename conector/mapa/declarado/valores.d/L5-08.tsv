@@ -1,0 +1,283 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	A	1	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	B	2	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	C	3	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	D	4	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	E	5	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	F	6	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	G	7	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	H	8	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	I	9	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	J	10	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	K	11	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	L	12	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	M	13	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	N	14	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	O	15	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	P	16	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	Q	17	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	R	18	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	S	19	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	T	20	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	U	21	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	V	22	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	W	23	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	X	24	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	Y	25	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	Z	26	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	a	27	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	b	28	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	c	29	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	d	30	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	e	31	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	f	32	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	g	33	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	h	34	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	i	35	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	j	36	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	k	37	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	l	38	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	m	39	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	n	40	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	o	41	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	p	42	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	q	43	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	r	44	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	s	45	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	t	46	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	u	47	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	v	48	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	w	49	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	x	50	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	y	51	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	z	52	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	0	53	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	1	54	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	2	55	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	3	56	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	4	57	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	5	58	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	6	59	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	7	60	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	8	61	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCPARAMS1210	ID	parametro_opcao.sequencia	9	62	L5-08: ordem da opção pela letra da chave (A-Z, a-z, 0-9; só ordenação, sem significado)
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	0	0	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	00	0	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	01	1	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	1	1	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	02	2	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	2	2	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	03	3	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	3	3	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	04	4	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	4	4	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	05	5	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	5	5	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	06	6	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	6	6	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	07	7	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	7	7	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	08	8	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	8	8	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	09	9	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	9	9	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	10	10	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	11	11	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	12	12	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	13	13	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	14	14	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	15	15	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	16	16	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	17	17	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	18	18	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	19	19	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	20	20	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	21	21	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	22	22	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	23	23	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	24	24	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	25	25	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	26	26	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	27	27	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	28	28	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	29	29	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	30	30	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	31	31	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	32	32	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	33	33	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	34	34	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	35	35	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	36	36	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	37	37	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	38	38	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	39	39	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	40	40	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	41	41	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	42	42	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	43	43	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	44	44	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	45	45	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	46	46	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	47	47	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	48	48	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	49	49	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	50	50	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	51	51	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	52	52	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	53	53	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	54	54	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	55	55	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	56	56	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	57	57	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	58	58	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	59	59	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	60	60	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	61	61	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	62	62	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	63	63	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	64	64	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	65	65	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	66	66	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	67	67	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	68	68	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	69	69	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	70	70	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	71	71	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	72	72	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	73	73	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	74	74	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	75	75	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	76	76	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	77	77	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	78	78	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	79	79	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	80	80	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	81	81	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	82	82	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	83	83	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	84	84	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	85	85	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	86	86	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	87	87	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	88	88	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	89	89	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	90	90	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	91	91	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	92	92	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	93	93	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	94	94	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	95	95	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	96	96	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	97	97	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	98	98	L5-08: ordem pelo código numérico da chave
+FPESOCINDSUSP	ID	parametro_opcao.sequencia	99	99	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	0	0	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	00	0	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	01	1	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	1	1	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	02	2	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	2	2	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	03	3	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	3	3	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	04	4	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	4	4	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	05	5	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	5	5	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	06	6	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	6	6	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	07	7	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	7	7	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	08	8	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	8	8	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	09	9	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	9	9	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	10	10	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	11	11	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	12	12	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	13	13	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	14	14	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	15	15	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	16	16	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	17	17	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	18	18	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	19	19	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	20	20	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	21	21	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	22	22	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	23	23	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	24	24	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	25	25	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	26	26	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	27	27	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	28	28	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	29	29	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	30	30	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	31	31	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	32	32	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	33	33	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	34	34	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	35	35	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	36	36	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	37	37	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	38	38	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	39	39	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	40	40	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	41	41	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	42	42	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	43	43	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	44	44	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	45	45	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	46	46	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	47	47	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	48	48	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	49	49	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	50	50	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	51	51	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	52	52	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	53	53	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	54	54	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	55	55	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	56	56	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	57	57	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	58	58	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	59	59	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	60	60	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	61	61	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	62	62	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	63	63	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	64	64	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	65	65	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	66	66	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	67	67	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	68	68	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	69	69	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	70	70	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	71	71	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	72	72	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	73	73	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	74	74	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	75	75	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	76	76	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	77	77	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	78	78	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	79	79	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	80	80	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	81	81	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	82	82	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	83	83	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	84	84	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	85	85	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	86	86	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	87	87	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	88	88	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	89	89	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	90	90	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	91	91	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	92	92	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	93	93	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	94	94	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	95	95	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	96	96	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	97	97	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	98	98	L5-08: ordem pelo código numérico da chave
+FPLOTACAOTRIB	ID	parametro_opcao.sequencia	99	99	L5-08: ordem pelo código numérico da chave

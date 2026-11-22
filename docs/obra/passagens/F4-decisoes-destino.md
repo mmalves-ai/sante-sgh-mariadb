@@ -2197,3 +2197,35 @@ Decisão pela melhor prática (ADR 0006, itens 1 e 4; sem pedir aprovação):
 - Também nesta conferência: o prefixo de `#codigo_derivado:C:n:<prefixo>` aceita texto livre sem `:` nem tabulação
   (até 80 caracteres), para a descrição derivada (L6-09, `TBNUMDOSE`); comentário das provas sem `;` (o verificador
   exige um SELECT só).
+
+## Rodada 5, L5-07: listas legais do RH declaradas (2026-11-21)
+| Tabelas | Decisão | Motivo |
+|---|---|---|
+| FPADMESOCIAL, FPAFAST_COD, FPAFAST_RAIS, FPALIQRATCNAE, FPASO*, FPBR_PDH, FPCAT*, FPCAUSA_AFASTAMENTO, FPCLASSIFTRIB, FPCODALIQFPAS, FPCOND_TRAB_IMIGRANTE, FPCOR, FPDOSE_VACINA | **carregam** como lista do hospital (`parametro_opcao` sob `rh.lista.<nome>`, decisão r5-1/r5-2); FPCODALIQFPAS com valor composto id_FPAS_terceiros_alíquota; FPALIQRATCNAE uma lista por alíquota RAT; ordem de código texto por pares gerados (`valores.d/L5-07.tsv`) até o motor ter a posição na leitura da tabela (pedido em `saida/L5-07.json`) | ADR 0006 (1, 4): a lista da origem continua utilizável no produto, sem descarte por julgamento; FPBANCOPIS segue descarte `catalogo_oficial` (carregador do Banco Central) |
+
+## L5-09 refeita pela decisão do conferidor da rodada 5 (2026-11-21)
+| Tabelas | Destino | Motivo |
+|---|---|---|
+| FPMOTDESLIG, FPMOTESTABILI, FPMTCANCELAVI, FPNIVELESTAG, FPOCOR_SEFIP, FPPROCESSOTEOR, FPPROCTRAB_ESOCIAL_CR, FPRESC_CAGED, FPRESC_CAUSA, FPRESC_RAIS, FPRESC_SEFIP, FPSAQUE, FPTEMPO_RESID_TRAB_IMIGRANTE, FPTIPOAVISO, FPTIPO_CONTRATO, FPTPACESSORIA, FPTPACIDTRANS, FPTPAVISORESC, FPTPDEFICIEN | **carregam** como listas do hospital: `parametro_definicao` `rh.lista.<nome>` (tipo lista, módulo `migracao` adotado) + `parametro_opcao` por linha (valor = código, rótulo = descrição ou o código, ordem = código, origem `migracao`, ativas) | ADR 0006 (1 e 4): a lista continua utilizável no produto; o consumidor liga ao oficial pelo código. Sem descarte e sem bloqueio |
+| Ordem das listas de chave texto (FPMOTDESLIG, FPRESC_SEFIP, FPSAQUE) | `faixa:0,65535` sobre o código; código não numérico é recusado com pendência visível | Falta posição na tabela inteira (`#seq:*`, pedido r5-a da L5-09) |
+| FPPROCTRAB_ESOCIAL_CR | valor = número interno, rótulo = descrição ou código de receita; alíquota e aplicabilidade não entram | São as da tabela pública da Receita |
+| FPTIPORESC.ID_FPRESC_CAUSA | segue sem destino no tipo de rescisão; a causa fica legível na lista `rh.lista.causa_demissao` | Falta a coluna no modelo (pedido r5-b da L5-09) |
+
+## Rodada 5, conferidor (tentativa 2): licenciado próprio, listas do eSocial da L5-11 e regime TISS (2026-11-21)
+Decisões pela melhor prática (ADR 0006, itens 3 e 4; sem pedir aprovação):
+- **Linha do hospital numa tabela do espelho (pedidos R5-1 da L8-03 e R5-4 da L8-01)**: o item e o preço da tabela
+  PRÓPRIA de mat/med entram pelo conector (ADR 0006, 3: preço próprio entra). A cobertura só acusa
+  `licenciado_copiado` quando a tabela grava no espelho SEM o filtro de licença por linha (`so_se:...!licenca_nao_
+  comprovada`, a tabela licenciada é pulada e fica visível) ou com fonte licenciada por literal (`=brasindice`,
+  `=simpro`, `=cbhpm`, `=correios`). TBMATMED, FCREFUND, TBVLRMEM, TBREFMEMTUSS e TBREFUNI carregam assim.
+- **Marcas T/F da tabela de mat/med (pedido r4_marca_TF da L8-01)**: o filtro de TBMATMED e TBREFMEMTUSS aceita
+  `N`, `F` e vazio como tabela própria, igual ao de FCREFUND.
+
+| Tabelas | Decisão | Motivo |
+|---|---|---|
+| FPTP_SAL, FPTP_TREINAMENTO_CAPACITACAO, POTPJORNADA, STEMITENTE | **carregam** como listas do hospital (`parametro_opcao` sob `rh.lista.<nome>`, decisão r5-1/r5-2); FPTP_SAL com valor composto código local + código do eSocial | ADR 0006 (4): código oficial liga pelo código; código local ou de versão antiga entra ativo |
+| TBTISSREGINT | **carrega** em `regime_atendimento_internacao` (mudança coordenada da L6-14 aplicada na L6-15): 1..3 adota a semente pelo `codigo_tiss` (mescla não destrutiva, conflito guardado), fora da faixa = regime do hospital, ativo | ADR 0006 (4) e 0007 (20) |
+
+Conferência: pai externo (`PAIS_EXTERNOS`) lido na origem não entra na conciliação nem na conta de idempotência da
+fatia que o lê (ele é da fatia dona; o principal dele pode ser o mesmo destino da fatia, ex. `trilha_auditoria` de
+TBCID10 lida pela L6-15).

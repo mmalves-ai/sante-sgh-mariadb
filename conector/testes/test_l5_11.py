@@ -11,7 +11,8 @@ DECLARADAS = {"FPVACINA", "POTPCONTTEMP", "PEPERIOD_JUSTIF", "PETP_MOVIM", "POCL
               "POTPHORA", "PETPINTERVALO", "POREPHOMOLOGADO", "FPVALE"}
 # rodada 5 (ADR 0006): listas fixas sem prova possível entram como listas do hospital (parametro_opcao sob
 # parametro_definicao migracao.<lista>); a configuração do ponto (PEPARAM) entra inteira como parâmetro json
-LISTAS = {"POPROGSIT", "POPROSITUACAO", "POBANCOHRTP", "PETP_INTEGR_EVENTO"}
+LISTAS = {"POPROGSIT", "POPROSITUACAO", "POBANCOHRTP", "PETP_INTEGR_EVENTO", "FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO",
+          "POTPJORNADA", "STEMITENTE"}
 DECLARADAS = DECLARADAS | LISTAS | {"PEPARAM"}
 # classificador NOT NULL sem fonte na origem: literal presumido (=~), com pendência valor_presumido por linha
 PRESUMIDOS = {"PEPERIOD_JUSTIF": ("abrangencia_justificativa", "abrangencia"),
@@ -23,10 +24,10 @@ PRESUMIDOS = {"PEPERIOD_JUSTIF": ("abrangencia_justificativa", "abrangencia"),
               "POREPHOMOLOGADO": ("tipo_relogio_ponto", "categoria_portaria"),
               "FPVALE": ("beneficio", "tipo")}
 # descarte de produto (declarado/sem_carga.tsv): domínio de CHECK no consumidor, catálogo oficial, parâmetro
-SEM_CARGA = {"FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO", "STEMITENTE", "PODIA", "POTPINIBANCO", "POTPJORNADA"}
+SEM_CARGA = {"PODIA", "POTPINIBANCO"}
 # BLOQUEADAS com pedido (sem_carga.tsv `bloqueada`): parâmetros do ponto sem definição no produto; listas legais do
 # eSocial até o item do hospital (pedido r5-1 da L5-07)
-BLOQUEADAS = {"POTPJORNADA", "FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO", "STEMITENTE"}
+BLOQUEADAS = set()
 
 
 def _raiz():
@@ -114,8 +115,9 @@ class FatiaL511(unittest.TestCase):
         pai = [x for x in self.m["colunas_decl"] if x["tabela"] == "FPTPVALE" and x["destino"] == "beneficio.codigo"]
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         # o tipo de vale (FPTPVALE, L5-10) não grava código sem prefixo no mesmo cadastro (situação dela é da L5-10)
-        self.assertTrue(pai == [] and sc["FPTPVALE"]["situacao"] in ("descarte", "bloqueada")
-                        or [x["coluna"] for x in pai] == ["ID"])
+        # rodada 5: FPTPVALE carrega como lista do hospital (parametro_opcao), fora de beneficio
+        self.assertTrue(pai == [] and (sc.get("FPTPVALE") or {"situacao": "descarte"})["situacao"]
+                        in ("descarte", "bloqueada") or [x["coluna"] for x in pai] == ["ID"])
 
     def test_sintetica_cobre_as_declaradas(self):
         self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l5_11.DDL)), DECLARADAS | set(l5_11.PROVADAS))

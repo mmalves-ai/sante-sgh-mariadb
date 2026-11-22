@@ -1,12 +1,13 @@
 """Fatia L5-07 (cadastros do RH): tabelas da origem com os mesmos nomes e tipos do dicionário e dados 100% falsos.
 
-Só a condição do colaborador é carregada (vira situacao_colaborador INATIVA, código 'cond_<n>' pelo prefixo de domínio
-e categoria 'outro' presumida: nenhuma coluna da origem a referencia). As outras 21 são descarte de produto
-(`declarado/sem_carga.tsv`): 4 cópias de catálogo oficial (nunca gravado; 3 aguardam o carregador oficial), 15 listas
-de domínio fixo do leiaute (de-para pela descrição na coluna consumidora) e 2 listas públicas extintas sem consumidor:
-entram na imagem para provar que nada delas é gravado.
-Anomalias: descrição nula (NOT NULL no destino: recusa só a linha), espaços internos (texto_nome colapsa), acentos
-CP1252, lacunas na chave, chave alta (o código com prefixo cabe), valor_presumido em toda linha lida.
+Rodada 5 (ADR 0006, decisão r5-1/r5-2): as 19 listas legais do RH entram inteiras como listas do hospital
+(`parametro_opcao` sob `parametro_definicao` `rh.lista.<nome>`, módulo `migracao`, criados pela 1.ª linha e
+adotados). A condição do colaborador vira situacao_colaborador INATIVA ('cond_<n>', categoria 'outro' presumida).
+Só FPBANCOPIS segue descarte (catálogo oficial de bancos, carregador do Banco Central).
+Anomalias: descrição nula (o rótulo vira o código), descrição longa (texto_resumido), código alfanumérico com caixa
+(FPBR_PDH 'a' e 'A' distintos; ordem pelos pares de valores.d), código alfanumérico do SEFIP fora do domínio gerado
+(minúsculo: valor_fora_do_dominio, sem ordem, recusa visível), CNAE em listas por alíquota RAT, alíquota nula
+(sem lista: recusa visível), espaços internos, acentos CP1252, lacunas e chave alta na condição.
 """
 DDL = """
 CREATE TABLE FPADMESOCIAL (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(100));
@@ -34,29 +35,51 @@ CREATE TABLE FPCOR (COD_COR INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(20), COD_
 CREATE TABLE FPDOSE_VACINA (COD_DOSE_VAC SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(50));
 """
 
+
 CONDICOES = [(1, "Em atividade"), (2, "  Afastado   temporariamente  "), (3, None), (5, "Férias coletivas"),
              (6, "Licença não remunerada"), (8, "Cedido a outra unidade"), (9, "Aposentado por invalidez"),
              (12, "Suspensão disciplinar"), (300, "Condição de chave alta")]
 
-NAO_CARREGADAS = ["FPADMESOCIAL", "FPAFAST_COD", "FPAFAST_RAIS", "FPALIQRATCNAE", "FPASOEXAMEORD", "FPASOINDRESUL",
-                  "FPASOINTEXAME", "FPASORESULTADO", "FPASOTIPO", "FPBANCOPIS", "FPBR_PDH", "FPCATTIPO",
-                  "FPCATTPEMIS", "FPCATTPLOCACD", "FPCATTPREG", "FPCAUSA_AFASTAMENTO", "FPCLASSIFTRIB",
-                  "FPCODALIQFPAS", "FPCOND_TRAB_IMIGRANTE", "FPCOR", "FPDOSE_VACINA"]
+NAO_CARREGADAS = ["FPBANCOPIS"]
+LISTAS = ["FPADMESOCIAL", "FPAFAST_COD", "FPAFAST_RAIS", "FPALIQRATCNAE", "FPASOEXAMEORD", "FPASOINDRESUL",
+          "FPASOINTEXAME", "FPASORESULTADO", "FPASOTIPO", "FPBR_PDH", "FPCATTIPO", "FPCATTPEMIS", "FPCATTPLOCACD",
+          "FPCATTPREG", "FPCAUSA_AFASTAMENTO", "FPCLASSIFTRIB", "FPCODALIQFPAS", "FPCOND_TRAB_IMIGRANTE", "FPCOR",
+          "FPDOSE_VACINA"]
+ESPERADO = {}
+
+
+def _e(t, n, **pend):
+    ESPERADO[t] = {"gravados": n, "pendencias": pend}
+
+
+# adotado_existente: o módulo 'migracao' e a definição da lista criados pela 1.ª linha lida e adotados pelas outras
+for _t in ("FPASOEXAMEORD", "FPASOINDRESUL", "FPASOINTEXAME", "FPASORESULTADO", "FPASOTIPO", "FPCATTIPO", "FPCATTPEMIS",
+           "FPCATTPLOCACD", "FPCATTPREG", "FPCLASSIFTRIB", "FPCOND_TRAB_IMIGRANTE"):
+    _e(_t, 2, adotado_existente=3)
+for _t in ("FPAFAST_RAIS", "FPCAUSA_AFASTAMENTO", "FPCODALIQFPAS", "FPCOR", "FPDOSE_VACINA"):
+    _e(_t, 3, adotado_existente=5)
+_e("FPADMESOCIAL", 3, adotado_existente=4)       # a 1.ª tabela cria o módulo; descrição nula: rótulo = código
+_e("FPAFAST_COD", 3, adotado_existente=5, texto_resumido=1,  # 'x1' minúsculo sem ordem: recusa visível
+   valor_fora_do_dominio=1, restricao_destino_1048=1)
+_e("FPBR_PDH", 2, adotado_existente=3, restricao_destino_1062=1)  # 'a' x 'A': valor único sem caixa, recusa visível
+_e("FPALIQRATCNAE", 4, adotado_existente=5, restricao_destino_1048=1)  # alíquota nula: sem lista, recusa visível
 
 
 def linhas(r, ins):
     for i in (1, 2, 4):
-        ins("FPADMESOCIAL", [i, "Tipo de admissão %d" % i])
-    for c in ("01", "1A", "03"):
-        ins("FPAFAST_COD", [c, "Código de afastamento %s" % c])
+        ins("FPADMESOCIAL", [i, "Tipo de admissão %d" % i if i != 4 else None])
+    longa = "Descrição longa " + " ".join("palavra%d" % i for i in range(25))
+    for c in ("O1", "Z5", "01", "x1"):
+        ins("FPAFAST_COD", [c, "Código de afastamento %s" % c if c != "Z5" else longa])
+    for c in ("10", "20", "70"):
         ins("FPAFAST_RAIS", [c, "Afastamento anual %s" % c])
-        ins("FPCAUSA_AFASTAMENTO", [c, "Causa de saída %s" % c])
-    for cnae in (8610101, 8610102, 8630503):
-        ins("FPALIQRATCNAE", [cnae, r.randint(1, 3)])
+        ins("FPCAUSA_AFASTAMENTO", [c, "Causa %s" % c])
+    for cnae, rat in ((8610101, 3), (8610102, 3), (8630503, 1), (8640202, 2), (8650001, None)):
+        ins("FPALIQRATCNAE", [cnae, rat])
     for t in ("FPASOEXAMEORD", "FPASOINDRESUL", "FPASORESULTADO", "FPCATTIPO", "FPCATTPEMIS", "FPCATTPLOCACD",
               "FPCATTPREG", "FPASOTIPO", "FPCOND_TRAB_IMIGRANTE"):
         for i in (1, 2):
-            ins(t, [i, "Opção %d" % i])
+            ins(t, [i, " Op  %d " % i])
     ins("FPASOINTEXAME", [1, "Sim"])
     ins("FPASOINTEXAME", [2, "Não"])
     for i, n in ((1, "Banco um"), (2, "Banco dois")):
@@ -74,6 +97,8 @@ def linhas(r, ins):
         ins("FPDOSE_VACINA", [i, n])
     for c in CONDICOES:
         ins("FPCONDFUNC", list(c))
+    esp = dict(ESPERADO)
     # valor_presumido: uma por linha lida (categoria presumida), inclusive a recusada
-    return {"FPCONDFUNC": {"gravados": len(CONDICOES) - 1,
-                           "pendencias": {"restricao_destino_1048": 1, "valor_presumido": len(CONDICOES)}}}
+    esp["FPCONDFUNC"] = {"gravados": len(CONDICOES) - 1,
+                         "pendencias": {"restricao_destino_1048": 1, "valor_presumido": len(CONDICOES)}}
+    return esp

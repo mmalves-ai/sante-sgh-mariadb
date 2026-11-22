@@ -31,7 +31,12 @@ TBREGUL_SERVICO	ATIVO	servico_regulacao.ativo	booleano_sn			L6-15: S/N para bool
 TBTIPOACOMOD	ID	categoria_acomodacao.codigo	texto			L6-15: chave inteira da origem gravada como código (texto)
 TBTIPOACOMOD	NOME	categoria_acomodacao.descricao	texto_nome			L6-15: sem nome recusa a linha (NOT NULL)
 TBTIPOACOMOD	=~outro	categoria_acomodacao.tipo				L6-15: a origem não classifica (enfermaria, apartamento, UTI...): entra 'outro' com valor_presumido por linha (de-para de valores pedido no L6-15.json)
-TBTISSREGINT	ID					L6-15: não carregada: terminologia TISS de regime de internação vem do carregador oficial da ANS (regra 7); descarte catalogo_oficial pedido em sem_carga.tsv (L6-15.json); decisão em F4-decisoes-destino.md, seção L6-15
+TBTISSREGINT	ID	regime_atendimento_internacao.codigo	texto		principal;regime_atendimento_internacao	L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
+TBTISSREGINT	ID	regime_atendimento_internacao.codigo_tiss	inteiro_faixa:1,3		adotar:codigo_tiss	L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
+TBTISSREGINT	NOME	regime_atendimento_internacao.descricao	texto_nome			L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
+TBTISSREGINT	ID	regime_atendimento_internacao.descricao	texto			L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
+TBTISSREGINT	DATA_VIGENCIA_INICIAL	regime_atendimento_internacao.vigencia_inicio	data			L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
+TBTISSREGINT	DATA_VIGENCIA_FINAL	regime_atendimento_internacao.vigencia_fim	data			L6-15 r5 conferidor (ADR 0006, 4; mudança coordenada pedida pela L6-14 r5b): regime TISS 1..3 adota a semente pelo codigo_tiss; fora da faixa = regime do hospital, ativo
 RELOCLEITO	@estabelecimento	local_observacao.estabelecimento_id				L6-15: a origem não diz a unidade: com vários estabelecimentos recusa com estabelecimento_indefinido
 RELOCLEITO	COD_LOCAL_LEITO	local_observacao.codigo	texto			L6-15: código do local (único por estabelecimento)
 RELOCLEITO	NOME	local_observacao.nome	texto_nome			L6-15: sem nome recusa a linha (NOT NULL)

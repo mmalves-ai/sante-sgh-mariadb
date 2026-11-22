@@ -228,7 +228,7 @@ TBTIPPRO	=~Tipo de serviço migrado	tipo_servico_faturavel.descricao				L8-03 r3
 TBTIPPRO	PROCTO		inteiro			L8-03 r3 (correção): o procedimento do par vai para a associação item faturável x tipo de serviço, que o modelo não tem: pedido 11 (item_faturavel_tipo_servico, à F2.2) com a declaração pronta (ref:TBPROCTO.COD_PROCEDIMENTO ou pela chave e @id do tipo); até lá cada par fica no conector_origem da linha
 
 TBMATMED	ID		chave_origem			L8-03 r4: chave da origem (conector_origem)
-TBMATMED	#codigo_derivado:TAB+COD+CLASSIF:20	item_referencia_matmed.codigo_referencia			so_se:TAB>TBCTRMEM>REF_BRA=N,!licenca_nao_comprovada;so_se:TAB>TBCTRMEM>REF_SIMP=N,!licenca_nao_comprovada	L8-03 r4: item de mat/med de tabela PRÓPRIA do hospital (tabela sem marca Brasíndice nem Simpro) em item_referencia_matmed, fonte 'outra'; item de tabela licenciada: recusado pelo filtro com licenca_nao_comprovada (baixa), nunca gravado (regra 7); código = TAB_COD (único por fonte); código TAB_COD_CLASSIF (a chave alternativa do item é TAB, COD, CLASSIF)
+TBMATMED	#codigo_derivado:TAB+COD+CLASSIF:20	item_referencia_matmed.codigo_referencia			so_se:TAB>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada;so_se:TAB>TBCTRMEM>REF_SIMP=N,F,!licenca_nao_comprovada	L8-03 r4: item de mat/med de tabela PRÓPRIA do hospital (tabela sem marca Brasíndice nem Simpro) em item_referencia_matmed, fonte 'outra'; item de tabela licenciada: recusado pelo filtro com licenca_nao_comprovada (baixa), nunca gravado (regra 7); código = TAB_COD (único por fonte); código TAB_COD_CLASSIF (a chave alternativa do item é TAB, COD, CLASSIF)
 TBMATMED	TAB		inteiro			L8-03 r4: tabela do item: vai no código derivado e no filtro de licença
 TBMATMED	COD		inteiro			L8-03 r4: parte do código de referência (TAB+COD+CLASSIF)
 TBMATMED	NOME	item_referencia_matmed.descricao	texto_nome			L8-03 r4: descrição do item; vazia recusa (NOT NULL)
@@ -272,7 +272,7 @@ TBMATMED	IDENTIFICACAO		codigo_char			L8-03 r4 (revisão): atributo de cobrança
 TBMATMED	COB_TAXA_LOGISTICA		codigo_char			L8-03 r4 (revisão): atributo de cobrança do item da tabela PRÓPRIA (dado financeiro/fiscal que o hospital usa); sem coluna no item de referência: pedido 17 do L8-03.json à F2.2 (decisão em F4-decisoes-destino.md, L8-02/03/04 r4 revisão); NÃO é descarte
 
 TBREFMEMTUSS	ID		chave_origem			L8-03 r4: chave da origem (conector_origem)
-TBREFMEMTUSS	TAB_FCREFUND	equivalencia_matmed_tuss.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF)=(TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND);so_se:TAB_FCREFUND>TBCTRMEM>REF_BRA=N,!licenca_nao_comprovada;so_se:TAB_FCREFUND>TBCTRMEM>REF_SIMP=N,!licenca_nao_comprovada	L8-03 r4: item de mat/med pela chave alternativa (tabela, código, classificação); tabela licenciada: recusada com licenca_nao_comprovada (baixa)
+TBREFMEMTUSS	TAB_FCREFUND	equivalencia_matmed_tuss.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF)=(TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND);so_se:TAB_FCREFUND>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada;so_se:TAB_FCREFUND>TBCTRMEM>REF_SIMP=N,F,!licenca_nao_comprovada	L8-03 r4: item de mat/med pela chave alternativa (tabela, código, classificação); tabela licenciada: recusada com licenca_nao_comprovada (baixa)
 TBREFMEMTUSS	COD_FCREFUND		inteiro			L8-03 r4: parte da chave alternativa do item
 TBREFMEMTUSS	CLASSIF_FCREFUND		inteiro			L8-03 r4: parte da chave alternativa do item
 TBREFMEMTUSS	COD_TUSS	equivalencia_matmed_tuss.termo_terminologia_id	inteiro	tiss:19		L8-03 r4: termo TUSS de materiais e OPME (tabela 19, terminologia pública da ANS)

@@ -92,7 +92,7 @@ def _rodar(lt, cc, ctl, eid, mapa_exec, presentes, contagens):
     return c, c.executar(presentes, contagens)
 
 
-def _comparar(c, res, esperado, erros, rodada):
+def _comparar(c, res, esperado, erros, rodada, externos=()):
     # rodada 5 (ADR 0006 e 0007): prova de "não copiar" e ligação filho -> pai de código derivado
     for t, r in (res.get("provas") or {}).items():
         if not r["conferido"]:
@@ -102,7 +102,9 @@ def _comparar(c, res, esperado, erros, rodada):
         if not r["conferido"]:
             erros.append("%s: filho -> pai divergente em %s (%d de %d)" % (rodada, k, r["divergentes"], r["verificados"]))
     for ent, r in res["entidades"].items():
-        if not r["conferido"]:
+        # pai externo (PAIS_EXTERNOS) lido na origem: registrado como já carregado por outra fatia, nunca regravado
+        # aqui; a conciliação dele é da fatia dona (rodada 5: o principal do pai pode ser o mesmo destino da fatia)
+        if not r["conferido"] and r.get("tabela_origem") not in externos:
             erros.append("%s: conciliação divergiu em %s (origem %d, destino %d, recusados %d)" % (
                 rodada, ent, r["registros_origem"], r["registros_destino"], r["recusados"]))
     principal = {p["tabela"]: c._nome_ent(p["tabela"], p["destinos"][0]) for p in c.plano}
@@ -169,7 +171,15 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 for f in fs:
                     preparo = getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None)
                     if preparo:
-                        banco.aplicar_script(root, preparo)
+                        # o banco da conferência cria as tabelas REAIS de `cod:` e do preparo (rodada 5): o preparo
+                        # grava só as colunas que a fatia consulta (pai dado como já carregado); as outras NOT NULL
+                        # recebem o padrão implícito (sql_mode sem STRICT, só nesta sessão; CHECK e FK continuam)
+                        banco.aplicar_script(root, "SET SESSION sql_mode = REPLACE(REPLACE(@@sql_mode,"
+                                             " 'STRICT_TRANS_TABLES', ''), 'STRICT_ALL_TABLES', '')")
+                        try:
+                            banco.aplicar_script(root, preparo)
+                        finally:
+                            banco.aplicar_script(root, "SET SESSION sql_mode = DEFAULT")
                 with root.cursor() as cur:
                     i = 0
                     for t, ks in sorted(manif["pais_externos"].items()):
@@ -181,7 +191,7 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 cc = banco.conectar(cliente, autocommit=False)
                 try:
                     c, res = _rodar(lt, cc, "%s" % ctl, 1, mapa_exec, presentes, contagens)
-                    _comparar(c, res, esperado, erros, "primeira")
+                    _comparar(c, res, esperado, erros, "primeira", set(manif["pais_externos"]))
                     saida = {"entidades": {k: {x: v[x] for x in ("tabela_origem", "registros_origem",
                                                                  "registros_destino", "recusados", "conferido")}
                                            for k, v in res["entidades"].items()},
@@ -195,8 +205,13 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                         depois_da_primeira(cc)
                         cc.commit()
                     c2, res2 = _rodar(lt, cc, ctl, 2, mapa_exec, presentes, contagens)
-                    _comparar(c2, res2, esperado, erros, "segunda")
+                    _comparar(c2, res2, esperado, erros, "segunda", set(manif["pais_externos"]))
                     lidas = sum(int(contagens.get(p["tabela"], 0)) for p in c2.plano)
+                    # pai externo com principal próprio não é regravado (aguarda o Sincronizar da fatia dona)
+                    ext = sum(int(contagens.get(p["tabela"], 0)) for p in c2.plano
+                              if p["tabela"] in manif["pais_externos"])
+                    if lidas - ext <= res2["carga"]["puladas_iguais"] <= lidas:
+                        lidas = res2["carga"]["puladas_iguais"]
                     novas = sum(v["registros_destino"] for k, v in res2["entidades"].items()) - \
                         sum(v["registros_destino"] for k, v in res["entidades"].items())
                     if res2["carga"]["puladas_iguais"] != lidas or novas:

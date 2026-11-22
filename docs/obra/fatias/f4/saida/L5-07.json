@@ -78,6 +78,11 @@
    "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; inclui tipo_rescisao.causa_demissao_id (FPTIPORESC.ID_FPRESC_CAUSA, tese de duplicado retirada) e o de-para dos consumidores FPTPEVENTOAUT_TBEMPHOS (L5-12, evento_gatilho) e FPVALE (L5-11, beneficio.tipo) no lugar do =~outro, outro só para código sem par.",
    "atendido": true,
    "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (motor, genérico)",
+   "mudanca": "(a) especial de posição na leitura da tabela inteira pela chave (ex.: `#seq:*` ou `#grupo_seq@*`), para a ordem de lista com código alfanumérico; (b) _colisoes/_unicos_sem_caixa: considerar a chave única composta cujas demais colunas são fixas por tabela (parametro_opcao: parametro_definicao_id, valor), para a colisão de caixa virar codigo_colisao_caixa em vez de restricao_destino_1062",
+   "motivo": "L5-07 r5: hoje a ordem dos códigos texto (FPAFAST_COD, FPAFAST_RAIS, FPBR_PDH, FPCAUSA_AFASTAMENTO, FPCLASSIFTRIB) vem de pares gerados em valores.d/L5-07.tsv (todo código de 1-2 caracteres [0-9A-Z], 3 dígitos; FPBR_PDH com minúsculas): código fora desse domínio é recusado com valor_fora_do_dominio visível; com (a) os 6390 pares saem. Em FPBR_PDH 'a' e 'A' colidem pela collation do valor (1062, visível na sintética)."
   }
  ]
 }

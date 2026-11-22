@@ -17,8 +17,8 @@ class L509(unittest.TestCase):
         cls.m = mapa.carregar_execucao()
         cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.m, set(FATIA))}
 
-    def test_so_situacao_e_tipo_de_rescisao_sao_carregados(self):
-        self.assertEqual(set(self.plano), {"FPSIT_FUNC", "FPTIPORESC"})
+    def test_toda_a_fatia_carrega(self):
+        self.assertEqual(set(self.plano), set(FATIA))
         self.assertEqual(self.plano["FPSIT_FUNC"]["destinos"], ["situacao_colaborador"])
         self.assertEqual(self.plano["FPTIPORESC"]["destinos"], ["tipo_rescisao"])
 
@@ -86,24 +86,29 @@ class L509(unittest.TestCase):
         self.assertEqual(d.resolver("08"), (None, "catalogo_codigo_inexistente"))
         self.assertEqual(d.resolver(None), (None, None))
 
-    def test_descartes_pedidos_cobrem_o_resto_da_fatia(self):
-        self.assertEqual(set(l5_09.SEM_CARGA) | set(l5_09.BLOQUEADAS) | set(self.plano), set(FATIA))
-        self.assertFalse(set(l5_09.SEM_CARGA) & set(self.plano))
-        self.assertFalse(set(l5_09.SEM_CARGA) & set(l5_09.BLOQUEADAS))
-        for t, (causa, motivo) in l5_09.SEM_CARGA.items():
-            # sem carregador de catálogo trabalhista, nenhum descarte pode depender dele
-            # rodada 5 (ADR 0006, item 4): listas legais como catálogo oficial ligado pelo código no consumidor
-            self.assertIn(causa, ("catalogo_oficial", "mecanismo_do_produto", "duplicado"), t)
-            self.assertNotIn("carregador oficial", motivo, t)
-            self.assertNotIn("de-para codigo_esocial", motivo, t)
-        self.assertEqual(l5_09.BLOQUEADAS["FPMOTDESLIG"][0], "mecanismo_pedido")
-        # rodada 5, revisão: o que a sintética diz é o que sem_carga.tsv diz (bloqueada até r5-1 ou r5-2)
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
-        for t, (causa, pedido) in l5_09.BLOQUEADAS.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", causa), t)
-            self.assertTrue(sc[t]["motivo"].startswith("BLOQUEADA até o pedido %s (saida/L5-09.json)" % pedido), t)
-        self.assertIn("causa_demissao_id", sc["FPRESC_CAUSA"]["motivo"])
-        self.assertIn("RETIRADA", sc["FPRESC_CAUSA"]["motivo"])
+    def test_listas_entram_como_listas_do_hospital(self):
+        """ADR 0006 (1 e 4), decisão do conferidor da rodada 5: cada lista vira uma definição 'rh.lista.<nome>' e
+        uma opção ativa por linha (valor = código, rótulo = descrição ou o código), nunca descarte nem bloqueio."""
+        self.assertEqual((l5_09.SEM_CARGA, l5_09.BLOQUEADAS), ({}, {}))
+        sc = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
+        chaves = set()
+        for t in l5_09.TODAS_LISTAS:
+            self.assertNotIn(t, sc, t)
+            p = self.plano[t]
+            self.assertEqual(p["destinos"][0], "parametro_opcao", t)
+            op = {}
+            for c in p["colunas"]["parametro_opcao"]:
+                op.setdefault(c["destino"], []).append(c)
+            self.assertEqual(op["origem"][0]["coluna"], "=migracao", t)
+            self.assertEqual(op["parametro_definicao_id"][0]["coluna"], "@id:parametro_definicao", t)
+            self.assertEqual(op["valor"][0]["coluna"], p["chave"][0], t)
+            self.assertEqual(op["rotulo"][-1]["coluna"], p["chave"][0], t)     # sem descrição: o código
+            self.assertEqual(op["rotulo"][0]["regra"], "texto_resumo:150", t)
+            df = {c["destino"]: c["coluna"] for c in p["colunas"]["parametro_definicao"]}
+            self.assertTrue(df["chave"].startswith("=rh.lista."), t)
+            self.assertEqual(df["tipo"], "=lista", t)
+            chaves.add(df["chave"])
+        self.assertEqual(len(chaves), len(l5_09.TODAS_LISTAS))                # uma definição por lista
 
     def test_codigo_da_situacao_preserva_caixa(self):
         cols = {c["destino"]: c for c in self.plano["FPSIT_FUNC"]["colunas"]["situacao_colaborador"]}
@@ -118,15 +123,15 @@ class L509(unittest.TestCase):
         self.assertEqual(sentinela.aplicar("texto", "   ")[0], None)
         self.assertEqual(sentinela.aplicar("texto_nome", "  Tipo   com  espaços  ")[0], "Tipo com espaços")
 
-    def test_causa_de_demissao_aguarda_r5_2_com_motivo(self):
+    def test_causa_de_demissao_no_tipo_aguarda_pedido_com_motivo(self):
         import csv
         with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L5-09.tsv", encoding="utf-8") as f:
             decl = [r for r in csv.DictReader(f, delimiter="\t")]
         causa = [r for r in decl if (r["tabela"], r["coluna"]) == ("FPTIPORESC", "ID_FPRESC_CAUSA")]
         self.assertEqual(len(causa), 1)
         self.assertEqual(causa[0]["destino"], "")
-        self.assertIn("NÃO carregada até o pedido r5-2", causa[0]["motivo"])
-        self.assertIn("causa_demissao_id", causa[0]["motivo"])
+        self.assertIn("rh.lista.causa_demissao", causa[0]["motivo"])
+        self.assertIn("pedido r5-b", causa[0]["motivo"])
 
     @unittest.expectedFailure
     def test_depara_codigo_esocial_filtra_fonte_e_versao(self):
@@ -145,8 +150,9 @@ class L509(unittest.TestCase):
         import random
         vistos = {}
         esp = l5_09.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
-        self.assertEqual(set(esp), {"FPSIT_FUNC", "FPTIPORESC"})
-        for t, e in esp.items():
+        self.assertEqual(set(esp), set(FATIA))
+        for t in ("FPSIT_FUNC", "FPTIPORESC"):
+            e = esp[t]
             self.assertEqual(e["gravados"] + sum(v for k, v in e["pendencias"].items()
                                                  if k.startswith("restricao_destino_")
                                                  or k == "codigo_colisao_caixa"), len(vistos[t]))

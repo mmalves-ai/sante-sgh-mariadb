@@ -34,6 +34,10 @@ CREATE TABLE PEPARAM (COD_EMP INTEGER NOT NULL PRIMARY KEY, DESC_MIN_FALTA_MARC 
   PER_FINAL DATE, HORA_NOTURNO_INICIAL TIMESTAMP, HORA_NOTURNO_FINAL TIMESTAMP, TP_TOLERANCIA CHAR(1),
   GERAR_EXTRA_FERIADO_NORMAL CHAR(1), GERAR_EXTRA_FERIADO_ESCALONADO CHAR(1), GERAR_EXTRA_FERIADO_MEIO_PER CHAR(1),
   GERAR_EXTRA_INTER_SEM_REG_ESC CHAR(1));
+CREATE TABLE FPTP_SAL (COD_TPSAL SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50), COD_ESOCIAL SMALLINT);
+CREATE TABLE FPTP_TREINAMENTO_CAPACITACAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(150));
+CREATE TABLE POTPJORNADA (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20));
+CREATE TABLE STEMITENTE (COD_EMIT SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50));
 CREATE TABLE FPVALE (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(45) NOT NULL, ID_FPTPVALE SMALLINT NOT NULL);
 """
 
@@ -91,6 +95,15 @@ def linhas(r, ins):
         ins("POBANCOHRTP", [i, n])
     for i in (1, 2, 3, 5, 8):          # o 8 sem descrição: o rótulo é o próprio código
         ins("PETP_INTEGR_EVENTO", [i, None if i == 8 else "Evento integração ex %d" % i])
+    # rodada 5 (conferidor, ADR 0006, 4): listas legais do eSocial como listas do hospital; código local (9x) ativo
+    for i, n, e in [(1, "Mensal ex", 1), (2, "Horista ex", 2), (97, "Local ex", None)]:
+        ins("FPTP_SAL", [i, n, e])
+    for i in (1, 2, 3):
+        ins("FPTP_TREINAMENTO_CAPACITACAO", [i, None if i == 3 else "Treinamento ex %d" % i])
+    for i in (1, 2, 9):
+        ins("POTPJORNADA", [i, "Jornada ex %d" % i])
+    for i in (1, 2):
+        ins("STEMITENTE", [i, "Emitente ex %d" % i])
     # configuração do ponto da empresa: uma linha com todas as colunas (retrato JSON numa definição por empresa)
     ins("PEPARAM", [1, "S", 10, "S", "N", 5, 10, 1, "N", "Feliz aniversário ex", "S", "C:\\fotos_ex", 30, "editor_ex",
                     "1", datetime.date(2026, 1, 1), datetime.date(2026, 1, 31), datetime.datetime(1899, 12, 30, 22, 0),
@@ -100,7 +113,11 @@ def linhas(r, ins):
         "POPROSITUACAO": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
         "POBANCOHRTP": {"gravados": 4, "pendencias": {"adotado_existente": 7}},
         "PETP_INTEGR_EVENTO": {"gravados": 5, "pendencias": {"adotado_existente": 9}},
-        "PEPARAM": {"gravados": 1, "pendencias": {}},
+        "FPTP_SAL": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
+        "FPTP_TREINAMENTO_CAPACITACAO": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+        "POTPJORNADA": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+        "STEMITENTE": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+        "PEPARAM": {"gravados": 1, "pendencias": {"adotado_existente": 1}},
         "FPVACINA": {"gravados": 6, "pendencias": {"restricao_destino_1048": 1}},
         "POTPCONTTEMP": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2}},
         "PEPERIOD_JUSTIF": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},

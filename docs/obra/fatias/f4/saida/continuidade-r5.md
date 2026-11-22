@@ -92,3 +92,55 @@ Tipo da prova das 41 tabelas que não são copiadas:
   - L8-16: ; pendências de TBDIGITAL_INTEG_TYPE diferentes do esperado: valor_fora_do_dominio=2/0, valor_presumido=1/0 ; testes da fatia (test_l8_16.py): ERROR: test_obrigatorias_do_destino_cobertas (testes.test_l8_16.Plano) FAILED
   - L8-15: ; FAIL: test_descartadas_com_causa_de_produto (testes.test_l8_15.Plano); PSTPSVIGENCIA gravou 1, esperado 2
   - L8-17: ; conciliação divergiu em trilha_auditoria (origem 2, destino 0, recusados 0); reexecução não foi idempotente (puladas 50 de 52, 0 linhas novas) 
+
+## Conferidor, tentativa 2 (2026-11-21)
+### Contagens (cobertura_conector.py, 1185 tabelas carregáveis)
+- **Carregam: 1136** (eram 1126 na largada desta tentativa e 836 na largada da rodada).
+- **Não copiam, com prova: 41**:
+  - 29 com prova de conciliação do tipo `derivado` (`declarado/provas.tsv` + `provas.d/`):
+    - 24 `mecanismo_do_produto`;
+    - 3 `duplicado`;
+    - 2 `catalogo_oficial`.
+  - 11 `catalogo_oficial` ligados pelo código (ADR 0006, 4).
+  - 1 `licenciado` no espelho padrão (ADR 0006, 3).
+- **Bloqueadas: 8** (eram 18):
+  - L6-11 PRAGRUP_PRFILTROCLASSIF (DDL do vínculo do filtro por classificação);
+  - L7-05 GECOMPRA (DDL `historico_compra_insumo`);
+  - L7-06 GEULTDOCGER (regras de competência e `adotar_maior`);
+  - L7-07 GEUSERS_TBCLASSI (DDL de `usuario_estoque_classificacao`);
+  - L7-08 GEPARAM (semente de `parametro_definicao` do estoque);
+  - L7-08 GEQTDELOTEVALLOTEDOCSAIDA (DDL `movimento_lote.quantidade_liquida`);
+  - L8-01 FCPROCUNIBHMED (`#grupo_seq@*`);
+  - L8-03 TBPACTHM (domínio do TIPO na referência).
+- **Registros da imagem de referência:**
+
+  | Situação | Registros | % do total (166.297.677) |
+  |---|---:|---:|
+  | Carregam | 164.216.433 | 98,75% |
+  | Não copiam, com prova | 227.895 | 0,14% |
+  | **Cobertos (soma das duas linhas)** | **164.444.328** | **98,89%** |
+  | Bloqueados | 1.853.349 | 1,11% |
+
+  Sete tabelas não têm contagem na ficha.
+
+### Aplicado
+- **Cobertura:** `licenciado_copiado` não bloqueia mais a linha do hospital gravada no espelho (pedidos R5-1 e R5-4).
+  - Vale quando a tabela filtra a licença por linha e não tem fonte licenciada literal.
+  - Com isso carregam TBMATMED, FCREFUND, TBVLRMEM, TBREFMEMTUSS e TBREFUNI.
+  - As marcas T/F foram aceitas no filtro de TBMATMED e TBREFMEMTUSS.
+- **L5-11:** FPTP_SAL, FPTP_TREINAMENTO_CAPACITACAO, POTPJORNADA e STEMITENTE carregam como listas do hospital.
+- **L6-15:** TBTISSREGINT carrega em `regime_atendimento_internacao` (mudança coordenada da L6-14).
+  - O preparo da fatia passou a gravar as colunas obrigatórias dos catálogos reais.
+- **Conferência (`conferencia.py`):**
+  - O pai externo lido na origem fica fora da conciliação e da conta de idempotência.
+  - O preparo roda sem modo estrito, só na sessão. O CHECK e a FK continuam valendo.
+
+### Validação
+- `verificar_mapa`, `fatiar_conector --conferir` e `validar_migracoes`: ok.
+- `cobertura_conector.py --falhar-se-bloqueada`: **vermelho** (8 bloqueadas).
+- `conector.sh testes`: Ran 1197 tests, FAILED (failures=22, errors=8).
+- Ponta a ponta do painel: **não rodado** nesta tentativa (orçamento de turnos).
+- Autoconferência: **22 de 57 fatias ok**.
+  - Fatias ok: L5-07 a L5-11, L6-01, L6-03, L6-05, L6-13, L6-15, L7-03, L8-04, L8-07 a L8-09, L8-11 a L8-14 e
+    L8-17 a L8-19.
+  - As causas das 35 vermelhas estão nos avisos devolvidos ao orquestrador.

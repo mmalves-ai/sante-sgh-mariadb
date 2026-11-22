@@ -25,7 +25,7 @@ class PlanoL615(unittest.TestCase):
 
     def test_so_as_carregaveis_entram_na_carga(self):
         self.assertEqual(len(FATIA), 22)
-        self.assertEqual(len(l6_15.CARREGADAS), 21)
+        self.assertEqual(len(l6_15.CARREGADAS), 22)
         self.assertEqual(set(self.plano), set(l6_15.CARREGADAS))
 
     def test_ordem_do_mapa(self):
@@ -45,6 +45,7 @@ class PlanoL615(unittest.TestCase):
                     "TBREGUL_SERVICO": ["servico_regulacao"], "TBTIPOACOMOD": ["categoria_acomodacao"],
                     "RELOCLEITO": ["local_observacao"],
                     "RELEITO": ["leito_observacao"], "REOCUPLEITO": ["ocupacao_leito_observacao"],
+                    "TBTISSREGINT": ["regime_atendimento_internacao"],
                     "RILEITOS": ["leito_hospitalar"], "TBLEITO": ["leito_hospitalar"],
                     "TBACOMODLEITO": ["acomodacao"], "RICADINT": ["internacao", "trilha_auditoria"],
                     "RIPREINT": ["agendamento_internacao", "trilha_auditoria"], "RITRANSF": ["transferencia_leito"],
@@ -126,9 +127,13 @@ class PlanoL615(unittest.TestCase):
         self.assertEqual(self.pares("REOCUPLEITO", "DATA_HORA_SAIDA", "ocupacao_leito_observacao.situacao"),
                          {"1": "encerrada", "": "ativa"})
 
-    def test_regime_tiss_nao_e_carregado_da_origem(self):
-        # regra 7: terminologia TISS vem do carregador oficial
-        self.assertNotIn("TBTISSREGINT", self.plano)
+    def test_regime_tiss_adota_a_semente_e_guarda_o_do_hospital(self):
+        # ADR 0006 (4): o código TISS (1..3) adota a semente pelo codigo_tiss; fora da faixa entra como do hospital
+        c = self.cols("TBTISSREGINT", "regime_atendimento_internacao")
+        self.assertEqual(c["codigo_tiss"]["regra"], "inteiro_faixa:1,3")
+        decl = [x for x in self.m["colunas_decl"] if x["tabela"] == "TBTISSREGINT"
+                and x.get("destino") == "regime_atendimento_internacao.codigo_tiss"]
+        self.assertIn("adotar:codigo_tiss", decl[0]["via"])
 
     def test_literais_presumidos_depois_das_referencias(self):
         # pai_pendente recusa antes dos literais: a contagem de valor_presumido da imagem depende desta ordem

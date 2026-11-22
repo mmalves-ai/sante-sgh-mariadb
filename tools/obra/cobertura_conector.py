@@ -94,6 +94,20 @@ PALAVRAS = [
 
 # causas que já têm mecanismo genérico no motor (rodada de cobertura) ou decisão registrada em
 # docs/obra/passagens/F4-decisoes-destino.md: a fatia só precisa ser REFEITA (declarar), sem esperar ninguém
+# ADR 0006 (3), pedidos R5-1/R5-4 (rodada 5): a linha DO HOSPITAL (item ou preço da tabela PRÓPRIA) gravada numa
+# tabela do espelho entra pelo conector. Vale só quando a tabela filtra a licença por linha (`so_se:...!licenca_nao_
+# comprovada`, a tabela licenciada é pulada) e não grava fonte licenciada por literal.
+FONTES_LICENCIADAS = re.compile(r"^=~?(brasindice|simpro|cbhpm|correios)", re.I)
+
+
+def _so_proprio(decl, t):
+    linhas = [c for c in decl if c["tabela"] == t]
+    filtra = any("!licenca_nao_comprovada" in x for c in linhas for x in (c.get("via") or "").split(";")
+                 if x.startswith("so_se:"))
+    literal = any(FONTES_LICENCIADAS.match(c.get("coluna") or "") for c in linhas if c.get("destino"))
+    return filtra and not literal
+
+
 COM_MECANISMO = {"descarte_sem_prova", "licenciado_copiado", "sem_declaracao", "pai_nao_carregado", "referencia_composta", "referencia_encadeada",
                  "vigencia_sem_fonte", "desdobrar_coluna", "regra_disponivel", "segredo", "depara_valores",
                  "destino_decidido", "declaracao_comentada", "retrato_historico", "catalogo_oficial_faltante",
@@ -208,7 +222,7 @@ def avaliar(raiz=RAIZ):
             continue
         lic = sorted({c["destino"].split(".")[0] for c in d["colunas_decl"] if c["tabela"] == t and c.get("destino")
                       and c["destino"].split(".")[0] in mapa.LICENCIADAS_ESPELHO}) if t in plano else []
-        if lic:  # ADR 0006 (3): o licenciado vive no espelho; o conector só liga (`espelho:` na via)
+        if lic and not _so_proprio(d["colunas_decl"], t):  # ADR 0006 (3): o licenciado vive no espelho; o conector só liga
             res[t] = (f, "BLOQUEADA", "licenciado_copiado:" + ",".join(lic))
             continue
         if t in plano:

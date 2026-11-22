@@ -17,6 +17,8 @@ FATIA = {"FPEPC", "FPESOCAUTORIA", "FPESOCCADRESEV", "FPESOCDESONER", "FPESOCIND
          "FPINTAGRUP", "FPINTROTINA", "FPLOTACAOTRIB", "FPMOTAFAST"}
 CARREGADAS = {"FPMOTAFAST": ["motivo_afastamento"], "FPHSTDIAAFAST": ["tabela_legal_vigencia"],
               "FPESOCMOTAFAS": ["motivo_afastamento"]}
+# rodada 5 (ADR 0006; decisão do conferidor r5-1/r5-2): as 19 listas entram inteiras como lista do hospital
+LISTAS = FATIA - set(CARREGADAS)
 CAUSAS_DESCARTE = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
 
 
@@ -27,9 +29,24 @@ class DeclaracoesL5_08(unittest.TestCase):
         cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.m, FATIA) if p["tabela"] in FATIA}
 
     def test_so_as_carregaveis_entram_no_plano(self):
-        self.assertEqual(set(self.plano), set(CARREGADAS))
+        self.assertEqual(set(self.plano), FATIA)
         for t, dts in CARREGADAS.items():
             self.assertEqual(self.plano[t]["destinos"], dts)
+        for t in LISTAS:
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_opcao", t)
+            self.assertTrue({"modulo_sistema", "parametro_definicao"} <= set(self.plano[t]["destinos"]), t)
+
+    def test_lista_inteira_com_chave_unica_por_tabela(self):
+        chaves = {}
+        for c in self.m["colunas_decl"]:
+            if c["tabela"] in LISTAS and c["destino"] == "parametro_definicao.chave":
+                chaves.setdefault(c["coluna"], set()).add(c["tabela"])
+        self.assertEqual(len(chaves), len(LISTAS))
+        self.assertTrue(all(k.startswith("=rh.lista.") and len(v) == 1 for k, v in chaves.items()))
+
+    def test_rotina_leva_os_atributos_no_retrato(self):
+        dests = {c["destino"]: c["coluna"] for c in self.m["colunas_decl"] if c["tabela"] == "FPINTROTINA"}
+        self.assertEqual(dests["trilha_auditoria.dados_depois"], "#retrato:*")
 
     def test_nenhum_destino_oficial_declarado(self):
         ofic = {r["tabela"]: set((r.get("destinos_oficiais") or "").split(";")) - {""} for r in self.m["tabelas"]}
@@ -60,25 +77,27 @@ class DeclaracoesL5_08(unittest.TestCase):
         self.assertNotIn("NOME", lidas)
         self.assertNotIn("NOME", self.plano["FPESOCMOTAFAS"]["lidas"])
 
-    def test_desoneracao_fora_da_carga_e_na_imagem(self):
-        """FPESOCDESONER é descarte (catálogo oficial) mas está na imagem para a referência encadeada da L5-12."""
-        self.assertNotIn("FPESOCDESONER", self.plano)
+    def test_desoneracao_carregada_e_na_imagem(self):
+        """FPESOCDESONER carrega como lista (valor = código oficial) e está na imagem para a ref encadeada da L5-12."""
+        self.assertIn("FPESOCDESONER", self.plano)
         self.assertIn("CREATE TABLE FPESOCDESONER (ID SMALLINT NOT NULL PRIMARY KEY, COD_INDICATIVO_DESONERACAO", l5_08.DDL)
 
     def test_cobertura_total_da_fatia(self):
         """Toda tabela da fatia carrega ou é descarte com causa de produto e motivo (declarado/sem_carga.tsv)."""
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
-        for t in FATIA - set(CARREGADAS):
-            self.assertIn(t, sc, t)
-            # rodada 5, revisão (ADR 0006, itens 1 e 4): nenhuma lista desta fatia é descarte sem prova; todas
-            # aguardam r5-1 (item do hospital no catálogo oficial) ou r5-2 (lista própria do hospital)
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "mecanismo_pedido"), t)
-            self.assertRegex(sc[t]["motivo"], r"^BLOQUEADA até o pedido r5-[12] \(saida/L5-08\.json\)", t)
-            self.assertTrue(sc[t]["motivo"].strip(), t)
-        self.assertFalse(set(CARREGADAS) & set(sc))
+        # rodada 5 (ADR 0006): nada da fatia é descarte nem bloqueada; tudo carrega
+        self.assertFalse(FATIA & set(sc))
 
 
 class RegrasL5_08(unittest.TestCase):
+    def test_ordem_das_listas_pelo_de_para_da_chave(self):
+        v = {(r["tabela"], r["valor_origem"]): r["valor_destino"] for r in mapa.carregar_execucao()["valores"]
+             if r["tabela"] in LISTAS and r["destino"] == "parametro_opcao.sequencia"}
+        self.assertEqual(v[("FPESOCPARAMS1210", "A")], "1")
+        self.assertEqual(v[("FPESOCPARAMS1210", "b")], "28")
+        self.assertEqual(v[("FPLOTACAOTRIB", "01")], v[("FPLOTACAOTRIB", "1")])
+        self.assertNotIn(("FPESOCINDSUSP", "AB"), v)
+
     def test_codigo_do_motivo_oficial_com_prefixo(self):
         self.assertEqual(carga_mapa.codigo_derivado("01", 30, "esocial_"), ("esocial_01", False))
 
@@ -104,11 +123,16 @@ class RegrasL5_08(unittest.TestCase):
     def test_esperado_da_imagem(self):
         vistos = []
         esp = l5_08.linhas(__import__("random").Random(1), lambda t, v: vistos.append(t))
-        self.assertEqual(set(esp), set(CARREGADAS))
+        self.assertEqual(set(esp), FATIA)
         self.assertEqual(vistos.count("FPMOTAFAST"), 12)
         self.assertEqual(vistos.count("FPHSTDIAAFAST"), 5)
         self.assertEqual(vistos.count("FPESOCMOTAFAS"), 7)
         self.assertEqual(vistos.count("FPESOCDESONER"), 3)
+        # listas: código repetido (1062), chave sem ordem numérica (valor_fora_do_dominio + 1048), nome longo
+        self.assertEqual(esp["FPESOCPTOELET"]["pendencias"].get("restricao_destino_1062"), 1)
+        self.assertEqual(esp["FPESOCINDSUSP"]["pendencias"].get("valor_fora_do_dominio"), 1)
+        self.assertEqual(esp["FPESOCTPAVISO"]["pendencias"].get("texto_resumido"), 1)
+        self.assertEqual(esp["FPESOCPARAMS1210"]["gravados"], 2)
         self.assertEqual(esp["FPESOCMOTAFAS"], {"gravados": 6, "pendencias": {"valor_fora_do_dominio": 1,
                                                                               "restricao_destino_4025": 1}})
 

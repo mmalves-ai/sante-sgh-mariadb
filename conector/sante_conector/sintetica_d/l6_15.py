@@ -111,38 +111,50 @@ def id_externo(tabela, chave):
     raise KeyError((tabela, chave))
 
 
-_CAT = ("CREATE TABLE IF NOT EXISTS {t} (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL,"
-        " UNIQUE KEY uq_{t}_codigo (codigo)); INSERT INTO {t} (codigo) VALUES {v};")
+def _CAT(t, codigos, extra=None):
+    """Catálogo-base procurado pelo código (`cod:`): cria a forma mínima se o banco da conferência não a tem e grava
+    as colunas obrigatórias do modelo (descrição = código; `extra` = coluna obrigatória própria, valor por código).
+    INSERT IGNORE: a semente do modelo, quando aplicada, já tem os mesmos códigos."""
+    ex = extra[0] if extra else None
+    cria = ("CREATE TABLE IF NOT EXISTS {t} (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL,"
+            " descricao VARCHAR(150) NULL, criado_em DATETIME(3) NULL{x}, UNIQUE KEY uq_{t}_codigo (codigo));"
+            ).format(t=t, x=(", %s VARCHAR(30) NULL" % ex) if ex else "")
+    vals = ", ".join("('%s', '%s', UTC_TIMESTAMP(3)%s)" % (c, c, (", '%s'" % extra[1].get(c, c)) if ex else "")
+                     for c in codigos)
+    return cria + " INSERT IGNORE INTO %s (codigo, descricao, criado_em%s) VALUES %s;" % (t, (", " + ex) if ex else "", vals)
+
+
 # catálogos-base do produto (semente do 'criar novo cliente', pedido M2b à F2.2), procurados pelo código (`cod:`);
 # os quartos de RIACOMOD (fatia L6-14) com o id do pai externo, para TBACOMODLEITO completar; e o CID do catálogo
 # oficial (só A00: B01 fica ausente)
 PREPARO_DESTINO = "\n".join([
     "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
     " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');",
-    _CAT.format(t="situacao_leito", v="('livre'), ('ocupado'), ('reservado'), ('higienizacao'), ('interditado'),"
-                                      " ('manutencao'), ('bloqueado'), ('inativo')"),
-    _CAT.format(t="carater_admissao", v="('eletiva'), ('urgencia'), ('emergencia')"),
-    _CAT.format(t="modalidade_internacao", v="('clinica'), ('cirurgica'), ('obstetrica'), ('pediatrica'),"
-                                             " ('psiquiatrica')"),
-    _CAT.format(t="motivo_troca_leito", v="('migracao')"),
-    _CAT.format(t="tipo_troca_internacao", v="('clinica'), ('fonte_pagadora'), ('especialidade'), ('profissional')"),
+    _CAT("situacao_leito", ("livre", "ocupado", "reservado", "higienizacao", "interditado", "manutencao", "bloqueado",
+                            "inativo"), ("situacao_base", {})),
+    _CAT("carater_admissao", ("eletiva", "urgencia", "emergencia")),
+    _CAT("modalidade_internacao", ("clinica", "cirurgica", "obstetrica", "pediatrica", "psiquiatrica")),
+    _CAT("motivo_troca_leito", ("migracao",)),
+    _CAT("tipo_troca_internacao", ("clinica", "fonte_pagadora", "especialidade", "profissional"),
+         ("dado_trocado", {"profissional": "profissional_responsavel"})),
     "INSERT INTO acomodacao (id, estabelecimento_id, unidade_internacao_id, categoria_acomodacao_id, codigo, nome,"
     " origem, criado_em) VALUES " + ", ".join(
         "(%d, 1, %d, 1, '%s', 'Quarto %s', 'migracao', UTC_TIMESTAMP(3))" % (
             id_externo("RIACOMOD", k), id_externo("RIBLOCOS", k[0] + "/unidade_internacao"), k[2:], k[2:])
         for k in PAIS_EXTERNOS["RIACOMOD"]) + ";",
     "CREATE TABLE IF NOT EXISTS regime_atendimento_internacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-    " codigo VARCHAR(30) NOT NULL, descricao VARCHAR(150) NOT NULL, codigo_tiss VARCHAR(2) NULL);",
-    "INSERT INTO regime_atendimento_internacao (id, codigo, descricao, codigo_tiss) VALUES (1, 'hospitalar',"
-    " 'Hospitalar', '1'), (2, 'hospital_dia', 'Hospital-dia', '2'), (3, 'domiciliar', 'Domiciliar', '3');",
+    " codigo VARCHAR(30) NOT NULL, descricao VARCHAR(150) NOT NULL, codigo_tiss VARCHAR(2) NULL, criado_em DATETIME(3) NULL);",
+    "INSERT IGNORE INTO regime_atendimento_internacao (id, codigo, descricao, codigo_tiss, criado_em) VALUES (1, 'hospitalar',"
+    " 'Hospitalar', '1', UTC_TIMESTAMP(3)), (2, 'hospital_dia', 'Hospital-dia', '2', UTC_TIMESTAMP(3)),"
+    " (3, 'domiciliar', 'Domiciliar', '3', UTC_TIMESTAMP(3));",
     "INSERT INTO terminologia (id, codigo, nome, tipo, origem, criado_em) VALUES (900, 'cid10', 'CID-10',"
     " 'diagnostico', 'sistema', UTC_TIMESTAMP(3));",
     "INSERT INTO termo_terminologia (id, terminologia_id, codigo_termo, descricao, criado_em) VALUES"
     " (901, 900, 'A00', 'Termo de exemplo', UTC_TIMESTAMP(3));"])
 CADEIA = ("TBSEXO",)  # de outra fatia (L5-05): lida pela referência encadeada do sexo do local
 CARREGADAS = ("TBDESFECHO_INTERNACAO", "TBMOTALT", "TBREGUL_SISTEMA", "TBREGUL_SERVICO", "TBTIPOACOMOD",
-              "RELOCLEITO", "RELEITO", "REOCUPLEITO") + tuple(NOVAS)
-NAO_CARREGADAS = ("TBTISSREGINT",)  # terminologia TISS (regra 7): na imagem só para provar que nada é gravado
+              "RELOCLEITO", "RELEITO", "REOCUPLEITO", "TBTISSREGINT") + tuple(NOVAS)
+NAO_CARREGADAS = ()  # rodada 5: TBTISSREGINT carrega (ADR 0006, 4: 1..3 adota a semente TISS; o resto é do hospital)
 
 # Significado gravado (relido do destino depois da carga): (tabela de destino, filtro {coluna: valor}, coluna, valor).
 # Cobre os de-para de valores, os booleanos A/I e S/N e os literais. A conciliação compara contagem e soma; estes
@@ -252,8 +264,10 @@ def linhas(r, ins):
         ins("TBREGUL_SERVICO", list(x))
     for x in [(1, "Enfermaria"), (2, "Apartamento"), (3, "UTI  adulto"), (4, None), (5, "Berçário")]:
         ins("TBTIPOACOMOD", list(x))
-    for x in [(1, "Hospitalar", D(2020, 1, 1), None), (2, "Hospital-dia", D(2020, 1, 1), D(2030, 12, 31))]:
-        ins("TBTISSREGINT", list(x))  # catálogo oficial: nada gravado
+    # 1 e 2: código TISS adota a semente (sem sobrescrever); 7: regime local do hospital, ativo (fora da faixa TISS)
+    for x in [(1, "Hospitalar", D(2020, 1, 1), None), (2, "Hospital-dia", D(2020, 1, 1), D(2030, 12, 31)),
+              (7, "Regime  loc ex", D(2021, 3, 1), None)]:
+        ins("TBTISSREGINT", list(x))
     # ID, COD, NOME, CENCUS, QTD, SEXO, TIPOACOMOD, TP_CONVENIO, CLINICA, COR, IDMIN, UNMIN, IDMAX, UNMAX
     # sexo pela sigla: 1 M masculino, 2 F feminino, 3 I qualquer, 4 'O' sem par (valor_fora_do_dominio, 'qualquer')
     for x in [(1, "OBS1", "Observação  adulto", 10, 6, 1, 1, 0, "A", "clBlue", 18, 1, 130, 1),
@@ -402,6 +416,8 @@ def linhas(r, ins):
         "TBREGUL_SERVICO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                           "restricao_destino_1048": 2, "restricao_destino_1062": 1,
                                                           "valor_fora_do_dominio": 1, "valor_presumido": 7}},
+        "TBTISSREGINT": {"gravados": 3, "pendencias": {"adotado_existente": 2, "valor_fora_do_dominio": 1,
+                                                   "mescla_conflito_origem_guardada": 2}},
         "TBTIPOACOMOD": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
         "RELOCLEITO": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1264": 1, "restricao_destino_1062": 1,

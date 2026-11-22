@@ -10,7 +10,6 @@ from sante_conector.sintetica_d import l5_10
 
 FATIA = "colunas.d/L5-10.tsv"
 RAIZ = pathlib.Path(__file__).resolve().parents[2]
-CAUSAS = {"mecanismo_pedido"}  # rodada 5, revisão: bloqueadas até r5-1 ou r5-2, nunca descarte sem prova
 
 
 def _ddl():
@@ -52,34 +51,42 @@ class L5_10(unittest.TestCase):
         self.assertEqual({c["tabela"] for c in self.decl}, self.todas)
         self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l5_10.DDL)), self.todas)
 
-    def test_plano_com_as_cinco_carregadas(self):
-        self.assertEqual({t: x["destinos"] for t, x in self.plano.items()}, {
-            "FPTP_FUNC": ["tipo_colaborador"], "FPTPFERIAS": ["tipo_ferias"],
-            "FPTP_EVENTO": ["tipo_rubrica"], "FPTP_FOLHA": ["tipo_folha"], "FPTP_REFER": ["tipo_referencia_rubrica"]})
+    def test_plano_com_todas_carregadas(self):
+        dest = {t: x["destinos"] for t, x in self.plano.items()}
+        for t, d in {"FPTP_FUNC": ["tipo_colaborador"], "FPTPFERIAS": ["tipo_ferias"], "FPTP_EVENTO": ["tipo_rubrica"],
+                     "FPTP_FOLHA": ["tipo_folha"], "FPTP_REFER": ["tipo_referencia_rubrica"]}.items():
+            self.assertEqual(dest[t], d, t)
+        for t in l5_10.LISTAS:  # lista do hospital: opção principal, módulo e definição antes (adotados)
+            self.assertEqual(dest[t][0], "parametro_opcao", t)
+            self.assertEqual(set(dest[t]), {"parametro_opcao", "modulo_sistema", "parametro_definicao"}, t)
+        self.assertEqual(set(self.plano), self.todas)
 
     def test_tipo_de_vale_nao_vira_beneficio(self):
         # FPTPVALE é a classificação (beneficio.tipo); gravá-lo em beneficio criaria benefício que não existe
-        self.assertFalse([c for c in self.decl if c["tabela"] == "FPTPVALE" and c["destino"]])
-        self.assertIn("beneficio.tipo", _sem_carga()["FPTPVALE"]["motivo"])
+        self.assertFalse([c for c in self.decl if c["tabela"] == "FPTPVALE" and c["destino"].startswith("beneficio")])
 
-    def test_descartadas_em_sem_carga_com_causa_de_produto_e_sem_destino(self):
+    def test_nenhuma_tabela_da_fatia_em_sem_carga_e_listas_ativas(self):
         sc = _sem_carga()
-        for t in l5_10.DESCARTADAS:
-            self.assertIn(t, sc, t)
-            self.assertEqual(sc[t]["situacao"], "bloqueada", t)
-            self.assertRegex(sc[t]["motivo"], r"^BLOQUEADA até o pedido r5-[12] \(saida/L5-10\.json\)", t)
-            self.assertIn(sc[t]["causa"], CAUSAS, t)
-            self.assertTrue(sc[t]["motivo"], t)
-        for c in self.decl:
-            if c["tabela"] in l5_10.DESCARTADAS:
-                self.assertEqual(c["destino"], "", c["tabela"])
-                # o motivo da declaração é o MESMO de sem_carga.tsv (sem causa trocada entre os dois arquivos)
-                self.assertEqual(c["motivo"], "bloqueada (mecanismo_pedido, sem_carga.tsv): " + sc[c["tabela"]]["motivo"],
-                                 c["tabela"])
+        self.assertFalse(self.todas & set(sc))  # zero descarte e zero bloqueio (ADR 0006)
+        chaves = set()
+        for t in l5_10.LISTAS:
+            d = {(c["destino"], c["coluna"]): c for c in self.decl if c["tabela"] == t and c["destino"]}
+            ch = [k[1] for k in d if k[0] == "parametro_definicao.chave"]
+            self.assertEqual(len(ch), 1, t)
+            self.assertRegex(ch[0], r"^=rh\.lista\.[a-z_]+$", t)
+            chaves.add(ch[0])
+            self.assertIn(("parametro_opcao.origem", "=migracao"), d, t)
+            self.assertFalse([k for k in d if k[0] == "parametro_opcao.ativo"], t)  # ativa pelo padrão
+            # o rótulo nunca recusa: sem descrição, o código
+            rot = [c["coluna"] for c in self.decl if c["tabela"] == t and c["destino"] == "parametro_opcao.rotulo"]
+            self.assertEqual(len(rot), 2, t)
+            self.assertEqual(rot[1], self.plano[t]["chave"][0], t)
+        self.assertEqual(len(chaves), len(l5_10.LISTAS))  # uma definição por lista
 
     def test_literal_de_classificacao_so_presumido(self):
         # literal sem pendência gravaria regra de pagamento errada em silêncio: só =~ (valor_presumido)
-        lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}
+        lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")
+               and c["tabela"] not in l5_10.LISTAS}
         self.assertEqual(lit, {("FPTP_FOLHA", "tipo_folha.ativo"): "=~1",
                                ("FPTPFERIAS", "tipo_ferias.categoria"): "=~individual"})
 
@@ -113,25 +120,17 @@ class L5_10(unittest.TestCase):
         cols = [c["coluna"] for c in self.plano["FPTP_FOLHA"]["colunas"]["tipo_folha"]]
         self.assertTrue(any(c.startswith("=~") for c in cols))
 
-    def test_motivo_de_descarte_confere_com_o_ddl_e_o_mapa(self):
-        """Toda alegação do motivo (CHECK citado, coluna sem CHECK, nenhum consumidor no mapa) é verificável."""
+    def test_rotulo_cabe_no_destino(self):
         ddl = _ddl()
         if ddl is None:
             self.skipTest("DDL de destino fora do alcance")
-        sc = _sem_carga()
-        destinos = {c["destino"].split(".")[0] for c in self.m["colunas_decl"] if c["destino"]}
-        for t in l5_10.DESCARTADAS:
-            mot = sc[t]["motivo"]
-            for tab, col in re.findall(r"CHECK em (\w+)\.(\w+)", mot):
-                self.assertIsNotNone(_check(ddl, tab, col), (t, tab, col))
-            for tab, col in re.findall(r"\((\w+)\.(\w+), VARCHAR\(\d+\) SEM CHECK", mot):
-                self.assertIn(col, ddl[tab], t)
-                self.assertIsNone(_check(ddl, tab, col), t)
-            for tab in re.findall(r"NENHUMA tabela do mapa carrega (\w+)", mot):
-                self.assertNotIn(tab, destinos, t)
-        # o consumidor citado do tipo de lançamento automático existe (L5-12)
-        self.assertTrue([c for c in self.m["colunas_decl"] if c["tabela"] == "FPTPEVENTOAUT_TBEMPHOS"
-                         and c["destino"] == "lancamento_automatico_rubrica.evento_gatilho"])
+        tam = int(re.search(r"rotulo\s+VARCHAR\((\d+)\)", ddl["parametro_opcao"]).group(1))
+        for t in l5_10.LISTAS:
+            corpo = re.search(r"CREATE TABLE %s \((.*?)\);" % t, l5_10.DDL).group(1)
+            larg = max([int(x) for x in re.findall(r"VARCHAR\((\d+)\)", corpo)] or [0])
+            regra = [c["regra"] for c in self.decl if c["tabela"] == t and c["destino"] == "parametro_opcao.rotulo"][0]
+            if larg > tam:
+                self.assertEqual(regra, "texto_resumo:%d" % tam, t)
 
     def test_indicativo_de_apuracao_nao_e_referencia_ao_catalogo(self):
         c = [x for x in self.plano["FPTP_FOLHA"]["colunas"]["tipo_folha"] if x["coluna"] == "ID_FPTPFOLHAESOC"
@@ -157,9 +156,12 @@ class L5_10(unittest.TestCase):
 
     def test_esperado_da_imagem_nas_carregadas(self):
         self.assertEqual(set(self.esp), set(l5_10.CARREGADAS))
+        self.assertEqual(l5_10.DESCARTADAS, ())
         self.assertEqual(self.esp["FPTP_EVENTO"]["pendencias"]["codigo_colisao_caixa"], 2)
         self.assertEqual(self.esp["FPTP_REFER"]["pendencias"]["codigo_colisao_caixa"], 2)
         self.assertEqual(self.esp["FPTP_FOLHA"]["pendencias"]["valor_presumido"], 7)  # toda linha lida
+        self.assertEqual(self.esp["FPTPDEPENDENT"]["gravados"], 4)  # o sem descrição entra com o código no rótulo
+
 
 
 if __name__ == "__main__":

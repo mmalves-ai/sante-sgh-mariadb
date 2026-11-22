@@ -69,7 +69,8 @@
    ],
    "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; a conciliação compara cada código e descrição da origem com o catálogo oficial carregado (casados, locais, divergentes); fonte extinta (FPAFAST_COD, FPAFAST_RAIS, FPRESC_SEFIP, FPOCOR_SEFIP, FPRESC_CAGED, FPRESC_RAIS) entra inteira como versao_antiga, ligada ao motivo atual por de-para declarado. Também falta o carregador oficial versionado de codigo_esocial, aliquota_rat_cnae, aliquota_terceiros e codigo_retorno_esocial.",
    "atendido": true,
-   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial",
+   "aplicado_na_fatia": "L5-10 r5: as tabelas listadas carregam em parametro_opcao sob rh.lista.<nome>; retiradas de sem_carga.tsv"
   },
   {
    "id": "r5-2",
@@ -88,7 +89,8 @@
    ],
    "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; inclui tipo_rescisao.causa_demissao_id (FPTIPORESC.ID_FPRESC_CAUSA, tese de duplicado retirada) e o de-para dos consumidores FPTPEVENTOAUT_TBEMPHOS (L5-12, evento_gatilho) e FPVALE (L5-11, beneficio.tipo) no lugar do =~outro, outro só para código sem par.",
    "atendido": true,
-   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial",
+   "aplicado_na_fatia": "L5-10 r5: as tabelas listadas carregam em parametro_opcao sob rh.lista.<nome>; retiradas de sem_carga.tsv"
   }
  ]
 }

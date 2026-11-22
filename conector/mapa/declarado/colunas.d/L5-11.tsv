@@ -90,3 +90,56 @@ PEPARAM	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L5-11 r5 (AD
 PEPARAM	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L5-11 r5 (ADR 0006, 1; ADR 0007, 17/18): configuração do ponto da empresa CARREGA inteira como parâmetro json do módulo migracao (retrato de todas as colunas, visível no painel) até o produto ter as definições pessoas.ponto.* que a recebam (pedido em saida/L5-11.json; F4-decisoes-destino.md, rodada 5): módulo das listas e configurações trazidas da origem
 PEPARAM	=Listas de valores trazidas da origem	modulo_sistema.descricao				L5-11 r5 (ADR 0006, 1; ADR 0007, 17/18): configuração do ponto da empresa CARREGA inteira como parâmetro json do módulo migracao (retrato de todas as colunas, visível no painel) até o produto ter as definições pessoas.ponto.* que a recebam (pedido em saida/L5-11.json; F4-decisoes-destino.md, rodada 5)
 PEPARAM	=0	modulo_sistema.ativo				L5-11 r5 (ADR 0006, 1; ADR 0007, 17/18): configuração do ponto da empresa CARREGA inteira como parâmetro json do módulo migracao (retrato de todas as colunas, visível no painel) até o produto ter as definições pessoas.ponto.* que a recebam (pedido em saida/L5-11.json; F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+FPTP_SAL	#codigo_derivado:COD_TPSAL+COD_ESOCIAL:200	parametro_opcao.valor	texto		principal;parametro_opcao	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	COD_TPSAL	parametro_opcao.sequencia	inteiro			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	NOME	parametro_opcao.rotulo	texto_nome			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	COD_TPSAL	parametro_opcao.rotulo	texto			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=migracao	parametro_opcao.origem				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=Listas de valores trazidas da origem	modulo_sistema.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=0	modulo_sistema.ativo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=rh.lista.tipo_salario	parametro_definicao.chave			antes;adotar:chave	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=Tipo de salário (eSocial: código local e código oficial no valor)	parametro_definicao.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	=lista	parametro_definicao.tipo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_SAL	COD_ESOCIAL		inteiro			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	ID	parametro_opcao.sequencia	inteiro			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	NOME	parametro_opcao.rotulo	texto_nome			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	ID	parametro_opcao.rotulo	texto			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=migracao	parametro_opcao.origem				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=Listas de valores trazidas da origem	modulo_sistema.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=0	modulo_sistema.ativo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=rh.lista.treinamento_capacitacao	parametro_definicao.chave			antes;adotar:chave	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=Tipo de treinamento e capacitação (eSocial)	parametro_definicao.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+FPTP_TREINAMENTO_CAPACITACAO	=lista	parametro_definicao.tipo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	ID	parametro_opcao.sequencia	inteiro			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	NOME	parametro_opcao.rotulo	texto_nome			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	ID	parametro_opcao.rotulo	texto			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=migracao	parametro_opcao.origem				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=Listas de valores trazidas da origem	modulo_sistema.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=0	modulo_sistema.ativo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=rh.lista.tipo_jornada	parametro_definicao.chave			antes;adotar:chave	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=Tipo de jornada (eSocial; o regime usa regime_jornada.tipo_jornada_esocial)	parametro_definicao.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+POTPJORNADA	=lista	parametro_definicao.tipo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	COD_EMIT	parametro_opcao.valor	texto		principal;parametro_opcao	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	COD_EMIT	parametro_opcao.sequencia	inteiro			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	NOME	parametro_opcao.rotulo	texto_nome			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	COD_EMIT	parametro_opcao.rotulo	texto			L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=migracao	parametro_opcao.origem				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=Listas de valores trazidas da origem	modulo_sistema.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=0	modulo_sistema.ativo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=rh.lista.emitente_cat	parametro_definicao.chave			antes;adotar:chave	L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=Emitente da comunicação de acidente de trabalho (eSocial)	parametro_definicao.descricao				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos
+STEMITENTE	=lista	parametro_definicao.tipo				L5-11 r5 conferidor (ADR 0006, 4; decisão r5-1/r5-2): lista legal da origem como lista do hospital, códigos ativos

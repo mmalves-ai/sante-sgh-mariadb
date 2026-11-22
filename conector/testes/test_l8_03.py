@@ -224,7 +224,7 @@ class Declaracoes(unittest.TestCase):
         for t, col in (("TBMATMED", "TAB"), ("TBREFMEMTUSS", "TAB_FCREFUND")):
             vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == t)
             for marca in ("REF_BRA", "REF_SIMP"):
-                self.assertIn("so_se:%s>TBCTRMEM>%s=N,!licenca_nao_comprovada" % (col, marca), vias, t)
+                self.assertIn("so_se:%s>TBCTRMEM>%s=N,F,!licenca_nao_comprovada" % (col, marca), vias, t)
         self.assertTrue([l for l in self.linhas if l["tabela"] == "TBMATMED" and l["coluna"] == "=outra"])
 
     def test_credenciamento_do_medico_num_so_cadastro(self):
