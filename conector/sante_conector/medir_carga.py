@@ -144,8 +144,11 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
 def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
     """Previsão da carga completa: contagem de cada tabela do plano inteiro, ondas e gravadores livres (a maior
     tabela primeiro), com o teto de um gravador e o teto do leitor único. Só contagens."""
+    import os
     mapa_exec = mapa.carregar_execucao()
-    plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()))
+    # CONECTOR_ADIAR (carga em duas passadas, motor.py): a previsão é a da passada sem as tabelas adiadas
+    adiar = {t.strip() for t in (os.environ.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
+    plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()) - adiar)
     cont = {p["tabela"]: lt.contar(p["tabela"]) for p in plano}
     ws = carga_mapa.paralelo.ondas(plano, mapa_exec)
     total_s, por_onda = 0.0, []
@@ -166,7 +169,7 @@ def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
         total_s += s
         por_onda.append((len(onda), linhas, round(s)))
     maiores = sorted(cont.items(), key=lambda x: -x[1])[:8]
-    return {"tabelas": len(plano), "linhas": sum(cont.values()), "ondas": len(ws), "horas": round(total_s / 3600, 2),
+    return {"adiadas": sorted(adiar), "tabelas": len(plano), "linhas": sum(cont.values()), "ondas": len(ws), "horas": round(total_s / 3600, 2),
             "divididas": sorted(divididas, key=lambda t: -cont[t])[:15], "linhas_divididas": sum(cont[t] for t in divididas),
             "ondas_mais_longas": sorted(por_onda, key=lambda x: -x[2])[:8],
             "maiores_tabelas": [(t, n, ws_i) for t, n in maiores

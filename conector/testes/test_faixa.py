@@ -42,6 +42,17 @@ class TestDivisivel(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CONECTOR_FAIXA": "0"}):
             self.assertFalse(paralelo.divisivel_spec(_spec(), 10 ** 9))  # desligada
 
+    def test_so_primeira_carga(self):
+        cm = _Cm()
+        self.assertTrue(paralelo.primeira_carga(cm, "TGRANDE"))
+        cm.existente["TGRANDE"] = {}
+        self.assertTrue(paralelo.primeira_carga(cm, "TGRANDE"))  # nada gravado ainda
+        cm.existente["TGRANDE"] = {"1": (10, None, None, None)}
+        self.assertFalse(paralelo.primeira_carga(cm, "TGRANDE"))  # reexecução: estado herdado da tabela inteira
+        cm.existente["TGRANDE"] = {}
+        cm.sinc = True
+        self.assertFalse(paralelo.primeira_carga(cm, "TGRANDE"))  # Sincronizar: produto em uso, linhas existentes
+
     def test_na_faixa(self):
         self.assertTrue(paralelo._na_faixa("5", [(None, 10)]))
         self.assertFalse(paralelo._na_faixa("10", [(None, 10)]))

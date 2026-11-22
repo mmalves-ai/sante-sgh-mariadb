@@ -18,7 +18,8 @@ Ordem do plano:
   chave primária, sem `id` declarado e fora dos provisórios) é dividida por FAIXA DE CHAVE: as faixas de 10 mil
   chaves do leitor vão em N partes contíguas, uma tarefa cada, ao lado das tabelas pequenas da mesma onda. O id do
   destino vem de um bloco reservado pelo coordenador a cada gravador (`reservar`), nunca do MAX+1; o hash por bloco
-  do Sincronizar só apaga os blocos sumidos dentro da faixa do gravador;
+  do Sincronizar só apaga os blocos sumidos dentro da faixa do gravador. Só a 1ª carga da tabela se divide
+  (`primeira_carga`): no Sincronizar e na reexecução a tabela vai inteira a um gravador, como antes;
 - onda de uma tabela só, sem divisão, roda no próprio coordenador, como antes.
 
 Estado em memória: o gravador nasce do fork com todo o estado do coordenador e devolve só a diferença (chaves tocadas
@@ -87,12 +88,24 @@ def divisivel_spec(p, linhas):
     return not re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(t), json.dumps(p["colunas"], default=str))
 
 
+def primeira_carga(cm, t):
+    """Só a 1ª carga da tabela se divide (revisão de 2026-11-22). No Sincronizar ou com a tabela já gravada
+    (`existente[t]` herdado, reexecução):
+    - cada gravador carregaria o estado da tabela INTEIRA (`estado_destino`, `existente[t]`), multiplicando a memória
+      pelo número de partes;
+    - o INSERT ... ON DUPLICATE KEY UPDATE de linhas que já existem toma trava next-key no índice único de
+      `conector_origem` (chave em texto: as faixas numéricas se intercalam) e dois gravadores podem dar 1213;
+    - o produto pode estar em uso no cliente e inserir no destino um id dentro do bloco reservado da onda (1062).
+    Na 1ª carga o destino não tem linha da tabela, não há duplicata nem uso concorrente: os três riscos não existem."""
+    return not getattr(cm, "sinc", False) and not cm.existente.get(t)
+
+
 def divisivel(cm, p, contagens):
     """A tabela pode ser dividida por faixa de chave entre gravadores sem mudar o resultado: nenhuma decisão da linha
     depende de outra linha da mesma tabela nem da ordem de gravação no destino (ver o cabeçalho do módulo)."""
     from .carga_mapa import TIPOS_INT
     t, ch = p["tabela"], p["chave"]
-    if not divisivel_spec(p, contagens.get(t, 0)):
+    if not divisivel_spec(p, contagens.get(t, 0)) or not primeira_carga(cm, t):
         return False
     if not cm._adiavel(p) or cm.lt.chave_primaria(t) != ch:
         return False
