@@ -9,7 +9,7 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_01
 
 FATIA = list(l8_01.FATIA)
-CARREGADAS = {"FCTPMOTGLOSA": "grupo_motivo_glosa", "RPDEDUTIVEL": "tipo_deducao_irrf",
+CARREGADAS = {"FCPROCUNIBHMED": "parametro_opcao", "FCTPMOTGLOSA": "grupo_motivo_glosa", "RPDEDUTIVEL": "tipo_deducao_irrf",
               "FAPARUSU": "competencia_trabalho_usuario", "FCPARUSU": "competencia_trabalho_usuario",
               "FIPARUSU": "competencia_trabalho_usuario", "FCCODCON": "codigo_prestador_fonte_pagadora",
               "FCCPSCON": "codigo_prestador_fonte_pagadora",
@@ -22,12 +22,13 @@ CARREGADAS = {"FCTPMOTGLOSA": "grupo_motivo_glosa", "RPDEDUTIVEL": "tipo_deducao
               # R5 (ADR 0006): passam a carregar
               "FCEMPAUDPLANSERV": "parametro_opcao", "RPPARAM": "sequencia_negocio",
               "RPLANEVE_TBCBOPRO": "lancamento_repasse"}
-DESCARTES = {"FCPROCUNIBHMED": "sem_valor"}
+DESCARTES = {}  # r6: FCPROCUNIBHMED carrega como opções de parâmetro de lista (#grupo_seq@*)
 # r4: FCREFUND carrega (preço das tabelas próprias; as de referência comercial são puladas pelo filtro de linha)
 BLOQUEADAS = set()
 EXTRAS = {"RPLANEVE": ["favorecido_repasse"],
           "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed"],  # destino secundário declarado pela via
-          "FCEMPAUDPLANSERV": ["modulo_sistema", "parametro_definicao"]}
+          "FCEMPAUDPLANSERV": ["modulo_sistema", "parametro_definicao"],
+          "FCPROCUNIBHMED": ["modulo_sistema", "parametro_definicao"]}  # r6: lista de opções (módulo e parâmetro adotados)
 CONTA = "FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)"
 PROF = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 

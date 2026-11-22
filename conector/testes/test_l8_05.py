@@ -250,7 +250,7 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items()
-                          if k.startswith("restricao_destino_") or k in ("pai_pendente", "aguarda_dimensao_no_modelo"))
+                          if k.startswith("restricao_destino_") or k in ("pai_pendente", "aguarda_dimensao_no_modelo", "licenca_nao_comprovada"))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in l8_05.BLOQUEADAS + l8_05.SO_ORIGEM:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t) if t not in l8_05.COM_LINHAS else self.assertGreater(cont[t], 2, t)

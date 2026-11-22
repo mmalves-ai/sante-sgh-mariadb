@@ -573,7 +573,8 @@ def linhas(r, ins):
     # r5: + item ligado ao espelho (gravado) e código fora do espelho (espelho_codigo_inexistente + CHECK 4025)
     esperado["TBPERMEM"] = {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 2,
                                                           "valor_fora_do_dominio": 1, "espelho_codigo_inexistente": 1}}
-    esperado["TBVLRMEM"] = {"gravados": 2, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_4025": 1}}
+    esperado["TBVLRMEM"] = {"gravados": 2, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_4025": 1,
+                                                 "adotado_existente": 1}}  # a fonte matmed_1 já existe: adotada
     if RPLANRPA_ATIVA:
         esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     return esperado

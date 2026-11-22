@@ -67,6 +67,11 @@
    "motivo": "TBDIGITAL_VIAACESSO passou a carregar por cod:via_de_uso.codigo_interoperabilidade; via_de_uso não é destino de nenhuma fatia que REQUER a L6-08, então a conferência de quem REQUER a L6-08 sem o preparo dela falha com 1146. L6-09 e L6-10 já ligaram PREPARO_DOS_REQUERIDOS; a L6-17 (outra fatia) precisa do mesmo ou da mudança no motor. Rodada 5, 2ª volta: o preparo da L6-08 também grava a informação clínica externa (ids 1..100) que a PRTPRESPOSTA complementa; sem ele, a conciliação de informacao_clinica_operadora diverge (destino 0). Só PREPARO_DOS_REQUERIDOS = True na L6-17 resolve as duas",
    "atendido": false,
    "rodada5": true
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_gravar_ou_adotar com complementa; conciliar)",
+   "mudanca": "rodada 6: complemento N:1 com valores DIFERENTES (duas linhas da origem complementam a mesma linha do destino): a primeira grava, a seguinte em conflito mantém o destino e guarda a da origem no histórico com pendência (ADR 0007, 20), e a conciliação conta essa linha como conferida pelo histórico",
+   "motivo": "com a conciliação sintética rodando de novo (d4300a3), o N:1 da imagem (dado de envio 1 com tipos texto e data) divergia a soma de informacao_clinica_operadora: o UPDATE do último vence e a linha anterior não bate. A imagem passou a ter o N:1 com o mesmo tipo (concilia); o caso com tipos diferentes volta à sintética da L6-08 quando o motor atender"
   }
  ]
 }

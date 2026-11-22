@@ -3,6 +3,7 @@ inventados. Rodada 3 de cobertura: 23 tabelas declaradas (GEANTIMI incluída), G
 descartadas. A conciliação na imagem SINTÉTICA roda em
 `conector.sh conferir-fatia L7-08`."""
 import random
+import pathlib
 import unittest
 
 from sante_conector import carga_mapa, mapa
@@ -78,6 +79,11 @@ class FatiaL708(unittest.TestCase):
                     continue
                 n = c["coluna"]
                 usadas.add(n.split(":")[1] if n.startswith("#") and ":" in n else n)
+                if n.startswith("#item@"):
+                    usadas.add(n[6:])
+                for op in (c.get("via") or "").split(";"):  # r6: colunas desdobradas (uma linha por coluna)
+                    if op.startswith("desdobrar:"):
+                        usadas |= {x.split("=")[0] for x in op[10:].split(",")}
             faltam = {c for c, _, _ in l7_08.COLUNAS[t]} - chaves[t] - usadas
             self.assertFalse(faltam, (t, sorted(faltam)))
 
@@ -97,12 +103,11 @@ class FatiaL708(unittest.TestCase):
             self.assertFalse(self._d(t, "=concluido"))
 
     def test_sem_duas_fontes_na_mesma_coluna_e_saldo_vigente_fora(self):
-        # r5c: a quantidade líquida fica PENDENTE (movimento_lote.quantidade_liquida, pedido r5b_lote_liquido); a trilha
-        # não conta como carga
-        q = [c for c in self.decl if c["tabela"] == "GEQTDELOTEVALLOTEDOCSAIDA" and c.get("destino")]
-        self.assertFalse(q)
+        # r6: a quantidade líquida vai à coluna própria do lote da saída (complementa), nunca à bruta
+        q = {c["destino"] for c in self.decl if c["tabela"] == "GEQTDELOTEVALLOTEDOCSAIDA" and c.get("destino")}
+        self.assertEqual(q, {"movimento_lote.id", "movimento_lote.quantidade_liquida"})
         self.assertFalse([c for c in self.decl if c.get("destino") == "inventario_estoque_lote.saldo_sistema"])
-        self.assertIn("GEQTDELOTEVALLOTEDOCSAIDA", l7_08.BLOQUEADAS)
+        self.assertNotIn("GEQTDELOTEVALLOTEDOCSAIDA", l7_08.BLOQUEADAS)
         self.assertEqual(l7_08.DESCARTADAS, ())
 
     def test_regra_presumida_entra_inativa(self):
@@ -170,8 +175,18 @@ class FatiaL708(unittest.TestCase):
         # entrega ao setor acha o setor pelo código do local de consumo do documento
         self.assertIn("cod:setor_funcional.codigo",
                       self._d("GECTRLENTREGADOCSAIDA", "ID_GECADSAI", "entrega_setor.setor_funcional_id")[0]["via"])
-        # nenhuma bloqueada; a liberação aponta a ficha de GECADANTIMI e a liberação anterior (autorreferência)
+        # r6: nenhuma bloqueada (regra 23): GEPARAM em parametro_valor do usuário pela semente estoque.* (11_SUP/09)
         self.assertEqual(l7_08.BLOQUEADAS, ())
+        pv = self._d("GEPARAM", "#item", "parametro_valor.valor")[0]["via"]
+        self.assertIn("desdobrar:", pv)
+        self.assertIn("cod:parametro_definicao.chave",
+                      self._d("GEPARAM", "#rotulo", "parametro_valor.parametro_definicao_id")[0]["via"])
+        self.assertEqual(self._d("GEPARAM", "#item@CONS_AUT", "parametro_valor.valor")[0]["depara"], "valores")
+        semente = next(r / "db/migracoes/11_SUP/09_chaves.sql" for r in pathlib.Path(__file__).resolve().parents
+                       if (r / "db/migracoes/11_SUP/09_chaves.sql").exists()).read_text("utf-8")
+        for rot in [x.split("=")[1] for x in pv.split("desdobrar:")[1].split(";")[0].split(",")]:
+            self.assertIn("'" + rot + "'", semente)  # toda opção tem definição na semente
+        # a liberação aponta a ficha de GECADANTIMI e a liberação anterior (autorreferência)
         lib = "liberacao_antimicrobiano."
         self.assertEqual(self._d("GEANTIMI", "ID_GECADANTIMI", lib + "ficha_antimicrobiano_id")[0]["via"],
                          "ref:GECADANTIMI")

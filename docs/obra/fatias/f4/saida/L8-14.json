@@ -39,6 +39,16 @@
    "arquivo": "tools/obra/conferir-fatia-f4.sh / validador global do mapa (conector/sante_conector/mapa.py ou ferramenta de checagem do mapa gerado)",
    "mudanca": "checagem determinística global: para cada destino.coluna que receba mais de um emissor (#codigo_derivado:<col>:<n>:<prefixo>, coluna crua mapeada, ou de-para de valores), dois #codigo_derivado não podem ter o mesmo prefixo, nem prefixo vazio quando outro emissor grava chave crua ou valor de de-para que possa coincidir; violação = erro com as duas tabelas e o prefixo",
    "motivo": "PSORIGEMCOBR (L8-14) e TBTIPOCOBRANCASGO (L8-15) usavam ambos 'cobranca_' em origem_cobranca_plano.codigo; cada fatia é conferida isolada e o choque (1062) só aparece na carga completa. Corrigido na L8-14 (prefixo 'origem_'); a checagem evita a reincidência em qualquer fatia"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-05.tsv (dono: fatia L7-05)",
+   "mudanca": "GECOMPRA: declarar historico_compra_insumo entre os destinos da tabela (via/opção de destino) ou retirar as 11 colunas declaradas para ele",
+   "motivo": "L8-14 rodada 6: o verificador do mapa é global e recusa 11 colunas de GECOMPRA (coluna de destino fora dos destinos da tabela); nenhuma é desta fatia"
+  },
+  {
+   "arquivo": "docs/obra/fatias/f4/L7-07.md, L7-08.md, indice.tsv (orquestrador: fatiar_conector)",
+   "mudanca": "regenerar as fatias L7-07 e L7-08 e o indice.tsv depois das mudanças do mapa",
+   "motivo": "L8-14 rodada 6: fatiar_conector --conferir acusa arquivo diferente do gerado em fatias de outro lote; nenhuma é desta fatia"
   }
  ]
 }

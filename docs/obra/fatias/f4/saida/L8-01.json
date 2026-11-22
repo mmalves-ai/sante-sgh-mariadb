@@ -250,6 +250,18 @@
       "arquivo": "tools/obra/cobertura_conector.py",
       "mudanca": "tools/obra/cobertura_conector.py: `licenciado_copiado` não pode bloquear a linha DO HOSPITAL gravada numa tabela do espelho (item ou preço da tabela PRÓPRIA: fonte_referencia 'outra' / tipo_fonte 'propria', com o filtro `so_se:` de licença que pula a tabela licenciada com licenca_nao_comprovada). Proposta: bloquear só quando a tabela declara destino licenciado SEM filtro de licença na via, ou com fonte brasindice/simpro/cbhpm literal",
       "motivo": "FCREFUND já grava só o preço das tabelas PRÓPRIAS do hospital (a de referência comercial é pulada por linha); o ADR 0006 (3) manda o preço próprio entrar pelo conector, e a decisão do espelho dá aos itens locais a faixa 10^12 nas mesmas tabelas"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (motor, regra genérica: adotar + mescla no destino PRINCIPAL)",
+      "mudanca": "quando _mesclar PREENCHE colunas vazias (UPDATE) de uma linha adotada, refazer o resumo (self.origem[ent][k]) de TODAS as chaves da origem já registradas nessa linha do destino (relido do banco), ou reler o resumo das linhas adotadas na conciliação",
+      "motivo": "r6: FCGUIAS (adotar:estabelecimento_id,fonte_pagadora_id,numero) lê na ordem da chave '1|S|G1|G1|C' (sem senha/datas) ANTES de '1|S|G1|G1|S' (completa): a 1ª insere, a 2ª adota e a mescla preenche 4 colunas vazias (numero_guia_operadora, senha, validade, autorização); o resumo da 1ª ficou o de antes do UPDATE e a conciliação de guia_fonte_pagadora diverge (so != sd; origem 10 = destino 6 + recusados 4). Diagnóstico por cópia instrumentada do motor em /tmp (sem editar o compartilhado). Afeta a carga real (2.214 pares de guia repetem número no mesmo convênio) e toda tabela com adotar no principal",
+      "rodada": 6
+    },
+    {
+      "id": "resumo_apos_mescla",
+      "arquivo": "conector/sante_conector/carga_mapa.py (motor, integrador)",
+      "mudanca": "quando _gravar_ou_adotar adota uma linha e a mescla (ADR 0007, 20) PREENCHE colunas vazias, reler e atualizar o resumo (self.origem[ent][k] e o registro do conector_origem) de TODAS as chaves que já apontavam para o mesmo id",
+      "motivo": "rodada 6: a linha gravada primeiro guarda o resumo de antes da mescla; a adotante preenche a guia e a conciliação diverge (soma origem != destino) mesmo com contagens certas. Na sintética da L8-01 a duplicada passou a trazer os mesmos dados para não depender disso"
     }
   ]
 }

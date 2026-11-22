@@ -14,14 +14,17 @@ CARREGADAS = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBC
               "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED",
               "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI",
               # R5 (ADR 0006): listas de opções carregadas como opções de um parâmetro de lista
-              "TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC"]
+              "TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC",
+              # r6 (ADR 0006): o pacote carrega pela chave composta com componente encadeado (mecanismo f da R5)
+              "TBPACTHM"]
 LISTAS_R5 = ["TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC"]
 # R5 (ADR 0006): nenhum descarte por julgamento
 DESCARTE = []
 # aguardam regra genérica do motor (pedidos em docs/obra/fatias/f4/saida/L8-03.json)
 # r4: TBMATMED, TBREFMEMTUSS e TBPERTHM carregam; TBPACTHM espera o componente encadeado na chave composta (pedido 3)
 # r4 (revisão): TBCONVPERCTAPAC volta a bloqueada (a escolha da fonte pagadora em TBCONVEN, L5-06, ainda não carrega)
-BLOQUEADAS = ["TBPACTHM"]
+# r6: nenhuma bloqueada (TBPACTHM carrega; o domínio do TIPO é decisão registrada, F4-decisoes-destino.md)
+BLOQUEADAS = []
 DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_cooperativa"],
             "TBCREMED": ["credenciamento_cobranca"],
             "TBCREPRS": ["credenciamento_cobranca"], "TBCTRDTH": ["tabela_preco"], "TBCTRMEM": ["tabela_preco"],
@@ -31,9 +34,14 @@ DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_coope
             "TBITEATE": ["tipo_atendimento_tabela"], "TBLOCCON": ["local_cobranca"],
             "TBPROCTO": ["item_faturavel", "grupo_faturamento"], "TBPORMED": ["valor_porte_medico", "porte_procedimento"],
             "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed"],
-            "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"]}
+            "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"],
+            "TBPACTHM": ["pacote_item_incluso", "pacote", "pacote_contrato"]}
 DESTINOS.update({t: ["parametro_opcao", "modulo_sistema", "parametro_definicao"] for t in LISTAS_R5})
 OBRIGATORIAS = {
+    "pacote": {"codigo", "descricao", "tipo_pacote", "item_faturavel_id", "cobranca_item_faturavel_id",
+               "vigencia_inicio"},
+    "pacote_item_incluso": {"pacote_id", "sequencia"},
+    "pacote_contrato": {"pacote_id", "fonte_pagadora_id", "vigencia_inicio"},
     "funcao_equipe_cobranca": {"codigo", "descricao", "tipo_funcao"},
     "membro_cooperativa": {"cooperativa_medica_id", "profissional_id", "vigencia_inicio"},
     "credenciamento_cobranca": {"estabelecimento_id", "fonte_pagadora_id", "vigencia_inicio"},
@@ -276,7 +284,10 @@ class Declaracoes(unittest.TestCase):
 
 
 # pedido 9 do saida/L8-03.json: arestas de ordem que faltam no mapa (o pai vem depois do filho na carga real)
-ARESTAS_PEDIDAS = ("TBCRECOO->TBPROFIS", "TBINDICE->TBCONVEN", "TBPORMED->TBCONVEN", "TBLOCCON->TBCENCUS")
+ARESTAS_PEDIDAS = ("TBCRECOO->TBPROFIS", "TBINDICE->TBCONVEN", "TBPORMED->TBCONVEN", "TBLOCCON->TBCENCUS",
+                  # r6: pedido R6-1 (pais do pacote)
+                  "TBPACTHM->TBCONVEN", "TBPACTHM->TBTABTHM", "TBPACTHM->TBTABDTH", "TBPACTHM->TBGRAUPARTPROC",
+                  "TBPACTHM->TBLOCCON")
 
 
 class OrdemDasReferencias(unittest.TestCase):
@@ -308,6 +319,36 @@ class OrdemDasReferencias(unittest.TestCase):
                             and "%s->%s" % (x["tabela"], pai) not in abertos:
                         fora.append("%s->%s" % (x["tabela"], pai))
         self.assertEqual(sorted(set(fora)), [])
+
+
+class Pacote(unittest.TestCase):
+    """r6 (ADR 0006): TBPACTHM vira pacote (agrupado por convênio, tipo de conta e procedimento), item incluso por
+    linha e acordo por convênio; o procedimento do pacote pela tabela de honorários do convênio."""
+
+    def setUp(self):
+        r = _raiz()
+        if r is None:
+            self.skipTest("declarações ausentes")
+        with open(r / "colunas.d/L8-03.tsv", newline="", encoding="utf-8") as f:
+            self.l = [x for x in csv.DictReader(f, delimiter="\t") if x["tabela"] == "TBPACTHM"]
+
+    def _via(self, destino):
+        return [x["via"] for x in self.l if x["destino"] == destino]
+
+    def test_procedimento_do_pacote_pela_tabela_do_convenio(self):
+        for d in ("pacote.item_faturavel_id", "pacote.cobranca_item_faturavel_id"):
+            self.assertEqual(self._via(d), ["ref:TBTABTHM(CON>TBCONVEN>THM,THM)@item_faturavel_id"], d)
+
+    def test_item_incluso_condicionado_ao_tipo(self):
+        self.assertEqual(self._via("pacote_item_incluso.item_faturavel_id"),
+                         ["ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id;se:TIPO=1",
+                          "ref:TBTABDTH.(TAB,OPE)=(TABELA,PROCTO)/item_faturavel;se:TIPO=2"])
+
+    def test_agrupado_e_vigencia_pela_evidencia(self):
+        self.assertIn("antes;agrupar:CON,CONTAS,THM", self._via("pacote.codigo"))
+        for x in self.l:
+            self.assertNotIn("@vigencia_carga", x["coluna"])
+        self.assertEqual({x["coluna"] for x in self.l if x["destino"].endswith(".vigencia_inicio")}, {"#vigencia"})
 
 
 class Sintetica(unittest.TestCase):
@@ -399,7 +440,8 @@ class ValoresNoDestino(unittest.TestCase):
                                        " ORDER BY codigo",
             "item_faturavel": "SELECT i.codigo, i.descricao, i.tipo_item, g.codigo, g.descricao, g.tipo_grupo"
                               " FROM item_faturavel i JOIN grupo_faturamento g ON g.id = i.grupo_faturamento_id"
-                              " ORDER BY i.codigo",
+                              # r6: os itens ex_* são a semente dos pais externos (PREPARO_DESTINO), não da carga
+                              " WHERE i.codigo NOT LIKE 'ex\\_%' ORDER BY i.codigo",
             "grupos": "SELECT COUNT(*) FROM grupo_faturamento",
             "valor_porte_medico": "SELECT p.codigo, p.descricao, p.tipo_porte, v.vigencia_inicio, v.ocorrido_em, v.valor,"
                                   " v.fonte_pagadora_id IS NOT NULL FROM valor_porte_medico v JOIN porte_procedimento p"

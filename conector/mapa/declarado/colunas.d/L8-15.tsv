@@ -457,5 +457,5 @@ PSBENCPL	ID_PSBENEFI	credencial_usuario.senha_alterada_em			credencial_usuario;r
 PSTPSVIGENCIA	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): valores da taxa de saúde suplementar por vigência guardados na origem; conciliar com o carregador da ANS
 PSTPSVIGENCIA	=inclusao	trilha_auditoria.acao				
 PSTPSVIGENCIA	=taxa_saude_suplementar_vigencia	trilha_auditoria.entidade				
-PSTPSVIGENCIA	DATA_VIGENCIA	trilha_auditoria.ocorrido_em	data			
+PSTPSVIGENCIA	#vigencia:DATA_VIGENCIA	trilha_auditoria.ocorrido_em				
 PSTPSVIGENCIA	=valores da taxa de saúde suplementar por vigência guardados na origem; conciliar com o carregador da ANS	trilha_auditoria.motivo				

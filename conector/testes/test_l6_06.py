@@ -19,7 +19,9 @@ COM_VALORES = {("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.atendim
                ("PRPROTGERAL", "SEXO", "protocolo_prescricao.sexo"),
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto"),
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao"),
-               ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria")}
+               ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria"),
+               # r6: S/N da checagem -> 'sim'/'nao' do parâmetro booleano do produto (formato canônico)
+               ("PRPARAM_CHECAGEM", "#item", "parametro_valor.valor")}
 
 
 # rodada 5 (ADR 0006): as antes descartadas, que carregam por parâmetro do produto e pelo agrupamento
@@ -154,7 +156,8 @@ class L6_06(unittest.TestCase):
         tipos = l6_06.tipos_semente()
         usadas = set()
         for f in ("L6-03", "L6-04", "L6-05", "L6-06"):
-            with open(os.path.join(RAIZ, "conector", "mapa", "declarado", "colunas.d", f + ".tsv"), encoding="utf-8") as a:
+            # pelo pacote do mapa (no container a raiz do repositório não existe: /app)
+            with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / (f + ".tsv"), encoding="utf-8") as a:
                 for ln in a:
                     usadas.update(_re.findall(r"=((?:agenda|pep|oftalmologia|prescricao)\.[a-zA-Z.]+)", ln))
         self.assertTrue(usadas)

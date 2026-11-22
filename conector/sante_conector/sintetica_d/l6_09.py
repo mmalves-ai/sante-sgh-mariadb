@@ -98,8 +98,9 @@ def linhas(r, ins):
         ins("TBHORMED_TBUNIDAD", list(u))
     # números de doses (frequência 'N vezes ao dia' nos horários padrão, uma por número, adotada pelo código):
     # 7 da grade recusada 3 (o número de doses carrega; o horário dele fica pai_pendente pela grade); 8 com menos
-    # horários que doses (carrega); 9 com 50 doses (CHECK 1..48 recusa: pendência visível; o horário dele fica
-    # pai_pendente); 10 SEM horário nenhum (carrega: o número de doses chega ao destino)
+    # horários que doses (carrega); 9 com 50 doses (CHECK 1..48 recusa: pendência visível; o horário dele lê as 50
+    # doses pela encadeada e é recusado pelo MESMO CHECK do destino, 4025, também visível: a encadeada só confere
+    # a pendência do último pai, a grade 2, que carregou); 10 SEM horário nenhum (carrega)
     doses = [(1, 1, 1), (2, 1, 2), (3, 2, 3), (4, 2, 2), (5, 4, 1), (6, 4, 3), (7, 3, 1), (8, 1, 3), (9, 2, 50),
              (10, 4, 4)]
     for n in doses:
@@ -181,8 +182,8 @@ def linhas(r, ins):
         "TBHORMED_TBUNIDAD": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 8,
                                                             "restricao_destino_1048": 2}},
         "TBNUMDOSE": {"gravados": 9, "pendencias": {"adotado_existente": 5, "restricao_destino_4025": 1}},
-        "TBHORARIODOSE": {"gravados": 14, "pendencias": {"restricao_destino_4025": 1, "hora_invalida": 1,
-                                                         "pai_pendente": 2, "pai_inexistente": 2,
+        "TBHORARIODOSE": {"gravados": 14, "pendencias": {"restricao_destino_4025": 2, "hora_invalida": 1,
+                                                         "pai_pendente": 1, "pai_inexistente": 2,
                                                          "restricao_destino_1048": 2}},
         "TBTABELA_CAMPO": {"gravados": 4, "pendencias": {"adotado_existente": 7}},
         "TBLANC_DIAG_STATUS": {"gravados": 7, "pendencias": {"adotado_existente": 13}},

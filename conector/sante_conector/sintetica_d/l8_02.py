@@ -226,6 +226,13 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " criado_em) VALUES ('001', '00000001', 'Banco exemplo', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));"
                    " INSERT INTO pessoa_juridica (cnpj, razao_social, origem, criado_em) VALUES ('%s',"
                    " 'Pessoa juridica ja cadastrada', 'sistema', UTC_TIMESTAMP(3));" % CNPJ_EXISTENTE)
+# r6 (prova de não copiar de RPRPA_TBCBOPRO, ADR 0006, 1): a UF e o conselho das inscrições (catálogos oficiais), para
+# a inscrição (TBCBOPRO) gravar de verdade em inscricao_conselho e a prova recalcular a inscrição de cada RPA gravado
+# pelo profissional dele e a inscrição única desse profissional, linha a linha contra a origem
+PREPARO_DESTINO += (" INSERT IGNORE INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em)"
+                    " VALUES ('35', 'SP', 'Unidade exemplo SP', 1, UTC_TIMESTAMP(3));"
+                    " INSERT IGNORE INTO conselho_classe (codigo_tiss, sigla, descricao, criado_em) VALUES"
+                    " ('06', 'CRM', 'Conselho exemplo um', UTC_TIMESTAMP(3));")
 
 
 def _falso(tipo, i):
@@ -299,8 +306,9 @@ def linhas(r, ins):
     # competência por usuário: USR1 03/2026; USR2 mês 13 (recusa); login inexistente (recusa)
     for u, m in [("USR1", 3), ("USR2", 13), ("NINGUEM", 1)]:
         _ins(ins, "RPPARUSUEMP", EMPRESA_RPPARAM=1, USUARIO=u, MES_PROCESSAMENTO=m, ANO_PROCESSAMENTO=2026)
-    # RPA: 1 normal (inscrição 301 -> profissional 1); 2 sem inscrição (recusa); 3 período invertido (CHECK);
-    # 4 série e número repetidos do 1 (1062). Situação: G (par) ou Z (sem par: padrão emitido + pendência);
+    # RPA: 1 normal (inscrição 301 -> profissional 1); 2, 3 (período invertido) e 4 (série e número do 1) sem
+    # inscrição: recusa pelo profissional obrigatório (r6: o CHECK e o 1062 do rpa deixam de ser exercitados aqui,
+    # pela prova de não copiar de RPRPA_TBCBOPRO). Situação: G (par) ou Z (sem par: padrão emitido + pendência);
     # método E ou nulo; fato gerador AAAAMM, 0 (nulo) ou mês 13 (valor_fora_do_dominio)
     for i, num, ini, fim, st, met, comp in [
             (1, 1, DT(2025, 3, 1), DT(2025, 3, 31), "G", "E", 202503), (2, 2, DT(2025, 3, 1), DT(2025, 3, 31), "G", "E", 0),
@@ -309,10 +317,13 @@ def linhas(r, ins):
              EMISSAO=fim, CALCULAR_INSS="S", STATUS=st, METODO_ENVIO=met, COMPETENCIA_FATO_GERADOR=comp,
              DATA_HORA_INC_ULT_ALT_ESOC=datetime.datetime(2025, 6, 1, 8, 0), TIPO="M", COD_PRESTADOR=i, HIST=0,
              FATO_GERADOR=0)
-    for rpa, insc in [(1, 301), (3, 302), (4, 301)]:
+    # r6: a associação RPA x inscrição só existe para o RPA 1 (os outros ficam sem inscrição e são recusados pelo
+    # profissional obrigatório): a prova de não copiar de RPRPA_TBCBOPRO compara linha a linha só o que o destino
+    # pode recalcular; RPA recusado com a associação na origem faria a prova falhar (alta), além da pendência dele
+    for rpa, insc in [(1, 301)]:
         _ins(ins, "RPRPA_TBCBOPRO", ID_RPRPA=rpa, ID_TBCBOPRO=insc)
     for i, prof in [(301, 1), (302, 2)]:   # ids das inscrições diferentes dos profissionais
-        _ins(ins, "TBCBOPRO", ID=i, ID_TBPROFIS=prof, UF="SP", COD=7000 + i)
+        _ins(ins, "TBCBOPRO", ID=i, ID_TBPROFIS=prof, UF="SP", CONS_PROF="CRM", COD=7000 + i)
     # orçamentos: Um/1 normal com paciente pelo prontuário; Um/2 colide no número derivado (1062); Dois/1 percentual
     # fora da faixa e prontuário sem paciente (pai_inexistente, gravado); Tres sem data
     for i, pront in [(1, 501), (2, 502)]:
@@ -387,9 +398,8 @@ def esperado():
                                                    "restricao_destino_4025": 1}},
         "RPPARUSUEMP": {"gravados": 1, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
                                                       "restricao_destino_1048": 2}},
-        "RPRPA": {"gravados": 1, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 2, "pai_inexistente": 1,
-                                                "restricao_destino_1048": 1, "restricao_destino_4025": 1,
-                                                "restricao_destino_1062": 1}},
+        "RPRPA": {"gravados": 1, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 2, "pai_inexistente": 3,
+                                                "restricao_destino_1048": 3}},
         "SIORCAME": {"gravados": 2, "pendencias": {"codigo_derivado": 4, "valor_fora_do_dominio": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1062": 1, "restricao_destino_1048": 1}},
     }

@@ -360,7 +360,7 @@ def linhas(r, ins):
         # pedido 10 do L7-02.json (depois: as duas recusadas, valor_repetido_unico 2, gravados 3, sem 1062)
         # r5 (ADR 0006): visualizador inativo com endereço presumido; preferências por usuário ('zeca' nunca visto:
         # pai_inexistente e o escopo de usuário recusa, 4025; vigência pela evidência); SIPARLAB 'ana' tem senha
-        # gerencial e sem chave mestra na conferência o cofre falha fechado (credencial sem referência: 1048)
+        # gerencial e sem chave mestra na conferência o cofre falha fechado (credencial opcional não grava)
         "SIPACSVISIMG": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         # módulo 'migracao' e definição criados pela 1ª linha gravada e adotados pelas seguintes (padrão L8-14):
         # SIPARANA cria o módulo (bia adota os dois: 2); nas outras, ana adota o módulo e bia os dois (3); a linha
@@ -369,9 +369,10 @@ def linhas(r, ins):
                                              "vigencia_sem_fonte": 3,
                                              "adotado_existente": 2 if t == "SIPARANA" else 3}}
            for t in SIPAR if t != "SIPARLAB"},
-        "SIPARLAB": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
-                                                   "adotado_existente": 1,
-                                                   "restricao_destino_1048": 1, "segredo_aguarda_cofre": 1,
+        # r6: a credencial é destino OPCIONAL (destino_se): sem chave mestra não grava e a linha de 'ana' entra
+        # como as das outras tabelas (só segredo_aguarda_cofre a mais)
+        "SIPARLAB": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
+                                                   "adotado_existente": 3, "segredo_aguarda_cofre": 1,
                                                    "vigencia_sem_fonte": 3}},
         "SIPACSMODALID": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                         "codigo_colisao_caixa": 3, "valor_fora_do_dominio": 1}},

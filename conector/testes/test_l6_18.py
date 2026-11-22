@@ -114,14 +114,23 @@ class Plano(unittest.TestCase):
         sc = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         self.assertFalse({"TBTPDIETA", "CHPARAM", "CVPARAM"} & sc)
         self.assertEqual(DESCARTADAS, set())
-        for t, dt, chave in (("CHPARAM", "parametro_valor", "migracao.parametros_higienizacao"),
-                             ("CVPARAM", "parametro_valor", "migracao.parametros_visitante"),
-                             ("TBTPDIETA", "parametro_opcao", "migracao.tipo_dieta")):
-            self.assertEqual(self.plano[t]["destinos"][0], dt, t)
+        # rodada 6: TBTPDIETA é a lista do produto 'nutricao.tipoDieta' (definição adotada pela chave); CHPARAM e
+        # CVPARAM gravam UM valor por chave do produto (desdobrar), com a definição achada pela chave
+        # (cod:parametro_definicao.chave), nunca a linha inteira em JSON numa chave da migração
+        self.assertEqual(self.plano["TBTPDIETA"]["destinos"][0], "parametro_opcao")
+        c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == "TBTPDIETA"}
+        self.assertEqual(c["parametro_definicao.chave"]["coluna"], "=nutricao.tipoDieta")
+        for t in ("CHPARAM", "CVPARAM"):
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_valor", t)
             c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == t}
-            self.assertEqual(c["parametro_definicao.chave"]["coluna"], "=" + chave)
+            self.assertEqual(c["parametro_valor.valor"]["coluna"], "#item", t)
+            self.assertIn("desdobrar:", c["parametro_valor.valor"]["via"], t)
+            self.assertEqual(c["parametro_valor.parametro_definicao_id"]["coluna"], "#rotulo", t)
+            self.assertIn("cod:parametro_definicao.chave", c["parametro_valor.parametro_definicao_id"]["via"], t)
+            self.assertNotIn("parametro_definicao.chave", c, t)
         c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == "CVPARAM"}
-        self.assertEqual(c["parametro_valor.valor"]["coluna"], "#retrato:*")
+        # a senha mestra nunca vira valor de parâmetro: só o cofre (ADR 0007, 17)
+        self.assertNotIn("SENHA_MASTER_LIB_VISITA", c["parametro_valor.valor"]["via"])
         self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER_LIB_VISITA")
 
     def test_referencias(self):
@@ -199,6 +208,9 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("booleano_sn", b"X")[1], "valor_fora_do_dominio")
 
 
+DESDOBRADAS = {"CHPARAM", "CVPARAM"}
+
+
 class Sintetica(unittest.TestCase):
     def test_esperado_coerente_com_as_linhas(self):
         cont = {}
@@ -206,8 +218,13 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(esp), TABELAS)
         self.assertTrue(BLOQUEADAS | DESCARTADAS <= set(cont))
         for t, e in esp.items():
+            if t in DESDOBRADAS:
+                continue
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
+        # desdobradas (rodada 6): "gravados" conta itens (uma linha do destino por coluna com valor), de uma linha só
+        self.assertEqual({t: cont[t] for t in DESDOBRADAS}, {"CHPARAM": 1, "CVPARAM": 1})
+        self.assertEqual({t: esp[t]["gravados"] for t in DESDOBRADAS}, {"CHPARAM": 2, "CVPARAM": 10})
 
     def test_sinonimos_do_tipo_de_dieta_r5(self):
         # r5 (achado; ADR 0007, 18): siglas e nomes usuais do domínio têm par nas duas consumidoras; o tipo próprio

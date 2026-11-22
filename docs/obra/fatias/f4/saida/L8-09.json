@@ -64,6 +64,11 @@
       "mudanca": "o SQL da prova não pode COMEÇAR por comentário nem conter ';' (mapa.erros_provas exige '^\\s*(select|with)' e recusa ';'): 15 provas em provas.d (MFTPAPURACAO, SDNATRECEITA, MFTPCONTRIBUICAO, TBTIPOCARTAO, TBTIPOTAXACARTAO, TBTIPOPERMISSAO, TBTPNATOPENF, CDFAIXAETATP, CDMSGLINHA, CDPARDIGOBG, CDPGTOCOOPART, CDTPCOPART, CDTPCTRCONTRAT e, antes da correção, as duas desta fatia) quebram o verificador do mapa. As desta fatia já têm o SELECT primeiro e o comentário depois, sem ';'.",
       "motivo": "verificador do mapa com 'prova sem SQL de leitura' em toda autoconferência.",
       "tabelas": []
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L7-05.tsv; fatias geradas L7-05..L7-08 e indice.tsv (orquestrador)",
+      "mudanca": "r6: corrigir GECOMPRA (11 colunas com destino historico_compra_insumo fora dos destinos da tabela) na fatia L7-05 e regenerar as fatias L7-05 a L7-08 e o indice.tsv (fatiar_conector) depois das correções em paralelo",
+      "motivo": "únicos erros restantes da autoconferência de L8-09 (23:57): passos globais (verificador do mapa e fatiar --conferir) quebrados por outras fatias; testes, carga/conciliação duas vezes e cobertura da fatia passam (0 bloqueadas)"
     }
   ]
 }

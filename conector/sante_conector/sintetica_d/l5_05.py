@@ -298,8 +298,12 @@ def linhas(r, ins):
     # optante do Simples fora do domínio fica com o padrão do destino (FALSE)
     # responsável: novo na 1 (com o retrato fiscal), ADOTADO pelo CPF na 2, nenhum na 3 (opcional); DMED 1 ->
     # prestador_saude, 7 fora do domínio (NULL); toda mantenedora gravada tem a trilha com o retrato completo
-    esperado["TBEMPHOS"] = {"gravados": 3, "pendencias": {"documento_invalido": 1, "adotado_existente": 2,
-                                                          "valor_fora_do_dominio": 2}}
+    # r6 (DDL 03_CAD/08, ck_pessoa_juridica_cnpj): empresa nacional sem CNPJ válido é RECUSADA pelo CHECK (4025), e
+    # com ela o responsável adotado da linha 2; a 3 adota a pessoa jurídica pelo CNPJ e o nome diferente da origem
+    # fica no histórico da mescla (ADR 0007, 20)
+    esperado["TBEMPHOS"] = {"gravados": 2, "pendencias": {"documento_invalido": 1, "adotado_existente": 1,
+                                                          "valor_fora_do_dominio": 2, "restricao_destino_4025": 1,
+                                                          "mescla_conflito_origem_guardada": 1}}
     # municípios: parte fiscal do cliente na trilha do município; código fora do catálogo oficial fica sem
     # entidade_id (catalogo_codigo_inexistente) e a linha da trilha é gravada; sem configuração também grava
     from decimal import Decimal as D

@@ -210,7 +210,11 @@ def linhas(r, ins):
     # data (4025); 4 CPF inválido e situação fora do domínio (padrão ativo)
     for crm, nome, cpf, sit in [(1, None, None, "A"), (2, "Tecnico Hemo Um", float(CPF_C), "A"),
                                 (3, "Tecnico Hemo Dois", None, "I"), (4, "Tecnico  Hemo Tres", 123.0, "Z")]:
-        ins("SHTECNIC", [crm, nome, cpf, None, None, None, None, None, "SP", "1133335555", None, None, 6, 1000 + crm, sit])
+        # celular do técnico 2 igual ao do técnico do laboratório 101 (mesma pessoa, carregado depois): a mescla não
+        # destrutiva do 101 não preenche coluna vazia do profissional já conciliado aqui (o telefone diverge: conflito
+        # guardado no histórico, destino mantido)
+        cel = "11999990000" if crm == 2 else None
+        ins("SHTECNIC", [crm, nome, cpf, None, None, None, None, None, "SP", "1133335555", cel, None, 6, 1000 + crm, sit])
     # CBO da origem: 10 no catálogo, 11 fora do catálogo; 999 (ausente) é pai_inexistente
     ins("TBCBOSUS", [10, "225125"])
     ins("TBCBOSUS", [11, "999999"])

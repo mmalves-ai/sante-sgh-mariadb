@@ -325,9 +325,11 @@ def _esperado_bloco():
         "CCCADCIR": {"gravados": 2, "pendencias": {"virada_de_dia": 4, "restricao_destino_1048": 2,
                                                    "pai_inexistente": 1, "pai_pendente": 1,
                                                    "valor_fora_do_dominio": 1}},
+        # valor_presumido 13 (rodada 6): caráter eletivo presumido nas 11 linhas + situação agendado presumida só nas 2
+        # em que é ela que grava (o motor deixou de marcar o =~ concorrente quando uma coluna anterior preenche)
         # 3 e 11: o banco acusa o CHECK (4025) antes do NOT NULL do paciente; 5: recusada (4025), a adoção é desfeita;
         # 6 cancelada sem data do cancelamento, 8 e 9 horário bloqueado: 4025
-        "CCAGENDA": {"gravados": 4, "pendencias": {"valor_presumido": 22, "pai_ambiguo": 1, "pai_inexistente": 3,
+        "CCAGENDA": {"gravados": 4, "pendencias": {"valor_presumido": 13, "pai_ambiguo": 1, "pai_inexistente": 3,
                                                    "restricao_destino_1048": 1, "restricao_destino_4025": 6,
                                                    "valor_fora_do_dominio": 2}},
         "CCHISAGE": {"gravados": 3, "pendencias": {"valor_presumido": 5, "pai_ambiguo": 3, "pai_inexistente": 4,

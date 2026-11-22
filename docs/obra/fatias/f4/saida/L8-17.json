@@ -43,6 +43,12 @@
       "arquivo": "conector/sante_conector/carga_mapa.py + db/migracoes/17_INTG (termo_terminologia)",
       "mudanca": "item_hospital na terminologia (decisão F4-decisoes-destino, linha do espelho): o conector grava em termo_terminologia só o termo do hospital (código local, versão antiga, descrição personalizada), ativo; de-para pelo código para o oficial.",
       "motivo": "L8-16/L8-17 r5b (ADR 0006 4): TBCID10 e HTCIAP seguem descarte catalogo_oficial até isso; HTCID já carrega o histórico como versão com retrato."
+    },
+    {
+      "id": "r6-1",
+      "arquivo": "docs/obra/fatias/f4 (fatiar_conector, orquestrador)",
+      "mudanca": "Regerar as fatias L7-07, L7-08 e o indice.tsv (fatiar_conector) depois das mudanças paralelas das trilhas L7-07/L7-08.",
+      "motivo": "L8-17 rodada 6: a autoconferência só falha no passo global 'fatiar_conector --conferir' (L7-07, L7-08 e indice.tsv diferentes do gerado); testes da fatia, carga sintética duas vezes e cobertura (sem bloqueadas) estão ok. Os erros do verificador (PRAGRUP_PRFILTROCLASSIF de L6-11, GECOMPRA de L7-05) já sumiram com as correções das outras fatias."
     }
   ]
 }

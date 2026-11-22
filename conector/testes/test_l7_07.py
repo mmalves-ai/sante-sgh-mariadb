@@ -304,7 +304,7 @@ class ImagemL707(unittest.TestCase):
     def test_pais_externos_cobrem_as_referencias_de_fora(self):
         self.assertEqual(set(l7_07.PAIS_EXTERNOS), {"GEGRUPOS", "TBLABORA", "GEKITRAS", "GETABVIA", "GELANESI",
                                                     "GEKITS", "GELOCARM", "TBUSERS", "TBFORNEC", "TBNATOPE",
-                                                    "TBCENCUS", "RECADATE", "GELANTRA", "TBPROFIS"})
+                                                    "TBCENCUS", "RECADATE", "GELANTRA", "TBPROFIS", "TBCLASSI"})
         # o movimento da transferência é destino SECUNDÁRIO do item (chave <chave>/movimento_estoque)
         self.assertTrue(all(k.endswith("/movimento_estoque") for k in l7_07.PAIS_EXTERNOS["GELANTRA"]))
 

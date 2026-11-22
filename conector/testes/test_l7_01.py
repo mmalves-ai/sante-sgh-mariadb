@@ -51,9 +51,13 @@ class L701(unittest.TestCase):
             self.assertTrue(sc[t]["motivo"].startswith("L7-01: "), t)
         self.assertFalse(any(l.startswith("#--- ") for l in _decl()))
         self.assertFalse({"SHPARAM", "SHREQUISICAO"} & set(sc))
+        # r6 (ADR 0006/0003): um valor por chave do produto (desdobrado), definição pela chave do catálogo do produto
         c = {x["destino"]: x for x in self.m["colunas_decl"] if x["tabela"] == "SHPARAM"}
-        self.assertEqual(c["parametro_definicao.chave"]["coluna"], "=migracao.parametros_hemoterapia")
-        self.assertEqual(c["parametro_valor.valor"]["coluna"], "#retrato:*")
+        self.assertEqual(c["parametro_valor.valor"]["coluna"], "#item")
+        self.assertIn("desdobrar:CEVS=sadt.hemoterapia.codigoCevs", c["parametro_valor.valor"]["via"])
+        self.assertEqual(c["parametro_valor.parametro_definicao_id"]["coluna"], "#rotulo")
+        self.assertEqual(c["parametro_valor.parametro_definicao_id"]["via"], "cod:parametro_definicao.chave")
+        self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER")
 
     def test_literais_e_presumidos(self):
         # nada presumido que mexa no estoque: situação e natureza pelo de-para do NOME; sem par, recusa visível
@@ -163,6 +167,9 @@ class L701(unittest.TestCase):
         for t, e in esp.items():
             recusas = sum(n for r, n in e["pendencias"].items()
                           if r.startswith("restricao_destino_") or r == "pai_pendente")
+            if t == "SHPARAM":  # r6: desdobrado, "gravados" conta itens (um por coluna preenchida da linha única)
+                self.assertEqual((lidas.count(t), e["gravados"]), (1, 10))
+                continue
             self.assertEqual(e["gravados"] + recusas, lidas.count(t), t)
         self.assertNotIn("TBFORNEC", l7_01.PAIS_EXTERNOS)  # alternativa lê a origem: fornecedor ausente
 

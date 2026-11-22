@@ -3603,3 +3603,5 @@ item_faturavel_tipo_servico	FAT	vinculo	F4	Tipos de serviço em que o item fatur
 tabela_preco_item_padrao	FAT	configuracao	F4	Item cobrado por padrão em cada finalidade (consulta, consulta eletiva, visita, pedido), por tabela de preço	F4 rodada 4, pedido L8-03; SPDATA: TBCTRTHM	06	1
 segredo_cofre	INTG	principal	F3	Cofre de segredos do cliente: credencial migrada ou cadastrada, cifrada com a chave mestra do deploy; a tabela de uso guarda só a referência	ADR 0007 item 17 (credenciais copiadas)	08	1
 historico_mescla_migracao	INTG	historico	F3	Mescla não destrutiva da migração: valor da origem guardado quando o registro adotado já tinha outro	ADR 0007 item 20	08	1
+classificacao_filtro_painel_despesa	PEP	item	F3	Classificações de despesa dos itens que entram em cada filtro do painel do profissional	F4 conector L6-11 (pedido de modelo, rodada 6): PRAGRUP_PRFILTROCLASSIF	03	1
+historico_compra_insumo	SUP	movimento	F3	Histórico de compra de cada insumo (data, fornecedor, nota, quantidade, valores e marca) para cotação e reposição	F4 conector L7-05 (pedido de modelo, rodada 6): GECOMPRA	05	1

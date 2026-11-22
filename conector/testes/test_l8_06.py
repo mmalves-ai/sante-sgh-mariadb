@@ -106,7 +106,7 @@ class Plano(unittest.TestCase):
             self.assertIn("#%s\t" % t, texto, t)  # declaração pronta, comentada
 
     def test_conta_e_guia_da_internacao(self):
-        self.assertEqual(self.plano["RICONTAS"]["destinos"], ["conta_hospitalar", "tipo_conta"])
+        self.assertEqual(self.plano["RICONTAS"]["destinos"], ["conta_hospitalar", "tipo_conta", "atendimento_conta"])  # pedido L6-02: vínculo opcional
         c = self.cols("RICONTAS", "conta_hospitalar")
         self.assertEqual(c["tipo_conta_id"]["coluna"], "@id:tipo_conta")  # criado uma vez e adotado, nunca duplicado
         self.assertEqual(c["natureza"]["coluna"], "=internacao")

@@ -91,6 +91,12 @@
    "atendido": true,
    "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial",
    "aplicado_na_fatia": "L5-10 r5: as tabelas listadas carregam em parametro_opcao sob rh.lista.<nome>; retiradas de sem_carga.tsv"
+  },
+  {
+   "arquivo": "colunas.d/L6-11.tsv, colunas.d/L7-05.tsv, colunas.d/L7-07.tsv, colunas.d/L7-08.tsv e fatias geradas (indice.tsv)",
+   "mudanca": "rodada 6: corrigir os 13 erros do verificador (GECOMPRA -> historico_compra_insumo 11; PRAGRUP_PRFILTROCLASSIF -> classificacao_filtro_painel_despesa 2: destino fora dos destinos da tabela) e regerar as fatias L7-07, L7-08 e indice.tsv (fatiar_conector)",
+   "motivo": "únicos erros da autoconferência de L5-10; vêm de fatias de outros agentes em edição paralela. Os passos próprios da fatia passam: testes OK, conciliação na sintética nas duas execuções, cobertura 21/0/0",
+   "atendido": false
   }
  ]
 }

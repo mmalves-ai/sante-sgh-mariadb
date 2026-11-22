@@ -1,7 +1,7 @@
 """Fatia L7-08 (SADT e suprimentos, módulo SUP): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
 Rodada 3 de cobertura: 23 tabelas declaradas (GEANTIMI carrega a liberação sobre a ficha de GECADANTIMI, L6-05),
-GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA descartadas
+GEQTDELOTEVALLOTEDOCSAIDA carrega (r6, quantidade líquida do lote); GEPARAM carrega (r6: opções do estoque por usuário em parametro_valor, semente 11_SUP/09)
 pelo modelo (a ficha do produto exige o item prescrito, que a origem não tem: pedido 6 em saida/L7-08.json). GELANPED,
 GELANPEDENTREGA e GERASVALBAL carregam aqui; na carga real dependem de GECADPED e GELANBAL (L7-07).
 As declaradas trazem as anomalias que a carga trata: pai inexistente (NULL ou recusa 1048), pai pendente, CHECK do
@@ -322,12 +322,12 @@ FORMAS = {
 CARREGADAS = ("GELANPED", "GELANPEDENTREGA", "GERASVALBAL", "GEUSERS_TBCENCUS", "PRPARINTEGEST", "GECADDEV",
               "GECADDISPENSACAO", "GECADSAI", "GECTRLENTREGADOCSAIDA", "GEINFVENEXT", "GELANDISPENSACAO", "GELANSAI",
               "GEITEMKITRAS_GELANSAI", "GELANDEV", "GEITEMKITRAS_GELANDEV", "GELANSAIREQ", "GERASVALSAIDLOTE",
-              "GERASVALDEVLOTE", "GEDISPHOR", "PREXTRATOITEM_SUBST", "PREXTRATOITEM_TBSITFARM", "PRINTEGRACAOESTOQUE",
-              "GEANTIMI")
+              "GERASVALDEVLOTE", "GEQTDELOTEVALLOTEDOCSAIDA", "GEDISPHOR", "PREXTRATOITEM_SUBST", "PREXTRATOITEM_TBSITFARM", "PRINTEGRACAOESTOQUE",
+              "GEANTIMI", "GEPARAM")
 BLOQUEADAS = ()
 # rodada 5 (ADR 0006): GEPARAM (trilha do usuário) e GEQTDELOTEVALLOTEDOCSAIDA (trilha do lote da saída) carregam
 # r5c: GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA PENDENTES (pedidos r5b_parametros_estoque e r5b_lote_liquido)
-BLOQUEADAS = ("GEPARAM", "GEQTDELOTEVALLOTEDOCSAIDA")
+BLOQUEADAS = ()  # r6: GEQTDELOTEVALLOTEDOCSAIDA (quantidade líquida) e GEPARAM (semente estoque.*, 11_SUP/09) carregam
 DESCARTADAS = ()
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
@@ -359,7 +359,7 @@ def _ddl():
 
 DDL = _ddl()
 # pais de fora da fatia dados como já carregados (só pela chave: conector_origem)
-PAIS_EXTERNOS = {"GECADPED": [1, 2], "GELANBAL": [1, 2], "GEVALMEM": [10, 11, 12], "TBUSERS": ["ana", "bia"],
+PAIS_EXTERNOS = {"GECADPED": [1, 2], "GELANBAL": [1, 2], "GEVALMEM": [10, 11, 12], "TBUSERS": ["ana", "bia"], "TBEDITREL": [1], "TBEMPHOS": [1],
                  "TBCENCUS": [10, 20, 30], "TBTP_ENV_LISTA_AVAL_FARM": [1], "GELOCARM": [1, 2], "RICADPAC": [500],
                  "GEITENS": [100, 101], "TBSITUACAOFARMACIA": [1], "PRCHKGERAL": [700, 701], "GEITEMKITRAS": [50, 51],
                  "GEKITRAS": [5], "TBUNICON": ["UN", "MG"], "PRLANGERAL": [1],
@@ -372,6 +372,12 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " CREATE TABLE IF NOT EXISTS tipo_movimento_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL UNIQUE);"
                    " INSERT IGNORE INTO tipo_movimento_estoque (codigo, descricao, natureza, sentido, afeta_saldo, afeta_custo_medio, sistema, ativo, criado_em) VALUES ('migracao_entrada', 'Entrada trazida de outro sistema', 'entrada', 'entrada', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3)), ('migracao_saida', 'Saída trazida de outro sistema', 'saida', 'saida', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3))")
+
+# r6: catálogo estoque.* de parametro_definicao: a MESMA semente do produto (11_SUP/09_chaves.sql), idempotente
+_SEMENTE = next(r / "db/migracoes/11_SUP/09_chaves.sql" for r in __import__("pathlib").Path(__file__).resolve().parents
+                if (r / "db/migracoes/11_SUP/09_chaves.sql").exists())  # /app no container, a raiz no repositório
+PREPARO_DESTINO += "; " + " ".join(l for l in _SEMENTE.read_text(encoding="utf-8").splitlines()
+                                   if not l.startswith("--")).rstrip().rstrip(";")
 
 
 def __getattr__(nome):
@@ -517,6 +523,9 @@ def linhas(r, ins):
     # com a forma
     for i in (1, 2, 3):
         _ins(ins, "GERASVALSAIDLOTE", i, ID=i, ID_GELANSAI=i, QTDE=D("1"), ID_GEVALMEM=10)
+    # r6: quantidade líquida do lote (complementa a linha do lote da saída, cópia exata; lote recusado: pai_pendente)
+    for i in (1, 2, 3):
+        _ins(ins, "GEQTDELOTEVALLOTEDOCSAIDA", i, ID_GERASVALSAIDLOTE=i, QTDE=D("0.5"))
     # lotes da devolução pelo movimento secundário de GELANDEV: 1 grava; 2 devolução recusada inteira (o movimento
     # secundário nunca foi gravado: pai_inexistente + 1048); 3 sem devolução (1048)
     for i, dev in [(1, 1), (2, 2), (3, None)]:
@@ -574,6 +583,23 @@ def linhas(r, ins):
              DATA_VIGENCIA_FINAL=ini + datetime.timedelta(days=fim_d), QUANTIDADE_DOSE=D("500.25"),
              DOSE_EXTRA=extra, ID_PRFREQUENCIA=1 + i % 2, DIA_INICIO=1, ID_RICADPAC=None,
              DATA_INT=ini + datetime.timedelta(days=2) if i == 5 else None, USU_INT="bia" if i == 5 else None)
+    # r6 GEPARAM: ana com todas as opções (S -> sim, referências achadas; senha vai ao cofre); bia com marcação N (nao), marcação fora do
+    # domínio ('X': valor_fora_do_dominio, só no retrato) e farmacêutico inexistente (pai_inexistente); zeca, login
+    # nunca visto: usuário NULL e o escopo do usuário recusa (CHECK 4025), visível
+    itens = {}
+    for usu, i, v in [("ana", 1, dict({c: _falso(tp, 1) for c, tp, _ in COLUNAS["GEPARAM"]},
+                                      ID_TBCBOPRO_FARM_RESP_GERAL=70, OLD_ID_TBCBOPRO_RESP_MANIPULACA=None,
+                                      ID_TBEDITREL_ORDEM_COMPRA=None, ID_TBEMPHOS_INTEG_CONT_CUSTO=1)),
+                      ("bia", 2, dict(GER_DMM="N", CONS_AUT="X", NUM_VIAS=2, PERC_VE_F=D("2.50"),
+                                      DATA_EI=dt(2024, 3, 1), ID_TBCBOPRO_FARM_RESP_GERAL=71,
+                                      OLD_ID_TBCBOPRO_RESP_MANIPULACA=70, ID_TBEDITREL_ORDEM_COMPRA=1,
+                                      ID_TBEMPHOS_INTEG_CONT_CUSTO=1)),
+                      ("zeca", 3, dict(IMPOK="S", ID_TBEMPHOS_INTEG_CONT_CUSTO=1))]:
+        v["USUARIO"] = usu
+        _ins(ins, "GEPARAM", i, **v)
+        cols = COLUNAS["GEPARAM"]
+        vals = [v[c] if c in v else (_falso(tp, i) if nn else None) for c, tp, nn in cols]
+        itens[usu] = sum(x is not None for (c, _, _), x in zip(cols, vals) if c not in ("USUARIO", "SENHA"))
     pi, r48, r25, r62 = "pai_inexistente", "restricao_destino_1048", "restricao_destino_4025", "restricao_destino_1062"
     return {
         "GELANPEDENTREGA": {"gravados": 3, "pendencias": {"data_sentinela": 1, r48: 2, r25: 1, pi: 1}},
@@ -588,6 +614,8 @@ def linhas(r, ins):
         "GEITEMKITRAS_GELANDEV": {"gravados": 1, "pendencias": {r48: 1}},
         "PREXTRATOITEM_TBSITFARM": {"gravados": 1, "pendencias": {r48: 1}},
         "GERASVALSAIDLOTE": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
+        # r6: quantidade líquida complementa o lote da saída: os 2 lotes gravados recebem; o recusado deixa pai_pendente
+        "GEQTDELOTEVALLOTEDOCSAIDA": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
         "GEDISPHOR": {"gravados": 2, "pendencias": {}},
         # lote 3 recusado: pai_pendente recusa a linha (a trilha não grava referência a linha recusada)
         "PRINTEGRACAOESTOQUE": {"gravados": 0, "pendencias": {pi: 2}},
@@ -600,6 +628,12 @@ def linhas(r, ins):
         "GERASVALDEVLOTE": {"gravados": 1, "pendencias": {pi: 1, r48: 2}},
         "PREXTRATOITEM_SUBST": {"gravados": 1, "pendencias": {r48: 1, r25: 1}},
         # 4 e 7 CHECK; 6 e 10 pai inexistente (NOT NULL); 8 S/N fora do domínio (padrão falso); 9 anterior recusada
+        # r6: gravados = itens (uma opção por linha de parametro_valor): ana todas; bia menos a 'X' e a referência
+        # inexistente; zeca recusado (4025)
+        "GEPARAM": {"gravados": itens["ana"] + itens["bia"] - 2,
+                    # senha de ana ao cofre (nunca gravada); ana e bia sem evidência de data (vigência, baixa)
+                    "pendencias": {"valor_fora_do_dominio": 1, pi: 3, r25: 1, "segredo_aguarda_cofre": 1,
+                                   "vigencia_sem_fonte": 2}},
         "GEANTIMI": {"gravados": 6, "pendencias": {pi: 2, r48: 2, r25: 2, "pai_pendente": 1,
                                                     "valor_fora_do_dominio": 1}},
     }

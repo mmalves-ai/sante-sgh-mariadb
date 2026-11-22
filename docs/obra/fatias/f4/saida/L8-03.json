@@ -133,7 +133,26 @@
       "n": "R5-2",
       "arquivo": "orquestrador (agregado da imagem de referência)",
       "mudanca": "domínio de TBPACTHM.TIPO (valores distintos e contagens, nenhum outro dado) para declarar o item incluso condicionado (`se:TIPO=...` por tipo: honorário ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id; diária/taxa pela TBTABDTH; mat/med pelo grupo) e o pacote por `ref:TBTABTHM(CON>TBCONVEN>THM,THM)@item_faturavel_id` (mecanismo f da R5)",
-      "motivo": "sem o domínio do TIPO a ligação do item incluso sairia errada em silêncio (as tabelas de cada tipo numeram desde 1); TBPACTHM segue BLOQUEADA (mecanismo_pedido)"
+      "motivo": "sem o domínio do TIPO a ligação do item incluso sairia errada em silêncio (as tabelas de cada tipo numeram desde 1); TBPACTHM segue BLOQUEADA (mecanismo_pedido)",
+      "atendido": "r6 (fatia): TBPACTHM carrega com o domínio do TIPO decidido pela melhor prática (1 honorário, 2 diária/taxa, 3 mat/med; F4-decisoes-destino.md); a confirmação por contagem segue no R6-3, sem bloquear"
+    },
+    {
+      "n": "R6-1",
+      "arquivo": "conector/mapa/declarado/dependencias.tsv (integrador)",
+      "mudanca": "arestas de ordem de TBPACTHM: TBPACTHM->TBCONVEN, TBPACTHM->TBTABTHM, TBPACTHM->TBTABDTH, TBPACTHM->TBGRAUPARTPROC, TBPACTHM->TBLOCCON (o pacote lê o procedimento na tabela de honorários do convênio, o item incluso no preço do procedimento ou da diária, o grau de participação e o local)",
+      "motivo": "na ordem real TBPACTHM (623) vem antes de TBTABTHM (632) e dos outros pais: sem as arestas todo pacote sairia pai_inexistente na carga real (a imagem sintética dá os pais como externos e não pega)"
+    },
+    {
+      "n": "R6-2",
+      "arquivo": "db/migracoes/12_FAT (trilha F2.2) + colunas.d/L8-03.tsv",
+      "mudanca": "pacote_item_incluso.item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed) e o CHECK do alvo aceitando item, grupo OU item de mat/med; com ela a fatia declara TBPACTHM TIPO=3 por ref:TBMATMED.(TAB,COD)=(TABELA,PROCTO) com se:TIPO=3",
+      "motivo": "o mat/med incluso no pacote não tem item faturável próprio (o item da tabela de mat/med vive em item_referencia_matmed): hoje a linha de mat/med é recusada pelo CHECK do alvo, visível no painel, até o modelo ter onde ligá-la"
+    },
+    {
+      "n": "R6-3",
+      "arquivo": "orquestrador (agregado da imagem de referência, só contagens)",
+      "mudanca": "confirmar o domínio de TBPACTHM.TIPO (valores distintos e contagens) contra a decisão 1 honorário, 2 diária/taxa, 3 mat/med; divergência: corrigir só o se:TIPO= das duas linhas",
+      "motivo": "decisão pela melhor prática (ADR 0007, 18) sem evidência no repositório; valor fora da decisão já é recusado visível (sem item, CHECK do alvo), nunca ligado errado calado"
     }
   ],
   "pedidos_rodada2": [

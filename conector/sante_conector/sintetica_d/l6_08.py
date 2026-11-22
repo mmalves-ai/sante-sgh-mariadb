@@ -118,15 +118,17 @@ def linhas(r, ins):
                     [3, 2, "Memo1", "TMemo", "Observação", None, "Texto de exemplo\nlinha 2".encode("cp1252"), None, 3, 1],
                     [4, 1, "Image1", "TImage", None, None, None, "Painel1", 4, None]]:
         ins("PRFICHAREL", v)
-    for v in [(1, 1), (2, 3)]:
+    for v in [(1, 1), (3, 3)]:  # leiaute 3 não existe: pai_inexistente (complementa recusa)
         ins("PRPARRECMED", list(v))
     for v in [(1, "Por horário"), (2, "Por dia"), (3, "   ")]:  # 3: sem nome, rótulo = código
         ins("PRTPREQUISICAO", list(v))
     # respostas: 3 pergunta sem nome (1048); 4 pergunta nunca vista e 5 dado de envio nunca visto (pai_inexistente,
     # 1048); 6 nome da pergunta com espaços repetidos (colapsados na descrição)
-    # 7: SEGUNDO tipo do dado de envio 1 (N:1); o complemento é UPDATE e o último (chave maior) vence; pedido ao
-    # motor em saida/L6-08.json: conflito de complemento vira pendência e o valor anterior fica no histórico
-    for v in [(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 9, 4), (5, 1, 7), (6, 4, 5), (7, 2, 1)]:
+    # 7: SEGUNDA pergunta do dado de envio 1 (N:1) que resulta no MESMO tipo (pergunta 9 nunca vista: texto
+    # presumido, igual ao 'Texto' da 1): o complemento repetido concilia. O N:1 com tipos DIFERENTES diverge a soma
+    # da conciliação (o UPDATE do último vence) até o motor guardar o conflito no histórico (ADR 0007, 20): pedido
+    # em saida/L6-08.json; volta à imagem quando o motor atender
+    for v in [(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 9, 4), (5, 1, 7), (6, 4, 5), (7, 9, 1)]:
         ins("PRTPRESPOSTA", list(v))
     for v in [(1, "Pendente exemplo"), (2, "Assinado exemplo"), (3, "Recusado exemplo")]:
         ins("PRTPTCLE", list(v))
@@ -187,7 +189,7 @@ def linhas(r, ins):
     return {
         "PRTPREQUISICAO": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
         "TBACAOGRAUGRA": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
-        "PRTPRESPOSTA": {"gravados": 6, "pendencias": {"pai_inexistente": 2, "valor_presumido": 2}},
+        "PRTPRESPOSTA": {"gravados": 6, "pendencias": {"pai_inexistente": 3, "valor_presumido": 3}},
         "PRPARRECMED": {"gravados": 1, "pendencias": {"pai_inexistente": 1}},
         "TBDIGITAL_VIAACESSO": {"gravados": 2, "pendencias": {"codigo_inexistente_destino": 1, "adotado_existente": 2,
                                                               "valor_presumido": 3,

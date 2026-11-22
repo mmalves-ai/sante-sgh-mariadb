@@ -26,9 +26,11 @@ FATIA = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM
          "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED", "TBPROCTO",
          "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI",
          # R5 (ADR 0006): listas de opções -> parametro_opcao (TBCTRTAT, também lida pelo TBITEATE, em PAIS_ORIGEM)
-         "TBIRREGCTRCTA", "TBCONVPERCTAPAC"]
+         "TBIRREGCTRCTA", "TBCONVPERCTAPAC",
+         # r6 (ADR 0006): pacote pelo procedimento na tabela de honorários do convênio (TBCONVEN.THM, lida da origem)
+         "TBPACTHM"]
 # r4: TBCTRTAT é só LIDA (a TAB do tipo de atendimento segue pelo nome da lista; a lista é descarte de produto)
-PAIS_ORIGEM = ["TBCBOPRO", "TBPRESER", "TBTABDTH", "TBCTRTAT"]
+PAIS_ORIGEM = ["TBCBOPRO", "TBPRESER", "TBTABDTH", "TBCTRTAT", "TBCONVEN"]
 
 
 def _ler(arq):
@@ -61,7 +63,7 @@ PAIS_EXTERNOS = {
     "TBCENCUS": ["5"], "TBCONVEN": ["1", "2"], "TBCOOPER": ["1"], "TBMODULO": ["1", "2"],
     "TBPROFIS": ["1", "2"], "TBTABATO": ["1"],
     # r4: preço do procedimento 10 na tabela 1 (L8-04), lido pela chave composta do percentual
-    "TBTABTHM": ["1|10"]}
+    "TBTABTHM": ["1|10", "1|30"]}
 # TBPRESER (L8-04) e TBTABDTH (L8-05) são carregadas pelas fatias delas DEPOIS desta na ordem do mapa (dependência
 # pedida no L8-03.json): na imagem entram como origem (lidas pela chave alternativa) e são carregadas na mesma
 # execução, depois; por isso aqui a referência a elas fica pai_inexistente (ou pai_ambiguo) e a linha é recusada.
@@ -89,7 +91,21 @@ PREPARO_DESTINO = (
     " (9020, 'tuss_20', 'Terminologia exemplo 20', 'material_medicamento', '20', UTC_TIMESTAMP(3));"
     " INSERT IGNORE INTO termo_terminologia (id, terminologia_id, codigo_termo, descricao, criado_em) VALUES"
     " (9101, 9019, '70000001', 'Termo exemplo material', UTC_TIMESTAMP(3)),"
-    " (9102, 9020, '90000001', 'Termo exemplo medicamento', UTC_TIMESTAMP(3));")
+    " (9102, 9020, '90000001', 'Termo exemplo medicamento', UTC_TIMESTAMP(3));"
+    # r6: preço do procedimento dos pais externos TBTABTHM 1|10 (id 10) e 1|30 (id 11, o procedimento do pacote),
+    # com os itens faturáveis falsos (só a forma; FK desligada só na semente)
+    " ALTER TABLE preco_procedimento ADD COLUMN IF NOT EXISTS descricao_cobranca VARCHAR(150) NULL;"
+    " SET FOREIGN_KEY_CHECKS=0;"
+    " INSERT IGNORE INTO item_faturavel (id, codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES"
+    " (9001, 'ex_hon_10', 'Honorário exemplo', 'procedimento', 1, UTC_TIMESTAMP(3)),"
+    " (9002, 'ex_pac_30', 'Pacote exemplo', 'procedimento', 1, UTC_TIMESTAMP(3));"
+    " INSERT IGNORE INTO preco_procedimento (id, item_faturavel_id, descricao_cobranca) VALUES"
+    " (10, 9001, 'Honorário exemplo'), (11, 9002, 'Pacote exemplo cirurgia');"
+    # r6: as fontes pagadoras dos pais externos TBCONVEN 1 (id 2) e 2 (id 3): a linha da origem as completa
+    " INSERT IGNORE INTO fonte_pagadora (id, codigo, nome, tipo, criado_em) VALUES"
+    " (2, 'ex_fonte_1', 'Fonte exemplo um', 'operadora', UTC_TIMESTAMP(3)),"
+    " (3, 'ex_fonte_2', 'Fonte exemplo dois', 'operadora', UTC_TIMESTAMP(3));"
+    " SET FOREIGN_KEY_CHECKS=1")
 
 
 def _b(s):
@@ -233,7 +249,26 @@ def linhas(r, ins):
                                             (9, 1, 10101012, d(2025, 1, 1), "T", dict(PERC_CH=D("10.00"))),
                                             (2, 1, 10101012, d(2025, 3, 1), "I", dict(PERC_APOS_HORARIO=D("15.00")))):
         q("TBPERTHM", CONV=conv, TAB=tab, PROCTO=procto, DATA=data, TIPO_PAC=tp, **kw)
+    # r6: convênios lidos da origem só pela tabela de honorários (THM); pacote A (1, I, 30): a1 honorário gravado
+    # (grau 1 inexistente), a2 mat/med sem item (CHECK do alvo recusa; quantidade 0), a3 honorário sem preço na
+    # tabela (pai_inexistente, CHECK); pacote B (2, A, 99): procedimento do pacote ausente na tabela 2 (NOT NULL)
+    # (r6: TBCONVEN é pai EXTERNO (L5, já carregado) e também lida na origem pela encadeada CON>TBCONVEN>THM; a
+    # fonte pagadora externa vem semeada no PREPARO_DESTINO e a linha da origem a completa)
+    q("TBCONVEN", COD=1, NOME="Convênio exemplo um", THM=1)
+    q("TBCONVEN", COD=2, NOME="Convênio exemplo dois", THM=2)
+    for con, contas, thm, tipo, tab, procto, kw in (
+            (1, "I", 30, 1, 1, 10, dict(NOME="Honorário exemplo", QTDE=D("1.00"), ATO=1, QTDE_DIARIA="N")),
+            (1, "I", 30, 3, 1, 500, dict(QTDE=D("0.00"), ATO=0, QTDE_DIARIA="S")),
+            (1, "I", 30, 1, 1, 77, dict(NOME="Honorário sem preço", ATO=1, QTDE_DIARIA="N")),
+            (2, "A", 99, 1, 1, 10, dict(NOME="Honorário exemplo", ATO=1, QTDE_DIARIA="N"))):
+        q("TBPACTHM", CON=con, CONTAS=contas, THM=thm, TIPO=tipo, TABELA=tab, PROCTO=procto, **kw)
     return {
+        # r6: 1 item gravado (a1) sob o pacote A; a2 e a3 recusadas pelo CHECK do alvo (4025); B recusada pelo NOT
+        # NULL do pacote (1048); pai_inexistente: grau 1 em a1, a3 e B, preço 1|77 de a3 e os 3 do procedimento de B;
+        # presumidos: tipo do pacote nas 4 linhas e descrição de B; vigência pela evidência no pacote e no acordo
+        "TBPACTHM": {"gravados": 1, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 1,
+                                                   "restricao_destino_4025": 2, "valor_fora_do_dominio": 1,
+                                                   "valor_presumido": 5, "vigencia_sem_fonte": 8}},
         # R5 (ADR 0006): listas -> parametro_opcao; TBCTRTAT 4 sem nome com rótulo presumido; TBIRREGCTRCTA 3 (1048)
         # módulo faturamento e definição do parâmetro: a 1ª lista na ordem do mapa (TBCONVPERCTAPAC) cria os dois e
         # a 2ª linha adota (2); nas outras o módulo já existe (adotado em toda linha, a definição da 2ª em diante)

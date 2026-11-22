@@ -30,14 +30,19 @@ class Plano(unittest.TestCase):
         for t in TABELAS - {"PSBENEFI", "PSBENCPL"} - set(l8_15.NOVAS):
             self.assertEqual(len(self.plano[t]["destinos"]), 1, t)
         # rodada 5 (ADR 0006): lista do hospital (opção, módulo e definição) e mescla do complemento
-        for t in l8_15.NOVAS:
+        for t in set(l8_15.NOVAS) - {"PSTPSVIGENCIA"}:
             self.assertEqual(self.plano[t]["destinos"], ["parametro_opcao", "modulo_sistema", "parametro_definicao"], t)
+        # r5c (ADR 0006): a taxa por vigência carrega na trilha com o retrato até o carregador oficial da ANS
+        self.assertEqual(self.plano["PSTPSVIGENCIA"]["destinos"], ["trilha_auditoria"])
         self.assertEqual(self.plano["PSBENCPL"]["destinos"][:2], ["beneficiario_plano", "pessoa_fisica"])
         # r5b: e-mail do complemento e a linha inteira em retrato no histórico do beneficiário (nada se perde)
-        self.assertEqual(set(self.plano["PSBENCPL"]["destinos"][2:]), {"email_pessoa", "movimento_cadastral_beneficiario"})
+        # r5c (ADR 0007, 17 e 20): a senha web do complemento vai à credencial do usuário do beneficiário (mescla)
+        self.assertEqual(set(self.plano["PSBENCPL"]["destinos"][2:]),
+                         {"email_pessoa", "movimento_cadastral_beneficiario", "credencial_usuario"})
         self.assertEqual(self.plano["PSBENEFI"]["destinos"],
                          ["beneficiario_plano", "pessoa_fisica", "documento_pessoa", "email_pessoa",
-                          "grau_parentesco_dependente"])
+                          "grau_parentesco_dependente", "movimento_cadastral_beneficiario", "usuario",
+                          "credencial_usuario", "conta_portal_beneficiario"])  # r5c: retrato e acesso ao portal
         self.assertEqual(self.plano["PSVENDAS"]["destinos"], ["proposta_adesao"])
 
     def test_codigo_com_prefixo_e_adocao_onde_o_destino_e_compartilhado(self):
@@ -86,7 +91,7 @@ class Plano(unittest.TestCase):
         # cobertura total: toda tabela fora da carga tem descarte com causa aceita e motivo (declarado/sem_carga.tsv)
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         # rodada 5 (ADR 0006): listas e complemento carregam; só o catálogo oficial da ANS fica de fora
-        causas = {"PSTPSVIGENCIA": "catalogo_oficial"}
+        causas = {}  # r5c: PSTPSVIGENCIA carrega na trilha (retrato) até o carregador da ANS
         for t in list(l8_15.NOVAS) + ["PSBENCPL"]:
             self.assertNotIn(t, sc, t)
         self.assertNotIn("PSVENDAS", sc)
@@ -167,9 +172,10 @@ class Plano(unittest.TestCase):
         em = self.cols("PSBENEFI", "email_pessoa")
         self.assertEqual((em["email"]["coluna"], em["email"]["regra"]), ("EMAIL", "email"))
         self.assertEqual(em["pessoa_fisica_id"]["coluna"], "@id:pessoa_fisica")
-        # telefone e endereço: sem destino até o motor (pedidos 18 e 19), com o motivo exato
+        # telefone e endereço: sem destino estruturado (pedido r5c-1), preservados no retrato do movimento (ADR 0006)
         decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENEFI"}
-        for c, ped in (("FONE", "pedido 18"), ("CELULAR", "pedido 18"), ("ENDER", "pedido 19"), ("CEP", "pedido 19")):
+        self.assertEqual(self.cols("PSBENEFI", "movimento_cadastral_beneficiario")["dados"]["coluna"], "#retrato:*")
+        for c, ped in (("FONE", "r5c-1"), ("CELULAR", "r5c-1"), ("ENDER", "r5c-1"), ("CEP", "r5c-1")):
             self.assertFalse(decl[c].get("destino"), c)
             self.assertIn(ped, decl[c]["motivo"], c)
 
@@ -180,7 +186,7 @@ class Plano(unittest.TestCase):
         self.assertEqual(sentinela.aplicar("preenchido", "99999999"), (True, None))
         self.assertEqual(sentinela.aplicar("preenchido", None), (None, None))  # sem óbito: padrão falso do destino
         decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "PSBENEFI"}
-        self.assertIn("pedido 20", decl["ID_TBCID10_OBITO"]["motivo"])
+        self.assertIn("r5c-1", decl["ID_TBCID10_OBITO"]["motivo"])  # causa no retrato do movimento
         self.assertNotIn("pedido 8", decl["NUM_DECLARACAO_OBITO"]["motivo"])
 
     def test_cpf_falso_valido(self):
@@ -220,7 +226,7 @@ class Plano(unittest.TestCase):
 
     def test_descartadas_sem_destino(self):
         decl = [c for c in self.mapa["colunas_decl"] if c["tabela"] in FORA]
-        self.assertTrue(decl)
+        self.assertEqual(bool(decl), bool(FORA))  # r5c: nada fora da carga
         self.assertFalse([c for c in decl if c.get("destino")])
 
 

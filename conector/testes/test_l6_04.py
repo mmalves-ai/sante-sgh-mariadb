@@ -247,9 +247,18 @@ class L604(unittest.TestCase):
         self.assertEqual([c["coluna"] for c in self.todas("AGCADEIRA", "codigo")][0], "COD_IDENT")
         self.assertFalse(self.todas("AGCADEIRA", "codigo_integracao"))
         self.assertEqual(self.cols("AGDIASINDISP")["criado_em"]["coluna"], "DATA_GRAV")
+        # o plano não leva a "via" crua (o motor a desmonta em passos/condição): confere a declaração da fatia
+        with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L6-04.tsv", encoding="utf-8") as f:
+            decl = list(csv.DictReader((x for x in f.read().splitlines() if not x.startswith("#")), delimiter="\t"))
+        via = {}
+        for r in decl:
+            if r["tabela"] == "AGCADAGENDA":
+                via[(r["tabela"], r["destino"])] = via.get((r["tabela"], r["destino"]), "") + "|" + (r["via"] or "")
+        self.assertIn("ref:TBCENCUS.ID", via[("AGCADAGENDA", "setor_funcional.centro_custo_id")])
+        self.assertIn("se:AGENDA_DOMICILIAR=S", via[("AGCADAGENDA", "categoria_agenda.codigo")])
         ag = self.plano["AGCADAGENDA"]["colunas"]
-        self.assertIn("ref:TBCENCUS.ID", next(c for c in ag["setor_funcional"] if c["destino"] == "centro_custo_id")["via"])
-        self.assertIn("se:AGENDA_DOMICILIAR=S", next(c for c in ag["categoria_agenda"] if c["destino"] == "codigo")["via"])
+        self.assertTrue(next(c for c in ag["setor_funcional"] if c["destino"] == "centro_custo_id")["passos"])
+        self.assertTrue(any(c.get("se") for c in ag["categoria_agenda"] if c["destino"] == "codigo"))
         self.assertEqual(set(self.plano["AGDIASINDISP"]["destinos"]), {"bloqueio_agenda", "motivo_bloqueio_agenda"})
         item = self.todas("AGPARAM", "valor")[0]
         self.assertEqual(item["coluna"], "#item")

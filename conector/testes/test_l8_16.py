@@ -20,6 +20,8 @@ NOVAS_R5 = ["FPESOCTPAMB", "PRCABEARQINTEGRAQT", "SIMODULO_SIWEBATOS", "TBDIGITA
 CARREGADAS = sorted(CARREGADAS + NOVAS_R5)
 DESCARTE = {}  # r5c: TBCID10 carrega na trilha (ADR 0006, 4)
 OBRIGATORIAS = {"parametro_opcao": {"parametro_definicao_id", "sequencia", "valor", "rotulo"},
+                # r5c (ADR 0006): CID-10 do hospital guardado na trilha com o retrato
+                "trilha_auditoria": {"ocorrido_em", "acao", "entidade"},
                 "sistema_externo": {"codigo", "nome", "categoria", "finalidade"},
                 "ponto_integracao": {"estabelecimento_id", "codigo", "nome", "sistema_externo_id", "padrao_troca_id",
                                      "direcao", "transporte", "formato_conteudo"},

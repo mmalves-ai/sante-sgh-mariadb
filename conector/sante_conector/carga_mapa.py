@@ -60,7 +60,8 @@ Mecanismos genéricos da cobertura total (F4, rodada de cobertura; prova em `sin
   colunas de segredo (`#cofre`); data em ISO, decimal e número como texto, binário como SHA-256 (histórico da origem
   guardado como retrato da versão);
 - opções do destino na `via` de uma coluna dele: `opcional` (destino secundário sem nenhum valor da origem não
-  grava linha), `adotar:<c1>,<c2>` (linha que já existe no destino com as mesmas colunas, ex.: CPF ou código, é
+  grava linha), `adotar:<c1>,<c2>` (rodada 6: com `adotar_maior:<c>` a coluna adotada guarda o maior, e combina com `agrupar:`
+  no principal) (linha que já existe no destino com as mesmas colunas, ex.: CPF ou código, é
   ADOTADA: o conector_origem aponta para ela, nada é sobrescrito, pendência baixa `adotado_existente`; o resumo é o
   relido do destino) e `desdobrar:<COL>=<rótulo>,...` (uma linha do destino por coluna da origem com valor: `#item`
   recebe o valor pela regra declarada nele e `#rotulo` o rótulo; falso ou vazio não gera linha) e `complementa`
@@ -138,7 +139,8 @@ Mecanismos da rodada 4 de cobertura (pedidos das fatias; prova em `sintetica_d/e
 - `#item`/`#item2` com `ref:` encadeada ou composta e `cod:`; `#rotulo` com `cod:` (o rótulo acha o id no destino);
 - `agrupar:C1,..` no destino PRINCIPAL (uma linha do destino por grupo; os membros apontam para ela) e
   `#grupo_json:C1,C2` (lista JSON das colunas de todas as linhas lidas do grupo, sem segredo);
-- grupos de leitura sem cabeçalho: `#grupo_seq@C1,C2` (posição na leitura pela chave) e `#grupo_razao:V@C1,C2`
+- grupos de leitura sem cabeçalho: `#grupo_seq@C1,C2` (posição na leitura pela chave; `#grupo_seq@*`: na tabela
+  inteira, rodada 6) e `#grupo_razao:V@C1,C2`
   (V / soma de V do grupo x 100, na escala do destino; soma zero: NULL com valor_fora_do_dominio);
 - agregados das tabelas FILHAS da origem: `#filhos_min|max|somar|contar:T1.C1|T2.C2@FK` (linhas de T com FK = chave
   desta linha; min/max sem valor: NULL com `sem_filho_com_valor`; somar sem filho: 0);
@@ -289,7 +291,7 @@ def fontes_especial(nome):
     if nome.startswith("#grupo_json:"):
         return nome[12:].split(",")
     if nome.startswith("#grupo_seq@"):
-        return nome[11:].split(",")
+        return [x for x in nome[11:].split(",") if x != "*"]
     if nome.startswith("#grupo_razao:"):
         v, cols = nome[13:].split("@", 1)
         return [v] + cols.split(",")
@@ -1262,7 +1264,7 @@ class CargaMapa(carga.Carga):
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
             for c in specs:
                 n = c["coluna"]
-                cols = n.split("@", 1)[1].split(",")
+                cols = [x for x in n.split("@", 1)[1].split(",") if x != "*"]  # `@*`: a tabela inteira (r6)
                 partes = [sentinela.aplicar("texto", linha[x])[0] if isinstance(linha[x], (str, bytes, bytearray))
                           else linha[x] for x in cols]
                 g = "|".join("" if x is None else self._chave(x) for x in partes)
@@ -1583,7 +1585,7 @@ class CargaMapa(carga.Carga):
                 return e[0], True
         return None, False
 
-    def _gravar_ou_adotar(self, dt, v, adotar, complementa=False):
+    def _gravar_ou_adotar(self, dt, v, adotar, complementa=False, maior=()):
         """(id, adotado): com `adotar`, a linha do destino que já tem as mesmas colunas (uma só) é adotada; com
         `complementa`, a linha do pai (`id` resolvido pela referência) recebe as colunas por UPDATE."""
         if complementa:
@@ -1598,7 +1600,13 @@ class CargaMapa(carga.Carga):
             ids = self._todas("SELECT id FROM `%s` WHERE %s LIMIT 2" % (dt, " AND ".join("`%s`=%%s" % a for a in adotar)),
                               tuple(v[a] for a in adotar))
             if len(ids) == 1:
-                self._mesclar(dt, ids[0][0], v)
+                maiores = [m for m in maior if v.get(m) is not None]
+                if maiores:  # rodada 6: `adotar_maior:` o contador adotado fica com o MAIOR (nunca recua)
+                    with self._c() as c:
+                        c.execute("UPDATE `%s` SET %s WHERE id=%%s" % (dt, ", ".join(
+                            "`%s`=GREATEST(COALESCE(`%s`, %%s), %%s)" % (m, m) for m in maiores)),
+                            [x for m in maiores for x in (v[m], v[m])] + [ids[0][0]])
+                self._mesclar(dt, ids[0][0], {k: x for k, x in v.items() if k not in maiores})
                 return ids[0][0], True
         return self._inserir(dt, v), False
 
@@ -1910,7 +1918,12 @@ class CargaMapa(carga.Carga):
                             rid, anterior = self._cabecalho(t, dt, chave, i == 0)
                             agrupado, adotado = rid is not None, False
                             if not agrupado:
-                                rid = self._inserir(dt, v)
+                                if op.get("adotar"):  # rodada 6: contador que já existe é adotado (maior vence)
+                                    self._linha = (t, chave)
+                                    rid, adotado = self._gravar_ou_adotar(dt, v, op["adotar"], False,
+                                                                          op.get("adotar_maior") or ())
+                                else:
+                                    rid = self._inserir(dt, v)
                                 cabs.append(((t, self._grp[0]), rid))
                         else:
                             self._linha = (t, chave)

@@ -234,7 +234,12 @@ def linhas(r, ins):
     linha("FCGUIAS", CON=2, GUIA_P="G3", GUIA_S="G3", CONTA=800, **dict(gd, TIPO_CTA="I"))  # interna: competência
     linha("FCGUIAS", CON=1, GUIA_P="G4", GUIA_S="G4", CONTA=802, **dict(gd, MESPRO=4))  # conta repetida: 1048
     linha("FCGUIAS", CON=9, GUIA_P="G5", GUIA_S="G5", CONTA=800, **gd)                 # convênio inexistente: 1048
-    linha("FCGUIAS", CON=1, GUIA_P="G1", GUIA_S="G1", CONTA=800, **dict(gd, TP_GUIA_S="C"))  # número repetido: 1062
+    # número repetido no MESMO convênio: adota a guia (lida antes da linha acima pela chave, TP_GUIA_S C < S). Traz
+    # os mesmos dados da guia: a mescla que PREENCHE a guia adotada muda o resumo da linha que a gravou e a
+    # conciliação diverge (lacuna do motor pedida em saida/L8-01.json, "resumo_apos_mescla")
+    linha("FCGUIAS", CON=1, GUIA_P="G1", GUIA_S="G1", CONTA=800, SENHA_SUPLEMENTAR="S9",
+          VALIDADE_SENHA_SUPLEMENTAR=datetime.date(2026, 4, 30), DATA_AUTORIZACAO_SUPLEMENTAR=datetime.date(2026, 3, 3),
+          GUIA_ATRIBUIDA_OPERADORA_TISS="OP-1", **dict(gd, TP_GUIA_S="C"))
     linha("FCGUIAS", CON=2, GUIA_P="G7", GUIA_S="G7", CONTA=800,
           DATA_AUTORIZACAO_SUPLEMENTAR=datetime.date(2026, 1, 5), **gd)               # autorização antes: 4025
     linha("FCGUIAS", CON=2, GUIA_P="G2", GUIA_S="G2", CONTA=801, **gd)                 # mesmo número, outro convênio: 1062
@@ -299,6 +304,10 @@ def linhas(r, ins):
     # espaços (1048)
     for i, nome in ((1, "Auditoria Exemplo Um"), (2, "Auditoria  Exemplo Dois"), (3, "   ")):
         linha("FCEMPAUDPLANSERV", ID=i, NOME=nome)
+    # r6: códigos de procedimento de uma operadora -> opções de um parâmetro de lista; sequência pela chave na
+    # tabela inteira (códigos grandes não cabem em SMALLINT); 30000003 sem nome (1048)
+    for cod, nome in ((30000001, "Procedimento exemplo A"), (30000002, "Procedimento  exemplo B"), (30000003, "   ")):
+        linha("FCPROCUNIBHMED", CODIGO=cod, NOME=nome)
     # R5: numeração do RPA: o último número (41) vira o próximo da sequência (42), série como prefixo
     linha("RPPARAM", EMPRESA=1, SERIE_RPA="A", NUMERO_RPA=41, HAB_RET_IRRF="S", HABILITA_DATA_PREVISAO="N")
 
@@ -371,6 +380,7 @@ for _t in ("FAPARUSU", "FCCPSCON", "FCPARUSU", "RPLANEVE"):
 ESPERADO.update({
     # opções do parâmetro de lista das empresas de auditoria: 3 só espaços (1048); módulo e definição criados pela
     # 1ª linha e adotados pela 2ª
+    "FCPROCUNIBHMED": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 3}},
     "FCEMPAUDPLANSERV": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 2}},
     # numeração do RPA: uma sequência (item desdobrado), inativa e presumida
     "RPPARAM": {"gravados": 1, "pendencias": {"valor_presumido": 1}},

@@ -159,6 +159,12 @@
    "mudanca": "pedido 19 REAFIRMADO: declarar em TBCONVEN as colunas ID_TBCONVMEDREQATD, ID_TBCONVCOBTXPA, ID_TBCONVCONSMAT, ID_TBCONVPERCTAPAC, ID_TBCONSBRASINATIVO e ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH com destino em regra_consistencia_lancamento (de-para de valores das listas)",
    "motivo": "as 6 listas (TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC) voltaram a BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN): o descarte da r4 escondia que a escolha de cada convênio não carrega. test_l8_02 aceita o descarte sozinho quando essas colunas estiverem declaradas com destino",
    "atendido": "conferidor r4 (tentativa 2)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py _provas + declarado/provas.tsv (motor/integrador; prova da L8-05)",
+   "mudanca": "melhoria opcional (não bloqueia; a conferência da L8-02 dá ok): a prova 'derivado' de RPRPA_TBCBOPRO excluir do lado da origem as linhas cujo RPA (ID_RPRPA) foi RECUSADO na carga (a recusa já é pendência própria do RPA), por ex. coluna nova em provas.tsv 'dono=RPRPA:ID_RPRPA'; com isso a imagem da L8-02 volta a exercitar o CHECK (4025) e o 1062 do rpa com a associação presente",
+   "motivo": "r6 (corrigido na fatia): a inscrição (TBCBOPRO) agora grava de verdade na conferência (UF e conselho do catálogo no PREPARO_DESTINO) e só o RPA gravado guarda a associação na origem; a prova confere 1 de 1. Sem (a), um RPA recusado com associação na origem também derruba a prova (alta, visível) além da pendência do RPA",
+   "rodada": 6
   }
  ]
 }

@@ -14,6 +14,7 @@ valor (não grava).
 """
 import datetime
 import os
+import random
 import re
 
 DDL = """
@@ -297,11 +298,13 @@ PREPARO_DESTINO = PREPARO_SEXO + ("INSERT INTO ocupacao_cbo (codigo_cbo, descric
 CARREGADAS = ["TBESPEC", "TBCBOSUS_TBESPEC", "ATPARAMGERAL", "TBCONVEN", "TBMEDSOL_CODCON", "TBPROFIS",
               "TBCBOPRO_TBCONVEN", "TBMEDESP", "RICADPAC_TBCONVEN", "HTCONVEN", "HTPACIENTE", "HTPROFIS", "HTATENDRESP",
               "HTPACTELEFONE", "HTPROFISTEL", "HTPRONTUNIF", "HTTBCBOPRO", "HTTBCBOPRO_TBUNIDAD", "HTTBHOSPIT"]
-# sem carga: só o descarte de produto (TBEMPHOSLOGO, em declarado/sem_carga.tsv)
-SEM_CARGA = ["TBEMPHOSLOGO"]
+# sem carga: nenhuma (r6: TBEMPHOSLOGO carrega na L5-05, logotipo ao armazenamento de arquivos, ADR 0004/0006)
+SEM_CARGA = []
 # pais de fora da fatia criados na imagem só para a referência encadeada (inscrição -> profissional, ID -> código CBO,
 # responsável -> versão do atendimento); ficam fora do plano da conferência (MAPA_TESTE abaixo)
-PAIS_NA_IMAGEM = ["TBCBOPRO", "TBCBOSUS", "HTATENDIMENTO", "TBPESSOA"]
+# r6: as listas de opção da fonte pagadora (L8-02/L8-03 carregam) estão na imagem só para o nome lido pela encadeada
+PAIS_NA_IMAGEM = ["TBCBOPRO", "TBCBOSUS", "HTATENDIMENTO", "TBPESSOA", "TBCONSBRASINATIVO", "TBCONSIDCALCVLR",
+                  "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD", "TBCONVPERCTAPAC"]
 # campos da regra do cadastro desdobrados de ATPARAMGERAL (colunas do desdobrar declarado)
 CAMPOS_REGRA = 42
 # ID substituto de TBCBOSUS -> código CBO (o ID nunca é o código: a ocupação sai do COD da linha pai)
@@ -317,6 +320,16 @@ DH = datetime.datetime
 CHAR_TF = {"DIGITAR_APELIDO", "DIGITAR_TP_SANGUINEO", "DIGITAR_EMAIL", "DIGITAR_DISTRITO_SANITARIO",
            "DIGITAR_PRONTUARIO_FAMILIA", "DIGITAR_PRONTUARIO_UNIDADE", "DIGITAR_OBS_CAD_PAC", "DIGITAR_EMPRESA_CAD_PAC"}
 SENT = DH(1899, 12, 30)
+
+
+def _doc_invalido(v):
+    """Documento falso garantidamente inválido como CPF (dígito verificador trocado quando o acaso o fez válido)."""
+    t = str(v).zfill(11)
+    d = [int(c) for c in t[:9]]
+    for n in (10, 11):
+        x = sum(a * b for a, b in zip(d, range(n, 1, -1))) * 10 % 11
+        d.append(0 if x == 10 else x)
+    return v + 1 if "".join(map(str, d)) == t else v
 
 
 def _cpf_falso(r):
@@ -400,14 +413,20 @@ def linhas(r, ins):
              MOTIVO_DESLIGAMENTO="Mudança de cidade" if i == 2 else None, SITUACAO="I" if i in (2, 8) else "A",
              PANEST={1: "S", 2: "N", 3: "X"}.get(i), PLANTAO="S" if i % 2 == 0 else "N",
              ID_TBCOOPER=9 if i == 7 else (1 if i == 1 else None), NOME="Nome falso %d" % i,
-             CNPJ_CPF=None if i == 4 else r.randint(10 ** 9, 10 ** 10), CPF=0, PESSOA="F",
+             CNPJ_CPF=None if i == 4 else _doc_invalido(r.randint(10 ** 9, 10 ** 10)), CPF=0, PESSOA="F",
              NASC=D(1970, 2, i), SEXO={1: "M", 2: "F", 3: "X"}.get(i), NOME_MAE="Mãe falsa %d" % i if i < 4 else None,
              CNS=123456789012345 if i == 1 else None, ID_TBUSERS={1: "USUARIO1", 2: "USUARIO1", 3: "NINGUEM",
                                                                    5: "USUARIO2"}.get(i), **fiscal)
-    # índice de identidade da origem: documento falso (o 4 só tem o documento aqui)
+    # índice de identidade da origem (r6, prova de não copiar de TBPESSOA, ADR 0006): COERENTE com quem o usa: cada
+    # documento é CPF válido (falso) de um profissional gravado (o 5 repete a pessoa 1: adota a pessoa do 1); sem a
+    # pessoa 5 (ninguém a usa) e a 8 (só o profissional 8, recusado: pai_inexistente); o gerador `r` é consumido
+    # como antes para não mudar as linhas seguintes
+    docs = random.Random(5606)
     for i in range(1, 9):
-        _ins(ins, "TBPESSOA", ID=i, CPF_CNPJ=_cpf_falso(r) if i == 4 else str(r.randint(10 ** 9, 10 ** 10)),
-             TIPO_PESSOA="F")
+        _ = _cpf_falso(r) if i == 4 else r.randint(10 ** 9, 10 ** 10)
+        doc = _cpf_falso(docs)
+        if i not in (5, 8):
+            _ins(ins, "TBPESSOA", ID=i, CPF_CNPJ=doc, TIPO_PESSOA="F")
     # especialidades: 4 sem nome (1048), 5 com faixa etária invertida (CHECK 4025)
     for cod, nome, sigla, ini, fim in [(1, "Clínica  médica", "CM", 0, 130), (2, "Pediatria", "PED", 0, 18),
                                        (3, "Geriatria", "GER", 60, 130), (4, None, "X", 0, 1),
@@ -516,11 +535,17 @@ def linhas(r, ins):
         # r3 (revisão): documento concorrente CNPJ_CPF, CPF, TBPESSOA (cada coluna inválida deixa a própria
         # pendência; o 4 tem só o documento válido do índice), sexo 'X' sem sigla no cadastro, usuário nunca visto
         # (o vínculo opcional não grava) e USUARIO1 repetido (o 2 adota o vínculo do 1)
-        "TBPROFIS": {"gravados": 7, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
-                                                   "documento_invalido": 12, "codigo_inexistente_destino": 1,
-                                                   "adotado_existente": 1,
-                                                   "restricao_destino_4025": 1, "data_sentinela": 1,
-                                                   "pai_inexistente": 2}},
+        # r6 (prova de não copiar de TBPESSOA, ADR 0006; mescla e vigência, ADR 0007): o índice coerente dá CPF
+        # válido a quem o usa: o 5, MESMA pessoa do 1 no índice, adota a pessoa (nome da origem guardado no histórico
+        # da mescla) e é recusado por ser o segundo profissional da mesma pessoa (1062, visível para o hospital
+        # resolver); o 8 aponta pessoa ausente do índice (pai_inexistente); sem data de início: vigência pela
+        # evidência (vigencia_sem_fonte)
+        "TBPROFIS": {"gravados": 6, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
+                                                   "documento_invalido": 7, "codigo_inexistente_destino": 1,
+                                                   "adotado_existente": 1, "mescla_conflito_origem_guardada": 1,
+                                                   "restricao_destino_4025": 1, "restricao_destino_1062": 1,
+                                                   "data_sentinela": 1, "vigencia_sem_fonte": 2,
+                                                   "pai_inexistente": 3}},
         "TBESPEC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1,
                                                   "valor_fora_do_dominio": 1}},
         "TBCBOSUS_TBESPEC": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 1,

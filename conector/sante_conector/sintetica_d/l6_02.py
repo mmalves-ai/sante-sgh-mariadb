@@ -84,10 +84,13 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    # rodada 5 (correção): conta_hospitalar e atendimento_conta como a carga das contas de internação
                    # (RICONTAS, L8-06) os deixa: conta por (registro, conta parcial), registrada como pai externo
                    " CREATE TABLE IF NOT EXISTS conta_hospitalar (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " atendimento_id BIGINT UNSIGNED NULL);"
+                   " atendimento_id BIGINT UNSIGNED NULL, estabelecimento_id BIGINT UNSIGNED NULL, numero VARCHAR(20) NULL,"
+                   " paciente_id BIGINT UNSIGNED NULL, fonte_pagadora_id BIGINT UNSIGNED NULL,"
+                   " tipo_conta_id BIGINT UNSIGNED NULL, natureza VARCHAR(20) NULL, competencia DATE NULL,"
+                   " inicio_em DATETIME(3) NULL, criado_em DATETIME(3) NULL);"
                    " CREATE TABLE IF NOT EXISTS atendimento_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " atendimento_id BIGINT UNSIGNED NOT NULL, conta_hospitalar_id BIGINT UNSIGNED NOT NULL,"
-                   " excluido_em DATETIME(3) NULL);")
+                   " criado_em DATETIME(3) NULL, excluido_em DATETIME(3) NULL);")
 
 
 def _ids_externos():
@@ -112,12 +115,21 @@ def _ids_externos():
 CONTAS = [("1", "900|1"), ("1", "900|2"), ("2", "901|1"), ("2", "902|1"), ("3", "903|1")]
 PAIS_EXTERNOS["RICONTAS"] = [c for _, c in CONTAS]
 _IDS = _ids_externos()
-PREPARO_DESTINO += "".join(" INSERT INTO conta_hospitalar (id, atendimento_id) SELECT %d, %d FROM DUAL WHERE NOT EXISTS"
-                           " (SELECT 1 FROM conta_hospitalar WHERE id = %d);" % (_IDS[("RICONTAS", c)],
-                           _IDS[("ATCABECATEND", a)], _IDS[("RICONTAS", c)]) for a, c in CONTAS)
-PREPARO_DESTINO += (" INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id) SELECT a, c FROM (%s) x"
-                    " WHERE NOT EXISTS (SELECT 1 FROM atendimento_conta)" % " UNION ALL ".join(
+# a conta é de outra fatia (L8-06): no banco descartável com o DDL completo ela exige as colunas obrigatórias e os
+# CHECKs (natureza, competência no dia 1); os pais dela (paciente, fonte pagadora, tipo de conta) não são desta fatia,
+# por isso as FKs ficam desligadas só neste preparo
+PREPARO_DESTINO += " SET FOREIGN_KEY_CHECKS=0;"
+PREPARO_DESTINO += "".join(" INSERT INTO conta_hospitalar (id, atendimento_id, estabelecimento_id, numero, paciente_id,"
+                           " fonte_pagadora_id, tipo_conta_id, natureza, competencia, inicio_em, criado_em)"
+                           " SELECT %d, %d, 1, 'CT%d', 1, 1, 1, 'internacao', '2020-01-01', '2020-01-01', NOW(3)"
+                           " FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM conta_hospitalar WHERE id = %d);"
+                           % (_IDS[("RICONTAS", c)], _IDS[("ATCABECATEND", a)], _IDS[("RICONTAS", c)],
+                              _IDS[("RICONTAS", c)]) for a, c in CONTAS)
+PREPARO_DESTINO += (" INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id, criado_em)"
+                    " SELECT a, c, NOW(3) FROM (%s) x"
+                    " WHERE NOT EXISTS (SELECT 1 FROM atendimento_conta);" % " UNION ALL ".join(
                         "SELECT %d a, %d c" % (_IDS[("ATCABECATEND", a)], _IDS[("RICONTAS", c)]) for a, c in CONTAS))
+PREPARO_DESTINO += " SET FOREIGN_KEY_CHECKS=1"
 CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALHORA", "TBLOCALPESATE",
               "TBGERASENHA", "TBSENHAATEND", "ATCABECATEND_TBSENHAATEND", "TBSENHAATEND_REPACAGD",
               "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO", "REPARAM", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO",

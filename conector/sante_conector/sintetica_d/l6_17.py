@@ -69,6 +69,9 @@ NAO_CARREGADAS = ()
 PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo"], "TBTIPOTELEFONE": ["1", "2"], "TBUNICON": ["mg"]}
 # a unidade de resposta (PRUNIDRESPOSTA, origem lida na referência encadeada) vem da imagem da L6-08
 REQUER = ["L6-08"]
+# rodada 6: o preparo da L6-08 (informação clínica da operadora, via de uso, cadastros de cod:) roda antes deste;
+# sem ele as tabelas da L6-08 carregadas aqui caíam em codigo_inexistente_destino e filho -> pai divergente
+PREPARO_DOS_REQUERIDOS = True
 
 
 def linhas(r, ins):

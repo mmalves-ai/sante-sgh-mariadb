@@ -183,7 +183,12 @@ def linhas(r, ins):
                                                                "restricao_destino_1048": 1, "pai_inexistente": 4,
                                                                "valor_fora_do_dominio": 2,
                                                                "segredo_aguarda_cofre": 8, "vigencia_sem_fonte": 8,
-                                                               "adotado_existente": 2 if REFERENCIA_OBRIGATORIA else 3}},
+                                                               "adotado_existente": 2 if REFERENCIA_OBRIGATORIA else 3,
+                                                               # ADR 0007 (20): a credencial adotada tem outro
+                                                               # endereço: o destino fica e o da origem vai ao
+                                                               # histórico da mescla (uma por linha adotada)
+                                                               "mescla_conflito_origem_guardada":
+                                                                   2 if REFERENCIA_OBRIGATORIA else 3}},
         "FCFAIPAC": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "restricao_destino_1048": 2,
                                                    "pai_inexistente": 1}},
         "FCIRREGULARID": {"gravados": 2, "pendencias": {"valor_presumido": 5, "restricao_destino_4025": 1,

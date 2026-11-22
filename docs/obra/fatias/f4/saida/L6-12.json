@@ -150,6 +150,11 @@
    "arquivo": "domínio do prontuário (contrato de resposta do registro) ou conector",
    "mudanca": "r5b: converter a lista do grupo (#grupo_json com ID_RESPOSTA, SEQ, ORDEM, RESPALFA, RESPVALOR, RESPDATA, RESPHORA, RESPSNAO, UNIDRESP, CONTEVOL...) ao contrato de resposta do registro (campo do modelo pela opção/pergunta)",
    "motivo": "o rascunho já abre com as respostas, mas no formato da origem; a tela precisa delas no contrato para finalizar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter)",
+   "mudanca": "aplicar a regra e o de-para de valores (depara=valores) também ao valor copiado por ref:T@<coluna> (cópia da coluna do destino que o pai gravou); hoje a cópia retorna antes do de-para",
+   "motivo": "L6-12 r6: alergia_paciente.situacao_registro = estado do rascunho pai NO PRODUTO (aberto -> rascunho; descartado/arquivado -> descartado) saía cru ('aberto') e o CHECK recusava 2 de 2 alergias em rascunho válidas. Contornado na fatia com concorrentes condicionadas (se:) pelas mesmas colunas da origem que dão o estado do rascunho; com o pedido atendido a declaração pode voltar a ref:PRCABEVOLTMP@situacao"
   }
  ]
 }

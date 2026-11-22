@@ -255,12 +255,12 @@ CARREGADAS = ("PRLOCAL_ASSISTENCIA", "TBCBARAREACAOADVERSA", "PRPROTGERALESP", "
               "PREVOLTIPOACO", "PRITEMNAOPAD", "PRITEMNAOPAD_GETABVIA", "PRKITMED", "PRITENSKITMED", "PRKITSOLITENS",
               "PRFAVORITO", "PRMANCHESTER", "PRITEM_GEITENS", "PRITEMNAOPAD_TBPRINC", "TBALERGIA_TBPRINC",
               "PRPADEVOL", "PRFORMULCOMP", "PRASSINATURA_CAB", "TBKITPRO", "PRRESPOSTA", "PRPAREVOLIMG",
-              "PRPARAM")  # rodada 5 (ADR 0006)
+              "PRPARAM", "PRAGRUP_PRFILTROCLASSIF")  # rodada 5 (ADR 0006); r6: PRAGRUP_PRFILTROCLASSIF
 # rodada 3 (revisão): BLOQUEADAS com a declaração pronta e comentada (sem_carga.tsv): a forma e as linhas entram na
 # imagem (provam a declaração quando o mecanismo chegar), mas a tabela não é carregada. PRRESPOSTA (forma da L6-10)
 # também fica só como pai lido na origem.
 # rodada 4: as três carregam (min:/max: do evento, agrupar:PROCTO no principal, por_pai)
-BLOQUEADAS = ("PRAGRUP_PRFILTROCLASSIF",)  # r5 (achado alto): aguarda o vínculo no modelo (saida/L6-11.json)
+BLOQUEADAS = ()  # r6: PRAGRUP_PRFILTROCLASSIF carrega no vínculo classificacao_filtro_painel_despesa (06_PEP/40)
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 
@@ -298,7 +298,8 @@ PAIS_EXTERNOS = {"PRTPCOMP": ["1", "2"], "TBESPEC": ["1", "2", "3"], "TBTIPOACOM
                  # (L6-07): pontas das referências, dados como já carregados
                  "TBALERGIA": ["1", "2"], "TBPROFIS": ["1", "2"], "RICADPAC": ["1", "2"], "ATCABECATEND": ["1"],
                  "PRSITDOCUMENTO": ["1", "2"],
-                 "PRFILTROCLASSIF": ["1"]}  # r5: filtro do painel (L6-05); o 2 nunca visto
+                 "PRFILTROCLASSIF": ["1"],  # r5: filtro do painel (L6-05); o 2 nunca visto
+                 "TBCLASSI": ["7"]}  # r6: classificação de despesa (L7), dada como já carregada
 # rodada 4: a inscrição no conselho da imagem é a da requerida L7-07 (TBCBOPRO 1 -> profissional 501; as linhas da
 # TBCBOPRO desta fatia são omitidas porque a L7-07 já define a tabela): o profissional 501 é dado como carregado
 PAIS_EXTERNOS["TBPROFIS"] = PAIS_EXTERNOS["TBPROFIS"] + ["501"]
@@ -553,16 +554,16 @@ def _rodada3(ins):
         _ins(ins, "PRITEM_GEITENS", ID_GEITENS=it, POTENCIALMENTE_PERIGOSO=perig, PERMITIR_DOSE_INTERV_SUP_24H=int24,
              PERIODO_MINIMO_ENTRE_DOSE=per, ITEM_CONTABILIZADO_BALANCO_PEP=bal, PADRAO_BOMBA_FICHA_ANEST=bomba,
              INFORMAR_LOCAL_ACESSO_INVASIVO=inv, CONSISTIR_DOSE_MINIMA_MAXIMA=0, ID_GEITEACAODOSE=1)
-    # princípio da origem: 1 e 2 com código DCB do catálogo (2 com espaços nas pontas); 3 com código fora do catálogo;
-    # 4 sem código DCB (códigos 61-64: a requerida L7-07 usa 1-3 na mesma tabela da imagem)
-    for cod, dcb in [(61, "00101"), (62, " 00202 "), (63, "99999"), (64, None)]:
-        _pai(ins, "TBPRINC", COD=cod, NOME="Princípio exemplo %d" % cod, ATIVO="A", COD_DCB=dcb)
-    # princípio do item não padronizado (PRITEMNAOPAD: 1, 2, 6 gravados; 3 recusado): código fora do catálogo e sem
-    # código (codigo_inexistente_destino / NULL: 1048); item recusado (pai_pendente)
-    for it, pr in [(1, 61), (2, 62), (1, 63), (2, 64), (3, 61)]:
+    # r6 (ADR 0006): o princípio é o do HOSPITAL (TBPRINC carrega em principio_ativo_cliente na requerida L7-07, que
+    # define a tabela na imagem: as linhas dela valem, 1 e 2 com DCB do catálogo, 4 com código fora do catálogo e
+    # gravado como item próprio, 6 recusado). Princípio do item não padronizado (PRITEMNAOPAD: 1, 2, 6 gravados; 3
+    # recusado): 4 local entra utilizável; 6 recusado (pai_pendente); 99 nunca visto (pai_inexistente + CHECK 4025);
+    # item recusado (pai_pendente)
+    for it, pr in [(1, 1), (2, 2), (1, 4), (2, 6), (1, 99), (3, 1)]:
         _ins(ins, "PRITEMNAOPAD_TBPRINC", ID_PRITEMNAOPAD=it, ID_TBPRINC=pr)
-    # princípio do alergeno: situação fora do domínio (padrão ativo); alergeno nunca visto (pai_inexistente + 1048)
-    for al, pr, sit in [(1, 61, "A"), (2, 61, "I"), (2, 62, "X"), (9, 61, "A"), (1, 63, "A")]:
+    # princípio do alergeno: situação fora do domínio (padrão ativo); alergeno nunca visto (pai_inexistente + 1048);
+    # princípio local (4) entra utilizável
+    for al, pr, sit in [(1, 1, "A"), (2, 1, "I"), (2, 2, "X"), (9, 1, "A"), (1, 4, "A")]:
         _ins(ins, "TBALERGIA_TBPRINC", ID_TBALERGIA=al, ID_TBPRINC=pr, SITUACAO=sit)
     # perguntas (lidas pela ligação PRPADEVOL): 1 decimal com unidade 'kg', texto padrão e reaproveitamento (65535 h);
     # 2 escolha, MANTERHIST 3 (sem semântica: valor_fora_do_dominio); 3 CID (texto, destino diagnóstico) e INATIVA
@@ -637,21 +638,18 @@ def linhas(r, ins):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
     # rodada 5 (ADR 0006): ligação do filtro do painel à classificação, na trilha do filtro (1 filtro conhecido; 2
     # filtro nunca visto: pai_inexistente, gravada com a chave original no retrato)
+    # r6: no vínculo classificacao_filtro_painel_despesa; o 2 (filtro nunca visto) é recusado pelo NOT NULL
     for i in (1, 2):
         ins("PRAGRUP_PRFILTROCLASSIF", [i, i, 7])
-    # parâmetros globais (sem chave): 1 com logotipo (arquivo + logotipo do estabelecimento) e senha (nunca no retrato); 2 sem
-    # logotipo nem senha
+    # parâmetros globais (sem chave): uma linha com logotipo (arquivo + logotipo do estabelecimento) e senha (ao cofre,
+    # nunca no retrato)
     nomes = [c for c, _, _ in COLUNAS["PRPARAM"]]
-    for i in (1, 2):
+    # r6: UMA linha (a tabela de parâmetros globais tem uma linha só; duas linhas globais colidiriam na vigência)
+    for i in (2,):
         v = [_falso(tp, i) for _, tp, _ in COLUNAS["PRPARAM"]]
-        # r5: 1 com a senha da alteração do planejamento e sem logotipo (no banco descartável não há chave mestra do
-        # cofre: segredo_aguarda_cofre e a credencial NOT NULL recusa a linha, falha fechada, nunca em claro); 2 com
-        # logotipo e sem senha: 155 parâmetros com valor (os 3 de hora ficam nulos na imagem) + trilha + logotipo
-        if i == 1:
-            v[nomes.index("LOGOTIPO")] = None
-        else:
-            v[nomes.index("SENHAALTPLAN")] = None
-            v[nomes.index("LOGOTIPO")] = b"\x89PNG falso"
+        # r6: com logotipo e com a senha (ao cofre; sem chave mestra no descartável: segredo_aguarda_cofre): 148
+        # parâmetros com valor (os 3 de hora ficam nulos na imagem) + trilha + logotipo
+        v[nomes.index("LOGOTIPO")] = b"\x89PNG falso"
         ins("PRPARAM", v)
     # local de assistência: 3 sem descrição (1048); 4 com descrição acima de 150 (1406); 5 com situação fora do
     # domínio (fica com o padrão do destino: ativo); 6 com espaços internos preservados e tipo vazio (padrão: todos);
@@ -766,22 +764,27 @@ def linhas(r, ins):
         "PREVOLESPEC": {"gravados": 5, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 1}},
         "PREVOLTIPOACO": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}},
-        "PRITEMNAOPAD": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "pai_pendente": 1, "restricao_destino_1048": 3, "valor_presumido": 6}},
+        # r6: unidade UN recusada na L7-07 = pai_pendente (não pai_inexistente + 1048); a linha recusada antes não presume
+        "PRITEMNAOPAD": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "pai_pendente": 2, "restricao_destino_1048": 2, "valor_presumido": 5}},
         "PRITEMNAOPAD_GETABVIA": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "pai_pendente": 1, "restricao_destino_1048": 2}},
-        "PRKITMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2, "restricao_destino_4025": 1, "valor_fora_do_dominio": 1}},
-        "PRITENSKITMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "pai_pendente": 1, "restricao_destino_1048": 1, "restricao_destino_4025": 2}},
-        "PRKITSOLITENS": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
+        # r6: unidade adotada pelo código (adotado_existente, baixa); kit 6 com unidade ZZ nunca vista é recusado
+        # (pai_inexistente + 1048 na unidade criada antes), como o item do kit com ZZ: a conciliação mostra a referência órfã
+        "PRKITMED": {"gravados": 2, "pendencias": {"adotado_existente": 2, "pai_inexistente": 3, "restricao_destino_1048": 3, "restricao_destino_4025": 1, "valor_fora_do_dominio": 1}},
+        "PRITENSKITMED": {"gravados": 2, "pendencias": {"adotado_existente": 2, "pai_inexistente": 2, "pai_pendente": 3, "restricao_destino_1048": 1, "restricao_destino_4025": 1}},  # r6: itens do kit 6 recusado: pai_pendente
+        "PRKITSOLITENS": {"gravados": 4, "pendencias": {"adotado_existente": 3, "pai_inexistente": 2, "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
         "PRFAVORITO": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3, "valor_fora_do_dominio": 3}},
         # rodada 3
         "PRITEM_GEITENS": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "pai_pendente": 1,
                                                         "restricao_destino_1048": 1, "valor_fora_do_dominio": 2,
                                                         "valor_presumido": 4}},
-        "PRITEMNAOPAD_TBPRINC": {"gravados": 2, "pendencias": {"codigo_inexistente_destino": 1, "pai_pendente": 1,
-                                                              "restricao_destino_1048": 2}},
-        "TBALERGIA_TBPRINC": {"gravados": 3, "pendencias": {"codigo_inexistente_destino": 1, "pai_inexistente": 1,
-                                                           "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
-        "PRPADEVOL": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3,
-                                                   "valor_fora_do_dominio": 1, "valor_presumido": 7}},
+        "PRITEMNAOPAD_TBPRINC": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 2,
+                                                              "restricao_destino_4025": 1}},  # r6: princípio do hospital
+        "TBALERGIA_TBPRINC": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                           "valor_fora_do_dominio": 1}},  # r6: princípio do hospital
+        "PRPADEVOL": {"gravados": 4, "pendencias": {"adotado_existente": 2, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 3, "valor_fora_do_dominio": 8}},
+        # r6: sem tipo presumido (o tipo vem do de-para de TIPOPERG); fora do domínio: MANTERHIST 2/3, TIPOPERG 99 (tipo e
+        # destino), obrigatório 'Z'; unidade 'kg' adotada pela sigla
         "PRFORMULCOMP": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2}},
         # rodada 4
         # cabeçalho 2: autor, momento e gravação pelo menor evento e situação pelo maior ID (pendência baixa da escolha);
@@ -794,9 +797,12 @@ def linhas(r, ins):
         "TBKITPRO": {"gravados": 3, "pendencias": {"adotado_existente": 2, "pai_inexistente": 5, "pai_pendente": 1,
                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
         "PRRESPOSTA": {"gravados": 5, "pendencias": {"pai_inexistente": 2}},
+        # rodada 6: vínculo do filtro do painel com a classificação de despesa
+        "PRAGRUP_PRFILTROCLASSIF": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
         # rodada 5 (ADR 0006)
-        "PRPARAM": {"gravados": 155, "pendencias": {"restricao_destino_1048": 1, "segredo_aguarda_cofre": 1,
-                                             "vigencia_sem_fonte": 2}},
+        "PRPARAM": {"gravados": 148, "pendencias": {"segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 1}},
+        # r6: uma linha, 148 parâmetros (151 desdobrados menos os 3 de hora nulos); a senha vai ao cofre (sem chave mestra
+        # no descartável: segredo_aguarda_cofre, credencial opcional não grava e a linha fica; nunca em claro)
         "PRMANCHESTER": {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1406": 1,
                                                       "restricao_destino_1062": 1, "valor_fora_do_dominio": 3}},
     }

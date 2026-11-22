@@ -1,0 +1,13 @@
+{
+  "fatia": "L8-19",
+  "pedidos": [
+    {
+      "tipo": "compartilhado",
+      "alvo": "fatiar_conector (fatias geradas L7-07, L7-08 e indice.tsv)",
+      "erro": "fatiar_conector --conferir: L7-07: arquivo diferente do gerado; L7-08: arquivo diferente do gerado; indice.tsv diferente do gerado",
+      "causa": "fatias geradas desatualizadas em relação ao mapa compartilhado (mudanças de outras fatias em paralelo); nada da L8-19",
+      "acao": "orquestrador regenerar as fatias com fatiar_conector depois das rodadas paralelas",
+      "atendido": false
+    }
+  ]
+}

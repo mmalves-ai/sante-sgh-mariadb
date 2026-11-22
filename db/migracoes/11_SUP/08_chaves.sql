@@ -15,3 +15,12 @@ ALTER TABLE principio_ativo_cliente
   ADD CONSTRAINT fk_principio_ativo_cliente_unidade_medida_padrao_id FOREIGN KEY (unidade_medida_padrao_id) REFERENCES unidade_medida (id) ON DELETE RESTRICT;
 ALTER TABLE insumo_principio_ativo
   ADD CONSTRAINT fk_insumo_principio_ativo_principio_ativo_cliente_id FOREIGN KEY (principio_ativo_cliente_id) REFERENCES principio_ativo_cliente (id) ON DELETE RESTRICT;
+
+-- F4 rodada 6 (L7-05, L7-07): histórico de compra por insumo e restrição do usuário por classificação de despesa.
+ALTER TABLE historico_compra_insumo
+  ADD CONSTRAINT fk_historico_compra_insumo_insumo FOREIGN KEY (insumo_id) REFERENCES insumo (id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_historico_compra_insumo_empresa_fornecedora FOREIGN KEY (empresa_fornecedora_id) REFERENCES empresa_fornecedora (id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_historico_compra_insumo_nota_entrada FOREIGN KEY (nota_entrada_id) REFERENCES nota_entrada (id) ON DELETE RESTRICT;
+
+ALTER TABLE usuario_estoque_classificacao
+  ADD CONSTRAINT fk_usuario_estoque_classificacao_classificacao_despesa FOREIGN KEY (classificacao_despesa_id) REFERENCES classificacao_despesa (id) ON DELETE RESTRICT;

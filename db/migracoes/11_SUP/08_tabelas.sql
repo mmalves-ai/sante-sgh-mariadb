@@ -51,3 +51,49 @@ ALTER TABLE insumo_principio_ativo
   ADD COLUMN principio_ativo_cliente_id BIGINT UNSIGNED NULL COMMENT 'Princípio do cadastro próprio do cliente (sem par no oficial)' AFTER principio_ativo_id,
   ADD KEY ix_insumo_principio_ativo_principio_ativo_cliente_id (principio_ativo_cliente_id),
   ADD CONSTRAINT ck_insumo_principio_ativo_principio CHECK ((principio_ativo_id IS NULL) <> (principio_ativo_cliente_id IS NULL));
+
+-- F4 rodada 6 (L7-05, ADR 0006): histórico de compra por insumo (último preço, fornecedor e marca), usado na
+-- cotação e na reposição. Guarda o que foi comprado mesmo quando a nota não existe no sistema.
+CREATE TABLE historico_compra_insumo (
+  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  insumo_id              BIGINT UNSIGNED NOT NULL,
+  empresa_fornecedora_id BIGINT UNSIGNED NULL,
+  nota_entrada_id        BIGINT UNSIGNED NULL,
+  numero_nota            VARCHAR(30) NULL,
+  numero_documento       VARCHAR(30) NULL,
+  comprado_em            DATE NOT NULL,
+  quantidade             DECIMAL(15,4) NULL,
+  valor_unitario         DECIMAL(19,6) NULL,
+  custo_unitario         DECIMAL(19,6) NULL,
+  marca                  VARCHAR(100) NULL,
+  preco_venda            DECIMAL(19,6) NULL,
+  origem                 VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em              DATETIME(3) NOT NULL,
+  criado_por             BIGINT UNSIGNED NULL,
+  alterado_em            DATETIME(3) NULL,
+  alterado_por           BIGINT UNSIGNED NULL,
+  versao                 INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_historico_compra_insumo_quantidade CHECK (quantidade IS NULL OR quantidade >= 0),
+  CONSTRAINT ck_historico_compra_insumo_valores CHECK ((valor_unitario IS NULL OR valor_unitario >= 0) AND (custo_unitario IS NULL OR custo_unitario >= 0) AND (preco_venda IS NULL OR preco_venda >= 0)),
+  CONSTRAINT ck_historico_compra_insumo_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_historico_compra_insumo_insumo_data (insumo_id, comprado_em),
+  KEY ix_historico_compra_insumo_fornecedor (empresa_fornecedora_id),
+  KEY ix_historico_compra_insumo_nota (nota_entrada_id)
+) COMMENT='Histórico de compra de cada insumo: data, fornecedor, nota, quantidade, valores e marca';
+
+-- F4 rodada 6 (L7-07, ADR 0006): a restrição do usuário no estoque pode ser por classificação de despesa (que
+-- atravessa grupos), além de grupo e subgrupo. Uma das duas é obrigatória.
+ALTER TABLE usuario_estoque_classificacao
+  MODIFY COLUMN grupo_insumo_id BIGINT UNSIGNED NULL COMMENT 'Nulo quando a restrição é só pela classificação de despesa',
+  ADD COLUMN classificacao_despesa_id BIGINT UNSIGNED NULL COMMENT 'Classificação de despesa dos insumos permitidos (atravessa grupos)' AFTER subgrupo_insumo_id,
+  ADD COLUMN grupo_chave BIGINT UNSIGNED AS (COALESCE(grupo_insumo_id, 0)) STORED COMMENT 'Apoio da unicidade quando o grupo é nulo',
+  ADD COLUMN classificacao_chave BIGINT UNSIGNED AS (COALESCE(classificacao_despesa_id, 0)) STORED COMMENT 'Apoio da unicidade quando a classificação é nula',
+  DROP INDEX uq_usuario_estoque_classificacao_par,
+  ADD UNIQUE KEY uq_usuario_estoque_classificacao_par (estabelecimento_id, usuario_id, grupo_chave, subgrupo_chave, classificacao_chave, vigencia_inicio),
+  ADD CONSTRAINT ck_usuario_estoque_classificacao_alvo CHECK (grupo_insumo_id IS NOT NULL OR classificacao_despesa_id IS NOT NULL),
+  ADD KEY ix_usuario_estoque_classificacao_despesa (classificacao_despesa_id);
+
+-- F4 rodada 6 (L7-08, ADR 0006): quantidade do lote no movimento depois das devoluções (rastreio por lote).
+ALTER TABLE movimento_lote
+  ADD COLUMN quantidade_liquida DECIMAL(15,4) NULL COMMENT 'Quantidade do lote no movimento depois das devoluções (saída menos devolução)' AFTER quantidade,
+  ADD CONSTRAINT ck_movimento_lote_quantidade_liquida CHECK (quantidade_liquida IS NULL OR (quantidade_liquida >= 0 AND quantidade_liquida <= quantidade));

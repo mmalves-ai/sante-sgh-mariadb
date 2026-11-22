@@ -28,7 +28,7 @@ Dados 100% falsos (nomes, códigos e logins inventados). Carregadas (CARREGADAS)
   carga) e fora do domínio (valor_fora_do_dominio).
 Rodada 5 (ADR 0006, continuidade; antes descartadas): TBTPDIETA vira opções da lista `nutricao.tipoDieta`
 (parametro_opcao: código, ordem e rótulo do hospital); CHPARAM e CVPARAM viram parametro_valor do estabelecimento
-(linha inteira em JSON, vigência pela evidência); a senha mestra de visita vai ao cofre (credencial_integracao,
+(rodada 6: um valor por chave do produto, desdobrado; vigência pela evidência); a senha mestra de visita vai ao cofre (credencial_integracao,
 só com senha; sem chave mestra na conferência: segredo_aguarda_cofre). As definições do produto vêm do preparo
 (semente pedida em saida/L6-18.json).
 """
@@ -78,7 +78,9 @@ CREATE TABLE CVPARAM (COD_TBHOSPIT SMALLINT NOT NULL PRIMARY KEY, GRAVAR_FOTO_BA
 PAIS_EXTERNOS = {"GELOCARM": ["1", "2"], "PRCARACTDIE": ["1", "2", "3"], "CHTPLIMPEZA": ["1", "2"],
                  "GEITENS": ["10", "11", "12"], "CHSITUACAO": ["1", "2"], "TBUSERS": ["ana.exemplo", "bia.exemplo"],
                  "ATCABECATEND": ["900", "901", "7601", "7602", "7603", "7604"], "TBLEITO": ["1", "2", "3"],
-                 "CHPROFISLIMP": ["1", "2"], "RICADPAC": ["7701", "7702"], "GDPRONTCADOPER": ["1", "2"]}
+                 "CHPROFISLIMP": ["1", "2"], "RICADPAC": ["7701", "7702"], "GDPRONTCADOPER": ["1", "2"],
+                 # contas de internação (L8-06, chave registro|conta parcial) que a prova de ATCONTA confere
+                 "RICONTAS": ["801|1", "802|1", "803|1", "804|1"]}
 
 
 def _id_externo(tabela, chave):
@@ -113,6 +115,10 @@ CHAVES_PARAMETROS = ("hotelaria.higienizacao.situacaoLeitoAposAlta", "hotelaria.
                      "hotelaria.visita.exigeDataNascimento", "hotelaria.visita.exigeCelular",
                      "hotelaria.visita.exigeDocumento", "hotelaria.visita.modeloEtiqueta",
                      "hotelaria.visita.situacaoAcessoPadrao", "hotelaria.visita.imprimirEtiquetaSemVisualizar")
+# ATCONTA (descarte duplicado COM PROVA, provas.tsv): pares (atendimento, registro da conta) que a carga das contas de
+# internação (RICONTAS, L8-06) deixa em atendimento_conta; a prova confere linha a linha com a origem
+CONTAS_ATENDIMENTO = [("7601", "801|1"), ("7602", "802|1"), ("7603", "803|1"), ("7604", "804|1")]
+_BIA = _id_externo("TBUSERS", "bia.exemplo")
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
                    # tipo documental da carga de domínio do produto (09_HOT/06_chaves.sql), que o banco descartável
@@ -122,14 +128,42 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " criado_em DATETIME(3) NOT NULL);"
                    " INSERT INTO tipo_documento_arquivo (codigo, descricao, grupo, criado_em) SELECT 'prontuario-antigo',"
                    " 'Prontuário antigo', 'prontuario', NOW(3) FROM DUAL WHERE NOT EXISTS"
-                   " (SELECT 1 FROM tipo_documento_arquivo WHERE codigo = 'prontuario-antigo')"
+                   " (SELECT 1 FROM tipo_documento_arquivo WHERE codigo = 'prontuario-antigo');"
+                   # os pais das linhas preparadas abaixo (empresa, paciente, fonte pagadora, tipo de conta) não são
+                   # desta fatia: FKs desligadas só neste preparo
+                   " SET FOREIGN_KEY_CHECKS=0;"
                    # profissional de higienização do executante, achado pelo usuário (chave alternativa do destino,
-                   # `cod:profissional_higienizacao.usuario_id`): cadastro da L6-17, que não grava na imagem dela
-                   " ;CREATE TABLE IF NOT EXISTS profissional_higienizacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " estabelecimento_id BIGINT UNSIGNED NOT NULL, nome VARCHAR(150) NOT NULL, usuario_id BIGINT UNSIGNED"
-                   " NULL, UNIQUE KEY uq_profissional_higienizacao_usuario (estabelecimento_id, usuario_id));"
-                   " INSERT IGNORE INTO profissional_higienizacao (estabelecimento_id, nome, usuario_id) VALUES"
-                   " (1, 'Profissional exemplo', %d); " % _id_externo("TBUSERS", "bia.exemplo")
+                   # `cod:profissional_higienizacao.usuario_id`): cadastro da L6-17, que não grava na imagem dela.
+                   # Rodada 6: com o DDL completo no banco descartável ele exige vínculo (terceirizado com empresa),
+                   # e o INSERT IGNORE de antes não gravava nada (o executante bia ficava sem profissional)
+                   " CREATE TABLE IF NOT EXISTS profissional_higienizacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " estabelecimento_id BIGINT UNSIGNED NOT NULL, vinculo VARCHAR(20) NULL,"
+                   " empresa_fornecedora_id BIGINT UNSIGNED NULL, nome VARCHAR(150) NOT NULL,"
+                   " usuario_id BIGINT UNSIGNED NULL, criado_em DATETIME(3) NULL,"
+                   " UNIQUE KEY uq_profissional_higienizacao_usuario (estabelecimento_id, usuario_id));"
+                   " INSERT INTO profissional_higienizacao (estabelecimento_id, vinculo, empresa_fornecedora_id, nome,"
+                   " usuario_id, criado_em) SELECT 1, 'terceirizado', 1, 'Profissional exemplo', %d, NOW(3) FROM DUAL"
+                   " WHERE NOT EXISTS (SELECT 1 FROM profissional_higienizacao WHERE usuario_id = %d);" % (_BIA, _BIA)
+                   # conta_hospitalar e atendimento_conta como a carga das contas de internação os deixa
+                   + " CREATE TABLE IF NOT EXISTS conta_hospitalar (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " atendimento_id BIGINT UNSIGNED NULL, estabelecimento_id BIGINT UNSIGNED NULL, numero VARCHAR(20) NULL,"
+                   " paciente_id BIGINT UNSIGNED NULL, fonte_pagadora_id BIGINT UNSIGNED NULL,"
+                   " tipo_conta_id BIGINT UNSIGNED NULL, natureza VARCHAR(20) NULL, competencia DATE NULL,"
+                   " inicio_em DATETIME(3) NULL, criado_em DATETIME(3) NULL);"
+                   " CREATE TABLE IF NOT EXISTS atendimento_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " atendimento_id BIGINT UNSIGNED NOT NULL, conta_hospitalar_id BIGINT UNSIGNED NOT NULL,"
+                   " criado_em DATETIME(3) NULL, excluido_em DATETIME(3) NULL);"
+                   + "".join(" INSERT INTO conta_hospitalar (id, atendimento_id, estabelecimento_id, numero, paciente_id,"
+                             " fonte_pagadora_id, tipo_conta_id, natureza, competencia, inicio_em, criado_em)"
+                             " SELECT %d, %d, 1, 'CT%d', 1, 1, 1, 'internacao', '2020-01-01', '2020-01-01', NOW(3)"
+                             " FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM conta_hospitalar WHERE id = %d);"
+                             % (_id_externo("RICONTAS", c), _id_externo("ATCABECATEND", a), _id_externo("RICONTAS", c),
+                                _id_externo("RICONTAS", c)) for a, c in CONTAS_ATENDIMENTO)
+                   + (" INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id, criado_em) SELECT a, c, NOW(3)"
+                      " FROM (%s) x WHERE NOT EXISTS (SELECT 1 FROM atendimento_conta);" % " UNION ALL ".join(
+                          "SELECT %d a, %d c" % (_id_externo("ATCABECATEND", a), _id_externo("RICONTAS", c))
+                          for a, c in CONTAS_ATENDIMENTO))
+                   + " SET FOREIGN_KEY_CHECKS=1; "
                    # r5 achado: definições dos parâmetros da higienização e da visita (catálogo do produto, pedido em
                    # saida/L6-18.json; a migração nunca cria definição)
                    + _preparo_definicoes(CHAVES_PARAMETROS, "hotelaria"))
@@ -191,7 +225,7 @@ def linhas(r, ins):
         ins("CHSOLICITLIMP_TBLEITO", list(x))
     # trâmite do prontuário: conta -> atendimento -> paciente (só as colunas lidas pela encadeada); 7604 leva a um
     # paciente nunca visto
-    for x in [(7801, 7601, 1), (7802, 7602, 1), (7803, 7603, 1), (7804, 7604, 1)]:  # COD_CONTA: forma do dicionário
+    for x in [(7801, 7601, 801), (7802, 7602, 802), (7803, 7603, 803), (7804, 7604, 804)]:  # COD_CONTA = registro
         ins("ATCONTA", list(x))
     for x in [(7601, 7701), (7602, 7701), (7603, 7702), (7604, 7799)]:
         ins("ATCABECATEND", list(x))
@@ -236,13 +270,14 @@ def linhas(r, ins):
                                                        "mescla_conflito_origem_guardada": 2}},
         # r5 (ADR 0006): opções da lista do produto; parâmetros do estabelecimento (vigência pela evidência: a
         # imagem não tem data própria da linha); CVPARAM com senha mestra e sem chave mestra na conferência: o cofre
-        # falha fechado (segredo_aguarda_cofre) e a credencial sem referência recusa a linha (1048, visível)
-        # módulo 'migracao' e definição: TBTPDIETA (ordem 431) cria os dois e as 3 linhas seguintes adotam (6);
-        # CHPARAM adota o módulo (1); a linha recusada de CVPARAM não deixa adoção
+        # falha fechado (segredo_aguarda_cofre, visível)
+        # módulo 'nutricao' e definição 'nutricao.tipoDieta': TBTPDIETA (ordem 431) cria os dois e as 3 linhas seguintes adotam (6)
         "TBTPDIETA": {"gravados": 4, "pendencias": {"adotado_existente": 6}},
-        "CHPARAM": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 1, "adotado_existente": 1}},
-        "CVPARAM": {"gravados": 0, "pendencias": {"restricao_destino_1048": 1, "segredo_aguarda_cofre": 1,
-                                                  "vigencia_sem_fonte": 1}},
+        # rodada 6: um valor por chave (desdobrar; "gravados" = itens): CHPARAM 2 colunas com valor; CVPARAM 10 (a
+        # senha mestra nunca vira valor: vai ao cofre, e sem chave mestra a credencial OPCIONAL não grava, com
+        # segredo_aguarda_cofre visível; a definição é do produto, sem adoção de módulo)
+        "CHPARAM": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1}},
+        "CVPARAM": {"gravados": 10, "pendencias": {"segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 1}},
         "CHSOLICITLIMP_TBLEITO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                 "restricao_destino_4025": 1,
                                                                 "valor_fora_do_dominio": 1}},

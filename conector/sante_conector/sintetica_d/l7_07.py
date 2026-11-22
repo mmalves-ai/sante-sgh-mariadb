@@ -115,19 +115,20 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 PAIS_EXTERNOS = {"GEGRUPOS": ["1", "2"], "TBLABORA": ["1", "2"], "GEKITRAS": ["1", "2"], "GETABVIA": ["VO", "IV"],
                  "GELANESI": ["1", "2", "3"], "GEKITS": ["1", "2"], "GELOCARM": ["1", "2"], "TBUSERS": ["ADMIN"],
                  "TBFORNEC": ["1", "2"], "TBNATOPE": ["5"], "TBCENCUS": ["10", "20"], "RECADATE": ["7001", "7002"],
-                 "GELANTRA": ["1/movimento_estoque", "2/movimento_estoque"], "TBPROFIS": ["501"]}
+                 "GELANTRA": ["1/movimento_estoque", "2/movimento_estoque"], "TBPROFIS": ["501"],
+                 "TBCLASSI": ["7"]}  # r6: classificação de despesa (L8), dada como já carregada
 # pais lidos na ORIGEM só para a referência (chave alternativa ou encadeada): fora do plano (MAPA_TESTE), já carregados
 ORIGEM_PAIS = ("TBCENCUS", "TBCBOPRO")
 CARREGADAS = ("TBTP_ENV_LISTA_AVAL_FARM", "TBUNICON", "GEITENS", "GENOMCOM", "GEUNIPRESC", "GEVALMEM",
               "GEITEMKITRAS", "GERASVALESTINI", "GEVIASITEM", "GEKITITE", "GESALDOKITRAS", "GECADBAL", "GELANBAL",
               "GECADPED", "GELANNFS", "GECADNFS", "GERASVALNFS", "GERASVALTRANSFLOTE", "GELANPAC", "TBPRINC",
-              "GEITENS_TBPRINC", "GERASVALFINAL", "GERASVALINICIAL", "GEKITKPI")
+              "GEITENS_TBPRINC", "GERASVALFINAL", "GERASVALINICIAL", "GEKITKPI", "GEUSERS_TBCLASSI")
 # rodada 5 (ADR 0006): GEKITKPI carrega como kit do item principal; GEUSERS_TBCLASSI na trilha do usuário
 DESCARTADAS = ()
 # rodada 4: nenhuma bloqueada (o princípio do hospital carrega em principio_ativo_cliente; as fotografias do saldo
 # do lote carregam como histórico na trilha_auditoria, correção da rodada 4)
 # r5c: GEUSERS_TBCLASSI PENDENTE (pedido r5b_classificacao_usuario)
-BLOQUEADAS = ("GEUSERS_TBCLASSI",)
+BLOQUEADAS = ()  # r6: GEUSERS_TBCLASSI carrega em usuario_estoque_classificacao.classificacao_despesa_id
 NAO_CARREGADAS = DESCARTADAS + BLOQUEADAS
 COLS = {m.group(1): [c.split()[0] for c in re.split(r",\s+(?![0-9]+\))", re.sub(r",\s*(PRIMARY KEY|CONSTRAINT).*$", "", m.group(2))) if c.split()[0] not in ("PRIMARY", "CONSTRAINT")]
         for m in re.finditer(r"CREATE TABLE (\w+) \((.*?)\);", " ".join(DDL.split()))}
@@ -152,6 +153,10 @@ EXTRA_GEITENS = [x.split()[0] for x in " ".join(DDL.split("RASTREAR SMALLINT NOT
 
 
 def linhas(r, ins):
+    # r6: permissão por classificação: ADMIN/7 grava; usuário nunca visto (NOT NULL recusa); classificação 8 nunca
+    # vista (sem grupo nem classificação: o CHECK do alvo recusa)
+    for x in [("ADMIN", 7), ("NAOVISTO", 7), ("ADMIN", 8)]:
+        ins("GEUSERS_TBCLASSI", list(x))
     T = "TBTP_ENV_LISTA_AVAL_FARM"
     for x in [(1, "Antes  da dispensação", "S"), (2, "Depois da dispensação", "N"), (3, None, "S")]:
         ins(T, list(x))
@@ -340,6 +345,8 @@ def linhas(r, ins):
     for x in [(101, 102, D(2)), (101, 105, D(1)), (102, 199, D(1))]:
         _l(ins, "GEKITKPI", ITEM_PRI=x[0], ITEM_SEC=x[1], QTDE=x[2])
     return {
+        "GEUSERS_TBCLASSI": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
+                                                           "restricao_destino_4025": 1, "vigencia_sem_fonte": 3}},
         "GEKITKPI": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1}},
         "TBPRINC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                   "codigo_inexistente_destino": 4, "pai_inexistente": 1}},

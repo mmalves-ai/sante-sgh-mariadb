@@ -85,8 +85,10 @@ CHAVES_PARAMETROS = tuple("sadt.hemoterapia." + c for c in (
     "lancarTransfusaoNaPreTransfusao", "modeloImpressaoPreTransfusao", "exigeCpfDoador",
     "modeloImpressaoRequisicaoHemocentro", "modeloImpressaoRequisicaoPaciente", "codigoRegionalSaude",
     "lancarTransfusaoApos24h"))
-PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+# r6: o estabelecimento é a tabela REAL do modelo (criada pela conferência a partir do preparo), não uma tabela
+# provisória: o preparo da L7-06 (REQUER, roda antes) já grava nela com o código
+PREPARO_DESTINO = ("INSERT INTO estabelecimento (id, codigo) SELECT 1, 'exemplo' FROM DUAL"
+                   " WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
                    # o município que o cadastro de fornecedores da L7-06 (REQUER) usa: só o preparo desta fatia roda
                    " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em)"
                    " SELECT '3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3) FROM DUAL"
@@ -211,9 +213,9 @@ def linhas(r, ins):
     return {
         "PRHEMOTLAN": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "SHCLIENT": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
-        # r5: sem chave mestra na conferência o cofre falha fechado e a credencial sem referência recusa a linha
-        "SHPARAM": {"gravados": 0, "pendencias": {"restricao_destino_1048": 1, "segredo_aguarda_cofre": 1,
-                                                  "vigencia_sem_fonte": 1}},
+        # r6: desdobrado, um valor por coluna preenchida (10 itens); sem chave mestra na conferência o cofre falha
+        # fechado e a credencial (destino opcional) não grava: só segredo_aguarda_cofre, sem recusar os parâmetros
+        "SHPARAM": {"gravados": 10, "pendencias": {"segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 1}},
         # fornecedor sem dependência de ordem declarada (pedido em saida/L7-01.json): pai_inexistente nas 3 linhas
         # até a aresta SHREQUISICAO -> SHCLIENT; depois, só a do fornecedor 77
         "SHREQUISICAO": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "vigencia_sem_fonte": 1}},

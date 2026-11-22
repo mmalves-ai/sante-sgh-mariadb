@@ -146,8 +146,9 @@ def linhas(r, ins):
         ins("PRTPLAN_GETABVIA", [item, via, vis, marc])
     return {
         "PRTIPONOTIFICACAO": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
-        "PRTPASSINATURA_TBOID": {"gravados": 4, "pendencias": {"adotado_existente": 7, "pai_pendente": 1}},
-        "PRTIPOPERGPAR": {"gravados": 3, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 3}},
+        "PRTPASSINATURA_TBOID": {"gravados": 5, "pendencias": {"adotado_existente": 9, "pai_pendente": 1,
+                                                               "pai_inexistente": 1}},
+        "PRTIPOPERGPAR": {"gravados": 3, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 2}},
         "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1}},
         "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 3}},

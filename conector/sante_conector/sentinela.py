@@ -50,6 +50,8 @@ REGRAS = {
                 "inválido: NULL com documento_invalido",
     "decimal_nao_negativo": "NUMERIC em que negativo não tem sentido (CHECK >= 0): negativo vira NULL com "
                             "valor_fora_do_dominio (linha gravada); zero fica",
+    "ano_competencia": "rodada 6: ano da competência AAAAMM (inteiro ou texto); inválida: NULL e valor_fora_do_dominio",
+    "mes_competencia": "rodada 6: mês (1..12) da competência AAAAMM; inválida: NULL e valor_fora_do_dominio",
     "competencia_aaaamm": "competência em inteiro ou texto AAAAMM vira DATE do 1º dia do mês; mês fora de 1..12, ano "
                           "< 1800 ou forma inválida: NULL com valor_fora_do_dominio; 0 ou vazio vira NULL",
     "data_primeiro_dia_mes": "DATE/TIMESTAMP vira DATE do 1º dia do mês (competência); data sentinela vira NULL com "
@@ -440,6 +442,11 @@ def aplicar(regra, v):
     if regra == "decimal_nao_negativo":
         x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))
         return (x, None) if x >= 0 else (None, "valor_fora_do_dominio")
+    if regra in ("ano_competencia", "mes_competencia"):
+        d, e = aplicar("competencia_aaaamm", v)
+        if d is None:
+            return None, e
+        return (d.year if regra == "ano_competencia" else d.month), None
     if regra == "competencia_aaaamm":
         t = _str(v).strip() if isinstance(v, (str, bytes, bytearray)) else v
         if t == "" or t == 0:

@@ -299,8 +299,13 @@ class Conferencia(unittest.TestCase):
                           " k.dados, l.codigo FROM consumo_centro_custo k JOIN local_estoque l ON"
                           " l.id=k.local_estoque_id ORDER BY k.ano, k.mes, k.quantidade_liquida")
                 lidos["kon"] = [list(x) for x in c.fetchall()]
+                # r6: histórico de compra do insumo (GECOMPRA): 2 compras, fornecedor fora da imagem (NULL)
+                c.execute("SELECT numero_nota, CAST(quantidade AS CHAR), empresa_fornecedora_id IS NULL, origem"
+                          " FROM historico_compra_insumo ORDER BY comprado_em")
+                lidos["compra"] = [list(x) for x in c.fetchall()]
         r = conferencia.conferir("L7-05", depois_da_primeira=ler)
         self.assertEqual(r["erros"], [])
+        self.assertEqual(lidos["compra"], [["100", "2.0000", 1, "migracao"], ["101", "1.0000", 1, "migracao"]])
         kon = lidos["kon"]
         self.assertEqual(len(kon), 3)
         self.assertEqual([(k[0], k[1], k[2], k[3], str(k[5])) for k in kon],

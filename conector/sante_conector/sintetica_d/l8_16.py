@@ -187,7 +187,10 @@ DADOS += [
                  [2, 1, "Z999", "Termo local exemplo", "A", "B", "C", "I", "N", "N", None, None, None, None, 1, None, None, None,
                   "id-falso-ex"]], {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 1}}, 0),
     ("TBDIGITAL_INTEG_TYPE", [[1, "TIPO_EXEMPLO_A", "ENTIDADE_EX", "ID", None],
-                              [2, "TIPO_EXEMPLO_B", "ENTIDADE_EX2", "ID", "ENTIDADE_EX3"]], {"gravados": 2, "pendencias": {}}, 0),
+                              # r5c (regra 1): a 2.ª linha tem tabelas sem par no de-para: entidade NULL com
+                              # valor_fora_do_dominio e a presumida '~prescricao' (valor_presumido); a secundária fica nula
+                              [2, "TIPO_EXEMPLO_B", "ENTIDADE_EX2", "ID", "ENTIDADE_EX3"]],
+     {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 2, "valor_presumido": 1}}, 0),
     ("TBDIGITAL_INTEG_FIELD", [[1, 1, "CAMPO_EX_A"], [2, 1, "CAMPO_EX_B"], [3, 2, "CAMPO_EX_A"]],
      {"gravados": 3, "pendencias": {A: 5}}, 0),
     ("PRCABEARQINTEGRAQT", [[1, None, "CAMPO_EX_A;CAMPO_EX_B", "CAMPO_EX_A"]], {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 1}}, 0),

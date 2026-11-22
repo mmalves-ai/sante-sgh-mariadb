@@ -113,8 +113,9 @@ CARREGADAS = ("GENIVELSERV", "GEPADRAO_DATAMATRIX_QRCODE", "GEPORTALCOMPRAS", "G
 # descarte de produto (declarado/sem_carga.tsv): só a forma, 2 linhas falsas cada (TBDISPON com nomes, 3 linhas)
 # r5c: GEULTDOCGER PENDENTE (pedido r5b_sequencia_por_competencia); GPPARAMG em parametro_valor
 TRILHA_R5 = ("GETPSALDO", "GPPARAMG", "TBDISPON")
-BLOQUEADAS = ("GEULTDOCGER",)
-CARREGADAS = CARREGADAS + TRILHA_R5
+TRILHA_R6 = ("GEULTDOCGER",)  # r6: numeração por tipo e competência em sequencia_documento_estoque
+BLOQUEADAS = ()  # r6: GEULTDOCGER carrega em sequencia_documento_estoque (agrupado por tipo e mês)
+CARREGADAS = CARREGADAS + TRILHA_R5 + TRILHA_R6
 DESCARTADAS = ()
 PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo", "novo.exemplo"], "GELOCARM": [1, 2, 3],
                  "GEGRUPOS": [1, 2], "GEITENS": [10, 20], "TBTIPOTELEFONE": [1]}
@@ -207,8 +208,9 @@ def linhas(r, ins):
     # itens em parametro_valor do estabelecimento (S/N -> sim/nao; códigos como estão; dias; nome)
     ins("GPPARAMG", [1, "S", "N", "S", "S", "N", "S", "L", "1", 30, 15, "Responsavel exemplo", None, "A", "1", "2",
                      "X", "1", "N"])
-    # números gerados: tipo 1 em 01/2025 (2 linhas, um grupo), tipo 2 em 02/2025, tipo 9 nunca visto (NULL com
-    # pai_inexistente, a linha fica) e mês 13 (competência inválida: valor_fora_do_dominio; entra com o momento da carga, 2ª fonte)
+    # r6: números gerados -> sequencia_documento_estoque por tipo e mês: tipo 1 em 01/2025 (2 linhas, um grupo:
+    # próximo 12), tipo 2 em 02/2025 (próximo 6), tipo 9 nunca visto (NOT NULL recusa) e mês 13 (competência
+    # inválida: ano e mês valor_fora_do_dominio, o CHECK do período recusa)
     for v in [(1, 202501, 10), (1, 202501, 11), (2, 202502, 5), (9, 202503, 1), (3, 202513, 1)]:
         ins("GEULTDOCGER", list(v))
     for v in [(1, "COMERCIAL"), (2, "Plantão 24 horas")]:
@@ -310,6 +312,9 @@ def linhas(r, ins):
         "GEREFER": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "GESITUACAOPED": {"gravados": 2, "pendencias": {"valor_presumido": 9, "restricao_destino_1048": 1}},
         "GETPLANCTO": {"gravados": 3, "pendencias": {"valor_presumido": 9}},
+        # r6: 3 linhas da origem em 2 sequências (tipo 1/01-2025 próximo 12; tipo 2/02-2025 próximo 6)
+        "GEULTDOCGER": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                      "valor_fora_do_dominio": 2, "restricao_destino_4025": 1}},
         "TBCATEGO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBFABOPM": {"gravados": 2, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
                                                    "documento_invalido": 1}},
@@ -329,7 +334,9 @@ def linhas(r, ins):
         # no titular da conta (2); catálogo: município da linha 6 e banco 999 da linha 6 (sem conta: nada gravado)
         "TBFORNEC": {"gravados": 4, "pendencias": {"documento_invalido": 8, "adotado_existente": 1,
                                                    "mescla_conflito_origem_guardada": 1,
-                                                   "valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
+                                                   # r6: disponibilidade 3 sem linha na lista do cliente (TBDISPON):
+                                                   # pai_inexistente pela encadeada (antes valor_fora_do_dominio)
+                                                   "pai_inexistente": 1, "valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1, "catalogo_codigo_inexistente": 2}},
         "TBCATFOR": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_pendente": 2, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
@@ -340,7 +347,7 @@ def linhas(r, ins):
                                                    "pai_inexistente": 1}},
         "GESALCON": {"gravados": 1, "pendencias": {"pai_inexistente": 1}},
         "GETPSALDO": {"gravados": 3, "pendencias": {}},
-        "GPPARAMG": {"gravados": 17, "pendencias": {}},
+        "GPPARAMG": {"gravados": 17, "pendencias": {"vigencia_sem_fonte": 1}},  # r6: linha sem evidência de data (ADR 0007, 16): pendência baixa
         "TBDISPON": {"gravados": 2, "pendencias": {}},
     }
 
@@ -348,6 +355,8 @@ def linhas(r, ins):
 # r5c: catálogo de parâmetros do patrimônio NA IMAGEM DE TESTE (no produto é semente, pedido r5b_parametros_patrimonio;
 # sem ela cada item recusa com codigo_inexistente_destino). Prova positiva do desdobrar em parametro_valor.
 PREPARO_DESTINO = PREPARO_DESTINO + (
+    ";\nINSERT INTO estabelecimento (id, codigo) SELECT 1, 'exemplo' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)"
+    # r6: o único estabelecimento do cliente (@estabelecimento de GPPARAMG e GEULTDOCGER), como nas outras fatias
     ";\nINSERT IGNORE INTO modulo_sistema (codigo, descricao, ativo, criado_em) VALUES"
     " ('patrimonio', 'Patrimonio', 1, UTC_TIMESTAMP(3));\n"
     "INSERT IGNORE INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_estabelecimento,"

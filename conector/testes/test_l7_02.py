@@ -120,7 +120,8 @@ class Plano(unittest.TestCase):
         self.assertFalse(({"SIPARGER", "SIPACSVISIMG"} | set(l7_02.SIPAR)) & set(sc))
         rx = {x["destino"]: x["coluna"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIPARRX"}
         self.assertEqual(rx["parametro_valor.valor"], "#retrato:*")
-        self.assertEqual(rx["parametro_definicao.chave"], "=migracao.preferencias_imagem")
+        # r6: chave no espaço do módulo real do produto (sadt), não num módulo "migracao"
+        self.assertEqual(rx["parametro_definicao.chave"], "=sadt.preferenciasOrigem.imagem")
 
     def test_bloqueadas_sem_destino(self):
         # dependem de regra genérica, de ordem do mapa ou de decisão do dono (docs/obra/fatias/f4/saida/L7-02.json)

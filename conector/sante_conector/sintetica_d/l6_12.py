@@ -495,7 +495,8 @@ def linhas(r, ins):
         linha("PRALERGIAPACTMP", ID=i, ID_PRCABEVOL=cab, ID_TBALERGIA=alg, RETIRAR_VINCULO_PACIENTE=ret,
               OBSERVACAO="Reação em rascunho %d" % i)
     # princípio da alergia em rascunho: 1 gravado; 2 alergia recusada (pai_pendente); 3 código ausente no catálogo
-    for i, alg, princ in [(1, 1, 1), (2, 3, 2), (3, 2, 4)]:
+    # (na alergia gravada: codigo_inexistente_destino e o CHECK do princípio)
+    for i, alg, princ in [(1, 1, 1), (2, 3, 2), (3, 1, 4)]:
         linha("PRALERGIAPACTMP_TBPRINC", ID=i, ID_PRALERGIAPAC=alg, ID_TBPRINC=princ)
     # monitorização: 1 com assistente (responsável estimado); 2 atendimento sem assistente (NOT NULL); 3 fim antes do
     # início (CHECK), retroativa com justificativa
@@ -556,8 +557,9 @@ ESPERADO = {
     # pelo profissional nunca visto; a trilha das respostas do rascunho nunca visto grava sem a ligação (pai_inexistente)
     "PRCABEVOLTMP": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "rascunho_sem_autor": 1, "restricao_destino_1048": 1}},
     # r5: as respostas em edição ficam na trilha do rascunho (agrupadas); no próprio rascunho só no contrato do produto
-    # (pedido em saida/L6-12.json); a do rascunho nunca visto (999) grava sem a ligação
-    "PREVOLPACTMP": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
+    # (pedido em saida/L6-12.json); a do rascunho nunca visto (999) grava sem a ligação; gravados contam as LINHAS
+    # da origem (101 tem duas no mesmo grupo), como o agrupar principal do exemplo_r4 (r6)
+    "PREVOLPACTMP": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
     "PRALERGIAPACTMP": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "restricao_destino_4025": 1,
                                                     "retirada_proposta_aguarda_modelo": 1}},
     "PRALERGIAPACTMP_TBPRINC": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, "pai_pendente": 1, "restricao_destino_4025": 1}},

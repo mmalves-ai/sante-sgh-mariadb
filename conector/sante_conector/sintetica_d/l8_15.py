@@ -117,8 +117,9 @@ NAO_CARREGADAS = ()  # r5c: PSTPSVIGENCIA passa a carregar na trilha (retrato) a
 # lista: a 1.ª linha da fatia cria o módulo e a definição; as seguintes adotam (adotado_existente, baixa)
 NOVAS = {"TBTPFAVORECIDO": {"gravados": 2, "pendencias": {"adotado_existente": 2}}, "TBTPFORMAREAJ": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
          "TBTPVIGCONTRATO": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
-         # r5c: valores da taxa por vigência guardados na trilha com o retrato (a placeholder de 1899 fica com a data sentinela)
-         "PSTPSVIGENCIA": {"gravados": 2, "pendencias": {}}}
+         # r5c: valores da taxa por vigência guardados na trilha com o retrato; a placeholder de 1899 tem o momento pela
+         # evidência (ADR 0007, 16: data mais antiga da tabela, nunca a da carga), com vigencia_sem_fonte (baixa)
+         "PSTPSVIGENCIA": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1}}}
 # complemento do beneficiário 101 (mãe igual: adotado sem mudança nas colunas que PSBENEFI concilia); 999 sem
 # beneficiário (pai_inexistente em cada referência; recusado). Preencher pela mescla uma coluna que PSBENEFI também
 # concilia muda a soma de controle dele (pedido 14 em saida/L8-15.json: a conciliação descontar o que a mescla preencheu)
@@ -279,9 +280,11 @@ BENEFICIARIOS = [
 # inválido do dependente: valor_fora_do_dominio e nenhuma linha; o outro dependente tem STATUS 'C' sem par (suspenso
 # com valor_fora_do_dominio) e declaração de óbito (pessoa falecida);
 # recusados: dependente sem parentesco na origem (pai_inexistente + 1048 na descrição do grau) e a placeholder
-# (pai_inexistente do contrato, 3 datas sentinela: adesão, início e nascimento; 1048 no nome da pessoa)
-ESPERADO_BENEFICIARIO = {"gravados": 4, "pendencias": {AD: 2, "data_sentinela": 3, "pai_inexistente": 2, R1048: 2,
-                                                       "valor_fora_do_dominio": 2}}
+# (pai_inexistente do contrato, 5 datas sentinela: adesão, início e nascimento, mais a adesão no efeito e no momento do
+# movimento de inclusão; 1048 no nome da pessoa). r5c: o e-mail inválido do dependente também vale para a conta do
+# portal (criada pela senha web): valor_fora_do_dominio 3 (e-mail da pessoa, e-mail da conta e STATUS 'C')
+ESPERADO_BENEFICIARIO = {"gravados": 4, "pendencias": {AD: 2, "data_sentinela": 5, "pai_inexistente": 2, R1048: 2,
+                                                       "valor_fora_do_dominio": 3}}
 # venda do titular: proposta gravada pelo plano e contrato do beneficiário (referência encadeada na origem); venda da
 # placeholder (contrato desconhecido: pai_inexistente; sem plano nem data: 1048) e do dependente sem data (1048)
 

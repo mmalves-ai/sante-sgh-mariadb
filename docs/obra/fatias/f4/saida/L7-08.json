@@ -102,7 +102,16 @@
    "trilha": "F2.2 (semente)",
    "prioridade": "alta (ADR 0006/0003: comportamento do estoque)",
    "mudanca": "semente de parametro_definicao com permite_usuario=1 (e permite_estabelecimento=1) para as opções do estoque por usuário que a origem guarda em GEPARAM (cerca de 270 colunas: fonte de recurso padrão, consumo automático, código de barras, validade, emissão de nota etc.; lista em docs/obra/fatias/f4/L7-08.md, seção GEPARAM), com chave estoque.<nome_de_negocio>, tipo pelo tipo da coluna (S/N -> booleano; inteiro; data; texto) e o padrão do produto",
-   "motivo": "a carga em parametro_valor é por desdobrar (uma linha por opção com valor: #item = valor, #rotulo com cod:parametro_definicao.chave, nivel=usuario, usuario_id ref:TBUSERS, vigencia_inicio @vigencia_carga), mas parametro_definicao não pode ser criado pela migração (catálogo do produto) e o nome de negócio de cada opção é decisão da semente. Sem a definição, cada opção sem correspondente deixará pendência codigo_inexistente_destino. Até lá: retrato completo na trilha (aviso)."
+   "motivo": "a carga em parametro_valor é por desdobrar (uma linha por opção com valor: #item = valor, #rotulo com cod:parametro_definicao.chave, nivel=usuario, usuario_id ref:TBUSERS, vigencia_inicio @vigencia_carga), mas parametro_definicao não pode ser criado pela migração (catálogo do produto) e o nome de negócio de cada opção é decisão da semente. Sem a definição, cada opção sem correspondente deixará pendência codigo_inexistente_destino. Até lá: retrato completo na trilha (aviso).",
+   "atendido": "rodada 6 (L7-08): semente db/migracoes/11_SUP/09_chaves.sql (271 definições estoque.*, nível rede, estabelecimento e usuário; marcação S/N em booleano sim/nao) e GEPARAM declarada em parametro_valor do usuário (desdobrar) com retrato na trilha e senha ao cofre"
+  },
+  {
+   "id": "r6_refs_mesmo_pai_no_desdobrar",
+   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar com #item@COL e ref:)",
+   "trilha": "F4 motor",
+   "prioridade": "média (a perda fica visível como pai_inexistente)",
+   "mudanca": "investigar: na sintética, a linha com DUAS colunas #item@ que apontam o MESMO pai (ref:TBCBOPRO, chave 70 existente) deixou 2 itens sem gravar com pai_inexistente; com uma só coluna para esse pai na linha, as duas referências acham o pai",
+   "motivo": "GEPARAM: farmacêutico responsável geral e responsável pela manipulação anterior podem ser o mesmo profissional; hoje a sintética da fatia evita o caso (ana só com um deles) para a conciliação fechar"
   }
  ]
 }

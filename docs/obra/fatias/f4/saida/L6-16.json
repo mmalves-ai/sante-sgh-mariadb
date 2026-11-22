@@ -198,6 +198,13 @@
    ],
    "atendido_parcial": "rodada 4 (DDL): db/migracoes/08_CC/05; falta na fatia: declarar os #retrato prontos; não aplicado: só (1) dados_origem; (2) já existia; (3) é da cobertura",
    "atendido": "rodada 4 (DDL): db/migracoes/08_CC/05; falta na fatia: declarar os #retrato prontos"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (e regerar conector/mapa/tabelas.tsv e as fatias)",
+   "mudanca": "linha nova: CCAGENDA<TAB>CCSALAS<TAB>pedido da fatia L6-16 na rodada 6: referência declarada sem FK na origem (sala reservada da agenda, ref:CCSALAS); o pai carrega depois do filho na ordem atual",
+   "motivo": "desde a regeração da rodada 4 (e45b80e) a ordem é CCAGENDA 832 < CCSALAS 834: toda agenda acha a sala como pai_inexistente, sala_cirurgica_id fica NULL e o CHECK ck_agendamento_cirurgico_sala recusa as agendadas e confirmadas (CCAGENDA grava 0 de 4; CCHISAGE e CCPROEXT caem por pai_pendente). Com a sala antes da agenda (provado reordenando o plano na conferência) a fatia fecha sem erro de conciliação.",
+   "rodada": 6,
+   "atendido": null
   }
  ]
 }

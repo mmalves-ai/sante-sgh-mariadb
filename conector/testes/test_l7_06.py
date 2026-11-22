@@ -74,6 +74,8 @@ class Plano(unittest.TestCase):
         por = {}
         for c in self.decl:
             por.setdefault(c["tabela"], set()).add(c["coluna"])
+            if c["coluna"].startswith("#item@"):  # r6: a coluna lida pelo item do desdobrar (#item@COL) está declarada
+                por[c["tabela"]].add(c["coluna"][6:])
             self.assertTrue(c["motivo"].strip(), (c["tabela"], c["coluna"]))
         for t in NA_IMAGEM:
             self.assertTrue({n for n, _, _ in l7_06.colunas(t)} <= por[t], t)
@@ -240,7 +242,8 @@ class Sintetica(unittest.TestCase):
         for t, e in esp.items():
             pref = ("restricao_destino_", "pai_pendente") + (("pai_inexistente",) if t in COMPLEMENTA else ())
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            if t != "GPPARAMG":  # desdobrado no principal: "gravados" conta os itens (17 de uma linha)
+                self.assertEqual(cont[t], e["gravados"] + recusas, t)
             presumidas = sum(1 for c in mapa.carregar_execucao()["colunas_decl"]
                              if c["tabela"] == t and c["destino"] and c["coluna"].startswith("=~"))
             # valor_presumido: uma por coluna presumida em cada linha que chega à gravação (inclusive a recusada)

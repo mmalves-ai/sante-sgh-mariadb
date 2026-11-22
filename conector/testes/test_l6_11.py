@@ -130,7 +130,10 @@ class FatiaL611(unittest.TestCase):
                       "especialidade_medica_id": "TBESPEC", "alergeno_id": "TBALERGIA",
                       "tipo_documento_clinico_id": "PRTPASSINATURA",
                       "modelo_documento_clinico_id": "PREVOLUCAO",
-                      "entidade_id": "PRFILTROCLASSIF"}  # r5: trilha do filtro do painel  # PRPAREVOLIMG (conferidor r4)
+                      "entidade_id": "PRFILTROCLASSIF",
+                      "classificacao_filtro_painel_id": "PRFILTROCLASSIF",  # r6: vínculo filtro x classificação
+                      "classificacao_despesa_id": "TBCLASSI",
+                      "principio_ativo_cliente_id": "TBPRINC"}  # r6: princípio do hospital (L7-07)  # r5: trilha do filtro do painel  # PRPAREVOLIMG (conferidor r4)
         for (t, d), r in novas.items():
             esperado = {"PRITENSKITMED": "PRKITMED", "PRKITSOLITENS": "PRKITSOL"}.get(t) \
                 if d == "kit_prescricao_id" else por_coluna[d]
@@ -155,11 +158,11 @@ class FatiaL611(unittest.TestCase):
         self.assertIn("ref:GEITENS@codigo", via[("PRITEM_GEITENS", "ID_GEITENS", "item_prescritivel.codigo")])
         self.assertIn("cod:tipo_item_prescricao.codigo",
                       via[("PRITEM_GEITENS", "=~6", "item_prescritivel.tipo_item_prescricao_id")])
-        # princípio ativo oficial: achado pelo código DCB no catálogo do destino, nunca gravado
+        # r6 (ADR 0006): princípio do HOSPITAL (principio_ativo_cliente, L7-07, ligado ao oficial pelo DCB); o
+        # catálogo oficial continua nunca gravado
         for t, d in (("PRITEMNAOPAD_TBPRINC", "item_nao_padronizado_principio"), ("TBALERGIA_TBPRINC",
                                                                                  "alergeno_principio_ativo")):
-            self.assertEqual(via[(t, "ID_TBPRINC", d + ".principio_ativo_id")],
-                             "ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb")
+            self.assertEqual(via[(t, "ID_TBPRINC", d + ".principio_ativo_cliente_id")], "ref:TBPRINC")
         self.assertFalse(any(c["destino"].startswith("principio_ativo.") for c in self.decl if c.get("destino")))
         # versão atual do modelo como destino secundário de PREVOLUCAO; campo, leiaute e opção ligados a ela
         self.assertEqual(via[("PRPADEVOL", "ID_EVOLUCAO", "modelo_campo.modelo_documento_versao_id")],
@@ -237,8 +240,8 @@ class FatiaL611(unittest.TestCase):
         for t, e in esp.items():  # lidas = gravadas + recusadas
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith("restricao_destino_") or k in ("pai_pendente", "codigo_colisao_caixa"))
-            if t == "PRPARAM":  # r5b: desdobrado (gravados = parâmetros): 1 linha recusada + 155 itens da outra
-                self.assertEqual((recusas, len(linhas[t])), (1, 2), t)
+            if t == "PRPARAM":  # r6: desdobrado (gravados = parâmetros): uma linha só (global), nenhuma recusada
+                self.assertEqual((recusas, len(linhas[t])), (0, 1), t)
                 continue
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]), t)
 

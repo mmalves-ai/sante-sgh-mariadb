@@ -138,9 +138,9 @@ CARREGADAS = ("GECAPELAMP", "GEDESCOM", "GEGRUPOMP", "GECAPELAMP_GEGRUPOMP", "GE
               "GEKONCDC", "GECADTER")
 # rodada 5 (ADR 0006): GECADTER e GECOMPRA deixam o descarte e carregam na trilha (retrato completo da linha)
 FORMAS_BLOQUEADAS = {}
-# r5c: GECOMPRA PENDENTE (pedido r5b_historico_compra): na imagem, nada esperado no destino
-# r5c: GECOMPRA PENDENTE (pedido r5b_historico_compra): na imagem, nada esperado no destino
-BLOQUEADAS = tuple(FORMAS_BLOQUEADAS) + ("GECOMPRA",) + ("GECOMPRA",)
+# r6: GECOMPRA carrega em historico_compra_insumo (pedido r5b_historico_compra atendido)
+CARREGADAS = CARREGADAS + ("GECOMPRA",)
+BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
 
 D = decimal.Decimal
 
@@ -405,8 +405,13 @@ def linhas(r, ins):
     for x in [("Terceiro Exemplo Um", datetime.date(1980, 1, 2), 1), ("Terceiro Exemplo Dois", datetime.date(1975, 5, 6), 2)]:
         ins("GECADTER", list(x))
     for x in [(1, datetime.date(2025, 3, 5), 10, 100, 1000, D("2.000"), D("5.0000"), D("10.0000"), "Marca exemplo", None),
-              (2, datetime.date(2025, 3, 6), 11, 101, 1001, D("1.000"), D("3.5000"), D("3.5000"), None, D("4.0000"))]:
+              (2, datetime.date(2025, 3, 6), 11, 101, 1001, D("1.000"), D("3.5000"), D("3.5000"), None, D("4.0000")),
+              (9, datetime.date(2025, 3, 7), 10, 102, 1002, D("1.000"), D("1.0000"), D("1.0000"), None, None)]:
         ins("GECOMPRA", list(x))
+    # r6: insumos 1 e 2 (PAIS_EXTERNOS) gravam; o fornecedor (TBFORNEC, outra fatia) não está na imagem: NULL com
+    # pai_inexistente, a compra fica; insumo 9 nunca visto: pai_inexistente do insumo e do fornecedor (uma por pai)
+    # e o NOT NULL recusa (1048)
+    esp["GECOMPRA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 1}}
     esp["GECADTER"] = {"gravados": 2, "pendencias": {}}
 
     return dict(esp, **{

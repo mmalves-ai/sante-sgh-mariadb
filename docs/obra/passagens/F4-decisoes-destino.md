@@ -2229,3 +2229,16 @@ Decisões pela melhor prática (ADR 0006, itens 3 e 4; sem pedir aprovação):
 Conferência: pai externo (`PAIS_EXTERNOS`) lido na origem não entra na conciliação nem na conta de idempotência da
 fatia que o lê (ele é da fatia dona; o principal dele pode ser o mesmo destino da fatia, ex. `trilha_auditoria` de
 TBCID10 lida pela L6-15).
+
+## L8-03, rodada 6 (TBPACTHM; ADR 0006 e 0007)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| TBPACTHM | **carrega** (deixa de ser BLOQUEADA): `pacote` agrupado por CON,CONTAS,THM (procedimento pela tabela de honorários do convênio, `ref:TBTABTHM(CON>TBCONVEN>THM,THM)`), `pacote_item_incluso` por linha, `pacote_contrato` por convênio; domínio de TIPO decidido pela melhor prática: 1 honorário, 2 diária/taxa, 3 mat/med | ADR 0007 (18): sem evidência, a melhor estimativa; valor fora da decisão fica sem item e é recusado visível, nunca ligado calado. Confirmação por contagem (R6-3) e mat/med no modelo (R6-2) não bloqueiam. |
+
+## L7-08 r6: opções do estoque por usuário (GEPARAM)
+- Destino: parametro_valor no nível usuário, uma linha por opção com valor; catálogo `estoque.*` semeado pelo produto
+  (11_SUP/09). Nomes de negócio por estimativa do rótulo e do contexto (ADR 0007, 18); marcação de uma letra = booleano
+  sim/nao, salvo 5 códigos (lista). Valor fora de S/N: pendência visível e guardado no retrato da trilha (sem perda).
+- Dados de cabeçalho e de contato da ficha (empresa, endereço, compras, responsável técnico) entram como opções texto do
+  usuário (continuidade, ADR 0006); senha de operação ao cofre (ADR 0007, 17).

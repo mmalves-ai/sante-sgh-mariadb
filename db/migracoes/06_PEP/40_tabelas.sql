@@ -30,3 +30,20 @@ ALTER TABLE alergia_paciente
   ADD KEY ix_alergia_paciente_rascunho_autor_usuario (rascunho_autor_usuario_id),
   ADD KEY ix_alergia_paciente_encerrado_profissional (encerrado_por_profissional_id),
   ADD KEY ix_alergia_paciente_situacao (paciente_id, situacao_registro);
+
+-- F4 rodada 6 (L6-11, ADR 0006): critério do filtro do painel por classificação de despesa do item. Cada filtro do
+-- painel pode juntar várias classificações; a mesma classificação pode estar em vários filtros.
+CREATE TABLE classificacao_filtro_painel_despesa (
+  id                             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  classificacao_filtro_painel_id BIGINT UNSIGNED NOT NULL,
+  classificacao_despesa_id       BIGINT UNSIGNED NOT NULL,
+  origem                         VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em                      DATETIME(3) NOT NULL,
+  criado_por                     BIGINT UNSIGNED NULL,
+  alterado_em                    DATETIME(3) NULL,
+  alterado_por                   BIGINT UNSIGNED NULL,
+  versao                         INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_classificacao_filtro_painel_despesa_par (classificacao_filtro_painel_id, classificacao_despesa_id),
+  CONSTRAINT ck_classificacao_filtro_painel_despesa_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_classificacao_filtro_painel_despesa_despesa (classificacao_despesa_id)
+) COMMENT='Classificações de despesa dos itens que entram em cada filtro do painel do profissional';
