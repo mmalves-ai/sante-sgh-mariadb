@@ -18,3 +18,13 @@ teto_M: 9
   - medição antes e depois na cópia real, só com contagens, num cliente próprio sobre um recorte de tabelas grandes;
   - suíte do conector verde;
   - autoconferência das 57 fatias verde.
+
+## Fechamento da 1ª etapa (22/11, 7h40)
+- **Gasto: cerca de 3,5 M** (1 construtor, fechado pela G6 aos 60 de ferramentas).
+- **Resultado:** cerca de 2 vezes mais rápido (recorte real: de 818 para 1.567 linhas por segundo; evolução 2,6 vezes),
+  com resultado idêntico ao do código antigo e a suíte verde (commit 49c6921, branch `velocidade-carga`).
+- **Limite de um processo:** de 5 a 7 mil linhas por segundo. O tempo de cada linha se divide assim:
+  - leitura da origem, cerca de 40 µs;
+  - preparo dos valores, cerca de 120 µs;
+  - hash, cerca de 28 µs.
+- A meta de 10 vezes pede paralelismo: orçamento `paralelismo-carga`.
