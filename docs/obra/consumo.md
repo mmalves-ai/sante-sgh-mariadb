@@ -53,3 +53,28 @@ cada uma com construir, revisão adversarial e correção.
    construtor (regras 20 a 22).
 3. **Três agentes por lote, sempre:** o corretor custa quase tanto quanto o construtor.
 4. **Workflows lançados sem orçamento aprovado.** Daqui em diante, acima de 50 M, só com aprovação do dono.
+
+## 22/11, 13h a 16h30: verificação pedida pelo dono ("gasto expressivo na última hora")
+
+- **Controles técnicos:** funcionaram. A G6 contou todos os subagentes, abaixo de 60 ferramentas; o LIMITE_AGENTES
+  segurou; não houve agente em laço.
+- **Medido por hora, custo aproximado pela tabela do Opus 5.5:**
+
+  | Hora | Orquestrador: tokens lidos | Orquestrador | Subagentes |
+  |---|---|---|---|
+  | 13h | 11,0 M | US$ 4,6 | US$ 1,4 |
+  | 14h | 10,5 M | US$ 2,9 | US$ 12,0 |
+  | 15h | 12,8 M | US$ 3,3 | US$ 4,9 |
+  | 16h, parcial | 7,3 M | US$ 1,7 | US$ 4,4 |
+
+- **Causas, todas de orquestração:**
+  1. Sessão do orquestrador com 1.449 turnos, contra a regra de cerca de 150. Cada turno relê cerca de 250 mil tokens
+     de contexto.
+  2. Três agentes perdidos na queda das 15h, cerca de 5,6 M equivalentes. A queda veio de três medições pesadas
+     rodando juntas.
+  3. Rodada parada e retomada às 16h15, com um corretor descartado (cerca de 1 M equivalente).
+- **Correções:**
+  - passagem e sessão nova ao fechar a rodada `liberacao-prontocardio`;
+  - mínimo de turnos até lá;
+  - trava de execução pesada (`flock`);
+  - não parar rodada no meio para reorganizar.
