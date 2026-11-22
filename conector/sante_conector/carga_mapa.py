@@ -565,12 +565,13 @@ def _truncar(v, precisao):
 
 class CargaMapa(carga.Carga):
     def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=(),
-                 sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False):
+                 sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False, limite_global=None):
         super().__init__(leitor, cr, ctl, eid, imagem_id, progresso)
         # L9: Sincronizar (a origem vence; edição do destino guardada; exclusão lógica com reativação)
         self.sinc = bool(sincronizar)
         self.limite_exclusao = limite_exclusao or sincronizar_mod.LIMITE_EXCLUSAO
         self.confirmar_massa = bool(confirmar_exclusao_em_massa)
+        self.limite_global = sincronizar_mod.LIMITE_GLOBAL if limite_global is None else limite_global
         self._excluidas = {}                # tabela -> chaves com exclusão lógica (conector_origem.excluido_em)
         self._estado = {}                   # (dt, chave em conector_origem) -> sha256 do destino antes da execução
         self._atualizar = None              # linha da origem sendo reaplicada (Sincronizar)
@@ -1595,10 +1596,23 @@ class CargaMapa(carga.Carga):
             return self._cab[(t, g)], False
         ex = self.existente.get(t, {})
         for m in self._grupos[2][g][1]:
-            e = ex.get(m if principal else "%s/%s" % (m, dt)) if m != chave else None
+            # Sincronizar de uma linha já carregada: o cabeçalho dela mesma vale (único membro do grupo)
+            proprio = getattr(self, "_atualizar", None) is not None
+            e = ex.get(m if principal else "%s/%s" % (m, dt)) if m != chave or proprio else None
             if e and e[0] is not None:
                 return e[0], True
         return None, False
+
+    def _linha_nova(self, tab, chave, entidade, h, fazer):
+        """Como na carga própria, e também desfaz os contadores do Sincronizar da linha recusada por restrição (o
+        resumo só conta atualização e conflito que ficaram no banco)."""
+        r = self.sinc_res
+        marca = ({k: x for k, x in r.items() if isinstance(x, int)}, len(r["conflitos_itens"]))
+        ids = super()._linha_nova(tab, chave, entidade, h, fazer)
+        if ids is None:
+            r.update(marca[0])
+            del r["conflitos_itens"][marca[1]:]
+        return ids
 
     def _gravar_ou_adotar(self, dt, v, adotar, complementa=False, maior=()):
         """(id, adotado): com `adotar`, a linha do destino que já tem as mesmas colunas (uma só) é adotada; com
@@ -1984,7 +1998,12 @@ class CargaMapa(carga.Carga):
                             alvo = sincronizar_mod.alvo(self, t, kx, dt, op) if self._atualizar is not None else None
                             if alvo:  # Sincronizar: a origem vence (UPDATE do mesmo id); edição do destino guardada
                                 sincronizar_mod.conflito(self, t, kx, dt, alvo, nomes, v)
-                                rid, adotado = sincronizar_mod.atualizar(self, dt, alvo, v), False
+                                rid, adotado = sincronizar_mod.atualizar(
+                                    self, dt, alvo, v, [str(x) for x in cs if isinstance(x, _PADRAO)]), False
+                            elif op.get("complementa") and self._atualizar is not None and v.get("id") is not None:
+                                # complementa no Sincronizar: a edição do destino nessas colunas vai ao conflito
+                                sincronizar_mod.conflito(self, t, kx, dt, v["id"], nomes, v)
+                                rid, adotado = sincronizar_mod.atualizar(self, dt, v["id"], v), False
                             else:
                                 rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
                         for c in p["colunas"][dt]:  # filho -> pai de código derivado (ADR 0007, 19)
@@ -2004,7 +2023,16 @@ class CargaMapa(carga.Carga):
                                 ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0]) if nomes else []
                             if anterior and any(not isinstance(a, _PADRAO) and n not in maiores and canon(a) != canon(b)
                                                 for n, a, b in zip(nomes, cs, lido)):
-                                self._pendencia(t, chave, "grupo_divergente_aguarda_sincronizar", "media")
+                                if self.sinc:  # a origem vence: agregados recalculados de todas as linhas lidas do grupo
+                                    sincronizar_mod.atualizar(self, dt, rid, {
+                                        n: x for n, x in v.items() if n not in maiores and n != "id"},
+                                        [str(x) for x in cs if isinstance(x, _PADRAO)])
+                                    self.sinc_res["cabecalhos_recalculados"] = self.sinc_res.get(
+                                        "cabecalhos_recalculados", 0) + 1
+                                    lido = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
+                                        ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0])
+                                else:
+                                    self._pendencia(t, chave, "grupo_divergente_aguarda_sincronizar", "media")
                             cs = lido
                         elif adotado:  # nada é sobrescrito: o resumo é o que está no destino
                             self._pendencia(t, chave, "adotado_existente", "baixa")

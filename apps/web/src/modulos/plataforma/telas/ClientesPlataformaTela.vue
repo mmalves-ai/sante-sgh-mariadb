@@ -127,12 +127,12 @@ async function vincular(arquivo: string): Promise<void> {
   }
 }
 
-async function executar(tipo: 'importar' | 'sincronizar'): Promise<void> {
+async function executar(tipo: 'importar' | 'sincronizar', confirmarExclusaoEmMassa = false): Promise<void> {
   const c = cliente.value;
   if (!c) return;
   ocupado.value = true;
   try {
-    const { execucao: id } = await pedirExecucao(c.codigo, tipo);
+    const { execucao: id } = await pedirExecucao(c.codigo, tipo, confirmarExclusaoEmMassa);
     erro.value = null;
     await acompanhar(c.codigo, id);
     await carregar();
@@ -314,11 +314,27 @@ onBeforeUnmount(parar);
             variante="alerta"
             :texto="t('onboarding.sincronizar.massa', { ...a, entidade: rotuloEntidade(a.entidade) })"
           />
-          <table
-            v-if="execucao.sincronizar.conflitosItens.length"
-            class="tabela"
-            data-testid="onb-conflitos"
-          >
+          <SanteBotao
+            v-if="execucao.sincronizar.alertasExclusaoEmMassa.length"
+            variante="secundario"
+            :rotulo="t('onboarding.sincronizar.confirmarMassa')"
+            :desabilitado="ocupado || !cliente.origem || execucaoAtiva(execucao)"
+            :confirmacao="
+              t('onboarding.sincronizar.confirmaMassa', {
+                apagadas: execucao.sincronizar.alertasExclusaoEmMassa.reduce((n, a) => n + a.apagadas, 0),
+                codigo: cliente.codigo,
+              })
+            "
+            data-testid="onb-confirmar-massa"
+            @acionar="executar('sincronizar', true)"
+          />
+          <SanteAlerta
+            v-if="execucao.sincronizar.exclusoesSemSuporte"
+            variante="alerta"
+            :texto="t('onboarding.sincronizar.semSuporte', { n: execucao.sincronizar.exclusoesSemSuporte })"
+            data-testid="onb-sem-suporte"
+          />
+          <table v-if="execucao.sincronizar.conflitosItens.length" class="tabela" data-testid="onb-conflitos">
             <caption>
               {{
                 t('onboarding.sincronizar.conflitos')

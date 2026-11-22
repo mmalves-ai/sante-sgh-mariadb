@@ -50,7 +50,11 @@ export const esquemaVincularOrigemEntrada = z
   .strict();
 export type VincularOrigemEntrada = z.infer<typeof esquemaVincularOrigemEntrada>;
 
-export const esquemaPedirExecucaoEntrada = z.object({ tipo: z.enum(TIPOS_EXECUCAO_CONECTOR) }).strict();
+/** `confirmarExclusaoEmMassa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu fica no
+ * evento da fila. */
+export const esquemaPedirExecucaoEntrada = z
+  .object({ tipo: z.enum(TIPOS_EXECUCAO_CONECTOR), confirmarExclusaoEmMassa: z.boolean().optional() })
+  .strict();
 export type PedirExecucaoEntrada = z.infer<typeof esquemaPedirExecucaoEntrada>;
 
 export const esquemaConciliacaoEntidade = z.object({
@@ -94,6 +98,8 @@ export const esquemaExecucaoConector = z.object({
       conflitos: z.number().int(),
       excluidas: z.number().int(),
       reativadas: z.number().int(),
+      /** Linhas apagadas na origem cujo destino não tem exclusão lógica: seguem ativas, com pendência. */
+      exclusoesSemSuporte: z.number().int().optional(),
       alertasExclusaoEmMassa: z.array(
         z.object({ entidade: z.string(), apagadas: z.number().int(), ativas: z.number().int() }),
       ),

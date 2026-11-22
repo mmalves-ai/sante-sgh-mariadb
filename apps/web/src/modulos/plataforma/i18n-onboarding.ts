@@ -68,8 +68,14 @@ export const mensagensOnboarding = {
     resumo:
       '{atualizadas} registros atualizados pela origem, {excluidas} excluídos (exclusão lógica), {reativadas} reativados e {conflitos} conflitos.',
     massa:
-      'Exclusão em massa retida em {entidade}: {apagadas} de {ativas} registros sumiram da origem. Nada foi excluído; confira a origem e sincronize de novo com a confirmação.',
-    conflitos: 'Conflitos: editados no sistema e alterados na origem (a edição ficou guardada no controle do cliente)',
+      'Exclusão em massa retida em {entidade}: {apagadas} de {ativas} registros sumiram da origem. Nada foi excluído; confira a origem e use "Confirmar a exclusão e sincronizar".',
+    confirmarMassa: 'Confirmar a exclusão e sincronizar',
+    confirmaMassa:
+      'Sincronizar {codigo} excluindo (exclusão lógica) os {apagadas} registros que sumiram da origem? A confirmação fica registrada com o seu usuário.',
+    semSuporte:
+      '{n} registros sumiram da origem, mas o destino não tem exclusão lógica: seguem ativos, com a pendência exclusao_sem_suporte_no_destino.',
+    conflitos:
+      'Conflitos: editados no sistema e alterados na origem (a edição ficou guardada no controle do cliente)',
     registro: 'Registro',
     colunas: 'Colunas sobrescritas pela origem',
   },

@@ -2263,3 +2263,38 @@ TBCID10 lida pela L6-15).
   tabela inteira: o atalho de pular blocos iguais sem ler exige hash no servidor de origem (pendente, medido abaixo).
 - Generators (F4.7): todos guardados em `conector_generator` a cada execução; `declarado/sequencias.tsv` liga um
   generator a `sequencia_negocio.tipo`, que só avança (próximo = valor + 1), nunca recua.
+
+## L9 Sincronizar: correções da revisão (2026-11-22)
+- **Linha compartilhada na exclusão lógica:** a exclusão marca o principal e os secundários da linha. O cabeçalho
+  agrupado e a linha adotada só são excluídos quando nenhuma outra linha ativa do controle aponta o mesmo registro do
+  destino. O `complementa` nunca exclui nem reativa a linha do pai. A adotada que já existia antes da migração (coluna
+  `origem` diferente de `migracao`) nunca é excluída nem reativada pelo conector. Prova: `exemplo_l9` (pessoa do
+  profissional usada pelo aluno, título com parcela ativa, vínculo do paciente).
+- **Adotada no Sincronizar:** a linha adotada que a própria migração criou segue a origem (UPDATE do mesmo id, também
+  quando a chave de adoção muda). A que já existia antes segue a mescla não destrutiva (ADR 0007, 20). Sem coluna
+  `origem` no destino, não há como saber: fica a mescla.
+- **`complementa` no Sincronizar:** a edição do destino nas colunas complementadas vai a `conflito_sincronizar` antes
+  da origem vencer, como no principal.
+- **Agrupado no Sincronizar:** a parcela (principal) e os secundários não agrupados são reaplicados. O cabeçalho recebe
+  os agregados (`#grupo_*`) recalculados das linhas lidas do grupo quando divergem (a origem vence; sem a pendência
+  `grupo_divergente_aguarda_sincronizar` no Sincronizar). Parcela que sai do grupo sem outra alteração no grupo não
+  recalcula o cabeçalho nesta execução: fica para a próxima linha alterada do grupo.
+- **Destino sem `excluido_em`:** a linha apagada na origem fica ATIVA no destino e no controle, com a pendência média
+  `exclusao_sem_suporte_no_destino` a cada execução (e a `apagada_aguarda_sincronizar` na conciliação). Contagem
+  `exclusoes_sem_suporte` no resumo, no contrato e no painel. Exigir `excluido_em` nas tabelas carregadas é pedido à
+  trilha do modelo (F2.2), não trava do conector (regra 23: nada bloqueado).
+- **Exclusão em massa:** alerta quando a fração passa de 10% das ativas COM ao menos 5 linhas (antes: mais de 50; uma
+  tabela pequena esvaziada passava em silêncio) e quando a soma das exclusões abaixo do limite passa de 1.000 linhas
+  na execução (`alerta_exclusao_global`). A confirmação vai do painel ("Confirmar a exclusão e sincronizar", com o
+  total de linhas) ao pedido (`confirmarExclusaoEmMassa`), à coluna `conector_execucao.confirmar_exclusao_em_massa`
+  (db/plataforma/0004) e ao motor. Quem confirmou fica em `solicitado_por` e no evento da fila (`confirmado_por`).
+- **Coluna NOT NULL com padrão que a origem esvazia:** na reaplicação volta ao padrão do destino (`col`=DEFAULT(col)),
+  como no INSERT.
+- **Restrição ao reaplicar:** a recusa desfaz também os contadores do Sincronizar da linha (atualizadas, conflitos e a
+  lista de conflitos); o conflito gravado é desfeito pelo mesmo SAVEPOINT.
+- **Sequências:** a numeração de negócio do mapa real vem das tabelas de contador da origem (`#item` de REPARAM e
+  RIPARAM em `sequencia_negocio.proximo_valor`, `sequencial_guia`, `sequencia_documento_estoque`), já carregadas.
+  `declarado/sequencias.tsv` fica para generator que alimente número de negócio SEM tabela de contador: a lista sai do
+  dicionário de generators da imagem real (metadado, `conector_generator` já guarda todos a cada execução) e é
+  declarada quando o conferidor apontar um. O ajuste avança TODA sequência do tipo (global, por estabelecimento ou por
+  prefixo), nunca recua; generator ilegível deixa a pendência `generators_ilegiveis_<erro>` (antes: silêncio).

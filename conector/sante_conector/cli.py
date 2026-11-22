@@ -15,7 +15,7 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
                                           vezes (sintetica_d/<fatia>.py; banco descartável cliente_cf<fatia>)
 Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
-  enfileirar <codigo> importar|sincronizar   põe na fila (erro 409 se já há execução ativa do cliente)
+  enfileirar <codigo> importar|sincronizar [--confirmar-exclusao-em-massa]   põe na fila (409 se já há execução ativa)
   cancelar <id>                           cancela execução ainda na fila
   execucao <id>                           estado, etapa, % e contadores
   fila [--limite N]                       últimas execuções
@@ -62,6 +62,7 @@ def main(argv=None):
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
     p.add_argument("--admin", type=int)
     p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
+    p.add_argument("--confirmar-exclusao-em-massa", action="store_true")
     p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
@@ -90,7 +91,9 @@ def main(argv=None):
                     _json({"erro": 400, "motivo": str(e)}); return 3
             if a.cmd == "enfileirar":
                 try:
-                    return _json({"execucao_id": plataforma.enfileirar(conn, a.codigo, a.tipo)})
+                    eid = plataforma.enfileirar(conn, a.codigo, a.tipo,
+                                                confirmar_exclusao_em_massa=a.confirmar_exclusao_em_massa)
+                    return _json({"execucao_id": eid})
                 except plataforma.ExecucaoAtiva as e:
                     _json({"erro": 409, "motivo": str(e)}); return 3
             if a.cmd == "cancelar":

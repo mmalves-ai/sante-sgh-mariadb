@@ -9,8 +9,14 @@ Plano F4, seções 6 e 6.1 (dono, 2026-11-21). Chamado pela `carga_mapa.CargaMap
 - conflito: a linha mudou na origem E foi editada no destino depois da última execução (resumo do destino diferente
   do gravado). A origem vence e a edição fica GUARDADA em `conflito_sincronizar` (valores antes e depois, só na base de
   controle do cliente), com a pendência `conflito_origem_venceu`; o painel lista os conflitos (sem valores no resumo);
-- alerta de exclusão em massa: apagadas acima do limite (fração das ativas e mínimo absoluto) NÃO são excluídas; ficam
-  com a pendência crítica `exclusao_em_massa_aguarda_confirmacao` até o Sincronizar confirmado;
+- alerta de exclusão em massa: apagadas acima do limite (fração das ativas E ao menos 5 linhas, também em tabela
+  pequena) ou, somadas as tabelas, acima do limite global da execução NÃO são excluídas; ficam com a pendência crítica
+  `exclusao_em_massa_aguarda_confirmacao` até o Sincronizar confirmado pelo painel (pedido com a confirmação);
+- linha COMPARTILHADA (cabeçalho agrupado, adotada, `complementa` que aponta a linha do pai): só é excluída quando
+  nenhuma outra linha ativa do controle aponta o mesmo registro do destino; o `complementa` nunca exclui a linha do pai;
+  a adotada que já existia antes da migração nunca é excluída nem reativada pelo conector;
+- destino sem `excluido_em`: a linha fica ATIVA e a pendência `exclusao_sem_suporte_no_destino` (média) fica visível a
+  cada execução (o controle não é marcado como excluído);
 - generators (F4.7): o valor de todos é guardado em `conector_generator` a cada execução; os declarados em
   `declarado/sequencias.tsv` (generator -> `sequencia_negocio.tipo`) avançam a sequência própria (nunca recua).
 Nunca grava valor de linha em log nem no resumo: só contagens, nomes de colunas e chaves originais.
@@ -21,22 +27,32 @@ import json
 from .carga import AGORA
 from .leitor import hash_bloco
 
-# (fração das linhas ativas da tabela, mínimo absoluto): acima dos dois, a exclusão espera confirmação
-LIMITE_EXCLUSAO = (0.10, 50)
+# (fração das linhas ativas da tabela, mínimo de linhas): acima da fração E com ao menos o mínimo, a exclusão espera
+# confirmação (uma tabela pequena esvaziada também alerta: 5 de 5, 25 de 50)
+LIMITE_EXCLUSAO = (0.10, 5)
+# soma das exclusões das tabelas abaixo do limite, por execução: acima dela, tudo espera confirmação
+LIMITE_GLOBAL = 1000
 MAX_ITENS_RESUMO = 200
 
 
 def em_massa(apagar, ativas, limite=LIMITE_EXCLUSAO, confirmado=False):
     """True quando a exclusão de `apagar` linhas de `ativas` precisa de confirmação."""
     frac, minimo = limite
-    return not confirmado and apagar > minimo and apagar > frac * max(ativas, 1)
+    return not confirmado and apagar > 0 and apagar >= minimo and apagar > frac * max(ativas, 1)
 
 
 def suporta(cm, p):
-    """O Sincronizar reaplica a linha alterada em toda estrutura, salvo o cabeçalho AGRUPADO (uma linha do destino
-    resume várias da origem): essa fica com `alteracao_aguarda_sincronizar` (visível)."""
-    ops = p.get("opcoes") or {}
-    return not any((ops.get(dt) or {}).get("agrupar") for dt in p["destinos"])
+    """O Sincronizar reaplica a linha alterada em toda estrutura: principal e secundários pelo mesmo id; o cabeçalho
+    AGRUPADO recebe os agregados recalculados do grupo (todas as linhas lidas nesta execução) quando divergem."""
+    return True
+
+
+def criado_pelo_conector(cm, dt, rid):
+    """A linha do destino foi criada pela migração (coluna `origem` = 'migracao'); sem a coluna: não se sabe (False)."""
+    if "origem" not in cm._info(dt):
+        return False
+    r = cm._todas("SELECT origem FROM `%s` WHERE id=%%s" % dt, (rid,))
+    return bool(r) and r[0][0] == "migracao"
 
 
 def _chave_ctl(k, base, dt, principal, desd):
@@ -58,11 +74,16 @@ def estado_destino(cm, p, ents):
 
 
 def alvo(cm, t, kx, dt, op):
-    """Id do destino a reaplicar; None = gravar como hoje (adoção e complemento seguem a mescla não destrutiva)."""
-    if op.get("adotar") or op.get("complementa") or op.get("agrupar"):
+    """Id do destino a reaplicar; None = gravar como hoje. A linha ADOTADA que a própria migração criou segue a origem
+    (UPDATE do mesmo id, também quando a chave de adoção muda); a que já existia antes da migração fica na mescla não
+    destrutiva. `complementa` e cabeçalho agrupado têm caminho próprio."""
+    if op.get("complementa") or op.get("agrupar"):
         return None
     ex = cm.existente.get(t, {}).get(kx)
-    return ex[0] if ex and ex[0] is not None else None
+    rid = ex[0] if ex and ex[0] is not None else None
+    if rid is not None and op.get("adotar") and not criado_pelo_conector(cm, dt, rid):
+        return None
+    return rid
 
 
 def _legivel(v):
@@ -102,11 +123,12 @@ def conflito(cm, t, kx, dt, rid, nomes, v):
     return True
 
 
-def atualizar(cm, dt, rid, v):
-    """A origem vence: UPDATE do mesmo id com as colunas declaradas; `alterado_em` e `versao` contam a reaplicação."""
+def atualizar(cm, dt, rid, v, padrao=()):
+    """A origem vence: UPDATE do mesmo id com as colunas declaradas; `alterado_em` e `versao` contam a reaplicação.
+    Coluna NOT NULL com padrão que ficou sem valor na origem (`padrao`) volta ao padrão do destino, como no INSERT."""
     info = cm._info(dt)
     cols = [c for c in v if c not in ("id", "origem", "criado_em")]
-    sets = ["`%s`=%%s" % c for c in cols]
+    sets = ["`%s`=%%s" % c for c in cols] + ["`%s`=DEFAULT(`%s`)" % (c, c) for c in padrao if c not in v]
     if "alterado_em" in info:
         sets.append("`alterado_em`=%s" % AGORA)
     if "versao" in info:
@@ -125,25 +147,55 @@ def _destinos_da_tabela(cm, tab):
     return {}
 
 
+def _plano(cm, tab):
+    return next((p for p in cm.plano if p["tabela"] == tab), None)
+
+
+def _dt_da_entidade(ent):
+    return ent.split("#", 1)[0]
+
+
+def _compartilhada(cm, dt, rid, cids):
+    """Outra linha ATIVA do controle (de qualquer tabela da origem, fora `cids`) aponta o mesmo registro do destino."""
+    marca = ",".join(str(int(x)) for x in cids) or "0"
+    return cm._todas("SELECT COUNT(*) FROM %s.conector_origem WHERE id_destino=%%s AND excluido_em IS NULL AND"
+                     " (entidade_destino=%%s OR entidade_destino LIKE %%s) AND id NOT IN (%s)" % (cm.ctl, marca),
+                     (rid, dt, dt.replace("_", "\\_") + "#%"))[0][0] > 0
+
+
 def _marcar(cm, tab, chave, excluir):
-    """Exclusão lógica (excluir=True) ou reativação da linha e das secundárias dela, no destino e no controle."""
+    """Exclusão lógica (excluir=True) ou reativação da linha e das secundárias dela, no destino e no controle.
+    Devolve (marcadas no destino, sem suporte no destino). Linha compartilhada, `complementa` (linha do pai) e adotada
+    que já existia antes da migração não são tocadas no destino; destino sem `excluido_em`: o controle NÃO é marcado."""
     por_ent = _destinos_da_tabela(cm, tab)
+    ops = (_plano(cm, tab) or {}).get("opcoes") or {}
     like = chave.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%"
     rs = cm._todas("SELECT id, entidade_destino, id_destino FROM %s.conector_origem WHERE tabela_origem=%%s AND"
                    " (chave_original=%%s OR chave_original LIKE %%s) AND id_destino IS NOT NULL" % cm.ctl,
                    (tab, chave, like))
-    sem_coluna = 0
+    cids = [r[0] for r in rs]
+    marcadas = sem_suporte = 0
     with cm._c() as c:
         for cid, ent, rid in rs:
-            dt = por_ent.get(ent)
-            if dt and "excluido_em" in cm._info(dt):
+            dt = por_ent.get(ent) or _dt_da_entidade(ent)
+            op = ops.get(dt) or {}
+            if "excluido_em" not in cm._info(dt):
+                sem_suporte += 1
+                continue  # a linha fica ativa no destino e no controle: pendência visível a cada execução
+            tocar = not op.get("complementa")
+            if tocar and op.get("adotar") and not criado_pelo_conector(cm, dt, rid):
+                tocar = False
+            # agrupado e adotado são compartilhados por natureza (a linha `complementa` de um filho nunca prende o pai)
+            if tocar and excluir and (op.get("agrupar") or op.get("adotar")) and _compartilhada(cm, dt, rid, cids):
+                tocar = False
+                cm.sinc_res["mantidas_compartilhadas"] = cm.sinc_res.get("mantidas_compartilhadas", 0) + 1
+            if tocar:
                 c.execute("UPDATE `%s` SET excluido_em=%s WHERE id=%%s" % (dt, AGORA if excluir else "NULL")
                           + (" AND excluido_em IS NULL" if excluir else ""), (rid,))
-            else:
-                sem_coluna += 1
+                marcadas += 1
             c.execute("UPDATE %s.conector_origem SET excluido_em=%s, alterado_em=%s, versao=versao+1 WHERE id=%%s"
                       % (cm.ctl, AGORA if excluir else "NULL", AGORA), (cid,))
-    return sem_coluna
+    return marcadas, sem_suporte
 
 
 def reativar(cm, tab, chave):
@@ -164,28 +216,45 @@ def _e_base(k, destinos):
 
 
 def excluir_apagadas(cm):
-    """Linha que estava ativa e sumiu da origem: exclusão lógica, salvo exclusão em massa (alerta, espera)."""
+    """Linha que estava ativa e sumiu da origem: exclusão lógica, salvo exclusão em massa (por tabela ou somada na
+    execução: alerta crítico, espera a confirmação) e destino sem `excluido_em` (pendência visível)."""
+    plano = []
     for p in cm.plano:
         t, vistas = p["tabela"], cm.vistas.get(p["tabela"], set())
         excl = cm._excluidas.setdefault(t, set())
         ativas = [k for k, a in cm.existente.get(t, {}).items()
                   if a[0] is not None and k not in excl and _e_base(k, p["destinos"])]
         apagar = [k for k in ativas if k not in vistas]
-        if not apagar:
-            continue
+        if apagar:
+            plano.append((p, t, ativas, apagar))
+
+    def alertar(t, ent, apagadas, ativas):
+        cm._pendencia(t, None, "exclusao_em_massa_aguarda_confirmacao", "critica")
+        cm.sinc_res["alertas_exclusao_em_massa"].append({"tabela_origem": t, "entidade": ent, "apagadas": apagadas,
+                                                         "ativas": ativas})
+    abaixo = []
+    for p, t, ativas, apagar in plano:
         if em_massa(len(apagar), len(ativas), cm.limite_exclusao, cm.confirmar_massa):
-            cm._pendencia(t, None, "exclusao_em_massa_aguarda_confirmacao", "critica")
-            cm.sinc_res["alertas_exclusao_em_massa"].append({"tabela_origem": t, "entidade": cm._nome_ent(t, p["destinos"][0]),
-                                                             "apagadas": len(apagar),
-                                                             "ativas": len(ativas)})
-            continue
-        sem = 0
+            alertar(t, cm._nome_ent(t, p["destinos"][0]), len(apagar), len(ativas))
+        else:
+            abaixo.append((p, t, ativas, apagar))
+    total = sum(len(x[3]) for x in abaixo)
+    if not cm.confirmar_massa and total > cm.limite_global:  # muitas tabelas pequenas somam uma exclusão grande
+        for p, t, ativas, apagar in abaixo:
+            alertar(t, cm._nome_ent(t, p["destinos"][0]), len(apagar), len(ativas))
+        cm.sinc_res["alerta_exclusao_global"] = {"apagadas": total, "limite": cm.limite_global}
+        abaixo = []
+    r = cm.sinc_res
+    for p, t, ativas, apagar in abaixo:
+        excl = cm._excluidas[t]
         for k in apagar:
-            sem += _marcar(cm, t, k, True)
-            excl.add(k)
-        cm.sinc_res["excluidas"] += len(apagar)
-        if sem:
-            cm.sinc_res["excluidas_sem_coluna"] = cm.sinc_res.get("excluidas_sem_coluna", 0) + sem
+            marcadas, sem = _marcar(cm, t, k, True)
+            if sem:
+                cm._pendencia(t, k, "exclusao_sem_suporte_no_destino", "media")
+                r["exclusoes_sem_suporte"] = r.get("exclusoes_sem_suporte", 0) + 1
+            if not sem:
+                excl.add(k)
+                r["excluidas"] += 1
     cm._commit()
 
 
@@ -215,7 +284,9 @@ def sequencias(cm):
     """F4.7: guarda o valor de todos os generators; avança a sequência própria declarada (nunca recua)."""
     try:
         gens = cm.lt.generators()
-    except Exception:  # noqa: BLE001 (leitor sem dicionário de generators: nada a ajustar)
+    except Exception as e:  # noqa: BLE001 (leitor sem dicionário de generators: visível, nunca silencioso)
+        cm._pendencia("*", None, "generators_ilegiveis_%s" % type(e).__name__.lower()[:30], "media")
+        cm._commit()
         return
     with cm._c() as c:
         for nome, valor in gens.items():
@@ -234,18 +305,18 @@ def sequencias(cm):
             cm._pendencia(g, None, "sequencia_sem_generator" if tem else "sequencia_sem_tabela", "media")
             continue
         prox = int(gens[g] or 0) + 1
-        rs = cm._todas("SELECT id FROM sequencia_negocio WHERE tipo=%s AND estabelecimento_id IS NULL AND"
-                       " prefixo IS NULL", (tipo,))
+        # o generator da origem é único para o hospital: TODA sequência do tipo (global, por estabelecimento ou por
+        # prefixo) avança até o próximo número (nunca recua); sem nenhuma, nasce a global
+        rs = cm._todas("SELECT id FROM sequencia_negocio WHERE tipo=%s", (tipo,))
         with cm._c() as c:
             if rs:
                 c.execute("UPDATE sequencia_negocio SET proximo_valor=%%s, alterado_em=%s, versao=versao+1 WHERE"
-                          " id=%%s AND proximo_valor < %%s" % AGORA, (prox, rs[0][0], prox))
+                          " tipo=%%s AND proximo_valor < %%s" % AGORA, (prox, tipo, prox))
             else:
                 c.execute("INSERT INTO sequencia_negocio (tipo, proximo_valor, criado_em) VALUES (%%s,%%s,%s)"
                           % AGORA, (tipo, prox))
         cm.sinc_res["sequencias"][tipo] = cm._todas(
-            "SELECT proximo_valor FROM sequencia_negocio WHERE tipo=%s AND estabelecimento_id IS NULL AND"
-            " prefixo IS NULL", (tipo,))[0][0]
+            "SELECT MIN(proximo_valor) FROM sequencia_negocio WHERE tipo=%s", (tipo,))[0][0]
     cm._commit()
 
 

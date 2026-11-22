@@ -43,8 +43,17 @@ export const criarCliente = (codigo: string, nome: string): Promise<ClienteCriad
   pedir('POST', `${B}/clientes`, esquemaClienteCriado, { codigo, nome });
 export const vincularOrigem = (codigo: string, arquivo: string): Promise<OrigemVinculada> =>
   pedir('PUT', `${B}/clientes/${encodeURIComponent(codigo)}/origem`, esquemaOrigemVinculada, { arquivo });
-export const pedirExecucao = (codigo: string, tipo: 'importar' | 'sincronizar'): Promise<ExecucaoPedida> =>
-  pedir('POST', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes`, esquemaExecucaoPedida, { tipo });
+export const pedirExecucao = (
+  codigo: string,
+  tipo: 'importar' | 'sincronizar',
+  confirmarExclusaoEmMassa = false,
+): Promise<ExecucaoPedida> =>
+  pedir(
+    'POST',
+    `${B}/clientes/${encodeURIComponent(codigo)}/execucoes`,
+    esquemaExecucaoPedida,
+    confirmarExclusaoEmMassa ? { tipo, confirmarExclusaoEmMassa: true } : { tipo },
+  );
 export const listarExecucoes = (codigo: string): Promise<ListaExecucoes> =>
   pedir('GET', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes`, esquemaListaExecucoes);
 export const lerExecucao = (codigo: string, id: number): Promise<ExecucaoConector> =>

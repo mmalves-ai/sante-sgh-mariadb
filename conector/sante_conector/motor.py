@@ -141,7 +141,9 @@ def executar(trab, eid):
                         if plano:
                             rm = carga_mapa.CargaMapa(lt, cc, ctl, eid, iid, mapa_exec, prog_mapa,
                                                       entidades_usadas=set(resumo["entidades"]),
-                                                      sincronizar=ex["tipo"] == "sincronizar").executar(
+                                                      sincronizar=ex["tipo"] == "sincronizar",
+                                                      confirmar_exclusao_em_massa=bool(
+                                                          ex.get("confirmar_exclusao_em_massa"))).executar(
                                 set(tabelas), contagens)
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]

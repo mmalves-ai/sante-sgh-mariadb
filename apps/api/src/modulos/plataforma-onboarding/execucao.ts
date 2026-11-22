@@ -17,6 +17,7 @@ function sincronizarDe(bruto: unknown): ExecucaoConector['sincronizar'] {
     conflitos: num(s['conflitos']),
     excluidas: num(s['excluidas']),
     reativadas: num(s['reativadas']),
+    exclusoesSemSuporte: num(s['exclusoes_sem_suporte']),
     // lista branca: a entidade de destino, nunca a tabela da origem
     alertasExclusaoEmMassa: lista(s['alertas_exclusao_em_massa']).map((a) => ({
       entidade: String(a['entidade'] ?? ''),

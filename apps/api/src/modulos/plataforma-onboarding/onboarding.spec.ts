@@ -17,11 +17,12 @@ function montar() {
   const chamadas: string[] = [];
   const repo: RepositorioOnboarding = {
     listarClientes: async () => [] as ClienteOnboarding[],
-    historico: async (c) => (c === 'exemplo' ? [execucaoDaLinha({ id: 1, tipo: 'sincronizar', estado: 'concluida' })] : []),
+    historico: async (c) =>
+      c === 'exemplo' ? [execucaoDaLinha({ id: 1, tipo: 'sincronizar', estado: 'concluida' })] : [],
     execucao: async (_c, id) =>
       id === 1 ? execucaoDaLinha({ id: 1, tipo: 'importar', estado: 'fila' }) : null,
-    enfileirar: async (c, t, a) => {
-      chamadas.push(`enfileirar ${c} ${t} ${a}`);
+    enfileirar: async (c, t, a, confirmar) => {
+      chamadas.push(`enfileirar ${c} ${t} ${a}${confirmar ? ' confirmada' : ''}`);
       if (c === 'ocupado') throw new ErroOnboarding('conflito', 'Já há uma execução.');
       return 9;
     },
@@ -98,9 +99,19 @@ describe('painel de onboarding: portão do administrador da plataforma', () => {
       expect(await problema(c.vincular(PLAT, 'ok', { arquivo }))).toBe(400);
     expect(await problema(c.pedir(PLAT, 'ok', { tipo: 'apagar' }))).toBe(400);
     expect(await problema(c.pedir(PLAT, 'ocupado', { tipo: 'sincronizar' }))).toBe(409);
+    // a confirmação da exclusão em massa só vale para o Sincronizar e chega ao repositório (quem confirmou: o admin)
+    expect(await problema(c.pedir(PLAT, 'ok', { tipo: 'importar', confirmarExclusaoEmMassa: true }))).toBe(
+      400,
+    );
+    expect(
+      await problema(c.pedir(PLAT, 'ok', { tipo: 'sincronizar', confirmarExclusaoEmMassa: 'sim' })),
+    ).toBe(400);
+    expect(await c.pedir(PLAT, 'ok', { tipo: 'sincronizar', confirmarExclusaoEmMassa: true })).toEqual({
+      execucao: 9,
+    });
     expect(await problema(c.execucao(PLAT, 'ok', '2'))).toBe(404);
     expect(await problema(c.execucao(PLAT, 'ok', 'x'))).toBe(400);
-    expect(chamadas).toEqual(['enfileirar ocupado sincronizar 7']);
+    expect(chamadas).toEqual(['enfileirar ocupado sincronizar 7', 'enfileirar ok sincronizar 7 confirmada']);
   });
 });
 

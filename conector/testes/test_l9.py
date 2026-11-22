@@ -17,15 +17,16 @@ CODIGO = "f4r6_l9"
 class Regras(unittest.TestCase):
     def test_exclusao_em_massa(self):
         self.assertFalse(sincronizar.em_massa(3, 6000))
-        self.assertFalse(sincronizar.em_massa(50, 100))          # no mínimo absoluto: exclui
-        self.assertTrue(sincronizar.em_massa(51, 100))
+        self.assertTrue(sincronizar.em_massa(50, 100))           # metade de uma tabela pequena: alerta
+        self.assertTrue(sincronizar.em_massa(5, 5))              # tabela pequena esvaziada: alerta
+        self.assertFalse(sincronizar.em_massa(4, 10))            # abaixo do mínimo de linhas
         self.assertFalse(sincronizar.em_massa(51, 1000))         # abaixo da fração
         self.assertFalse(sincronizar.em_massa(900, 1000, confirmado=True))
         self.assertTrue(sincronizar.em_massa(1, 10, limite=(0.0, 0)))
 
     def test_suporta_e_chave(self):
         p = {"destinos": ["a", "b"], "opcoes": {"b": {"agrupar": ["X"]}}}
-        self.assertFalse(sincronizar.suporta(None, p))
+        self.assertTrue(sincronizar.suporta(None, p))            # o agrupado também é reaplicado
         self.assertTrue(sincronizar.suporta(None, {"destinos": ["a"], "opcoes": {}}))
         self.assertEqual(sincronizar._chave_ctl("7", "7", "a", True, False), "7")
         self.assertEqual(sincronizar._chave_ctl("7", "7", "b", False, False), "7/b")
@@ -79,7 +80,8 @@ class SincronizarF4r6L9(unittest.TestCase):
                 finally:
                     cc.close()
             ruins = [k for k, r in res["entidades"].items() if not r["conferido"]]
-            self.assertEqual(ruins, [], "execução %d: conciliação divergiu" % eid)
+            self.assertEqual(ruins, [], "execução %d: conciliação divergiu: %r" % (
+                eid, {k: res["entidades"][k] for k in ruins}))
             regras = {}
             for _, _, regra, _ in cm.pend:
                 regras[regra] = regras.get(regra, 0) + 1
@@ -102,7 +104,8 @@ class SincronizarF4r6L9(unittest.TestCase):
             root.select_db(cliente)
             banco.aplicar_script(root, ex.DDL_DESTINO)
             # 1) importação da versão 1
-            _, r1, _ = rodar(1, 1, False)
+            _, r1, reg1 = rodar(1, 1, False)
+            self.assertEqual(reg1.get("adotado_existente"), 1, reg1)      # o aluno 1 adota a pessoa do profissional 1
             self.assertEqual((r1["entidades"]["ex9_paciente"]["registros_destino"],
                               r1["entidades"]["ex9_consulta"]["registros_destino"]), (2010, 6000))
             self.assertEqual(r1["sincronizar"]["sequencias"], {"consulta": 24001})
@@ -113,27 +116,59 @@ class SincronizarF4r6L9(unittest.TestCase):
                           " versao=versao+1 WHERE id=%s", (p3,))
                 c.execute("UPDATE ex9_paciente SET telefone='1188888888', alterado_em=UTC_TIMESTAMP(3),"
                           " versao=versao+1 WHERE id=%s", (p4,))
+                c.execute("UPDATE ex9_paciente SET unidade='EDITADA', alterado_em=UTC_TIMESTAMP(3), versao=versao+1"
+                          " WHERE id=%s", (id_de(ex.PAC, "5"),))
+                c.execute("UPDATE ex9_setor SET nome='SETOR EDITADO', alterado_em=UTC_TIMESTAMP(3), versao=versao+1"
+                          " WHERE id=%s", (id_de(ex.SEM, "2"),))
             root.commit()
             # 3) Sincronizar com a versão 2
             cm2, r2, reg2 = rodar(2, 2, True)
             s2 = r2["sincronizar"]
-            self.assertEqual(s2["atualizadas"], 5)                # 3 presenças + 2 pacientes antigos
-            self.assertEqual(s2["conflitos"], 1)
-            self.assertEqual(s2["conflitos_itens"], [{"tabela_origem": ex.PAC, "chave_original": "3",
-                                                      "tabela_destino": "ex9_paciente", "id_destino": p3,
-                                                      "colunas": ["nome"]}])
-            self.assertEqual((s2["excluidas"], s2["reativadas"], s2["alertas_exclusao_em_massa"]), (3, 0, []))
+            # 3 presenças + 2 pacientes antigos + profissional 3 (e a pessoa dele) + parcela 1 (e o título) + vínculo 1
+            # + setor 1; o setor 2 (recusado pela restrição ao reaplicar) não conta, nem o conflito dele
+            self.assertEqual(s2["atualizadas"], 11, s2)
+            self.assertEqual(s2["conflitos"], 2)
+            self.assertEqual(s2["conflitos_itens"], [
+                {"tabela_origem": ex.PAC, "chave_original": "3", "tabela_destino": "ex9_paciente", "id_destino": p3,
+                 "colunas": ["nome"]},
+                {"tabela_origem": ex.VIN, "chave_original": "1", "tabela_destino": "ex9_paciente",
+                 "id_destino": id_de(ex.PAC, "5"), "colunas": ["unidade"]}])
+            # 3 antigas + profissionais 1 e 2 + parcela 2 + vínculo 2; o setor 3 (destino sem excluido_em) fica ativo
+            self.assertEqual((s2["excluidas"], s2["reativadas"], s2["alertas_exclusao_em_massa"]), (7, 0, []))
+            self.assertEqual(s2.get("exclusoes_sem_suporte"), 1)
+            self.assertEqual(s2.get("cabecalhos_recalculados"), 1)
+            self.assertEqual(reg2.get("exclusao_sem_suporte_no_destino"), 1)
+            self.assertEqual(reg2.get("restricao_destino_1062"), 1)
+            # compartilhadas: a pessoa do profissional 1 (o aluno usa) segue ativa; a do 2 foi excluída; o título 100
+            # (a parcela 1 segue) ativo; o paciente 6 (o vínculo 2 sumiu) ativo
+            def pes(tab, k):
+                return um("SELECT excluido_em IS NULL, nome FROM ex9_pessoa WHERE id=%s",
+                          (id_de(tab, k + "/ex9_pessoa"),))[0]
+            self.assertEqual(pes(ex.PROF, "1")[0], 1)
+            self.assertEqual(pes(ex.PROF, "2")[0], 0)
+            self.assertEqual(pes(ex.PROF, "3"), (1, "PROF TRES ALTERADO"))     # a criada pela migração segue a origem
+            self.assertEqual(um("SELECT excluido_em IS NULL, quantidade, valor_total FROM ex9_titulo WHERE id=%s",
+                                (id_de(ex.PAR, "1/ex9_titulo"),))[0], (1, 1, 15))
+            self.assertEqual(um("SELECT valor FROM ex9_parcela WHERE id=%s", (id_de(ex.PAR, "1"),))[0][0], 15)
+            self.assertEqual(um("SELECT excluido_em IS NULL FROM ex9_parcela WHERE id=%s", (id_de(ex.PAR, "2"),))[0][0], 0)
+            self.assertEqual(um("SELECT excluido_em IS NULL, unidade FROM ex9_paciente WHERE id=%s",
+                                (id_de(ex.PAC, "6"),))[0], (1, "U2"))
+            self.assertEqual(um("SELECT unidade FROM ex9_paciente WHERE id=%s", (id_de(ex.PAC, "5"),))[0][0], "U9")
+            self.assertEqual(um("SELECT nome, prioridade FROM ex9_setor ORDER BY id"),
+                             (("SETOR 1", 3), ("SETOR EDITADO", 4), ("SETOR 3", 2)))  # padrão; recusa; ativo
             self.assertEqual(s2["blocos"][ex.CON], {"total": 3, "iguais": 1, "alterados": 2})
             self.assertEqual(s2["sequencias"], {"consulta": 24021})
-            self.assertEqual(reg2.get("conflito_origem_venceu"), 1)
+            self.assertEqual(reg2.get("conflito_origem_venceu"), 2)      # paciente 3 e vínculo 1
             self.assertEqual(reg2.get("edicao_no_destino"), 1)    # paciente 4: só o destino mudou, a edição fica
             self.assertNotIn("alteracao_aguarda_sincronizar", reg2)
-            self.assertNotIn("apagada_aguarda_sincronizar", reg2)
+            self.assertEqual(reg2.get("apagada_aguarda_sincronizar"), 1)     # só o setor 3 (sem exclusão lógica)
             self.assertEqual(um("SELECT nome FROM ex9_paciente WHERE id=%s", (p3,))[0][0],
                              "PACIENTE TESTE TRES ALTERADO")           # a origem venceu
             self.assertEqual(um("SELECT telefone FROM ex9_paciente WHERE id=%s", (p4,))[0][0], "1188888888")
-            cf = um("SELECT colunas, edicao_destino, valor_origem, decisao FROM `%s`.conflito_sincronizar" % ctl)
-            self.assertEqual(len(cf), 1)
+            cf = um("SELECT colunas, edicao_destino, valor_origem, decisao FROM `%s`.conflito_sincronizar"
+                    " ORDER BY id" % ctl)
+            self.assertEqual(len(cf), 2)                      # o do setor 2 foi desfeito com a linha recusada
+            self.assertEqual((json.loads(cf[1][1])["unidade"], json.loads(cf[1][2])), ("EDITADA", {"unidade": "U9"}))
             self.assertEqual(json.loads(cf[0][0]), ["nome"])
             self.assertEqual(json.loads(cf[0][1])["nome"], "EDITADO NO DESTINO")   # a edição guardada
             self.assertEqual(json.loads(cf[0][2]), {"nome": "PACIENTE TESTE TRES ALTERADO"})
@@ -148,7 +183,10 @@ class SincronizarF4r6L9(unittest.TestCase):
             # 4) a versão 1 volta: reativação das apagadas, exclusão das novas, a origem vence de novo (sem conflito)
             _, r3, reg3 = rodar(1, 3, True)
             s3 = r3["sincronizar"]
-            self.assertEqual((s3["reativadas"], s3["excluidas"], s3["conflitos"]), (3, 7, 0))
+            self.assertEqual((s3["reativadas"], s3["excluidas"], s3["conflitos"]), (7, 7, 0))
+            self.assertEqual(pes(ex.PROF, "2")[0], 1)                          # a pessoa do profissional 2 reativada
+            self.assertEqual(um("SELECT quantidade, valor_total FROM ex9_titulo WHERE id=%s",
+                                (id_de(ex.PAR, "1/ex9_titulo"),))[0], (2, 30))
             self.assertEqual(um("SELECT COUNT(*) FROM ex9_consulta WHERE excluido_em IS NULL")[0][0], 6000)
             self.assertEqual(um("SELECT nome FROM ex9_paciente WHERE id=%s", (p3,))[0][0], "PACIENTE TESTE 3")
             self.assertEqual(um("SELECT presente FROM ex9_consulta WHERE id=%s", (id_de(ex.CON, "20"),))[0][0], 0)
@@ -156,11 +194,16 @@ class SincronizarF4r6L9(unittest.TestCase):
             _, r4, reg4 = rodar(2, 4, True, limite_exclusao=(0.0, 0))
             s4 = r4["sincronizar"]
             self.assertEqual(s4["excluidas"], 0)
-            self.assertEqual(sorted(a["tabela_origem"] for a in s4["alertas_exclusao_em_massa"]), [ex.CON, ex.PAC])
-            self.assertEqual(reg4.get("exclusao_em_massa_aguarda_confirmacao"), 2)
+            self.assertEqual(sorted(a["tabela_origem"] for a in s4["alertas_exclusao_em_massa"]),
+                             sorted([ex.CON, ex.PAC, ex.PROF, ex.PAR, ex.VIN, ex.SEM]))
+            self.assertEqual(reg4.get("exclusao_em_massa_aguarda_confirmacao"), 6)
             self.assertEqual(um("SELECT COUNT(*) FROM ex9_consulta WHERE excluido_em IS NOT NULL")[0][0], 0)  # novas reativadas
             _, r5, _ = rodar(2, 5, True, limite_exclusao=(0.0, 0), confirmar_exclusao_em_massa=True)
-            self.assertEqual(r5["sincronizar"]["excluidas"], 3)
+            self.assertEqual(r5["sincronizar"]["excluidas"], 7)
+            # limite global por execução: tabelas abaixo do limite somadas acima dele também esperam confirmação
+            _, r6, _ = rodar(1, 6, True, limite_global=3)
+            s6 = r6["sincronizar"]
+            self.assertEqual((s6["excluidas"], s6["alerta_exclusao_global"]["apagadas"]), (0, 7))
             print("L9_MEDIDAS " + json.dumps(saida, sort_keys=True))
         finally:
             with root.cursor() as c:
