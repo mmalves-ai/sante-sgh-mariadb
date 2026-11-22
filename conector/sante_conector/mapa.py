@@ -1044,7 +1044,12 @@ def carregar_execucao(d=None):
     ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
             "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
-            "valores": ler_valores(d), "provas": ler_provas(d), "evidencia_origem": ler(EVIDENCIA_ORIGEM)}
+            "valores": ler_valores(d), "provas": ler_provas(d), "evidencia_origem": ler(EVIDENCIA_ORIGEM),
+            "sequencias": ler(SEQUENCIAS)}
+
+
+# L9 (F4.7): generator da origem -> `sequencia_negocio.tipo` (o Sincronizar avança a sequência própria, nunca recua)
+SEQUENCIAS = "declarado/sequencias.tsv"
 
 
 # rodada 5 (ADR 0006, item 1; ADR 0007, item 16)

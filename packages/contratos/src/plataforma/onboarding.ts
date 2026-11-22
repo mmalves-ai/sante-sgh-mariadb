@@ -87,8 +87,25 @@ export const esquemaExecucaoConector = z.object({
     criticas: z.number().int(),
     porRegra: z.array(esquemaPendenciaResumo),
   }),
+  /** L9: resultado do Sincronizar (só contagens, tabela e id do destino e nomes de coluna; nunca valores). */
+  sincronizar: z
+    .object({
+      atualizadas: z.number().int(),
+      conflitos: z.number().int(),
+      excluidas: z.number().int(),
+      reativadas: z.number().int(),
+      alertasExclusaoEmMassa: z.array(
+        z.object({ entidade: z.string(), apagadas: z.number().int(), ativas: z.number().int() }),
+      ),
+      conflitosItens: z.array(
+        z.object({ tabelaDestino: z.string(), idDestino: z.number().int(), colunas: z.array(z.string()) }),
+      ),
+    })
+    .nullish(),
 });
 export type ExecucaoConector = z.infer<typeof esquemaExecucaoConector>;
+export const esquemaListaExecucoes = z.object({ execucoes: z.array(esquemaExecucaoConector) });
+export type ListaExecucoes = z.infer<typeof esquemaListaExecucoes>;
 
 export const esquemaClienteOnboarding = z.object({
   id: z.number().int(),

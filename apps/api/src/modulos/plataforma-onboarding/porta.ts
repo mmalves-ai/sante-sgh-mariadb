@@ -22,6 +22,8 @@ export class ErroOnboarding extends Error {
 export interface RepositorioOnboarding {
   listarClientes(): Promise<ClienteOnboarding[]>;
   execucao(codigo: string, id: number): Promise<ExecucaoConector | null>;
+  /** Histórico de execuções do cliente (L9), da mais recente para a mais antiga. */
+  historico(codigo: string, limite?: number): Promise<ExecucaoConector[]>;
   /** Enfileira (409/ErroOnboarding 'conflito' se já há execução ativa do cliente). */
   enfileirar(codigo: string, tipo: 'importar' | 'sincronizar', admin: number | null): Promise<number>;
 }

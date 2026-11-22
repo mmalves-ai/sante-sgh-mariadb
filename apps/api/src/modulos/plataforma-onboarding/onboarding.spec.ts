@@ -17,6 +17,7 @@ function montar() {
   const chamadas: string[] = [];
   const repo: RepositorioOnboarding = {
     listarClientes: async () => [] as ClienteOnboarding[],
+    historico: async (c) => (c === 'exemplo' ? [execucaoDaLinha({ id: 1, tipo: 'sincronizar', estado: 'concluida' })] : []),
     execucao: async (_c, id) =>
       id === 1 ? execucaoDaLinha({ id: 1, tipo: 'importar', estado: 'fila' }) : null,
     enfileirar: async (c, t, a) => {

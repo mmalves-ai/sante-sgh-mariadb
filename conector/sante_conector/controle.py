@@ -63,6 +63,44 @@ ALTER TABLE {b}.conector_origem
     COMMENT 'sha256 do resumo dos campos gravados no destino (texto em bytes CP1252): base da conciliação e do L9',
   ADD COLUMN IF NOT EXISTS regra_recusa VARCHAR(80) NULL COMMENT 'Regra que recusou a linha (nunca o valor)',
   ADD COLUMN IF NOT EXISTS gravidade_recusa VARCHAR(10) NULL;
+CREATE TABLE IF NOT EXISTS {b}.conflito_sincronizar (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  execucao_id BIGINT UNSIGNED NOT NULL,
+  tabela_origem VARCHAR(63) NOT NULL,
+  chave_original VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  tabela_destino VARCHAR(64) NOT NULL,
+  id_destino BIGINT UNSIGNED NOT NULL,
+  colunas JSON NOT NULL COMMENT 'Colunas em que a edição do destino diverge da origem',
+  edicao_destino JSON NOT NULL COMMENT 'Valores do destino ANTES do Sincronizar (a edição guardada)',
+  valor_origem JSON NOT NULL COMMENT 'Valores da origem que venceram',
+  decisao VARCHAR(20) NOT NULL DEFAULT 'origem_venceu',
+  reaplicado_em DATETIME(3) NULL, reaplicado_por BIGINT UNSIGNED NULL,
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
+  KEY ix_conflito_sincronizar_execucao (execucao_id),
+  KEY ix_conflito_sincronizar_destino (tabela_destino, id_destino),
+  CONSTRAINT ck_conflito_sincronizar_decisao CHECK (decisao IN ('origem_venceu', 'destino_reaplicado'))
+) COMMENT='Linha editada no destino E alterada na origem: a origem vence, a edição fica guardada (L9)';
+CREATE TABLE IF NOT EXISTS {b}.conector_bloco (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  tabela_origem VARCHAR(63) NOT NULL,
+  bloco BIGINT NOT NULL COMMENT 'Início da faixa de 10 mil ids',
+  hash_bloco BINARY(16) NOT NULL COMMENT 'BLAKE2b-128 dos hashes das linhas do bloco, na ordem da chave',
+  linhas INT UNSIGNED NOT NULL,
+  imagem_id BIGINT UNSIGNED NOT NULL,
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_conector_bloco (tabela_origem, bloco)
+) COMMENT='Hash por bloco de ids do diferencial (estado da última execução)';
+CREATE TABLE IF NOT EXISTS {b}.conector_generator (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(63) NOT NULL,
+  valor BIGINT NOT NULL,
+  execucao_id BIGINT UNSIGNED NOT NULL,
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_conector_generator (nome)
+) COMMENT='Último valor lido de cada generator da origem (F4.7)';
 CREATE TABLE IF NOT EXISTS {b}.pendencia (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL,

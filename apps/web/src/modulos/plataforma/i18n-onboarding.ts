@@ -63,6 +63,24 @@ export const mensagensOnboarding = {
     gravidade: 'Gravidade',
     quantidade: 'Quantidade',
   },
+  sincronizar: {
+    titulo: 'Sincronizar: a origem vence',
+    resumo:
+      '{atualizadas} registros atualizados pela origem, {excluidas} excluídos (exclusão lógica), {reativadas} reativados e {conflitos} conflitos.',
+    massa:
+      'Exclusão em massa retida em {entidade}: {apagadas} de {ativas} registros sumiram da origem. Nada foi excluído; confira a origem e sincronize de novo com a confirmação.',
+    conflitos: 'Conflitos: editados no sistema e alterados na origem (a edição ficou guardada no controle do cliente)',
+    registro: 'Registro',
+    colunas: 'Colunas sobrescritas pela origem',
+  },
+  historico: {
+    titulo: 'Histórico de execuções',
+    execucao: 'Execução',
+    tipo: 'Tipo',
+    estado: 'Situação',
+    concluida: 'Concluída em',
+    conflitos: 'Conflitos',
+  },
   tipos: { importar: 'importar', sincronizar: 'sincronizar' },
   estados: {
     fila: 'Na fila',

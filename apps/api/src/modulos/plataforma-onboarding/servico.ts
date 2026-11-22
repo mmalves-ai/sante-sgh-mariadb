@@ -51,6 +51,10 @@ export class ServicoOnboarding {
     return this.repo.enfileirar(codigoValido(codigo), r.data.tipo, admin);
   }
 
+  async historico(codigo: string): Promise<ExecucaoConector[]> {
+    return this.repo.historico(codigoValido(codigo), 20);
+  }
+
   async execucao(codigo: string, id: number): Promise<ExecucaoConector> {
     if (!Number.isSafeInteger(id) || id <= 0) throw new ErroOnboarding('invalido', 'Execução inválida.');
     const e = await this.repo.execucao(codigoValido(codigo), id);

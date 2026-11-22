@@ -175,6 +175,7 @@ import os
 import json
 import time
 
+from . import sincronizar as sincronizar_mod
 from . import carga, continuidade, depara, mapa, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_linha
@@ -563,8 +564,18 @@ def _truncar(v, precisao):
 
 
 class CargaMapa(carga.Carga):
-    def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=()):
+    def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=(),
+                 sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False):
         super().__init__(leitor, cr, ctl, eid, imagem_id, progresso)
+        # L9: Sincronizar (a origem vence; edição do destino guardada; exclusão lógica com reativação)
+        self.sinc = bool(sincronizar)
+        self.limite_exclusao = limite_exclusao or sincronizar_mod.LIMITE_EXCLUSAO
+        self.confirmar_massa = bool(confirmar_exclusao_em_massa)
+        self._excluidas = {}                # tabela -> chaves com exclusão lógica (conector_origem.excluido_em)
+        self._estado = {}                   # (dt, chave em conector_origem) -> sha256 do destino antes da execução
+        self._atualizar = None              # linha da origem sendo reaplicada (Sincronizar)
+        self.sinc_res = {"atualizadas": 0, "conflitos": 0, "conflitos_itens": [], "excluidas": 0, "reativadas": 0,
+                         "alertas_exclusao_em_massa": [], "blocos": {}, "sequencias": {}}
         self.mapa_exec = mapa_exec
         self.prop = Propagador()
         self.deparas = {}
@@ -574,6 +585,7 @@ class CargaMapa(carga.Carga):
         self.usadas = set(entidades_usadas)
         self.plano = []
         self.cont.update(fase2_gravadas=0, fase2_pendentes=0)
+        self._bloco = None
         self.seq = {}                       # posição da linha no grupo de `#seq:<COLUNA>` (linha atual)
         self._estab = False
         self.por_tabela = {}
@@ -732,9 +744,12 @@ class CargaMapa(carga.Carga):
         if len(ch) == 1 and self.lt.chave_primaria(t) == ch and cols[ch[0]]["codigo_tipo"] in TIPOS_INT:
             for ini, fim in self.lt.faixas(t, ch[0]):
                 nomes, it = self.lt.ler_faixa(t, ch[0], ini, fim, colunas=p["lidas"])
+                self._bloco = ini
                 for x in it:
                     yield dict(zip(nomes, x)), None
+            self._bloco = None
             return
+        self._bloco = None
         nomes, it = self.lt.ler_tudo(t, colunas=p["lidas"])
         if ch:  # ordem fixa pela chave: decisões de duplicidade estáveis
             ix = [nomes.index(c) for c in ch]
@@ -1837,6 +1852,25 @@ class CargaMapa(carga.Carga):
         return self.ent[k]
 
     # ----- carga de uma tabela -----
+    def _situacao(self, tab, chave, h):
+        if not self.sinc:
+            return super()._situacao(tab, chave, h)
+        self.vistas.setdefault(tab, set()).add(chave)
+        ant = self.existente.get(tab, {}).get(chave)
+        if ant is None:
+            return "nova", None
+        if chave in self._excluidas.get(tab, ()):
+            sincronizar_mod.reativar(self, tab, chave)
+        if ant[1] == h:
+            if ant[0] is None:
+                self._pendencia(tab, chave, ant[3] or "recusa_sem_regra_registrada", ant[4] or "alta")
+            self.cont["puladas_iguais"] += 1
+            return "igual", ant
+        if ant[0] is None:  # recusada antes e mudou na origem: tenta de novo, como linha nova
+            self.cont["recusadas_retentadas"] = self.cont.get("recusadas_retentadas", 0) + 1
+            return "nova", None
+        return "alterada", ant
+
     def _tabela(self, p):
         t, dts = p["tabela"], p["destinos"]
         ents = [self._nome_ent(t, dt) for dt in dts]
@@ -1847,6 +1881,10 @@ class CargaMapa(carga.Carga):
         seqs = [c["coluna"][5:] for dt in dts for c in p["colunas"][dt] if c["coluna"].startswith("#seq:")]
         cont_seq = {}
         inicio, n = time.monotonic(), 0
+        suporta = self.sinc and sincronizar_mod.suporta(self, p)
+        if suporta:
+            sincronizar_mod.estado_destino(self, p, ents)
+        blocos = {}
         for linha, ch_sem in self._linhas_mapa(p):
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
@@ -1855,6 +1893,8 @@ class CargaMapa(carga.Carga):
                 cont_seq[k] = cont_seq.get(k, 0) + 1
                 self.seq[col] = cont_seq[k]
             h = bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
+            if self._bloco is not None:
+                blocos.setdefault(self._bloco, []).append(h)
             self._grp = self._grupos[1][chave] if self._grupos else None
             prov = self.existente.get(t, {}).get(chave)
             completar = None
@@ -1864,7 +1904,14 @@ class CargaMapa(carga.Carga):
                 completar = prov[0]
                 del self.existente[t][chave]
             sit, ant = self._situacao(t, chave, h)
-            if sit != "nova":
+            self._atualizar = None
+            if sit == "alterada" and self.sinc:
+                if suporta:
+                    self._atualizar = ant
+                else:  # estrutura que o Sincronizar ainda não reaplica (cabeçalho agrupado): visível, nunca silenciosa
+                    self.cont["alteradas_aguardam"] += 1
+                    self._pendencia(t, chave, "alteracao_aguarda_sincronizar", "baixa")
+            if sit != "nova" and self._atualizar is None:
                 if ant[0] is not None:
                     self._secundarias_ja_carregadas(p, ents, chave, sit, ant)
                 elif ant[3]:
@@ -1880,6 +1927,11 @@ class CargaMapa(carga.Carga):
                     vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
                 if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:
                     recusa = ("sem_item_a_gravar", "baixa")  # nada a gravar: visível, conta como recusada
+            if recusa and self._atualizar is not None:  # a linha antiga fica como estava, à espera da correção
+                self._pendencia(t, chave, *recusa)
+                self._pendencia(t, chave, "alteracao_recusada_aguarda_correcao", "media")
+                self._secundarias_ja_carregadas(p, ents, chave, "alterada", self._atualizar)
+                continue
             if recusa:
                 if completar is not None:  # o provisório fica como estava, com a regra da linha real
                     self.existente[t][chave] = prov
@@ -1927,7 +1979,14 @@ class CargaMapa(carga.Carga):
                                 cabs.append(((t, self._grp[0]), rid))
                         else:
                             self._linha = (t, chave)
-                            rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
+                            kx = chave if i == 0 and not itens_principal else "%s/%s%s" % (
+                                chave, dt, "/" + suf if suf else "")
+                            alvo = sincronizar_mod.alvo(self, t, kx, dt, op) if self._atualizar is not None else None
+                            if alvo:  # Sincronizar: a origem vence (UPDATE do mesmo id); edição do destino guardada
+                                sincronizar_mod.conflito(self, t, kx, dt, alvo, nomes, v)
+                                rid, adotado = sincronizar_mod.atualizar(self, dt, alvo, v), False
+                            else:
+                                rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
                         for c in p["colunas"][dt]:  # filho -> pai de código derivado (ADR 0007, 19)
                             if c.get("pai_derivado") and v.get(c["destino"]) is not None and not adotado:
                                 self._filho_pai.setdefault((dt, c["destino"], c["pai_derivado"]), []).append(
@@ -1977,6 +2036,10 @@ class CargaMapa(carga.Carga):
                 for dt, dc, ref, cpai in adiadas:
                     if ids[dts.index(dt)] is not None:
                         self.adiadas.append((dt, dc, ids[dts.index(dt)], ref, cpai, t, chave))
+            elif self._atualizar is not None:  # restrição ao reaplicar: a linha antiga fica, à espera da correção
+                a = self._atualizar
+                self._registrar(t, chave, ents[0], a[0], a[1], a[2])
+                self._secundarias_ja_carregadas(p, ents, chave, "alterada", a)
             elif completar is not None:  # restrição do destino ao completar: o provisório fica como estava
                 self._registrar(t, chave, ents[0], prov[0], prov[1], prov[2])
                 self.cont["provisorios_nao_completados"] = self.cont.get("provisorios_nao_completados", 0) + 1
@@ -1985,6 +2048,9 @@ class CargaMapa(carga.Carga):
                 self.prop.registrar(t, chave, self.existente[t][chave][3] or "recusada", "critica")
             if n % LOTE_COMMIT == 0:
                 self._commit()
+        self._atualizar = None
+        if blocos:
+            sincronizar_mod.blocos(self, t, blocos)
         self._commit()
         seg = time.monotonic() - inicio
         self.por_tabela[t] = {"linhas": n, "segundos": round(seg, 3),
@@ -2058,6 +2124,8 @@ class CargaMapa(carga.Carga):
                     "carga": dict(self.cont, por_tabela={})}
         for p in self.plano:
             self._carregar_existente(p["tabela"])
+        if self.sinc:
+            sincronizar_mod.carregar_excluidas(self)
         # tabelas de continuidade garantidas ANTES da primeira linha: CREATE TABLE faz commit implícito e, no meio de
         # uma linha, apagaria o SAVEPOINT dela (rodada 6: recusa de restrição virava "SAVEPOINT does not exist")
         self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
@@ -2067,7 +2135,11 @@ class CargaMapa(carga.Carga):
             self.progresso(i / len(self.plano), "carregando %s" % p["destinos"][0])
             self._tabela(p)
         self._fase2()
+        if self.sinc:
+            sincronizar_mod.excluir_apagadas(self)
+        sincronizar_mod.sequencias(self)
         res = self.conciliar(contagens)
+        res["sincronizar"] = sincronizar_mod.resumo(self)
         res["filho_pai"] = self._conferir_filho_pai()
         res["provas"] = self._provas(presentes)
         self._gravar_provas(res)
@@ -2140,12 +2212,14 @@ class CargaMapa(carga.Carga):
                             linhas += 1
                         else:
                             apagadas += 1
-                            self._pendencia(t, base, "apagada_aguarda_sincronizar", "media")
+                            if base not in self._excluidas.get(t, ()):
+                                self._pendencia(t, base, "apagada_aguarda_sincronizar", "media")
                         continue
                     if base not in vistas:
                         if i == 0 and not desd:
                             apagadas += 1
-                            self._pendencia(t, k, "apagada_aguarda_sincronizar", "media")
+                            if k not in self._excluidas.get(t, ()):
+                                self._pendencia(t, k, "apagada_aguarda_sincronizar", "media")
                         continue
                     destino[k] = (hashlib.sha256(txt.encode()).hexdigest(), ed)
                 aguardam = self.aguardam.get(ent, set())

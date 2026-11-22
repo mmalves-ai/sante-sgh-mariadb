@@ -2242,3 +2242,24 @@ TBCID10 lida pela L6-15).
   sim/nao, salvo 5 códigos (lista). Valor fora de S/N: pendência visível e guardado no retrato da trilha (sem perda).
 - Dados de cabeçalho e de contato da ficha (empresa, endereço, compras, responsável técnico) entram como opções texto do
   usuário (continuidade, ADR 0006); senha de operação ao cofre (ADR 0007, 17).
+
+## L9 Sincronizar (rodada 6, 2026-11-22): decisões pela melhor prática
+- A ORIGEM VENCE (dono, 21/11): linha alterada na origem é reaplicada no MESMO id do destino (`alterado_em`,
+  `versao`+1). Editada no destino desde a última execução (resumo atual diferente do `hash_destino` guardado) e alterada
+  na origem: conflito em `conector_ctl_<cliente>.conflito_sincronizar` (valores de antes, valores da origem, colunas
+  divergentes, decisão `origem_venceu`), pendência média `conflito_origem_venceu`. Editada só no destino: a edição fica
+  (pendência `edicao_no_destino`, fora da soma, como antes).
+- Apagada na origem: exclusão LÓGICA (`excluido_em` no destino e em `conector_origem`), nunca DELETE; a linha que volta
+  é reativada (`excluido_em` NULL) e segue o diferencial normal. Tabela de destino sem `excluido_em`: só o controle marca
+  (contagem `excluidas_sem_coluna`).
+- Exclusão em massa: acima de 10% das linhas ativas da tabela E de 50 linhas, nada é excluído; pendência crítica
+  `exclusao_em_massa_aguarda_confirmacao` e alerta no painel até o Sincronizar confirmado (`confirmar_exclusao_em_massa`).
+- Recusada antes e alterada na origem: tentada de novo como linha nova (a correção na origem vale).
+- Cabeçalho AGRUPADO (uma linha do destino resume várias da origem): a alteração continua como
+  `alteracao_aguarda_sincronizar` (visível), até o reagrupamento ter regra própria. Adoção e complemento seguem a
+  mescla não destrutiva (ADR 0007, 20).
+- Diferencial: hash de toda linha contra o estado guardado (pega alteração só de coluna e linha antiga, em qualquer
+  data); hash por bloco de 10 mil ids guardado em `conector_bloco` (quais faixas mudaram). A leitura ainda percorre a
+  tabela inteira: o atalho de pular blocos iguais sem ler exige hash no servidor de origem (pendente, medido abaixo).
+- Generators (F4.7): todos guardados em `conector_generator` a cada execução; `declarado/sequencias.tsv` liga um
+  generator a `sequencia_negocio.tipo`, que só avança (próximo = valor + 1), nunca recua.

@@ -8,10 +8,12 @@ import {
   esquemaExecucaoConector,
   esquemaExecucaoPedida,
   esquemaListaClientesOnboarding,
+  esquemaListaExecucoes,
   esquemaListaOrigens,
   esquemaOrigemVinculada,
   ESTADOS_EXECUCAO_ATIVOS,
   type ListaClientesOnboarding,
+  type ListaExecucoes,
   type ListaOrigens,
   type OrigemVinculada,
 } from '@sgh/contratos';
@@ -43,6 +45,8 @@ export const vincularOrigem = (codigo: string, arquivo: string): Promise<OrigemV
   pedir('PUT', `${B}/clientes/${encodeURIComponent(codigo)}/origem`, esquemaOrigemVinculada, { arquivo });
 export const pedirExecucao = (codigo: string, tipo: 'importar' | 'sincronizar'): Promise<ExecucaoPedida> =>
   pedir('POST', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes`, esquemaExecucaoPedida, { tipo });
+export const listarExecucoes = (codigo: string): Promise<ListaExecucoes> =>
+  pedir('GET', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes`, esquemaListaExecucoes);
 export const lerExecucao = (codigo: string, id: number): Promise<ExecucaoConector> =>
   pedir('GET', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes/${id}`, esquemaExecucaoConector);
 

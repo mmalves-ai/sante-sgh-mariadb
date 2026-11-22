@@ -62,6 +62,17 @@ export class RepositorioOnboardingPlataforma implements RepositorioOnboarding {
     return l ? execucaoDaLinha(l) : null;
   }
 
+  async historico(codigo: string, limite = 20): Promise<ExecucaoConector[]> {
+    const linhas = await this.nucleo.lerPlataforma('onboarding-historico', (x) =>
+      x.consultar(
+        `SELECT ${COLUNAS_EXECUCAO} FROM conector_execucao e JOIN cliente c ON c.id = e.cliente_id
+          WHERE c.codigo = ? ORDER BY e.id DESC LIMIT ${Math.max(1, Math.min(100, Math.trunc(limite)))}`,
+        [codigo],
+      ),
+    );
+    return linhas.map(execucaoDaLinha);
+  }
+
   async enfileirar(codigo: string, tipo: 'importar' | 'sincronizar', admin: number | null): Promise<number> {
     try {
       return await this.nucleo.escreverPlataforma('onboarding-enfileirar', async (e) => {

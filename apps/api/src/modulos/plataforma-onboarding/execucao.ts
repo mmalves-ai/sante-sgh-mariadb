@@ -8,6 +8,29 @@ const iso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString() : v ? new Date(String(v).replace(' ', 'T') + 'Z').toISOString() : null;
 const GRAVIDADES = ['critica', 'alta', 'media', 'baixa'] as const;
 
+function sincronizarDe(bruto: unknown): ExecucaoConector['sincronizar'] {
+  if (!bruto || typeof bruto !== 'object') return null;
+  const s = bruto as Record<string, unknown>;
+  const lista = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  return {
+    atualizadas: num(s['atualizadas']),
+    conflitos: num(s['conflitos']),
+    excluidas: num(s['excluidas']),
+    reativadas: num(s['reativadas']),
+    // lista branca: a entidade de destino, nunca a tabela da origem
+    alertasExclusaoEmMassa: lista(s['alertas_exclusao_em_massa']).map((a) => ({
+      entidade: String(a['entidade'] ?? ''),
+      apagadas: num(a['apagadas']),
+      ativas: num(a['ativas']),
+    })),
+    conflitosItens: lista(s['conflitos_itens']).map((x) => ({
+      tabelaDestino: String(x['tabela_destino'] ?? ''),
+      idDestino: num(x['id_destino']),
+      colunas: (Array.isArray(x['colunas']) ? x['colunas'] : []).map(String),
+    })),
+  };
+}
+
 export function execucaoDaLinha(l: Record<string, unknown>): ExecucaoConector {
   let c: Record<string, unknown>;
   try {
@@ -58,5 +81,6 @@ export function execucaoDaLinha(l: Record<string, unknown>): ExecucaoConector {
       }))
       .sort((a, b) => a.entidade.localeCompare(b.entidade)),
     pendencias: { total: num(pend['total']), criticas: num(pend['criticas']), porRegra },
+    sincronizar: sincronizarDe(c['sincronizar']),
   };
 }

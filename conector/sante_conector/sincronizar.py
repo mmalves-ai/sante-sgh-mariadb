@@ -1,0 +1,255 @@
+"""Sincronizar (F4 L9): o diferencial da carga dirigida pelo mapa, depois da importação.
+
+Plano F4, seções 6 e 6.1 (dono, 2026-11-21). Chamado pela `carga_mapa.CargaMapa` com `sincronizar=True`:
+- diferencial por linha: o hash dos bytes crus de cada linha contra o estado guardado em `conector_origem` (nunca
+  janela de datas: a alteração SÓ DE COLUNA e a linha ANTIGA alterada aparecem); hash por bloco de 10 mil ids
+  (`conector_bloco`) guardado em toda execução, para dizer quais faixas mudaram;
+- inclusão (linha nova), atualização (a ORIGEM VENCE: UPDATE do mesmo id no destino, `alterado_em` e `versao`) e
+  exclusão LÓGICA (`excluido_em` no destino e em `conector_origem`), com reativação quando a linha volta;
+- conflito: a linha mudou na origem E foi editada no destino depois da última execução (resumo do destino diferente
+  do gravado). A origem vence e a edição fica GUARDADA em `conflito_sincronizar` (valores antes e depois, só na base de
+  controle do cliente), com a pendência `conflito_origem_venceu`; o painel lista os conflitos (sem valores no resumo);
+- alerta de exclusão em massa: apagadas acima do limite (fração das ativas e mínimo absoluto) NÃO são excluídas; ficam
+  com a pendência crítica `exclusao_em_massa_aguarda_confirmacao` até o Sincronizar confirmado;
+- generators (F4.7): o valor de todos é guardado em `conector_generator` a cada execução; os declarados em
+  `declarado/sequencias.tsv` (generator -> `sequencia_negocio.tipo`) avançam a sequência própria (nunca recua).
+Nunca grava valor de linha em log nem no resumo: só contagens, nomes de colunas e chaves originais.
+"""
+import hashlib
+import json
+
+from .carga import AGORA
+from .leitor import hash_bloco
+
+# (fração das linhas ativas da tabela, mínimo absoluto): acima dos dois, a exclusão espera confirmação
+LIMITE_EXCLUSAO = (0.10, 50)
+MAX_ITENS_RESUMO = 200
+
+
+def em_massa(apagar, ativas, limite=LIMITE_EXCLUSAO, confirmado=False):
+    """True quando a exclusão de `apagar` linhas de `ativas` precisa de confirmação."""
+    frac, minimo = limite
+    return not confirmado and apagar > minimo and apagar > frac * max(ativas, 1)
+
+
+def suporta(cm, p):
+    """O Sincronizar reaplica a linha alterada em toda estrutura, salvo o cabeçalho AGRUPADO (uma linha do destino
+    resume várias da origem): essa fica com `alteracao_aguarda_sincronizar` (visível)."""
+    ops = p.get("opcoes") or {}
+    return not any((ops.get(dt) or {}).get("agrupar") for dt in p["destinos"])
+
+
+def _chave_ctl(k, base, dt, principal, desd):
+    if principal and not desd:
+        return k
+    if isinstance(k, tuple):
+        return None
+    return base + "/" + dt + k[len(base):]
+
+
+def estado_destino(cm, p, ents):
+    """Resumo atual (antes desta execução) de cada linha do destino, na mesma forma do `hash_destino` guardado."""
+    for i, dt in enumerate(p["destinos"]):
+        desd = i == 0 and cm._desdobrado(p, dt)
+        for k, (txt, _ed, base) in cm._destino(p, dt, ents[i], i == 0).items():
+            kx = _chave_ctl(k, base, dt, i == 0, desd)
+            if kx is not None:
+                cm._estado[(dt, kx)] = hashlib.sha256(txt.encode()).digest()
+
+
+def alvo(cm, t, kx, dt, op):
+    """Id do destino a reaplicar; None = gravar como hoje (adoção e complemento seguem a mescla não destrutiva)."""
+    if op.get("adotar") or op.get("complementa") or op.get("agrupar"):
+        return None
+    ex = cm.existente.get(t, {}).get(kx)
+    return ex[0] if ex and ex[0] is not None else None
+
+
+def _legivel(v):
+    from .carga_mapa import _valor_legivel
+    return None if v is None else _valor_legivel(v)
+
+
+def conflito(cm, t, kx, dt, rid, nomes, v):
+    """Edição no destino desde a última execução (resumo atual != resumo gravado) numa linha que mudou na origem:
+    guarda a edição (valores antes) e o que veio da origem; a origem vence em seguida."""
+    from .carga_mapa import canon
+    guardado = (cm.existente.get(t, {}).get(kx) or (None, None, None))[2]
+    atual = cm._estado.get((dt, kx))
+    if guardado is None or atual is None or atual == guardado:
+        return False
+    cols = [c for c in v if c not in ("id", "origem", "criado_em")]
+    if not cols:
+        return False
+    linha = cm._todas("SELECT %s FROM `%s` WHERE id=%%s" % (", ".join("`%s`" % c for c in cols), dt), (rid,))
+    if not linha:
+        return False
+    antes = dict(zip(cols, linha[0]))
+    difs = [c for c in cols if canon(antes[c]) != canon(v[c])]
+    with cm._c() as c:
+        c.execute("INSERT INTO %s.conflito_sincronizar (execucao_id, tabela_origem, chave_original, tabela_destino,"
+                  " id_destino, colunas, edicao_destino, valor_origem, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%%s,"
+                  "%%s,%s)" % (cm.ctl, AGORA),
+                  (cm.eid, t, kx, dt, rid, json.dumps(difs),
+                   json.dumps({c: _legivel(antes[c]) for c in cols}, ensure_ascii=False),
+                   json.dumps({c: _legivel(v[c]) for c in difs}, ensure_ascii=False)))
+    cm._pendencia(t, kx, "conflito_origem_venceu", "media")
+    r = cm.sinc_res
+    r["conflitos"] += 1
+    if len(r["conflitos_itens"]) < MAX_ITENS_RESUMO:
+        r["conflitos_itens"].append({"tabela_origem": t, "chave_original": kx, "tabela_destino": dt,
+                                     "id_destino": rid, "colunas": difs})
+    return True
+
+
+def atualizar(cm, dt, rid, v):
+    """A origem vence: UPDATE do mesmo id com as colunas declaradas; `alterado_em` e `versao` contam a reaplicação."""
+    info = cm._info(dt)
+    cols = [c for c in v if c not in ("id", "origem", "criado_em")]
+    sets = ["`%s`=%%s" % c for c in cols]
+    if "alterado_em" in info:
+        sets.append("`alterado_em`=%s" % AGORA)
+    if "versao" in info:
+        sets.append("`versao`=`versao`+1")
+    if sets:
+        with cm._c() as c:
+            c.execute("UPDATE `%s` SET %s WHERE id=%%s" % (dt, ", ".join(sets)), [v[c] for c in cols] + [rid])
+    cm.sinc_res["atualizadas"] += 1
+    return rid
+
+
+def _destinos_da_tabela(cm, tab):
+    for p in cm.plano:
+        if p["tabela"] == tab:
+            return {cm._nome_ent(tab, dt) if i == 0 else dt: dt for i, dt in enumerate(p["destinos"])}
+    return {}
+
+
+def _marcar(cm, tab, chave, excluir):
+    """Exclusão lógica (excluir=True) ou reativação da linha e das secundárias dela, no destino e no controle."""
+    por_ent = _destinos_da_tabela(cm, tab)
+    like = chave.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%"
+    rs = cm._todas("SELECT id, entidade_destino, id_destino FROM %s.conector_origem WHERE tabela_origem=%%s AND"
+                   " (chave_original=%%s OR chave_original LIKE %%s) AND id_destino IS NOT NULL" % cm.ctl,
+                   (tab, chave, like))
+    sem_coluna = 0
+    with cm._c() as c:
+        for cid, ent, rid in rs:
+            dt = por_ent.get(ent)
+            if dt and "excluido_em" in cm._info(dt):
+                c.execute("UPDATE `%s` SET excluido_em=%s WHERE id=%%s" % (dt, AGORA if excluir else "NULL")
+                          + (" AND excluido_em IS NULL" if excluir else ""), (rid,))
+            else:
+                sem_coluna += 1
+            c.execute("UPDATE %s.conector_origem SET excluido_em=%s, alterado_em=%s, versao=versao+1 WHERE id=%%s"
+                      % (cm.ctl, AGORA if excluir else "NULL", AGORA), (cid,))
+    return sem_coluna
+
+
+def reativar(cm, tab, chave):
+    _marcar(cm, tab, chave, False)
+    cm._excluidas[tab].discard(chave)
+    cm.sinc_res["reativadas"] += 1
+
+
+def carregar_excluidas(cm):
+    for p in cm.plano:
+        rs = cm._todas("SELECT chave_original FROM %s.conector_origem WHERE tabela_origem=%%s AND excluido_em IS NOT"
+                       " NULL" % cm.ctl, (p["tabela"],))
+        cm._excluidas[p["tabela"]] = {r[0] for r in rs}
+
+
+def _e_base(k, destinos):
+    return not any(k.endswith("/" + dt) or ("/" + dt + "/") in k for dt in destinos)
+
+
+def excluir_apagadas(cm):
+    """Linha que estava ativa e sumiu da origem: exclusão lógica, salvo exclusão em massa (alerta, espera)."""
+    for p in cm.plano:
+        t, vistas = p["tabela"], cm.vistas.get(p["tabela"], set())
+        excl = cm._excluidas.setdefault(t, set())
+        ativas = [k for k, a in cm.existente.get(t, {}).items()
+                  if a[0] is not None and k not in excl and _e_base(k, p["destinos"])]
+        apagar = [k for k in ativas if k not in vistas]
+        if not apagar:
+            continue
+        if em_massa(len(apagar), len(ativas), cm.limite_exclusao, cm.confirmar_massa):
+            cm._pendencia(t, None, "exclusao_em_massa_aguarda_confirmacao", "critica")
+            cm.sinc_res["alertas_exclusao_em_massa"].append({"tabela_origem": t, "entidade": cm._nome_ent(t, p["destinos"][0]),
+                                                             "apagadas": len(apagar),
+                                                             "ativas": len(ativas)})
+            continue
+        sem = 0
+        for k in apagar:
+            sem += _marcar(cm, t, k, True)
+            excl.add(k)
+        cm.sinc_res["excluidas"] += len(apagar)
+        if sem:
+            cm.sinc_res["excluidas_sem_coluna"] = cm.sinc_res.get("excluidas_sem_coluna", 0) + sem
+    cm._commit()
+
+
+def blocos(cm, t, por_bloco):
+    """Hash por bloco de ids contra o guardado: quantos blocos mudaram (e quais sumiram)."""
+    antes = {int(b): bytes(h) for b, h in cm._todas(
+        "SELECT bloco, hash_bloco FROM %s.conector_bloco WHERE tabela_origem=%%s" % cm.ctl, (t,))}
+    iguais = alterados = 0
+    with cm._c() as c:
+        for b, hs in sorted(por_bloco.items()):
+            hb = bytes.fromhex(hash_bloco([h.hex() for h in hs]))
+            if antes.get(b) == hb:
+                iguais += 1
+                continue
+            alterados += 1
+            c.execute("INSERT INTO %s.conector_bloco (tabela_origem, bloco, hash_bloco, linhas, imagem_id, criado_em)"
+                      " VALUES (%%s,%%s,%%s,%%s,%%s,%s) ON DUPLICATE KEY UPDATE hash_bloco=VALUES(hash_bloco),"
+                      " linhas=VALUES(linhas), imagem_id=VALUES(imagem_id), alterado_em=%s, versao=versao+1"
+                      % (cm.ctl, AGORA, AGORA), (t, b, hb, len(hs), cm.img))
+        sumiram = [b for b in antes if b not in por_bloco]
+        for b in sumiram:
+            c.execute("DELETE FROM %s.conector_bloco WHERE tabela_origem=%%s AND bloco=%%s" % cm.ctl, (t, b))
+    cm.sinc_res["blocos"][t] = {"total": len(por_bloco), "iguais": iguais, "alterados": alterados + len(sumiram)}
+
+
+def sequencias(cm):
+    """F4.7: guarda o valor de todos os generators; avança a sequência própria declarada (nunca recua)."""
+    try:
+        gens = cm.lt.generators()
+    except Exception:  # noqa: BLE001 (leitor sem dicionário de generators: nada a ajustar)
+        return
+    with cm._c() as c:
+        for nome, valor in gens.items():
+            c.execute("INSERT INTO %s.conector_generator (nome, valor, execucao_id, criado_em) VALUES (%%s,%%s,%%s,%s)"
+                      " ON DUPLICATE KEY UPDATE valor=VALUES(valor), execucao_id=VALUES(execucao_id), alterado_em=%s,"
+                      " versao=versao+1" % (cm.ctl, AGORA, AGORA), (nome, int(valor or 0), cm.eid))
+    decl = cm.mapa_exec.get("sequencias") or []
+    if not decl:
+        cm._commit()
+        return
+    tem = cm._todas("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND"
+                    " TABLE_NAME='sequencia_negocio'")[0][0]
+    for d in decl:
+        g, tipo = d["generator"], d["tipo"]
+        if g not in gens or not tem:
+            cm._pendencia(g, None, "sequencia_sem_generator" if tem else "sequencia_sem_tabela", "media")
+            continue
+        prox = int(gens[g] or 0) + 1
+        rs = cm._todas("SELECT id FROM sequencia_negocio WHERE tipo=%s AND estabelecimento_id IS NULL AND"
+                       " prefixo IS NULL", (tipo,))
+        with cm._c() as c:
+            if rs:
+                c.execute("UPDATE sequencia_negocio SET proximo_valor=%%s, alterado_em=%s, versao=versao+1 WHERE"
+                          " id=%%s AND proximo_valor < %%s" % AGORA, (prox, rs[0][0], prox))
+            else:
+                c.execute("INSERT INTO sequencia_negocio (tipo, proximo_valor, criado_em) VALUES (%%s,%%s,%s)"
+                          % AGORA, (tipo, prox))
+        cm.sinc_res["sequencias"][tipo] = cm._todas(
+            "SELECT proximo_valor FROM sequencia_negocio WHERE tipo=%s AND estabelecimento_id IS NULL AND"
+            " prefixo IS NULL", (tipo,))[0][0]
+    cm._commit()
+
+
+def resumo(cm):
+    r = dict(cm.sinc_res, modo="sincronizar" if cm.sinc else "importar")
+    r["alteradas_aguardam"] = cm.cont.get("alteradas_aguardam", 0)
+    return r

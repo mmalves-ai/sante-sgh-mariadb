@@ -6,6 +6,7 @@ import type {
   ClienteCriado,
   TipoProblema,
   ExecucaoConector,
+  ListaExecucoes,
   ExecucaoPedida,
   ListaClientesOnboarding,
   ListaOrigens,
@@ -104,6 +105,13 @@ export class OnboardingController {
   ): Promise<ExecucaoPedida> {
     const { s, admin } = this.exigir(req);
     return { execucao: await this.tratar(() => s.pedirExecucao(codigo, corpo, admin)) };
+  }
+
+  @Get('clientes/:codigo/execucoes')
+  @Permissao(PERMISSAO_ONBOARDING)
+  async historico(@Req() req: RequisicaoAutorizada, @Param('codigo') codigo: string): Promise<ListaExecucoes> {
+    const { s } = this.exigir(req);
+    return { execucoes: await this.tratar(() => s.historico(codigo)) };
   }
 
   @Get('clientes/:codigo/execucoes/:id')

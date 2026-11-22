@@ -140,7 +140,8 @@ def executar(trab, eid):
                             "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
                         if plano:
                             rm = carga_mapa.CargaMapa(lt, cc, ctl, eid, iid, mapa_exec, prog_mapa,
-                                                      entidades_usadas=set(resumo["entidades"])).executar(
+                                                      entidades_usadas=set(resumo["entidades"]),
+                                                      sincronizar=ex["tipo"] == "sincronizar").executar(
                                 set(tabelas), contagens)
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]
@@ -150,6 +151,7 @@ def executar(trab, eid):
                             for k, n in pm["por_regra"].items():
                                 pr["por_regra"][k] = pr["por_regra"].get(k, 0) + n
                             resumo["carga"]["mapa"] = rm["carga"]
+                            cont["sincronizar"] = rm["sincronizar"]  # L9: contagens, conflitos (sem valores), alertas
                 finally:
                     cc.close()
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",
@@ -157,10 +159,10 @@ def executar(trab, eid):
                                                           "aguardam_sincronizar", "editados_no_destino",
                                                           "apagados_na_origem") if x in v}
                                      for k, v in resumo["entidades"].items()}
-                # até o L9, o Sincronizar roda a mesma carga: traz linhas novas; alteradas, apagadas e editadas no
-                # destino ficam com pendência (nunca sobrescrita silenciosa). O resumo diz isso ao painel.
-                resumo["carga"]["modo"] = ("sincronizar_parcial_ate_l9" if ex["tipo"] == "sincronizar"
-                                           else "importar")
+                # L9: na carga dirigida pelo mapa, o Sincronizar reaplica a origem (vence), guarda a edição do destino
+                # em conflito, exclui logicamente o que sumiu e reativa o que voltou. As 7 tabelas da carga própria
+                # do L3 ainda deixam a alteração como pendência (nunca sobrescrita silenciosa).
+                resumo["carga"]["modo"] = "sincronizar" if ex["tipo"] == "sincronizar" else "importar"
                 cont.update(versao_mapa=resumo["versao_mapa"], pendencias=resumo["pendencias"], carga=resumo["carga"])
                 ruins = sorted(k for k, v in resumo["entidades"].items() if not v["conferido"])
                 if ruins:
