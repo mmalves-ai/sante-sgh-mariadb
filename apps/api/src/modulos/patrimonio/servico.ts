@@ -816,7 +816,7 @@ export class ServicoPatrimonio {
 
   /**
    * Achado 6 da revisão (CPC 01 e CPC 27; RDC 509): anexa o PDF do laudo ao bem. O arquivo vai primeiro ao
-   * armazenamento com Object Lock (chave do SHA-256; o mesmo PDF é reaproveitado), depois a linha imutável no banco.
+   * disco local, somente leitura (chave do SHA-256; o mesmo PDF é reaproveitado), depois a linha imutável no banco.
    */
   async anexarLaudo(
     s: SessaoPatrimonio,

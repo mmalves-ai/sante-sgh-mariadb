@@ -45,6 +45,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type ContextoPortaM18, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
+import { idNaChave } from '../arquivos-locais.js';
+import { chaveFotoVisitante } from './fotos.js';
 import { type ContextoPortaria, type GravadorPortaria, METODOS_PORTA_PORTARIA, type PortaPortaria } from './porta.js';
 import {
   type AcompanhanteRegistrado,
@@ -177,7 +179,7 @@ const SQL_GUARDA_VENCIDA = `
 
 const SQL_VISITANTE = `
   SELECT pp.id, pp.nome, pp.cpf, td.codigo AS tipo_documento, pp.numero_documento, pp.data_nascimento, pp.telefone,
-         pp.tipo_visitante_id, a.chave_armazenamento AS foto, pp.criado_em, pp.guarda_ate,
+         pp.tipo_visitante_id, a.id AS foto_id, a.tipo_mime AS foto_tipo, pp.criado_em, pp.guarda_ate,
          (SELECT MAX(v.entrada_em) FROM visita v WHERE v.pessoa_portaria_id = pp.id AND v.excluido_em IS NULL) AS ultima
     FROM pessoa_portaria pp
     LEFT JOIN tipo_documento_identificacao td ON td.id = pp.tipo_documento_identificacao_id
@@ -667,15 +669,19 @@ export class PortaPortariaPropria implements PortaPortaria {
 
   foto(c: ContextoPortaria, visitante: number): Promise<string | null> {
     return this.ler(c, async (l) => {
-      const r = await l.uma<{ chave: unknown }>(
-        `SELECT a.chave_armazenamento AS chave FROM pessoa_portaria pp JOIN arquivo a ON a.id = pp.foto_arquivo_id
+      const r = await l.uma<Linha>(
+        `SELECT a.id AS foto_id, a.tipo_mime AS foto_tipo FROM pessoa_portaria pp JOIN arquivo a ON a.id = pp.foto_arquivo_id
           WHERE pp.id = ? AND pp.excluido_em IS NULL AND a.excluido_em IS NULL`,
         [visitante],
       );
-      return textoN(r?.chave);
+      return r ? chaveDaFoto(r) : null;
     });
   }
 }
+
+/** A chave da foto vista pelo módulo (`visitante/arquivo-<id>.<ext>`), pelo id e tipo do registro em `arquivo`. */
+const chaveDaFoto = (r: Linha): string | null =>
+  r['foto_id'] === null || r['foto_id'] === undefined ? null : chaveFotoVisitante(n(r['foto_id']), texto(r['foto_tipo']));
 
 // ── Leituras comuns ─────────────────────────────────────────────────────────────────────────────────
 
@@ -745,7 +751,7 @@ function visitanteDe(r: Linha, fuso: string): VisitanteRegistrado {
     nascimento: dataIso(r['data_nascimento']),
     telefone: textoN(r['telefone']),
     tipoVisitante: n(r['tipo_visitante_id']),
-    fotoChave: textoN(r['foto']),
+    fotoChave: chaveDaFoto(r),
     // O prazo de guarda gravado; sem ele, derivado da última visita e do prazo padrão.
     reterAte: dataIso(r['guarda_ate']) ?? (base ? somarDias(base, RETENCAO_PADRAO_DIAS) : ''),
     ultimaVisita: ultima,
@@ -903,26 +909,32 @@ function gravadorSobre(
       if (!tipo) throw recusa('tipo-visitante-invalido', 'Escolha um tipo de visitante ativo.', { campos: ['tipoVisitante'] });
       const [ja] = await tx.consultarParaAtualizar<Linha>(
         cpf
-          ? `SELECT pp.id, pp.versao, a.chave_armazenamento AS foto FROM pessoa_portaria pp
+          ? `SELECT pp.id, pp.versao, a.id AS foto_id, a.tipo_mime AS foto_tipo FROM pessoa_portaria pp
                LEFT JOIN arquivo a ON a.id = pp.foto_arquivo_id WHERE pp.cpf = ? AND pp.excluido_em IS NULL`
-          : `SELECT pp.id, pp.versao, a.chave_armazenamento AS foto FROM pessoa_portaria pp
+          : `SELECT pp.id, pp.versao, a.id AS foto_id, a.tipo_mime AS foto_tipo FROM pessoa_portaria pp
                LEFT JOIN arquivo a ON a.id = pp.foto_arquivo_id
               WHERE pp.tipo_documento_identificacao_id = ? AND pp.numero_documento = ? AND pp.excluido_em IS NULL`,
         cpf ? [cpf] : [tipoDoc, numero],
       );
-      const fotoId = v.foto
-        ? await tx.incluir('arquivo', {
-            estabelecimento_id: est,
-            entidade: 'pessoa_portaria',
-            entidade_id: ja ? n(ja['id']) : null,
-            finalidade: 'foto_visitante',
-            nome_original: v.foto.chave.split('/').at(-1) ?? 'foto',
-            tipo_mime: v.foto.tipoMime,
-            tamanho_bytes: v.foto.tamanho,
-            hash_sha256: v.foto.hash,
-            chave_armazenamento: v.foto.chave,
-          })
-        : null;
+      // A foto já foi registrada em `arquivo` pela porta de arquivos do núcleo (ADR 0004): aqui só se liga o registro
+      // (do mesmo estabelecimento, ativo, de foto de visitante, com o mesmo hash) ao cadastro. Nunca um segundo registro.
+      let foto: { id: number; versao: number } | null = null;
+      if (v.foto) {
+        const fid = idNaChave(v.foto.chave);
+        const [a] = fid
+          ? await tx.consultarParaAtualizar<Linha>(
+              `SELECT id, versao FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND finalidade = 'foto_visitante'
+                  AND hash_sha256 = ? AND excluido_em IS NULL`,
+              [fid, est, v.foto.hash],
+            )
+          : [];
+        if (!a) throw recusa('foto-inexistente', 'A foto não foi guardada: envie a foto de novo.', { campos: ['foto'] });
+        foto = { id: n(a['id']), versao: n(a['versao']) };
+      }
+      const fotoId = foto?.id ?? null;
+      const ligarFoto = async (pessoa: number) => {
+        if (foto) await tx.alterar('arquivo', foto.id, foto.versao, { entidade: 'pessoa_portaria', entidade_id: pessoa });
+      };
       const valores = {
         nome: v.nome.slice(0, 150),
         tipo_visitante_id: v.tipoVisitante,
@@ -933,7 +945,8 @@ function gravadorSobre(
       if (ja) {
         const id = n(ja['id']);
         await tx.alterar('pessoa_portaria', id, n(ja['versao']), valores);
-        const anterior = textoN(ja['foto']);
+        await ligarFoto(id);
+        const anterior = chaveDaFoto(ja);
         return { id, novo: false, fotoAnterior: v.foto && anterior && anterior !== v.foto.chave ? anterior : null };
       }
       let id: number;
@@ -949,7 +962,7 @@ function gravadorSobre(
           throw recusa('visitante-em-uso', 'Outro cadastro com este documento acabou de ser gravado: busque o visitante.');
         throw x;
       }
-      if (fotoId) await tx.executar('UPDATE arquivo SET entidade_id = ? WHERE id = ?', [id, fotoId]);
+      await ligarFoto(id);
       return { id, novo: true, fotoAnterior: null };
     },
 
@@ -958,7 +971,7 @@ function gravadorSobre(
       // anônimo (o histórico da portaria continua contável). As fotos voltam para o chamador apagar o arquivo.
       const corte = instante(`${somarDias(x.hoje, -(x.retencaoDias ?? RETENCAO_PADRAO_DIAS))}T00:00`, fuso);
       const vencidos = await tx.consultarParaAtualizar<Linha>(
-        `SELECT pp.id, pp.versao, a.chave_armazenamento AS foto FROM pessoa_portaria pp
+        `SELECT pp.id, pp.versao, a.id AS foto_id, a.tipo_mime AS foto_tipo FROM pessoa_portaria pp
            LEFT JOIN arquivo a ON a.id = pp.foto_arquivo_id AND a.excluido_em IS NULL
           WHERE ${SQL_GUARDA_VENCIDA} ORDER BY pp.id LIMIT ${Math.max(1, Math.trunc(x.teto))}`,
         [corte, x.hoje],
@@ -983,7 +996,7 @@ function gravadorSobre(
           anonimizada_em: new Date(),
         });
         ids.push(n(v['id']));
-        const foto = textoN(v['foto']);
+        const foto = chaveDaFoto(v);
         if (foto) fotos.push(foto);
       }
       return { ids, fotos };

@@ -244,10 +244,10 @@ put DOCUMENTO_URL_VALIDACAO https://localhost/validar
 # Sem servidor de e-mail no ensaio: a porta do dublê de e-mail em loopback (nada escuta; nada sai do contêiner).
 put SMTP_URL smtp://127.0.0.1:1325
 for k in AVISO_TI_EMAIL AVISO_RT_EMAIL AUDITORIA_EMAIL ENCARREGADO_EMAIL PLANTAO_EMAIL; do put "$k" ti@localhost; done
-# Sem armazenamento de objetos no ensaio: um endereço local que não escuta (a API só o usa ao guardar um arquivo).
-put S3_ENDPOINT http://127.0.0.1:8333
-put S3_ACESSO ensaio
-put S3_SEGREDO "$ENSAIO_SONDA_TOKEN"
+# Arquivos no disco da máquina (ADR 0004): a pasta da instalação, do usuário do serviço e com modo 0750.
+install -d -m 0750 /srv/sante-sgh/arquivos
+if id sante-sgh >/dev/null 2>&1; then chown sante-sgh:sante-sgh /srv/sante-sgh/arquivos; fi
+put ARQUIVOS_RAIZ /srv/sante-sgh/arquivos
 # A conta técnica de sonda entra no sante.env pelo subcomando sonda (manual §6.4), depois da migração. Na primeira instalação as duas
 # linhas ficam comentadas (manual §5.6: a conta só existe depois da instalação).
 for k in SONDA_LOGIN SONDA_SENHA; do sed -i -E "s/^$k=.*/# $k=/" "$f"; done

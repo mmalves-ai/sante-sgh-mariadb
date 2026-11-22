@@ -3,6 +3,15 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import {
+  type ArmazemArquivosLocal,
+  type ContextoNucleo,
+  criarArmazemLocal,
+  criarPastaArquivosTeste,
+  NucleoProprio,
+  type PastaArquivosTeste,
+} from '@sgh/nucleo';
+import { armazemSobDemanda } from './infra/arquivos.js';
 
 export const IMAGEM_VERAPDF =
   'verapdf/cli:v1.30.2@sha256:d5ee329657cf9bc4b2400392dd54c7d0a0ce9980ff6fa2da5590eebeec007cdb';
@@ -150,4 +159,47 @@ export function compararSnapshot(
   if (mesmoTamanho)
     for (let i = 0; i < total; i++) if (Math.abs((a.pixels[i] ?? 0) - (r.pixels[i] ?? 0)) > 64) diferentes++;
   return { criado: false, diferentes, total, fracao: mesmoTamanho ? diferentes / total : 1, mesmoTamanho };
+}
+
+/**
+ * Arquivos dos testes de PDF (ADR 0004): a porta de arquivos no disco local sobre o cliente de teste
+ * (SGH_CLIENTE_TESTE) e uma pasta temporária como raiz, apagada no fim. `armazem` pode ser passado ao serviço antes do
+ * `preparar()` (é criado no primeiro uso).
+ */
+export interface ArquivosDeTeste {
+  readonly cliente: string;
+  readonly armazem: ReturnType<typeof armazemSobDemanda>;
+  contexto(): ContextoNucleo;
+  local(): ArmazemArquivosLocal;
+  /** Nome do banco do cliente (a pasta dele na raiz). */
+  banco(): Promise<string>;
+  preparar(): Promise<void>;
+  encerrar(): Promise<void>;
+}
+
+export function arquivosDeTeste(): ArquivosDeTeste {
+  const cliente = process.env['SGH_CLIENTE_TESTE']?.trim() || 'teste_nucleo';
+  let nucleo: NucleoProprio | null = null;
+  let pasta: PastaArquivosTeste | null = null;
+  let local: ArmazemArquivosLocal | null = null;
+  const exigir = (): ArmazemArquivosLocal => {
+    if (!local) throw new Error('arquivosDeTeste: chame preparar() no beforeAll.');
+    return local;
+  };
+  return {
+    cliente,
+    armazem: armazemSobDemanda(exigir),
+    contexto: () => ({ cliente, estabelecimento: null, usuario: null, correlacao: 'teste-arquivos-pdf' }),
+    local: exigir,
+    banco: async () => (await nucleo!.cliente(cliente)).banco,
+    async preparar() {
+      nucleo = new NucleoProprio();
+      pasta = await criarPastaArquivosTeste(cliente);
+      local = criarArmazemLocal(nucleo, { raiz: pasta.raiz });
+    },
+    async encerrar() {
+      await pasta?.apagar();
+      await nucleo?.encerrar();
+    },
+  };
 }

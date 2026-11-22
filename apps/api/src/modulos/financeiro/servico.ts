@@ -2,7 +2,7 @@
 // pelas gravações diretas da porta, também com a trilha junto), a alçada e a segregação conferidas no servidor (regras 4 e 5), os títulos da
 // competência (regra 10), a glosa no título (regra 12), a conciliação por regra, o fluxo de caixa, a DRE em duas réguas,
 // os indicadores com as parcelas, e o fiscal (NFS-e, DMED, EFD-REINF, lote contábil e remessa) gerado como arquivo,
-// guardado no S3 com hash, e enviado só ao SIMULADOR fora de produção (nada sai para banco, prefeitura ou Receita).
+// guardado no disco local com hash, e enviado só ao SIMULADOR fora de produção (nada sai para banco, prefeitura ou Receita).
 import { createHash } from 'node:crypto';
 import {
   type AprovarTituloEntrada,
@@ -63,7 +63,12 @@ import {
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { ApoiosFinanceiro } from './apoios.js';
-import type { ArmazemFinanceiro } from './armazem.js';
+import { type ArmazemFinanceiro, ErroSobrescritaArquivo } from './armazem.js';
+
+/** A chave ocupada é o mesmo arquivo (a chave sai do hash): segue; outra falha da guarda (disco, raiz) sobe. */
+const jaGuardado = (e: unknown): void => {
+  if (!(e instanceof ErroSobrescritaArquivo)) throw e;
+};
 import type { ContextoFinanceiro, PortaFinanceiro } from './porta.js';
 
 const ctx = (s: SessaoCadastro): ContextoFinanceiro => s.porta;
@@ -299,7 +304,8 @@ export class ServicoFinanceiro {
     );
     const hash = sha256(arquivo.conteudo);
     const chave = `remessa/${conta.id}/${hoje}-${hash.slice(0, 16)}.rem`;
-    await this.armazem.guardar(chave, bytes(arquivo.conteudo), 'text/plain');
+    const conteudoRemessa = bytes(arquivo.conteudo);
+    await this.armazem.guardar(chave, conteudoRemessa, 'text/plain');
     // Fora de produção, nada sai para o banco: o simulador devolve o retorno (ocorrência 00 = crédito efetuado).
     const retorno = this.ambiente === 'producao' ? null : simularRetorno(titulos);
     const r = await this.apoios.apoios.contasPagar.sgh(
@@ -315,7 +321,7 @@ export class ServicoFinanceiro {
           titulos: titulos.length,
           valorTotal: arquivo.total,
           hashArquivo: hash,
-          chaveObjeto: chave,
+          arquivo: { chave, tamanhoBytes: conteudoRemessa.length, tipoMime: 'text/plain' },
           destino: this.ambiente === 'producao' ? 'banco' : 'simulador',
           situacao: retorno ? 'retornada' : 'gerada',
           hashRetorno: retorno ? sha256(JSON.stringify(retorno)) : null,
@@ -423,11 +429,9 @@ export class ServicoFinanceiro {
     }
     const hash = sha256(e.conteudo);
     const chave = `extrato/${e.conta}/${hash}.${e.origem}`;
-    try {
-      await this.armazem.guardar(chave, bytes(e.conteudo), 'text/plain');
-    } catch {
-      // O mesmo arquivo já guardado (imutável): a importação é idempotente pelo hash.
-    }
+    const conteudoExtrato = bytes(e.conteudo);
+    // O mesmo arquivo já guardado (imutável): a importação é idempotente pelo hash. Outra falha da guarda sobe.
+    await this.armazem.guardar(chave, conteudoExtrato, 'text/plain').catch(jaGuardado);
     const r = await this.apoios.apoios.tesouraria.sgh(
       comChave(s),
       E.financeiroExtratoImportado.codigo,
@@ -439,7 +443,7 @@ export class ServicoFinanceiro {
           conta: e.conta,
           origem: e.origem,
           hashArquivo: hash,
-          chaveObjeto: chave,
+          arquivo: { chave, tamanhoBytes: conteudoExtrato.length, tipoMime: 'text/plain' },
           linhas,
         }),
     );
@@ -738,7 +742,8 @@ export class ServicoFinanceiro {
     });
     const hash = sha256(xml);
     const chave = `nfse/${hash}.xml`;
-    await this.armazem.guardar(chave, bytes(xml), 'application/xml');
+    const conteudoXml = bytes(xml);
+    await this.armazem.guardar(chave, conteudoXml, 'application/xml');
     const sim = simularPrefeitura(xml, Date.now() % 1_000_000_000);
     const r = await this.apoios.apoios.fiscal.sgh(
       comChave(s),
@@ -765,7 +770,7 @@ export class ServicoFinanceiro {
           situacao: 'simulada',
           numero: sim.numero,
           hashXml: hash,
-          chaveObjeto: chave,
+          arquivo: { chave, tamanhoBytes: conteudoXml.length, tipoMime: 'application/xml' },
         }),
     );
     return resultadoFin(
@@ -807,7 +812,8 @@ export class ServicoFinanceiro {
     }
     const hash = sha256(arquivo.conteudo);
     const chave = `declaracao/${e.tipo}/${e.periodo}-${hash.slice(0, 16)}`;
-    await this.armazem.guardar(chave, bytes(arquivo.conteudo), 'text/plain').catch(() => undefined);
+    const conteudoDeclaracao = bytes(arquivo.conteudo);
+    await this.armazem.guardar(chave, conteudoDeclaracao, 'text/plain').catch(jaGuardado);
     const r = await this.apoios.apoios.fiscal.sgh(
       comChave(s),
       E.financeiroDeclaracaoGerada.codigo,
@@ -822,7 +828,7 @@ export class ServicoFinanceiro {
           registros: arquivo.registros,
           valorTotal: arquivo.valorTotal,
           hashArquivo: hash,
-          chaveObjeto: chave,
+          arquivo: { chave, tamanhoBytes: conteudoDeclaracao.length, tipoMime: 'text/plain' },
         }),
     );
     return resultadoFin(
@@ -877,7 +883,8 @@ export class ServicoFinanceiro {
     );
     const hash = sha256(lote.conteudo);
     const chave = `contabil/${e.periodo}-${e.regua}-${hash.slice(0, 16)}.txt`;
-    await this.armazem.guardar(chave, bytes(lote.conteudo), 'text/plain').catch(() => undefined);
+    const conteudoLote = bytes(lote.conteudo);
+    await this.armazem.guardar(chave, conteudoLote, 'text/plain').catch(jaGuardado);
     const r = await this.apoios.apoios.fiscal.sgh(
       comChave(s),
       E.financeiroLoteContabilExportado.codigo,
@@ -893,7 +900,7 @@ export class ServicoFinanceiro {
           somaCreditos: lote.somaCreditos,
           semDePara: lote.semDePara.length,
           hashArquivo: hash,
-          chaveObjeto: chave,
+          arquivo: { chave, tamanhoBytes: conteudoLote.length, tipoMime: 'text/plain' },
         }),
     );
     return resultadoFin(

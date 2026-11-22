@@ -11,12 +11,17 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from '../atendimento/public-api.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
-import { CACHE_CONFIG, type CacheConfig, FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
+import {
+  CACHE_CONFIG,
+  type CacheConfig,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+} from '../config/public-api.js';
 import { ConfiguracaoM16 } from '../internacao/configuracao.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
 import { BATIDA_EVENTOS_MS, BATIDA_EVENTOS_PADRAO_MS, CONFIGURACAO_M16 } from '../internacao/simbolos.js';
 import type { ContextoModulo } from '../registro.js';
-import { ARMAZEM_FOTOS, type ArmazemFotos, ArmazemFotosMemoria } from './fotos.js';
+import { ARMAZEM_FOTOS, type ArmazemFotos, criarArmazemFotos } from './fotos.js';
 import { HigienizacaoController } from './higienizacao.controller.js';
 import { InternacaoController } from './internacao.controller.js';
 import { MapaLeitosController } from './leitos.controller.js';
@@ -37,7 +42,7 @@ export interface OpcoesModuloAdt {
   /** Portas prontas (testes). */
   readonly adt?: PortaAdt;
   readonly nir?: PortaNir;
-  /** Armazém das fotos da higienização (testes; padrão: memória). */
+  /** Armazém das fotos da higienização (testes; padrão: o disco local com o núcleo, memória sem ele). */
   readonly fotos?: ArmazemFotos;
   /** Batida do canal de eventos (testes). */
   readonly batidaEventosMs?: number;
@@ -52,16 +57,23 @@ export async function portasDaInternacao(ctx: ContextoModulo): Promise<{ adt: Po
   }
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
     const cadastro = new PortaCadastroMemoria();
-    const estadoNir = new EstadoNirMemoria({ arquivoPorFora: ctx.env['NIR_SINTETICO_POR_FORA']?.trim() || null });
+    const estadoNir = new EstadoNirMemoria({
+      arquivoPorFora: ctx.env['NIR_SINTETICO_POR_FORA']?.trim() || null,
+    });
     const adt = new PortaAdtMemoria(
       { estado: () => 'verde' },
       {
-        painel: new FonteInternacaoMemoria({ arquivoPorFora: ctx.env['LEITOS_SINTETICOS_POR_FORA']?.trim() || null }),
+        painel: new FonteInternacaoMemoria({
+          arquivoPorFora: ctx.env['LEITOS_SINTETICOS_POR_FORA']?.trim() || null,
+        }),
         lerPacientes: (c, ids) => cadastro.lerPacientes(c, ids),
         nir: estadoNir,
       },
     );
-    return { adt, nir: new PortaNirMemoria(estadoNir, adt, ctx.trilha, (c, ids) => cadastro.lerPacientes(c, ids)) };
+    return {
+      adt,
+      nir: new PortaNirMemoria(estadoNir, adt, ctx.trilha, (c, ids) => cadastro.lerPacientes(c, ids)),
+    };
   }
   return { adt: portaAdtIndisponivel(), nir: portaNirIndisponivel() };
 }
@@ -90,12 +102,17 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       { provide: PORTA_NIR, useValue: nir },
       { provide: AVISOS_ADT, useValue: new AvisosAtendimento(null, 'leitos') },
       { provide: AVISOS_ATENDIMENTO, useValue: new AvisosAtendimento(null) },
-      { provide: ARMAZEM_FOTOS, useValue: opcoes.fotos ?? new ArmazemFotosMemoria() },
+      {
+        provide: ARMAZEM_FOTOS,
+        useValue:
+          opcoes.fotos ?? criarArmazemFotos(ctx.configuracao, ctx.env as NodeJS.ProcessEnv, ctx.nucleo),
+      },
       { provide: BATIDA_EVENTOS_MS, useValue: opcoes.batidaEventosMs ?? BATIDA_EVENTOS_PADRAO_MS },
       { provide: INTEGRACAO_OS_LEITO, useClass: IntegracaoOsLeitoAdt },
       {
         provide: CONFIGURACAO_M16,
-        useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) => new ConfiguracaoM16(cfg, cache),
+        useFactory: (cfg: FonteConfiguracao | null, cache: CacheConfig | null) =>
+          new ConfiguracaoM16(cfg, cache),
         inject: [
           { token: FONTE_CONFIGURACAO, optional: true },
           { token: CACHE_CONFIG, optional: true },

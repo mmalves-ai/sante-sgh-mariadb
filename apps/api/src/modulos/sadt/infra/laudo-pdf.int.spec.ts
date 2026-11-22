@@ -1,5 +1,5 @@
 // Laudo em PDF/A (ficha do M26, regra 11; seção 10 "Documento"): o laudo dos exames liberados, emitido pelo serviço de
-// emissão do M09 (Gotenberg + S3 com Object Lock), com o código de autenticação e o QR da validação pública, passa no
+// emissão do M09 (Gotenberg + porta de arquivos no disco local, ADR 0004), com o código de autenticação e o QR da validação pública, passa no
 // veraPDF (PDF/A-2b, 0 regra com falha), sai com "2ª via" na reemissão e tem o snapshot visual da primeira página
 // (referência versionada em snapshots/sadt-laudo.pgm; SGH_ATUALIZAR_SNAPSHOT=sim regrava). Pela API (porta em memória):
 // a emissão grava o laudo no novo, a 2ª via pede o motivo e a validação pública mostra só a emissão (sem conteúdo
@@ -24,7 +24,7 @@ import {
   verapdf,
 } from '../../documento/integracao.spec-util.js';
 import { RegistroEmissoesMemoria } from '../../documento/infra/registro.js';
-import { ClienteS3 } from '../../documento/infra/s3.js';
+import { arquivosDeTeste } from '../../documento/integracao.spec-util.js';
 import { PortaDocumentosMemoria } from '../../pep/documentos-porta-memoria.js';
 import { moduloPep } from '../../pep/modulo.js';
 import { REGISTRO_MODULOS } from '../../registro.js';
@@ -32,18 +32,16 @@ import { moduloSadt } from '../modulo.js';
 import { camposDoLaudo } from '../aplicacao/servico.js';
 import { PortaSadtMemoria } from '../porta-memoria.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m26-${Date.now()}`;
 const CODIGO = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const arquivos = arquivosDeTeste();
 const servico = new EmissaoService({
-  s3,
-  bucket,
+  armazem: arquivos.armazem,
+  cliente: arquivos.cliente,
   gotenbergUrl: GOTENBERG,
   registro: new RegistroEmissoesMemoria(),
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -95,10 +93,13 @@ const pedido = () => ({
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  await s3.criarBucketComTrava(bucket);
+  await arquivos.preparar();
   pasta = pastaTemporaria('m26-pdf-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await arquivos.encerrar();
+});
 
 describe('laudo em PDF/A (M26)', () => {
   it('PDF/A-2b sem falha no veraPDF, hash conferido, 2ª via marcada e o snapshot da primeira página', async () => {
@@ -137,9 +138,7 @@ describe('emissão pela API (porta em memória, serviço de emissão do Compose)
     ...envTeste,
     AMBIENTE: 'dev',
     API_MODULOS: 'sadt,pep,documento,acesso,config',
-    S3_ENDPOINT: S3,
     GOTENBERG_URL: GOTENBERG,
-    S3_BUCKET_DOCUMENTOS: bucket,
   };
   beforeAll(async () => {
     const trilha = new RegistradorTrilhaMemoria();

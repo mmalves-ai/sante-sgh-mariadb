@@ -144,7 +144,7 @@ describe('regra 15: conciliação, crédito e remessas só nas contas do escopo 
           titulos: 1,
           valorTotal: 10,
           hashArquivo: `h${conta}`,
-          chaveObjeto: null,
+          arquivo: null,
           destino: 'simulador',
           situacao: 'gerada',
           hashRetorno: null,

@@ -5,7 +5,7 @@ export { ServicoSusAih } from './servico-aih.js';
 export { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 export { PortaSusPropria } from './porta-propria.js';
 export { PortaSusMemoria, SIGTAP_SINTETICO } from './porta-memoria.js';
-export { armazemSusMemoria, armazemSusS3 } from './armazem.js';
+export { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 export { ServicoSus, type ArmazemArquivoSus, type SessaoSus } from './servico.js';
 export { montarCihaDaCompetencia, type ParametrosSus } from './montagem.js';
 export { modulo, portaDoSus } from './modulo.js';

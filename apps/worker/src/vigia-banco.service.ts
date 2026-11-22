@@ -1,7 +1,7 @@
 // Serviço do vigia do banco próprio (lote F2.2 05-17; no lugar do vigia do banco de origem, M09): a cada VIGIA_BANCO_MS
 // coleta as transações abertas (vigia-banco.ts), o estado dos pools e a saúde da plataforma; exporta as métricas
 // OpenTelemetry (painel "Banco" do Grafana) e alerta no log (só códigos, contagens e durações). Também mede a saúde dos
-// serviços do Compose (Gotenberg, S3) para o painel "Técnico". Desligado por VIGIA_BANCO=desligado.
+// serviços do Compose (Gotenberg; o S3 saiu pelo ADR 0004) para o painel "Técnico". Desligado por VIGIA_BANCO=desligado.
 // Melhoria: um único núcleo para todos os clientes (um pool por banco de cliente), em vez de uma conexão por hospital
 // configurado no ambiente.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
@@ -19,11 +19,10 @@ import {
 export type NucleoVigiaBanco = Pick<NucleoProprio, 'saude' | 'lerPlataforma' | 'encerrar'>;
 export type Sondagem = () => Promise<ReadonlyMap<string, number>>;
 
-/** Gotenberg e S3 respondendo (1) ou não (0). */
+/** Gotenberg respondendo (1) ou não (0). */
 export async function sondarServicos(env: NodeJS.ProcessEnv = process.env): Promise<Map<string, number>> {
   const alvos: [string, string][] = [
     ['gotenberg', `${env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318'}/health`],
-    ['s3', `${env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318'}/healthz`],
   ];
   const r = new Map<string, number>();
   for (const [nome, url] of alvos) {
@@ -103,11 +102,15 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
           logger.warn({}, 'vigia do banco: sem permissão para ver as transações abertas (PROCESS)');
         }
       } catch (e) {
-        logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'vigia do banco: coleta das transações falhou');
+        logger.warn(
+          { erro: e instanceof Error ? e.name : 'erro' },
+          'vigia do banco: coleta das transações falhou',
+        );
       }
       this.servicos = await this.sondar();
       const alertas = alertasDaColeta(saude, transacoes, this.limiteMs);
-      for (const a of alertas) logger.warn({ alerta: a.tipo, quantidade: a.quantidade }, `alerta do vigia: ${a.detalhe}`);
+      for (const a of alertas)
+        logger.warn({ alerta: a.tipo, quantidade: a.quantidade }, `alerta do vigia: ${a.detalhe}`);
       this.ultima = {
         plataforma: saude.plataforma,
         neutralizacao: saude.neutralizacao,
@@ -127,17 +130,28 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
 
   private registrarMetricas(): void {
     const m = metrics.getMeter('sgh-vigia-banco');
-    const g = (nome: string, descricao: string, valor: (r: RodadaVigiaBanco) => number | null, unidade = '') =>
+    const g = (
+      nome: string,
+      descricao: string,
+      valor: (r: RodadaVigiaBanco) => number | null,
+      unidade = '',
+    ) =>
       m.createObservableGauge(nome, { description: descricao, unit: unidade }).addCallback((o) => {
         const r = this.ultima;
         const v = r ? valor(r) : null;
         if (v !== null) o.observe(v);
       });
     g('sgh.banco.plataforma', 'Banco plataforma respondendo (1) ou não (0)', (r) => (r.plataforma ? 1 : 0));
-    g('sgh.banco.neutralizacao', 'Neutralização de saídas aprovada (1) ou não (0)', (r) => (r.neutralizacao ? 1 : 0));
+    g('sgh.banco.neutralizacao', 'Neutralização de saídas aprovada (1) ou não (0)', (r) =>
+      r.neutralizacao ? 1 : 0,
+    );
     g('sgh.banco.transacoes', 'Transações abertas no servidor', (r) => r.transacoes?.abertas ?? null);
     g('sgh.banco.transacoes.escrita', 'Transações de escrita abertas', (r) => r.transacoes?.escrita ?? null);
-    g('sgh.banco.transacoes.acima_limite', 'Transações acima do limite', (r) => r.transacoes?.acimaDoLimite ?? null);
+    g(
+      'sgh.banco.transacoes.acima_limite',
+      'Transações acima do limite',
+      (r) => r.transacoes?.acimaDoLimite ?? null,
+    );
     g('sgh.banco.travas.esperas', 'Transações esperando trava', (r) => r.transacoes?.esperandoTrava ?? null);
     g(
       'sgh.banco.transacao.mais_longa',
@@ -148,7 +162,9 @@ export class VigiaBancoService implements OnApplicationBootstrap, OnApplicationS
     g('sgh.banco.coleta.duracao', 'Duração da rodada do vigia', (r) => r.duracaoMs / 1000, 's');
     g('sgh.banco.alertas', 'Alertas na última rodada', (r) => r.alertas.length);
     g('sgh.vigia.transacao_limite', 'Limite de transação', () => this.limiteMs / 1000, 's');
-    m.createObservableGauge('sgh.banco.pool.conexoes', { description: 'Conexões do pool por banco' }).addCallback((o) => {
+    m.createObservableGauge('sgh.banco.pool.conexoes', {
+      description: 'Conexões do pool por banco',
+    }).addCallback((o) => {
       for (const p of this.ultima?.pools ?? []) {
         o.observe(p.ativas, { banco: p.banco, estado: 'ativas' });
         o.observe(p.ociosas, { banco: p.banco, estado: 'ociosas' });

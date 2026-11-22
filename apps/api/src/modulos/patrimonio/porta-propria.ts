@@ -39,6 +39,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { ContextoPatrimonio, PortaPatrimonio } from './porta.js';
@@ -1216,7 +1217,7 @@ const anexarLaudoZ = z.object({
 
 const opAnexarLaudo = definirOperacao({
   nome: 'patrimonio.laudo.anexar',
-  tabelas: ['laudo_bem'],
+  tabelas: ['laudo_bem', 'arquivo'],
   entrada: anexarLaudoZ,
   travar: (x) => ({ tabela: 'bem_patrimonial', id: x.bem, colunas: ['estabelecimento_id'] }),
   async conferir(_tx, _x, ctx, relido) {
@@ -1238,6 +1239,21 @@ const opAnexarLaudo = definirOperacao({
       chave_armazenamento: x.chave,
       sha256: x.sha256,
       tamanho_bytes: x.tamanho,
+    });
+    // ADR 0004 (RDC 509: guarda de 5 anos): o PDF guardado no disco é registrado em `arquivo` na mesma transação
+    // (hash, tamanho, tipo, imutável e guarda legal), e é esse registro que o vigia do worker confere. O mesmo PDF já
+    // anexado a outro bem é o mesmo arquivo (chave do hash): o registro existente é reaproveitado.
+    await registrarArquivoGuardado(tx, {
+      estabelecimento: tx.contexto.estabelecimento ?? null,
+      entidade: 'laudo_bem',
+      entidadeId: id,
+      finalidade: 'laudo',
+      nomeOriginal: x.nome,
+      tipoMime: 'application/pdf',
+      tamanhoBytes: x.tamanho,
+      hash: x.sha256,
+      chave: x.chave,
+      retencaoAte: retencaoAte(new Date()),
     });
     return { id };
   },

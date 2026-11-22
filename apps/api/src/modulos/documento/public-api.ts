@@ -2,6 +2,14 @@
 export { DocumentoController } from './documento.controller.js';
 export { criarFonteDocumento, FONTE_DOCUMENTO, type FonteDocumento } from './fonte.js';
 export { EmissaoService, politicaRetencao, type PedidoEmissao } from './aplicacao/emissao.service.js';
-// M34: a conversão HTML → PDF/A da exportação dos relatórios e o S3 do conteúdo bruto das integrações.
+// M34: a conversão HTML → PDF/A da exportação dos relatórios.
 export { converterHtmlEmPdfA } from './infra/gotenberg.js';
-export { ClienteS3 } from './infra/s3.js';
+// ADR 0004: a porta de arquivos escolhida pelo ambiente (catálogos, integrações e os demais módulos).
+export {
+  armazemArquivosDoAmbiente,
+  estabelecimentoDoCliente,
+  type ResolverEstabelecimento,
+  ArmazemArquivosMemoria,
+  armazemSobDemanda,
+  idDoArquivo,
+} from './infra/arquivos.js';

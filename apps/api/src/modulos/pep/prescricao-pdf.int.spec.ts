@@ -1,5 +1,5 @@
 // Prescrição impressa em PDF/A (ficha do M24, seção 10 "Documento"): a prescrição com os horários previstos, emitida
-// pelo serviço de emissão do M09 (Gotenberg + S3 com Object Lock), com o corpus CP1252 na observação para a
+// pelo serviço de emissão do M09 (Gotenberg + porta de arquivos no disco local, ADR 0004), com o corpus CP1252 na observação para a
 // enfermagem, passa no veraPDF (PDF/A-2b, 0 regra com falha), sai com "2ª via" na reimpressão e tem o snapshot visual
 // da primeira página (referência versionada em snapshots/pep-prescricao.pgm; SGH_ATUALIZAR_SNAPSHOT=sim regrava).
 // Serviços do Compose sgh (127.0.0.1); massa SINTÉTICA; nada sai da máquina. Fora do `pnpm verificar`: roda pelo
@@ -17,7 +17,7 @@ import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
 import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { RegistroEmissoesMemoria } from '../documento/infra/registro.js';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { arquivosDeTeste } from '../documento/integracao.spec-util.js';
 import {
   compararSnapshot,
   metadadosPdf,
@@ -28,18 +28,16 @@ import {
 } from '../documento/integracao.spec-util.js';
 import { criarAppPep } from './teste.spec-util.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m09-${Date.now()}`;
 const CORPUS = 'Ação, pé, avó, Ü; “aspas” – € 1,50; 1º, 2ª; ½ dose.';
 
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const arquivos = arquivosDeTeste();
 const servico = new EmissaoService({
-  s3,
-  bucket,
+  armazem: arquivos.armazem,
+  cliente: arquivos.cliente,
   gotenbergUrl: GOTENBERG,
   registro: new RegistroEmissoesMemoria(),
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -109,10 +107,13 @@ const pedido = () => ({
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  await s3.criarBucketComTrava(bucket);
+  await arquivos.preparar();
   pasta = pastaTemporaria('m24-pdf-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await arquivos.encerrar();
+});
 
 describe('prescrição impressa em PDF/A (M24)', () => {
   it('PDF/A-2b sem falha no veraPDF, hash conferido, 2ª via marcada e o snapshot da primeira página', async () => {
@@ -150,9 +151,7 @@ describe('impressão pela API (porta em memória, serviço de emissão do Compos
   const env: Record<string, string> = {
     ...envTeste,
     AMBIENTE: 'dev',
-    S3_ENDPOINT: S3,
     GOTENBERG_URL: GOTENBERG,
-    S3_BUCKET_DOCUMENTOS: bucket,
   };
   beforeAll(async () => {
     const trilha = new RegistradorTrilhaMemoria();

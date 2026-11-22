@@ -208,7 +208,7 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
     return this.ler((l) => fn(l, est));
   }
 
-  async reservar(e: EmissaoDocumento): Promise<void> {
+  async reservar(e: EmissaoDocumento): Promise<number> {
     if (e.versaoS3 !== null) throw new ErroEmissao('A reserva entra sem versão do S3.');
     if (this.ctx.estabelecimento === null) throw new ErroEmissao('A emissão exige o estabelecimento da sessão.');
     const entrada: Reserva = {
@@ -227,7 +227,8 @@ export class RegistroEmissoesPropria implements RegistroEmissoes {
       autor: e.autor,
       emitidoEm: e.emitidoEm,
     };
-    await this.executor.executar(reservar, this.ctx.cliente, entrada, this.contexto()).catch(traduzir);
+    const r = await this.executor.executar(reservar, this.ctx.cliente, entrada, this.contexto()).catch(traduzir);
+    return Number(r.resultado['id']);
   }
 
   async confirmar(id: string, versaoS3: string): Promise<EmissaoDocumento> {

@@ -1,46 +1,34 @@
-// Ordem da emissão (revisão do M09): reserva da linha antes do PUT no S3, confirmação com a versão depois;
-// falha do PUT não deixa objeto nem emissão válida; duas reemissões ao mesmo tempo ganham vias diferentes.
-// Gotenberg e S3 são dublês (o fluxo real está em documento.int.spec.ts). Massa sintética.
+// Ordem da emissão (revisão do M09): reserva da linha antes de guardar o arquivo, confirmação com o id dele depois;
+// falha da gravação não deixa arquivo nem emissão válida; duas reemissões ao mesmo tempo ganham vias diferentes.
+// Gotenberg é dublê e a porta de arquivos é a de memória (o fluxo real está em documento.int.spec.ts). Massa sintética.
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegistroEmissoesMemoria } from '../infra/registro.js';
-import type { ClienteS3 } from '../infra/s3.js';
+import { ArmazemArquivosMemoria } from '../infra/arquivos.js';
 import { EmissaoService } from './emissao.service.js';
 
 const raiz = resolve(import.meta.dirname, '../../../../../..');
 
-class S3Duble {
-  readonly objetos = new Map<string, { versao: string; bytes: Uint8Array }[]>();
-  falharPut = false;
-  semVersao = false;
+class ArmazemEspiao extends ArmazemArquivosMemoria {
+  falharGravacao = false;
   ordem: string[] = [];
-  async existe(_b: string, chave: string) {
-    return this.objetos.has(chave);
-  }
-  async gravarComRetencao(_b: string, chave: string, bytes: Uint8Array) {
-    this.ordem.push(`put:${chave}`);
-    if (this.falharPut) throw new Error('S3 fora');
-    const versoes = this.objetos.get(chave) ?? [];
-    const versao = `v${versoes.length + 1}`;
-    versoes.push({ versao, bytes });
-    this.objetos.set(chave, versoes);
-    return { versao: this.semVersao ? null : versao };
-  }
-  async ler(_b: string, chave: string, versao?: string) {
-    const v = this.objetos.get(chave) ?? [];
-    const achado = versao ? v.find((x) => x.versao === versao) : v[v.length - 1];
-    if (!achado) throw new Error('sem objeto');
-    return achado.bytes;
+  override async guardar(...a: Parameters<ArmazemArquivosMemoria['guardar']>) {
+    this.ordem.push(`guardar:${a[1].chaveIdempotencia}`);
+    if (this.falharGravacao) throw new Error('disco fora');
+    return super.guardar(...a);
   }
 }
 
 class RegistroEspiao extends RegistroEmissoesMemoria {
+  reservadas = 0;
   constructor(private readonly ordem: string[]) {
     super();
   }
   override async reservar(e: Parameters<RegistroEmissoesMemoria['reservar']>[0]) {
     this.ordem.push(`reservar:${e.chaveObjeto}`);
-    return super.reservar(e);
+    await super.reservar(e);
+    // Como o registro do banco: o id da linha da emissão, para o vínculo do arquivo.
+    return ++this.reservadas;
   }
 }
 
@@ -55,7 +43,8 @@ const pedido = {
   autor: 'USUARIO_TESTE',
 };
 
-let s3: S3Duble;
+const ctxTeste = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 't' };
+let armazem: ArmazemEspiao;
 let registro: RegistroEspiao;
 let servico: EmissaoService;
 
@@ -65,14 +54,19 @@ beforeEach(() => {
     'fetch',
     vi.fn(async () => new Response(new TextEncoder().encode(`%PDF-1.7 prova ${++n}`), { status: 200 })),
   );
-  s3 = new S3Duble();
-  registro = new RegistroEspiao(s3.ordem);
+  armazem = new ArmazemEspiao();
+  registro = new RegistroEspiao(armazem.ordem);
   servico = new EmissaoService({
-    s3: s3 as unknown as ClienteS3,
-    bucket: 'b',
+    armazem,
+    cliente: 'teste',
     gotenbergUrl: 'http://127.0.0.1:3318',
     registro,
-    retencao: { modo: 'GOVERNANCE', duracaoMs: 60_000 },
+    retencao: { imutavel: false, duracaoMs: 60_000 },
+    idEstabelecimento: async (codigo: string) => {
+      if (codigo !== 'zz')
+        throw new Error('Estabelecimento fora do mapa do cliente: o arquivo não foi guardado.');
+      return 42;
+    },
     produto: 'Produto de Teste',
     baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
     nomeEstabelecimento: (c) => c,
@@ -90,11 +84,11 @@ async function htmlEnviado(): Promise<string> {
 describe('SBIS-42: rodapé da certificação', () => {
   const comCertificado = (f: (h: string) => Promise<string | null>) =>
     new EmissaoService({
-      s3: s3 as unknown as ClienteS3,
-      bucket: 'b',
+      armazem,
+      cliente: 'teste',
       gotenbergUrl: 'http://127.0.0.1:3318',
       registro,
-      retencao: { modo: 'GOVERNANCE', duracaoMs: 60_000 },
+      retencao: { imutavel: false, duracaoMs: 60_000 },
       produto: 'Produto de Teste',
       baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
       nomeEstabelecimento: (c) => c,
@@ -122,29 +116,63 @@ describe('SBIS-42: rodapé da certificação', () => {
 });
 
 describe('emissão em duas etapas', () => {
-  it('reserva antes do PUT e confirma com a versão; o PDF é lido pela versão do registro', async () => {
+  it('reserva antes de guardar e confirma com o arquivo; o PDF é lido pelo arquivo do registro', async () => {
     const e = await servico.emitir(pedido);
-    expect(s3.ordem).toEqual([`reservar:${e.emissao.chaveObjeto}`, `put:${e.emissao.chaveObjeto}`]);
-    expect(e.emissao.versaoS3).toBe('v1');
-    expect(await registro.porId(e.emissao.id)).toMatchObject({ versaoS3: 'v1' });
-    // PUT de fora na mesma chave cria versão nova "mais recente": a leitura do registro não muda.
-    await s3.gravarComRetencao('b', e.emissao.chaveObjeto, new TextEncoder().encode('adulterado'));
+    expect(armazem.ordem).toEqual([`reservar:${e.emissao.chaveObjeto}`, `guardar:documento-${e.emissao.id}`]);
+    expect(e.emissao.versaoS3).toBe('1');
+    expect(await registro.porId(e.emissao.id)).toMatchObject({ versaoS3: '1' });
     expect(new TextDecoder().decode(await servico.lerPdf(e.emissao))).toMatch(/^%PDF-/);
+    const meta = await armazem.metadado(
+      { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 't' },
+      1,
+    );
+    expect(meta).toMatchObject({
+      finalidade: 'documento_emitido',
+      tipoMime: 'application/pdf',
+      imutavel: false,
+    });
+    expect(meta!.retencaoAte).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('PUT falhou: nenhum objeto no S3 e a reserva não vale como emissão (nem no QR)', async () => {
-    s3.falharPut = true;
-    await expect(servico.emitir(pedido)).rejects.toThrow('S3 fora');
-    expect(s3.objetos.size).toBe(0);
-    const reservaChave = s3.ordem[0]!.replace('reservar:', '');
+  it('gravação falhou: nenhum arquivo e a reserva não vale como emissão (nem no QR)', async () => {
+    armazem.falharGravacao = true;
+    await expect(servico.emitir(pedido)).rejects.toThrow('disco fora');
+    expect(armazem.tamanho).toBe(0);
+    const reservaChave = armazem.ordem[0]!.replace('reservar:', '');
     expect(reservaChave).toMatch(/via-1\.pdf$/);
     const id = reservaChave.split('/')[4]!;
     expect(await registro.porId(id)).toBeNull();
   });
 
-  it('S3 sem versão (versionamento desligado) é recusado', async () => {
-    s3.semVersao = true;
-    await expect(servico.emitir(pedido)).rejects.toThrow(/versão/);
+  it('o PDF emitido fica ligado à emissão e ao estabelecimento (nunca arquivo órfão)', async () => {
+    const e = await servico.emitir({ ...pedido, usuario: 5 });
+    const meta = await armazem.metadado(ctxTeste, Number(e.versaoS3));
+    expect(meta).toMatchObject({ estabelecimento: 42, entidade: 'emissao_documento', entidadeId: 1 });
+    expect(meta?.chave).toMatch(/^sistema\/42\//);
+  });
+
+  it('estabelecimento fora do mapa do cliente: recusa sem guardar arquivo', async () => {
+    await expect(servico.emitir({ ...pedido, estabelecimento: 'yy' })).rejects.toThrow(/fora do mapa/);
+    expect(armazem.tamanho).toBe(0);
+    await expect(servico.gravarAssinado('rede-teste', 'yy', 7, new Uint8Array([1]))).rejects.toThrow(
+      /fora do mapa/,
+    );
+  });
+
+  it('arquivo que não confere com o hash da emissão é recusado (nunca conteúdo errado)', async () => {
+    const e = await servico.emitir(pedido);
+    await expect(servico.lerPdf({ ...e.emissao, sha256: '0'.repeat(64) })).rejects.toThrow(/não confere/);
+    await expect(servico.lerPdf({ ...e.emissao, versaoS3: 'x' })).rejects.toThrow(/sem arquivo/);
+  });
+
+  it('PDF assinado: arquivo novo com a guarda dos documentos, lido de volta pelo id', async () => {
+    const pdf = new TextEncoder().encode('%PDF-1.7 assinado');
+    const g = await servico.gravarAssinado('rede-teste', 'zz', 7, pdf, 5);
+    expect(g.chave).toMatch(/^sistema\/42\/\d{4}\/\d{2}\/[0-9a-f]{2}\/[0-9a-f]{64}$/);
+    const meta = await armazem.metadado(ctxTeste, Number(g.versao));
+    expect(meta).toMatchObject({ estabelecimento: 42, entidade: 'assinatura_icp', entidadeId: 7 });
+    expect(new TextDecoder().decode(await servico.lerObjeto(g.chave, g.versao))).toBe('%PDF-1.7 assinado');
+    await expect(servico.gravarAssinado('Rede Teste', 'zz', 7, pdf)).rejects.toThrow(/inválido/);
   });
 
   it('duas reemissões ao mesmo tempo: vias 2 e 3, sem repetir', async () => {
@@ -155,8 +183,8 @@ describe('emissão em duas etapas', () => {
       servico.segundaVia(original.emissao.id, 'Pedido do convênio', pedido),
     ]);
     expect([a!.emissao.via, b!.emissao.via, c!.emissao.via].sort()).toEqual([2, 3, 4]);
-    // Cada via gravou um objeto só (quem perdeu a via não gravou nada antes de tentar a próxima).
-    expect([...s3.objetos.values()].every((v) => v.length === 1)).toBe(true);
-    expect(s3.objetos.size).toBe(4);
+    // Cada via guardou um arquivo só (quem perdeu a via não guardou nada antes de tentar a próxima).
+    expect(armazem.ordem.filter((x) => x.startsWith('guardar:'))).toHaveLength(4);
+    expect(armazem.tamanho).toBe(4);
   });
 });

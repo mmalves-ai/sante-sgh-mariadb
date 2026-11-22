@@ -1,7 +1,7 @@
 // Aplicação do pós-fechamento (M31): as gravações das telas (pelo executor, com a trilha na mesma transação, ou
 // gravações diretas no banco do estabelecimento com a trilha_auditoria junto, sobre a entidade do modelo), o escopo por convênio conferido no servidor em toda leitura e gravação (como no
 // M30), o envio do lote (fora de produção, ao simulador de operadora; em produção, só com as credenciais da operadora no
-// cofre), a importação do demonstrativo (XML guardado no S3 com Object Lock), a decisão da glosa (o prazo por operadora)
+// cofre), a importação do demonstrativo (XML guardado no disco local, somente leitura), a decisão da glosa (o prazo por operadora)
 // e o painel de glosas em cache de horas.
 import {
   type DecidirGlosaEntrada,
@@ -287,7 +287,7 @@ export class ServicoTiss {
     };
   }
 
-  /** Demonstrativo: o XML (guardado no S3 com Object Lock, idempotente pelo SHA-256) ou a digitação assistida. */
+  /** Demonstrativo: o XML (guardado no disco local, somente leitura, idempotente pelo SHA-256) ou a digitação assistida. */
   async importarDemonstrativo(s: SessaoCadastro, e: ImportarDemonstrativoEntrada): Promise<ResultadoTiss> {
     await this.exigirEscopoLote(s, e.lote);
     await this.apoios.apoios.conciliacao.exigirLiberacao(s);

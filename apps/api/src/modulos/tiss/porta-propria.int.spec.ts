@@ -5,10 +5,18 @@
 // num describe.each. No fim, a massa de negócio é apagada; ficam o estabelecimento e o usuário de teste, que a trilha
 // (só inclusão) referencia. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
-import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  criarArmazemLocal,
+  criarPastaArquivosTeste,
+  type Escritor,
+  ErroOperacao,
+  NucleoProprio,
+  type PastaArquivosTeste,
+} from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { versaoTexto } from '../faturamento/esquemas.js';
-import { armazemXmlMemoria } from './armazem-xml.js';
+import { armazemXmlLocal, armazemXmlMemoria, type LocalizadorArquivos } from './armazem-xml.js';
 import type { ContextoTiss, PortaTiss } from './porta.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 import { PortaTissPropria } from './porta-propria.js';
@@ -37,7 +45,11 @@ const base = { estabelecimento: null, usuario: null, correlacao: null } as const
 describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente f22_o3)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaTissPropria;
-  const armazem = armazemXmlMemoria();
+  // O XML do lote vai ao disco local (ADR 0004), na pasta temporária do cliente de teste: a leitura parte da chave
+  // registrada em `arquivo`, como na produção.
+  let pasta: PastaArquivosTeste;
+  let local: LocalizadorArquivos | null = null;
+  const armazem = armazemXmlLocal(() => (local ??= criarArmazemLocal(nucleo, { raiz: pasta.raiz })), CLIENTE);
   const ids = {
     est: 0,
     outroEst: 0,
@@ -131,6 +143,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     })();
 
   beforeAll(async () => {
+    pasta = await criarPastaArquivosTeste(CLIENTE);
     nucleo = new NucleoProprio();
     expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-16' }, async (e) => {
@@ -363,6 +376,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
   }, 60_000);
 
   afterAll(async () => {
+    await pasta?.apagar();
     if (!nucleo) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-16' }, (e) => limpar(e));
     await nucleo.encerrar();

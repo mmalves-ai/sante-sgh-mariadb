@@ -12,8 +12,11 @@
 import { type EmissaoDocumento, ErroEmissao, ErroViaOcupada } from '@sgh/dominio-documento';
 
 export interface RegistroEmissoes {
-  /** Reserva a emissão (versaoS3 null). Lança ErroViaOcupada se a via do mesmo original já existe. */
-  reservar(e: EmissaoDocumento): Promise<void>;
+  /**
+   * Reserva a emissão (versaoS3 null). Lança ErroViaOcupada se a via do mesmo original já existe. Devolve o id da linha
+   * (emissao_documento.id) quando o registro é do banco, para o vínculo do arquivo guardado.
+   */
+  reservar(e: EmissaoDocumento): Promise<number | void>;
   /** Confirma a reserva com a versão do S3; só de 'reservado' para 'emitido', uma vez. */
   confirmar(id: string, versaoS3: string): Promise<EmissaoDocumento>;
   /** Só emissões confirmadas. */
@@ -29,7 +32,8 @@ export interface RegistroEmissoes {
 export class RegistroEmissoesMemoria implements RegistroEmissoes {
   private readonly linhas: EmissaoDocumento[] = [];
 
-  async reservar(e: EmissaoDocumento): Promise<void> {
+  // Sem id de linha (memória): o arquivo fica ligado só pela tabela dona.
+  async reservar(e: EmissaoDocumento): Promise<number | void> {
     if (e.versaoS3 !== null) throw new ErroEmissao('A reserva entra sem versão do S3.');
     if (e.idOriginal !== null && this.linhas.some((x) => x.idOriginal === e.idOriginal && x.via === e.via)) {
       throw new ErroViaOcupada(`Via ${e.via} já reservada para o original.`);

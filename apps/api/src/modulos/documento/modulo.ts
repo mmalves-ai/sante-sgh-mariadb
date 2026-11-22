@@ -6,9 +6,11 @@
 // a opção do registro por requisição em criarFonteDocumento (pedido ao integrador; fonte.ts é de outro lote). Até lá,
 // a fonte usa o registro em memória do processo, como antes.
 import { type DynamicModule, Module } from '@nestjs/common';
+import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { DocumentoController } from './documento.controller.js';
 import { criarFonteDocumento, FONTE_DOCUMENTO, type FonteDocumento } from './fonte.js';
+import { armazemArquivosDoAmbiente, estabelecimentoDoCliente } from './infra/arquivos.js';
 
 export interface OpcoesModuloDocumento {
   /** Testes: a fonte já montada. */
@@ -19,7 +21,23 @@ export interface OpcoesModuloDocumento {
 export class ModuloDocumento {}
 
 export function moduloDocumento(ctx: ContextoModulo, opcoes: OpcoesModuloDocumento = {}): DynamicModule {
-  const fonte = opcoes.fonte ?? criarFonteDocumento(ctx.configuracao, ctx.env as NodeJS.ProcessEnv);
+  const env = ctx.env as NodeJS.ProcessEnv;
+  // ADR 0004: os PDFs vão à porta de arquivos do núcleo (disco local do cliente); sem núcleo, memória só na sessão
+  // sintética.
+  const armazem = armazemArquivosDoAmbiente({
+    nucleo: ctx.nucleo,
+    cliente: ctx.configuracao.clientePadrao,
+    sintetico: fontesSinteticas(ctx.env, ctx.nucleo !== null),
+    env,
+  });
+  // Com o banco próprio, o arquivo leva o estabelecimento do pedido (mapa código → id do cliente; fora dele, recusa).
+  const cliente = ctx.configuracao.clientePadrao;
+  const fonte =
+    opcoes.fonte ??
+    criarFonteDocumento(ctx.configuracao, env, {
+      armazem,
+      ...(ctx.nucleo && cliente ? { idEstabelecimento: estabelecimentoDoCliente(cliente, ctx.nucleo) } : {}),
+    });
   return {
     module: ModuloDocumento,
     global: true,

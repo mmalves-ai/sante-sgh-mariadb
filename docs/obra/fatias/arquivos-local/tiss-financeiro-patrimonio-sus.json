@@ -1,0 +1,22 @@
+[
+  {
+    "tipo": "codigo",
+    "obrigatorio": true,
+    "arquivo": "apps/api/src/modulos/sus/porta-propria.ts",
+    "motivo": "A gravação do arquivo exportado ao SUS ainda recusa com modelo-pendente na porta própria (gravarArquivo, gravarArquivoBpa, gravarArquivoApac, gravarArquivoSisaih, proximoArquivo). Ao construí-la, registrar OBRIGATORIAMENTE em `arquivo`, na mesma transação, a chave que o ServicoSus já passa à guarda local (sus/<hospital>/<instrumento>/<competencia>/<id>-<hash16>.txt) pelo auxiliar comum `registrarArquivoGuardado` (apps/api/src/modulos/tiss/armazem-xml.ts): hash_sha256, tamanho_bytes, tipo_mime, imutavel = true e retencao_ate = hoje + 5 anos (`retencaoAte`). retencao_ate NÃO é opcional: é a única guarda legal do arquivo com dado pessoal depois que a retenção do armazenamento de objetos saiu (ADR 0004, item 2), e é o registro que o vigia do worker confere. Declarar 'arquivo' nas tabelas da operação."
+  },
+  {
+    "tipo": "ddl",
+    "obrigatorio": false,
+    "tabela": "laudo_bem",
+    "colunas": ["arquivo_id BIGINT UNSIGNED NULL (FK arquivo.id ON DELETE RESTRICT, índice)"],
+    "motivo": "O PDF do laudo já é registrado em `arquivo` (entidade laudo_bem, entidade_id do primeiro laudo; o mesmo PDF anexado a outro bem reaproveita o registro pela chave do hash). A coluna dá a ligação pela tabela dona, como nas tabelas do financeiro; até ela existir a ligação é pela chave_armazenamento (igual nas duas tabelas) e por arquivo.entidade/entidade_id."
+  },
+  {
+    "tipo": "ddl",
+    "obrigatorio": false,
+    "tabela": "arquivo_fiscal_gerado",
+    "colunas": ["arquivo_id BIGINT UNSIGNED NULL (FK arquivo.id ON DELETE RESTRICT, índice)"],
+    "motivo": "A NFS-e, a DMED e a EFD-REINF já são registradas em `arquivo` (entidade arquivo_fiscal_gerado, entidade_id da linha). A coluna completaria a ligação pela tabela dona, como em remessa_bancaria, extrato_bancario e lote_exportacao_contabil, que já a gravam."
+  }
+]

@@ -1,17 +1,18 @@
 // Módulo do patrimônio na API migrada (F2.2): bens, movimentos, depreciação, ajustes e inventário. A porta é a própria
 // sobre o banco do cliente quando o núcleo existe; sem núcleo, a memória sintética só em dev/ci; fora disso, a
-// indisponível (503, falha fechada). O PDF do laudo vai ao S3 do ambiente com Object Lock (com a porta em memória, em
-// memória); os documentos (termo de baixa) pelo Gotenberg. Os testes passam a porta, o armazém e o gerador pelas opções.
+// indisponível (503, falha fechada). O PDF do laudo vai ao disco local, sob a raiz de arquivos (ADR 0004; com a porta em
+// memória, em memória); os documentos (termo de baixa) pelo Gotenberg. Os testes passam a porta, o armazém e o gerador pelas opções.
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
-import { ClienteS3, converterHtmlEmPdfA } from '../documento/public-api.js';
+import { converterHtmlEmPdfA } from '../documento/public-api.js';
 import type { ContextoModulo } from '../registro.js';
+import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import {
   ARMAZEM_LAUDO_PATRIMONIO,
   type ArmazemLaudoPatrimonio,
+  armazemLaudoLocal,
   ArmazemLaudoMemoria,
-  armazemLaudoS3,
 } from './armazem-laudo.js';
 import { GERADOR_PDF_PATRIMONIO, PatrimonioController } from './patrimonio.controller.js';
 import { PORTA_PATRIMONIO, type PortaPatrimonio, portaPatrimonioIndisponivel } from './porta.js';
@@ -48,16 +49,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloPatrimonio
     opcoes.armazemLaudo ??
     (porta.destino !== 'banco'
       ? new ArmazemLaudoMemoria()
-      : armazemLaudoS3(
-          new ClienteS3({
-            endpoint: env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
-            regiao: env['S3_REGIAO']?.trim() || 'us-east-1',
-            acesso: env['S3_SEGREDO']?.trim() ? env['S3_ACESSO']?.trim() : undefined,
-            segredo: env['S3_SEGREDO']?.trim() || undefined,
-          }),
-          env['S3_BUCKET_PATRIMONIO']?.trim() || `sgh-${ctx.configuracao.rede ?? 'rede'}-patrimonio`,
-          (env['AMBIENTE'] ?? 'dev').trim() || 'dev',
-        ));
+      : armazemLaudoLocal(localizadorDoNucleo(ctx.nucleo, env), ctx.configuracao.clientePadrao ?? ''));
   const gotenberg = env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318';
   const geradorPdf =
     opcoes.geradorPdf !== undefined

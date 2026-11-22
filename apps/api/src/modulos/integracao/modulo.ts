@@ -1,7 +1,8 @@
 // Módulo das integrações (M34) e da fachada da API de integração da Hal-AI (M58-F4) na API migrada (F2.2, lote
 // 04-01): as portas próprias sobre o banco do cliente quando o núcleo existe; sem núcleo, as de memória só em dev/ci
 // (fontes sintéticas); fora disso, as indisponíveis (503, falha fechada). Os testes passam as portas prontas.
-// - O conteúdo das mensagens vai ao armazém de objetos (S3 do ambiente); na sessão sintética, à memória.
+// - O conteúdo das mensagens vai à porta de arquivos do núcleo (ADR 0004, disco local do cliente); na sessão
+//   sintética sem núcleo, à memória; fora disso, indisponível (falha fechada).
 // - A configuração (FONTE_CONFIGURACAO e CACHE_CONFIG) vem do módulo config (global) quando registrado; na memória sem
 //   ele, a fonte sintética local.
 // - A entrada do parceiro aceita os estabelecimentos do cliente (o código desconhecido não acha a credencial: 401).
@@ -15,14 +16,19 @@ import {
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
-import { ClienteS3 } from '../documento/public-api.js';
+import { armazemArquivosDoAmbiente, estabelecimentoDoCliente } from '../documento/public-api.js';
 import type { ContextoModulo } from '../registro.js';
 import { criarServicoFachada, FachadaController, SERVICO_FACHADA } from './fachada/fachada.controller.js';
 import type { PortaFachada } from './fachada/porta.js';
 import { PORTA_FACHADA } from './fachada/porta.js';
 import { PortaFachadaMemoria } from './fachada/porta-memoria.js';
 import { portaFachadaIndisponivel, PortaFachadaPropria } from './fachada/porta-propria.js';
-import { type ArmazemConteudo, ArmazemConteudoMemoria, ArmazemConteudoS3 } from './infra/armazem-conteudo.js';
+import {
+  type ArmazemConteudo,
+  ArmazemConteudoArquivos,
+  armazemConteudoIndisponivel,
+  ArmazemConteudoMemoria,
+} from './infra/armazem-conteudo.js';
 import { ARMAZEM_CONTEUDO, ESTABELECIMENTOS_ENTRADA, IntegracaoController } from './integracao.controller.js';
 import { PORTA_INTEGRACAO, type PortaIntegracao } from './porta.js';
 import { PortaIntegracaoMemoria } from './porta-memoria.js';
@@ -45,16 +51,15 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
   const nucleo = ctx.nucleo && cliente ? ctx.nucleo : null;
   const armazem: ArmazemConteudo =
     o.armazem ??
-    (!nucleo && sintetica
-      ? new ArmazemConteudoMemoria()
-      : new ArmazemConteudoS3(
-          new ClienteS3({
-            endpoint: ctx.env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
-            regiao: ctx.env['S3_REGIAO']?.trim() || 'us-east-1',
-            acesso: ctx.env['S3_SEGREDO']?.trim() ? ctx.env['S3_ACESSO']?.trim() : undefined,
-            segredo: ctx.env['S3_SEGREDO']?.trim() || undefined,
-          }),
-        ));
+    (nucleo && cliente
+      ? new ArmazemConteudoArquivos(
+          armazemArquivosDoAmbiente({ nucleo, cliente, sintetico: false, env: ctx.env as NodeJS.ProcessEnv }),
+          cliente,
+          estabelecimentoDoCliente(cliente, nucleo),
+        )
+      : sintetica
+        ? new ArmazemConteudoMemoria()
+        : armazemConteudoIndisponivel());
   const porta: PortaIntegracao =
     o.porta ??
     (nucleo && cliente
@@ -89,7 +94,8 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       ...(local ? [{ provide: FONTE_CONFIGURACAO, useValue: local }] : []),
       {
         provide: SERVICO_FACHADA,
-        useFactory: (fonte: FonteConfiguracao | null) => criarServicoFachada(fachada, fonte ?? local, ctx.env),
+        useFactory: (fonte: FonteConfiguracao | null) =>
+          criarServicoFachada(fachada, fonte ?? local, ctx.env),
         inject: [{ token: FONTE_CONFIGURACAO, optional: true }],
       },
     ],

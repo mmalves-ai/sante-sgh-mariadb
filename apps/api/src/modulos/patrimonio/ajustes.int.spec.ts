@@ -144,5 +144,18 @@ describe.skipIf(SEM_BANCO_PAT)('ajustes e laudos do bem na porta própria (Maria
     expect(await porta.laudos(c, bem)).toEqual([l]);
     expect(await porta.laudo(c, l.id)).toEqual(l);
     expect(await porta.laudo(c, l.id + 1_000_000)).toBeNull();
+    // ADR 0004 (RDC 509): o PDF fica registrado em `arquivo` com hash, tamanho, tipo, imutável e guarda de 5 anos.
+    const registro = await m!.nucleo.lerSomente({ cliente: CLIENTE_PAT, correlacao: 'laudo-arquivo' }, (x) =>
+      x.uma(
+        'SELECT hash_sha256, tamanho_bytes, tipo_mime, imutavel, retencao_ate, finalidade FROM arquivo WHERE chave_armazenamento = ?',
+        [dados.chave],
+      ),
+    );
+    expect(registro).toMatchObject({ hash_sha256: sha256, finalidade: 'laudo', tipo_mime: 'application/pdf' });
+    expect(Number(registro?.['tamanho_bytes'])).toBe(1234);
+    expect(Number(registro?.['imutavel'])).toBe(1);
+    const ate = registro?.['retencao_ate'];
+    const ateIso = ate instanceof Date ? ate.toISOString().slice(0, 10) : String(ate);
+    expect(ateIso >= `${new Date().getUTCFullYear() + 5}-01-01`).toBe(true);
   });
 });

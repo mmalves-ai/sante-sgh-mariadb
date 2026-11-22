@@ -537,7 +537,7 @@ export class FinanceiroController {
   @Post('tesouraria/extratos')
   @HttpCode(200)
   @Permissao('financeiro.conciliacao.conciliar')
-  @AuditadoNoHandler('extrato (arquivo no S3 com hash) com a trilha na mesma transação')
+  @AuditadoNoHandler('extrato (arquivo no disco local com hash) com a trilha na mesma transação')
   importarExtrato(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.servico.importarExtrato(sessaoDe(req), corpo(esquemaImportarExtrato, b));
   }

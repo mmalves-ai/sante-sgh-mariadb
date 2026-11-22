@@ -1,7 +1,7 @@
-// Regras 4 e 8 do M49 (etapa 2; SBIS-35, SBIS-38, SBIS-42; ICP-05) sobre o PDF/A REAL do serviço de emissão (Gotenberg +
-// S3 com Object Lock do Compose, 127.0.0.1): a prévia exata da receita de controle especial e do atestado (com o selo,
-// o rodapé legal e o QR do verificador; sem o "assinar à mão") é guardada no S3 e o hash dela é o do arquivo lido de
-// volta pela versão (o que a tela mostra é o que se assina); a revisão incremental PAdES com o CMS destacado (assinado
+// Regras 4 e 8 do M49 (etapa 2; SBIS-35, SBIS-38, SBIS-42; ICP-05) sobre o PDF/A REAL do serviço de emissão (Gotenberg do
+// Compose, 127.0.0.1, e a porta de arquivos numa pasta temporária, ADR 0004): a prévia exata da receita de controle especial e do atestado (com o selo,
+// o rodapé legal e o QR do verificador; sem o "assinar à mão") é guardada pela porta de arquivos e o hash dela é o do arquivo lido de
+// volta pelo id do arquivo (o que a tela mostra é o que se assina); a revisão incremental PAdES com o CMS destacado (assinado
 // pela ICP SINTÉTICA, com o carimbo do tempo sintético) mantém o PDF/A-2b sem falha no veraPDF e é validada FORA do
 // sistema pelo pdfsig (poppler) e pelo OpenSSL. Fora do `pnpm verificar`: roda pelo `testes:integracao` da API, com
 // `./pnpm infra:subir` no ar. Massa SINTÉTICA; nada sai da máquina.
@@ -34,19 +34,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { RegistroEmissoesMemoria } from '../documento/infra/registro.js';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { arquivosDeTeste } from '../documento/integracao.spec-util.js';
 import { pastaTemporaria, raiz, verapdf } from '../documento/integracao.spec-util.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m49-${Date.now()}`;
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const arquivos = arquivosDeTeste();
 const emissao = new EmissaoService({
-  s3,
-  bucket,
+  armazem: arquivos.armazem,
+  cliente: arquivos.cliente,
   gotenbergUrl: GOTENBERG,
   registro: new RegistroEmissoesMemoria(),
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -122,28 +120,19 @@ function assinar(pdf: Uint8Array) {
   );
 }
 
-/** Os baldes de teste deste arquivo de rodadas anteriores (mais de 10 min) saem do S3 do Compose. */
-function apagarBucketsVencidos(): void {
-  const limite = Date.now() - 10 * 60_000;
-  const weed = (c: string): string =>
-    execFileSync('docker', ['exec', '-i', 'sgh-s3', 'weed', 'shell'], { input: `${c}\n`, encoding: 'utf8' });
-  const vencidos = [...weed('s3.bucket.list').matchAll(/sgh-teste-m49-(\d+)/g)]
-    .filter((m) => Number(m[1]) < limite)
-    .map((m) => m[0]);
-  for (const nome of new Set(vencidos)) weed(`s3.bucket.delete -name=${nome}`);
-}
-
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  apagarBucketsVencidos();
-  await s3.criarBucketComTrava(bucket);
+  await arquivos.preparar();
   pasta = pastaTemporaria('m49-pades-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await arquivos.encerrar();
+});
 
 describe('prévia exata e PDF assinado sobre o PDF/A real (regras 4 e 8)', () => {
-  it('o hash da prévia é o do arquivo guardado (lido pela versão do S3); o PDF assinado também fica guardado', async () => {
+  it('o hash da prévia é o do arquivo guardado (lido pelo id do arquivo); o PDF assinado também fica guardado', async () => {
     const e = await previa('atestado');
     const lido = await emissao.lerObjeto(e.emissao.chaveObjeto, e.versaoS3);
     expect(await sha256Hex(lido)).toBe(await sha256Hex(e.pdf));
@@ -153,7 +142,7 @@ describe('prévia exata e PDF assinado sobre o PDF/A real (regras 4 e 8)', () =>
     expect(Buffer.from(assinado.subarray(0, lido.length)).equals(Buffer.from(lido))).toBe(true);
     const g = await emissao.gravarAssinado('rede-teste', 'zz', 1, assinado);
     expect(await sha256Hex(await emissao.lerObjeto(g.chave, g.versao))).toBe(await sha256Hex(assinado));
-    expect(g.chave).toMatch(/^rede-teste\/zz\/documentos\/assinados\/1\/[0-9a-f-]{36}\.pdf$/);
+    expect(g.chave).toMatch(/^sistema\/0\/\d{4}\/\d{2}\/[0-9a-f]{2}\/[0-9a-f]{64}$/);
   });
 
   it('receita de controle especial e atestado assinados: PDF/A-2b sem falha (veraPDF) e assinatura válida (pdfsig, OpenSSL)', async () => {

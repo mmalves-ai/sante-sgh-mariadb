@@ -28,16 +28,31 @@ export async function converterHtmlEmPdfA(
   formulario.append('preferCssPageSize', 'true');
   if (opcoes.metadados) formulario.append('metadata', JSON.stringify(opcoes.metadados));
   const inicio = performance.now();
-  const r = await fetch(`${urlGotenberg.replace(/\/+$/, '')}/forms/chromium/convert/html`, {
-    method: 'POST',
-    body: formulario,
-    signal: AbortSignal.timeout(opcoes.tempoMaximoMs ?? 30_000),
+  const url = `${urlGotenberg.replace(/\/+$/, '')}/forms/chromium/convert/html`;
+  const pedir = () =>
+    fetch(url, {
+      method: 'POST',
+      body: formulario,
+      signal: AbortSignal.timeout(opcoes.tempoMaximoMs ?? 30_000),
+    });
+  // Conexão reaproveitada que o Gotenberg já fechou (EPIPE, ECONNRESET, "other side closed"): a conversão não tem
+  // efeito colateral, então tenta uma vez mais numa conexão nova. Outras falhas sobem como estão.
+  const r = await pedir().catch((e: unknown) => {
+    if (conexaoFechada(e)) return pedir();
+    throw e;
   });
   if (!r.ok) throw new ErroGotenberg(`Gotenberg recusou a conversão (${r.status}).`);
   const pdf = new Uint8Array(await r.arrayBuffer());
   if (new TextDecoder().decode(pdf.slice(0, 5)) !== '%PDF-')
     throw new ErroGotenberg('Resposta do Gotenberg não é PDF.');
   return { pdf, ms: performance.now() - inicio };
+}
+
+function conexaoFechada(e: unknown): boolean {
+  const causa = (e as { cause?: { code?: unknown } } | null)?.cause?.code;
+  return (
+    e instanceof TypeError && (causa === 'EPIPE' || causa === 'ECONNRESET' || causa === 'UND_ERR_SOCKET')
+  );
 }
 
 /** Saúde do Gotenberg (painel "Técnico"). */

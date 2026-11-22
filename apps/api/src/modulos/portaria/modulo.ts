@@ -41,7 +41,10 @@ export async function portaDaPortaria(ctx: ContextoModulo): Promise<PortaPortari
   return portaPortariaIndisponivel();
 }
 
-export async function moduloPortaria(ctx: ContextoModulo, opcoes: OpcoesModuloPortaria = {}): Promise<DynamicModule> {
+export async function moduloPortaria(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloPortaria = {},
+): Promise<DynamicModule> {
   const porta: PortaPortaria = opcoes.porta ?? (await portaDaPortaria(ctx));
   const configuracao =
     opcoes.configuracao ??
@@ -57,7 +60,10 @@ export async function moduloPortaria(ctx: ContextoModulo, opcoes: OpcoesModuloPo
     controllers: [PortariaController],
     providers: [
       { provide: PORTA_PORTARIA, useValue: porta },
-      { provide: ARMAZEM_FOTOS_PORTARIA, useValue: opcoes.fotos ?? criarArmazemFotosPortaria(ctx.configuracao, ctx.env) },
+      {
+        provide: ARMAZEM_FOTOS_PORTARIA,
+        useValue: opcoes.fotos ?? criarArmazemFotosPortaria(ctx.configuracao, ctx.env, ctx.nucleo),
+      },
       { provide: OPCOES_PORTARIA, useValue: { simulador: ctx.configuracao.ambiente !== 'producao' } },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],

@@ -7,6 +7,7 @@ import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil } from '../exames/relogio.js';
+import { chaveFotoVisitante } from './fotos.js';
 import { PortaPortariaPropria } from './porta-propria.js';
 import type { NovoBloqueioVisita } from './tipos.js';
 
@@ -306,6 +307,21 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   const ler = <T>(sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-0212' }, (l) => l.uma<T & Record<string, unknown>>(sql, p));
 
+  /** A foto como a porta de arquivos do núcleo a deixa: o registro em `arquivo` (sem o disco) e a chave do módulo. */
+  const fotoGuardada = (sufixo: string, hash: string, tamanho: number) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: 'foto-teste-02-12' }, async (e) => {
+      await e.executar(
+        `INSERT INTO arquivo (estabelecimento_id, finalidade, nome_original, tipo_mime, tamanho_bytes, hash_sha256,
+                              chave_armazenamento, criado_em)
+         VALUES (?, 'foto_visitante', 'visitante.jpg', 'image/jpeg', ?, ?, ?, ?)`,
+        [ids.est, tamanho, hash, `visitante/l0212-00000000-0000-0000-0000-00000000000${sufixo}.jpg`, new Date()],
+      );
+      const r = await e.uma<{ id: unknown }>('SELECT id FROM arquivo WHERE chave_armazenamento = ?', [
+        `visitante/l0212-00000000-0000-0000-0000-00000000000${sufixo}.jpg`,
+      ]);
+      return { chave: chaveFotoVisitante(Number(r?.id), 'image/jpeg'), tipoMime: 'image/jpeg', tamanho, hash };
+    });
+
   const visitante = (doc: string, extra: Partial<{ foto: { chave: string; tipoMime: string; tamanho: number; hash: string } }> = {}) =>
     porta.gravarSgh(ctx, trilha('pessoa_portaria'), (g) =>
       g.registrarVisitante({
@@ -379,14 +395,20 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   });
 
   it('visitante: inclui pelo documento, atualiza o mesmo documento (versão) e grava a trilha', async () => {
-    const r1 = await visitante('L0212-RG1', {
-      foto: { chave: 'visitante/l0212-00000000-0000-0000-0000-000000000001.jpg', tipoMime: 'image/jpeg', tamanho: 10, hash: 'a'.repeat(64) },
-    });
+    const f1 = await fotoGuardada('1', 'a'.repeat(64), 10);
+    const f2 = await fotoGuardada('2', 'b'.repeat(64), 12);
+    const r1 = await visitante('L0212-RG1', { foto: f1 });
     expect(r1).toMatchObject({ novo: true, fotoAnterior: null });
-    const r2 = await visitante('L0212-RG1', {
-      foto: { chave: 'visitante/l0212-00000000-0000-0000-0000-000000000002.jpg', tipoMime: 'image/jpeg', tamanho: 12, hash: 'b'.repeat(64) },
-    });
-    expect(r2).toEqual({ id: r1.id, novo: false, fotoAnterior: 'visitante/l0212-00000000-0000-0000-0000-000000000001.jpg' });
+    const r2 = await visitante('L0212-RG1', { foto: f2 });
+    expect(r2).toEqual({ id: r1.id, novo: false, fotoAnterior: f1.chave });
+    // A foto não ganha um segundo registro em `arquivo`: o da porta de arquivos fica ligado ao cadastro.
+    const ligada = await ler<{ total: number; entidade_id: number }>(
+      "SELECT COUNT(*) AS total, MAX(entidade_id) AS entidade_id FROM arquivo WHERE finalidade = 'foto_visitante' AND hash_sha256 = ?",
+      ['b'.repeat(64)],
+    );
+    expect({ total: Number(ligada?.total), entidade: Number(ligada?.entidade_id) }).toEqual({ total: 1, entidade: r1.id });
+    // Foto sem registro na porta de arquivos (ou com outro conteúdo): recusa, nunca grava um registro solto.
+    expect(await recusada(visitante('L0212-RG1', { foto: { ...f2, hash: 'c'.repeat(64) } }))).toBe('foto-inexistente');
     const linha = await ler<{ versao: number; numero_documento: string }>('SELECT versao, numero_documento FROM pessoa_portaria WHERE id = ?', [r1.id]);
     expect(Number(linha?.versao)).toBe(2);
     const t = await ler<{ total: number }>(
@@ -396,7 +418,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
     expect(Number(t?.total)).toBeGreaterThanOrEqual(2);
     const lido = await porta.visitante(ctx, r1.id);
     expect(lido).toMatchObject({ tipoDocumento: 'rg', documento: 'L0212-RG1', tipoVisitante: ids.tipoVisitante, nascimento: '1980-05-01' });
-    expect(await porta.foto(ctx, r1.id)).toBe('visitante/l0212-00000000-0000-0000-0000-000000000002.jpg');
+    expect(await porta.foto(ctx, r1.id)).toBe(f2.chave);
     expect((await porta.buscarVisitantes(ctx, { documento: { tipo: 'rg', numero: 'L0212-RG1' }, nomeBusca: null })).map((v) => v.id)).toEqual([r1.id]);
     // A guarda vencida (gravada) anonimiza o cadastro; o visitante recente fica como está.
     const { id: velho } = await visitante('L0212-RG90');

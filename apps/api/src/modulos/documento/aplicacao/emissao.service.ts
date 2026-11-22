@@ -1,9 +1,10 @@
 // Emissão de documento de prova (regra 9 da ficha do M09; roteiro 6.8): HTML do modelo → PDF/A-2b no
-// Gotenberg → SHA-256 → reserva da linha (SGH_DOCUMENTO_EMISSAO, com via, chave, QR e hash) → S3 com Object
-// Lock (chave única por emissão e via, nunca sobrescrita) → confirmação com a versão do S3. A reserva vem
-// antes do PUT: nenhum PDF travado fica sem registro, e a via disputada por duas reemissões é decidida antes
-// de gravar (quem perde tenta a próxima). Reemissão é nova via marcada "2ª via", com motivo. A validação
-// pública pelo QR mostra só existência, data, estabelecimento e hash. Massa sintética no spike.
+// Gotenberg → SHA-256 → reserva da linha (emissão do documento, com via, chave, QR e hash) → porta de arquivos do
+// núcleo (ADR 0004: disco local, gravação uma vez e somente leitura, guarda legal no registro `arquivo`) →
+// confirmação com o id do arquivo guardado. A reserva vem antes da gravação: nenhum PDF guardado fica sem registro,
+// e a via disputada por duas reemissões é decidida antes de gravar (quem perde tenta a próxima). Reemissão é nova
+// via marcada "2ª via", com motivo. A validação pública pelo QR mostra só existência, data, estabelecimento e hash.
+// O campo `versaoS3` do registro da emissão guarda o id do arquivo (o nome sai no domínio por pedido deste lote).
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -26,33 +27,42 @@ import {
   validacaoPublica,
   type ValidacaoPublica,
 } from '@sgh/dominio-documento';
+import { type ArmazemArquivos, type ContextoNucleo, type ContextoOperacao, dataUtc } from '@sgh/nucleo';
+import { idDoArquivo } from '../infra/arquivos.js';
 import { converterHtmlEmPdfA } from '../infra/gotenberg.js';
 import type { RegistroEmissoes } from '../infra/registro.js';
-import type { ClienteS3, ModoRetencao } from '../infra/s3.js';
 
+/** Guarda legal do arquivo: até quando a exclusão é recusada e se é imutável (homologação e produção). */
 export interface PoliticaRetencao {
-  readonly modo: ModoRetencao;
+  readonly imutavel: boolean;
   readonly duracaoMs: number;
 }
 
-/** Compliance em homologação e produção (20 anos, Lei 13.787/2018); governance curto no dev e no CI. */
+/** Imutável em homologação e produção (20 anos, Lei 13.787/2018); guarda curta no dev e no CI. */
 export function politicaRetencao(ambiente: string, env: NodeJS.ProcessEnv = process.env): PoliticaRetencao {
   const dias = Number(env['DOCUMENTO_RETENCAO_DIAS'] ?? '');
   if (ambiente === 'producao' || ambiente === 'homolog') {
     return {
-      modo: 'COMPLIANCE',
+      imutavel: true,
       duracaoMs: (Number.isFinite(dias) && dias > 0 ? dias : 365 * 20) * 86_400_000,
     };
   }
   return {
-    modo: 'GOVERNANCE',
+    imutavel: false,
     duracaoMs: (Number.isFinite(dias) && dias > 0 ? Math.min(dias, 2) : 1) * 86_400_000,
   };
 }
 
+/** Data (AAAA-MM-DD) até a qual o arquivo fica sob guarda legal, contada do relógio da gravação. */
+export function retencaoAte(politica: PoliticaRetencao, agoraMs: number = Date.now()): string {
+  return dataUtc(new Date(agoraMs + politica.duracaoMs));
+}
+
 export interface DependenciasEmissao {
-  readonly s3: ClienteS3;
-  readonly bucket: string;
+  /** Porta de arquivos do núcleo (ADR 0004). */
+  readonly armazem: ArmazemArquivos;
+  /** Cliente (banco) dono dos arquivos. */
+  readonly cliente: string;
   readonly gotenbergUrl: string;
   readonly registro: RegistroEmissoes;
   readonly retencao: PoliticaRetencao;
@@ -64,8 +74,8 @@ export interface DependenciasEmissao {
   /** Data e hora impressas no documento (fixável em teste); padrão: o relógio real. */
   readonly agora?: () => Date;
   /**
-   * Relógio da retenção no S3, que conta do momento da gravação e não da data impressa: com `agora` fixo
-   * no passado (teste visual), a retenção cairia no passado e o S3 recusaria. Padrão: o relógio real.
+   * Relógio da guarda legal, que conta do momento da gravação e não da data impressa: com `agora` fixo no passado
+   * (teste visual), a guarda cairia no passado. Padrão: o relógio real.
    */
   readonly relogioRetencao?: () => number;
   readonly aoConverter?: (ms: number) => void;
@@ -74,6 +84,20 @@ export interface DependenciasEmissao {
    * leitura vira rodapé sem a certificação: o documento nunca afirma um certificado que não se confirmou.
    */
   readonly certificadoSbis?: (estabelecimento: string) => Promise<string | null>;
+  /**
+   * Id do estabelecimento (estabelecimento.id) pelo código do pedido, para o contexto do arquivo guardado (chave, linha
+   * em `arquivo` e trilha). Com o banco próprio é obrigatório e recusa o código fora do mapa; sem ele (porta em
+   * memória da sessão sintética), o arquivo fica sem estabelecimento.
+   */
+  readonly idEstabelecimento?: (codigo: string) => Promise<number>;
+}
+
+/** Dono do arquivo guardado: estabelecimento (código), usuário e a linha da tabela dona, quando já tem id. */
+interface VinculoArquivo {
+  readonly estabelecimento: string;
+  readonly usuario: number | null;
+  readonly entidade: string;
+  readonly entidadeId: number | null;
 }
 
 export interface PedidoEmissao {
@@ -87,6 +111,8 @@ export interface PedidoEmissao {
   readonly autor: string;
   /** ADR 0021: marca do documento emitido numa sessão "como" (ponto único: marcaSuporteTecnico). */
   readonly marcaSuporte?: string | null;
+  /** Usuário que emite (usuario.id), para o contexto do arquivo e a trilha; null em processo automático. */
+  readonly usuario?: number | null;
   /**
    * M49, etapa 2: o QR do documento a assinar com ICP aponta o verificador público (`/verificar/<código>`), com o
    * código opaco da prévia; sem isto, o QR da validação do M09.
@@ -99,6 +125,7 @@ const TENTATIVAS_VIA = 5;
 
 export interface EmissaoFeita {
   readonly emissao: EmissaoDocumento;
+  /** Id do arquivo guardado (texto), o mesmo do registro da emissão. */
   readonly versaoS3: string;
   readonly pdf: Uint8Array;
   readonly conversaoMs: number;
@@ -122,6 +149,57 @@ export class EmissaoService {
     this.d = d;
   }
 
+  private contexto(correlacao: string): ContextoNucleo {
+    return {
+      cliente: this.d.cliente,
+      estabelecimento: null,
+      usuario: null,
+      correlacao: correlacao.slice(0, 64),
+    };
+  }
+
+  private async guardarPdf(
+    pdf: Uint8Array,
+    nome: string,
+    finalidade: string,
+    chaveIdempotencia: string,
+    vinculo: VinculoArquivo,
+  ): Promise<string> {
+    const estabelecimento = this.d.idEstabelecimento
+      ? await this.d.idEstabelecimento(vinculo.estabelecimento)
+      : null;
+    const ctx: ContextoOperacao = {
+      ...this.contexto(chaveIdempotencia),
+      estabelecimento,
+      usuario: vinculo.usuario,
+      chaveIdempotencia,
+    };
+    const g = await this.d.armazem.guardar(
+      {
+        conteudo: pdf,
+        nomeOriginal: nome,
+        tipoMime: 'application/pdf',
+        finalidade,
+        // Tabela dona sempre; o id da linha quando o registro já o tem (o registro em memória da sessão sintética não).
+        entidade: vinculo.entidade,
+        entidadeId: vinculo.entidadeId,
+        retencaoAte: retencaoAte(this.d.retencao, (this.d.relogioRetencao ?? Date.now)()),
+        imutavel: this.d.retencao.imutavel,
+      },
+      ctx,
+    );
+    return String(g.id);
+  }
+
+  private async lerArquivo(texto: string | null, hashEsperado?: string): Promise<Uint8Array> {
+    const id = idDoArquivo(texto);
+    if (id === null) throw new ErroEmissao('Emissão sem arquivo guardado.');
+    const { metadado, conteudo } = await this.d.armazem.ler(this.contexto(`documento-leitura-${id}`), id);
+    if (hashEsperado !== undefined && metadado.hash !== hashEsperado)
+      throw new ErroEmissao('O arquivo guardado não confere com o hash da emissão.');
+    return new Uint8Array(conteudo);
+  }
+
   private async emitirVia(
     pedido: PedidoEmissao,
     via: number,
@@ -138,9 +216,6 @@ export class EmissaoService {
       id,
       via,
     });
-    // Nunca sobrescreve: a chave é nova por construção e, ainda assim, é conferida antes de gravar.
-    if (await this.d.s3.existe(this.d.bucket, chave))
-      throw new ErroEmissao('Já existe documento nesta chave.');
     const certificadoSbis = this.d.certificadoSbis
       ? await this.d.certificadoSbis(pedido.estabelecimento).catch(() => null)
       : null;
@@ -188,57 +263,55 @@ export class EmissaoService {
       emitidoEm: agora.toISOString(),
       versaoS3: null,
     };
-    // 1. Reserva (unicidade conferida aqui, antes de qualquer objeto travado no S3).
-    await this.d.registro.reservar(reserva);
-    // 2. PUT com retenção. Se falhar, a reserva fica sem objeto e a validação pública não a mostra.
-    const { versao } = await this.d.s3.gravarComRetencao(
-      this.d.bucket,
-      chave,
+    // 1. Reserva (unicidade conferida aqui, antes de qualquer arquivo guardado).
+    const linha = await this.d.registro.reservar(reserva);
+    // 2. Gravação uma vez, com a guarda legal. Se falhar, a reserva fica sem arquivo e a validação pública não a mostra.
+    const arquivo = await this.guardarPdf(
       pdf,
-      'application/pdf',
-      this.d.retencao.modo,
-      new Date((this.d.relogioRetencao ?? Date.now)() + this.d.retencao.duracaoMs),
+      `${pedido.modelo}-via-${via}.pdf`,
+      'documento_emitido',
+      `documento-${id}`,
+      {
+        estabelecimento: pedido.estabelecimento,
+        usuario: pedido.usuario ?? null,
+        entidade: 'emissao_documento',
+        entidadeId: typeof linha === 'number' ? linha : null,
+      },
     );
-    if (!versao) throw new ErroEmissao('O S3 não devolveu a versão do objeto (versionamento desligado?).');
-    // 3. Confirmação com a versão: a leitura do PDF é sempre por ela.
-    const emissao = await this.d.registro.confirmar(id, versao);
-    return { emissao, versaoS3: versao, pdf, conversaoMs: ms };
+    // 3. Confirmação com o id do arquivo: a leitura do PDF é sempre por ele, conferida pelo hash.
+    const emissao = await this.d.registro.confirmar(id, arquivo);
+    return { emissao, versaoS3: arquivo, pdf, conversaoMs: ms };
   }
 
-  /** PDF guardado da emissão, pela versão do registro (nunca a "mais recente" da chave). */
+  /** PDF guardado da emissão, pelo arquivo do registro, conferido contra o hash da emissão. */
   async lerPdf(emissao: EmissaoDocumento): Promise<Uint8Array> {
-    if (!emissao.versaoS3) throw new ErroEmissao('Emissão sem versão confirmada.');
-    return this.d.s3.ler(this.d.bucket, emissao.chaveObjeto, emissao.versaoS3);
+    if (!emissao.versaoS3) throw new ErroEmissao('Emissão sem arquivo confirmado.');
+    return this.lerArquivo(emissao.versaoS3, emissao.sha256);
   }
 
-  private bucketPronto: Promise<void> | null = null;
-
   /**
-   * M49, etapa 2: o bucket dos documentos com Object Lock (idempotente; uma vez por processo), como os armazéns do
-   * financeiro, do TISS e das fotos: o serviço de assinatura grava a prévia e o PDF assinado nele.
+   * M49, etapa 2: confere que a porta de arquivos está disponível antes de emitir a prévia (sem configuração, a
+   * operação recusa aqui). Mantido com o nome antigo até o módulo de assinatura migrar (pedido deste lote).
    */
-  garantirBucket(): Promise<void> {
-    this.bucketPronto ??= this.d.s3.criarBucketComTrava(this.d.bucket).catch((e: unknown) => {
-      this.bucketPronto = null;
-      throw e;
-    });
-    return this.bucketPronto;
+  async garantirBucket(): Promise<void> {
+    await this.d.armazem.existe(this.contexto('documento-conferencia'), 1);
   }
 
-  /** M49, etapa 2: lê um PDF guardado pela chave e pela versão do objeto (a prévia exata ou o PDF assinado). */
-  lerObjeto(chave: string, versao: string): Promise<Uint8Array> {
-    return this.d.s3.ler(this.d.bucket, chave, versao);
+  /** M49, etapa 2: lê um PDF guardado (a prévia exata ou o PDF assinado) pelo id do arquivo; a chave é referência. */
+  lerObjeto(_chave: string, arquivo: string): Promise<Uint8Array> {
+    return this.lerArquivo(arquivo);
   }
 
   /**
-   * M49, etapa 2: grava o PDF assinado (a prévia + a revisão incremental com o CMS) numa chave nova, com a mesma
-   * retenção dos documentos (Object Lock); nunca sobrescreve.
+   * M49, etapa 2: guarda o PDF assinado (a prévia + a revisão incremental com o CMS) como arquivo novo, com a mesma
+   * guarda legal dos documentos; nunca sobrescreve. Devolve a chave do arquivo e o id dele (em `versao`).
    */
   async gravarAssinado(
     rede: string,
     estabelecimento: string,
     assinatura: number,
     pdf: Uint8Array,
+    usuario: number | null = null,
   ): Promise<{ chave: string; versao: string }> {
     for (const [nome, v] of [
       ['rede', rede],
@@ -247,19 +320,19 @@ export class EmissaoService {
       if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(v))
         throw new ErroEmissao(`${nome} inválido para a chave do documento.`);
     if (!Number.isSafeInteger(assinatura) || assinatura < 1) throw new ErroEmissao('Assinatura inválida.');
-    const chave = `${rede}/${estabelecimento}/documentos/assinados/${assinatura}/${randomUUID()}.pdf`;
-    if (await this.d.s3.existe(this.d.bucket, chave))
-      throw new ErroEmissao('Já existe documento nesta chave.');
-    const { versao } = await this.d.s3.gravarComRetencao(
-      this.d.bucket,
-      chave,
+    const versao = await this.guardarPdf(
       pdf,
-      'application/pdf',
-      this.d.retencao.modo,
-      new Date((this.d.relogioRetencao ?? Date.now)() + this.d.retencao.duracaoMs),
+      `assinatura-${assinatura}.pdf`,
+      'documento_assinado',
+      `assinado-${assinatura}-${randomUUID()}`.slice(0, 64),
+      { estabelecimento, usuario, entidade: 'assinatura_icp', entidadeId: assinatura },
     );
-    if (!versao) throw new ErroEmissao('O S3 não devolveu a versão do objeto (versionamento desligado?).');
-    return { chave, versao };
+    const meta = await this.d.armazem.metadado(
+      this.contexto(`documento-assinado-${assinatura}`),
+      Number(versao),
+    );
+    if (!meta) throw new ErroEmissao('O PDF assinado não ficou registrado.');
+    return { chave: meta.chave, versao };
   }
 
   emitir(pedido: PedidoEmissao): Promise<EmissaoFeita> {
@@ -308,7 +381,7 @@ export class EmissaoService {
           m,
         );
       } catch (e) {
-        // Outra reemissão reservou esta via primeiro (nada foi gravado no S3): recalcula e tenta de novo.
+        // Outra reemissão reservou esta via primeiro (nada foi guardado): recalcula e tenta de novo.
         if (e instanceof ErroViaOcupada && tentativa < TENTATIVAS_VIA) continue;
         throw e;
       }

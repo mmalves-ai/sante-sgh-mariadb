@@ -18,6 +18,6 @@ export type * from './tipos.js';
 export {
   ARMAZEM_LAUDO_PATRIMONIO,
   type ArmazemLaudoPatrimonio,
+  armazemLaudoLocal,
   ArmazemLaudoMemoria,
-  armazemLaudoS3,
 } from './armazem-laudo.js';

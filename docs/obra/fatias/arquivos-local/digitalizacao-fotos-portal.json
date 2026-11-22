@@ -1,0 +1,33 @@
+{
+  "lote": "digitalizacao-fotos-portal",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/portaria/porta-propria.ts",
+      "pedido": "Não incluir linha nova em `arquivo` para a foto do visitante: o armazém já registrou pela porta do núcleo. Gravar pessoa_portaria.foto_arquivo_id = idNaChave(foto.chave) (de ../arquivos-locais.js) e ler a chave do módulo como `visitante/arquivo-<foto_arquivo_id>.<ext>` (chaveFotoVisitante de ./fotos.js, com o tipo_mime). Ajustar o porta-propria.int.spec.ts (chaves fixas `visitante/l0212-<uuid>.jpg`).",
+      "motivo": "Hoje fica um segundo registro em `arquivo` cuja chave_armazenamento não existe no disco: o vigia-arquivos acusaria falta."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/digitalizacao/porta-propria.ts",
+      "pedido": "Na captura, não incluir linha em `arquivo` (chaveNoBanco): usar documento_digitalizado.arquivo_id = idNaChave(x.arquivoChave) e atualizar entidade_id desse arquivo; na leitura, a chave do módulo vem de chaveDigitalizacaoDoArquivo(arquivo_id) (./armazem.js). A recusa de arquivo repetido (SQL_HASH_EXISTE) continua pelo hash do arquivo ligado.",
+      "motivo": "Mesmo motivo: registro duplicado sem arquivo no disco."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/digitalizacao/digitalizacao.controller.ts, adt/higienizacao.controller.ts, portaria/portaria.controller.ts, portal-paciente/agenda/servico.ts",
+      "pedido": "Opcional (melhoria de trilha): passar o usuário da sessão ao armazém para a trilha do registro em `arquivo` (hoje usuario = null, como processo automático).",
+      "motivo": "Auditoria de quem enviou o arquivo."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/vitest.config.ts",
+      "pedido": "Incluir src/modulos/arquivos-locais.spec.ts no SUITE_BASE (a integração src/modulos/arquivos-locais.int.spec.ts já entra pelo glob).",
+      "motivo": "Spec de unidade novo da ponte dos módulos."
+    }
+  ],
+  "aplicados_na_correcao": [
+    "apps/api/src/modulos/portaria/modulo.ts: armazém com ctx.nucleo",
+    "apps/api/src/modulos/adt/modulo.ts: criarArmazemFotos(ctx.configuracao, ctx.env, ctx.nucleo)"
+  ]
+}

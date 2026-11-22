@@ -232,7 +232,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const movB = await porta.movimento(c, m.contaB, hoje, hoje);
     const credito = movB.find((x) => ids.includes(x.id));
     expect([credito?.tipo, credito?.contaCredito, credito?.contaDebito]).toEqual(['T', m.contaB, m.contaA]);
-    const extrato = { conta: m.contaB, origem: 'csv' as const, hashArquivo: 'a'.repeat(64), chaveObjeto: null, usuario: 'x' };
+    const extrato = { conta: m.contaB, origem: 'csv' as const, hashArquivo: 'a'.repeat(64), arquivo: null, usuario: 'x' };
     const linhas = [{ data: hoje, valor: 77.7, historico: 'TED RECEBIDA', documento: '' }];
     const i1 = await porta.gravarSgh(comChave(c), trilha, (g) => g.importarExtrato({ ...extrato, linhas }));
     const i2 = await porta.gravarSgh(comChave(c), trilha, (g) => g.importarExtrato({ ...extrato, linhas }));
@@ -278,7 +278,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         somaCreditos: 30,
         semDePara: 1,
         hashArquivo: 'b'.repeat(64),
-        chaveObjeto: null,
+        arquivo: null,
       }),
     );
     // O mesmo arquivo (hash) com outra chave de pedido devolve o lote já registrado.
@@ -292,12 +292,39 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         somaCreditos: 30,
         semDePara: 1,
         hashArquivo: 'b'.repeat(64),
-        chaveObjeto: null,
+        arquivo: null,
       }),
     );
     expect(lote2.id).toBe(lote.id);
     const lotes = await porta.registrosFiscais(c, 'lote');
     expect(lotes.find((x) => x['ID'] === lote.id)).toMatchObject({ PERIODO: '2026-10', REGUA: 'caixa', LANCAMENTOS: 3 });
+    // ADR 0004: o arquivo guardado vai ao registro `arquivo` na mesma transação (hash, tamanho, tipo, imutável e guarda
+    // legal de 5 anos), ligado à tabela dona pelos dois lados.
+    const hashGuardado = randomUUID().replace(/-/g, '').repeat(2);
+    const chaveGuardada = `contabil/2026-10-caixa-${hashGuardado.slice(0, 16)}.txt`;
+    const comArquivo = await porta.gravarSgh(comChave(c), trilha, (g) =>
+      g.registrarLoteContabil({
+        usuario: 'x',
+        periodo: '2026-10',
+        regua: 'caixa',
+        lancamentos: 1,
+        somaDebitos: 5,
+        somaCreditos: 5,
+        semDePara: 0,
+        hashArquivo: hashGuardado,
+        arquivo: { chave: chaveGuardada, tamanhoBytes: 321, tipoMime: 'text/plain' },
+      }),
+    );
+    const cincoAnos = `${new Date().getUTCFullYear() + 5}-01-01`;
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM arquivo a JOIN lote_exportacao_contabil x ON x.arquivo_id = a.id
+          WHERE x.id = ? AND a.chave_armazenamento = ? AND a.hash_sha256 = ? AND a.tamanho_bytes = 321
+            AND a.tipo_mime = 'text/plain' AND a.imutavel = TRUE AND a.retencao_ate >= ?
+            AND a.entidade = 'lote_exportacao_contabil' AND a.entidade_id = x.id`,
+        [comArquivo.id, chaveGuardada, hashGuardado, cincoAnos],
+      ),
+    ).toBe(1);
     const rem = await porta.gravarSgh(comChave(c), trilha, (g) =>
       g.registrarRemessa({
         usuario: 'x',
@@ -306,7 +333,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         titulos: 1,
         valorTotal: 10,
         hashArquivo: 'c'.repeat(64),
-        chaveObjeto: null,
+        arquivo: null,
         destino: 'simulador',
         situacao: 'gerada',
         hashRetorno: null,
@@ -325,7 +352,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
           titulos: 1,
           valorTotal: 10,
           hashArquivo: hash,
-          chaveObjeto: null,
+          arquivo: null,
           destino: 'simulador',
           situacao: 'gerada',
           hashRetorno: null,
@@ -358,7 +385,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
             situacao: 'simulada',
             numero: null,
             hashXml: 'd'.repeat(64),
-            chaveObjeto: null,
+            arquivo: null,
           }),
         );
     // A NFS-e simulada fica registrada (com o hash); o mesmo arquivo de novo devolve o mesmo registro.
@@ -375,7 +402,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
         registros: 3,
         valorTotal: 12.5,
         hashArquivo: 'e'.repeat(64),
-        chaveObjeto: null,
+        arquivo: null,
       }),
     );
     const declaracao = (await porta.registrosFiscais(c, 'declaracao')).find((x) => x['ID'] === dec.id && x['TIPO'] === 'reinf-r4000');

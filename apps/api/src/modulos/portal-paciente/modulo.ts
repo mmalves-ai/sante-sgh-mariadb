@@ -152,11 +152,12 @@ export async function moduloPortalPaciente(
   const chave =
     chaveMestra(ctx.env['PORTAL_CHAVE_MESTRA'] ?? ctx.env['PLATAFORMA_CHAVE_MESTRA']) ??
     (fontesSinteticas(ctx.env) ? randomBytes(32) : null);
+  // Com o núcleo, o disco local (ADR 0004); sem ele, a memória (a sessão sintética).
   const armazem =
     opcoes.armazem ??
-    (memoria && !ctx.env['S3_ENDPOINT']?.trim()
+    (memoria
       ? new ArmazemProvasMemoria()
-      : criarArmazemProvas(rede || null, ctx.env));
+      : criarArmazemProvas(ctx.nucleo, ctx.configuracao.clientePadrao, ctx.env));
   const gateway = opcoes.gateway ?? gatewayDoAmbiente(ctx.env, ctx.configuracao.ambiente);
   const configMemoria =
     opcoes.configuracao !== undefined

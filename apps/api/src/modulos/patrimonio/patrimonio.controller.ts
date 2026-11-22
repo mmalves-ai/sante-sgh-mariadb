@@ -25,7 +25,7 @@
 //   POST /api/patrimonio/bens/:id/ajustes             revisão de estimativa, impairment (com laudo) ou reavaliação
 //   POST /api/patrimonio/ajustes/:id/estorno          estornar o ajuste com motivo e a senha de novo (W0-08, M1)
 //   GET  /api/patrimonio/bens/:id/laudos              laudos anexados ao bem (W0-08, achado 6)
-//   POST /api/patrimonio/bens/:id/laudos              anexar o PDF do laudo (armazenamento com Object Lock)
+//   POST /api/patrimonio/bens/:id/laudos              anexar o PDF do laudo (disco local, somente leitura)
 //   GET  /api/patrimonio/laudos/:id/arquivo           o PDF do laudo, conferido pelo SHA-256
 //   GET  /api/patrimonio/movimentos?situacao&bem      movimentos
 //   POST /api/patrimonio/movimentos                   transferência (pendente), empréstimo, comodato, devolução

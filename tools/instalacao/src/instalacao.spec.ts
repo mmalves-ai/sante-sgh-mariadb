@@ -33,6 +33,7 @@ function preenchido(extra: Record<string, string> = {}): string {
     DOCUMENTO_URL_VALIDACAO: 'https://sgh.exemplo.invalid/validar',
     FB_CLIENTE_BIBLIOTECA: '/usr/lib/x86_64-linux-gnu/libfbclient.so.2',
     TZ: 'UTC',
+    ARQUIVOS_RAIZ: '/srv/sante-sgh/arquivos',
     LOG_NIVEL: 'info',
     FB_PC_NOME: 'Hospital de exemplo',
     FB_PC_HOST: 'banco.exemplo.invalid',
@@ -99,8 +100,15 @@ describe('M60.2: o modelo e a conferência do arquivo de ambiente do servidor', 
   });
 
   it('recusa obrigatória ausente, marcador esquecido, porta inválida e valor fora da lista', () => {
-    const t = preenchido({ SMTP_URL: '', S3_ACESSO: '<gerar>', FB_PC_PORTA: '99999', LOG_NIVEL: 'barulho' });
-    expect(chaves(t)).toEqual(expect.arrayContaining(['SMTP_URL', 'S3_ACESSO', 'FB_PC_PORTA', 'LOG_NIVEL']));
+    const t = preenchido({
+      SMTP_URL: '',
+      ARQUIVOS_RAIZ: '<preencher>',
+      FB_PC_PORTA: '99999',
+      LOG_NIVEL: 'barulho',
+    });
+    expect(chaves(t)).toEqual(
+      expect.arrayContaining(['SMTP_URL', 'ARQUIVOS_RAIZ', 'FB_PC_PORTA', 'LOG_NIVEL']),
+    );
   });
 
   it('API_PORTA só vazia ou a do layout: o nginx e a espera da saúde usam a porta do pacote', () => {

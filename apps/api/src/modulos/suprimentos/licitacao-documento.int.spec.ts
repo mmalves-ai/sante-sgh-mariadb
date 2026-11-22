@@ -1,6 +1,6 @@
 // Regra 10 do M55 (etapa 4): o termo de referência, o registro da etapa e a ata do julgamento em PDF/A, pelo serviço
-// de emissão do M09 (Gotenberg + S3 com Object Lock, num bucket de teste): PDF/A-2b sem falha no veraPDF, retenção
-// do objeto conferida, hash conferido na releitura e cada emissão numa chave nova. Serviços do Compose sgh
+// de emissão do M09 (Gotenberg + porta de arquivos numa pasta temporária, ADR 0004): PDF/A-2b sem falha no veraPDF, guarda
+// legal do arquivo conferida, hash conferido na releitura e cada emissão numa chave nova. Serviços do Compose sgh
 // (127.0.0.1); massa SINTÉTICA; nada sai da máquina. Fora do `pnpm verificar`: roda pelo `testes:integracao` da API,
 // com `./pnpm infra:subir` no ar.
 import { rmSync } from 'node:fs';
@@ -16,21 +16,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { RegistroEmissoesMemoria } from '../documento/infra/registro.js';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { arquivosDeTeste } from '../documento/integracao.spec-util.js';
 import { metadadosPdf, pastaTemporaria, raiz, verapdf } from '../documento/integracao.spec-util.js';
 import { emitirDocumentoLicitacao } from './licitacao-documento.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m55-${Date.now()}`;
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const guarda = arquivosDeTeste();
 const registro = new RegistroEmissoesMemoria();
 const emissao = new EmissaoService({
-  s3,
-  bucket,
+  armazem: guarda.armazem,
+  cliente: guarda.cliente,
   gotenbergUrl: GOTENBERG,
   registro,
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -108,13 +106,16 @@ const ctx = { rede: 'rede-teste', hospital: 'zz', autor: 'USUARIO_TESTE' };
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  await s3.criarBucketComTrava(bucket);
+  await guarda.preparar();
   pasta = pastaTemporaria('m55-licitacao-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await guarda.encerrar();
+});
 
 describe('documentos do processo de compra em PDF/A (M55, regra 10)', () => {
-  it('termo, registro da etapa e ata: PDF/A-2b sem falha, retenção no S3, hash conferido, chaves novas', async () => {
+  it('termo, registro da etapa e ata: PDF/A-2b sem falha, guarda legal do arquivo, hash conferido, chaves novas', async () => {
     const feitos = [];
     for (const tipo of ['termo', 'etapa', 'ata'] as const)
       feitos.push(await emitirDocumentoLicitacao({ emissao }, ctx, detalhe, tipo));
@@ -126,7 +127,9 @@ describe('documentos do processo de compra em PDF/A (M55, regra 10)', () => {
         via: 1,
       });
       expect(await sha256Hex(await emissao.lerPdf(feita.emissao))).toBe(feita.emissao.sha256);
-      expect((await s3.retencao(bucket, feita.emissao.chaveObjeto, feita.versaoS3)).modo).toBe('GOVERNANCE');
+      const meta = await guarda.armazem.metadado(guarda.contexto(), Number(feita.versaoS3));
+      expect(meta).toMatchObject({ imutavel: false, finalidade: 'documento_emitido' });
+      expect(meta!.retencaoAte! >= new Date().toISOString().slice(0, 10)).toBe(true);
       arquivos[documento.nomeArquivo] = feita.pdf;
     }
     expect(new Set(feitos.map((f) => f.feita.emissao.chaveObjeto)).size).toBe(3);

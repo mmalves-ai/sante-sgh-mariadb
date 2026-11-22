@@ -1,13 +1,14 @@
 // Módulo do faturamento SUS próprio na API migrada (F2.2 onda 3, M51): competência, crítica prévia, CIHA, BPA, APAC,
 // AIH (faixa, laudo, espelho, retorno) e a equivalência SIGTAP. A porta é a própria sobre o banco do cliente quando o
 // núcleo existe; sem núcleo, a memória sintética só em dev/ci; fora disso, a indisponível (503, falha fechada). O
-// arquivo exportado (tem dado pessoal) vai ao armazenamento de objetos com retenção, como o TISS; na memória, à memória.
+// arquivo exportado (tem dado pessoal) vai ao disco local, sob a raiz de arquivos, como o TISS (ADR 0004); na memória,
+// à memória.
 // Os testes passam a porta e o armazém pelas opções.
 import { type DynamicModule, Module } from '@nestjs/common';
-import { ClienteS3 } from '../documento/public-api.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
-import { armazemSusMemoria, armazemSusS3 } from './armazem.js';
+import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
+import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
 import { PortaSusPropria } from './porta-propria.js';
@@ -29,20 +30,10 @@ export function portaDoSus(ctx: ContextoModulo): PortaSus {
   return portaSusIndisponivel();
 }
 
-/** O armazém do arquivo exportado: o de objetos com retenção quando a porta é a do banco; senão, a memória. */
+/** O armazém do arquivo exportado: o disco local quando a porta é a do banco; senão, a memória. */
 export function armazemDoSus(ctx: ContextoModulo, porta: PortaSus): ArmazemArquivoSus {
   if (porta.destino !== 'banco') return armazemSusMemoria();
-  const env = ctx.env;
-  return armazemSusS3(
-    new ClienteS3({
-      endpoint: env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
-      regiao: env['S3_REGIAO']?.trim() || 'us-east-1',
-      acesso: env['S3_SEGREDO']?.trim() ? env['S3_ACESSO']?.trim() : undefined,
-      segredo: env['S3_SEGREDO']?.trim() || undefined,
-    }),
-    env['S3_BUCKET_SUS']?.trim() || `sgh-${ctx.configuracao.clientePadrao || 'cliente'}-sus`,
-    (env['AMBIENTE'] ?? 'dev').trim() || 'dev',
-  );
+  return armazemSusLocal(localizadorDoNucleo(ctx.nucleo, ctx.env), ctx.configuracao.clientePadrao ?? '');
 }
 
 @Module({})

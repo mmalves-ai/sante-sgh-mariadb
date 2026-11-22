@@ -24,7 +24,6 @@ import type { ContextoModulo } from '../registro.js';
 import {
   ARMAZEM_DIGITALIZACAO,
   type ArmazemDigitalizacao,
-  ArmazemDigitalizacaoMemoria,
   criarArmazemDigitalizacao,
 } from './armazem.js';
 import { ServicoAssinaturaDigitalizacao } from './assinatura.js';
@@ -94,11 +93,10 @@ export async function moduloDigitalizacao(
   opcoes: OpcoesModuloDigitalizacao = {},
 ): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDaDigitalizacao(ctx));
+  // Com o núcleo, o disco local (ADR 0004); sem ele, a memória (a sessão sintética).
   const armazem =
     opcoes.armazem ??
-    (fontesSinteticas(ctx.env) && !ctx.env['S3_ENDPOINT']?.trim()
-      ? new ArmazemDigitalizacaoMemoria()
-      : criarArmazemDigitalizacao(ctx.configuracao.rede ?? null, ctx.env as NodeJS.ProcessEnv));
+    criarArmazemDigitalizacao(ctx.nucleo, ctx.configuracao.clientePadrao, ctx.env as NodeJS.ProcessEnv);
   const configuracao =
     opcoes.configuracao ??
     (porta.destino === 'memoria'

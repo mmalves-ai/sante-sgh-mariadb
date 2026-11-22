@@ -54,7 +54,7 @@ CREATE TABLE arquivo (
   tipo_mime         VARCHAR(127) NOT NULL,
   tamanho_bytes     BIGINT UNSIGNED NOT NULL,
   hash_sha256       CHAR(64) NOT NULL,
-  chave_armazenamento VARCHAR(512) NOT NULL COMMENT 'Chave do objeto no armazenamento (S3 compatível)',
+  chave_armazenamento VARCHAR(512) NOT NULL COMMENT 'Caminho relativo na raiz de arquivos',
   retencao_ate      DATE NULL COMMENT 'Guarda legal (ex.: prontuário, 20 anos)',
   imutavel          BOOLEAN NOT NULL DEFAULT FALSE,
   origem            VARCHAR(20) NOT NULL DEFAULT 'sistema',
@@ -70,7 +70,7 @@ CREATE TABLE arquivo (
   KEY ix_arquivo_entidade (entidade, entidade_id),
   KEY ix_arquivo_hash_sha256 (hash_sha256),
   KEY ix_arquivo_estabelecimento (estabelecimento_id)
-) COMMENT='Metadado de documento ou anexo binário guardado no armazenamento de objetos';
+) COMMENT='Metadado de documento ou anexo binário guardado no armazenamento de arquivos da instalação';
 
 CREATE TABLE pendencia (
   id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

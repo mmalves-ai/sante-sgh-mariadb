@@ -78,6 +78,10 @@ const AMBIENTES_SERVIDOR = new Set(['producao', 'homolog', 'treino']);
 export function conferirAmbiente(texto: string): ProblemaAmbiente[] {
   const env = parseEnv(texto) as Record<string, string>;
   const p: ProblemaAmbiente[] = [];
+  // ADR 0004: a pasta de arquivos é absoluta (a permissão e o espaço livre são conferidos no servidor).
+  const raizArquivos = env['ARQUIVOS_RAIZ']?.trim();
+  if (raizArquivos && !raizArquivos.startsWith('<') && !raizArquivos.startsWith('/'))
+    p.push({ chave: 'ARQUIVOS_RAIZ', motivo: 'informe um caminho absoluto.' });
   const val = (k: string) => (env[k] ?? '').trim();
   const temMarcador = (s: string) => s.includes(MARCADOR_PREENCHER) || s.includes(MARCADOR_SEGREDO);
 

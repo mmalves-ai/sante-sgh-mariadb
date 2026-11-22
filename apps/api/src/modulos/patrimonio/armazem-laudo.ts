@@ -1,13 +1,14 @@
 // Arquivos dos laudos do patrimônio (W0-08, achado 6 da revisão; CPC 01 e CPC 27; RDC 509 arts. 8º e 15: guarda de pelo
-// menos 5 anos): o PDF do laudo vai ao armazenamento de objetos LOCAL do ambiente (o S3 em loopback fora de produção),
-// num bucket próprio com Object Lock (COMPLIANCE de 5 anos em homologação e produção, GOVERNANCE de 1 dia no dev e no
-// CI). A chave sai do SHA-256 do arquivo: o mesmo PDF nunca vira duas cópias e nada se sobrescreve. O banco guarda só a
-// chave e o resumo (SGH_PAT_LAUDO). Sem S3 configurado (testes e a sessão sintética), em memória.
-import type { ClienteS3 } from '../documento/public-api.js';
-import { retencaoXml } from '../tiss/armazem-xml.js';
+// menos 5 anos; ADR 0004): o PDF do laudo vai ao disco da máquina, sob a raiz de arquivos, na pasta do banco do cliente
+// (porta de arquivos do núcleo: gravação uma vez, somente leitura). A chave sai do SHA-256 do arquivo: o mesmo PDF
+// nunca vira duas cópias e nada se sobrescreve; a leitura confere o hash. A anexação registra o PDF em `arquivo` (hash,
+// tamanho, tipo, imutável e guarda legal de 5 anos) na mesma transação de `laudo_bem` (porta-propria.ts), e é esse
+// registro que o vigia do worker confere. Sem núcleo (testes e a sessão sintética), em memória.
+import { ErroOperacao, sha256 } from '@sgh/nucleo';
+import { guardaLocal, type LocalizadorArquivos } from '../tiss/armazem-xml.js';
 
 export interface ArmazemLaudoPatrimonio {
-  readonly destino: 's3' | 'memoria';
+  readonly destino: 'disco' | 'memoria';
   /** Guarda o PDF na chave do resumo (se já existe, é o mesmo arquivo: reaproveita) e devolve a chave. */
   guardar(hospital: string, bytes: Uint8Array, hash: string): Promise<string>;
   ler(hospital: string, chave: string): Promise<Uint8Array | null>;
@@ -40,31 +41,40 @@ export class ArmazemLaudoMemoria implements ArmazemLaudoPatrimonio {
   }
 }
 
-export function armazemLaudoS3(s3: ClienteS3, bucket: string, ambiente: string): ArmazemLaudoPatrimonio {
-  let pronto: Promise<void> | null = null;
-  const garantir = async () => {
-    pronto ??= s3.criarBucketComTrava(bucket);
-    await pronto;
-  };
+export function armazemLaudoLocal(
+  localizador: () => LocalizadorArquivos,
+  cliente: string,
+): ArmazemLaudoPatrimonio {
+  const g = guardaLocal(localizador, cliente);
   return {
-    destino: 's3',
-    async guardar(hospital, bytes, hash) {
-      await garantir();
+    destino: 'disco',
+    async guardar(_hospital, bytes, hash) {
       const chave = chaveLaudo(hash);
-      // O mesmo arquivo já anexado (a outro ajuste ou numa tentativa recusada): o objeto travado é reaproveitado.
-      if (await s3.existe(bucket, `${hospital}/${chave}`)) return chave;
-      const r = retencaoXml(ambiente);
-      await s3.gravarComRetencao(bucket, `${hospital}/${chave}`, bytes, 'application/pdf', r.modo, r.ate);
+      if (sha256(bytes) !== hash)
+        throw new ErroOperacao(
+          400,
+          'arquivo-divergente',
+          'Arquivo divergente',
+          'O PDF do laudo não confere com o resumo informado.',
+        );
+      // O mesmo arquivo já anexado (a outro ajuste ou numa tentativa recusada): o arquivo guardado é reaproveitado.
+      await g.gravar(chave, bytes, {
+        reaproveitar: true,
+        recusar: () => new Error('laudo já guardado'),
+      });
       return chave;
     },
-    async ler(hospital, chave) {
+    async ler(_hospital, chave) {
       if (!CHAVE_LAUDO.test(chave)) return null;
-      await garantir();
-      try {
-        return await s3.ler(bucket, `${hospital}/${chave}`);
-      } catch {
-        return null;
-      }
+      const bytes = await g.ler(chave);
+      if (bytes && sha256(bytes) !== chave.slice('patrimonio/laudos/'.length, -'.pdf'.length))
+        throw new ErroOperacao(
+          500,
+          'arquivo-divergente',
+          'Arquivo íntegro indisponível',
+          'O laudo no armazenamento não confere com o hash da chave.',
+        );
+      return bytes;
     },
   };
 }

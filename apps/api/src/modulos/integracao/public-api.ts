@@ -8,7 +8,8 @@ export { EXAME_SINTETICO_APOIO, ORU_SINTETICO, PortaIntegracaoMemoria } from './
 export {
   type ArmazemConteudo,
   ArmazemConteudoMemoria,
-  ArmazemConteudoS3,
+  ArmazemConteudoArquivos,
+  armazemConteudoIndisponivel,
   resumoSha256,
 } from './infra/armazem-conteudo.js';
 // M47 (etapa 3): a credencial do parceiro conferida também na entrada do status do exame (PACS).

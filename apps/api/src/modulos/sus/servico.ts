@@ -123,10 +123,12 @@ export interface SessaoSus {
 }
 
 /**
- * A guarda do conteúdo do arquivo exportado (S3 com Object Lock fora da memória; o conteúdo tem dado pessoal). Guardar
- * põe uma retenção curta (GOVERNANCE) até o COMMIT; `fixar` aplica a guarda definitiva depois dele; `remover` apaga a
- * versão guardada quando a transação é recusada ou falha (nenhum dado pessoal fica órfão, fora da retenção e do
- * download auditado).
+ * A guarda do conteúdo do arquivo exportado (disco local fora da memória, ADR 0004; o conteúdo tem dado pessoal).
+ * Guardar grava uma vez e somente leitura; `fixar` confirma a chave depois do COMMIT (daí em diante não se remove);
+ * `remover` apaga só o arquivo que a própria guarda gravou e ainda não confirmou, quando a transação é recusada ou
+ * falha (nenhum dado pessoal fica órfão); a chave confirmada ou alheia é recusada. A guarda legal de 5 anos não é
+ * desta interface: é o registro em `arquivo` com `retencao_ate`, que a gravação da porta própria tem de fazer na
+ * mesma transação (hoje a porta própria ainda recusa; pedido obrigatório no .json do lote).
  */
 export interface ArmazemArquivoSus {
   guardar(chave: string, bytes: Uint8Array): Promise<{ versao: string | null }>;

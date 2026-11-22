@@ -93,24 +93,12 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `ALERTA_RELATORIO_EMAIL` | opcional |  | Destino do alerta quando o dono do relatório não tem e-mail. |
 | `SMTP_HOST` | opcional |  | Servidor SMTP de saída. Fora de produção só é aceito destino local (neutralização). |
 
-## Armazenamento de arquivos (S3)
+## Armazenamento de arquivos (disco da máquina, ADR 0004)
 
 | variável | uso | segredo | descrição |
 |---|---|---|---|
-| `S3_ENDPOINT` | obrigatoria |  | Endereço do armazenamento compatível com S3. |
-| `S3_REGIAO` | opcional |  | Região do armazenamento. |
-| `S3_ACESSO` | obrigatoria | sim | Chave de acesso do armazenamento. |
-| `S3_SEGREDO` | obrigatoria | sim | Segredo do armazenamento. |
-| `S3_BUCKET_CATALOGOS` | opcional |  | Bucket de catalogos (padrão: derivado da rede). |
-| `S3_BUCKET_DOCUMENTOS` | opcional |  | Bucket de documentos (padrão: derivado da rede). |
-| `S3_BUCKET_FINANCEIRO` | opcional |  | Bucket de financeiro (padrão: derivado da rede). |
-| `S3_BUCKET_HIGIENIZACAO` | opcional |  | Bucket de higienizacao (padrão: derivado da rede). |
-| `S3_BUCKET_PATRIMONIO` | opcional |  | Bucket de patrimonio (padrão: derivado da rede). |
-| `S3_BUCKET_PORTAL` | opcional |  | Bucket de portal (padrão: derivado da rede). |
-| `S3_BUCKET_PORTARIA` | opcional |  | Bucket de portaria (padrão: derivado da rede). |
-| `S3_BUCKET_SAME` | opcional |  | Bucket de same (padrão: derivado da rede). |
-| `S3_BUCKET_SUS` | opcional |  | Bucket de sus (padrão: derivado da rede). |
-| `S3_BUCKET_TISS` | opcional |  | Bucket de tiss (padrão: derivado da rede). |
+| `ARQUIVOS_RAIZ` | obrigatoria |  | Pasta absoluta dos arquivos (uma subpasta por banco de cliente), no disco da máquina; ex.: /srv/sante-sgh/arquivos. Cópia de segurança pela hospedagem (snapshot do volume ou backup do cliente). |
+| `ARQUIVOS_ALERTA_LIVRE_GB` | opcional |  | Alerta (instalação e vigia do worker) quando o espaço livre da pasta de arquivos fica abaixo deste valor, em GB. |
 | `DOCUMENTO_RETENCAO_DIAS` | opcional |  | Dias de retenção dos documentos de prova. |
 
 ## Integrações externas
@@ -148,6 +136,8 @@ servidor, nunca em repositório, e-mail ou chamado.
 
 | variável | uso | segredo | descrição |
 |---|---|---|---|
+| `VIGIA_ARQUIVOS` | opcional |  | Vigia de integridade dos arquivos (hash x registro). |
+| `VIGIA_ARQUIVOS_MS` | opcional |  | Intervalo do vigia dos arquivos, em ms (padrão 6 h). |
 | `OUTBOX_RELAY` | opcional |  | Envio da caixa de saída (e-mails, avisos e integrações). Vazio: o padrão do ambiente. |
 | `INTEGRACAO` | opcional |  | Integrações de saída do worker. Vazio: o padrão do ambiente. |
 | `VIGIA_BANCO` | opcional |  | Vigia do banco (transações, travas e conexões; desligado desliga). Vazio: o padrão do ambiente. |
@@ -207,6 +197,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `SGH_M58_ENSAIOS` | opcional |  | Pasta ou arquivo: relatórios do ensaio da versão 5 do banco. Vazio: o do pacote. |
 | `SGH_HOMOLOGACAO` | opcional |  | Pasta ou arquivo: registro da homologação. Vazio: o do pacote. |
 | `SGH_PRONTIDAO` | opcional |  | Pasta ou arquivo: relatório de prontidão. Vazio: o do pacote. |
+| `SGH_MAPA_PERMISSOES` | opcional |  | Pasta ou arquivo: mapa das permissões (implantação fora do repositório). Vazio: o do pacote. |
 
 ## Portas
 

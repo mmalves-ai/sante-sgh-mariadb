@@ -1,9 +1,9 @@
 // Módulo do financeiro e fiscal (F2.2, M32): o controlador do financeiro sobre a porta própria (MariaDB pelo
 // @sgh/nucleo) quando o núcleo existe; a de memória só em dev/ci com as fontes sintéticas; fora disso, a porta
 // indisponível (503 em tudo, falha fechada) — a mesma regra do F2-L.
-// Os arquivos (extrato, remessa, NFS-e, declarações, lote contábil) vão ao S3 com Object Lock; na memória, à guarda
-// em memória. A liberação das funcionalidades e os parâmetros vêm da FONTE_CONFIGURACAO global do módulo de
-// configuração; na memória, a fonte sintética da configuração.
+// Os arquivos (extrato, remessa, NFS-e, declarações, lote contábil) vão ao disco local, sob a raiz de arquivos, pela
+// porta de arquivos do núcleo (ADR 0004); na memória, à guarda em memória. A liberação das funcionalidades e os
+// parâmetros vêm da FONTE_CONFIGURACAO global do módulo de configuração; na memória, a fonte sintética da configuração.
 import type { DynamicModule } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import {
@@ -13,9 +13,9 @@ import {
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
-import { ClienteS3 } from '../documento/public-api.js';
+import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import type { ContextoModulo } from '../registro.js';
-import { type ArmazemFinanceiro, armazemFinanceiroMemoria, armazemFinanceiroS3 } from './armazem.js';
+import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
 import { FinanceiroController } from './financeiro.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { PortaFinanceiroMemoria } from './porta-memoria.js';
@@ -40,20 +40,13 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       : memoria
         ? new PortaFinanceiroMemoria(null)
         : portaFinanceiroIndisponivel());
-  const ambiente = (ctx.env['AMBIENTE'] ?? 'dev').trim() || 'dev';
   const armazem: ArmazemFinanceiro =
     opcoes.armazem ??
     (porta.destino === 'memoria'
       ? armazemFinanceiroMemoria()
-      : armazemFinanceiroS3(
-          new ClienteS3({
-            endpoint: ctx.env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
-            regiao: ctx.env['S3_REGIAO']?.trim() || 'us-east-1',
-            acesso: ctx.env['S3_SEGREDO']?.trim() ? ctx.env['S3_ACESSO']?.trim() : undefined,
-            segredo: ctx.env['S3_SEGREDO']?.trim() || undefined,
-          }),
-          ctx.env['S3_BUCKET_FINANCEIRO']?.trim() || `sgh-${ctx.configuracao.rede ?? 'rede'}-financeiro`,
-          ambiente,
+      : armazemFinanceiroLocal(
+          localizadorDoNucleo(ctx.nucleo, ctx.env),
+          ctx.configuracao.clientePadrao ?? '',
         ));
   const configuracao =
     opcoes.configuracao ??

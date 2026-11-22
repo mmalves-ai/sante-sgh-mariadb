@@ -1,9 +1,10 @@
-// Guarda dos arquivos do financeiro (M32; ficha, seção 6): o extrato importado, a remessa e o retorno bancário, o XML da
-// NFS-e, a DMED, a EFD-REINF e o lote contábil vão ao S3 do projeto com Object Lock (retenção COMPLIANCE de 5 anos em
-// homologação e produção, GOVERNANCE de 1 dia no dev), numa chave única por tipo e SHA-256: a sobrescrita é recusada
-// antes de gravar. No banco fica só a chave e o hash. Em memória na sessão sintética.
-import type { ClienteS3 } from '../documento/public-api.js';
-import { retencaoXml } from '../tiss/armazem-xml.js';
+// Guarda dos arquivos do financeiro (M32; ficha, seção 6; ADR 0004): o extrato importado, a remessa e o retorno
+// bancário, o XML da NFS-e, a DMED, a EFD-REINF e o lote contábil vão ao disco da máquina, sob a raiz de arquivos, na
+// pasta do banco do cliente (porta de arquivos do núcleo), numa chave única por tipo e SHA-256: a chave já ocupada é
+// recusada antes de gravar e o arquivo gravado fica somente leitura. A gravação da tabela dona registra o arquivo em
+// `arquivo` (hash, tamanho, tipo, imutável e guarda legal de 5 anos) na mesma transação (porta-propria.ts), e é esse
+// registro que o vigia do worker confere. Em memória na sessão sintética.
+import { guardaLocal, type LocalizadorArquivos } from '../tiss/armazem-xml.js';
 
 export interface ArmazemFinanceiro {
   guardar(chave: string, bytes: Uint8Array, tipo: string): Promise<{ versao: string | null }>;
@@ -28,29 +29,18 @@ export function armazemFinanceiroMemoria(): ArmazemFinanceiro & { objetos: Map<s
   };
 }
 
-export function armazemFinanceiroS3(s3: ClienteS3, bucket: string, ambiente: string): ArmazemFinanceiro {
-  let criado = false;
-  const garantir = async () => {
-    if (!criado) {
-      await s3.criarBucketComTrava(bucket);
-      criado = true;
-    }
-  };
+export function armazemFinanceiroLocal(
+  localizador: () => LocalizadorArquivos,
+  cliente: string,
+): ArmazemFinanceiro {
+  const g = guardaLocal(localizador, cliente);
+  const recusar = (chave: string) =>
+    new ErroSobrescritaArquivo(`O arquivo ${chave} já está guardado: é imutável.`);
   return {
-    async guardar(chave, bytes, tipo) {
-      await garantir();
-      if (await s3.existe(bucket, chave))
-        throw new ErroSobrescritaArquivo(`O arquivo ${chave} já está guardado: é imutável.`);
-      const r = retencaoXml(ambiente);
-      return s3.gravarComRetencao(bucket, chave, bytes, tipo, r.modo, r.ate);
+    async guardar(chave, bytes) {
+      await g.gravar(chave, bytes, { recusar });
+      return { versao: null };
     },
-    async ler(chave) {
-      await garantir();
-      try {
-        return await s3.ler(bucket, chave);
-      } catch {
-        return null;
-      }
-    },
+    ler: (chave) => g.ler(chave),
   };
 }

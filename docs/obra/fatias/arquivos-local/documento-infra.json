@@ -1,0 +1,49 @@
+{
+  "lote": "documento-infra",
+  "pedidos": [
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/assinatura/infra/documentos-ambiente.ts",
+      "mudanca": "trocar fonte.emissao.garantirBucket() por uma conferência de nome neutro (o método segue como compatibilidade, já sem S3) e renomear chaveS3/versaoS3 da assinatura para chave/arquivoId",
+      "motivo": "vocabulário do meio antigo; a 'versao' agora é o id do arquivo na tabela arquivo"
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "packages/dominio-documento/src/pdf/emissao.ts",
+      "mudanca": "renomear EmissaoDocumento.versaoS3 para arquivoId (texto ou número) e ajustar registro-propria (coluna da emissao_documento)",
+      "motivo": "o campo guarda o id do arquivo da porta (ADR 0004), não versão de S3"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "carga_catalogo",
+      "colunas": "arquivo_id BIGINT NULL REFERENCES arquivo(id)",
+      "motivo": "hoje o id do arquivo vai em texto para arquivo_guardado; a FK dá a garantia no banco"
+    },
+    {
+      "tipo": "teste",
+      "arquivo": "apps/api/src/modulos/catalogos/porta-propria.int.spec.ts",
+      "mudanca": "usar SGH_CLIENTE_TESTE em vez do cliente fixo f22_o2",
+      "motivo": "4 testes falham no f22_o2 (dados já presentes do lote anterior); sem relação com a porta de arquivos"
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/catalogos/servico.ts",
+      "linha": 231,
+      "mudanca": "com destino 'banco', a falha de guardarArquivo recusa a carga (hoje .catch(() => null) segue sem o original)",
+      "motivo": "falha fechada do arquivo original sob guarda legal"
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/documento/fonte.ts",
+      "mudanca": "registro por requisição (RegistroEmissoesPropria) em produção no lugar de RegistroEmissoesMemoria",
+      "motivo": "com o registro em memória, o arquivo da emissão fica com entidadeId null e a emissão se perde ao reiniciar"
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/assinatura/aplicacao/documentos.ts",
+      "linha": 994,
+      "mudanca": "passar o usuario.id da sessão em gravarAssinado(..., usuario) e em PedidoEmissao.usuario nos chamadores de emitir (PEP, SADT, enfermagem, suprimentos)",
+      "motivo": "trilha do arquivo com o usuário"
+    }
+  ]
+}

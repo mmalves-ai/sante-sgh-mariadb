@@ -108,7 +108,7 @@ export interface GravadorSghFinanceiro {
     conta: number;
     origem: 'ofx' | 'csv' | 'api';
     hashArquivo: string;
-    chaveObjeto: string | null;
+    arquivo: ArquivoGuardadoFinanceiro | null;
     linhas: readonly { data: string; valor: number; historico: string; documento: string }[];
   }): Promise<{ id: number; linhas: number; repetido: boolean }>;
   /** `contasEscopo`: as contas do escopo do usuário (regra 15); a linha ou o crédito de outra conta é recusado (403). */
@@ -125,7 +125,7 @@ export interface GravadorSghFinanceiro {
     titulos: number;
     valorTotal: number;
     hashArquivo: string;
-    chaveObjeto: string | null;
+    arquivo: ArquivoGuardadoFinanceiro | null;
     destino: 'simulador' | 'banco';
     situacao: 'gerada' | 'retornada';
     hashRetorno: string | null;
@@ -150,7 +150,7 @@ export interface GravadorSghFinanceiro {
     situacao: 'simulada' | 'autorizada' | 'rejeitada';
     numero: string | null;
     hashXml: string;
-    chaveObjeto: string | null;
+    arquivo: ArquivoGuardadoFinanceiro | null;
   }): Promise<{ id: number }>;
   registrarDeclaracao(d: {
     usuario: string;
@@ -160,7 +160,7 @@ export interface GravadorSghFinanceiro {
     registros: number;
     valorTotal: number;
     hashArquivo: string;
-    chaveObjeto: string | null;
+    arquivo: ArquivoGuardadoFinanceiro | null;
   }): Promise<{ id: number }>;
   registrarLoteContabil(d: {
     usuario: string;
@@ -171,8 +171,18 @@ export interface GravadorSghFinanceiro {
     somaCreditos: number;
     semDePara: number;
     hashArquivo: string;
-    chaveObjeto: string | null;
+    arquivo: ArquivoGuardadoFinanceiro | null;
   }): Promise<{ id: number }>;
+}
+
+/**
+ * O arquivo que o serviço já guardou no disco (ADR 0004): a gravação o registra em `arquivo` na mesma transação da
+ * tabela dona (hash, tamanho, tipo, imutável e guarda legal de 5 anos), e é contra esse registro que o vigia confere.
+ */
+export interface ArquivoGuardadoFinanceiro {
+  readonly chave: string;
+  readonly tamanhoBytes: number;
+  readonly tipoMime: string;
 }
 
 export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro> {

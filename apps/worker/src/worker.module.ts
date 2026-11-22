@@ -15,6 +15,7 @@ import { PublicadorCatalogosService } from './publicador-catalogos.service.js';
 import { RelayOutboxService } from './relay-outbox.service.js';
 import { Relogio } from './relogio.js';
 import { SinalDeVidaService } from './sinal-de-vida.service.js';
+import { VigiaArquivosService } from './vigia-arquivos.service.js';
 import { VigiaBancoService } from './vigia-banco.service.js';
 
 // Vigia do banco próprio (transações abertas, pools, plataforma, saúde dos serviços) exportado por OpenTelemetry
@@ -32,6 +33,8 @@ import { VigiaBancoService } from './vigia-banco.service.js';
 const SERVICOS: Readonly<Record<string, Provider>> = {
   'sinal-de-vida': SinalDeVidaService,
   'vigia-banco': VigiaBancoService,
+  // ADR 0004: integridade dos arquivos no disco local (hash x registro) e espaço livre da raiz.
+  'vigia-arquivos': VigiaArquivosService,
   'relay-outbox': RelayOutboxService,
   email: EmailService,
   'indice-busca': IndiceBuscaService,
@@ -73,6 +76,7 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     Relogio,
     SinalDeVidaService,
     VigiaBancoService,
+    VigiaArquivosService,
     RelayOutboxService,
     EmailService,
     IndiceBuscaService,

@@ -166,7 +166,7 @@ export interface PortaPatrimonio {
   laudos(c: C, bem: number): Promise<LaudoDoBem[]>;
   /** Achado 6 da revisão: o laudo pelo identificador (null: não existe neste estabelecimento). */
   laudo(c: C, id: number): Promise<LaudoDoBem | null>;
-  /** Achado 6 da revisão: registra o laudo anexado (o PDF já está no armazenamento com Object Lock, pela chave). */
+  /** Achado 6 da revisão: registra o laudo anexado (o PDF já está no disco local, pela chave). */
   anexarLaudo(
     c: C,
     x: { bem: number; nome: string; descricao: string; chave: string; sha256: string; tamanho: number },

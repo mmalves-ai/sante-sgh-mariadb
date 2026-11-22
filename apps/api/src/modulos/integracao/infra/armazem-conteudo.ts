@@ -1,8 +1,9 @@
-// Conteúdo bruto das mensagens das integrações (M34; ficha, seção 6: "conteúdo bruto no S3"; cap-14 §14.2.8): a
-// mensagem recebida ou enviada vai ao S3 do projeto (o bucket da rede para as integrações), nunca ao banco nem ao log;
-// no banco fica só o resumo SHA-256 e a chave do objeto. Em memória na sessão sintética.
-import { createHash } from 'node:crypto';
-import { ClienteS3 } from '../../documento/public-api.js';
+// Conteúdo bruto das mensagens das integrações (M34; ficha, seção 6; cap-14 §14.2.8): a mensagem recebida ou enviada
+// vai à porta de arquivos do núcleo (ADR 0004: disco local do cliente, origem `integracao`), nunca ao log; na tabela
+// da mensagem fica só o resumo SHA-256 e a referência do arquivo (o id). Em memória na sessão sintética.
+import { createHash, randomUUID } from 'node:crypto';
+import { type ArmazemArquivos, ErroConfiguracao } from '@sgh/nucleo';
+import { idDoArquivo, type ResolverEstabelecimento } from '../../documento/public-api.js';
 
 export interface ArmazemConteudo {
   gravar(rede: string, chave: string, conteudo: string): Promise<string>;
@@ -34,32 +35,62 @@ export class ArmazemConteudoMemoria implements ArmazemConteudo {
   }
 }
 
-export class ArmazemConteudoS3 implements ArmazemConteudo {
-  private readonly criados = new Set<string>();
+/**
+ * Sobre a porta de arquivos do cliente: a referência devolvida é o id do arquivo (texto), que a mensagem guarda. O
+ * mesmo conteúdo no mesmo mês reaproveita o arquivo. Referência que não é id (de antes do ADR 0004) lê como ausente.
+ */
+export class ArmazemConteudoArquivos implements ArmazemConteudo {
   constructor(
-    private readonly s3: ClienteS3,
-    private readonly bucketDaRede: (rede: string) => string = (r) => `sgh-${r}-integracoes`,
+    private readonly armazem: ArmazemArquivos,
+    private readonly cliente: string,
+    /** Id do estabelecimento pelo código (1º segmento da chave); sem ele, o arquivo fica sem estabelecimento. */
+    private readonly idEstabelecimento?: ResolverEstabelecimento,
   ) {}
 
-  private async bucket(rede: string): Promise<string> {
-    const b = this.bucketDaRede(rede);
-    if (!this.criados.has(b)) {
-      await this.s3.criarBucketComTrava(b).catch(() => undefined);
-      this.criados.add(b);
-    }
-    return b;
+  private ctx(correlacao: string) {
+    return {
+      cliente: this.cliente,
+      estabelecimento: null,
+      usuario: null,
+      correlacao: correlacao.slice(0, 64),
+    };
   }
 
-  async gravar(rede: string, chave: string, conteudo: string): Promise<string> {
-    await this.s3.gravarSemRetencao(await this.bucket(rede), chave, new TextEncoder().encode(conteudo));
-    return chave;
+  async gravar(_rede: string, chave: string, conteudo: string): Promise<string> {
+    const bytes = new TextEncoder().encode(conteudo);
+    const resumo = resumoSha256(conteudo);
+    // Chave nova por gravação: o mesmo conteúdo cai no mesmo arquivo pela porta (reaproveitado), não pela chave.
+    const chaveIdempotencia = `integracao-${randomUUID()}`;
+    const hospital = chave.split('/')[0] ?? '';
+    const estabelecimento = this.idEstabelecimento ? await this.idEstabelecimento(hospital) : null;
+    const g = await this.armazem.guardar(
+      {
+        conteudo: bytes,
+        nomeOriginal: (chave.split('/').pop() || `${resumo}.txt`).slice(0, 255),
+        tipoMime: 'text/plain',
+        finalidade: 'conteudo_integracao',
+        origem: 'integracao',
+      },
+      { ...this.ctx(chaveIdempotencia), estabelecimento, chaveIdempotencia },
+    );
+    return String(g.id);
   }
 
-  async ler(rede: string, chave: string): Promise<string | null> {
-    try {
-      return new TextDecoder().decode(await this.s3.ler(await this.bucket(rede), chave));
-    } catch {
-      return null;
-    }
+  async ler(_rede: string, referencia: string): Promise<string | null> {
+    const id = idDoArquivo(referencia);
+    if (id === null) return null;
+    const ctx = this.ctx(`integracao-leitura-${id}`);
+    if (!(await this.armazem.existe(ctx, id))) return null;
+    return new TextDecoder().decode((await this.armazem.ler(ctx, id)).conteudo);
   }
+}
+
+/** Sem o banco próprio do cliente fora da sessão sintética: falha fechada. */
+export function armazemConteudoIndisponivel(): ArmazemConteudo {
+  const recusar = async (): Promise<never> => {
+    throw new ErroConfiguracao(
+      'Armazém do conteúdo das integrações indisponível: sem o banco próprio do cliente.',
+    );
+  };
+  return { gravar: recusar, ler: recusar };
 }

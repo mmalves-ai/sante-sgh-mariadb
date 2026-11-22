@@ -2,6 +2,8 @@
 // origem: pool por cliente, Leitor e Escritor, Executor com trilha, outbox e idempotência na mesma transação,
 // trava otimista, números de negócio, auditoria automática e neutralização fora de produção.
 export * from './ambiente.js';
+export * from './armazem-arquivos.js';
+export * from './arquivos-teste.js';
 export * from './configuracao.js';
 export * from './como.js';
 export * from './contexto.js';

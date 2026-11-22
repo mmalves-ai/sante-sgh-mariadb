@@ -46,8 +46,14 @@ export class ModuloCatalogos {}
 
 export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCatalogos = {}): DynamicModule {
   const fonte = opcoes.fonte ?? fonteDosCatalogos(ctx);
-  // O original da carga vai ao armazenamento com retenção só com o banco (na memória, nada sai do processo).
-  const guardar = fonte.destino === 'banco' ? guardarArquivoCatalogo(ctx.configuracao, ctx.env) : undefined;
+  // O original da carga vai à porta de arquivos só com o banco (na memória, nada sai do processo). Com o banco, a porta
+  // sempre existe (o destino 'banco' só nasce com o núcleo e o cliente): sem ela, a montagem recusa (falha fechada).
+  const guardar =
+    fonte.destino === 'banco' ? guardarArquivoCatalogo(ctx.configuracao, ctx.env, ctx.nucleo) : undefined;
+  if (fonte.destino === 'banco' && !guardar)
+    throw new Error(
+      'Catálogos no banco sem a porta de arquivos: o arquivo original da carga não seria guardado.',
+    );
   const servico = new ServicoCatalogos(fonte, {
     ambiente: ctx.configuracao.ambiente,
     janela: ctx.env['CATALOGO_JANELA_PUBLICACAO'] ?? null,

@@ -43,7 +43,7 @@ export const GRUPOS: readonly { grupo: GrupoVariavel; titulo: string }[] = [
   { grupo: 'servicos', titulo: 'Serviços do servidor (portas, fila, documentos)' },
   { grupo: 'seguranca', titulo: 'Segurança, chaves e sessão' },
   { grupo: 'email', titulo: 'E-mail e destinatários de aviso' },
-  { grupo: 'armazenamento', titulo: 'Armazenamento de arquivos (S3)' },
+  { grupo: 'armazenamento', titulo: 'Armazenamento de arquivos (disco da máquina, ADR 0004)' },
   { grupo: 'integracoes', titulo: 'Integrações externas' },
   { grupo: 'rotinas', titulo: 'Rotinas do worker (ligar, desligar, intervalos)' },
   { grupo: 'observabilidade', titulo: 'Observabilidade e sondas' },
@@ -361,42 +361,24 @@ export const VARIAVEIS: readonly Variavel[] = [
   ),
   // Armazenamento
   v(
-    'S3_ENDPOINT',
+    'ARQUIVOS_RAIZ',
     'armazenamento',
     'obrigatoria',
     MARCADOR_PREENCHER,
-    'Endereço do armazenamento compatível com S3.',
+    'Pasta absoluta dos arquivos (uma subpasta por banco de cliente), no disco da máquina; ex.: /srv/sante-sgh/arquivos. Cópia de segurança pela hospedagem (snapshot do volume ou backup do cliente).',
   ),
-  v('S3_REGIAO', 'armazenamento', 'opcional', 'us-east-1', 'Região do armazenamento.'),
-  v('S3_ACESSO', 'armazenamento', 'obrigatoria', MARCADOR_SEGREDO, 'Chave de acesso do armazenamento.', {
-    segredo: true,
-  }),
-  v('S3_SEGREDO', 'armazenamento', 'obrigatoria', MARCADOR_SEGREDO, 'Segredo do armazenamento.', {
-    segredo: true,
-  }),
-  ...(
-    [
-      'CATALOGOS',
-      'DOCUMENTOS',
-      'FINANCEIRO',
-      'HIGIENIZACAO',
-      'PATRIMONIO',
-      'PORTAL',
-      'PORTARIA',
-      'SAME',
-      'SUS',
-      'TISS',
-    ] as const
-  ).map((b) =>
-    v(
-      `S3_BUCKET_${b}`,
-      'armazenamento',
-      'opcional',
-      '',
-      `Bucket de ${b.toLowerCase()} (padrão: derivado da rede).`,
-    ),
+  v(
+    'ARQUIVOS_ALERTA_LIVRE_GB',
+    'armazenamento',
+    'opcional',
+    '20',
+    'Alerta (instalação e vigia do worker) quando o espaço livre da pasta de arquivos fica abaixo deste valor, em GB.',
   ),
   v('DOCUMENTO_RETENCAO_DIAS', 'armazenamento', 'opcional', '', 'Dias de retenção dos documentos de prova.'),
+  v('VIGIA_ARQUIVOS', 'rotinas', 'opcional', '', 'Vigia de integridade dos arquivos (hash x registro).', {
+    valores: ['', 'desligado'],
+  }),
+  v('VIGIA_ARQUIVOS_MS', 'rotinas', 'opcional', '', 'Intervalo do vigia dos arquivos, em ms (padrão 6 h).'),
   // Integrações
   v('OIE_URL', 'integracoes', 'opcional', '', 'Motor de integração (HL7) do hospital.'),
   v('OIE_MLLP_HOST', 'integracoes', 'opcional', '', 'Servidor MLLP do motor de integração.'),
@@ -691,6 +673,7 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['SGH_M58_ENSAIOS', 'relatórios do ensaio da versão 5 do banco'],
       ['SGH_HOMOLOGACAO', 'registro da homologação'],
       ['SGH_PRONTIDAO', 'relatório de prontidão'],
+      ['SGH_MAPA_PERMISSOES', 'mapa das permissões (implantação fora do repositório)'],
     ] as const
   ).map(([k, d]) => v(k, 'caminhos', 'opcional', '', `Pasta ou arquivo: ${d}. Vazio: o do pacote.`)),
 ];
@@ -731,6 +714,7 @@ export const NAO_CONFIGURAVEIS: Readonly<Record<string, string>> = {
   SGH_ARQUIVO_AMBIENTE: 'definida pela unit do systemd (aponta para este arquivo)',
   SGH_PROCESSO: 'definida pelo próprio processo (api ou worker)',
   SGH_CONTAINERS_LOCAIS: 'dev/homologação: containers locais aceitos como destino pela neutralização',
+  SGH_CLIENTE_TESTE: 'teste: cliente de teste do lote (banco e pasta de arquivos próprios)',
   ORIGEM: 'nome de coluna, não variável',
   DESTINO: 'nome de coluna, não variável',
   ENVIADA_POR: 'nome de coluna, não variável',

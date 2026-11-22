@@ -1,5 +1,5 @@
 // Relatório de contingência do posto em PDF/A (ficha do M40, regra 6): o relatório da UTI sintética (porta em memória)
-// pelo serviço de emissão do M09 (Gotenberg + S3 com Object Lock, num bucket de teste), com o hash conferido na
+// pelo serviço de emissão do M09 (Gotenberg + porta de arquivos numa pasta temporária, ADR 0004), com o hash conferido na
 // releitura e o veraPDF sem falha (PDF/A-2b). Serviços do Compose sgh (127.0.0.1); massa SINTÉTICA; nada sai da
 // máquina. Fora do `pnpm verificar`: roda pelo `testes:integracao` da API, com `./pnpm infra:subir` no ar.
 import { rmSync } from 'node:fs';
@@ -10,23 +10,21 @@ import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import type { FonteDocumento } from '../documento/public-api.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { RegistroEmissoesMemoria } from '../documento/infra/registro.js';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { arquivosDeTeste } from '../documento/integracao.spec-util.js';
 import { metadadosPdf, pastaTemporaria, raiz, verapdf } from '../documento/integracao.spec-util.js';
 import { ServicoContingencia } from './contingencia.js';
 import { RELOGIO_TESTE } from './enfermagem.spec-util.js';
 import { PortaEnfermagemMemoria } from './porta-memoria.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m40-${Date.now()}`;
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const arquivos = arquivosDeTeste();
 const registro = new RegistroEmissoesMemoria();
 const emissao = new EmissaoService({
-  s3,
-  bucket,
+  armazem: arquivos.armazem,
+  cliente: arquivos.cliente,
   gotenbergUrl: GOTENBERG,
   registro,
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -37,10 +35,13 @@ const porta = new PortaEnfermagemMemoria({ agora: () => new Date(RELOGIO_TESTE) 
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  await s3.criarBucketComTrava(bucket);
+  await arquivos.preparar();
   pasta = pastaTemporaria('m40-contingencia-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await arquivos.encerrar();
+});
 
 describe('relatório de contingência do posto em PDF/A (M40, regra 6)', () => {
   it('PDF/A-2b sem falha no veraPDF, com o título e o hash conferido na releitura', async () => {

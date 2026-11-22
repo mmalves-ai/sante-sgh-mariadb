@@ -1,10 +1,9 @@
 // Documentos do prontuário em PDF/A (ficha do M23, regras 7 e 8; seção 10 "Documento"): cada modelo emitido pelo
-// serviço de emissão do M09 (Gotenberg + S3 com Object Lock), com o texto do corpus CP1252, passa no veraPDF
+// serviço de emissão do M09 (Gotenberg + porta de arquivos no disco local, ADR 0004), com o texto do corpus CP1252, passa no veraPDF
 // (PDF/A-2b, 0 regra com falha), tem o snapshot visual da primeira página (referência versionada em
 // snapshots/pep-*.pgm; SGH_ATUALIZAR_SNAPSHOT=sim regrava), sai com "2ª via" na reemissão e leva o rodapé "assinar à
 // mão" nos que saem do hospital. Serviços do Compose sgh (127.0.0.1); massa SINTÉTICA; nada sai da máquina. Fora do
 // `pnpm verificar`: roda pelo `testes:integracao` da API, com `./pnpm infra:subir` no ar.
-import { execFileSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,7 +17,7 @@ import {
 import { EmissaoService } from '../documento/aplicacao/emissao.service.js';
 import { gotenbergDisponivel } from '../documento/infra/gotenberg.js';
 import { RegistroEmissoesMemoria } from '../documento/infra/registro.js';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { arquivosDeTeste } from '../documento/integracao.spec-util.js';
 import {
   compararSnapshot,
   metadadosPdf,
@@ -28,9 +27,7 @@ import {
   verapdf,
 } from '../documento/integracao.spec-util.js';
 
-const S3 = 'http://127.0.0.1:9318';
 const GOTENBERG = 'http://127.0.0.1:3318';
-const bucket = `sgh-teste-m09-${Date.now()}`;
 
 /** Os modelos da ficha (seção 10): receita simples e de controle especial, atestado, declaração, TCLE, sumário e transferência. */
 const MODELOS: readonly ModeloPep[] = [
@@ -47,23 +44,13 @@ const MODELOS: readonly ModeloPep[] = [
 const CORPUS =
   'Ação, coração, pé, avó, Ü, ñ; “aspas” e ‘simples’ – travessão — € 1,50; 1º, 2ª; ½ comprimido.';
 
-function apagarBucketsVencidos(): void {
-  const limite = Date.now() - 10 * 60_000;
-  const weed = (c: string): string =>
-    execFileSync('docker', ['exec', '-i', 'sgh-s3', 'weed', 'shell'], { input: `${c}\n`, encoding: 'utf8' });
-  const vencidos = [...weed('s3.bucket.list').matchAll(/sgh-teste-m09-(\d+)/g)]
-    .filter((m) => Number(m[1]) < limite)
-    .map((m) => m[0]);
-  for (const nome of new Set(vencidos)) weed(`s3.bucket.delete -name=${nome}`);
-}
-
-const s3 = new ClienteS3({ endpoint: S3, regiao: 'us-east-1' });
+const arquivos = arquivosDeTeste();
 const servico = new EmissaoService({
-  s3,
-  bucket,
+  armazem: arquivos.armazem,
+  cliente: arquivos.cliente,
   gotenbergUrl: GOTENBERG,
   registro: new RegistroEmissoesMemoria(),
-  retencao: { modo: 'GOVERNANCE', duracaoMs: 3 * 60_000 },
+  retencao: { imutavel: false, duracaoMs: 3 * 60_000 },
   produto: 'Produto de Teste',
   baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
   nomeEstabelecimento: (c) => `Estabelecimento Fictício ${c}`,
@@ -101,11 +88,13 @@ function pedido(modelo: ModeloPep) {
 let pasta: string;
 beforeAll(async () => {
   expect(await gotenbergDisponivel(GOTENBERG)).toBe(true);
-  apagarBucketsVencidos();
-  await s3.criarBucketComTrava(bucket);
+  await arquivos.preparar();
   pasta = pastaTemporaria('m23-pdf-');
 });
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+afterAll(async () => {
+  rmSync(pasta, { recursive: true, force: true });
+  await arquivos.encerrar();
+});
 
 describe('documentos do prontuário em PDF/A (M23)', () => {
   it('cada modelo: PDF/A-2b sem falha no veraPDF, hash conferido, 2ª via marcada, rodapé "assinar à mão"', async () => {

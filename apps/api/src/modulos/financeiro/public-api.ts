@@ -10,7 +10,7 @@ export {
   contasBancariasSinteticasDoEscopo,
   PortaFinanceiroMemoria,
 } from './porta-memoria.js';
-export { type ArmazemFinanceiro, armazemFinanceiroMemoria, armazemFinanceiroS3 } from './armazem.js';
+export { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemoria } from './armazem.js';
 export { ServicoFinanceiro } from './servico.js';
 export { ApoiosFinanceiro } from './apoios.js';
 export {

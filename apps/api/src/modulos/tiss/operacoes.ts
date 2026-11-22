@@ -3,7 +3,7 @@
 // trilha, o outbox e a idempotência vão na mesma transação, e o registro alterado é travado e relido (trava otimista
 // pela coluna `versao`). As regras ficam em regras-tiss.ts e no domínio do faturamento (puras).
 // Melhoria: o número do lote vem da sequência de negócio do estabelecimento (garantida na primeira vez), não de um
-// contador por convênio; o XML só é gravado depois de validado no XSD e guardado (S3 com Object Lock), com o arquivo
+// contador por convênio; o XML só é gravado depois de validado no XSD e guardado (disco local, somente leitura), com o arquivo
 // registrado (hash SHA-256, tamanho, imutável) e ligado ao lote; a conta vai a "faturada" pela própria operação.
 // Melhoria: o protocolo vira registro próprio (protocolo_recebimento, com a situação e quem registrou); limpar o
 // protocolo cancela o registro anterior em vez de apagá-lo, e o histórico do lote sai desses registros; registrar de

@@ -68,6 +68,8 @@
     "src/vigia-banco.service.ts",
     "src/vigia-banco.spec.ts",
     "src/vigia-banco.int.spec.ts",
+    "src/vigia-arquivos.service.ts",
+    "src/vigia-arquivos.spec.ts",
     "src/worker.module.ts",
     "src/worker.spec.ts",
     "src/relatorios/envio-agendado.ts",

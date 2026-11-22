@@ -1,19 +1,27 @@
-// Arquivos da digitalização certificada (M50, etapa 6; ficha, seção 6: "arquivo no S3 com Object Lock"; Lei 13.787/2018,
-// art. 6: guarda de 20 anos): o PDF do escâner vai ao armazenamento de objetos LOCAL do ambiente (o S3 em loopback fora
-// de produção; a trava de saídas recusa endereço externo), num bucket próprio com Object Lock: GOVERNANCE de 1 dia até o
-// COMMIT e, depois dele, COMPLIANCE pelo prazo de guarda (no dev, a curta continua). A chave sai do SHA-256 do arquivo;
-// o banco guarda a chave e o resumo. Nunca vai a log. Sem S3 configurado (testes e a sessão sintética), em memória.
+// Arquivos da digitalização certificada (M50, etapa 6; Lei 13.787/2018, art. 6: guarda de 20 anos): o PDF do escâner
+// vai ao disco local pela porta de arquivos do núcleo (ADR 0004: ARQUIVOS_RAIZ, uma pasta por banco de cliente, gravação
+// uma vez em somente leitura, metadado na tabela `arquivo` com trilha). A guarda legal (`retencao_ate`) só é fixada
+// depois do COMMIT do documento (`fixar`): a tentativa recusada não deixa arquivo preso por 20 anos. A chave do
+// módulo leva o id do arquivo (`same/digitalizacao/arquivo-<id>.pdf`); o banco guarda a chave e o resumo. Nunca vai a
+// log. Sem núcleo (testes de unidade e a sessão sintética), em memória.
 import { ANOS_GUARDA_DIGITALIZACAO } from '@sgh/contratos';
-import { ClienteS3 } from '../documento/infra/s3.js';
+import { type NucleoArmazem, sha256 } from '@sgh/nucleo';
+import {
+  ambienteCurto,
+  type ArquivosDoModulo,
+  arquivosDoAmbiente,
+  dataDaqui,
+  idNaChave,
+} from '../arquivos-locais.js';
 
 export interface ArmazemDigitalizacao {
-  readonly destino: 's3' | 'memoria';
+  readonly destino: 'local' | 'memoria';
   /**
-   * Guarda o PDF na chave do próprio resumo (o mesmo arquivo nunca vira duas cópias; se o objeto já existe, de uma
-   * tentativa recusada, é reaproveitado) com uma retenção GOVERNANCE curta: até o COMMIT, nada fica preso por 20 anos.
+   * Guarda o PDF (o mesmo conteúdo nunca vira duas cópias: o arquivo de uma tentativa recusada é reaproveitado) e
+   * devolve a chave do módulo.
    */
   guardar(hospital: string, bytes: Uint8Array, hash: string): Promise<string>;
-  /** Depois do COMMIT: a retenção da guarda legal (COMPLIANCE, 20 anos; no dev e no CI, a curta continua). */
+  /** Depois do COMMIT: a guarda legal no registro do arquivo (`retencao_ate`, 20 anos; em dev/ci, nada). */
   fixar(hospital: string, chave: string): Promise<void>;
   ler(hospital: string, chave: string): Promise<Uint8Array | null>;
 }
@@ -25,9 +33,11 @@ export const chaveDigitalizacao = (hash: string) => {
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('resumo SHA-256 inválido para a chave do arquivo');
   return `same/digitalizacao/${hash}.pdf`;
 };
-/** O formato que a leitura aceita: o resumo (64) ou o identificador aleatório das primeiras capturas (32). */
-export const CHAVE_DIGITALIZACAO = /^same\/digitalizacao\/(?:[a-f0-9]{32}|[a-f0-9]{64})\.pdf$/;
-const DIA_MS = 86_400_000;
+/** A chave do módulo para o arquivo guardado na porta do núcleo. */
+export const chaveDigitalizacaoDoArquivo = (id: number) => `same/digitalizacao/arquivo-${id}.pdf`;
+/** O formato que a leitura aceita: o id do arquivo; na memória, o resumo (64) ou o identificador das primeiras (32). */
+export const CHAVE_DIGITALIZACAO =
+  /^same\/digitalizacao\/(?:[a-f0-9]{32}|[a-f0-9]{64}|arquivo-[1-9]\d{0,14})\.pdf$/;
 
 export class ArmazemDigitalizacaoMemoria implements ArmazemDigitalizacao {
   readonly destino = 'memoria' as const;
@@ -52,57 +62,50 @@ export class ArmazemDigitalizacaoMemoria implements ArmazemDigitalizacao {
   }
 }
 
-export function criarArmazemDigitalizacao(
-  rede: string | null,
+/** O PDF sobre a porta de arquivos do núcleo (disco local), com a guarda legal fora de dev/ci. */
+export function armazemDigitalizacaoLocal(
+  arquivos: ArquivosDoModulo,
   env: NodeJS.ProcessEnv = process.env,
 ): ArmazemDigitalizacao {
-  const endpoint = env['S3_ENDPOINT']?.trim();
-  if (!endpoint) return new ArmazemDigitalizacaoMemoria();
-  const segredo = env['S3_SEGREDO']?.trim();
-  const s3 = new ClienteS3({
-    endpoint,
-    regiao: env['S3_REGIAO']?.trim() || 'us-east-1',
-    acesso: segredo ? env['S3_ACESSO']?.trim() : undefined,
-    segredo: segredo || undefined,
-  });
-  const bucket = env['S3_BUCKET_SAME']?.trim() || `sgh-${rede ?? 'rede'}-same`;
-  const ambiente = (env['AMBIENTE'] ?? 'dev').trim() || 'dev';
-  const curto = ambiente === 'dev' || ambiente === 'ci';
-  let pronto: Promise<void> | null = null;
+  const curto = ambienteCurto(env);
   return {
-    destino: 's3',
+    destino: 'local',
     async guardar(hospital, bytes, hash) {
-      pronto ??= s3.criarBucketComTrava(bucket);
-      await pronto;
-      const chave = chaveDigitalizacao(hash);
-      // Uma tentativa anterior recusada (lote disputado, falha da transação) já deixou este mesmo arquivo: reaproveita.
-      if (await s3.existe(bucket, `${hospital}/${chave}`)) return chave;
-      await s3.gravarComRetencao(
-        bucket,
-        `${hospital}/${chave}`,
-        bytes,
-        'application/pdf',
-        'GOVERNANCE',
-        new Date(Date.now() + DIA_MS),
-      );
-      return chave;
+      chaveDigitalizacao(hash);
+      if (sha256(bytes) !== hash) throw new Error('o resumo SHA-256 não confere com o arquivo');
+      const g = await arquivos.guardar(hospital, {
+        conteudo: bytes,
+        nomeOriginal: `digitalizacao-${hash.slice(0, 16)}.pdf`,
+        tipoMime: 'application/pdf',
+        finalidade: 'documento_digitalizado',
+        entidade: 'documento_digitalizado',
+        // Sem guarda até o COMMIT: o `fixar` a aplica no documento confirmado.
+        retencaoAte: null,
+      });
+      return chaveDigitalizacaoDoArquivo(g.id);
     },
     async fixar(hospital, chave) {
-      if (curto || !CHAVE_DIGITALIZACAO.test(chave)) return;
-      await s3.fixarRetencao(
-        bucket,
-        `${hospital}/${chave}`,
-        'COMPLIANCE',
-        new Date(Date.now() + ANOS_GUARDA_DIGITALIZACAO * 365.25 * DIA_MS),
-      );
+      if (curto) return;
+      const id = CHAVE_DIGITALIZACAO.test(chave) ? idNaChave(chave) : null;
+      if (id === null) throw new Error('chave de digitalização sem o id do arquivo');
+      await arquivos.fixarRetencao(hospital, id, dataDaqui(ANOS_GUARDA_DIGITALIZACAO));
     },
     async ler(hospital, chave) {
-      if (!CHAVE_DIGITALIZACAO.test(chave)) return null;
-      try {
-        return await s3.ler(bucket, `${hospital}/${chave}`);
-      } catch {
-        return null;
-      }
+      const id = CHAVE_DIGITALIZACAO.test(chave) ? idNaChave(chave) : null;
+      if (id === null) return null;
+      const r = await arquivos.ler(hospital, id);
+      if (!r || r.metadado.finalidade !== 'documento_digitalizado') return null;
+      return new Uint8Array(r.conteudo);
     },
   };
+}
+
+/** O armazém pelo ambiente: com o núcleo, o disco local (ARQUIVOS_RAIZ); sem ele, em memória. */
+export function criarArmazemDigitalizacao(
+  nucleo: NucleoArmazem | null | undefined,
+  cliente: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): ArmazemDigitalizacao {
+  const arquivos = arquivosDoAmbiente(nucleo, cliente, env);
+  return arquivos ? armazemDigitalizacaoLocal(arquivos, env) : new ArmazemDigitalizacaoMemoria();
 }

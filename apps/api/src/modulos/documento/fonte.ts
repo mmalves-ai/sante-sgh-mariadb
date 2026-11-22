@@ -1,4 +1,4 @@
-// Montagem do módulo documento a partir do ambiente (S3, Gotenberg, Valkey e chave do QZ Tray). Nada aqui
+// Montagem do módulo documento a partir do ambiente (porta de arquivos, Gotenberg, Valkey e chave do QZ Tray). Nada aqui
 // vai a log. Em dev, a chave do QZ Tray é de teste, gerada no processo (a da Rede vem no deploy).
 import { randomUUID, type webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -10,11 +10,13 @@ import {
   importarChavePrivadaQz,
   type TrabalhoZpl,
 } from '@sgh/dominio-documento';
+import type { ArmazemArquivos } from '@sgh/nucleo';
 import type { Configuracao } from '../../configuracao.js';
+import { fontesSinteticas } from '../../sessao/montar.js';
 import { registrarConversaoPdf } from '../../telemetria.js';
 import { EmissaoService, politicaRetencao } from './aplicacao/emissao.service.js';
 import { RegistroEmissoesMemoria } from './infra/registro.js';
-import { ClienteS3 } from './infra/s3.js';
+import { armazemArquivosDoAmbiente } from './infra/arquivos.js';
 import { ArmazemValkey, FilaZplValkey } from './infra/valkey.js';
 
 type CryptoKey = webcrypto.CryptoKey;
@@ -34,15 +36,17 @@ export interface FonteDocumento {
 export function criarFonteDocumento(
   cfg: Configuracao,
   env: NodeJS.ProcessEnv = process.env,
-  opcoes: { readonly certificadoSbis?: (estabelecimento: string) => Promise<string | null> } = {},
+  opcoes: {
+    readonly certificadoSbis?: (estabelecimento: string) => Promise<string | null>;
+    /** Porta de arquivos (ADR 0004); padrão: memória na sessão sintética, senão indisponível. */
+    readonly armazem?: ArmazemArquivos;
+    /** Id do estabelecimento pelo código (obrigatório com o banco próprio; ver DependenciasEmissao). */
+    readonly idEstabelecimento?: (codigo: string) => Promise<number>;
+  } = {},
 ): FonteDocumento {
-  const segredo = env['S3_SEGREDO']?.trim();
-  const s3 = new ClienteS3({
-    endpoint: env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
-    regiao: env['S3_REGIAO']?.trim() || 'us-east-1',
-    acesso: segredo ? env['S3_ACESSO']?.trim() : undefined,
-    segredo: segredo || undefined,
-  });
+  const armazem =
+    opcoes.armazem ??
+    armazemArquivosDoAmbiente({ nucleo: null, cliente: null, sintetico: fontesSinteticas(env), env });
   const nomes = new Map<string, string>();
   for (const cod of (env['ESTABELECIMENTOS'] ?? '')
     .split(',')
@@ -51,8 +55,8 @@ export function criarFonteDocumento(
     nomes.set(cod, env[`FB_${cod.toUpperCase()}_NOME`]?.trim() || cod);
   }
   const emissao = new EmissaoService({
-    s3,
-    bucket: env['S3_BUCKET_DOCUMENTOS']?.trim() || `sgh-${cfg.rede ?? 'rede'}-documentos`,
+    armazem,
+    cliente: cfg.clientePadrao ?? 'sintetico',
     gotenbergUrl: env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318',
     registro: new RegistroEmissoesMemoria(),
     retencao: politicaRetencao(cfg.ambiente, env),
@@ -61,6 +65,7 @@ export function criarFonteDocumento(
     nomeEstabelecimento: (c) => nomes.get(c) ?? c,
     aoConverter: (ms) => registrarConversaoPdf(ms / 1000),
     ...(opcoes.certificadoSbis ? { certificadoSbis: opcoes.certificadoSbis } : {}),
+    ...(opcoes.idEstabelecimento ? { idEstabelecimento: opcoes.idEstabelecimento } : {}),
   });
   const valkey = env['VALKEY_URL']?.trim();
   const fila = valkey ? new FilaZplValkey(valkey) : null;

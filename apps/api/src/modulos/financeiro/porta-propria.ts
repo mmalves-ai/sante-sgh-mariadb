@@ -59,6 +59,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
+import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import {
   aprovacoesPorTitulo,
   centroDaAlcada,
@@ -75,6 +76,7 @@ import {
   TIPO_APROVACAO_TITULO,
 } from './operacoes.js';
 import {
+  type ArquivoGuardadoFinanceiro,
   type BasesDrePorta,
   type BasesIndicadoresPorta,
   type ContextoFinanceiro,
@@ -120,6 +122,7 @@ const SITUACOES_TITULAVEIS = SITUACOES_CONTA_TITULAVEL.map((s) => `'${s}'`).join
 
 /** Tabelas das gravações diretas (a operação de gravação direta só grava nelas). */
 const TABELAS_GRAVACAO_DIRETA = [
+  'arquivo',
   'tipo_documento_aprovacao',
   'fluxo_aprovacao',
   'etapa_fluxo_aprovacao',
@@ -1392,6 +1395,29 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
   const login = () => loginDe(tx, usuario);
   const foraDoEscopo = () =>
     new ErroOperacao(403, 'fora-do-escopo', 'Fora do escopo', 'A conta bancária não está no seu escopo de contas.');
+  // ADR 0004: o arquivo guardado no disco é registrado em `arquivo` na mesma transação da tabela dona (hash, tamanho,
+  // tipo, imutável e guarda legal de 5 anos), e é esse registro que o vigia do worker confere.
+  const registrar = (
+    a: ArquivoGuardadoFinanceiro | null,
+    entidade: string,
+    finalidade: string,
+    hash: string,
+    entidadeId: number | null = null,
+  ) =>
+    a
+      ? registrarArquivoGuardado(tx, {
+          estabelecimento: est,
+          entidade,
+          entidadeId,
+          finalidade,
+          nomeOriginal: a.chave.slice(a.chave.lastIndexOf('/') + 1),
+          tipoMime: a.tipoMime,
+          tamanhoBytes: a.tamanhoBytes,
+          hash,
+          chave: a.chave,
+          retencaoAte: retencaoAte(agora()),
+        })
+      : Promise.resolve(null);
 
   async function tipoAprovacao(): Promise<number> {
     const r = await tx.uma('SELECT id FROM tipo_documento_aprovacao WHERE codigo = ?', [TIPO_APROVACAO_TITULO]);
@@ -1628,6 +1654,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       const linhas = d.linhas.filter((x) => Math.abs(x.valor) >= 0.005);
       const datas = linhas.map((x) => x.data).sort();
       const hoje = new Date().toISOString().slice(0, 10);
+      const arquivo = await registrar(d.arquivo, 'extrato_bancario', 'extrato_bancario', d.hashArquivo);
       const id = await tx.incluir('extrato_bancario', {
         estabelecimento_id: est,
         conta_bancaria_id: d.conta,
@@ -1638,9 +1665,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         total_debitos: centavos(linhas.filter((x) => x.valor < 0).reduce((s, x) => s - x.valor, 0)),
         quantidade_linhas: linhas.length,
         hash_conteudo: d.hashArquivo,
+        arquivo_id: arquivo?.id ?? null,
         importado_em: agora(),
         importado_por_usuario_id: usuario,
       });
+      if (arquivo) await ligarArquivo(tx, arquivo, id);
       for (const [i, x] of linhas.entries())
         await tx.incluir('linha_extrato', {
           extrato_bancario_id: id,
@@ -1815,6 +1844,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       await tx.alterar('conta_bancaria', d.conta, numero(conta['versao']), { sequencia_remessa: sequencial });
       await garantirSequencia(tx, { tipo: 'remessa_bancaria', estabelecimento: est, prefixo: 'RM-' }, { usuario, agora: agora() });
       const num = await tx.proximoNumero('remessa_bancaria');
+      const arquivo = await registrar(d.arquivo, 'remessa_bancaria', 'remessa_bancaria', d.hashArquivo);
       const id = await tx.incluir('remessa_bancaria', {
         estabelecimento_id: est,
         numero: num.formatado,
@@ -1827,6 +1857,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         quantidade_registros: d.titulos,
         valor_total: d.valorTotal,
         hash_arquivo: d.hashArquivo,
+        arquivo_id: arquivo?.id ?? null,
         situacao: d.situacao === 'retornada' ? 'processada' : 'gerada',
         observacao: JSON.stringify({
           destino: d.destino,
@@ -1834,6 +1865,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
           retorno: d.hashRetorno,
         }).slice(0, 500),
       });
+      if (arquivo) await ligarArquivo(tx, arquivo, id);
       return { id, sequencial };
     },
 
@@ -1861,11 +1893,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         valor_cbs: centavos(d.valorCbs),
         valor_liquido: centavos(d.valorLiquido),
         hash_arquivo: d.hashXml,
-        chave_objeto: d.chaveObjeto,
+        chave_objeto: d.arquivo?.chave ?? null,
         destino: d.destino,
         situacao: SITUACAO_ARQUIVO_DA_NFSE[d.situacao] ?? 'gerado',
         gerado_em: momento,
       });
+      await registrar(d.arquivo, 'arquivo_fiscal_gerado', 'nfse', d.hashXml, id);
       return { id };
     },
 
@@ -1885,11 +1918,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         quantidade_registros: d.registros,
         valor_total: centavos(d.valorTotal),
         hash_arquivo: d.hashArquivo,
-        chave_objeto: d.chaveObjeto,
+        chave_objeto: d.arquivo?.chave ?? null,
         destino: 'receita',
         situacao: 'gerado',
         gerado_em: agora(),
       });
+      await registrar(d.arquivo, 'arquivo_fiscal_gerado', 'declaracao_fiscal', d.hashArquivo, id);
       return { id };
     },
 
@@ -1908,6 +1942,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         { usuario, agora: agora() },
       );
       const num = await tx.proximoNumero('lote_exportacao_contabil');
+      const arquivo = await registrar(d.arquivo, 'lote_exportacao_contabil', 'lote_contabil', d.hashArquivo);
       const id = await tx.incluir('lote_exportacao_contabil', {
         estabelecimento_id: est,
         numero: num.valor,
@@ -1918,9 +1953,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         quantidade_lancamentos: d.lancamentos,
         valor_total: d.somaDebitos,
         hash_conferencia: d.hashArquivo,
+        arquivo_id: arquivo?.id ?? null,
         gerado_em: agora(),
         observacao: JSON.stringify({ regua: d.regua, somaCreditos: d.somaCreditos, semDePara: d.semDePara }),
       });
+      if (arquivo) await ligarArquivo(tx, arquivo, id);
       return { id };
     },
   };
