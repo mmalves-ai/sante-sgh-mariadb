@@ -296,6 +296,81 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     expect((await porta.observacao(c)).leitos.find((x) => x.id === l1)?.ocupacao).toBeNull();
   });
 
+  it('ADR 0009, decisão 25 na abertura: alerta sem credenciamento; bloqueio recusa sem gravar; credenciado no plano superior abre o subplano', async () => {
+    const mm = m!;
+    const c = contextoPorta(mm);
+    const escrever = <T>(fn: (w: Parameters<Parameters<NucleoProprio['escrever']>[1]>[0]) => Promise<T>) =>
+      nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-cred' }, fn);
+    const op = await escrever(async (w) => {
+      const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+        const l = await w.uma<{ id: number }>(sel, p);
+        return l ? Number(l.id) : w.inserir(ins, pi);
+      };
+      const fonte = await um(
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        [`${MARCA}-OP`],
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, ?, 'operadora', 'ativa', CURRENT_TIMESTAMP(3))",
+        [`${MARCA}-OP`, `OPERADORA ${MARCA}`],
+      );
+      const plano = (codigo: string, sup: number | null) =>
+        um(
+          'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
+          [fonte, codigo],
+          'INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, plano_superior_id, codigo, descricao, criado_em) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP(3))',
+          [fonte, sup, codigo, codigo],
+        );
+      const raiz = await plano(`${MARCA}-PR`, null);
+      await plano(`${MARCA}-PS`, raiz);
+      await w.executar('DELETE FROM profissional_fonte_pagadora WHERE fonte_pagadora_id = ?', [fonte]);
+      await w.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 0 WHERE id = ?', [fonte]);
+      return { fonte, raiz };
+    });
+    const atendimentos = () =>
+      contar('SELECT COUNT(*) AS n FROM atendimento WHERE fonte_pagadora_id = ? AND excluido_em IS NULL', [
+        op.fonte,
+      ]);
+    const abrir = (extra: Record<string, unknown> = {}) =>
+      porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), convenio: op.fonte, ...extra },
+        contextoGravacao(mm),
+      );
+    try {
+      // Sem credenciamento e sem bloqueio: abre, com o alerta no resultado.
+      const a = await abrir();
+      expect(a.resultado).toMatchObject({ alerta: 'profissional-nao-credenciado' });
+      expect(String(a.resultado['alertaMotivo'])).toMatch(/credenciamento/);
+      // Com o bloqueio do convênio: recusa antes do INSERT (nenhum atendimento novo).
+      await escrever((w) =>
+        w.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 1 WHERE id = ?', [op.fonte]),
+      );
+      const antes = await atendimentos();
+      await expect(abrir({ plano: `${MARCA}-PS` })).rejects.toMatchObject({
+        problema: { codigo: 'profissional-nao-credenciado' },
+      });
+      expect(await atendimentos()).toBe(antes);
+      // Credenciado no plano superior: o subplano do paciente abre sem alerta, mesmo com o bloqueio ligado.
+      await escrever((w) =>
+        w.executar(
+          `INSERT INTO profissional_fonte_pagadora (profissional_id, fonte_pagadora_id, plano_fonte_pagadora_id, vigencia_inicio,
+             credenciado, criado_em) VALUES (?, ?, ?, '2020-01-01', TRUE, CURRENT_TIMESTAMP(3))`,
+          [mm.profissional, op.fonte, op.raiz],
+        ),
+      );
+      const b = await abrir({ plano: `${MARCA}-PS` });
+      expect(b.resultado['alerta']).toBeUndefined();
+      expect(await atendimentos()).toBe(antes + 1);
+    } finally {
+      await escrever(async (w) => {
+        await w.executar('DELETE FROM profissional_fonte_pagadora WHERE fonte_pagadora_id = ?', [op.fonte]);
+        await w.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 0 WHERE id = ?', [
+          op.fonte,
+        ]);
+      });
+    }
+  });
+
   it('as operações ainda sem regra no banco respondem 501 (nada gravado)', async () => {
     const mm = m!;
     await expect(

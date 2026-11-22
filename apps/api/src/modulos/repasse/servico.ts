@@ -290,7 +290,12 @@ export class ServicoRepasse {
     };
     if (data === undefined) return base;
     const x = await this.porta.integraisParticular(ctx(s), data);
-    return { ...base, integrais: x.integrais, grupoDoProcedimento: x.grupoDoProcedimento };
+    return {
+      ...base,
+      integrais: x.integrais,
+      grupoDoProcedimento: x.grupoDoProcedimento,
+      fontesParticulares: x.fontesParticulares,
+    };
   }
 
   /** Os parâmetros do RPA (regra 7): sem a tabela vigente definida, o RPA não é emitido. */

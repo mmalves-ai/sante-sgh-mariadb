@@ -46,6 +46,24 @@ describe('credenciamento (decisões 25 e 26)', () => {
     });
     expect([b.credenciado, b.efeito]).toEqual([false, 'bloqueio']);
   });
+  it('plano desconhecido (marcação): credenciado só num plano do convênio alerta e nunca bloqueia', () => {
+    const bloqueia = { ...base.opcoes, bloqueiaSemCredenciamento: true };
+    const semPlano = { ...base, planoId: null, planoSuperiorId: null, opcoes: bloqueia };
+    const v = verificarCredenciamento({
+      ...semPlano,
+      planoDesconhecido: true,
+      credenciamentos: [cred({ planoId: 31, id: 7 })],
+    });
+    expect([v.efeito, v.credenciamentoId]).toEqual(['alerta', 7]);
+    // Sem nenhum credenciamento, o bloqueio pedido pelo convênio continua.
+    expect(
+      verificarCredenciamento({ ...semPlano, planoDesconhecido: true, credenciamentos: [] }).efeito,
+    ).toBe('bloqueio');
+    // Credenciado no convênio inteiro: nada a avisar.
+    expect(
+      verificarCredenciamento({ ...semPlano, planoDesconhecido: true, credenciamentos: [cred({})] }).efeito,
+    ).toBe('nenhum');
+  });
   it('descredenciado no plano vence o credenciamento do convênio inteiro; vencido não vale', () => {
     const r = verificarCredenciamento({
       ...base,

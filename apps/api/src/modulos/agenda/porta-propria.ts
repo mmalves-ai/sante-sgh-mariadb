@@ -2201,7 +2201,10 @@ export class PortaAgendaPropria implements PortaAgenda {
     const credenciamento = await conferirCredenciamentoNoFluxo(tx, {
       profissionalId: a['profissional_id'] == null ? null : num(a['profissional_id']),
       fontePagadoraId: num(fp['id']),
+      // A marcação não traz o plano: o credenciamento só num plano do convênio alerta e nunca bloqueia (decisão 25).
+      // A conferência pelo plano exato acontece na abertura do atendimento.
       planoId: null,
+      planoDesconhecido: true,
       estabelecimentoId: Number(ctx.estabelecimento),
       data: p.data,
       campo: 'convenio',

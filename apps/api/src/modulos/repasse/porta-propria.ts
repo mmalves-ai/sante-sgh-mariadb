@@ -991,9 +991,11 @@ export class PortaRepassePropria implements PortaRepasse {
   integraisParticular(c: ContextoRepasse, data: string): Promise<IntegraisParticular> {
     return this.ler(c, async (l, est) => {
       const rs = await l.consultar(
-        `SELECT i.fonte_pagadora_id, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
+        `SELECT i.fonte_pagadora_id, f.tipo AS tipo_fonte, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
            FROM regra_repasse r
            JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
+           -- Só a fonte particular: a marca "consulta particular inteira ao médico" nunca vale num convênio.
+           JOIN fonte_pagadora f ON f.id = i.fonte_pagadora_id AND f.tipo = 'particular'
            LEFT JOIN item_faturavel ifa ON ifa.id = i.item_faturavel_id
           WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.codigo LIKE ? AND r.vigencia_inicio <= ?
             AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND i.percentual = 100
@@ -1009,6 +1011,7 @@ export class PortaRepassePropria implements PortaRepasse {
         integrais.push(
           regraRepasseParticularIntegral({
             fontePagadoraId: n(r['fonte_pagadora_id']),
+            tipoFonte: String(r['tipo_fonte']),
             profissionalId: nn(r['profissional_id']),
             itemFaturavelId: item,
             grupoFaturamentoId: item === null ? nn(r['grupo_faturamento_id']) : null,
@@ -1029,7 +1032,8 @@ export class PortaRepassePropria implements PortaRepasse {
           const cod = codigoProcedimento(r['codigo']);
           if (cod !== 0) grupoDoProcedimento.set(cod, n(r['grupo_faturamento_id']));
         }
-      return { integrais, grupoDoProcedimento };
+      const fontesParticulares = new Set(integrais.map((x) => x.fontePagadoraId));
+      return { integrais, grupoDoProcedimento, fontesParticulares };
     });
   }
 

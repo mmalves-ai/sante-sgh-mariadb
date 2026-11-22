@@ -849,4 +849,82 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       ]),
     ).toBe(livres.length);
   });
+
+  it('ADR 0009, decisão 25 na marcação (agenda.encaixar): alerta sem credenciamento; bloqueio do convênio recusa sem gravar; credenciado só num plano, com a marcação sem plano, só alerta', async () => {
+    const op = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0104-cred' }, async (e) => {
+      const agora = new Date();
+      const fonte = await garantir(
+        e,
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        ['9143'],
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES ('9143', 'OPERADORA SINTETICA 9143', 'operadora', 'ativa', ?)",
+        [agora],
+      );
+      const plano = await garantir(
+        e,
+        'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
+        [fonte, 'L0104-PL'],
+        "INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, 'L0104-PL', 'PLANO SINTETICO L0104', ?)",
+        [fonte, agora],
+      );
+      await e.executar('DELETE FROM profissional_fonte_pagadora WHERE fonte_pagadora_id = ?', [fonte]);
+      await e.executar(
+        'UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 0, credencia_todos_ao_criar = 0 WHERE id = ?',
+        [fonte],
+      );
+      return { fonte, plano };
+    });
+    const escrever = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l0104-cred' }, (e) => e.executar(sql, p));
+    const marcacoes = () =>
+      contar(
+        'SELECT COUNT(*) AS n FROM marcacao_horario WHERE fonte_pagadora_id = ? AND excluido_em IS NULL',
+        [op.fonte],
+      );
+    const encaixar = (hora: string, paciente: number) =>
+      porta.executar(ctx(), 'agenda.encaixar', {
+        agenda: ids.agenda,
+        data: DIA,
+        hora,
+        paciente,
+        convenio: 9143,
+        retorno: false,
+        canal: 'presencial',
+        motivo: 'Encaixe sintético da decisão 25',
+      });
+    try {
+      // Sem credenciamento e sem bloqueio: marca, com o alerta no resultado.
+      const a = await encaixar('09:00', ids.pacienteA);
+      expect(a.resultado).toMatchObject({ alerta: 'profissional-nao-credenciado' });
+      expect(String(a.resultado['alertaMotivo'])).toMatch(/credenciamento/);
+      // Com o bloqueio do convênio: recusa antes de gravar (nenhuma marcação nova).
+      await escrever('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 1 WHERE id = ?', [op.fonte]);
+      const antes = await marcacoes();
+      await expect(encaixar('09:15', ids.pacienteB)).rejects.toMatchObject(
+        recusada('profissional-nao-credenciado'),
+      );
+      expect(await marcacoes()).toBe(antes);
+      // Credenciado só no plano: a marcação não traz o plano, então só alerta (nunca o bloqueio).
+      await escrever(
+        `INSERT INTO profissional_fonte_pagadora (profissional_id, fonte_pagadora_id, plano_fonte_pagadora_id, vigencia_inicio,
+           credenciado, criado_em) VALUES (?, ?, ?, '2020-01-01', TRUE, CURRENT_TIMESTAMP(3))`,
+        [ids.profissional, op.fonte, op.plano],
+      );
+      const b = await encaixar('09:15', ids.pacienteB);
+      expect(b.resultado).toMatchObject({ alerta: 'profissional-nao-credenciado' });
+      expect(String(b.resultado['alertaMotivo'])).toMatch(/plano do paciente/);
+      expect(await marcacoes()).toBe(antes + 1);
+      // Credenciado no convênio inteiro: sem alerta.
+      await escrever(
+        `INSERT INTO profissional_fonte_pagadora (profissional_id, fonte_pagadora_id, vigencia_inicio, credenciado, criado_em)
+         VALUES (?, ?, '2020-01-01', TRUE, CURRENT_TIMESTAMP(3))`,
+        [ids.profissional, op.fonte],
+      );
+      const c = await encaixar('09:30', ids.pacienteA);
+      expect(c.resultado['alerta']).toBeUndefined();
+    } finally {
+      await escrever('DELETE FROM profissional_fonte_pagadora WHERE fonte_pagadora_id = ?', [op.fonte]);
+      await escrever('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = 0 WHERE id = ?', [op.fonte]);
+    }
+  });
 });

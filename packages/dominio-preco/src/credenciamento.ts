@@ -10,6 +10,12 @@ export interface EntradaVerificarCredenciamento {
   readonly planoId: number | null;
   /** Plano superior do plano do paciente (subplano), quando houver. */
   readonly planoSuperiorId: number | null;
+  /**
+   * O plano do paciente não é conhecido neste passo (a marcação da agenda não traz o plano). Com planoId nulo, o
+   * credenciamento vigente em qualquer plano do convênio impede o bloqueio: o resultado é só alerta, para conferir o
+   * plano na abertura do atendimento.
+   */
+  readonly planoDesconhecido?: boolean;
   readonly data: string;
   readonly credenciamentos: readonly Credenciamento[];
   readonly opcoes: OpcoesCredenciamentoConvenio | null;
@@ -41,6 +47,26 @@ export function verificarCredenciamento(e: EntradaVerificarCredenciamento): Veri
     )[0];
   if (vale?.credenciado)
     return { credenciado: true, efeito: 'nenhum', credenciamentoId: vale.id, motivo: null };
+  if (e.planoDesconhecido && e.planoId === null) {
+    const emPlano = e.credenciamentos
+      .filter(
+        (c) =>
+          c.profissionalId === e.profissionalId &&
+          c.planoId !== null &&
+          c.credenciado &&
+          c.vigenciaInicio <= e.data &&
+          (c.vigenciaFim === null || c.vigenciaFim >= e.data),
+      )
+      .sort((a, b) => b.id - a.id)[0];
+    if (emPlano)
+      return {
+        credenciado: false,
+        efeito: 'alerta',
+        credenciamentoId: emPlano.id,
+        motivo:
+          'O profissional é credenciado só em plano do convênio e o plano do paciente não foi informado; confira o plano no atendimento. O atendimento segue com alerta.',
+      };
+  }
   const bloqueia = e.opcoes?.bloqueiaSemCredenciamento ?? false;
   const base = vale
     ? 'O profissional está descredenciado neste convênio ou plano'

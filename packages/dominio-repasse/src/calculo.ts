@@ -18,6 +18,8 @@ export interface OpcoesCalculo {
    * o item, o repasse é o valor COBRADO inteiro, antes das regras comuns e sem adicional.
    */
   readonly integrais?: readonly RegraRepasseParticularIntegral[];
+  /** As fontes pagadoras do tipo particular: só nelas a regra integral vale (ADR 0009). */
+  readonly fontesParticulares?: ReadonlySet<number>;
   /** O grupo de faturamento de cada procedimento (para a regra integral por grupo). */
   readonly grupoDoProcedimento?: ReadonlyMap<number, number>;
 }
@@ -74,6 +76,7 @@ export function calcularItem(
   const integral = (o.integrais ?? []).find((x) =>
     repasseIntegralVale(x, {
       fontePagadoraId: item.convenio,
+      fonteParticular: o.fontesParticulares?.has(item.convenio) ?? false,
       profissionalId: executante,
       itemFaturavelId: item.procedimento,
       grupoFaturamentoId: o.grupoDoProcedimento?.get(item.procedimento) ?? null,

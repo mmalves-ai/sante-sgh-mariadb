@@ -72,7 +72,7 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
     await e.executar(
       `DELETE FROM regra_preco_particular WHERE agenda_servico_id IN ${ag} OR profissional_id IN ${pr}`,
     );
-    for (const t of ['agenda_cobertura', 'agenda_restricao', 'agenda_preparo'])
+    for (const t of ['agenda_cobertura', 'agenda_restricao', 'agenda_preparo', 'agenda_item_agendavel'])
       await e.executar(`DELETE FROM ${t} WHERE agenda_servico_id IN ${ag}`);
     await e.executar(
       `DELETE t FROM trecho_texto_agenda t JOIN texto_origem_agenda o ON o.id = t.texto_origem_agenda_id WHERE o.agenda_servico_id IN ${ag}`,
@@ -82,6 +82,9 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
     await e.executar("DELETE FROM agenda_servico WHERE nome LIKE 'a9a%'");
     await e.executar(
       "DELETE FROM profissional_fonte_pagadora WHERE fonte_pagadora_id IN (SELECT id FROM fonte_pagadora WHERE codigo LIKE 'a9a%')",
+    );
+    await e.executar(
+      "DELETE FROM profissional_fonte_pagadora WHERE plano_fonte_pagadora_id IN (SELECT id FROM plano_fonte_pagadora WHERE codigo LIKE 'a9a%')",
     );
     await e.executar(
       "DELETE FROM plano_fonte_pagadora WHERE codigo LIKE 'a9a%' AND plano_superior_id IS NOT NULL",
@@ -448,7 +451,10 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
       expect(await credenciadosEm(id)).toEqual([]);
     });
 
-    it('decisão 25 na marcação e na abertura (conferirCredenciamentoNoFluxo): alerta sem a opção, recusa com o bloqueio', async () => {
+    // A conferência auxiliar isolada. Os fluxos reais (agenda.encaixar e atendimento.abrirAtendimento, com o bloqueio
+    // antes do INSERT, o alerta no resultado e o credenciamento por plano e subplano) estão em
+    // agenda/porta-propria.int.spec.ts e atendimento/porta-propria.int.spec.ts.
+    it('decisão 25, conferência auxiliar (conferirCredenciamentoNoFluxo): alerta sem a opção, recusa com o bloqueio; plano desconhecido só alerta', async () => {
       const id = await escrever(async (e) =>
         Number((await e.uma<{ id: number }>("SELECT id FROM fonte_pagadora WHERE codigo = 'a9anv2'"))!.id),
       );
@@ -471,6 +477,31 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
         credenciaTodosAoCriar: false,
       });
       expect(await codigoDaRecusa(conferir(id))).toBe('profissional-nao-credenciado');
+      // Credenciado só no plano ouro de outro convênio não conta; no plano deste, com o plano desconhecido, só alerta.
+      const planoNv2 = await escrever((e) =>
+        e.inserir(
+          "INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, 'a9anv2pl', 'a9anv2pl', CURRENT_TIMESTAMP(3))",
+          [id],
+        ),
+      );
+      await s.incluirCredenciamento(op(), {
+        profissionalId: ids.prof,
+        fontePagadoraId: id,
+        planoId: planoNv2,
+        vigenciaInicio: '2026-01-01',
+      });
+      const desconhecido = await escrever((e) =>
+        conferirCredenciamentoNoFluxo(e, {
+          profissionalId: ids.prof,
+          fontePagadoraId: id,
+          planoId: null,
+          planoDesconhecido: true,
+          estabelecimentoId: ids.est,
+          data: DIA,
+          campo: 'convenio',
+        }),
+      );
+      expect(desconhecido?.efeito).toBe('alerta');
       await s.incluirCredenciamento(op(), {
         profissionalId: ids.prof,
         fontePagadoraId: id,
@@ -915,7 +946,18 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
         unknown
       >;
       expect([dc['origemPreco'], dc['regraEstimada']]).toEqual(['regra_particular_agenda', true]);
-      // O exame da marcação: a regra "exame" da agenda (95) antes da tabela (100).
+      // Um exame que a agenda não oferece (não está em agenda_item_agendavel nem é o da marcação): segue a tabela.
+      expect(Number((await lancar(contaMarcada, 91_990_002)).resultado['valor'])).toBe(100);
+      await escrever(async (e) => {
+        const ia = Number(
+          (await e.uma<{ id: number }>("SELECT id FROM item_agendavel WHERE codigo = 'a9aexam'"))!.id,
+        );
+        await e.inserir(
+          'INSERT INTO agenda_item_agendavel (agenda_servico_id, item_agendavel_id, criado_em) VALUES (?, ?, CURRENT_TIMESTAMP(3))',
+          [ids.agenda, ia],
+        );
+      });
+      // O exame da agenda: a regra "exame" da agenda (95) antes da tabela (100).
       const x = await lancar(contaMarcada, 91_990_002);
       expect(Number(x.resultado['valor'])).toBe(95);
       expect(

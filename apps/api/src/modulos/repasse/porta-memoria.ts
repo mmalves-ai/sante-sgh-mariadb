@@ -556,7 +556,11 @@ export class PortaRepasseMemoria implements PortaRepasse {
 
   /** A sessão sintética não tem regra integral da consulta particular (vem só da migração). */
   async integraisParticular() {
-    return { integrais: [], grupoDoProcedimento: new Map<number, number>() };
+    return {
+      integrais: [],
+      grupoDoProcedimento: new Map<number, number>(),
+      fontesParticulares: new Set<number>(),
+    };
   }
 
   async regrasUsadas(c: ContextoRepasse, ids: readonly number[]) {

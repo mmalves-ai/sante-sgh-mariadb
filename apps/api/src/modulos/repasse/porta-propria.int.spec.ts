@@ -727,40 +727,68 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
 
   it('ADR 0009: a regra integral da consulta particular chega ao motor (100% do cobrado, sem adicional no feriado)', async () => {
     const grupo = await contar(`SELECT id AS q FROM grupo_faturamento WHERE codigo = ?`, [`${P}-GF`]);
-    const integral = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-03-04r' }, async (e) => {
-      const r = await e.inserir(
-        `INSERT INTO regra_repasse (estabelecimento_id, codigo, descricao, evento_repasse_id, base_calculo, vigencia_inicio, criado_em)
-         VALUES (?, ?, 'Consulta particular integral L0304R', ?, 'cobrado', '2026-01-01', CURRENT_TIMESTAMP(3))`,
-        [ids.est, `INTEGRAL-PART-${P}`, ids.evento],
-      );
-      return e.inserir(
-        `INSERT INTO regra_repasse_item (regra_repasse_id, sequencia, fonte_pagadora_id, grupo_faturamento_id, percentual, origem, criado_em)
-         VALUES (?, 1, ?, ?, 100, 'migracao', CURRENT_TIMESTAMP(3))`,
-        [r, ids.fonte, grupo],
-      );
-    });
+    const { particular, integral, noConvenio } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'teste-03-04r' },
+      async (e) => {
+        const particular = await garantir(
+          e,
+          'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+          [`${P}-PART`],
+          "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, 'PARTICULAR L0304R', 'particular', 'ativa', CURRENT_TIMESTAMP(3))",
+          [`${P}-PART`],
+        );
+        const regra = async (codigo: string, fonte: number) => {
+          const r = await e.inserir(
+            `INSERT INTO regra_repasse (estabelecimento_id, codigo, descricao, evento_repasse_id, base_calculo, vigencia_inicio, criado_em)
+             VALUES (?, ?, 'Consulta particular integral L0304R', ?, 'cobrado', '2026-01-01', CURRENT_TIMESTAMP(3))`,
+            [ids.est, codigo, ids.evento],
+          );
+          return e.inserir(
+            `INSERT INTO regra_repasse_item (regra_repasse_id, sequencia, fonte_pagadora_id, grupo_faturamento_id, percentual, origem, criado_em)
+             VALUES (?, 1, ?, ?, 100, 'migracao', CURRENT_TIMESTAMP(3))`,
+            [r, fonte, grupo],
+          );
+        };
+        return {
+          particular,
+          integral: await regra(`INTEGRAL-PART-${P}`, particular),
+          // O caso negativo: a mesma marca gravada numa operadora não pode virar repasse integral num convênio.
+          noConvenio: await regra(`INTEGRAL-PART-${P}-OP`, ids.fonte),
+        };
+      },
+    );
     const x = await porta.integraisParticular(ctx, '2026-10-15');
     expect(x.integrais).toEqual([
       expect.objectContaining({
-        fontePagadoraId: ids.fonte,
+        fontePagadoraId: particular,
+        fonteParticular: true,
         grupoFaturamentoId: grupo,
         itemFaturavelId: null,
         percentual: 100,
       }),
     ]);
+    expect([...x.fontesParticulares]).toEqual([particular]);
     expect(x.grupoDoProcedimento.get(99304012)).toBe(grupo);
     expect((await porta.integraisParticular(outro, '2026-10-15')).integrais).toEqual([]);
     // Fora das regras comuns: sem as dimensões de grupo, ela valeria para todo item da fonte.
     const todas = await porta.todasRegras(ctx, { convenio: ids.fonte, data: '2026-10-15' });
     expect(todas.map((r) => r.id)).not.toContain(integral);
+    expect(todas.map((r) => r.id)).not.toContain(noConvenio);
     const item = (await porta.producao(ctx, comp, 0)).itens.find((i) => i.id === ids.producao)!;
-    const m = calcularItem(item, todas, {
-      basePadrao: 'cobrado',
-      modoAdicional: 'sobre-valor',
+    const opcoes = {
+      basePadrao: 'cobrado' as const,
+      modoAdicional: 'sobre-valor' as const,
       feriados: new Set([item.data]),
       integrais: x.integrais,
       grupoDoProcedimento: x.grupoDoProcedimento,
-    });
-    expect([m.valorCentavos, m.adicional, m.pendencia]).toEqual([50000, null, null]);
+      fontesParticulares: x.fontesParticulares,
+    };
+    // O mesmo item lançado no particular: 100% do cobrado, sem adicional no feriado.
+    const m = calcularItem({ ...item, convenio: particular }, todas, opcoes);
+    expect([m.valorCentavos, m.percentual, m.adicional, m.pendencia]).toEqual([50000, 100, null, null]);
+    // O item da operadora (convênio): a marca INTEGRAL-PART gravada nela não vale; segue a regra comum.
+    const c = calcularItem(item, todas, opcoes);
+    expect(c.percentual).not.toBe(100);
+    expect(c.regra).not.toBeNull();
   });
 });

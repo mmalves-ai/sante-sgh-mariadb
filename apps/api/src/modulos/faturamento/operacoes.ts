@@ -378,6 +378,8 @@ interface AtendimentoDoItem {
   readonly profissional: number | null;
   /** A agenda da marcação, só quando o item é do profissional dela (o executante é o do atendimento). */
   readonly agenda: number | null;
+  /** A marcação de onde veio o atendimento, com a mesma condição da agenda. */
+  readonly marcacao: number | null;
 }
 
 async function atendimentoDoItem(
@@ -387,7 +389,7 @@ async function atendimentoDoItem(
 ): Promise<AtendimentoDoItem> {
   const f = await tx.uma<Linha>('SELECT tipo FROM fonte_pagadora WHERE id = ?', [conta.fonte]);
   const at = await tx.uma<Linha>(
-    `SELECT a.profissional_id, ha.agenda_servico_id
+    `SELECT a.profissional_id, ha.agenda_servico_id, m.id AS marcacao_id
        FROM conta_hospitalar c JOIN atendimento a ON a.id = c.atendimento_id
        LEFT JOIN marcacao_horario m ON m.id = a.marcacao_horario_id
        LEFT JOIN horario_agenda ha ON ha.id = m.horario_agenda_id
@@ -397,10 +399,12 @@ async function atendimentoDoItem(
   const doAtendimento = at?.['profissional_id'] == null ? null : n(at['profissional_id']);
   const agenda = at?.['agenda_servico_id'] == null ? null : n(at['agenda_servico_id']);
   const profissional = executante ?? doAtendimento;
+  const daAgenda = profissional !== null && profissional === doAtendimento;
   return {
     particular: texto(f?.['tipo']) === 'particular',
     profissional,
-    agenda: profissional !== null && profissional === doAtendimento ? agenda : null,
+    agenda: daAgenda ? agenda : null,
+    marcacao: daAgenda && agenda !== null && at?.['marcacao_id'] != null ? n(at['marcacao_id']) : null,
   };
 }
 
@@ -425,8 +429,22 @@ async function regraParticularDoItem(
     [n(item['id'])],
   );
   const consulta = agendavel.some((x) => texto(x['tipo_item']) === 'consulta') ? true : null;
-  // O exame da agenda (alvo "exame", só da agenda): o item agendável de exame lançado no atendimento da marcação.
-  const exame = quem.agenda !== null && agendavel.some((x) => texto(x['tipo_item']) === 'exame');
+  // O exame da agenda (alvo "exame", só da agenda): o item agendável de exame que a agenda da marcação oferece
+  // (agenda_item_agendavel) ou que é o item da própria marcação. O exame de outra agenda segue a tabela do particular.
+  const exame =
+    quem.agenda !== null &&
+    agendavel.some((x) => texto(x['tipo_item']) === 'exame') &&
+    (await tx.uma<Linha>(
+      `SELECT ia.id FROM item_agendavel ia
+        WHERE ia.item_faturavel_id = ? AND ia.tipo_item = 'exame' AND ia.excluido_em IS NULL
+          AND (EXISTS (SELECT 1 FROM agenda_item_agendavel aia
+                        WHERE aia.item_agendavel_id = ia.id AND aia.agenda_servico_id = ? AND aia.excluido_em IS NULL)
+               OR EXISTS (SELECT 1 FROM marcacao_horario m WHERE m.id = ? AND m.item_agendavel_id = ia.id)
+               OR EXISTS (SELECT 1 FROM marcacao_horario_item mi
+                           WHERE mi.marcacao_horario_id = ? AND mi.item_agendavel_id = ia.id AND mi.excluido_em IS NULL))
+        LIMIT 1`,
+      [n(item['id']), quem.agenda, quem.marcacao ?? 0, quem.marcacao ?? 0],
+    )) !== null;
   const pedido = {
     fontePagadoraId: conta.fonte,
     profissionalId: quem.profissional,

@@ -149,6 +149,8 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
 export interface IntegraisParticular {
   readonly integrais: readonly RegraRepasseParticularIntegral[];
   readonly grupoDoProcedimento: ReadonlyMap<number, number>;
+  /** As fontes do tipo particular das regras integrais (o motor recusa a regra integral fora delas). */
+  readonly fontesParticulares: ReadonlySet<number>;
 }
 
 export const METODOS_PORTA_REPASSE: ReadonlySet<string> = new Set([

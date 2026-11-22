@@ -11,6 +11,8 @@ export interface PedidoCredenciamentoFluxo {
   readonly profissionalId: number | null;
   readonly fontePagadoraId: number;
   readonly planoId: number | null;
+  /** O passo não conhece o plano do paciente (marcação): credenciamento em plano do convênio só alerta. */
+  readonly planoDesconhecido?: boolean;
   readonly estabelecimentoId: number;
   /** AAAA-MM-DD. */
   readonly data: string;
@@ -47,6 +49,7 @@ export async function conferirCredenciamentoNoFluxo(
     profissionalId: p.profissionalId,
     planoId: p.planoId,
     planoSuperiorId,
+    planoDesconhecido: p.planoDesconhecido ?? false,
     data: p.data,
     credenciamentos: await credenciamentosVigentes(l, q),
     opcoes: await opcoesCredenciamentoConvenio(l, p.fontePagadoraId),
