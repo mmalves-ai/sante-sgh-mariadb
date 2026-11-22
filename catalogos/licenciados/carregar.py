@@ -49,6 +49,30 @@ class LinhaInvalida(Exception):
     pass
 
 
+class Script(str):
+    """O script SQL inteiro (texto, como antes) com a lista dos comandos em `comandos`, para quem precisa mandar em
+    blocos menores que o max_allowed_packet do servidor (ex.: a semente do espelho, que roda tudo numa conexão)."""
+
+    def __new__(cls, comandos):
+        obj = super().__new__(cls, "\n".join(comandos))
+        obj.comandos = list(comandos)
+        return obj
+
+
+def blocos(comandos, limite=8 * 1024 * 1024):
+    """Agrupa comandos inteiros em blocos de até `limite` bytes (um comando maior que o limite vai sozinho)."""
+    atual, tam = [], 0
+    for c in comandos:
+        n = len(c.encode("utf-8")) + 1
+        if atual and tam + n > limite:
+            yield "\n".join(atual)
+            atual, tam = [], 0
+        atual.append(c)
+        tam += n
+    if atual:
+        yield "\n".join(atual)
+
+
 def q(v) -> str:
     return "NULL" if v is None or v == "" else "'" + str(v).replace("\\", "\\\\").replace("'", "''") + "'"
 
@@ -246,7 +270,7 @@ ON DUPLICATE KEY UPDATE preco_referencia_matmed.operacao = VALUES(operacao), pre
     contagem = (f"SELECT 'item_referencia_matmed', COUNT(*) FROM item_referencia_matmed WHERE fonte_referencia = {q(fonte)} "
                 f"UNION ALL SELECT 'preco_referencia_matmed', COUNT(*) FROM preco_referencia_matmed WHERE edicao_referencia_matmed_id = @e "
                 f"UNION ALL SELECT 'edicao_referencia_matmed', COUNT(*) FROM edicao_referencia_matmed WHERE fonte_referencia_matmed_id = @f;")
-    return "\n".join(p), contagem
+    return Script(p), contagem
 
 
 def sql_cbhpm(fonte, nome, edicao, vig, pub, linhas, completa, uco=None, filme=None):
@@ -276,7 +300,7 @@ ON DUPLICATE KEY UPDATE descricao = VALUES(descricao), porte_codigo = VALUES(por
     contagem = (f"SELECT 'tabela_referencia_procedimento_item', COUNT(*) FROM tabela_referencia_procedimento_item "
                 f"WHERE tabela_referencia_procedimento_id = @t UNION ALL SELECT 'tabela_referencia_procedimento', "
                 f"COUNT(*) FROM tabela_referencia_procedimento WHERE codigo_tabela = {q(fonte)};")
-    return "\n".join(p), contagem
+    return Script(p), contagem
 
 
 def sql_cep(fonte, nome, edicao, vig, pub, linhas, completa):
@@ -315,7 +339,7 @@ ON DUPLICATE KEY UPDATE logradouro_cep.tipo_cep = VALUES(tipo_cep), logradouro_c
                 "m.codigo_ibge = t.codigo_ibge LEFT JOIN unidade_federativa u ON u.sigla = t.uf WHERE m.id IS NULL "
                 f"OR u.id IS NULL UNION ALL SELECT 'logradouro_cep', COUNT(*) FROM logradouro_cep WHERE versao_fonte = {q(edicao)} "
                 f"UNION ALL SELECT 'bairro', COUNT(*) FROM bairro WHERE versao_fonte = {q(edicao)};")
-    return "\n".join(p), contagem
+    return Script(p), contagem
 
 
 GERAR = {"matmed": sql_matmed, "cbhpm": sql_cbhpm, "cep": sql_cep}

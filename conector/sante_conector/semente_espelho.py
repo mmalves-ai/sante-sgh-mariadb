@@ -172,9 +172,11 @@ def semear(lt, conexao, decl=None, lic=None):
                 else:
                     corpo, _ = lic.GERAR[layout](cat, nome, ed, e["vig"].isoformat(), None, validas, False)
                     cur.execute("DROP TEMPORARY TABLE IF EXISTS tmp_item_licenciado, tmp_cep_licenciado")
-                    cur.execute(corpo)
-                    while cur.nextset():
-                        pass
+                    # em blocos de comandos inteiros: a edição inteira num pacote passa do max_allowed_packet (16 MB)
+                    for bloco in lic.blocos(getattr(corpo, "comandos", [corpo])):
+                        cur.execute(bloco)
+                        while cur.nextset():
+                            pass
                     r["situacao"] = "semeada"
                 r["espelho"] = _contar(cur, layout, cat, ed)
                 r["conferido"] = r["espelho"] == len(validas)
