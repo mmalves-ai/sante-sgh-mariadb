@@ -226,6 +226,34 @@ export const incluirPreparo = (entrada: EntradaPreparoAgenda, chave: string) => 
   const e = esquemaEntradaPreparoAgenda.parse(entrada);
   return gravar(`${AGENDAS}/${e.agendaId}/preparos`, semAgenda(e), chave);
 };
+/** Revisão (PUT) de cobertura, restrição ou preparo: a entrada inteira com a versão lida (recusa conflito-versao). */
+export const revisarCobertura = (
+  regraId: number,
+  versao: number,
+  entrada: EntradaCoberturaAgenda,
+  chave: string,
+) => {
+  const e = esquemaEntradaCoberturaAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/coberturas/${regraId}`, { ...semAgenda(e), versao }, chave, 'PUT');
+};
+export const revisarRestricao = (
+  regraId: number,
+  versao: number,
+  entrada: EntradaRestricaoAgenda,
+  chave: string,
+) => {
+  const e = esquemaEntradaRestricaoAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/restricoes/${regraId}`, { ...semAgenda(e), versao }, chave, 'PUT');
+};
+export const revisarPreparo = (
+  regraId: number,
+  versao: number,
+  entrada: EntradaPreparoAgenda,
+  chave: string,
+) => {
+  const e = esquemaEntradaPreparoAgenda.parse(entrada);
+  return gravar(`${AGENDAS}/${e.agendaId}/preparos/${regraId}`, { ...semAgenda(e), versao }, chave, 'PUT');
+};
 /** Criar convênio (decisão 26). A resposta traz { id, credenciados }. */
 export const criarConvenio = (entrada: EntradaNovoConvenio, chave: string) =>
   gravar(CONVENIOS, esquemaEntradaNovoConvenio.parse(entrada), chave);

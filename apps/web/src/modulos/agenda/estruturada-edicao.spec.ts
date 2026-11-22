@@ -421,6 +421,48 @@ describe('AgendaEstruturadaPainel: nomes e edição (volta 2)', () => {
       jejumHoras: 8,
     });
   });
+
+  it('o formulário vem preenchido com a regra e grava a revisão com a versão', async () => {
+    definirSessaoDaTela({ permissoes: ['agenda.estruturada.editar'] } as never);
+    const buscar = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/agendas/5/estruturada')) return json(AGENDA);
+      if (init?.method === 'PUT') return json({ id: 1 });
+      return json({ ...CONTRATO, codigo: 3, nome: 'Convênio Beta' });
+    });
+    const w = montar(buscar);
+    await flushPromises();
+    await w.get('[data-testid="revisar-restricao-71"]').trigger('click');
+    await flushPromises();
+    const fr = w.get('[data-testid="form-restricao"]');
+    expect(fr.text()).toContain('Revisar restrição');
+    await fr.get('[data-testid="restricao-idade-min"]').setValue('5');
+    await fr.trigger('submit');
+    await flushPromises();
+    const put = buscar.mock.calls.find((c) => c[0] === '/api/agendas/5/restricoes/71');
+    expect((put?.[1] as RequestInit).method).toBe('PUT');
+    const corpo = JSON.parse(String((put?.[1] as RequestInit).body));
+    expect(corpo).toMatchObject({
+      versao: 1,
+      fontePagadoraId: 3,
+      sexoAtendido: 'feminino',
+      idadeMinimaAnos: 5,
+    });
+    expect(corpo.agendaId).toBeUndefined();
+
+    await w.get('[data-testid="revisar-cobertura-61"]').trigger('click');
+    await flushPromises();
+    const fc = w.get('[data-testid="form-cobertura"]');
+    await fc.trigger('submit');
+    await flushPromises();
+    const pc = buscar.mock.calls.find((c) => c[0] === '/api/agendas/5/coberturas/61');
+    expect(JSON.parse(String((pc?.[1] as RequestInit).body))).toMatchObject({
+      versao: 1,
+      fontePagadoraId: 2,
+      planoId: 22,
+      aceita: false,
+      textoOrigemId: 81,
+    });
+  });
 });
 
 describe('credenciamento com nomes e criação do convênio', () => {

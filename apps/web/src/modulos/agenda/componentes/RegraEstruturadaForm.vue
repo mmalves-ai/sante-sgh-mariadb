@@ -3,7 +3,7 @@
 // restrição (sexo, idade, retorno e encaixe; nulo herda da agenda) e preparo. A regra pode apontar o texto de origem que
 // ela substitui: a tela destaca esse texto ao lado (o trecho não interpretado continua marcado e valendo pelo texto).
 // A regra incluída aqui entra confirmada. Os planos vêm do cadastro do convênio (nome; o subplano é um plano dele).
-import type { TextoOrigemAgenda } from '@sgh/contratos';
+import type { CoberturaAgenda, PreparoAgenda, RestricaoAgenda, TextoOrigemAgenda } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -11,7 +11,14 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { buscarContrato } from '../../precos/api-precos.js';
 import { novaChave } from '../api-agenda.js';
-import { incluirCobertura, incluirPreparo, incluirRestricao } from '../api-estruturada.js';
+import {
+  incluirCobertura,
+  incluirPreparo,
+  incluirRestricao,
+  revisarCobertura,
+  revisarPreparo,
+  revisarRestricao,
+} from '../api-estruturada.js';
 import {
   type CamposCobertura,
   type CamposPreparo,
@@ -30,26 +37,34 @@ const props = defineProps<{
   /** Rótulo do texto (campo e convênio), para a escolha do texto de origem. */
   rotuloTexto: (x: TextoOrigemAgenda) => string;
   hoje: string;
+  /** Regra existente (com a versão lida): o formulário vem preenchido e grava a revisão (PUT). */
+  regra?: CoberturaAgenda | RestricaoAgenda | PreparoAgenda | null;
 }>();
 const emit = defineEmits<{ gravado: [mensagem: string]; cancelar: []; verTexto: [id: number] }>();
 const { t } = useI18n();
 
-const convenio = ref('');
-const plano = ref('');
-const texto = ref('');
-const aceita = ref('sim');
+// Revisão: os campos partem da regra lida (os watches abaixo não disparam pelo valor inicial).
+const r0 = props.regra ?? null;
+const campo = <K extends string>(k: K): unknown =>
+  r0 && k in r0 ? (r0 as Record<string, unknown>)[k] : null;
+const texto0 = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+const tri = (v: unknown): '' | 'sim' | 'nao' => (v === true ? 'sim' : v === false ? 'nao' : '');
+const convenio = ref(texto0(campo('fontePagadoraId')));
+const plano = ref(texto0(campo('planoId')));
+const texto = ref(texto0(campo('textoOrigemId')));
+const aceita = ref(campo('aceita') === false ? 'nao' : 'sim');
 const c = reactive({
-  vigenciaInicio: props.hoje,
-  vigenciaFim: '',
-  sexoAtendido: '' as CamposRestricao['sexoAtendido'],
-  idadeMinimaAnos: '',
-  idadeMaximaAnos: '',
-  aceitaRetorno: '' as CamposRestricao['aceitaRetorno'],
-  diasRetorno: '',
-  permiteEncaixe: '' as CamposRestricao['permiteEncaixe'],
-  tipoPreparo: 'preparo' as CamposPreparo['tipo'],
-  descricao: '',
-  jejumHoras: '',
+  vigenciaInicio: r0?.vigenciaInicio ?? props.hoje,
+  vigenciaFim: r0?.vigenciaFim ?? '',
+  sexoAtendido: texto0(campo('sexoAtendido')) as CamposRestricao['sexoAtendido'],
+  idadeMinimaAnos: texto0(campo('idadeMinimaAnos')),
+  idadeMaximaAnos: texto0(campo('idadeMaximaAnos')),
+  aceitaRetorno: tri(campo('aceitaRetorno')) as CamposRestricao['aceitaRetorno'],
+  diasRetorno: texto0(campo('diasRetorno')),
+  permiteEncaixe: tri(campo('permiteEncaixe')) as CamposRestricao['permiteEncaixe'],
+  tipoPreparo: (texto0(campo('tipo')) || 'preparo') as CamposPreparo['tipo'],
+  descricao: texto0(campo('descricao')),
+  jejumHoras: texto0(campo('jejumHoras')),
 });
 const erro = ref<unknown>(null);
 const problema = ref<string | null>(null);
@@ -149,8 +164,14 @@ async function gravar(): Promise<void> {
   ocupado.value = true;
   try {
     const e = m.entrada;
-    const r =
-      props.tipo === 'cobertura'
+    const rv = props.regra ?? null;
+    const r = rv
+      ? props.tipo === 'cobertura'
+        ? await revisarCobertura(rv.id, rv.versao, e as Parameters<typeof revisarCobertura>[2], chave.value)
+        : props.tipo === 'restricao'
+          ? await revisarRestricao(rv.id, rv.versao, e as Parameters<typeof revisarRestricao>[2], chave.value)
+          : await revisarPreparo(rv.id, rv.versao, e as Parameters<typeof revisarPreparo>[2], chave.value)
+      : props.tipo === 'cobertura'
         ? await incluirCobertura(e as Parameters<typeof incluirCobertura>[0], chave.value)
         : props.tipo === 'restricao'
           ? await incluirRestricao(e as Parameters<typeof incluirRestricao>[0], chave.value)
@@ -167,7 +188,7 @@ async function gravar(): Promise<void> {
 
 <template>
   <form class="form" :data-testid="`form-${tipo}`" @submit.prevent="gravar">
-    <h4>{{ t(`estruturada.edicao.titulos.${tipo}`) }}</h4>
+    <h4>{{ t(`estruturada.edicao.${regra ? 'titulosRevisao' : 'titulos'}.${tipo}`) }}</h4>
     <div class="linha">
       <template v-if="tipo !== 'preparo'">
         <SanteSelecao
@@ -310,7 +331,7 @@ async function gravar(): Promise<void> {
     <div class="linha">
       <SanteBotao
         tipo="submit"
-        :rotulo="t('estruturada.edicao.incluir')"
+        :rotulo="t(regra ? 'estruturada.edicao.gravarRevisao' : 'estruturada.edicao.incluir')"
         :desabilitado="ocupado"
         :data-testid="`${tipo}-gravar`"
       />

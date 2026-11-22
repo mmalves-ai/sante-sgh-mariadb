@@ -15,7 +15,7 @@ import type {
 } from '@sgh/contratos';
 import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App } from 'vue';
 import { definirSessaoDaTela } from '../../casca/sessao/pode.js';
@@ -77,6 +77,9 @@ afterEach(() => {
   definirSessaoDaTela(null);
   document.body.innerHTML = '';
 });
+// Desmonta toda montagem ANTES da limpeza do body acima (ganchos afterEach rodam em pilha: o último registrado
+// roda primeiro). Sem isso, uma renderização assíncrona tardia desmontava nó já removido (rejeição não tratada).
+enableAutoUnmount(afterEach);
 
 // ── Dados sintéticos ──
 const LONGO = 'Orientação longa sintética. '.repeat(100); // 2.800 caracteres: passa do antigo corte de 2.000

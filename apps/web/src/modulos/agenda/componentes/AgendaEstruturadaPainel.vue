@@ -74,6 +74,16 @@ const conveniosDaAgenda = computed(() =>
   })),
 );
 const incluindo = ref<TipoRegraEstruturada | null>(null);
+/** Regra em revisão (PUT com a versão lida); nula: inclusão. */
+const emRevisao = ref<CoberturaAgenda | RestricaoAgenda | PreparoAgenda | null>(null);
+function revisar(tipo: TipoRegraEstruturada, regra: CoberturaAgenda | RestricaoAgenda | PreparoAgenda): void {
+  emRevisao.value = regra;
+  incluindo.value = tipo;
+}
+function fecharForm(): void {
+  incluindo.value = null;
+  emRevisao.value = null;
+}
 // Cobertura: a coluna própria que substitui o texto pode incluir um convênio que a agenda ainda não aceita, então a
 // escolha vem do cadastro de convênios ativos do hospital (o mesmo da tela de preços), somado aos aceitos.
 const cadastroConvenios = useQuery({
@@ -153,6 +163,7 @@ async function gravado(m: string): Promise<void> {
   mensagem.value = m;
   editando.value = null;
   incluindo.value = null;
+  emRevisao.value = null;
   await cliente.invalidateQueries({ queryKey: ['agenda', 'estruturada'] });
 }
 </script>
@@ -296,6 +307,13 @@ async function gravado(m: string): Promise<void> {
                       :rotulo="t('estruturada.verTexto')"
                       @acionar="verTexto(c.textoOrigemId)"
                     />
+                    <SanteBotao
+                      v-if="podeEditarRegras && incluindo === null"
+                      variante="texto"
+                      :rotulo="t('estruturada.edicao.revisar')"
+                      :data-testid="`revisar-cobertura-${c.id}`"
+                      @acionar="revisar('cobertura', c)"
+                    />
                   </span>
                 </li>
               </ul>
@@ -312,12 +330,13 @@ async function gravado(m: string): Promise<void> {
             v-if="podeEditarRegras && incluindo === 'cobertura'"
             :agenda-id="agendaId"
             tipo="cobertura"
+            :regra="emRevisao"
             :convenios="conveniosCobertura"
             :textos="a.textos"
             :rotulo-texto="rotuloTexto"
             :hoje="hoje"
             @gravado="gravado"
-            @cancelar="incluindo = null"
+            @cancelar="fecharForm"
             @ver-texto="verTexto"
           />
         </section>
@@ -355,6 +374,13 @@ async function gravado(m: string): Promise<void> {
                 :rotulo="t('estruturada.verTexto')"
                 @acionar="verTexto(r.textoOrigemId)"
               />
+              <SanteBotao
+                v-if="podeEditarRegras && incluindo === null"
+                variante="texto"
+                :rotulo="t('estruturada.edicao.revisar')"
+                :data-testid="`revisar-restricao-${r.id}`"
+                @acionar="revisar('restricao', r)"
+              />
             </li>
           </ul>
           <SanteBotao
@@ -368,12 +394,13 @@ async function gravado(m: string): Promise<void> {
             v-if="podeEditarRegras && incluindo === 'restricao'"
             :agenda-id="agendaId"
             tipo="restricao"
+            :regra="emRevisao"
             :convenios="conveniosDaAgenda"
             :textos="a.textos"
             :rotulo-texto="rotuloTexto"
             :hoje="hoje"
             @gravado="gravado"
-            @cancelar="incluindo = null"
+            @cancelar="fecharForm"
             @ver-texto="verTexto"
           />
         </section>
@@ -399,6 +426,13 @@ async function gravado(m: string): Promise<void> {
                 :rotulo="t('estruturada.verTexto')"
                 @acionar="verTexto(p.textoOrigemId)"
               />
+              <SanteBotao
+                v-if="podeEditarRegras && incluindo === null"
+                variante="texto"
+                :rotulo="t('estruturada.edicao.revisar')"
+                :data-testid="`revisar-preparo-${p.id}`"
+                @acionar="revisar('preparo', p)"
+              />
             </li>
           </ul>
           <SanteBotao
@@ -412,12 +446,13 @@ async function gravado(m: string): Promise<void> {
             v-if="podeEditarRegras && incluindo === 'preparo'"
             :agenda-id="agendaId"
             tipo="preparo"
+            :regra="emRevisao"
             :convenios="conveniosDaAgenda"
             :textos="a.textos"
             :rotulo-texto="rotuloTexto"
             :hoje="hoje"
             @gravado="gravado"
-            @cancelar="incluindo = null"
+            @cancelar="fecharForm"
             @ver-texto="verTexto"
           />
         </section>

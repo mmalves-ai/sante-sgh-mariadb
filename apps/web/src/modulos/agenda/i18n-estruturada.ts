@@ -141,6 +141,13 @@ export const mensagensEstruturada = {
       restricao: 'Incluir restrição',
       preparo: 'Incluir preparo ou documento',
     },
+    titulosRevisao: {
+      cobertura: 'Revisar cobertura',
+      restricao: 'Revisar restrição',
+      preparo: 'Revisar preparo ou documento',
+    },
+    revisar: 'Revisar',
+    gravarRevisao: 'Gravar a revisão',
     novas: {
       cobertura: 'Incluir cobertura',
       restricao: 'Incluir restrição',
