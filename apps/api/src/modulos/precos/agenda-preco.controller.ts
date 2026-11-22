@@ -14,6 +14,7 @@
 //   GET  /api/agendas/:id/estruturada?data                                agenda.estruturada.ler
 //   GET  /api/agendas/:id/respostas?data&convenio&plano&idade&sexo&item&retorno&encaixe   agenda.estruturada.ler
 //   POST /api/agendas/:id/coberturas | restricoes | preparos              agenda.estruturada.editar
+//   PUT  /api/agendas/:id/coberturas/:regra | restricoes/:regra | preparos/:regra (com versão)  agenda.estruturada.editar
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { esquemaFiltroRegrasPrecoParticular } from '@sgh/contratos';
@@ -279,6 +280,57 @@ export class AgendaPrecoController {
 
   private daAgenda(id: string, corpo: unknown) {
     return { ...objeto(corpo), agendaId: inteiro(id, 'agenda', [1, 2147483647]) };
+  }
+
+  /** PUT de cobertura, restrição ou preparo: o corpo é a entrada inteira, com a versão lida. */
+  private revisao(id: string, regra: string, corpo: unknown) {
+    const { versao, ...valores } = objeto(corpo);
+    return { id: inteiro(regra, 'regra', [1, 2147483647]), versao, valores: this.daAgenda(id, valores) };
+  }
+
+  @Put('agendas/:id/coberturas/:regra')
+  @HttpCode(200)
+  @Permissao('agenda.estruturada.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  revisarCobertura(
+    @Param('id') id: string,
+    @Param('regra') regra: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.rodar(() =>
+      this.s().revisarCobertura(contextoOperacao(req, 'agenda-cobertura'), this.revisao(id, regra, corpo)),
+    );
+  }
+
+  @Put('agendas/:id/restricoes/:regra')
+  @HttpCode(200)
+  @Permissao('agenda.estruturada.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  revisarRestricao(
+    @Param('id') id: string,
+    @Param('regra') regra: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.rodar(() =>
+      this.s().revisarRestricao(contextoOperacao(req, 'agenda-restricao'), this.revisao(id, regra, corpo)),
+    );
+  }
+
+  @Put('agendas/:id/preparos/:regra')
+  @HttpCode(200)
+  @Permissao('agenda.estruturada.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  revisarPreparo(
+    @Param('id') id: string,
+    @Param('regra') regra: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.rodar(() =>
+      this.s().revisarPreparo(contextoOperacao(req, 'agenda-preparo'), this.revisao(id, regra, corpo)),
+    );
   }
 
   @Post('agendas/:id/coberturas')

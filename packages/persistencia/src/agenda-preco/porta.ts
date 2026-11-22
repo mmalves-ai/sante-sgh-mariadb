@@ -162,6 +162,14 @@ export async function fonteParticularPadrao(
   return ls.length === 1 ? Number(ls[0]!['id']) : null;
 }
 
+/** Quantas fontes pagadoras de tipo particular estão ativas (para não deixar o particular padrão ambíguo). */
+export async function contarParticularesAtivos(l: Leitor): Promise<number> {
+  const u = await l.uma(
+    `SELECT COUNT(*) AS n FROM fonte_pagadora WHERE tipo = 'particular' AND situacao = 'ativa'`,
+  );
+  return u ? Number(u['n']) : 0;
+}
+
 /**
  * O valor vigente do parâmetro faturamento.fontePagadoraParticularCodigo para o estabelecimento (o do
  * estabelecimento vence o da rede; vazio ou sem valor: nulo, e vale a única fonte particular ativa).
@@ -307,22 +315,26 @@ export async function incluirCredenciamento(
 
 /**
  * Convênio novo com credencia_todos_ao_criar: credencia na rede (estabelecimento nulo, todos os planos) cada
- * profissional ativo ainda sem credenciamento nesse convênio. Idempotente. Devolve quantos foram credenciados.
+ * profissional ativo, de um dos `tipos` que atendem pelo convênio (critério do domínio:
+ * TIPOS_PROFISSIONAL_CREDENCIAVEIS), ainda sem credenciamento nesse convênio. Idempotente. Devolve quantos foram
+ * credenciados.
  */
 export async function credenciarTodosAtivos(
   e: Escritor,
   fontePagadoraId: number,
   vigenciaInicio: string,
   usuario: number | null,
+  tipos: readonly string[],
 ): Promise<number> {
+  if (tipos.length === 0) return 0;
   return e.executar(
     `INSERT INTO profissional_fonte_pagadora (profissional_id, fonte_pagadora_id, credenciado, vigencia_inicio,
        criado_em, criado_por)
      SELECT p.id, ?, 1, ?, CURRENT_TIMESTAMP(3), ? FROM profissional p
-      WHERE p.situacao = 'ativo' AND p.excluido_em IS NULL
+      WHERE p.situacao = 'ativo' AND p.excluido_em IS NULL AND p.tipo IN (${tipos.map(() => '?').join(', ')})
         AND NOT EXISTS (SELECT 1 FROM profissional_fonte_pagadora c
                          WHERE c.profissional_id = p.id AND c.fonte_pagadora_id = ? AND c.excluido_em IS NULL)`,
-    [fontePagadoraId, vigenciaInicio, usuario, fontePagadoraId],
+    [fontePagadoraId, vigenciaInicio, usuario, ...tipos, fontePagadoraId],
   );
 }
 
@@ -495,6 +507,90 @@ export async function incluirPreparoAgenda(
       origem,
       usuario,
     ],
+  );
+}
+
+/** As colunas que a revisão de cada regra da agenda altera (o vínculo com o texto original fica). */
+const COLUNAS_REGRA_AGENDA = {
+  agenda_cobertura: {
+    fontePagadoraId: 'fonte_pagadora_id',
+    planoId: 'plano_fonte_pagadora_id',
+    aceita: 'aceita',
+    vigenciaInicio: 'vigencia_inicio',
+    vigenciaFim: 'vigencia_fim',
+    situacaoRevisao: 'situacao_revisao',
+    observacao: 'observacao',
+  },
+  agenda_restricao: {
+    fontePagadoraId: 'fonte_pagadora_id',
+    planoId: 'plano_fonte_pagadora_id',
+    itemAgendavelId: 'item_agendavel_id',
+    sexoAtendido: 'sexo_atendido',
+    idadeMinimaAnos: 'idade_minima_anos',
+    idadeMaximaAnos: 'idade_maxima_anos',
+    aceitaRetorno: 'aceita_retorno',
+    diasRetorno: 'dias_retorno',
+    permiteEncaixe: 'permite_encaixe',
+    vigenciaInicio: 'vigencia_inicio',
+    vigenciaFim: 'vigencia_fim',
+    situacaoRevisao: 'situacao_revisao',
+    observacao: 'observacao',
+  },
+  agenda_preparo: {
+    itemAgendavelId: 'item_agendavel_id',
+    tipo: 'tipo',
+    descricao: 'descricao',
+    jejumHoras: 'jejum_horas',
+    vigenciaInicio: 'vigencia_inicio',
+    vigenciaFim: 'vigencia_fim',
+    situacaoRevisao: 'situacao_revisao',
+  },
+} as const;
+
+export type TabelaRegraAgenda = keyof typeof COLUNAS_REGRA_AGENDA;
+
+/** A regra da agenda existe (não excluída) e é desta agenda? */
+export async function regraDaAgendaExiste(
+  l: Leitor,
+  tabela: TabelaRegraAgenda,
+  id: number,
+  agendaId: number,
+): Promise<boolean> {
+  return (
+    (await l.uma(`SELECT id FROM ${tabela} WHERE id = ? AND agenda_servico_id = ? AND excluido_em IS NULL`, [
+      id,
+      agendaId,
+    ])) !== null
+  );
+}
+
+/**
+ * Revisa uma cobertura, restrição ou preparo da agenda (todos os campos da entrada), com controle de versão. O vínculo
+ * com o texto original não muda. Devolve as linhas afetadas (0 = versão divergente).
+ */
+export async function alterarRegraAgenda(
+  e: Escritor,
+  tabela: TabelaRegraAgenda,
+  id: number,
+  agendaId: number,
+  versaoEsperada: number,
+  v: EntradaCoberturaAgenda | EntradaRestricaoAgenda | EntradaPreparoAgenda,
+  usuario: number | null,
+): Promise<number> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const valores = v as unknown as Record<string, unknown>;
+  for (const [k, col] of Object.entries(COLUNAS_REGRA_AGENDA[tabela])) {
+    if (valores[k] === undefined) continue;
+    sets.push(`${col} = ?`);
+    const x = valores[k];
+    params.push(typeof x === 'boolean' ? bit(x) : x);
+  }
+  sets.push('versao = versao + 1', 'alterado_em = CURRENT_TIMESTAMP(3)', 'alterado_por = ?');
+  return e.executar(
+    `UPDATE ${tabela} SET ${sets.join(', ')}
+      WHERE id = ? AND agenda_servico_id = ? AND versao = ? AND excluido_em IS NULL`,
+    [...params, usuario, id, agendaId, versaoEsperada],
   );
 }
 

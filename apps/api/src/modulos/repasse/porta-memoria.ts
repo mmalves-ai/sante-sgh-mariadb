@@ -554,6 +554,11 @@ export class PortaRepasseMemoria implements PortaRepasse {
     return this.regras(c, { ...f, depoisDe: 0 });
   }
 
+  /** A sessão sintética não tem regra integral da consulta particular (vem só da migração). */
+  async integraisParticular() {
+    return { integrais: [], grupoDoProcedimento: new Map<number, number>() };
+  }
+
   async regrasUsadas(c: ContextoRepasse, ids: readonly number[]) {
     const u = this.e(c).usadas;
     return new Set(ids.filter((i) => u.has(i)));

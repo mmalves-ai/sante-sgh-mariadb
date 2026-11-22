@@ -7,6 +7,7 @@
 //     as mesmas validações (Zod dos contratos) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type { ItemProducao, RegraRepasse } from '@sgh/contratos';
+import type { RegraRepasseParticularIntegral } from '@sgh/dominio-repasse';
 import type {
   ApuracaoRepasseRegistrada,
   LancamentoRepasseRegistrado,
@@ -87,6 +88,11 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
   opcoes(c: ContextoRepasse): Promise<{ eventos: OpcaoPorta[]; convenios: OpcaoPorta[] }>;
   regras(c: ContextoRepasse, f: FiltroRegrasPorta): Promise<RegraRepasse[]>;
   todasRegras(c: ContextoRepasse, f: { convenio: number; data: string }): Promise<RegraRepasse[]>;
+  /**
+   * ADR 0009: as regras de repasse integral da consulta particular vigentes na data (fora de `todasRegras`) e o grupo de
+   * faturamento de cada procedimento que elas alcançam. O procedimento é o CÓDIGO de negócio, como em ItemProducao.
+   */
+  integraisParticular(c: ContextoRepasse, data: string): Promise<IntegraisParticular>;
   regrasUsadas(c: ContextoRepasse, ids: readonly number[]): Promise<Set<number>>;
   versoes(c: ContextoRepasse): Promise<VersaoRegraRegistrada[]>;
   versao(c: ContextoRepasse, id: number): Promise<VersaoRegraRegistrada | null>;
@@ -101,9 +107,17 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
     empresa: number,
     competencia: string,
   ): Promise<{ lancamentos: number; daApuracao: number }>;
-  apuracaoDoPeriodo(c: ContextoRepasse, empresa: number, competencia: string): Promise<ApuracaoRepasseRegistrada | null>;
+  apuracaoDoPeriodo(
+    c: ContextoRepasse,
+    empresa: number,
+    competencia: string,
+  ): Promise<ApuracaoRepasseRegistrada | null>;
   apuracao(c: ContextoRepasse, id: number): Promise<ApuracaoRepasseRegistrada | null>;
-  memorias(c: ContextoRepasse, apuracao: number, prestador: number | null): Promise<MemoriaCalculoRegistrada[]>;
+  memorias(
+    c: ContextoRepasse,
+    apuracao: number,
+    prestador: number | null,
+  ): Promise<MemoriaCalculoRegistrada[]>;
   lancamentos(
     c: ContextoRepasse,
     f: { empresa: number; competencia: string; prestador?: number },
@@ -131,6 +145,12 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
   basesIndicadores(c: ContextoRepasse, de: string, ate: string): Promise<BasesIndicadoresRepassePorta>;
 }
 
+/** As regras integrais e o grupo de faturamento por código de procedimento (o que o motor recebe em OpcoesCalculo). */
+export interface IntegraisParticular {
+  readonly integrais: readonly RegraRepasseParticularIntegral[];
+  readonly grupoDoProcedimento: ReadonlyMap<number, number>;
+}
+
 export const METODOS_PORTA_REPASSE: ReadonlySet<string> = new Set([
   'podeGravar',
   'executar',
@@ -139,6 +159,7 @@ export const METODOS_PORTA_REPASSE: ReadonlySet<string> = new Set([
   'opcoes',
   'regras',
   'todasRegras',
+  'integraisParticular',
   'regrasUsadas',
   'versoes',
   'versao',

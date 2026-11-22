@@ -11,11 +11,13 @@ import {
   ErroOperacao,
   NucleoProprio,
 } from '@sgh/nucleo';
-import { gravarTextoOrigemAgenda } from '@sgh/persistencia';
+import { codigoParticularDoParametro, gravarTextoOrigemAgenda } from '@sgh/persistencia';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoFaturamento } from '../faturamento/porta.js';
 import { PortaFaturamentoPropria } from '../faturamento/porta-propria.js';
+import { PortaAtendimentoPropria } from '../atendimento/porta-propria.js';
 import { ServicoAgendaPreco } from './agenda-preco.servico.js';
+import { conferirCredenciamentoNoFluxo } from './credenciamento-fluxo.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'adr9_api';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -55,12 +57,15 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
     // O lançamento na conta (massa a9a): memória, itens, contas e atendimentos do estabelecimento a9a.
     const est = "(SELECT id FROM estabelecimento WHERE codigo = 'a9a')";
     const ct = `(SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN ${est})`;
+    await e.executar(`DELETE FROM atendimento_conta WHERE conta_hospitalar_id IN ${ct}`);
     await e.executar(
       `DELETE FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id IN (SELECT id FROM conta_hospitalar_item WHERE conta_hospitalar_id IN ${ct})`,
     );
     await e.executar(`DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN ${ct}`);
     await e.executar(`DELETE FROM conta_hospitalar WHERE estabelecimento_id IN ${est}`);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`);
+    await e.executar(`DELETE FROM marcacao_horario WHERE estabelecimento_id IN ${est}`);
+    await e.executar(`DELETE FROM horario_agenda WHERE estabelecimento_id IN ${est}`);
     const ag = "(SELECT id FROM agenda_servico WHERE nome LIKE 'a9a%')";
     const pr =
       "(SELECT p.id FROM profissional p JOIN pessoa_fisica f ON f.id = p.pessoa_fisica_id WHERE f.nome LIKE 'a9a%')";
@@ -82,6 +87,11 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
       "DELETE FROM plano_fonte_pagadora WHERE codigo LIKE 'a9a%' AND plano_superior_id IS NOT NULL",
     );
     await e.executar("DELETE FROM plano_fonte_pagadora WHERE codigo LIKE 'a9a%'");
+    // Convênios criados pelo POST /convenios (a9anv*) e o parâmetro do particular padrão da massa.
+    await e.executar("DELETE FROM fonte_pagadora WHERE codigo LIKE 'a9anv%'");
+    await e.executar(
+      "DELETE FROM parametro_valor WHERE motivo = 'a9a teste' AND parametro_definicao_id IN (SELECT id FROM parametro_definicao WHERE chave = 'faturamento.fontePagadoraParticularCodigo')",
+    );
   };
 
   beforeAll(async () => {
@@ -216,6 +226,73 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
     ]).toEqual([1, 1, 1, 1]);
   });
 
+  it('PUT com versão: cobertura, restrição e preparo revisados; versão velha e agenda errada recusadas', async () => {
+    const a = (await s.agendaEstruturada(ctx(), ids.agenda))!;
+    const cob = a.coberturas[0]!;
+    const res = a.restricoes[0]!;
+    const pre = a.preparos[0]!;
+    await s.revisarCobertura(op(), {
+      id: cob.id,
+      versao: cob.versao,
+      valores: {
+        agendaId: ids.agenda,
+        fontePagadoraId: ids.conv,
+        planoId: ids.bronze,
+        aceita: false,
+        vigenciaInicio: '2026-01-01',
+        situacaoRevisao: 'confirmada',
+        observacao: 'revisada',
+      },
+    });
+    await s.revisarRestricao(op(), {
+      id: res.id,
+      versao: res.versao,
+      valores: {
+        agendaId: ids.agenda,
+        idadeMinimaAnos: 12,
+        observacao: 'revisada',
+        vigenciaInicio: '2026-01-01',
+      },
+    });
+    await s.revisarPreparo(op(), {
+      id: pre.id,
+      versao: pre.versao,
+      valores: {
+        agendaId: ids.agenda,
+        descricao: 'Jejum de 8 horas.',
+        jejumHoras: 8,
+        vigenciaInicio: '2026-01-01',
+      },
+    });
+    const b = (await s.agendaEstruturada(ctx(), ids.agenda))!;
+    const cob2 = b.coberturas.find((x) => x.id === cob.id)!;
+    const res2 = b.restricoes.find((x) => x.id === res.id)!;
+    const pre2 = b.preparos.find((x) => x.id === pre.id)!;
+    expect([cob2.versao, cob2.situacaoRevisao, res2.idadeMinimaAnos, res2.versao, pre2.versao]).toEqual([
+      cob.versao + 1,
+      'confirmada',
+      12,
+      res.versao + 1,
+      pre.versao + 1,
+    ]);
+    const velha = await codigoDaRecusa(
+      s.revisarPreparo(op(), {
+        id: pre.id,
+        versao: pre.versao,
+        valores: { agendaId: ids.agenda, descricao: 'x', vigenciaInicio: '2026-01-01' },
+      }),
+    );
+    expect(velha).not.toBeNull();
+    const fora = await codigoDaRecusa(
+      s.revisarPreparo(op(), {
+        id: pre.id,
+        versao: pre2.versao,
+        valores: { agendaId: ids.agenda + 999999, descricao: 'x', vigenciaInicio: '2026-01-01' },
+      }),
+    );
+    expect(fora).toBe('regra-inexistente');
+  });
+
   it('decisão 24: preço por médico em convênio é recusado', async () => {
     const r = await codigoDaRecusa(
       s.incluirRegra(op(), {
@@ -319,6 +396,137 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
         s.credenciarTodos(op(), { fontePagadoraId: ids.part, vigenciaInicio: '2026-01-01' }),
       ),
     ).toBe('particular-sem-credenciamento');
+  });
+
+  describe('convênio novo (POST /convenios) e o particular padrão', () => {
+    const adm = { id: 0 };
+    beforeAll(async () => {
+      await escrever(async (e) => {
+        const pf = await e.inserir(
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, CURRENT_TIMESTAMP(3))',
+          ['a9a Administrativo'],
+        );
+        adm.id = await e.inserir(
+          "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'administrativo', CURRENT_TIMESTAMP(3))",
+          [pf],
+        );
+      });
+    });
+    const credenciadosEm = (fonte: number) =>
+      escrever(async (e) =>
+        (
+          await e.consultar<{ p: number }>(
+            'SELECT profissional_id AS p FROM profissional_fonte_pagadora WHERE fonte_pagadora_id = ? AND excluido_em IS NULL',
+            [fonte],
+          )
+        ).map((x) => Number(x.p)),
+      );
+    const novo = (codigo: string, credenciaTodosAoCriar: boolean, tipo = 'operadora') =>
+      s.incluirConvenio(op(), {
+        codigo,
+        nome: codigo,
+        tipo,
+        credenciaTodosAoCriar,
+        dataInicioRelacao: '2026-01-01',
+      }) as Promise<Record<string, unknown>>;
+
+    it('decisão 26: com credenciaTodosAoCriar credencia os médicos ativos, nunca o administrativo', async () => {
+      const r = await novo('a9anv1', true);
+      const id = Number(r['id'] ?? (r['resultado'] as Record<string, unknown> | undefined)?.['id']);
+      const cred = await credenciadosEm(id);
+      expect(cred).toEqual(expect.arrayContaining([ids.prof, ids.prof2]));
+      expect(cred).not.toContain(adm.id);
+      // Já credenciados: o alerta da decisão 25 some para o médico, nunca para o administrativo.
+      const q = { fontePagadoraId: id, planoId: null, data: DIA };
+      expect((await s.verificar(ctx(), { ...q, profissionalId: ids.prof })).efeito).toBe('nenhum');
+      expect((await s.verificar(ctx(), { ...q, profissionalId: adm.id })).efeito).toBe('alerta');
+    });
+
+    it('decisão 26: sem a opção, nenhum credenciamento', async () => {
+      const r = await novo('a9anv2', false);
+      const id = Number(r['id'] ?? (r['resultado'] as Record<string, unknown> | undefined)?.['id']);
+      expect(await credenciadosEm(id)).toEqual([]);
+    });
+
+    it('decisão 25 na marcação e na abertura (conferirCredenciamentoNoFluxo): alerta sem a opção, recusa com o bloqueio', async () => {
+      const id = await escrever(async (e) =>
+        Number((await e.uma<{ id: number }>("SELECT id FROM fonte_pagadora WHERE codigo = 'a9anv2'"))!.id),
+      );
+      const conferir = (fonte: number) =>
+        escrever((e) =>
+          conferirCredenciamentoNoFluxo(e, {
+            profissionalId: ids.prof,
+            fontePagadoraId: fonte,
+            planoId: null,
+            estabelecimentoId: ids.est,
+            data: DIA,
+            campo: 'profissional',
+          }),
+        );
+      expect((await conferir(id))?.efeito).toBe('alerta');
+      expect(await conferir(ids.part)).toBeNull();
+      await s.definirOpcoes(op(), {
+        fontePagadoraId: id,
+        bloqueiaSemCredenciamento: true,
+        credenciaTodosAoCriar: false,
+      });
+      expect(await codigoDaRecusa(conferir(id))).toBe('profissional-nao-credenciado');
+      await s.incluirCredenciamento(op(), {
+        profissionalId: ids.prof,
+        fontePagadoraId: id,
+        vigenciaInicio: '2026-01-01',
+      });
+      expect(await conferir(id)).toBeNull();
+    });
+
+    it('segundo particular sem o parâmetro do particular padrão é recusado; a consulta particular segue', async () => {
+      expect(await codigoDaRecusa(novo('a9anv3', false, 'particular'))).toBe('particular-padrao-ambiguo');
+      const calc = await s.calcular(ctx(), {
+        fontePagadoraId: null,
+        planoId: null,
+        profissionalId: ids.prof,
+        agendaId: ids.agenda,
+        itemFaturavelId: null,
+        consulta: true,
+        tabelaContaId: null,
+        data: DIA,
+      });
+      expect(calc.recusa ?? null).toBeNull();
+    });
+
+    it('particular padrão pelo parâmetro: o do estabelecimento vence o da rede', async () => {
+      await escrever(async (e) => {
+        const chave = 'faturamento.fontePagadoraParticularCodigo';
+        let def = await e.uma<{ id: number }>('SELECT id FROM parametro_definicao WHERE chave = ?', [chave]);
+        // O cliente de teste nasce sem o catálogo de parâmetros: a definição sintética entra e sai com o teste.
+        const criada = def === null;
+        if (criada)
+          def = {
+            id: await e.inserir(
+              `INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_rede, permite_estabelecimento,
+                 criado_em) SELECT ?, MIN(id), 'a9a teste', 'texto', 1, 1, CURRENT_TIMESTAMP(3) FROM modulo_sistema`,
+              [chave],
+            ),
+          };
+        expect(await codigoParticularDoParametro(e, ids.est)).toBeNull();
+        const ins = (nivel: string, est: number | null, valor: string) =>
+          e.inserir(
+            `INSERT INTO parametro_valor (parametro_definicao_id, nivel, estabelecimento_id, valor, vigencia_inicio, motivo,
+               criado_em) VALUES (?, ?, ?, ?, '2026-01-01', 'a9a teste', CURRENT_TIMESTAMP(3))`,
+            [Number(def!.id), nivel, est, valor],
+          );
+        await ins('rede', null, 'a9arede');
+        expect(await codigoParticularDoParametro(e, ids.est)).toBe('a9arede');
+        await ins('estabelecimento', ids.est, 'a9apart');
+        expect(await codigoParticularDoParametro(e, ids.est)).toBe('a9apart');
+        expect(await codigoParticularDoParametro(e, ids.est + 1_000_000)).toBe('a9arede');
+        await e.executar(
+          "DELETE FROM parametro_valor WHERE motivo = 'a9a teste' AND parametro_definicao_id = ?",
+          [Number(def!.id)],
+        );
+        if (criada) await e.executar('DELETE FROM parametro_definicao WHERE id = ?', [Number(def!.id)]);
+      });
+    });
   });
 
   describe('lançamento na conta (faturamento.lancarItem)', () => {
@@ -564,6 +772,158 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
           l.uma<Record<string, unknown>>('SELECT atendimento_id FROM conta_hospitalar WHERE id = ?', [conta]),
         )
         .then((x) => Number(x?.['atendimento_id']));
+
+    it('pendência 10: atendimento.lancarProcedimentoExtra na porta própria lança pela regra particular; a requisição de laboratório é recusada', async () => {
+      const pa = new PortaAtendimentoPropria(nucleo, CLIENTE);
+      const ca = cf() as unknown as Parameters<PortaAtendimentoPropria['executar']>[0];
+      const og = () =>
+        ({ ...op(), login: 'a9a', estacao: 'TESTE' }) as unknown as Parameters<
+          PortaAtendimentoPropria['executar']
+        >[3];
+      const { at, lab } = await escrever(async (e) => {
+        const agora = 'CURRENT_TIMESTAMP(3)';
+        const at = Number(
+          (await e.uma<{ a: number }>('SELECT atendimento_id AS a FROM conta_hospitalar WHERE id = ?', [
+            L.contaPart,
+          ]))!.a,
+        );
+        await e.inserir(
+          `INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id, criado_em) VALUES (?, ?, ${agora})`,
+          [at, L.contaPart],
+        );
+        const catLab =
+          Number(
+            (await e.uma<{ id: number }>("SELECT id FROM categoria_atendimento WHERE codigo = 'a9alab'"))
+              ?.id ?? 0,
+          ) ||
+          (await e.inserir(
+            `INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, laboratorio, criado_em)
+             SELECT 'a9alab', 'a9a laboratório', tipo_base, 1, ${agora} FROM categoria_atendimento WHERE codigo = 'a9a'`,
+          ));
+        const lab = await e.inserir(
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
+           SELECT estabelecimento_id, 'a9a-LAB', paciente_id, ?, carater_atendimento_tiss_id, fonte_pagadora_id,
+                  profissional_id, situacao, entrada_em, ${agora} FROM atendimento WHERE id = ?`,
+          [catLab, at],
+        );
+        await e.inserir(
+          `INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id, criado_em) VALUES (?, ?, ${agora})`,
+          [lab, L.contaPart],
+        );
+        return { at, lab };
+      });
+      const r = await pa.executar(
+        ca,
+        'atendimento.lancarProcedimentoExtra',
+        { atendimento: at, procedimento: 91_990_001, quantidade: 1 },
+        og(),
+      );
+      expect([Number(r.resultado['conta']), Number(r.resultado['valor'])]).toEqual([L.contaPart, 180]);
+      const id = await nucleo.lerSomente(ctx(), async (l) =>
+        Number(
+          (
+            await l.uma<{ id: number }>(
+              'SELECT MAX(id) AS id FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+              [L.contaPart],
+            )
+          )?.id,
+        ),
+      );
+      expect(Number((await gravado(id))?.['regra_preco_particular_id'])).toBeGreaterThan(0);
+      expect(
+        await codigoDaRecusa(
+          pa.executar(
+            ca,
+            'atendimento.lancarProcedimentoExtra',
+            { atendimento: lab, procedimento: 91_990_001, quantidade: 1 },
+            og(),
+          ),
+        ),
+      ).toBe('requisicao-sem-extra');
+    });
+
+    it('pendência 7: com a marcação na agenda, a consulta leva a regra da agenda e o exame, a regra "exame" antes da tabela', async () => {
+      const contaMarcada = await escrever(async (e) => {
+        const agora = 'CURRENT_TIMESTAMP(3)';
+        const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+          const l = await e.uma<{ id: number }>(sel, p);
+          return l ? Number(l.id) : e.inserir(ins, pi);
+        };
+        // O 91990002 é exame no catálogo de agendamento: na marcação da agenda, leva o alvo "exame".
+        await um(
+          "SELECT id FROM item_agendavel WHERE codigo = 'a9aexam'",
+          [],
+          `INSERT INTO item_agendavel (codigo, descricao, tipo_item, item_faturavel_id, duracao_minutos, criado_em)
+           VALUES ('a9aexam', 'a9a exame', 'exame', ?, 20, ${agora})`,
+          [L.exame],
+        );
+        const cod = (t: string, extra: string, v: string) =>
+          um(
+            `SELECT id FROM ${t} WHERE codigo = 'a9a'`,
+            [],
+            `INSERT INTO ${t} (codigo, descricao${extra}, criado_em) VALUES ('a9a', 'a9a'${v}, ${agora})`,
+            [],
+          );
+        const tipo = await cod('tipo_marcacao', ', natureza', ", 'primeira_vez'");
+        const situacao = await cod('situacao_marcacao', ', significado', ", 'chegou'");
+        const canal = await cod('canal_marcacao', '', '');
+        const horario = await e.inserir(
+          `INSERT INTO horario_agenda (estabelecimento_id, agenda_servico_id, data_referencia, inicio_em, fim_em, criado_em)
+           VALUES (?, ?, ?, ?, ?, ${agora})`,
+          [ids.est, ids.agenda, hoje, `${hoje} 10:00:00`, `${hoje} 10:20:00`],
+        );
+        const base = await e.uma<{ at: number; pac: number }>(
+          'SELECT atendimento_id AS at, paciente_id AS pac FROM conta_hospitalar WHERE id = ?',
+          [L.contaPart],
+        );
+        const marcacao = await e.inserir(
+          `INSERT INTO marcacao_horario (estabelecimento_id, numero, horario_agenda_id, tipo_marcacao_id, situacao_marcacao_id,
+             canal_marcacao_id, fonte_pagadora_id, paciente_id, duracao_minutos, marcado_em, responsavel_usuario_id, criado_em)
+           VALUES (?, 'a9a-M1', ?, ?, ?, ?, ?, ?, 20, ${agora}, ?, ${agora})`,
+          [ids.est, horario, tipo, situacao, canal, ids.part, Number(base!.pac), ids.usuario],
+        );
+        const at = await e.inserir(
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, marcacao_horario_id, situacao, entrada_em,
+             criado_em)
+           SELECT estabelecimento_id, 'a9a-M1', paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+                  fonte_pagadora_id, ?, ?, situacao, entrada_em, ${agora} FROM atendimento WHERE id = ?`,
+          [ids.prof, marcacao, Number(base!.at)],
+        );
+        return e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+             plano_fonte_pagadora_id, tipo_conta_id, tabela_preco_id, natureza, competencia, inicio_em, criado_em)
+           SELECT estabelecimento_id, 'a9a-CM1', ?, paciente_id, fonte_pagadora_id, plano_fonte_pagadora_id, tipo_conta_id,
+                  tabela_preco_id, natureza, competencia, inicio_em, ${agora} FROM conta_hospitalar WHERE id = ?`,
+          [at, L.contaPart],
+        );
+      });
+      await s.incluirRegra(op(), {
+        fontePagadoraId: ids.part,
+        dono: { tipo: 'agenda', agendaId: ids.agenda },
+        alvo: { tipo: 'exame' },
+        valor: 95,
+        vigenciaInicio: '2026-01-01',
+      });
+      // A consulta da marcação: a regra da agenda X (300, estimada pelo texto), não a tabela (100).
+      const c = await lancar(contaMarcada, 91_990_001);
+      expect(Number(c.resultado['valor'])).toBe(300);
+      const gc = await gravado(Number(c.resultado['id']));
+      const dc = (typeof gc?.['dados'] === 'string' ? JSON.parse(gc['dados']) : gc?.['dados']) as Record<
+        string,
+        unknown
+      >;
+      expect([dc['origemPreco'], dc['regraEstimada']]).toEqual(['regra_particular_agenda', true]);
+      // O exame da marcação: a regra "exame" da agenda (95) antes da tabela (100).
+      const x = await lancar(contaMarcada, 91_990_002);
+      expect(Number(x.resultado['valor'])).toBe(95);
+      expect(
+        Number((await gravado(Number(x.resultado['id'])))?.['regra_preco_particular_id']),
+      ).toBeGreaterThan(0);
+      // Sem marcação, o mesmo exame segue na tabela.
+      expect(Number((await lancar(L.contaPart, 91_990_002)).resultado['valor'])).toBe(100);
+    });
 
     it('prévia do atendimento (GET atendimento/:reg/preco): os mesmos critérios do lançamento', async () => {
       const part = await s.precoDoAtendimento(ctx(), await atendimentoDa(L.contaPart), L.consulta, hoje);

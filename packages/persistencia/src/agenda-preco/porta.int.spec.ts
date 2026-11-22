@@ -273,10 +273,12 @@ describe.skipIf(SEM_BANCO)('porta do ADR 0009 (preço particular, credenciamento
     );
     expect(await ler((l) => credenciamentosVigentes(l, q))).toHaveLength(1);
     // credenciar todos: só quem falta (o médico Y; os ativos de outras massas do banco também entram, então >= 1)
-    const n = await escrever((e) => credenciarTodosAtivos(e, ids.convenio, DIA, null));
+    const n = await escrever((e) => credenciarTodosAtivos(e, ids.convenio, DIA, null, ['corpo_clinico']));
     expect(n).toBeGreaterThanOrEqual(1);
     expect(await ler((l) => credenciamentosVigentes(l, { ...q, profissionalId: ids.prof2 }))).toHaveLength(1);
-    expect(await escrever((e) => credenciarTodosAtivos(e, ids.convenio, DIA, null))).toBe(0); // idempotente
+    expect(await escrever((e) => credenciarTodosAtivos(e, ids.convenio, DIA, null, ['corpo_clinico']))).toBe(
+      0,
+    ); // idempotente
   });
 
   it('texto original íntegro com hash; mudou, volta a pendente e as estimadas saem; trechos marcados', async () => {

@@ -20,6 +20,7 @@
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
 // produção e o adiantamento ao prestador. Até lá, essas partes respondem zero ou vazio.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
+import { type RegraRepasseParticularIntegral, regraRepasseParticularIntegral } from '@sgh/dominio-repasse';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -42,6 +43,7 @@ import {
   type ContextoRepasse,
   type FiltroRegrasPorta,
   type GravadorRepasse,
+  type IntegraisParticular,
   METODOS_PORTA_REPASSE,
   type OpcaoPorta,
   type PortaRepasse,
@@ -95,7 +97,11 @@ const ESTADO_DA_SITUACAO: Readonly<Record<string, string>> = {
   cancelada: 'cancelada',
 };
 const ESCOPO_DA_CONTA = { A: 'todas', E: 'externa', I: 'internacao' } as const;
-const CONTA_DO_ESCOPO: Readonly<Record<string, RegraRepasse['tipoConta']>> = { todas: 'A', externa: 'E', internacao: 'I' };
+const CONTA_DO_ESCOPO: Readonly<Record<string, RegraRepasse['tipoConta']>> = {
+  todas: 'A',
+  externa: 'E',
+  internacao: 'I',
+};
 
 /** Tabelas das gravações do repasse (operações de tela e gravações diretas). */
 const TABELAS = [
@@ -118,6 +124,9 @@ async function numeroDe(tx: TxOperacao, tipo: string, prefixo: string, est: numb
   return tx.proximoNumero(tipo);
 }
 
+/** Código das regras de repasse integral da consulta particular gravadas pelo conector (ADR 0009). */
+const PREFIXO_INTEGRAL = 'INTEGRAL-PART-%';
+
 const SQL_REGRAS = `
   SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.profissional_id, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
          i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.local_atendimento_id,
@@ -130,7 +139,8 @@ const SQL_REGRAS = `
      AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND (i.fonte_pagadora_id = ? OR i.fonte_pagadora_id IS NULL)`;
 
 function regraDe(r: Linha): RegraRepasse {
-  const cod = (v: unknown) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+  const cod = (v: unknown) =>
+    v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
   return {
     id: n(r['id']),
     vigencia: dataIso(r['vigencia_inicio']) ?? '',
@@ -272,7 +282,10 @@ function versaoDe(r: Linha, fuso: string): VersaoRegraRegistrada {
 }
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -295,7 +308,12 @@ const exigirUsuario = (u: number | null): number => {
 };
 
 /** Relê a linha com trava e confere a versão de negócio esperada (situação). */
-async function travar(tx: TxOperacao, tabela: 'apuracao_repasse' | 'regra_repasse_versao', id: number, est: number) {
+async function travar(
+  tx: TxOperacao,
+  tabela: 'apuracao_repasse' | 'regra_repasse_versao',
+  id: number,
+  est: number,
+) {
   const sql =
     tabela === 'apuracao_repasse'
       ? 'SELECT id, versao, situacao FROM apuracao_repasse WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL'
@@ -303,7 +321,11 @@ async function travar(tx: TxOperacao, tabela: 'apuracao_repasse' | 'regra_repass
            FROM regra_repasse_versao v JOIN regra_repasse r ON r.id = v.regra_repasse_id
           WHERE v.id = ? AND r.estabelecimento_id = ?`;
   const r = (await tx.consultarParaAtualizar(sql, [id, est]))[0];
-  if (!r) throw recusa('nao-encontrado', tabela === 'apuracao_repasse' ? 'Apuração não encontrada.' : 'Versão de regra não encontrada.');
+  if (!r)
+    throw recusa(
+      'nao-encontrado',
+      tabela === 'apuracao_repasse' ? 'Apuração não encontrada.' : 'Versão de regra não encontrada.',
+    );
   return r;
 }
 
@@ -317,11 +339,13 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
         throw recusa('proposta-invalida', 'A proposta da regra não veio num formato válido.');
       }
       const vigencia = String(proposta['vigencia'] ?? '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(vigencia)) throw recusa('proposta-invalida', 'Informe a vigência da regra.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(vigencia))
+        throw recusa('proposta-invalida', 'Informe a vigência da regra.');
       let regra = d.substitui;
       if (regra === null) {
         const evento = Number(proposta['evento']);
-        if (!Number.isInteger(evento) || evento <= 0) throw recusa('proposta-invalida', 'Informe o evento da regra.');
+        if (!Number.isInteger(evento) || evento <= 0)
+          throw recusa('proposta-invalida', 'Informe o evento da regra.');
         const numero = await numeroDe(tx, 'regra_repasse', 'RR-', est, usuario);
         // A regra nova nasce inativa: só a inclusão da versão aprovada a ativa.
         regra = await tx.incluir('regra_repasse', {
@@ -334,7 +358,10 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           ativo: false,
         });
       } else {
-        const r = await tx.uma('SELECT id FROM regra_repasse WHERE id = ? AND estabelecimento_id = ?', [regra, est]);
+        const r = await tx.uma('SELECT id FROM regra_repasse WHERE id = ? AND estabelecimento_id = ?', [
+          regra,
+          est,
+        ]);
         if (!r) throw recusa('regra-inexistente', 'A regra substituída não existe neste estabelecimento.');
       }
       const ultima = await tx.uma(
@@ -385,7 +412,10 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
       );
       const a = anterior[0];
       if (a && !['em_apuracao', 'apurada'].includes(texto(a['situacao'])))
-        throw recusa('periodo-ja-apurado', 'A apuração do período já foi conferida: a correção entra no período seguinte.');
+        throw recusa(
+          'periodo-ja-apurado',
+          'A apuração do período já foi conferida: a correção entra no período seguinte.',
+        );
       let id: number;
       const agora = new Date();
       const valores = {
@@ -402,7 +432,11 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           [new Date(), usuario, id],
         );
         // O recálculo é uma nova apuração: quem recalculou passa a ser quem apurou (segregação na aprovação).
-        await tx.alterar('apuracao_repasse', id, n(a['versao']), { ...valores, iniciada_em: agora, iniciada_por_usuario_id: usuario });
+        await tx.alterar('apuracao_repasse', id, n(a['versao']), {
+          ...valores,
+          iniciada_em: agora,
+          iniciada_por_usuario_id: usuario,
+        });
       } else {
         const numero = await numeroDe(tx, 'apuracao_repasse', 'AR-', est, usuario);
         id = await tx.incluir('apuracao_repasse', {
@@ -467,8 +501,15 @@ async function regraDoItem(tx: TxOperacao, item: number, est: number): Promise<n
 
 /** O evento de repasse ativo do estabelecimento (o id vem da entrada). */
 async function exigirEvento(tx: TxOperacao, evento: number, est: number): Promise<number> {
-  const r = await tx.uma('SELECT id FROM evento_repasse WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE', [evento, est]);
-  if (!r) throw recusa('evento-inexistente', 'O evento de repasse não existe ou não está ativo neste estabelecimento.');
+  const r = await tx.uma(
+    'SELECT id FROM evento_repasse WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE',
+    [evento, est],
+  );
+  if (!r)
+    throw recusa(
+      'evento-inexistente',
+      'O evento de repasse não existe ou não está ativo neste estabelecimento.',
+    );
   return evento;
 }
 
@@ -480,7 +521,12 @@ const TRIBUTOS_RPA = [
 ] as const;
 
 /** As operações de tela pelo executor (entrada pelo Zod do contrato). */
-async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unknown>, ctx: ContextoOperacao) {
+async function aplicarOperacao(
+  tx: TxOperacao,
+  op: string,
+  e: Record<string, unknown>,
+  ctx: ContextoOperacao,
+) {
   const est = exigirEstabelecimento(ctx.estabelecimento);
   const usuario = exigirUsuario(ctx.usuario);
   switch (op) {
@@ -488,10 +534,10 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
       const prestador = n(e['prestador']);
       await exigirEvento(tx, n(e['evento']), est);
       if (e['apuracao'] !== null && e['apuracao'] !== undefined) {
-        const ap = await tx.uma('SELECT id FROM apuracao_repasse WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [
-          n(e['apuracao']),
-          est,
-        ]);
+        const ap = await tx.uma(
+          'SELECT id FROM apuracao_repasse WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [n(e['apuracao']), est],
+        );
         if (!ap) throw recusa('apuracao-inexistente', 'A apuração não existe neste estabelecimento.');
       }
       const tipoMedico = e['tipo'] === 'M';
@@ -546,10 +592,12 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
       );
       if (ls.length !== ids.length || ls.some((l) => n(l['profissional_id']) !== n(e['prestador'])))
         throw recusa('lancamento-inexistente', 'Algum lançamento não existe ou não é deste profissional.');
-      if (ls.some((l) => Boolean(Number(l['em_rpa'])))) throw recusa('ja-em-rpa', 'Algum lançamento já está em outro RPA.');
+      if (ls.some((l) => Boolean(Number(l['em_rpa']))))
+        throw recusa('ja-em-rpa', 'Algum lançamento já está em outro RPA.');
       const r = e['retencoes'] as Record<string, number>;
       const soma = ls.reduce((s, l) => s + centavos(n(l['valor'])), 0);
-      if (soma !== centavos(n(r['bruto']))) throw recusa('bruto-divergente', 'O bruto não é a soma dos lançamentos.');
+      if (soma !== centavos(n(r['bruto'])))
+        throw recusa('bruto-divergente', 'O bruto não é a soma dos lançamentos.');
       const retido = centavos(n(r['inss'])) + centavos(n(r['irrf'])) + centavos(n(r['iss']));
       if (centavos(n(r['bruto'])) - retido !== centavos(n(r['liquido'])))
         throw recusa('retencoes-divergentes', 'O líquido não é o bruto menos o INSS, o IRRF e o ISS.');
@@ -559,9 +607,14 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
         [],
       ))
         tributos.set(texto(t['codigo']), n(t['id']));
-      const faltam = TRIBUTOS_RPA.filter((t) => n(r[t.valor]) > 0 && !tributos.has(t.codigo)).map((t) => t.codigo);
+      const faltam = TRIBUTOS_RPA.filter((t) => n(r[t.valor]) > 0 && !tributos.has(t.codigo)).map(
+        (t) => t.codigo,
+      );
       if (faltam.length)
-        throw recusa('tributo-sem-cadastro', `Cadastre o tributo ${faltam.join(', ')} para emitir o RPA com a retenção.`);
+        throw recusa(
+          'tributo-sem-cadastro',
+          `Cadastre o tributo ${faltam.join(', ')} para emitir o RPA com a retenção.`,
+        );
       const lim = limitesCompetencia(String(e['competencia']));
       const numero = await numeroDe(tx, 'rpa', '', est, usuario);
       const id = await tx.incluir('rpa', {
@@ -599,7 +652,8 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
     }
     case 'repasse.incluirRegra': {
       const v = await travar(tx, 'regra_repasse_versao', n(e['versao']), est);
-      if (texto(v['situacao']) !== 'aprovada') throw recusa('versao-nao-aprovada', 'Só a versão aprovada é incluída.');
+      if (texto(v['situacao']) !== 'aprovada')
+        throw recusa('versao-nao-aprovada', 'Só a versão aprovada é incluída.');
       // A regra de um profissional (a dimensão mais forte): o prestador é o profissional (id). Os dois informados
       // têm de ser o mesmo, e o profissional tem de existir; sem nenhum, a regra vale para todos.
       const prof = n(e['profissional']) > 0 ? n(e['profissional']) : null;
@@ -608,13 +662,18 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
         throw recusa('profissional-divergente', 'O prestador e o profissional da regra não são o mesmo.');
       const profissionalId = prof ?? prest;
       if (profissionalId !== null) {
-        const pr = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [profissionalId]);
+        const pr = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [
+          profissionalId,
+        ]);
         if (!pr) throw recusa('profissional-inexistente', 'O profissional da regra não existe.');
       }
       await exigirEvento(tx, n(e['evento']), est);
       const regra = n(v['regra_repasse_id']);
       const rr = (
-        await tx.consultarParaAtualizar('SELECT id, versao FROM regra_repasse WHERE id = ? AND estabelecimento_id = ?', [regra, est])
+        await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM regra_repasse WHERE id = ? AND estabelecimento_id = ?',
+          [regra, est],
+        )
       )[0];
       if (!rr) throw recusa('nao-encontrado', 'Regra não encontrada neste estabelecimento.');
       await tx.alterar('regra_repasse', regra, n(rr['versao']), {
@@ -623,14 +682,18 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
         evento_repasse_id: n(e['evento']),
         beneficiario: e['beneficiario'] === 'P' ? 'prestador' : 'profissional',
       });
-      const seq = await tx.uma('SELECT COALESCE(MAX(sequencia), 0) AS s FROM regra_repasse_item WHERE regra_repasse_id = ?', [regra]);
+      const seq = await tx.uma(
+        'SELECT COALESCE(MAX(sequencia), 0) AS s FROM regra_repasse_item WHERE regra_repasse_id = ?',
+        [regra],
+      );
       const zeroNulo = (x: unknown) => (n(x) > 0 ? n(x) : null);
       const item = await tx.incluir('regra_repasse_item', {
         regra_repasse_id: regra,
         profissional_id: profissionalId,
         sequencia: n(seq?.['s']) + 1,
         fonte_pagadora_id: zeroNulo(e['convenio']),
-        codigo_procedimento_inicial: n(e['procedimentoInicial']) > 0 ? String(e['procedimentoInicial']) : null,
+        codigo_procedimento_inicial:
+          n(e['procedimentoInicial']) > 0 ? String(e['procedimentoInicial']) : null,
         codigo_procedimento_final: n(e['procedimentoFinal']) > 0 ? String(e['procedimentoFinal']) : null,
         especialidade_medica_id: zeroNulo(e['especialidade']),
         funcao_equipe_cobranca_id: zeroNulo(e['ato']),
@@ -648,14 +711,17 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
     }
     case 'repasse.integrarItens': {
       const a = await travar(tx, 'apuracao_repasse', n(e['apuracao']), est);
-      if (texto(a['situacao']) !== 'aprovada') throw recusa('apuracao-nao-aprovada', 'Só a apuração aprovada é integrada.');
+      if (texto(a['situacao']) !== 'aprovada')
+        throw recusa('apuracao-nao-aprovada', 'Só a apuração aprovada é integrada.');
       let itens = 0;
       for (const l of e['lancamentos'] as { itens: { item: number; percentual: number; valor: number }[] }[])
         for (const i of l.itens) {
-          const p = (await tx.consultarParaAtualizar(
-            'SELECT id, versao FROM producao_repasse WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-            [i.item, est],
-          ))[0];
+          const p = (
+            await tx.consultarParaAtualizar(
+              'SELECT id, versao FROM producao_repasse WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+              [i.item, est],
+            )
+          )[0];
           if (!p) throw recusa('item-inexistente', 'Item da produção não encontrado.');
           await tx.alterar('producao_repasse', i.item, n(p['versao']), {
             situacao: 'apurado',
@@ -678,7 +744,10 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
 export const TABELAS_EVENTO_REPASSE: readonly string[] = ['lancamento_repasse'];
 
 /** A entrada do lançamento composto: a de repasse.lancarEvento, sem a origem (sempre `plantao`) e sem o estorno. */
-export type EntradaEventoRepasseComposto = Omit<z.input<typeof esquemaLancarEventoRepasse>, 'origem' | 'estornaDe'>;
+export type EntradaEventoRepasseComposto = Omit<
+  z.input<typeof esquemaLancarEventoRepasse>,
+  'origem' | 'estornaDe'
+>;
 
 /** O estorno composto: o lançamento original e a data, a competência e a justificativa do lançamento negativo. */
 export interface EntradaEstornoRepasseComposto {
@@ -717,8 +786,16 @@ export function gravadorEventoRepasse(tx: TxOperacao): GravadorEventoRepasse {
     async incluir(entrada) {
       const analise = esquemaLancarEventoRepasse.safeParse({ ...entrada, origem: 'plantao' });
       if (!analise.success)
-        throw recusa('lancamento-invalido', 'O lançamento composto do repasse não passou na validação do contrato.');
-      const r = await aplicarOperacao(tx, 'repasse.lancarEvento', analise.data as Record<string, unknown>, tx.contexto);
+        throw recusa(
+          'lancamento-invalido',
+          'O lançamento composto do repasse não passou na validação do contrato.',
+        );
+      const r = await aplicarOperacao(
+        tx,
+        'repasse.lancarEvento',
+        analise.data as Record<string, unknown>,
+        tx.contexto,
+      );
       return { lancamento: n((r as Record<string, unknown>)['lancamento']) };
     },
     async estornar(entrada) {
@@ -735,7 +812,8 @@ export function gravadorEventoRepasse(tx: TxOperacao): GravadorEventoRepasse {
           WHERE l.id = ? AND l.estabelecimento_id = ? AND l.excluido_em IS NULL AND l.tipo_lancamento <> 'estorno'`,
         [e.lancamento, est],
       );
-      if (!orig) throw recusa('original-inexistente', 'O lançamento original não existe neste estabelecimento.');
+      if (!orig)
+        throw recusa('original-inexistente', 'O lançamento original não existe neste estabelecimento.');
       const saldo = centavos(n(orig['valor'])) - centavos(n(orig['estornado']));
       const valor = e.valor ?? saldo / 100;
       if (valor <= 0) throw recusa('estorno-excede', 'O lançamento original já foi todo estornado.');
@@ -776,7 +854,8 @@ export class PortaRepassePropria implements PortaRepasse {
 
   private ler<T>(c: ContextoRepasse, fn: (l: Leitor, est: number, fuso: string) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), async (l) => fn(l, est, await fusoDe(l, est)));
   }
 
@@ -838,7 +917,12 @@ export class PortaRepassePropria implements PortaRepasse {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = chaveDaGravacao('repasse', c);
-    const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+    const r = await this.executor.executar(
+      op,
+      c.cliente,
+      { chave },
+      { ...contextoDe(c), chaveIdempotencia: chave },
+    );
     if (r.repetida) return JSON.parse(String(r.resultado['valor'] ?? 'null')) as T;
     if (!saida) throw new Error('Gravação do repasse sem resultado.');
     return (saida as { valor: T }).valor;
@@ -853,13 +937,21 @@ export class PortaRepassePropria implements PortaRepasse {
   opcoes(c: ContextoRepasse): Promise<{ eventos: OpcaoPorta[]; convenios: OpcaoPorta[] }> {
     return this.ler(c, async (l, est) => {
       const [ev, cv] = await Promise.all([
-        l.consultar('SELECT id, nome FROM evento_repasse WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY nome, id', [est], {
-          teto: 500,
-        }),
+        l.consultar(
+          'SELECT id, nome FROM evento_repasse WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY nome, id',
+          [est],
+          {
+            teto: 500,
+          },
+        ),
         // O convênio (fonte pagadora) é cadastro da rede inteira.
-        l.consultar("SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome, id", [], {
-          teto: 2000,
-        }),
+        l.consultar(
+          "SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome, id",
+          [],
+          {
+            teto: 2000,
+          },
+        ),
       ]);
       const op = (r: Linha) => ({ codigo: n(r['id']), rotulo: texto(r['nome']) });
       return { eventos: ev.map(op), convenios: cv.map(op) };
@@ -880,10 +972,65 @@ export class PortaRepassePropria implements PortaRepasse {
     });
   }
 
+  // A regra integral da consulta particular (código INTEGRAL-PART-*) sai daqui: ela não tem as dimensões de item e grupo
+  // no RegraRepasse e valeria para todo item do particular. O motor a recebe por integraisParticular (OpcoesCalculo).
   todasRegras(c: ContextoRepasse, f: { convenio: number; data: string }): Promise<RegraRepasse[]> {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_REGRAS} ORDER BY i.id`, [est, f.data, f.data, f.convenio], { teto: 20000 })).map(regraDe),
+      (
+        await l.consultar(
+          `${SQL_REGRAS} AND r.codigo NOT LIKE ? ORDER BY i.id`,
+          [est, f.data, f.data, f.convenio, PREFIXO_INTEGRAL],
+          {
+            teto: 20000,
+          },
+        )
+      ).map(regraDe),
     );
+  }
+
+  integraisParticular(c: ContextoRepasse, data: string): Promise<IntegraisParticular> {
+    return this.ler(c, async (l, est) => {
+      const rs = await l.consultar(
+        `SELECT i.fonte_pagadora_id, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
+           FROM regra_repasse r
+           JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
+           LEFT JOIN item_faturavel ifa ON ifa.id = i.item_faturavel_id
+          WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.codigo LIKE ? AND r.vigencia_inicio <= ?
+            AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND i.percentual = 100
+            AND i.fonte_pagadora_id IS NOT NULL AND (i.item_faturavel_id IS NOT NULL OR i.grupo_faturamento_id IS NOT NULL)
+          ORDER BY i.id`,
+        [est, PREFIXO_INTEGRAL, data, data],
+        { teto: 500 },
+      );
+      const integrais: RegraRepasseParticularIntegral[] = [];
+      for (const r of rs) {
+        const item = r['item_codigo'] == null ? null : codigoProcedimento(r['item_codigo']);
+        if (item === 0) continue; // código que não é só de dígitos: nenhum item de produção casa com ele
+        integrais.push(
+          regraRepasseParticularIntegral({
+            fontePagadoraId: n(r['fonte_pagadora_id']),
+            profissionalId: nn(r['profissional_id']),
+            itemFaturavelId: item,
+            grupoFaturamentoId: item === null ? nn(r['grupo_faturamento_id']) : null,
+          }),
+        );
+      }
+      const grupos = [
+        ...new Set(integrais.flatMap((x) => (x.grupoFaturamentoId === null ? [] : [x.grupoFaturamentoId]))),
+      ];
+      const grupoDoProcedimento = new Map<number, number>();
+      if (grupos.length > 0)
+        for (const r of await l.consultar(
+          `SELECT codigo, grupo_faturamento_id FROM item_faturavel
+            WHERE grupo_faturamento_id IN (${marcas(grupos)}) AND excluido_em IS NULL`,
+          grupos,
+          { teto: 20000 },
+        )) {
+          const cod = codigoProcedimento(r['codigo']);
+          if (cod !== 0) grupoDoProcedimento.set(cod, n(r['grupo_faturamento_id']));
+        }
+      return { integrais, grupoDoProcedimento };
+    });
   }
 
   // Enquanto a memória não guarda o item de regra aplicado (pedido do lote), um item conta como usado quando a sua regra
@@ -905,7 +1052,9 @@ export class PortaRepassePropria implements PortaRepasse {
 
   versoes(c: ContextoRepasse): Promise<VersaoRegraRegistrada[]> {
     return this.ler(c, async (l, est, fuso) =>
-      (await l.consultar(`${SQL_VERSOES} ORDER BY v.id DESC`, [est], { teto: 500 })).map((r) => versaoDe(r, fuso)),
+      (await l.consultar(`${SQL_VERSOES} ORDER BY v.id DESC`, [est], { teto: 500 })).map((r) =>
+        versaoDe(r, fuso),
+      ),
     );
   }
 
@@ -916,7 +1065,11 @@ export class PortaRepassePropria implements PortaRepasse {
     });
   }
 
-  producao(c: ContextoRepasse, competencia: string, depoisDe: number): Promise<{ itens: ItemProducao[]; ultimo: number | null }> {
+  producao(
+    c: ContextoRepasse,
+    competencia: string,
+    depoisDe: number,
+  ): Promise<{ itens: ItemProducao[]; ultimo: number | null }> {
     const TETO = 2000;
     return this.ler(c, async (l, est, fuso) => {
       const rs = await l.consultar(
@@ -976,7 +1129,11 @@ export class PortaRepassePropria implements PortaRepasse {
     });
   }
 
-  estadoPeriodo(c: ContextoRepasse, _empresa: number, competencia: string): Promise<{ lancamentos: number; daApuracao: number }> {
+  estadoPeriodo(
+    c: ContextoRepasse,
+    _empresa: number,
+    competencia: string,
+  ): Promise<{ lancamentos: number; daApuracao: number }> {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
         `SELECT COUNT(*) AS q, SUM(tipo_lancamento = 'apuracao') AS a FROM lancamento_repasse
@@ -987,9 +1144,19 @@ export class PortaRepassePropria implements PortaRepasse {
     });
   }
 
-  apuracaoDoPeriodo(c: ContextoRepasse, _empresa: number, competencia: string): Promise<ApuracaoRepasseRegistrada | null> {
+  apuracaoDoPeriodo(
+    c: ContextoRepasse,
+    _empresa: number,
+    competencia: string,
+  ): Promise<ApuracaoRepasseRegistrada | null> {
     return this.ler(c, async (l, est) => {
-      const r = (await l.consultar(`${SQL_APURACAO} AND a.competencia = ? ORDER BY a.id DESC`, [est, `${competencia}-01`], { teto: 1 }))[0];
+      const r = (
+        await l.consultar(
+          `${SQL_APURACAO} AND a.competencia = ? ORDER BY a.id DESC`,
+          [est, `${competencia}-01`],
+          { teto: 1 },
+        )
+      )[0];
       return r ? apuracaoDe(r) : null;
     });
   }
@@ -1001,7 +1168,11 @@ export class PortaRepassePropria implements PortaRepasse {
     });
   }
 
-  memorias(c: ContextoRepasse, apuracao: number, prestador: number | null): Promise<MemoriaCalculoRegistrada[]> {
+  memorias(
+    c: ContextoRepasse,
+    apuracao: number,
+    prestador: number | null,
+  ): Promise<MemoriaCalculoRegistrada[]> {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
@@ -1032,7 +1203,10 @@ export class PortaRepassePropria implements PortaRepasse {
     );
   }
 
-  lancamentos(c: ContextoRepasse, f: { empresa: number; competencia: string; prestador?: number }): Promise<LancamentoRepasseRegistrado[]> {
+  lancamentos(
+    c: ContextoRepasse,
+    f: { empresa: number; competencia: string; prestador?: number },
+  ): Promise<LancamentoRepasseRegistrado[]> {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
@@ -1061,9 +1235,13 @@ export class PortaRepassePropria implements PortaRepasse {
 
   rpas(c: ContextoRepasse, f: { empresa: number; competencia: string }): Promise<RpaRegistrado[]> {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_RPAS} AND r.competencia = ? ORDER BY r.numero`, [est, `${f.competencia}-01`], { teto: 5000 })).map(
-        rpaDe,
-      ),
+      (
+        await l.consultar(
+          `${SQL_RPAS} AND r.competencia = ? ORDER BY r.numero`,
+          [est, `${f.competencia}-01`],
+          { teto: 5000 },
+        )
+      ).map(rpaDe),
     );
   }
 
@@ -1090,7 +1268,9 @@ export class PortaRepassePropria implements PortaRepasse {
           { teto: 20 },
         ),
       ]);
-      const ret = new Map(rt.map((x) => [texto(x['codigo']), { base: n(x['base_calculo']), valor: n(x['valor']) }]));
+      const ret = new Map(
+        rt.map((x) => [texto(x['codigo']), { base: n(x['base_calculo']), valor: n(x['valor']) }]),
+      );
       const bruto = ls.reduce((s, x) => s + n(x['valor']), 0);
       const cpf = texto(ct?.['cpf']);
       return {

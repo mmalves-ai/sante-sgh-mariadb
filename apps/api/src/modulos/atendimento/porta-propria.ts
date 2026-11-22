@@ -1771,13 +1771,24 @@ const OPERACAO_LANCAR_EXTRA = definirOperacao({
     if (est === null)
       throw recusa('estabelecimento-obrigatorio', 'Escolha o estabelecimento do atendimento.');
     const a = await tx.uma(
-      'SELECT id, situacao FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      `SELECT a.id, a.situacao, ca.codigo AS tipo, ca.laboratorio FROM atendimento a
+         JOIN categoria_atendimento ca ON ca.id = a.categoria_atendimento_id
+        WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
       [Number(e.atendimento), est],
     );
     if (!a)
       throw recusa('atendimento-inexistente', 'Atendimento não encontrado.', { campos: ['atendimento'] });
     if (String(a['situacao']) === 'cancelado')
       throw recusa('atendimento-cancelado', 'O atendimento foi cancelado.', { campos: ['atendimento'] });
+    // Como a porta em memória: a requisição de laboratório não recebe procedimento extra pela recepção.
+    if (String(a['tipo']) === 'requisicaoLab' || booleano(a['laboratorio']))
+      throw recusa(
+        'requisicao-sem-extra',
+        'A requisição de laboratório não recebe procedimento extra pela recepção.',
+        {
+          campos: ['atendimento'],
+        },
+      );
     const vinculo = await tx.uma(
       `SELECT ac.conta_hospitalar_id FROM atendimento_conta ac
         WHERE ac.atendimento_id = ? AND ac.excluido_em IS NULL ORDER BY ac.id LIMIT 1`,

@@ -44,6 +44,7 @@ import {
   lerTabelaIrrf,
   type MemoriaCalculo,
   type ModoAdicional,
+  type OpcoesCalculo,
   podeApurarPeriodo,
   reais,
   centavos,
@@ -277,12 +278,19 @@ export class ServicoRepasse {
     return v === null || v === undefined ? '' : String(v);
   }
 
-  private async opcoesCalculo(s: SessaoCadastro) {
-    return {
+  /**
+   * As opções do motor. Com a data, também a regra integral da consulta particular (ADR 0009: 100% do valor cobrado,
+   * antes das regras comuns e sem adicional) e o grupo de faturamento dos procedimentos que ela alcança.
+   */
+  private async opcoesCalculo(s: SessaoCadastro, data?: string): Promise<OpcoesCalculo> {
+    const base = {
       basePadrao: ((await this.texto(s, 'repasse.basePadrao')) || 'cobrado') as BaseCalculoRepasse,
       modoAdicional: ((await this.texto(s, 'repasse.adicionalModo')) || 'sobre-valor') as ModoAdicional,
       feriados: lerFeriados(await this.texto(s, 'repasse.feriados')),
     };
+    if (data === undefined) return base;
+    const x = await this.porta.integraisParticular(ctx(s), data);
+    return { ...base, integrais: x.integrais, grupoDoProcedimento: x.grupoDoProcedimento };
   }
 
   /** Os parâmetros do RPA (regra 7): sem a tabela vigente definida, o RPA não é emitido. */
@@ -412,7 +420,7 @@ export class ServicoRepasse {
       recursoDeferido: 0,
       conciliado: e.valorRecebido !== null,
     };
-    const m = calcularItem(item, regras, await this.opcoesCalculo(s));
+    const m = calcularItem(item, regras, await this.opcoesCalculo(s, e.data));
     if (e.versao !== null && s.pode('repasse.regra.propor'))
       await this.apoio.sgh(
         s,
@@ -606,7 +614,7 @@ export class ServicoRepasse {
       ctx(s),
       itens.map((i) => i.id),
     );
-    const o = await this.opcoesCalculo(s);
+    const o = await this.opcoesCalculo(s, fim);
     const memorias = itens.flatMap((i) =>
       calcularPeriodo([i], regrasPorConvenio.get(i.convenio) ?? [], ja, o),
     );
@@ -888,10 +896,7 @@ export class ServicoRepasse {
   }
 
   /** O RPA emitido, relido do banco para o documento (número, série, parcelas, título e o contribuinte mascarado). */
-  async rpaEmitido(
-    s: SessaoCadastro,
-    id: number,
-  ): Promise<RpaDetalhe & { eventos: Map<number, string> }> {
+  async rpaEmitido(s: SessaoCadastro, id: number): Promise<RpaDetalhe & { eventos: Map<number, string> }> {
     const [r, op] = await Promise.all([this.porta.rpaDetalhe(ctx(s), id), this.porta.opcoes(ctx(s))]);
     if (!r) throw naoEncontrado('RPA');
     return { ...r, eventos: new Map(op.eventos.map((e) => [e.codigo, e.rotulo])) };

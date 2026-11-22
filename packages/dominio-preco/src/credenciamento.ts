@@ -62,3 +62,21 @@ export function deveCredenciarTodosAoCriar(
 ): boolean {
   return !particular && (o?.credenciaTodosAoCriar ?? false);
 }
+
+/**
+ * Decisão 26 (quem entra no credenciamento em massa): só quem atende pelo convênio, ou seja, o profissional do corpo
+ * clínico, o plantonista, o residente, o externo e o terceiro. O pessoal administrativo e o assistencial (enfermagem e
+ * apoio) nunca são credenciados em convênio, porque isso criaria vínculo falso e calaria o alerta da decisão 25.
+ */
+export const TIPOS_PROFISSIONAL_CREDENCIAVEIS: readonly string[] = [
+  'corpo_clinico',
+  'plantonista',
+  'residente',
+  'externo',
+  'terceiro',
+];
+
+/** O profissional deste tipo pode ser credenciado em convênio (decisão 26)? */
+export function profissionalCredenciavel(tipo: string): boolean {
+  return TIPOS_PROFISSIONAL_CREDENCIAVEIS.includes(tipo);
+}

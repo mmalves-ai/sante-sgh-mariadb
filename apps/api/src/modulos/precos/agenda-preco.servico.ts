@@ -12,6 +12,9 @@ import {
   esquemaOpcoesCredenciamentoConvenio,
   SITUACOES_REVISAO_REGRA,
   type AgendaEstruturada,
+  type EntradaCoberturaAgenda,
+  type EntradaPreparoAgenda,
+  type EntradaRestricaoAgenda,
   type Credenciamento,
   type FiltroRegrasPrecoParticular,
   type OpcoesCredenciamentoConvenio,
@@ -29,6 +32,7 @@ import {
 } from '@sgh/dominio-agenda';
 import {
   deveCredenciarTodosAoCriar,
+  TIPOS_PROFISSIONAL_CREDENCIAVEIS,
   origemDaTabela,
   resolverPreco,
   verificarCredenciamento,
@@ -45,10 +49,12 @@ import {
   recusa,
 } from '@sgh/nucleo';
 import {
+  alterarRegraAgenda,
   alterarRegraPrecoParticular,
   candidatasPrecoParticular,
   credenciamentosVigentes,
   codigoParticularDoParametro,
+  contarParticularesAtivos,
   credenciarTodosAtivos,
   definirOpcoesCredenciamentoConvenio,
   fonteParticularPadrao,
@@ -62,6 +68,8 @@ import {
   listarCredenciamentosVigentes,
   listarRegrasPrecoParticular,
   opcoesCredenciamentoConvenio,
+  regraDaAgendaExiste,
+  type TabelaRegraAgenda,
 } from '@sgh/persistencia';
 import { z } from 'zod';
 import { precoVigente, tabelasDePreco } from '../faturamento/operacoes.js';
@@ -190,7 +198,13 @@ export const opCredenciarTodos = definirOperacao({
         campos: ['fontePagadoraId'],
       });
     return {
-      credenciados: await credenciarTodosAtivos(tx, e.fontePagadoraId, e.vigenciaInicio, ctx.usuario),
+      credenciados: await credenciarTodosAtivos(
+        tx,
+        e.fontePagadoraId,
+        e.vigenciaInicio,
+        ctx.usuario,
+        TIPOS_PROFISSIONAL_CREDENCIAVEIS,
+      ),
     };
   },
   alvo: (e) => ({ tabela: 'fonte_pagadora', id: e.fontePagadoraId }),
@@ -241,6 +255,19 @@ export const opIncluirConvenio = definirOperacao({
       throw recusa('particular-sem-credenciamento', 'O particular não tem credenciamento.', {
         campos: ['credenciaTodosAoCriar'],
       });
+    // Um segundo particular ativo sem o parâmetro do particular padrão deixaria o particular do hospital ambíguo
+    // (fonteParticularPadrao devolve nulo) e pararia a consulta particular pela regra do médico.
+    if (
+      particular &&
+      (await contarParticularesAtivos(tx)) > 0 &&
+      (await codigoParticularDoParametro(tx, ctx.estabelecimento ?? null)) === null
+    )
+      throw recusa(
+        'particular-padrao-ambiguo',
+        'Já existe uma fonte particular ativa. Defina antes o particular padrão do hospital no parâmetro ' +
+          'faturamento.fontePagadoraParticularCodigo.',
+        { campos: ['tipo'] },
+      );
     const id = await incluirConvenio(tx, e, ctx.usuario);
     if (id === null)
       throw recusa('codigo-em-uso', 'Já existe uma fonte pagadora com este código.', { campos: ['codigo'] });
@@ -252,7 +279,13 @@ export const opIncluirConvenio = definirOperacao({
       },
       particular,
     )
-      ? await credenciarTodosAtivos(tx, id, e.dataInicioRelacao, ctx.usuario)
+      ? await credenciarTodosAtivos(
+          tx,
+          id,
+          e.dataInicioRelacao,
+          ctx.usuario,
+          TIPOS_PROFISSIONAL_CREDENCIAVEIS,
+        )
       : 0;
     return { id, credenciados };
   },
@@ -288,6 +321,55 @@ export const opIncluirPreparo = definirOperacao({
   },
   alvo: (_e, s) => ({ tabela: 'agenda_preparo', id: s.id }),
 });
+
+/**
+ * Revisão de uma regra da agenda (PUT com versão): a entrada inteira, como na inclusão, mais o id e a versão lida. A
+ * regra estimada (extraída do texto) passa a confirmada quando o revisor a grava assim; o texto original fica ligado.
+ */
+function opRevisarRegraAgenda<T extends z.ZodTypeAny>(nome: string, tabela: TabelaRegraAgenda, valores: T) {
+  return definirOperacao({
+    nome,
+    tabelas: [tabela],
+    entrada: z.object({ id, versao: z.number().int().positive(), valores }),
+    async gravar(tx, entrada, ctx) {
+      const e = entrada as unknown as {
+        id: number;
+        versao: number;
+        valores: EntradaCoberturaAgenda | EntradaRestricaoAgenda | EntradaPreparoAgenda;
+      };
+      if (!(await regraDaAgendaExiste(tx, tabela, e.id, e.valores.agendaId)))
+        throw recusa('regra-inexistente', 'A regra não existe nesta agenda.', { campos: ['id'] });
+      const n = await alterarRegraAgenda(
+        tx,
+        tabela,
+        e.id,
+        e.valores.agendaId,
+        e.versao,
+        e.valores,
+        ctx.usuario,
+      );
+      if (n === 0) throw erroConflitoVersao(['versao']);
+      return { id: e.id };
+    },
+    alvo: (e) => ({ tabela, id: Number((e as unknown as { id: number }).id) }),
+  });
+}
+
+export const opRevisarCobertura = opRevisarRegraAgenda(
+  'agenda.revisar-cobertura',
+  'agenda_cobertura',
+  esquemaEntradaCoberturaAgenda,
+);
+export const opRevisarRestricao = opRevisarRegraAgenda(
+  'agenda.revisar-restricao',
+  'agenda_restricao',
+  esquemaEntradaRestricaoAgenda,
+);
+export const opRevisarPreparo = opRevisarRegraAgenda(
+  'agenda.revisar-preparo',
+  'agenda_preparo',
+  esquemaEntradaPreparoAgenda,
+);
 
 // ---------------------------------------------------------------- pedidos de leitura
 
@@ -589,6 +671,15 @@ export class ServicoAgendaPreco {
   }
   incluirPreparo(ctx: ContextoOperacao, e: unknown) {
     return this.gravar(opIncluirPreparo, ctx, e);
+  }
+  revisarCobertura(ctx: ContextoOperacao, e: unknown) {
+    return this.gravar(opRevisarCobertura, ctx, e);
+  }
+  revisarRestricao(ctx: ContextoOperacao, e: unknown) {
+    return this.gravar(opRevisarRestricao, ctx, e);
+  }
+  revisarPreparo(ctx: ContextoOperacao, e: unknown) {
+    return this.gravar(opRevisarPreparo, ctx, e);
   }
 
   /** As perguntas do paciente (seção 6) respondidas pela regra estruturada, com o texto original ao lado. */
