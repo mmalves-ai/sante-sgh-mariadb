@@ -215,3 +215,68 @@ conciliação. É mudança de arquitetura do motor e precisa de orçamento próp
 - **Fork com o Firebird carregado.** O filho nunca usa a conexão herdada e sai por `os._exit`.
 - **Trava entre gravadores** no `conector_origem`. A chave única é por tabela da origem, e a sessão usa READ COMMITTED.
   Não houve deadlock no recorte.
+
+## Etapa 3: revisão da divisão por faixa e prova de equivalência (2026-11-22)
+
+**Achados da revisão, corrigidos na causa (`paralelo.primeira_carga`):**
+- Os três achados acontecem só no **Sincronizar** ou na **reexecução** (com `existente[t]` herdado):
+  - memória multiplicada pelo número de partes (`estado_destino` e `existente[t]` da tabela inteira em cada
+    gravador; `_estado` devolvido por inteiro);
+  - deadlock 1213 no índice único de `conector_origem`, com ODKU em linha que já existe;
+  - colisão 1062 entre o bloco de id reservado e uma inserção do produto em uso.
+- Correção: **só a 1ª carga da tabela se divide**: sem `cm.sinc` e com `existente[t]` vazio. Nos outros casos, a tabela vai
+  inteira a um gravador, como antes da divisão.
+  - Na 1ª carga, o destino não tem linha da tabela: não há estado herdado, nem duplicata no `conector_origem` (sob READ
+    COMMITTED, a inserção de chave nova não toma trava de intervalo), nem uso concorrente do produto.
+  - Na carga em duas passadas (`CONECTOR_ADIAR`), as trilhas da 2ª passada continuam divisíveis, porque o
+    `existente` delas está vazio.
+- Não foi feita nova tentativa para 1213 nem reserva pelo AUTO_INCREMENT. Um `ALTER TABLE` no coordenador esperaria a
+  trava de metadados dos gravadores, que esperam a reserva. Os dois só fazem falta se a divisão valer para o
+  Sincronizar.
+- Teste novo: `test_faixa.TestDivisivel.test_so_primeira_carga`.
+
+**Prova de equivalência:**
+- **Recorte:** cópia real `pc-20261019.fdb`; TBCABTRILHA e PREVOLPAC com 1.000.000 de linhas cada e os pais com 20.000.
+  São 112 tabelas, 2.299.024 linhas e 30 ondas.
+- **Execução:** dentro do `flock pesado.lock`, um modo por vez. Clientes `vf_g1`, `vf_g4s` e `vf_g4f` na plataforma
+  `vf_plataforma`, apagados no fim.
+- Só a TBCABTRILHA foi dividida (4 partes). A PREVOLPAC não passa no critério de `divisivel`.
+
+| Modo | 1ª passada | TBCABTRILHA | PREVOLPAC | 2ª passada | Pico de memória usada (antes) |
+|---|---:|---:|---:|---:|---:|
+| 1 gravador | 631,5 s, 3.641 l/s | 84,5 s, 11.840 l/s | 414,8 s, 2.411 l/s | 181,5 s, tudo pulado | 16,0 GB (10,9) |
+| 4 sem faixa | 589,5 s, 3.900 l/s | 67,2 s, 14.879 l/s | 403,4 s, 2.479 l/s | 187,9 s, tudo pulado | 15,6 GB (10,8) |
+| 4 com faixa | 563,3 s, 4.082 l/s | **24,6 s, 40.611 l/s** | 412,1 s, 2.426 l/s | 192,8 s, tudo pulado | 15,6 GB (10,7) |
+
+- **`conector_origem` por tabela e regra:** idêntico nos três modos, com a mesma impressão digital `cca53bcdfde9517d`,
+  que inclui a soma dos `hash_destino`, nas duas passadas.
+- **Pendências por regra:** idênticas: 3.910.819 na 1ª passada e 7.345.872 acumuladas na 2ª.
+- **Contadores da carga:** idênticos, salvo `blocos_gravados`: 149 contra 152 com faixa, porque cada borda de parte
+  fecha um bloco a mais. O resultado gravado não muda.
+- **Conferência:** 173 entidades conferidas nos três modos. A 2ª passada pula todas as 2.299.024 linhas como iguais.
+- **Memória:** o pico é o mesmo nos três modos, cerca de 4,9 GB acima do início. A divisão não aumenta a memória na 1ª
+  carga.
+- **Ganho:** a tabela dividida rodou 2,7 vezes mais rápido que com 4 gravadores sem faixa, e 3,4 vezes mais rápido que com 1 gravador. O total do recorte
+  ganha pouco, porque é dominado pela PREVOLPAC, que não se divide.
+
+**`conector/conector.sh testes`** (flock, `CONECTOR_GRAVADORES=4`): 1.234 testes OK, com 10 pulados e 2 falhas
+esperadas.
+
+**Previsão da carga completa sem as trilhas:**
+- **Comando:** `CONECTOR_ADIAR=TBCABTRILHA,TBLANTRILHASGH medir-carga ... --prever 3640,25000,N`. A previsão agora
+  respeita o `CONECTOR_ADIAR`.
+- **Plano:** 1.135 tabelas, 116.033.142 linhas e 208 ondas. Pelo critério da especificação, 41,9 milhões de linhas são
+  divisíveis.
+- **Resultado do modelo, com 3.640 l/s por gravador (o ritmo do recorte):**
+  - 4 gravadores: **4,8 h**;
+  - 6 gravadores: **4,6 h**.
+- **A onda mais longa** tem 12 tabelas e 22,5 milhões de linhas, e leva cerca de 1,1 h. Ela é limitada pela PREVOLPAC
+  (14,2 M), que não se divide. No ritmo medido dela (cerca de 2.400 l/s), passa de 1,6 h.
+- **Faixa realista:** de 5 a 6 h com 4 gravadores. Se o ritmo da carga real anterior se repetir (3.400 l/s no total,
+  com 6 gravadores e sem faixa), o teto é de cerca de 9,5 h.
+- **Pico de memória esperado:** a divisão não acrescenta memória na 1ª carga (medido). O estado em memória do
+  coordenador cresce com as chaves carregadas. O recorte de 2,3 milhões de linhas subiu 4,9 GB, mas isso não é linear
+  e não dá para extrapolar com segurança. Por isso a recomendação é 4 gravadores com o vigia de 6 GB, e o `free -m`
+  acompanhado nas primeiras ondas grandes.
+- **Saídas:** `sante-sgh-dados/obra/lib/faixa-prova/`, com os arquivos `res-*.json`, `memoria.txt`, `prever-*.json`,
+  `testes.log` e o script `comparar.py`.
