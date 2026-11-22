@@ -7,6 +7,8 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
                                                   exemplo (no trabalho); `--fatias lotes` junta todas as fatias dos
                                                   lotes de domínio (sintetica_d/l<lote>_<n>.py)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
+  medir-carga <relativo> --cliente C --tabelas T1,T2 [--limite N --limite-pais M --vezes 2 --saida /saida/A]
+                                          velocidade da carga pelo mapa num recorte (medir_carga.py; só contagens)
   medir-adr9 <relativo>                   ADR 0009: contagens do extrator, do preço por médico e da ligação pelo nome
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   dicionario <relativo> --saida ARQ        dicionário de colunas (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo),
@@ -60,6 +62,11 @@ def main(argv=None):
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     p = sub.add_parser("medir-adr9"); p.add_argument("relativo")
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
+    p = sub.add_parser("medir-carga"); p.add_argument("relativo"); p.add_argument("--cliente", required=True)
+    p.add_argument("--tabelas", required=True); p.add_argument("--limite", type=int, default=100000)
+    p.add_argument("--limite-pais", type=int, default=10000); p.add_argument("--vezes", type=int, default=2)
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--saida")
+    p.add_argument("--perfil")
     p = sub.add_parser("testes"); p.add_argument("--padrao", default="test*.py")
     p = sub.add_parser("conferir-fatia"); p.add_argument("fatia")
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
@@ -188,6 +195,11 @@ def main(argv=None):
                 return _json(semente_espelho.semear(lt, cx))
             finally:
                 cx.close()
+    if a.cmd == "medir-carga":
+        from . import banco, medir_carga
+        with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
+            return _json(medir_carga.medir(lt, origem, banco.nome_seguro(a.cliente), a.tabelas.split(","), a.limite,
+                                           a.limite_pais, a.vezes, a.perfil), a.saida)
     if a.cmd == "medir-adr9":
         from . import preco_origem
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:

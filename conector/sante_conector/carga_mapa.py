@@ -175,6 +175,8 @@ import os
 import json
 import time
 
+import pymysql
+
 from . import sincronizar as sincronizar_mod
 from . import carga, continuidade, depara, mapa, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
@@ -551,6 +553,10 @@ def canon(v, precisao=None):
     return carga.fmt(v)
 
 
+class _AvisoNoLote(Exception):
+    """INSERT de várias linhas que gerou aviso (conversão silenciosa): o lote é desfeito e refeito em pedaços."""
+
+
 class _PADRAO(str):
     """Marca, no resumo, a coluna que ficou com o padrão do destino (trocada pelo valor relido depois do INSERT)."""
 
@@ -612,6 +618,11 @@ class CargaMapa(carga.Carga):
         self._vig_origem = False            # data do registro mais antigo da origem (evidência declarada)
         self._esp = {}                      # (catálogo, código, edição) -> id no espelho do cliente, None ou AMBIGUO
         self._criadas = set()               # tabelas de continuidade já garantidas no banco do cliente
+        self._fila = []                     # linhas novas com a gravação adiada (bloco), na ordem
+        self._adiando = self._esvaziando = False
+        self._adiar_linha = False           # a linha atual pode ser adiada (decidido em _tabela)
+        self._prox_id = {}                  # destino -> próximo id reservado no bloco
+        self._autoinc = {}                  # destino -> tem `id` autoincremento
         self._filho_pai = {}                # (dt, coluna, tabela do pai) -> [(id da filha, id esperado do pai)]
         self.chave_cofre = continuidade.chave_mestra()
 
@@ -694,11 +705,14 @@ class CargaMapa(carga.Carga):
 
     def _unicos_sem_caixa(self, dt):
         """Colunas de `dt` com índice único de uma coluna só e colação que não distingue caixa."""
-        rs = self._todas("SELECT s.INDEX_NAME, MIN(s.COLUMN_NAME), COUNT(*), MIN(c.COLLATION_NAME) FROM"
-                         " information_schema.STATISTICS s JOIN information_schema.COLUMNS c ON"
-                         " c.TABLE_SCHEMA=s.TABLE_SCHEMA AND c.TABLE_NAME=s.TABLE_NAME AND c.COLUMN_NAME=s.COLUMN_NAME"
-                         " WHERE s.TABLE_SCHEMA=DATABASE() AND s.TABLE_NAME=%s AND s.NON_UNIQUE=0"
-                         " GROUP BY s.INDEX_NAME", (dt,))
+        # duas consultas filtradas pela tabela (a junção das duas visões do information_schema levava ~2,5 s cada)
+        idx = {}
+        for nome, col in self._todas("SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS WHERE"
+                                     " TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND NON_UNIQUE=0", (dt,)):
+            idx.setdefault(nome, []).append(col)
+        colac = dict(self._todas("SELECT COLUMN_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE"
+                                 " TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s", (dt,)))
+        rs = [(nome, min(cols), len(cols), colac.get(min(cols))) for nome, cols in idx.items()]
         return {col for _, col, n, coll in rs if n == 1 and coll and not coll.endswith("_bin")
                 and "_cs" not in coll}
 
@@ -1606,6 +1620,10 @@ class CargaMapa(carga.Carga):
     def _linha_nova(self, tab, chave, entidade, h, fazer):
         """Como na carga própria, e também desfaz os contadores do Sincronizar da linha recusada por restrição (o
         resumo só conta atualização e conflito que ficaram no banco)."""
+        if self._adiar_linha:
+            return self._linha_adiada(tab, chave, entidade, h, fazer)
+        if self._fila:  # a linha linha a linha guarda índices de memória: o bloco é gravado antes
+            self._esvaziar()
         r = self.sinc_res
         marca = ({k: x for k, x in r.items() if isinstance(x, int)}, len(r["conflitos_itens"]))
         ids = super()._linha_nova(tab, chave, entidade, h, fazer)
@@ -1613,6 +1631,220 @@ class CargaMapa(carga.Carga):
             r.update(marca[0])
             del r["conflitos_itens"][marca[1]:]
         return ids
+
+    # ----- gravação em bloco (velocidade-carga, 2026-11-22) -----
+    # A linha NOVA simples (sem cabeçalho agrupado, adoção, complemento, provisório, Sincronizar ou padrão do
+    # destino) tem as inserções adiadas: id reservado em memória (MAX(id)+1 do destino), INSERT de várias linhas por
+    # tabela e `conector_origem` em lote no fim do bloco (antes de qualquer outra conversa com o banco e de todo
+    # commit), sob SAVEPOINT do bloco. Restrição do destino no bloco: ROLLBACK do bloco e o bloco refeito linha a
+    # linha, cada uma sob o SAVEPOINT dela; só a linha que falhar é desfeita (banco, memória, pendências e
+    # contadores) e recusada com `restricao_destino_<código>`, exatamente como na gravação linha a linha.
+    LOTE_SQL_LINHAS = 500
+    LOTE_SQL_BYTES = 4 << 20
+
+    def _c(self):
+        if self._fila and not self._esvaziando:
+            self._esvaziar()
+        return self.cr.cursor()
+
+    def _commit(self):
+        self._esvaziar()
+        if self._buf:  # INSERT de várias linhas (o executemany não junta linhas com a função de data no VALUES)
+            with self._c() as c:
+                self._sql_lote(c, "INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra,"
+                                  " gravidade, criado_em) VALUES " % self.ctl,
+                               "(%d, %%s, %%s, %%s, %%s, %s)" % (int(self.eid), AGORA), "", self._buf)
+            self._buf = []
+        super()._commit()
+
+    def _adiavel(self, p):
+        """A tabela pode ter linhas adiadas: destinos com `id` autoincremento, nenhum destino agrupado, adotado ou
+        complementado, e nenhuma menção à própria tabela nas colunas (autorreferência fica linha a linha)."""
+        t, ops = p["tabela"], p.get("opcoes") or {}
+        if os.environ.get("CONECTOR_SEM_LOTE") == "1":  # chave de segurança: volta à gravação linha a linha
+            return False
+        for dt in p["destinos"]:
+            op = ops.get(dt) or {}
+            if op.get("agrupar") or op.get("adotar") or op.get("complementa"):
+                return False
+            if dt not in self._autoinc:
+                with self.cr.cursor() as c:
+                    c.execute("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()"
+                              " AND TABLE_NAME=%s AND COLUMN_NAME='id' AND EXTRA LIKE '%%auto_increment%%'", (dt,))
+                    self._autoinc[dt] = bool(c.fetchone()[0])
+            if not self._autoinc[dt]:
+                return False
+        return not re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(t),
+                             json.dumps(p["colunas"], default=str))
+
+    def _inserir(self, tabela, valores):
+        if not self._adiando:
+            if self._fila:
+                self._esvaziar()
+            self._prox_id.pop(tabela, None)  # o autoincremento andou fora da reserva
+            return super()._inserir(tabela, valores)
+        if valores.get("id") is not None:
+            rid = valores["id"]
+        else:
+            if tabela not in self._prox_id:  # sem conversa pelo _c: a reserva não esvazia o bloco
+                with self.cr.cursor() as c:
+                    c.execute("SELECT COALESCE(MAX(id), 0) FROM `%s`" % tabela)
+                    self._prox_id[tabela] = int(c.fetchone()[0]) + 1
+            rid = self._prox_id[tabela]
+            valores = dict(valores, id=rid)
+        self._prox_id[tabela] = max(self._prox_id.get(tabela, 0), rid + 1)
+        cols = tuple(c for c in valores if c != "criado_em")
+        com_data = valores.get("criado_em") is not None
+        args = [valores[k] for k in cols] + ([valores["criado_em"]] if com_data else [])
+        self._fila[-1]["ins"].append((tabela, cols + ("criado_em",), com_data, args))
+        return rid
+
+    def _registrar(self, tab, chave, entidade, id_destino, h, hd=None, recusa=None):
+        if not self._adiando:
+            return super()._registrar(tab, chave, entidade, id_destino, h, hd, recusa)
+        regra, grav = recusa or (None, None)
+        self._fila[-1]["reg"].append((tab, chave, entidade, id_destino, h, hd, regra, grav, self.img))
+        t = self.existente.setdefault(tab, {})
+        self._diario.append((tab, chave, t.get(chave)))
+        t[chave] = (id_destino, h, hd, regra, grav)
+
+    def _linha_adiada(self, tab, chave, entidade, h, fazer):
+        rec = {"linha": (tab, chave, entidade, h), "ins": [], "reg": [], "origem": [], "adiadas": None,
+               "seq": len(self._fila),
+               "ini": (len(self._diario), len(self.pend), len(self._buf)), "cont": dict(self.cont)}
+        self._fila.append(rec)
+        self._adiando = True
+        try:
+            ids = fazer()
+        except BaseException:
+            self._fila.pop()
+            raise
+        finally:
+            self._adiando = False
+        rec["fim"] = (len(self._diario), len(self.pend), len(self._buf))
+        rec["dcont"] = {k: x - rec["cont"].get(k, 0) for k, x in self.cont.items()
+                        if isinstance(x, int) and x != rec["cont"].get(k, 0)}
+        del rec["cont"]
+        return ids
+
+    def _sql_lote(self, c, cab, tupla, fim, linhas):
+        """INSERT de várias linhas em pedaços (até LOTE_SQL_LINHAS linhas e cerca de LOTE_SQL_BYTES)."""
+        i = 0
+        while i < len(linhas):
+            j, tam = i, 0
+            while j < len(linhas) and j - i < self.LOTE_SQL_LINHAS and (j == i or tam < self.LOTE_SQL_BYTES):
+                tam += sum(len(x) for x in linhas[j] if isinstance(x, (bytes, str)))
+                j += 1
+            c.execute(cab + ",".join([tupla] * (j - i)) + fim, [x for a in linhas[i:j] for x in a])
+            if j - i > 1 and getattr(c._result, "warning_count", 0):
+                # no INSERT de várias linhas o MariaDB troca NULL em coluna NOT NULL pelo padrão implícito, com aviso
+                # (linha a linha é o erro 1048): todo aviso desfaz o lote, que é refeito até a linha sozinha
+                raise _AvisoNoLote()
+            i = j
+
+    def _sql_reg(self):
+        cab = ("INSERT INTO %s.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
+               " hash_linha, hash_destino, regra_recusa, gravidade_recusa, imagem_id, criado_em) VALUES " % self.ctl)
+        fim = (" ON DUPLICATE KEY UPDATE id_destino=VALUES(id_destino), hash_linha=VALUES(hash_linha),"
+               " hash_destino=VALUES(hash_destino), regra_recusa=VALUES(regra_recusa),"
+               " gravidade_recusa=VALUES(gravidade_recusa), imagem_id=VALUES(imagem_id), alterado_em=%s,"
+               " versao=versao+1" % AGORA)
+        return cab, "(%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%s)" % AGORA, fim
+
+    @staticmethod
+    def _sql_ins(tabela, cols, com_data):
+        return ("INSERT INTO `%s` (%s) VALUES " % (tabela, ", ".join("`%s`" % x for x in cols)),
+                "(%s)" % ", ".join(["%s"] * (len(cols) - 1) + ["%s" if com_data else AGORA]), "")
+
+    def _gravar_recs(self, c, recs, ordem, falhas, nivel):
+        """Grava as linhas adiadas `recs` sob um SAVEPOINT; restrição do destino: desfaz e divide ao meio, até chegar
+        a pedaços pequenos refeitos linha a linha (cada linha sob o SAVEPOINT dela, como na gravação sem bloco)."""
+        grupos = {}
+        for rec in recs:
+            for tabela, cols, com_data, args in rec["ins"]:
+                grupos.setdefault((tabela, cols, com_data), []).append(args)
+        reg = [a for rec in recs for a in rec["reg"]]
+        c.execute("SAVEPOINT bloco_conector_%d" % nivel)
+        try:
+            for (tabela, cols, com_data) in sorted(grupos, key=lambda k: ordem[k[0]]):
+                self._sql_lote(c, *self._sql_ins(tabela, cols, com_data), grupos[(tabela, cols, com_data)])
+            if reg:
+                self._sql_lote(c, *self._sql_reg(), reg)
+            if nivel == 0:
+                self.cont["blocos_gravados"] = self.cont.get("blocos_gravados", 0) + 1
+            return
+        except (pymysql.err.MySQLError, _AvisoNoLote) as e:
+            if not isinstance(e, _AvisoNoLote) and not (e.args and e.args[0] in carga.ERROS_LINHA):
+                raise
+            c.execute("ROLLBACK TO SAVEPOINT bloco_conector_%d" % nivel)
+        if nivel == 0:
+            self.cont["blocos_refeitos"] = self.cont.get("blocos_refeitos", 0) + 1
+        if len(recs) > 16:
+            meio = len(recs) // 2
+            self._gravar_recs(c, recs[:meio], ordem, falhas, nivel + 1)
+            self._gravar_recs(c, recs[meio:], ordem, falhas, nivel + 1)
+            return
+        sreg = self._sql_reg()
+        for rec in recs:  # linha a linha, como na gravação sem bloco
+            c.execute("SAVEPOINT linha_conector")
+            i = 0
+            try:
+                for i, (tabela, cols, com_data, args) in enumerate(rec["ins"]):
+                    cab, tupla, fim = self._sql_ins(tabela, cols, com_data)
+                    c.execute(cab + tupla, args)
+                i = len(rec["ins"])
+                if rec["reg"]:
+                    self._sql_lote(c, *sreg, rec["reg"])
+            except pymysql.err.MySQLError as e:
+                cod = e.args[0] if e.args and isinstance(e.args[0], int) else None
+                if cod not in carga.ERROS_LINHA:
+                    raise
+                c.execute("ROLLBACK TO SAVEPOINT linha_conector")
+                rec["falhou_em"] = i
+                falhas.append((rec, cod, rec["seq"]))
+
+    def _esvaziar(self):
+        """Grava o bloco adiado (`_gravar_recs`) e desfaz na memória só as linhas recusadas pela restrição do destino,
+        que ficam recusadas com `restricao_destino_<código>` como na gravação linha a linha."""
+        if not self._fila or self._esvaziando:
+            return
+        self._esvaziando = True
+        try:
+            fila, self._fila = self._fila, []
+            ordem = {}  # destinos na ordem da primeira inserção (pai antes do filho dentro da linha)
+            for rec in fila:
+                for tabela, _, _, _ in rec["ins"]:
+                    ordem.setdefault(tabela, len(ordem))
+            falhas, desfeitos = [], set()
+            with self.cr.cursor() as c:
+                self._gravar_recs(c, fila, ordem, falhas, 0)
+            falhas.sort(key=lambda x: x[2])
+            for rec, _, _ in reversed(falhas):  # desfaz a memória da linha; do fim para o começo, os índices valem
+                (d0, p0, b0), (d1, p1, b1) = rec["ini"], rec["fim"]
+                for t, k, ant in reversed(self._diario[d0:d1]):
+                    if ant is None:
+                        self.existente[t].pop(k, None)
+                    else:
+                        self.existente[t][k] = ant
+                del self._diario[d0:d1], self.pend[p0:p1], self._buf[b0:b1]
+                for k, x in rec["dcont"].items():
+                    self.cont[k] -= x
+                for ent, k in rec["origem"]:
+                    self.origem.get(ent, {}).pop(k, None)
+                if rec["adiadas"]:
+                    del self.adiadas[rec["adiadas"][0]:rec["adiadas"][1]]
+                desfeitos.update((tb, a[cols.index("id")]) for tb, cols, _, a in rec["ins"][rec["falhou_em"]:])
+            if desfeitos:  # filho -> pai como linha a linha: só fica o que chegou ao banco
+                for (dt, _, _), lst in self._filho_pai.items():
+                    lst[:] = [x for x in lst if (dt, x[0]) not in desfeitos]
+            for rec, cod, _ in falhas:
+                tab, chave, entidade, h = rec["linha"]
+                self.cont["recusas_por_restricao"] += 1
+                self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica")
+                self.prop.registrar(tab, chave, self.existente[tab][chave][3] or "recusada", "critica")
+            self._prox_id = {}
+        finally:
+            self._esvaziando = False
 
     def _gravar_ou_adotar(self, dt, v, adotar, complementa=False, maior=()):
         """(id, adotado): com `adotar`, a linha do destino que já tem as mesmas colunas (uma só) é adotada; com
@@ -1902,6 +2134,7 @@ class CargaMapa(carga.Carga):
         if suporta:
             sincronizar_mod.estado_destino(self, p, ents)
         blocos = {}
+        adiavel = self._adiavel(p)
         for linha, ch_sem in self._linhas_mapa(p):
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
@@ -1956,7 +2189,10 @@ class CargaMapa(carga.Carga):
                     self.cont["provisorios_nao_completados"] = self.cont.get("provisorios_nao_completados", 0) + 1
                     self.origem.setdefault(ents[0], {})[chave] = prov[2].hex() if prov[2] else "sem_resumo_gravado"
                     continue
-                self._recusar(t, chave, ents[0], h, *recusa)
+                if os.environ.get("CONECTOR_SEM_LOTE") == "1":
+                    self._recusar(t, chave, ents[0], h, *recusa)
+                else:  # o registro da recusa vai no lote do bloco (nenhuma inserção no destino)
+                    self._linha_adiada(t, chave, ents[0], h, lambda: self._recusar(t, chave, ents[0], h, *recusa))
                 self.prop.registrar(t, chave, *recusa)
                 continue
             for regra, g in pend:
@@ -2059,14 +2295,23 @@ class CargaMapa(carga.Carga):
                             b"".join(x[2] for x in hds if x[0] == ents[0])).digest())
                     ids[dt] = primeiro
                 return [ids.get(dt) for dt in dts]
-            ids = self._linha_nova(t, chave, ents[0], h, gravar)
+            self._adiar_linha = (adiavel and sit == "nova" and self._atualizar is None and completar is None
+                                 and not any(isinstance(x, _PADRAO) for dt in dts for _, cs in campos[dt] for x in cs))
+            try:
+                ids = self._linha_nova(t, chave, ents[0], h, gravar)
+            finally:
+                self._adiar_linha = False
             if ids:
                 self._cab.update(cabs)
                 for ent, k, hd in hds:
                     self.origem.setdefault(ent, {})[k] = hd.hex()
+                a0 = len(self.adiadas)
                 for dt, dc, ref, cpai in adiadas:
                     if ids[dts.index(dt)] is not None:
                         self.adiadas.append((dt, dc, ids[dts.index(dt)], ref, cpai, t, chave))
+                if self._fila and self._fila[-1]["linha"][:2] == (t, chave) and "fim" in self._fila[-1]:
+                    self._fila[-1]["origem"] = [(ent, k) for ent, k, _ in hds]
+                    self._fila[-1]["adiadas"] = (a0, len(self.adiadas))
             elif self._atualizar is not None:  # restrição ao reaplicar: a linha antiga fica, à espera da correção
                 a = self._atualizar
                 self._registrar(t, chave, ents[0], a[0], a[1], a[2])
