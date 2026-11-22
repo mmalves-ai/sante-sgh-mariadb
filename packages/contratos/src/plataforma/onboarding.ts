@@ -73,6 +73,78 @@ export const esquemaPendenciaResumo = z.object({
   quantidade: z.number().int(),
 });
 
+/** L10 (ADR 0007, item 22): relatório CURTO da execução. Só contagens, entidades de DESTINO e regras; nunca valores
+ * nem nome da origem. `decisao`: a quem cabe resolver (`cliente`, `plataforma`) ou `informativa`. */
+export const CLASSES_DECISAO_CONECTOR = ['cliente', 'plataforma', 'informativa'] as const;
+const gravidadeConector = z.enum(['critica', 'alta', 'media', 'baixa']);
+const inteiro = z.number().int();
+export const esquemaRelatorioConector = z.object({
+  versao: inteiro,
+  totais: z.object({
+    entidades: inteiro,
+    conferidas: inteiro,
+    registrosOrigem: inteiro,
+    registrosDestino: inteiro,
+    recusados: inteiro,
+    abertas: inteiro,
+    criticas: inteiro,
+    resolvidas: inteiro,
+    decisoesCliente: inteiro,
+  }),
+  porRegra: z.array(
+    z.object({
+      entidade: z.string(),
+      regra: z.string(),
+      gravidade: gravidadeConector,
+      abertas: inteiro,
+      resolvidas: inteiro,
+      decisao: z.enum(CLASSES_DECISAO_CONECTOR),
+      acao: z.string(),
+    }),
+  ),
+  decisoesCliente: z.array(
+    z.object({
+      regra: z.string(),
+      gravidade: gravidadeConector,
+      quantidade: inteiro,
+      entidades: inteiro,
+      acao: z.string(),
+    }),
+  ),
+  naoCarregado: z.object({
+    recusados: z.array(z.object({ entidade: z.string(), recusados: inteiro })),
+    semMapa: z.object({ tabelas: inteiro, registros: inteiro }),
+    bloqueadas: z.object({ tabelas: inteiro, registros: inteiro }),
+    semCarga: z.array(
+      z.object({
+        causa: z.string(),
+        tabelas: inteiro,
+        registros: inteiro,
+        provasConferidas: inteiro,
+        provasFalhas: inteiro,
+        semProva: inteiro,
+      }),
+    ),
+  }),
+  /** Prova de não copiar de cada tabela (ADR 0006, item 1), pelo destino onde a informação continua. */
+  provas: z.array(
+    z.object({
+      destino: z.string(),
+      causa: z.string(),
+      tipo: z.string(),
+      linhasOrigem: inteiro,
+      iguais: inteiro,
+      divergentes: inteiro,
+      faltandoNoDestino: inteiro,
+      sobrandoNoDestino: inteiro,
+      conferido: z.boolean(),
+    }),
+  ),
+  saidasExternas: inteiro,
+  redeSemRotaExterna: z.boolean().nullable(),
+});
+export type RelatorioConector = z.infer<typeof esquemaRelatorioConector>;
+
 export const esquemaExecucaoConector = z.object({
   id: z.number().int(),
   tipo: z.enum(TIPOS_EXECUCAO_CONECTOR),
@@ -108,6 +180,7 @@ export const esquemaExecucaoConector = z.object({
       ),
     })
     .nullish(),
+  relatorio: esquemaRelatorioConector.nullish(),
 });
 export type ExecucaoConector = z.infer<typeof esquemaExecucaoConector>;
 export const esquemaListaExecucoes = z.object({ execucoes: z.array(esquemaExecucaoConector) });

@@ -1045,7 +1045,7 @@ def carregar_execucao(d=None):
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
             "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
             "valores": ler_valores(d), "provas": ler_provas(d), "evidencia_origem": ler(EVIDENCIA_ORIGEM),
-            "sequencias": ler(SEQUENCIAS)}
+            "sequencias": ler(SEQUENCIAS), "sem_carga": ler("declarado/sem_carga.tsv")}
 
 
 # L9 (F4.7): generator da origem -> `sequencia_negocio.tipo` (o Sincronizar avança a sequência própria, nunca recua)

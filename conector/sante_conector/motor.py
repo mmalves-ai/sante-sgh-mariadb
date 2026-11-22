@@ -18,7 +18,7 @@ import time
 
 import pymysql
 
-from . import banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma
+from . import banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma, relatorio
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -33,11 +33,28 @@ def soma_controle(contagens):
     return hashlib.sha256(txt.encode()).hexdigest()
 
 
+def _relatorio(eid, usuario, rel, cont, mapa_exec):
+    """L10: relatório curto da execução (ADR 0007, item 22) em `contadores.relatorio`: pendências abertas, críticas e
+    resolvidas por entidade e regra, o que não carregou, a prova de não copiar e as decisões do cliente."""
+    if not rel.get("senha"):
+        return
+    contagens = rel.get("contagens") or {}
+    cr = banco.conectar(rel["ctl"], usuario=usuario, senha=rel["senha"], autocommit=False)
+    try:
+        cont["relatorio"] = relatorio.gerar(
+            cr, rel["ctl"], eid, rel.get("entidades") or {}, contagens=contagens, plano=rel.get("plano") or (),
+            carga_propria=[t for t in contagens if t in carga.MAPA], mapa_exec=mapa_exec,
+            provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"))
+    finally:
+        cr.close()
+
+
 def executar(trab, eid):
     """Roda a execução `eid` já reivindicada (estado `abrindo`) por `trab`. Nunca levanta: termina em estado final."""
     conn = trab.conn
-    usuario = host = None
+    usuario = host = mapa_exec = None
     cont = {}
+    rel = {}  # o que o relatório de conciliação (L10) precisa, preenchido ao longo da execução
     try:
         ex = plataforma.consultar(conn, eid)
         cont["disco"] = disco.verificar(ex["tipo"], ex["origem_tamanho"])
@@ -54,6 +71,7 @@ def executar(trab, eid):
         host = controle.host_do_motor(conn)
         usuario = "sscon_e%d_%s" % (eid, banco.ficha_plataforma())
         senha = controle.criar_usuario(conn, usuario, ex["banco_nome"], ctl, host)
+        rel.update(ctl=ctl, senha=senha)
         nome_ab = "e%d-%s" % (eid, banco.ficha_plataforma())
         with abrir_remoto(origem["relativo"], nome_ab) as ab:
             plataforma.mudar_estado(conn, eid, "lendo", etapa="contando as tabelas da origem", percentual=5,
@@ -70,6 +88,7 @@ def executar(trab, eid):
                                              dict(cont, tabelas_lidas=i, tabelas_total=len(tabelas),
                                                   registros_lidos=sum(contagens.values())))
                 somente_leitura = lt.somente_leitura()
+                rel["contagens"] = contagens
                 generators = len(lt.generators())
             # fonte independente, no mesmo snapshot, com o leitor fechado (o embarcado não divide o arquivo)
             plataforma.progresso(conn, eid, 60, "confrontando com o gstat")
@@ -126,6 +145,7 @@ def executar(trab, eid):
             # L3: carga das entidades do mapa (mesmo snapshot; leitor reaberto depois do gstat), pelo usuário restrito
             # L5 a L8: carga dirigida pelo mapa (tabelas com colunas declaradas), depois do L3, mesmo snapshot
             plano = carga_mapa.planejar(mapa_exec, set(tabelas))
+            rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
                 try:
@@ -154,6 +174,8 @@ def executar(trab, eid):
                                 pr["por_regra"][k] = pr["por_regra"].get(k, 0) + n
                             resumo["carga"]["mapa"] = rm["carga"]
                             cont["sincronizar"] = rm["sincronizar"]  # L9: contagens, conflitos (sem valores), alertas
+                            rel["provas"] = rm.get("provas") or {}
+                        rel["entidades"] = resumo["entidades"]
                 finally:
                     cc.close()
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",
@@ -175,6 +197,7 @@ def executar(trab, eid):
             n = cont["tabelas_sem_mapa"]["tabelas"]
             pend["total"] = pend.get("total", 0) + n
             pend.setdefault("por_regra", {})["imagem:tabela_sem_mapa:alta"] = n
+        _relatorio(eid, usuario, rel, cont, mapa_exec)
         plataforma.mudar_estado(conn, eid, "conciliando", etapa="conferindo contagens e o arquivo", percentual=95,
                                 contadores=cont)
         plataforma.progresso(conn, eid, 97, "conferindo o arquivo de origem (sha256, tamanho e mtime)")
@@ -192,6 +215,11 @@ def executar(trab, eid):
             motivo += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
         if isinstance(e, pymysql.err.MySQLError):  # a mensagem do servidor pode citar valores ("Duplicate entry ...")
             motivo = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
+        if "relatorio" not in cont:  # a execução que falha também deixa o relatório do que chegou a fazer
+            try:
+                _relatorio(eid, usuario, rel, cont, mapa_exec)
+            except Exception:  # noqa: BLE001 - o motivo da falha original é o que importa
+                pass
         try:
             plataforma.mudar_estado(conn, eid, "falhou", etapa="falhou", motivo=motivo, contadores=cont or None)
         except plataforma.PlataformaErro:

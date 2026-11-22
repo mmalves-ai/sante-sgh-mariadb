@@ -59,6 +59,19 @@ export const listarExecucoes = (codigo: string): Promise<ListaExecucoes> =>
 export const lerExecucao = (codigo: string, id: number): Promise<ExecucaoConector> =>
   pedir('GET', `${B}/clientes/${encodeURIComponent(codigo)}/execucoes/${id}`, esquemaExecucaoConector);
 
+/** L10: endereço da exportação do relatório (CSV), com o filtro por entidade e regra da tela. */
+export function urlRelatorioCsv(
+  codigo: string,
+  id: number,
+  filtro: { entidade?: string; regra?: string } = {},
+): string {
+  const q = new URLSearchParams();
+  if (filtro.entidade) q.set('entidade', filtro.entidade);
+  if (filtro.regra) q.set('regra', filtro.regra);
+  const qs = q.toString();
+  return `${B}/clientes/${encodeURIComponent(codigo)}/execucoes/${id}/relatorio.csv${qs ? `?${qs}` : ''}`;
+}
+
 /** A execução ainda está na fila ou rodando (a tela acompanha o progresso). */
 export const execucaoAtiva = (e: ExecucaoConector | null | undefined): boolean =>
   !!e && ESTADOS_EXECUCAO_ATIVOS.includes(e.estado);

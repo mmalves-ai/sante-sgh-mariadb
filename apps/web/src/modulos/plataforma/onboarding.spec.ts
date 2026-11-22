@@ -67,3 +67,15 @@ describe('api do painel de onboarding', () => {
     expect(tamanhoLegivel(null)).toBe('—');
   });
 });
+
+describe('relatório de conciliação (L10)', () => {
+  it('monta o endereço da exportação com o filtro', async () => {
+    const { urlRelatorioCsv } = await import('./api-onboarding.js');
+    expect(urlRelatorioCsv('cli_1', 7)).toBe(
+      '/api/plataforma/onboarding/clientes/cli_1/execucoes/7/relatorio.csv',
+    );
+    expect(urlRelatorioCsv('cli_1', 7, { entidade: 'paciente', regra: 'cpf_duplicado' })).toBe(
+      '/api/plataforma/onboarding/clientes/cli_1/execucoes/7/relatorio.csv?entidade=paciente&regra=cpf_duplicado',
+    );
+  });
+});

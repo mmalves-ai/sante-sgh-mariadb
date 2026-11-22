@@ -18,6 +18,7 @@ import {
   tamanhoLegivel,
   vincularOrigem,
 } from '../api-onboarding.js';
+import RelatorioExecucao from './RelatorioExecucao.vue';
 
 const { t, te } = useI18n();
 const clientes = ref<ClienteOnboarding[] | null>(null);
@@ -377,6 +378,7 @@ onBeforeUnmount(parar);
             </tbody>
           </table>
         </template>
+        <RelatorioExecucao :codigo="cliente.codigo" :execucao="execucao" />
       </section>
       <table v-if="historico.length" class="tabela" data-testid="onb-historico">
         <caption>

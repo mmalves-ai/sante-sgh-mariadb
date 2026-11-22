@@ -2298,3 +2298,26 @@ TBCID10 lida pela L6-15).
   dicionário de generators da imagem real (metadado, `conector_generator` já guarda todos a cada execução) e é
   declarada quando o conferidor apontar um. O ajuste avança TODA sequência do tipo (global, por estabelecimento ou por
   prefixo), nunca recua; generator ilegível deixa a pendência `generators_ilegiveis_<erro>` (antes: silêncio).
+
+## L10 Conciliação e relatório (rodada 6, 2026-11-22): decisões pela melhor prática
+- **Relatório curto em toda execução** (ADR 0007, item 22): `conector/sante_conector/relatorio.py`, gravado pelo motor em
+  `conector_execucao.contadores.relatorio` (sem migração nova da plataforma), também na execução que falha (o que
+  chegou a fazer). Conteúdo: totais, pendências por entidade/regra/gravidade (abertas e resolvidas), decisões do
+  cliente, o que não carregou (recusados por entidade, tabelas fora do mapa, tabelas com linhas sem carga declarada,
+  não copiadas por causa) e a prova de não copiar de cada tabela. Nada de linha a linha nem de valores.
+- **Pendência resolvida = não repetida.** Cada execução detecta de novo; a pendência aberta de execução anterior do
+  mesmo cliente que esta não repetiu (mesma tabela, chave e regra) vira `resolvida`, com `resolvida_execucao_id`
+  (base de controle). A resolvida conta uma vez por tabela, chave e regra, mesmo aberta em várias execuções. A ação
+  manual "dar por resolvida" no painel fica para depois (não pedida no L10).
+- **Quem decide** (`cliente`, `plataforma`, `informativa`), por regra: as da plataforma são de mapa, catálogo
+  oficial, espelho, cofre, armazenamento e prova; gravidade baixa é informativa (salvo as do Sincronizar, que o
+  cliente aciona); `pai_pendente` é informativa (resolve-se pela raiz); o resto pede decisão do cliente ("corrigir na
+  origem e Sincronizar, ou corrigir no destino"). Lista em `relatorio.PLATAFORMA`/`CLIENTE`.
+- **Nada de nome da origem no painel** (regra 1): a pendência de tabela fora do plano é atribuída à entidade principal
+  da tabela; a da prova, a `prova:<destino>`, com o destino tirado das tabelas que o SQL da prova lê (sem a base de
+  controle); fora do mapa, à entidade `imagem`. O nome da origem fica só na base de controle, para o diagnóstico.
+- **Saídas externas = 0:** o motor não tem cliente de rede externa (zero por construção) e confere, em cada execução,
+  que o container não tem rota padrão (`redeSemRotaExterna`, rede Docker `--internal`).
+- **Exportação:** CSV (`;`, UTF-8 com BOM) em `GET /plataforma/onboarding/clientes/:codigo/execucoes/:id/relatorio.csv`,
+  com o mesmo filtro por entidade e regra da tela; célula iniciada por `= + - @` vai com apóstrofo (injeção de
+  fórmula).

@@ -23,9 +23,13 @@ import { ServicoOnboarding } from './servico.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
-const BANCO = 'plataforma_teste_onboarding';
-const CLIENTE = 'exemplo_l3';
-const ORIGENS = resolve(RAIZ, '.tmp/conector/origens-l3-e2e');
+// banco plataforma e cliente de teste trocáveis por agente (banco exclusivo de cada um; ex.: o L10 usa f4r6_l10)
+const BANCO = process.env['ONBOARDING_E2E_PLATAFORMA'] ?? 'plataforma_teste_onboarding';
+const CLIENTE = process.env['ONBOARDING_E2E_CLIENTE'] ?? 'exemplo_l3';
+const ORIGENS = resolve(
+  RAIZ,
+  CLIENTE === 'exemplo_l3' ? '.tmp/conector/origens-l3-e2e' : `.tmp/conector/origens-${CLIENTE}-e2e`,
+);
 const ARQUIVO = 'exemplo-l3.fdb';
 const FICHA = createHash('sha1').update(BANCO).digest('hex').slice(0, 6);
 const ENV_CONECTOR = {
@@ -113,10 +117,14 @@ describe.skipIf(SEM_BANCO)(
       const adm = valor(BANCO, 'SELECT MAX(id) FROM administrador_plataforma');
       req = { sgh: { sessao: { usuario: { id: `plataforma:${adm}`, ator: 'plataforma' } } } } as never;
       mkdirSync(ORIGENS, { recursive: true });
-      execFileSync(resolve(RAIZ, 'conector/conector.sh'), ['sintetica', `/saida/${ARQUIVO}`, '--mapa', '--fatias', 'lotes'], {
-        env: ENV_CONECTOR,
-        stdio: ['ignore', 'ignore', 'pipe'],
-      });
+      execFileSync(
+        resolve(RAIZ, 'conector/conector.sh'),
+        ['sintetica', `/saida/${ARQUIVO}`, '--mapa', '--fatias', 'lotes'],
+        {
+          env: ENV_CONECTOR,
+          stdio: ['ignore', 'ignore', 'pipe'],
+        },
+      );
       manifesto = JSON.parse(readFileSync(resolve(ORIGENS, 'exemplo-l3.manifesto.json'), 'utf8'));
       shaAntes = sha256(resolve(ORIGENS, ARQUIVO));
       nucleo = new NucleoProprio({ env: { ...ambienteEfetivo().env, SGH_BANCO_PLATAFORMA: BANCO } });
@@ -228,12 +236,20 @@ describe.skipIf(SEM_BANCO)(
       expect(regra('login_duplicado')).toBe(2); // 'JOÃO SILVA' = 'joao.silva' na collation do destino
       expect(regra('cnes_duplicado')).toBe(1);
       // tabelas do cliente de exemplo com linhas e fora do mapa: pendência tabela_sem_mapa (nunca ignoradas em silêncio)
-      const foraDoMapa = Object.entries(manifesto.contagens).filter(([t, n]) => t.startsWith('EX_') && n > 0).length;
+      const foraDoMapa = Object.entries(manifesto.contagens).filter(
+        ([t, n]) => t.startsWith('EX_') && n > 0,
+      ).length;
       expect(foraDoMapa).toBeGreaterThan(0);
       expect(regra('tabela_sem_mapa')).toBe(foraDoMapa);
       // toda linha recusada tem a regra gravada com ela e uma pendência desta execução
-      expect(valor(ctl, `SELECT COUNT(*) FROM conector_origem WHERE id_destino IS NULL AND tabela_origem<>'TBTPEMP' AND regra_recusa IS NULL`)).toBe(0);
+      expect(
+        valor(
+          ctl,
+          `SELECT COUNT(*) FROM conector_origem WHERE id_destino IS NULL AND tabela_origem<>'TBTPEMP' AND regra_recusa IS NULL`,
+        ),
+      ).toBe(0);
       expect(semPendencia(execucao)).toBe(0);
+      await conferirRelatorio(c, req, final, manifesto.contagens, foraDoMapa);
       expect(sha256(resolve(ORIGENS, ARQUIVO))).toBe(shaAntes);
     }, 900_000);
 
@@ -265,9 +281,31 @@ describe.skipIf(SEM_BANCO)(
       expect(regra('edicao_no_destino')).toBe(1);
       expect(regra('prontuario_duplicado')).toBe(1); // a recusa reaparece com a regra em toda execução
       expect(semPendencia(execucao)).toBe(0);
+      // L10: o relatório do Sincronizar traz a edição do destino como decisão do cliente e a resolução confere
+      const rel = await conferirRelatorio(c, req, final, manifesto.contagens, null);
+      expect(rel.decisoesCliente.map((d) => d.regra)).toContain('edicao_no_destino');
+      expect(
+        valor(
+          ctl,
+          `SELECT COUNT(*) FROM pendencia p WHERE p.execucao_id<${execucao} AND p.situacao='aberta'
+            AND NOT EXISTS (SELECT 1 FROM pendencia n WHERE n.execucao_id=${execucao}
+                            AND n.tabela_origem=p.tabela_origem AND n.regra=p.regra
+                            AND n.chave_original <=> p.chave_original)`,
+        ),
+      ).toBe(0);
+      expect(
+        valor(
+          ctl,
+          `SELECT COUNT(DISTINCT tabela_origem, regra, COALESCE(chave_original,'')) FROM pendencia
+            WHERE resolvida_execucao_id=${execucao}`,
+        ),
+      ).toBe(rel.totais.resolvidas);
       // o hash guardado da linha alterada NÃO é sobrescrito: o Sincronizar do L9 ainda a detecta
       expect(
-        valor(ctl, `SELECT COUNT(*) FROM conector_origem WHERE hash_linha=UNHEX(REPEAT('00',16)) AND tabela_origem IN ('RICADPAC','REALTA')`),
+        valor(
+          ctl,
+          `SELECT COUNT(*) FROM conector_origem WHERE hash_linha=UNHEX(REPEAT('00',16)) AND tabela_origem IN ('RICADPAC','REALTA')`,
+        ),
       ).toBe(2);
       expect(valor(b, `SELECT COUNT(*) FROM paciente WHERE origem = 'migracao'`)).toBe(
         manifesto.esperado_destino['paciente'],
@@ -281,6 +319,55 @@ describe.skipIf(SEM_BANCO)(
     }, 900_000);
   },
 );
+
+/** L10: relatório curto da execução, coerente com a conciliação, sem nome da origem, filtrável e exportável. */
+async function conferirRelatorio(
+  c: OnboardingController,
+  req: RequisicaoAutorizada,
+  final: ExecucaoConector,
+  contagens: Record<string, number>,
+  foraDoMapa: number | null,
+): Promise<NonNullable<ExecucaoConector['relatorio']>> {
+  const rel = final.relatorio;
+  expect(rel, 'relatório da execução').toBeTruthy();
+  if (!rel) throw new Error('sem relatório');
+  expect(rel.totais.entidades).toBe(final.entidades.length);
+  expect(rel.totais.conferidas).toBe(final.entidades.length);
+  expect(rel.totais.recusados).toBe(final.entidades.reduce((a, e) => a + e.recusados, 0));
+  expect(rel.totais.abertas).toBe(rel.porRegra.reduce((a, p) => a + p.abertas, 0));
+  expect(rel.totais.abertas).toBeGreaterThanOrEqual(final.pendencias.total);
+  expect(rel.totais.criticas).toBeGreaterThanOrEqual(final.pendencias.criticas);
+  expect(rel.totais.decisoesCliente).toBe(rel.decisoesCliente.reduce((a, d) => a + d.quantidade, 0));
+  expect(rel.saidasExternas).toBe(0);
+  expect(rel.redeSemRotaExterna).toBe(true);
+  if (foraDoMapa !== null) {
+    expect(rel.totais.resolvidas).toBe(0); // primeira execução do cliente
+    expect(rel.naoCarregado.semMapa.tabelas).toBe(foraDoMapa);
+  }
+  // prova de não copiar: a que não confere aparece como pendência prova_nao_conferida (alta, plataforma), nunca some
+  const falhas = rel.provas.filter((p) => !p.conferido);
+  const pendProva = rel.porRegra.filter((p) => p.regra === 'prova_nao_conferida');
+  expect(pendProva.reduce((a, p) => a + p.abertas, 0)).toBe(falhas.length);
+  expect(pendProva.every((p) => p.decisao === 'plataforma')).toBe(true);
+  // nada de nome da origem no relatório (regra 1): nenhuma tabela da imagem aparece como texto
+  const texto = JSON.stringify(rel);
+  for (const t of Object.keys(contagens)) expect(texto, t).not.toContain(`"${t}"`);
+  // filtro por entidade e regra, e a exportação em CSV com o mesmo filtro
+  const ent = rel.porRegra.find((p) => p.entidade !== 'imagem')?.entidade;
+  if (ent) {
+    const f = await c.relatorio(req, CLIENTE, String(final.id), ent, undefined);
+    expect(f.relatorio?.porRegra.every((p) => p.entidade === ent)).toBe(true);
+    expect(f.entidades.every((e) => e.entidade === ent)).toBe(true);
+    const linhas = (await c.relatorioCsv(req, CLIENTE, String(final.id), ent, undefined)).split('\r\n');
+    expect(
+      linhas.filter((l) => l.startsWith('pendencia;')).every((l) => l.startsWith(`pendencia;${ent};`)),
+    ).toBe(true);
+  }
+  const csv = await c.relatorioCsv(req, CLIENTE, String(final.id), undefined, undefined);
+  expect(csv).toContain(`totais;${rel.totais.entidades};${rel.totais.conferidas};`);
+  expect(csv.split('\r\n').filter((l) => l.startsWith('entidade;')).length).toBe(final.entidades.length);
+  return rel;
+}
 
 /** Linhas recusadas (fora o de-para sem destino) sem pendência na execução `eid`: tem de ser 0. */
 function semPendencia(eid: number): number {
