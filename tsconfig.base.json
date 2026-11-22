@@ -27,6 +27,7 @@
       "@sgh/dominio-financeiro": ["./packages/dominio-financeiro/src/index.ts"],
       "@sgh/legado": ["./packages/legado/src/index.ts"],
       "@sgh/nucleo": ["./packages/nucleo/src/index.ts"],
+      "@sgh/nucleo/duble-banco": ["./packages/nucleo/src/duble-banco.spec-util.ts"],
       "@sgh/persistencia-contabil": ["./packages/persistencia-contabil/src/index.ts"],
       "@sgh/persistencia": ["./packages/persistencia/src/index.ts"],
       "@sgh/legado/nativo": ["./packages/legado/src/nucleo/driver-nativo.ts"],

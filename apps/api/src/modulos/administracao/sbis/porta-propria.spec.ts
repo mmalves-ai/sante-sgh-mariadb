@@ -6,7 +6,7 @@
 import { REQUISITOS_SBIS } from '@sgh/contratos';
 import { ErroOperacao, Executor, lerSomente } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { BancoDuble, CONFIG_TESTE } from '../../../../../../packages/nucleo/src/duble-banco.spec-util.js';
+import { BancoDuble, CONFIG_TESTE } from '@sgh/nucleo/duble-banco';
 import type { TrilhaSbis } from './porta.js';
 import { type NucleoSbis, PortaSbisPropria } from './porta-propria.js';
 
@@ -67,15 +67,25 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
     expect(aberto?.parametros).toEqual([EST, 'autoavaliacao']);
     expect(aberto?.sql).toMatch(/FOR UPDATE/);
     const [ciclo] = b.que(/^INSERT INTO ciclo_certificacao \(/);
-    expect(ciclo?.parametros).toEqual(expect.arrayContaining([EST, 'autoavaliacao', '2026-11', '1.0.0', 'aberto', USU]));
+    expect(ciclo?.parametros).toEqual(
+      expect.arrayContaining([EST, 'autoavaliacao', '2026-11', '1.0.0', 'aberto', USU]),
+    );
     const itens = b.que(/^INSERT INTO ciclo_certificacao_item \(/);
     expect(itens).toHaveLength(requisitos.length);
-    for (const [n, i] of itens.entries()) expect(i.parametros).toEqual(expect.arrayContaining([100, requisitos[n], 'pendente']));
+    for (const [n, i] of itens.entries())
+      expect(i.parametros).toEqual(expect.arrayContaining([100, requisitos[n], 'pendente']));
     const [t] = b.que(/^INSERT INTO trilha_auditoria/);
-    expect(t?.parametros).toEqual(expect.arrayContaining([EST, USU, 'ciclo_certificacao', 100, 'unidade-abrir']));
+    expect(t?.parametros).toEqual(
+      expect.arrayContaining([EST, USU, 'ciclo_certificacao', 100, 'unidade-abrir']),
+    );
     expect(String(t?.parametros[7])).toContain('"evento":"teste.sbis"');
     const [idem] = b.que(/^INSERT INTO idempotencia_operacao/);
-    expect(idem?.parametros.slice(0, 4)).toEqual(['auditoria.sbis.abrir-ciclo', 'chave-abrir-0001', EST, USU]);
+    expect(idem?.parametros.slice(0, 4)).toEqual([
+      'auditoria.sbis.abrir-ciclo',
+      'chave-abrir-0001',
+      EST,
+      USU,
+    ]);
     expect(b.estados).toContain('confirmar');
   });
 
@@ -88,10 +98,17 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
 
   it('avaliar: o item do ciclo aberto do estabelecimento, travado, gravado pela versão', async () => {
     const { b, porta } = montar();
-    b.quando(ITEM, [{ id: 11, versao: 2, resultado: 'pendente', situacao_correcao: null, corrigido_por_usuario_id: null }]);
+    b.quando(ITEM, [
+      { id: 11, versao: 2, resultado: 'pendente', situacao_correcao: null, corrigido_por_usuario_id: null },
+    ]);
     const ok = await porta.avaliar(
       'h1',
-      { idCiclo: '5', requisito: 'R1', por: 'SINT.AUDITOR', pedido: { resultado: 'nao-conforme', severidade: 'bloqueante', origem: 'defeito' } },
+      {
+        idCiclo: '5',
+        requisito: 'R1',
+        por: 'SINT.AUDITOR',
+        pedido: { resultado: 'nao-conforme', severidade: 'bloqueante', origem: 'defeito' },
+      },
       trilha('avaliar'),
     );
     expect(ok).toBe(true);
@@ -101,19 +118,33 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
     const [u] = b.que(/^UPDATE ciclo_certificacao_item SET/);
     expect(u?.sql).toMatch(/WHERE id = \? AND versao = \?$/);
     expect(u?.parametros.slice(-2)).toEqual([11, 2]);
-    expect(u?.parametros).toEqual(expect.arrayContaining(['nao_conforme', 'bloqueante', 'defeito', 'aberta', USU]));
+    expect(u?.parametros).toEqual(
+      expect.arrayContaining(['nao_conforme', 'bloqueante', 'defeito', 'aberta', USU]),
+    );
     expect(b.que(/^INSERT INTO trilha_auditoria/)).toHaveLength(1);
   });
 
   it('avaliar: NC sem correção verificada, ou item de outro estabelecimento (não achado), é recusado sem trilha', async () => {
     for (const linhas of [
-      [{ id: 11, versao: 2, resultado: 'nao_conforme', situacao_correcao: 'corrigida', corrigido_por_usuario_id: USU }],
+      [
+        {
+          id: 11,
+          versao: 2,
+          resultado: 'nao_conforme',
+          situacao_correcao: 'corrigida',
+          corrigido_por_usuario_id: USU,
+        },
+      ],
       [],
     ]) {
       const { b, porta } = montar();
       b.quando(ITEM, linhas);
       expect(
-        await porta.avaliar('h1', { idCiclo: '5', requisito: 'R1', por: 'x', pedido: { resultado: 'conforme' } }, trilha('avaliar')),
+        await porta.avaliar(
+          'h1',
+          { idCiclo: '5', requisito: 'R1', por: 'x', pedido: { resultado: 'conforme' } },
+          trilha('avaliar'),
+        ),
       ).toBe(false);
       nadaGravado(b);
     }
@@ -121,11 +152,17 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
 
   it('avaliar: conflito de versão chega com o código do núcleo e desfaz', async () => {
     const { b, porta } = montar();
-    b.quando(ITEM, [{ id: 11, versao: 2, resultado: 'pendente', situacao_correcao: null, corrigido_por_usuario_id: null }]);
+    b.quando(ITEM, [
+      { id: 11, versao: 2, resultado: 'pendente', situacao_correcao: null, corrigido_por_usuario_id: null },
+    ]);
     b.quando(/^UPDATE ciclo_certificacao_item/, { affectedRows: 0, insertId: 0 });
     b.quando(/^SELECT versao FROM ciclo_certificacao_item WHERE id = \?/, [{ versao: 3 }]);
     const e = await porta
-      .avaliar('h1', { idCiclo: '5', requisito: 'R1', por: 'x', pedido: { resultado: 'conforme' } }, trilha('avaliar'))
+      .avaliar(
+        'h1',
+        { idCiclo: '5', requisito: 'R1', por: 'x', pedido: { resultado: 'conforme' } },
+        trilha('avaliar'),
+      )
       .catch((x: unknown) => x);
     expect(e).toBeInstanceOf(ErroOperacao);
     expect((e as ErroOperacao).problema.codigo).toBe('conflito-versao');
@@ -136,29 +173,62 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
   it('corrigir: só NC com correção aberta; verificar: nunca quem corrigiu', async () => {
     const corr = { idCiclo: '5', requisito: 'R1', por: 'x', descricao: 'Correção sintética' };
     const m1 = montar();
-    m1.b.quando(ITEM, [{ id: 11, versao: 2, resultado: 'nao_conforme', situacao_correcao: 'aberta', corrigido_por_usuario_id: null }]);
+    m1.b.quando(ITEM, [
+      {
+        id: 11,
+        versao: 2,
+        resultado: 'nao_conforme',
+        situacao_correcao: 'aberta',
+        corrigido_por_usuario_id: null,
+      },
+    ]);
     expect(await m1.porta.corrigir('h1', corr, trilha('corrigir'))).toBe(true);
     expect(m1.b.que(/^UPDATE ciclo_certificacao_item/)[0]?.parametros).toEqual(
       expect.arrayContaining(['corrigida', 'Correção sintética', USU]),
     );
     const m2 = montar();
-    m2.b.quando(ITEM, [{ id: 11, versao: 2, resultado: 'conforme', situacao_correcao: null, corrigido_por_usuario_id: null }]);
+    m2.b.quando(ITEM, [
+      { id: 11, versao: 2, resultado: 'conforme', situacao_correcao: null, corrigido_por_usuario_id: null },
+    ]);
     expect(await m2.porta.corrigir('h1', corr, trilha('corrigir'))).toBe(false);
     nadaGravado(m2.b);
-    const corrigido = [{ id: 11, versao: 3, resultado: 'nao_conforme', situacao_correcao: 'corrigida', corrigido_por_usuario_id: USU }];
+    const corrigido = [
+      {
+        id: 11,
+        versao: 3,
+        resultado: 'nao_conforme',
+        situacao_correcao: 'corrigida',
+        corrigido_por_usuario_id: USU,
+      },
+    ];
     const m3 = montar();
     m3.b.quando(ITEM, corrigido);
-    expect(await m3.porta.verificar('h1', { idCiclo: '5', requisito: 'R1', por: 'x' }, trilha('verificar'))).toBe(false);
+    expect(
+      await m3.porta.verificar('h1', { idCiclo: '5', requisito: 'R1', por: 'x' }, trilha('verificar')),
+    ).toBe(false);
     nadaGravado(m3.b);
     const m4 = montar(OUTRO);
     m4.b.quando(ITEM, corrigido);
-    expect(await m4.porta.verificar('h1', { idCiclo: '5', requisito: 'R1', por: 'y' }, trilha('verificar'))).toBe(true);
-    expect(m4.b.que(/^UPDATE ciclo_certificacao_item/)[0]?.parametros).toEqual(expect.arrayContaining(['verificada', OUTRO]));
+    expect(
+      await m4.porta.verificar('h1', { idCiclo: '5', requisito: 'R1', por: 'y' }, trilha('verificar')),
+    ).toBe(true);
+    expect(m4.b.que(/^UPDATE ciclo_certificacao_item/)[0]?.parametros).toEqual(
+      expect.arrayContaining(['verificada', OUTRO]),
+    );
   });
 
   it('concluir: pendente ou bloqueante sem verificação recusam sem trilha; senão grava o parecer', async () => {
-    const pedido = { id: '5', parecer: 'apto' as const, parecerTexto: 'Parecer sintético', certificado: null, por: 'x' };
-    for (const conta of [{ pendentes: 1, bloqueantes: 0 }, { pendentes: 0, bloqueantes: 1 }]) {
+    const pedido = {
+      id: '5',
+      parecer: 'apto' as const,
+      parecerTexto: 'Parecer sintético',
+      certificado: null,
+      por: 'x',
+    };
+    for (const conta of [
+      { pendentes: 1, bloqueantes: 0 },
+      { pendentes: 0, bloqueantes: 1 },
+    ]) {
       const { b, porta } = montar();
       b.quando(CICLO, [{ id: 5, versao: 4 }]);
       b.quando(/SUM\(resultado = 'pendente'\)/, [conta]);
@@ -173,16 +243,22 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
     const [u] = b.que(/^UPDATE ciclo_certificacao SET/);
     expect(u?.parametros).toEqual(expect.arrayContaining(['concluido', 'apto', 'Parecer sintético', USU]));
     expect(u?.parametros.slice(-2)).toEqual([5, 4]);
-    expect(b.que(/^INSERT INTO trilha_auditoria/)[0]?.parametros).toEqual(expect.arrayContaining(['Parecer sintético']));
+    expect(b.que(/^INSERT INTO trilha_auditoria/)[0]?.parametros).toEqual(
+      expect.arrayContaining(['Parecer sintético']),
+    );
   });
 
   it('cancelar: ciclo fechado ou de outro estabelecimento recusa sem trilha; aberto grava o motivo', async () => {
     const m1 = montar();
-    expect(await m1.porta.cancelar('h1', { id: '5', motivo: 'Motivo sintético', por: 'x' }, trilha('cancelar'))).toBe(false);
+    expect(
+      await m1.porta.cancelar('h1', { id: '5', motivo: 'Motivo sintético', por: 'x' }, trilha('cancelar')),
+    ).toBe(false);
     nadaGravado(m1.b);
     const m2 = montar();
     m2.b.quando(CICLO, [{ id: 5, versao: 1 }]);
-    expect(await m2.porta.cancelar('h1', { id: '5', motivo: 'Motivo sintético', por: 'x' }, trilha('cancelar'))).toBe(true);
+    expect(
+      await m2.porta.cancelar('h1', { id: '5', motivo: 'Motivo sintético', por: 'x' }, trilha('cancelar')),
+    ).toBe(true);
     expect(m2.b.que(/^UPDATE ciclo_certificacao SET/)[0]?.parametros).toEqual(
       expect.arrayContaining(['cancelado', 'Motivo sintético', USU]),
     );
@@ -204,7 +280,14 @@ describe('PortaSbisPropria sobre o dublê do núcleo', () => {
     expect(idem?.parametros[1]).toBe('chave-reenvio-0001');
     b.quando(/FROM idempotencia_operacao WHERE operacao = \? AND chave = \?/, (p: readonly unknown[]) =>
       p[1] === 'chave-reenvio-0001'
-        ? [{ hash_entrada: idem?.parametros[4], usuario_id: USU, resultado: idem?.parametros[5], trilha_auditoria_id: 1 }]
+        ? [
+            {
+              hash_entrada: idem?.parametros[4],
+              usuario_id: USU,
+              resultado: idem?.parametros[5],
+              trilha_auditoria_id: 1,
+            },
+          ]
         : [],
     );
     const segundo = await porta.registrarRestauracao('h1', { por: 'x', pedido }, t);
