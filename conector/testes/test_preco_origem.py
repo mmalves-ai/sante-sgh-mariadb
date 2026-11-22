@@ -3,8 +3,9 @@ repasse integral da consulta particular e agenda -> profissional pelo nome. Nome
 
 A parte pura roda em qualquer lugar; a parte com banco roda no container do conector, num banco descartável com o DDL
 do modelo, e prova: a fonte particular é classificada pelos dados (nome + uso) e só ela ganha preço por médico; a
-fonte de convênio fica descartada (decisão 24); a vigência vem da evidência mais antiga, nunca da data da carga; o
-Sincronizar com valor novo fecha a regra anterior; o repasse integral vira regra a 100% no grupo de consulta; a agenda
+fonte de convênio (operadora) fica descartada (decisão 24); a vigência vem da evidência mais antiga, nunca da data da
+carga, e sem evidência nada é criado (pendência); o Sincronizar com valor novo fecha a regra anterior; o repasse
+integral vira regra a 100% no grupo de consulta só na fonte particular (marca num convênio vira pendência); a agenda
 sem profissional é ligada pelo nome, e a ambígua vira pendência."""
 import datetime as dt
 import os
@@ -95,6 +96,16 @@ class Banco(unittest.TestCase):
                   "NOW(3))", (pid, pid))
                 q("INSERT INTO inscricao_conselho (profissional_id, sequencia, conselho_classe_id,"
                   " unidade_federativa_id, numero_inscricao, criado_em) VALUES (%s,1,1,1,%s,NOW(3))", (pid, str(pid * 7)))
+            cc.commit()
+            # cliente ainda sem agendas nem horários: nenhuma evidência de vigência -> nada nasce com a data da carga
+            hoje = D(2026, 11, 22)
+            r0 = po.executar(cc, {"agendas": [], "valores": [("1", "77", 300), ("1", "70", 280), ("4", "77", 90),
+                                                             ("3", "77", 95)], "marca_integral": ["1"], "faltou": []},
+                             hoje=hoje)
+            self.assertEqual((r0["preco_profissional"]["sem_vigencia"], r0["preco_profissional"]["novas"],
+                              r0["pendencias"].get("vigencia:sem_evidencia:media")), (4, 0, 4), r0)
+            self.assertEqual(q("SELECT (SELECT COUNT(*) FROM preco_consulta_origem) + (SELECT COUNT(*) FROM"
+                               " regra_preco_particular) + (SELECT COUNT(*) FROM regra_repasse)")[0][0], 0)
             # agenda 1: do profissional 11 pela origem (CRM), criada em 2019; agenda 2: sem profissional, nome da Ana;
             # agenda 3: sem profissional, nome ambíguo (dois SINTETICO SOUZA)
             for aid, nm, prof, ini, obs in [
@@ -118,21 +129,29 @@ class Banco(unittest.TestCase):
                                                                                 "DRA ANA CLARA - CARDIOLOGIA", None),
                                   ("SIAGENDA", "3", "SINTETICO SOUZA ECO", D(1899, 12, 30))],
                       # código da fonte, número no conselho, valor: particular (1) e um convênio (4) com valor
-                      "valores": [("1", "77", 300), ("1", "70", 280), ("4", "77", 90), ("9", "77", 10)],
-                      "marca_integral": ["1"], "faltou": []}
-            hoje = D(2026, 11, 22)
+                      # e a operadora ALFA (3) com valor por médico, que a decisão 24 descarta
+                      "valores": [("1", "77", 300), ("1", "70", 280), ("4", "77", 90), ("9", "77", 10),
+                                  ("3", "77", 95)],
+                      # a marca de repasse integral também na operadora (3): nunca vira repasse integral de convênio
+                      "marca_integral": ["1", "3"], "faltou": []}
             r = po.executar(cc, origem, hoje=hoje)
             # ligação pelo nome: a agenda 2 ganhou a Ana; a 3 é ambígua (pendência), nada gravado
             self.assertEqual(r["ligacao_nome"], dict(sem_profissional=2, ligadas=1, ambiguas=1,
                                                      sem_correspondencia=0), r)
             self.assertEqual(q("SELECT id, profissional_id FROM agenda_servico ORDER BY id"), ((1, 11), (2, 10),
                                                                                                 (3, None)))
-            self.assertEqual(r["pendencias"], {po.REGRA_AMBIGUO + ":media": 1,
-                                               "fonte:particular_estimada:baixa": 1}, r)
+            self.assertEqual(r["pendencias"], {po.REGRA_AMBIGUO + ":media": 1, "fonte:particular_estimada:baixa": 1,
+                                               "repasse:integral_fonte_nao_particular:media": 1}, r)
             # fonte particular estimada pelos dados: nome + uso (a 2, também PARTICULAR, não tem valor)
             self.assertEqual(q("SELECT id FROM fonte_pagadora WHERE tipo='particular'"), ((1,),))
             pp = r["preco_profissional"]
-            self.assertEqual((pp["novas"], pp["aplicadas"], pp["pendentes"], pp["sem_fonte"]), (3, 2, 1, 1), pp)
+            self.assertEqual((pp["novas"], pp["aplicadas"], pp["pendentes"], pp["descartadas"], pp["sem_fonte"],
+                              pp["sem_vigencia"]), (4, 2, 1, 1, 1, 0), pp)
+            # decisão 24: o valor por médico da operadora fica registrado como descartado e nunca vira regra
+            (sit, mot), = q("SELECT situacao, motivo_situacao FROM preco_consulta_origem WHERE fonte_pagadora_id=3")
+            self.assertEqual(sit, "descartada")
+            self.assertIn("decisão 24", mot)
+            self.assertEqual(q("SELECT COUNT(*) FROM regra_preco_particular WHERE fonte_pagadora_id=3")[0][0], 0)
             # quanto custa a consulta particular com o Bruno: 300, vigência da agenda dele (criação 2019), não hoje
             regras = q("SELECT profissional_id, alvo, valor, vigencia_inicio, situacao_revisao FROM"
                        " regra_preco_particular WHERE profissional_id IS NOT NULL ORDER BY 1")
@@ -150,16 +169,17 @@ class Banco(unittest.TestCase):
                 "SELECT r.codigo, r.vigencia_inicio, i.fonte_pagadora_id, i.grupo_faturamento_id, i.percentual FROM"
                 " regra_repasse r JOIN regra_repasse_item i ON i.regra_repasse_id = r.id")
             self.assertEqual((cod, ini, fonte, grupo, float(perc)), ("INTEGRAL-PART-1", D(2017, 4, 5), 1, 7, 100.0))
+            self.assertEqual(r["repasse_integral"]["fonte_nao_particular"], 1)
             # Sincronizar: nada mudou -> nada muda
             r2 = po.executar(cc, origem, hoje=hoje)
             self.assertEqual((r2["preco_profissional"]["iguais"], r2["preco_profissional"]["novas"],
                               r2["preco_profissional"]["aplicadas"], r2["repasse_integral"]["existentes"],
-                              r2["texto"]["iguais"]), (3, 0, 0, 1, 2), r2)
+                              r2["texto"]["iguais"]), (4, 0, 0, 1, 2), r2)
             # Sincronizar: valor novo do Bruno, a Ana saiu, a marca sumiu
             origem2 = dict(origem, valores=[("1", "77", 320)], marca_integral=[])
             r3 = po.executar(cc, origem2, hoje=hoje)
             p3 = r3["preco_profissional"]
-            self.assertEqual((p3["valor_mudou"], p3["fechadas"], p3["aplicadas"]), (1, 3, 1), p3)
+            self.assertEqual((p3["valor_mudou"], p3["fechadas"], p3["aplicadas"]), (1, 4, 1), p3)
             vig = q("SELECT valor, vigencia_inicio, vigencia_fim FROM regra_preco_particular WHERE profissional_id=11"
                     " ORDER BY vigencia_inicio")
             self.assertEqual([(str(v), i, f) for v, i, f in vig], [("300.00", D(2019, 8, 1), D(2026, 11, 21)),

@@ -6,11 +6,14 @@ Roda depois da carga do mapa, em toda execução (importar e Sincronizar), no ba
    duas e estar TODAS no nome de um único profissional. Um só candidato: grava `agenda_servico.profissional_id`
    (melhor estimativa). Mais de um: pendência visível `agenda:profissional_ambiguo_pelo_nome` (nada gravado).
 2. **Vigência por evidência** (decisão 16): nunca a data da carga. Por agenda, a data mais antiga entre a criação da
-   agenda na origem, o início da vigência cadastrada e o primeiro horário da agenda; na falta, a do registro mais
-   antigo da origem (a menor dessas datas no cliente). Datas antes de `PISO` (sentinelas) e no futuro são ignoradas.
+   agenda na origem, o início da vigência cadastrada e o primeiro horário da agenda; na falta, a menor data com
+   evidência do cliente (criação de qualquer agenda da origem, vigência cadastrada, primeiro horário). Datas antes de
+   `PISO` (sentinelas) e no futuro são ignoradas. Sem nenhuma evidência, nada é criado com a data da carga: o que
+   dependeria da data vira pendência `vigencia:sem_evidencia` e entra num Sincronizar em que a evidência exista.
 3. **Texto da agenda** (`estruturar.executar`) com essas vigências.
 4. **Valor de consulta do profissional por fonte** (o `VLR_CONSULTA` do código do médico no convênio) →
-   `preco_consulta_origem`, íntegro, com a vigência da evidência das agendas do profissional (senão a mais antiga).
+   `preco_consulta_origem`, íntegro, com a vigência da evidência das agendas do profissional (senão a do cliente;
+   sem nenhuma: pendência, nada gravado).
    Sincronizar: valor igual não muda; valor novo fecha a linha anterior (e a regra) ontem e abre outra hoje; valor
    que sumiu fecha a linha.
 5. **Classificação da fonte particular** (ADR 0007, 18: melhor estimativa): vale a fonte de tipo `particular` do
@@ -21,7 +24,10 @@ Roda depois da carga do mapa, em toda execução (importar e Sincronizar), no ba
    particular → `descartada` (decisão 24: não existe preço por médico em convênio); fonte `outro` → fica pendente.
 7. **Repasse integral** (marca da origem "consulta particular vai inteira ao médico") → `regra_repasse` +
    `regra_repasse_item` a 100% sobre o grupo de consulta do cliente (senão o item de consulta em consultório), com a
-   fonte da marca. Sem grupo/item ou sem evento de repasse: pendência, nada gravado. Marca que sumiu fecha a regra.
+   fonte da marca, SÓ quando a fonte marcada é a particular (cadastro ou estimada no passo 5). Marca numa fonte que
+   não é particular: pendência `repasse:integral_fonte_nao_particular`, nada gravado (o repasse integral nunca vale
+   para convênio). Sem grupo/item, sem evento de repasse ou sem evidência de vigência: pendência, nada gravado. Marca
+   que sumiu, ou cuja fonte deixou de ser particular, fecha a regra.
 Só contagens saem daqui (nunca valores nem nomes).
 """
 import datetime as dt
@@ -154,14 +160,15 @@ def executar(conn, origem=None, ctl=None, execucao_id=None, hoje=None, commit=Tr
         vig, padrao = _vigencias(c, origem, hoje)
     cont["ligacao_nome"] = ligacao
     cont["vigencia"] = {"agendas_com_evidencia": sum(1 for v in vig.values() if v),
-                        "padrao_registro_mais_antigo": padrao is not None}
+                        "padrao_com_evidencia": padrao is not None}
+    particulares = None
     with conn.cursor() as c:   # antes do texto: a fonte particular classificada vale também para o preço do texto
         if _tem(c, ("preco_consulta_origem", "regra_preco_particular", "fonte_pagadora", "inscricao_conselho")):
-            cont["preco_profissional"] = _precos(c, origem, vig, padrao, hoje, cont)
+            cont["preco_profissional"], particulares = _precos(c, origem, vig, padrao, hoje, cont, ctl, execucao_id)
     cont["texto"] = estruturar.executar(conn, commit=False, vigencias=vig, vigencia_padrao=padrao)
     with conn.cursor() as c:
         if _tem(c, ("regra_repasse", "regra_repasse_item", "evento_repasse", "grupo_faturamento", "item_faturavel")):
-            cont["repasse_integral"] = _repasse(c, origem, padrao, hoje, cont)
+            cont["repasse_integral"] = _repasse(c, origem, padrao, hoje, cont, particulares, ctl, execucao_id)
     if commit:
         conn.commit()
     return cont
@@ -209,13 +216,15 @@ def _vigencias(c, origem, hoje):
     for aid, nome, cod, ini in _q(c, "SELECT id, nome, codigo_origem, vigencia_inicio FROM agenda_servico"
                                      " WHERE origem = 'migracao' AND excluido_em IS NULL"):
         vig[aid] = data_evidencia([criacao.get((cod, ea.chave(nome))), ini, primeiro.get(aid)], hoje)
-    todas = [v for v in vig.values() if v] + [_data(d, hoje) for d in primeiro.values()]
+    todas = ([v for v in vig.values() if v] + [_data(d, hoje) for d in primeiro.values()]
+             + [_data(d, hoje) for *_, d in origem.get("agendas", [])])
     return vig, data_evidencia(todas, hoje)
 
 
-def _precos(c, origem, vig, padrao, hoje, cont):
+def _precos(c, origem, vig, padrao, hoje, cont, ctl=None, eid=None):
+    """Devolve (contagens, ids das fontes particulares: cadastro ou a estimada agora)."""
     r = dict(linhas_origem=len(origem.get("valores", [])), sem_fonte=0, sem_profissional=0, profissional_ambiguo=0,
-             novas=0, iguais=0, valor_mudou=0, fechadas=0, aplicadas=0, descartadas=0, pendentes=0,
+             sem_vigencia=0, novas=0, iguais=0, valor_mudou=0, fechadas=0, aplicadas=0, descartadas=0, pendentes=0,
              fonte_particular_estimada=0, profissionais_com_regra=0)
     fontes = {cod: fid for fid, cod in _q(c, "SELECT id, codigo FROM fonte_pagadora WHERE excluido_em IS NULL")}
     insc = {}
@@ -239,7 +248,7 @@ def _precos(c, origem, vig, padrao, hoje, cont):
         if len(ps) != 1:
             r["sem_profissional" if not ps else "profissional_ambiguo"] += 1
             continue
-        vistos[(fid, next(iter(ps)))] = valor
+        vistos[(fid, next(iter(ps)))] = (valor, "%s/%s" % (con, crm))
     abertas = {(f, p, e): (i, v, rg) for i, f, p, e, v, rg in _q(
         c, "SELECT id, fonte_pagadora_id, profissional_id, estabelecimento_id, valor, regra_preco_particular_id"
            " FROM preco_consulta_origem WHERE vigencia_fim IS NULL AND origem = 'migracao'")}
@@ -252,7 +261,7 @@ def _precos(c, origem, vig, padrao, hoje, cont):
             c.execute("UPDATE regra_preco_particular SET vigencia_fim = GREATEST(vigencia_inicio, %s), alterado_em ="
                       " CURRENT_TIMESTAMP(3), versao = versao + 1 WHERE id = %s AND vigencia_fim IS NULL", (ontem, rg))
         r["fechadas"] += 1
-    for (fid, pid), valor in sorted(vistos.items()):
+    for (fid, pid), (valor, chave) in sorted(vistos.items()):
         e = estab.get((fid, pid))
         a = abertas.pop((fid, pid, e), None)
         if a and float(a[1]) == float(valor):
@@ -263,7 +272,11 @@ def _precos(c, origem, vig, padrao, hoje, cont):
             r["valor_mudou"] += 1
             ini = hoje
         else:
-            ini = data_evidencia(por_prof.get(pid, []), hoje) or padrao or hoje
+            ini = data_evidencia(por_prof.get(pid, []), hoje) or padrao
+            if ini is None:   # decisão 16: sem evidência não se usa a data da carga
+                r["sem_vigencia"] += 1
+                _pend(c, ctl, eid, "FCCODCON", chave, "vigencia:sem_evidencia", "media", cont)
+                continue
             r["novas"] += 1
         c.execute("INSERT INTO preco_consulta_origem (estabelecimento_id, fonte_pagadora_id, profissional_id, valor,"
                   " vigencia_inicio, origem, criado_em) VALUES (%s,%s,%s,%s,%s,'migracao',CURRENT_TIMESTAMP(3))"
@@ -310,19 +323,26 @@ def _precos(c, origem, vig, padrao, hoje, cont):
     r["profissionais_com_regra"] = _q(c, "SELECT COUNT(DISTINCT profissional_id) FROM regra_preco_particular WHERE"
                                          " origem = 'migracao' AND profissional_id IS NOT NULL AND excluido_em IS NULL"
                                          " AND vigencia_fim IS NULL")[0][0]
-    return r
+    return r, set(particulares)
 
 
-def _repasse(c, origem, padrao, hoje, cont):
+def _repasse(c, origem, padrao, hoje, cont, particulares=None, ctl=None, eid=None):
+    """`particulares`: as fontes particulares que `_precos` classificou (None: as de tipo particular do cadastro)."""
     r = dict(marcas=len(origem.get("marca_integral", [])), criadas=0, existentes=0, fechadas=0, sem_alvo=0,
-             sem_evento=0, sem_fonte=0)
+             sem_evento=0, sem_fonte=0, fonte_nao_particular=0, sem_vigencia=0)
     fontes = {cod: fid for fid, cod in _q(c, "SELECT id, codigo FROM fonte_pagadora WHERE excluido_em IS NULL")}
+    if particulares is None:
+        particulares = {f for f, in _q(c, "SELECT id FROM fonte_pagadora WHERE tipo = 'particular' AND excluido_em"
+                                          " IS NULL")}
     marcadas = {}
     for cod in origem.get("marca_integral", []):
-        if cod in fontes:
-            marcadas[(PREFIXO_REPASSE + cod)[:30]] = fontes[cod]
-        else:
+        if cod not in fontes:
             r["sem_fonte"] += 1
+        elif fontes[cod] not in particulares:   # repasse integral só no particular, nunca no convênio
+            r["fonte_nao_particular"] += 1
+            _pend(c, ctl, eid, "TBCONVEN", cod, "repasse:integral_fonte_nao_particular", "media", cont)
+        else:
+            marcadas[(PREFIXO_REPASSE + cod)[:30]] = fontes[cod]
     existentes = {(e, cod): (i, fim) for i, e, cod, fim in _q(
         c, "SELECT id, estabelecimento_id, codigo, vigencia_fim FROM regra_repasse WHERE codigo LIKE %s",
         (PREFIXO_REPASSE + "%",))}
@@ -351,7 +371,11 @@ def _repasse(c, origem, padrao, hoje, cont):
         r["sem_evento"] = len(marcadas)
         _pend(c, None, None, "TBCONVEN", None, "repasse:integral_sem_evento_rendimento", "media", cont)
         return r
-    ini = padrao or hoje
+    ini = padrao
+    if ini is None:   # decisão 16: sem evidência não se usa a data da carga
+        r["sem_vigencia"] = len(marcadas)
+        _pend(c, None, None, "TBCONVEN", None, "vigencia:sem_evidencia", "media", cont)
+        return r
     for e, evs in sorted(eventos.items()):
         prefer = [x for x, k in evs if any(p in k for p in ("CONSULTA", "PRODUC", "HONORARIO"))]
         ev = prefer[0] if prefer else evs[0][0]

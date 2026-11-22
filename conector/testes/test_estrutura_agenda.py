@@ -5,6 +5,7 @@ roda em qualquer lugar; a parte com banco roda no container do conector (MariaDB
 descartável com o DDL do modelo (db/migracoes), e prova as perguntas de aceite: quanto custa a consulta particular,
 se a agenda atende o convênio e o subplano, se precisa de preparo, se atende criança de 5 anos; e o Sincronizar
 (texto mudou: estimadas saem, confirmada fica, nova extração)."""
+import datetime as dt
 import os
 import unittest
 import uuid
@@ -239,8 +240,17 @@ class Banco(unittest.TestCase):
             q("INSERT INTO agenda_fonte_pagadora (agenda_servico_id, fonte_pagadora_id, observacao_marcacao_online,"
               " criado_em) VALUES (1,5,'NECESSÁRIO SOLICITAR AUTORIZAÇÃO PRÉVIA',NOW(3)),(1,2,NULL,NOW(3))")
             cc.commit()
-            r1 = estruturar.executar(cc)
-            self.assertEqual((r1["novos"], r1["falhas"], r1["precos"], r1["coberturas"], r1["restricoes"],
+            # sem evidência de vigência: o texto fica guardado inteiro e pendente, sem regra (decisão 16)
+            r0 = estruturar.executar(cc)
+            self.assertEqual((r0["novos"], r0["sem_evidencia"], r0["precos"], r0["coberturas"]), (3, 3, 0, 0), r0)
+            self.assertEqual(q("SELECT COUNT(*) FROM texto_origem_agenda WHERE situacao_estruturacao <> 'pendente'")
+                             [0][0], 0)
+            self.assertEqual(q("SELECT COUNT(*) FROM regra_preco_particular")[0][0], 0)
+            # com a evidência, os pendentes são extraídos com a vigência dela
+            vp = dt.date(2019, 1, 2)
+            r1 = estruturar.executar(cc, vigencia_padrao=vp)
+            self.assertEqual(q("SELECT DISTINCT vigencia_inicio FROM agenda_restricao"), ((vp,),))
+            self.assertEqual((r1["pendentes_extraidos"], r1["falhas"], r1["precos"], r1["coberturas"], r1["restricoes"],
                               r1["preparos"], r1["planos_criados"]), (3, 0, 1, 4, 1, 2, 1), r1)
             # quanto custa a consulta particular na agenda 1: pela regra, com o texto original ao lado
             (valor, tid, sit), = q("SELECT valor, texto_origem_agenda_id, situacao_revisao FROM regra_preco_particular"
@@ -264,14 +274,14 @@ class Banco(unittest.TestCase):
                             "=%s AND NOT interpretado", (tid,))
             self.assertEqual(OBS1[ini:fim], "ESPECIALIDADE: EXEMPLO SINTETICO")
             # segunda execução sem mudança: nada muda
-            r2 = estruturar.executar(cc)
+            r2 = estruturar.executar(cc, vigencia_padrao=vp)
             self.assertEqual((r2["iguais"], r2["novos"], r2["reextraidos"], r2["trechos"]), (3, 0, 0, 0), r2)
             # Sincronizar: o hospital confirmou a restrição; o texto mudou na origem (valor novo, sem lista)
             q("UPDATE agenda_restricao SET situacao_revisao='confirmada' WHERE agenda_servico_id=1")
             q("UPDATE agenda_servico SET observacao=%s WHERE id=1",
               ("VALOR DE CONSULTA PARTICULAR: R$ 300,00\nFAIXA ETÁRIA: A PARTIR DE 06 ANOS",))
             cc.commit()
-            r3 = estruturar.executar(cc)
+            r3 = estruturar.executar(cc, vigencia_padrao=vp)
             self.assertEqual((r3["reextraidos"], r3["estimadas_retiradas"], r3["confirmadas_a_rever"], r3["precos"],
                               r3["restricoes"], r3["ja_confirmadas"]), (1, 4, 1, 1, 0, 1), r3)
             self.assertEqual([str(v) for v, in q("SELECT valor FROM regra_preco_particular WHERE agenda_servico_id=1"

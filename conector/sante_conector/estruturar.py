@@ -44,14 +44,16 @@ def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
     """Estrutura os textos das agendas migradas. Devolve só contagens.
 
     Vigência das regras extraídas (decisão 16): nunca a data da carga. Texto novo: `vigencias[agenda]` (a data mais
-    antiga com evidência, de `preco_origem`), senão `vigencia_padrao` (o registro mais antigo da origem), senão hoje.
-    Texto que MUDOU na origem: hoje (a regra nova nasce da mudança). As estimadas de textos nunca alterados que ficaram
-    com uma vigência posterior à evidência (cargas anteriores) são corrigidas para a evidência."""
+    antiga com evidência, de `preco_origem`), senão `vigencia_padrao` (a menor data com evidência do cliente). Sem
+    nenhuma das duas, o texto é guardado inteiro e fica `pendente`, sem regra extraída (nunca a data da carga); um
+    Sincronizar com evidência o extrai. Texto que MUDOU na origem: hoje (a regra nova nasce da mudança). As estimadas
+    de textos nunca alterados que ficaram com uma vigência posterior à evidência (cargas anteriores) são corrigidas
+    para a evidência."""
     vigencias = vigencias or {}
     cont = dict(textos=0, novos=0, iguais=0, reextraidos=0, retirados=0, falhas=0, trechos=0, nao_interpretados=0,
                 precos=0, coberturas=0, restricoes=0, preparos=0, planos_criados=0, estimadas_retiradas=0,
                 confirmadas_a_rever=0, ja_confirmadas=0, sem_regra=0, vigencias_corrigidas=0,
-                reextraidos_extrator=0)
+                reextraidos_extrator=0, sem_evidencia=0, pendentes_extraidos=0)
     with conn.cursor() as c:
         n = _um(c, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN"
                    " (%s)" % ",".join(["%s"] * len(TABELAS)), TABELAS)[0][0]
@@ -71,9 +73,10 @@ def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
                " FROM agenda_fonte_pagadora p JOIN agenda_servico a ON a.id = p.agenda_servico_id"
                " WHERE a.origem = 'migracao' AND a.excluido_em IS NULL AND p.excluido_em IS NULL"
                " ORDER BY p.agenda_servico_id, p.fonte_pagadora_id")]
-        guardados = {(r[1], r[2], r[3]): (r[0], bytes(r[4]), r[5]) for r in _um(
-            c, "SELECT id, agenda_servico_id, campo, fonte_pagadora_id, hash_texto, versao_extrator"
-               " FROM texto_origem_agenda")}
+        guardados = {(r[1], r[2], r[3]): (r[0], bytes(r[4]), r[5], r[6]) for r in _um(
+            c, "SELECT id, agenda_servico_id, campo, fonte_pagadora_id, hash_texto, versao_extrator,"
+               " situacao_estruturacao FROM texto_origem_agenda")}
+        hoje = _um(c, "SELECT UTC_DATE()")[0][0]
     for aid, campo, fid, texto in textos:
         g = guardados.get((aid, campo, fid))
         vazio = not (texto or "").strip()
@@ -81,7 +84,8 @@ def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
             continue
         cont["textos"] += 1
         h = ea.hash_texto("" if vazio else texto)
-        so_extrator = bool(g and g[1] == h and g[2] not in (None, ea.VERSAO))   # extrator novo, texto igual
+        pendente = bool(g and g[1] == h and g[3] == "pendente")   # guardado sem evidência de vigência
+        so_extrator = pendente or bool(g and g[1] == h and g[2] not in (None, ea.VERSAO))   # extrator novo
         if g and g[1] == h and not so_extrator:
             cont["iguais"] += 1
             continue
@@ -91,11 +95,15 @@ def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
                 if so_extrator:   # o texto não mudou: estimadas refeitas pelo extrator novo, vigência da evidência
                     tid = g[0]
                     ini = vigencias.get(aid) or vigencia_padrao
+                    if ini is None:
+                        cont["sem_evidencia"] += 1
+                        c.execute("RELEASE SAVEPOINT estruturar_texto")
+                        continue
                     _retirar(c, tid, cont)
-                    cont["reextraidos_extrator"] += 1
+                    cont["pendentes_extraidos" if pendente else "reextraidos_extrator"] += 1
                 elif g:
                     tid = g[0]
-                    ini = None   # texto mudou: a regra nova vale a partir de hoje
+                    ini = hoje   # texto mudou: a regra nova vale a partir da mudança
                     _retirar(c, tid, cont)
                     c.execute("UPDATE texto_origem_agenda SET texto = %s, hash_texto = %s, situacao_estruturacao ="
                               " 'pendente', alterado_em = CURRENT_TIMESTAMP(3), versao = versao + 1 WHERE id = %s",
@@ -108,6 +116,10 @@ def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
                     tid = c.lastrowid
                     ini = vigencias.get(aid) or vigencia_padrao
                     cont["novos"] += 1
+                    if ini is None:   # decisão 16: guardado inteiro e pendente; sem data da carga
+                        cont["sem_evidencia"] += 1
+                        c.execute("RELEASE SAVEPOINT estruturar_texto")
+                        continue
                 ex = ea.extrair("" if vazio else texto, campo, fid, fontes, particular)
                 _gravar(c, tid, aid, agendas.get(aid), particular, ex, cont, ini)
                 situ = "extraida" if ex.interpretados() else "sem_regra"
@@ -170,8 +182,7 @@ def _confirmada(c, tabela, tid, campos, cont):
     return bool(achou)
 
 
-def _gravar(c, tid, aid, estab, particular, ex, cont, ini=None):
-    ini = ini or _um(c, "SELECT UTC_DATE()")[0][0]
+def _gravar(c, tid, aid, estab, particular, ex, cont, ini):
     for p in ex.precos:
         valor = "%d.%02d" % divmod(p["valor_centavos"], 100)
         if _confirmada(c, "regra_preco_particular", tid, {"alvo": p["alvo"], "valor": valor}, cont):
