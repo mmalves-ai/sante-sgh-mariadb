@@ -114,7 +114,7 @@ TBCBOPRO	ID	inscricao_conselho.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROF
 TBCBOPRO	#seq:ID_TBPROFIS	inscricao_conselho.sequencia				L5-04 r3: 1..n por profissional, na ordem da chave (estável no diferencial)
 TBCBOPRO	CONS_PROF	inscricao_conselho.conselho_classe_id	texto	conselho_classe		L5-04 r3: conselho pela sigla (de-para oficial conselho_classe, nunca criado); sigla fora do catálogo: catalogo_codigo_*; sem sigla: recusa visível (1048). ID_TBSIGLACONSPROF aponta tabela fora do mapa (sem via)
 TBCBOPRO	UF	inscricao_conselho.unidade_federativa_id	texto	ibge_uf		L5-04 r3: UF da inscrição pela sigla (de-para oficial ibge_uf)
-TBCBOPRO	COD	inscricao_conselho.numero_inscricao	texto			L5-04 r3: número no conselho, gravado como texto
+TBCBOPRO	COD	inscricao_conselho.numero_inscricao	texto		adotar:conselho_classe_id,unidade_federativa_id,numero_inscricao,profissional_id	L5-04 r3: número no conselho, gravado como texto; C3 (F4 liberação): a origem repete a inscrição (mesmo conselho, UF, número e profissional) numa linha por ocupação; as repetidas ADOTAM a inscrição já gravada (mescla não destrutiva, ADR 0007 item 20; o filho segue o pai, item 19) em vez de 1062, e a ocupação de cada linha continua na lotação
 TBCBOPRO	CRM_DIGITO	inscricao_conselho.digito	texto			L5-04 r3: dígito do número no conselho
 TBCBOPRO	ID_TBCBOSUS	inscricao_conselho.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	L5-04 r3: ocupação pelo código CBO guardado na tabela de CBO da origem (encadeada terminada em coluna; de-para oficial cbo); ausente: NULL com pendência
 TBCBOPRO	ATIVO	inscricao_conselho.situacao	booleano_sn	valores		L5-04 r3: S ativa, N inativa (valores.d); vazio: padrão do destino (ativa)
