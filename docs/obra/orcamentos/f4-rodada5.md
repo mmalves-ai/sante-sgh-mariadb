@@ -73,3 +73,10 @@ teto_M: 87
 
 - **21/11, 19h15: a retomada pelo cache repetiu corretores já concluídos**, porque o cache só vale até a primeira chamada que falhou. Parei a rodada (cerca de 137 M, com cerca de 12 M de corretores repetidos) e lancei `f4-rodada5-fim`: só o conferidor, o L9 e o L10, com limite de 12 agentes e as regras novas.
 - **Lição:** a retomada não serve depois de uma falha no meio de um pipeline. A sobra vai para um script novo, só com as etapas que faltam.
+
+- **21/11, fechamento do `f4-rodada5-fim`:** cerca de 13,8 M (conferir 2 × 3,82 M com 134 turnos, porque começaram antes
+  da G6; refazer 4 × 1,55 M). Total da rodada: cerca de 151 M contra teto revisto de 125 M. **Acima do teto.**
+  - Causa: conferidores longos (antes da G6) e retomada que repetiu corretores.
+  - Otimização já em vigor: G6 (teto técnico de 60/80 ferramentas), lotes de 2, conferência dividida em script de
+    verificação + corretor de um item.
+  - O L9 e o L10 não rodaram (o script para com a conferência vermelha). Vão para a rodada 6, com orçamento próprio.
