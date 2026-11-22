@@ -28,6 +28,7 @@
       "@sgh/legado": ["./packages/legado/src/index.ts"],
       "@sgh/nucleo": ["./packages/nucleo/src/index.ts"],
       "@sgh/persistencia-contabil": ["./packages/persistencia-contabil/src/index.ts"],
+      "@sgh/persistencia": ["./packages/persistencia/src/index.ts"],
       "@sgh/legado/nativo": ["./packages/legado/src/nucleo/driver-nativo.ts"],
       "@sgh/ui": ["./packages/ui/src/index.ts"],
       "@sgh/dominio-acesso": ["./packages/dominio-acesso/src/index.ts"],

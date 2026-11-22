@@ -103,7 +103,7 @@ class L801(unittest.TestCase):
         self.assertEqual(c["fonte_pagadora_id"]["referencia"], "TBCONVEN")
         self.assertEqual(c["fonte_pagadora_id"]["regra"], "chave_origem")  # regra declarada desligaria a ref
         self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
-        self.assertEqual(c["valor_consulta"]["regra"], "decimal_nao_negativo")
+        self.assertNotIn("valor_consulta", c)  # ADR 0009: vira regra_preco_particular
         h = self.cols("FCCPSCON")
         self.assertEqual(h["tipo_prestador"]["coluna"], "=~estabelecimento")
         self.assertNotIn("profissional_id", h)

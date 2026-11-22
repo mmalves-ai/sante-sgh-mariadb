@@ -81,14 +81,16 @@ export interface DefinicaoParametro {
  * padrão do registro.
  */
 /** Lista de e-mails separados por vírgula (vazio permitido: o papel cai na auditoria do cliente). */
-const FORMATO_LISTA_EMAIL = '^([^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,}(\\s*,\\s*[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,})*)?$';
+const FORMATO_LISTA_EMAIL =
+  '^([^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,}(\\s*,\\s*[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,})*)?$';
 
 /** Destinatários dos alertas por e-mail, por papel (lidos pelo worker em parametro_valor, nível rede, vigente). */
 const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
   {
     chave: 'alerta.email.auditoria',
     modulo: 'alerta',
-    descricao: 'E-mails do papel auditoria (quebra de vidro, sessão em nome de outro, leitura do prontuário e o papel sem endereço próprio) que recebem os alertas do sistema (separados por vírgula)',
+    descricao:
+      'E-mails do papel auditoria (quebra de vidro, sessão em nome de outro, leitura do prontuário e o papel sem endereço próprio) que recebem os alertas do sistema (separados por vírgula)',
     tipo: 'texto',
     padrao: '',
     niveis: ['rede'],
@@ -100,7 +102,8 @@ const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
   {
     chave: 'alerta.email.encarregado',
     modulo: 'alerta',
-    descricao: 'E-mails do papel encarregado de dados (LGPD) que recebem os alertas do sistema (separados por vírgula)',
+    descricao:
+      'E-mails do papel encarregado de dados (LGPD) que recebem os alertas do sistema (separados por vírgula)',
     tipo: 'texto',
     padrao: '',
     niveis: ['rede'],
@@ -112,7 +115,8 @@ const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
   {
     chave: 'alerta.email.plantao',
     modulo: 'alerta',
-    descricao: 'E-mails do papel plantão técnico (chamados graves) que recebem os alertas do sistema (separados por vírgula)',
+    descricao:
+      'E-mails do papel plantão técnico (chamados graves) que recebem os alertas do sistema (separados por vírgula)',
     tipo: 'texto',
     padrao: '',
     niveis: ['rede'],
@@ -124,7 +128,8 @@ const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
   {
     chave: 'alerta.email.ti',
     modulo: 'alerta',
-    descricao: 'E-mails do papel TI do hospital (avisos técnicos) que recebem os alertas do sistema (separados por vírgula)',
+    descricao:
+      'E-mails do papel TI do hospital (avisos técnicos) que recebem os alertas do sistema (separados por vírgula)',
     tipo: 'texto',
     padrao: '',
     niveis: ['rede'],
@@ -136,7 +141,8 @@ const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
   {
     chave: 'alerta.email.responsavelTecnico',
     modulo: 'alerta',
-    descricao: 'E-mails do papel responsável técnico que recebem os alertas do sistema (separados por vírgula)',
+    descricao:
+      'E-mails do papel responsável técnico que recebem os alertas do sistema (separados por vírgula)',
     tipo: 'texto',
     padrao: '',
     niveis: ['rede'],
@@ -1239,6 +1245,24 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   },
   // M30: conta do paciente (faixa do preço manual, prazo da fila, validade do orçamento, janela da fila tardia). As
   // regras de mercado da DP-33 (POL-1) também são parâmetros: o valor gravado é sempre o do outro sistema.
+  // ADR 0009: o "particular" padrão do hospital (há mais de uma fonte de tipo particular), usado pela API de
+  // compatibilidade e pelo cálculo da regra de preço particular. Vazio: a única fonte ativa de tipo particular.
+  {
+    chave: 'faturamento.fontePagadoraParticularCodigo',
+    modulo: 'faturamento',
+    descricao:
+      'Código da fonte pagadora particular padrão do hospital (vazio: a única fonte ativa de tipo particular)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    formato: {
+      expressao: '^[A-Za-z0-9._-]{0,30}$',
+      mensagem: 'Informe o código da fonte pagadora (até 30 caracteres).',
+    },
+    dono: 'faturamento',
+    origem: 'ADR 0009 e levantamento preco-profissional seção 5.4 (particular padrão)',
+  },
   {
     chave: 'faturamento.precoManualFaixaAbaixoPct',
     modulo: 'faturamento',
@@ -1528,8 +1552,7 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
       mensagem: 'Use acomodação:tipo:procedimento separados por ponto e vírgula (ex.: 3:2:0802010083).',
     },
     dono: 'faturamento',
-    origem:
-      'ficha do M51, regra 6 (diárias de UTI pela trajetória); tabela de tipos de UTI do SIH',
+    origem: 'ficha do M51, regra 6 (diárias de UTI pela trajetória); tabela de tipos de UTI do SIH',
   },
   {
     chave: 'faturamento.sus.aih.diretorClinicoCns',

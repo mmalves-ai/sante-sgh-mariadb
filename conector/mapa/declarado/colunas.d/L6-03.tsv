@@ -49,7 +49,7 @@ REAGENDA	QTDE_D_RET	agenda_servico.dias_retorno	inteiro_zero_nulo			prazo de ret
 REAGENDA	FX_INC	agenda_servico.idade_minima_anos	inteiro_zero_nulo			faixa etária atendida: idade inicial; 0 = sem limite
 REAGENDA	FX_FIN	agenda_servico.idade_maxima_anos	inteiro_zero_nulo			faixa etária atendida: idade final; 0 = sem limite
 REAGENDA	UNID	agenda_servico.unidade_assistencial_id			ref:TBUNIDAD	unidade da agenda; 0 = não informada (sem pendência)
-REAGENDA	OBS	agenda_servico.observacao	texto_resumo:2000			observação interna (VARCHAR(2000); maior é resumida com pendência)
+REAGENDA	OBS	agenda_servico.observacao	texto			observação interna (VARCHAR(2000); maior é resumida com pendência); ADR 0009: sem corte (observacao em MEDIUMTEXT), o texto original também vai para texto_origem_agenda
 REAGENDA	OBS_PORTAL_PAC_AGEND_ONLINE	agenda_servico.orientacao_marcacao	texto_longo			orientação ao paciente na marcação online
 REAGENDA	USUARIO	agenda_servico.criado_por			ref:TBUSERS	usuário que criou a agenda, pelo login
 REAGENDA	QTDE_RET					quantidade de retornos por dia do sistema anterior: o produto controla retorno pelo prazo (dias_retorno) e pela regra de retorno; sem coluna equivalente na agenda

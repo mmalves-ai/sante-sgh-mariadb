@@ -1,0 +1,19 @@
+{
+  "name": "persistencia",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/persistencia/src",
+  "tags": ["tipo:infra"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/persistencia"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/persistencia/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/persistencia/vitest.config.ts"
+    }
+  },
+  "implicitDependencies": ["contratos", "nucleo"]
+}

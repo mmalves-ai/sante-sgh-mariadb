@@ -1,0 +1,157 @@
+-- ADR 0009 (dono, 2026-11-22): agenda estruturada. O texto livre da agenda vira regra (cobertura por convênio e por
+-- plano/subplano, restrições, preparo e preço particular) que vale logo como melhor estimativa (decisão 27); o texto
+-- original fica inteiro ao lado (texto_origem_agenda), e o trecho que não se interpreta fica marcado
+-- (trecho_texto_agenda) e continua valendo pelo texto. Só para frente; FOREIGN KEY em 21_chaves.sql.
+
+-- Agenda: código de origem (agendaId da API de compatibilidade), sexo atendido, preparo; observação sem corte.
+-- A vigência cadastrada já existe (vigencia_inicio e vigencia_fim, 06_tabelas.sql); idade, retorno e encaixe também
+-- (idade_minima_anos, idade_maxima_anos, dias_retorno, permite_encaixe, encaixes_por_dia).
+ALTER TABLE agenda_servico
+  ADD COLUMN codigo_origem VARCHAR(30) NULL COMMENT 'Chave da agenda no sistema de origem (importada), devolvida como identificador pela API de compatibilidade',
+  ADD COLUMN sexo_atendido VARCHAR(20) NOT NULL DEFAULT 'todos' COMMENT 'todos | feminino | masculino',
+  ADD COLUMN aceita_retorno BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'A agenda marca retorno',
+  ADD COLUMN preparo TEXT NULL COMMENT 'Preparo e orientação padrão da agenda (exame); o específico por item fica em agenda_preparo',
+  MODIFY COLUMN observacao MEDIUMTEXT NULL COMMENT 'Observação da agenda, sem corte (ADR 0009)',
+  ADD CONSTRAINT ck_agenda_servico_sexo CHECK (sexo_atendido IN ('todos','feminino','masculino')),
+  ADD KEY ix_agenda_servico_codigo_origem (codigo_origem);
+
+CREATE TABLE texto_origem_agenda (
+  id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  agenda_servico_id     BIGINT UNSIGNED NOT NULL,
+  fonte_pagadora_id     BIGINT UNSIGNED NULL COMMENT 'Preenchido só no texto por agenda e convênio',
+  campo                 VARCHAR(30) NOT NULL COMMENT 'observacao | orientacao_marcacao | observacao_convenio',
+  texto                 MEDIUMTEXT NOT NULL COMMENT 'Texto original íntegro, sem corte e sem mexer em quebras',
+  hash_texto            BINARY(16) NOT NULL COMMENT 'Primeiros 16 bytes do SHA-256 do texto em UTF-8 (UNHEX(LEFT(SHA2(texto,256),32))); mudou, o Sincronizar extrai de novo',
+  situacao_estruturacao VARCHAR(20) NOT NULL DEFAULT 'pendente' COMMENT 'pendente | extraida | revisada | sem_regra',
+  versao_extrator       VARCHAR(20) NULL COMMENT 'Versão do extrator determinístico que gerou as regras',
+  extraido_em           DATETIME(3) NULL,
+  revisado_em           DATETIME(3) NULL,
+  revisado_por          BIGINT UNSIGNED NULL,
+  origem                VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em             DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  criado_por            BIGINT UNSIGNED NULL,
+  alterado_em           DATETIME(3) NULL,
+  alterado_por          BIGINT UNSIGNED NULL,
+  versao                INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_texto_origem_agenda_campo CHECK (campo IN ('observacao','orientacao_marcacao','observacao_convenio')),
+  CONSTRAINT ck_texto_origem_agenda_convenio CHECK ((campo = 'observacao_convenio') = (fonte_pagadora_id IS NOT NULL)),
+  CONSTRAINT ck_texto_origem_agenda_situacao CHECK (situacao_estruturacao IN ('pendente','extraida','revisada','sem_regra')),
+  CONSTRAINT ck_texto_origem_agenda_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  UNIQUE KEY uq_texto_origem_agenda (agenda_servico_id, campo, fonte_pagadora_id),
+  KEY ix_texto_origem_agenda_fonte (fonte_pagadora_id)
+) COMMENT='Texto livre original das agendas, guardado íntegro ao lado das regras estruturadas extraídas dele';
+
+CREATE TABLE trecho_texto_agenda (
+  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  texto_origem_agenda_id BIGINT UNSIGNED NOT NULL,
+  posicao_inicio         INT UNSIGNED NOT NULL COMMENT 'Posição do primeiro caractere do trecho no texto (base 0)',
+  posicao_fim            INT UNSIGNED NOT NULL COMMENT 'Posição após o último caractere do trecho',
+  interpretado           BOOLEAN NOT NULL COMMENT 'Falso: trecho não interpretado, continua valendo pelo texto',
+  tipo_regra             VARCHAR(20) NULL COMMENT 'preco | cobertura | restricao | preparo; nulo no trecho não interpretado',
+  motivo                 VARCHAR(300) NULL COMMENT 'Por que o trecho não virou regra',
+  criado_em              DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  criado_por             BIGINT UNSIGNED NULL,
+  alterado_em            DATETIME(3) NULL,
+  alterado_por           BIGINT UNSIGNED NULL,
+  versao                 INT UNSIGNED NOT NULL DEFAULT 1,
+  CONSTRAINT ck_trecho_texto_agenda_posicao CHECK (posicao_fim > posicao_inicio),
+  CONSTRAINT ck_trecho_texto_agenda_tipo CHECK (tipo_regra IS NULL OR tipo_regra IN ('preco','cobertura','restricao','preparo')),
+  CONSTRAINT ck_trecho_texto_agenda_interpretado CHECK (interpretado = (tipo_regra IS NOT NULL)),
+  UNIQUE KEY uq_trecho_texto_agenda (texto_origem_agenda_id, posicao_inicio, posicao_fim)
+) COMMENT='Trechos do texto da agenda: o que virou regra e o que ficou marcado como não interpretado';
+
+CREATE TABLE agenda_cobertura (
+  id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  agenda_servico_id       BIGINT UNSIGNED NOT NULL,
+  fonte_pagadora_id       BIGINT UNSIGNED NOT NULL,
+  plano_fonte_pagadora_id BIGINT UNSIGNED NULL COMMENT 'Plano ou subplano (plano com plano superior); nulo: o convênio inteiro',
+  aceita                  BOOLEAN NOT NULL COMMENT 'Verdadeiro: atende; falso: exclusão ("não atende")',
+  vigencia_inicio         DATE NOT NULL,
+  vigencia_fim            DATE NULL,
+  texto_origem_agenda_id  BIGINT UNSIGNED NULL COMMENT 'Texto de onde a regra foi extraída; nulo na regra cadastrada',
+  situacao_revisao        VARCHAR(20) NOT NULL DEFAULT 'confirmada' COMMENT 'estimada (extraída do texto, já vale) | confirmada | recusada (não vale)',
+  observacao              VARCHAR(500) NULL,
+  origem                  VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em               DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  criado_por              BIGINT UNSIGNED NULL,
+  alterado_em             DATETIME(3) NULL,
+  alterado_por            BIGINT UNSIGNED NULL,
+  versao                  INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em             DATETIME(3) NULL,
+  excluido_por            BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_agenda_cobertura_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),
+  CONSTRAINT ck_agenda_cobertura_revisao CHECK (situacao_revisao IN ('estimada','confirmada','recusada')),
+  CONSTRAINT ck_agenda_cobertura_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_agenda_cobertura_agenda (agenda_servico_id, fonte_pagadora_id, vigencia_inicio),
+  KEY ix_agenda_cobertura_fonte (fonte_pagadora_id),
+  KEY ix_agenda_cobertura_plano (plano_fonte_pagadora_id),
+  KEY ix_agenda_cobertura_texto (texto_origem_agenda_id)
+) COMMENT='Cobertura da agenda por convênio e por plano ou subplano, que aceita ou exclui, com vigência e texto de origem';
+
+CREATE TABLE agenda_restricao (
+  id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  agenda_servico_id       BIGINT UNSIGNED NOT NULL,
+  fonte_pagadora_id       BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os convênios',
+  plano_fonte_pagadora_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os planos',
+  item_agendavel_id       BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os itens da agenda',
+  sexo_atendido           VARCHAR(20) NULL COMMENT 'Nulo herda da agenda',
+  idade_minima_anos       TINYINT UNSIGNED NULL COMMENT 'Nulo herda da agenda',
+  idade_maxima_anos       TINYINT UNSIGNED NULL COMMENT 'Nulo herda da agenda',
+  aceita_retorno          BOOLEAN NULL COMMENT 'Nulo herda da agenda',
+  dias_retorno            SMALLINT UNSIGNED NULL COMMENT 'Nulo herda da agenda',
+  permite_encaixe         BOOLEAN NULL COMMENT 'Nulo herda da agenda',
+  vigencia_inicio         DATE NOT NULL,
+  vigencia_fim            DATE NULL,
+  texto_origem_agenda_id  BIGINT UNSIGNED NULL,
+  situacao_revisao        VARCHAR(20) NOT NULL DEFAULT 'confirmada' COMMENT 'estimada | confirmada | recusada',
+  observacao              VARCHAR(500) NULL,
+  origem                  VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em               DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  criado_por              BIGINT UNSIGNED NULL,
+  alterado_em             DATETIME(3) NULL,
+  alterado_por            BIGINT UNSIGNED NULL,
+  versao                  INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em             DATETIME(3) NULL,
+  excluido_por            BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_agenda_restricao_sexo CHECK (sexo_atendido IS NULL OR sexo_atendido IN ('todos','feminino','masculino')),
+  CONSTRAINT ck_agenda_restricao_idade CHECK (idade_minima_anos IS NULL OR idade_maxima_anos IS NULL OR idade_minima_anos <= idade_maxima_anos),
+  CONSTRAINT ck_agenda_restricao_algo CHECK (sexo_atendido IS NOT NULL OR idade_minima_anos IS NOT NULL OR idade_maxima_anos IS NOT NULL OR aceita_retorno IS NOT NULL OR dias_retorno IS NOT NULL OR permite_encaixe IS NOT NULL),
+  CONSTRAINT ck_agenda_restricao_plano CHECK (plano_fonte_pagadora_id IS NULL OR fonte_pagadora_id IS NOT NULL),
+  CONSTRAINT ck_agenda_restricao_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),
+  CONSTRAINT ck_agenda_restricao_revisao CHECK (situacao_revisao IN ('estimada','confirmada','recusada')),
+  CONSTRAINT ck_agenda_restricao_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_agenda_restricao_agenda (agenda_servico_id, vigencia_inicio),
+  KEY ix_agenda_restricao_fonte (fonte_pagadora_id),
+  KEY ix_agenda_restricao_plano (plano_fonte_pagadora_id),
+  KEY ix_agenda_restricao_item (item_agendavel_id),
+  KEY ix_agenda_restricao_texto (texto_origem_agenda_id)
+) COMMENT='Restrições da agenda por convênio, plano ou item (sexo, idade, retorno e encaixe), herdando da agenda o que for nulo';
+
+CREATE TABLE agenda_preparo (
+  id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  agenda_servico_id       BIGINT UNSIGNED NOT NULL,
+  item_agendavel_id       BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os itens da agenda',
+  tipo                    VARCHAR(20) NOT NULL DEFAULT 'preparo' COMMENT 'preparo | documento | orientacao',
+  descricao               TEXT NOT NULL COMMENT 'Instrução ao paciente, como será dita',
+  jejum_horas             SMALLINT UNSIGNED NULL COMMENT 'Horas de jejum, quando o preparo é jejum',
+  vigencia_inicio         DATE NOT NULL,
+  vigencia_fim            DATE NULL,
+  texto_origem_agenda_id  BIGINT UNSIGNED NULL,
+  situacao_revisao        VARCHAR(20) NOT NULL DEFAULT 'confirmada' COMMENT 'estimada | confirmada | recusada',
+  origem                  VARCHAR(20) NOT NULL DEFAULT 'sistema',
+  criado_em               DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  criado_por              BIGINT UNSIGNED NULL,
+  alterado_em             DATETIME(3) NULL,
+  alterado_por            BIGINT UNSIGNED NULL,
+  versao                  INT UNSIGNED NOT NULL DEFAULT 1,
+  excluido_em             DATETIME(3) NULL,
+  excluido_por            BIGINT UNSIGNED NULL,
+  CONSTRAINT ck_agenda_preparo_tipo CHECK (tipo IN ('preparo','documento','orientacao')),
+  CONSTRAINT ck_agenda_preparo_jejum CHECK (jejum_horas IS NULL OR jejum_horas BETWEEN 1 AND 72),
+  CONSTRAINT ck_agenda_preparo_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),
+  CONSTRAINT ck_agenda_preparo_revisao CHECK (situacao_revisao IN ('estimada','confirmada','recusada')),
+  CONSTRAINT ck_agenda_preparo_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  KEY ix_agenda_preparo_agenda (agenda_servico_id, vigencia_inicio),
+  KEY ix_agenda_preparo_item (item_agendavel_id),
+  KEY ix_agenda_preparo_texto (texto_origem_agenda_id)
+) COMMENT='Preparo, documentos e orientação do exame ou da consulta por agenda e item, com vigência e texto de origem';

@@ -28,7 +28,7 @@ SIAGENDA	UNID	agenda_servico.unidade_assistencial_id			ref:TBUNIDAD	agenda de ex
 SIAGENDA	ID_RETP_INTEG_AGENDA_ONLINE	agenda_servico.modo_agendamento_online_id	chave_origem			agenda de exames (L6-04): modo de marcação online (L6-03)
 SIAGENDA	ATIVA	agenda_servico.ativo	booleano_sn			agenda de exames (L6-04): S ativa, N inativa; vazio fica com o padrão do destino (TRUE); outro valor: valor_fora_do_dominio
 SIAGENDA	QTDE_D_RET	agenda_servico.dias_retorno	inteiro_zero_nulo			agenda de exames (L6-04): prazo em dias do retorno; 0 = sem prazo
-SIAGENDA	OBSERVACAO	agenda_servico.observacao	texto_resumo:2000			agenda de exames (L6-04): observação interna (BLOB de texto) no limite do destino, cortada na fronteira de palavra com a pendência da regra
+SIAGENDA	OBSERVACAO	agenda_servico.observacao	texto_longo			agenda de exames (L6-04): observação interna (BLOB de texto) no limite do destino, cortada na fronteira de palavra com a pendência da regra; ADR 0009: sem corte (observacao em MEDIUMTEXT), o texto original também vai para texto_origem_agenda
 SIAGENDA	OBS_PORTAL_PAC_AGEND_ONLINE	agenda_servico.orientacao_marcacao	texto_longo			agenda de exames (L6-04): orientação ao paciente na marcação online, sem mexer em quebras nem espaços
 SIAGENDA	USUARIO	agenda_servico.criado_por			ref:TBUSERS	agenda de exames (L6-04): quem criou a agenda, pelo login (L3); desconhecido: pai_inexistente e a linha entra sem autor
 SIAGENDA	EXAME		codigo_char			agenda de exames (L6-04): tipo de exame da agenda sem coluna no destino (os exames agendáveis são cadastro do produto, ligados na implantação); fica no conector_origem pelo hash da linha. A identidade da agenda para a grade e os horários é NOME e CRM, como no sistema antigo

@@ -135,6 +135,7 @@ export * from './permissoes/protocolo-gerenciado.js';
 export * from './recepcao/termos.js';
 // M18: agenda de exames e centro cirúrgico.
 export * from './agenda/exame.js';
+export * from './agenda/estruturada.js';
 export * from './cirurgia/vocabulario.js';
 export * from './cirurgia/entradas.js';
 export * from './cirurgia/respostas.js';
@@ -259,6 +260,7 @@ export * from './permissoes/farmacia.js';
 // M30: conta do paciente, lançamentos e auditoria de contas (as regras puras em @sgh/contratos/regras-faturamento).
 export * from './faturamento/entradas.js';
 export * from './faturamento/respostas.js';
+export * from './faturamento/preco-particular.js';
 export * from './permissoes/faturamento.js';
 // M31: TISS, competência, demonstrativos, glosa e recurso (as regras puras em @sgh/contratos/regras-faturamento).
 export * from './faturamento/tiss-entradas.js';
