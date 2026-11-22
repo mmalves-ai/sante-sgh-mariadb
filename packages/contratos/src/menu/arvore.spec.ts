@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CATALOGO_DECLARADO } from '../permissoes/catalogo.js';
@@ -532,17 +532,21 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('nenhum nome de tabela do sistema de origem no contrato (fronteira: só o conector conhece a origem)', () => {
-    // O dicionário de colunas da origem (referencias/, uso interno): TABELA|COLUNA|... por linha.
-    const dicionario = readFileSync(
-      resolve(import.meta.dirname, '../../../../referencias/spdata-colunas-raw.txt'),
-      'utf8',
-    );
-    const tabelas = new Set(
-      dicionario
-        .split('\n')
-        .map((l) => l.split('|')[0]!)
-        .filter(Boolean),
-    );
+    // As tabelas da origem que o mapa do conector conhece (versionado; 1.ª coluna de conector/mapa/tabelas.tsv),
+    // somadas às do dicionário completo de colunas da origem quando ele existe na máquina (referencias/, fora do
+    // git por ser estrutura de terceiros: TABELA|COLUNA|... por linha). No CI só o mapa existe.
+    const raizRepo = resolve(import.meta.dirname, '../../../..');
+    const mapa = readFileSync(resolve(raizRepo, 'conector/mapa/tabelas.tsv'), 'utf8')
+      .split('\n')
+      .slice(1)
+      .map((l) => l.split('\t')[0]!);
+    const caminhoDicionario = resolve(raizRepo, 'referencias/spdata-colunas-raw.txt');
+    const dicionario = existsSync(caminhoDicionario)
+      ? readFileSync(caminhoDicionario, 'utf8')
+          .split('\n')
+          .map((l) => l.split('|')[0]!)
+      : [];
+    const tabelas = new Set([...mapa, ...dicionario].filter(Boolean));
     expect(tabelas.size).toBeGreaterThan(1500);
     const palavras = JSON.stringify(ARVORE_MENU).match(/[A-Z][A-Z0-9_]{2,}/g) ?? [];
     expect(palavras.filter((p) => tabelas.has(p))).toEqual([]);

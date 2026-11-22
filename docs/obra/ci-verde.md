@@ -52,3 +52,22 @@ estão na esteira; a limpeza deles fica para quando o dono decidir o que do lega
 | ambiente:verificar | a | verde (local). |
 | e2e @M00 | a | Chrome há na VM; a API e o worker não compilam (`esquemaHhmm` não exportado por `packages/contratos/src/agenda/entradas.ts`, trilha F2.4): etapa 2. |
 | seguranca:verificar | a / decisão | gitleaks do histórico verde. Na árvore local, `dump/` (dados reais) e `certs/` passam a entrar vazios (ignorados pelo git, regra 5); resta 1 achado em `docs/obra/fatias/f24/saida/04-pep-1.json` (não versionado, de outra trilha). Vermelhos: Semgrep 9 altos (6 em apps/packages; 3 em tools são falso positivo de `node_password` por `PASSO` e um regex em teste), OSV/Trivy com dependências a atualizar (vue-i18n e @intlify 11.4.12 → 11.4.14, fast-uri, fastify 5.12.5, glob, minimatch) e Dockerfiles sem `USER` (`conector/`, `deploy/ubuntu/ensaio/`). Atualizar o lockfile ou aprovar exceção (`excecoes.json` exige o dono) é decisão do orquestrador. |
+
+## Etapa 2: conferência final (2026-11-22)
+
+Esteira local versionada: `tools/obra/esteira-local.sh` roda cada passo do `ci.yml` numa worktree limpa do commit (sem
+`.env` nem arquivo não versionado; o build não toca o `apps/*/dist` servido pelo painel; E2E nas portas 5391/3391), com
+um log por passo e o resumo `passo: verde|vermelho`. Primeira volta: commit `921a2991` (logs em
+`sante-sgh-dados/obra/ci2/e1/`).
+
+| Passo / item | Estado na volta 1 | Correção (na causa) ou o que falta |
+|---|---|---|
+| Instalar (lockfile congelado) | verde | — |
+| prettier --check | vermelho (`infra/gestao/compose.yml`) | Formatado. |
+| privilegios.spec (SBIS-14) | vermelho | O `alcance.json` versionado foi gerado com uma pasta vazia `apps/api/src/modulos/agenda-preco` (fora do git), que somava um aviso. Pasta removida e alcance regerado (avisos 2). |
+| contratos: `menu/arvore.spec.ts` | vermelho | Lia só `referencias/spdata-colunas-raw.txt` (fora do git). Passa a usar as tabelas do mapa versionado do conector (`conector/mapa/tabelas.tsv`) somadas às do dicionário quando ele existe na máquina. |
+| `.int.spec` do núcleo, instalação e contábil | vermelho | O runner não tem MariaDB. `ci.yml` declara `SGH_NUCLEO_SEM_BANCO: '1'` (a chave que os `.int.spec` já respeitavam); `contabil/reprocessar.int.spec.ts` não a respeitava e passou a respeitar. Rodar esses testes na VM contra um cliente de teste fica como passo próprio a escrever (falta). |
+| contratos: `suprimentos/onda3-liberacao.spec.ts` | vermelho (falta) | Confere a existência das capturas em `referencias/assinaturas-legado/` (fora do git, regeneráveis do `new-sgh`). Saída: versionar só as capturas que o teste cita ou trocar a prova pelo contrato de efeito do produto. **Decisão do orquestrador ou do dono** (o `.gitignore` foi escolha registrada). |
+| sbis.spec "matriz cobre o catálogo" e `sbis:verificar --executar` | vermelho (falta) | Lacunas abertas de propósito no lote L4: SBIS-16 (cadeia por hash da trilha sem tabela no modelo: DDL) e SBIS-26 (teste de integração do DELETE clínico negado ao papel). Ficam vermelhas até o DDL e o teste, ou exceção do **dono** (só proposta). |
+| fronteiras:provar | verde | — |
+| ambiente:verificar | verde | — |
