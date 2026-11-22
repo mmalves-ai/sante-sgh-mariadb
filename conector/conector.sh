@@ -44,12 +44,12 @@ mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
 PRIV=()
-case "$1" in registrar|ler-faixa|medir-adr9|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
+case "$1" in registrar|ler-faixa|medir-adr9|medir-carga|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 MARIADB_CT=${CONECTOR_MARIADB_CONTAINER:-sante-sgh-mariadb}
 REDE_INT=sante-sgh-conector-int
 case "$1" in
-  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho)
+  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho|medir-carga)
     docker network inspect "$REDE_INT" >/dev/null 2>&1 || docker network create --internal "$REDE_INT" >/dev/null
     if ! docker inspect "$MARIADB_CT" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"$REDE_INT\""; then
       docker network connect --alias mariadb "$REDE_INT" "$MARIADB_CT"
@@ -97,6 +97,7 @@ docker run --rm "${REDE[@]}" "${PRIV[@]}" "${ARQ[@]}" \
   -v "$RAIZ/catalogos/licenciados:/app/licenciados:ro" -v "$RAIZ/db/espelho:/app/db/espelho:ro" -e PLATAFORMA_CHAVE_MESTRA \
   -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
   -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" \
+  -e CONECTOR_GRAVADORES="${CONECTOR_GRAVADORES:-6}" -e CONECTOR_SEM_LOTE="${CONECTOR_SEM_LOTE:-}" \
   -e CONECTOR_UID="$(id -u)" -e CONECTOR_GID="$(id -g)" \
   -e CONECTOR_PLANO_B_AUTORIZADO="${CONECTOR_PLANO_B_AUTORIZADO:-}" \
   -e CONECTOR_COW_MB="${CONECTOR_COW_MB:-2048}" -e CONECTOR_RESERVA_GB="${CONECTOR_RESERVA_GB:-100}" \
