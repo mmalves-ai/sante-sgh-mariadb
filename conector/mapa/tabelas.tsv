@@ -596,11 +596,11 @@ TBIRREGULARID	TABELA	tipo_pendencia_conta;tipo_pendencia_prontuario	tipo_pendenc
 TBIRREGULARID_TBMODULO	TABELA	tipo_pendencia_conta_modulo	tipo_pendencia_conta_modulo		FAT	L8	595	43	ID_TBIRREGULARID,ID_TBMODULO	N		hash_linha	TBIRREGULARID,TBMODULO		
 TBITEATE	TABELA	tipo_atendimento_tabela	tipo_atendimento_tabela		FAT	L8	596	31	TAB,COD	N		hash_linha	TBCTRTAT		
 TBLOCCON	TABELA	local_cobranca	local_cobranca		FAT	L8	597	19	COD	S		hash_linha	TBCENCUS		
-TBMATMED	TABELA	item_referencia_matmed;equivalencia_matmed_fonte_pagadora	item_referencia_matmed;equivalencia_matmed_fonte_pagadora		FAT	L8	598	910414	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	data_alteracao_hash_bloco			
+TBMATMED	TABELA	item_referencia_matmed;equivalencia_matmed_fonte_pagadora	item_referencia_matmed;equivalencia_matmed_fonte_pagadora		FAT	L8	598	910414	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	data_alteracao_hash_bloco	TBCTRMEM		
 FCREFUND	TABELA	preco_procedimento	preco_procedimento		FAT	L8	599	1077674	TAB,COD,CLASSIF,DATA,COD_ALFA	N		hash_bloco_chave	TBCTRMEM,TBMATMED		itens de tabelas de preço de referência
 TBPROCTO	TABELA	tabela_preco;preco_procedimento	tabela_preco;preco_procedimento		FAT	L8	600	275058	ID	S		faixa_id_hash_bloco	TBCTRTHM		
 TBESPPRO	TABELA	especialidade_procedimento	especialidade_procedimento		CAD	L5	601	16246	PROCTO,ESP	N		hash_linha	TBESPEC,TBPROCTO		
-TBREFMEMTUSS	TABELA	equivalencia_matmed_tuss	equivalencia_matmed_tuss		FAT	L8	602	5613	ID	S		hash_linha			
+TBREFMEMTUSS	TABELA	equivalencia_matmed_tuss	equivalencia_matmed_tuss		FAT	L8	602	5613	ID	S		hash_linha	TBCTRMEM		
 TBREFUNI	TABELA	equivalencia_matmed_fonte_pagadora	equivalencia_matmed_fonte_pagadora		FAT	L8	603	6974	TAB,COD	N		hash_linha	TBMATMED		
 TBRPATPREPASSE	TABELA	tipo_prestador_repasse;favorecido_repasse	tipo_prestador_repasse;favorecido_repasse		FAT	L8	604	2	ID	S		hash_linha			
 TBSRVCON	TABELA	tipo_servico_contratado	tipo_servico_contratado		FAT	L8	605	9	COD	S		hash_linha			
@@ -650,7 +650,7 @@ TBEMIREFMATMED	TABELA	referencia_emissao_matmed_excecao	referencia_emissao_matme
 TBENTCON	TABELA	calendario_entrega_fatura	calendario_entrega_fatura		FAT	L8	649	12	CONV,ENTREGA	N		hash_linha	TBCONVEN		
 TBINDICE	TABELA	indice_cobranca;valor_indice	indice_cobranca;valor_indice		FAT	L8	650	242	CON,IND,DATA	N		hash_linha	TBCONVEN		
 TBINDPRO	TABELA	valor_indice_item	valor_indice_item		FAT	L8	651	5	CONV,PROCTO,DATA	N		hash_linha	TBCONVEN,TBPROCTO		
-TBPERMEM	TABELA	regra_percentual_cobranca;preco_negociado_matmed	regra_percentual_cobranca;preco_negociado_matmed		FAT	L8	652	33910	CON,DATA,ID_TBMATMED,TP_CONTA	N		hash_linha	TBCONVEN,TBMATMED		
+TBPERMEM	TABELA	regra_percentual_cobranca;preco_negociado_matmed	regra_percentual_cobranca;preco_negociado_matmed		FAT	L8	652	33910	CON,DATA,ID_TBMATMED,TP_CONTA	N		hash_linha	TBCONVEN,TBCTRMEM,TBMATMED		
 TBPERTHM	TABELA	regra_percentual_cobranca;acrescimo_horario_especial	regra_percentual_cobranca;acrescimo_horario_especial		FAT	L8	653	89015	CONV,TAB,PROCTO,DATA,TIPO_PAC	N		hash_linha	TBCONVEN,TBTABTHM		
 TBPORMED	TABELA	valor_porte_medico	valor_porte_medico		FAT	L8	654	1011	CONV,DATA,PORTE	N		hash_linha	TBCONVEN		
 TBSEGUIA	TABELA	sequencial_guia	sequencial_guia		FAT	L8	655	41	CONV,TIPO_GUIA	N		hash_linha	TBCONVEN		
@@ -658,7 +658,7 @@ TBTIPPLANO	TABELA	coparticipacao_contrato;plano_fonte_pagadora;acomodacao_plano_
 TBTIPPLCONV	TABELA	diaria_por_plano_local	diaria_por_plano_local		FAT	L8	657	76	CONV,ID_TBTIPPLANO	N		hash_linha	TBCONVEN,TBLOCCON,TBTABDTH,TBTIPPLANO		
 TBTISS	TABELA	regra_apresentacao_tiss;configuracao_tiss_fonte_pagadora	regra_apresentacao_tiss;configuracao_tiss_fonte_pagadora		FAT	L8	658	76	CONV	S		hash_linha	TBCONVEN,TBTISSEMIEXP		
 TBVLRDTH	TABELA	preco_diaria_taxa_valor	preco_diaria_taxa_valor		FAT	L8	659	6062	TAB,OPE,DATA	N		hash_linha			
-TBVLRMEM	TABELA	preco_referencia_matmed	preco_referencia_matmed		FAT	L8	660	6186813	TAB,COD,DATA	N		hash_bloco_chave	TBMATMED,TBVERSAOBRASIN		
+TBVLRMEM	TABELA	preco_referencia_matmed	preco_referencia_matmed		FAT	L8	660	6186813	TAB,COD,DATA	N		hash_bloco_chave	TBCTRMEM,TBMATMED,TBVERSAOBRASIN		
 TBVLRTHM	TABELA	preco_procedimento_valor	preco_procedimento_valor		FAT	L8	661	233790	TAB,COD,DATA	N		hash_bloco_chave	TBTABTHM		
 CMESCORE	TABELA	dominio_contratualizacao_sus	dominio_contratualizacao_sus		SUS	L8	662	4	ID	S		hash_linha			só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
 CMPERIODO	TABELA	dominio_contratualizacao_sus	dominio_contratualizacao_sus		SUS	L8	663	16	ID	S		hash_linha			só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
