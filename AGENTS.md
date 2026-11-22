@@ -68,6 +68,7 @@ plano:
 | **G3** | O script não tem `LIMITE_AGENTES` e o invólucro `chamar(...)`, ou chama `agent(` direto |
 | **G4** | O `PREFIXO` não traz o brief da tarefa nem as regras de economia |
 | **G5** | Um subagente avulso não traz `ORCAMENTO: <id>` válido (os tipos só de leitura Explore, claude-code-guide e web-fetch passam) |
+| **G6** | Um subagente passa de 60 ferramentas: recebe aviso para fechar (gravar o que fez e devolver a lista do que falta); a partir de 80, só a devolução do resultado passa. O orquestrador não é contado. `tools/obra/teto_turnos.py`, autorizada pelo dono em 2026-11-21 |
 
 **Proibido contornar o guardião:**
 - desligar o gancho;
