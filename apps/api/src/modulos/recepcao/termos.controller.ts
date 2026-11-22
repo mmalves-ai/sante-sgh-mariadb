@@ -4,7 +4,7 @@
 //   POST /api/recepcao/termos/modelos                         recepcao.termo.editar (versão 1)
 //   POST /api/recepcao/termos/modelos/:codigo/versoes         recepcao.termo.editar (alterar = nova versão)
 //   POST /api/recepcao/termos/modelos/:codigo/situacao        recepcao.termo.editar (inativar/reativar com motivo)
-//   POST /api/recepcao/termos/modelos/:codigo/excluir         recepcao.termo.editar (só o nunca assinado)
+//   POST /api/recepcao/termos/modelos/:codigo/excluir         recepcao.termo.editar (só o nunca assinado; sai da recepção, inativo, sem apagar)
 //   GET  /api/recepcao/termos/paciente?prontuario&tipo        recepcao.senha.ler (assinaturas, faltando, bloqueio suave)
 //   POST /api/recepcao/termos/assinaturas                     recepcao.termo.assinar (em tela ou aceite no portal)
 //   POST /api/recepcao/termos/assinaturas/:id/revogar         recepcao.termo.assinar (fato novo com motivo)
@@ -140,7 +140,7 @@ export class TermosRecepcaoController {
   @Post('modelos/:codigo/excluir')
   @HttpCode(200)
   @Permissao('recepcao.termo.editar')
-  @AuditadoNoHandler('exclusão do modelo de termo com a trilha junto')
+  @AuditadoNoHandler('retirada do modelo de termo (inativo, sem apagar) com a trilha junto')
   async excluir(@Param('codigo') c: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const codigo = codigoDaRota(c);
@@ -148,7 +148,10 @@ export class TermosRecepcaoController {
     await this.apoio.gravar(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
       g.excluirModeloTermo({ codigo, motivo: e.motivo, usuario: s.login }),
     );
-    return { ok: true as const, mensagem: 'Termo excluído.' };
+    return {
+      ok: true as const,
+      mensagem: 'Termo excluído da recepção (o modelo fica no histórico, inativo).',
+    };
   }
 
   @Get('paciente')

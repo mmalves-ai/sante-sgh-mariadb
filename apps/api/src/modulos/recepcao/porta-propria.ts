@@ -960,9 +960,13 @@ function gravadorProprio(
       let painelTv: number | null = null;
       if (x.portalOrdem !== null) {
         if (x.tipo !== 'paineltv')
-          throw recusa('painel-tv-so-no-tipo', 'Só o dispositivo do tipo painel de TV de setor exibe um painel de TV.', {
-            campos: ['portalOrdem'],
-          });
+          throw recusa(
+            'painel-tv-so-no-tipo',
+            'Só o dispositivo do tipo painel de TV de setor exibe um painel de TV.',
+            {
+              campos: ['portalOrdem'],
+            },
+          );
         const paineis = await e.consultar(
           `SELECT id FROM painel_tv
             WHERE estabelecimento_id = ? AND ordem = ? AND situacao = 'ativo' AND excluido_em IS NULL ORDER BY id`,
@@ -1129,10 +1133,15 @@ function gravadorProprio(
             podeInativar: true,
           },
         );
-      // Código nunca assinado: as versões saem (a trilha guarda o motivo); outro uso do modelo barra pela chave.
+      // Código nunca assinado: o modelo é registro clínico e não se apaga. As versões saem da recepção (sem tipos de
+      // atendimento), inativas e com a vigência encerrada hoje; ficam no histórico, com o código reservado, e a trilha
+      // guarda o motivo.
       await e.executar(
-        `DELETE FROM termo_consentimento_modelo WHERE id IN (${ids.map(() => '?').join(', ')})`,
-        ids,
+        `UPDATE termo_consentimento_modelo SET tipos_atendimento = NULL, exigido_recepcao = FALSE, ativo = FALSE,
+           vigencia_fim = COALESCE(vigencia_fim, GREATEST(vigencia_inicio, ?)), alterado_em = ?, alterado_por = ?,
+           versao = versao + 1
+          WHERE id IN (${ids.map(() => '?').join(', ')})`,
+        [horaCivil(instante, est.fuso).slice(0, 10), instante, await idDoLogin(x.usuario), ...ids],
       );
     },
 

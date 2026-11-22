@@ -85,7 +85,7 @@ const semPermissao = () =>
 export const MOTIVO_SESSAO_COMO_REALIZADO =
   'Na sessão de suporte não se registra nem se decide o plantão realizado: entre com a sua própria conta.';
 export const MOTIVO_PROPRIO_REALIZADO = 'O seu próprio plantão é aprovado por outra pessoa da coordenação.';
-export const MOTIVO_EVENTO_REPASSE =
+export const MOTIVO_FALTA_EVENTO_PLANTAO =
   'Falta definir o evento de repasse do plantão (parâmetro do repasse): o faturamento e o repasse confirmam o evento antes do primeiro lançamento.';
 const emComo = (s: SessaoCadastro): boolean => !!s.req?.sghComo;
 function naoComo(s: SessaoCadastro): void {
@@ -170,7 +170,7 @@ export class ServicoRealizado {
     return {
       ligado: l.ligada && evento !== null,
       evento,
-      motivo: !l.ligada ? l.motivo : evento === null ? MOTIVO_EVENTO_REPASSE : null,
+      motivo: !l.ligada ? l.motivo : evento === null ? MOTIVO_FALTA_EVENTO_PLANTAO : null,
     };
   }
 
@@ -507,7 +507,7 @@ export class ServicoRealizado {
         'recurso-desligado',
         403,
         'Lançamento desligado',
-        repasse.motivo ?? MOTIVO_EVENTO_REPASSE,
+        repasse.motivo ?? MOTIVO_FALTA_EVENTO_PLANTAO,
         { codigo: 'repasse-plantao-desligado' },
       );
     const [p] = await this.porta.plantoesPorIds(s.porta, [x.plantao]);
@@ -775,7 +775,7 @@ export class ServicoRealizado {
         'recurso-desligado',
         403,
         'Lançamento desligado',
-        repasse.motivo ?? MOTIVO_EVENTO_REPASSE,
+        repasse.motivo ?? MOTIVO_FALTA_EVENTO_PLANTAO,
         {
           codigo: 'repasse-plantao-desligado',
         },

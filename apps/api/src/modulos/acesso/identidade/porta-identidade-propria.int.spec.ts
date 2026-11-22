@@ -26,8 +26,9 @@ const C = 'teste.l0203c';
 const PERFIL = 'L0203-2FA';
 const PERFIL_PRIV = 'L0203-PRIV';
 const ARGON_TESTE = { memoria: 8192, passes: 1, paralelismo: 1 };
-/** Resumo fictício de uma senha anterior em bcrypt (não confere com nada). */
-const RESUMO_ANTERIOR = '$2b$10$abcdefghijklmnopqrstuuSinteticoSinteticoSinteticoSinte';
+/** Marcador no lugar do resumo de uma senha anterior em bcrypt: a porta só guarda e nunca confere nem devolve o resumo
+ * da migração (a conta fica com redefinição obrigatória), então o teste não precisa de um resumo de verdade. */
+const RESUMO_ANTERIOR = '<resumo-bcrypt-sintetico>';
 
 const ids = { est: 0, outro: 0, a: 0, b: 0, c: 0, perfil: 0, priv: 0 };
 let nucleo: NucleoProprio;
@@ -84,7 +85,10 @@ async function limpar(e: Escritor) {
   const ests = [ids.est, ids.outro].filter((x) => x > 0);
   if (!ests.length) return;
   const eem = ests.map(() => '?').join(',');
-  await e.executar(`UPDATE politica_segundo_fator SET substituida_por_id = NULL WHERE estabelecimento_id IN (${eem})`, ests);
+  await e.executar(
+    `UPDATE politica_segundo_fator SET substituida_por_id = NULL WHERE estabelecimento_id IN (${eem})`,
+    ests,
+  );
   await e.executar(`DELETE FROM politica_segundo_fator WHERE estabelecimento_id IN (${eem})`, ests);
 }
 
@@ -201,12 +205,15 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
       senhaPresente: true,
       redefinicaoObrigatoria: true,
     });
-    expect(JSON.stringify(a)).not.toContain('$2b$');
+    expect(JSON.stringify(a)).not.toContain(RESUMO_ANTERIOR);
     expect((await porta.conta(EST, B))?.grupo).toContain(PERFIL);
     expect(await porta.conta(EST, C)).toBeNull();
     expect(await porta.conta(OUTRO, C)).toMatchObject({ id: ids.c });
     expect(await porta.forte(EST, A, ids.a)).toBeNull();
-    expect(await porta.forte(EST, B, ids.b)).toMatchObject({ algoritmo: 'argon2id', parametros: 'm=8192,t=1,p=1' });
+    expect(await porta.forte(EST, B, ids.b)).toMatchObject({
+      algoritmo: 'argon2id',
+      parametros: 'm=8192,t=1,p=1',
+    });
     const r = await porta.autenticarForte(EST, B, ids.b, 'Sintetica#B1', conferirSenha);
     expect(r?.confere).toBe(true);
     expect((await porta.autenticarForte(EST, B, ids.b, 'errada', conferirSenha))?.confere).toBe(false);
@@ -221,16 +228,25 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
 
   it('redefinição pelo gestor: mesma linha, versão +1, trilha com o gestor como usuário e sem o resumo', async () => {
     const antes = await credencial(ids.a);
-    expect(await servico.regravar(ator(A, ids.a), 'Provisoria#A1', 'senha-provisoria', ator(B, ids.b))).toBe(true);
+    expect(await servico.regravar(ator(A, ids.a), 'Provisoria#A1', 'senha-provisoria', ator(B, ids.b))).toBe(
+      true,
+    );
     const depois = await credencial(ids.a);
-    expect(depois).toMatchObject({ id: antes?.['id'], algoritmo: 'argon2id', versao: Number(antes?.['versao']) + 1 });
+    expect(depois).toMatchObject({
+      id: antes?.['id'],
+      algoritmo: 'argon2id',
+      versao: Number(antes?.['versao']) + 1,
+    });
     expect(Boolean(depois?.['troca_obrigatoria'])).toBe(true);
     expect(Number(depois?.['trilhas'])).toBe(Number(antes?.['trilhas']) + 1);
     const t = await trilhaDe('credencial_usuario', Number(antes?.['id']));
     expect(t).toMatchObject({ usuario_id: ids.b, estabelecimento_id: ids.est });
     expect(JSON.stringify(t)).not.toContain('$argon2');
     expect((await porta.conta(EST, A))?.redefinicaoObrigatoria).toBe(false);
-    expect(await servico.autenticar(EST, A, 'Provisoria#A1')).toMatchObject({ tipo: 'forte-ok', provisoria: true });
+    expect(await servico.autenticar(EST, A, 'Provisoria#A1')).toMatchObject({
+      tipo: 'forte-ok',
+      provisoria: true,
+    });
   });
 
   it('troca já gravada pela porta da senha (Argon2id): regravar não toca a linha (versão e trilha intactas)', async () => {
@@ -246,7 +262,14 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
     await expect(
       porta.gravarForte(
         EST,
-        { idUsuario: ids.c, login: C, hashPhc, algoritmo: 'argon2id', parametros: 'm=8192,t=1,p=1', origem: 'senha-provisoria' },
+        {
+          idUsuario: ids.c,
+          login: C,
+          hashPhc,
+          algoritmo: 'argon2id',
+          parametros: 'm=8192,t=1,p=1',
+          origem: 'senha-provisoria',
+        },
         trilha(ids.b, 'acesso.credencial.regravada'),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'fora-do-estabelecimento' } });
@@ -259,20 +282,32 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
       expect.objectContaining({ alvo: 'perfil', valor: PERFIL_PRIV, origem: 'cadastro-perfil' }),
     );
     expect(
-      await servico.segundoFatorNoLogin(EST, { login: B, id: ids.b }, { perfil: PERFIL, complementares: [], grupo: null }, undefined),
+      await servico.segundoFatorNoLogin(
+        EST,
+        { login: B, id: ids.b },
+        { perfil: PERFIL, complementares: [], grupo: null },
+        undefined,
+      ),
     ).toEqual({
       tipo: 'entrar',
       info: { cadastrado: false, disponivel: true, exigencia: 'adesao', prazoAdesaoAte: null },
     });
     expect(
-      (await servico.meuSegundoFator(ator(B, ids.b), { perfil: PERFIL_PRIV, complementares: [], grupo: null }))
-        .exigencia,
+      (
+        await servico.meuSegundoFator(ator(B, ids.b), {
+          perfil: PERFIL_PRIV,
+          complementares: [],
+          grupo: null,
+        })
+      ).exigencia,
     ).toBe('adesao');
   });
 
   it('exigência pelo perfil; política por onda: inclui, altera (encerra e liga a nova) e encerra', async () => {
     const p = await porta.politicas(EST);
-    expect(p).toContainEqual(expect.objectContaining({ alvo: 'perfil', valor: PERFIL, inicio: '2026-01-01', onda: 1 }));
+    expect(p).toContainEqual(
+      expect.objectContaining({ alvo: 'perfil', valor: PERFIL, inicio: '2026-01-01', onda: 1 }),
+    );
     expect(await porta.politicas(OUTRO)).not.toContainEqual(expect.objectContaining({ valor: PERFIL }));
     const nova = {
       hospital: EST,
@@ -286,28 +321,90 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
     };
     const t = trilha(ids.b, 'acesso.politicaSegundoFator.incluida');
     const { id } = await porta.incluirPolitica(EST, nova, t);
-    expect(await linha('SELECT alvo, perfil_acesso_id, onda, prazo_adesao_dias, criado_por FROM politica_segundo_fator WHERE id = ?', [Number(id)]))
-      .toMatchObject({ alvo: 'todos', perfil_acesso_id: null, onda: 2, prazo_adesao_dias: 30, criado_por: ids.b });
+    expect(
+      await linha(
+        'SELECT alvo, perfil_acesso_id, onda, prazo_adesao_dias, criado_por FROM politica_segundo_fator WHERE id = ?',
+        [Number(id)],
+      ),
+    ).toMatchObject({
+      alvo: 'todos',
+      perfil_acesso_id: null,
+      onda: 2,
+      prazo_adesao_dias: 30,
+      criado_por: ids.b,
+    });
     expect(await porta.politicas(EST)).toContainEqual(
-      expect.objectContaining({ id, alvo: 'todos', valor: null, onda: 2, inicio: '2026-12-01', prazoAdesaoDias: 30, encerradaEm: null }),
+      expect.objectContaining({
+        id,
+        alvo: 'todos',
+        valor: null,
+        onda: 2,
+        inicio: '2026-12-01',
+        prazoAdesaoDias: 30,
+        encerradaEm: null,
+      }),
     );
     await expect(
-      porta.incluirPolitica(EST, { ...nova, alvo: 'grupo', valor: 'X' }, trilha(ids.b, 'acesso.politicaSegundoFator.incluida')),
+      porta.incluirPolitica(
+        EST,
+        { ...nova, alvo: 'grupo', valor: 'X' },
+        trilha(ids.b, 'acesso.politicaSegundoFator.incluida'),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'sem-grupos' } });
     const alt = await porta.alterarPolitica(
       EST,
-      { id, hospital: EST, por: B, alvo: 'perfil', valor: PERFIL, prazoAdesaoDias: 15, motivo: 'Prazo menor' },
+      {
+        id,
+        hospital: EST,
+        por: B,
+        alvo: 'perfil',
+        valor: PERFIL,
+        prazoAdesaoDias: 15,
+        motivo: 'Prazo menor',
+      },
       trilha(ids.b, 'acesso.politicaSegundoFator.alterada'),
     );
     expect(alt).toMatchObject({ anterior: id });
-    expect(await linha('SELECT motivo_encerramento, substituida_por_id FROM politica_segundo_fator WHERE id = ?', [Number(id)]))
-      .toMatchObject({ motivo_encerramento: 'Alterada: Prazo menor', substituida_por_id: Number(alt?.id) });
-    expect(await porta.alterarPolitica(EST, { id, hospital: EST, por: B, alvo: 'todos', valor: null, prazoAdesaoDias: 1, motivo: 'x' }, trilha(ids.b, 'x')))
-      .toBeNull();
-    expect(await porta.encerrarPolitica(OUTRO, { id: String(alt?.id), hospital: OUTRO, por: B, motivo: 'Outro hospital' }, trilha(ids.b, 'x'))).toBe(false);
-    expect(await porta.encerrarPolitica(EST, { id: String(alt?.id), hospital: EST, por: B, motivo: 'Fim da onda' }, trilha(ids.b, 'x'))).toBe(true);
-    expect(await porta.encerrarPolitica(EST, { id: String(alt?.id), hospital: EST, por: B, motivo: 'De novo' }, trilha(ids.b, 'x'))).toBe(false);
-    expect((await porta.politicas(EST)).find((l) => l.id === String(alt?.id))).toMatchObject({ alvo: 'perfil', valor: PERFIL, onda: 2, inicio: '2026-12-01', prazoAdesaoDias: 15 });
+    expect(
+      await linha('SELECT motivo_encerramento, substituida_por_id FROM politica_segundo_fator WHERE id = ?', [
+        Number(id),
+      ]),
+    ).toMatchObject({ motivo_encerramento: 'Alterada: Prazo menor', substituida_por_id: Number(alt?.id) });
+    expect(
+      await porta.alterarPolitica(
+        EST,
+        { id, hospital: EST, por: B, alvo: 'todos', valor: null, prazoAdesaoDias: 1, motivo: 'x' },
+        trilha(ids.b, 'x'),
+      ),
+    ).toBeNull();
+    expect(
+      await porta.encerrarPolitica(
+        OUTRO,
+        { id: String(alt?.id), hospital: OUTRO, por: B, motivo: 'Outro hospital' },
+        trilha(ids.b, 'x'),
+      ),
+    ).toBe(false);
+    expect(
+      await porta.encerrarPolitica(
+        EST,
+        { id: String(alt?.id), hospital: EST, por: B, motivo: 'Fim da onda' },
+        trilha(ids.b, 'x'),
+      ),
+    ).toBe(true);
+    expect(
+      await porta.encerrarPolitica(
+        EST,
+        { id: String(alt?.id), hospital: EST, por: B, motivo: 'De novo' },
+        trilha(ids.b, 'x'),
+      ),
+    ).toBe(false);
+    expect((await porta.politicas(EST)).find((l) => l.id === String(alt?.id))).toMatchObject({
+      alvo: 'perfil',
+      valor: PERFIL,
+      onda: 2,
+      inicio: '2026-12-01',
+      prazoAdesaoDias: 15,
+    });
   });
 
   it('lista e contagens do estabelecimento, com o filtro da senha antes da paginação', async () => {
@@ -335,20 +432,40 @@ describe.skipIf(SEM_BANCO)('porta própria da identidade contra o MariaDB (clien
 
 /** A mesma bateria do segundo fator na memória e no banco. */
 describe.each([
-  ['memória', () => ({ p: new PortaIdentidadeMemoria().usuario({ login: B, id: 1 }) as PortaIdentidade, id: 1, h: EST })],
+  [
+    'memória',
+    () => ({
+      p: new PortaIdentidadeMemoria().usuario({ login: B, id: 1 }) as PortaIdentidade,
+      id: 1,
+      h: EST,
+    }),
+  ],
   ['banco', () => ({ p: porta as PortaIdentidade, id: ids.b, h: EST })],
 ] as const)('ciclo do segundo fator (%s)', (nome, fabrica) => {
   it.skipIf(nome === 'banco' && SEM_BANCO)('pendente → ativo → revogado, sem repetir o passo', async () => {
     const { p, id, h } = fabrica();
     const t = (e: string) => trilha(id, e);
-    const r1 = await p.iniciar2fa(h, { idUsuario: id, login: B, segredoEnvelope: 'v1.x.y.z' }, t('acesso.segundofator.iniciado'));
-    const r2 = await p.iniciar2fa(h, { idUsuario: id, login: B, segredoEnvelope: 'v1.x.y.w' }, t('acesso.segundofator.iniciado'));
+    const r1 = await p.iniciar2fa(
+      h,
+      { idUsuario: id, login: B, segredoEnvelope: 'v1.x.y.z' },
+      t('acesso.segundofator.iniciado'),
+    );
+    const r2 = await p.iniciar2fa(
+      h,
+      { idUsuario: id, login: B, segredoEnvelope: 'v1.x.y.w' },
+      t('acesso.segundofator.iniciado'),
+    );
     expect(r2?.id).toBe(r1?.id);
-    expect(await p.segundoFator(h, B, id)).toMatchObject({ situacao: 'pendente', segredoEnvelope: 'v1.x.y.w' });
+    expect(await p.segundoFator(h, B, id)).toMatchObject({
+      situacao: 'pendente',
+      segredoEnvelope: 'v1.x.y.w',
+    });
     expect(await p.marcar2fa(h, r1!.id, new Date('2026-11-21T10:00:00Z'))).toBe(false);
     expect(await p.confirmar2fa(h, r1!.id, t('acesso.segundofator.confirmado'))).toBe(true);
     expect(await p.confirmar2fa(h, r1!.id, t('acesso.segundofator.confirmado'))).toBe(false);
-    expect(await p.iniciar2fa(h, { idUsuario: id, login: B, segredoEnvelope: 'v1.n.o.p' }, t('x'))).toBeNull();
+    expect(
+      await p.iniciar2fa(h, { idUsuario: id, login: B, segredoEnvelope: 'v1.n.o.p' }, t('x')),
+    ).toBeNull();
     const passo = new Date('2026-11-21T10:00:00Z');
     expect(await p.marcar2fa(h, r1!.id, passo)).toBe(true);
     expect(await p.marcar2fa(h, r1!.id, passo)).toBe(false);
@@ -359,9 +476,10 @@ describe.each([
     expect(f?.situacao).toBe('revogado');
     expect(f?.segredoEnvelope).not.toBe('v1.x.y.w');
     if (nome === 'banco') {
-      const l = await linha('SELECT situacao, referencia_cofre, revogado_em, versao FROM segundo_fator_usuario WHERE id = ?', [
-        Number(r1!.id),
-      ]);
+      const l = await linha(
+        'SELECT situacao, referencia_cofre, revogado_em, versao FROM segundo_fator_usuario WHERE id = ?',
+        [Number(r1!.id)],
+      );
       expect(l).toMatchObject({ situacao: 'revogado', referencia_cofre: 'descartado' });
       expect(l?.['revogado_em']).not.toBeNull();
       expect(await trilhaDe('segundo_fator_usuario', Number(r1!.id))).toMatchObject({ usuario_id: ids.b });

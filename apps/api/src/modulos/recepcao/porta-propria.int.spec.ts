@@ -683,7 +683,9 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
     await finalidade('protecao_dados');
     try {
       expect(await recusada(porta.modelosTermo(c))).toBe('termo-finalidade-fora-do-contrato');
-      expect(await recusada(porta.termosDoPaciente(c, m.prontuario))).toBe('termo-finalidade-fora-do-contrato');
+      expect(await recusada(porta.termosDoPaciente(c, m.prontuario))).toBe(
+        'termo-finalidade-fora-do-contrato',
+      );
     } finally {
       await finalidade('compartilhamento_rede');
     }
@@ -726,6 +728,23 @@ describe.skipIf(SEM_BANCO)('porta própria da recepção contra o MariaDB (clien
       gr.excluirModeloTermo({ codigo: 'avulso-sintetico', motivo: 'Cadastro errado', usuario: LOGIN }),
     );
     expect((await porta.modelosTermo(c)).some((x) => x.codigo === 'avulso-sintetico')).toBe(false);
+    // O modelo é registro clínico: não se apaga. As versões ficam no banco, inativas, fora da recepção e com a
+    // vigência encerrada; o código fica reservado.
+    const guardado = await ler<{
+      ativo: number;
+      tipos_atendimento: unknown;
+      exigido_recepcao: number;
+      vigencia_fim: Date | null;
+    }>(
+      `SELECT ativo, tipos_atendimento, exigido_recepcao, vigencia_fim FROM termo_consentimento_modelo
+        WHERE estabelecimento_id = ? AND codigo = ?`,
+      [m.est, 'avulso-sintetico'],
+    );
+    expect(guardado).toHaveLength(1);
+    expect(guardado[0]).toMatchObject({ tipos_atendimento: null });
+    expect(Boolean(guardado[0]!.ativo)).toBe(false);
+    expect(Boolean(guardado[0]!.exigido_recepcao)).toBe(false);
+    expect(guardado[0]!.vigencia_fim).not.toBeNull();
   });
 
   it('as guias do dia aguardando autorização: fonte que exige guia e sem senha', async () => {

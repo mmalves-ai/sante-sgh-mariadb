@@ -67,7 +67,7 @@ import type { ContextoRealizado, GravadorRealizado, PortaRealizado } from './por
 import type { RegistroPlantaoParaRealizado, RegistroRealizado, RegistroTarifaPlantao } from './tipos.js';
 
 /** A receita do repasse que a porta do realizado executa (o lançamento do plantão e o negativo do estorno). */
-const OPERACAO_REPASSE = 'repasse.lancarEvento';
+const OPERACAO_LANCAR_EVENTO = 'repasse.lancarEvento';
 const centavos = (v: number) => Math.round(v * 100);
 
 /** Uma operação do Executor por ação da tela do realizado. */
@@ -349,16 +349,15 @@ async function lancarNoRepasse(tx: TxOperacao, e: LancarEventoRepasseEntrada): P
     );
     if (!original)
       throw recusa('sem-estorno-pendente', 'O lançamento original não existe neste estabelecimento.');
-    const doOriginal = await leitura.realizados(tx, est, fuso, 'AND p.lancamento_repasse_id = ?', [e.estornaDe]);
+    const doOriginal = await leitura.realizados(tx, est, fuso, 'AND p.lancamento_repasse_id = ?', [
+      e.estornaDe,
+    ]);
     const valorOriginal = centavos(Number(original['valor']));
     // Original de um plantão só: o negativo devolve o valor lançado inteiro. De vários: o recálculo de todos tem de
     // fechar com o lançado, senão a tarifa mudou e o valor de cada plantão no lançamento não é mais conhecido.
     const lancadoDe = (r: RegistroRealizado): number | null =>
       doOriginal.length === 1 ? valorOriginal : r.valor === null ? null : centavos(r.valor);
-    if (
-      doOriginal.length > 1 &&
-      doOriginal.reduce((t, r) => t + centavos(r.valor ?? 0), 0) !== valorOriginal
-    )
+    if (doOriginal.length > 1 && doOriginal.reduce((t, r) => t + centavos(r.valor ?? 0), 0) !== valorOriginal)
       throw recusa(
         'tarifa-alterada-depois-do-lancamento',
         'O valor recalculado dos plantões não fecha com o lançamento original: estorne pelo repasse.',
@@ -676,7 +675,7 @@ export class PortaRealizadoPropria implements PortaRealizado {
     entrada: unknown,
     ctx: ContextoOperacao,
   ): Promise<GravacaoFeita> {
-    if (operacao !== OPERACAO_REPASSE)
+    if (operacao !== OPERACAO_LANCAR_EVENTO)
       throw recusa('operacao-desconhecida', 'A porta do realizado só executa o lançamento no repasse.');
     if (c.estabelecimento === null)
       throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
