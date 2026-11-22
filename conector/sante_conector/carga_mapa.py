@@ -633,6 +633,9 @@ class CargaMapa(carga.Carga):
         self._adiando = self._esvaziando = False
         self._adiar_linha = False           # a linha atual pode ser adiada (decidido em _tabela)
         self._prox_id = {}                  # destino -> próximo id reservado no bloco
+        # tabela grande dividida por faixa de chave entre gravadores (paralelo.py): as faixas deste gravador, os
+        # limites [lo, hi) da chave (None = aberto), os destinos e a reserva de id por bloco do coordenador
+        self._faixas_so, self._faixa_lim, self._faixa_dts, self._reservar = None, None, frozenset(), None
         self._autoinc = {}                  # destino -> tem `id` autoincremento
         self._filho_pai = {}                # (dt, coluna, tabela do pai) -> [(id da filha, id esperado do pai)]
         self.chave_cofre = continuidade.chave_mestra()
@@ -768,7 +771,7 @@ class CargaMapa(carga.Carga):
         self.tipos = {n: c.get("codigo_tipo") for n, c in cols.items()}
         ch = p["chave"]
         if len(ch) == 1 and self.lt.chave_primaria(t) == ch and cols[ch[0]]["codigo_tipo"] in TIPOS_INT:
-            for ini, fim in self.lt.faixas(t, ch[0]):
+            for ini, fim in (self._faixas_so if self._faixas_so is not None else self.lt.faixas(t, ch[0])):
                 nomes, it = self.lt.ler_faixa(t, ch[0], ini, fim, colunas=p["lidas"])
                 self._bloco = ini
                 for x in it:
@@ -787,6 +790,10 @@ class CargaMapa(carga.Carga):
         for h, x in sorted(((hash_linha(list(x)), x) for x in it), key=lambda y: y[0]):
             vistos[h] = vistos.get(h, 0) + 1
             yield dict(zip(nomes, x)), "h:%s#%d" % (h, vistos[h])
+
+    def _faixas_divisao(self, p):
+        """Faixas de chave da tabela inteira (ordem da chave), para dividir entre gravadores (paralelo.py)."""
+        return list(self.lt.faixas(p["tabela"], p["chave"][0]))
 
     @staticmethod
     def _chave(v):
@@ -1689,6 +1696,15 @@ class CargaMapa(carga.Carga):
                              json.dumps(p["colunas"], default=str))
 
     def _inserir(self, tabela, valores):
+        if self._faixa_lim is not None and tabela in self._faixa_dts and valores.get("id") is None:
+            # tabela dividida por faixa: o id vem do bloco reservado a este gravador pelo coordenador (sem colisão
+            # com os outros gravadores do mesmo destino; o MAX+1 não vale com dois gravadores no destino)
+            valores = dict(valores, id=self._reservar(tabela))
+            if not self._adiando:
+                if self._fila:
+                    self._esvaziar()
+                super()._inserir(tabela, valores)
+                return valores["id"]
         if not self._adiando:
             if self._fila:
                 self._esvaziar()
@@ -2340,6 +2356,9 @@ class CargaMapa(carga.Carga):
             sincronizar_mod.blocos(self, t, blocos)
         self._commit()
         seg = time.monotonic() - inicio
+        ant = self.por_tabela.get(t) if self._faixa_lim is not None else None
+        if ant:  # outra faixa da mesma tabela neste gravador: soma
+            n, seg = n + ant["linhas"], seg + ant["segundos"]
         self.por_tabela[t] = {"linhas": n, "segundos": round(seg, 3),
                               "linhas_por_segundo": round(n / seg, 1) if seg > 0 else None}
 

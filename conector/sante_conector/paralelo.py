@@ -11,9 +11,15 @@ Ordem do plano:
   destino nunca recebe dois gravadores ao mesmo tempo (o id reservado MAX+1 do bloco continua seguro) e a ordem entre
   tabelas relacionadas é a do plano, como na carga de um gravador só;
 - uma onda só começa quando a anterior terminou, foi commitada e o estado em memória dos gravadores foi juntado;
-- dentro da onda, as tabelas vão para os gravadores livres, das maiores para as menores. A tabela grande NÃO é
-  dividida por faixa (na dúvida, fica num gravador só);
-- onda de uma tabela só roda no próprio coordenador, como antes.
+- dentro da onda, as tarefas vão para os gravadores livres, das maiores para as menores;
+- tabela GRANDE (CONECTOR_FAIXA_MIN linhas, padrão 500 mil; CONECTOR_FAIXA=0 desliga) e SEGURA (`divisivel`: chave
+  primária inteira de uma coluna, gravação em bloco permitida (sem agrupar, adotar, complementar nem autorreferência),
+  sem `#seq:`/`#grupo_*` (posição ou soma que dependem das outras linhas), sem índice único no destino além da
+  chave primária, sem `id` declarado e fora dos provisórios) é dividida por FAIXA DE CHAVE: as faixas de 10 mil
+  chaves do leitor vão em N partes contíguas, uma tarefa cada, ao lado das tabelas pequenas da mesma onda. O id do
+  destino vem de um bloco reservado pelo coordenador a cada gravador (`reservar`), nunca do MAX+1; o hash por bloco
+  do Sincronizar só apaga os blocos sumidos dentro da faixa do gravador;
+- onda de uma tabela só, sem divisão, roda no próprio coordenador, como antes.
 
 Estado em memória: o gravador nasce do fork com todo o estado do coordenador e devolve só a diferença (chaves tocadas
 dos dicionários, cauda das listas, soma dos contadores); o coordenador junta e segue com a fase 2, o Sincronizar, a
@@ -33,6 +39,9 @@ import pymysql
 
 PADRAO = 6
 LOTE_LINHAS = 1000
+FAIXA_MIN = 500000
+RESERVA = 20000  # ids reservados por pedido do gravador, por destino
+_FILTRO = {}  # no gravador: (atributo, chave) da tabela dividida -> faixas [lo, hi) cujas chaves voltam ao coordenador
 _FALTA = object()
 # contadores somados entre gravadores (a chave criada no gravador também soma); nos outros dicionários (caches de id)
 # o inteiro novo substitui
@@ -41,7 +50,8 @@ _ATIVO = [False]  # só o gravador anota as chaves alteradas (no coordenador o d
 # atributos que são do processo (conexões, fila do bloco, linha atual) ou caches por tabela: nunca voltam
 _FORA = frozenset({"lt", "cr", "progresso", "mapa_exec", "plano", "tabelas", "chaves", "_fila", "_diario", "_buf",
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
-                   "_esvaziando", "_adiar_linha", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest"})
+                   "_esvaziando", "_adiar_linha", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
+                   "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar"})
 
 
 def gravadores():
@@ -49,6 +59,61 @@ def gravadores():
         return max(1, int(os.environ.get("CONECTOR_GRAVADORES") or PADRAO))
     except ValueError:
         return PADRAO
+
+
+def _faixa_min():
+    if os.environ.get("CONECTOR_FAIXA") == "0":
+        return None
+    try:
+        return max(1, int(os.environ.get("CONECTOR_FAIXA_MIN") or FAIXA_MIN))
+    except ValueError:
+        return FAIXA_MIN
+
+
+def divisivel_spec(p, linhas):
+    """Parte da especificação (também usada na previsão): grande, chave de uma coluna, sem posição/soma de grupo,
+    sem `id` declarado, sem agrupar/adotar/complementar, sem autorreferência e fora dos provisórios."""
+    from .carga_mapa import PROVISORIO
+    m, t, ch = _faixa_min(), p["tabela"], p["chave"]
+    if m is None or int(linhas or 0) < m or len(ch) != 1 or t in PROVISORIO:
+        return False
+    for dt in p["destinos"]:
+        op = (p.get("opcoes") or {}).get(dt) or {}
+        if op.get("agrupar") or op.get("adotar") or op.get("complementa"):
+            return False
+        for c in p["colunas"][dt]:
+            if c["coluna"].startswith(("#seq:", "#grupo_")) or c.get("destino") == "id":
+                return False
+    return not re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(t), json.dumps(p["colunas"], default=str))
+
+
+def divisivel(cm, p, contagens):
+    """A tabela pode ser dividida por faixa de chave entre gravadores sem mudar o resultado: nenhuma decisão da linha
+    depende de outra linha da mesma tabela nem da ordem de gravação no destino (ver o cabeçalho do módulo)."""
+    from .carga_mapa import TIPOS_INT
+    t, ch = p["tabela"], p["chave"]
+    if not divisivel_spec(p, contagens.get(t, 0)):
+        return False
+    if not cm._adiavel(p) or cm.lt.chave_primaria(t) != ch:
+        return False
+    cols = {c["nome"]: c for c in cm.lt.colunas(t)}
+    if ch[0] not in cols or cols[ch[0]]["codigo_tipo"] not in TIPOS_INT:
+        return False
+    with cm.cr.cursor() as c:
+        for dt in p["destinos"]:
+            c.execute("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND"
+                      " TABLE_NAME=%s AND NON_UNIQUE=0 AND INDEX_NAME<>'PRIMARY'", (dt,))
+            if c.fetchone()[0]:
+                return False
+    return True
+
+
+def _na_faixa(k, lims):
+    try:
+        v = int(str(k).split("/", 1)[0])
+    except ValueError:
+        return True
+    return any((lo is None or v >= lo) and (hi is None or v < hi) for lo, hi in lims)
 
 
 class _Rastreado(dict):
@@ -165,6 +230,11 @@ def _delta(cm, base):
         elif isinstance(v, _Rastreado):
             for k, (velho, tam, num) in v.ant.items():
                 novo = dict.get(v, k, _FALTA)
+                lims = _FILTRO.get((n, k)) if quem == "" else None
+                if lims is not None and isinstance(novo, (dict, set)):  # tabela dividida: só as chaves das faixas
+                    novo = type(novo)(x for x in (novo.items() if isinstance(novo, dict) else novo)
+                                      if _na_faixa(x[0] if isinstance(novo, dict) else x, lims))
+                    velho = novo if velho is not _FALTA else velho
                 if novo is _FALTA:
                     ops.append((quem, n, "del", k, None))
                 elif velho is _FALTA and n in _CONTADORES and isinstance(novo, int) and not isinstance(novo, bool):
@@ -191,13 +261,23 @@ def _delta(cm, base):
     return ops
 
 
-def _juntar(cm, ops):
+def _juntar(cm, ops, somar=frozenset()):
     for quem, n, op, k, x in ops:
         dono = cm.prop if quem == "prop" else cm
         if op == "set":
             setattr(dono, n, x)
             continue
         d = getattr(dono, n)
+        if somar and quem == "":  # tabela dividida: medida e blocos de cada gravador somados
+            if n == "por_tabela" and op in ("put", "upd") and k in somar and d.get(k):
+                li, sg = d[k]["linhas"] + x["linhas"], max(d[k]["segundos"], x["segundos"])
+                d[k] = {"linhas": li, "segundos": sg, "linhas_por_segundo": round(li / sg, 1) if sg > 0 else None}
+                continue
+            if n == "sinc_res" and k == "blocos" and op == "upd" and isinstance(d.get(k), dict):
+                for tt, b in x.items():
+                    a = d[k].get(tt)
+                    d[k][tt] = {c: b[c] + a[c] for c in b} if tt in somar and a else b
+                continue
         if k is None:  # lista ou conjunto no próprio atributo
             d.extend(x) if op == "ext" else d.update(x)
         elif op == "del":
@@ -319,19 +399,37 @@ def _gravador(cm, con):
         cm.lt = LeitorRemoto(cli)
         cm.progresso = lambda *a: None
         cm._prox_id, cm._fila, cm._buf, cm._diario = {}, [], [], []
+        reserva = {}
+
+        def reservar(dt):
+            a = reserva.get(dt)
+            if not a or a[0] >= a[1]:
+                a = reserva[dt] = list(cli.chamar("reservar", dt, RESERVA))
+            a[0] += 1
+            return a[0] - 1
+        cm._reservar = reservar
         _pre_tocar(cm, frozenset(), tudo_pequeno=True)
         base = _base(cm)
         feito = None
         while True:
-            i = cli.chamar("tabela", feito)
-            if i is None:
+            tarefa = cli.chamar("tabela", feito)
+            if tarefa is None:
                 break
+            i = tarefa if isinstance(tarefa, int) else tarefa[0]
             p = cm.plano[i]
-            _pre_tocar(cm, frozenset([p["tabela"]] + list(p["destinos"]) +
-                                     [cm._nome_ent(p["tabela"], dt) for dt in p["destinos"]]))
-            cm._tabela(p)
-            cm._commit()
-            feito = i
+            ents = [cm._nome_ent(p["tabela"], dt) for dt in p["destinos"]]
+            _pre_tocar(cm, frozenset([p["tabela"]] + list(p["destinos"]) + ents))
+            if not isinstance(tarefa, int):  # uma parte (faixas contíguas) de tabela dividida
+                _, _, _, lo, hi, fx = tarefa
+                cm._faixas_so, cm._faixa_lim, cm._faixa_dts = fx, (lo, hi), frozenset(p["destinos"])
+                for chave in [("existente", p["tabela"]), ("vistas", p["tabela"])] + [("origem", e) for e in ents]:
+                    _FILTRO.setdefault(chave, []).append((lo, hi))
+            try:
+                cm._tabela(p)
+                cm._commit()
+            finally:
+                cm._faixas_so, cm._faixa_lim, cm._faixa_dts = None, None, frozenset()
+            feito = tarefa if isinstance(tarefa, int) else (i, tarefa[2])
         con.send((0, "fim", (_delta(cm, base),)))
     except BaseException:
         try:
@@ -343,9 +441,10 @@ def _gravador(cm, con):
 
 
 # ----- coordenador -----
-def _servir(cm, filhos, fila, ao_feito):
-    """Atende os gravadores até todos devolverem o estado: leituras da origem, próxima tabela e o resultado."""
-    fluxos, vivos, sid = {}, dict(filhos), itertools.count(1)
+def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
+    """Atende os gravadores até todos devolverem o estado: leituras da origem, próxima tarefa, reserva de ids do
+    destino da tabela dividida e o resultado."""
+    fluxos, vivos, sid, prox = {}, dict(filhos), itertools.count(1), {}
     while vivos:
         for con in wait(list(vivos)):
             pid = vivos[con]
@@ -378,10 +477,18 @@ def _servir(cm, filhos, fila, ao_feito):
                 if a[0] is not None:
                     ao_feito(a[0])
                 con.send((rid, True, fila.pop(0) if fila else None))
+            elif op == "reservar":  # bloco de ids do destino: começa no MAX+1 do início da onda, nunca repete
+                dt, q = a
+                if dt not in prox:
+                    with cm.cr.cursor() as c:
+                        c.execute("SELECT COALESCE(MAX(id), 0) FROM `%s`" % dt)
+                        prox[dt] = int(c.fetchone()[0]) + 1
+                con.send((rid, True, (prox[dt], prox[dt] + q)))
+                prox[dt] += q
             elif op == "fim":
                 del vivos[con]
                 os.waitpid(pid, 0)
-                _juntar(cm, a[0])
+                _juntar(cm, a[0], somar)
             elif op == "erro":
                 for p in vivos.values():
                     try:
@@ -408,12 +515,27 @@ def carregar(cm, contagens):
     feitos = [0]
     ws = ondas(cm.plano, cm.mapa_exec)
 
-    def ao_feito(i):
-        feitos[0] += 1
+    def ao_feito(f):
+        i = f if isinstance(f, int) else f[0]
+        feitos[0] += 1 if isinstance(f, int) else 1 / f[1]
         cm.progresso(feitos[0] / total, "carregando %s (onda %d de %d)" % (cm.plano[i]["destinos"][0], k + 1,
                                                                              len(ws)))
+    cm.divididas = getattr(cm, "divididas", {})
     for k, onda in enumerate(ws):
-        if len(onda) == 1:
+        tarefas = []  # (linhas estimadas, posição no plano, tarefa: índice ou (índice, parte, partes, lo, hi, faixas))
+        for i in onda:
+            p, est = cm.plano[i], int(contagens.get(cm.plano[i]["tabela"], 0) or 0)
+            fx = cm._faixas_divisao(p) if divisivel(cm, p, contagens) else []
+            q = min(n, len(fx))
+            if q > 1:
+                partes = [fx[j * len(fx) // q:(j + 1) * len(fx) // q] for j in range(q)]
+                for j, pt in enumerate(partes):
+                    lo, hi = (None if j == 0 else pt[0][0]), (None if j == q - 1 else partes[j + 1][0][0])
+                    tarefas.append((est / q, i, j, (i, j, q, lo, hi, pt)))
+                cm.divididas[p["tabela"]] = q
+            else:
+                tarefas.append((est, i, 0, i))
+        if len(tarefas) == 1:
             p = cm.plano[onda[0]]
             cm.progresso(feitos[0] / total, "carregando %s (onda %d de %d)" % (p["destinos"][0], k + 1, len(ws)))
             cm._tabela(p)
@@ -421,14 +543,15 @@ def carregar(cm, contagens):
             continue
         cm._commit()  # o que a onda anterior gravou fica visível aos gravadores
         _rastrear(cm)
-        fila = sorted(onda, key=lambda i: (-int(contagens.get(cm.plano[i]["tabela"], 0) or 0), i))
+        fila = [x[3] for x in sorted(tarefas, key=lambda x: (-x[0], x[1], x[2]))]
+        somar = frozenset(cm.plano[x[0]]["tabela"] for x in fila if not isinstance(x, int))
         cm.progresso(feitos[0] / total, "carregando %d tabelas em paralelo (onda %d de %d)" % (len(onda), k + 1,
                                                                                                len(ws)))
         filhos = {}
         gc.collect()
         gc.freeze()  # o coletor não toca nos objetos herdados (menos cópia de página nos filhos)
         try:
-            for _ in range(min(n, len(onda))):
+            for _ in range(min(n, len(fila))):
                 pai, filho = Pipe()
                 pid = os.fork()
                 if pid == 0:
@@ -439,7 +562,7 @@ def carregar(cm, contagens):
         finally:
             gc.unfreeze()
         try:
-            _servir(cm, filhos, fila, ao_feito)
+            _servir(cm, filhos, fila, ao_feito, somar)
         finally:
             for con in filhos:
                 con.close()

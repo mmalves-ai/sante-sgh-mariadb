@@ -274,10 +274,14 @@ def blocos(cm, t, por_bloco):
                       " VALUES (%%s,%%s,%%s,%%s,%%s,%s) ON DUPLICATE KEY UPDATE hash_bloco=VALUES(hash_bloco),"
                       " linhas=VALUES(linhas), imagem_id=VALUES(imagem_id), alterado_em=%s, versao=versao+1"
                       % (cm.ctl, AGORA, AGORA), (t, b, hb, len(hs), cm.img))
-        sumiram = [b for b in antes if b not in por_bloco]
+        lim = getattr(cm, "_faixa_lim", None)  # tabela dividida por faixa: só os blocos da faixa deste gravador
+        sumiram = [b for b in antes if b not in por_bloco and (lim is None or (
+            (lim[0] is None or b >= lim[0]) and (lim[1] is None or b < lim[1])))]
         for b in sumiram:
             c.execute("DELETE FROM %s.conector_bloco WHERE tabela_origem=%%s AND bloco=%%s" % cm.ctl, (t, b))
-    cm.sinc_res["blocos"][t] = {"total": len(por_bloco), "iguais": iguais, "alterados": alterados + len(sumiram)}
+    r = {"total": len(por_bloco), "iguais": iguais, "alterados": alterados + len(sumiram)}
+    ant = cm.sinc_res["blocos"].get(t) if lim is not None else None
+    cm.sinc_res["blocos"][t] = {k: v + ant[k] for k, v in r.items()} if ant else r
 
 
 def sequencias(cm):
