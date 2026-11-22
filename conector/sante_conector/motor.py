@@ -153,6 +153,13 @@ def executar(trab, eid):
             if adiar:
                 rel["adiadas"] = sorted(adiar & set(tabelas))
                 cont["adiadas"] = rel["adiadas"]
+            # Passada só de algumas tabelas (CONECTOR_SO, separadas por vírgula): reprocessa o que uma correção do
+            # mapa mudou, sem recarregar o resto (a carga é idempotente; o resto fica como está). Vazio: todas.
+            so = {t.strip() for t in (os.environ.get("CONECTOR_SO") or "").split(",") if t.strip()}
+            if so:
+                adiar = adiar | (set(tabelas) - so)
+                rel["so"] = sorted(so & set(tabelas))
+                cont["so"] = rel["so"]
             plano = carga_mapa.planejar(mapa_exec, set(tabelas) - adiar)
             rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
