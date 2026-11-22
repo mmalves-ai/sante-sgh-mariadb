@@ -122,7 +122,7 @@ def _comparar(c, res, esperado, erros, rodada, externos=()):
             erros.append("%s: %s gravou %d, esperado %d" % (rodada, t, r["registros_destino"], esp["gravados"]))
         if rodada == "primeira":
             obtido = {}
-            for tab, _, regra, _ in c.pend:
+            for tab, _, regra, _, _ in c.pend:
                 if tab == t:
                     obtido[regra] = obtido.get(regra, 0) + 1
             if obtido != esp.get("pendencias", {}):

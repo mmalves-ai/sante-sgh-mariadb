@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS {b}.pendencia (
   CONSTRAINT ck_pendencia_situacao CHECK (situacao IN ('aberta','resolvida'))
 ) COMMENT='Pendências do conector: tabela, chave original e regra, sem valores';
 ALTER TABLE {b}.pendencia
+  ADD COLUMN IF NOT EXISTS detalhe VARCHAR(80) NULL
+    COMMENT 'C7: metadado da recusa pelo destino (coluna, restrição ou chave); nunca o valor',
   ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL
     COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
   ADD INDEX IF NOT EXISTS ix_pendencia_regra (tabela_origem, regra, chave_original(190)),

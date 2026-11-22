@@ -83,7 +83,7 @@ class SincronizarF4r6L9(unittest.TestCase):
             self.assertEqual(ruins, [], "execução %d: conciliação divergiu: %r" % (
                 eid, {k: res["entidades"][k] for k in ruins}))
             regras = {}
-            for _, _, regra, _ in cm.pend:
+            for _, _, regra, _, _ in cm.pend:
                 regras[regra] = regras.get(regra, 0) + 1
             return cm, res, regras
 

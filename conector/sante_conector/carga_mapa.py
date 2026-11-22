@@ -1664,8 +1664,8 @@ class CargaMapa(carga.Carga):
         if self._buf:  # INSERT de várias linhas (o executemany não junta linhas com a função de data no VALUES)
             with self._c() as c:
                 self._sql_lote(c, "INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra,"
-                                  " gravidade, criado_em) VALUES " % self.ctl,
-                               "(%d, %%s, %%s, %%s, %%s, %s)" % (int(self.eid), AGORA), "", self._buf)
+                                  " gravidade, detalhe, criado_em) VALUES " % self.ctl,
+                               "(%d, %%s, %%s, %%s, %%s, %%s, %s)" % (int(self.eid), AGORA), "", self._buf)
             self._buf = []
         super()._commit()
 
@@ -1813,7 +1813,7 @@ class CargaMapa(carga.Carga):
                     raise
                 c.execute("ROLLBACK TO SAVEPOINT linha_conector")
                 rec["falhou_em"] = i
-                falhas.append((rec, cod, rec["seq"]))
+                falhas.append((rec, cod, rec["seq"], carga.detalhe_erro(e)))
 
     def _esvaziar(self):
         """Grava o bloco adiado (`_gravar_recs`) e desfaz na memória só as linhas recusadas pela restrição do destino,
@@ -1849,10 +1849,10 @@ class CargaMapa(carga.Carga):
             if desfeitos:  # filho -> pai como linha a linha: só fica o que chegou ao banco
                 for (dt, _, _), lst in self._filho_pai.items():
                     lst[:] = [x for x in lst if (dt, x[0]) not in desfeitos]
-            for rec, cod, _ in falhas:
+            for rec, cod, _, det in falhas:
                 tab, chave, entidade, h = rec["linha"]
                 self.cont["recusas_por_restricao"] += 1
-                self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica")
+                self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica", det)
                 self.prop.registrar(tab, chave, self.existente[tab][chave][3] or "recusada", "critica")
             self._prox_id = {}
         finally:
@@ -2525,7 +2525,7 @@ class CargaMapa(carga.Carga):
                             "apagados_na_origem": apagadas, "soma_origem": so, "soma_destino": sd, "conferido": ok}
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
         por_regra = {}
-        for tab, _, regra, grav in self.pend:
+        for tab, _, regra, grav, _ in self.pend:
             k = "%s:%s:%s" % (principal.get(tab, "outra"), regra, grav)
             por_regra[k] = por_regra.get(k, 0) + 1
         with self._c() as c:
@@ -2540,4 +2540,5 @@ class CargaMapa(carga.Carga):
                            r["soma_destino"], r["conferido"]))
         return {"versao_mapa": VERSAO, "entidades": res, "pendencias": {
             "total": len(self.pend), "criticas": sum(1 for x in self.pend if x[3] == "critica"),
-            "por_regra": por_regra}, "carga": dict(self.cont, por_tabela=self.por_tabela)}
+            "por_regra": por_regra, "por_restricao": carga.por_restricao(self.pend)},
+            "carga": dict(self.cont, por_tabela=self.por_tabela)}

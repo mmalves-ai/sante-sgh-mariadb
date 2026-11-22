@@ -98,6 +98,37 @@ HASH_ZERO = b"\0" * 16
 RECUSADO = "-"
 # erros de restrição do banco que recusam só a linha (o resto, como conexão perdida, derruba a execução)
 ERROS_LINHA = {1048, 1062, 1264, 1292, 1364, 1366, 1406, 1452, 3819, 4025}
+
+# C7: de cada erro de linha só sai o METADADO (nome da coluna, da restrição ou da chave), nunca o valor: a mensagem do
+# MariaDB traz o valor em 1062 ("Duplicate entry '<valor>' for key ...") e em 1292/1366; por isso a extração só aceita
+# um identificador ([A-Za-z0-9_.]) nas posições de nome, nunca o trecho entre aspas do valor.
+_DETALHE_ERRO = (
+    re.compile(r"CONSTRAINT `([A-Za-z0-9_.]{1,64})` failed"),           # 4025/3819 CHECK
+    re.compile(r"FOREIGN KEY \(`([A-Za-z0-9_]{1,64})`\)"),               # 1452 coluna da FK
+    re.compile(r"for key '([A-Za-z0-9_.]{1,80})'\s*$"),                   # 1062 chave única
+    re.compile(r"[Cc]olumn '([A-Za-z0-9_]{1,64})'"),                      # 1048, 1264, 1406, 1366, 1292
+    re.compile(r"^Field '([A-Za-z0-9_]{1,64})' doesn't have a default"),  # 1364
+)
+
+
+def por_restricao(pend):
+    """C7: recusas por restrição do destino com o metadado (tabela de origem:regra:coluna ou restrição) e a contagem."""
+    r = {}
+    for tab, _, regra, _, det in pend:
+        if det:
+            k = "%s:%s:%s" % (tab, regra, det)
+            r[k] = r.get(k, 0) + 1
+    return r
+
+
+def detalhe_erro(e):
+    """Nome da coluna, da restrição ou da chave do erro de linha (metadado sem valor), ou None."""
+    msg = e.args[1] if len(getattr(e, "args", ())) > 1 and isinstance(e.args[1], str) else ""
+    for rx in _DETALHE_ERRO:
+        m = rx.search(msg)
+        if m:
+            return m.group(1).rsplit(".", 1)[-1][:80]
+    return None
 ENT_FILHA = {"RECADATE": "atendimento_ficha", "REALTA": "atendimento_alta"}
 # entidade de destino de cada tabela (o resumo que sai para o painel nunca leva nome de tabela da origem)
 ENTIDADE_DA_TABELA = dict({t: m["entidade"] for t, m in MAPA.items()}, RECADATE="atendimento_ficha",
@@ -134,6 +165,16 @@ def bruto(b, limite=None):
     if limite:
         b = b[:limite].rstrip(b" ")
     return b or None
+
+
+def municipio_ibge(cod, por7, por6):
+    """C8: id do município pelo código IBGE da origem: 7 dígitos (com verificador) direto; 6 dígitos (sem o
+    verificador, como a origem grava) pelo prefixo único do catálogo oficial; vazio ou desconhecido: None."""
+    if not cod or len(cod) > 7:
+        return None
+    if len(cod) == 7:
+        return por7.get(cod)
+    return por6.get(cod.zfill(6)) or por7.get(cod.zfill(7))
 
 
 def digitos(v):
@@ -289,8 +330,8 @@ class Carga:
     def _c(self):
         return self.cr.cursor()
 
-    def _pendencia(self, tab, chave, regra, grav):
-        p = (tab, None if chave is None else str(chave)[:500], regra, grav)
+    def _pendencia(self, tab, chave, regra, grav, detalhe=None):
+        p = (tab, None if chave is None else str(chave)[:500], regra, grav, detalhe)
         k = (tab, p[1], regra)
         if self._reemitidas.get(k):  # a linha recalculou a mesma pendência que já foi reemitida: conta uma vez só
             self._reemitidas[k] -= 1
@@ -303,7 +344,7 @@ class Carga:
         if self._buf:
             with self._c() as c:
                 c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
-                              " criado_em) VALUES (%s, %%s, %%s, %%s, %%s, %s)" % (self.ctl, int(self.eid), AGORA),
+                              " detalhe, criado_em) VALUES (%s, %%s, %%s, %%s, %%s, %%s, %s)" % (self.ctl, int(self.eid), AGORA),
                               self._buf)
             self._buf = []
         self.cr.commit()
@@ -363,8 +404,8 @@ class Carga:
         self._diario.append((tab, chave, t.get(chave)))
         t[chave] = (id_destino, h, hd, regra, grav)
 
-    def _recusar(self, tab, chave, entidade, h, regra, grav):
-        self._pendencia(tab, chave, regra, grav)
+    def _recusar(self, tab, chave, entidade, h, regra, grav, detalhe=None):
+        self._pendencia(tab, chave, regra, grav, detalhe)
         self._registrar(tab, chave, entidade, None, h, recusa=(regra, grav))
 
     def _linha_nova(self, tab, chave, entidade, h, fazer):
@@ -392,7 +433,7 @@ class Carga:
             del self._buf[marca[2]:]
             self.cont = marca[3]
             self.cont["recusas_por_restricao"] += 1
-            self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica")
+            self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica", detalhe_erro(e))
             return None
 
     def _de_para(self, tab, chave):
@@ -444,7 +485,7 @@ class Carga:
         for r, g in sorted(self._avisos_ant[tab].get(ck, ())):
             if r in self.NAO_REEMITIR or r == ja:
                 continue
-            p = (tab, ck, r, g)
+            p = (tab, ck, r, g, None)
             self.pend.append(p)
             self._buf.append(p)
             self._reemitidas[(tab, ck, r)] = self._reemitidas.get((tab, ck, r), 0) + 1
@@ -510,6 +551,15 @@ class Carga:
             self.carater = {k: i for k, i in c.fetchall()}
             c.execute("SELECT codigo_ibge, id FROM municipio_ibge")
             self.municipio = {k: i for k, i in c.fetchall()}
+        # C8: o código do município na origem vem com 6 dígitos (sem o dígito verificador do IBGE; agregado na cópia
+        # real: 46.931 de 47.024 endereços com 6 dígitos, nenhum com 7). Os 6 primeiros dígitos identificam o
+        # município no catálogo oficial (o 7º é verificador); só entra o prefixo que aponta para um município só.
+        seis = {}
+        for k, i in self.municipio.items():
+            if k and len(k) == 7:
+                seis.setdefault(k[:6], set()).add(i)
+        self.municipio6 = {k: next(iter(v)) for k, v in seis.items() if len(v) == 1}
+        self.municipio_cod = {i: k for k, i in self.municipio.items()}
         if not self.carater:
             self._pendencia("ATCABECATEND", None, "catalogo_oficial_ausente_carater_tiss", "critica")
         if not self.municipio:
@@ -715,8 +765,8 @@ class Carga:
             sub("documento", "documento_pessoa", did, (bruto(l["IDENT"], 40),))
         if txt(l["ENDERECO"]):
             cep = digitos(l["CEP"]); cep = cep.zfill(8) if cep and len(cep) <= 8 else None
-            ibge = digitos(l["IBGE"]); ibge = ibge.zfill(7) if ibge else None
-            mun = self.municipio.get(ibge) if ibge else None
+            ibge = digitos(l["IBGE"])
+            mun = municipio_ibge(ibge, self.municipio, getattr(self, "municipio6", {}))
             if not cep or not mun:
                 sub("endereco", "endereco_pessoa", None, None, ("endereco_sem_cep_ou_municipio", "media"))
             else:
@@ -726,6 +776,8 @@ class Carga:
                     logradouro=txt(l["ENDERECO"], 150), cep=cep, municipio_ibge_id=mun, numero=num,
                     sem_numero=not num, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAIRRO"], 100),
                     principal=True, origem="migracao"))
+                # o resumo leva o código do catálogo (7 dígitos), o mesmo que a conferência lê do destino
+                ibge = getattr(self, "municipio_cod", {}).get(mun, ibge)
                 sub("endereco", "endereco_pessoa", eid, (bruto(l["ENDERECO"], 150), cep, ibge, num,
                                                          bruto(l["COMPL"], 100), bruto(l["BAIRRO"], 100)))
         seq = 0
@@ -1039,7 +1091,7 @@ class Carga:
                                    "conferido": len(ks) == lidos and so == sd,
                                    "observacao": "de-para guardado; vira campo do estabelecimento"}
         por_regra = {}
-        for tab, _, regra, grav in self.pend:
+        for tab, _, regra, grav, _ in self.pend:
             k = "%s:%s:%s" % (ENTIDADE_DA_TABELA.get(tab, "outra"), regra, grav)
             por_regra[k] = por_regra.get(k, 0) + 1
         with self._c() as c:
@@ -1054,4 +1106,4 @@ class Carga:
                            r["soma_destino"], r["conferido"]))
         return {"versao_mapa": VERSAO_MAPA, "entidades": res, "pendencias": {
             "total": len(self.pend), "criticas": sum(1 for p in self.pend if p[3] == "critica"),
-            "por_regra": por_regra}, "carga": dict(self.cont)}
+            "por_regra": por_regra, "por_restricao": por_restricao(self.pend)}, "carga": dict(self.cont)}

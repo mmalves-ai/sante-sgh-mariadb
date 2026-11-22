@@ -47,8 +47,8 @@ REAGENDA	ID_RETP_INTEG_AGENDA_ONLINE	agenda_servico.modo_agendamento_online_id	c
 REAGENDA	ATIVA	agenda_servico.ativo	booleano_sn			S ativa, N inativa; vazio: padrão do destino
 REAGENDA	PERMITE_TELEATENDIMENTO	agenda_servico.teleatendimento	booleano_sn			S/N
 REAGENDA	QTDE_D_RET	agenda_servico.dias_retorno	inteiro_zero_nulo			prazo de retorno em dias; 0 = sem prazo
-REAGENDA	FX_INC	agenda_servico.idade_minima_anos	inteiro_zero_nulo			faixa etária atendida: idade inicial; 0 = sem limite
-REAGENDA	FX_FIN	agenda_servico.idade_maxima_anos	inteiro_zero_nulo			faixa etária atendida: idade final; 0 = sem limite
+REAGENDA	FX_INC	agenda_servico.idade_minima_anos	inteiro_zero_nulo			faixa etária atendida: idade inicial; 0 = sem limite (C5: agregado na cópia real, FX_INC máximo 0 nas 138 agendas)
+REAGENDA	FX_FIN	agenda_servico.idade_maxima_anos	idade_maxima_sem_limite:130			faixa etária atendida: idade final (C5: 0 ou acima de 130 é a marca de sem limite, como em TBESPEC/C4; agregado na cópia real: FX_FIN = 999 nas 138 agendas, o que estourava o TINYINT com 1264): NULL com idade_sem_limite, linha gravada
 REAGENDA	UNID	agenda_servico.unidade_assistencial_id			ref:TBUNIDAD	unidade da agenda; 0 = não informada (sem pendência)
 REAGENDA	OBS	agenda_servico.observacao	texto			observação interna (VARCHAR(2000); maior é resumida com pendência); ADR 0009: sem corte (observacao em MEDIUMTEXT), o texto original também vai para texto_origem_agenda
 REAGENDA	OBS_PORTAL_PAC_AGEND_ONLINE	agenda_servico.orientacao_marcacao	texto_longo			orientação ao paciente na marcação online

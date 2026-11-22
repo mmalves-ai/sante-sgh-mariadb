@@ -135,7 +135,7 @@ class Recusas(unittest.TestCase):
         c.existente["RICADPAC"] = {"5": (None, b"h" * 16, None, "prontuario_duplicado", "critica"),
                                    "6": (9, b"a" * 16, b"r" * 32, None, None)}
         self.assertEqual(c._situacao("RICADPAC", "5", b"h" * 16)[0], "igual")
-        self.assertEqual(c.pend[-1][2:], ("prontuario_duplicado", "critica"))
+        self.assertEqual(c.pend[-1][2:4], ("prontuario_duplicado", "critica"))
         sit, ant = c._situacao("RICADPAC", "6", b"b" * 16)
         self.assertEqual(sit, "alterada")
         c._ja_carregada("paciente", "6", sit, ant)
