@@ -1876,8 +1876,11 @@ class CargaMapa(carga.Carga):
         if chave in self._excluidas.get(tab, ()):
             sincronizar_mod.reativar(self, tab, chave)
         if ant[1] == h:
+            ja = None
             if ant[0] is None:
-                self._pendencia(tab, chave, ant[3] or "recusa_sem_regra_registrada", ant[4] or "alta")
+                ja = ant[3] or "recusa_sem_regra_registrada"
+                self._pendencia(tab, chave, ja, ant[4] or "alta")
+            self._reemitir_avisos(tab, chave, ja)  # linha igual não é reprocessada: as pendências dela continuam
             self.cont["puladas_iguais"] += 1
             return "igual", ant
         if ant[0] is None:  # recusada antes e mudou na origem: tenta de novo, como linha nova

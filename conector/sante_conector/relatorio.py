@@ -97,9 +97,15 @@ def rotulos_das_provas(provas_decl):
     return saida
 
 
+# Causas de descarte sem prova linha a linha: o licenciado vive no espelho padrão da base e o catálogo oficial é
+# ligado pelo código (ADR 0006, itens 3 e 4); a conferência delas é a ligação, não a cópia.
+SEM_PROVA_LINHA = frozenset(("licenciado", "catalogo_oficial"))
+
+
 # ---------------- pendências resolvidas ----------------
 def garantir_ctl(cr, ctl):
-    """Coluna e índices da resolução (base de controle de clientes anteriores ao L10)."""
+    """Coluna e índices da resolução (base de controle de clientes anteriores ao L10). O motor não chama isto a cada
+    execução: o `controle.preparar` já garante o mesmo no começo (DDL da base de controle); fica para testes."""
     with cr.cursor() as c:
         c.execute("ALTER TABLE `%s`.pendencia ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL"
                   " COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)'" % ctl)
@@ -194,6 +200,8 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
                                                      "provasConferidas": 0, "provasFalhas": 0, "semProva": 0})
             pc["tabelas"] += 1
             pc["registros"] += n
+            if sem_carga[t] in SEM_PROVA_LINHA:  # espelho padrão ou catálogo oficial: ligação pelo código
+                continue
             if t not in provas:
                 pc["semProva"] += 1
                 sem_prova["tabelas"] += 1
@@ -208,10 +216,11 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
     for nome, q in (("sem_prova_de_nao_copiar", sem_prova), ("tabela_bloqueada", bloqueadas)):
         if q["tabelas"]:
             grupos[("imagem", nome, "alta")] = {"entidade": "imagem", "regra": nome, "gravidade": "alta",
-                                               "abertas": q["tabelas"], "resolvidas": 0}
+                                               "abertas": q["tabelas"], "resolvidas": 0, "unidade": "tabela"}
 
     por_regra = []
     for g in grupos.values():
+        g.setdefault("unidade", "linha")
         g["decisao"], g["acao"] = classe(g["regra"], g["gravidade"])
         por_regra.append(g)
     por_regra.sort(key=lambda g: (GRAVIDADES.index(g["gravidade"]), -g["abertas"], g["entidade"], g["regra"]))
@@ -249,8 +258,10 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
             "registrosOrigem": sum(int(v.get("registros_origem") or 0) for v in ents.values()),
             "registrosDestino": sum(int(v.get("registros_destino") or 0) for v in ents.values()),
             "recusados": sum(x["recusados"] for x in recusados),
-            "abertas": sum(g["abertas"] for g in por_regra),
-            "criticas": sum(g["abertas"] for g in por_regra if g["gravidade"] == "critica"),
+            # pendências por LINHA; os itens contados por tabela (sem prova, bloqueada) ficam à parte
+            "abertas": sum(g["abertas"] for g in por_regra if g["unidade"] == "linha"),
+            "tabelasAbertas": sum(g["abertas"] for g in por_regra if g["unidade"] == "tabela"),
+            "criticas": sum(g["abertas"] for g in por_regra if g["gravidade"] == "critica" and g["unidade"] == "linha"),
             "resolvidas": sum(g["resolvidas"] for g in por_regra),
             "decisoesCliente": sum(d["quantidade"] for d in decisoes.values()),
         },
@@ -269,10 +280,11 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
     }
 
 
-def gerar(cr, ctl, eid, entidades, **kw):
-    """Resolve as pendências que esta execução não repetiu, conta e monta o relatório (commit incluído)."""
-    garantir_ctl(cr, ctl)
-    resolver(cr, ctl, eid)
-    cr.commit()
+def gerar(cr, ctl, eid, entidades, resolver_pendencias=True, **kw):
+    """Resolve as pendências que esta execução não repetiu (só na execução que conclui: `resolver_pendencias`),
+    conta e monta o relatório (commit incluído). A execução que falha só lê: nunca mexe nas anteriores."""
+    if resolver_pendencias:
+        resolver(cr, ctl, eid)
+        cr.commit()
     abertas, resolvidas = _contar(cr, ctl, eid)
     return montar(abertas, resolvidas, entidades, rede=rede_sem_rota_externa(), **kw)

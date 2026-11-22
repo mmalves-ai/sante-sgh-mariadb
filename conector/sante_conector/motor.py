@@ -33,7 +33,7 @@ def soma_controle(contagens):
     return hashlib.sha256(txt.encode()).hexdigest()
 
 
-def _relatorio(eid, usuario, rel, cont, mapa_exec):
+def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
     """L10: relatório curto da execução (ADR 0007, item 22) em `contadores.relatorio`: pendências abertas, críticas e
     resolvidas por entidade e regra, o que não carregou, a prova de não copiar e as decisões do cliente."""
     if not rel.get("senha"):
@@ -44,7 +44,8 @@ def _relatorio(eid, usuario, rel, cont, mapa_exec):
         cont["relatorio"] = relatorio.gerar(
             cr, rel["ctl"], eid, rel.get("entidades") or {}, contagens=contagens, plano=rel.get("plano") or (),
             carga_propria=[t for t in contagens if t in carga.MAPA], mapa_exec=mapa_exec,
-            provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"))
+            provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"),
+            resolver_pendencias=resolver_pendencias)
     finally:
         cr.close()
 
@@ -197,7 +198,6 @@ def executar(trab, eid):
             n = cont["tabelas_sem_mapa"]["tabelas"]
             pend["total"] = pend.get("total", 0) + n
             pend.setdefault("por_regra", {})["imagem:tabela_sem_mapa:alta"] = n
-        _relatorio(eid, usuario, rel, cont, mapa_exec)
         plataforma.mudar_estado(conn, eid, "conciliando", etapa="conferindo contagens e o arquivo", percentual=95,
                                 contadores=cont)
         plataforma.progresso(conn, eid, 97, "conferindo o arquivo de origem (sha256, tamanho e mtime)")
@@ -206,6 +206,15 @@ def executar(trab, eid):
         if (sha_depois, depois["tamanho"], depois["mtime"]) != (sha_antes, origem["tamanho"], origem["mtime"]):
             raise FalhaExecucao("o arquivo de origem mudou durante a execução")
         cont["arquivo_inalterado"] = True
+        # o relatório (e a resolução das pendências anteriores) só depois de a carga e o arquivo conferirem; a falha
+        # só do relatório não derruba a carga gravada: vira pendência da plataforma
+        try:
+            _relatorio(eid, usuario, rel, cont, mapa_exec)
+        except Exception as e:  # noqa: BLE001
+            cont["relatorio_falhou"] = type(e).__name__
+            pend = cont.setdefault("pendencias", {"total": 0, "criticas": 0, "por_regra": {}})
+            pend["total"] = pend.get("total", 0) + 1
+            pend.setdefault("por_regra", {})["imagem:relatorio_falhou:alta"] = 1
         plataforma.mudar_estado(conn, eid, "concluida", etapa="concluída", percentual=100, contadores=cont,
                                 imagem_sha256=sha_antes)
     except Exception as e:  # o motivo é técnico e não traz valores de linha
@@ -217,7 +226,7 @@ def executar(trab, eid):
             motivo = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
         if "relatorio" not in cont:  # a execução que falha também deixa o relatório do que chegou a fazer
             try:
-                _relatorio(eid, usuario, rel, cont, mapa_exec)
+                _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=False)
             except Exception:  # noqa: BLE001 - o motivo da falha original é o que importa
                 pass
         try:

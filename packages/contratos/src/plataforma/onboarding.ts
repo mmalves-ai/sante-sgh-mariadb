@@ -86,7 +86,10 @@ export const esquemaRelatorioConector = z.object({
     registrosOrigem: inteiro,
     registrosDestino: inteiro,
     recusados: inteiro,
+    /** Pendências abertas por LINHA da origem (os itens contados por tabela ficam em `tabelasAbertas`). */
     abertas: inteiro,
+    /** Itens contados por TABELA (sem prova de não copiar, bloqueada): nunca somados a `abertas`. */
+    tabelasAbertas: inteiro.optional(),
     criticas: inteiro,
     resolvidas: inteiro,
     decisoesCliente: inteiro,
@@ -98,6 +101,8 @@ export const esquemaRelatorioConector = z.object({
       gravidade: gravidadeConector,
       abertas: inteiro,
       resolvidas: inteiro,
+      /** `linha` (pendência por linha da origem) ou `tabela` (item contado por tabela). */
+      unidade: z.enum(['linha', 'tabela']).optional(),
       decisao: z.enum(CLASSES_DECISAO_CONECTOR),
       acao: z.string(),
     }),

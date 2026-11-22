@@ -258,6 +258,8 @@ class Carga:
         self.cont = {"catalogos_criados": 0, "provisorios": 0, "puladas_iguais": 0, "alteradas_aguardam": 0,
                      "recusas_por_restricao": 0}
         self.existente = {}                 # tabela -> {chave: (id_destino, hash, hash_destino, regra, gravidade)}
+        self._avisos_ant = {}               # tabela -> {chave: {(regra, gravidade)}}: abertas de execuções anteriores
+        self._reemitidas = {}               # (tabela, chave, regra) -> vezes: reemitidas, ainda não recalculadas
         self.pre = {}                       # REALTA/RECADATE lidos antes do atendimento
         self.atend_novos = set()            # atendimentos gravados nesta execução
         self.tabelas = []
@@ -268,6 +270,10 @@ class Carga:
 
     def _pendencia(self, tab, chave, regra, grav):
         p = (tab, None if chave is None else str(chave)[:500], regra, grav)
+        k = (tab, p[1], regra)
+        if self._reemitidas.get(k):  # a linha recalculou a mesma pendência que já foi reemitida: conta uma vez só
+            self._reemitidas[k] -= 1
+            return
         self.pend.append(p)
         self._buf.append(p)
 
@@ -393,6 +399,35 @@ class Carga:
             for t in sorted(it, key=lambda t: bytes(t[i]) if isinstance(t[i], (bytes, bytearray)) else str(t[i]).encode()):
                 yield dict(zip(nomes, t))
 
+    # Pendências que só existem enquanto o estado vale (recalculadas a cada execução) ou que registram um fato da
+    # execução que as gerou: nunca reemitidas para a linha que não foi reprocessada.
+    NAO_REEMITIR = frozenset(("alteracao_aguarda_sincronizar", "conflito_origem_venceu",
+                              "mescla_conflito_origem_guardada"))
+
+    def _reemitir_avisos(self, tab, chave, ja=None):
+        """L10: linha da origem que esta execução NÃO reprocessa (igual; ou alterada no Importar, que não regrava)
+        mantém as pendências abertas da execução anterior (ex.: segredo_aguarda_cofre, vigencia_sem_fonte): são
+        copiadas para esta execução, para o relatório não as dar como resolvidas só porque a linha foi pulada.
+        `ja`: regra já reemitida pela recusa."""
+        if tab not in self._avisos_ant:
+            av = {}
+            with self._c() as c:
+                c.execute("SELECT chave_original, regra, gravidade FROM %s.pendencia WHERE tabela_origem=%%s"
+                          " AND situacao='aberta' AND execucao_id<%%s AND chave_original IS NOT NULL"
+                          " AND chave_original<>'*' GROUP BY BINARY chave_original, regra, gravidade"
+                          % self.ctl, (tab, int(self.eid)))
+                for k, r, g in c.fetchall():
+                    av.setdefault(k, set()).add((r, g))
+            self._avisos_ant[tab] = av
+        ck = str(chave)[:500]
+        for r, g in sorted(self._avisos_ant[tab].get(ck, ())):
+            if r in self.NAO_REEMITIR or r == ja:
+                continue
+            p = (tab, ck, r, g)
+            self.pend.append(p)
+            self._buf.append(p)
+            self._reemitidas[(tab, ck, r)] = self._reemitidas.get((tab, ck, r), 0) + 1
+
     def _situacao(self, tab, chave, h):
         """'nova', 'igual' ou 'alterada', contra o estado guardado. Linha já vista e recusada: reemite a regra da
         recusa (todo recusado tem regra no resumo de toda execução). Alterada: pendência, e nada é regravado."""
@@ -400,8 +435,11 @@ class Carga:
         ant = self.existente.get(tab, {}).get(chave)
         if ant is None:
             return "nova", None
+        ja = None
         if ant[0] is None and not MAPA.get(tab, {}).get("sem_destino"):
-            self._pendencia(tab, chave, ant[3] or "recusa_sem_regra_registrada", ant[4] or "alta")
+            ja = ant[3] or "recusa_sem_regra_registrada"
+            self._pendencia(tab, chave, ja, ant[4] or "alta")
+        self._reemitir_avisos(tab, chave, ja)  # no Importar a linha já vista nunca é regravada
         if ant[1] == h:
             self.cont["puladas_iguais"] += 1
             return "igual", ant

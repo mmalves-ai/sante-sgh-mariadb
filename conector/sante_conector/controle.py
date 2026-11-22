@@ -115,6 +115,11 @@ CREATE TABLE IF NOT EXISTS {b}.pendencia (
   CONSTRAINT ck_pendencia_gravidade CHECK (gravidade IN ('critica','alta','media','baixa')),
   CONSTRAINT ck_pendencia_situacao CHECK (situacao IN ('aberta','resolvida'))
 ) COMMENT='Pendências do conector: tabela, chave original e regra, sem valores';
+ALTER TABLE {b}.pendencia
+  ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL
+    COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
+  ADD INDEX IF NOT EXISTS ix_pendencia_regra (tabela_origem, regra, chave_original(190)),
+  ADD INDEX IF NOT EXISTS ix_pendencia_resolvida (resolvida_execucao_id);
 CREATE TABLE IF NOT EXISTS {b}.conciliacao (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL,

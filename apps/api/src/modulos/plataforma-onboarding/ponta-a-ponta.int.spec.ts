@@ -191,11 +191,15 @@ describe.skipIf(SEM_BANCO)(
         [...vistos.map((v) => v.percentual)].sort((a, b) => a - b),
       );
       const ent = Object.fromEntries(final.entidades.map((e) => [e.entidade, e]));
+      const esp = manifesto.esperado_destino;
       for (const e of final.entidades) {
         expect(e.conferido, e.entidade).toBe(true);
-        expect(e.registrosOrigem, e.entidade).toBe(e.registrosDestino + e.recusados);
+        // a conta origem = destino + recusados vale para as entidades do esperado (destinos principais); um destino
+        // secundário (ex. opcional, que só grava com valor) tem a própria conciliação, exigida por `conferido`
+        if (e.entidade in esp) {
+          expect(e.registrosOrigem, e.entidade).toBe(e.registrosDestino + e.recusados);
+        }
       }
-      const esp = manifesto.esperado_destino;
       expect(ent['estabelecimento']?.registrosDestino).toBe(esp['estabelecimento']);
       expect(ent['usuario']?.registrosDestino).toBe(esp['usuario']);
       expect(ent['paciente']?.registrosDestino).toBe(esp['paciente']);
@@ -222,11 +226,29 @@ describe.skipIf(SEM_BANCO)(
         valor(b, `SELECT COUNT(*) FROM atendimento WHERE situacao='encerrado' AND desfecho IS NULL`),
       ).toBe(0);
       const ctl = `conector_ctl_${CLIENTE}`;
+      // entidades: todas conferidas. Provas de não copiar e filho -> pai também ficam na conciliação; a que não
+      // confere (na imagem que junta todas as fatias, dados falsos de fatias diferentes não casam entre si) aparece
+      // como pendência alta da plataforma, uma por prova: coerência, nunca some
+      const naoProva = `entidade NOT LIKE 'prova:%' AND entidade NOT LIKE 'filho\\_pai:%'`;
       expect(
-        valor(ctl, `SELECT COUNT(*) FROM conciliacao WHERE execucao_id=${execucao} AND NOT conferido`),
-      ).toBe(0);
-      expect(valor(ctl, `SELECT COUNT(*) FROM conciliacao WHERE execucao_id=${execucao}`)).toBe(
-        final.entidades.length + 1,
+        sql(
+          ctl,
+          `SELECT COALESCE(GROUP_CONCAT(entidade ORDER BY entidade SEPARATOR ','), '') FROM conciliacao WHERE execucao_id=${execucao} AND NOT conferido AND ${naoProva}`,
+        ).trim(),
+      ).toBe('');
+      expect(
+        valor(ctl, `SELECT COUNT(*) FROM conciliacao WHERE execucao_id=${execucao} AND ${naoProva}`),
+      ).toBe(final.entidades.length + 1);
+      expect(
+        valor(
+          ctl,
+          `SELECT COUNT(*) FROM conciliacao WHERE execucao_id=${execucao} AND entidade LIKE 'prova:%' AND NOT conferido`,
+        ),
+      ).toBe(
+        valor(
+          ctl,
+          `SELECT COUNT(*) FROM pendencia WHERE execucao_id=${execucao} AND regra='prova_nao_conferida'`,
+        ),
       );
       expect(final.pendencias.criticas).toBeGreaterThan(0);
       const regra = (r: string) =>
@@ -334,7 +356,12 @@ async function conferirRelatorio(
   expect(rel.totais.entidades).toBe(final.entidades.length);
   expect(rel.totais.conferidas).toBe(final.entidades.length);
   expect(rel.totais.recusados).toBe(final.entidades.reduce((a, e) => a + e.recusados, 0));
-  expect(rel.totais.abertas).toBe(rel.porRegra.reduce((a, p) => a + p.abertas, 0));
+  // abertas conta LINHAS; os itens contados por tabela ficam em tabelasAbertas (unidades nunca somadas)
+  const porLinha = rel.porRegra.filter((p) => (p.unidade ?? 'linha') === 'linha');
+  expect(rel.totais.abertas).toBe(porLinha.reduce((a, p) => a + p.abertas, 0));
+  expect(rel.totais.tabelasAbertas ?? 0).toBe(
+    rel.porRegra.filter((p) => p.unidade === 'tabela').reduce((a, p) => a + p.abertas, 0),
+  );
   expect(rel.totais.abertas).toBeGreaterThanOrEqual(final.pendencias.total);
   expect(rel.totais.criticas).toBeGreaterThanOrEqual(final.pendencias.criticas);
   expect(rel.totais.decisoesCliente).toBe(rel.decisoesCliente.reduce((a, d) => a + d.quantidade, 0));

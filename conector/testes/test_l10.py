@@ -11,9 +11,10 @@ from sante_conector import relatorio
 CODIGO = "f4r6_l10"
 
 MAPA = {
-    "tabelas": [{"tabela": t} for t in ("TA", "TB", "TC", "TD", "TE", "TF")],
+    "tabelas": [{"tabela": t} for t in ("TA", "TB", "TC", "TD", "TE", "TF", "TL")],
     "sem_carga": [{"tabela": "TC", "situacao": "descarte", "causa": "mecanismo_do_produto"},
-                  {"tabela": "TD", "situacao": "descarte", "causa": "duplicado"}],
+                  {"tabela": "TD", "situacao": "descarte", "causa": "duplicado"},
+                  {"tabela": "TL", "situacao": "descarte", "causa": "licenciado"}],
     "provas": [{"tabela": "TC", "sql": "SELECT co.chave_original, x.n FROM sequencia_negocio x"
                                        " JOIN {ctl}.conector_origem co ON co.id_destino = x.id"},
                {"tabela": "TF", "sql": "SELECT a.k FROM `atendimento_conta` a JOIN conta_hospitalar c ON 1"}],
@@ -55,13 +56,14 @@ class Regras(unittest.TestCase):
                          "faltando_no_destino": 0, "sobrando_no_destino": 0, "conferido": False},
                   "TF": {"tipo": "derivado", "linhas_origem": 4, "iguais": 4, "conferido": True}}
         r = relatorio.montar(abertas, resolvidas, ENTIDADES,
-                             contagens={"TA": 10, "TB": 5, "TC": 3, "TD": 7, "TE": 2, "TF": 4, "TV": 0},
+                             contagens={"TA": 10, "TB": 5, "TC": 3, "TD": 7, "TE": 2, "TF": 4, "TL": 8, "TV": 0},
                              plano=["TA", "TB"], mapa_exec=MAPA, provas=provas,
                              sem_mapa={"tabelas": 1, "registros": 6}, rede=True)
         t = r["totais"]
         self.assertEqual((t["entidades"], t["conferidas"], t["recusados"]), (3, 3, 1))
-        # abertas: 13 da carga + sem prova (TD) + bloqueada (TE)
-        self.assertEqual((t["abertas"], t["criticas"], t["resolvidas"]), (15, 1, 3))
+        # abertas: 13 linhas da carga; sem prova (TD) e bloqueada (TE) contam TABELAS, à parte; o licenciado (TL,
+        # espelho padrão) não exige prova linha a linha
+        self.assertEqual((t["abertas"], t["tabelasAbertas"], t["criticas"], t["resolvidas"]), (13, 2, 1, 3))
         regras = {(g["entidade"], g["regra"]): g for g in r["porRegra"]}
         self.assertEqual(regras[("paciente", "cpf_duplicado")]["resolvidas"], 2)
         self.assertEqual(regras[("consulta", "valor_fora_do_dominio")]["abertas"], 0)
@@ -77,11 +79,14 @@ class Regras(unittest.TestCase):
         self.assertEqual(nc["semMapa"], {"tabelas": 1, "registros": 6})
         causas = {x["causa"]: x for x in nc["semCarga"]}
         self.assertEqual((causas["mecanismo_do_produto"]["provasFalhas"], causas["duplicado"]["semProva"]), (1, 1))
+        self.assertEqual((causas["licenciado"]["tabelas"], causas["licenciado"]["semProva"]), (1, 0))
+        self.assertEqual(regras[("imagem", "sem_prova_de_nao_copiar")]["abertas"], 1)
+        self.assertEqual(regras[("imagem", "sem_prova_de_nao_copiar")]["unidade"], "tabela")
         self.assertEqual([p["destino"] for p in r["provas"]],
                          ["sequencia_negocio", "atendimento_conta+conta_hospitalar"])  # a que falhou primeiro
         self.assertEqual((r["saidasExternas"], r["redeSemRotaExterna"]), (0, True))
         texto = json.dumps(r)
-        for nome in ("TA", "TB", "TC", "TD", "TE", "TF", "TX"):  # nada de nome da origem no relatório
+        for nome in ("TA", "TB", "TC", "TD", "TE", "TF", "TL", "TX"):  # nada de nome da origem no relatório
             self.assertNotIn('"%s"' % nome, texto)
 
     def test_rede(self):
@@ -147,6 +152,35 @@ class ResolucaoF4r6L10(unittest.TestCase):
                 self.assertEqual(c.fetchone()[0], 0)
             # 4: repetir não resolve de novo
             self.assertEqual(relatorio.gerar(cr, ctl, 4, ENTIDADES)["totais"]["resolvidas"], 0)
+            # 5: a execução que FALHA não resolve nada (só lê): a pendência da 4.ª continua aberta
+            pend(5, [("TA", "7", "cpf_duplicado", "alta")])
+            r6 = relatorio.gerar(cr, ctl, 6, ENTIDADES, resolver_pendencias=False)
+            self.assertEqual((r6["totais"]["abertas"], r6["totais"]["resolvidas"]), (0, 0))
+            with cr.cursor() as c:
+                c.execute("SELECT COUNT(*) FROM pendencia WHERE situacao='aberta'")
+                self.assertEqual(c.fetchone()[0], 1)
+            # 7: linha da origem que a execução NÃO reprocessa (igual) mantém os avisos da anterior (reemitidos);
+            # só o fato da execução (conflito_origem_venceu) e a alteração não se repetem
+            from sante_conector import carga
+            pend(7, [("TG", "k1", "segredo_aguarda_cofre", "media"), ("TG", "k1", "conflito_origem_venceu", "media"),
+                     ("TG", "k2", "vigencia_sem_fonte", "baixa")])
+            cg = object.__new__(carga.Carga)
+            cg.cr, cg.ctl, cg.eid = cr, "`%s`" % ctl, 8
+            cg.pend, cg._buf, cg._diario, cg.vistas = [], [], [], {}
+            cg._avisos_ant, cg._reemitidas = {}, {}
+            cg.cont = {"puladas_iguais": 0, "alteradas_aguardam": 0}
+            cg.existente = {"TG": {"k1": (11, b"h1", None, None, None), "k2": (12, b"h2", None, None, None)}}
+            self.assertEqual(cg._situacao("TG", "k1", b"h1")[0], "igual")
+            cg._pendencia("TG", "k1", "segredo_aguarda_cofre", "media")  # recalculada: conta uma vez só
+            self.assertEqual(cg._situacao("TG", "k2", b"outro")[0], "alterada")  # Importar: não regrava
+            cg._commit()
+            r8 = relatorio.gerar(cr, ctl, 8, ENTIDADES)
+            regras8 = sorted(p[2] for p in cg.pend)
+            self.assertEqual(regras8, ["alteracao_aguarda_sincronizar", "segredo_aguarda_cofre",
+                                       "vigencia_sem_fonte"])
+            # resolvidas em 8: a 5 (falhou antes, não repetida) e o conflito (fato da 7); os avisos continuam
+            self.assertEqual(r8["totais"]["resolvidas"], 2)
+            self.assertEqual(r8["totais"]["abertas"], 3)
             cr.close()
         finally:
             with root.cursor() as c:
