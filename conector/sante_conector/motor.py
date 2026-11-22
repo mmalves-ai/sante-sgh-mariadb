@@ -18,7 +18,8 @@ import time
 
 import pymysql
 
-from . import banco, caminho, carga, carga_mapa, controle, disco, estruturar, imagem, mapa, plataforma, relatorio
+from . import (banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma, preco_origem,
+               relatorio)
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -179,8 +180,16 @@ def executar(trab, eid):
                         rel["entidades"] = resumo["entidades"]
                         # ADR 0009 (decisão 27): texto livre das agendas migradas -> regras estimadas, texto inteiro ao
                         # lado; no Sincronizar, só o texto que mudou é extraído de novo. A falha não derruba a carga.
+                        # Mesma etapa: agenda -> profissional pelo nome, vigência por evidência (decisão 16), preço
+                        # particular por médico da origem com a fonte particular classificada (decisão 24) e o repasse
+                        # integral da consulta particular (preco_origem).
                         try:
-                            cont["agenda_estruturada"] = estruturar.executar(cc)
+                            cont["agenda_estruturada"] = preco_origem.executar(
+                                cc, preco_origem.ler_origem(lt), ctl=ctl, execucao_id=eid)
+                            pend = resumo["pendencias"]
+                            for k, n in cont["agenda_estruturada"].get("pendencias", {}).items():
+                                pend["total"] += n
+                                pend["por_regra"][k] = pend["por_regra"].get(k, 0) + n
                         except Exception as e:  # noqa: BLE001 - só o tipo do erro (a mensagem pode citar valores)
                             cc.rollback()
                             cont["agenda_estruturada"] = {"falhou": type(e).__name__}

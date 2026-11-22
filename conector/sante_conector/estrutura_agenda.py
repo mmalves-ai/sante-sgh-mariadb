@@ -28,7 +28,7 @@ import hashlib
 import re
 import unicodedata
 
-VERSAO = "conector-1"
+VERSAO = "conector-2"
 MAX_DESCRICAO = 60000      # agenda_preparo.descricao é TEXT (64 KiB); o texto inteiro fica no texto original
 MAX_OBSERVACAO = 500
 
@@ -222,13 +222,17 @@ def _linha(ex, a, b, n, campo, fonte_id, nome_fonte, fontes, fonte_particular_id
         consulta = re.match(r"^ *VALOR +(DA|DE|DO) +CONSULTA +PARTICULAR\b", n) or (
             campo == "observacao_convenio" and fonte_id is not None and fonte_id == fonte_particular_id
             and re.match(r"^ *VALOR +(DA|DE|DO) +CONSULTA\b", n))
+        # ADR 0009, volta 2: "valor do exame particular" sem dizer o exame = o exame padrão da agenda (alvo exame)
+        exame = re.match(r"^ *VALOR +(DA|DE|DO) +EXAME +PARTICULAR +(R\b|\d)", n) or (
+            campo == "observacao_convenio" and fonte_id is not None and fonte_id == fonte_particular_id
+            and re.match(r"^ *VALOR +(DA|DE|DO) +EXAME +(R\b|\d)", n))
         if re.search(r"\bCONVENIOS?\b", n) and "PARTICULAR" not in n:
             ex.trecho(a, b, motivo="valor para paciente de convênio: o preço de convênio vem do convênio (decisão 24)")
         elif not vs:
             ex.trecho(a, b, motivo="valor sem quantia em reais reconhecível")
         elif len(vs) > 1:
             ex.trecho(a, b, motivo="valor em parcelas: a soma e o destino de cada parcela ficam para a revisão")
-        elif not consulta:
+        elif not (consulta or exame):
             ex.trecho(a, b, motivo="valor de exame ou procedimento sem item resolvido: aguarda o item na revisão")
         elif fonte_particular_id is None:
             ex.trecho(a, b, motivo="fonte pagadora particular indefinida no cadastro")
@@ -238,7 +242,8 @@ def _linha(ex, a, b, n, campo, fonte_id, nome_fonte, fontes, fonte_particular_id
             m = re.match(r"\s*\([^)]*\)", linha[fim_v:])
             if m and re.search(r"\bREAIS\b", normalizar(m.group(0))):
                 fim = a + fim_v + m.end()  # o valor por extenso entre parênteses faz parte do trecho do preço
-            ex.precos.append({"alvo": "consulta", "valor_centavos": centavos, "trecho": (a, fim)})
+            ex.precos.append({"alvo": "consulta" if consulta else "exame", "valor_centavos": centavos,
+                              "trecho": (a, fim)})
             ex.trecho(a, fim, "preco")
             resto = re.search(r"[A-Za-z]", t[fim:b])
             if resto:

@@ -44,7 +44,7 @@ mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
 PRIV=()
-case "$1" in registrar|ler-faixa|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
+case "$1" in registrar|ler-faixa|medir-adr9|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 MARIADB_CT=${CONECTOR_MARIADB_CONTAINER:-sante-sgh-mariadb}
 REDE_INT=sante-sgh-conector-int

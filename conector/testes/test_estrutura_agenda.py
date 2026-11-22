@@ -56,7 +56,7 @@ class Puro(unittest.TestCase):
 
     def test_valores_nao_interpretados(self):
         for txt in ["VALOR DO EXAME PARTICULAR: R$ 410,00 + R$ 90,00 ( SEDACAO )",   # parcelas
-                    "VALOR DO EXAME PARTICULAR: R$ 130,00",                         # exame sem item
+                    "VALOR DO EXAME EXEMPLO PARTICULAR R$ 130,00",                  # exame nomeado sem item
                     "VALOR DO MAPEAMENTO EXEMPLO PARTICULAR: R$ 333,00 ( POR LADO )",
                     "Exame exemplo um R$ 145,00",                                    # tabela de procedimentos
                     "VALOR DA AVALIACAO PARA PACIENTES DE CONVÊNIO: R$ 60,00"]:      # decisão 24
@@ -64,6 +64,14 @@ class Puro(unittest.TestCase):
             self.assertEqual(ex.precos, [], txt)
             self.assertEqual([(i, tp) for _, i, tp in trechos(ex)], [(False, None)], txt)
         self.assertIn("decisão 24", ext("VALOR DA AVALIACAO PARA PACIENTES DE CONVÊNIO: R$ 60,00").trechos[0]["motivo"])
+
+    def test_valor_do_exame_particular_vira_alvo_exame(self):
+        ex = ext("VALOR DO EXAME PARTICULAR: R$ 130,00")
+        self.assertEqual([(p["alvo"], p["valor_centavos"]) for p in ex.precos], [("exame", 13000)])
+        self.assertEqual([(i, tp) for _, i, tp in trechos(ex)], [(True, "preco")])
+        ex = ext("VALOR DO EXAME: R$ 99,90", "observacao_convenio", 1)   # no texto do convênio particular
+        self.assertEqual([(p["alvo"], p["valor_centavos"]) for p in ex.precos], [("exame", 9990)])
+        self.assertEqual(ext("VALOR DO EXAME: R$ 99,90", "observacao_convenio", 2).precos, [])
 
     def test_sem_fonte_particular_nao_grava_preco(self):
         ex = ea.extrair("VALOR DA CONSULTA PARTICULAR: R$ 200,00", "observacao", None, FONTES[1:], None)

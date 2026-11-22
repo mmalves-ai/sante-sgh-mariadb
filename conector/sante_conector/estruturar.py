@@ -40,11 +40,18 @@ def _um(c, sql, args=()):
     return c.fetchall()
 
 
-def executar(conn, commit=True):
-    """Estrutura os textos das agendas migradas. Devolve só contagens."""
+def executar(conn, commit=True, vigencias=None, vigencia_padrao=None):
+    """Estrutura os textos das agendas migradas. Devolve só contagens.
+
+    Vigência das regras extraídas (decisão 16): nunca a data da carga. Texto novo: `vigencias[agenda]` (a data mais
+    antiga com evidência, de `preco_origem`), senão `vigencia_padrao` (o registro mais antigo da origem), senão hoje.
+    Texto que MUDOU na origem: hoje (a regra nova nasce da mudança). As estimadas de textos nunca alterados que ficaram
+    com uma vigência posterior à evidência (cargas anteriores) são corrigidas para a evidência."""
+    vigencias = vigencias or {}
     cont = dict(textos=0, novos=0, iguais=0, reextraidos=0, retirados=0, falhas=0, trechos=0, nao_interpretados=0,
                 precos=0, coberturas=0, restricoes=0, preparos=0, planos_criados=0, estimadas_retiradas=0,
-                confirmadas_a_rever=0, ja_confirmadas=0, sem_regra=0)
+                confirmadas_a_rever=0, ja_confirmadas=0, sem_regra=0, vigencias_corrigidas=0,
+                reextraidos_extrator=0)
     with conn.cursor() as c:
         n = _um(c, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN"
                    " (%s)" % ",".join(["%s"] * len(TABELAS)), TABELAS)[0][0]
@@ -64,8 +71,9 @@ def executar(conn, commit=True):
                " FROM agenda_fonte_pagadora p JOIN agenda_servico a ON a.id = p.agenda_servico_id"
                " WHERE a.origem = 'migracao' AND a.excluido_em IS NULL AND p.excluido_em IS NULL"
                " ORDER BY p.agenda_servico_id, p.fonte_pagadora_id")]
-        guardados = {(r[1], r[2], r[3]): (r[0], bytes(r[4])) for r in _um(
-            c, "SELECT id, agenda_servico_id, campo, fonte_pagadora_id, hash_texto FROM texto_origem_agenda")}
+        guardados = {(r[1], r[2], r[3]): (r[0], bytes(r[4]), r[5]) for r in _um(
+            c, "SELECT id, agenda_servico_id, campo, fonte_pagadora_id, hash_texto, versao_extrator"
+               " FROM texto_origem_agenda")}
     for aid, campo, fid, texto in textos:
         g = guardados.get((aid, campo, fid))
         vazio = not (texto or "").strip()
@@ -73,14 +81,21 @@ def executar(conn, commit=True):
             continue
         cont["textos"] += 1
         h = ea.hash_texto("" if vazio else texto)
-        if g and g[1] == h:
+        so_extrator = bool(g and g[1] == h and g[2] not in (None, ea.VERSAO))   # extrator novo, texto igual
+        if g and g[1] == h and not so_extrator:
             cont["iguais"] += 1
             continue
         with conn.cursor() as c:
             c.execute("SAVEPOINT estruturar_texto")
             try:
-                if g:
+                if so_extrator:   # o texto não mudou: estimadas refeitas pelo extrator novo, vigência da evidência
                     tid = g[0]
+                    ini = vigencias.get(aid) or vigencia_padrao
+                    _retirar(c, tid, cont)
+                    cont["reextraidos_extrator"] += 1
+                elif g:
+                    tid = g[0]
+                    ini = None   # texto mudou: a regra nova vale a partir de hoje
                     _retirar(c, tid, cont)
                     c.execute("UPDATE texto_origem_agenda SET texto = %s, hash_texto = %s, situacao_estruturacao ="
                               " 'pendente', alterado_em = CURRENT_TIMESTAMP(3), versao = versao + 1 WHERE id = %s",
@@ -91,9 +106,10 @@ def executar(conn, commit=True):
                               " hash_texto, origem, criado_em) VALUES (%s,%s,%s,%s,%s,'migracao',"
                               " CURRENT_TIMESTAMP(3))", (aid, fid, campo, texto, h))
                     tid = c.lastrowid
+                    ini = vigencias.get(aid) or vigencia_padrao
                     cont["novos"] += 1
                 ex = ea.extrair("" if vazio else texto, campo, fid, fontes, particular)
-                _gravar(c, tid, aid, agendas.get(aid), particular, ex, cont)
+                _gravar(c, tid, aid, agendas.get(aid), particular, ex, cont, ini)
                 situ = "extraida" if ex.interpretados() else "sem_regra"
                 cont["sem_regra"] += situ == "sem_regra"
                 c.execute("UPDATE texto_origem_agenda SET situacao_estruturacao = %s, versao_extrator = %s,"
@@ -102,6 +118,17 @@ def executar(conn, commit=True):
             except Exception:  # noqa: BLE001 - só a contagem sai (a mensagem do banco pode citar valores)
                 c.execute("ROLLBACK TO SAVEPOINT estruturar_texto")
                 cont["falhas"] += 1
+    with conn.cursor() as c:
+        for aid in sorted(agendas):
+            ini = vigencias.get(aid) or vigencia_padrao
+            if ini is None:
+                continue
+            for t in REGRAS:
+                cont["vigencias_corrigidas"] += c.execute(
+                    "UPDATE %s r JOIN texto_origem_agenda t ON t.id = r.texto_origem_agenda_id SET r.vigencia_inicio ="
+                    " %%s, r.versao = r.versao + 1 WHERE t.agenda_servico_id = %%s AND t.versao = 1 AND r.situacao_revisao"
+                    " = 'estimada' AND r.origem = 'migracao' AND r.excluido_em IS NULL AND r.vigencia_inicio > %%s"
+                    " AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= %%s)" % t, (ini, aid, ini, ini))
     if commit:
         conn.commit()
     return cont
@@ -143,15 +170,16 @@ def _confirmada(c, tabela, tid, campos, cont):
     return bool(achou)
 
 
-def _gravar(c, tid, aid, estab, particular, ex, cont):
+def _gravar(c, tid, aid, estab, particular, ex, cont, ini=None):
+    ini = ini or _um(c, "SELECT UTC_DATE()")[0][0]
     for p in ex.precos:
         valor = "%d.%02d" % divmod(p["valor_centavos"], 100)
         if _confirmada(c, "regra_preco_particular", tid, {"alvo": p["alvo"], "valor": valor}, cont):
             continue
         c.execute("INSERT INTO regra_preco_particular (estabelecimento_id, fonte_pagadora_id, agenda_servico_id, alvo,"
                   " valor, vigencia_inicio, situacao_revisao, texto_origem_agenda_id, observacao, origem, criado_em)"
-                  " VALUES (%s,%s,%s,%s,%s,UTC_DATE(),'estimada',%s,%s,'migracao',CURRENT_TIMESTAMP(3))",
-                  (estab, particular, aid, p["alvo"], valor, tid, OBS_PRECO))
+                  " VALUES (%s,%s,%s,%s,%s,%s,'estimada',%s,%s,'migracao',CURRENT_TIMESTAMP(3))",
+                  (estab, particular, aid, p["alvo"], valor, ini, tid, OBS_PRECO))
         cont["precos"] += 1
     for cb in ex.coberturas:
         pid = _plano(c, cb["fonte_pagadora_id"], cb["subplano"], cont) if cb["subplano"] else None
@@ -160,8 +188,8 @@ def _gravar(c, tid, aid, estab, particular, ex, cont):
             continue
         c.execute("INSERT INTO agenda_cobertura (agenda_servico_id, fonte_pagadora_id, plano_fonte_pagadora_id, aceita,"
                   " vigencia_inicio, texto_origem_agenda_id, situacao_revisao, observacao, origem, criado_em)"
-                  " VALUES (%s,%s,%s,%s,UTC_DATE(),%s,'estimada',%s,'migracao',CURRENT_TIMESTAMP(3))",
-                  (aid, cb["fonte_pagadora_id"], pid, cb["aceita"], tid, cb["observacao"]))
+                  " VALUES (%s,%s,%s,%s,%s,%s,'estimada',%s,'migracao',CURRENT_TIMESTAMP(3))",
+                  (aid, cb["fonte_pagadora_id"], pid, cb["aceita"], ini, tid, cb["observacao"]))
         cont["coberturas"] += 1
     campos = ("fonte_pagadora_id", "sexo_atendido", "idade_minima_anos", "idade_maxima_anos", "aceita_retorno",
               "dias_retorno", "permite_encaixe")
@@ -169,16 +197,17 @@ def _gravar(c, tid, aid, estab, particular, ex, cont):
         if _confirmada(c, "agenda_restricao", tid, {k: r.get(k) for k in campos}, cont):
             continue
         c.execute("INSERT INTO agenda_restricao (agenda_servico_id, %s, vigencia_inicio, texto_origem_agenda_id,"
-                  " situacao_revisao, origem, criado_em) VALUES (%%s,%s,UTC_DATE(),%%s,'estimada','migracao',"
+                  " situacao_revisao, origem, criado_em) VALUES (%%s,%s,%%s,%%s,'estimada','migracao',"
                   " CURRENT_TIMESTAMP(3))" % (", ".join(campos), ",".join(["%s"] * len(campos))),
-                  [aid] + [r.get(k) for k in campos] + [tid])
+                  [aid] + [r.get(k) for k in campos] + [ini, tid])
         cont["restricoes"] += 1
     for p in ex.preparos:
         if _confirmada(c, "agenda_preparo", tid, {"tipo": p["tipo"], "descricao": p["descricao"]}, cont):
             continue
         c.execute("INSERT INTO agenda_preparo (agenda_servico_id, tipo, descricao, jejum_horas, vigencia_inicio,"
-                  " texto_origem_agenda_id, situacao_revisao, origem, criado_em) VALUES (%s,%s,%s,%s,UTC_DATE(),%s,"
-                  "'estimada','migracao',CURRENT_TIMESTAMP(3))", (aid, p["tipo"], p["descricao"], p["jejum_horas"], tid))
+                  " texto_origem_agenda_id, situacao_revisao, origem, criado_em) VALUES (%s,%s,%s,%s,%s,%s,"
+                  "'estimada','migracao',CURRENT_TIMESTAMP(3))",
+                  (aid, p["tipo"], p["descricao"], p["jejum_horas"], ini, tid))
         cont["preparos"] += 1
     for t in ex.trechos:
         c.execute("INSERT INTO trecho_texto_agenda (texto_origem_agenda_id, posicao_inicio, posicao_fim, interpretado,"

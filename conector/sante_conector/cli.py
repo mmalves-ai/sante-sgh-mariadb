@@ -7,6 +7,7 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
                                                   exemplo (no trabalho); `--fatias lotes` junta todas as fatias dos
                                                   lotes de domínio (sintetica_d/l<lote>_<n>.py)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
+  medir-adr9 <relativo>                   ADR 0009: contagens do extrator, do preço por médico e da ligação pelo nome
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   dicionario <relativo> --saida ARQ        dicionário de colunas (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo),
                                           só metadado, para o gerador do mapa (tools/obra/gerar_mapa_conector.py)
@@ -57,6 +58,8 @@ def main(argv=None):
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     p = sub.add_parser("ler-faixa"); p.add_argument("relativo"); p.add_argument("--tabela", required=True)
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
+    p = sub.add_parser("medir-adr9"); p.add_argument("relativo")
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     p = sub.add_parser("testes"); p.add_argument("--padrao", default="test*.py")
     p = sub.add_parser("conferir-fatia"); p.add_argument("fatia")
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
@@ -185,6 +188,10 @@ def main(argv=None):
                 return _json(semente_espelho.semear(lt, cx))
             finally:
                 cx.close()
+    if a.cmd == "medir-adr9":
+        from . import preco_origem
+        with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
+            return _json(preco_origem.medir(lt))
     if a.cmd == "ler-faixa":
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab:
             with Leitor(ab.dispositivo) as lt:
