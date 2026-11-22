@@ -1,35 +1,35 @@
 {
- "fase_cobranca_inadimplencia": [
-  {
-   "codigo": "aviso",
-   "descricao": "Aviso de atraso",
-   "ordem": 1,
-   "tipo_acao": "aviso"
-  },
-  {
-   "codigo": "notificacao",
-   "descricao": "Notificação de inadimplência",
-   "ordem": 2,
-   "tipo_acao": "notificacao"
-  },
-  {
-   "codigo": "suspensao",
-   "descricao": "Suspensão do atendimento",
-   "ordem": 3,
-   "tipo_acao": "suspensao",
-   "suspende_atendimento": true
-  },
-  {
-   "codigo": "rescisao",
-   "descricao": "Rescisão do contrato",
-   "ordem": 4,
-   "tipo_acao": "rescisao"
-  },
-  {
-   "codigo": "acordo",
-   "descricao": "Acordo de pagamento",
-   "ordem": 5,
-   "tipo_acao": "acordo"
-  }
- ]
+  "fase_cobranca_inadimplencia": [
+    {
+      "codigo": "aviso",
+      "descricao": "Aviso de atraso",
+      "ordem": 1,
+      "tipo_acao": "aviso"
+    },
+    {
+      "codigo": "notificacao",
+      "descricao": "Notificação de inadimplência",
+      "ordem": 2,
+      "tipo_acao": "notificacao"
+    },
+    {
+      "codigo": "suspensao",
+      "descricao": "Suspensão do atendimento",
+      "ordem": 3,
+      "tipo_acao": "suspensao",
+      "suspende_atendimento": true
+    },
+    {
+      "codigo": "rescisao",
+      "descricao": "Rescisão do contrato",
+      "ordem": 4,
+      "tipo_acao": "rescisao"
+    },
+    {
+      "codigo": "acordo",
+      "descricao": "Acordo de pagamento",
+      "ordem": 5,
+      "tipo_acao": "acordo"
+    }
+  ]
 }

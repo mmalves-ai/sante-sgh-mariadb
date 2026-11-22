@@ -1,0 +1,169 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 20,
+    "codigo": "MED10",
+    "descricao": "RESPOSTA DO PARECER",
+    "fase": 2
+  },
+  "impressaoLayout": "550bd0c81bff460cac60226f6c10c1625898a37041de193a7d953de259831d6c",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 4,
+    "vinculosAtivos": 4,
+    "vinculosInativos": 0,
+    "componentes": 4,
+    "componentesMapeados": 4,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 3,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Resposta do parecer",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Parecer",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 136,
+            "topo": 18,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 818,
+            "pergunta": 144,
+            "codPergunta": 138,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp818",
+            "componentePai": "cmp817",
+            "idResposta": 431,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Hipótese Diagnóstica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 127,
+            "topo": 154,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 819,
+            "pergunta": 363,
+            "codPergunta": 351,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp819",
+            "componentePai": "cmp817",
+            "idResposta": 1063,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Conduta sugerida",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 736,
+            "altura": 135,
+            "topo": 281,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 820,
+            "pergunta": 366,
+            "codPergunta": 354,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp820",
+            "componentePai": "cmp817",
+            "idResposta": 1068,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 422,
+        "topo": 3,
+        "esquerda": 4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 817,
+        "pergunta": 365,
+        "codPergunta": 353,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp817",
+        "componentePai": "jvsBox",
+        "idResposta": 1067,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

@@ -1,0 +1,675 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 8,
+    "codigo": "ENF03",
+    "descricao": "EVOLUÇÃO DE ENFERMAGEM - PA",
+    "fase": 2
+  },
+  "impressaoLayout": "92fae5d2e86062238c38c6e3c1d098b5a966592db8a7a03669d25af393e42aa2",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 12,
+    "vinculosAtivos": 10,
+    "vinculosInativos": 2,
+    "componentes": 12,
+    "componentesMapeados": 12,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 24,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespAlergia": 1,
+      "TfRespCheckListBox": 3,
+      "TfRespColunas": 1,
+      "TfRespComboBox": 1,
+      "TfRespComboTexto": 1,
+      "TfRespEditUnidade": 2,
+      "TfRespTexto": 2,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Evolução de Enfermagem - PA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Paciente encaminhado para",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 186,
+            "topo": 15,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Medicação",
+              "idResposta": 103,
+              "codigo": 41,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Soroterapia",
+              "idResposta": 104,
+              "codigo": 42,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "ECG",
+              "idResposta": 105,
+              "codigo": 43,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "TC",
+              "idResposta": 106,
+              "codigo": 44,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "RX",
+              "idResposta": 107,
+              "codigo": 45,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Laboratório",
+              "idResposta": 108,
+              "codigo": 46,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Micronebulização com oxigênio",
+              "idResposta": 109,
+              "codigo": 47,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Micronebulização sem oxigênio",
+              "idResposta": 110,
+              "codigo": 48,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Glicemia capilar",
+              "idResposta": 111,
+              "codigo": 49,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Avaliação",
+              "idResposta": 112,
+              "codigo": 50,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Outros",
+              "idResposta": 113,
+              "codigo": 31,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 243,
+            "pergunta": 67,
+            "codPergunta": 67,
+            "ordem": "0101",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp243",
+            "componentePai": "cmp241",
+            "idResposta": 103,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Alergia de medicamentos",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 76,
+            "topo": 204,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 114,
+              "codigo": 51,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 115,
+              "codigo": 52,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 244,
+            "pergunta": 68,
+            "codPergunta": 68,
+            "ordem": "0102",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp244",
+            "componentePai": "cmp241",
+            "idResposta": 114,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Utilizado scalp para punção",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 180,
+            "altura": 40,
+            "topo": 285,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "21",
+              "idResposta": 116,
+              "codigo": 53,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "23",
+              "idResposta": 117,
+              "codigo": 54,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Outro",
+              "idResposta": 118,
+              "codigo": 55,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 245,
+            "pergunta": 69,
+            "codPergunta": 69,
+            "ordem": "0103",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp245",
+            "componentePai": "cmp241",
+            "idResposta": 116,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Utilizado mais de um scalp para punção? Justifique",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 9,
+            "largura": 552,
+            "altura": 40,
+            "topo": 285,
+            "esquerda": 191,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 246,
+            "pergunta": 71,
+            "codPergunta": 71,
+            "ordem": "0104",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp246",
+            "componentePai": "cmp241",
+            "idResposta": 121,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Conduta",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 117,
+            "topo": 782,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Medicado conforme prescrição médica e liberado em seguida.",
+              "idResposta": 124,
+              "codigo": 60,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Medicado e encaminhado para observação",
+              "idResposta": 125,
+              "codigo": 61,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Paciente evadiu",
+              "idResposta": 126,
+              "codigo": 62,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Outra",
+              "idResposta": 127,
+              "codigo": 63,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 247,
+            "pergunta": 72,
+            "codPergunta": 72,
+            "ordem": "0105",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp247",
+            "componentePai": "cmp241",
+            "idResposta": 124,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Sinais Vitais",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "grid",
+          "widget": "table-repeater",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 721,
+            "altura": 116,
+            "topo": 899,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "colunasGrade": [
+            {
+              "coluna": 1,
+              "pergunta": 75,
+              "idResposta": 130,
+              "titulo": "Hora",
+              "tipo": "2",
+              "unidade": null
+            },
+            {
+              "coluna": 2,
+              "pergunta": 76,
+              "idResposta": 132,
+              "titulo": "PA (mmHg)",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 3,
+              "pergunta": 77,
+              "idResposta": 133,
+              "titulo": "FC",
+              "tipo": "6",
+              "unidade": "bpm"
+            },
+            {
+              "coluna": 4,
+              "pergunta": 78,
+              "idResposta": 135,
+              "titulo": "FR",
+              "tipo": "6",
+              "unidade": "rpm"
+            },
+            {
+              "coluna": 5,
+              "pergunta": 79,
+              "idResposta": 137,
+              "titulo": "T",
+              "tipo": "5",
+              "unidade": "° C"
+            },
+            {
+              "coluna": 6,
+              "pergunta": 80,
+              "idResposta": 138,
+              "titulo": "SAT",
+              "tipo": "6",
+              "unidade": "%"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 248,
+            "pergunta": 74,
+            "codPergunta": 74,
+            "ordem": "0106",
+            "tipo": "9",
+            "classe": "TfRespColunas",
+            "componente": "cmp248",
+            "componentePai": "cmp241",
+            "idResposta": 129,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Glicemia capilar",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": "mg/dL",
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 40,
+            "topo": 1021,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 249,
+            "pergunta": 82,
+            "codPergunta": 76,
+            "ordem": "0107",
+            "tipo": "7",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp249",
+            "componentePai": "cmp241",
+            "idResposta": 143,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Condição do paciente",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 729,
+            "altura": 116,
+            "topo": 1064,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Paciente estável sem queixas no momento, mantendo observação.",
+              "idResposta": 148,
+              "codigo": 73,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Medicado conforme prescrição médica.",
+              "idResposta": 150,
+              "codigo": 75,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Colhido amostras para exame laboratorial.",
+              "idResposta": 152,
+              "codigo": 77,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Outra",
+              "idResposta": 154,
+              "codigo": 63,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 250,
+            "pergunta": 84,
+            "codPergunta": 78,
+            "ordem": "0108",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp250",
+            "componentePai": "cmp241",
+            "idResposta": 148,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Observações de enfermagem",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 118,
+            "topo": 1184,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 251,
+            "pergunta": 87,
+            "codPergunta": 81,
+            "ordem": "0109",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp251",
+            "componentePai": "cmp241",
+            "idResposta": 156,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Intercorrências",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 731,
+            "altura": 95,
+            "topo": 1306,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 252,
+            "pergunta": 1,
+            "codPergunta": 1,
+            "ordem": "0110",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp252",
+            "componentePai": "cmp241",
+            "idResposta": 1,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Alergias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "reference",
+          "widget": "allergy-panel",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 497,
+            "topo": 280,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2480,
+            "pergunta": 772,
+            "codPergunta": 756,
+            "ordem": "0111",
+            "tipo": "19",
+            "classe": "TfRespAlergia",
+            "componente": "cmp2480",
+            "componentePai": "cmp241",
+            "idResposta": 2287,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 1500,
+        "topo": 5,
+        "esquerda": -3,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 241,
+        "pergunta": 66,
+        "codPergunta": 66,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp241",
+        "componentePai": "jvsBox",
+        "idResposta": 99,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

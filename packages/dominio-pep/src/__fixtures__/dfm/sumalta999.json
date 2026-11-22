@@ -1,0 +1,28 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 58,
+    "codigo": "SUMALTA999",
+    "descricao": "Sumário de alta padrão",
+    "fase": null
+  },
+  "impressaoLayout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 0,
+    "vinculosAtivos": 0,
+    "vinculosInativos": 0,
+    "componentes": 0,
+    "componentesMapeados": 0,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {}
+  },
+  "itens": [],
+  "pendencias": []
+}

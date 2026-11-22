@@ -1,0 +1,127 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 47,
+    "codigo": "M11",
+    "descricao": "EVOLUÇÃO MÉDICA PRONTO ATENDIMENTO",
+    "fase": 0
+  },
+  "impressaoLayout": "06f40a711cdbd7823f2b639ba38ee4b21ca7541e9e5e69318101fb382dffcec6",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 3,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 1,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 1976,
+        "pergunta": 984,
+        "codPergunta": 960,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO MÉDICA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Evolução",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 108,
+            "topo": 11,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1978,
+            "pergunta": 986,
+            "codPergunta": 962,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp820",
+            "componentePai": "cmp819",
+            "idResposta": 2598,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 127,
+        "topo": 2,
+        "esquerda": 0,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1977,
+        "pergunta": 985,
+        "codPergunta": 961,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp819",
+        "componentePai": "jvsBox",
+        "idResposta": 2597,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

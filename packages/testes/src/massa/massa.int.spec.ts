@@ -96,7 +96,9 @@ describe.skipIf(SEM_BANCO)('massa sintética e concorrência contra o MariaDB (c
       const cpf = await cpfLivre(l, 4242);
       expect(cpf).toMatch(/^9\d{10}$/);
       const inexistente = await cepInexistente(l);
-      expect(await l.consultar('SELECT id FROM logradouro_cep WHERE codigo_cep = ?', [inexistente])).toEqual([]);
+      expect(await l.consultar('SELECT id FROM logradouro_cep WHERE codigo_cep = ?', [inexistente])).toEqual(
+        [],
+      );
       const [c] = await l.consultar<{ n: number }>(
         `SELECT COUNT(*) AS n FROM logradouro_cep WHERE ativo = TRUE AND tipo_cep = 'logradouro'
            AND logradouro IS NOT NULL AND bairro_id IS NOT NULL AND especie_logradouro_id IS NOT NULL`,
@@ -104,7 +106,9 @@ describe.skipIf(SEM_BANCO)('massa sintética e concorrência contra o MariaDB (c
       if (Number(c?.n) > 0) {
         const cep = await cepCompleto(l);
         expect(cep).toMatch(/^\d{8}$/);
-        await outroCepCompleto(l, cep).catch((x: Error) => expect(x.message).toBe('Nenhum outro CEP completo.'));
+        await outroCepCompleto(l, cep).catch((x: Error) =>
+          expect(x.message).toBe('Nenhum outro CEP completo.'),
+        );
       } else {
         // Catálogo de CEPs não carregado neste cliente: a função recusa com a mensagem de negócio.
         await expect(cepCompleto(l)).rejects.toThrow('Nenhum CEP completo');
@@ -130,11 +134,10 @@ describe.skipIf(SEM_BANCO)('massa sintética e concorrência contra o MariaDB (c
       );
       // O mesmo código em dois estabelecimentos (a e b); nenhum perfil de rede com esse código.
       const perfil = (est: number) =>
-        e.inserir('INSERT INTO perfil_acesso (codigo, nome, estabelecimento_id, criado_em) VALUES (?, ?, ?, NOW(3))', [
-          CODIGO,
-          `Perfil ${MARCA_SINTETICA}`,
-          est,
-        ]);
+        e.inserir(
+          'INSERT INTO perfil_acesso (codigo, nome, estabelecimento_id, criado_em) VALUES (?, ?, ?, NOW(3))',
+          [CODIGO, `Perfil ${MARCA_SINTETICA}`, est],
+        );
       const pa = await perfil(a);
       const pb = await perfil(b);
       await perfilSintetico(e, login, CODIGO, b);
@@ -184,7 +187,11 @@ describe.skipIf(SEM_BANCO)('massa sintética e concorrência contra o MariaDB (c
 
       // (c) A outra estação checa: 1 linha, versão +1, evento 'checagem'; a segunda vez não altera nada.
       const h0 = await versao('horario_administracao', m.horarioVencido);
-      const checagem = { profissional: m.profissional, situacaoChecagem: m.situacaoAdministrado, usuario: m.usuario };
+      const checagem = {
+        profissional: m.profissional,
+        situacaoChecagem: m.situacaoAdministrado,
+        usuario: m.usuario,
+      };
       expect(await checarEmOutraEstacao(e, m.horarioVencido, checagem)).toBe(1);
       expect((await versao('horario_administracao', m.horarioVencido)).v).toBe(h0.v + 1);
       expect(await checarEmOutraEstacao(e, m.horarioVencido, checagem)).toBe(0);
@@ -196,7 +203,11 @@ describe.skipIf(SEM_BANCO)('massa sintética e concorrência contra o MariaDB (c
       const f0 = await versao('horario_administracao', m.horarioFuturo);
       const a0 = await versao('horario_administracao', m.horarioAdministrado);
       const v0 = await versao('horario_administracao', m.horarioVencido);
-      const suspensao = { profissional: m.profissional, motivo: `Suspensão ${MARCA_SINTETICA}`, usuario: m.usuario };
+      const suspensao = {
+        profissional: m.profissional,
+        motivo: `Suspensão ${MARCA_SINTETICA}`,
+        usuario: m.usuario,
+      };
       expect(await suspenderItemEmOutraEstacao(e, m.item, suspensao)).toBe(1);
       expect(await versao('prescricao_item', m.item)).toEqual({ v: i0.v + 1, suspenso: true });
       expect(await versao('horario_administracao', m.horarioFuturo)).toEqual({ v: f0.v + 1, suspenso: true });

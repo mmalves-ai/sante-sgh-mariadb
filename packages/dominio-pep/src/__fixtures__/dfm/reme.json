@@ -1,0 +1,106 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 55,
+    "codigo": "REME",
+    "descricao": "RELATÓRIO GERAL",
+    "fase": 2
+  },
+  "impressaoLayout": "a84c4949cc3f6bfd9b2a9ad29dab86d20c818c6858b4b7fff8f2aa370464f8a0",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 2
+    }
+  ],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 0,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "RELATÓRIO GERAL",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "RELATÓRIO (DESCRIÇÃO)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 691,
+            "topo": 15,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2482,
+            "pergunta": 1237,
+            "codPergunta": 1209,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2482",
+            "componentePai": "cmp2481",
+            "idResposta": 3144,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 751,
+        "altura": 712,
+        "topo": 2,
+        "esquerda": 3,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2481,
+        "pergunta": 1236,
+        "codPergunta": 1208,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2481",
+        "componentePai": "jvsBox",
+        "idResposta": 3143,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

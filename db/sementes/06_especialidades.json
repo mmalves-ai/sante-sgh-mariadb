@@ -1,179 +1,179 @@
 {
- "tipo_barreira_alta": [
-  {
-   "codigo": "social",
-   "descricao": "Barreira social para a alta",
-   "categoria": "social"
-  }
- ],
- "acuidade_visual": [
-  {
-   "codigo": "20_20",
-   "rotulo": "20/20",
-   "valor_decimal": 1.0,
-   "tipo": "snellen",
-   "ordem": 1
-  },
-  {
-   "codigo": "20_25",
-   "rotulo": "20/25",
-   "valor_decimal": 0.8,
-   "tipo": "snellen",
-   "ordem": 2
-  },
-  {
-   "codigo": "20_30",
-   "rotulo": "20/30",
-   "valor_decimal": 0.667,
-   "tipo": "snellen",
-   "ordem": 3
-  },
-  {
-   "codigo": "20_40",
-   "rotulo": "20/40",
-   "valor_decimal": 0.5,
-   "tipo": "snellen",
-   "ordem": 4
-  },
-  {
-   "codigo": "20_50",
-   "rotulo": "20/50",
-   "valor_decimal": 0.4,
-   "tipo": "snellen",
-   "ordem": 5
-  },
-  {
-   "codigo": "20_60",
-   "rotulo": "20/60",
-   "valor_decimal": 0.333,
-   "tipo": "snellen",
-   "ordem": 6
-  },
-  {
-   "codigo": "20_70",
-   "rotulo": "20/70",
-   "valor_decimal": 0.286,
-   "tipo": "snellen",
-   "ordem": 7
-  },
-  {
-   "codigo": "20_80",
-   "rotulo": "20/80",
-   "valor_decimal": 0.25,
-   "tipo": "snellen",
-   "ordem": 8
-  },
-  {
-   "codigo": "20_100",
-   "rotulo": "20/100",
-   "valor_decimal": 0.2,
-   "tipo": "snellen",
-   "ordem": 9
-  },
-  {
-   "codigo": "20_200",
-   "rotulo": "20/200",
-   "valor_decimal": 0.1,
-   "tipo": "snellen",
-   "ordem": 10
-  },
-  {
-   "codigo": "20_400",
-   "rotulo": "20/400",
-   "valor_decimal": 0.05,
-   "tipo": "snellen",
-   "ordem": 11
-  },
-  {
-   "codigo": "conta_dedos",
-   "rotulo": "Conta dedos",
-   "tipo": "qualitativa",
-   "ordem": 12
-  },
-  {
-   "codigo": "movimento_maos",
-   "rotulo": "Movimento de mãos",
-   "tipo": "qualitativa",
-   "ordem": 13
-  },
-  {
-   "codigo": "percepcao_luz",
-   "rotulo": "Percepção luminosa",
-   "tipo": "qualitativa",
-   "ordem": 14
-  },
-  {
-   "codigo": "sem_percepcao_luz",
-   "rotulo": "Sem percepção luminosa",
-   "tipo": "qualitativa",
-   "ordem": 15
-  }
- ],
- "graduacao_oftalmologica": [
-  {
-   "sigla": "OD",
-   "descricao": "Olho direito"
-  },
-  {
-   "sigla": "OE",
-   "descricao": "Olho esquerdo"
-  },
-  {
-   "sigla": "AO",
-   "descricao": "Ambos os olhos"
-  },
-  {
-   "sigla": "ESF",
-   "descricao": "Esférico"
-  },
-  {
-   "sigla": "CIL",
-   "descricao": "Cilíndrico"
-  },
-  {
-   "sigla": "EIXO",
-   "descricao": "Eixo"
-  },
-  {
-   "sigla": "ADD",
-   "descricao": "Adição"
-  }
- ],
- "via_de_uso": [
-  {
-   "codigo": "iv",
-   "descricao": "Intravenosa",
-   "sigla": "IV",
-   "parenteral": true,
-   "uso_quimioterapia": true
-  },
-  {
-   "codigo": "vo",
-   "descricao": "Oral",
-   "sigla": "VO",
-   "uso_quimioterapia": true
-  },
-  {
-   "codigo": "sc",
-   "descricao": "Subcutânea",
-   "sigla": "SC",
-   "parenteral": true,
-   "uso_quimioterapia": true
-  },
-  {
-   "codigo": "im",
-   "descricao": "Intramuscular",
-   "sigla": "IM",
-   "parenteral": true,
-   "uso_quimioterapia": true
-  },
-  {
-   "codigo": "it",
-   "descricao": "Intratecal",
-   "sigla": "IT",
-   "parenteral": true,
-   "exige_dispositivo": true,
-   "uso_quimioterapia": true
-  }
- ]
+  "tipo_barreira_alta": [
+    {
+      "codigo": "social",
+      "descricao": "Barreira social para a alta",
+      "categoria": "social"
+    }
+  ],
+  "acuidade_visual": [
+    {
+      "codigo": "20_20",
+      "rotulo": "20/20",
+      "valor_decimal": 1.0,
+      "tipo": "snellen",
+      "ordem": 1
+    },
+    {
+      "codigo": "20_25",
+      "rotulo": "20/25",
+      "valor_decimal": 0.8,
+      "tipo": "snellen",
+      "ordem": 2
+    },
+    {
+      "codigo": "20_30",
+      "rotulo": "20/30",
+      "valor_decimal": 0.667,
+      "tipo": "snellen",
+      "ordem": 3
+    },
+    {
+      "codigo": "20_40",
+      "rotulo": "20/40",
+      "valor_decimal": 0.5,
+      "tipo": "snellen",
+      "ordem": 4
+    },
+    {
+      "codigo": "20_50",
+      "rotulo": "20/50",
+      "valor_decimal": 0.4,
+      "tipo": "snellen",
+      "ordem": 5
+    },
+    {
+      "codigo": "20_60",
+      "rotulo": "20/60",
+      "valor_decimal": 0.333,
+      "tipo": "snellen",
+      "ordem": 6
+    },
+    {
+      "codigo": "20_70",
+      "rotulo": "20/70",
+      "valor_decimal": 0.286,
+      "tipo": "snellen",
+      "ordem": 7
+    },
+    {
+      "codigo": "20_80",
+      "rotulo": "20/80",
+      "valor_decimal": 0.25,
+      "tipo": "snellen",
+      "ordem": 8
+    },
+    {
+      "codigo": "20_100",
+      "rotulo": "20/100",
+      "valor_decimal": 0.2,
+      "tipo": "snellen",
+      "ordem": 9
+    },
+    {
+      "codigo": "20_200",
+      "rotulo": "20/200",
+      "valor_decimal": 0.1,
+      "tipo": "snellen",
+      "ordem": 10
+    },
+    {
+      "codigo": "20_400",
+      "rotulo": "20/400",
+      "valor_decimal": 0.05,
+      "tipo": "snellen",
+      "ordem": 11
+    },
+    {
+      "codigo": "conta_dedos",
+      "rotulo": "Conta dedos",
+      "tipo": "qualitativa",
+      "ordem": 12
+    },
+    {
+      "codigo": "movimento_maos",
+      "rotulo": "Movimento de mãos",
+      "tipo": "qualitativa",
+      "ordem": 13
+    },
+    {
+      "codigo": "percepcao_luz",
+      "rotulo": "Percepção luminosa",
+      "tipo": "qualitativa",
+      "ordem": 14
+    },
+    {
+      "codigo": "sem_percepcao_luz",
+      "rotulo": "Sem percepção luminosa",
+      "tipo": "qualitativa",
+      "ordem": 15
+    }
+  ],
+  "graduacao_oftalmologica": [
+    {
+      "sigla": "OD",
+      "descricao": "Olho direito"
+    },
+    {
+      "sigla": "OE",
+      "descricao": "Olho esquerdo"
+    },
+    {
+      "sigla": "AO",
+      "descricao": "Ambos os olhos"
+    },
+    {
+      "sigla": "ESF",
+      "descricao": "Esférico"
+    },
+    {
+      "sigla": "CIL",
+      "descricao": "Cilíndrico"
+    },
+    {
+      "sigla": "EIXO",
+      "descricao": "Eixo"
+    },
+    {
+      "sigla": "ADD",
+      "descricao": "Adição"
+    }
+  ],
+  "via_de_uso": [
+    {
+      "codigo": "iv",
+      "descricao": "Intravenosa",
+      "sigla": "IV",
+      "parenteral": true,
+      "uso_quimioterapia": true
+    },
+    {
+      "codigo": "vo",
+      "descricao": "Oral",
+      "sigla": "VO",
+      "uso_quimioterapia": true
+    },
+    {
+      "codigo": "sc",
+      "descricao": "Subcutânea",
+      "sigla": "SC",
+      "parenteral": true,
+      "uso_quimioterapia": true
+    },
+    {
+      "codigo": "im",
+      "descricao": "Intramuscular",
+      "sigla": "IM",
+      "parenteral": true,
+      "uso_quimioterapia": true
+    },
+    {
+      "codigo": "it",
+      "descricao": "Intratecal",
+      "sigla": "IT",
+      "parenteral": true,
+      "exige_dispositivo": true,
+      "uso_quimioterapia": true
+    }
+  ]
 }

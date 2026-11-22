@@ -17,7 +17,9 @@ describe('abertura do atendimento', () => {
     expect(recusaSenhaNaAbertura(senha)).toBeNull();
     expect(recusaSenhaNaAbertura({ ...senha, situacao: 'chamada' })).toBeNull();
     expect(recusaSenhaNaAbertura({ ...senha, existe: false })?.codigo).toBe('senha-inexistente');
-    expect(recusaSenhaNaAbertura({ ...senha, outroAtendimentoAtivo: true })?.codigo).toBe('senha-ja-atendida');
+    expect(recusaSenhaNaAbertura({ ...senha, outroAtendimentoAtivo: true })?.codigo).toBe(
+      'senha-ja-atendida',
+    );
     expect(recusaSenhaNaAbertura({ ...senha, doDia: false })?.codigo).toBe('senha-de-outro-dia');
     for (const s of ['em_atendimento', 'encaminhada', 'atendida', 'cancelada'])
       expect(recusaSenhaNaAbertura({ ...senha, situacao: s })?.codigo).toBe('senha-concluida');
@@ -28,7 +30,9 @@ describe('abertura do atendimento', () => {
     expect(recusaMarcacaoNaAbertura({ ...m, existe: false })?.codigo).toBe('marcacao-inexistente');
     expect(recusaMarcacaoNaAbertura({ ...m, doDia: false })?.codigo).toBe('marcacao-de-outro-dia');
     expect(recusaMarcacaoNaAbertura({ ...m, jaAtendida: true })?.codigo).toBe('marcacao-ja-atendida');
-    expect(recusaMarcacaoNaAbertura({ ...m, mesmoPaciente: false })?.codigo).toBe('marcacao-de-outro-paciente');
+    expect(recusaMarcacaoNaAbertura({ ...m, mesmoPaciente: false })?.codigo).toBe(
+      'marcacao-de-outro-paciente',
+    );
   });
 });
 
@@ -58,9 +62,15 @@ describe('consultório', () => {
 describe('exclusão e observação', () => {
   it('exclui só o aberto por engano; a senha só volta se estava em atendimento e é do dia', () => {
     expect(recusaCancelamento({ situacao: 'aberto', temDesfecho: false })).toBeNull();
-    expect(recusaCancelamento({ situacao: 'encerrado', temDesfecho: true })?.codigo).toBe('exclusao-recusada');
-    expect(recusaCancelamento({ situacao: 'em_atendimento', temDesfecho: true })?.codigo).toBe('exclusao-recusada');
-    expect(recusaCancelamento({ situacao: 'cancelado', temDesfecho: false })?.codigo).toBe('exclusao-recusada');
+    expect(recusaCancelamento({ situacao: 'encerrado', temDesfecho: true })?.codigo).toBe(
+      'exclusao-recusada',
+    );
+    expect(recusaCancelamento({ situacao: 'em_atendimento', temDesfecho: true })?.codigo).toBe(
+      'exclusao-recusada',
+    );
+    expect(recusaCancelamento({ situacao: 'cancelado', temDesfecho: false })?.codigo).toBe(
+      'exclusao-recusada',
+    );
     expect(senhaVoltaAFila({ situacao: 'em_atendimento', doDia: true })).toBe(true);
     expect(senhaVoltaAFila({ situacao: 'atendida', doDia: true })).toBe(false);
     expect(senhaVoltaAFila({ situacao: 'em_atendimento', doDia: false })).toBe(false);

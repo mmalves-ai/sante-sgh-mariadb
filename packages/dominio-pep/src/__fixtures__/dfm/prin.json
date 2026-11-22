@@ -1,0 +1,633 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 61,
+    "codigo": "PRIN",
+    "descricao": "SOLICITAÇÃO DE PRORROGAÇÃO DE INTERNAÇÃO",
+    "fase": 2
+  },
+  "impressaoLayout": "9e6ab01c7d45096a2c35971af9a13bcfa8c55753b3b66aa8b439e31a2a3b8558",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 14
+    },
+    {
+      "versao": 2,
+      "componentes": 14
+    },
+    {
+      "versao": 3,
+      "componentes": 12
+    }
+  ],
+  "resumo": {
+    "vinculos": 14,
+    "vinculosAtivos": 12,
+    "vinculosInativos": 2,
+    "componentes": 14,
+    "componentesMapeados": 14,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 14,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 3,
+      "TfRespComboTexto": 1,
+      "TfRespData": 2,
+      "TfRespEditUnidade": 1,
+      "TfRespMultiploCid": 1,
+      "TfRespTexto": 5,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "SOLICITAÇÃO DE PRORROGAÇÃO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Matrícula/CIB",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 228,
+            "altura": 59,
+            "topo": 15,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2677,
+            "pergunta": 1382,
+            "codPergunta": 1354,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2677",
+            "componentePai": "cmp2676",
+            "idResposta": 3666,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Números de Diárias Solicitadas",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 226,
+            "altura": 40,
+            "topo": 78,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2678,
+            "pergunta": 1383,
+            "codPergunta": 1355,
+            "ordem": "0103",
+            "tipo": "7",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp2678",
+            "componentePai": "cmp2676",
+            "idResposta": 3667,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Diagnóstico Inicial (CID)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-coding",
+          "widget": "terminology-multi",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 206,
+            "topo": 124,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2679,
+            "pergunta": 1384,
+            "codPergunta": 1356,
+            "ordem": "0104",
+            "tipo": "18",
+            "classe": "TfRespMultiploCid",
+            "componente": "cmp2679",
+            "componentePai": "cmp2676",
+            "idResposta": 3668,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Comorbidades",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 87,
+            "topo": 335,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2680,
+            "pergunta": 1385,
+            "codPergunta": 1357,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2680",
+            "componentePai": "cmp2676",
+            "idResposta": 3669,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Acomodação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 195,
+            "altura": 128,
+            "topo": 427,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Apto/Enfermaria",
+              "idResposta": 3670,
+              "codigo": 2320,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "UTI",
+              "idResposta": 3671,
+              "codigo": 2321,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2681,
+            "pergunta": 1386,
+            "codPergunta": 1358,
+            "ordem": "0106",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2681",
+            "componentePai": "cmp2676",
+            "idResposta": 3670,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Data do Início da Prorrogação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "date",
+          "widget": "date",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 262,
+            "altura": 53,
+            "topo": 427,
+            "esquerda": 207,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2682,
+            "pergunta": 1387,
+            "codPergunta": 1359,
+            "ordem": "0107",
+            "tipo": "2",
+            "classe": "TfRespData",
+            "componente": "cmp2682",
+            "componentePai": "cmp2676",
+            "idResposta": 3672,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Data do término da Prorrogação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "date",
+          "widget": "date",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 273,
+            "altura": 40,
+            "topo": 485,
+            "esquerda": 206,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2683,
+            "pergunta": 1388,
+            "codPergunta": 1360,
+            "ordem": "0108",
+            "tipo": "2",
+            "classe": "TfRespData",
+            "componente": "cmp2683",
+            "componentePai": "cmp2676",
+            "idResposta": 3673,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Alta Hospitalar?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 7,
+            "largura": 468,
+            "altura": 84,
+            "topo": 557,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2684,
+            "pergunta": 1389,
+            "codPergunta": 1361,
+            "ordem": "0109",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2684",
+            "componentePai": "cmp2676",
+            "idResposta": 3674,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Acessos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 90,
+            "topo": 640,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "PAM",
+              "idResposta": 3677,
+              "codigo": 267,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "AVP",
+              "idResposta": 3675,
+              "codigo": 2322,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "AVC",
+              "idResposta": 3676,
+              "codigo": 2323,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "PIA",
+              "idResposta": 3678,
+              "codigo": 2324,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2685,
+            "pergunta": 1390,
+            "codPergunta": 1362,
+            "ordem": "0110",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2685",
+            "componentePai": "cmp2676",
+            "idResposta": 3675,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Oxigênio Terapia",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 98,
+            "topo": 734,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Sim",
+              "idResposta": 3679,
+              "codigo": 51,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 3680,
+              "codigo": 52,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "TOT/TQT",
+              "idResposta": 3683,
+              "codigo": 246,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "VNI",
+              "idResposta": 3682,
+              "codigo": 786,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "VM",
+              "idResposta": 3684,
+              "codigo": 857,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "CN",
+              "idResposta": 3681,
+              "codigo": 1527,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2686,
+            "pergunta": 1391,
+            "codPergunta": 1363,
+            "ordem": "0111",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2686",
+            "componentePai": "cmp2676",
+            "idResposta": 3679,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Drogas Vasoativas",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 731,
+            "altura": 71,
+            "topo": 842,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 3685,
+              "codigo": 51,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 3686,
+              "codigo": 52,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2687,
+            "pergunta": 1392,
+            "codPergunta": 1364,
+            "ordem": "0112",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp2687",
+            "componentePai": "cmp2676",
+            "idResposta": 3685,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "Antibiótico Terapia",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 729,
+            "altura": 116,
+            "topo": 917,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2688,
+            "pergunta": 1394,
+            "codPergunta": 1366,
+            "ordem": "0113",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2688",
+            "componentePai": "cmp2676",
+            "idResposta": 3689,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Relatório Médico Evolutivo Para Justificativa da Prorrogação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 741,
+            "altura": 369,
+            "topo": 1033,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2689,
+            "pergunta": 1395,
+            "codPergunta": 1367,
+            "ordem": "0114",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2689",
+            "componentePai": "cmp2676",
+            "idResposta": 3690,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 752,
+        "altura": 1466,
+        "topo": 1,
+        "esquerda": 1,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2676,
+        "pergunta": 1396,
+        "codPergunta": 1368,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2676",
+        "componentePai": "jvsBox",
+        "idResposta": 3691,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

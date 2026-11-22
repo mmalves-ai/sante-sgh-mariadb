@@ -1,0 +1,1620 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 33,
+    "codigo": "MED19",
+    "descricao": "NIH - ESCALA DE AVC",
+    "fase": 2
+  },
+  "impressaoLayout": "40c2c23d3cb50605735ae4d4f6178ec92c469551c26564b184769875c1ae9b75",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 16,
+    "vinculosAtivos": 15,
+    "vinculosInativos": 1,
+    "componentes": 15,
+    "componentesMapeados": 15,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 53,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 1,
+    "porClasse": {
+      "TfRespComboBox": 13,
+      "TfRespEditUnidade": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "NIH - ESCALA DE AVC",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "1a. Nível de Consciência",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 14,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Acordado; responde corretamente.",
+              "idResposta": 1729,
+              "codigo": 1091,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Sonolento, mas acorda com um pequeno estímulo, obedece, responde ou reage.",
+              "idResposta": 1730,
+              "codigo": 1092,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Estuporoso; acorda com estímulo forte, requer estimulação repetida ou dolorosa para realizar movimentos (não estereotipados).",
+              "idResposta": 1731,
+              "codigo": 1093,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Comatoso; apenas respostas reflexas motoras ou autonómicas, ou sem qualquer tipo de resposta.",
+              "idResposta": 1732,
+              "codigo": 1094,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1362,
+            "pergunta": 622,
+            "codPergunta": 610,
+            "ordem": "0101",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1362",
+            "componentePai": "cmp1354",
+            "idResposta": 1729,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "1b. NDC Questões: O paciente é questionado sobre o mês e idade.",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 57,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Responde a ambas as questões corretamente.",
+              "idResposta": 1733,
+              "codigo": 1095,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Responde a uma questão corretamente.",
+              "idResposta": 1734,
+              "codigo": 1096,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Não responde a nenhuma questão corretamente.",
+              "idResposta": 1735,
+              "codigo": 1097,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1363,
+            "pergunta": 623,
+            "codPergunta": 611,
+            "ordem": "0102",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1363",
+            "componentePai": "cmp1354",
+            "idResposta": 1733,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "1c. NDC Ordens: O paciente é solicitado a abrir e fechar os olhos e depois abrir e fechar a mão",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 96,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Realiza ambas as tarefas corretamente.",
+              "idResposta": 1736,
+              "codigo": 1098,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Realiza uma tarefa corretamente.",
+              "idResposta": 1737,
+              "codigo": 1099,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Não realiza nenhuma tarefa corretamente.",
+              "idResposta": 1738,
+              "codigo": 1100,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1364,
+            "pergunta": 624,
+            "codPergunta": 612,
+            "ordem": "0103",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1364",
+            "componentePai": "cmp1354",
+            "idResposta": 1736,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "2. Melhor Olhar Conjugado: Teste apenas os movimentos oculares horizontais.",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 135,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Normal.",
+              "idResposta": 1739,
+              "codigo": 1101,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Paralisia parcial do olhar conjugado. Esta pontuação é dada quando o olhar é anormal em um ou ambos os olhos, mas não há desvio forçado ou paresia total do olhar conjugado.",
+              "idResposta": 1740,
+              "codigo": 1102,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Desvio forçado ou paresia total do olhar conjugado não revertidos pela manobra oculocefálica.",
+              "idResposta": 1741,
+              "codigo": 1103,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1365,
+            "pergunta": 625,
+            "codPergunta": 613,
+            "ordem": "0104",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1365",
+            "componentePai": "cmp1354",
+            "idResposta": 1739,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Respiração",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1366,
+            "pergunta": 626,
+            "codPergunta": 614,
+            "ordem": "0105",
+            "tipo": "12",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "3. Campos visuais",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 174,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Sem défices campimétricos.",
+              "idResposta": 1747,
+              "codigo": 1106,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Hemianopsia parcial.",
+              "idResposta": 1748,
+              "codigo": 1107,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Hemianopsia completa.",
+              "idResposta": 1749,
+              "codigo": 1108,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Hemianopsia bilateral (cego, incluindo cegueira cortical).",
+              "idResposta": 1750,
+              "codigo": 1109,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1367,
+            "pergunta": 627,
+            "codPergunta": 615,
+            "ordem": "0105",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1367",
+            "componentePai": "cmp1354",
+            "idResposta": 1747,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "4. Paresia Facial",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 214,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Movimentos normais simétricos.",
+              "idResposta": 1751,
+              "codigo": 1110,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Paralisia facial minor (apagamento de prega nasolabial, assimetria no sorriso).",
+              "idResposta": 1752,
+              "codigo": 1111,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Paralisia facial central evidente (paralisia facial inferior total ou quase total).",
+              "idResposta": 1753,
+              "codigo": 1112,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Paralisia facial completa (ausência de movimentos faciais das regiões superior e inferior de um lado da face).",
+              "idResposta": 1754,
+              "codigo": 1113,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1368,
+            "pergunta": 628,
+            "codPergunta": 616,
+            "ordem": "0106",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1368",
+            "componentePai": "cmp1354",
+            "idResposta": 1751,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "5. Membros Superiores",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 255,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Sem queda; mantém o braço a 90º (ou 45º) por um período de 10 segundos.",
+              "idResposta": 1755,
+              "codigo": 1114,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Queda parcial antes de completar o período de 10 segundos; não chega a tocar na cama ou noutro suporte.",
+              "idResposta": 1756,
+              "codigo": 1115,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Algum esforço contra a gravidade; o braço acaba por cair na cama ou noutro suporte antes dos 10 segundos, mas não de forma imediata.",
+              "idResposta": 1757,
+              "codigo": 1116,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Nenhum esforço contra a gravidade; o braço cai logo; pousado, o membro faz algum movimento.",
+              "idResposta": 1758,
+              "codigo": 1117,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "4 = Nenhum movimento.",
+              "idResposta": 1759,
+              "codigo": 1118,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "NT = Amputação ou anquilose MSE",
+              "idResposta": 1760,
+              "codigo": 1119,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "NT = Amputação ou anquilose MSD",
+              "idResposta": 1761,
+              "codigo": 1120,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1369,
+            "pergunta": 629,
+            "codPergunta": 617,
+            "ordem": "0107",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1369",
+            "componentePai": "cmp1354",
+            "idResposta": 1755,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "6. Membros Inferiores",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 295,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Sem queda; mantém a perna a 30º por um período de 5 segundos.",
+              "idResposta": 1762,
+              "codigo": 1121,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Queda parcial antes de completar o período de 5 segundos; não chega a tocar na cama ou noutro suporte.",
+              "idResposta": 1763,
+              "codigo": 1122,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Algum esforço contra a gravidade; a perna acaba por cair na cama ou noutro suporte antes dos 5 segundos, mas não de forma imediata.",
+              "idResposta": 1764,
+              "codigo": 1123,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Nenhum esforço contra a gravidade; a perna cai logo; pousado, o membro faz algum movimento.",
+              "idResposta": 1765,
+              "codigo": 1124,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "4 = Nenhum movimento",
+              "idResposta": 1767,
+              "codigo": 1125,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "NT = Amputação ou anquilose MIE",
+              "idResposta": 1768,
+              "codigo": 1126,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "NT = Amputação ou anquilose MID",
+              "idResposta": 1769,
+              "codigo": 1127,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1370,
+            "pergunta": 630,
+            "codPergunta": 618,
+            "ordem": "0108",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1370",
+            "componentePai": "cmp1354",
+            "idResposta": 1762,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "7. Ataxia de membros",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 336,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Ausente.",
+              "idResposta": 1770,
+              "codigo": 1128,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Presente em 1 membro.",
+              "idResposta": 1771,
+              "codigo": 1129,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Presente em 2 membros.",
+              "idResposta": 1772,
+              "codigo": 1130,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "NT = Amputação ou anquilose",
+              "idResposta": 1773,
+              "codigo": 1131,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1371,
+            "pergunta": 631,
+            "codPergunta": 619,
+            "ordem": "0109",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1371",
+            "componentePai": "cmp1354",
+            "idResposta": 1770,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "8. Sensibilidade",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 375,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Normal; sem perda de sensibilidade.",
+              "idResposta": 1774,
+              "codigo": 1132,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Perda de sensibilidade leve a moderada; o doente sente menos a picada , ou há uma perda da sensibilidade dolorosa à picada , mas o paciente sente a tocar.",
+              "idResposta": 1775,
+              "codigo": 1133,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Perda da sensibilidade grave ou total; o paciente não sente que está sendo tocado.",
+              "idResposta": 1776,
+              "codigo": 1134,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1372,
+            "pergunta": 632,
+            "codPergunta": 620,
+            "ordem": "0110",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1372",
+            "componentePai": "cmp1354",
+            "idResposta": 1774,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "9. Melhor linguagem",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 415,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Sem afasia; normal.",
+              "idResposta": 1777,
+              "codigo": 1135,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Afasia leve a moderada; perda óbvia de alguma fluência ou dificuldade de compreensão, sem limitação significativa das ideias expressas ou formas de expressão.",
+              "idResposta": 1778,
+              "codigo": 1136,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Afasia grave; toda a comunicação é feita através de expressões fragmentadas; necessidade de interferência, questionamento e adivinhação por parte do examinador.",
+              "idResposta": 1779,
+              "codigo": 1137,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "3 = Mutismo, afasia global; sem discurso ou compreensão verbal minimamente úteis.",
+              "idResposta": 1780,
+              "codigo": 1138,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1373,
+            "pergunta": 633,
+            "codPergunta": 621,
+            "ordem": "0111",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1373",
+            "componentePai": "cmp1354",
+            "idResposta": 1777,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "10. Disartria",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 454,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Normal.",
+              "idResposta": 1781,
+              "codigo": 1101,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Disartria leve a moderada; doente com voz arrastada pelo menos nalgumas palavras, e na pior das hipóteses pode ser entendido com alguma dificuldade.",
+              "idResposta": 1782,
+              "codigo": 1139,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Disartria grave; voz do doente é tão arrastada que chega a ser ininteligível, na ausência ou desproporcionalmente a disfasia, ou tem mutismo ou anartria.",
+              "idResposta": 1783,
+              "codigo": 1140,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "NT = Entubado ou outra barreira física",
+              "idResposta": 1784,
+              "codigo": 1141,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1374,
+            "pergunta": 634,
+            "codPergunta": 622,
+            "ordem": "0112",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1374",
+            "componentePai": "cmp1354",
+            "idResposta": 1781,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "11. Extinção e Desatenção, antiga negligência",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 494,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "0 = Nenhuma anormalidade.",
+              "idResposta": 1785,
+              "codigo": 1142,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "1 = Desatenção visual, tátil, auditiva, espacial ou pessoal, ou extinção à estimulação simultânea em uma das modalidades sensoriais.",
+              "idResposta": 1786,
+              "codigo": 1143,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "2 = Profunda hemidesatenção ou hemidesatenção para mais de uma modalidade; não reconhece a própria mão e se orienta apenas para um lado do espaço.",
+              "idResposta": 1787,
+              "codigo": 1144,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1375,
+            "pergunta": 635,
+            "codPergunta": 623,
+            "ordem": "0113",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1375",
+            "componentePai": "cmp1354",
+            "idResposta": 1785,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Total",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 535,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "expressoes": [
+            {
+              "tipo": "calcular",
+              "padrao": "escore-soma",
+              "referencias": [
+                "cmp1362",
+                "cmp1363",
+                "cmp1364",
+                "cmp1365",
+                "cmp1367",
+                "cmp1368",
+                "cmp1369",
+                "cmp1370",
+                "cmp1371",
+                "cmp1372",
+                "cmp1373",
+                "cmp1374",
+                "cmp1375"
+              ],
+              "contexto": [],
+              "fonte": "A := 0; B := 0; C := 0; D := 0; E := 0; F := 0; G := 0; H := 0; I := 0; J := 0; K := 0; L := 0; M := 0; IF (cmp1362ItemIndex = 1) then A:= 0 ELSE IF (cmp1362ItemIndex = 2) then A:= 1 ELSE IF (cmp1362ItemIndex = 3) then A:= 2 ELSE IF (cmp1362ItemIndex = 4) then A:= 3; IF (cmp1363ItemIndex = 1) then B:= 0 ELSE IF (cmp1363ItemIndex = 2) then B:= 1 ELSE IF (cmp1363ItemIndex = 3) then B:= 2; IF (cmp1364ItemIndex = 1) then C:= 0 ELSE IF (cmp1364ItemIndex = 2) then C:= 1 ELSE IF (cmp1364ItemIndex = 3) then C:= 2; IF (cmp1365ItemIndex = 1) then D:= 0 ELSE IF (cmp1365ItemIndex = 2) then D:= 1 ELSE IF (cmp1365ItemIndex = 3) then D:= 2; IF (cmp1367ItemIndex = 1) then E:= 0 ELSE IF (cmp1367ItemIndex = 2) then E:= 1 ELSE IF (cmp1367ItemIndex = 3) then E:= 2 ELSE IF (cmp1367ItemIndex = 4) then E:= 3; IF (cmp1368ItemIndex = 1) then F:= 0 ELSE IF (cmp1368ItemIndex = 2) then F:= 1 ELSE IF (cmp1368ItemIndex = 3) then F:= 2 ELSE IF (cmp1368ItemIndex = 4) then F:= 3; IF (cmp1369ItemIndex = 1) then G:= 0 ELSE IF (cmp1369ItemIndex = 2) then G:= 1 ELSE IF (cmp1369ItemIndex = 3) then G:= 2 ELSE IF (cmp1369ItemIndex = 4) then G:= 3 ELSE IF (cmp1369ItemIndex = 5) then G:= 4; IF (cmp1370ItemIndex = 1) then H:= 0 ELSE IF (cmp1370ItemIndex = 2) then H:= 1 ELSE IF (cmp1370ItemIndex = 3) then H:= 2 ELSE IF (cmp1370ItemIndex = 4) then H:= 3 ELSE IF (cmp1370ItemIndex = 5) then H:= 4; IF (cmp1371ItemIndex = 1) then I:= 0 ELSE IF (cmp1371ItemIndex = 2) then I:= 1 ELSE IF (cmp1371ItemIndex = 3) then I:= 2; IF (cmp1372ItemIndex = 1) then J:= 0 ELSE IF (cmp1372ItemIndex = 2) then J:= 1 ELSE IF (cmp1372ItemIndex = 3) then J:= 2; IF (cmp1373ItemIndex = 1) then K:= 0 ELSE IF (cmp1373ItemIndex = 2) then K:= 1 ELSE IF (cmp1373ItemIndex = 3) then K:= 2 ELSE IF (cmp1373ItemIndex = 4) then K:= 3; IF (cmp1374ItemIndex = 1) then L:= 0 ELSE IF (cmp1374ItemIndex = 2) then L:= 1 ELSE IF (cmp1374ItemIndex = 3) then L:= 2; IF (cmp1375ItemIndex = 1) then M:= 0 ELSE IF (cmp1375ItemIndex = 2) then M:= 1 ELSE IF (cmp1375ItemIndex = 3) then M:= 2; result:= sum(A,B,C,D,E,F,G,H,I,J,K,L,M);",
+              "regra": {
+                "soma": [
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1362ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1362ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1362ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1362ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  0
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1363ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1363ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1363ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1364ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1364ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1364ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1365ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1365ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1365ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1367ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1367ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1367ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1367ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  0
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1368ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1368ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1368ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1368ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  0
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1369ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1369ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1369ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1369ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  {
+                                    "if": [
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "cmp1369ItemIndex"
+                                          },
+                                          5
+                                        ]
+                                      },
+                                      4,
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1370ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1370ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1370ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1370ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  {
+                                    "if": [
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "cmp1370ItemIndex"
+                                          },
+                                          5
+                                        ]
+                                      },
+                                      4,
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1371ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1371ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1371ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1372ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1372ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1372ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1373ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1373ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1373ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              {
+                                "if": [
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp1373ItemIndex"
+                                      },
+                                      4
+                                    ]
+                                  },
+                                  3,
+                                  0
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1374ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1374ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1374ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "var": "cmp1375ItemIndex"
+                          },
+                          1
+                        ]
+                      },
+                      0,
+                      {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp1375ItemIndex"
+                              },
+                              2
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp1375ItemIndex"
+                                  },
+                                  3
+                                ]
+                              },
+                              2,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "convertida": true,
+              "motivoConversao": null
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1376,
+            "pergunta": 86,
+            "codPergunta": 80,
+            "ordem": "0114",
+            "tipo": "7",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1376",
+            "componentePai": "cmp1354",
+            "idResposta": 155,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 584,
+        "topo": 2,
+        "esquerda": 4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1354,
+        "pergunta": 621,
+        "codPergunta": 609,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1354",
+        "componentePai": "jvsBox",
+        "idResposta": 1728,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

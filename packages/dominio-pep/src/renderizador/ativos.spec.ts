@@ -13,7 +13,7 @@ import { bloqueiosDoModelo, camposParaRegistro, camposParaVisualizar, planos } f
 
 const ler = (c: string) =>
   JSON.parse(
-    readFileSync(resolve(import.meta.dirname, `../../../../docs/marcos/M09/dfm/${c}.json`), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, `../__fixtures__/dfm/${c}.json`), 'utf8'),
   ) as RepresentacaoFormulario;
 
 describe('visão do formulário (regra 4)', () => {

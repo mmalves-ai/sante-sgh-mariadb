@@ -72,7 +72,9 @@ export async function suspenderItemEmOutraEstacao(
  * O teste espera o erro do banco; sem a recusa, a regra se perdeu.
  */
 export async function suspensaoIncompleta(e: Escritor, prescricao: number): Promise<number> {
-  return e.executar(`UPDATE prescricao SET situacao = 'suspensa', suspensa_em = NULL WHERE id = ?`, [prescricao]);
+  return e.executar(`UPDATE prescricao SET situacao = 'suspensa', suspensa_em = NULL WHERE id = ?`, [
+    prescricao,
+  ]);
 }
 
 export interface SuspensaoDaPrescricao {
@@ -82,14 +84,25 @@ export interface SuspensaoDaPrescricao {
 }
 
 /** A situação e a suspensão da prescrição (só da prescrição sintética que o teste gravou). */
-export async function suspensaoDaPrescricao(l: Consulta, prescricao: number): Promise<SuspensaoDaPrescricao | null> {
-  const [x] = await l.consultar<{ situacao: string; suspensa_em: Date | null; motivo_suspensao: string | null }>(
+export async function suspensaoDaPrescricao(
+  l: Consulta,
+  prescricao: number,
+): Promise<SuspensaoDaPrescricao | null> {
+  const [x] = await l.consultar<{
+    situacao: string;
+    suspensa_em: Date | null;
+    motivo_suspensao: string | null;
+  }>(
     'SELECT situacao, suspensa_em, motivo_suspensao FROM prescricao WHERE id = ? AND excluido_em IS NULL',
     [prescricao],
     { teto: 1 },
   );
   if (!x) return null;
-  return { situacao: String(x.situacao), suspensaEm: x.suspensa_em ?? null, motivo: x.motivo_suspensao ?? null };
+  return {
+    situacao: String(x.situacao),
+    suspensaEm: x.suspensa_em ?? null,
+    motivo: x.motivo_suspensao ?? null,
+  };
 }
 
 /** Quantas prescrições do atendimento nasceram depois da de origem (a cópia não pode duplicar). */
@@ -104,7 +117,9 @@ export async function prescricoesDepoisDe(l: Consulta, atendimento: number, orig
 
 /** Outra conexão segura a prescrição (a tela de edição aberta e gravando em outra estação). */
 export async function travarPrescricao(e: Escritor, prescricao: number): Promise<boolean> {
-  const r = await e.consultarParaAtualizar('SELECT id FROM prescricao WHERE id = ?', [prescricao], { teto: 1 });
+  const r = await e.consultarParaAtualizar('SELECT id FROM prescricao WHERE id = ?', [prescricao], {
+    teto: 1,
+  });
   return r.length === 1;
 }
 
@@ -164,9 +179,10 @@ export async function semContaNemEstoque(
   antes: MarcasContaEstoque,
   insumos: readonly number[],
 ): Promise<{ conta: number; movimento: number; saldoIgual: boolean }> {
-  const [c] = await l.consultar<{ n: number }>('SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE id > ?', [
-    antes.conta,
-  ]);
+  const [c] = await l.consultar<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE id > ?',
+    [antes.conta],
+  );
   const [s] = await l.consultar<{ n: number }>(
     'SELECT COUNT(*) AS n FROM movimento_estoque WHERE estabelecimento_id = ? AND id > ?',
     [estabelecimento, antes.movimento],

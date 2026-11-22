@@ -1,0 +1,208 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 56,
+    "codigo": "PRDM",
+    "descricao": "PRORROGAÇÃO DE DIÁRIA MÉDICA",
+    "fase": 2
+  },
+  "impressaoLayout": "c9edc8a2759db99e39fcb4712c8ab81b44e4c19975161c50f78c8063a9f33a98",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 5
+    }
+  ],
+  "resumo": {
+    "vinculos": 5,
+    "vinculosAtivos": 5,
+    "vinculosInativos": 0,
+    "componentes": 5,
+    "componentesMapeados": 5,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 4,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PRORROGAÇÃO DE DIÁRIA MÉDICA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Motivo de Internação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 180,
+            "topo": 13,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2484,
+            "pergunta": 1239,
+            "codPergunta": 1211,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2484",
+            "componentePai": "cmp2483",
+            "idResposta": 3146,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Comorbidade Prévias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 180,
+            "topo": 192,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2485,
+            "pergunta": 1240,
+            "codPergunta": 1212,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2485",
+            "componentePai": "cmp2483",
+            "idResposta": 3147,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Alteração dos Exames (Laboratoriais e de Imagem)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 180,
+            "topo": 375,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2486,
+            "pergunta": 1241,
+            "codPergunta": 1213,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2486",
+            "componentePai": "cmp2483",
+            "idResposta": 3148,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Plano Terapêutico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 180,
+            "topo": 557,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2487,
+            "pergunta": 1242,
+            "codPergunta": 1214,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2487",
+            "componentePai": "cmp2483",
+            "idResposta": 3149,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 745,
+        "altura": 747,
+        "topo": 4,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2483,
+        "pergunta": 1238,
+        "codPergunta": 1210,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2483",
+        "componentePai": "jvsBox",
+        "idResposta": 3145,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

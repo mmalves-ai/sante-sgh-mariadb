@@ -1,242 +1,242 @@
 {
- "sexo": [
-  {
-   "codigo": "masculino",
-   "descricao": "Masculino",
-   "sigla": "M"
-  },
-  {
-   "codigo": "feminino",
-   "descricao": "Feminino",
-   "sigla": "F"
-  },
-  {
-   "codigo": "ignorado",
-   "descricao": "Ignorado",
-   "sigla": "I"
-  }
- ],
- "estado_civil": [
-  {
-   "codigo": "solteiro",
-   "descricao": "Solteiro(a)"
-  },
-  {
-   "codigo": "casado",
-   "descricao": "Casado(a)",
-   "exige_conjuge": true
-  },
-  {
-   "codigo": "uniao_estavel",
-   "descricao": "União estável",
-   "exige_conjuge": true
-  },
-  {
-   "codigo": "separado",
-   "descricao": "Separado(a)"
-  },
-  {
-   "codigo": "divorciado",
-   "descricao": "Divorciado(a)"
-  },
-  {
-   "codigo": "viuvo",
-   "descricao": "Viúvo(a)"
-  },
-  {
-   "codigo": "ignorado",
-   "descricao": "Ignorado"
-  }
- ],
- "tipo_documento_identificacao": [
-  {
-   "codigo": "cpf",
-   "descricao": "CPF",
-   "sigla": "CPF",
-   "padrao_validacao": "^[0-9]{11}$"
-  },
-  {
-   "codigo": "cns",
-   "descricao": "Cartão Nacional de Saúde",
-   "sigla": "CNS",
-   "padrao_validacao": "^[0-9]{15}$"
-  },
-  {
-   "codigo": "rg",
-   "descricao": "Carteira de identidade",
-   "sigla": "RG",
-   "exige_orgao_emissor": true,
-   "exige_uf_emissao": true,
-   "exige_data_emissao": true
-  },
-  {
-   "codigo": "cnh",
-   "descricao": "Carteira nacional de habilitação",
-   "sigla": "CNH",
-   "exige_data_emissao": true
-  },
-  {
-   "codigo": "passaporte",
-   "descricao": "Passaporte",
-   "sigla": "PASS",
-   "exige_data_emissao": true
-  },
-  {
-   "codigo": "crnm",
-   "descricao": "Carteira de registro nacional migratório",
-   "sigla": "CRNM"
-  },
-  {
-   "codigo": "ctps",
-   "descricao": "Carteira de trabalho",
-   "sigla": "CTPS",
-   "exige_uf_emissao": true
-  },
-  {
-   "codigo": "titulo_eleitor",
-   "descricao": "Título de eleitor",
-   "sigla": "TE"
-  },
-  {
-   "codigo": "certidao_nascimento",
-   "descricao": "Certidão de nascimento",
-   "sigla": "CN",
-   "certidao": true
-  },
-  {
-   "codigo": "certidao_casamento",
-   "descricao": "Certidão de casamento",
-   "sigla": "CC",
-   "certidao": true
-  },
-  {
-   "codigo": "cnpj",
-   "descricao": "CNPJ",
-   "sigla": "CNPJ",
-   "aplica_a": "pessoa_juridica",
-   "padrao_validacao": "^[0-9]{14}$"
-  }
- ],
- "tipo_telefone": [
-  {
-   "codigo": "celular",
-   "descricao": "Celular",
-   "movel": true,
-   "permite_mensagem": true
-  },
-  {
-   "codigo": "residencial",
-   "descricao": "Residencial"
-  },
-  {
-   "codigo": "comercial",
-   "descricao": "Comercial"
-  },
-  {
-   "codigo": "recado",
-   "descricao": "Recado",
-   "recado": true
-  }
- ],
- "tipo_endereco": [
-  {
-   "codigo": "residencial",
-   "descricao": "Residencial",
-   "padrao": true,
-   "usado_em_correspondencia": true
-  },
-  {
-   "codigo": "comercial",
-   "descricao": "Comercial"
-  },
-  {
-   "codigo": "cobranca",
-   "descricao": "Cobrança",
-   "usado_em_cobranca": true
-  },
-  {
-   "codigo": "correspondencia",
-   "descricao": "Correspondência",
-   "usado_em_correspondencia": true
-  }
- ],
- "tipo_parentesco": [
-  {
-   "codigo": "proprio",
-   "descricao": "O próprio paciente",
-   "proprio_paciente": true,
-   "usado_em_dependente": false,
-   "usado_em_visitante": false
-  },
-  {
-   "codigo": "mae",
-   "descricao": "Mãe"
-  },
-  {
-   "codigo": "pai",
-   "descricao": "Pai"
-  },
-  {
-   "codigo": "conjuge",
-   "descricao": "Cônjuge ou companheiro(a)"
-  },
-  {
-   "codigo": "filho",
-   "descricao": "Filho(a)"
-  },
-  {
-   "codigo": "irmao",
-   "descricao": "Irmão(ã)"
-  },
-  {
-   "codigo": "avo",
-   "descricao": "Avô(ó)"
-  },
-  {
-   "codigo": "neto",
-   "descricao": "Neto(a)"
-  },
-  {
-   "codigo": "tio",
-   "descricao": "Tio(a)"
-  },
-  {
-   "codigo": "sobrinho",
-   "descricao": "Sobrinho(a)"
-  },
-  {
-   "codigo": "primo",
-   "descricao": "Primo(a)"
-  },
-  {
-   "codigo": "enteado",
-   "descricao": "Enteado(a)"
-  },
-  {
-   "codigo": "padrasto_madrasta",
-   "descricao": "Padrasto ou madrasta"
-  },
-  {
-   "codigo": "sogro",
-   "descricao": "Sogro(a)"
-  },
-  {
-   "codigo": "genro_nora",
-   "descricao": "Genro ou nora"
-  },
-  {
-   "codigo": "tutor",
-   "descricao": "Tutor(a) legal",
-   "usado_em_dependente": false
-  },
-  {
-   "codigo": "curador",
-   "descricao": "Curador(a)",
-   "usado_em_dependente": false
-  },
-  {
-   "codigo": "outro",
-   "descricao": "Outro"
-  }
- ]
+  "sexo": [
+    {
+      "codigo": "masculino",
+      "descricao": "Masculino",
+      "sigla": "M"
+    },
+    {
+      "codigo": "feminino",
+      "descricao": "Feminino",
+      "sigla": "F"
+    },
+    {
+      "codigo": "ignorado",
+      "descricao": "Ignorado",
+      "sigla": "I"
+    }
+  ],
+  "estado_civil": [
+    {
+      "codigo": "solteiro",
+      "descricao": "Solteiro(a)"
+    },
+    {
+      "codigo": "casado",
+      "descricao": "Casado(a)",
+      "exige_conjuge": true
+    },
+    {
+      "codigo": "uniao_estavel",
+      "descricao": "União estável",
+      "exige_conjuge": true
+    },
+    {
+      "codigo": "separado",
+      "descricao": "Separado(a)"
+    },
+    {
+      "codigo": "divorciado",
+      "descricao": "Divorciado(a)"
+    },
+    {
+      "codigo": "viuvo",
+      "descricao": "Viúvo(a)"
+    },
+    {
+      "codigo": "ignorado",
+      "descricao": "Ignorado"
+    }
+  ],
+  "tipo_documento_identificacao": [
+    {
+      "codigo": "cpf",
+      "descricao": "CPF",
+      "sigla": "CPF",
+      "padrao_validacao": "^[0-9]{11}$"
+    },
+    {
+      "codigo": "cns",
+      "descricao": "Cartão Nacional de Saúde",
+      "sigla": "CNS",
+      "padrao_validacao": "^[0-9]{15}$"
+    },
+    {
+      "codigo": "rg",
+      "descricao": "Carteira de identidade",
+      "sigla": "RG",
+      "exige_orgao_emissor": true,
+      "exige_uf_emissao": true,
+      "exige_data_emissao": true
+    },
+    {
+      "codigo": "cnh",
+      "descricao": "Carteira nacional de habilitação",
+      "sigla": "CNH",
+      "exige_data_emissao": true
+    },
+    {
+      "codigo": "passaporte",
+      "descricao": "Passaporte",
+      "sigla": "PASS",
+      "exige_data_emissao": true
+    },
+    {
+      "codigo": "crnm",
+      "descricao": "Carteira de registro nacional migratório",
+      "sigla": "CRNM"
+    },
+    {
+      "codigo": "ctps",
+      "descricao": "Carteira de trabalho",
+      "sigla": "CTPS",
+      "exige_uf_emissao": true
+    },
+    {
+      "codigo": "titulo_eleitor",
+      "descricao": "Título de eleitor",
+      "sigla": "TE"
+    },
+    {
+      "codigo": "certidao_nascimento",
+      "descricao": "Certidão de nascimento",
+      "sigla": "CN",
+      "certidao": true
+    },
+    {
+      "codigo": "certidao_casamento",
+      "descricao": "Certidão de casamento",
+      "sigla": "CC",
+      "certidao": true
+    },
+    {
+      "codigo": "cnpj",
+      "descricao": "CNPJ",
+      "sigla": "CNPJ",
+      "aplica_a": "pessoa_juridica",
+      "padrao_validacao": "^[0-9]{14}$"
+    }
+  ],
+  "tipo_telefone": [
+    {
+      "codigo": "celular",
+      "descricao": "Celular",
+      "movel": true,
+      "permite_mensagem": true
+    },
+    {
+      "codigo": "residencial",
+      "descricao": "Residencial"
+    },
+    {
+      "codigo": "comercial",
+      "descricao": "Comercial"
+    },
+    {
+      "codigo": "recado",
+      "descricao": "Recado",
+      "recado": true
+    }
+  ],
+  "tipo_endereco": [
+    {
+      "codigo": "residencial",
+      "descricao": "Residencial",
+      "padrao": true,
+      "usado_em_correspondencia": true
+    },
+    {
+      "codigo": "comercial",
+      "descricao": "Comercial"
+    },
+    {
+      "codigo": "cobranca",
+      "descricao": "Cobrança",
+      "usado_em_cobranca": true
+    },
+    {
+      "codigo": "correspondencia",
+      "descricao": "Correspondência",
+      "usado_em_correspondencia": true
+    }
+  ],
+  "tipo_parentesco": [
+    {
+      "codigo": "proprio",
+      "descricao": "O próprio paciente",
+      "proprio_paciente": true,
+      "usado_em_dependente": false,
+      "usado_em_visitante": false
+    },
+    {
+      "codigo": "mae",
+      "descricao": "Mãe"
+    },
+    {
+      "codigo": "pai",
+      "descricao": "Pai"
+    },
+    {
+      "codigo": "conjuge",
+      "descricao": "Cônjuge ou companheiro(a)"
+    },
+    {
+      "codigo": "filho",
+      "descricao": "Filho(a)"
+    },
+    {
+      "codigo": "irmao",
+      "descricao": "Irmão(ã)"
+    },
+    {
+      "codigo": "avo",
+      "descricao": "Avô(ó)"
+    },
+    {
+      "codigo": "neto",
+      "descricao": "Neto(a)"
+    },
+    {
+      "codigo": "tio",
+      "descricao": "Tio(a)"
+    },
+    {
+      "codigo": "sobrinho",
+      "descricao": "Sobrinho(a)"
+    },
+    {
+      "codigo": "primo",
+      "descricao": "Primo(a)"
+    },
+    {
+      "codigo": "enteado",
+      "descricao": "Enteado(a)"
+    },
+    {
+      "codigo": "padrasto_madrasta",
+      "descricao": "Padrasto ou madrasta"
+    },
+    {
+      "codigo": "sogro",
+      "descricao": "Sogro(a)"
+    },
+    {
+      "codigo": "genro_nora",
+      "descricao": "Genro ou nora"
+    },
+    {
+      "codigo": "tutor",
+      "descricao": "Tutor(a) legal",
+      "usado_em_dependente": false
+    },
+    {
+      "codigo": "curador",
+      "descricao": "Curador(a)",
+      "usado_em_dependente": false
+    },
+    {
+      "codigo": "outro",
+      "descricao": "Outro"
+    }
+  ]
 }

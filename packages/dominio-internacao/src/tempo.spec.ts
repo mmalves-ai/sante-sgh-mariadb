@@ -18,7 +18,8 @@ describe('tempo do movimento', () => {
     expect(minutosDaHora('23:59')).toBe(1439);
     expect(minutosDaHora(null)).toBe(0);
     expect(minutosDaHora('')).toBe(0);
-    expect(() => minutosDaHora('07:30')).toThrow(/hora.formato/);
+    expect(() => minutosDaHora('1000')).toThrow(/hora.formato/);
+    expect(() => minutosDaHora('7:30')).toThrow(/hora.formato/);
     expect(() => minutosDaHora('24:00')).toThrow(/hora.formato/);
     expect(() => minutosDaHora('ab')).toThrow(/hora.formato/);
   });

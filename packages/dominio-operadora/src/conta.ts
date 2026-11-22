@@ -414,10 +414,13 @@ export function situacaoDoRecurso(valor: number, acatado: number): SituacaoRecur
 }
 
 /** O parecer do auditor é obrigatório quando o recurso não é acatado por inteiro (mantido ou acatado em parte). */
-export const exigeParecerNoRecurso = (s: SituacaoRecursoConta): boolean => s !== 'acatado' && s !== 'pendente';
+export const exigeParecerNoRecurso = (s: SituacaoRecursoConta): boolean =>
+  s !== 'acatado' && s !== 'pendente';
 
 export function problemasDoParecerDoRecurso(s: SituacaoRecursoConta, parecer: string): Problema[] {
-  return exigeParecerNoRecurso(s) && parecer.trim() === '' ? [{ codigo: 'parecer-obrigatorio', campo: 'parecer' }] : [];
+  return exigeParecerNoRecurso(s) && parecer.trim() === ''
+    ? [{ codigo: 'parecer-obrigatorio', campo: 'parecer' }]
+    : [];
 }
 
 /**

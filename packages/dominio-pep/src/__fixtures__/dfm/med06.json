@@ -1,0 +1,3258 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 6,
+    "codigo": "MED06",
+    "descricao": "EVOLUÇÃO MÉDICA INTENSIVISTA - CTI",
+    "fase": 0
+  },
+  "impressaoLayout": "7c9a995b3ec1671323dbab22c7b9d3dee768cc30fd6f290bd35a8ec9ae7be52b",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 64,
+    "vinculosAtivos": 43,
+    "vinculosInativos": 21,
+    "componentes": 63,
+    "componentesMapeados": 63,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 22,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 22,
+    "expressoesCalcular": 7,
+    "porClasse": {
+      "TfRespComboBox": 11,
+      "TfRespData": 22,
+      "TfRespEditUnidade": 25,
+      "TfRespTexto": 2,
+      "TGroupBoxPep": 3
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Evolução médica noturna - CTI",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Admitido na unidade em",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.01.01",
+              "texto": "Dias de internação",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 154,
+                "altura": 40,
+                "topo": 25,
+                "esquerda": 130,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "dias-desde-data",
+                  "referencias": ["cmp192"],
+                  "contexto": ["Date"],
+                  "fonte": "if (DateToStr(cmp192) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp192)",
+                  "regra": {
+                    "if": [
+                      {
+                        "==": [
+                          {
+                            "data_texto": [
+                              {
+                                "var": "cmp192"
+                              }
+                            ]
+                          },
+                          "30/12/1899"
+                        ]
+                      },
+                      0,
+                      {
+                        "-": [
+                          {
+                            "hoje": []
+                          },
+                          {
+                            "data_texto": [
+                              {
+                                "var": "cmp192"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 193,
+                "pergunta": 14,
+                "codPergunta": 14,
+                "ordem": "010101",
+                "tipo": "7",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp193",
+                "componentePai": "cmp191",
+                "idResposta": 15,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            }
+          ],
+          "tipo": "date",
+          "widget": "date",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 122,
+            "altura": 41,
+            "topo": 24,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 192,
+            "pergunta": 13,
+            "codPergunta": 13,
+            "ordem": "0101",
+            "tipo": "2",
+            "classe": "TfRespData",
+            "componente": "cmp192",
+            "componentePai": "cmp191",
+            "idResposta": 14,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Dados antropométricos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.02.01",
+              "texto": "Peso ideal",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "Kg",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 140,
+                "altura": 40,
+                "topo": 17,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 195,
+                "pergunta": 9,
+                "codPergunta": 9,
+                "ordem": "010201",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp195",
+                "componentePai": "cmp194",
+                "idResposta": 10,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.02.02",
+              "texto": "Peso real",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "Kg",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 140,
+                "altura": 40,
+                "topo": 17,
+                "esquerda": 146,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 196,
+                "pergunta": 10,
+                "codPergunta": 10,
+                "ordem": "010202",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp196",
+                "componentePai": "cmp194",
+                "idResposta": 11,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.02.03",
+              "texto": "Altura",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "m",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 140,
+                "altura": 40,
+                "topo": 17,
+                "esquerda": 289,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 197,
+                "pergunta": 11,
+                "codPergunta": 11,
+                "ordem": "010203",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp197",
+                "componentePai": "cmp194",
+                "idResposta": 12,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 7,
+            "largura": 433,
+            "altura": 64,
+            "topo": 9,
+            "esquerda": 304,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 194,
+            "pergunta": 8,
+            "codPergunta": 8,
+            "ordem": "0102",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp194",
+            "componentePai": "cmp191",
+            "idResposta": 9,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "História clínica (Cabeçalho)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 92,
+            "topo": 76,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 198,
+            "pergunta": 12,
+            "codPergunta": 12,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp198",
+            "componentePai": "cmp191",
+            "idResposta": 13,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Dispositivos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.04.01",
+              "texto": "TOT",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.01.01",
+                  "texto": "Data TOT",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp200"],
+                      "contexto": [],
+                      "fonte": "if (cmp200ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp200ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 201,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040101",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp201",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.01.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 276,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp200"],
+                      "contexto": [],
+                      "fonte": "if (cmp200ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp200ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    },
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp201"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp201) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp201)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp201"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp201"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 202,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040102",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp202",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 160,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 17,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 17,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 200,
+                "pergunta": 16,
+                "codPergunta": 16,
+                "ordem": "010401",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp200",
+                "componentePai": "cmp199",
+                "idResposta": 17,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.02",
+              "texto": "Acesso Venoso Central 1",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.02.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 523,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 204,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040201",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp204",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.02.01",
+                  "texto": "Data AVC1",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 541,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp203"],
+                      "contexto": [],
+                      "fonte": "if (cmp203ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp203ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 953,
+                    "pergunta": 380,
+                    "codPergunta": 368,
+                    "ordem": "01040201",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp953",
+                    "componentePai": "cmp199",
+                    "idResposta": 1109,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.02.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 120,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 614,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp204"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp204) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp204)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp204"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp204"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 205,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040202",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp205",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.02.02",
+                  "texto": "Dias de uso AVC1",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 105,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 631,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp203"],
+                      "contexto": [],
+                      "fonte": "if (cmp203ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp203ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 954,
+                    "pergunta": 381,
+                    "codPergunta": 369,
+                    "ordem": "01040202",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp954",
+                    "componentePai": "cmp199",
+                    "idResposta": 1110,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 132,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 396,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 20,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 20,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 203,
+                "pergunta": 19,
+                "codPergunta": 19,
+                "ordem": "010402",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp203",
+                "componentePai": "cmp199",
+                "idResposta": 20,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.03",
+              "texto": "Acesso Venoso Central 2",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.03.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 88,
+                    "altura": 43,
+                    "topo": 55,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 207,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040301",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp207",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.03.01",
+                  "texto": "Data AVC2",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 55,
+                    "esquerda": 166,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp206"],
+                      "contexto": [],
+                      "fonte": "if (cmp206ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp206ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 955,
+                    "pergunta": 382,
+                    "codPergunta": 370,
+                    "ordem": "01040301",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp955",
+                    "componentePai": "cmp199",
+                    "idResposta": 1111,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.03.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 126,
+                    "altura": 40,
+                    "topo": 55,
+                    "esquerda": 259,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp207"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp207) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp207)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp207"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp207"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 208,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040302",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp208",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.03.02",
+                  "texto": "Dias de uso AVC2",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 55,
+                    "esquerda": 276,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp206"],
+                      "contexto": [],
+                      "fonte": "if (cmp206ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp206ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 956,
+                    "pergunta": 383,
+                    "codPergunta": 371,
+                    "ordem": "01040302",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp956",
+                    "componentePai": "cmp199",
+                    "idResposta": 1112,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 161,
+                "altura": 40,
+                "topo": 55,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 21,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 21,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 206,
+                "pergunta": 20,
+                "codPergunta": 20,
+                "ordem": "010403",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp206",
+                "componentePai": "cmp199",
+                "idResposta": 21,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.04",
+              "texto": "Acesso Venoso Central 3",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.04.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 55,
+                    "esquerda": 524,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 210,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040401",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp210",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.04.01",
+                  "texto": "Data AVC3",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 52,
+                    "esquerda": 541,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp209"],
+                      "contexto": [],
+                      "fonte": "if (cmp209ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp209ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 957,
+                    "pergunta": 384,
+                    "codPergunta": 372,
+                    "ordem": "01040401",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp957",
+                    "componentePai": "cmp199",
+                    "idResposta": 1113,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.04.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 115,
+                    "altura": 40,
+                    "topo": 55,
+                    "esquerda": 616,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp210"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp210) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp210)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp210"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp210"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 211,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040402",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp211",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.04.02",
+                  "texto": "Dias de uso AVC3",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 105,
+                    "altura": 40,
+                    "topo": 52,
+                    "esquerda": 631,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp203"],
+                      "contexto": [],
+                      "fonte": "if (cmp203ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp203ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 958,
+                    "pergunta": 385,
+                    "codPergunta": 373,
+                    "ordem": "01040402",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp958",
+                    "componentePai": "cmp199",
+                    "idResposta": 1114,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 132,
+                "altura": 40,
+                "topo": 53,
+                "esquerda": 396,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 22,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 22,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 209,
+                "pergunta": 21,
+                "codPergunta": 21,
+                "ordem": "010404",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp209",
+                "componentePai": "cmp199",
+                "idResposta": 22,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.05",
+              "texto": "Acesso arterial",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.05.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 97,
+                    "esquerda": 166,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 213,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040501",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp213",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.05.01",
+                  "texto": "Data Acesso arterial",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 100,
+                    "altura": 39,
+                    "topo": 94,
+                    "esquerda": 166,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp212"],
+                      "contexto": [],
+                      "fonte": "if (cmp212ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp212ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 959,
+                    "pergunta": 386,
+                    "codPergunta": 374,
+                    "ordem": "01040501",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp959",
+                    "componentePai": "cmp199",
+                    "idResposta": 1115,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.05.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 126,
+                    "altura": 40,
+                    "topo": 97,
+                    "esquerda": 258,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 214,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040502",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp214",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.05.02",
+                  "texto": "Dias de uso Acesso arterial",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 94,
+                    "esquerda": 276,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp212"],
+                      "contexto": [],
+                      "fonte": "if (cmp212ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp212ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 960,
+                    "pergunta": 387,
+                    "codPergunta": 375,
+                    "ordem": "01040502",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp960",
+                    "componentePai": "cmp199",
+                    "idResposta": 1116,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 160,
+                "altura": 40,
+                "topo": 94,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 23,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 23,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 212,
+                "pergunta": 22,
+                "codPergunta": 22,
+                "ordem": "010405",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp212",
+                "componentePai": "cmp199",
+                "idResposta": 23,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.06",
+              "texto": "VM",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.06.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 97,
+                    "esquerda": 524,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 216,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040601",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp216",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.06.01",
+                  "texto": "Data VM",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 113,
+                    "altura": 56,
+                    "topo": 92,
+                    "esquerda": 541,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp215"],
+                      "contexto": [],
+                      "fonte": "if (cmp215ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp215ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 961,
+                    "pergunta": 388,
+                    "codPergunta": 376,
+                    "ordem": "01040601",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp961",
+                    "componentePai": "cmp199",
+                    "idResposta": 1117,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.06.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 118,
+                    "altura": 40,
+                    "topo": 97,
+                    "esquerda": 616,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 217,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040602",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp217",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.06.02",
+                  "texto": "Dias de uso VM",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 105,
+                    "altura": 40,
+                    "topo": 91,
+                    "esquerda": 631,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp215"],
+                      "contexto": [],
+                      "fonte": "if (cmp215ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp215ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 962,
+                    "pergunta": 389,
+                    "codPergunta": 377,
+                    "ordem": "01040602",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp962",
+                    "componentePai": "cmp199",
+                    "idResposta": 1118,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 132,
+                "altura": 40,
+                "topo": 93,
+                "esquerda": 396,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 24,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 24,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 215,
+                "pergunta": 23,
+                "codPergunta": 23,
+                "ordem": "010406",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp215",
+                "componentePai": "cmp199",
+                "idResposta": 24,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.07",
+              "texto": "Acesso Venoso Central - Diálise",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.07.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 39,
+                    "topo": 139,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 219,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040701",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp219",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.07.01",
+                  "texto": "Data AVC Diálise",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 133,
+                    "esquerda": 168,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp218"],
+                      "contexto": [],
+                      "fonte": "if (cmp218ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp218ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 963,
+                    "pergunta": 390,
+                    "codPergunta": 378,
+                    "ordem": "01040701",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp963",
+                    "componentePai": "cmp199",
+                    "idResposta": 1119,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.07.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 126,
+                    "altura": 40,
+                    "topo": 139,
+                    "esquerda": 259,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp219"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp219) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp219)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp219"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp219"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 220,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040702",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp220",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.07.02",
+                  "texto": "Dias de uso AVC Diálise",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 133,
+                    "esquerda": 275,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp218"],
+                      "contexto": [],
+                      "fonte": "if (cmp218ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp218ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 964,
+                    "pergunta": 391,
+                    "codPergunta": 379,
+                    "ordem": "01040702",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp964",
+                    "componentePai": "cmp199",
+                    "idResposta": 1120,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 161,
+                "altura": 40,
+                "topo": 133,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 25,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 25,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 218,
+                "pergunta": 24,
+                "codPergunta": 24,
+                "ordem": "010407",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp218",
+                "componentePai": "cmp199",
+                "idResposta": 25,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.08",
+              "texto": "SVD",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.08.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 139,
+                    "esquerda": 524,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 222,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040801",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp222",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.08.01",
+                  "texto": "Data SVD",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 131,
+                    "esquerda": 541,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp221"],
+                      "contexto": [],
+                      "fonte": "if (cmp221ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp221ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 965,
+                    "pergunta": 392,
+                    "codPergunta": 380,
+                    "ordem": "01040801",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp965",
+                    "componentePai": "cmp199",
+                    "idResposta": 1121,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.08.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 119,
+                    "altura": 40,
+                    "topo": 139,
+                    "esquerda": 617,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "calcular",
+                      "padrao": "dias-desde-data",
+                      "referencias": ["cmp222"],
+                      "contexto": ["Date"],
+                      "fonte": "if (DateToStr(cmp222) = '30/12/1899') then result := 0 else result := Date() - DateToStr(cmp222)",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp222"
+                                  }
+                                ]
+                              },
+                              "30/12/1899"
+                            ]
+                          },
+                          0,
+                          {
+                            "-": [
+                              {
+                                "hoje": []
+                              },
+                              {
+                                "data_texto": [
+                                  {
+                                    "var": "cmp222"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 223,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040802",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp223",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.08.02",
+                  "texto": "Dias de uso SVD",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 105,
+                    "altura": 40,
+                    "topo": 130,
+                    "esquerda": 632,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp221"],
+                      "contexto": [],
+                      "fonte": "if (cmp221ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp221ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 966,
+                    "pergunta": 393,
+                    "codPergunta": 381,
+                    "ordem": "01040802",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp966",
+                    "componentePai": "cmp199",
+                    "idResposta": 1122,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 131,
+                "altura": 40,
+                "topo": 132,
+                "esquerda": 397,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 26,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 26,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 221,
+                "pergunta": 25,
+                "codPergunta": 25,
+                "ordem": "010408",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp221",
+                "componentePai": "cmp199",
+                "idResposta": 26,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.09",
+              "texto": "Dreno 1",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.09.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 180,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 225,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01040901",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp225",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.09.01",
+                  "texto": "Data Dreno1",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 172,
+                    "esquerda": 168,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp224"],
+                      "contexto": [],
+                      "fonte": "if (cmp224ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp224ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 967,
+                    "pergunta": 394,
+                    "codPergunta": 382,
+                    "ordem": "01040901",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp967",
+                    "componentePai": "cmp199",
+                    "idResposta": 1123,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.09.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 126,
+                    "altura": 40,
+                    "topo": 180,
+                    "esquerda": 259,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 226,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01040902",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp226",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.09.02",
+                  "texto": "Dias de uso Dreno1",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 172,
+                    "esquerda": 275,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp224"],
+                      "contexto": [],
+                      "fonte": "if (cmp224ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp224ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 968,
+                    "pergunta": 395,
+                    "codPergunta": 383,
+                    "ordem": "01040902",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp968",
+                    "componentePai": "cmp199",
+                    "idResposta": 1124,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 160,
+                "altura": 40,
+                "topo": 172,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 27,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 27,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 224,
+                "pergunta": 26,
+                "codPergunta": 26,
+                "ordem": "010409",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp224",
+                "componentePai": "cmp199",
+                "idResposta": 27,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.10",
+              "texto": "Dreno 2",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.10.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 180,
+                    "esquerda": 524,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 228,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01041001",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp228",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.10.01",
+                  "texto": "Data Dreno2",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 170,
+                    "esquerda": 542,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp227"],
+                      "contexto": [],
+                      "fonte": "if (cmp227ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp227ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 969,
+                    "pergunta": 396,
+                    "codPergunta": 384,
+                    "ordem": "01041001",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp969",
+                    "componentePai": "cmp199",
+                    "idResposta": 1125,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.10.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 119,
+                    "altura": 40,
+                    "topo": 180,
+                    "esquerda": 616,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 229,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01041002",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp229",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.10.02",
+                  "texto": "Dias de uso Dreno2",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 105,
+                    "altura": 40,
+                    "topo": 171,
+                    "esquerda": 633,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp227"],
+                      "contexto": [],
+                      "fonte": "if (cmp227ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp227ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 970,
+                    "pergunta": 397,
+                    "codPergunta": 385,
+                    "ordem": "01041002",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp970",
+                    "componentePai": "cmp199",
+                    "idResposta": 1126,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 132,
+                "altura": 40,
+                "topo": 171,
+                "esquerda": 397,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 28,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 28,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 227,
+                "pergunta": 27,
+                "codPergunta": 27,
+                "ordem": "010410",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp227",
+                "componentePai": "cmp199",
+                "idResposta": 28,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            },
+            {
+              "linkId": "01.04.11",
+              "texto": "Dreno 3",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.04.11.01",
+                  "texto": "Data TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 222,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 231,
+                    "pergunta": 17,
+                    "codPergunta": 17,
+                    "ordem": "01041101",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp231",
+                    "componentePai": "cmp199",
+                    "idResposta": 18,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.11.01",
+                  "texto": "Data Dreno3",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "date",
+                  "widget": "date",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 90,
+                    "altura": 40,
+                    "topo": 211,
+                    "esquerda": 167,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp230"],
+                      "contexto": [],
+                      "fonte": "if (cmp230ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp230ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 971,
+                    "pergunta": 398,
+                    "codPergunta": 386,
+                    "ordem": "01041101",
+                    "tipo": "2",
+                    "classe": "TfRespData",
+                    "componente": "cmp971",
+                    "componentePai": "cmp199",
+                    "idResposta": 1127,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.11.02",
+                  "texto": "Dias de uso TOT",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 127,
+                    "altura": 40,
+                    "topo": 222,
+                    "esquerda": 259,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 232,
+                    "pergunta": 18,
+                    "codPergunta": 18,
+                    "ordem": "01041102",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp232",
+                    "componentePai": "cmp199",
+                    "idResposta": 19,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 3
+                  }
+                },
+                {
+                  "linkId": "01.04.11.02",
+                  "texto": "Dias de uso Dreno3",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 2,
+                    "largura": 117,
+                    "altura": 40,
+                    "topo": 211,
+                    "esquerda": 275,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "expressoes": [
+                    {
+                      "tipo": "habilitar",
+                      "padrao": "habilitar-por-resposta",
+                      "referencias": ["cmp230"],
+                      "contexto": [],
+                      "fonte": "if (cmp230ItemIndex = 1) then result := false else result := true;",
+                      "regra": {
+                        "if": [
+                          {
+                            "==": [
+                              {
+                                "var": "cmp230ItemIndex"
+                              },
+                              1
+                            ]
+                          },
+                          false,
+                          true
+                        ]
+                      },
+                      "convertida": true,
+                      "motivoConversao": null
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 972,
+                    "pergunta": 399,
+                    "codPergunta": 387,
+                    "ordem": "01041102",
+                    "tipo": "7",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp972",
+                    "componentePai": "cmp199",
+                    "idResposta": 1128,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 3
+                  }
+                }
+              ],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 161,
+                "altura": 40,
+                "topo": 211,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Não",
+                  "idResposta": 29,
+                  "codigo": null,
+                  "valor": false,
+                  "origem": "sim-nao"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sim",
+                  "idResposta": 29,
+                  "codigo": null,
+                  "valor": true,
+                  "origem": "sim-nao"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 230,
+                "pergunta": 28,
+                "codPergunta": 28,
+                "ordem": "010411",
+                "tipo": "4",
+                "classe": "TfRespComboBox",
+                "componente": "cmp230",
+                "componentePai": "cmp199",
+                "idResposta": 29,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 3
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 748,
+            "altura": 261,
+            "topo": 171,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 199,
+            "pergunta": 15,
+            "codPergunta": 15,
+            "ordem": "0104",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp199",
+            "componentePai": "cmp191",
+            "idResposta": 16,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Plano Terapêutico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 233,
+            "pergunta": 53,
+            "codPergunta": 53,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Metas diárias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 744,
+            "altura": 129,
+            "topo": 433,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 234,
+            "pergunta": 57,
+            "codPergunta": 57,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp234",
+            "componentePai": "cmp191",
+            "idResposta": 86,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 568,
+        "topo": 4,
+        "esquerda": 3,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 191,
+        "pergunta": 54,
+        "codPergunta": 54,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp191",
+        "componentePai": "jvsBox",
+        "idResposta": 83,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

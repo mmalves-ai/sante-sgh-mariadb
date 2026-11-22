@@ -81,7 +81,11 @@ export class NucleoProprio {
   }
 
   /** Escrita numa transação no banco plataforma (credencial do administrador da plataforma). */
-  async escreverPlataforma<T>(correlacao: string, fn: (e: Escritor) => Promise<T>, confirmar = true): Promise<T> {
+  async escreverPlataforma<T>(
+    correlacao: string,
+    fn: (e: Escritor) => Promise<T>,
+    confirmar = true,
+  ): Promise<T> {
     const fonte = this.pools.fontePlataforma();
     return escreverTransacao(fonte, this.configuracao, { cliente: fonte.cliente, correlacao }, fn, confirmar);
   }

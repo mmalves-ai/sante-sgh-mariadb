@@ -49,7 +49,9 @@ const UNICAS: Readonly<Record<string, Readonly<Record<string, readonly string[]>
   item_lista_trabalho_imagem: { uq_item_lista_trabalho_imagem_exame_vigente: ['exame_item_vigente_id'] },
   atendimento_conta: { uq_atendimento_conta_par: ['atendimento_id', 'conta_hospitalar_id'] },
   usuario_local_atendimento: { uq_usuario_local_atendimento_par: ['usuario_id', 'local_atendimento_id'] },
-  painel_resultado_grupo_exame: { uq_painel_resultado_grupo_exame_sequencia: ['painel_resultado_grupo_id', 'sequencia'] },
+  painel_resultado_grupo_exame: {
+    uq_painel_resultado_grupo_exame_sequencia: ['painel_resultado_grupo_id', 'sequencia'],
+  },
   conta_portal_paciente: { uq_conta_portal_paciente_paciente: ['paciente_id'] },
 };
 
@@ -57,7 +59,9 @@ const UNICAS: Readonly<Record<string, Readonly<Record<string, readonly string[]>
 function textoDe(x: unknown): string {
   if (!(x instanceof Error)) return String(x);
   const extra = x as Error & { problema?: unknown; cause?: unknown };
-  return [x.message, JSON.stringify(extra.problema ?? null), extra.cause ? textoDe(extra.cause) : ''].join(' | ');
+  return [x.message, JSON.stringify(extra.problema ?? null), extra.cause ? textoDe(extra.cause) : ''].join(
+    ' | ',
+  );
 }
 
 /**
@@ -77,7 +81,12 @@ async function recusaDe(a: Ambiente, sql: string, p: readonly unknown[]): Promis
  * Grava a primeira linha e tenta a segunda igual na mesma transação desfeita, com as chaves estrangeiras desligadas só
  * nela (os ids de pai são sintéticos). Devolve o texto da recusa da segunda, ou 'gravou'. Recusa na primeira é erro.
  */
-async function duplicadaDe(a: Ambiente, sql: string, p1: readonly unknown[], p2: readonly unknown[]): Promise<string> {
+async function duplicadaDe(
+  a: Ambiente,
+  sql: string,
+  p1: readonly unknown[],
+  p2: readonly unknown[],
+): Promise<string> {
   try {
     return await desfeito(a, async (e: Escritor) => {
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
@@ -111,7 +120,10 @@ describe.skipIf(SEM_BANCO)('regras de integridade no modelo (cliente f22_o5, tra
   });
 
   const ler = <T>(fn: Parameters<Ambiente['nucleo']['lerSomente']>[1]) =>
-    a.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), correlacao: 'int-regras-banco' }, fn) as Promise<T>;
+    a.nucleo.lerSomente(
+      { cliente: process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5', correlacao: 'int-regras-banco' },
+      fn,
+    ) as Promise<T>;
 
   it('as CHECK e as UNIQUE que substituem os gatilhos existem no banco do cliente', async () => {
     const faltam: string[] = [];
@@ -154,7 +166,9 @@ describe.skipIf(SEM_BANCO)('regras de integridade no modelo (cliente f22_o5, tra
     const sql = `INSERT INTO local_atendimento_horario
         (local_atendimento_id, dia_semana, dia_nao_util, hora_inicio, hora_fim, criado_em)
       VALUES (0, ?, FALSE, ?, ?, NOW(3))`;
-    expect(await recusaDe(a, sql, [2, '18:00:00', '08:00:00'])).toContain('ck_local_atendimento_horario_faixa');
+    expect(await recusaDe(a, sql, [2, '18:00:00', '08:00:00'])).toContain(
+      'ck_local_atendimento_horario_faixa',
+    );
     expect(await recusaDe(a, sql, [9, '08:00:00', '18:00:00'])).toContain('ck_local_atendimento_horario_dia');
   });
 
@@ -217,9 +231,9 @@ describe.skipIf(SEM_BANCO)('regras de integridade no modelo (cliente f22_o5, tra
          competencia, canal_envio, valor_apresentado, valor_glosado, recebido_em, situacao, criado_em)
       VALUES (?, 0, 0, ?, ?, 'consulta', '2099-01-01', 'portal', 10, 0, NOW(3), 'recebida', NOW(3))`;
     const prot = `UQ${RODADA}`;
-    expect(await duplicadaDe(a, sql, [a.estabelecimento, prot, 'L1'], [a.estabelecimento, prot, 'L2'])).toContain(
-      'uq_lote_conta_recebida_estabelecimento_id_numero_protocolo',
-    );
+    expect(
+      await duplicadaDe(a, sql, [a.estabelecimento, prot, 'L1'], [a.estabelecimento, prot, 'L2']),
+    ).toContain('uq_lote_conta_recebida_estabelecimento_id_numero_protocolo');
   });
 
   it('a mesma conta e guia no mesmo lote TISS é recusada pela chave, também com a guia nula', async () => {

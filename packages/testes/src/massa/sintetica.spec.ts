@@ -42,7 +42,11 @@ describe('massa sintética', () => {
   });
 
   it('CEP: completo, outro e inexistente no catálogo próprio', async () => {
-    const e = dubleEscritor((c) => (/LIMIT 1$/m.test(c.sql) && /codigo_cep\b/.test(c.sql) && !/= \?\s*LIMIT/.test(c.sql) ? [{ codigo_cep: '20000000' }] : []));
+    const e = dubleEscritor((c) =>
+      /LIMIT 1$/m.test(c.sql) && /codigo_cep\b/.test(c.sql) && !/= \?\s*LIMIT/.test(c.sql)
+        ? [{ codigo_cep: '20000000' }]
+        : [],
+    );
     expect(await cepCompleto(e)).toBe('20000000');
     expect(await outroCepCompleto(e, '20000000')).toBe('20000000');
     expect(await cepInexistente(e)).toBe('99999999');
@@ -50,7 +54,12 @@ describe('massa sintética', () => {
   });
 
   it('login livre, estabelecimentos e concessões com vigência', async () => {
-    const e = dubleEscritor((c) => (/FROM (usuario|papel_seguranca|perfil_acesso)\s+WHERE (login|codigo)/.test(c.sql) && !/LIMIT 1/.test(c.sql) ? [{ id: 7 }] : []));
+    const e = dubleEscritor((c) =>
+      /FROM (usuario|papel_seguranca|perfil_acesso)\s+WHERE (login|codigo)/.test(c.sql) &&
+      !/LIMIT 1/.test(c.sql)
+        ? [{ id: 7 }]
+        : [],
+    );
     expect(await loginLivre(e, 10)).toMatch(/^sgh\.m04\./);
     expect(await estabelecimentosAtivos(e, 99)).toEqual([]);
     await papelSintetico(e, 'sgh.m04.a', 'operador');

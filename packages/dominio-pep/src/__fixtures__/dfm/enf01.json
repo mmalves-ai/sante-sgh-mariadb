@@ -1,0 +1,268 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 7,
+    "codigo": "ENF01",
+    "descricao": "CHECKLIST DE VERIFICAÇÃO DAS PRÁTICAS DE INSERÇÃO SEGURA DE CATETER VENOSO CENTRAL (VPIS-CVC)",
+    "fase": 2
+  },
+  "impressaoLayout": "d388ae14eb54ceb0f9685a29d4ee91aeefaa97d3dd783e3716030d72aba6bf64",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 6,
+    "vinculosAtivos": 4,
+    "vinculosInativos": 2,
+    "componentes": 5,
+    "componentesMapeados": 5,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 5,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 1,
+      "TfRespEditUnidade": 2,
+      "TGroupBoxPep": 2
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Checklist de verificação das práticas de inserção segura de cateter venoso central",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Responsável pela inserção do CVC",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 7,
+            "largura": 456,
+            "altura": 40,
+            "topo": 16,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 236,
+            "pergunta": 59,
+            "codPergunta": 59,
+            "ordem": "0101",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp236",
+            "componentePai": "cmp235",
+            "idResposta": 88,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Data / hora início do procedimento",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 276,
+            "altura": 40,
+            "topo": 16,
+            "esquerda": 464,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 237,
+            "pergunta": 60,
+            "codPergunta": 60,
+            "ordem": "0102",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp237",
+            "componentePai": "cmp235",
+            "idResposta": 89,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Ação preventiva",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 185,
+            "altura": 105,
+            "topo": 194,
+            "esquerda": 55,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 238,
+            "pergunta": 61,
+            "codPergunta": 61,
+            "ordem": "0103",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp238",
+            "componentePai": "cmp235",
+            "idResposta": 90,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Ação preventiva realizada",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.03.01",
+              "texto": "Ação preventiva realizada",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 239,
+                "pergunta": 62,
+                "codPergunta": 62,
+                "ordem": "010301",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 230,
+            "topo": 56,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Higienizar as mãos",
+              "idResposta": 91,
+              "codigo": 32,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Realizar a antissepsia da pele com gluconato de clorexidina > 0,5% ou PVPI alcoólico 10%",
+              "idResposta": 92,
+              "codigo": 33,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Utilizar barreira máxima com luvas, avental estéreis, gorro, máscara e óculos de proteção",
+              "idResposta": 93,
+              "codigo": 34,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Utilizar campo estéril que cubra todo o corpo do paciente (cabeça aos pés)",
+              "idResposta": 94,
+              "codigo": 35,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Realizar curativo oclusivo com gaze e fita adesiva estéril ou cobertura transparente semipermeável estéril",
+              "idResposta": 95,
+              "codigo": 36,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 240,
+            "pergunta": 62,
+            "codPergunta": 62,
+            "ordem": "0103",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp240",
+            "componentePai": "cmp235",
+            "idResposta": 91,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 464,
+        "topo": 3,
+        "esquerda": 4,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 235,
+        "pergunta": 58,
+        "codPergunta": 58,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp235",
+        "componentePai": "jvsBox",
+        "idResposta": 87,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

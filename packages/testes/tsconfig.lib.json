@@ -9,6 +9,7 @@
     "paths": {
       "@sgh/legado": ["../legado/dist/index.d.ts"],
       "@sgh/contratos": ["../contratos/dist/index.d.ts"],
+      "@sgh/nucleo": ["../nucleo/dist/index.d.ts"],
       "@sgh/dominio-pep": ["../dominio-pep/dist/index.d.ts"],
       "@sgh/dominio-agenda": ["../dominio-agenda/dist/index.d.ts"],
       "@sgh/dominio-recepcao": ["../dominio-recepcao/dist/index.d.ts"],

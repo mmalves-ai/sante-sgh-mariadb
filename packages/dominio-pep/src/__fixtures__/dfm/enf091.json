@@ -1,0 +1,1916 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 36,
+    "codigo": "ENF091",
+    "descricao": "RELATÓRIO TÉCNICO DE ENFERMAGEM",
+    "fase": 2
+  },
+  "impressaoLayout": "12b155511eaa681c5a743eecf35db9f8234da11309261ed0d2e349bad84d01bd",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 28,
+    "vinculosAtivos": 12,
+    "vinculosInativos": 16,
+    "componentes": 25,
+    "componentesMapeados": 25,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 3,
+    "opcoesResolvidas": 105,
+    "escolhasPendentes": 22,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 18,
+      "TfRespComboBox": 1,
+      "TfRespComboTexto": 2,
+      "TfRespTexto": 3,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Relatório Técnico de enfermagem",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Turno",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 40,
+            "topo": 13,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Diurno",
+              "idResposta": 2184,
+              "codigo": 1391,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Noturno",
+              "idResposta": 2185,
+              "codigo": 1392,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "24 horas",
+              "idResposta": 2186,
+              "codigo": 1393,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1660,
+            "pergunta": 755,
+            "codPergunta": 739,
+            "ordem": "0101",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp632",
+            "componentePai": "cmp631",
+            "idResposta": 2184,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Nível de consciência",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 131,
+            "topo": 52,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Orientado",
+              "idResposta": 2187,
+              "codigo": 1394,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Confuso",
+              "idResposta": 2188,
+              "codigo": 1395,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Acordado",
+              "idResposta": 2189,
+              "codigo": 1396,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Sonolento",
+              "idResposta": 2190,
+              "codigo": 1397,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Torporoso",
+              "idResposta": 2191,
+              "codigo": 1398,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Agitado",
+              "idResposta": 2192,
+              "codigo": 1399,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Alerta/calmo",
+              "idResposta": 2193,
+              "codigo": 1400,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Sedado",
+              "idResposta": 2194,
+              "codigo": 1401,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Inconsciente",
+              "idResposta": 2195,
+              "codigo": 1402,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Consciente",
+              "idResposta": 2196,
+              "codigo": 1403,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Desorientado",
+              "idResposta": 2197,
+              "codigo": 1404,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Comatoso",
+              "idResposta": 2198,
+              "codigo": 1405,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1661,
+            "pergunta": 756,
+            "codPergunta": 740,
+            "ordem": "0102",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp633",
+            "componentePai": "cmp631",
+            "idResposta": 2193,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Hidratação venosa",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 737,
+            "altura": 112,
+            "topo": 187,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "PVP",
+              "idResposta": 2199,
+              "codigo": 1406,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "PVSC",
+              "idResposta": 2200,
+              "codigo": 1407,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "PVJI",
+              "idResposta": 2201,
+              "codigo": 1408,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "PVJE",
+              "idResposta": 2202,
+              "codigo": 1409,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Dissecção",
+              "idResposta": 2203,
+              "codigo": 1410,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Sem sinais flogísticos",
+              "idResposta": 2204,
+              "codigo": 1411,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Com sinais flogísticos",
+              "idResposta": 2205,
+              "codigo": 1412,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1662,
+            "pergunta": 757,
+            "codPergunta": 741,
+            "ordem": "0103",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp634",
+            "componentePai": "cmp631",
+            "idResposta": 2199,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Dieta",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 737,
+            "altura": 111,
+            "topo": 300,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Oral",
+              "idResposta": 2206,
+              "codigo": 1413,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Zero",
+              "idResposta": 2207,
+              "codigo": 1414,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Gastrostomia",
+              "idResposta": 2208,
+              "codigo": 1415,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Jejunostomia",
+              "idResposta": 2209,
+              "codigo": 1416,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Nutrição Parenteral",
+              "idResposta": 2210,
+              "codigo": 1417,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "SNE/SOE",
+              "idResposta": 2211,
+              "codigo": 1418,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "SNG/SOG",
+              "idResposta": 2212,
+              "codigo": 1419,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1663,
+            "pergunta": 758,
+            "codPergunta": 742,
+            "ordem": "0104",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp635",
+            "componentePai": "cmp631",
+            "idResposta": 2206,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Avaliação respiratória",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 736,
+            "altura": 114,
+            "topo": 411,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Espontânea",
+              "idResposta": 2213,
+              "codigo": 1420,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "MCNBZ",
+              "idResposta": 2214,
+              "codigo": 1421,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "CPAP/VNI",
+              "idResposta": 2215,
+              "codigo": 1422,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Aspiração",
+              "idResposta": 2216,
+              "codigo": 1423,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "VMI",
+              "idResposta": 2217,
+              "codigo": 1424,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "TOT/TQT",
+              "idResposta": 2218,
+              "codigo": 1425,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Cateter nasal",
+              "idResposta": 2219,
+              "codigo": 1426,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1664,
+            "pergunta": 759,
+            "codPergunta": 743,
+            "ordem": "0105",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp636",
+            "componentePai": "cmp631",
+            "idResposta": 2218,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Monitorização Hemodinâmica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 100,
+            "topo": 527,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "MCC",
+              "idResposta": 2220,
+              "codigo": 1427,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "SPO2",
+              "idResposta": 2221,
+              "codigo": 1428,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "PAM",
+              "idResposta": 2222,
+              "codigo": 1429,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "PNI",
+              "idResposta": 2223,
+              "codigo": 1430,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Swan-Ganz",
+              "idResposta": 2224,
+              "codigo": 1431,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "PVC",
+              "idResposta": 2225,
+              "codigo": 1432,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Capnográfo",
+              "idResposta": 2226,
+              "codigo": 1433,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1665,
+            "pergunta": 760,
+            "codPergunta": 744,
+            "ordem": "0106",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp637",
+            "componentePai": "cmp631",
+            "idResposta": 2220,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Drenagem",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 116,
+            "topo": 630,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Tórax em selo d água",
+              "idResposta": 2227,
+              "codigo": 1434,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Hemovac",
+              "idResposta": 2228,
+              "codigo": 1435,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Penrose",
+              "idResposta": 2229,
+              "codigo": 1436,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Mediatismo",
+              "idResposta": 2230,
+              "codigo": 1437,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1666,
+            "pergunta": 761,
+            "codPergunta": 745,
+            "ordem": "0107",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1377",
+            "componentePai": "cmp631",
+            "idResposta": 2227,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Eliminação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 106,
+            "topo": 628,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Diurese espontânea",
+              "idResposta": 2231,
+              "codigo": 1438,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Aspecto caracteristico",
+              "idResposta": 2232,
+              "codigo": 1439,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Sonda vesical de demora",
+              "idResposta": 2233,
+              "codigo": 1440,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Concentrado",
+              "idResposta": 2234,
+              "codigo": 1441,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Presença de grumos",
+              "idResposta": 2235,
+              "codigo": 1442,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Cateter externo",
+              "idResposta": 2236,
+              "codigo": 1443,
+              "origem": "ordem"
+            },
+            {
+              "indice": 6,
+              "texto": "Hematúria",
+              "idResposta": 2237,
+              "codigo": 1444,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1667,
+            "pergunta": 762,
+            "codPergunta": 746,
+            "ordem": "0107",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp638",
+            "componentePai": "cmp631",
+            "idResposta": 2231,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Drenagem",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 84,
+            "topo": 734,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Tórax em selo d água",
+              "idResposta": 2227,
+              "codigo": 1434,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Hemovac",
+              "idResposta": 2228,
+              "codigo": 1435,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Penrose",
+              "idResposta": 2229,
+              "codigo": 1436,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Mediatismo",
+              "idResposta": 2230,
+              "codigo": 1437,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1668,
+            "pergunta": 761,
+            "codPergunta": 745,
+            "ordem": "0108",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp639",
+            "componentePai": "cmp631",
+            "idResposta": 2227,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Higiene corporal",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 731,
+            "altura": 131,
+            "topo": 750,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Aspersão",
+              "idResposta": 2238,
+              "codigo": 1445,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Aspersão com auxílio",
+              "idResposta": 2239,
+              "codigo": 1446,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Ablusão",
+              "idResposta": 2240,
+              "codigo": 1447,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Higiene ocular",
+              "idResposta": 2241,
+              "codigo": 1448,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Higiene do couro cabeludo",
+              "idResposta": 2242,
+              "codigo": 1449,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Leito",
+              "idResposta": 2243,
+              "codigo": 1450,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1669,
+            "pergunta": 763,
+            "codPergunta": 747,
+            "ordem": "0108",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1378",
+            "componentePai": "cmp631",
+            "idResposta": 2238,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Curativos",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 82,
+            "topo": 823,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Acesso venoso",
+              "idResposta": 2244,
+              "codigo": 1451,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Lesão por pressão",
+              "idResposta": 2245,
+              "codigo": 1452,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Ferida cirúrgica",
+              "idResposta": 2246,
+              "codigo": 1453,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "H.V.",
+              "idResposta": 2247,
+              "codigo": 1454,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1670,
+            "pergunta": 764,
+            "codPergunta": 748,
+            "ordem": "0109",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp640",
+            "componentePai": "cmp631",
+            "idResposta": 2244,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Aspiração",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 731,
+            "altura": 132,
+            "topo": 882,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "TOT",
+              "idResposta": 2248,
+              "codigo": 1455,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "VAS",
+              "idResposta": 2249,
+              "codigo": 1456,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Traqueostomia",
+              "idResposta": 2250,
+              "codigo": 1457,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Espessa e amarela",
+              "idResposta": 2251,
+              "codigo": 1458,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Clara e fluida",
+              "idResposta": 2252,
+              "codigo": 1459,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Pouco secretivo",
+              "idResposta": 2253,
+              "codigo": 1460,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Muito secretivo",
+              "idResposta": 2254,
+              "codigo": 1461,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1671,
+            "pergunta": 765,
+            "codPergunta": 749,
+            "ordem": "0109",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1379",
+            "componentePai": "cmp631",
+            "idResposta": 2249,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Medicamentos em uso de bomba infusora",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 135,
+            "topo": 906,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 2,
+              "texto": "Heparina",
+              "idResposta": 2257,
+              "codigo": 1464,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Tridil",
+              "idResposta": 2258,
+              "codigo": 1465,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Nipride",
+              "idResposta": 2259,
+              "codigo": 1466,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Noradrenalina",
+              "idResposta": 2260,
+              "codigo": 1467,
+              "origem": "ordem"
+            },
+            {
+              "indice": 6,
+              "texto": "Dopamina",
+              "idResposta": 2261,
+              "codigo": 1468,
+              "origem": "ordem"
+            },
+            {
+              "indice": 7,
+              "texto": "Midazolan",
+              "idResposta": 2262,
+              "codigo": 1469,
+              "origem": "ordem"
+            },
+            {
+              "indice": 8,
+              "texto": "Hidratação venosa",
+              "idResposta": 2263,
+              "codigo": 1470,
+              "origem": "ordem"
+            },
+            {
+              "indice": 9,
+              "texto": "Fentanil",
+              "idResposta": 2264,
+              "codigo": 1471,
+              "origem": "ordem"
+            },
+            {
+              "indice": 10,
+              "texto": "Diazepan",
+              "idResposta": 2265,
+              "codigo": 1472,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1672,
+            "pergunta": 766,
+            "codPergunta": 750,
+            "ordem": "0110",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp641",
+            "componentePai": "cmp631",
+            "idResposta": 2256,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Realizada troca de fraldas",
+          "ativo": false,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 77,
+            "topo": 1019,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 2267,
+              "codigo": 1474,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 2268,
+              "codigo": 1475,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1673,
+            "pergunta": 767,
+            "codPergunta": 751,
+            "ordem": "0110",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1380",
+            "componentePai": "cmp631",
+            "idResposta": 2267,
+            "obrigatorio": "T",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Higiene corporal",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 88,
+            "topo": 1041,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Aspersão",
+              "idResposta": 2238,
+              "codigo": 1445,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Aspersão com auxílio",
+              "idResposta": 2239,
+              "codigo": 1446,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Ablusão",
+              "idResposta": 2240,
+              "codigo": 1447,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Higiene ocular",
+              "idResposta": 2241,
+              "codigo": 1448,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Higiene do couro cabeludo",
+              "idResposta": 2242,
+              "codigo": 1449,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Leito",
+              "idResposta": 2243,
+              "codigo": 1450,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1674,
+            "pergunta": 763,
+            "codPergunta": 747,
+            "ordem": "0111",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp642",
+            "componentePai": "cmp631",
+            "idResposta": 2238,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Observações",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 145,
+            "topo": 1017,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1675,
+            "pergunta": 768,
+            "codPergunta": 752,
+            "ordem": "0111",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1381",
+            "componentePai": "cmp631",
+            "idResposta": 2269,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Aspiração",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 99,
+            "topo": 1128,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 3,
+              "texto": "Espessa e amarela",
+              "idResposta": 2251,
+              "codigo": 1458,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Clara e fluida",
+              "idResposta": 2252,
+              "codigo": 1459,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Pouco secretivo",
+              "idResposta": 2253,
+              "codigo": 1460,
+              "origem": "ordem"
+            },
+            {
+              "indice": 6,
+              "texto": "Muito secretivo",
+              "idResposta": 2254,
+              "codigo": 1461,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1676,
+            "pergunta": 765,
+            "codPergunta": 749,
+            "ordem": "0112",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp643",
+            "componentePai": "cmp631",
+            "idResposta": 2249,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1677,
+            "pergunta": 768,
+            "codPergunta": 752,
+            "ordem": "0112",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Alergias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 2478,
+            "pergunta": 772,
+            "codPergunta": 756,
+            "ordem": "0112",
+            "tipo": "19",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "Função Intestinal",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 108,
+            "topo": 1227,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Presente",
+              "idResposta": 2270,
+              "codigo": 1476,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Ausente",
+              "idResposta": 2271,
+              "codigo": 1477,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Diarréia",
+              "idResposta": 2272,
+              "codigo": 1478,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Pastosa",
+              "idResposta": 2273,
+              "codigo": 1479,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Fecaloma",
+              "idResposta": 2274,
+              "codigo": 1480,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Moldada",
+              "idResposta": 2275,
+              "codigo": 1481,
+              "origem": "ordem"
+            },
+            {
+              "indice": 6,
+              "texto": "Melena",
+              "idResposta": 2276,
+              "codigo": 1482,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1678,
+            "pergunta": 769,
+            "codPergunta": 753,
+            "ordem": "0113",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp644",
+            "componentePai": "cmp631",
+            "idResposta": 2270,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1679,
+            "pergunta": 768,
+            "codPergunta": 752,
+            "ordem": "0113",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Realizada troca de fraldas",
+          "ativo": false,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.14.01",
+              "texto": "Motivo da troca de fralda",
+              "ativo": false,
+              "obrigatorio": true,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 731,
+                "altura": 94,
+                "topo": 1433,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [],
+              "x-legacy": {
+                "vinculo": 1682,
+                "pergunta": 771,
+                "codPergunta": 755,
+                "ordem": "011401",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1219",
+                "componentePai": "cmp631",
+                "idResposta": 2284,
+                "obrigatorio": "T",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 95,
+            "topo": 1337,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 2267,
+              "codigo": 1474,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 2268,
+              "codigo": 1475,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1680,
+            "pergunta": 767,
+            "codPergunta": 751,
+            "ordem": "0114",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1216",
+            "componentePai": "cmp631",
+            "idResposta": 2267,
+            "obrigatorio": "T",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Realizado troca de dispositivos conforme rotina da CCIH",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 90,
+            "topo": 1335,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [],
+          "x-legacy": {
+            "vinculo": 1681,
+            "pergunta": 770,
+            "codPergunta": 754,
+            "ordem": "0114",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp645",
+            "componentePai": "cmp631",
+            "idResposta": 2278,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.15",
+          "texto": "Realizado troca de dispositivos conforme rotina da CCIH",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 93,
+            "topo": 1528,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [],
+          "x-legacy": {
+            "vinculo": 1683,
+            "pergunta": 770,
+            "codPergunta": 754,
+            "ordem": "0115",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1217",
+            "componentePai": "cmp631",
+            "idResposta": 2278,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.15",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 128,
+            "topo": 1425,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1684,
+            "pergunta": 768,
+            "codPergunta": 752,
+            "ordem": "0115",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1213",
+            "componentePai": "cmp631",
+            "idResposta": 2269,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.16",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 130,
+            "topo": 1621,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1685,
+            "pergunta": 768,
+            "codPergunta": 752,
+            "ordem": "0116",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1218",
+            "componentePai": "cmp631",
+            "idResposta": 2269,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 756,
+        "altura": 1164,
+        "topo": 3,
+        "esquerda": -3,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1659,
+        "pergunta": 754,
+        "codPergunta": 738,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp631",
+        "componentePai": "jvsBox",
+        "idResposta": 2183,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": [
+    {
+      "linkId": "01.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Ancoron",
+      "sugestaoIdResposta": 2256
+    },
+    {
+      "linkId": "01.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Dieta",
+      "sugestaoIdResposta": 2266
+    },
+    {
+      "linkId": "01.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 11,
+      "opcao": "Outros",
+      "sugestaoIdResposta": 2255
+    },
+    {
+      "linkId": "01.12",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "VAS",
+      "sugestaoIdResposta": 2249
+    },
+    {
+      "linkId": "01.12",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Traqueostomia",
+      "sugestaoIdResposta": 2250
+    },
+    {
+      "linkId": "01.12",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "TOT",
+      "sugestaoIdResposta": 2248
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Equipo de bomba",
+      "sugestaoIdResposta": 2278
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Equipo comum",
+      "sugestaoIdResposta": 2279
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Equipo fotossensível",
+      "sugestaoIdResposta": 2280
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 3,
+      "opcao": "Equipo de dieta",
+      "sugestaoIdResposta": 2281
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 4,
+      "opcao": "Discofix",
+      "sugestaoIdResposta": 2282
+    },
+    {
+      "linkId": "01.14",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 5,
+      "opcao": "Outro",
+      "sugestaoIdResposta": 2277
+    },
+    {
+      "linkId": "01.14.01",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Diarréia",
+      "sugestaoIdResposta": 2284
+    },
+    {
+      "linkId": "01.14.01",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Uso de diuréticos",
+      "sugestaoIdResposta": 2285
+    },
+    {
+      "linkId": "01.14.01",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Lesão por pressão secretiva em região sacra ou trocanter",
+      "sugestaoIdResposta": 2286
+    },
+    {
+      "linkId": "01.14.01",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 3,
+      "opcao": "Outros",
+      "sugestaoIdResposta": 2283
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Equipo de bomba",
+      "sugestaoIdResposta": 2278
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Equipo comum",
+      "sugestaoIdResposta": 2279
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Equipo fotossensível",
+      "sugestaoIdResposta": 2280
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 3,
+      "opcao": "Equipo de dieta",
+      "sugestaoIdResposta": 2281
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 4,
+      "opcao": "Discofix",
+      "sugestaoIdResposta": 2282
+    },
+    {
+      "linkId": "01.15",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 5,
+      "opcao": "Outro",
+      "sugestaoIdResposta": 2277
+    }
+  ]
+}

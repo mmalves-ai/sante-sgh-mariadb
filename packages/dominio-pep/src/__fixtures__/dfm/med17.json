@@ -1,0 +1,705 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 31,
+    "codigo": "MED17",
+    "descricao": "PROTOCOLO DE SEPSE",
+    "fase": 2
+  },
+  "impressaoLayout": "698131b19b8e6006eb522ae58d8512d5d6d3d0840b61fcdf1523cbedf5c7e221",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 16,
+    "vinculosAtivos": 13,
+    "vinculosInativos": 3,
+    "componentes": 13,
+    "componentesMapeados": 13,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 3,
+    "opcoesResolvidas": 19,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 3,
+      "TfRespComboTexto": 2,
+      "TfRespData": 1,
+      "TfRespEdit": 1,
+      "TfRespHora": 1,
+      "TGroupBoxPep": 5
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PROTOCOLO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Valor do news",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 191,
+            "altura": 40,
+            "topo": 14,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1322,
+            "pergunta": 593,
+            "codPergunta": 581,
+            "ordem": "0101",
+            "tipo": "7",
+            "classe": "TfRespEdit",
+            "componente": "cmp335",
+            "componentePai": "cmp334",
+            "idResposta": 1650,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Posso excluir o diagnóstico de Sepse?",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 737,
+            "altura": 82,
+            "topo": 54,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 1651,
+              "codigo": 1037,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 1652,
+              "codigo": 1038,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1323,
+            "pergunta": 594,
+            "codPergunta": 582,
+            "ordem": "0102",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp336",
+            "componentePai": "cmp334",
+            "idResposta": 1651,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 862,
+        "topo": 3,
+        "esquerda": 4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1321,
+        "pergunta": 592,
+        "codPergunta": 580,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp334",
+        "componentePai": "jvsBox",
+        "idResposta": 1649,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "SUSPEITA DIAGNÓSTICA DE SEPSE OU CHOQUE SÉPTICO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "02.01",
+          "texto": "Data",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "date",
+          "widget": "date",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 1,
+            "largura": 90,
+            "altura": 40,
+            "topo": 16,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1325,
+            "pergunta": 596,
+            "codPergunta": 584,
+            "ordem": "0201",
+            "tipo": "2",
+            "classe": "TfRespData",
+            "componente": "cmp338",
+            "componentePai": "cmp337",
+            "idResposta": 1654,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.02",
+          "texto": "Hora",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 1,
+            "largura": 40,
+            "altura": 40,
+            "topo": 16,
+            "esquerda": 97,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1326,
+            "pergunta": 597,
+            "codPergunta": 585,
+            "ordem": "0202",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp339",
+            "componentePai": "cmp337",
+            "idResposta": 1655,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 761,
+        "altura": 66,
+        "topo": 139,
+        "esquerda": 1,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1324,
+        "pergunta": 595,
+        "codPergunta": 583,
+        "ordem": "02",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp337",
+        "componentePai": "cmp334",
+        "idResposta": 1653,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "03",
+      "texto": "PACOTE DE 1 HORA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "03.01",
+          "texto": "Itens (1ª hora)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 737,
+            "altura": 181,
+            "topo": 13,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Colher lactato arterial sérico (imediato)",
+              "idResposta": 1657,
+              "codigo": 1039,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Laboratório deve entregar o resultado em até 20 minutos",
+              "idResposta": 1658,
+              "codigo": 1040,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Colher duas hemoculturas em sítios diferentes + RX tórax + sumário de urina + exames laboratoriais de rotina (Hemograma, Na, K, Ur, Cr, TGO, TGP, BT, Coagulograma, etc)",
+              "idResposta": 1659,
+              "codigo": 1041,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Administrar antimicrobiano intravenoso adequado (imediatamente após a coleta das hemoculturas)",
+              "idResposta": 1660,
+              "codigo": 1042,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Se persistência de hipotensão, após administração de cristalóides, iniciar Noradrenalina.",
+              "idResposta": 1661,
+              "codigo": 1043,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Forneça pelo menos 500 ml de fluidos IV na primeira hora e considere até 30 ml/kg de ressuscitação volêmica se houver lactato (maior ou igual a 2 x valor normal) e hipotensão (Cristalóide de escolha é o Ringer, em caso de falta, SF a 0,9%)",
+              "idResposta": 1662,
+              "codigo": 1044,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1328,
+            "pergunta": 599,
+            "codPergunta": 587,
+            "ordem": "0301",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp341",
+            "componentePai": "cmp340",
+            "idResposta": 1657,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 203,
+        "topo": 206,
+        "esquerda": 0,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1327,
+        "pergunta": 598,
+        "codPergunta": 586,
+        "ordem": "03",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp340",
+        "componentePai": "cmp334",
+        "idResposta": 1656,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "04",
+      "texto": "PACOTE DE 3 HORAS",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "04.01",
+          "texto": "Itens (3ª hora)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 103,
+            "topo": 14,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Se lactato alterado (maior ou igual a 2 x valor normal), coletar nova amostra de lactato arterial em até 3h após reposição volêmica",
+              "idResposta": 1664,
+              "codigo": 1045,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Reavaliação médica do paciente, já com todos os resultados de exames",
+              "idResposta": 1665,
+              "codigo": 1046,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1330,
+            "pergunta": 601,
+            "codPergunta": 589,
+            "ordem": "0401",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1330",
+            "componentePai": "cmp342",
+            "idResposta": 1664,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "04.02",
+          "texto": "Diagnóstico de SEPSE",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 732,
+            "altura": 90,
+            "topo": 116,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Confirmado",
+              "idResposta": 1666,
+              "codigo": 1047,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Descartado",
+              "idResposta": 1667,
+              "codigo": 1048,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1331,
+            "pergunta": 602,
+            "codPergunta": 590,
+            "ordem": "0402",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp344",
+            "componentePai": "cmp342",
+            "idResposta": 1666,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 752,
+        "altura": 216,
+        "topo": 409,
+        "esquerda": -1,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1329,
+        "pergunta": 600,
+        "codPergunta": 588,
+        "ordem": "04",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp342",
+        "componentePai": "cmp334",
+        "idResposta": 1663,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "05",
+      "texto": "PACOTE DE 6 HORAS",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "05.01",
+          "texto": "Itens (6ª hora)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 203,
+            "topo": 13,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Se hipotensão e/ou hiperlactatemia, avaliar o status volêmico e perfusão nas primeiras 6 horas. *Avalie as opções abaixo e registre em prontuário.",
+              "idResposta": 1669,
+              "codigo": 1049,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Elevação passiva de membros inferiores",
+              "idResposta": 1670,
+              "codigo": 1050,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Outras formas de avaliação de responsividade a volume",
+              "idResposta": 1671,
+              "codigo": 1051,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Melhora do nível de consciência",
+              "idResposta": 1672,
+              "codigo": 1052,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Melhora da diurese",
+              "idResposta": 1673,
+              "codigo": 1053,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Melhora do tempo de enchimento capilar",
+              "idResposta": 1674,
+              "codigo": 1054,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Melhora da intensidade de livedo",
+              "idResposta": 1675,
+              "codigo": 1055,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1333,
+            "pergunta": 604,
+            "codPergunta": 592,
+            "ordem": "0501",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp346",
+            "componentePai": "cmp345",
+            "idResposta": 1669,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 228,
+        "topo": 626,
+        "esquerda": 0,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1332,
+        "pergunta": 603,
+        "codPergunta": 591,
+        "ordem": "05",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp345",
+        "componentePai": "cmp334",
+        "idResposta": 1668,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "06",
+      "texto": "REGISTRO NO PRONTUÁRIO DESSA AVALIAÇÃO",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "06.01",
+          "texto": "Data",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1335,
+            "pergunta": 596,
+            "codPergunta": 584,
+            "ordem": "0601",
+            "tipo": "2",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "06.02",
+          "texto": "Hora",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1336,
+            "pergunta": 597,
+            "codPergunta": 585,
+            "ordem": "0602",
+            "tipo": "3",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 1334,
+        "pergunta": 605,
+        "codPergunta": 593,
+        "ordem": "06",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

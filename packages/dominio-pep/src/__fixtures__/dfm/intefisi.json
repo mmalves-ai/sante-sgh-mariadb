@@ -1,0 +1,101 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 43,
+    "codigo": "INTEFISI",
+    "descricao": "INTERCORRÊNCIA FISIOTERAPIA",
+    "fase": 2
+  },
+  "impressaoLayout": "86a52e9a6523cb0701ebf83bae2b1b2237b6906a178fc69fd05152c07d6d32a5",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 0,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "INTECORRÊNCIA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "INTERCORRÊNCIA",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 743,
+            "altura": 644,
+            "topo": 13,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1821,
+            "pergunta": 852,
+            "codPergunta": 830,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1821",
+            "componentePai": "cmp1820",
+            "idResposta": 2425,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 752,
+        "altura": 661,
+        "topo": 4,
+        "esquerda": 3,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1820,
+        "pergunta": 851,
+        "codPergunta": 829,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1820",
+        "componentePai": "jvsBox",
+        "idResposta": 2424,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

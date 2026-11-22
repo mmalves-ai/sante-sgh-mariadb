@@ -13,7 +13,8 @@ import type {
 } from '@sgh/contratos';
 
 /** Tipo do item do processo gravado. */
-export type TipoItemSae = 'diagnostico' | 'resultado' | 'intervencao' | 'atividade' | 'evolucao' | 'suspensao';
+export type TipoItemSae =
+  'diagnostico' | 'resultado' | 'intervencao' | 'atividade' | 'evolucao' | 'suspensao';
 
 /** Item gravado do processo de enfermagem (a árvore pelo `pai`). */
 export interface ItemSae {

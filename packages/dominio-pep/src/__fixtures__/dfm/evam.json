@@ -1,0 +1,271 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 38,
+    "codigo": "EVAM",
+    "descricao": "EVOLUÇÃO AMBULATÓRIO",
+    "fase": 2
+  },
+  "impressaoLayout": "9b38ad1a6397437df7c96c8259243e1fcf4bba1529f977f685a1d54d9357aa8f",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 7,
+    "vinculosAtivos": 7,
+    "vinculosInativos": 0,
+    "componentes": 7,
+    "componentesMapeados": 7,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 6,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO AMBULATÓRIO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Quadro Clínico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 15,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1688,
+            "pergunta": 775,
+            "codPergunta": 759,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1688",
+            "componentePai": "cmp1687",
+            "idResposta": 2290,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Exame Físico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 124,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1689,
+            "pergunta": 776,
+            "codPergunta": 760,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1689",
+            "componentePai": "cmp1687",
+            "idResposta": 2291,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Diagnóstico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 233,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1690,
+            "pergunta": 777,
+            "codPergunta": 761,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1690",
+            "componentePai": "cmp1687",
+            "idResposta": 2292,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Medicação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 344,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1691,
+            "pergunta": 778,
+            "codPergunta": 762,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1691",
+            "componentePai": "cmp1687",
+            "idResposta": 2293,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Tratamento Proposto",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 454,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1692,
+            "pergunta": 779,
+            "codPergunta": 763,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1692",
+            "componentePai": "cmp1687",
+            "idResposta": 2294,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Observação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 110,
+            "topo": 565,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1693,
+            "pergunta": 780,
+            "codPergunta": 764,
+            "ordem": "0106",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1693",
+            "componentePai": "cmp1687",
+            "idResposta": 2295,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 679,
+        "topo": 1,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1687,
+        "pergunta": 774,
+        "codPergunta": 758,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1687",
+        "componentePai": "jvsBox",
+        "idResposta": 2289,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

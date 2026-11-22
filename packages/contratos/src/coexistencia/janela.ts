@@ -216,12 +216,12 @@ export const esquemaVerificacaoJanela = z
     observacao: texto.nullable().default(null),
   })
   .strict()
-  .superRefine((v, ctx) => {
-    if (v.contagens && v.contagens.iguais > v.contagens.tabelas)
+  .superRefine(({ contagens, operacoes, inicio, fim }, ctx) => {
+    if (contagens && contagens.iguais > contagens.tabelas)
       ctx.addIssue({ code: 'custom', path: ['contagens', 'iguais'], message: 'iguais acima do total' });
-    if (v.operacoes && v.operacoes.verdes > v.operacoes.total)
+    if (operacoes && operacoes.verdes > operacoes.total)
       ctx.addIssue({ code: 'custom', path: ['operacoes', 'verdes'], message: 'verdes acima do total' });
-    if (v.inicio && v.fim && v.inicio > v.fim)
+    if (inicio && fim && inicio > fim)
       ctx.addIssue({ code: 'custom', path: ['fim'], message: 'fim antes do início' });
   });
 export type VerificacaoJanela = z.infer<typeof esquemaVerificacaoJanela>;

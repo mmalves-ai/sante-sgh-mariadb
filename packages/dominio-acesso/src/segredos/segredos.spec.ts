@@ -92,12 +92,17 @@ describe('M59-F3: senhas secundárias', () => {
       ),
     ).toBe('contingencia-ativa');
     expect(
-      bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['senha_liberacao'] }, { ...c, receitaLigada: false }),
+      bloqueioRetiradaSenhaSecundaria(
+        { login: 'A', colunas: ['senha_liberacao'] },
+        { ...c, receitaLigada: false },
+      ),
     ).toBe('operacao-desligada');
-    expect(bloqueioRetiradaSenhaSecundaria({ login: 'GESTOR', colunas: ['senha_cancelamento_nota'] }, c)).toBe(
-      'a-si-mesmo',
-    );
-    expect(bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['senha_cancelamento_nota'] }, c)).toBeNull();
+    expect(
+      bloqueioRetiradaSenhaSecundaria({ login: 'GESTOR', colunas: ['senha_cancelamento_nota'] }, c),
+    ).toBe('a-si-mesmo');
+    expect(
+      bloqueioRetiradaSenhaSecundaria({ login: 'A', colunas: ['senha_cancelamento_nota'] }, c),
+    ).toBeNull();
   });
   it('contingência: só "não" desliga (ausente é ligada); contagem protegida', () => {
     for (const v of [null, undefined, '', 'sim', 'S', 'qualquer'])

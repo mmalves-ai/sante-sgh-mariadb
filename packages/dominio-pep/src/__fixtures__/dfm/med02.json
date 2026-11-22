@@ -1,0 +1,136 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 2,
+    "codigo": "MED02",
+    "descricao": "CONFERÊNCIA MÉDICA COM FAMILIARES",
+    "fase": 2
+  },
+  "impressaoLayout": "9326bfa58ebfd43004d87331a4a618a4daaf7d2c150e6b33cbb6138001c351dc",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 3,
+    "vinculosAtivos": 3,
+    "vinculosInativos": 0,
+    "componentes": 3,
+    "componentesMapeados": 3,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespEditUnidade": 1,
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Conferência médica com familiares",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Nome dos familiares",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 727,
+            "altura": 40,
+            "topo": 14,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 4,
+            "pergunta": 4,
+            "codPergunta": 4,
+            "ordem": "0101",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp4",
+            "componentePai": "cmp3",
+            "idResposta": 4,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Descrição do diálogo e registro de internação discutidas",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 396,
+            "topo": 61,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 5,
+            "pergunta": 5,
+            "codPergunta": 5,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp5",
+            "componentePai": "cmp3",
+            "idResposta": 5,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 745,
+        "altura": 468,
+        "topo": 3,
+        "esquerda": 5,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 3,
+        "pergunta": 3,
+        "codPergunta": 3,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp3",
+        "componentePai": "jvsBox",
+        "idResposta": 3,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

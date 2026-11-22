@@ -378,10 +378,15 @@ export async function gravarContabilizacao(
     alvo: () => ({ tabela: 'lancamento_contabil', id: null }),
     trilha: () => ({ dados: { diferenca }, motivo: null }),
   });
-  const r = await executor.executar(op, contexto.cliente, { pedido }, {
-    ...contexto,
-    chaveIdempotencia: `contabil:${est}:${pedido.slice(0, 40)}`,
-  });
+  const r = await executor.executar(
+    op,
+    contexto.cliente,
+    { pedido },
+    {
+      ...contexto,
+      chaveIdempotencia: `contabil:${est}:${pedido.slice(0, 40)}`,
+    },
+  );
   const v = r.resultado;
   return { lancamentos: num(v['lancamentos']), repetidos: num(v['repetidos']), mudaram: num(v['mudaram']) };
 }

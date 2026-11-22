@@ -1,0 +1,2072 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 25,
+    "codigo": "MED13",
+    "descricao": "RELATÓRIO GERAL DE CIRURGIAS",
+    "fase": 2
+  },
+  "impressaoLayout": "0a6c67dbe682e10ea16c7f69cef62fa90cb9e2f15c62f485cb33b401cd601ba2",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 36,
+    "vinculosAtivos": 8,
+    "vinculosInativos": 28,
+    "componentes": 36,
+    "componentesMapeados": 36,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 111,
+    "escolhasPendentes": 2,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespComboTexto": 9,
+      "TfRespEditUnidade": 15,
+      "TfRespHora": 3,
+      "TfRespTexto": 5,
+      "TGroupBoxPep": 4
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Descrição cirúrgica",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Cirurgia realizada - Cirurgia Geral",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 200,
+            "topo": 17,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Hemicolectomia",
+              "idResposta": 1518,
+              "codigo": 960,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Reconstrução de trânsito intestinal",
+              "idResposta": 1519,
+              "codigo": 961,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Herniorrafia epigástrica + Herniorrafia umbilical + Omentectomia",
+              "idResposta": 1520,
+              "codigo": 962,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Colectomia",
+              "idResposta": 1521,
+              "codigo": 963,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Apendicectomia",
+              "idResposta": 1522,
+              "codigo": 964,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Orquiectomia",
+              "idResposta": 1530,
+              "codigo": 972,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Salpingectomia",
+              "idResposta": 1531,
+              "codigo": 973,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Sigmoidectomia",
+              "idResposta": 1532,
+              "codigo": 974,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Rizotomia",
+              "idResposta": 1533,
+              "codigo": 975,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Hernioplastia incisional + Lise de aderência + Resecção de módulo peritoneal",
+              "idResposta": 1534,
+              "codigo": 976,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Exerése de TU partes moles + Rotação de retalho",
+              "idResposta": 1535,
+              "codigo": 977,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Entero- Enteroanastomose paliativa + biópisa de tumoração anexial",
+              "idResposta": 1536,
+              "codigo": 978,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Ressecção de tumor do ovário",
+              "idResposta": 1537,
+              "codigo": 979,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Salpingectomia + Ressecção ureteral bilateral + Ressecção de cúpula vaginal",
+              "idResposta": 1538,
+              "codigo": 980,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 15,
+              "texto": "Exérese de tumor de pele",
+              "idResposta": 1554,
+              "codigo": 996,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1221,
+            "pergunta": 542,
+            "codPergunta": 530,
+            "ordem": "0101",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1221",
+            "componentePai": "cmp1220",
+            "idResposta": 1518,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Diagnóstico pré-operatório",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 40,
+            "topo": 16,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1227,
+            "pergunta": 547,
+            "codPergunta": 535,
+            "ordem": "0101",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1227",
+            "componentePai": "cmp1220",
+            "idResposta": 1558,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Cirurgia realizada - Cirurgia Ortopédica",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 200,
+            "topo": 219,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Ligamento de joelho",
+              "idResposta": 1526,
+              "codigo": 968,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Fratura de fêmur",
+              "idResposta": 1527,
+              "codigo": 969,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Regularização de coto + Liberação articular",
+              "idResposta": 1523,
+              "codigo": 965,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Osteossíntese de tornozelo",
+              "idResposta": 1528,
+              "codigo": 970,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Artroplastia de joelho",
+              "idResposta": 1525,
+              "codigo": 967,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Lesão de ligamento cruzado anterior joelho",
+              "idResposta": 1539,
+              "codigo": 981,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1222,
+            "pergunta": 543,
+            "codPergunta": 531,
+            "ordem": "0102",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1222",
+            "componentePai": "cmp1220",
+            "idResposta": 1526,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Risco operatório",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 40,
+            "topo": 57,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1228,
+            "pergunta": 548,
+            "codPergunta": 536,
+            "ordem": "0102",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1228",
+            "componentePai": "cmp1220",
+            "idResposta": 1559,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Cirurgia realizada- Plástica",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 200,
+            "topo": 421,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Mama",
+              "idResposta": 1551,
+              "codigo": 993,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Blefaroplastia",
+              "idResposta": 1552,
+              "codigo": 994,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Rinoplastia",
+              "idResposta": 1553,
+              "codigo": 995,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "PCC Mama",
+              "idResposta": 1540,
+              "codigo": 982,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "PCC mama sem prótese",
+              "idResposta": 1541,
+              "codigo": 983,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Lipoabdominoplastia",
+              "idResposta": 1542,
+              "codigo": 984,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Prótese de glúteo",
+              "idResposta": 1543,
+              "codigo": 985,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "PCC Abdominoplastia",
+              "idResposta": 1544,
+              "codigo": 986,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Lipoaspiração",
+              "idResposta": 1545,
+              "codigo": 987,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "PCC Lipoaspiração",
+              "idResposta": 1546,
+              "codigo": 988,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Face lifting",
+              "idResposta": 1547,
+              "codigo": 989,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Otoplastia",
+              "idResposta": 1548,
+              "codigo": 990,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Mamoplastia redutora",
+              "idResposta": 1549,
+              "codigo": 991,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Prótese de mama",
+              "idResposta": 1550,
+              "codigo": 992,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1223,
+            "pergunta": 544,
+            "codPergunta": 532,
+            "ordem": "0103",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1223",
+            "componentePai": "cmp1220",
+            "idResposta": 1551,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Pulso antes",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 173,
+            "altura": 40,
+            "topo": 101,
+            "esquerda": 12,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1229,
+            "pergunta": 549,
+            "codPergunta": 537,
+            "ordem": "0103",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1229",
+            "componentePai": "cmp1220",
+            "idResposta": 1560,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Cirurgia realizada",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 200,
+            "topo": 624,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1224,
+            "pergunta": 545,
+            "codPergunta": 533,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1224",
+            "componentePai": "cmp1220",
+            "idResposta": 1555,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Pulso depois",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 172,
+            "altura": 40,
+            "topo": 101,
+            "esquerda": 187,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1230,
+            "pergunta": 550,
+            "codPergunta": 538,
+            "ordem": "0104",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1230",
+            "componentePai": "cmp1220",
+            "idResposta": 1561,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "P.A antes",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 200,
+            "altura": 40,
+            "topo": 101,
+            "esquerda": 361,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1231,
+            "pergunta": 551,
+            "codPergunta": 539,
+            "ordem": "0105",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1231",
+            "componentePai": "cmp1220",
+            "idResposta": 1562,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "P.A depois",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 178,
+            "altura": 40,
+            "topo": 101,
+            "esquerda": 561,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1232,
+            "pergunta": 552,
+            "codPergunta": 540,
+            "ordem": "0106",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1232",
+            "componentePai": "cmp1220",
+            "idResposta": 1563,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Operação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 40,
+            "topo": 144,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1233,
+            "pergunta": 553,
+            "codPergunta": 541,
+            "ordem": "0107",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1233",
+            "componentePai": "cmp1220",
+            "idResposta": 1564,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Início da cirurgia",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 138,
+            "altura": 41,
+            "topo": 184,
+            "esquerda": 12,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1234,
+            "pergunta": 554,
+            "codPergunta": 542,
+            "ordem": "0108",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1234",
+            "componentePai": "cmp1220",
+            "idResposta": 1565,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Término da cirurgia",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 224,
+            "altura": 40,
+            "topo": 184,
+            "esquerda": 106,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1235,
+            "pergunta": 555,
+            "codPergunta": 543,
+            "ordem": "0109",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1235",
+            "componentePai": "cmp1220",
+            "idResposta": 1566,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Duração",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 118,
+            "altura": 44,
+            "topo": 185,
+            "esquerda": 209,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1252,
+            "pergunta": 568,
+            "codPergunta": 556,
+            "ordem": "0110",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1252",
+            "componentePai": "cmp1220",
+            "idResposta": 1579,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 746,
+        "altura": 1116,
+        "topo": 2,
+        "esquerda": 6,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1220,
+        "pergunta": 541,
+        "codPergunta": 529,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1220",
+        "componentePai": "jvsBox",
+        "idResposta": 1517,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "EQUIPE",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 143,
+        "topo": 227,
+        "esquerda": 0,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1236,
+        "pergunta": 557,
+        "codPergunta": 545,
+        "ordem": "02",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1236",
+        "componentePai": "cmp1220",
+        "idResposta": 1568,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "Descrição cirúrgica",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "02.01",
+          "texto": "Cirurgião",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 15,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1237,
+            "pergunta": 558,
+            "codPergunta": 546,
+            "ordem": "0201",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1237",
+            "componentePai": "cmp1236",
+            "idResposta": 1569,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.01",
+          "texto": "Cirurgia realizada - Cirurgia Geral",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 727,
+            "altura": 252,
+            "topo": 15,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Hemicolectomia",
+              "idResposta": 1518,
+              "codigo": 960,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Reconstrução de trânsito intestinal",
+              "idResposta": 1519,
+              "codigo": 961,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Herniorrafia epigástrica + Herniorrafia umbilical + Omentectomia",
+              "idResposta": 1520,
+              "codigo": 962,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Colectomia",
+              "idResposta": 1521,
+              "codigo": 963,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Apendicectomia",
+              "idResposta": 1522,
+              "codigo": 964,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Orquiectomia",
+              "idResposta": 1530,
+              "codigo": 972,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Salpingectomia",
+              "idResposta": 1531,
+              "codigo": 973,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Sigmoidectomia",
+              "idResposta": 1532,
+              "codigo": 974,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Rizotomia",
+              "idResposta": 1533,
+              "codigo": 975,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Hernioplastia incisional + Lise de aderência + Resecção de módulo peritoneal",
+              "idResposta": 1534,
+              "codigo": 976,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Exerése de TU partes moles + Rotação de retalho",
+              "idResposta": 1535,
+              "codigo": 977,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Entero- Enteroanastomose paliativa + biópisa de tumoração anexial",
+              "idResposta": 1536,
+              "codigo": 978,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Ressecção de tumor do ovário",
+              "idResposta": 1537,
+              "codigo": 979,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Salpingectomia + Ressecção ureteral bilateral + Ressecção de cúpula vaginal",
+              "idResposta": 1538,
+              "codigo": 980,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 15,
+              "texto": "Exérese de tumor de pele",
+              "idResposta": 1554,
+              "codigo": 996,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 16,
+              "texto": "Prostatectomia",
+              "idResposta": 1606,
+              "codigo": 1015,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1288,
+            "pergunta": 542,
+            "codPergunta": 530,
+            "ordem": "0201",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1288",
+            "componentePai": "cmp1287",
+            "idResposta": 1518,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.02",
+          "texto": "1º Auxiliar",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 15,
+            "esquerda": 343,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1238,
+            "pergunta": 559,
+            "codPergunta": 547,
+            "ordem": "0202",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1238",
+            "componentePai": "cmp1236",
+            "idResposta": 1570,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.02",
+          "texto": "Cirurgia realizada - Cirurgia Ortopédica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 727,
+            "altura": 228,
+            "topo": 268,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Ligamento de joelho",
+              "idResposta": 1526,
+              "codigo": 968,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Fratura de fêmur",
+              "idResposta": 1527,
+              "codigo": 969,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Regularização de coto + Liberação articular",
+              "idResposta": 1523,
+              "codigo": 965,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Osteossíntese de tornozelo",
+              "idResposta": 1528,
+              "codigo": 970,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Fratura de tornozelo",
+              "idResposta": 1524,
+              "codigo": 966,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Artroplastia de joelho",
+              "idResposta": 1525,
+              "codigo": 967,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Fratura do plato tibial",
+              "idResposta": 1529,
+              "codigo": 971,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Lesão de ligamento cruzado anterior joelho",
+              "idResposta": 1539,
+              "codigo": 981,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1289,
+            "pergunta": 543,
+            "codPergunta": 531,
+            "ordem": "0202",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1289",
+            "componentePai": "cmp1287",
+            "idResposta": 1526,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.03",
+          "texto": "2º Auxiliar",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 59,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1239,
+            "pergunta": 560,
+            "codPergunta": 548,
+            "ordem": "0203",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1239",
+            "componentePai": "cmp1236",
+            "idResposta": 1571,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.03",
+          "texto": "Cirurgia realizada- Plástica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 728,
+            "altura": 267,
+            "topo": 494,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Mama",
+              "idResposta": 1551,
+              "codigo": 993,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Blefaroplastia",
+              "idResposta": 1552,
+              "codigo": 994,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Rinoplastia",
+              "idResposta": 1553,
+              "codigo": 995,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "PCC Mama",
+              "idResposta": 1540,
+              "codigo": 982,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "PCC mama sem prótese",
+              "idResposta": 1541,
+              "codigo": 983,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Lipoabdominoplastia",
+              "idResposta": 1542,
+              "codigo": 984,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Prótese de glúteo",
+              "idResposta": 1543,
+              "codigo": 985,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "PCC Abdominoplastia",
+              "idResposta": 1544,
+              "codigo": 986,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Lipoaspiração",
+              "idResposta": 1545,
+              "codigo": 987,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "PCC Lipoaspiração",
+              "idResposta": 1546,
+              "codigo": 988,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Face lifting",
+              "idResposta": 1547,
+              "codigo": 989,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Otoplastia",
+              "idResposta": 1548,
+              "codigo": 990,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Mamoplastia redutora",
+              "idResposta": 1549,
+              "codigo": 991,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Prótese de mama",
+              "idResposta": 1550,
+              "codigo": 992,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1290,
+            "pergunta": 544,
+            "codPergunta": 532,
+            "ordem": "0203",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1290",
+            "componentePai": "cmp1287",
+            "idResposta": 1551,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.04",
+          "texto": "Anestesista",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 59,
+            "esquerda": 343,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1240,
+            "pergunta": 561,
+            "codPergunta": 549,
+            "ordem": "0204",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1240",
+            "componentePai": "cmp1236",
+            "idResposta": 1572,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.04",
+          "texto": "Cirurgia realizada",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 727,
+            "altura": 234,
+            "topo": 760,
+            "esquerda": 12,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1291,
+            "pergunta": 545,
+            "codPergunta": 533,
+            "ordem": "0204",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1291",
+            "componentePai": "cmp1287",
+            "idResposta": 1555,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.05",
+          "texto": "Instrumentador",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 99,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1241,
+            "pergunta": 562,
+            "codPergunta": 550,
+            "ordem": "0205",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1241",
+            "componentePai": "cmp1236",
+            "idResposta": 1573,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "02.06",
+          "texto": "Enfermeiro de sala",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 329,
+            "altura": 40,
+            "topo": 99,
+            "esquerda": 343,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1242,
+            "pergunta": 563,
+            "codPergunta": 551,
+            "ordem": "0206",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1242",
+            "componentePai": "cmp1236",
+            "idResposta": 1574,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 770,
+        "altura": 1007,
+        "topo": 100,
+        "esquerda": -2,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1287,
+        "pergunta": 541,
+        "codPergunta": 529,
+        "ordem": "02",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1287",
+        "componentePai": "cmp1220",
+        "idResposta": 1517,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "03",
+      "texto": "Tipo de anestesia",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "03.01",
+          "texto": "Anestésico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 330,
+            "altura": 40,
+            "topo": 374,
+            "esquerda": 342,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1244,
+            "pergunta": 565,
+            "codPergunta": 553,
+            "ordem": "0301",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1244",
+            "componentePai": "cmp1220",
+            "idResposta": 1576,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "quantity",
+      "widget": "quantity",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 5,
+        "largura": 330,
+        "altura": 40,
+        "topo": 374,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1243,
+        "pergunta": 564,
+        "codPergunta": 552,
+        "ordem": "03",
+        "tipo": "11",
+        "classe": "TfRespEditUnidade",
+        "componente": "cmp1243",
+        "componentePai": "cmp1220",
+        "idResposta": 1575,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "04",
+      "texto": "Medicação na sala de operações",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "text",
+      "widget": "richtext",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 80,
+        "topo": 416,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1245,
+        "pergunta": 566,
+        "codPergunta": 554,
+        "ordem": "04",
+        "tipo": "5",
+        "classe": "TfRespTexto",
+        "componente": "cmp1245",
+        "componentePai": "cmp1220",
+        "idResposta": 1577,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "05",
+      "texto": "Acidentes",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "text",
+      "widget": "richtext",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 80,
+        "topo": 496,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1246,
+        "pergunta": 567,
+        "codPergunta": 555,
+        "ordem": "05",
+        "tipo": "5",
+        "classe": "TfRespTexto",
+        "componente": "cmp1246",
+        "componentePai": "cmp1220",
+        "idResposta": 1578,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "06",
+      "texto": "Descrição cirúrgica",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 756,
+        "altura": 828,
+        "topo": 576,
+        "esquerda": 1,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1247,
+        "pergunta": 541,
+        "codPergunta": 529,
+        "ordem": "06",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1247",
+        "componentePai": "cmp1220",
+        "idResposta": 1517,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "07",
+      "texto": "Cirurgia realizada - Cirurgia Geral",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "open-choice",
+      "widget": "select-with-text",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 200,
+        "topo": 18,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Hemicolectomia",
+          "idResposta": 1518,
+          "codigo": 960,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 2,
+          "texto": "Reconstrução de trânsito intestinal",
+          "idResposta": 1519,
+          "codigo": 961,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 3,
+          "texto": "Herniorrafia epigástrica + Herniorrafia umbilical + Omentectomia",
+          "idResposta": 1520,
+          "codigo": 962,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 4,
+          "texto": "Colectomia",
+          "idResposta": 1521,
+          "codigo": 963,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 5,
+          "texto": "Apendicectomia",
+          "idResposta": 1522,
+          "codigo": 964,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 6,
+          "texto": "Orquiectomia",
+          "idResposta": 1530,
+          "codigo": 972,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 7,
+          "texto": "Salpingectomia",
+          "idResposta": 1531,
+          "codigo": 973,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 8,
+          "texto": "Sigmoidectomia",
+          "idResposta": 1532,
+          "codigo": 974,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 9,
+          "texto": "Rizotomia",
+          "idResposta": 1533,
+          "codigo": 975,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 10,
+          "texto": "Hernioplastia incisional + Lise de aderência + Resecção de módulo peritoneal",
+          "idResposta": 1534,
+          "codigo": 976,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 11,
+          "texto": "Exerése de TU partes moles + Rotação de retalho",
+          "idResposta": 1535,
+          "codigo": 977,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 12,
+          "texto": "Entero- Enteroanastomose paliativa + biópisa de tumoração anexial",
+          "idResposta": 1536,
+          "codigo": 978,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 13,
+          "texto": "Ressecção de tumor do ovário",
+          "idResposta": 1537,
+          "codigo": 979,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 14,
+          "texto": "Salpingectomia + Ressecção ureteral bilateral + Ressecção de cúpula vaginal",
+          "idResposta": 1538,
+          "codigo": 980,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 15,
+          "texto": "Exérese de tumor de pele",
+          "idResposta": 1554,
+          "codigo": 996,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 16,
+          "texto": "Prostatectomia",
+          "idResposta": 1606,
+          "codigo": 1015,
+          "origem": "id-resposta"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 1248,
+        "pergunta": 542,
+        "codPergunta": 530,
+        "ordem": "07",
+        "tipo": "8",
+        "classe": "TfRespComboTexto",
+        "componente": "cmp1248",
+        "componentePai": "cmp1247",
+        "idResposta": 1518,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "08",
+      "texto": "Cirurgia realizada - Cirurgia Ortopédica",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "open-choice",
+      "widget": "select-with-text",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 200,
+        "topo": 219,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Ligamento de joelho",
+          "idResposta": 1526,
+          "codigo": 968,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 2,
+          "texto": "Fratura de fêmur",
+          "idResposta": 1527,
+          "codigo": 969,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 3,
+          "texto": "Regularização de coto + Liberação articular",
+          "idResposta": 1523,
+          "codigo": 965,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 4,
+          "texto": "Osteossíntese de tornozelo",
+          "idResposta": 1528,
+          "codigo": 970,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 5,
+          "texto": "Fratura de tornozelo",
+          "idResposta": 1524,
+          "codigo": 966,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 6,
+          "texto": "Artroplastia de joelho",
+          "idResposta": 1525,
+          "codigo": 967,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 7,
+          "texto": "Fratura do plato tibial",
+          "idResposta": 1529,
+          "codigo": 971,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 8,
+          "texto": "Lesão de ligamento cruzado anterior joelho",
+          "idResposta": 1539,
+          "codigo": 981,
+          "origem": "id-resposta"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 1249,
+        "pergunta": 543,
+        "codPergunta": 531,
+        "ordem": "08",
+        "tipo": "8",
+        "classe": "TfRespComboTexto",
+        "componente": "cmp1249",
+        "componentePai": "cmp1247",
+        "idResposta": 1526,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "09",
+      "texto": "Cirurgia realizada- Plástica",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "open-choice",
+      "widget": "select-with-text",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 200,
+        "topo": 420,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Mama",
+          "idResposta": 1551,
+          "codigo": 993,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 2,
+          "texto": "Blefaroplastia",
+          "idResposta": 1552,
+          "codigo": 994,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 3,
+          "texto": "Rinoplastia",
+          "idResposta": 1553,
+          "codigo": 995,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 4,
+          "texto": "PCC Mama",
+          "idResposta": 1540,
+          "codigo": 982,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 5,
+          "texto": "PCC mama sem prótese",
+          "idResposta": 1541,
+          "codigo": 983,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 6,
+          "texto": "Lipoabdominoplastia",
+          "idResposta": 1542,
+          "codigo": 984,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 7,
+          "texto": "Prótese de glúteo",
+          "idResposta": 1543,
+          "codigo": 985,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 8,
+          "texto": "PCC Abdominoplastia",
+          "idResposta": 1544,
+          "codigo": 986,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 9,
+          "texto": "Lipoaspiração",
+          "idResposta": 1545,
+          "codigo": 987,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 10,
+          "texto": "PCC Lipoaspiração",
+          "idResposta": 1546,
+          "codigo": 988,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 11,
+          "texto": "Face lifting",
+          "idResposta": 1547,
+          "codigo": 989,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 12,
+          "texto": "Otoplastia",
+          "idResposta": 1548,
+          "codigo": 990,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 13,
+          "texto": "Mamoplastia redutora",
+          "idResposta": 1549,
+          "codigo": 991,
+          "origem": "id-resposta"
+        },
+        {
+          "indice": 14,
+          "texto": "Prótese de mama",
+          "idResposta": 1550,
+          "codigo": 992,
+          "origem": "id-resposta"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 1250,
+        "pergunta": 544,
+        "codPergunta": 532,
+        "ordem": "09",
+        "tipo": "8",
+        "classe": "TfRespComboTexto",
+        "componente": "cmp1250",
+        "componentePai": "cmp1247",
+        "idResposta": 1551,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "10",
+      "texto": "Cirurgia realizada",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "text",
+      "widget": "richtext",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 730,
+        "altura": 200,
+        "topo": 623,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1251,
+        "pergunta": 545,
+        "codPergunta": 533,
+        "ordem": "10",
+        "tipo": "5",
+        "classe": "TfRespTexto",
+        "componente": "cmp1251",
+        "componentePai": "cmp1247",
+        "idResposta": 1555,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": [
+    {
+      "linkId": "01.02",
+      "tipo": "escolha",
+      "detalhe": "rótulo do DFM diferente do cadastro da resposta (PRCADRESP)",
+      "indice": 5,
+      "opcao": "Fratura de tronozelo"
+    },
+    {
+      "linkId": "01.02",
+      "tipo": "escolha",
+      "detalhe": "rótulo do DFM diferente do cadastro da resposta (PRCADRESP)",
+      "indice": 7,
+      "opcao": "Fratura do plator tibial"
+    }
+  ]
+}

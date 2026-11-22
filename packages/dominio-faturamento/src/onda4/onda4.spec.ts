@@ -168,7 +168,10 @@ describe('regra 9: códigos de baixa confiança da onda', () => {
 
   it('legenda confirmada substitui a de baixa confiança; coluna fora da lista segue a regra geral', () => {
     expect(conferirCodigoOnda4('contaHospitalar.pacote', 'P', ['P'], { P: 'Pacote' }).legenda).toBe('Pacote');
-    expect(conferirCodigoOnda4('contaHospitalar.situacao', 'X', [])).toMatchObject({ aceito: true, recusa: null });
+    expect(conferirCodigoOnda4('contaHospitalar.situacao', 'X', [])).toMatchObject({
+      aceito: true,
+      recusa: null,
+    });
   });
 });
 

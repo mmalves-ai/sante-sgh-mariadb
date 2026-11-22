@@ -1,0 +1,106 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 62,
+    "codigo": "ENF33",
+    "descricao": "EVOLUÇÃO DE ENFERMAGEM CCIH",
+    "fase": 2
+  },
+  "impressaoLayout": "523e10ba20cc1c4f390a6b6aa42d19f24f4430a4d2d0824702bdf69ae4df1bac",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 2
+    }
+  ],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 0,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Evolução de enfermagem CCIH",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 723,
+            "altura": 266,
+            "topo": 17,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2691,
+            "pergunta": 1398,
+            "codPergunta": 1370,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2122",
+            "componentePai": "cmp2121",
+            "idResposta": 3693,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 739,
+        "altura": 293,
+        "topo": 3,
+        "esquerda": 7,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2690,
+        "pergunta": 1397,
+        "codPergunta": 1369,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2121",
+        "componentePai": "jvsBox",
+        "idResposta": 3692,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

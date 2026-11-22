@@ -1,0 +1,101 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 1,
+    "codigo": "MED01",
+    "descricao": "INTERCORRÊNCIAS MÉDICAS",
+    "fase": 2
+  },
+  "impressaoLayout": "8e1544f9138df0e5a0828e5b81e4a347ac6151756700630f068ca7c121fb250c",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 0,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Intercorrências médicas",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Intercorrências",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 259,
+            "topo": 14,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2,
+            "pergunta": 1,
+            "codPergunta": 1,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2",
+            "componentePai": "cmp1",
+            "idResposta": 1,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 745,
+        "altura": 467,
+        "topo": 1,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1,
+        "pergunta": 2,
+        "codPergunta": 2,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1",
+        "componentePai": "jvsBox",
+        "idResposta": 2,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

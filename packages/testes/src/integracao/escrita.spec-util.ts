@@ -35,10 +35,7 @@ export const raiz = resolve(import.meta.dirname, '../../../..');
 export const MARCA = 'SGH INT NUCLEO';
 
 /** Confere o cliente de teste; se faltar, cria-o pelo comando oficial (que recusa cliente já existente). */
-export function garantirCliente(
-  cliente = CLIENTE,
-  nome = 'Teste F2.2 onda 5 (integração do núcleo)',
-): void {
+export function garantirCliente(cliente = CLIENTE, nome = 'Teste F2.2 onda 5 (integração do núcleo)'): void {
   const comando = resolve(raiz, 'tools/db/criar_cliente.py');
   const lista = execFileSync('python3', ['-I', comando, '--listar'], { cwd: raiz, encoding: 'utf8' });
   if (new RegExp(`(^|\\W)${cliente}(\\W|$)`, 'm').test(lista)) return;

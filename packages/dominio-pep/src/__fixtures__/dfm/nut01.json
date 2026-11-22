@@ -1,0 +1,3695 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 17,
+    "codigo": "NUT01",
+    "descricao": "EMTN - FICHA DE AVALIAÇÃO E EVOLUÇÃO NUTRICIONAL",
+    "fase": 2
+  },
+  "impressaoLayout": "b93229c9702e95b9cf10b286f53eae12dec0fd1cf06612ca5f2485f202995a2c",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 68,
+    "vinculosAtivos": 32,
+    "vinculosInativos": 36,
+    "componentes": 57,
+    "componentesMapeados": 57,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 11,
+    "opcoesResolvidas": 30,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 4,
+    "porClasse": {
+      "TfRespCheckListBox": 4,
+      "TfRespComboBox": 1,
+      "TfRespComboTexto": 4,
+      "TfRespEdit": 18,
+      "TfRespEditUnidade": 21,
+      "TfRespTexto": 7,
+      "TGroupBoxPep": 2
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Evolução Nutricional",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 722,
+        "pergunta": 314,
+        "codPergunta": 302,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO NUTRICIONAL",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Diagnóstico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 80,
+            "topo": 27,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 724,
+            "pergunta": 316,
+            "codPergunta": 304,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp276",
+            "componentePai": "cmp303",
+            "idResposta": 970,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Motivo da internação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 110,
+            "topo": 14,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 755,
+            "pergunta": 299,
+            "codPergunta": 291,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp755",
+            "componentePai": "cmp723",
+            "idResposta": 952,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Indicação da TN",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 112,
+            "topo": 125,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 725,
+            "pergunta": 317,
+            "codPergunta": 305,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp725",
+            "componentePai": "cmp723",
+            "idResposta": 971,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Peso",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 202,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 726,
+            "pergunta": 318,
+            "codPergunta": 306,
+            "ordem": "0103",
+            "tipo": "6",
+            "classe": "TfRespEdit",
+            "componente": "cmp278",
+            "componentePai": "cmp303",
+            "idResposta": 972,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Dados antropométricos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.03.01",
+              "texto": "Peso",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 122,
+                "altura": 40,
+                "topo": 16,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 757,
+                "pergunta": 318,
+                "codPergunta": 306,
+                "ordem": "010301",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp757",
+                "componentePai": "cmp756",
+                "idResposta": 972,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.02",
+              "texto": "Altura",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 110,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 126,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 758,
+                "pergunta": 319,
+                "codPergunta": 307,
+                "ordem": "010302",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp758",
+                "componentePai": "cmp756",
+                "idResposta": 973,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.03",
+              "texto": "IMC",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 101,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 236,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "antropometria",
+                  "referencias": ["cmp757", "cmp758"],
+                  "contexto": [],
+                  "fonte": "if cmp757 <> 0 and cmp758 <> 0 then result:= (cmp757/(cmp758*cmp758)) else result:= 0;",
+                  "regra": {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "!=": [
+                              {
+                                "var": "cmp757"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "!=": [
+                              {
+                                "var": "cmp758"
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "/": [
+                          {
+                            "var": "cmp757"
+                          },
+                          {
+                            "*": [
+                              {
+                                "var": "cmp758"
+                              },
+                              {
+                                "var": "cmp758"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 759,
+                "pergunta": 320,
+                "codPergunta": 308,
+                "ordem": "010303",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp759",
+                "componentePai": "cmp756",
+                "idResposta": 974,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.04",
+              "texto": "Altura do joelho",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 175,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 337,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 760,
+                "pergunta": 345,
+                "codPergunta": 333,
+                "ordem": "010304",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp760",
+                "componentePai": "cmp756",
+                "idResposta": 1011,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.05",
+              "texto": "Circunferência do braço",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 4,
+                "largura": 221,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 514,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 770,
+                "pergunta": 346,
+                "codPergunta": 334,
+                "ordem": "010305",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp770",
+                "componentePai": "cmp756",
+                "idResposta": 1012,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.06",
+              "texto": "Circunferência do braço",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 761,
+                "pergunta": 346,
+                "codPergunta": 334,
+                "ordem": "010306",
+                "tipo": "6",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.06",
+              "texto": "Circunferência da panturrilha",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 4,
+                "largura": 233,
+                "altura": 40,
+                "topo": 55,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 771,
+                "pergunta": 347,
+                "codPergunta": 335,
+                "ordem": "010306",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp771",
+                "componentePai": "cmp756",
+                "idResposta": 1013,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.07",
+              "texto": "Circunferência da panturrilha",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 762,
+                "pergunta": 347,
+                "codPergunta": 335,
+                "ordem": "010307",
+                "tipo": "6",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.07",
+              "texto": "Etnia",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 2,
+                "largura": 137,
+                "altura": 40,
+                "topo": 54,
+                "esquerda": 236,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Branco",
+                  "idResposta": 1014,
+                  "codigo": 665,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Negro",
+                  "idResposta": 1015,
+                  "codigo": 666,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 772,
+                "pergunta": 348,
+                "codPergunta": 336,
+                "ordem": "010307",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp772",
+                "componentePai": "cmp756",
+                "idResposta": 1014,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.08",
+              "texto": "Etnia",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 763,
+                "pergunta": 348,
+                "codPergunta": 336,
+                "ordem": "010308",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.08",
+              "texto": "Altura estimada",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 184,
+                "altura": 40,
+                "topo": 54,
+                "esquerda": 375,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "antropometria",
+                  "referencias": ["cmp760", "cmp772"],
+                  "contexto": ["PacienteIdade", "PacienteSexo"],
+                  "fonte": "if cmp760 <> 0 and(PacienteIdade <= 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 1) then result:= (70.25 +(1.87 * cmp760) - 0.06 * PacienteIdade) else if cmp760 <> 0 and(PacienteIdade <= 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 2) then result:= (68.10 +(1.87 * cmp760) - 0.06 * PacienteIdade) else if cmp760 <> 0 and(PacienteIdade <= 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 1) then result:= (71.85 +(1.88 * cmp760)) else if cmp760 <> 0 and(PacienteIdade <= 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 2) then result:= (73.42 +(1.79 * cmp760)) else if cmp760 <> 0 and( PacienteIdade > 60) and ( PacienteSexo = \"M\")then result:= (64.19 +(2.04 * cmp760) - 0.04 * PacienteIdade) else if cmp760 <> 0 and( PacienteIdade > 60) and ( PacienteSexo = \"F\")then result:= (84.88 + (1.83 * cmp760) - 0.24 * PacienteIdade);",
+                  "regra": {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "!=": [
+                                      {
+                                        "var": "cmp760"
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "<=": [
+                                      {
+                                        "var": "PacienteIdade"
+                                      },
+                                      60
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "==": [
+                                  {
+                                    "var": "PacienteSexo"
+                                  },
+                                  "F"
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "==": [
+                              {
+                                "var": "cmp772ItemIndex"
+                              },
+                              1
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "-": [
+                          {
+                            "+": [
+                              70.25,
+                              {
+                                "*": [
+                                  1.87,
+                                  {
+                                    "var": "cmp760"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "*": [
+                              0.06,
+                              {
+                                "var": "PacienteIdade"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "!=": [
+                                          {
+                                            "var": "cmp760"
+                                          },
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "<=": [
+                                          {
+                                            "var": "PacienteIdade"
+                                          },
+                                          60
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "PacienteSexo"
+                                      },
+                                      "F"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp772ItemIndex"
+                                  },
+                                  2
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "-": [
+                              {
+                                "+": [
+                                  68.1,
+                                  {
+                                    "*": [
+                                      1.87,
+                                      {
+                                        "var": "cmp760"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "*": [
+                                  0.06,
+                                  {
+                                    "var": "PacienteIdade"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "if": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "!=": [
+                                              {
+                                                "var": "cmp760"
+                                              },
+                                              0
+                                            ]
+                                          },
+                                          {
+                                            "<=": [
+                                              {
+                                                "var": "PacienteIdade"
+                                              },
+                                              60
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "PacienteSexo"
+                                          },
+                                          "M"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp772ItemIndex"
+                                      },
+                                      1
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "+": [
+                                  71.85,
+                                  {
+                                    "*": [
+                                      1.88,
+                                      {
+                                        "var": "cmp760"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "if": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "!=": [
+                                                  {
+                                                    "var": "cmp760"
+                                                  },
+                                                  0
+                                                ]
+                                              },
+                                              {
+                                                "<=": [
+                                                  {
+                                                    "var": "PacienteIdade"
+                                                  },
+                                                  60
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "==": [
+                                              {
+                                                "var": "PacienteSexo"
+                                              },
+                                              "M"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "cmp772ItemIndex"
+                                          },
+                                          2
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "+": [
+                                      73.42,
+                                      {
+                                        "*": [
+                                          1.79,
+                                          {
+                                            "var": "cmp760"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "if": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "!=": [
+                                                  {
+                                                    "var": "cmp760"
+                                                  },
+                                                  0
+                                                ]
+                                              },
+                                              {
+                                                ">": [
+                                                  {
+                                                    "var": "PacienteIdade"
+                                                  },
+                                                  60
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "==": [
+                                              {
+                                                "var": "PacienteSexo"
+                                              },
+                                              "M"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "-": [
+                                          {
+                                            "+": [
+                                              64.19,
+                                              {
+                                                "*": [
+                                                  2.04,
+                                                  {
+                                                    "var": "cmp760"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "*": [
+                                              0.04,
+                                              {
+                                                "var": "PacienteIdade"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "if": [
+                                          {
+                                            "and": [
+                                              {
+                                                "and": [
+                                                  {
+                                                    "!=": [
+                                                      {
+                                                        "var": "cmp760"
+                                                      },
+                                                      0
+                                                    ]
+                                                  },
+                                                  {
+                                                    ">": [
+                                                      {
+                                                        "var": "PacienteIdade"
+                                                      },
+                                                      60
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "==": [
+                                                  {
+                                                    "var": "PacienteSexo"
+                                                  },
+                                                  "F"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "-": [
+                                              {
+                                                "+": [
+                                                  84.88,
+                                                  {
+                                                    "*": [
+                                                      1.83,
+                                                      {
+                                                        "var": "cmp760"
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "*": [
+                                                  0.24,
+                                                  {
+                                                    "var": "PacienteIdade"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          null
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 773,
+                "pergunta": 349,
+                "codPergunta": 337,
+                "ordem": "010308",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp773",
+                "componentePai": "cmp756",
+                "idResposta": 1016,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.09",
+              "texto": "Altura estimada",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": "cm",
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 764,
+                "pergunta": 349,
+                "codPergunta": 337,
+                "ordem": "010309",
+                "tipo": "6",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.09",
+              "texto": "Peso estimado",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": "kg",
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 175,
+                "altura": 40,
+                "topo": 54,
+                "esquerda": 560,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "antropometria",
+                  "referencias": ["cmp760", "cmp770", "cmp772"],
+                  "contexto": ["PacienteIdade", "PacienteSexo"],
+                  "fonte": "if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade <= 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 1) then result:= ((cmp760 * 1.01) + (cmp770 * 2.81) - 60.04) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade <= 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 2) then result:= ((cmp760 * 1.24) + (cmp770 * 2.97) - 82.48) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade <= 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 1) then result:= ((cmp760 * 1.19) + (cmp770 * 3.21) - 86.82) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade <= 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 2) then result:= ((cmp760 * 1.09) + (cmp770 * 3.14) - 83.72) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade > 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 1) then result:= ((cmp760 * 1.09) + (cmp770 * 2.68) - 65.51) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade > 60) and (PacienteSexo = \"F\") and (cmp772ItemIndex = 2) then result:= ((cmp760 * 1.50) + (cmp770 * 2.58) - 84.22) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade > 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 1) then result:= ((cmp760 * 1.10) + (cmp770 * 3.07) - 75.81) else if cmp760 <> 0 and cmp770 <>0 and(PacienteIdade > 60) and (PacienteSexo = \"M\") and (cmp772ItemIndex = 2) then result:= ((cmp760 * 0.44) + (cmp770 * 2.86) - 39.21);",
+                  "regra": {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "!=": [
+                                          {
+                                            "var": "cmp760"
+                                          },
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "!=": [
+                                          {
+                                            "var": "cmp770"
+                                          },
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "<=": [
+                                      {
+                                        "var": "PacienteIdade"
+                                      },
+                                      60
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "==": [
+                                  {
+                                    "var": "PacienteSexo"
+                                  },
+                                  "F"
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "==": [
+                              {
+                                "var": "cmp772ItemIndex"
+                              },
+                              1
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "-": [
+                          {
+                            "+": [
+                              {
+                                "*": [
+                                  {
+                                    "var": "cmp760"
+                                  },
+                                  1.01
+                                ]
+                              },
+                              {
+                                "*": [
+                                  {
+                                    "var": "cmp770"
+                                  },
+                                  2.81
+                                ]
+                              }
+                            ]
+                          },
+                          60.04
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "!=": [
+                                              {
+                                                "var": "cmp760"
+                                              },
+                                              0
+                                            ]
+                                          },
+                                          {
+                                            "!=": [
+                                              {
+                                                "var": "cmp770"
+                                              },
+                                              0
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "<=": [
+                                          {
+                                            "var": "PacienteIdade"
+                                          },
+                                          60
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "PacienteSexo"
+                                      },
+                                      "F"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "==": [
+                                  {
+                                    "var": "cmp772ItemIndex"
+                                  },
+                                  2
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "-": [
+                              {
+                                "+": [
+                                  {
+                                    "*": [
+                                      {
+                                        "var": "cmp760"
+                                      },
+                                      1.24
+                                    ]
+                                  },
+                                  {
+                                    "*": [
+                                      {
+                                        "var": "cmp770"
+                                      },
+                                      2.97
+                                    ]
+                                  }
+                                ]
+                              },
+                              82.48
+                            ]
+                          },
+                          {
+                            "if": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "!=": [
+                                                  {
+                                                    "var": "cmp760"
+                                                  },
+                                                  0
+                                                ]
+                                              },
+                                              {
+                                                "!=": [
+                                                  {
+                                                    "var": "cmp770"
+                                                  },
+                                                  0
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "<=": [
+                                              {
+                                                "var": "PacienteIdade"
+                                              },
+                                              60
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "PacienteSexo"
+                                          },
+                                          "M"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "==": [
+                                      {
+                                        "var": "cmp772ItemIndex"
+                                      },
+                                      1
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "-": [
+                                  {
+                                    "+": [
+                                      {
+                                        "*": [
+                                          {
+                                            "var": "cmp760"
+                                          },
+                                          1.19
+                                        ]
+                                      },
+                                      {
+                                        "*": [
+                                          {
+                                            "var": "cmp770"
+                                          },
+                                          3.21
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  86.82
+                                ]
+                              },
+                              {
+                                "if": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "and": [
+                                                  {
+                                                    "!=": [
+                                                      {
+                                                        "var": "cmp760"
+                                                      },
+                                                      0
+                                                    ]
+                                                  },
+                                                  {
+                                                    "!=": [
+                                                      {
+                                                        "var": "cmp770"
+                                                      },
+                                                      0
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "<=": [
+                                                  {
+                                                    "var": "PacienteIdade"
+                                                  },
+                                                  60
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "==": [
+                                              {
+                                                "var": "PacienteSexo"
+                                              },
+                                              "M"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "==": [
+                                          {
+                                            "var": "cmp772ItemIndex"
+                                          },
+                                          2
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "-": [
+                                      {
+                                        "+": [
+                                          {
+                                            "*": [
+                                              {
+                                                "var": "cmp760"
+                                              },
+                                              1.09
+                                            ]
+                                          },
+                                          {
+                                            "*": [
+                                              {
+                                                "var": "cmp770"
+                                              },
+                                              3.14
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      83.72
+                                    ]
+                                  },
+                                  {
+                                    "if": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "and": [
+                                                  {
+                                                    "and": [
+                                                      {
+                                                        "!=": [
+                                                          {
+                                                            "var": "cmp760"
+                                                          },
+                                                          0
+                                                        ]
+                                                      },
+                                                      {
+                                                        "!=": [
+                                                          {
+                                                            "var": "cmp770"
+                                                          },
+                                                          0
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    ">": [
+                                                      {
+                                                        "var": "PacienteIdade"
+                                                      },
+                                                      60
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "==": [
+                                                  {
+                                                    "var": "PacienteSexo"
+                                                  },
+                                                  "F"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "==": [
+                                              {
+                                                "var": "cmp772ItemIndex"
+                                              },
+                                              1
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "-": [
+                                          {
+                                            "+": [
+                                              {
+                                                "*": [
+                                                  {
+                                                    "var": "cmp760"
+                                                  },
+                                                  1.09
+                                                ]
+                                              },
+                                              {
+                                                "*": [
+                                                  {
+                                                    "var": "cmp770"
+                                                  },
+                                                  2.68
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          65.51
+                                        ]
+                                      },
+                                      {
+                                        "if": [
+                                          {
+                                            "and": [
+                                              {
+                                                "and": [
+                                                  {
+                                                    "and": [
+                                                      {
+                                                        "and": [
+                                                          {
+                                                            "!=": [
+                                                              {
+                                                                "var": "cmp760"
+                                                              },
+                                                              0
+                                                            ]
+                                                          },
+                                                          {
+                                                            "!=": [
+                                                              {
+                                                                "var": "cmp770"
+                                                              },
+                                                              0
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        ">": [
+                                                          {
+                                                            "var": "PacienteIdade"
+                                                          },
+                                                          60
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "==": [
+                                                      {
+                                                        "var": "PacienteSexo"
+                                                      },
+                                                      "F"
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "==": [
+                                                  {
+                                                    "var": "cmp772ItemIndex"
+                                                  },
+                                                  2
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "-": [
+                                              {
+                                                "+": [
+                                                  {
+                                                    "*": [
+                                                      {
+                                                        "var": "cmp760"
+                                                      },
+                                                      1.5
+                                                    ]
+                                                  },
+                                                  {
+                                                    "*": [
+                                                      {
+                                                        "var": "cmp770"
+                                                      },
+                                                      2.58
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              84.22
+                                            ]
+                                          },
+                                          {
+                                            "if": [
+                                              {
+                                                "and": [
+                                                  {
+                                                    "and": [
+                                                      {
+                                                        "and": [
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "!=": [
+                                                                  {
+                                                                    "var": "cmp760"
+                                                                  },
+                                                                  0
+                                                                ]
+                                                              },
+                                                              {
+                                                                "!=": [
+                                                                  {
+                                                                    "var": "cmp770"
+                                                                  },
+                                                                  0
+                                                                ]
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            ">": [
+                                                              {
+                                                                "var": "PacienteIdade"
+                                                              },
+                                                              60
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "==": [
+                                                          {
+                                                            "var": "PacienteSexo"
+                                                          },
+                                                          "M"
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "==": [
+                                                      {
+                                                        "var": "cmp772ItemIndex"
+                                                      },
+                                                      1
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "-": [
+                                                  {
+                                                    "+": [
+                                                      {
+                                                        "*": [
+                                                          {
+                                                            "var": "cmp760"
+                                                          },
+                                                          1.1
+                                                        ]
+                                                      },
+                                                      {
+                                                        "*": [
+                                                          {
+                                                            "var": "cmp770"
+                                                          },
+                                                          3.07
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  75.81
+                                                ]
+                                              },
+                                              {
+                                                "if": [
+                                                  {
+                                                    "and": [
+                                                      {
+                                                        "and": [
+                                                          {
+                                                            "and": [
+                                                              {
+                                                                "and": [
+                                                                  {
+                                                                    "!=": [
+                                                                      {
+                                                                        "var": "cmp760"
+                                                                      },
+                                                                      0
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "!=": [
+                                                                      {
+                                                                        "var": "cmp770"
+                                                                      },
+                                                                      0
+                                                                    ]
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                ">": [
+                                                                  {
+                                                                    "var": "PacienteIdade"
+                                                                  },
+                                                                  60
+                                                                ]
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "==": [
+                                                              {
+                                                                "var": "PacienteSexo"
+                                                              },
+                                                              "M"
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "==": [
+                                                          {
+                                                            "var": "cmp772ItemIndex"
+                                                          },
+                                                          2
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "-": [
+                                                      {
+                                                        "+": [
+                                                          {
+                                                            "*": [
+                                                              {
+                                                                "var": "cmp760"
+                                                              },
+                                                              0.44
+                                                            ]
+                                                          },
+                                                          {
+                                                            "*": [
+                                                              {
+                                                                "var": "cmp770"
+                                                              },
+                                                              2.86
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      39.21
+                                                    ]
+                                                  },
+                                                  null
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 774,
+                "pergunta": 350,
+                "codPergunta": 338,
+                "ordem": "010309",
+                "tipo": "6",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp774",
+                "componentePai": "cmp756",
+                "idResposta": 1017,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.10",
+              "texto": "Peso estimado",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": "kg",
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 765,
+                "pergunta": 350,
+                "codPergunta": 338,
+                "ordem": "010310",
+                "tipo": "6",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 108,
+            "topo": 243,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 756,
+            "pergunta": 8,
+            "codPergunta": 8,
+            "ordem": "0103",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp756",
+            "componentePai": "cmp723",
+            "idResposta": 9,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Altura",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 202,
+            "esquerda": 151,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 727,
+            "pergunta": 319,
+            "codPergunta": 307,
+            "ordem": "0104",
+            "tipo": "6",
+            "classe": "TfRespEdit",
+            "componente": "cmp279",
+            "componentePai": "cmp303",
+            "idResposta": 973,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "VCT",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 115,
+            "altura": 40,
+            "topo": 353,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 766,
+            "pergunta": 321,
+            "codPergunta": 309,
+            "ordem": "0104",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp766",
+            "componentePai": "cmp723",
+            "idResposta": 975,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "IMC",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 202,
+            "esquerda": 292,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "expressoes": [
+            {
+              "tipo": "calcular",
+              "padrao": "antropometria",
+              "referencias": ["cmp278", "cmp279"],
+              "contexto": [],
+              "fonte": "if cmp278 <> 0 and cmp279 <> 0 then result := int(cmp278/(cmp279*cmp279));",
+              "regra": {
+                "if": [
+                  {
+                    "and": [
+                      {
+                        "!=": [
+                          {
+                            "var": "cmp278"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "!=": [
+                          {
+                            "var": "cmp279"
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "int": [
+                      {
+                        "/": [
+                          {
+                            "var": "cmp278"
+                          },
+                          {
+                            "*": [
+                              {
+                                "var": "cmp279"
+                              },
+                              {
+                                "var": "cmp279"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  null
+                ]
+              },
+              "convertida": true,
+              "motivoConversao": null
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 728,
+            "pergunta": 320,
+            "codPergunta": 308,
+            "ordem": "0105",
+            "tipo": "6",
+            "classe": "TfRespEdit",
+            "componente": "cmp280",
+            "componentePai": "cmp303",
+            "idResposta": 974,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Dieta",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 100,
+            "altura": 40,
+            "topo": 352,
+            "esquerda": 125,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 767,
+            "pergunta": 322,
+            "codPergunta": 310,
+            "ordem": "0105",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp767",
+            "componentePai": "cmp723",
+            "idResposta": 976,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "VCT",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 202,
+            "esquerda": 433,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 729,
+            "pergunta": 321,
+            "codPergunta": 309,
+            "ordem": "0106",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp281",
+            "componentePai": "cmp303",
+            "idResposta": 975,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Vol/Kcal prescrito",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 149,
+            "altura": 40,
+            "topo": 352,
+            "esquerda": 225,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 768,
+            "pergunta": 323,
+            "codPergunta": 311,
+            "ordem": "0106",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp768",
+            "componentePai": "cmp723",
+            "idResposta": 977,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Dieta",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 202,
+            "esquerda": 574,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 730,
+            "pergunta": 322,
+            "codPergunta": 310,
+            "ordem": "0107",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp282",
+            "componentePai": "cmp303",
+            "idResposta": 976,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Vol/kcal administ.",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 143,
+            "altura": 40,
+            "topo": 352,
+            "esquerda": 374,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 769,
+            "pergunta": 324,
+            "codPergunta": 312,
+            "ordem": "0107",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp769",
+            "componentePai": "cmp723",
+            "idResposta": 978,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Vol/Kcal prescrito",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 731,
+            "pergunta": 323,
+            "codPergunta": 311,
+            "ordem": "0108",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp283",
+            "componentePai": "cmp303",
+            "idResposta": 977,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "% VCT",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 111,
+            "altura": 40,
+            "topo": 352,
+            "esquerda": 518,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 775,
+            "pergunta": 325,
+            "codPergunta": 313,
+            "ordem": "0108",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp775",
+            "componentePai": "cmp723",
+            "idResposta": 979,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Vol/kcal administ.",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 151,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 732,
+            "pergunta": 324,
+            "codPergunta": 312,
+            "ordem": "0109",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp284",
+            "componentePai": "cmp303",
+            "idResposta": 978,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Kcal/Kg",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 113,
+            "altura": 40,
+            "topo": 351,
+            "esquerda": 629,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 776,
+            "pergunta": 326,
+            "codPergunta": 314,
+            "ordem": "0109",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp776",
+            "componentePai": "cmp723",
+            "idResposta": 980,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "% VCT",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 292,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 733,
+            "pergunta": 325,
+            "codPergunta": 313,
+            "ordem": "0110",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp285",
+            "componentePai": "cmp303",
+            "idResposta": 979,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Ptn/Kg",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 114,
+            "altura": 40,
+            "topo": 392,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 777,
+            "pergunta": 327,
+            "codPergunta": 315,
+            "ordem": "0110",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp777",
+            "componentePai": "cmp723",
+            "idResposta": 981,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Kcal/Kg",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 433,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 734,
+            "pergunta": 326,
+            "codPergunta": 314,
+            "ordem": "0111",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp286",
+            "componentePai": "cmp303",
+            "idResposta": 980,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Fibras",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 100,
+            "altura": 40,
+            "topo": 391,
+            "esquerda": 124,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 778,
+            "pergunta": 329,
+            "codPergunta": 317,
+            "ordem": "0111",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp778",
+            "componentePai": "cmp723",
+            "idResposta": 983,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Ptn/Kg",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 574,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 735,
+            "pergunta": 327,
+            "codPergunta": 315,
+            "ordem": "0112",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp287",
+            "componentePai": "cmp303",
+            "idResposta": 981,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "Acréscimos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 149,
+            "altura": 40,
+            "topo": 391,
+            "esquerda": 225,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 779,
+            "pergunta": 330,
+            "codPergunta": 318,
+            "ordem": "0112",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp779",
+            "componentePai": "cmp723",
+            "idResposta": 984,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "Etapas/vol",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 306,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 736,
+            "pergunta": 328,
+            "codPergunta": 316,
+            "ordem": "0113",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp288",
+            "componentePai": "cmp303",
+            "idResposta": 982,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "Resíduo",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 143,
+            "altura": 40,
+            "topo": 391,
+            "esquerda": 374,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 780,
+            "pergunta": 331,
+            "codPergunta": 319,
+            "ordem": "0113",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp780",
+            "componentePai": "cmp723",
+            "idResposta": 985,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Fibras",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 306,
+            "esquerda": 150,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 737,
+            "pergunta": 329,
+            "codPergunta": 317,
+            "ordem": "0114",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp289",
+            "componentePai": "cmp303",
+            "idResposta": 983,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "Infusão",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 111,
+            "altura": 40,
+            "topo": 391,
+            "esquerda": 518,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 781,
+            "pergunta": 332,
+            "codPergunta": 320,
+            "ordem": "0114",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp781",
+            "componentePai": "cmp723",
+            "idResposta": 986,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.15",
+          "texto": "Acréscimos",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 306,
+            "esquerda": 291,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 738,
+            "pergunta": 330,
+            "codPergunta": 318,
+            "ordem": "0115",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp290",
+            "componentePai": "cmp303",
+            "idResposta": 984,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.15",
+          "texto": "Evacuação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 85,
+            "topo": 433,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 990,
+              "codigo": 653,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 991,
+              "codigo": 654,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 782,
+            "pergunta": 335,
+            "codPergunta": 323,
+            "ordem": "0115",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp782",
+            "componentePai": "cmp723",
+            "idResposta": 990,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.16",
+          "texto": "Resíduo",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 306,
+            "esquerda": 432,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 739,
+            "pergunta": 331,
+            "codPergunta": 319,
+            "ordem": "0116",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp291",
+            "componentePai": "cmp303",
+            "idResposta": 985,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.16",
+          "texto": "Consistência",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 84,
+            "topo": 518,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Líquido",
+              "idResposta": 993,
+              "codigo": 655,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Pastoso",
+              "idResposta": 994,
+              "codigo": 656,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Semilíquido",
+              "idResposta": 995,
+              "codigo": 657,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 783,
+            "pergunta": 337,
+            "codPergunta": 325,
+            "ordem": "0116",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp783",
+            "componentePai": "cmp723",
+            "idResposta": 993,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.17",
+          "texto": "Infusão",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 306,
+            "esquerda": 573,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 740,
+            "pergunta": 332,
+            "codPergunta": 320,
+            "ordem": "0117",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp292",
+            "componentePai": "cmp303",
+            "idResposta": 986,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.17",
+          "texto": "Diurese",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 140,
+            "altura": 40,
+            "topo": 603,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 784,
+            "pergunta": 336,
+            "codPergunta": 324,
+            "ordem": "0117",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp784",
+            "componentePai": "cmp723",
+            "idResposta": 992,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.18",
+          "texto": "Assinatura",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 741,
+            "pergunta": 333,
+            "codPergunta": 321,
+            "ordem": "0118",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.18",
+          "texto": "HGT",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 140,
+            "altura": 40,
+            "topo": 603,
+            "esquerda": 145,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 785,
+            "pergunta": 338,
+            "codPergunta": 326,
+            "ordem": "0118",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp785",
+            "componentePai": "cmp723",
+            "idResposta": 996,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.19",
+          "texto": "Evacuação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 742,
+            "pergunta": 334,
+            "codPergunta": 322,
+            "ordem": "0119",
+            "tipo": "12",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.19",
+          "texto": "Evacuação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 103,
+            "topo": 356,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 990,
+              "codigo": 653,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 991,
+              "codigo": 654,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 743,
+            "pergunta": 335,
+            "codPergunta": 323,
+            "ordem": "0119",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp441",
+            "componentePai": "cmp303",
+            "idResposta": 990,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.19",
+          "texto": "Antibiotico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 75,
+            "topo": 642,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 786,
+            "pergunta": 339,
+            "codPergunta": 327,
+            "ordem": "0119",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp786",
+            "componentePai": "cmp723",
+            "idResposta": 997,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.20",
+          "texto": "Diurese",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 744,
+            "pergunta": 336,
+            "codPergunta": 324,
+            "ordem": "0120",
+            "tipo": "11",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.20",
+          "texto": "Consistência",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 98,
+            "topo": 462,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Líquido",
+              "idResposta": 993,
+              "codigo": 655,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Pastoso",
+              "idResposta": 994,
+              "codigo": 656,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Semilíquido",
+              "idResposta": 995,
+              "codigo": 657,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 745,
+            "pergunta": 337,
+            "codPergunta": 325,
+            "ordem": "0120",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp296",
+            "componentePai": "cmp303",
+            "idResposta": 993,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.20",
+          "texto": "Procinético",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 101,
+            "topo": 718,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 1000,
+              "codigo": 653,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 1001,
+              "codigo": 654,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 787,
+            "pergunta": 341,
+            "codPergunta": 329,
+            "ordem": "0120",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp787",
+            "componentePai": "cmp723",
+            "idResposta": 1000,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.21",
+          "texto": "Resíduo",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 120,
+            "altura": 40,
+            "topo": 581,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 746,
+            "pergunta": 331,
+            "codPergunta": 319,
+            "ordem": "0121",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp297",
+            "componentePai": "cmp303",
+            "idResposta": 985,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.21",
+          "texto": "Conduta",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 99,
+            "topo": 821,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Mantida",
+              "idResposta": 1002,
+              "codigo": 658,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Observar HGT",
+              "idResposta": 1003,
+              "codigo": 659,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Evoluo NE",
+              "idResposta": 1004,
+              "codigo": 660,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Reduzo NE",
+              "idResposta": 1005,
+              "codigo": 661,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Troca NE",
+              "idResposta": 1006,
+              "codigo": 662,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Observar Resíduo",
+              "idResposta": 1007,
+              "codigo": 663,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Observar FI",
+              "idResposta": 1008,
+              "codigo": 664,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 788,
+            "pergunta": 342,
+            "codPergunta": 330,
+            "ordem": "0121",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp788",
+            "componentePai": "cmp723",
+            "idResposta": 1002,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.22",
+          "texto": "Diurese",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 120,
+            "altura": 40,
+            "topo": 581,
+            "esquerda": 149,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 747,
+            "pergunta": 336,
+            "codPergunta": 324,
+            "ordem": "0122",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp298",
+            "componentePai": "cmp303",
+            "idResposta": 992,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.22",
+          "texto": "Observações",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 92,
+            "topo": 920,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 789,
+            "pergunta": 343,
+            "codPergunta": 331,
+            "ordem": "0122",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp789",
+            "componentePai": "cmp723",
+            "idResposta": 1009,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.23",
+          "texto": "HGT",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "string",
+          "widget": "text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 581,
+            "esquerda": 293,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 748,
+            "pergunta": 338,
+            "codPergunta": 326,
+            "ordem": "0123",
+            "tipo": "11",
+            "classe": "TfRespEdit",
+            "componente": "cmp299",
+            "componentePai": "cmp303",
+            "idResposta": 996,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.24",
+          "texto": "Antibiotico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 91,
+            "topo": 636,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 749,
+            "pergunta": 339,
+            "codPergunta": 327,
+            "ordem": "0124",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp300",
+            "componentePai": "cmp303",
+            "idResposta": 997,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.25",
+          "texto": "Procinético",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 750,
+            "pergunta": 340,
+            "codPergunta": 328,
+            "ordem": "0125",
+            "tipo": "12",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.25",
+          "texto": "Procinético",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 76,
+            "topo": 737,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 1000,
+              "codigo": 653,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 1001,
+              "codigo": 654,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 751,
+            "pergunta": 341,
+            "codPergunta": 329,
+            "ordem": "0125",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp442",
+            "componentePai": "cmp303",
+            "idResposta": 1000,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.26",
+          "texto": "Conduta",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 156,
+            "topo": 828,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Mantida",
+              "idResposta": 1002,
+              "codigo": 658,
+              "origem": "ordem"
+            },
+            {
+              "indice": 1,
+              "texto": "Observar HGT",
+              "idResposta": 1003,
+              "codigo": 659,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Evoluo NE",
+              "idResposta": 1004,
+              "codigo": 660,
+              "origem": "ordem"
+            },
+            {
+              "indice": 3,
+              "texto": "Reduzo NE",
+              "idResposta": 1005,
+              "codigo": 661,
+              "origem": "ordem"
+            },
+            {
+              "indice": 4,
+              "texto": "Troca NE",
+              "idResposta": 1006,
+              "codigo": 662,
+              "origem": "ordem"
+            },
+            {
+              "indice": 5,
+              "texto": "Observar Resíduo",
+              "idResposta": 1007,
+              "codigo": 663,
+              "origem": "ordem"
+            },
+            {
+              "indice": 6,
+              "texto": "Observar FI",
+              "idResposta": 1008,
+              "codigo": 664,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 752,
+            "pergunta": 342,
+            "codPergunta": 330,
+            "ordem": "0126",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp302",
+            "componentePai": "cmp303",
+            "idResposta": 1002,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.27",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 131,
+            "topo": 998,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 753,
+            "pergunta": 343,
+            "codPergunta": 331,
+            "ordem": "0127",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp443",
+            "componentePai": "cmp303",
+            "idResposta": 1009,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.27",
+          "texto": "Obs",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 754,
+            "pergunta": 344,
+            "codPergunta": 332,
+            "ordem": "0127",
+            "tipo": "11",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 1016,
+        "topo": 6,
+        "esquerda": 3,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 723,
+        "pergunta": 315,
+        "codPergunta": 303,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp723",
+        "componentePai": "jvsBox",
+        "idResposta": 969,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

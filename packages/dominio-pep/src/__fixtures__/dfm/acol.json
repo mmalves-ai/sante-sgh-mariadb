@@ -1,0 +1,587 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 39,
+    "codigo": "ACOL",
+    "descricao": "ACOLHIMENTO",
+    "fase": 2
+  },
+  "impressaoLayout": "6dd8616ee2757cdf85baf43c4cd7d8b9ed5ff002f03abfac224d9f61eb21f6d5",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 11,
+    "vinculosAtivos": 11,
+    "vinculosInativos": 0,
+    "componentes": 11,
+    "componentesMapeados": 11,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 17,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 3,
+      "TfRespColunas": 1,
+      "TfRespComboTexto": 1,
+      "TfRespTexto": 5,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "ACOLHIMENTO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Queixa Principal",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 749,
+            "altura": 101,
+            "topo": 13,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1695,
+            "pergunta": 782,
+            "codPergunta": 766,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1695",
+            "componentePai": "cmp1694",
+            "idResposta": 2297,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Tempo de Sintomas",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 749,
+            "altura": 65,
+            "topo": 112,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1696,
+            "pergunta": 783,
+            "codPergunta": 767,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1696",
+            "componentePai": "cmp1694",
+            "idResposta": 2298,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Alergias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 6,
+            "largura": 370,
+            "altura": 108,
+            "topo": 174,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1697,
+            "pergunta": 784,
+            "codPergunta": 768,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1697",
+            "componentePai": "cmp1694",
+            "idResposta": 2299,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Medicamento de uso regular",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 6,
+            "largura": 370,
+            "altura": 108,
+            "topo": 174,
+            "esquerda": 378,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1698,
+            "pergunta": 785,
+            "codPergunta": 769,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1698",
+            "componentePai": "cmp1694",
+            "idResposta": 2300,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Sinais Vitais",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "grid",
+          "widget": "table-repeater",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 741,
+            "altura": 105,
+            "topo": 283,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "colunasGrade": [
+            {
+              "coluna": 1,
+              "pergunta": 787,
+              "idResposta": 2302,
+              "titulo": "PA",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 2,
+              "pergunta": 788,
+              "idResposta": 2303,
+              "titulo": "Saturação de O2",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 3,
+              "pergunta": 789,
+              "idResposta": 2304,
+              "titulo": "Temperatura",
+              "tipo": "5",
+              "unidade": null
+            },
+            {
+              "coluna": 4,
+              "pergunta": 790,
+              "idResposta": 2305,
+              "titulo": "FC",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 5,
+              "pergunta": 791,
+              "idResposta": 2306,
+              "titulo": "FR",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 6,
+              "pergunta": 792,
+              "idResposta": 2307,
+              "titulo": "HGT",
+              "tipo": "4",
+              "unidade": null
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1699,
+            "pergunta": 786,
+            "codPergunta": 770,
+            "ordem": "0105",
+            "tipo": "9",
+            "classe": "TfRespColunas",
+            "componente": "cmp1699",
+            "componentePai": "cmp1694",
+            "idResposta": 2301,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Comorbidades",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 743,
+            "altura": 87,
+            "topo": 391,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Doença Arterial/coronariana",
+              "idResposta": 2308,
+              "codigo": 1491,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "DPOC/Asma",
+              "idResposta": 2309,
+              "codigo": 1492,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Diabetes Mellitus",
+              "idResposta": 2310,
+              "codigo": 1493,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "HAS",
+              "idResposta": 2311,
+              "codigo": 1494,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1700,
+            "pergunta": 793,
+            "codPergunta": 771,
+            "ordem": "0106",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1700",
+            "componentePai": "cmp1694",
+            "idResposta": 2308,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Sintoma Respiratório",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 741,
+            "altura": 66,
+            "topo": 476,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1701,
+            "pergunta": 794,
+            "codPergunta": 772,
+            "ordem": "0107",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1701",
+            "componentePai": "cmp1694",
+            "idResposta": 2312,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Sintomas: Nível I",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 270,
+            "altura": 155,
+            "topo": 546,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Tosse",
+              "idResposta": 2313,
+              "codigo": 1495,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Dor de Garganta",
+              "idResposta": 2314,
+              "codigo": 1496,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Congestão Nasal",
+              "idResposta": 2315,
+              "codigo": 1497,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Cefaleia",
+              "idResposta": 2316,
+              "codigo": 1498,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Mialgia",
+              "idResposta": 2317,
+              "codigo": 1499,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1702,
+            "pergunta": 795,
+            "codPergunta": 773,
+            "ordem": "0108",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1702",
+            "componentePai": "cmp1694",
+            "idResposta": 2313,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Sintomas: Nível II",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 265,
+            "altura": 154,
+            "topo": 547,
+            "esquerda": 283,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Febre",
+              "idResposta": 2318,
+              "codigo": 1016,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Dispneia",
+              "idResposta": 2319,
+              "codigo": 329,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Diarréia",
+              "idResposta": 2320,
+              "codigo": 285,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1703,
+            "pergunta": 796,
+            "codPergunta": 774,
+            "ordem": "0109",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1703",
+            "componentePai": "cmp1694",
+            "idResposta": 2318,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Prioridade Clínica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 53,
+            "topo": 703,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Azul",
+              "idResposta": 2321,
+              "codigo": 1500,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Verde",
+              "idResposta": 2322,
+              "codigo": 1501,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Amarelo",
+              "idResposta": 2323,
+              "codigo": 1502,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Laranja",
+              "idResposta": 2324,
+              "codigo": 1503,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Vermelho",
+              "idResposta": 2325,
+              "codigo": 1504,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1704,
+            "pergunta": 797,
+            "codPergunta": 775,
+            "ordem": "0110",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1704",
+            "componentePai": "cmp1694",
+            "idResposta": 2321,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 751,
+        "altura": 780,
+        "topo": 10,
+        "esquerda": 3,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1694,
+        "pergunta": 781,
+        "codPergunta": 765,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1694",
+        "componentePai": "jvsBox",
+        "idResposta": 2296,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

@@ -1,0 +1,1288 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 63,
+    "codigo": "PSIC01",
+    "descricao": "EVOLUÇÃO DE PSICOLOGIA",
+    "fase": 2
+  },
+  "impressaoLayout": "c4e46620e84ce9826bbe775963016bb8eb40540f276120e2836eff1e43f867df",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 25
+    },
+    {
+      "versao": 2,
+      "componentes": 25
+    }
+  ],
+  "resumo": {
+    "vinculos": 26,
+    "vinculosAtivos": 25,
+    "vinculosInativos": 1,
+    "componentes": 26,
+    "componentesMapeados": 26,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 46,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 12,
+      "TfRespComboBox": 3,
+      "TfRespTexto": 6,
+      "TGroupBoxPep": 5
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO DE PSICOLOGIA",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 745,
+        "altura": 1685,
+        "topo": 2,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2693,
+        "pergunta": 1400,
+        "codPergunta": 1372,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2020",
+        "componentePai": "jvsBox",
+        "idResposta": 3695,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "RESPOSTA DE PARECER DA PSICOLOGIA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "INDICAÇÃO DO ATENDIMENTO PSICOLÓGICO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 743,
+            "altura": 210,
+            "topo": 14,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Estado emocional ou comportamentos que interfiram, negativamente, no tratamento, seguimento ou adesão.",
+              "idResposta": 3696,
+              "codigo": 2325,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Disfunção emocional, cognitiva e/ou comportamental que interfira no enfrentamento da doença, do tratamento e na adaptação à rotina hospitalar.",
+              "idResposta": 3697,
+              "codigo": 2326,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Reação psicológica inadequada ou sintomas psiquiátricos.",
+              "idResposta": 3698,
+              "codigo": 2327,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Dificuldade para lidar com um diagnóstico de uma doença ameaçadora da vida ou com o diagnóstico de uma doença ameaçadora da vida ou com processo de finitude e morte.",
+              "idResposta": 3699,
+              "codigo": 2328,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Necessidade de desenvolver estratégias adaptativas para lidar com o diagnóstico ou com limitações e sequelas relacionadas ao adoecimento.",
+              "idResposta": 3700,
+              "codigo": 2329,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Outras situações, relacionadas ao processo de saúde e doença que ocasionaram a demanda de internação e que envolvem o bem-estar psicológico e emocional do usuário, e seus familiares/cuidadores e da equipe.",
+              "idResposta": 3701,
+              "codigo": 2330,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2694,
+            "pergunta": 1401,
+            "codPergunta": 1373,
+            "ordem": "0101",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2694",
+            "componentePai": "cmp2720",
+            "idResposta": 3696,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Obs: Fonte: saude.df.gov.br",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 194,
+            "altura": 14,
+            "topo": 226,
+            "esquerda": 16,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2695,
+            "pergunta": 1402,
+            "codPergunta": 1374,
+            "ordem": "0102",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp2695",
+            "componentePai": "cmp2720",
+            "idResposta": 3702,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "PACIENTE POSSUI ACOMPANHANTE?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 4,
+            "largura": 236,
+            "altura": 40,
+            "topo": 242,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 3703,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 3703,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2696,
+            "pergunta": 1403,
+            "codPergunta": 1375,
+            "ordem": "0103",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp2696",
+            "componentePai": "cmp2720",
+            "idResposta": 3703,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "NOME DO ACOMPANHANTE E GRAU DE PARENTESCO:",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 8,
+            "largura": 485,
+            "altura": 46,
+            "topo": 237,
+            "esquerda": 257,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2697,
+            "pergunta": 1404,
+            "codPergunta": 1376,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2697",
+            "componentePai": "cmp2720",
+            "idResposta": 3704,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "EXAME PSÍQUICO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.05.01",
+              "texto": "FUNÇÃO PSÍQUICA",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.05.01.01",
+                  "texto": "Consciência",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 718,
+                    "altura": 78,
+                    "topo": 18,
+                    "esquerda": 6,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3707,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3708,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3709,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2700,
+                    "pergunta": 1407,
+                    "codPergunta": 1379,
+                    "ordem": "01050101",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2700",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3707,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.02",
+                  "texto": "Orientação",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 716,
+                    "altura": 74,
+                    "topo": 96,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3710,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3711,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3712,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2701,
+                    "pergunta": 1408,
+                    "codPergunta": 1380,
+                    "ordem": "01050102",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2701",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3710,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.03",
+                  "texto": "Atenção",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 718,
+                    "altura": 73,
+                    "topo": 173,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3713,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3714,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3715,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2702,
+                    "pergunta": 1409,
+                    "codPergunta": 1381,
+                    "ordem": "01050103",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2702",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3713,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.04",
+                  "texto": "Sensopercepção",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 714,
+                    "altura": 71,
+                    "topo": 246,
+                    "esquerda": 9,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3716,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3717,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3718,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2703,
+                    "pergunta": 1410,
+                    "codPergunta": 1382,
+                    "ordem": "01050104",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2703",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3716,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.06",
+                  "texto": "Memória",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 713,
+                    "altura": 72,
+                    "topo": 320,
+                    "esquerda": 12,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3719,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3720,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3721,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2704,
+                    "pergunta": 1411,
+                    "codPergunta": 1383,
+                    "ordem": "01050106",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2704",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3719,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.07",
+                  "texto": "Vontade",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 711,
+                    "altura": 71,
+                    "topo": 395,
+                    "esquerda": 14,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3722,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3723,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3724,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2705,
+                    "pergunta": 1412,
+                    "codPergunta": 1384,
+                    "ordem": "01050107",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2705",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3722,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.08",
+                  "texto": "Afeto",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 711,
+                    "altura": 73,
+                    "topo": 470,
+                    "esquerda": 14,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservado",
+                      "idResposta": 3725,
+                      "codigo": 2334,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterado",
+                      "idResposta": 3726,
+                      "codigo": 2335,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3727,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2706,
+                    "pergunta": 1413,
+                    "codPergunta": 1385,
+                    "ordem": "01050108",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2706",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3725,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.09",
+                  "texto": "Linguagem e Pensamento",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 710,
+                    "altura": 74,
+                    "topo": 544,
+                    "esquerda": 17,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3728,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3729,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3730,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2707,
+                    "pergunta": 1414,
+                    "codPergunta": 1386,
+                    "ordem": "01050109",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2707",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3728,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.05.01.10",
+                  "texto": "Crítica/Juízo",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 708,
+                    "altura": 69,
+                    "topo": 618,
+                    "esquerda": 20,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Preservada",
+                      "idResposta": 3731,
+                      "codigo": 2331,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alterada",
+                      "idResposta": 3732,
+                      "codigo": 2332,
+                      "origem": "id-resposta"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sem Resposta",
+                      "idResposta": 3733,
+                      "codigo": 2333,
+                      "origem": "id-resposta"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 2708,
+                    "pergunta": 1415,
+                    "codPergunta": 1387,
+                    "ordem": "01050110",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp2708",
+                    "componentePai": "cmp2699",
+                    "idResposta": 3731,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                }
+              ],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 734,
+                "altura": 694,
+                "topo": 298,
+                "esquerda": 13,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 2699,
+                "pergunta": 1406,
+                "codPergunta": 1378,
+                "ordem": "010501",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp2699",
+                "componentePai": "cmp2720",
+                "idResposta": 3706,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 1498,
+            "topo": 282,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2698,
+            "pergunta": 1405,
+            "codPergunta": 1377,
+            "ordem": "0105",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp2698",
+            "componentePai": "cmp2720",
+            "idResposta": 3705,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "OBSERVAÇÕES:",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 735,
+            "altura": 103,
+            "topo": 999,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2709,
+            "pergunta": 1416,
+            "codPergunta": 1388,
+            "ordem": "0106",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2709",
+            "componentePai": "cmp2720",
+            "idResposta": 3734,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "É RECEPTIVO À ABORDAGEM PSICOLÓGICA?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 209,
+            "altura": 40,
+            "topo": 1108,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 3735,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 3735,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2710,
+            "pergunta": 1417,
+            "codPergunta": 1389,
+            "ordem": "0107",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp2710",
+            "componentePai": "cmp2720",
+            "idResposta": 3735,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "APRESENTA QUEIXAS CLÍNICAS? QUAIS?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 732,
+            "altura": 121,
+            "topo": 1150,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2711,
+            "pergunta": 1418,
+            "codPergunta": 1390,
+            "ordem": "0108",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2711",
+            "componentePai": "cmp2720",
+            "idResposta": 3736,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "COMO SE SENTE EM RELAÇÃO A INTERNAÇÃO HOSPITALAR?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 6,
+            "largura": 392,
+            "altura": 95,
+            "topo": 1277,
+            "esquerda": 12,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Ansioso",
+              "idResposta": 3737,
+              "codigo": 2336,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Alteração do humor",
+              "idResposta": 3738,
+              "codigo": 2337,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Deprimido",
+              "idResposta": 3739,
+              "codigo": 2338,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Inseguro",
+              "idResposta": 3740,
+              "codigo": 2339,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2712,
+            "pergunta": 1419,
+            "codPergunta": 1391,
+            "ordem": "0109",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2712",
+            "componentePai": "cmp2720",
+            "idResposta": 3737,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "CONSIDERA O MOTIVO DA INTERNAÇÃO COMO ALGO GRAVE?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 5,
+            "largura": 324,
+            "altura": 95,
+            "topo": 1278,
+            "esquerda": 408,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Sim",
+              "idResposta": 3741,
+              "codigo": 2340,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 3742,
+              "codigo": 2341,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Moderadamente",
+              "idResposta": 3743,
+              "codigo": 2342,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2713,
+            "pergunta": 1420,
+            "codPergunta": 1392,
+            "ordem": "0110",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2713",
+            "componentePai": "cmp2720",
+            "idResposta": 3741,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "ALGUM COMPONENTE DE TRANSTORNO PSÍQUICO NA HISTÓRIA DO PACIENTE?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 8,
+            "largura": 493,
+            "altura": 40,
+            "topo": 1376,
+            "esquerda": 12,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 3744,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 3744,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2714,
+            "pergunta": 1421,
+            "codPergunta": 1393,
+            "ordem": "0111",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp2714",
+            "componentePai": "cmp2720",
+            "idResposta": 3744,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "JUSTIFIQUE:",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 734,
+            "altura": 121,
+            "topo": 1418,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2715,
+            "pergunta": 1422,
+            "codPergunta": 1394,
+            "ordem": "0112",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2715",
+            "componentePai": "cmp2720",
+            "idResposta": 3745,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "REAÇÕES EMOCIONAIS E/OU OUTRAS OBSERVAÇÕES?",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 104,
+            "topo": 1545,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2716,
+            "pergunta": 1423,
+            "codPergunta": 1395,
+            "ordem": "0113",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2716",
+            "componentePai": "cmp2720",
+            "idResposta": 3746,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "PLANO TERAPÊUTICO DO (A) PACIENTE:",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 116,
+            "topo": 1652,
+            "esquerda": 11,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2717,
+            "pergunta": 1424,
+            "codPergunta": 1396,
+            "ordem": "0114",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2717",
+            "componentePai": "cmp2720",
+            "idResposta": 3747,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 766,
+        "altura": 1788,
+        "topo": 2,
+        "esquerda": -4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2720,
+        "pergunta": 1427,
+        "codPergunta": 1399,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2720",
+        "componentePai": "jvsBox",
+        "idResposta": 3750,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

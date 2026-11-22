@@ -57,7 +57,10 @@ export const esquemaEntrarAdministradorPlataforma = z.object({
     .string()
     .min(1, 'Informe o login.')
     .max(TAMANHO_LOGIN_PLATAFORMA)
-    .regex(FORMATO_LOGIN_PLATAFORMA, 'Login da plataforma: só letras sem acento, dígitos, ponto, hífen e sublinhado.')
+    .regex(
+      FORMATO_LOGIN_PLATAFORMA,
+      'Login da plataforma: só letras sem acento, dígitos, ponto, hífen e sublinhado.',
+    )
     .transform((l) => l.toLowerCase()),
   senha: esquemaSenhaDigitada,
   cliente: z

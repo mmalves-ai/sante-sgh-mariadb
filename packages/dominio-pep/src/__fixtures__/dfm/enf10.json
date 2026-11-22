@@ -1,0 +1,700 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 29,
+    "codigo": "ENF10",
+    "descricao": "RELATÓRIO GERAL DE CIRURGIAS - ENFERMAGEM",
+    "fase": 2
+  },
+  "impressaoLayout": "d9cf88da4d10392d634b6c5999a66af2ac02ef0c745187b520f49d46aac3242d",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 18,
+    "vinculosAtivos": 18,
+    "vinculosInativos": 0,
+    "componentes": 18,
+    "componentesMapeados": 18,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 7,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 1,
+      "TfRespEditUnidade": 11,
+      "TfRespHora": 3,
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 2
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "RELATÓRIO GERAL DE CIRURGIAS - ENFERMAGEM",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Operação",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 40,
+            "topo": 15,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1293,
+            "pergunta": 553,
+            "codPergunta": 541,
+            "ordem": "0101",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1293",
+            "componentePai": "cmp1292",
+            "idResposta": 1564,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Pulso antes",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 121,
+            "altura": 40,
+            "topo": 58,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1294,
+            "pergunta": 549,
+            "codPergunta": 537,
+            "ordem": "0102",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1294",
+            "componentePai": "cmp1292",
+            "idResposta": 1560,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Pulso depois",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 126,
+            "altura": 40,
+            "topo": 58,
+            "esquerda": 127,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1295,
+            "pergunta": 550,
+            "codPergunta": 538,
+            "ordem": "0103",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1295",
+            "componentePai": "cmp1292",
+            "idResposta": 1561,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "P.A antes",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 108,
+            "altura": 40,
+            "topo": 58,
+            "esquerda": 253,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1296,
+            "pergunta": 551,
+            "codPergunta": 539,
+            "ordem": "0104",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1296",
+            "componentePai": "cmp1292",
+            "idResposta": 1562,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "P.A depois",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 58,
+            "esquerda": 360,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1297,
+            "pergunta": 552,
+            "codPergunta": 540,
+            "ordem": "0105",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1297",
+            "componentePai": "cmp1292",
+            "idResposta": 1563,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Início da cirurgia",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 1,
+            "largura": 91,
+            "altura": 41,
+            "topo": 58,
+            "esquerda": 475,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1298,
+            "pergunta": 554,
+            "codPergunta": 542,
+            "ordem": "0106",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1298",
+            "componentePai": "cmp1292",
+            "idResposta": 1565,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Término da cirurgia",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 95,
+            "altura": 40,
+            "topo": 58,
+            "esquerda": 555,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1299,
+            "pergunta": 555,
+            "codPergunta": 543,
+            "ordem": "0107",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1299",
+            "componentePai": "cmp1292",
+            "idResposta": 1566,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Duração",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "time",
+          "widget": "time",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 1,
+            "largura": 54,
+            "altura": 40,
+            "topo": 59,
+            "esquerda": 652,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1300,
+            "pergunta": 568,
+            "codPergunta": 556,
+            "ordem": "0108",
+            "tipo": "3",
+            "classe": "TfRespHora",
+            "componente": "cmp1300",
+            "componentePai": "cmp1292",
+            "idResposta": 1579,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "EQUIPE",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.09.01",
+              "texto": "Cirurgião",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1302,
+                "pergunta": 558,
+                "codPergunta": 546,
+                "ordem": "010901",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1302",
+                "componentePai": "cmp1301",
+                "idResposta": 1569,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.02",
+              "texto": "1º Auxiliar",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 6,
+                "largura": 349,
+                "altura": 40,
+                "topo": 53,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1303,
+                "pergunta": 559,
+                "codPergunta": 547,
+                "ordem": "010902",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1303",
+                "componentePai": "cmp1301",
+                "idResposta": 1570,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.03",
+              "texto": "2º Auxiliar",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 6,
+                "largura": 373,
+                "altura": 40,
+                "topo": 53,
+                "esquerda": 356,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1304,
+                "pergunta": 560,
+                "codPergunta": 548,
+                "ordem": "010903",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1304",
+                "componentePai": "cmp1301",
+                "idResposta": 1571,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.04",
+              "texto": "Anestesista",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 6,
+                "largura": 349,
+                "altura": 40,
+                "topo": 92,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1305,
+                "pergunta": 561,
+                "codPergunta": 549,
+                "ordem": "010904",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1305",
+                "componentePai": "cmp1301",
+                "idResposta": 1572,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.05",
+              "texto": "Instrumentador",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 6,
+                "largura": 373,
+                "altura": 40,
+                "topo": 92,
+                "esquerda": 357,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1306,
+                "pergunta": 562,
+                "codPergunta": 550,
+                "ordem": "010905",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1306",
+                "componentePai": "cmp1301",
+                "idResposta": 1573,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.06",
+              "texto": "Enfermeiro de sala",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 721,
+                "altura": 40,
+                "topo": 131,
+                "esquerda": 9,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1307,
+                "pergunta": 563,
+                "codPergunta": 551,
+                "ordem": "010906",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1307",
+                "componentePai": "cmp1301",
+                "idResposta": 1574,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 759,
+            "altura": 179,
+            "topo": 103,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1301,
+            "pergunta": 557,
+            "codPergunta": 545,
+            "ordem": "0109",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1301",
+            "componentePai": "cmp1292",
+            "idResposta": 1568,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "Anestesia realizada",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 717,
+            "altura": 123,
+            "topo": 284,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Sedação",
+              "idResposta": 1629,
+              "codigo": 466,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Local",
+              "idResposta": 1630,
+              "codigo": 1027,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Local + sedação",
+              "idResposta": 1631,
+              "codigo": 1028,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Raqui",
+              "idResposta": 1632,
+              "codigo": 1029,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Peridural",
+              "idResposta": 1633,
+              "codigo": 1030,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Geral",
+              "idResposta": 1634,
+              "codigo": 1031,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Outra",
+              "idResposta": 1635,
+              "codigo": 63,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1308,
+            "pergunta": 581,
+            "codPergunta": 569,
+            "ordem": "0110",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1308",
+            "componentePai": "cmp1292",
+            "idResposta": 1629,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "Observações de enfermagem",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 719,
+            "altura": 130,
+            "topo": 406,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1309,
+            "pergunta": 87,
+            "codPergunta": 81,
+            "ordem": "0111",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1309",
+            "componentePai": "cmp1292",
+            "idResposta": 156,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 740,
+        "altura": 541,
+        "topo": 2,
+        "esquerda": 7,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1292,
+        "pergunta": 580,
+        "codPergunta": 568,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1292",
+        "componentePai": "jvsBox",
+        "idResposta": 1628,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

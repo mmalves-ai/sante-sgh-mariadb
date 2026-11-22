@@ -1,0 +1,101 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 40,
+    "codigo": "EVOFON",
+    "descricao": "EVOLUÇÃO FONOAUDIÓLOGO",
+    "fase": 2
+  },
+  "impressaoLayout": "1606bc497caa6b2551f9e5ca532fe675d2361f348707039fff3401b6f825b9e6",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 0,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Evolução Fonoaudiólogo",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Quadro Clínico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 741,
+            "altura": 488,
+            "topo": 15,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1713,
+            "pergunta": 775,
+            "codPergunta": 759,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1713",
+            "componentePai": "cmp1712",
+            "idResposta": 2290,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 515,
+        "topo": 11,
+        "esquerda": 6,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1712,
+        "pergunta": 805,
+        "codPergunta": 783,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1712",
+        "componentePai": "jvsBox",
+        "idResposta": 2340,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

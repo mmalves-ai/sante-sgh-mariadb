@@ -1,43 +1,43 @@
 {
- "motivo_ajuste_fatura": [
-  {
-   "codigo": "cancelamento",
-   "descricao": "Cancelamento da fatura",
-   "natureza": "ajuste",
-   "exige_justificativa": true
-  },
-  {
-   "codigo": "desconto_negociado",
-   "descricao": "Desconto negociado",
-   "natureza": "desconto",
-   "exige_justificativa": true
-  },
-  {
-   "codigo": "acrescimo",
-   "descricao": "Acréscimo (juros ou multa)",
-   "natureza": "acrescimo"
-  }
- ],
- "motivo_cancelamento_guia_plano": [
-  {
-   "codigo": "pedido_beneficiario",
-   "descricao": "A pedido do beneficiário",
-   "aplica_a": "beneficiario"
-  },
-  {
-   "codigo": "pedido_prestador",
-   "descricao": "A pedido do prestador",
-   "aplica_a": "prestador"
-  },
-  {
-   "codigo": "erro_digitacao",
-   "descricao": "Erro de digitação",
-   "aplica_a": "operadora"
-  },
-  {
-   "codigo": "outros",
-   "descricao": "Outros",
-   "aplica_a": "todos"
-  }
- ]
+  "motivo_ajuste_fatura": [
+    {
+      "codigo": "cancelamento",
+      "descricao": "Cancelamento da fatura",
+      "natureza": "ajuste",
+      "exige_justificativa": true
+    },
+    {
+      "codigo": "desconto_negociado",
+      "descricao": "Desconto negociado",
+      "natureza": "desconto",
+      "exige_justificativa": true
+    },
+    {
+      "codigo": "acrescimo",
+      "descricao": "Acréscimo (juros ou multa)",
+      "natureza": "acrescimo"
+    }
+  ],
+  "motivo_cancelamento_guia_plano": [
+    {
+      "codigo": "pedido_beneficiario",
+      "descricao": "A pedido do beneficiário",
+      "aplica_a": "beneficiario"
+    },
+    {
+      "codigo": "pedido_prestador",
+      "descricao": "A pedido do prestador",
+      "aplica_a": "prestador"
+    },
+    {
+      "codigo": "erro_digitacao",
+      "descricao": "Erro de digitação",
+      "aplica_a": "operadora"
+    },
+    {
+      "codigo": "outros",
+      "descricao": "Outros",
+      "aplica_a": "todos"
+    }
+  ]
 }

@@ -1,0 +1,370 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 57,
+    "codigo": "LAHI",
+    "descricao": "LAUDO VÍDEO HISTEROSCOPIA",
+    "fase": 2
+  },
+  "impressaoLayout": "446f2dacdfe7539c72183e84d53b2c48e9d3e88a1bee5775f7ad76aba6312237",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 9
+    }
+  ],
+  "resumo": {
+    "vinculos": 10,
+    "vinculosAtivos": 9,
+    "vinculosInativos": 1,
+    "componentes": 9,
+    "componentesMapeados": 9,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 8,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "LAUDO VÍDEO HISTEROSCOPIA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "INDICAÇÃO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 16,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2489,
+            "pergunta": 1244,
+            "codPergunta": 1216,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2489",
+            "componentePai": "cmp2488",
+            "idResposta": 3151,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "CANAL CERVICAL",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 114,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2490,
+            "pergunta": 1245,
+            "codPergunta": 1217,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2490",
+            "componentePai": "cmp2488",
+            "idResposta": 3152,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "CAVIDADE UTERINA",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 214,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2491,
+            "pergunta": 1246,
+            "codPergunta": 1218,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2491",
+            "componentePai": "cmp2488",
+            "idResposta": 3153,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "ÓSTIOS TUBÁRIOS",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 314,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2492,
+            "pergunta": 1247,
+            "codPergunta": 1219,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2492",
+            "componentePai": "cmp2488",
+            "idResposta": 3154,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "ENDOMÉTRIO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 414,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2493,
+            "pergunta": 1248,
+            "codPergunta": 1220,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2493",
+            "componentePai": "cmp2488",
+            "idResposta": 3155,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "CAVIDADE UTERINA",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 2494,
+            "pergunta": 1246,
+            "codPergunta": 1218,
+            "ordem": "0106",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "PROCEDIMENTO REALIZADO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 517,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2495,
+            "pergunta": 1249,
+            "codPergunta": 1221,
+            "ordem": "0106",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2495",
+            "componentePai": "cmp2488",
+            "idResposta": 3156,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "OBSERVAÇÃO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 620,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2496,
+            "pergunta": 1250,
+            "codPergunta": 1222,
+            "ordem": "0107",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2496",
+            "componentePai": "cmp2488",
+            "idResposta": 3157,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "CONCLUSÃO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 100,
+            "topo": 727,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2497,
+            "pergunta": 1251,
+            "codPergunta": 1223,
+            "ordem": "0108",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2497",
+            "componentePai": "cmp2488",
+            "idResposta": 3158,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 830,
+        "topo": 5,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2488,
+        "pergunta": 1243,
+        "codPergunta": 1215,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2488",
+        "componentePai": "jvsBox",
+        "idResposta": 3150,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

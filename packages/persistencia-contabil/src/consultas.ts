@@ -40,7 +40,6 @@ export const reais = (centavos: number) => (centavos / 100).toFixed(2);
 export const INSTANTE = `'%Y-%m-%dT%H:%i:%s'`;
 export const CENTAVOS = (expr: string) => `CAST(ROUND(COALESCE(${expr}, 0) * 100) AS SIGNED)`;
 
-
 /** Grupo da tela ↔ natureza da conta no modelo. */
 export const NATUREZA_DO_GRUPO: Readonly<Record<GrupoConta, string>> = {
   ativo: 'ativo',
@@ -84,7 +83,6 @@ export function chaveDoLancamento(estabelecimento: number, chave: string): strin
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-
 export const SQL_PLANO = `SELECT COALESCE(
     (SELECT pe.plano_contas_id FROM periodo_contabil pe
       WHERE pe.estabelecimento_id = ? AND pe.plano_contas_id IS NOT NULL AND pe.excluido_em IS NULL
@@ -114,7 +112,6 @@ export const SQL_FATOS = `SELECT f.id, f.estabelecimento_id, f.entidade_origem, 
   LEFT JOIN fato_contabil fe ON fe.id = f.estornado_fato_contabil_id
   WHERE f.estabelecimento_id = ? AND f.excluido_em IS NULL`;
 
-
 export const SQL_PARTIDAS = `SELECT p.id, p.lancamento_contabil_id, p.sequencia, p.lado, c.classificacao,
     ${CENTAVOS('p.valor')} AS centavos, p.centro_custo_id, p.complemento, p.conciliacao_conta_contabil_id
   FROM partida_contabil p JOIN conta_contabil c ON c.id = p.conta_contabil_id
@@ -134,7 +131,6 @@ export const SQL_PERIODOS = `SELECT p.id, DATE_FORMAT(p.competencia, '%Y-%m') AS
   LEFT JOIN usuario ur ON ur.id = p.reabertura_usuario_id
   WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
 
-
 export const SQL_REGRAS = `SELECT v.id, v.conteudo, v.impressao, v.justificativa, COALESCE(u.login, '') AS publicada_por,
     DATE_FORMAT(v.publicada_em, ${INSTANTE}) AS publicada_em
   FROM versao_regra_contabil v
@@ -153,7 +149,6 @@ export function regraPublicadaDe(r: Linha): RegraPublicada {
     publicadaEm: texto(r['publicada_em']),
   };
 }
-
 
 export function contaDe(r: Linha, est: number): ContaPlanoVersionada {
   return {
@@ -205,7 +200,6 @@ export function fatoDe(r: Linha): FatoRegistrado {
     lidoEm: texto(r['lido_em']),
   };
 }
-
 
 export function partidaDe(r: Linha): PartidaRegistrada {
   return {
@@ -282,7 +276,8 @@ export async function lerRegras(
   est: number,
   f: { readonly tipoFato?: string; readonly origem?: number },
 ): Promise<RegraPublicada[]> {
-  const tipos = f.tipoFato !== undefined ? [f.tipoFato] : f.origem !== undefined ? tiposDaOrigem(f.origem) : null;
+  const tipos =
+    f.tipoFato !== undefined ? [f.tipoFato] : f.origem !== undefined ? tiposDaOrigem(f.origem) : null;
   if (tipos !== null && tipos.length === 0) return [];
   const filtro = tipos === null ? '' : ` AND ev.codigo IN (${lista(tipos.length)})`;
   return (
@@ -301,7 +296,10 @@ export async function lerPeriodos(l: Leitor, est: number): Promise<PeriodoRegist
 }
 
 /** As partidas dos lançamentos, por lançamento, em ordem. */
-export async function lerPartidas(l: Leitor, ids: readonly number[]): Promise<Map<number, PartidaRegistrada[]>> {
+export async function lerPartidas(
+  l: Leitor,
+  ids: readonly number[],
+): Promise<Map<number, PartidaRegistrada[]>> {
   const m = new Map<number, PartidaRegistrada[]>();
   if (ids.length === 0) return m;
   const linhas = await l.consultar(
@@ -326,7 +324,8 @@ export async function lerParaContabilizar(
   competencia: string | null,
   lote: number,
 ): Promise<LeituraParaContabilizar> {
-  if (situacoes.length === 0) return { candidatos: [], registrados: [], lancamentos: new Map(), restam: false };
+  if (situacoes.length === 0)
+    return { candidatos: [], registrados: [], lancamentos: new Map(), restam: false };
   const p: unknown[] = [est, ...situacoes.map((s) => SITUACAO_FATO_MODELO[s])];
   const lidos = (
     await l.consultar(
@@ -337,7 +336,9 @@ export async function lerParaContabilizar(
     )
   ).map(fatoDe);
   const candidatos = lidos.slice(0, lote);
-  const origens = [...new Set(candidatos.map((f) => `${f.tabela}\u0000${f.id}`))].map((k) => k.split('\u0000'));
+  const origens = [...new Set(candidatos.map((f) => `${f.tabela}\u0000${f.id}`))].map((k) =>
+    k.split('\u0000'),
+  );
   const registrados: FatoRegistrado[] = [];
   for (let i = 0; i < origens.length; i += 200) {
     const parte = origens.slice(i, i + 200);
@@ -369,15 +370,13 @@ export async function lerParaContabilizar(
       lancamentos.set(num(x['fato_contabil_id']), {
         id: num(x['id']),
         idFato: num(x['fato_contabil_id']),
-        partidas: (partidas.get(num(x['id'])) ?? []).map(
-          (pp): PartidaGerada => ({
-            lado: pp.lado,
-            conta: pp.conta,
-            valorCentavos: pp.valorCentavos,
-            historico: pp.historico,
-            centroCusto: pp.centroCusto,
-          }),
-        ),
+        partidas: (partidas.get(num(x['id'])) ?? []).map((pp): PartidaGerada => ({
+          lado: pp.lado,
+          conta: pp.conta,
+          valorCentavos: pp.valorCentavos,
+          historico: pp.historico,
+          centroCusto: pp.centroCusto,
+        })),
         estornadoPor: numOuNulo(x['estornado_por']),
       });
   }

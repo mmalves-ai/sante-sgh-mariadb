@@ -6,8 +6,10 @@ describe('unificação: referências ao paciente', () => {
     const chaves = REFERENCIAS_PACIENTE.map((r) => `${r.tabela}.${r.coluna}`);
     expect(new Set(chaves).size).toBe(chaves.length);
     const t = tabelasDaUnificacao();
-    for (const x of ['alergia_paciente', 'cobertura_paciente', 'atendimento', 'marcacao_horario']) expect(t).toContain(x);
-    for (const x of ['unificacao_cadastro', 'paciente', 'paciente_versao', 'suspeita_duplicidade']) expect(t).not.toContain(x);
+    for (const x of ['alergia_paciente', 'cobertura_paciente', 'atendimento', 'marcacao_horario'])
+      expect(t).toContain(x);
+    for (const x of ['unificacao_cadastro', 'paciente', 'paciente_versao', 'suspeita_duplicidade'])
+      expect(t).not.toContain(x);
     expect(REFERENCIAS_PACIENTE.filter((r) => r.destino === 'manter').every((r) => r.motivo)).toBe(true);
   });
   it('referência do banco fora da lista vira recusa', () => {

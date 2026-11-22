@@ -29,7 +29,8 @@ export function ordenarLiberacao(h: readonly EventoLiberacao[]): EventoLiberacao
 
 function aplicar(estado: EstadoLiberacao, e: EventoLiberacao): EstadoLiberacao {
   const desfaz = e.operacao === 'exclusao';
-  if (e.etapa === 'liberacao_clinica') return desfaz ? (estado === 'liberado' ? 'desfeito' : estado) : 'liberado';
+  if (e.etapa === 'liberacao_clinica')
+    return desfaz ? (estado === 'liberado' ? 'desfeito' : estado) : 'liberado';
   if (e.etapa === 'revogacao') {
     // Desfazer a revogação devolve a liberação que ela tinha retirado.
     if (desfaz) return estado === 'revogado' ? 'liberado' : estado;
@@ -62,7 +63,8 @@ export function fatoDaLiberacao(
   const depois = aplicar(antes, h[i]!);
   if (depois === 'liberado' && (antes !== 'liberado' || h[i]!.etapa === 'liberacao_clinica'))
     return EVENTO_RESULTADO_LIBERADO;
-  if ((depois === 'revogado' || depois === 'desfeito') && antes === 'liberado') return EVENTO_RESULTADO_REVOGADO;
+  if ((depois === 'revogado' || depois === 'desfeito') && antes === 'liberado')
+    return EVENTO_RESULTADO_REVOGADO;
   return null;
 }
 
@@ -80,7 +82,11 @@ export const SITUACOES_REMESSA_COM_PEDIDO = ['fechada', 'enviada', 'recebida', '
 /** O exame cancelado ou recusado nunca vai ao laboratório de apoio (que executaria e cobraria). */
 export const SITUACOES_EXAME_SEM_PEDIDO = ['cancelado', 'recusado'] as const;
 
-export function exameVaiAoApoio(situacaoRemessa: string, situacaoExame: string, situacaoItem: string): boolean {
+export function exameVaiAoApoio(
+  situacaoRemessa: string,
+  situacaoExame: string,
+  situacaoItem: string,
+): boolean {
   return (
     (SITUACOES_REMESSA_COM_PEDIDO as readonly string[]).includes(situacaoRemessa) &&
     !(SITUACOES_EXAME_SEM_PEDIDO as readonly string[]).includes(situacaoExame) &&

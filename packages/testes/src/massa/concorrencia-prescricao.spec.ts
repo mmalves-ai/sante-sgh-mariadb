@@ -19,9 +19,15 @@ describe('concorrência na prescrição e na checagem', () => {
     const e = dubleEscritor(() => 1);
     expect(await suspenderItemEmOutraEstacao(e, 5, { profissional: 7, motivo: 'm', usuario: 9 })).toBe(1);
     expect(e.chamadas.map((c) => c.sql)).toEqual([
-      expect.stringMatching(/UPDATE prescricao_item[\s\S]*suspensao_profissional_id[\s\S]*versao = versao \+ 1[\s\S]*excluido_em IS NULL/),
-      expect.stringMatching(/INSERT INTO horario_administracao_evento[\s\S]*'suspensao'[\s\S]*administrado_em IS NULL/),
-      expect.stringMatching(/UPDATE horario_administracao[\s\S]*versao = versao \+ 1[\s\S]*administrado_em IS NULL/),
+      expect.stringMatching(
+        /UPDATE prescricao_item[\s\S]*suspensao_profissional_id[\s\S]*versao = versao \+ 1[\s\S]*excluido_em IS NULL/,
+      ),
+      expect.stringMatching(
+        /INSERT INTO horario_administracao_evento[\s\S]*'suspensao'[\s\S]*administrado_em IS NULL/,
+      ),
+      expect.stringMatching(
+        /UPDATE horario_administracao[\s\S]*versao = versao \+ 1[\s\S]*administrado_em IS NULL/,
+      ),
     ]);
     expect(e.chamadas[0]?.parametros).toEqual([7, 'm', 9, 5]);
     // Item já não ativo: nenhum horário é tocado.
@@ -56,11 +62,19 @@ describe('concorrência na prescrição e na checagem', () => {
             ? [{ n: 0 }]
             : [],
     );
-    expect(await suspensaoDaPrescricao(e, 1)).toEqual({ situacao: 'vigente', suspensaEm: null, motivo: null });
+    expect(await suspensaoDaPrescricao(e, 1)).toEqual({
+      situacao: 'vigente',
+      suspensaEm: null,
+      motivo: null,
+    });
     expect(await horarioPendente(e, 2)).toBeNull();
     const antes = await marcasContaEstoque(e, 2, [11, 12]);
     expect(antes).toEqual({ conta: 10, movimento: 10, saldo: '' });
-    expect(await semContaNemEstoque(e, 2, antes, [11, 12])).toEqual({ conta: 0, movimento: 0, saldoIgual: true });
+    expect(await semContaNemEstoque(e, 2, antes, [11, 12])).toEqual({
+      conta: 0,
+      movimento: 0,
+      saldoIgual: true,
+    });
     expect(await rastroDosHorarios(e, [])).toEqual([0, 0]);
     expect(await rastroDosHorarios(e, [1, 2])).toEqual([0, 0]);
     const pendente = e.chamadas.find((c) => /horario_administracao h/.test(c.sql));

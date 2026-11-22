@@ -1,0 +1,450 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 30,
+    "codigo": "MED16",
+    "descricao": "SOLICITAÇÃO DE ALBUMINA",
+    "fase": 2
+  },
+  "impressaoLayout": "c4256c3120ac62c13e8b6afe3232716e5a7ca4a3f458c32bbdd573fb37b66ac5",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 11,
+    "vinculosAtivos": 11,
+    "vinculosInativos": 0,
+    "componentes": 11,
+    "componentesMapeados": 11,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 5,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 2,
+      "TfRespData": 1,
+      "TfRespEditUnidade": 4,
+      "TfRespTexto": 2,
+      "TGroupBoxPep": 2
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "SOLICITAÇÃO DE ALBUMINA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Diagnóstico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 70,
+            "topo": 13,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1311,
+            "pergunta": 447,
+            "codPergunta": 435,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1311",
+            "componentePai": "cmp1310",
+            "idResposta": 1261,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Posologia",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 116,
+            "altura": 40,
+            "topo": 83,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1312,
+            "pergunta": 583,
+            "codPergunta": 571,
+            "ordem": "0102",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1312",
+            "componentePai": "cmp1310",
+            "idResposta": 1637,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Tempo de tratamento",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 164,
+            "altura": 40,
+            "topo": 83,
+            "esquerda": 123,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1313,
+            "pergunta": 584,
+            "codPergunta": 572,
+            "ordem": "0103",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1313",
+            "componentePai": "cmp1310",
+            "idResposta": 1638,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Dosagem albumina sérica",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": "g%",
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 187,
+            "altura": 40,
+            "topo": 83,
+            "esquerda": 287,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1314,
+            "pergunta": 585,
+            "codPergunta": 573,
+            "ordem": "0104",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1314",
+            "componentePai": "cmp1310",
+            "idResposta": 1639,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Dosagem proteínas totais",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": "g%",
+          "itens": [],
+          "tipo": "quantity",
+          "widget": "quantity",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 169,
+            "altura": 40,
+            "topo": 83,
+            "esquerda": 474,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1315,
+            "pergunta": 586,
+            "codPergunta": 574,
+            "ordem": "0105",
+            "tipo": "11",
+            "classe": "TfRespEditUnidade",
+            "componente": "cmp1315",
+            "componentePai": "cmp1310",
+            "idResposta": 1640,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Data do exame",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "date",
+          "widget": "date",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 1,
+            "largura": 90,
+            "altura": 40,
+            "topo": 82,
+            "esquerda": 643,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1316,
+            "pergunta": 587,
+            "codPergunta": 575,
+            "ordem": "0106",
+            "tipo": "2",
+            "classe": "TfRespData",
+            "componente": "cmp1316",
+            "componentePai": "cmp1310",
+            "idResposta": 1641,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Indicação para Albumina neste paciente (Ref. Resolução da ANVISA - RDC 115 de 10 de maio de 2004)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.07.01",
+              "texto": "1 - Indicações indiscutíveis",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 718,
+                "altura": 129,
+                "topo": 18,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Tratamento das ascites volumosas por paracenteses repetidas",
+                  "idResposta": 1643,
+                  "codigo": 1032,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Após paracentese evacuadora nas ascites volumosas",
+                  "idResposta": 1644,
+                  "codigo": 1033,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Cirrose hepática e síndrome nefrética, quando houver edemas refratários aos diuréticos e que coloquem em risco iminente a vida dos pacientes (volumosos derrames pleural ou pericárdico ou ascite)",
+                  "idResposta": 1645,
+                  "codigo": 1034,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1318,
+                "pergunta": 589,
+                "codPergunta": 577,
+                "ordem": "010701",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1318",
+                "componentePai": "cmp1317",
+                "idResposta": 1643,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.07.02",
+              "texto": "2 - Indicações discutíveis",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 719,
+                "altura": 106,
+                "topo": 146,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Em pacientes com cirrose que apresentam peritonite bacteriana espontânea",
+                  "idResposta": 1646,
+                  "codigo": 1035,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Hiperbilirrubinemia do recém nascido por doença hemolítica peri-natal (DHPN)",
+                  "idResposta": 1647,
+                  "codigo": 1036,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1319,
+                "pergunta": 590,
+                "codPergunta": 578,
+                "ordem": "010702",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1319",
+                "componentePai": "cmp1317",
+                "idResposta": 1646,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.07.03",
+              "texto": "3 - Outras (A dispensação de albumina só será autorizada após aprovação de projeto de pesquisa )",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "text",
+              "widget": "richtext",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 721,
+                "altura": 108,
+                "topo": 252,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1320,
+                "pergunta": 591,
+                "codPergunta": 579,
+                "ordem": "010703",
+                "tipo": "5",
+                "classe": "TfRespTexto",
+                "componente": "cmp1320",
+                "componentePai": "cmp1317",
+                "idResposta": 1648,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 775,
+            "altura": 367,
+            "topo": 130,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1317,
+            "pergunta": 588,
+            "codPergunta": 576,
+            "ordem": "0107",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1317",
+            "componentePai": "cmp1310",
+            "idResposta": 1642,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 741,
+        "altura": 505,
+        "topo": 4,
+        "esquerda": 6,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1310,
+        "pergunta": 582,
+        "codPergunta": 570,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1310",
+        "componentePai": "jvsBox",
+        "idResposta": 1636,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

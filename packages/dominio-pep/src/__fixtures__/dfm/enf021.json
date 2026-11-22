@@ -1,0 +1,4662 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 34,
+    "codigo": "ENF021",
+    "descricao": "ESCALA DE BRADEN",
+    "fase": 2
+  },
+  "impressaoLayout": "5c081adbc60c995660d8520a8f5b303d610065b1c090bcd38f715d4c3b6caec3",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 77,
+    "vinculosAtivos": 10,
+    "vinculosInativos": 67,
+    "componentes": 64,
+    "componentesMapeados": 64,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 13,
+    "opcoesResolvidas": 227,
+    "escolhasPendentes": 30,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 2,
+    "porClasse": {
+      "TfRespCheckListBox": 16,
+      "TfRespComboBox": 25,
+      "TfRespEditUnidade": 16,
+      "TfRespTexto": 1,
+      "TGroupBoxPep": 6
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Protocolo de avaliação de lesões",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "ESCALA DE BRADEN",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.01.01",
+              "texto": "Percepção sensorial",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 170,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Completamente limitado",
+                  "idResposta": 1854,
+                  "codigo": 1150,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Muito limitado",
+                  "idResposta": 1855,
+                  "codigo": 1151,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Ligeiramente limitado",
+                  "idResposta": 1856,
+                  "codigo": 1152,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "4 - Sem limitação",
+                  "idResposta": 1857,
+                  "codigo": 1153,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1379,
+                "pergunta": 639,
+                "codPergunta": 627,
+                "ordem": "010101",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp254",
+                "componentePai": "cmp253",
+                "idResposta": 1854,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.02",
+              "texto": "Umidade",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 176,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 175,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Constantemente úmido",
+                  "idResposta": 1858,
+                  "codigo": 1154,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Muitas vezes úmido",
+                  "idResposta": 1859,
+                  "codigo": 1155,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Ocasionalmente úmido",
+                  "idResposta": 1860,
+                  "codigo": 1156,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "4 - Raramente úmido",
+                  "idResposta": 1861,
+                  "codigo": 1157,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1380,
+                "pergunta": 640,
+                "codPergunta": 628,
+                "ordem": "010102",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp255",
+                "componentePai": "cmp253",
+                "idResposta": 1858,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.03",
+              "texto": "Atividade",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 202,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 352,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Acamado",
+                  "idResposta": 1862,
+                  "codigo": 1158,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Em cadeira",
+                  "idResposta": 1863,
+                  "codigo": 1159,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Deambula ocasionalmente",
+                  "idResposta": 1864,
+                  "codigo": 1160,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "4 - Deambula com frequência",
+                  "idResposta": 1865,
+                  "codigo": 1161,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1381,
+                "pergunta": 641,
+                "codPergunta": 629,
+                "ordem": "010103",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp256",
+                "componentePai": "cmp253",
+                "idResposta": 1862,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.04",
+              "texto": "Mobilidade",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 182,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 554,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Completamente imóvel",
+                  "idResposta": 1866,
+                  "codigo": 1162,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Muito limitada",
+                  "idResposta": 1867,
+                  "codigo": 1163,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Deambula em momentos ocasionais",
+                  "idResposta": 1868,
+                  "codigo": 1164,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "4 - Sem Limitação",
+                  "idResposta": 1869,
+                  "codigo": 1165,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1382,
+                "pergunta": 642,
+                "codPergunta": 630,
+                "ordem": "010104",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp257",
+                "componentePai": "cmp253",
+                "idResposta": 1866,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.05",
+              "texto": "Nutrição",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 171,
+                "altura": 40,
+                "topo": 52,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Muito pobre",
+                  "idResposta": 1870,
+                  "codigo": 1166,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Provavelmente inadequada",
+                  "idResposta": 1871,
+                  "codigo": 1167,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Adequada",
+                  "idResposta": 1872,
+                  "codigo": 1168,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "4 - Excelente",
+                  "idResposta": 1873,
+                  "codigo": 1169,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1383,
+                "pergunta": 643,
+                "codPergunta": 631,
+                "ordem": "010105",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp258",
+                "componentePai": "cmp253",
+                "idResposta": 1870,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.06",
+              "texto": "Fricção e risco de danos cutâneos",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 175,
+                "altura": 40,
+                "topo": 52,
+                "esquerda": 176,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "1 - Problema",
+                  "idResposta": 1874,
+                  "codigo": 1170,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "2 - Problema potencial",
+                  "idResposta": 1875,
+                  "codigo": 1171,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "3 - Sem problema",
+                  "idResposta": 1876,
+                  "codigo": 1172,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1384,
+                "pergunta": 644,
+                "codPergunta": 632,
+                "ordem": "010106",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp259",
+                "componentePai": "cmp253",
+                "idResposta": 1874,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.07",
+              "texto": "Total",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 202,
+                "altura": 40,
+                "topo": 52,
+                "esquerda": 353,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "escore-soma",
+                  "referencias": ["cmp254", "cmp255", "cmp256", "cmp257", "cmp258", "cmp259"],
+                  "contexto": [],
+                  "fonte": "PercepçãoSensorial := 0; Umidade := 0; Atividade := 0; Mobilidade := 0; Nutrição := 0; FricçãoeCisalhamento := 0; if cmp254ItemIndex > 0 then PercepçãoSensorial := cmp254ItemIndex; if cmp255ItemIndex > 0 then Umidade := cmp255ItemIndex; if cmp256ItemIndex > 0 then Atividade := cmp256ItemIndex; if cmp257ItemIndex > 0 then Mobilidade := cmp257ItemIndex; if cmp258ItemIndex > 0 then Nutrição := cmp258ItemIndex; if cmp259ItemIndex > 0 then FricçãoeCisalhamento := cmp259ItemIndex; result := Sum(PercepçãoSensorial, Umidade, Atividade, Mobilidade, Nutrição, FricçãoeCisalhamento )",
+                  "regra": {
+                    "soma": [
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp254ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp254ItemIndex"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp255ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp255ItemIndex"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp256ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp256ItemIndex"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp257ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp257ItemIndex"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp258ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp258ItemIndex"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            ">": [
+                              {
+                                "var": "cmp259ItemIndex"
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "var": "cmp259ItemIndex"
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1385,
+                "pergunta": 645,
+                "codPergunta": 633,
+                "ordem": "010107",
+                "tipo": "7",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp260",
+                "componentePai": "cmp253",
+                "idResposta": 1877,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.08",
+              "texto": "Classificação",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 3,
+                "largura": 183,
+                "altura": 40,
+                "topo": 52,
+                "esquerda": 555,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "(15 - 16) - Risco baixo",
+                  "idResposta": 1878,
+                  "codigo": 1173,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "(12 - 14) - Risco moderado",
+                  "idResposta": 1879,
+                  "codigo": 1174,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "(Abaixo de 11) - Risco alto",
+                  "idResposta": 1880,
+                  "codigo": 1175,
+                  "origem": "id-resposta"
+                }
+              ],
+              "expressoes": [
+                {
+                  "tipo": "calcular",
+                  "padrao": "classificacao-faixa",
+                  "referencias": ["cmp260"],
+                  "contexto": [],
+                  "fonte": "if ((cmp260 >= 6) and (cmp260 <= 11)) then result := 3 else if ((cmp260 >= 12) and (cmp260 <= 14)) then result := 1 else if ((cmp260 >= 15) and (cmp260 <= 16)) then result := 2;",
+                  "regra": {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            ">=": [
+                              {
+                                "var": "cmp260"
+                              },
+                              6
+                            ]
+                          },
+                          {
+                            "<=": [
+                              {
+                                "var": "cmp260"
+                              },
+                              11
+                            ]
+                          }
+                        ]
+                      },
+                      3,
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                ">=": [
+                                  {
+                                    "var": "cmp260"
+                                  },
+                                  12
+                                ]
+                              },
+                              {
+                                "<=": [
+                                  {
+                                    "var": "cmp260"
+                                  },
+                                  14
+                                ]
+                              }
+                            ]
+                          },
+                          1,
+                          {
+                            "if": [
+                              {
+                                "and": [
+                                  {
+                                    ">=": [
+                                      {
+                                        "var": "cmp260"
+                                      },
+                                      15
+                                    ]
+                                  },
+                                  {
+                                    "<=": [
+                                      {
+                                        "var": "cmp260"
+                                      },
+                                      16
+                                    ]
+                                  }
+                                ]
+                              },
+                              2,
+                              null
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "convertida": true,
+                  "motivoConversao": null
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1386,
+                "pergunta": 646,
+                "codPergunta": 634,
+                "ordem": "010108",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp261",
+                "componentePai": "cmp253",
+                "idResposta": 1879,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 744,
+            "altura": 100,
+            "topo": 15,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1378,
+            "pergunta": 638,
+            "codPergunta": 626,
+            "ordem": "0101",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp253",
+            "componentePai": "cmp242",
+            "idResposta": 1853,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Avaliação da Ferida",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.02.01",
+              "texto": "Ferida 1",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.02.01.01",
+                  "texto": "Local",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 217,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1389,
+                    "pergunta": 649,
+                    "codPergunta": 637,
+                    "ordem": "01020101",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp264",
+                    "componentePai": "cmp263",
+                    "idResposta": 1883,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.02",
+                  "texto": "Etiologia",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 178,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 225,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1390,
+                    "pergunta": 650,
+                    "codPergunta": 638,
+                    "ordem": "01020102",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp265",
+                    "componentePai": "cmp263",
+                    "idResposta": 1884,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.03",
+                  "texto": "Classificação",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 165,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 402,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Superficial",
+                      "idResposta": 1885,
+                      "codigo": 1176,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Espessura parcial",
+                      "idResposta": 1886,
+                      "codigo": 1177,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espessura total",
+                      "idResposta": 1887,
+                      "codigo": 1178,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1391,
+                    "pergunta": 651,
+                    "codPergunta": 639,
+                    "ordem": "01020103",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp266",
+                    "componentePai": "cmp263",
+                    "idResposta": 1885,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.04",
+                  "texto": "Categoria",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 166,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 567,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "I",
+                      "idResposta": 1888,
+                      "codigo": 1179,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "II",
+                      "idResposta": 1889,
+                      "codigo": 1180,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "III",
+                      "idResposta": 1890,
+                      "codigo": 1181,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "IV",
+                      "idResposta": 1891,
+                      "codigo": 1182,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Não classificável",
+                      "idResposta": 1892,
+                      "codigo": 1183,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Suspeita de lesão profunda",
+                      "idResposta": 1893,
+                      "codigo": 1184,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1392,
+                    "pergunta": 652,
+                    "codPergunta": 640,
+                    "ordem": "01020104",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp267",
+                    "componentePai": "cmp263",
+                    "idResposta": 1888,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.05",
+                  "texto": "Área perilesional",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 727,
+                    "altura": 89,
+                    "topo": 53,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Normal",
+                      "idResposta": 1894,
+                      "codigo": 1185,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Pálida",
+                      "idResposta": 1895,
+                      "codigo": 1186,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Macerada",
+                      "idResposta": 1896,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Eritema",
+                      "idResposta": 1897,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Descamação",
+                      "idResposta": 1898,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Hiperpigmentação",
+                      "idResposta": 1899,
+                      "codigo": 1190,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1393,
+                    "pergunta": 653,
+                    "codPergunta": 641,
+                    "ordem": "01020105",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp268",
+                    "componentePai": "cmp263",
+                    "idResposta": 1894,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.06",
+                  "texto": "Borda",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 726,
+                    "altura": 121,
+                    "topo": 141,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Macerada",
+                      "idResposta": 1900,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Eritema",
+                      "idResposta": 1901,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Descamação",
+                      "idResposta": 1902,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Epitelizada",
+                      "idResposta": 1903,
+                      "codigo": 1191,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Aderida",
+                      "idResposta": 1904,
+                      "codigo": 1192,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Descolada",
+                      "idResposta": 1905,
+                      "codigo": 1193,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Tunelização",
+                      "idResposta": 1906,
+                      "codigo": 1194,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Queratose",
+                      "idResposta": 1907,
+                      "codigo": 1195,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1394,
+                    "pergunta": 654,
+                    "codPergunta": 642,
+                    "ordem": "01020106",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp269",
+                    "componentePai": "cmp263",
+                    "idResposta": 1900,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.07",
+                  "texto": "Sinais e sintomas de infecção",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 725,
+                    "altura": 138,
+                    "topo": 262,
+                    "esquerda": 9,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 2,
+                      "texto": "Sem sinais",
+                      "idResposta": 1910,
+                      "codigo": 1197,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Aumento da dor",
+                      "idResposta": 1911,
+                      "codigo": 1198,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Calor local",
+                      "idResposta": 1912,
+                      "codigo": 1199,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Exsudato purulento",
+                      "idResposta": 1913,
+                      "codigo": 1200,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Cicatrização retardada",
+                      "idResposta": 1914,
+                      "codigo": 1201,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Acúmulo de pus",
+                      "idResposta": 1915,
+                      "codigo": 1202,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Tecido de granulação pálido",
+                      "idResposta": 1916,
+                      "codigo": 1203,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Odor desagradável",
+                      "idResposta": 1917,
+                      "codigo": 1204,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1395,
+                    "pergunta": 655,
+                    "codPergunta": 643,
+                    "ordem": "01020107",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp270",
+                    "componentePai": "cmp263",
+                    "idResposta": 1909,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.08",
+                  "texto": "Exsudato",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 234,
+                    "altura": 40,
+                    "topo": 401,
+                    "esquerda": 9,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Pouco",
+                      "idResposta": 1918,
+                      "codigo": 1205,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Moderado",
+                      "idResposta": 1919,
+                      "codigo": 1206,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Abundante",
+                      "idResposta": 1920,
+                      "codigo": 1207,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Ausente",
+                      "idResposta": 1921,
+                      "codigo": 1208,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1396,
+                    "pergunta": 656,
+                    "codPergunta": 644,
+                    "ordem": "01020108",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp273",
+                    "componentePai": "cmp263",
+                    "idResposta": 1918,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.09",
+                  "texto": "Tipo",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 256,
+                    "altura": 40,
+                    "topo": 401,
+                    "esquerda": 244,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Seroso",
+                      "idResposta": 1922,
+                      "codigo": 1209,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sanguíneo",
+                      "idResposta": 1923,
+                      "codigo": 1210,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Serosanguíneo",
+                      "idResposta": 1924,
+                      "codigo": 1211,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Purulento",
+                      "idResposta": 1925,
+                      "codigo": 1212,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Piosanguinolento",
+                      "idResposta": 1926,
+                      "codigo": 1213,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1397,
+                    "pergunta": 657,
+                    "codPergunta": 645,
+                    "ordem": "01020109",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp274",
+                    "componentePai": "cmp263",
+                    "idResposta": 1922,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.10",
+                  "texto": "Odor",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 233,
+                    "altura": 40,
+                    "topo": 401,
+                    "esquerda": 501,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [],
+                  "x-legacy": {
+                    "vinculo": 1398,
+                    "pergunta": 658,
+                    "codPergunta": 646,
+                    "ordem": "01020110",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp276",
+                    "componentePai": "cmp263",
+                    "idResposta": 1927,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.11",
+                  "texto": "Tipo de tecido",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 725,
+                    "altura": 136,
+                    "topo": 442,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Necrose úmida",
+                      "idResposta": 1929,
+                      "codigo": 1215,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Necrose seca",
+                      "idResposta": 1930,
+                      "codigo": 1216,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Granulação",
+                      "idResposta": 1931,
+                      "codigo": 1217,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Hipergranulação",
+                      "idResposta": 1932,
+                      "codigo": 1218,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Epitelização",
+                      "idResposta": 1933,
+                      "codigo": 1219,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Sangrante",
+                      "idResposta": 1934,
+                      "codigo": 1220,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Osso",
+                      "idResposta": 1935,
+                      "codigo": 1221,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Tendão",
+                      "idResposta": 1936,
+                      "codigo": 1222,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Flictena",
+                      "idResposta": 1937,
+                      "codigo": 1223,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Crosta",
+                      "idResposta": 1938,
+                      "codigo": 1224,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Fáscia muscular",
+                      "idResposta": 1939,
+                      "codigo": 1225,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1399,
+                    "pergunta": 659,
+                    "codPergunta": 647,
+                    "ordem": "01020111",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp277",
+                    "componentePai": "cmp263",
+                    "idResposta": 1929,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.12",
+                  "texto": "Comprimento",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 214,
+                    "altura": 40,
+                    "topo": 580,
+                    "esquerda": 9,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1400,
+                    "pergunta": 660,
+                    "codPergunta": 648,
+                    "ordem": "01020112",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp278",
+                    "componentePai": "cmp263",
+                    "idResposta": 1940,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.13",
+                  "texto": "Largura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 217,
+                    "altura": 40,
+                    "topo": 580,
+                    "esquerda": 237,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1401,
+                    "pergunta": 661,
+                    "codPergunta": 649,
+                    "ordem": "01020113",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp279",
+                    "componentePai": "cmp263",
+                    "idResposta": 1941,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.14",
+                  "texto": "Profundidade",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 272,
+                    "altura": 40,
+                    "topo": 580,
+                    "esquerda": 460,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1402,
+                    "pergunta": 662,
+                    "codPergunta": 650,
+                    "ordem": "01020114",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp280",
+                    "componentePai": "cmp263",
+                    "idResposta": 1942,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.15",
+                  "texto": "Coberturas",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 725,
+                    "altura": 128,
+                    "topo": 619,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Hidrogel",
+                      "idResposta": 1943,
+                      "codigo": 1226,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alginato",
+                      "idResposta": 1944,
+                      "codigo": 1227,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Hidrocolóide",
+                      "idResposta": 1945,
+                      "codigo": 1228,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espuma de poliuretano",
+                      "idResposta": 1946,
+                      "codigo": 1229,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "AGE",
+                      "idResposta": 1947,
+                      "codigo": 1230,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Carvão ativado",
+                      "idResposta": 1948,
+                      "codigo": 1231,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Filme de poliuretano",
+                      "idResposta": 1949,
+                      "codigo": 1232,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Kerlix",
+                      "idResposta": 1950,
+                      "codigo": 1233,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "PHMB",
+                      "idResposta": 1951,
+                      "codigo": 1234,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Outras",
+                      "idResposta": 1952,
+                      "codigo": 1235,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Sulfadiazina de prata",
+                      "idResposta": 1953,
+                      "codigo": 1236,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1403,
+                    "pergunta": 663,
+                    "codPergunta": 651,
+                    "ordem": "01020115",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp281",
+                    "componentePai": "cmp263",
+                    "idResposta": 1943,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.01.16",
+                  "texto": "Tempo de Cobertura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 724,
+                    "altura": 40,
+                    "topo": 747,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "2/2 dias",
+                      "idResposta": 1954,
+                      "codigo": 1237,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "3/3 dias",
+                      "idResposta": 1955,
+                      "codigo": 1238,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "5/5 dias",
+                      "idResposta": 1956,
+                      "codigo": 1239,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "7/7 dias",
+                      "idResposta": 1957,
+                      "codigo": 1240,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Diária",
+                      "idResposta": 1958,
+                      "codigo": 1241,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1404,
+                    "pergunta": 664,
+                    "codPergunta": 652,
+                    "ordem": "01020116",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp282",
+                    "componentePai": "cmp263",
+                    "idResposta": 1954,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                }
+              ],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 755,
+                "altura": 793,
+                "topo": 12,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1388,
+                "pergunta": 648,
+                "codPergunta": 636,
+                "ordem": "010201",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp263",
+                "componentePai": "cmp262",
+                "idResposta": 1882,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.02.02",
+              "texto": "Ferida 2",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.02.02.01",
+                  "texto": "Local",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 195,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1406,
+                    "pergunta": 649,
+                    "codPergunta": 637,
+                    "ordem": "01020201",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp284",
+                    "componentePai": "cmp283",
+                    "idResposta": 1883,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.02",
+                  "texto": "Etiologia",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 159,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 203,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1407,
+                    "pergunta": 650,
+                    "codPergunta": 638,
+                    "ordem": "01020202",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp285",
+                    "componentePai": "cmp283",
+                    "idResposta": 1884,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.03",
+                  "texto": "Classificação",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 183,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 363,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Superficial",
+                      "idResposta": 1885,
+                      "codigo": 1176,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Espessura parcial",
+                      "idResposta": 1886,
+                      "codigo": 1177,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espessura total",
+                      "idResposta": 1887,
+                      "codigo": 1178,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1408,
+                    "pergunta": 651,
+                    "codPergunta": 639,
+                    "ordem": "01020203",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp287",
+                    "componentePai": "cmp283",
+                    "idResposta": 1885,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.04",
+                  "texto": "Classificação",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "sem-componente",
+                  "widget": null,
+                  "tamanhoMaximo": null,
+                  "layout": null,
+                  "x-legacy": {
+                    "vinculo": 1409,
+                    "pergunta": 651,
+                    "codPergunta": 639,
+                    "ordem": "01020204",
+                    "tipo": "13",
+                    "classe": null,
+                    "componente": null,
+                    "componentePai": null,
+                    "idResposta": null,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.04",
+                  "texto": "Categoria",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 181,
+                    "altura": 40,
+                    "topo": 13,
+                    "esquerda": 548,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "I",
+                      "idResposta": 1888,
+                      "codigo": 1179,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "II",
+                      "idResposta": 1889,
+                      "codigo": 1180,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "III",
+                      "idResposta": 1890,
+                      "codigo": 1181,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "IV",
+                      "idResposta": 1891,
+                      "codigo": 1182,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Não classificável",
+                      "idResposta": 1892,
+                      "codigo": 1183,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Suspeita de lesão profunda",
+                      "idResposta": 1893,
+                      "codigo": 1184,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1410,
+                    "pergunta": 652,
+                    "codPergunta": 640,
+                    "ordem": "01020204",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp288",
+                    "componentePai": "cmp283",
+                    "idResposta": 1888,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.05",
+                  "texto": "Área perilesional",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 724,
+                    "altura": 100,
+                    "topo": 54,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Normal",
+                      "idResposta": 1894,
+                      "codigo": 1185,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Pálida",
+                      "idResposta": 1895,
+                      "codigo": 1186,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Macerada",
+                      "idResposta": 1896,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Eritema",
+                      "idResposta": 1897,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Descamação",
+                      "idResposta": 1898,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Hiperpigmentação",
+                      "idResposta": 1899,
+                      "codigo": 1190,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1411,
+                    "pergunta": 653,
+                    "codPergunta": 641,
+                    "ordem": "01020205",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp289",
+                    "componentePai": "cmp283",
+                    "idResposta": 1894,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.06",
+                  "texto": "Borda",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 725,
+                    "altura": 115,
+                    "topo": 153,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Macerada",
+                      "idResposta": 1900,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Eritema",
+                      "idResposta": 1901,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Descamação",
+                      "idResposta": 1902,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Epitelizada",
+                      "idResposta": 1903,
+                      "codigo": 1191,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Aderida",
+                      "idResposta": 1904,
+                      "codigo": 1192,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Descolada",
+                      "idResposta": 1905,
+                      "codigo": 1193,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Tunelização",
+                      "idResposta": 1906,
+                      "codigo": 1194,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Queratose",
+                      "idResposta": 1907,
+                      "codigo": 1195,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1412,
+                    "pergunta": 654,
+                    "codPergunta": 642,
+                    "ordem": "01020206",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp290",
+                    "componentePai": "cmp283",
+                    "idResposta": 1900,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.07",
+                  "texto": "Sinais e sintomas de infecção",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 726,
+                    "altura": 130,
+                    "topo": 268,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 2,
+                      "texto": "Sem sinais",
+                      "idResposta": 1910,
+                      "codigo": 1197,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Aumento da dor",
+                      "idResposta": 1911,
+                      "codigo": 1198,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Calor local",
+                      "idResposta": 1912,
+                      "codigo": 1199,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Exsudato purulento",
+                      "idResposta": 1913,
+                      "codigo": 1200,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Cicatrização retardada",
+                      "idResposta": 1914,
+                      "codigo": 1201,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Acúmulo de pus",
+                      "idResposta": 1915,
+                      "codigo": 1202,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Tecido de granulação pálido",
+                      "idResposta": 1916,
+                      "codigo": 1203,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Odor desagradável",
+                      "idResposta": 1917,
+                      "codigo": 1204,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1413,
+                    "pergunta": 655,
+                    "codPergunta": 643,
+                    "ordem": "01020207",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp291",
+                    "componentePai": "cmp283",
+                    "idResposta": 1909,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.08",
+                  "texto": "Exsudato",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 228,
+                    "altura": 40,
+                    "topo": 400,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Pouco",
+                      "idResposta": 1918,
+                      "codigo": 1205,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Moderado",
+                      "idResposta": 1919,
+                      "codigo": 1206,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Abundante",
+                      "idResposta": 1920,
+                      "codigo": 1207,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Ausente",
+                      "idResposta": 1921,
+                      "codigo": 1208,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1414,
+                    "pergunta": 656,
+                    "codPergunta": 644,
+                    "ordem": "01020208",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp292",
+                    "componentePai": "cmp283",
+                    "idResposta": 1918,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.09",
+                  "texto": "Tipo",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 237,
+                    "altura": 40,
+                    "topo": 400,
+                    "esquerda": 236,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Seroso",
+                      "idResposta": 1922,
+                      "codigo": 1209,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sanguíneo",
+                      "idResposta": 1923,
+                      "codigo": 1210,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Serosanguíneo",
+                      "idResposta": 1924,
+                      "codigo": 1211,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Purulento",
+                      "idResposta": 1925,
+                      "codigo": 1212,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Piosanguinolento",
+                      "idResposta": 1926,
+                      "codigo": 1213,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1415,
+                    "pergunta": 657,
+                    "codPergunta": 645,
+                    "ordem": "01020209",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp293",
+                    "componentePai": "cmp283",
+                    "idResposta": 1922,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.10",
+                  "texto": "Odor",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 258,
+                    "altura": 40,
+                    "topo": 400,
+                    "esquerda": 475,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [],
+                  "x-legacy": {
+                    "vinculo": 1416,
+                    "pergunta": 658,
+                    "codPergunta": 646,
+                    "ordem": "01020210",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp294",
+                    "componentePai": "cmp283",
+                    "idResposta": 1927,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.11",
+                  "texto": "Tipo de tecido",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 725,
+                    "altura": 131,
+                    "topo": 440,
+                    "esquerda": 7,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Necrose úmida",
+                      "idResposta": 1929,
+                      "codigo": 1215,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Necrose seca",
+                      "idResposta": 1930,
+                      "codigo": 1216,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Granulação",
+                      "idResposta": 1931,
+                      "codigo": 1217,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Hipergranulação",
+                      "idResposta": 1932,
+                      "codigo": 1218,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Epitelização",
+                      "idResposta": 1933,
+                      "codigo": 1219,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Sangrante",
+                      "idResposta": 1934,
+                      "codigo": 1220,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Osso",
+                      "idResposta": 1935,
+                      "codigo": 1221,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Tendão",
+                      "idResposta": 1936,
+                      "codigo": 1222,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Flictena",
+                      "idResposta": 1937,
+                      "codigo": 1223,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Crosta",
+                      "idResposta": 1938,
+                      "codigo": 1224,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Fáscia muscular",
+                      "idResposta": 1939,
+                      "codigo": 1225,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1417,
+                    "pergunta": 659,
+                    "codPergunta": 647,
+                    "ordem": "01020211",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp295",
+                    "componentePai": "cmp283",
+                    "idResposta": 1929,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.12",
+                  "texto": "Comprimento",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 216,
+                    "altura": 40,
+                    "topo": 571,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1418,
+                    "pergunta": 660,
+                    "codPergunta": 648,
+                    "ordem": "01020212",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp296",
+                    "componentePai": "cmp283",
+                    "idResposta": 1940,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.13",
+                  "texto": "Largura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 277,
+                    "altura": 40,
+                    "topo": 572,
+                    "esquerda": 230,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1419,
+                    "pergunta": 661,
+                    "codPergunta": 649,
+                    "ordem": "01020213",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp297",
+                    "componentePai": "cmp283",
+                    "idResposta": 1941,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.14",
+                  "texto": "Profundidade",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 221,
+                    "altura": 40,
+                    "topo": 572,
+                    "esquerda": 511,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1420,
+                    "pergunta": 662,
+                    "codPergunta": 650,
+                    "ordem": "01020214",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp298",
+                    "componentePai": "cmp283",
+                    "idResposta": 1942,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.15",
+                  "texto": "Coberturas",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 721,
+                    "altura": 133,
+                    "topo": 616,
+                    "esquerda": 9,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Hidrogel",
+                      "idResposta": 1943,
+                      "codigo": 1226,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alginato",
+                      "idResposta": 1944,
+                      "codigo": 1227,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Hidrocolóide",
+                      "idResposta": 1945,
+                      "codigo": 1228,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espuma de poliuretano",
+                      "idResposta": 1946,
+                      "codigo": 1229,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "AGE",
+                      "idResposta": 1947,
+                      "codigo": 1230,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Carvão ativado",
+                      "idResposta": 1948,
+                      "codigo": 1231,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Filme de poliuretano",
+                      "idResposta": 1949,
+                      "codigo": 1232,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Kerlix",
+                      "idResposta": 1950,
+                      "codigo": 1233,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "PHMB",
+                      "idResposta": 1951,
+                      "codigo": 1234,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Outras",
+                      "idResposta": 1952,
+                      "codigo": 1235,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Sulfadiazina de prata",
+                      "idResposta": 1953,
+                      "codigo": 1236,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1421,
+                    "pergunta": 663,
+                    "codPergunta": 651,
+                    "ordem": "01020215",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp299",
+                    "componentePai": "cmp283",
+                    "idResposta": 1943,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.02.16",
+                  "texto": "Tempo de Cobertura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 720,
+                    "altura": 40,
+                    "topo": 751,
+                    "esquerda": 10,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "2/2 dias",
+                      "idResposta": 1954,
+                      "codigo": 1237,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "3/3 dias",
+                      "idResposta": 1955,
+                      "codigo": 1238,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "5/5 dias",
+                      "idResposta": 1956,
+                      "codigo": 1239,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "7/7 dias",
+                      "idResposta": 1957,
+                      "codigo": 1240,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Diária",
+                      "idResposta": 1958,
+                      "codigo": 1241,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1422,
+                    "pergunta": 664,
+                    "codPergunta": 652,
+                    "ordem": "01020216",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp300",
+                    "componentePai": "cmp283",
+                    "idResposta": 1954,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                }
+              ],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 752,
+                "altura": 803,
+                "topo": 803,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1405,
+                "pergunta": 665,
+                "codPergunta": 653,
+                "ordem": "010202",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp283",
+                "componentePai": "cmp262",
+                "idResposta": 1959,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.02.03",
+              "texto": "Ferida 3",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.02.03.01",
+                  "texto": "Local",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 192,
+                    "altura": 40,
+                    "topo": 15,
+                    "esquerda": 10,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1424,
+                    "pergunta": 649,
+                    "codPergunta": 637,
+                    "ordem": "01020301",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp313",
+                    "componentePai": "cmp301",
+                    "idResposta": 1883,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.02",
+                  "texto": "Etiologia",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 172,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 202,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1425,
+                    "pergunta": 650,
+                    "codPergunta": 638,
+                    "ordem": "01020302",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp314",
+                    "componentePai": "cmp301",
+                    "idResposta": 1884,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.03",
+                  "texto": "Classificação",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 178,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 375,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Superficial",
+                      "idResposta": 1885,
+                      "codigo": 1176,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Espessura parcial",
+                      "idResposta": 1886,
+                      "codigo": 1177,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espessura total",
+                      "idResposta": 1887,
+                      "codigo": 1178,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1426,
+                    "pergunta": 651,
+                    "codPergunta": 639,
+                    "ordem": "01020303",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp315",
+                    "componentePai": "cmp301",
+                    "idResposta": 1885,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.04",
+                  "texto": "Categoria",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 177,
+                    "altura": 40,
+                    "topo": 14,
+                    "esquerda": 555,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "I",
+                      "idResposta": 1888,
+                      "codigo": 1179,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "II",
+                      "idResposta": 1889,
+                      "codigo": 1180,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "III",
+                      "idResposta": 1890,
+                      "codigo": 1181,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "IV",
+                      "idResposta": 1891,
+                      "codigo": 1182,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Não classificável",
+                      "idResposta": 1892,
+                      "codigo": 1183,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Suspeita de lesão profunda",
+                      "idResposta": 1893,
+                      "codigo": 1184,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1427,
+                    "pergunta": 652,
+                    "codPergunta": 640,
+                    "ordem": "01020304",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp316",
+                    "componentePai": "cmp301",
+                    "idResposta": 1888,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.05",
+                  "texto": "Área perilesional",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 724,
+                    "altura": 100,
+                    "topo": 56,
+                    "esquerda": 10,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Normal",
+                      "idResposta": 1894,
+                      "codigo": 1185,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Pálida",
+                      "idResposta": 1895,
+                      "codigo": 1186,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Macerada",
+                      "idResposta": 1896,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Eritema",
+                      "idResposta": 1897,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Descamação",
+                      "idResposta": 1898,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Hiperpigmentação",
+                      "idResposta": 1899,
+                      "codigo": 1190,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1428,
+                    "pergunta": 653,
+                    "codPergunta": 641,
+                    "ordem": "01020305",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp317",
+                    "componentePai": "cmp301",
+                    "idResposta": 1894,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.06",
+                  "texto": "Borda",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 724,
+                    "altura": 130,
+                    "topo": 157,
+                    "esquerda": 11,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Macerada",
+                      "idResposta": 1900,
+                      "codigo": 1187,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Eritema",
+                      "idResposta": 1901,
+                      "codigo": 1188,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Descamação",
+                      "idResposta": 1902,
+                      "codigo": 1189,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Epitelizada",
+                      "idResposta": 1903,
+                      "codigo": 1191,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Aderida",
+                      "idResposta": 1904,
+                      "codigo": 1192,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Descolada",
+                      "idResposta": 1905,
+                      "codigo": 1193,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Tunelização",
+                      "idResposta": 1906,
+                      "codigo": 1194,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Queratose",
+                      "idResposta": 1907,
+                      "codigo": 1195,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1429,
+                    "pergunta": 654,
+                    "codPergunta": 642,
+                    "ordem": "01020306",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp318",
+                    "componentePai": "cmp301",
+                    "idResposta": 1900,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.07",
+                  "texto": "Sinais e sintomas de infecção",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 727,
+                    "altura": 131,
+                    "topo": 286,
+                    "esquerda": 10,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 2,
+                      "texto": "Sem sinais",
+                      "idResposta": 1910,
+                      "codigo": 1197,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Aumento da dor",
+                      "idResposta": 1911,
+                      "codigo": 1198,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Calor local",
+                      "idResposta": 1912,
+                      "codigo": 1199,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Exsudato purulento",
+                      "idResposta": 1913,
+                      "codigo": 1200,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Cicatrização retardada",
+                      "idResposta": 1914,
+                      "codigo": 1201,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Acúmulo de pus",
+                      "idResposta": 1915,
+                      "codigo": 1202,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Tecido de granulação pálido",
+                      "idResposta": 1916,
+                      "codigo": 1203,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Odor desagradável",
+                      "idResposta": 1917,
+                      "codigo": 1204,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1430,
+                    "pergunta": 655,
+                    "codPergunta": 643,
+                    "ordem": "01020307",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp320",
+                    "componentePai": "cmp301",
+                    "idResposta": 1909,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.08",
+                  "texto": "Exsudato",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 192,
+                    "altura": 40,
+                    "topo": 421,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Pouco",
+                      "idResposta": 1918,
+                      "codigo": 1205,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Moderado",
+                      "idResposta": 1919,
+                      "codigo": 1206,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Abundante",
+                      "idResposta": 1920,
+                      "codigo": 1207,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Ausente",
+                      "idResposta": 1921,
+                      "codigo": 1208,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1431,
+                    "pergunta": 656,
+                    "codPergunta": 644,
+                    "ordem": "01020308",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp321",
+                    "componentePai": "cmp301",
+                    "idResposta": 1918,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.09",
+                  "texto": "Tipo",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 272,
+                    "altura": 40,
+                    "topo": 421,
+                    "esquerda": 203,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "Seroso",
+                      "idResposta": 1922,
+                      "codigo": 1209,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Sanguíneo",
+                      "idResposta": 1923,
+                      "codigo": 1210,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Serosanguíneo",
+                      "idResposta": 1924,
+                      "codigo": 1211,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Purulento",
+                      "idResposta": 1925,
+                      "codigo": 1212,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Piosanguinolento",
+                      "idResposta": 1926,
+                      "codigo": 1213,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1432,
+                    "pergunta": 657,
+                    "codPergunta": 645,
+                    "ordem": "01020309",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp322",
+                    "componentePai": "cmp301",
+                    "idResposta": 1922,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.10",
+                  "texto": "Odor",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 259,
+                    "altura": 40,
+                    "topo": 420,
+                    "esquerda": 479,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [],
+                  "x-legacy": {
+                    "vinculo": 1433,
+                    "pergunta": 658,
+                    "codPergunta": 646,
+                    "ordem": "01020310",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp323",
+                    "componentePai": "cmp301",
+                    "idResposta": 1927,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.11",
+                  "texto": "Tipo de tecido",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 730,
+                    "altura": 127,
+                    "topo": 461,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Necrose úmida",
+                      "idResposta": 1929,
+                      "codigo": 1215,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Necrose seca",
+                      "idResposta": 1930,
+                      "codigo": 1216,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Granulação",
+                      "idResposta": 1931,
+                      "codigo": 1217,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Hipergranulação",
+                      "idResposta": 1932,
+                      "codigo": 1218,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "Epitelização",
+                      "idResposta": 1933,
+                      "codigo": 1219,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Sangrante",
+                      "idResposta": 1934,
+                      "codigo": 1220,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Osso",
+                      "idResposta": 1935,
+                      "codigo": 1221,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Tendão",
+                      "idResposta": 1936,
+                      "codigo": 1222,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "Flictena",
+                      "idResposta": 1937,
+                      "codigo": 1223,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Crosta",
+                      "idResposta": 1938,
+                      "codigo": 1224,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Fáscia muscular",
+                      "idResposta": 1939,
+                      "codigo": 1225,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1434,
+                    "pergunta": 659,
+                    "codPergunta": 647,
+                    "ordem": "01020311",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp324",
+                    "componentePai": "cmp301",
+                    "idResposta": 1929,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.12",
+                  "texto": "Comprimento",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 3,
+                    "largura": 188,
+                    "altura": 40,
+                    "topo": 589,
+                    "esquerda": 10,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1435,
+                    "pergunta": 660,
+                    "codPergunta": 648,
+                    "ordem": "01020312",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp325",
+                    "componentePai": "cmp301",
+                    "idResposta": 1940,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.13",
+                  "texto": "Largura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 274,
+                    "altura": 40,
+                    "topo": 588,
+                    "esquerda": 197,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1436,
+                    "pergunta": 661,
+                    "codPergunta": 649,
+                    "ordem": "01020313",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp327",
+                    "componentePai": "cmp301",
+                    "idResposta": 1941,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.14",
+                  "texto": "Profundidade",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": "cm",
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 4,
+                    "largura": 269,
+                    "altura": 40,
+                    "topo": 587,
+                    "esquerda": 469,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1437,
+                    "pergunta": 662,
+                    "codPergunta": 650,
+                    "ordem": "01020314",
+                    "tipo": "6",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp337",
+                    "componentePai": "cmp301",
+                    "idResposta": 1942,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.15",
+                  "texto": "Coberturas",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "multi-choice",
+                  "widget": "checkbox-group",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 729,
+                    "altura": 130,
+                    "topo": 631,
+                    "esquerda": 11,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 0,
+                      "texto": "Hidrogel",
+                      "idResposta": 1943,
+                      "codigo": 1226,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 1,
+                      "texto": "Alginato",
+                      "idResposta": 1944,
+                      "codigo": 1227,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "Hidrocolóide",
+                      "idResposta": 1945,
+                      "codigo": 1228,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "Espuma de poliuretano",
+                      "idResposta": 1946,
+                      "codigo": 1229,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "AGE",
+                      "idResposta": 1947,
+                      "codigo": 1230,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Carvão ativado",
+                      "idResposta": 1948,
+                      "codigo": 1231,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 6,
+                      "texto": "Filme de poliuretano",
+                      "idResposta": 1949,
+                      "codigo": 1232,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 7,
+                      "texto": "Kerlix",
+                      "idResposta": 1950,
+                      "codigo": 1233,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 8,
+                      "texto": "PHMB",
+                      "idResposta": 1951,
+                      "codigo": 1234,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 9,
+                      "texto": "Outras",
+                      "idResposta": 1952,
+                      "codigo": 1235,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 10,
+                      "texto": "Sulfadiazina de prata",
+                      "idResposta": 1953,
+                      "codigo": 1236,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1438,
+                    "pergunta": 663,
+                    "codPergunta": 651,
+                    "ordem": "01020315",
+                    "tipo": "12",
+                    "classe": "TfRespCheckListBox",
+                    "componente": "cmp339",
+                    "componentePai": "cmp301",
+                    "idResposta": 1943,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.02.03.16",
+                  "texto": "Tempo de Cobertura",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "choice",
+                  "widget": "select",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 12,
+                    "largura": 728,
+                    "altura": 40,
+                    "topo": 767,
+                    "esquerda": 11,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "opcoes": [
+                    {
+                      "indice": 1,
+                      "texto": "2/2 dias",
+                      "idResposta": 1954,
+                      "codigo": 1237,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 2,
+                      "texto": "3/3 dias",
+                      "idResposta": 1955,
+                      "codigo": 1238,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 3,
+                      "texto": "5/5 dias",
+                      "idResposta": 1956,
+                      "codigo": 1239,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 4,
+                      "texto": "7/7 dias",
+                      "idResposta": 1957,
+                      "codigo": 1240,
+                      "origem": "ordem"
+                    },
+                    {
+                      "indice": 5,
+                      "texto": "Diária",
+                      "idResposta": 1958,
+                      "codigo": 1241,
+                      "origem": "ordem"
+                    }
+                  ],
+                  "x-legacy": {
+                    "vinculo": 1439,
+                    "pergunta": 664,
+                    "codPergunta": 652,
+                    "ordem": "01020316",
+                    "tipo": "13",
+                    "classe": "TfRespComboBox",
+                    "componente": "cmp341",
+                    "componentePai": "cmp301",
+                    "idResposta": 1954,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                }
+              ],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 745,
+                "altura": 816,
+                "topo": 1602,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1423,
+                "pergunta": 666,
+                "codPergunta": 654,
+                "ordem": "010203",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp301",
+                "componentePai": "cmp262",
+                "idResposta": 1960,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 751,
+            "altura": 2431,
+            "topo": 115,
+            "esquerda": -6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1387,
+            "pergunta": 647,
+            "codPergunta": 635,
+            "ordem": "0102",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp262",
+            "componentePai": "cmp242",
+            "idResposta": 1881,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Conduta",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.03.01",
+              "texto": "Local",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1441,
+                "pergunta": 649,
+                "codPergunta": 637,
+                "ordem": "010301",
+                "tipo": "11",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.02",
+              "texto": "Etiologia",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1442,
+                "pergunta": 650,
+                "codPergunta": 638,
+                "ordem": "010302",
+                "tipo": "11",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.03",
+              "texto": "Classificação",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1443,
+                "pergunta": 651,
+                "codPergunta": 639,
+                "ordem": "010303",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.04",
+              "texto": "Categoria",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1444,
+                "pergunta": 652,
+                "codPergunta": 640,
+                "ordem": "010304",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.05",
+              "texto": "Área perilesional",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1445,
+                "pergunta": 653,
+                "codPergunta": 641,
+                "ordem": "010305",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.06",
+              "texto": "Borda",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1446,
+                "pergunta": 654,
+                "codPergunta": 642,
+                "ordem": "010306",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.07",
+              "texto": "Sinais e sintomas de infecção",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1447,
+                "pergunta": 655,
+                "codPergunta": 643,
+                "ordem": "010307",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.08",
+              "texto": "Exsudato",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1448,
+                "pergunta": 656,
+                "codPergunta": 644,
+                "ordem": "010308",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.09",
+              "texto": "Tipo",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1449,
+                "pergunta": 657,
+                "codPergunta": 645,
+                "ordem": "010309",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.10",
+              "texto": "Odor",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1450,
+                "pergunta": 658,
+                "codPergunta": 646,
+                "ordem": "010310",
+                "tipo": "13",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.11",
+              "texto": "Tipo de tecido",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 1451,
+                "pergunta": 659,
+                "codPergunta": 647,
+                "ordem": "010311",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 721,
+            "altura": 82,
+            "topo": 2529,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1440,
+            "pergunta": 667,
+            "codPergunta": 655,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp344",
+            "componentePai": "cmp242",
+            "idResposta": 1961,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Materiais utilizados nos curativos",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 720,
+            "altura": 204,
+            "topo": 2610,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [],
+          "x-legacy": {
+            "vinculo": 1452,
+            "pergunta": 668,
+            "codPergunta": 656,
+            "ordem": "0104",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp346",
+            "componentePai": "cmp242",
+            "idResposta": 1963,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Conduta",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1453,
+            "pergunta": 667,
+            "codPergunta": 655,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 751,
+        "altura": 146,
+        "topo": 1,
+        "esquerda": 3,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1377,
+        "pergunta": 637,
+        "codPergunta": 625,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp242",
+        "componentePai": "jvsBox",
+        "idResposta": 1852,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": [
+    {
+      "linkId": "01.02.01.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Edema",
+      "sugestaoIdResposta": 1909
+    },
+    {
+      "linkId": "01.02.01.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Eritema",
+      "sugestaoIdResposta": 1908
+    },
+    {
+      "linkId": "01.02.01.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Presente",
+      "sugestaoIdResposta": 1927
+    },
+    {
+      "linkId": "01.02.01.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Ausente",
+      "sugestaoIdResposta": 1928
+    },
+    {
+      "linkId": "01.02.02.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Edema",
+      "sugestaoIdResposta": 1909
+    },
+    {
+      "linkId": "01.02.02.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Eritema",
+      "sugestaoIdResposta": 1908
+    },
+    {
+      "linkId": "01.02.02.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Presente",
+      "sugestaoIdResposta": 1927
+    },
+    {
+      "linkId": "01.02.02.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Ausente",
+      "sugestaoIdResposta": 1928
+    },
+    {
+      "linkId": "01.02.03.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Edema",
+      "sugestaoIdResposta": 1909
+    },
+    {
+      "linkId": "01.02.03.07",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Eritema",
+      "sugestaoIdResposta": 1908
+    },
+    {
+      "linkId": "01.02.03.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Presente",
+      "sugestaoIdResposta": 1927
+    },
+    {
+      "linkId": "01.02.03.10",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Ausente",
+      "sugestaoIdResposta": 1928
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 0,
+      "opcao": "Soro Fisiológico 10ml",
+      "sugestaoIdResposta": 1963
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Soro Fisiológico 100ml",
+      "sugestaoIdResposta": 1964
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Gaze (Pacote com 10 unidades)",
+      "sugestaoIdResposta": 1965
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 3,
+      "opcao": "ISOBEC",
+      "sugestaoIdResposta": 1966
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 4,
+      "opcao": "Luva de procedimento (par)",
+      "sugestaoIdResposta": 1967
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 5,
+      "opcao": "Luva estéril (par)",
+      "sugestaoIdResposta": 1968
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 6,
+      "opcao": "Esparadrapo comum",
+      "sugestaoIdResposta": 1969
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 7,
+      "opcao": "Esparadrapo antialérgico",
+      "sugestaoIdResposta": 1970
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 8,
+      "opcao": "Atadura 10cm",
+      "sugestaoIdResposta": 1971
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 9,
+      "opcao": "Atadura 15cm",
+      "sugestaoIdResposta": 1972
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 10,
+      "opcao": "Atadura 20cm",
+      "sugestaoIdResposta": 1973
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 11,
+      "opcao": "Colagenase",
+      "sugestaoIdResposta": 1974
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 12,
+      "opcao": "Sulfadiazina de prata",
+      "sugestaoIdResposta": 1975
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 13,
+      "opcao": "Lâmina de bisturi",
+      "sugestaoIdResposta": 1976
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 14,
+      "opcao": "Agulha 40x12",
+      "sugestaoIdResposta": 1977
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 15,
+      "opcao": "Transofix",
+      "sugestaoIdResposta": 1978
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 16,
+      "opcao": "Alcool 70%",
+      "sugestaoIdResposta": 1979
+    },
+    {
+      "linkId": "01.04",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 17,
+      "opcao": "Outro",
+      "sugestaoIdResposta": 1962
+    }
+  ]
+}

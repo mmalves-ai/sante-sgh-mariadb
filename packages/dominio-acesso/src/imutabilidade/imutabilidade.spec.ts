@@ -27,7 +27,14 @@ describe('M59-F3 regra 6: tabela clínica', () => {
     expect(ehTabelaClinica('SGH_CC_FA_GANHO')).toBe(true);
     expect(ehTabelaClinica('SGH_IDEMPOTENCIA')).toBe(false);
     // SADT (resultado e laudo), CC (cirurgia), prontuário e a trilha entram; os cadastros saem.
-    for (const t of ['emissao_laudo', 'entrega_resultado', 'ato_cirurgico', 'prescricao', 'trilha_auditoria', 'PRESCRICAO'])
+    for (const t of [
+      'emissao_laudo',
+      'entrega_resultado',
+      'ato_cirurgico',
+      'prescricao',
+      'trilha_auditoria',
+      'PRESCRICAO',
+    ])
       expect(ehTabelaClinica(t)).toBe(true);
     for (const t of [
       'SGH_SADT_LAUDO_EMITIDO',

@@ -1,0 +1,81 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 28,
+    "codigo": "SEPSE",
+    "descricao": "INATIVO",
+    "fase": 0
+  },
+  "impressaoLayout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 2,
+    "vinculosAtivos": 0,
+    "vinculosInativos": 2,
+    "componentes": 0,
+    "componentesMapeados": 0,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 2,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {}
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PROTOCOLO GERENCIADO DE SEPSE",
+      "ativo": false,
+      "obrigatorio": true,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 1285,
+        "pergunta": 575,
+        "codPergunta": 563,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "T",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "SUSPEITA CLINICA",
+      "ativo": false,
+      "obrigatorio": true,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 1286,
+        "pergunta": 577,
+        "codPergunta": 565,
+        "ordem": "02",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "T",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

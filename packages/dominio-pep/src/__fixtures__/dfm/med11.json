@@ -1,0 +1,748 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 21,
+    "codigo": "MED11",
+    "descricao": "ENCAMINHAMENTO",
+    "fase": 2
+  },
+  "impressaoLayout": "4ea3621a68548217254d63c29bf2c2af9a36e77187eb02a910bfad20cb388f82",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 12,
+    "vinculosAtivos": 3,
+    "vinculosInativos": 9,
+    "componentes": 8,
+    "componentesMapeados": 8,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 4,
+    "opcoesResolvidas": 28,
+    "escolhasPendentes": 17,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespComboBox": 3,
+      "TfRespTexto": 3,
+      "TGroupBoxPep": 2
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PARECER",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 762,
+        "altura": 332,
+        "topo": 0,
+        "esquerda": 0,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 821,
+        "pergunta": 367,
+        "codPergunta": 355,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp494",
+        "componentePai": "jvsBox",
+        "idResposta": 1069,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "Encaminhamento",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.00",
+          "texto": "Especialidade",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 6,
+            "largura": 368,
+            "altura": 40,
+            "topo": 13,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [],
+          "x-legacy": {
+            "vinculo": 822,
+            "pergunta": 368,
+            "codPergunta": 356,
+            "ordem": "0100",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp502",
+            "componentePai": "cmp494",
+            "idResposta": 1072,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Especialidade",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 823,
+            "pergunta": 368,
+            "codPergunta": 356,
+            "ordem": "0101",
+            "tipo": "13",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Dados Clínicos (Sumário)",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 108,
+            "topo": 55,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 824,
+            "pergunta": 369,
+            "codPergunta": 357,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp495",
+            "componentePai": "cmp494",
+            "idResposta": 1097,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Especialidade",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 40,
+            "topo": 12,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Cardiologia",
+              "idResposta": 1037,
+              "codigo": 678,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Cirurgia Bucomaxilofacial",
+              "idResposta": 1038,
+              "codigo": 679,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Cirurgia Cardíaca",
+              "idResposta": 1039,
+              "codigo": 680,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Cirurgia Geral",
+              "idResposta": 1040,
+              "codigo": 681,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Cirurgia Plástica",
+              "idResposta": 1041,
+              "codigo": 682,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Cirurgia Torácica",
+              "idResposta": 1042,
+              "codigo": 683,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Cirurgia Vascular",
+              "idResposta": 1043,
+              "codigo": 684,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Dermatologia",
+              "idResposta": 1044,
+              "codigo": 685,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Endocrinologia",
+              "idResposta": 1045,
+              "codigo": 686,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Hematologia",
+              "idResposta": 1046,
+              "codigo": 687,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Neurologia",
+              "idResposta": 1047,
+              "codigo": 688,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Ortopedia",
+              "idResposta": 1048,
+              "codigo": 689,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Pneumologia",
+              "idResposta": 1049,
+              "codigo": 690,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Reumatologia",
+              "idResposta": 1050,
+              "codigo": 691,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 15,
+              "texto": "Urologia",
+              "idResposta": 1051,
+              "codigo": 692,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 16,
+              "texto": "Infectologia",
+              "idResposta": 1052,
+              "codigo": 693,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 17,
+              "texto": "Nefrologia",
+              "idResposta": 1053,
+              "codigo": 694,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 18,
+              "texto": "Clinica Médica",
+              "idResposta": 1054,
+              "codigo": 695,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 19,
+              "texto": "Otorrinolaringologia",
+              "idResposta": 1055,
+              "codigo": 696,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 20,
+              "texto": "Oftalmologia",
+              "idResposta": 1056,
+              "codigo": 697,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 21,
+              "texto": "Geriatria",
+              "idResposta": 1057,
+              "codigo": 698,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 22,
+              "texto": "Gastroenterologia",
+              "idResposta": 1058,
+              "codigo": 699,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 23,
+              "texto": "Proctologia",
+              "idResposta": 1059,
+              "codigo": 700,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 24,
+              "texto": "Nutrologia",
+              "idResposta": 1060,
+              "codigo": 701,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 25,
+              "texto": "Nutrição",
+              "idResposta": 1061,
+              "codigo": 702,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 26,
+              "texto": "Outra",
+              "idResposta": 1066,
+              "codigo": 63,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 831,
+            "pergunta": 361,
+            "codPergunta": 349,
+            "ordem": "0101",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp831",
+            "componentePai": "cmp830",
+            "idResposta": 1037,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "História clínica (Cabeçalho)",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 825,
+            "pergunta": 370,
+            "codPergunta": 358,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Hipótese Diagnóstica",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 108,
+            "topo": 168,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 826,
+            "pergunta": 371,
+            "codPergunta": 359,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp496",
+            "componentePai": "cmp494",
+            "idResposta": 1099,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "História clínica (Cabeçalho)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 737,
+            "altura": 107,
+            "topo": 61,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 832,
+            "pergunta": 12,
+            "codPergunta": 12,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp832",
+            "componentePai": "cmp830",
+            "idResposta": 13,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Hipótese Diagnóstica",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 827,
+            "pergunta": 371,
+            "codPergunta": 359,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Parecer",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 207,
+            "altura": 40,
+            "topo": 280,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Urgência",
+              "idResposta": 1100,
+              "codigo": 732,
+              "origem": "ordem"
+            },
+            {
+              "indice": 2,
+              "texto": "Rotina",
+              "idResposta": 1101,
+              "codigo": 733,
+              "origem": "ordem"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 828,
+            "pergunta": 372,
+            "codPergunta": 360,
+            "ordem": "0103",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp497",
+            "componentePai": "cmp494",
+            "idResposta": 1100,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Parecer",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 829,
+            "pergunta": 372,
+            "codPergunta": 360,
+            "ordem": "0104",
+            "tipo": "13",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 173,
+        "topo": 8,
+        "esquerda": 2,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 830,
+        "pergunta": 373,
+        "codPergunta": 361,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp830",
+        "componentePai": "jvsBox",
+        "idResposta": 1102,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": [
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 1,
+      "opcao": "Cardiologia",
+      "sugestaoIdResposta": 1072
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 2,
+      "opcao": "Cirurgia Bucomaxilofacial",
+      "sugestaoIdResposta": 1073
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 3,
+      "opcao": "Cirurgia Cardíaca",
+      "sugestaoIdResposta": 1074
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 4,
+      "opcao": "Cirurgia Geral",
+      "sugestaoIdResposta": 1075
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 5,
+      "opcao": "Cirurgia Plástica",
+      "sugestaoIdResposta": 1076
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 6,
+      "opcao": "Cirurgia Torácica",
+      "sugestaoIdResposta": 1077
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 7,
+      "opcao": "Cirurgia Vascular",
+      "sugestaoIdResposta": 1078
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 8,
+      "opcao": "Dermatologia",
+      "sugestaoIdResposta": 1079
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 9,
+      "opcao": "Endocrinologia",
+      "sugestaoIdResposta": 1080
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 10,
+      "opcao": "Hematologia",
+      "sugestaoIdResposta": 1081
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 11,
+      "opcao": "Neurologia",
+      "sugestaoIdResposta": 1082
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 12,
+      "opcao": "Ortopedia",
+      "sugestaoIdResposta": 1083
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 13,
+      "opcao": "Pneumologia",
+      "sugestaoIdResposta": 1084
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 14,
+      "opcao": "Reumatologia",
+      "sugestaoIdResposta": 1085
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 15,
+      "opcao": "Urologia",
+      "sugestaoIdResposta": 1086
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 16,
+      "opcao": "Infectologia",
+      "sugestaoIdResposta": 1087
+    },
+    {
+      "linkId": "01.00",
+      "tipo": "escolha",
+      "detalhe": "ID_RESPOSTA do DFM não pertence à pergunta",
+      "indice": 17,
+      "opcao": "Nefrologia",
+      "sugestaoIdResposta": 1088
+    }
+  ]
+}

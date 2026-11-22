@@ -238,7 +238,10 @@ describe.skipIf(SEM_BANCO)('executor do núcleo no MariaDB (cliente f22_o5, tran
       await new Promise<void>((r) => (soltar = r));
     });
     // Se a trava falhar, o teste falha na hora (em vez de esperar o tempo máximo).
-    await Promise.race([travada, segurando.then(() => Promise.reject(new Error('A trava não foi segurada.')))]);
+    await Promise.race([
+      travada,
+      segurando.then(() => Promise.reject(new Error('A trava não foi segurada.'))),
+    ]);
     const inicio = Date.now();
     let codigo = '';
     try {

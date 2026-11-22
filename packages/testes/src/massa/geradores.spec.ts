@@ -126,11 +126,42 @@ const campo = (c: Partial<CampoDaMassa> & Pick<CampoDaMassa, 'coluna' | 'campo' 
 const dominio: DominioDaMassa = {
   tabela: 'tipo_acomodacao_sintetico',
   campos: [
-    campo({ coluna: 'codigo', campo: 'codigo', tipo: 'texto', maxBytes: 30, obrigatorio: true, codigo: 'manual' }),
+    campo({
+      coluna: 'codigo',
+      campo: 'codigo',
+      tipo: 'texto',
+      maxBytes: 30,
+      obrigatorio: true,
+      codigo: 'manual',
+    }),
     campo({ coluna: 'descricao', campo: 'descricao', tipo: 'texto', maxBytes: 120, obrigatorio: true }),
-    campo({ coluna: 'ativo', campo: 'ativo', tipo: 'letra', booleano: true, valores: [{ valor: 'sim', rotulo: 'Sim' }, { valor: 'nao', rotulo: 'Não' }] }),
-    campo({ coluna: 'permite_acompanhante', campo: 'permiteAcompanhante', tipo: 'letra', booleano: true, valores: [{ valor: 'sim', rotulo: 'Sim' }, { valor: 'nao', rotulo: 'Não' }] }),
-    campo({ coluna: 'grupo_id', campo: 'grupoId', tipo: 'referencia', referencia: 'grupo', tabelaReferencia: 'grupo_sintetico' }),
+    campo({
+      coluna: 'ativo',
+      campo: 'ativo',
+      tipo: 'letra',
+      booleano: true,
+      valores: [
+        { valor: 'sim', rotulo: 'Sim' },
+        { valor: 'nao', rotulo: 'Não' },
+      ],
+    }),
+    campo({
+      coluna: 'permite_acompanhante',
+      campo: 'permiteAcompanhante',
+      tipo: 'letra',
+      booleano: true,
+      valores: [
+        { valor: 'sim', rotulo: 'Sim' },
+        { valor: 'nao', rotulo: 'Não' },
+      ],
+    }),
+    campo({
+      coluna: 'grupo_id',
+      campo: 'grupoId',
+      tipo: 'referencia',
+      referencia: 'grupo',
+      tabelaReferencia: 'grupo_sintetico',
+    }),
     campo({ coluna: 'ordem', campo: 'ordem', tipo: 'inteiro', minimo: 0, maximo: 255 }),
     campo({ coluna: 'valor_diaria', campo: 'valorDiaria', tipo: 'decimal', casas: 2 }),
     campo({ coluna: 'vigente_desde', campo: 'vigenteDesde', tipo: 'data' }),
@@ -166,7 +197,15 @@ describe('massa do CRUD genérico de domínios (modelo próprio)', () => {
     expect(b).not.toBe(a);
   });
   it('alteração: todo editável muda, menos ativo (é a inativação)', async () => {
-    const atuais = { descricao: 'X', permiteAcompanhante: 'nao', grupoId: 7, ordem: 7, valorDiaria: 2.5, vigenteDesde: '2099-12-01', horaLimite: '02:45' };
+    const atuais = {
+      descricao: 'X',
+      permiteAcompanhante: 'nao',
+      grupoId: 7,
+      ordem: 7,
+      valorDiaria: 2.5,
+      vigenteDesde: '2099-12-01',
+      horaLimite: '02:45',
+    };
     const v = await valoresDeAlteracao(leitor(['7', '9']), dominio, atuais);
     expect(v).not.toHaveProperty('ativo');
     expect(v).not.toHaveProperty('codigo');
@@ -174,11 +213,15 @@ describe('massa do CRUD genérico de domínios (modelo próprio)', () => {
   });
   it('referência sem opção ativa: SemOpcaoLivre com a tabela das opções', async () => {
     await expect(valoresDeInclusao(leitor([]), dominio)).rejects.toBeInstanceOf(SemOpcaoLivre);
-    await expect(valoresDeInclusao(leitor([]), dominio)).rejects.toMatchObject({ tabelaOpcoes: 'grupo_sintetico' });
+    await expect(valoresDeInclusao(leitor([]), dominio)).rejects.toMatchObject({
+      tabelaOpcoes: 'grupo_sintetico',
+    });
   });
   it('item ativo e item ativo sem uso', async () => {
     expect((await itemAtivo(leitor([]), dominio)).codigo).toBe('ZZZZ');
     expect(await itemAtivoSemUso(leitor([], ['ZZZZ']), dominio)).toBe('B2');
-    await expect(itemAtivoSemUso(leitor([], ['ZZZZ', 'B2']), dominio)).rejects.toThrow('nenhum item ativo sem uso');
+    await expect(itemAtivoSemUso(leitor([], ['ZZZZ', 'B2']), dominio)).rejects.toThrow(
+      'nenhum item ativo sem uso',
+    );
   });
 });

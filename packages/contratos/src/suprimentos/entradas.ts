@@ -33,7 +33,6 @@ export const esquemaMotivoSuprimentos = textoCp1252(250)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())
   .pipe(z.string().min(10, 'Escreva o motivo (ao menos 10 caracteres).'));
 
-
 /** O lote de um item rastreável (lote e validade; a quantidade daquele lote). */
 export const esquemaLoteItem = z
   .object({ lote: livre(30).pipe(z.string().min(1, 'Informe o lote.')), validade: dataIso, quantidade })

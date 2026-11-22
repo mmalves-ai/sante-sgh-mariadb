@@ -1,0 +1,5051 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 12,
+    "codigo": "ENF06",
+    "descricao": "SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM - DIAGNÓSTICO DE ENFERMAGEM",
+    "fase": 2
+  },
+  "impressaoLayout": "898218d6f78d1691d3e077a73f527f4f9fa2071973def65e0105b2fd82959c97",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 89,
+    "vinculosAtivos": 83,
+    "vinculosInativos": 6,
+    "componentes": 86,
+    "componentesMapeados": 86,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 3,
+    "opcoesResolvidas": 267,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 40,
+      "TfRespComboBox": 22,
+      "TGroupBoxPep": 24
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "DIAGNÓSTICO DE ENFERMAGEM SEGUNDA NANDA (2015-2017)",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 393,
+        "pergunta": 149,
+        "codPergunta": 143,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "DIAGNÓSTICO DE ENFERMAGEM SEGUNDO NANDA (2015-2017)",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "DOR AGUDA - 00132",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.01.01",
+              "texto": "DOR AGUDA - 00132",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 754,
+                "altura": 271,
+                "topo": 10,
+                "esquerda": 0,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 397,
+                "pergunta": 151,
+                "codPergunta": 145,
+                "ordem": "010101",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp174",
+                "componentePai": "cmp493",
+                "idResposta": 444,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.01",
+              "texto": "Características Definidoras - 00132",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "sem-componente",
+              "widget": null,
+              "tamanhoMaximo": null,
+              "layout": null,
+              "x-legacy": {
+                "vinculo": 398,
+                "pergunta": 153,
+                "codPergunta": 147,
+                "ordem": "010101",
+                "tipo": "12",
+                "classe": null,
+                "componente": null,
+                "componentePai": null,
+                "idResposta": null,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 730,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 479,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010101",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp479",
+                "componentePai": "cmp395",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.02",
+              "texto": "Características Definidoras - 00132",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 729,
+                "altura": 140,
+                "topo": 53,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Autorrelato da intensidade usando escala padronizada de dor",
+                  "idResposta": 447,
+                  "codigo": 320,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Comportamento protetor",
+                  "idResposta": 448,
+                  "codigo": 321,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Mudanças no parâmetro fisiológico",
+                  "idResposta": 449,
+                  "codigo": 322,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Posição para aliviar a dor",
+                  "idResposta": 450,
+                  "codigo": 323,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Relato de outra pessoa sobre comportamento da dor/mudança na atividade",
+                  "idResposta": 451,
+                  "codigo": 324,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 399,
+                "pergunta": 153,
+                "codPergunta": 147,
+                "ordem": "010102",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp399",
+                "componentePai": "cmp395",
+                "idResposta": 447,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.03",
+              "texto": "Fatores Relacionados - 00132",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 729,
+                "altura": 114,
+                "topo": 192,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Agente lesivo biológico",
+                  "idResposta": 452,
+                  "codigo": 325,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Agente lesivo físico",
+                  "idResposta": 453,
+                  "codigo": 326,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Agente lesivo químico",
+                  "idResposta": 454,
+                  "codigo": 327,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 400,
+                "pergunta": 154,
+                "codPergunta": 148,
+                "ordem": "010103",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp400",
+                "componentePai": "cmp395",
+                "idResposta": 452,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 316,
+            "topo": 16,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 395,
+            "pergunta": 151,
+            "codPergunta": 145,
+            "ordem": "0101",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp395",
+            "componentePai": "cmp394",
+            "idResposta": 444,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "Situação do diagnóstico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 396,
+            "pergunta": 152,
+            "codPergunta": 146,
+            "ordem": "0101",
+            "tipo": "13",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "COMUNICAÇÃO VERBAL PREJUDICADA - 00051",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.02.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 725,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 402,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010201",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp402",
+                "componentePai": "cmp401",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.02.02",
+              "texto": "Características Definidoras - 00051",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 726,
+                "altura": 132,
+                "topo": 55,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dificuldade para manter a comunicação",
+                  "idResposta": 456,
+                  "codigo": 328,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Dispneia",
+                  "idResposta": 457,
+                  "codigo": 329,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Não consegue falar",
+                  "idResposta": 458,
+                  "codigo": 330,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Não fala",
+                  "idResposta": 459,
+                  "codigo": 331,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Recusa em falar",
+                  "idResposta": 460,
+                  "codigo": 332,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Verbaliza com dificuldade",
+                  "idResposta": 461,
+                  "codigo": 333,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Verbalização inadequada",
+                  "idResposta": 462,
+                  "codigo": 334,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 403,
+                "pergunta": 156,
+                "codPergunta": 150,
+                "ordem": "010202",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp403",
+                "componentePai": "cmp401",
+                "idResposta": 456,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.02.03",
+              "texto": "Fatores Relacionados - 00051",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 726,
+                "altura": 135,
+                "topo": 188,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Barreiras ambientais",
+                  "idResposta": 463,
+                  "codigo": 335,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Condição fisiológica",
+                  "idResposta": 464,
+                  "codigo": 336,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Distúrbios emocionais",
+                  "idResposta": 465,
+                  "codigo": 337,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Percepção alterada",
+                  "idResposta": 466,
+                  "codigo": 338,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Prejuízo no sistema nervoso central",
+                  "idResposta": 467,
+                  "codigo": 339,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Regime de tratamento",
+                  "idResposta": 468,
+                  "codigo": 340,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Transtorno psicótico",
+                  "idResposta": 469,
+                  "codigo": 341,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 404,
+                "pergunta": 157,
+                "codPergunta": 151,
+                "ordem": "010203",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp404",
+                "componentePai": "cmp401",
+                "idResposta": 463,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 331,
+            "topo": 334,
+            "esquerda": 1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 401,
+            "pergunta": 155,
+            "codPergunta": 149,
+            "ordem": "0102",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp401",
+            "componentePai": "cmp394",
+            "idResposta": 455,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "DÉFICIT NO AUTOCUIDADO PARA BANHO - 00108",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.03.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 726,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 406,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010301",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp406",
+                "componentePai": "cmp405",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.02",
+              "texto": "Características Definidoras - 00108",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 726,
+                "altura": 91,
+                "topo": 56,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Capacidade prejudicada de acessar o banheiro",
+                  "idResposta": 471,
+                  "codigo": 342,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Capacidade prejudicada de lavar o corpo",
+                  "idResposta": 472,
+                  "codigo": 343,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Incapacidade de secar o corpo",
+                  "idResposta": 473,
+                  "codigo": 344,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 407,
+                "pergunta": 159,
+                "codPergunta": 153,
+                "ordem": "010302",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp407",
+                "componentePai": "cmp405",
+                "idResposta": 471,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.03",
+              "texto": "Fatores Relacionados - 00108",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 727,
+                "altura": 109,
+                "topo": 149,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Alteração na função cognitiva",
+                  "idResposta": 474,
+                  "codigo": 345,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Dor",
+                  "idResposta": 475,
+                  "codigo": 346,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Fraqueza",
+                  "idResposta": 476,
+                  "codigo": 347,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Prejuízo musculoesquelético",
+                  "idResposta": 477,
+                  "codigo": 348,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Prejuízo neuromuscular",
+                  "idResposta": 478,
+                  "codigo": 349,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 408,
+                "pergunta": 160,
+                "codPergunta": 154,
+                "ordem": "010303",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp408",
+                "componentePai": "cmp405",
+                "idResposta": 474,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 758,
+            "altura": 269,
+            "topo": 666,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 405,
+            "pergunta": 158,
+            "codPergunta": 152,
+            "ordem": "0103",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp405",
+            "componentePai": "cmp394",
+            "idResposta": 470,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "MUCOSA ORAL PREJUDICADA - 00247",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.04.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 724,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 410,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010401",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp410",
+                "componentePai": "cmp409",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.04.02",
+              "texto": "Características definidoras - 00247",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 725,
+                "altura": 122,
+                "topo": 52,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Edema oral",
+                  "idResposta": 480,
+                  "codigo": 350,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Estomatite",
+                  "idResposta": 481,
+                  "codigo": 351,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Exposição a patógeno",
+                  "idResposta": 482,
+                  "codigo": 352,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Desconforto oral",
+                  "idResposta": 483,
+                  "codigo": 353,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Dor oral",
+                  "idResposta": 484,
+                  "codigo": 354,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Lesão oral",
+                  "idResposta": 485,
+                  "codigo": 355,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Sangramento",
+                  "idResposta": 486,
+                  "codigo": 356,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Sensação de gosto diminuída",
+                  "idResposta": 487,
+                  "codigo": 357,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 411,
+                "pergunta": 162,
+                "codPergunta": 156,
+                "ordem": "010402",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp411",
+                "componentePai": "cmp409",
+                "idResposta": 480,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.04.03",
+              "texto": "Fatores relacionados - 00247",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 724,
+                "altura": 142,
+                "topo": 174,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Alteração na função cognitiva",
+                  "idResposta": 488,
+                  "codigo": 345,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Alergia",
+                  "idResposta": 489,
+                  "codigo": 358,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Barreiras ao autocuidado oral",
+                  "idResposta": 490,
+                  "codigo": 359,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Doença autoimune",
+                  "idResposta": 491,
+                  "codigo": 360,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Estressores",
+                  "idResposta": 492,
+                  "codigo": 361,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Fator mecânico",
+                  "idResposta": 493,
+                  "codigo": 362,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Infecção",
+                  "idResposta": 494,
+                  "codigo": 363,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Jejum oral por mais de 24 horas",
+                  "idResposta": 495,
+                  "codigo": 364,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Trauma oral",
+                  "idResposta": 496,
+                  "codigo": 365,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 412,
+                "pergunta": 163,
+                "codPergunta": 157,
+                "ordem": "010403",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp412",
+                "componentePai": "cmp409",
+                "idResposta": 488,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 749,
+            "altura": 325,
+            "topo": 936,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 409,
+            "pergunta": 161,
+            "codPergunta": 155,
+            "ordem": "0104",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp409",
+            "componentePai": "cmp394",
+            "idResposta": 479,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "DEGLUTIÇÃO PREJUDICADA - 00103",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.05.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 40,
+                "topo": 16,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 414,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010501",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp414",
+                "componentePai": "cmp413",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.05.02",
+              "texto": "Características definidoras - 00103",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 147,
+                "topo": 55,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Mastigação insuficiente",
+                  "idResposta": 498,
+                  "codigo": 366,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Tosse antes de deglutir",
+                  "idResposta": 499,
+                  "codigo": 367,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Fase oral anormal, segundo o estudo da deglutição",
+                  "idResposta": 500,
+                  "codigo": 368,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Alteração na posição da cabeça",
+                  "idResposta": 501,
+                  "codigo": 369,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Recusa do alimento",
+                  "idResposta": 502,
+                  "codigo": 370,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Azia",
+                  "idResposta": 503,
+                  "codigo": 371,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Irritabilidade sem explicação nas proximidades dos horários das refeições",
+                  "idResposta": 504,
+                  "codigo": 372,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Vômito",
+                  "idResposta": 505,
+                  "codigo": 373,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 415,
+                "pergunta": 165,
+                "codPergunta": 159,
+                "ordem": "010502",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp415",
+                "componentePai": "cmp413",
+                "idResposta": 498,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.05.03",
+              "texto": "Fatores relacionados - 00103",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 138,
+                "topo": 201,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Anormalidade de via aérea superior",
+                  "idResposta": 506,
+                  "codigo": 374,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Condição respiratória",
+                  "idResposta": 507,
+                  "codigo": 375,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Obstrução mecânica",
+                  "idResposta": 508,
+                  "codigo": 376,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Problemas de alimentação relacionados ao comportamento",
+                  "idResposta": 509,
+                  "codigo": 377,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Comprometimento no nervo craniano",
+                  "idResposta": 510,
+                  "codigo": 378,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Lesão encefálica",
+                  "idResposta": 511,
+                  "codigo": 379,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Defeitos nas cavidades nasofaringeas",
+                  "idResposta": 512,
+                  "codigo": 380,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 416,
+                "pergunta": 166,
+                "codPergunta": 160,
+                "ordem": "010503",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp416",
+                "componentePai": "cmp413",
+                "idResposta": 506,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 346,
+            "topo": 1262,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 413,
+            "pergunta": 164,
+            "codPergunta": 158,
+            "ordem": "0105",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp413",
+            "componentePai": "cmp394",
+            "idResposta": 497,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "PADRÃO RESPIRATÓRIO INEFICAZ - 00032",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.06.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 720,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 418,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010601",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp418",
+                "componentePai": "cmp417",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.06.02",
+              "texto": "Características Definidoras - 00032",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 96,
+                "topo": 55,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Uso da musculatura acessória para respirar",
+                  "idResposta": 514,
+                  "codigo": 381,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Dispnéia",
+                  "idResposta": 515,
+                  "codigo": 382,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Excursão torácica alterada",
+                  "idResposta": 516,
+                  "codigo": 383,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Padrão respiratório anormal",
+                  "idResposta": 517,
+                  "codigo": 384,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 419,
+                "pergunta": 168,
+                "codPergunta": 162,
+                "ordem": "010602",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp419",
+                "componentePai": "cmp417",
+                "idResposta": 514,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.06.03",
+              "texto": "Fatores Relacionados - 00032",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 721,
+                "altura": 100,
+                "topo": 151,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dor",
+                  "idResposta": 518,
+                  "codigo": 346,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Dano neurológico",
+                  "idResposta": 519,
+                  "codigo": 385,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Fadiga da musculatura respiratória",
+                  "idResposta": 520,
+                  "codigo": 386,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Ansiedade",
+                  "idResposta": 521,
+                  "codigo": 387,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 420,
+                "pergunta": 169,
+                "codPergunta": 163,
+                "ordem": "010603",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp420",
+                "componentePai": "cmp417",
+                "idResposta": 518,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 258,
+            "topo": 1608,
+            "esquerda": -1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 417,
+            "pergunta": 167,
+            "codPergunta": 161,
+            "ordem": "0106",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp417",
+            "componentePai": "cmp394",
+            "idResposta": 513,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "VENTILAÇÃO ESPONTÂNEA PREJUDICADA - 00033",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.07.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 720,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 422,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010701",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp422",
+                "componentePai": "cmp421",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.07.02",
+              "texto": "Características Definidoras - 00033",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 91,
+                "topo": 56,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dispneia",
+                  "idResposta": 523,
+                  "codigo": 329,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Aumento na taxa metabólica",
+                  "idResposta": 524,
+                  "codigo": 388,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Cooperação diminuída",
+                  "idResposta": 525,
+                  "codigo": 389,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Frequência cardíaca aumentada",
+                  "idResposta": 526,
+                  "codigo": 390,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 423,
+                "pergunta": 171,
+                "codPergunta": 165,
+                "ordem": "010702",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp423",
+                "componentePai": "cmp421",
+                "idResposta": 523,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.07.03",
+              "texto": "Fatores Relacionados - 00033",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 95,
+                "topo": 147,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Fadiga da musculatura respiratória",
+                  "idResposta": 527,
+                  "codigo": 386,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Alteração no metabolismo",
+                  "idResposta": 528,
+                  "codigo": 391,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 424,
+                "pergunta": 172,
+                "codPergunta": 166,
+                "ordem": "010703",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp424",
+                "componentePai": "cmp421",
+                "idResposta": 527,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 253,
+            "topo": 1866,
+            "esquerda": 1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 421,
+            "pergunta": 170,
+            "codPergunta": 164,
+            "ordem": "0107",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp421",
+            "componentePai": "cmp394",
+            "idResposta": 522,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "DÉBITO CARDÍACO DIMINUÍDO - 00029",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.08.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 723,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 426,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010801",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp426",
+                "componentePai": "cmp425",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.08.02",
+              "texto": "Características Definidoras - 00029",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 724,
+                "altura": 164,
+                "topo": 55,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Edema",
+                  "idResposta": 530,
+                  "codigo": 392,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Ansiedade",
+                  "idResposta": 531,
+                  "codigo": 387,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Alterações eletrocardiográficas",
+                  "idResposta": 532,
+                  "codigo": 393,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Bradicardia",
+                  "idResposta": 533,
+                  "codigo": 394,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Palpitações cardíacas",
+                  "idResposta": 534,
+                  "codigo": 395,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Taquicardia",
+                  "idResposta": 535,
+                  "codigo": 396,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Distensão da veia jugular",
+                  "idResposta": 536,
+                  "codigo": 397,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Pele fria, úmida e pegajosa",
+                  "idResposta": 537,
+                  "codigo": 398,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Pulsos periféricos diminuídos",
+                  "idResposta": 538,
+                  "codigo": 399,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 9,
+                  "texto": "Alteração na pressão sanguínea",
+                  "idResposta": 539,
+                  "codigo": 400,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 10,
+                  "texto": "Dispneia paroxística noturna",
+                  "idResposta": 540,
+                  "codigo": 401,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 11,
+                  "texto": "Presença de 3a bulha cardíaca (B3)",
+                  "idResposta": 541,
+                  "codigo": 402,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 12,
+                  "texto": "Presença de 4a bulha cardíaca (B4)",
+                  "idResposta": 542,
+                  "codigo": 403,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 13,
+                  "texto": "Sons respiratórios adventícios",
+                  "idResposta": 543,
+                  "codigo": 404,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 427,
+                "pergunta": 174,
+                "codPergunta": 168,
+                "ordem": "010802",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp427",
+                "componentePai": "cmp425",
+                "idResposta": 530,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.08.03",
+              "texto": "Fatores Relacionados - 00029",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 725,
+                "altura": 121,
+                "topo": 218,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Contratilidade alterada",
+                  "idResposta": 544,
+                  "codigo": 405,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Frequência cardíaca alterada",
+                  "idResposta": 545,
+                  "codigo": 406,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Pós-carga alterada",
+                  "idResposta": 546,
+                  "codigo": 407,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Pré-carga alterada",
+                  "idResposta": 547,
+                  "codigo": 408,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Ritmo cardíaco alterado",
+                  "idResposta": 548,
+                  "codigo": 409,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Volume sistólico alterado",
+                  "idResposta": 549,
+                  "codigo": 410,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 428,
+                "pergunta": 175,
+                "codPergunta": 169,
+                "ordem": "010803",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp428",
+                "componentePai": "cmp425",
+                "idResposta": 544,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 348,
+            "topo": 2119,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 425,
+            "pergunta": 173,
+            "codPergunta": 167,
+            "ordem": "0108",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp425",
+            "componentePai": "cmp394",
+            "idResposta": 529,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "INTEGRIDADE DA PELE PREJUDICADA - 00046",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.09.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 723,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 430,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "010901",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp430",
+                "componentePai": "cmp429",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.02",
+              "texto": "Características Definidoras - 00046",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 724,
+                "altura": 99,
+                "topo": 55,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Alteração na integridade da pele",
+                  "idResposta": 551,
+                  "codigo": 411,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Matéria estranha perfurando a pele",
+                  "idResposta": 552,
+                  "codigo": 412,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 431,
+                "pergunta": 177,
+                "codPergunta": 171,
+                "ordem": "010902",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp431",
+                "componentePai": "cmp429",
+                "idResposta": 551,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.09.03",
+              "texto": "Fatores Relacionados - 00046",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 725,
+                "altura": 121,
+                "topo": 154,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Extremos de idade",
+                  "idResposta": 553,
+                  "codigo": 413,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Nutrição inadequada",
+                  "idResposta": 554,
+                  "codigo": 414,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Pressão sobre saliência óssea",
+                  "idResposta": 555,
+                  "codigo": 415,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Circulação prejudicada",
+                  "idResposta": 556,
+                  "codigo": 416,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Fatores mecânicos",
+                  "idResposta": 557,
+                  "codigo": 417,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Alteração no turgor da pele",
+                  "idResposta": 558,
+                  "codigo": 418,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Imunodeficiência",
+                  "idResposta": 559,
+                  "codigo": 419,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Umidade",
+                  "idResposta": 560,
+                  "codigo": 420,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 432,
+                "pergunta": 178,
+                "codPergunta": 172,
+                "ordem": "010903",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp432",
+                "componentePai": "cmp429",
+                "idResposta": 553,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 283,
+            "topo": 2466,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 429,
+            "pergunta": 176,
+            "codPergunta": 170,
+            "ordem": "0109",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp429",
+            "componentePai": "cmp394",
+            "idResposta": 550,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.10",
+          "texto": "ELIMINAÇÃO URINÁRIA PREJUDICADA - 00016",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.10.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 725,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 434,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011001",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp434",
+                "componentePai": "cmp433",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.10.02",
+              "texto": "Características Definidoras - 00016",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 727,
+                "altura": 95,
+                "topo": 54,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Frequência",
+                  "idResposta": 562,
+                  "codigo": 421,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Incontinência urinária",
+                  "idResposta": 563,
+                  "codigo": 422,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Retenção urinária",
+                  "idResposta": 564,
+                  "codigo": 423,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Urgência urinária",
+                  "idResposta": 565,
+                  "codigo": 424,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 435,
+                "pergunta": 180,
+                "codPergunta": 174,
+                "ordem": "011002",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp435",
+                "componentePai": "cmp433",
+                "idResposta": 562,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.10.03",
+              "texto": "Fatores Relacionados - 00016",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 726,
+                "altura": 99,
+                "topo": 149,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dano sensório-motor",
+                  "idResposta": 566,
+                  "codigo": 425,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Infecção no trato urinário",
+                  "idResposta": 567,
+                  "codigo": 426,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Múltiplas causas",
+                  "idResposta": 568,
+                  "codigo": 427,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Obstrução anatômica",
+                  "idResposta": 569,
+                  "codigo": 428,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 436,
+                "pergunta": 181,
+                "codPergunta": 175,
+                "ordem": "011003",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp436",
+                "componentePai": "cmp433",
+                "idResposta": 566,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 754,
+            "altura": 258,
+            "topo": 2749,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 433,
+            "pergunta": 179,
+            "codPergunta": 173,
+            "ordem": "0110",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp433",
+            "componentePai": "cmp394",
+            "idResposta": 561,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.11",
+          "texto": "CONSTIPAÇÃO - 00011",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.11.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 723,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 438,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011101",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp438",
+                "componentePai": "cmp437",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.11.02",
+              "texto": "Características Definidoras - 00016",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 727,
+                "altura": 90,
+                "topo": 55,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Frequência",
+                  "idResposta": 562,
+                  "codigo": 421,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Incontinência urinária",
+                  "idResposta": 563,
+                  "codigo": 422,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Retenção urinária",
+                  "idResposta": 564,
+                  "codigo": 423,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Urgência urinária",
+                  "idResposta": 565,
+                  "codigo": 424,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 439,
+                "pergunta": 180,
+                "codPergunta": 174,
+                "ordem": "011102",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp439",
+                "componentePai": "cmp437",
+                "idResposta": 562,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.11.02",
+              "texto": "Características Definidoras - 00011",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 724,
+                "altura": 109,
+                "topo": 53,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dor ao evacuar",
+                  "idResposta": 1492,
+                  "codigo": 944,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Esforço para evacuar",
+                  "idResposta": 1493,
+                  "codigo": 945,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Fezes formadas endurecidas",
+                  "idResposta": 1494,
+                  "codigo": 946,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Fezes líquidas",
+                  "idResposta": 1495,
+                  "codigo": 947,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Incapacidade de defecar",
+                  "idResposta": 1496,
+                  "codigo": 948,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Redução na frequência das fezes",
+                  "idResposta": 1497,
+                  "codigo": 949,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Redução no volume das fezes",
+                  "idResposta": 1498,
+                  "codigo": 950,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Sangue vermelho-vivo nas fezes",
+                  "idResposta": 1499,
+                  "codigo": 951,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1209,
+                "pergunta": 537,
+                "codPergunta": 525,
+                "ordem": "011102",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1209",
+                "componentePai": "cmp437",
+                "idResposta": 1492,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.11.03",
+              "texto": "Fatores Relacionados - 00016",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 728,
+                "altura": 91,
+                "topo": 145,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dano sensório-motor",
+                  "idResposta": 566,
+                  "codigo": 425,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Infecção no trato urinário",
+                  "idResposta": 567,
+                  "codigo": 426,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Múltiplas causas",
+                  "idResposta": 568,
+                  "codigo": 427,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Obstrução anatômica",
+                  "idResposta": 569,
+                  "codigo": 428,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 440,
+                "pergunta": 181,
+                "codPergunta": 175,
+                "ordem": "011103",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp440",
+                "componentePai": "cmp437",
+                "idResposta": 566,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.11.03",
+              "texto": "Fatores relacionados - 00011",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 722,
+                "altura": 114,
+                "topo": 162,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Abuso de laxantes",
+                  "idResposta": 1500,
+                  "codigo": 952,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Alteração nos hábitos alimentares",
+                  "idResposta": 1501,
+                  "codigo": 953,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Desidratação",
+                  "idResposta": 1502,
+                  "codigo": 464,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Hábitos de evacuação irregulares",
+                  "idResposta": 1503,
+                  "codigo": 954,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Ingestão de fibras insuficiente",
+                  "idResposta": 1504,
+                  "codigo": 955,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Ingestão de líquidos insuficiente",
+                  "idResposta": 1505,
+                  "codigo": 956,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Motilidade gastrointestinal diminuída",
+                  "idResposta": 1506,
+                  "codigo": 957,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1210,
+                "pergunta": 538,
+                "codPergunta": 526,
+                "ordem": "011103",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1210",
+                "componentePai": "cmp437",
+                "idResposta": 1500,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 742,
+            "altura": 287,
+            "topo": 3007,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 437,
+            "pergunta": 182,
+            "codPergunta": 176,
+            "ordem": "0111",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp437",
+            "componentePai": "cmp394",
+            "idResposta": 570,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.12",
+          "texto": "DIARRÉIA - 00013",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.12.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 728,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 442,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011201",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp442",
+                "componentePai": "cmp441",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.12.02",
+              "texto": "Características Definidoras - 00013",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 730,
+                "altura": 71,
+                "topo": 57,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dor abdominal",
+                  "idResposta": 572,
+                  "codigo": 429,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Fezes líquidas ao menos 3x ao dia",
+                  "idResposta": 573,
+                  "codigo": 430,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 443,
+                "pergunta": 184,
+                "codPergunta": 178,
+                "ordem": "011202",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp443",
+                "componentePai": "cmp441",
+                "idResposta": 572,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.12.03",
+              "texto": "Fatores Relacionados - 00013",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 733,
+                "altura": 109,
+                "topo": 131,
+                "esquerda": 5,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Regime de tratamento",
+                  "idResposta": 574,
+                  "codigo": 340,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Infecção",
+                  "idResposta": 575,
+                  "codigo": 363,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inflamação gastrintestinal",
+                  "idResposta": 576,
+                  "codigo": 431,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Má absorção",
+                  "idResposta": 577,
+                  "codigo": 432,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Altos níveis de estresse",
+                  "idResposta": 578,
+                  "codigo": 433,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Parasitas",
+                  "idResposta": 579,
+                  "codigo": 434,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Alimentação enteral",
+                  "idResposta": 580,
+                  "codigo": 435,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 444,
+                "pergunta": 185,
+                "codPergunta": 179,
+                "ordem": "011203",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp444",
+                "componentePai": "cmp441",
+                "idResposta": 574,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 246,
+            "topo": 3297,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 441,
+            "pergunta": 183,
+            "codPergunta": 177,
+            "ordem": "0112",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp441",
+            "componentePai": "cmp394",
+            "idResposta": 571,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.13",
+          "texto": "PADRÃO DE SONO PREJUDICADO - 00198",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.13.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 736,
+                "altura": 40,
+                "topo": 16,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 446,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011301",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp446",
+                "componentePai": "cmp445",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.13.02",
+              "texto": "Características Definidoras - 00198",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 735,
+                "altura": 87,
+                "topo": 57,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dificuldade para iniciar o sono",
+                  "idResposta": 582,
+                  "codigo": 436,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Alteração no padrão de sono",
+                  "idResposta": 583,
+                  "codigo": 437,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Insatisfação com o sono",
+                  "idResposta": 584,
+                  "codigo": 438,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 447,
+                "pergunta": 187,
+                "codPergunta": 181,
+                "ordem": "011302",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp447",
+                "componentePai": "cmp445",
+                "idResposta": 582,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.13.03",
+              "texto": "Fatores Relacionados - 00198",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 737,
+                "altura": 86,
+                "topo": 147,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Barreira ambiental",
+                  "idResposta": 585,
+                  "codigo": 439,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Imobilização",
+                  "idResposta": 586,
+                  "codigo": 440,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Privacidade insuficiente",
+                  "idResposta": 587,
+                  "codigo": 441,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 448,
+                "pergunta": 188,
+                "codPergunta": 182,
+                "ordem": "011303",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp448",
+                "componentePai": "cmp445",
+                "idResposta": 585,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 240,
+            "topo": 3545,
+            "esquerda": -1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 445,
+            "pergunta": 186,
+            "codPergunta": 180,
+            "ordem": "0113",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp445",
+            "componentePai": "cmp394",
+            "idResposta": 581,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.14",
+          "texto": "RETENÇÃO URINÁRIA - 00023",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.14.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 733,
+                "altura": 40,
+                "topo": 17,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 450,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011401",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp450",
+                "componentePai": "cmp449",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.14.02",
+              "texto": "Características Definidoras - 00023",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 738,
+                "altura": 86,
+                "topo": 61,
+                "esquerda": 1,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dor",
+                  "idResposta": 589,
+                  "codigo": 346,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Distenção vesical",
+                  "idResposta": 590,
+                  "codigo": 442,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Eliminação urinária ausente",
+                  "idResposta": 591,
+                  "codigo": 443,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 451,
+                "pergunta": 190,
+                "codPergunta": 184,
+                "ordem": "011402",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp451",
+                "componentePai": "cmp449",
+                "idResposta": 589,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.14.03",
+              "texto": "Fatores Relacionados - 00023",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 738,
+                "altura": 70,
+                "topo": 147,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Bloqueio",
+                  "idResposta": 592,
+                  "codigo": 444,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Inibição do arco reflexo",
+                  "idResposta": 593,
+                  "codigo": 445,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 452,
+                "pergunta": 191,
+                "codPergunta": 185,
+                "ordem": "011403",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp452",
+                "componentePai": "cmp449",
+                "idResposta": 592,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 224,
+            "topo": 3790,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 449,
+            "pergunta": 189,
+            "codPergunta": 183,
+            "ordem": "0114",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp449",
+            "componentePai": "cmp394",
+            "idResposta": 588,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.15",
+          "texto": "MOBILIDADE FÍSICA PREJUDICADA - 00085",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.15.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 737,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 454,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011501",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp454",
+                "componentePai": "cmp453",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.15.02",
+              "texto": "Características Definidoras - 00085",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 739,
+                "altura": 84,
+                "topo": 60,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Desconforto",
+                  "idResposta": 595,
+                  "codigo": 446,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Redução na amplitude de movimentos",
+                  "idResposta": 596,
+                  "codigo": 447,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Engaja-se em substituições de movimentos",
+                  "idResposta": 597,
+                  "codigo": 448,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 455,
+                "pergunta": 193,
+                "codPergunta": 187,
+                "ordem": "011502",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp455",
+                "componentePai": "cmp453",
+                "idResposta": 595,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.15.03",
+              "texto": "Fatores Relacionados - 00085",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 83,
+                "topo": 148,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Dor",
+                  "idResposta": 598,
+                  "codigo": 346,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Desuso",
+                  "idResposta": 599,
+                  "codigo": 449,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Depressão",
+                  "idResposta": 600,
+                  "codigo": 450,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Restrições prescritas de movimento",
+                  "idResposta": 601,
+                  "codigo": 451,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Força muscular diminuída",
+                  "idResposta": 602,
+                  "codigo": 452,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 456,
+                "pergunta": 194,
+                "codPergunta": 188,
+                "ordem": "011503",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp456",
+                "componentePai": "cmp453",
+                "idResposta": 598,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 236,
+            "topo": 4017,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 453,
+            "pergunta": 192,
+            "codPergunta": 186,
+            "ordem": "0115",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp453",
+            "componentePai": "cmp394",
+            "idResposta": 594,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.16",
+          "texto": "NUTRIÇÃO DESEQUILIBRADA: MENOR DO QUE AS NECESSIDADES CORPORAIS - 00002",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.16.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 736,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 3,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 458,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011601",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp458",
+                "componentePai": "cmp457",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.16.02",
+              "texto": "Características Definidoras - 00002",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 738,
+                "altura": 96,
+                "topo": 55,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Cavidade bucal ferida",
+                  "idResposta": 604,
+                  "codigo": 453,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Peso do corpo 20% ou mais abaixo do ideal",
+                  "idResposta": 605,
+                  "codigo": 454,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Interesse insuficiente pelos alimentos",
+                  "idResposta": 606,
+                  "codigo": 455,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Incapacidade percebida de ingestão de alimentos",
+                  "idResposta": 607,
+                  "codigo": 456,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 459,
+                "pergunta": 196,
+                "codPergunta": 190,
+                "ordem": "011602",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp459",
+                "componentePai": "cmp457",
+                "idResposta": 604,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.16.03",
+              "texto": "Fatores Relacionados - 00002",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 86,
+                "topo": 150,
+                "esquerda": 1,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Fatores biológicos",
+                  "idResposta": 608,
+                  "codigo": 457,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Incapacidade de absorver nutrientes",
+                  "idResposta": 609,
+                  "codigo": 458,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Incapacidade de ingerir os alimentos",
+                  "idResposta": 610,
+                  "codigo": 459,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Transtorno psicológico",
+                  "idResposta": 611,
+                  "codigo": 460,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 460,
+                "pergunta": 197,
+                "codPergunta": 191,
+                "ordem": "011603",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp460",
+                "componentePai": "cmp457",
+                "idResposta": 608,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 750,
+            "altura": 243,
+            "topo": 4258,
+            "esquerda": 1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 457,
+            "pergunta": 195,
+            "codPergunta": 189,
+            "ordem": "0116",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp457",
+            "componentePai": "cmp394",
+            "idResposta": 603,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.17",
+          "texto": "RISCO DE INFECÇÃO - 00004",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.17.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 40,
+                "topo": 23,
+                "esquerda": 0,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 462,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011701",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp462",
+                "componentePai": "cmp461",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.17.02",
+              "texto": "Fatores Relacionados - 00005",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 739,
+                "altura": 133,
+                "topo": 66,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Agente farmacológico",
+                  "idResposta": 613,
+                  "codigo": 461,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Extremos de idade",
+                  "idResposta": 614,
+                  "codigo": 413,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Alteração na taxa metabólica",
+                  "idResposta": 615,
+                  "codigo": 462,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Condição que afeta a regulação da temperatura",
+                  "idResposta": 616,
+                  "codigo": 463,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Desidratação",
+                  "idResposta": 617,
+                  "codigo": 464,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Lesão encefálica grave",
+                  "idResposta": 618,
+                  "codigo": 465,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Sedação",
+                  "idResposta": 619,
+                  "codigo": 466,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Sepse",
+                  "idResposta": 620,
+                  "codigo": 467,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 463,
+                "pergunta": 199,
+                "codPergunta": 193,
+                "ordem": "011702",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp463",
+                "componentePai": "cmp461",
+                "idResposta": 613,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 204,
+            "topo": 4503,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 461,
+            "pergunta": 198,
+            "codPergunta": 192,
+            "ordem": "0117",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp461",
+            "componentePai": "cmp394",
+            "idResposta": 612,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.18",
+          "texto": "RISCO DE INTEGRIDADE DA PELE PREJUDICADA - 00046",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.18.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 40,
+                "topo": 14,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 465,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011801",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp465",
+                "componentePai": "cmp464",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.18.02",
+              "texto": "Fatores Relacionados - 00046",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 739,
+                "altura": 128,
+                "topo": 58,
+                "esquerda": 6,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Fator mecânico",
+                  "idResposta": 622,
+                  "codigo": 362,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Agente farmacológico",
+                  "idResposta": 623,
+                  "codigo": 461,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Agente químico lesivo",
+                  "idResposta": 624,
+                  "codigo": 468,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Extremos de idade",
+                  "idResposta": 625,
+                  "codigo": 413,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Alteração na pigmentação",
+                  "idResposta": 626,
+                  "codigo": 469,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Alteração na sensibilidade",
+                  "idResposta": 627,
+                  "codigo": 470,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Nutrição inadequada",
+                  "idResposta": 628,
+                  "codigo": 414,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Pressão sobre saliência óssea",
+                  "idResposta": 629,
+                  "codigo": 415,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Circulação prejudicada",
+                  "idResposta": 630,
+                  "codigo": 416,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 466,
+                "pergunta": 201,
+                "codPergunta": 195,
+                "ordem": "011802",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp466",
+                "componentePai": "cmp464",
+                "idResposta": 622,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 757,
+            "altura": 191,
+            "topo": 4709,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 464,
+            "pergunta": 200,
+            "codPergunta": 194,
+            "ordem": "0118",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp464",
+            "componentePai": "cmp394",
+            "idResposta": 621,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.19",
+          "texto": "RISCO DE QUEDAS - 00155",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.19.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 40,
+                "topo": 20,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 468,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "011901",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp468",
+                "componentePai": "cmp467",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.19.02",
+              "texto": "Fatores Relacionados- 00155",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 740,
+                "altura": 170,
+                "topo": 64,
+                "esquerda": 4,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Alteração na função cognitiva",
+                  "idResposta": 632,
+                  "codigo": 345,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Agente farmacológico",
+                  "idResposta": 633,
+                  "codigo": 461,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "História de quedas",
+                  "idResposta": 634,
+                  "codigo": 471,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Idade = 65 anos",
+                  "idResposta": 635,
+                  "codigo": 472,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Alteração no nível de glicose do sangue",
+                  "idResposta": 636,
+                  "codigo": 473,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Dificuldades na marcha",
+                  "idResposta": 637,
+                  "codigo": 474,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Doença aguda",
+                  "idResposta": 638,
+                  "codigo": 475,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Doença vascular",
+                  "idResposta": 639,
+                  "codigo": 476,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Equilíbrio prejudicado",
+                  "idResposta": 640,
+                  "codigo": 477,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 9,
+                  "texto": "Hipotensão ortostática",
+                  "idResposta": 641,
+                  "codigo": 478,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 10,
+                  "texto": "Mobilidade prejudicada",
+                  "idResposta": 642,
+                  "codigo": 479,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 11,
+                  "texto": "Período de recuperação pós-operatória",
+                  "idResposta": 643,
+                  "codigo": 480,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 12,
+                  "texto": "Redução da força em extremidade inferior",
+                  "idResposta": 644,
+                  "codigo": 481,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 469,
+                "pergunta": 203,
+                "codPergunta": 197,
+                "ordem": "011902",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp469",
+                "componentePai": "cmp467",
+                "idResposta": 632,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 746,
+            "altura": 241,
+            "topo": 4899,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 467,
+            "pergunta": 202,
+            "codPergunta": 196,
+            "ordem": "0119",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp467",
+            "componentePai": "cmp394",
+            "idResposta": 631,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.20",
+          "texto": "RISCO DE ASPIRAÇÃO - 00039",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.20.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 746,
+                "altura": 40,
+                "topo": 16,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 471,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "012001",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp471",
+                "componentePai": "cmp470",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.20.02",
+              "texto": "Fatores Relacionados - 00039",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 744,
+                "altura": 103,
+                "topo": 59,
+                "esquerda": 1,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Regime de tratamento",
+                  "idResposta": 646,
+                  "codigo": 340,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Alimentação enteral",
+                  "idResposta": 647,
+                  "codigo": 435,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Barreira à elevação da porção superior do corpo",
+                  "idResposta": 648,
+                  "codigo": 482,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Capacidade de deglutição prejudicada",
+                  "idResposta": 649,
+                  "codigo": 483,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Motilidade gastrintestinal diminuída",
+                  "idResposta": 650,
+                  "codigo": 484,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Nível de consciência reduzido",
+                  "idResposta": 651,
+                  "codigo": 485,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Presença de sonda oral/nasal",
+                  "idResposta": 652,
+                  "codigo": 486,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Trauma",
+                  "idResposta": 653,
+                  "codigo": 487,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Cirurgia",
+                  "idResposta": 654,
+                  "codigo": 488,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 472,
+                "pergunta": 205,
+                "codPergunta": 199,
+                "ordem": "012002",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp472",
+                "componentePai": "cmp470",
+                "idResposta": 646,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 744,
+            "altura": 168,
+            "topo": 5141,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 470,
+            "pergunta": 204,
+            "codPergunta": 198,
+            "ordem": "0120",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp470",
+            "componentePai": "cmp394",
+            "idResposta": 645,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.21",
+          "texto": "RISCO DE DESEQUILÍBRIO NA TEMPERATURA CORPORAL - 00005",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.21.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 742,
+                "altura": 40,
+                "topo": 15,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 474,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "012101",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp474",
+                "componentePai": "cmp473",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.21.02",
+              "texto": "Fatores Relacionados - 00005",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 744,
+                "altura": 104,
+                "topo": 60,
+                "esquerda": 2,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Agente farmacológico",
+                  "idResposta": 613,
+                  "codigo": 461,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Extremos de idade",
+                  "idResposta": 614,
+                  "codigo": 413,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Alteração na taxa metabólica",
+                  "idResposta": 615,
+                  "codigo": 462,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Condição que afeta a regulação da temperatura",
+                  "idResposta": 616,
+                  "codigo": 463,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Desidratação",
+                  "idResposta": 617,
+                  "codigo": 464,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Lesão encefálica grave",
+                  "idResposta": 618,
+                  "codigo": 465,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Sedação",
+                  "idResposta": 619,
+                  "codigo": 466,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Sepse",
+                  "idResposta": 620,
+                  "codigo": 467,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 475,
+                "pergunta": 199,
+                "codPergunta": 193,
+                "ordem": "012102",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp475",
+                "componentePai": "cmp473",
+                "idResposta": 613,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 751,
+            "altura": 170,
+            "topo": 5309,
+            "esquerda": 1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 473,
+            "pergunta": 206,
+            "codPergunta": 200,
+            "ordem": "0121",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp473",
+            "componentePai": "cmp394",
+            "idResposta": 655,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.22",
+          "texto": "RISCO DE SÍNDROME PÓS-TRAUMA - 00145",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.22.01",
+              "texto": "Situação do diagnóstico",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 742,
+                "altura": 40,
+                "topo": 13,
+                "esquerda": 1,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "Solucionado",
+                  "idResposta": 445,
+                  "codigo": 318,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Inalterado",
+                  "idResposta": 446,
+                  "codigo": 319,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 477,
+                "pergunta": 152,
+                "codPergunta": 146,
+                "ordem": "012201",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp477",
+                "componentePai": "cmp476",
+                "idResposta": 445,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.22.02",
+              "texto": "Fatores Relacionados - 00145",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 744,
+                "altura": 100,
+                "topo": 53,
+                "esquerda": 0,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Ambiente que não atende às necessidades",
+                  "idResposta": 657,
+                  "codigo": 489,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Percepção de evento como traumático",
+                  "idResposta": 658,
+                  "codigo": 490,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Suporte social inadequado",
+                  "idResposta": 659,
+                  "codigo": 491,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 478,
+                "pergunta": 208,
+                "codPergunta": 202,
+                "ordem": "012202",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp478",
+                "componentePai": "cmp476",
+                "idResposta": 657,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 750,
+            "altura": 159,
+            "topo": 5481,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 476,
+            "pergunta": 207,
+            "codPergunta": 201,
+            "ordem": "0122",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp476",
+            "componentePai": "cmp394",
+            "idResposta": 656,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 749,
+        "altura": 5646,
+        "topo": 4,
+        "esquerda": 4,
+        "negrito": true,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 394,
+        "pergunta": 150,
+        "codPergunta": 144,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp394",
+        "componentePai": "jvsBox",
+        "idResposta": 443,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

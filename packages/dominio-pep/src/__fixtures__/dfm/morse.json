@@ -1,0 +1,445 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 37,
+    "codigo": "MORSE",
+    "descricao": "ESCALA DE MORSE",
+    "fase": 2
+  },
+  "impressaoLayout": "7a74bf6435c40abab073b503a41cc38605c8cd6f55a717625d33f0099cf0a47c",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 8,
+    "vinculosAtivos": 8,
+    "vinculosInativos": 0,
+    "componentes": 8,
+    "componentesMapeados": 8,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 17,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespComboBox": 3,
+      "TfRespComboTexto": 4,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "ESCALA DE MORSE",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Histórico de queda recente",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 17,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 2326,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 2326,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1705,
+            "pergunta": 798,
+            "codPergunta": 776,
+            "ordem": "0101",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1705",
+            "componentePai": "cmp1686",
+            "idResposta": 2326,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Diagnóstico Secundário",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 64,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 2327,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 2327,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1706,
+            "pergunta": 799,
+            "codPergunta": 777,
+            "ordem": "0102",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1706",
+            "componentePai": "cmp1686",
+            "idResposta": 2327,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Auxílio para deambular",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 120,
+            "topo": 108,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Nenhum/ Acamado/ Auxiliado por profissional da saúde",
+              "idResposta": 2328,
+              "codigo": 1505,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Muleta/ Bengala/ Andador",
+              "idResposta": 2329,
+              "codigo": 1506,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Mobiliário/ parede",
+              "idResposta": 2330,
+              "codigo": 1507,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1707,
+            "pergunta": 800,
+            "codPergunta": 778,
+            "ordem": "0103",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1707",
+            "componentePai": "cmp1686",
+            "idResposta": 2328,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Terapia endovenosa/ Dispositivo endovenoso salinizado ou heparinizado",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 749,
+            "altura": 40,
+            "topo": 235,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 2331,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 2331,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1708,
+            "pergunta": 801,
+            "codPergunta": 779,
+            "ordem": "0104",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1708",
+            "componentePai": "cmp1686",
+            "idResposta": 2331,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Marcha",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 134,
+            "topo": 276,
+            "esquerda": 5,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Normal/ Sem deambulação, acamado, cadeira de rodas",
+              "idResposta": 2332,
+              "codigo": 1508,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Fraca",
+              "idResposta": 2333,
+              "codigo": 1509,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Comprometida, cambaleante",
+              "idResposta": 2334,
+              "codigo": 1510,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1709,
+            "pergunta": 802,
+            "codPergunta": 780,
+            "ordem": "0105",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1709",
+            "componentePai": "cmp1686",
+            "idResposta": 2332,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Estado Mental",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 134,
+            "topo": 415,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Orientado, capaz quanto a sua capacidade/ limitação",
+              "idResposta": 2335,
+              "codigo": 1511,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Superestima capacidade/ esquece limitações",
+              "idResposta": 2336,
+              "codigo": 1512,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1710,
+            "pergunta": 803,
+            "codPergunta": 781,
+            "ordem": "0106",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1710",
+            "componentePai": "cmp1686",
+            "idResposta": 2335,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Escore / Risco",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 134,
+            "topo": 552,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "< 41 - Risco Médio",
+              "idResposta": 2337,
+              "codigo": 1513,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "41 -51 - Risco Elevado",
+              "idResposta": 2338,
+              "codigo": 1514,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "> 51 Risco muito elevado",
+              "idResposta": 2339,
+              "codigo": 1515,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1711,
+            "pergunta": 804,
+            "codPergunta": 782,
+            "ordem": "0107",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1711",
+            "componentePai": "cmp1686",
+            "idResposta": 2337,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 700,
+        "topo": 2,
+        "esquerda": 4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1686,
+        "pergunta": 773,
+        "codPergunta": 757,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1686",
+        "componentePai": "jvsBox",
+        "idResposta": 2288,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

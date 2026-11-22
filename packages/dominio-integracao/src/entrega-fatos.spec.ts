@@ -21,7 +21,9 @@ describe('estado da liberação do exame para o parceiro', () => {
     const h = [ev(1, 'conferencia_tecnica', 'inclusao', 1), ev(2, 'liberacao_clinica', 'inclusao', 2)];
     expect(fatoDaLiberacao(h, 1)).toBeNull();
     expect(fatoDaLiberacao(h, 2)).toBe('fato.resultado.liberado');
-    expect(fatoDaLiberacao([...h, ev(3, 'publicacao_portal', 'inclusao', 3)], 2)).toBe('fato.resultado.liberado');
+    expect(fatoDaLiberacao([...h, ev(3, 'publicacao_portal', 'inclusao', 3)], 2)).toBe(
+      'fato.resultado.liberado',
+    );
     expect(estadoDaLiberacao(h)).toBe('liberado');
   });
 
@@ -37,7 +39,11 @@ describe('estado da liberação do exame para o parceiro', () => {
   });
 
   it('desfazer a revogação devolve a liberação; revogar o que não estava liberado não gera fato', () => {
-    const h = [ev(1, 'liberacao_clinica', 'inclusao', 1), ev(2, 'revogacao', 'inclusao', 2), ev(3, 'revogacao', 'exclusao', 3)];
+    const h = [
+      ev(1, 'liberacao_clinica', 'inclusao', 1),
+      ev(2, 'revogacao', 'inclusao', 2),
+      ev(3, 'revogacao', 'exclusao', 3),
+    ];
     expect(fatoDaLiberacao(h, 3)).toBe('fato.resultado.liberado');
     expect(fatoDaLiberacao(h, 2)).toBeNull();
     expect(fatoDaLiberacao([ev(5, 'revogacao', 'inclusao', 1)], 5)).toBeNull();
@@ -45,7 +51,11 @@ describe('estado da liberação do exame para o parceiro', () => {
   });
 
   it('a nova liberação depois da retirada vale; a ordem é o instante e, no empate, a linha', () => {
-    const h = [ev(4, 'liberacao_clinica', 'inclusao', 3), ev(2, 'revogacao', 'inclusao', 2), ev(1, 'liberacao_clinica', 'inclusao', 1)];
+    const h = [
+      ev(4, 'liberacao_clinica', 'inclusao', 3),
+      ev(2, 'revogacao', 'inclusao', 2),
+      ev(1, 'liberacao_clinica', 'inclusao', 1),
+    ];
     expect(fatoDaLiberacao(h, 4)).toBe('fato.resultado.liberado');
     const empate = [ev(8, 'revogacao', 'inclusao', 1), ev(7, 'liberacao_clinica', 'inclusao', 1)];
     expect(fatoDaLiberacao(empate, 8)).toBe('fato.resultado.revogado');

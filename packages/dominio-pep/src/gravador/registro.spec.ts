@@ -1,4 +1,4 @@
-// Prova do gravador nos modelos reais (estrutura em docs/marcos/M09/dfm, respostas SINTÉTICAS): respostas →
+// Prova do gravador nos modelos reais (estrutura em src/__fixtures__/dfm, respostas SINTÉTICAS): respostas →
 // linhas → leitura (ida e volta: as mesmas respostas); as linhas lidas pelo leitor do M15 × o formulário que o
 // próprio novo produziu (conferência cruzada: 100% nos 10 de maior uso e em todos os que o gravador grava); o
 // texto do registro, o formulário e o documento legíveis pelos leitores do M15 (regra 8: o registro abre com o
@@ -17,7 +17,7 @@ import { escaparRtf, paragrafosDoTexto, rtfDoCampo, rtfDoRegistro } from './rtf.
 import { MARCA_SINTETICA_PEP, respostasSinteticas } from './sintetico.js';
 import type { CabecalhoDocumento } from './xml.js';
 
-const pasta = resolve(import.meta.dirname, '../../../../docs/marcos/M09/dfm');
+const pasta = resolve(import.meta.dirname, '../__fixtures__/dfm');
 const reps = readdirSync(pasta)
   .filter((f) => f.endsWith('.json'))
   .map((f) => JSON.parse(readFileSync(resolve(pasta, f), 'utf8')) as RepresentacaoFormulario);

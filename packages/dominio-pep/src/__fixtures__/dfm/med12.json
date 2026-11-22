@@ -1,0 +1,859 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 24,
+    "codigo": "MED12",
+    "descricao": "CONSULTA MÉDICA PRONTO ATENDIMENTO",
+    "fase": 0
+  },
+  "impressaoLayout": "35885702a45e73037c3e1822c08d696c1c32e650ae2932fd03c73c8c6e7367ef",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 15,
+    "vinculosAtivos": 10,
+    "vinculosInativos": 5,
+    "componentes": 14,
+    "componentesMapeados": 14,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 39,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespAlergia": 1,
+      "TfRespCheckListBox": 2,
+      "TfRespCid": 1,
+      "TfRespColunas": 1,
+      "TfRespComboBox": 2,
+      "TfRespComboTexto": 1,
+      "TfRespTexto": 5,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "Consulta Médica - Pronto Atendimento",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Queixa Principal (QP)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 733,
+            "altura": 67,
+            "topo": 14,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1200,
+            "pergunta": 534,
+            "codPergunta": 522,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1200",
+            "componentePai": "cmp1199",
+            "idResposta": 1489,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "História da doença atual (HDA)",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "sem-componente",
+          "widget": null,
+          "tamanhoMaximo": null,
+          "layout": null,
+          "x-legacy": {
+            "vinculo": 1201,
+            "pergunta": 535,
+            "codPergunta": 523,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": null,
+            "componente": null,
+            "componentePai": null,
+            "idResposta": null,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "História clínica (Cabeçalho)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 732,
+            "altura": 99,
+            "topo": 80,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1226,
+            "pergunta": 12,
+            "codPergunta": 12,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1226",
+            "componentePai": "cmp1199",
+            "idResposta": 13,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Exame Físico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 731,
+            "altura": 142,
+            "topo": 179,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1202,
+            "pergunta": 52,
+            "codPergunta": 52,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1202",
+            "componentePai": "cmp1199",
+            "idResposta": 81,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "História patológica pregressa (HPP)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 729,
+            "altura": 232,
+            "topo": 322,
+            "esquerda": 7,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Tabagista",
+              "idResposta": 30,
+              "codigo": 3,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Etilista",
+              "idResposta": 31,
+              "codigo": 4,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "AVE Isquêmico prévio",
+              "idResposta": 32,
+              "codigo": 5,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "AVE Hemorrágico prévio",
+              "idResposta": 33,
+              "codigo": 6,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "IAM prévio",
+              "idResposta": 34,
+              "codigo": 7,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Diabetes",
+              "idResposta": 35,
+              "codigo": 8,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Hipertensão Arterial",
+              "idResposta": 36,
+              "codigo": 9,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 7,
+              "texto": "Hipotireoidismo",
+              "idResposta": 37,
+              "codigo": 10,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 8,
+              "texto": "Hipertireoidismo",
+              "idResposta": 38,
+              "codigo": 11,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 9,
+              "texto": "Insuficiência Renal Crônica não dialítica",
+              "idResposta": 39,
+              "codigo": 12,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 10,
+              "texto": "Insuficiência Renal Crônica dialítica",
+              "idResposta": 40,
+              "codigo": 13,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 11,
+              "texto": "Cirrose Child A-B",
+              "idResposta": 41,
+              "codigo": 14,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 12,
+              "texto": "Cirrose Child C",
+              "idResposta": 42,
+              "codigo": 15,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 13,
+              "texto": "Insuficiência Cardíaca Classe II - III",
+              "idResposta": 43,
+              "codigo": 16,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 14,
+              "texto": "Insuficiência Cardíaca Classe IV",
+              "idResposta": 44,
+              "codigo": 17,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 15,
+              "texto": "Hepatite B",
+              "idResposta": 45,
+              "codigo": 18,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 16,
+              "texto": "Hepatite C",
+              "idResposta": 46,
+              "codigo": 19,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 17,
+              "texto": "HIV",
+              "idResposta": 47,
+              "codigo": 20,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 18,
+              "texto": "DPOC",
+              "idResposta": 48,
+              "codigo": 21,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 19,
+              "texto": "TVP",
+              "idResposta": 49,
+              "codigo": 22,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 20,
+              "texto": "Doença péptica",
+              "idResposta": 50,
+              "codigo": 23,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 21,
+              "texto": "Dislipidemia",
+              "idResposta": 51,
+              "codigo": 24,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 22,
+              "texto": "Arritmias",
+              "idResposta": 52,
+              "codigo": 25,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 23,
+              "texto": "Cirurgia prévia",
+              "idResposta": 53,
+              "codigo": 26,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 24,
+              "texto": "TCE prévio",
+              "idResposta": 54,
+              "codigo": 27,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 25,
+              "texto": "Parkinson",
+              "idResposta": 55,
+              "codigo": 28,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 26,
+              "texto": "Alzheimer",
+              "idResposta": 56,
+              "codigo": 29,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 27,
+              "texto": "Demência senil",
+              "idResposta": 57,
+              "codigo": 30,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 28,
+              "texto": "Outros",
+              "idResposta": 58,
+              "codigo": 31,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1203,
+            "pergunta": 29,
+            "codPergunta": 29,
+            "ordem": "0104",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1203",
+            "componentePai": "cmp1199",
+            "idResposta": 30,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "História familiar (HF)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 728,
+            "altura": 94,
+            "topo": 553,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1204,
+            "pergunta": 536,
+            "codPergunta": 524,
+            "ordem": "0105",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1204",
+            "componentePai": "cmp1199",
+            "idResposta": 1491,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Alergia de medicamentos",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 728,
+            "altura": 78,
+            "topo": 648,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Sim",
+              "idResposta": 114,
+              "codigo": 51,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Não",
+              "idResposta": 115,
+              "codigo": 52,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1205,
+            "pergunta": 68,
+            "codPergunta": 68,
+            "ordem": "0106",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp1205",
+            "componentePai": "cmp1199",
+            "idResposta": 114,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Medicações de uso prévio",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "grid",
+          "widget": "table-repeater",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 729,
+            "altura": 125,
+            "topo": 1171,
+            "esquerda": 6,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "colunasGrade": [
+            {
+              "coluna": 1,
+              "pergunta": 302,
+              "idResposta": 955,
+              "titulo": "Medicações",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 2,
+              "pergunta": 303,
+              "idResposta": 956,
+              "titulo": "Posologia",
+              "tipo": "4",
+              "unidade": null
+            },
+            {
+              "coluna": 3,
+              "pergunta": 304,
+              "idResposta": 957,
+              "titulo": "Reconciliação hospitalar",
+              "tipo": "3",
+              "unidade": null
+            },
+            {
+              "coluna": 4,
+              "pergunta": 305,
+              "idResposta": 958,
+              "titulo": "Motivo",
+              "tipo": "4",
+              "unidade": null
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1206,
+            "pergunta": 301,
+            "codPergunta": 293,
+            "ordem": "0107",
+            "tipo": "9",
+            "classe": "TfRespColunas",
+            "componente": "cmp1206",
+            "componentePai": "cmp1199",
+            "idResposta": 954,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "CID",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "coding",
+          "widget": "terminology-lookup",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 40,
+            "topo": 845,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1207,
+            "pergunta": 359,
+            "codPergunta": 347,
+            "ordem": "0108",
+            "tipo": "10",
+            "classe": "TfRespCid",
+            "componente": "cmp1207",
+            "componentePai": "cmp1199",
+            "idResposta": 1034,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.08",
+          "texto": "Conduta",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 114,
+            "topo": 1295,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "Medicação",
+              "idResposta": 1581,
+              "codigo": 41,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Exame de imagem",
+              "idResposta": 1582,
+              "codigo": 999,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Exame de Laboratório",
+              "idResposta": 1583,
+              "codigo": 1000,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Outra",
+              "idResposta": 1584,
+              "codigo": 63,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1261,
+            "pergunta": 570,
+            "codPergunta": 558,
+            "ordem": "0108",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp1261",
+            "componentePai": "cmp1199",
+            "idResposta": 1581,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Conduta",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 725,
+            "altura": 101,
+            "topo": 885,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1208,
+            "pergunta": 133,
+            "codPergunta": 127,
+            "ordem": "0109",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp1208",
+            "componentePai": "cmp1199",
+            "idResposta": 394,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Local de internação",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 726,
+            "altura": 40,
+            "topo": 968,
+            "esquerda": 9,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "U.T.I",
+              "idResposta": 1556,
+              "codigo": 997,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Acomodação",
+              "idResposta": 1557,
+              "codigo": 998,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 1262,
+            "pergunta": 546,
+            "codPergunta": 534,
+            "ordem": "0109",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp1262",
+            "componentePai": "cmp1199",
+            "idResposta": 1556,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.09",
+          "texto": "Alergias",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.09.01",
+              "texto": "Local de internação",
+              "ativo": false,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "choice",
+              "widget": "select",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 5,
+                "largura": 330,
+                "altura": 40,
+                "topo": 987,
+                "esquerda": 10,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 1,
+                  "texto": "U.T.I",
+                  "idResposta": 1556,
+                  "codigo": 997,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Acomodação",
+                  "idResposta": 1557,
+                  "codigo": 998,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1225,
+                "pergunta": 546,
+                "codPergunta": 534,
+                "ordem": "010901",
+                "tipo": "13",
+                "classe": "TfRespComboBox",
+                "componente": "cmp1225",
+                "componentePai": "cmp1199",
+                "idResposta": 1556,
+                "obrigatorio": "F",
+                "ativo": "F",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "reference",
+          "widget": "allergy-panel",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 448,
+            "topo": 725,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2474,
+            "pergunta": 772,
+            "codPergunta": 756,
+            "ordem": "0109",
+            "tipo": "19",
+            "classe": "TfRespAlergia",
+            "componente": "cmp2474",
+            "componentePai": "cmp1199",
+            "idResposta": 2287,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 2
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 747,
+        "altura": 1450,
+        "topo": 10,
+        "esquerda": 6,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1199,
+        "pergunta": 533,
+        "codPergunta": 521,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1199",
+        "componentePai": "jvsBox",
+        "idResposta": 1488,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

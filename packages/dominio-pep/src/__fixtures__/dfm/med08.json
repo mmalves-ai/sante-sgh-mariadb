@@ -1,0 +1,852 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 18,
+    "codigo": "MED08",
+    "descricao": "SUMÁRIO DE ALTA MÉDICA",
+    "fase": 0
+  },
+  "impressaoLayout": "17e985ee7ca064a56e843c4170bffcda82490c6d4a7d3ce5b09b44a6958e18f9",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 18,
+    "vinculosAtivos": 8,
+    "vinculosInativos": 10,
+    "componentes": 18,
+    "componentesMapeados": 18,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 0,
+    "opcoesResolvidas": 24,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCid": 2,
+      "TfRespComboBox": 9,
+      "TfRespComboTexto": 1,
+      "TfRespTexto": 5,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "SUMÁRIO DE ALTA",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "Resumo Clínico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 108,
+            "topo": 15,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 791,
+            "pergunta": 352,
+            "codPergunta": 340,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp305",
+            "componentePai": "cmp304",
+            "idResposta": 1019,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.01",
+          "texto": "História clínica (Cabeçalho)",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 739,
+            "altura": 83,
+            "topo": 14,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 804,
+            "pergunta": 12,
+            "codPergunta": 12,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp804",
+            "componentePai": "cmp790",
+            "idResposta": 13,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "Condições de Alta/Transferência",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 40,
+            "topo": 97,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Inalterado",
+              "idResposta": 1020,
+              "codigo": 667,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Curado",
+              "idResposta": 1021,
+              "codigo": 668,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Melhorado",
+              "idResposta": 1022,
+              "codigo": 669,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Óbito",
+              "idResposta": 1023,
+              "codigo": 670,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Revelia",
+              "idResposta": 1024,
+              "codigo": 671,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 792,
+            "pergunta": 353,
+            "codPergunta": 341,
+            "ordem": "0102",
+            "tipo": "13",
+            "classe": "TfRespComboBox",
+            "componente": "cmp792",
+            "componentePai": "cmp790",
+            "idResposta": 1020,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "Destino do paciente",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "open-choice",
+          "widget": "select-with-text",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 740,
+            "altura": 119,
+            "topo": 142,
+            "esquerda": 3,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Residência",
+              "idResposta": 1025,
+              "codigo": 672,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Atendimento domiciliar",
+              "idResposta": 1026,
+              "codigo": 673,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Transferência",
+              "idResposta": 1027,
+              "codigo": 674,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 793,
+            "pergunta": 354,
+            "codPergunta": 342,
+            "ordem": "0103",
+            "tipo": "8",
+            "classe": "TfRespComboTexto",
+            "componente": "cmp793",
+            "componentePai": "cmp790",
+            "idResposta": 1025,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Observações",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 730,
+            "altura": 108,
+            "topo": 208,
+            "esquerda": 10,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 794,
+            "pergunta": 355,
+            "codPergunta": 343,
+            "ordem": "0104",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp308",
+            "componentePai": "cmp304",
+            "idResposta": 1030,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Encaminhamento Ambulatório",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 207,
+            "altura": 40,
+            "topo": 171,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 1236,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 1236,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 795,
+            "pergunta": 356,
+            "codPergunta": 344,
+            "ordem": "0104",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp635",
+            "componentePai": "cmp304",
+            "idResposta": 1031,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "Atestado Médico",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 125,
+            "altura": 40,
+            "topo": 275,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 1032,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 1032,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 805,
+            "pergunta": 357,
+            "codPergunta": 345,
+            "ordem": "0104",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp805",
+            "componentePai": "cmp790",
+            "idResposta": 1032,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Atestado Médico",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 207,
+            "altura": 40,
+            "topo": 218,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 1237,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 1237,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 796,
+            "pergunta": 357,
+            "codPergunta": 345,
+            "ordem": "0105",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp636",
+            "componentePai": "cmp304",
+            "idResposta": 1032,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.05",
+          "texto": "Declaração de Atendimento",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 2,
+            "largura": 140,
+            "altura": 40,
+            "topo": 275,
+            "esquerda": 131,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 1033,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 1033,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 806,
+            "pergunta": 358,
+            "codPergunta": 346,
+            "ordem": "0105",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp806",
+            "componentePai": "cmp790",
+            "idResposta": 1033,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "Declaração de Atendimento",
+          "ativo": false,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "choice",
+          "widget": "select",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 207,
+            "altura": 40,
+            "topo": 260,
+            "esquerda": 8,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 1,
+              "texto": "Não",
+              "idResposta": 1238,
+              "codigo": null,
+              "valor": false,
+              "origem": "sim-nao"
+            },
+            {
+              "indice": 2,
+              "texto": "Sim",
+              "idResposta": 1238,
+              "codigo": null,
+              "valor": true,
+              "origem": "sim-nao"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 797,
+            "pergunta": 358,
+            "codPergunta": 346,
+            "ordem": "0106",
+            "tipo": "4",
+            "classe": "TfRespComboBox",
+            "componente": "cmp637",
+            "componentePai": "cmp304",
+            "idResposta": 1033,
+            "obrigatorio": "F",
+            "ativo": "F",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.06",
+          "texto": "CID",
+          "ativo": true,
+          "obrigatorio": true,
+          "unidade": null,
+          "itens": [],
+          "tipo": "coding",
+          "widget": "terminology-lookup",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 8,
+            "largura": 469,
+            "altura": 40,
+            "topo": 275,
+            "esquerda": 274,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 807,
+            "pergunta": 359,
+            "codPergunta": 347,
+            "ordem": "0106",
+            "tipo": "10",
+            "classe": "TfRespCid",
+            "componente": "cmp807",
+            "componentePai": "cmp790",
+            "idResposta": 1034,
+            "obrigatorio": "T",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.07",
+          "texto": "Observações",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 738,
+            "altura": 108,
+            "topo": 314,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 798,
+            "pergunta": 355,
+            "codPergunta": 343,
+            "ordem": "0107",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp798",
+            "componentePai": "cmp790",
+            "idResposta": 1030,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 746,
+        "altura": 421,
+        "topo": 11,
+        "esquerda": 5,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 790,
+        "pergunta": 351,
+        "codPergunta": 339,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp790",
+        "componentePai": "jvsBox",
+        "idResposta": 1018,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "Encaminhamento Ambulatório",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "choice",
+      "widget": "select",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 3,
+        "largura": 207,
+        "altura": 40,
+        "topo": 169,
+        "esquerda": 9,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Não",
+          "idResposta": 1236,
+          "codigo": null,
+          "valor": false,
+          "origem": "sim-nao"
+        },
+        {
+          "indice": 2,
+          "texto": "Sim",
+          "idResposta": 1236,
+          "codigo": null,
+          "valor": true,
+          "origem": "sim-nao"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 799,
+        "pergunta": 356,
+        "codPergunta": 344,
+        "ordem": "02",
+        "tipo": "4",
+        "classe": "TfRespComboBox",
+        "componente": "cmp639",
+        "componentePai": "cmp304",
+        "idResposta": 1031,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "03",
+      "texto": "Atestado Médico",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "choice",
+      "widget": "select",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 3,
+        "largura": 207,
+        "altura": 40,
+        "topo": 216,
+        "esquerda": 9,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Não",
+          "idResposta": 1237,
+          "codigo": null,
+          "valor": false,
+          "origem": "sim-nao"
+        },
+        {
+          "indice": 2,
+          "texto": "Sim",
+          "idResposta": 1237,
+          "codigo": null,
+          "valor": true,
+          "origem": "sim-nao"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 800,
+        "pergunta": 357,
+        "codPergunta": 345,
+        "ordem": "03",
+        "tipo": "4",
+        "classe": "TfRespComboBox",
+        "componente": "cmp640",
+        "componentePai": "cmp304",
+        "idResposta": 1032,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "04",
+      "texto": "Declaração de Atendimento",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "choice",
+      "widget": "select",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 3,
+        "largura": 207,
+        "altura": 40,
+        "topo": 215,
+        "esquerda": 253,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "opcoes": [
+        {
+          "indice": 1,
+          "texto": "Não",
+          "idResposta": 1238,
+          "codigo": null,
+          "valor": false,
+          "origem": "sim-nao"
+        },
+        {
+          "indice": 2,
+          "texto": "Sim",
+          "idResposta": 1238,
+          "codigo": null,
+          "valor": true,
+          "origem": "sim-nao"
+        }
+      ],
+      "x-legacy": {
+        "vinculo": 801,
+        "pergunta": 358,
+        "codPergunta": 346,
+        "ordem": "04",
+        "tipo": "4",
+        "classe": "TfRespComboBox",
+        "componente": "cmp641",
+        "componentePai": "cmp304",
+        "idResposta": 1033,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "05",
+      "texto": "Observações",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "text",
+      "widget": "richtext",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 9,
+        "largura": 569,
+        "altura": 105,
+        "topo": 257,
+        "esquerda": 8,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 802,
+        "pergunta": 355,
+        "codPergunta": 343,
+        "ordem": "05",
+        "tipo": "5",
+        "classe": "TfRespTexto",
+        "componente": "cmp642",
+        "componentePai": "cmp304",
+        "idResposta": 1030,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "06",
+      "texto": "CID",
+      "ativo": false,
+      "obrigatorio": true,
+      "unidade": null,
+      "itens": [],
+      "tipo": "coding",
+      "widget": "terminology-lookup",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 7,
+        "largura": 428,
+        "altura": 40,
+        "topo": 368,
+        "esquerda": 10,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 803,
+        "pergunta": 359,
+        "codPergunta": 347,
+        "ordem": "06",
+        "tipo": "10",
+        "classe": "TfRespCid",
+        "componente": "cmp808",
+        "componentePai": "cmp304",
+        "idResposta": 1034,
+        "obrigatorio": "T",
+        "ativo": "F",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

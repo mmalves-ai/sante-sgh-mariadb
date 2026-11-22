@@ -19,7 +19,8 @@ export function palavraSintetica(): string {
 }
 
 /** Frase curta com acentos, ordinais, aspas tipográficas, moeda e dois caracteres de 4 bytes (U+1D11E e U+1F48A). */
-export const CORPUS_ACENTUADO = 'Ação, pé, avó, Ü; “aspas” – € 1,50; 1º, 2ª; ½ dose; clave \u{1D11E}; cápsula \u{1F48A}.';
+export const CORPUS_ACENTUADO =
+  'Ação, pé, avó, Ü; “aspas” – € 1,50; 1º, 2ª; ½ dose; clave \u{1D11E}; cápsula \u{1F48A}.';
 
 /** Texto longo (cerca de 84 mil caracteres, 113 mil bytes em UTF-8) com acentuação, para campos de texto livre extensos. */
 export function textoLongoAcentuado(): string {

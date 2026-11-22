@@ -125,7 +125,9 @@ describe('derivadores das fontes', () => {
       tipo: 'recibo',
       valorCentavos: 50_000,
     });
-    expect(derivarRecibo(linha('recibo_autonomo', 6, { EMISSAO: '2027-01-31', STATUS: 'C' }), ctx)).toEqual([]);
+    expect(derivarRecibo(linha('recibo_autonomo', 6, { EMISSAO: '2027-01-31', STATUS: 'C' }), ctx)).toEqual(
+      [],
+    );
   });
 
   it('folha: custo de pessoal no último dia da competência; rubrica fora da contabilização não gera fato', () => {

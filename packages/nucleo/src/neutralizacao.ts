@@ -93,7 +93,8 @@ export function hostsDoValor(valor: string): string[] {
 
 const CHAVE_DE_ENDERECO = /(?:_URL|_URI|_HOST|_ENDPOINT|_ENDERECO|_SERVIDOR|_WSDL|_DSN)$/;
 // Canais de mensagem a pessoas (WhatsApp, SMS, push e os provedores comuns deles).
-const CANAL_DESLIGAVEL = /^(?:WHATSAPP|WPP|SMS|TWILIO|ZENVIA|GUPSHUP|TELEGRAM|PUSH|FCM|ONESIGNAL|META_WA|MENSAGERIA)_/;
+const CANAL_DESLIGAVEL =
+  /^(?:WHATSAPP|WPP|SMS|TWILIO|ZENVIA|GUPSHUP|TELEGRAM|PUSH|FCM|ONESIGNAL|META_WA|MENSAGERIA)_/;
 const CREDENCIAL = /_(?:TOKEN|CHAVE|SENHA|SEGREDO|SECRET|KEY|APIKEY|API_KEY|PASSWORD|SID)$/;
 const LIGADO = /^(?:1|sim|true|ligado|ativo|on)$/i;
 
@@ -118,8 +119,7 @@ export function verificarNeutralizacao(env: Ambiente): ResultadoNeutralizacao {
       LIGADO.test(env[k]?.trim() ?? ''),
   );
   const credenciaisDeCanal = chaves.filter(
-    (k) =>
-      CANAL_DESLIGAVEL.test(k) && CREDENCIAL.test(k) && (env[k]?.trim() ?? '') !== '',
+    (k) => CANAL_DESLIGAVEL.test(k) && CREDENCIAL.test(k) && (env[k]?.trim() ?? '') !== '',
   );
   const enderecos = chaves.filter(
     (k) =>

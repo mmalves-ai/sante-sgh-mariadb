@@ -20,7 +20,8 @@ export function minutosDe(hora: string): number {
 /** Lê a janela "HH:MM-HH:MM" (texto do parâmetro); inválida ou vazia = a padrão. */
 export function lerJanela(texto: string | null | undefined): JanelaPublicacao {
   const m = /^\s*(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})\s*$/.exec(texto ?? '');
-  if (!m || !FORMATO_HORA_JANELA.test(m[1] as string) || !FORMATO_HORA_JANELA.test(m[2] as string)) return JANELA_PADRAO;
+  if (!m || !FORMATO_HORA_JANELA.test(m[1] as string) || !FORMATO_HORA_JANELA.test(m[2] as string))
+    return JANELA_PADRAO;
   return { inicio: m[1] as string, fim: m[2] as string };
 }
 

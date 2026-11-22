@@ -3,15 +3,25 @@
 // o repasse. Rótulos de produto (ADR 0023).
 
 /** Chaves de liberação da fatia (SGH_CFG_LIBERACAO; todas nascem desligadas, POL-3). */
-export const CHAVE_PESSOAS_TREINAMENTO = 'pessoas.treinamento';
-export const CHAVE_PESSOAS_AUTOATENDIMENTO = 'pessoas.autoatendimento';
-export const CHAVE_PESSOAS_PLANTAO_REALIZADO = 'pessoas.plantaoRealizado';
-/** O lançamento do realizado no repasse (repasse.lancarEvento, origem plantão): só com a DP-33 decidida. */
-export const CHAVE_PESSOAS_REPASSE_PLANTAO = 'pessoas.repassePlantao';
+export const CHAVES_LIBERACAO_TREINAMENTO = {
+  treinamento: 'pessoas.treinamento',
+  autoatendimento: 'pessoas.autoatendimento',
+  plantaoRealizado: 'pessoas.plantaoRealizado',
+  /** O lançamento do realizado no repasse (repasse.lancarEvento, origem plantão): só com a DP-33 decidida. */
+  repassePlantao: 'pessoas.repassePlantao',
+} as const;
+export const CHAVE_PESSOAS_TREINAMENTO = CHAVES_LIBERACAO_TREINAMENTO.treinamento;
+export const CHAVE_PESSOAS_AUTOATENDIMENTO = CHAVES_LIBERACAO_TREINAMENTO.autoatendimento;
+export const CHAVE_PESSOAS_PLANTAO_REALIZADO = CHAVES_LIBERACAO_TREINAMENTO.plantaoRealizado;
+export const CHAVE_PESSOAS_REPASSE_PLANTAO = CHAVES_LIBERACAO_TREINAMENTO.repassePlantao;
 
 /** Parâmetros da fatia (SGH_CFG_PARAMETRO). */
-export const PARAMETRO_ALERTA_TREINAMENTO = 'pessoas.treinamento.alertaDias';
-export const PARAMETRO_EVENTO_REPASSE_PLANTAO = 'pessoas.repasse.eventoPlantao';
+export const PARAMETROS_TREINAMENTO = {
+  alertaTreinamento: 'pessoas.treinamento.alertaDias',
+  eventoRepassePlantao: 'pessoas.repasse.eventoPlantao',
+} as const;
+export const PARAMETRO_ALERTA_TREINAMENTO = PARAMETROS_TREINAMENTO.alertaTreinamento;
+export const PARAMETRO_EVENTO_REPASSE_PLANTAO = PARAMETROS_TREINAMENTO.eventoRepassePlantao;
 
 export const CATEGORIAS_CURSO = {
   nr32: 'Segurança e saúde no trabalho (NR-32)',

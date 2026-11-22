@@ -284,7 +284,12 @@ export const CODIGOS_BAIXA_CONFIANCA_ONDA_4: readonly CodigoBaixaConfianca[] = [
   { coluna: 'contaPagar.situacao', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
   { coluna: 'contaPagar.formaPagamento', dp: 'DP-46.3', pergunta: 'FIS-08', citados: [] },
   { coluna: 'contaReceber.origem', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['F', 'E'] },
-  { coluna: 'movimentoBancario.tipoTransferencia', dp: 'DP-46.4', pergunta: 'FIS-09', citados: ['I', 'T', 'C', 'D'] },
+  {
+    coluna: 'movimentoBancario.tipoTransferencia',
+    dp: 'DP-46.4',
+    pergunta: 'FIS-09',
+    citados: ['I', 'T', 'C', 'D'],
+  },
   { coluna: 'contaHospitalar.tipoNota', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },
   { coluna: 'contaHospitalar.pacote', dp: 'DP-46.5', pergunta: 'FIS-10', citados: ['P', 'D', 'F'] },
   { coluna: 'itemConta.fpa', dp: 'DP-46.5', pergunta: 'FIS-10', citados: [] },

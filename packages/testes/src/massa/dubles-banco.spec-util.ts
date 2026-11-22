@@ -28,9 +28,11 @@ export function dubleEscritor(
     consultar: async <T extends Linha = Linha>(sql: string, p: readonly unknown[] = []) =>
       linhas({ tipo: 'consultar', sql, parametros: p }) as T[],
     uma: async <T extends Linha = Linha>(sql: string, p: readonly unknown[] = []) =>
-      ((linhas({ tipo: 'consultar', sql, parametros: p })[0] ?? null) as T | null),
-    executar: async (sql: string, p: readonly unknown[] = []) => numero({ tipo: 'executar', sql, parametros: p }),
-    inserir: async (sql: string, p: readonly unknown[] = []) => numero({ tipo: 'inserir', sql, parametros: p }),
+      (linhas({ tipo: 'consultar', sql, parametros: p })[0] ?? null) as T | null,
+    executar: async (sql: string, p: readonly unknown[] = []) =>
+      numero({ tipo: 'executar', sql, parametros: p }),
+    inserir: async (sql: string, p: readonly unknown[] = []) =>
+      numero({ tipo: 'inserir', sql, parametros: p }),
     executarRetornando: async (sql: string, p: readonly unknown[] = []) =>
       linhas({ tipo: 'executar', sql, parametros: p })[0] ?? {},
     consultarParaAtualizar: async <T extends Linha = Linha>(sql: string, p: readonly unknown[] = []) =>

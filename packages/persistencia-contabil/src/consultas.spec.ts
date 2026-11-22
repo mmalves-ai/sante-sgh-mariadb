@@ -12,7 +12,8 @@ describe('persistência comum da contabilidade', () => {
   });
 
   it('situação do fato: ida e volta entre a tela e o modelo; desconhecida vira pendente', () => {
-    for (const [tela, modelo] of Object.entries(SITUACAO_FATO_MODELO)) expect(situacaoFatoDe(modelo)).toBe(tela);
+    for (const [tela, modelo] of Object.entries(SITUACAO_FATO_MODELO))
+      expect(situacaoFatoDe(modelo)).toBe(tela);
     expect(situacaoFatoDe('outra')).toBe('pendente');
   });
 
@@ -52,9 +53,13 @@ describe('persistência comum da contabilidade', () => {
 
   it('período lido: bloqueado aparece aberto com o aviso; o lançamento nele é recusado', () => {
     const p = periodoDe({ competencia: '2026-10', situacao: 'bloqueado', bloqueado_ate: null, versao: 2 }, 3);
-    expect(p).toMatchObject({ empresa: 3, situacao: 'aberto', observacao: 'Período bloqueado para lançamentos.' });
-    expect(bloqueioDoLancamento({ situacao: 'bloqueado', bloqueadoAte: null }, '2026-10-02', '2026-10')?.codigo).toBe(
-      'periodo-bloqueado',
-    );
+    expect(p).toMatchObject({
+      empresa: 3,
+      situacao: 'aberto',
+      observacao: 'Período bloqueado para lançamentos.',
+    });
+    expect(
+      bloqueioDoLancamento({ situacao: 'bloqueado', bloqueadoAte: null }, '2026-10-02', '2026-10')?.codigo,
+    ).toBe('periodo-bloqueado');
   });
 });

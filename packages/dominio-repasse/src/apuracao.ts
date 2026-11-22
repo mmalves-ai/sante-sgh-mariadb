@@ -55,7 +55,8 @@ export function podeApurarPeriodo(estado: {
   readonly lancamentosDaApuracaoNoPeriodo: number;
   readonly apuracaoFechada: boolean;
 }): { ok: true } | { ok: false; recusa: RecusaPeriodo } {
-  if (estado.apuracaoFechada || estado.lancamentosDaApuracaoNoPeriodo > 0) return { ok: false, recusa: 'periodo-ja-apurado' };
+  if (estado.apuracaoFechada || estado.lancamentosDaApuracaoNoPeriodo > 0)
+    return { ok: false, recusa: 'periodo-ja-apurado' };
   return { ok: true };
 }
 

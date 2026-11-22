@@ -1,58 +1,58 @@
 {
- "tipo_movimento_estoque": [
-  {
-   "codigo": "consumo_paciente",
-   "descricao": "Consumo do paciente (dispensação)",
-   "natureza": "consumo_paciente",
-   "sentido": "saida",
-   "gera_consumo": true,
-   "exige_paciente": true,
-   "sistema": true
-  },
-  {
-   "codigo": "devolucao_paciente",
-   "descricao": "Devolução do paciente",
-   "natureza": "devolucao",
-   "sentido": "entrada",
-   "exige_motivo": true,
-   "sistema": true
-  },
-  {
-   "codigo": "perda",
-   "descricao": "Perda",
-   "natureza": "perda",
-   "sentido": "saida",
-   "exige_motivo": true,
-   "sistema": true
-  }
- ],
- "motivo_devolucao_estoque": [
-  {
-   "codigo": "nao-administrado",
-   "descricao": "Não administrado",
-   "origem_devolucao": "paciente",
-   "retorna_ao_saldo": true,
-   "estorna_conta_paciente": true
-  },
-  {
-   "codigo": "suspenso",
-   "descricao": "Prescrição suspensa",
-   "origem_devolucao": "paciente",
-   "retorna_ao_saldo": true,
-   "estorna_conta_paciente": true
-  },
-  {
-   "codigo": "sobra",
-   "descricao": "Sobra",
-   "origem_devolucao": "ambos",
-   "retorna_ao_saldo": true,
-   "estorna_conta_paciente": true
-  },
-  {
-   "codigo": "outro",
-   "descricao": "Outro motivo",
-   "origem_devolucao": "ambos",
-   "retorna_ao_saldo": true
-  }
- ]
+  "tipo_movimento_estoque": [
+    {
+      "codigo": "consumo_paciente",
+      "descricao": "Consumo do paciente (dispensação)",
+      "natureza": "consumo_paciente",
+      "sentido": "saida",
+      "gera_consumo": true,
+      "exige_paciente": true,
+      "sistema": true
+    },
+    {
+      "codigo": "devolucao_paciente",
+      "descricao": "Devolução do paciente",
+      "natureza": "devolucao",
+      "sentido": "entrada",
+      "exige_motivo": true,
+      "sistema": true
+    },
+    {
+      "codigo": "perda",
+      "descricao": "Perda",
+      "natureza": "perda",
+      "sentido": "saida",
+      "exige_motivo": true,
+      "sistema": true
+    }
+  ],
+  "motivo_devolucao_estoque": [
+    {
+      "codigo": "nao-administrado",
+      "descricao": "Não administrado",
+      "origem_devolucao": "paciente",
+      "retorna_ao_saldo": true,
+      "estorna_conta_paciente": true
+    },
+    {
+      "codigo": "suspenso",
+      "descricao": "Prescrição suspensa",
+      "origem_devolucao": "paciente",
+      "retorna_ao_saldo": true,
+      "estorna_conta_paciente": true
+    },
+    {
+      "codigo": "sobra",
+      "descricao": "Sobra",
+      "origem_devolucao": "ambos",
+      "retorna_ao_saldo": true,
+      "estorna_conta_paciente": true
+    },
+    {
+      "codigo": "outro",
+      "descricao": "Outro motivo",
+      "origem_devolucao": "ambos",
+      "retorna_ao_saldo": true
+    }
+  ]
 }

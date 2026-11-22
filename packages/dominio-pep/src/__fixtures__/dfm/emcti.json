@@ -1,0 +1,252 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 66,
+    "codigo": "EMCTI",
+    "descricao": "EVOLUÇÃO MÉDICA CTI (ROTINA)",
+    "fase": 2
+  },
+  "impressaoLayout": "f7634f74ab9938ba8552dc1c31d79666c1bad786fa7b7611d5ce754cea5482d3",
+  "versoesLayout": [
+    {
+      "versao": 1,
+      "componentes": 4
+    }
+  ],
+  "resumo": {
+    "vinculos": 7,
+    "vinculosAtivos": 4,
+    "vinculosInativos": 3,
+    "componentes": 4,
+    "componentesMapeados": 4,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 3,
+    "opcoesResolvidas": 0,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespTexto": 3,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PLANO TERAPÊTICO",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 2724,
+        "pergunta": 1430,
+        "codPergunta": 1402,
+        "ordem": "01",
+        "tipo": "5",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 3
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "EVOLUÇÃO",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "PLANO TERAPÊTICO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 200,
+            "topo": 16,
+            "esquerda": 2,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2727,
+            "pergunta": 1430,
+            "codPergunta": 1402,
+            "ordem": "0101",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2727",
+            "componentePai": "cmp2730",
+            "idResposta": 3759,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "PLANO DE AÇÃO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 200,
+            "topo": 220,
+            "esquerda": 1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2728,
+            "pergunta": 1431,
+            "codPergunta": 1403,
+            "ordem": "0102",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2728",
+            "componentePai": "cmp2730",
+            "idResposta": 3760,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "PENDÊNCIAS",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "text",
+          "widget": "richtext",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 745,
+            "altura": 200,
+            "topo": 427,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 2729,
+            "pergunta": 1432,
+            "codPergunta": 1404,
+            "ordem": "0103",
+            "tipo": "5",
+            "classe": "TfRespTexto",
+            "componente": "cmp2729",
+            "componentePai": "cmp2730",
+            "idResposta": 3761,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 750,
+        "altura": 731,
+        "topo": 3,
+        "esquerda": 3,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2730,
+        "pergunta": 1397,
+        "codPergunta": 1369,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2730",
+        "componentePai": "jvsBox",
+        "idResposta": 3692,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    },
+    {
+      "linkId": "02",
+      "texto": "PLANO DE AÇÃO",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 2725,
+        "pergunta": 1431,
+        "codPergunta": 1403,
+        "ordem": "02",
+        "tipo": "5",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 3
+      }
+    },
+    {
+      "linkId": "03",
+      "texto": "PENDÊNCIAS",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 2726,
+        "pergunta": 1432,
+        "codPergunta": 1404,
+        "ordem": "03",
+        "tipo": "5",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 3
+      }
+    }
+  ],
+  "pendencias": []
+}

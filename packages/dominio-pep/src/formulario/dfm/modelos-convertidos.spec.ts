@@ -1,5 +1,5 @@
 // Critério de aceite do M09 (`pnpm nx test dominio-pep`): os 67 modelos da cópia `pc`, convertidos por
-// `./pnpm formularios:converter -- --hospital=pc`, estão em docs/marcos/M09/dfm/ e conferem com o relatório:
+// `./pnpm formularios:converter -- --hospital=pc`, estão em src/__fixtures__/dfm/ (cópia da estrutura, sem dado de paciente) e conferem com o relatório:
 // 2.368 de 2.368 componentes mapeados, 0 classe desconhecida, 0 U+FFFD, vínculos inativos preservados e
 // pendências de escolha listadas. Só estrutura do formulário (nenhum dado de paciente).
 import { readdirSync, readFileSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { CLASSES_DFM } from './classes.js';
 import type { ItemFormulario, RepresentacaoFormulario } from './mapeamento.js';
 import { totalizar } from './relatorio.js';
 
-const pasta = resolve(import.meta.dirname, '../../../../../docs/marcos/M09/dfm');
+const pasta = resolve(import.meta.dirname, '../../__fixtures__/dfm');
 const arquivos = readdirSync(pasta)
   .filter((f) => f.endsWith('.json'))
   .sort();

@@ -540,7 +540,9 @@ describe('recurso de glosa: rateio e parecer', () => {
   it('o parecer é obrigatório no mantido e no acatado em parte', () => {
     expect(exigeParecerNoRecurso('acatado')).toBe(false);
     expect(exigeParecerNoRecurso('mantido')).toBe(true);
-    expect(problemasDoParecerDoRecurso('parcial', '  ')).toEqual([{ codigo: 'parecer-obrigatorio', campo: 'parecer' }]);
+    expect(problemasDoParecerDoRecurso('parcial', '  ')).toEqual([
+      { codigo: 'parecer-obrigatorio', campo: 'parecer' },
+    ]);
     expect(problemasDoParecerDoRecurso('parcial', 'Laudo confirma')).toEqual([]);
     expect(problemasDoParecerDoRecurso('acatado', '')).toEqual([]);
   });

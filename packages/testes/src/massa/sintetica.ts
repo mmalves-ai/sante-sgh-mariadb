@@ -261,7 +261,9 @@ export async function estabelecimentosAtivos(l: Consulta, n = 3): Promise<number
 export async function cepInexistente(l: Consulta): Promise<string> {
   for (let n = 99_999_999; n > 99_000_000; n -= 7) {
     const cep = String(n);
-    const r = await l.consultar('SELECT id FROM logradouro_cep WHERE codigo_cep = ? LIMIT 1', [cep], { teto: 1 });
+    const r = await l.consultar('SELECT id FROM logradouro_cep WHERE codigo_cep = ? LIMIT 1', [cep], {
+      teto: 1,
+    });
     if (r.length === 0) return cep;
   }
   throw new Error('Nenhum CEP inexistente.');

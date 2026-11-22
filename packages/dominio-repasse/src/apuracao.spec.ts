@@ -31,7 +31,9 @@ describe('transicaoApuracao', () => {
 
 describe('podeApurarPeriodo', () => {
   it('recusa período com lançamentos de apuração aprovada ou com a apuração já fechada', () => {
-    expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 0, apuracaoFechada: false })).toEqual({ ok: true });
+    expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 0, apuracaoFechada: false })).toEqual({
+      ok: true,
+    });
     expect(podeApurarPeriodo({ lancamentosDaApuracaoNoPeriodo: 3, apuracaoFechada: false })).toEqual({
       ok: false,
       recusa: 'periodo-ja-apurado',

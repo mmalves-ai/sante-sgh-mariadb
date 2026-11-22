@@ -94,11 +94,10 @@ export async function prescricaoSintetica(e: Escritor, c: string, n: number): Pr
     [prescricao, tipoItem, profissional],
   );
   const situacao = (codigo: string, categoria: string) =>
-    e.inserir('INSERT INTO situacao_checagem (codigo, descricao, categoria, criado_em) VALUES (?, ?, ?, NOW(3))', [
-      `${c}${codigo}`,
-      nome(categoria),
-      categoria,
-    ]);
+    e.inserir(
+      'INSERT INTO situacao_checagem (codigo, descricao, categoria, criado_em) VALUES (?, ?, ?, NOW(3))',
+      [`${c}${codigo}`, nome(categoria), categoria],
+    );
   const situacaoPendente = await situacao('p', 'pendente');
   const situacaoAdministrado = await situacao('a', 'administrado');
   const horario = (previsto: string, administrado: boolean) =>
@@ -169,6 +168,15 @@ export async function entradaSintetica(e: Escritor, m: PrescricaoSintetica, quan
             tipo_movimento_estoque_id, natureza, insumo_id, unidade_medida_id, quantidade, quantidade_estoque,
             usuario_id, criado_em)
      VALUES (?, ?, NOW(3), DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), ?, 'entrada', ?, ?, ?, ?, ?, NOW(3))`,
-    [m.estabelecimento, m.localEstoque, m.tipoMovimento, m.insumo, m.unidadeMedida, quantidade, quantidade, m.usuario],
+    [
+      m.estabelecimento,
+      m.localEstoque,
+      m.tipoMovimento,
+      m.insumo,
+      m.unidadeMedida,
+      quantidade,
+      quantidade,
+      m.usuario,
+    ],
   );
 }

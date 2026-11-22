@@ -11,13 +11,7 @@ const r = (codigo: string, mensagem: string): Recusa => ({ codigo, mensagem });
 
 /** Situação da senha da recepção (vocabulário do banco próprio). */
 export type SituacaoSenha =
-  | 'aguardando'
-  | 'chamada'
-  | 'em_atendimento'
-  | 'encaminhada'
-  | 'atendida'
-  | 'nao_compareceu'
-  | 'cancelada';
+  'aguardando' | 'chamada' | 'em_atendimento' | 'encaminhada' | 'atendida' | 'nao_compareceu' | 'cancelada';
 
 /** A senha só abre atendimento se for do dia, estiver na fila (aguardando ou chamada) e sem outro atendimento ativo. */
 export function recusaSenhaNaAbertura(s: {
@@ -49,7 +43,10 @@ export function recusaMarcacaoNaAbertura(m: {
 }
 
 /** A situação do atendimento na fila do consultório: pela situação do atendimento e pela chamada já feita. */
-export function situacaoNoConsultorio(a: { readonly situacao: string; readonly chamado: boolean }): SituacaoFila {
+export function situacaoNoConsultorio(a: {
+  readonly situacao: string;
+  readonly chamado: boolean;
+}): SituacaoFila {
   if (a.situacao === 'encerrado' || a.situacao === 'cancelado') return 'liberado';
   if (a.situacao === 'em_atendimento' || a.situacao === 'em_observacao') return 'emAtendimento';
   return a.chamado ? 'chamado' : 'aguardando';
@@ -74,10 +71,16 @@ export function prioridadeDaSenha(s: {
 }
 
 /** A exclusão é só do atendimento aberto por engano: nunca do encerrado nem do já excluído. */
-export function recusaCancelamento(a: { readonly situacao: string; readonly temDesfecho: boolean }): Recusa | null {
+export function recusaCancelamento(a: {
+  readonly situacao: string;
+  readonly temDesfecho: boolean;
+}): Recusa | null {
   if (a.situacao === 'cancelado') return r('exclusao-recusada', 'O atendimento já foi excluído.');
   if (a.temDesfecho || a.situacao === 'encerrado')
-    return r('exclusao-recusada', 'O atendimento já foi encerrado: a exclusão é só do atendimento aberto por engano.');
+    return r(
+      'exclusao-recusada',
+      'O atendimento já foi encerrado: a exclusão é só do atendimento aberto por engano.',
+    );
   return null;
 }
 

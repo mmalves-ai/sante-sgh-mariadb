@@ -430,7 +430,12 @@ describe('ação de situação do convênio', () => {
     expect(resultadoSituacao(base, 'A')).toMatchObject({
       situacaoAnterior: 'I',
       situacaoAtual: 'A',
-      efeito: { tabela: 'fonte_pagadora_estabelecimento', coluna: 'situacao', antes: 'suspensa', depois: 'ativa' },
+      efeito: {
+        tabela: 'fonte_pagadora_estabelecimento',
+        coluna: 'situacao',
+        antes: 'suspensa',
+        depois: 'ativa',
+      },
     });
     expect(capturar(() => resultadoSituacao(base, 'I'))).toMatchObject({
       extra: { motivo: 'update_sem_efeito' },

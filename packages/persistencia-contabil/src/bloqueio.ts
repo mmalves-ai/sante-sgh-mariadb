@@ -22,7 +22,10 @@ export function bloqueioDoLancamento(
   competencia: string,
 ): BloqueioDoLancamento | null {
   if (periodo.situacao === 'encerrado')
-    return { codigo: 'periodo-encerrado', mensagem: `A competência ${competencia} está encerrada: reabra-a para lançar.` };
+    return {
+      codigo: 'periodo-encerrado',
+      mensagem: `A competência ${competencia} está encerrada: reabra-a para lançar.`,
+    };
   if (periodo.situacao === 'bloqueado')
     return {
       codigo: 'periodo-bloqueado',

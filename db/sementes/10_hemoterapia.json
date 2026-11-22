@@ -1,205 +1,205 @@
 {
- "tipo_transfusao": [
-  {
-   "codigo": "programada",
-   "descricao": "Programada (dia e hora marcados)",
-   "exige_data_programada": true,
-   "ordem": 1
-  },
-  {
-   "codigo": "rotina",
-   "descricao": "Rotina (em até 24 horas)",
-   "prazo_atendimento_horas": 24,
-   "ordem": 2
-  },
-  {
-   "codigo": "urgente",
-   "descricao": "Urgente (em até 3 horas)",
-   "prazo_atendimento_horas": 3,
-   "ordem": 3
-  },
-  {
-   "codigo": "extrema_urgencia",
-   "descricao": "Extrema urgência (risco imediato à vida)",
-   "prazo_atendimento_horas": 0,
-   "dispensa_provas_pre_transfusionais": true,
-   "exige_justificativa": true,
-   "ordem": 4
-  }
- ],
- "tipo_reacao_transfusional": [
-  {
-   "codigo": "febril_nao_hemolitica",
-   "descricao": "Reação febril não hemolítica",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "alergica",
-   "descricao": "Reação alérgica",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "hemolitica_aguda_imune",
-   "descricao": "Reação hemolítica aguda imunológica",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "hemolitica_aguda_nao_imune",
-   "descricao": "Reação hemolítica aguda não imune",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "trali",
-   "descricao": "Lesão pulmonar aguda relacionada à transfusão (TRALI)",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "taco",
-   "descricao": "Sobrecarga circulatória associada à transfusão (TACO)",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "dispneia_associada",
-   "descricao": "Dispneia associada à transfusão",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "hipotensiva",
-   "descricao": "Reação hipotensiva",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "contaminacao_bacteriana",
-   "descricao": "Contaminação bacteriana",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "disturbio_metabolico",
-   "descricao": "Distúrbio metabólico (hipocalcemia, hipercalemia, hipotermia)",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "dor_aguda",
-   "descricao": "Dor aguda relacionada à transfusão",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "hemolitica_tardia",
-   "descricao": "Reação hemolítica tardia",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "aloimunizacao",
-   "descricao": "Aloimunização ou aparecimento de anticorpo irregular",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "dech_t",
-   "descricao": "Doença do enxerto contra o hospedeiro pós-transfusional",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "purpura_pos_transfusional",
-   "descricao": "Púrpura pós-transfusional",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "imunologica"
-  },
-  {
-   "codigo": "sobrecarga_ferro",
-   "descricao": "Sobrecarga de ferro",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "transmissao_infecciosa",
-   "descricao": "Transmissão de doença infecciosa",
-   "tempo_ocorrencia": "tardia",
-   "natureza": "nao_imunologica"
-  },
-  {
-   "codigo": "outra",
-   "descricao": "Outra reação",
-   "tempo_ocorrencia": "imediata",
-   "natureza": "intercorrencia"
-  }
- ],
- "motivo_cancelamento_requisicao_transfusao": [
-  {
-   "codigo": "prescricao_suspensa",
-   "descricao": "Prescrição suspensa"
-  },
-  {
-   "codigo": "erro_requisicao",
-   "descricao": "Erro na requisição"
-  },
-  {
-   "codigo": "alta_ou_obito",
-   "descricao": "Alta ou óbito do paciente"
-  },
-  {
-   "codigo": "recusa_paciente",
-   "descricao": "Recusa do paciente ou responsável"
-  },
-  {
-   "codigo": "outro",
-   "descricao": "Outro",
-   "exige_complemento": true
-  }
- ],
- "hemocomponente": [
-  {
-   "codigo": "concentrado_hemacias",
-   "descricao": "Concentrado de hemácias",
-   "sigla": "CH",
-   "validade_dias": 42,
-   "conservacao": "refrigerado",
-   "temperatura_minima": 2,
-   "temperatura_maxima": 6,
-   "exige_prova_compatibilidade": true,
-   "faturavel": false
-  },
-  {
-   "codigo": "concentrado_plaquetas",
-   "descricao": "Concentrado de plaquetas",
-   "sigla": "CP",
-   "validade_dias": 5,
-   "conservacao": "ambiente",
-   "temperatura_minima": 20,
-   "temperatura_maxima": 24,
-   "exige_agitacao": true,
-   "faturavel": false
-  },
-  {
-   "codigo": "plasma_fresco_congelado",
-   "descricao": "Plasma fresco congelado",
-   "sigla": "PFC",
-   "validade_dias": 365,
-   "conservacao": "congelado",
-   "temperatura_maxima": -18,
-   "faturavel": false
-  },
-  {
-   "codigo": "crioprecipitado",
-   "descricao": "Crioprecipitado",
-   "sigla": "CRIO",
-   "validade_dias": 365,
-   "conservacao": "congelado",
-   "temperatura_maxima": -18,
-   "faturavel": false
-  }
- ]
+  "tipo_transfusao": [
+    {
+      "codigo": "programada",
+      "descricao": "Programada (dia e hora marcados)",
+      "exige_data_programada": true,
+      "ordem": 1
+    },
+    {
+      "codigo": "rotina",
+      "descricao": "Rotina (em até 24 horas)",
+      "prazo_atendimento_horas": 24,
+      "ordem": 2
+    },
+    {
+      "codigo": "urgente",
+      "descricao": "Urgente (em até 3 horas)",
+      "prazo_atendimento_horas": 3,
+      "ordem": 3
+    },
+    {
+      "codigo": "extrema_urgencia",
+      "descricao": "Extrema urgência (risco imediato à vida)",
+      "prazo_atendimento_horas": 0,
+      "dispensa_provas_pre_transfusionais": true,
+      "exige_justificativa": true,
+      "ordem": 4
+    }
+  ],
+  "tipo_reacao_transfusional": [
+    {
+      "codigo": "febril_nao_hemolitica",
+      "descricao": "Reação febril não hemolítica",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "alergica",
+      "descricao": "Reação alérgica",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "hemolitica_aguda_imune",
+      "descricao": "Reação hemolítica aguda imunológica",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "hemolitica_aguda_nao_imune",
+      "descricao": "Reação hemolítica aguda não imune",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "trali",
+      "descricao": "Lesão pulmonar aguda relacionada à transfusão (TRALI)",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "taco",
+      "descricao": "Sobrecarga circulatória associada à transfusão (TACO)",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "dispneia_associada",
+      "descricao": "Dispneia associada à transfusão",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "hipotensiva",
+      "descricao": "Reação hipotensiva",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "contaminacao_bacteriana",
+      "descricao": "Contaminação bacteriana",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "disturbio_metabolico",
+      "descricao": "Distúrbio metabólico (hipocalcemia, hipercalemia, hipotermia)",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "dor_aguda",
+      "descricao": "Dor aguda relacionada à transfusão",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "hemolitica_tardia",
+      "descricao": "Reação hemolítica tardia",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "aloimunizacao",
+      "descricao": "Aloimunização ou aparecimento de anticorpo irregular",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "dech_t",
+      "descricao": "Doença do enxerto contra o hospedeiro pós-transfusional",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "purpura_pos_transfusional",
+      "descricao": "Púrpura pós-transfusional",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "imunologica"
+    },
+    {
+      "codigo": "sobrecarga_ferro",
+      "descricao": "Sobrecarga de ferro",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "transmissao_infecciosa",
+      "descricao": "Transmissão de doença infecciosa",
+      "tempo_ocorrencia": "tardia",
+      "natureza": "nao_imunologica"
+    },
+    {
+      "codigo": "outra",
+      "descricao": "Outra reação",
+      "tempo_ocorrencia": "imediata",
+      "natureza": "intercorrencia"
+    }
+  ],
+  "motivo_cancelamento_requisicao_transfusao": [
+    {
+      "codigo": "prescricao_suspensa",
+      "descricao": "Prescrição suspensa"
+    },
+    {
+      "codigo": "erro_requisicao",
+      "descricao": "Erro na requisição"
+    },
+    {
+      "codigo": "alta_ou_obito",
+      "descricao": "Alta ou óbito do paciente"
+    },
+    {
+      "codigo": "recusa_paciente",
+      "descricao": "Recusa do paciente ou responsável"
+    },
+    {
+      "codigo": "outro",
+      "descricao": "Outro",
+      "exige_complemento": true
+    }
+  ],
+  "hemocomponente": [
+    {
+      "codigo": "concentrado_hemacias",
+      "descricao": "Concentrado de hemácias",
+      "sigla": "CH",
+      "validade_dias": 42,
+      "conservacao": "refrigerado",
+      "temperatura_minima": 2,
+      "temperatura_maxima": 6,
+      "exige_prova_compatibilidade": true,
+      "faturavel": false
+    },
+    {
+      "codigo": "concentrado_plaquetas",
+      "descricao": "Concentrado de plaquetas",
+      "sigla": "CP",
+      "validade_dias": 5,
+      "conservacao": "ambiente",
+      "temperatura_minima": 20,
+      "temperatura_maxima": 24,
+      "exige_agitacao": true,
+      "faturavel": false
+    },
+    {
+      "codigo": "plasma_fresco_congelado",
+      "descricao": "Plasma fresco congelado",
+      "sigla": "PFC",
+      "validade_dias": 365,
+      "conservacao": "congelado",
+      "temperatura_maxima": -18,
+      "faturavel": false
+    },
+    {
+      "codigo": "crioprecipitado",
+      "descricao": "Crioprecipitado",
+      "sigla": "CRIO",
+      "validade_dias": 365,
+      "conservacao": "congelado",
+      "temperatura_maxima": -18,
+      "faturavel": false
+    }
+  ]
 }

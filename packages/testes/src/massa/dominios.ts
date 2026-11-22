@@ -183,7 +183,12 @@ async function opcaoDaReferencia(
   const x = ops.find(
     (o) => (diferenteDe === undefined || o.valor !== String(diferenteDe)) && o.valor !== proprioId,
   );
-  if (!x) throw new SemOpcaoLivre(d.tabela, c.tabelaReferencia ?? null, `${d.tabela}.${c.coluna}: sem opção ativa.`);
+  if (!x)
+    throw new SemOpcaoLivre(
+      d.tabela,
+      c.tabelaReferencia ?? null,
+      `${d.tabela}.${c.coluna}: sem opção ativa.`,
+    );
   return Number(x.valor);
 }
 

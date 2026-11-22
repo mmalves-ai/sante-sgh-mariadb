@@ -24,7 +24,7 @@ describe('configuração do núcleo', () => {
 
   it('lê as chaves e recusa valor fora da faixa citando só a chave', () => {
     const c = lerConfiguracaoNucleo({
-      MARIADB_SENHA: 'x',
+      MARIADB_SENHA: '<senha-de-teste>',
       MARIADB_PORTA: '3999',
       SGH_MARIADB_POOL_TETO: '8',
     });

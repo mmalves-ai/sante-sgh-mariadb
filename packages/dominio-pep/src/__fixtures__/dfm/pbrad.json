@@ -1,0 +1,178 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 65,
+    "codigo": "PBRAD",
+    "descricao": "PROTOCOLO DE EMERGENCIA - BRADIARRITMIAS",
+    "fase": 0
+  },
+  "impressaoLayout": "1cbf4ec49cb8734e1766a4ee01b4d158f000ab425a417341f7eeda1875bf8dde",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 3,
+    "vinculosAtivos": 2,
+    "vinculosInativos": 1,
+    "componentes": 2,
+    "componentesMapeados": 2,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 7,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 1,
+      "TGroupBoxPep": 1
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "ACIONAR PROTOCOLO",
+      "ativo": false,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [],
+      "tipo": "sem-componente",
+      "widget": null,
+      "tamanhoMaximo": null,
+      "layout": null,
+      "x-legacy": {
+        "vinculo": 2721,
+        "pergunta": 1428,
+        "codPergunta": 1400,
+        "ordem": "01",
+        "tipo": "12",
+        "classe": null,
+        "componente": null,
+        "componentePai": null,
+        "idResposta": null,
+        "obrigatorio": "F",
+        "ativo": "F",
+        "manterHist": 3
+      }
+    },
+    {
+      "linkId": "01",
+      "texto": "BRADIARRITMIAS",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "ACIONAR PROTOCOLO",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [],
+          "tipo": "multi-choice",
+          "widget": "checkbox-group",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 3,
+            "largura": 177,
+            "altura": 225,
+            "topo": 16,
+            "esquerda": 4,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "opcoes": [
+            {
+              "indice": 0,
+              "texto": "FC < 50 bpm",
+              "idResposta": 3751,
+              "codigo": 2343,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 1,
+              "texto": "Síncope / pré-síncope",
+              "idResposta": 3752,
+              "codigo": 2344,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 2,
+              "texto": "Tontura / hipotimia",
+              "idResposta": 3753,
+              "codigo": 2345,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 3,
+              "texto": "Dispneia",
+              "idResposta": 3754,
+              "codigo": 329,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 4,
+              "texto": "Dor torácica",
+              "idResposta": 3755,
+              "codigo": 1666,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 5,
+              "texto": "Hipotensão",
+              "idResposta": 3756,
+              "codigo": 1017,
+              "origem": "id-resposta"
+            },
+            {
+              "indice": 6,
+              "texto": "Ateração do nível de consciência",
+              "idResposta": 3757,
+              "codigo": 2346,
+              "origem": "id-resposta"
+            }
+          ],
+          "x-legacy": {
+            "vinculo": 2722,
+            "pergunta": 1428,
+            "codPergunta": 1400,
+            "ordem": "0101",
+            "tipo": "12",
+            "classe": "TfRespCheckListBox",
+            "componente": "cmp2722",
+            "componentePai": "cmp2723",
+            "idResposta": 3751,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 3
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 748,
+        "altura": 708,
+        "topo": 1,
+        "esquerda": 4,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 2723,
+        "pergunta": 1429,
+        "codPergunta": 1401,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp2723",
+        "componentePai": "jvsBox",
+        "idResposta": 3758,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

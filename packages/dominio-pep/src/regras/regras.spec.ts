@@ -205,7 +205,7 @@ describe('avaliador de JSON Logic', () => {
 
 // ── Regressão nos 67 modelos (as 270 expressões do inventário do M09) ──────────────────────────────────
 
-const pasta = resolve(import.meta.dirname, '../../../../docs/marcos/M09/dfm');
+const pasta = resolve(import.meta.dirname, '../__fixtures__/dfm');
 const reps = readdirSync(pasta)
   .filter((f) => f.endsWith('.json'))
   .map((f) => JSON.parse(readFileSync(resolve(pasta, f), 'utf8')) as RepresentacaoFormulario);

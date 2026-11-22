@@ -1,0 +1,925 @@
+{
+  "formato": "sgh-formulario/1",
+  "modelo": {
+    "id": 32,
+    "codigo": "MED18",
+    "descricao": "PROTOCOLO DE SEPSE - TRIAGEM",
+    "fase": 2
+  },
+  "impressaoLayout": "6797c40dcd50d3f8411477f93f0da3543723cc1e6c35de6a72b99710299bcfc8",
+  "versoesLayout": [],
+  "resumo": {
+    "vinculos": 17,
+    "vinculosAtivos": 16,
+    "vinculosInativos": 1,
+    "componentes": 16,
+    "componentesMapeados": 16,
+    "classesDesconhecidas": 0,
+    "caracteresSubstituicao": 0,
+    "vinculosSemComponente": 1,
+    "opcoesResolvidas": 43,
+    "escolhasPendentes": 0,
+    "expressoesHabilitar": 0,
+    "expressoesCalcular": 0,
+    "porClasse": {
+      "TfRespCheckListBox": 7,
+      "TfRespEditUnidade": 2,
+      "TfRespHora": 1,
+      "TGroupBoxPep": 6
+    }
+  },
+  "itens": [
+    {
+      "linkId": "01",
+      "texto": "PROTOCOLO DE SEPSE - TRIAGEM",
+      "ativo": true,
+      "obrigatorio": false,
+      "unidade": null,
+      "itens": [
+        {
+          "linkId": "01.01",
+          "texto": "PREENCHIMENTO PELA ENFERMAGEM",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.01.01",
+              "texto": "PACIENTE APRESENTA PELO MENOS DOIS DOS SINAIS DE SIRS?",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 728,
+                "altura": 130,
+                "topo": 14,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Hipertermia > 37,8º C ou hipotermia <35º C",
+                  "idResposta": 1678,
+                  "codigo": 1056,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Leucocitose > 12000, leucopenia <4000 ou desvio esquerdo > 10%",
+                  "idResposta": 1679,
+                  "codigo": 1057,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Taquicardia > 90 bpm",
+                  "idResposta": 1680,
+                  "codigo": 1058,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Taquipneia > 20 ipm",
+                  "idResposta": 1681,
+                  "codigo": 1059,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1339,
+                "pergunta": 607,
+                "codPergunta": 595,
+                "ordem": "010101",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1339",
+                "componentePai": "cmp1338",
+                "idResposta": 1678,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.02",
+              "texto": "OU UM DOS CRITÉRIOS DE DISFUNÇÃO ORGÂNICA ABAIXO?",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 728,
+                "altura": 106,
+                "topo": 144,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Oligúria",
+                  "idResposta": 1682,
+                  "codigo": 593,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Hipotensão",
+                  "idResposta": 1683,
+                  "codigo": 1017,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Rebaixamento do nível de consciência",
+                  "idResposta": 1684,
+                  "codigo": 1060,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Dispneia ou dessaturação",
+                  "idResposta": 1685,
+                  "codigo": 1061,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1340,
+                "pergunta": 608,
+                "codPergunta": 596,
+                "ordem": "010102",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1340",
+                "componentePai": "cmp1338",
+                "idResposta": 1682,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.01.03",
+              "texto": "Acionamento equipe médica",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [
+                {
+                  "linkId": "01.01.03.01",
+                  "texto": "Hora",
+                  "ativo": false,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "sem-componente",
+                  "widget": null,
+                  "tamanhoMaximo": null,
+                  "layout": null,
+                  "x-legacy": {
+                    "vinculo": 1342,
+                    "pergunta": 449,
+                    "codPergunta": 437,
+                    "ordem": "01010301",
+                    "tipo": "3",
+                    "classe": null,
+                    "componente": null,
+                    "componentePai": null,
+                    "idResposta": null,
+                    "obrigatorio": "F",
+                    "ativo": "F",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.01.03.01",
+                  "texto": "Nome do médico chamado",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "quantity",
+                  "widget": "quantity",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 11,
+                    "largura": 678,
+                    "altura": 40,
+                    "topo": 16,
+                    "esquerda": 8,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1343,
+                    "pergunta": 610,
+                    "codPergunta": 598,
+                    "ordem": "01010301",
+                    "tipo": "11",
+                    "classe": "TfRespEditUnidade",
+                    "componente": "cmp1343",
+                    "componentePai": "cmp1341",
+                    "idResposta": 1687,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                },
+                {
+                  "linkId": "01.01.03.02",
+                  "texto": "Hora",
+                  "ativo": true,
+                  "obrigatorio": false,
+                  "unidade": null,
+                  "itens": [],
+                  "tipo": "time",
+                  "widget": "time",
+                  "tamanhoMaximo": null,
+                  "layout": {
+                    "colunas": 1,
+                    "largura": 40,
+                    "altura": 40,
+                    "topo": 16,
+                    "esquerda": 687,
+                    "negrito": false,
+                    "tamanhoFonte": 8
+                  },
+                  "x-legacy": {
+                    "vinculo": 1344,
+                    "pergunta": 449,
+                    "codPergunta": 437,
+                    "ordem": "01010302",
+                    "tipo": "3",
+                    "classe": "TfRespHora",
+                    "componente": "cmp1344",
+                    "componentePai": "cmp1341",
+                    "idResposta": 1263,
+                    "obrigatorio": "F",
+                    "ativo": "T",
+                    "manterHist": 1
+                  }
+                }
+              ],
+              "tipo": "group",
+              "widget": "section",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 792,
+                "altura": 62,
+                "topo": 251,
+                "esquerda": -1,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1341,
+                "pergunta": 609,
+                "codPergunta": 597,
+                "ordem": "010103",
+                "tipo": "1",
+                "classe": "TGroupBoxPep",
+                "componente": "cmp1341",
+                "componentePai": "cmp1338",
+                "idResposta": 1686,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 749,
+            "altura": 320,
+            "topo": 17,
+            "esquerda": 0,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1338,
+            "pergunta": 611,
+            "codPergunta": 599,
+            "ordem": "0101",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1338",
+            "componentePai": "cmp1337",
+            "idResposta": 1688,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.02",
+          "texto": "AVALIAÇÃO MÉDICA 1",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.02.01",
+              "texto": "PACIENTE APRESENTA HISTÓRIA SUGESTIVA DE INFECÇÃO?",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 719,
+                "altura": 186,
+                "topo": 15,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Pneumonia/Empiema",
+                  "idResposta": 1690,
+                  "codigo": 1062,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Infecção urinária",
+                  "idResposta": 1691,
+                  "codigo": 1063,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Infecção abdominal aguda",
+                  "idResposta": 1692,
+                  "codigo": 1064,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Meningite",
+                  "idResposta": 1693,
+                  "codigo": 1065,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Endocardite",
+                  "idResposta": 1694,
+                  "codigo": 1066,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Pele e partes moles",
+                  "idResposta": 1695,
+                  "codigo": 1067,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Infecção de prótese",
+                  "idResposta": 1696,
+                  "codigo": 1068,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Infecção óssea/articular",
+                  "idResposta": 1697,
+                  "codigo": 1069,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Infecção de ferida operatória",
+                  "idResposta": 1698,
+                  "codigo": 1070,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 9,
+                  "texto": "Infecção de corrente sanguínea associada ao cateter",
+                  "idResposta": 1699,
+                  "codigo": 1071,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 10,
+                  "texto": "Sem foco definido",
+                  "idResposta": 1700,
+                  "codigo": 1072,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 11,
+                  "texto": "Outras infecções",
+                  "idResposta": 1701,
+                  "codigo": 1073,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1346,
+                "pergunta": 613,
+                "codPergunta": 601,
+                "ordem": "010201",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1346",
+                "componentePai": "cmp1345",
+                "idResposta": 1690,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 755,
+            "altura": 209,
+            "topo": 337,
+            "esquerda": -1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1345,
+            "pergunta": 612,
+            "codPergunta": 600,
+            "ordem": "0102",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1345",
+            "componentePai": "cmp1337",
+            "idResposta": 1689,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.03",
+          "texto": "AVALIAÇÃO MÉDICA 2",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.03.01",
+              "texto": "O PACIENTE APRESENTA CRITÉRIOS PARA",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 719,
+                "altura": 145,
+                "topo": 12,
+                "esquerda": 7,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Infecção (ainda sem disfunção clínica, necessita coleta de exames para descartar disfunção orgânica laboratorial)",
+                  "idResposta": 1703,
+                  "codigo": 1074,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Sepse",
+                  "idResposta": 1704,
+                  "codigo": 467,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Choque séptico",
+                  "idResposta": 1705,
+                  "codigo": 1075,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Afastado infecção/sepse/choque séptico",
+                  "idResposta": 1706,
+                  "codigo": 1076,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Sepse /choque séptico em cuidados de fim de vida com seguimento fora do protocolo",
+                  "idResposta": 1707,
+                  "codigo": 1077,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1348,
+                "pergunta": 615,
+                "codPergunta": 603,
+                "ordem": "010301",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1348",
+                "componentePai": "cmp1347",
+                "idResposta": 1703,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.03.02",
+              "texto": "CONDUTA MÉDICA",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 717,
+                "altura": 108,
+                "topo": 156,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Coletar exames do kit sepse E",
+                  "idResposta": 1708,
+                  "codigo": 1078,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Prescrever antimicrobiano OU",
+                  "idResposta": 1709,
+                  "codigo": 1079,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Encerrar o atendimento",
+                  "idResposta": 1710,
+                  "codigo": 1080,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1349,
+                "pergunta": 616,
+                "codPergunta": 604,
+                "ordem": "010302",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1349",
+                "componentePai": "cmp1347",
+                "idResposta": 1708,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 776,
+            "altura": 273,
+            "topo": 547,
+            "esquerda": -1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1347,
+            "pergunta": 614,
+            "codPergunta": 602,
+            "ordem": "0103",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1347",
+            "componentePai": "cmp1337",
+            "idResposta": 1702,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        },
+        {
+          "linkId": "01.04",
+          "texto": "AVALIAÇÃO MÉDICA 3",
+          "ativo": true,
+          "obrigatorio": false,
+          "unidade": null,
+          "itens": [
+            {
+              "linkId": "01.04.01",
+              "texto": "APÓS EXAMES, HÁ NOVAS DISFUNÇÕES ORGÂNICAS?",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 716,
+                "altura": 240,
+                "topo": 15,
+                "esquerda": 8,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Não",
+                  "idResposta": 1712,
+                  "codigo": 52,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Paciente não tinha disfunção orgânica, somente infecção",
+                  "idResposta": 1713,
+                  "codigo": 1081,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "PAS < 90 mmHg ou PAM < 65 mmHg ou queda de PA > 40 mmHg",
+                  "idResposta": 1714,
+                  "codigo": 1082,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Relação PaO2/FiO2 <300 ou necessidade de O2 para manter SpO2 > 90%",
+                  "idResposta": 1715,
+                  "codigo": 1083,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Rebaixamento do nível de consciência",
+                  "idResposta": 1716,
+                  "codigo": 1060,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 5,
+                  "texto": "Creatinina > 2,0 mg/dL ou diurese menor que 0,5mL/Kg/h nas últimas 2 horas",
+                  "idResposta": 1717,
+                  "codigo": 1084,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 6,
+                  "texto": "Bilirrubina > 2mg/dL",
+                  "idResposta": 1718,
+                  "codigo": 1085,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 7,
+                  "texto": "Contagem de plaquetas < 100.000mm3",
+                  "idResposta": 1719,
+                  "codigo": 1086,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 8,
+                  "texto": "Lactato acima do valor de referência",
+                  "idResposta": 1720,
+                  "codigo": 1087,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 9,
+                  "texto": "Coagulopatia (INR > 1,5 ou TTPA > 60 seg)",
+                  "idResposta": 1721,
+                  "codigo": 1088,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1351,
+                "pergunta": 618,
+                "codPergunta": 606,
+                "ordem": "010401",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1351",
+                "componentePai": "cmp1350",
+                "idResposta": 1712,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.04.02",
+              "texto": "Data e hora da primeira disfunção orgânica",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "quantity",
+              "widget": "quantity",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 716,
+                "altura": 40,
+                "topo": 258,
+                "esquerda": 9,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "x-legacy": {
+                "vinculo": 1352,
+                "pergunta": 619,
+                "codPergunta": 607,
+                "ordem": "010402",
+                "tipo": "11",
+                "classe": "TfRespEditUnidade",
+                "componente": "cmp1352",
+                "componentePai": "cmp1350",
+                "idResposta": 1722,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            },
+            {
+              "linkId": "01.04.03",
+              "texto": "O caso ficou confirmado como:",
+              "ativo": true,
+              "obrigatorio": false,
+              "unidade": null,
+              "itens": [],
+              "tipo": "multi-choice",
+              "widget": "checkbox-group",
+              "tamanhoMaximo": null,
+              "layout": {
+                "colunas": 12,
+                "largura": 716,
+                "altura": 108,
+                "topo": 297,
+                "esquerda": 9,
+                "negrito": false,
+                "tamanhoFonte": 8
+              },
+              "opcoes": [
+                {
+                  "indice": 0,
+                  "texto": "Infecção",
+                  "idResposta": 1723,
+                  "codigo": 363,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 1,
+                  "texto": "Sepse",
+                  "idResposta": 1724,
+                  "codigo": 467,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 2,
+                  "texto": "Sepse com lactato alterado",
+                  "idResposta": 1725,
+                  "codigo": 1089,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 3,
+                  "texto": "Choque séptico",
+                  "idResposta": 1726,
+                  "codigo": 1075,
+                  "origem": "id-resposta"
+                },
+                {
+                  "indice": 4,
+                  "texto": "Afastado infecção",
+                  "idResposta": 1727,
+                  "codigo": 1090,
+                  "origem": "id-resposta"
+                }
+              ],
+              "x-legacy": {
+                "vinculo": 1353,
+                "pergunta": 620,
+                "codPergunta": 608,
+                "ordem": "010403",
+                "tipo": "12",
+                "classe": "TfRespCheckListBox",
+                "componente": "cmp1353",
+                "componentePai": "cmp1350",
+                "idResposta": 1723,
+                "obrigatorio": "F",
+                "ativo": "T",
+                "manterHist": 1
+              }
+            }
+          ],
+          "tipo": "group",
+          "widget": "section",
+          "tamanhoMaximo": null,
+          "layout": {
+            "colunas": 12,
+            "largura": 747,
+            "altura": 417,
+            "topo": 823,
+            "esquerda": -1,
+            "negrito": false,
+            "tamanhoFonte": 8
+          },
+          "x-legacy": {
+            "vinculo": 1350,
+            "pergunta": 617,
+            "codPergunta": 605,
+            "ordem": "0104",
+            "tipo": "1",
+            "classe": "TGroupBoxPep",
+            "componente": "cmp1350",
+            "componentePai": "cmp1337",
+            "idResposta": 1711,
+            "obrigatorio": "F",
+            "ativo": "T",
+            "manterHist": 1
+          }
+        }
+      ],
+      "tipo": "group",
+      "widget": "section",
+      "tamanhoMaximo": null,
+      "layout": {
+        "colunas": 12,
+        "largura": 740,
+        "altura": 1250,
+        "topo": 0,
+        "esquerda": 6,
+        "negrito": false,
+        "tamanhoFonte": 8
+      },
+      "x-legacy": {
+        "vinculo": 1337,
+        "pergunta": 606,
+        "codPergunta": 594,
+        "ordem": "01",
+        "tipo": "1",
+        "classe": "TGroupBoxPep",
+        "componente": "cmp1337",
+        "componentePai": "jvsBox",
+        "idResposta": 1677,
+        "obrigatorio": "F",
+        "ativo": "T",
+        "manterHist": 1
+      }
+    }
+  ],
+  "pendencias": []
+}

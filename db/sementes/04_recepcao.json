@@ -1,105 +1,105 @@
 {
- "acao_fluxo_senha": [
-  {
-   "codigo": "chamar",
-   "descricao": "Chamar",
-   "ordem": 1
-  },
-  {
-   "codigo": "encaminhar",
-   "descricao": "Encaminhar a outro local",
-   "ordem": 2
-  },
-  {
-   "codigo": "cancelar_chamada",
-   "descricao": "Cancelar a chamada",
-   "ordem": 3
-  },
-  {
-   "codigo": "suspender",
-   "descricao": "Suspender",
-   "ordem": 4
-  },
-  {
-   "codigo": "nao_localizado",
-   "descricao": "Paciente não localizado",
-   "ordem": 5
-  },
-  {
-   "codigo": "liberar",
-   "descricao": "Liberar",
-   "encerra_senha": true,
-   "ordem": 6
-  },
-  {
-   "codigo": "finalizar",
-   "descricao": "Finalizar",
-   "encerra_senha": true,
-   "ordem": 7
-  },
-  {
-   "codigo": "ignorar",
-   "descricao": "Ignorar",
-   "encerra_senha": true,
-   "ordem": 8
-  }
- ],
- "grupo_prioridade_legal": [
-  {
-   "codigo": "idoso_80",
-   "descricao": "Pessoa com 80 anos ou mais",
-   "peso": 1,
-   "idade_minima": 80,
-   "base_legal": "Lei 13.466/2017"
-  },
-  {
-   "codigo": "idoso_60",
-   "descricao": "Pessoa com 60 a 79 anos",
-   "peso": 2,
-   "idade_minima": 60,
-   "base_legal": "Lei 10.741/2003"
-  },
-  {
-   "codigo": "gestante",
-   "descricao": "Gestante",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000"
-  },
-  {
-   "codigo": "lactante",
-   "descricao": "Lactante",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000"
-  },
-  {
-   "codigo": "pessoa_deficiencia",
-   "descricao": "Pessoa com deficiência",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000; Lei 13.146/2015"
-  },
-  {
-   "codigo": "crianca_colo",
-   "descricao": "Pessoa com criança de colo",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000"
-  },
-  {
-   "codigo": "autismo",
-   "descricao": "Pessoa com transtorno do espectro autista",
-   "peso": 2,
-   "base_legal": "Lei 12.764/2012"
-  },
-  {
-   "codigo": "obesidade",
-   "descricao": "Pessoa com obesidade",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000"
-  },
-  {
-   "codigo": "prioridade_legal",
-   "descricao": "Demais prioridades legais",
-   "peso": 2,
-   "base_legal": "Lei 10.048/2000"
-  }
- ]
+  "acao_fluxo_senha": [
+    {
+      "codigo": "chamar",
+      "descricao": "Chamar",
+      "ordem": 1
+    },
+    {
+      "codigo": "encaminhar",
+      "descricao": "Encaminhar a outro local",
+      "ordem": 2
+    },
+    {
+      "codigo": "cancelar_chamada",
+      "descricao": "Cancelar a chamada",
+      "ordem": 3
+    },
+    {
+      "codigo": "suspender",
+      "descricao": "Suspender",
+      "ordem": 4
+    },
+    {
+      "codigo": "nao_localizado",
+      "descricao": "Paciente não localizado",
+      "ordem": 5
+    },
+    {
+      "codigo": "liberar",
+      "descricao": "Liberar",
+      "encerra_senha": true,
+      "ordem": 6
+    },
+    {
+      "codigo": "finalizar",
+      "descricao": "Finalizar",
+      "encerra_senha": true,
+      "ordem": 7
+    },
+    {
+      "codigo": "ignorar",
+      "descricao": "Ignorar",
+      "encerra_senha": true,
+      "ordem": 8
+    }
+  ],
+  "grupo_prioridade_legal": [
+    {
+      "codigo": "idoso_80",
+      "descricao": "Pessoa com 80 anos ou mais",
+      "peso": 1,
+      "idade_minima": 80,
+      "base_legal": "Lei 13.466/2017"
+    },
+    {
+      "codigo": "idoso_60",
+      "descricao": "Pessoa com 60 a 79 anos",
+      "peso": 2,
+      "idade_minima": 60,
+      "base_legal": "Lei 10.741/2003"
+    },
+    {
+      "codigo": "gestante",
+      "descricao": "Gestante",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000"
+    },
+    {
+      "codigo": "lactante",
+      "descricao": "Lactante",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000"
+    },
+    {
+      "codigo": "pessoa_deficiencia",
+      "descricao": "Pessoa com deficiência",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000; Lei 13.146/2015"
+    },
+    {
+      "codigo": "crianca_colo",
+      "descricao": "Pessoa com criança de colo",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000"
+    },
+    {
+      "codigo": "autismo",
+      "descricao": "Pessoa com transtorno do espectro autista",
+      "peso": 2,
+      "base_legal": "Lei 12.764/2012"
+    },
+    {
+      "codigo": "obesidade",
+      "descricao": "Pessoa com obesidade",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000"
+    },
+    {
+      "codigo": "prioridade_legal",
+      "descricao": "Demais prioridades legais",
+      "peso": 2,
+      "base_legal": "Lei 10.048/2000"
+    }
+  ]
 }

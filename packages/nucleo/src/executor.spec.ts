@@ -132,7 +132,13 @@ describe('Executor: protocolo da operação', () => {
   it('sessão "como" (ADR 0021): a trilha da mesma transação guarda o ator real e o alvo', async () => {
     const b = banco();
     const ex = new Executor(b.dependencias());
-    const marca = { sessao: '41', acao: '9', atorTipo: 'plataforma' as const, idConta: '5', alvo: 'alvo.teste' };
+    const marca = {
+      sessao: '41',
+      acao: '9',
+      atorTipo: 'plataforma' as const,
+      idConta: '5',
+      alvo: 'alvo.teste',
+    };
     expect(marcaComoAtual()).toBeNull();
     await executarComo(marca, () => ex.executar(incluir, 'teste_duble', { descricao: 'Alcool' }, CTX));
     expect(marcaComoAtual()).toBeNull();
@@ -148,10 +154,15 @@ describe('Executor: protocolo da operação', () => {
     });
     // Fora do "como", nada de origem.
     const b2 = banco();
-    await new Executor(b2.dependencias()).executar(incluir, 'teste_duble', { descricao: 'Alcool' }, {
-      ...CTX,
-      chaveIdempotencia: 'chave-0002',
-    });
+    await new Executor(b2.dependencias()).executar(
+      incluir,
+      'teste_duble',
+      { descricao: 'Alcool' },
+      {
+        ...CTX,
+        chaveIdempotencia: 'chave-0002',
+      },
+    );
     const t2 = b2.que(/^INSERT INTO trilha_auditoria/)[0]?.parametros ?? [];
     expect(JSON.parse(String(t2[7]))).not.toHaveProperty('origem');
   });
@@ -316,12 +327,17 @@ describe('Executor: protocolo da operação', () => {
   it('escritor de quem chama aberto no banco de outro cliente: recusado sem gravar', async () => {
     const b = banco();
     const ex = new Executor(b.dependencias());
-    await escreverTransacao(b.fonte('outro_cliente'), CONFIG_TESTE, { ...CTX, cliente: 'outro_cliente' }, async (e) => {
-      expect(e.cliente).toBe('outro_cliente');
-      expect(
-        await problema(ex.executar(incluir, 'teste_duble', { descricao: 'A' }, CTX, { escritor: e })),
-      ).toMatchObject({ status: 400, codigo: 'contexto-invalido' });
-    });
+    await escreverTransacao(
+      b.fonte('outro_cliente'),
+      CONFIG_TESTE,
+      { ...CTX, cliente: 'outro_cliente' },
+      async (e) => {
+        expect(e.cliente).toBe('outro_cliente');
+        expect(
+          await problema(ex.executar(incluir, 'teste_duble', { descricao: 'A' }, CTX, { escritor: e })),
+        ).toMatchObject({ status: 400, codigo: 'contexto-invalido' });
+      },
+    );
     expect(b.que(/SAVEPOINT|INSERT/)).toHaveLength(0);
   });
 });
