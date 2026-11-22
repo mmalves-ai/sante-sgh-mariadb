@@ -3,6 +3,7 @@
 # PRÓPRIOS (precarga), na ordem real (carga própria L3, mapa, preço particular/repasse), para achar recusas antes da
 # carga completa. Só contagens e agregados (regra 5).
 #   tools/obra/pre-carga.sh [AREA ...]       (ex.: FAT RH SUP; sem área = todas)
+#   PRECARGA_COD=<código> (padrão precarga; plataforma <código>_plataforma) para rodar ao lado de outra pré-carga.
 #   PRECARGA_MANTER=1 mantém o cliente de teste no fim (padrão: apaga cliente, controle e plataforma de teste).
 # Amostra: tools/obra/pre_carga.py recorte (folha 1.000 linhas, pai 5.000; filho de pai truncado filtrado pelo pai).
 # Saída em sante-sgh-dados/obra/precarga/: recorte.tsv, resultado.json, precarga.tsv (uma linha por tabela da origem:
@@ -12,8 +13,8 @@ RAIZ=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$RAIZ"
 D=${PRECARGA_SAIDA:-$(cd "$RAIZ/.." && pwd)/sante-sgh-dados/obra/precarga}
 ORIGEM=${PRECARGA_ORIGEM:-pc-20261019.fdb}
-COD=precarga
-PLAT=precarga_plataforma
+COD=${PRECARGA_COD:-precarga}
+PLAT=${PRECARGA_PLAT:-${COD}_plataforma}
 mkdir -p "$D"
 LOG=$D/precarga.log
 : > "$LOG"
