@@ -20,7 +20,8 @@ def ambiente_limpo():
 
 def iniciar_abridor(sock, uid, gid):
     ab = subprocess.Popen(["unshare", "--net", "--"] + PY + ["sante_conector.servico_abridor", sock, str(uid), str(gid)],
-                          env=ambiente_limpo())
+                          env={k: v for k, v in ambiente_limpo().items() if k != "PLATAFORMA_CHAVE_MESTRA"})
+    # o abridor só abre o arquivo da origem: não precisa da chave do cofre (só o motor cifra as credenciais)
     for _ in range(200):
         if os.path.exists(sock):
             return ab

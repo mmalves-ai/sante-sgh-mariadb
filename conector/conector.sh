@@ -74,7 +74,23 @@ VOL=sante-sgh-conector-trab-$$-$RANDOM
 docker volume create "$VOL" >/dev/null
 trap 'docker volume rm -f "$VOL" >/dev/null 2>&1 || true' EXIT
 
-docker run --rm "${REDE[@]}" "${PRIV[@]}" \
+# ADR 0004 e decisão 17 (ADR 0007): a pasta de arquivos da instalação e a chave mestra do cofre vêm do ambiente ou
+# do .env (nunca impressas). A pasta entra no MESMO caminho do host, para a API servir o que a carga gravou.
+# Só no processo que executa a fila (worker): testes e conferência de fatia usam pasta e cofre descartáveis próprios.
+ARQ=()
+[ "$1" = worker-separado ] && for VAR in ARQUIVOS_RAIZ PLATAFORMA_CHAVE_MESTRA; do
+  if [ -z "${!VAR:-}" ] && [ -f "$RAIZ/.env" ]; then
+    VALOR=$(grep "^$VAR=" "$RAIZ/.env" | cut -d= -f2-)
+    [ -n "$VALOR" ] && export "$VAR=$VALOR"
+  fi
+done
+if [ "$1" = worker-separado ] && [ -n "${ARQUIVOS_RAIZ:-}" ] && [ -d "$ARQUIVOS_RAIZ" ]; then
+  ARQ=(-v "$ARQUIVOS_RAIZ:$ARQUIVOS_RAIZ" -e ARQUIVOS_RAIZ)
+elif [ "$1" != worker-separado ]; then
+  unset PLATAFORMA_CHAVE_MESTRA ARQUIVOS_RAIZ
+fi
+
+docker run --rm "${REDE[@]}" "${PRIV[@]}" "${ARQ[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" -v "$AQUI/mapa:/app/mapa:ro" \
   -v "$RAIZ/db/plataforma:/db-plataforma:ro" -v "$RAIZ/db/migracoes:/app/db/migracoes:ro" \
