@@ -296,3 +296,71 @@ export function gerarSenhaProvisoria(
   }
   throw new Error('Não foi possível gerar uma senha provisória que cumpra a política.');
 }
+
+/**
+ * Uma regra da política vigente, para a tela mostrar antes de digitar. `valor`: o número da regra (tamanho mínimo em
+ * `curta`, janela em dias em `repetida`). `aoVivo`: a tela confere sozinha enquanto a pessoa digita; as demais (nome,
+ * nascimento, lista de comuns e histórico) só o servidor confere, na troca.
+ */
+export interface RegraPoliticaSenha {
+  readonly codigo: FalhaSenha;
+  readonly valor?: number;
+  readonly aoVivo: boolean;
+  /** Em português, afirmativa ("Ter pelo menos 8 caracteres."). */
+  readonly mensagem: string;
+}
+
+/** Mensagem em português de cada regra (a recusa e a lista usam a mesma frase). */
+export function mensagemRegraSenha(codigo: FalhaSenha, valor?: number): string {
+  switch (codigo) {
+    case 'curta':
+      return valor ? `Ter pelo menos ${valor} caracteres.` : 'Ter o tamanho mínimo exigido pela política.';
+    case 'sem-letra':
+      return 'Ter pelo menos uma letra.';
+    case 'sem-numero':
+      return 'Ter pelo menos um número.';
+    case 'sem-especial':
+      return 'Ter pelo menos um caractere especial (como # @ % !).';
+    case 'sem-minuscula':
+      return 'Ter pelo menos uma letra minúscula.';
+    case 'sem-maiuscula':
+      return 'Ter pelo menos uma letra maiúscula.';
+    case 'deriva-do-login':
+      return 'Não conter o login (nem ao contrário).';
+    case 'deriva-do-nome':
+      return 'Não conter partes do seu nome.';
+    case 'deriva-do-nascimento':
+      return 'Não conter a sua data de nascimento.';
+    case 'comum':
+      return 'Não ser uma senha comum ou proibida.';
+    case 'igual-atual':
+      return 'Ser diferente da senha atual.';
+    case 'repetida':
+      return valor && valor > 0
+        ? `Não repetir senha usada nos últimos ${valor} dias.`
+        : 'Não repetir uma senha usada antes.';
+  }
+}
+
+/** As regras da política efetiva, na ordem em que a tela as mostra. */
+export function regrasDaPolitica(p: PoliticaSenha): RegraPoliticaSenha[] {
+  const r = (codigo: FalhaSenha, aoVivo: boolean, valor?: number): RegraPoliticaSenha => ({
+    codigo,
+    aoVivo,
+    ...(valor === undefined ? {} : { valor }),
+    mensagem: mensagemRegraSenha(codigo, valor),
+  });
+  const regras = [r('curta', true, p.minimoCaracteres)];
+  if (p.exigeLetra) regras.push(r('sem-letra', true));
+  if (p.exigeNumero) regras.push(r('sem-numero', true));
+  if (p.exigeEspecial) regras.push(r('sem-especial', true));
+  if (p.exigeMinuscula) regras.push(r('sem-minuscula', true));
+  if (p.exigeMaiuscula) regras.push(r('sem-maiuscula', true));
+  regras.push(r('deriva-do-login', true));
+  if (p.recusaNome) regras.push(r('deriva-do-nome', false));
+  if (p.recusaNascimento) regras.push(r('deriva-do-nascimento', false));
+  if (p.recusaComuns || (p.senhasProibidas?.length ?? 0) > 0) regras.push(r('comum', false));
+  regras.push(r('igual-atual', true));
+  regras.push(r('repetida', false, p.periodoReutilizacaoDias));
+  return regras;
+}

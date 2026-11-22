@@ -47,6 +47,8 @@ import {
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema, tipoPorStatus } from '../../problema.filter.js';
 import { ErroOperacao } from '@sgh/nucleo';
+import { mensagemRegraSenha, type RegraPoliticaSenha } from '@sgh/dominio-acesso';
+import { logger } from '../../logger.js';
 import {
   CABECALHO_CSRF,
   COOKIE_CSRF,
@@ -139,6 +141,30 @@ const TIPO_ERRO: Record<ErroSessao['tipo'], [import('@sgh/contratos').TipoProble
 
 const AMBIENTES_SEM_PREFIXO = new Set(['dev', 'ci']);
 
+/**
+ * Linha do log de uma recusa de login ou de troca de senha: rota, status, códigos das regras (ou o tipo da recusa) e
+ * login. Nunca a senha nem o resumo: o registro é montado só destes campos.
+ */
+export function registroRecusa(
+  rota: string,
+  e: unknown,
+  login: string | null,
+): { rota: string; status: number; codigos: string[]; login: string | null } | null {
+  if (e instanceof ErroSessao) {
+    const status = TIPO_ERRO[e.tipo][1];
+    const codigos = e.falhas?.length ? [...e.falhas] : [e.codigo ?? e.tipo];
+    return { rota, status, codigos, login: e.login ?? login };
+  }
+  if (e instanceof ErroOperacao)
+    return { rota, status: e.problema.status, codigos: [e.problema.codigo ?? 'recusa-da-operacao'], login };
+  return null;
+}
+
+export function registrarRecusa(rota: string, e: unknown, login: string | null): void {
+  const r = registroRecusa(rota, e, login);
+  if (r && r.status < 500) logger.warn(r, 'recusa de senha');
+}
+
 @Controller()
 export class AcessoController {
   constructor(
@@ -180,9 +206,14 @@ export class AcessoController {
   private erro(e: unknown): never {
     if (e instanceof ErroSessao) {
       const [tipo, status, titulo] = TIPO_ERRO[e.tipo];
-      throw new ErroProblema(tipo, status, titulo, e.detalhe, {
+      const regras = e.falhas?.map((c) => ({ codigo: c, mensagem: mensagemRegraSenha(c) }));
+      const detalhe = regras?.length
+        ? `${e.detalhe ?? 'A senha nova não cumpre a política de senha.'} ${regras.map((r) => r.mensagem).join(' ')}`
+        : e.detalhe;
+      throw new ErroProblema(tipo, status, titulo, detalhe, {
         ...(e.codigo ? { codigo: e.codigo } : {}),
         ...(e.falhas ? { falhas: e.falhas } : {}),
+        ...(regras?.length ? { regras } : {}),
       });
     }
     throw e;
@@ -294,6 +325,7 @@ export class AcessoController {
       ]);
       return login.sessao;
     } catch (e) {
+      registrarRecusa('POST /api/sessao', e, r.data.login);
       this.erro(e);
     }
   }
@@ -321,7 +353,12 @@ export class AcessoController {
       );
     try {
       const posto = this.postoDaEntrada(req);
-      const login = await servico.entrarPlataforma(r.data, this.rede(req), this.idSessao(req), this.origem(req, posto));
+      const login = await servico.entrarPlataforma(
+        r.data,
+        this.rede(req),
+        this.idSessao(req),
+        this.origem(req, posto),
+      );
       const op = { maxIdadeSegundos: login.ttlSegundos, prefixoHost: this.prefixoHost };
       res.header('set-cookie', [
         cookieSessao(login.idSessao, op),
@@ -330,6 +367,7 @@ export class AcessoController {
       ]);
       return login.sessao;
     } catch (e) {
+      registrarRecusa('POST /api/sessao/plataforma', e, r.data.login);
       this.erro(e);
     }
   }
@@ -616,6 +654,7 @@ export class AcessoController {
     try {
       return await servico.trocarSenha(id, this.rede(req), r.data, this.origem(req));
     } catch (e) {
+      registrarRecusa('POST /api/sessao/senha', e, null);
       if (e instanceof ErroOperacao) {
         // Recusa da receita (usuário bloqueado, alterado ao mesmo tempo…): só o código, nunca valores.
         const p = e.problema;
@@ -629,6 +668,24 @@ export class AcessoController {
           },
         );
       }
+      this.erro(e);
+    }
+  }
+
+  /**
+   * GET /api/sessao/senha/politica: as regras da política de senha vigente para a sessão (troca obrigatória ou
+   * voluntária; administrador da plataforma usa a padrão do produto), com o código, o valor, a mensagem e se a tela
+   * confere ao vivo. Nenhuma senha.
+   */
+  @Get('sessao/senha/politica')
+  @Permissao(PERMISSOES_ACESSO.senhaTrocar)
+  async politicaDaSenha(@Req() req: Req): Promise<{ login: string; regras: RegraPoliticaSenha[] }> {
+    const servico = this.servicoOu503();
+    const id = this.idSessao(req);
+    if (!id) throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
+    try {
+      return await servico.regrasSenha(id, this.rede(req));
+    } catch (e) {
       this.erro(e);
     }
   }

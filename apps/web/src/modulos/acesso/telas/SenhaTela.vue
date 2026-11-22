@@ -3,10 +3,12 @@
 // senha atual confere de novo (vale como reautenticação); a nova passa pela política do estabelecimento e pelo
 // histórico; recusada, a tela lista as regras que faltam (só códigos vêm do servidor). Sem a troca liberada no
 // estabelecimento (a combinação do resumo ainda não confirmada), a tela explica e não mostra o formulário.
+// As regras da política vigente aparecem antes de digitar e são conferidas ao vivo (ok ou pendente); a recusa do
+// servidor aparece em destaque (alerta de erro, com foco) com a regra que falhou.
 import type { Sessao } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao } from '@sgh/ui';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink, useRouter } from 'vue-router';
 import { trocarSenha } from '../../../api.js';
@@ -14,6 +16,7 @@ import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { CHAVE_SESSAO, usarSessao } from '../../../casca/sessao/sessao.js';
 import { destinoDepoisDoLogin } from '../identidade-tela.js';
+import { buscarRegrasSenha, estadoRegra, type RegraSenha, type RegrasSenha } from '../regras-senha-tela.js';
 
 const { t } = useI18n();
 const roteador = useRouter();
@@ -31,6 +34,35 @@ const aviso = ref('');
 const falhas = ref<string[]>([]);
 const trocada = ref<Sessao | null>(null);
 const naoConfere = computed(() => confirmacao.value !== '' && confirmacao.value !== nova.value);
+const politica = ref<RegrasSenha | null>(null);
+const alertaFalhas = ref<HTMLElement | null>(null);
+
+onMounted(async () => {
+  try {
+    politica.value = await buscarRegrasSenha();
+  } catch {
+    // Sem a lista, a tela segue com o texto geral das regras; a recusa do servidor continua dizendo qual falhou.
+    politica.value = null;
+  }
+});
+
+function textoRegra(r: Pick<RegraSenha, 'codigo' | 'valor'>): string {
+  if (r.codigo === 'repetida' && r.valor) return t('senha.regra.repetidaDias', { n: r.valor });
+  return t(`senha.regra.${r.codigo}`, { n: r.valor ?? 0, login: politica.value?.login ?? '' });
+}
+
+const regrasAoVivo = computed(() =>
+  (politica.value?.regras ?? []).map((r) => ({
+    ...r,
+    texto: textoRegra(r),
+    estado: estadoRegra(r, nova.value, politica.value?.login ?? '', atual.value),
+  })),
+);
+
+function textoFalha(codigo: string): string {
+  const r = politica.value?.regras.find((x) => x.codigo === codigo);
+  return r ? textoRegra(r) : t(`senha.falha.${codigo}`);
+}
 
 async function trocar(): Promise<void> {
   if (ocupado.value || naoConfere.value) return;
@@ -48,8 +80,11 @@ async function trocar(): Promise<void> {
     trocada.value = s;
   } catch (x) {
     const p = x instanceof ErroApi ? x.problema : null;
-    if (p?.falhas?.length) falhas.value = p.falhas;
-    else if (x instanceof ErroApi && x.status === 401) aviso.value = t('senha.atualInvalida');
+    if (p?.falhas?.length) {
+      falhas.value = p.falhas;
+      await nextTick();
+      alertaFalhas.value?.focus();
+    } else if (x instanceof ErroApi && x.status === 401) aviso.value = t('senha.atualInvalida');
     else erro.value = x;
   } finally {
     // A senha digitada nunca fica na tela depois do pedido.
@@ -85,15 +120,40 @@ async function continuar(): Promise<void> {
       <SanteBotao :rotulo="t('senha.continuar')" data-testid="senha-continuar" @acionar="continuar" />
     </template>
     <form v-else-if="disponivel" class="formulario" data-testid="form-senha" @submit.prevent="trocar">
-      <p>{{ t('senha.regras') }}</p>
-      <MensagemErro v-if="erro" :erro="erro" />
-      <SanteAlerta v-if="aviso" variante="alerta" :texto="aviso" anunciar data-testid="senha-aviso" />
-      <div v-if="falhas.length" class="falhas" role="alert" data-testid="senha-falhas">
-        <p>{{ t('senha.recusada') }}</p>
+      <div
+        v-if="falhas.length"
+        ref="alertaFalhas"
+        class="falhas"
+        role="alert"
+        tabindex="-1"
+        data-testid="senha-falhas"
+      >
+        <p class="falhas-titulo">{{ t('senha.recusada') }}</p>
         <ul>
-          <li v-for="f in falhas" :key="f">{{ t(`senha.falha.${f}`) }}</li>
+          <li v-for="f in falhas" :key="f" :data-falha="f">{{ textoFalha(f) }}</li>
         </ul>
       </div>
+      <MensagemErro v-if="erro" :erro="erro" />
+      <SanteAlerta v-if="aviso" variante="alerta" :texto="aviso" anunciar data-testid="senha-aviso" />
+      <div v-if="politica" class="regras" data-testid="senha-regras">
+        <p id="senha-regras-titulo">{{ t('senha.regrasTitulo') }}</p>
+        <ul aria-labelledby="senha-regras-titulo" aria-live="polite">
+          <li
+            v-for="r in regrasAoVivo"
+            :key="r.codigo"
+            :class="`regra regra--${r.estado}`"
+            :data-regra="r.codigo"
+            :data-estado="r.estado"
+          >
+            <span class="marca" aria-hidden="true">{{
+              r.estado === 'ok' ? '✓' : r.estado === 'pendente' ? '○' : '…'
+            }}</span>
+            <span>{{ r.texto }}</span>
+            <span class="estado">({{ t(`senha.estadoRegra.${r.estado}`) }})</span>
+          </li>
+        </ul>
+      </div>
+      <p v-else>{{ t('senha.regras') }}</p>
       <label class="campo" for="senha-atual">
         <span>{{ t('senha.atual') }}</span>
         <input
@@ -113,6 +173,7 @@ async function continuar(): Promise<void> {
           type="password"
           autocomplete="new-password"
           required
+          aria-describedby="senha-regras-titulo"
           data-testid="senha-nova"
         />
       </label>
@@ -146,8 +207,45 @@ async function continuar(): Promise<void> {
   gap: var(--sgh-espaco-2);
   max-width: 28rem;
 }
-.falhas ul {
+.falhas {
+  border: 2px solid var(--sgh-alerta);
+  border-left-width: 6px;
+  background: var(--sgh-alerta-suave);
+  color: var(--sgh-texto);
+  padding: var(--sgh-espaco-2);
+  border-radius: 4px;
+}
+.falhas:focus {
+  outline: 3px solid var(--sgh-foco);
+  outline-offset: 2px;
+}
+.falhas-titulo {
+  font-weight: 700;
   margin: 0;
+}
+.falhas ul,
+.regras ul {
+  margin: 0;
+}
+.regras ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.regra {
+  display: flex;
+  gap: var(--sgh-espaco-2);
+}
+.regra--ok .marca {
+  color: var(--sgh-sucesso);
+  font-weight: 700;
+}
+.regra--pendente {
+  color: var(--sgh-texto-secundario);
+}
+.estado {
+  font-size: 0.875em;
 }
 .nao-confere {
   font-weight: 600;

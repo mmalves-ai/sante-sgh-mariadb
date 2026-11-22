@@ -73,6 +73,8 @@ export const esquemaProblema = z.looseObject({
   campos: z.array(z.string()).optional(),
   /** Só na troca de senha: regras da política que a senha nova não cumpre. */
   falhas: z.array(z.string()).optional(),
+  /** Só na troca de senha: as mesmas regras, com a mensagem em português de cada uma. */
+  regras: z.array(z.object({ codigo: z.string(), mensagem: z.string() })).optional(),
   /** M25: o conflito de sincronização aberto e os bloqueios e avisos dos nove certos. */
   conflito: z.number().int().optional(),
   bloqueios: z.array(z.string()).optional(),

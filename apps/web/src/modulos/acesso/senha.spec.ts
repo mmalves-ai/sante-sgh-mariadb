@@ -142,6 +142,56 @@ describe('SenhaTela', () => {
     w.unmount();
   });
 
+  it('mostra as regras vigentes antes de digitar, confere ao vivo e destaca a recusa da API com foco', async () => {
+    const regras = {
+      login: 'admin',
+      regras: [
+        { codigo: 'curta', valor: 10, aoVivo: true, mensagem: 'x' },
+        { codigo: 'sem-numero', aoVivo: true, mensagem: 'x' },
+        { codigo: 'deriva-do-login', aoVivo: true, mensagem: 'x' },
+        { codigo: 'repetida', valor: 30, aoVivo: false, mensagem: 'x' },
+      ],
+    };
+    simular((p) => {
+      if (p.url === '/api/sessao/senha/politica') return { status: 200, corpo: regras };
+      if (p.metodo === 'GET')
+        return { status: 200, corpo: sessao({ trocaSenhaPeloNovo: true, trocaSenha: 'senha-provisoria' }) };
+      return {
+        status: 422,
+        corpo: {
+          type: 'urn:sgh:problema:entrada-invalida',
+          title: 'Senha nova recusada',
+          status: 422,
+          codigo: 'senha-politica',
+          falhas: ['deriva-do-login'],
+        },
+      };
+    });
+    const w = await montar();
+    const lista = () => w.get('[data-testid="senha-regras"]');
+    const estado = (c: string) => lista().get(`[data-regra="${c}"]`).attributes('data-estado');
+    expect(lista().text()).toContain('Ter pelo menos 10 caracteres.');
+    expect(lista().text()).toContain('Não conter o seu login (admin)');
+    expect(lista().text()).toContain('últimos 30 dias');
+    expect(estado('curta')).toBe('pendente');
+    expect(estado('repetida')).toBe('na-troca');
+
+    await w.get('[data-testid="senha-nova"]').setValue('Admin#2026xy');
+    expect(estado('curta')).toBe('ok');
+    expect(estado('sem-numero')).toBe('ok');
+    expect(estado('deriva-do-login')).toBe('pendente');
+    await w.get('[data-testid="senha-nova"]').setValue('Forte#2026xy');
+    expect(estado('deriva-do-login')).toBe('ok');
+
+    await preencher(w, 'Atual#2026', 'Admin#2026xy');
+    const alerta = w.get('[data-testid="senha-falhas"]');
+    expect(alerta.attributes('role')).toBe('alert');
+    expect(alerta.text()).toContain('Regra que falhou');
+    expect(alerta.text()).toContain('Não conter o seu login (admin)');
+    expect(document.activeElement).toBe(alerta.element);
+    w.unmount();
+  });
+
   it('confirmação diferente: avisa e não envia', async () => {
     const pedidos = simular(() => ({ status: 200, corpo: sessao({ trocaSenhaPeloNovo: true }) }));
     const w = await montar();

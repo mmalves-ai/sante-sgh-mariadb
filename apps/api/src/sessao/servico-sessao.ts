@@ -23,6 +23,8 @@ import {
   gerarSenhaProvisoria,
   politicaEfetiva,
   portaFechada,
+  regrasDaPolitica,
+  type RegraPoliticaSenha,
   reautenticacaoRecente,
   reautenticacaoValidaAte,
   senhaExpirada,
@@ -151,6 +153,15 @@ export class ErroSessao extends Error {
     super(tipo);
     this.name = 'ErroSessao';
   }
+
+  /** Login de quem foi recusado (para o log da recusa; nunca a senha nem o resumo). */
+  login?: string;
+
+  /** A mesma recusa, marcada com o login (troca de senha: o controlador não conhece o login da sessão). */
+  doLogin(login: string): this {
+    this.login = login;
+    return this;
+  }
 }
 
 /** Registro guardado no armazém (JSON pequeno, sem senha, sem hash). */
@@ -219,6 +230,11 @@ const CACHE_SITUACAO_PLATAFORMA_MS = 180_000;
  * espaços das chaves de tentativas, índice, último acesso e revogação ficam separados.
  */
 export const PREFIXO_LOGIN_PLATAFORMA = 'plataforma:';
+
+/** Login do administrador da plataforma sem o prefixo da sessão. */
+export function loginPuroPlataforma(login: string): string {
+  return login.startsWith(PREFIXO_LOGIN_PLATAFORMA) ? login.slice(PREFIXO_LOGIN_PLATAFORMA.length) : login;
+}
 
 /** A marca interna da sessão "como" (no armazém; a casca recebe só `Sessao.como`). */
 export interface RegistroComo {
@@ -427,7 +443,12 @@ export class ServicoSessao {
     if (r.plataforma) {
       try {
         return autorizacaoDoAtorPlataforma(
-          { tipo: 'plataforma', idAdministrador: r.plataforma.idAdministrador, nomeExibicao: '', cliente: r.plataforma.cliente },
+          {
+            tipo: 'plataforma',
+            idAdministrador: r.plataforma.idAdministrador,
+            nomeExibicao: '',
+            cliente: r.plataforma.cliente,
+          },
           this.cliente ?? '',
           this.agora(),
         );
@@ -1202,6 +1223,26 @@ export class ServicoSessao {
   }
 
   /** A troca de senha está disponível (porta de senha montada). */
+  /**
+   * As regras da política de senha vigente para a sessão (a do estabelecimento, ou a padrão do produto para o
+   * administrador da plataforma), para a tela mostrar antes de digitar e conferir ao vivo. Traz o login (sem prefixo)
+   * contra o qual a regra "não conter o login" é conferida. Nenhuma senha.
+   */
+  async regrasSenha(
+    id: string,
+    redeDoEndereco: string | null,
+  ): Promise<{ login: string; regras: RegraPoliticaSenha[] }> {
+    const rede = this.conferirRede(redeDoEndereco);
+    const r = await this.carregarAtiva(rede, id);
+    if (r.plataforma)
+      return {
+        login: loginPuroPlataforma(r.login),
+        regras: regrasDaPolitica(politicaEfetiva(CONFIG_LOGIN_PADRAO.senha, CONFIG_LOGIN_PADRAO.sante)),
+      };
+    const config = await this.politica(rede, r.estabelecimento);
+    return { login: r.login, regras: regrasDaPolitica(politicaEfetiva(config.senha, config.sante)) };
+  }
+
   get trocaSenhaDisponivel(): boolean {
     return this.portaSenha !== null;
   }
@@ -1236,7 +1277,8 @@ export class ServicoSessao {
     const chaveTent = this.chaveTentativas(rede, r.login);
     await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
     const auth = await this.autenticar(r.estabelecimento, r.login, entrada.senhaAtual);
-    if (auth.desfecho !== 'ok') throw new ErroSessao('credencial-invalida', 'Senha atual inválida.');
+    if (auth.desfecho !== 'ok')
+      throw new ErroSessao('credencial-invalida', 'Senha atual inválida.').doLogin(r.login);
     await this.armazem.apagar(chaveTent);
 
     const politica = politicaEfetiva(config.senha, config.sante);
@@ -1273,7 +1315,7 @@ export class ServicoSessao {
         'A senha nova não cumpre a política de senha.',
         'senha-politica',
         falhas,
-      );
+      ).doLogin(r.login);
 
     const resumo = await cifrarSenha(entrada.senhaNova);
     const t = this.agora();
@@ -1310,7 +1352,10 @@ export class ServicoSessao {
   }
 
   /** Releitura da credencial da plataforma, com cache curto por administrador (o de 3 min das permissões). */
-  private readonly situacoesPlataforma = new Map<number, { situacao: SituacaoAdministradorPlataforma | null; ate: number }>();
+  private readonly situacoesPlataforma = new Map<
+    number,
+    { situacao: SituacaoAdministradorPlataforma | null; ate: number }
+  >();
 
   private async plataformaVigente(p: RegistroPlataforma): Promise<boolean> {
     if (!this.plataforma) return false;
@@ -1358,11 +1403,16 @@ export class ServicoSessao {
     const chaveTent = this.chaveTentativas(rede, r.login);
     await this.contarTentativa(chaveTent, limiteTentativas(CONFIG_LOGIN_PADRAO.limiteTentativas));
     if (!(await this.conferirPlataforma(p, entrada.senhaAtual)))
-      throw new ErroSessao('credencial-invalida', 'Senha atual inválida.');
+      throw new ErroSessao('credencial-invalida', 'Senha atual inválida.').doLogin(
+        loginPuroPlataforma(r.login),
+      );
     await this.armazem.apagar(chaveTent);
     const politica = politicaEfetiva(CONFIG_LOGIN_PADRAO.senha, CONFIG_LOGIN_PADRAO.sante);
-    const loginPuro = r.login.slice(PREFIXO_LOGIN_PLATAFORMA.length);
-    const falhas = avaliarSenhaNova(entrada.senhaNova, loginPuro, politica, { nome: r.nome, nascimento: null });
+    const loginPuro = loginPuroPlataforma(r.login);
+    const falhas = avaliarSenhaNova(entrada.senhaNova, loginPuro, politica, {
+      nome: r.nome,
+      nascimento: null,
+    });
     if (entrada.senhaNova === entrada.senhaAtual) falhas.push('igual-atual');
     if (falhas.length > 0)
       throw new ErroSessao(
@@ -1370,7 +1420,7 @@ export class ServicoSessao {
         'A senha nova não cumpre a política de senha.',
         'senha-politica',
         falhas,
-      );
+      ).doLogin(loginPuro);
     const resumo = await cifrarSenha(entrada.senhaNova);
     let senhaAlteradaEm: number;
     try {
@@ -1868,7 +1918,12 @@ export class ServicoSessao {
   private montar(r: Registro, reautRecente: boolean, aut: Autorizacao | null = null): Sessao {
     const t = this.agora();
     return {
-      usuario: { id: r.idUsuario, nome: r.nome, login: r.login, ...(r.plataforma ? { ator: 'plataforma' as const } : {}) },
+      usuario: {
+        id: r.idUsuario,
+        nome: r.nome,
+        login: r.login,
+        ...(r.plataforma ? { ator: 'plataforma' as const } : {}),
+      },
       rede: r.rede,
       // Para a troca (novo login): só os disponíveis agora.
       estabelecimentos: this.fonte
