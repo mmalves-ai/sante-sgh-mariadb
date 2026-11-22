@@ -5,6 +5,8 @@ import type { DynamicModule } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
+import { AgendaPrecoController, SERVICO_AGENDA_PRECO } from './agenda-preco.controller.js';
+import { ServicoAgendaPreco } from './agenda-preco.servico.js';
 import { ConveniosController } from './convenios.controller.js';
 import { FONTE_PRECOS, type FontePrecos, fontePrecosIndisponivel } from './fonte.js';
 import { FontePrecosMemoria } from './fonte-memoria.js';
@@ -32,13 +34,27 @@ export async function fonteDosPrecos(ctx: ContextoModulo): Promise<FontePrecos> 
   return fontePrecosIndisponivel();
 }
 
-export async function moduloPrecos(ctx: ContextoModulo, opcoes: OpcoesModuloPrecos = {}): Promise<DynamicModule> {
+export async function moduloPrecos(
+  ctx: ContextoModulo,
+  opcoes: OpcoesModuloPrecos = {},
+): Promise<DynamicModule> {
   const fonte = opcoes.fonte ?? (await fonteDosPrecos(ctx));
   return {
     module: class ModuloPrecos {},
-    controllers: [ConveniosController, PrecosController, ImportacoesController, MotorController],
+    controllers: [
+      ConveniosController,
+      PrecosController,
+      ImportacoesController,
+      MotorController,
+      AgendaPrecoController,
+    ],
     providers: [
       { provide: FONTE_PRECOS, useValue: fonte },
+      // ADR 0009: regra de preço particular, credenciamento e agenda estruturada (só com o banco próprio; sem ele, 503).
+      {
+        provide: SERVICO_AGENDA_PRECO,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoAgendaPreco(ctx.nucleo) : null,
+      },
       // O cache da lista de convênios fica de fora até o armazém compartilhado chegar ao boot mínimo.
       { provide: SERVICO_PRECOS, useValue: new ServicoPrecos(fonte, null) },
     ],

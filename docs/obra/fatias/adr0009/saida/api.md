@@ -1,0 +1,49 @@
+# ADR 0009, lote domínio e API (rótulo `api`)
+
+Prova (2026-11-22): `tsc` de `apps/api`, `contratos`, `dominio-preco`, `dominio-agenda` e `dominio-repasse` ok; `eslint` e
+`prettier` ok nos arquivos do lote; unidade: dominio-preco 54/54, dominio-agenda 129/129, dominio-repasse 57/57 (com
+cobertura), contratos 829/829, apps/api 2149 ok (19 pulados); integração no cliente `adr9_api` (plataforma de teste
+`plataforma_teste_adr9_api`, apagados no fim): `agenda-preco.int.spec.ts` 6/6 e `faturamento/porta-propria.int.spec.ts`
+22/22 (o lançamento de item continua verde com a regra particular ligada antes da tabela).
+
+## Domínio (funções puras, com teste)
+- `dominio-preco/preco-particular.ts`: `regrasAplicaveis`, `compararEspecificidade` (alvo item > grupo > consulta; dono
+  agenda > profissional; estabelecimento > rede; prioridade menor; confirmada > estimada; vigência mais recente; maior
+  id), `escolherRegraPrecoParticular`, `resolverPreco` (particular: regra ANTES da tabela; convênio: só tabela conta >
+  plano > convênio, regras ignoradas; resposta com `origem`, ids, `textoOrigemId`, `estimada`, explicação e recusa),
+  `origemDaTabela`.
+- `dominio-preco/credenciamento.ts`: `verificarCredenciamento` (alerta por padrão; bloqueio com
+  `bloqueiaSemCredenciamento`; plano e plano superior; descredenciado vence; particular não pede),
+  `deveCredenciarTodosAoCriar`.
+- `dominio-agenda/estruturada.ts`: `agendaAtendeConvenio` (vínculo, exclusão do convênio ou do plano/subplano, só
+  alguns planos, `dependeDoPlano`), `regrasEfetivas`/`agendaAtendePaciente` (sexo, idade, retorno, encaixe; restrição
+  do item/plano/convênio sobrepõe o padrão), `preparoDoExame` (preparo, orientação, documentos, jejum). Toda resposta
+  traz os textos originais e marca trecho não interpretado.
+- `dominio-repasse/particular-integral.ts`: regra de repasse 100% da consulta particular sobre o valor cobrado.
+
+## API (módulo `precos`, controlador `AgendaPrecoController`)
+Rotas: `GET/POST precos-particulares`, `GET precos-particulares/calculo`, `GET/POST credenciamentos`,
+`GET credenciamentos/verificacao`, `GET/PUT convenios/:id/opcoes-credenciamento`, `POST convenios/:id/credenciar-todos`,
+`GET agendas/:id/estruturada`, `GET agendas/:id/respostas` (perguntas do paciente), `POST agendas/:id/coberturas |
+restricoes | preparos`. Gravações pelo executor (7 operações, trilha e Idempotency-Key). Permissões novas em
+`contratos/permissoes/precos.ts` (concedidas ao perfil `administrador-sistema`): `preco.regraParticular.ler|editar`,
+`convenio.credenciamento.editar`, `agenda.estruturada.ler|editar`. Preço por médico em convênio é recusado
+(`convenio-sem-preco-por-medico`).
+- `faturamento/operacoes.ts` (`lancarItem`): na conta particular, a regra do profissional do atendimento ou da agenda da
+  marcação vale antes da tabela; a memória grava `regra_preco_particular_id`, `origemPreco` e `regraEstimada`.
+
+## Teste de aceite (seção 6)
+Domínio: 6.1 (valor por médico e agenda; médico sem regra cai na tabela), 6.2 (exame por item/grupo, estimada com o
+texto), 6.5 a 6.8 (SUS excluído, convênio fora, Assim exceto A60, Bradesco só Empresarial), 6.10 e 6.11 (preparo,
+jejum, documento), 6.12 a 6.14 (criança de 5 anos, encaixe, sexo, retorno em 30 dias). API (integração): 6.1, 6.7/6.8,
+6.10, 6.12 com o texto original íntegro (2.4 mil caracteres) ao lado.
+
+## Pendências
+1. O "particular padrão" lido do parâmetro `faturamento.fontePagadoraParticularCodigo`: o módulo monta o serviço sem
+   o código (vale a única fonte particular ativa); falta ligar o resolvedor de parâmetros.
+2. No `lancarItem`, "consulta" = honorário (tipo 2) de atendimento vindo de agenda; sem teste de integração do caminho
+   particular com regra (precisa de conta, atendimento e marcação sintéticos).
+3. "Criar convênio" do cadastro ainda não chama `credenciarTodosAtivos` quando `credencia_todos_ao_criar` (há a rota
+   `POST convenios/:id/credenciar-todos`).
+4. Fora do lote: `permissoes:verificar` segue VERMELHO por 4 rotas antigas sem auditoria (config/dominios e
+   plataforma-onboarding), nenhuma deste lote; as 5 permissões novas passam.

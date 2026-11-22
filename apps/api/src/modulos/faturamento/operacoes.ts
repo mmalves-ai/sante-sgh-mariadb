@@ -22,8 +22,10 @@ import {
   type FecharContaEntrada,
   type LancarItemEntrada,
   type ReabrirContaEntrada,
+  type RegraPrecoParticular,
 } from '@sgh/contratos';
 import { conferirPrecoManual } from '@sgh/dominio-faturamento';
+import { escolherRegraPrecoParticular } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -36,6 +38,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { candidatasPrecoParticular } from '@sgh/persistencia';
 import { versaoNumero } from './esquemas.js';
 import {
   conferirCompetenciaDaConta,
@@ -363,6 +366,48 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
 });
 
+/**
+ * A regra de preço particular que vence para o item na conta (ADR 0009): só na conta de fonte particular; o
+ * profissional é o do atendimento e a agenda, a da marcação que o originou. "consulta" vale para o honorário (tipo 2)
+ * de atendimento vindo de agenda.
+ */
+async function regraParticularDoItem(
+  tx: TxOperacao,
+  conta: { readonly id: number; readonly fonte: number },
+  est: number,
+  item: Linha,
+  e: { readonly tipo: number; readonly data: string },
+): Promise<RegraPrecoParticular | null> {
+  const f = await tx.uma<Linha>('SELECT tipo FROM fonte_pagadora WHERE id = ?', [conta.fonte]);
+  if (texto(f?.['tipo']) !== 'particular') return null;
+  const at = await tx.uma<Linha>(
+    `SELECT a.profissional_id, ha.agenda_servico_id
+       FROM conta_hospitalar c JOIN atendimento a ON a.id = c.atendimento_id
+       LEFT JOIN marcacao_horario m ON m.id = a.marcacao_horario_id
+       LEFT JOIN horario_agenda ha ON ha.id = m.horario_agenda_id
+      WHERE c.id = ?`,
+    [conta.id],
+  );
+  const profissional = at?.['profissional_id'] == null ? null : n(at['profissional_id']);
+  const agenda = at?.['agenda_servico_id'] == null ? null : n(at['agenda_servico_id']);
+  const pedido = {
+    fontePagadoraId: conta.fonte,
+    profissionalId: profissional,
+    agendaId: agenda,
+    estabelecimentoId: est,
+    data: e.data,
+  };
+  const candidatas = await candidatasPrecoParticular(tx, pedido);
+  return escolherRegraPrecoParticular(candidatas, {
+    ...pedido,
+    alvo: {
+      itemFaturavelId: n(item['id']),
+      grupoFaturamentoId: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
+      consulta: e.tipo === 2 && agenda !== null,
+    },
+  });
+}
+
 export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>({
   nome: 'faturamento.lancar-item',
   tabelas: ['conta_hospitalar_item', 'conta_hospitalar_item_memoria', 'conta_hospitalar'],
@@ -386,20 +431,36 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       throw recusa('item-fora-do-catalogo', 'O item não está no catálogo de itens faturáveis.', {
         campos: ['codigo'],
       });
+    // ADR 0009: no particular, a regra estruturada do médico ou da agenda vale ANTES da tabela do particular (o
+    // convênio segue só a tabela: não há preço por médico em convênio).
+    const regra = e.precoManual ? null : await regraParticularDoItem(tx, conta, est, item, e);
     const tabelas = await tabelasDePreco(tx, est, conta.fonte, conta.plano, conta.tabela);
-    const naTabela = tabelas.length
-      ? await tx.uma<Linha>(
-          `SELECT tabela_preco_id FROM preco_procedimento
+    const naTabela = regra
+      ? null
+      : tabelas.length
+        ? await tx.uma<Linha>(
+            `SELECT tabela_preco_id FROM preco_procedimento
             WHERE item_faturavel_id = ? AND tabela_preco_id IN (${lista(tabelas.length)}) AND ativo = 1
               AND excluido_em IS NULL LIMIT 1`,
-          [n(item['id']), ...tabelas],
-        )
-      : null;
-    if (!naTabela)
+            [n(item['id']), ...tabelas],
+          )
+        : null;
+    if (!naTabela && !regra)
       throw recusa('item-fora-da-tabela', 'O item não está na tabela de preço da fonte pagadora da conta.', {
         campos: ['codigo'],
       });
-    const preco = await precoVigente(tx, tabelas, n(item['id']), e.data);
+    const doTabela = regra ? null : await precoVigente(tx, tabelas, n(item['id']), e.data);
+    const preco: PrecoVigente | null = regra
+      ? {
+          modelo: 'regra_particular',
+          unitario: regra.valor,
+          honorario: 0,
+          custoOperacional: 0,
+          filme: 0,
+          vigencia: regra.vigenciaInicio,
+          tabela: 0,
+        }
+      : doTabela;
     // O setor onde o paciente estava: setor funcional do estabelecimento da sessão (0 na tela = sem setor).
     let setor: number | null = null;
     if (e.local > 0) {
@@ -465,12 +526,21 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     // A memória do cálculo: de onde veio o preço e, no manual, quem aprovou e por quê.
     await tx.incluir('conta_hospitalar_item_memoria', {
       conta_hospitalar_item_id: id,
-      tabela_preco_id: preco?.tabela ?? n(naTabela['tabela_preco_id']),
+      tabela_preco_id: regra ? null : (preco?.tabela ?? n(naTabela?.['tabela_preco_id'])),
+      regra_preco_particular_id: regra?.id ?? null,
       valor_unitario_calculado: preco?.unitario ?? null,
       valor_total_calculado: preco ? valorDoItem(preco.unitario, e.quantidade) : null,
       preco_manual: valorizacao === 'manual' ? 1 : 0,
       operacao: 'inclusao',
       dados: JSON.stringify({
+        origemPreco: regra
+          ? regra.dono.tipo === 'agenda'
+            ? 'regra_particular_agenda'
+            : 'regra_particular_profissional'
+          : valorizacao === 'manual'
+            ? 'manual'
+            : 'tabela',
+        regraEstimada: regra ? regra.situacaoRevisao === 'estimada' : null,
         modelo: preco?.modelo ?? null,
         vigencia: preco?.vigencia ?? null,
         unitarioTabela: preco?.unitario ?? null,

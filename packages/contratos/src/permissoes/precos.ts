@@ -138,4 +138,47 @@ export const PERMISSOES_M12: readonly DeclaracaoPermissao[] = [
     concessaoPorPerfil: null,
     categoria: 'financeira',
   },
+  {
+    codigo: 'preco.regraParticular.ler',
+    descricao:
+      'Consultar as regras de preço particular do médico ou da agenda e o cálculo do preço com a origem (ADR 0009)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+  },
+  {
+    codigo: 'preco.regraParticular.editar',
+    descricao: 'Incluir regra de preço particular do médico ou da agenda (só no particular; ADR 0009)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+  },
+  {
+    codigo: 'convenio.credenciamento.editar',
+    descricao:
+      'Credenciar profissional no convênio e definir alerta ou bloqueio sem credenciamento (ADR 0009)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+  },
+  {
+    codigo: 'agenda.estruturada.ler',
+    descricao:
+      'Consultar a agenda estruturada (cobertura, restrições, preparo, texto original) e as respostas ao paciente',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
+  {
+    codigo: 'agenda.estruturada.editar',
+    descricao: 'Incluir cobertura por convênio e plano, restrição e preparo da agenda (ADR 0009)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
 ];

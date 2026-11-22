@@ -9,3 +9,5 @@ export * from './comparacao-importacao.js';
 export * from './convenio-aceita-atendimento.js';
 export * from './busca.js';
 export * from './saneamento.js';
+export * from './preco-particular.js';
+export * from './credenciamento.js';

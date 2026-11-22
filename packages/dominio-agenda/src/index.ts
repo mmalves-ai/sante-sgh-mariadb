@@ -12,3 +12,4 @@ export * from './dia.js';
 export * from './exame.js';
 export * from './online/index.js';
 export * from './sessoes/index.js';
+export * from './estruturada.js';
