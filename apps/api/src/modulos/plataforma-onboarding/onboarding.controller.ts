@@ -24,7 +24,7 @@ import type {
   ListaOrigens,
   OrigemVinculada,
 } from '@sgh/contratos';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { filtrarRelatorio, relatorioCsv } from './execucao.js';
@@ -83,6 +83,9 @@ export class OnboardingController {
   }
 
   @Post('clientes')
+  @AuditadoNoHandler(
+    'cliente_evento no banco da plataforma, com o administrador que pediu (script do cliente e conector)',
+  )
   @HttpCode(201)
   @Permissao(PERMISSAO_ONBOARDING)
   async criar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown): Promise<ClienteCriado> {
@@ -98,6 +101,9 @@ export class OnboardingController {
   }
 
   @Put('clientes/:codigo/origem')
+  @AuditadoNoHandler(
+    'cliente_evento no banco da plataforma, com o administrador que pediu (script do cliente e conector)',
+  )
   @Permissao(PERMISSAO_ONBOARDING)
   async vincular(
     @Req() req: RequisicaoAutorizada,
@@ -109,6 +115,9 @@ export class OnboardingController {
   }
 
   @Post('clientes/:codigo/execucoes')
+  @AuditadoNoHandler(
+    'cliente_evento no banco da plataforma, com o administrador que pediu (script do cliente e conector)',
+  )
   @HttpCode(202)
   @Permissao(PERMISSAO_ONBOARDING)
   async pedir(

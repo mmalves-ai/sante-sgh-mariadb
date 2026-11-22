@@ -27,7 +27,12 @@ import {
   type RespostaPreparo,
   type RespostaRestricao,
 } from '@sgh/dominio-agenda';
-import { origemDaTabela, resolverPreco, verificarCredenciamento } from '@sgh/dominio-preco';
+import {
+  deveCredenciarTodosAoCriar,
+  origemDaTabela,
+  resolverPreco,
+  verificarCredenciamento,
+} from '@sgh/dominio-preco';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -43,9 +48,11 @@ import {
   alterarRegraPrecoParticular,
   candidatasPrecoParticular,
   credenciamentosVigentes,
+  codigoParticularDoParametro,
   credenciarTodosAtivos,
   definirOpcoesCredenciamentoConvenio,
   fonteParticularPadrao,
+  incluirConvenio,
   incluirCoberturaAgenda,
   incluirCredenciamento,
   incluirPreparoAgenda,
@@ -189,6 +196,69 @@ export const opCredenciarTodos = definirOperacao({
   alvo: (e) => ({ tabela: 'fonte_pagadora', id: e.fontePagadoraId }),
 });
 
+/** Convênio novo (decisão 26): com credencia_todos_ao_criar, credencia na mesma transação todos os médicos ativos. */
+export const esquemaConvenioNovo = z
+  .object({
+    codigo: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._-]{1,30}$/),
+    nome: z.string().trim().min(2).max(150),
+    tipo: z.enum([
+      'operadora',
+      'seguradora',
+      'autogestao',
+      'cooperativa',
+      'medicina_grupo',
+      'filantropia',
+      'particular',
+      'publico',
+      'empresa',
+      'convenio_proprio',
+      'outro',
+    ]),
+    registroAns: z
+      .string()
+      .trim()
+      .regex(/^\d{1,10}$/)
+      .nullable()
+      .default(null),
+    bloqueiaSemCredenciamento: z.boolean().default(false),
+    credenciaTodosAoCriar: z.boolean().default(false),
+    /** Início da relação e da vigência do credenciamento em massa (AAAA-MM-DD). */
+    dataInicioRelacao: data,
+  })
+  .strict();
+
+export const opIncluirConvenio = definirOperacao({
+  nome: 'convenio.incluir-convenio',
+  tabelas: ['fonte_pagadora', 'profissional_fonte_pagadora'],
+  entrada: esquemaConvenioNovo,
+  acao: 'inclusao',
+  async gravar(tx, e, ctx) {
+    const particular = e.tipo === 'particular';
+    if (particular && (e.bloqueiaSemCredenciamento || e.credenciaTodosAoCriar))
+      throw recusa('particular-sem-credenciamento', 'O particular não tem credenciamento.', {
+        campos: ['credenciaTodosAoCriar'],
+      });
+    const id = await incluirConvenio(tx, e, ctx.usuario);
+    if (id === null)
+      throw recusa('codigo-em-uso', 'Já existe uma fonte pagadora com este código.', { campos: ['codigo'] });
+    const credenciados = deveCredenciarTodosAoCriar(
+      {
+        fontePagadoraId: id,
+        bloqueiaSemCredenciamento: e.bloqueiaSemCredenciamento,
+        credenciaTodosAoCriar: e.credenciaTodosAoCriar,
+      },
+      particular,
+    )
+      ? await credenciarTodosAtivos(tx, id, e.dataInicioRelacao, ctx.usuario)
+      : 0;
+    return { id, credenciados };
+  },
+  alvo: (_e, s) => ({ tabela: 'fonte_pagadora', id: s.id }),
+});
+
 export const opIncluirCobertura = definirOperacao({
   nome: 'agenda.incluir-cobertura',
   tabelas: ['agenda_cobertura'],
@@ -277,6 +347,11 @@ export class ServicoAgendaPreco {
     );
   }
 
+  /** O código do particular padrão: o fixado no construtor (testes) ou o parâmetro vigente do estabelecimento. */
+  private async codigoDoParticular(l: Leitor, est: number): Promise<string | null> {
+    return this.codigoParticular ?? (await codigoParticularDoParametro(l, est));
+  }
+
   private estabelecimento(ctx: ContextoNucleo): number {
     if (ctx.estabelecimento === null)
       throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.', { campos: [] });
@@ -363,7 +438,8 @@ export class ServicoAgendaPreco {
   }
 
   private async calcularCom(l: Leitor, est: number, p: PedidoCalculo): Promise<ResultadoCalculoPreco> {
-    const fonte = p.fontePagadoraId ?? (await fonteParticularPadrao(l, this.codigoParticular));
+    const fonte =
+      p.fontePagadoraId ?? (await fonteParticularPadrao(l, await this.codigoDoParticular(l, est)));
     if (fonte === null)
       throw recusa(
         'particular-indefinido',
@@ -497,6 +573,9 @@ export class ServicoAgendaPreco {
   credenciarTodos(ctx: ContextoOperacao, e: unknown) {
     return this.gravar(opCredenciarTodos, ctx, e);
   }
+  incluirConvenio(ctx: ContextoOperacao, e: unknown) {
+    return this.gravar(opIncluirConvenio, ctx, e);
+  }
 
   // -- agenda estruturada
   agendaEstruturada(ctx: ContextoNucleo, agendaId: number, data?: string): Promise<AgendaEstruturada | null> {
@@ -545,7 +624,7 @@ export class ServicoAgendaPreco {
         encaixe: p.encaixe,
       });
       const preparo = preparoDoExame(a, { data: p.data, itemAgendavelId: p.itemAgendavelId });
-      const particular = await fonteParticularPadrao(l, this.codigoParticular);
+      const particular = await fonteParticularPadrao(l, await this.codigoDoParticular(l, est));
       const precoParticular =
         particular === null
           ? null

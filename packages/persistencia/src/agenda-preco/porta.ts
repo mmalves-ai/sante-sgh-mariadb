@@ -162,6 +162,65 @@ export async function fonteParticularPadrao(
   return ls.length === 1 ? Number(ls[0]!['id']) : null;
 }
 
+/**
+ * O valor vigente do parâmetro faturamento.fontePagadoraParticularCodigo para o estabelecimento (o do
+ * estabelecimento vence o da rede; vazio ou sem valor: nulo, e vale a única fonte particular ativa).
+ */
+export async function codigoParticularDoParametro(
+  l: Leitor,
+  estabelecimentoId: number | null,
+): Promise<string | null> {
+  const u = await l.uma(
+    `SELECT pv.valor FROM parametro_valor pv
+       JOIN parametro_definicao pd ON pd.id = pv.parametro_definicao_id
+      WHERE pd.chave = 'faturamento.fontePagadoraParticularCodigo'
+        AND (pv.nivel = 'rede' OR (pv.nivel = 'estabelecimento' AND pv.estabelecimento_id = ?))
+        AND pv.vigencia_inicio <= CURRENT_TIMESTAMP(3)
+        AND (pv.vigencia_fim IS NULL OR pv.vigencia_fim > CURRENT_TIMESTAMP(3))
+      ORDER BY pv.nivel = 'estabelecimento' DESC, pv.vigencia_inicio DESC, pv.id DESC LIMIT 1`,
+    [estabelecimentoId ?? 0],
+  );
+  const v = u ? String(u['valor'] ?? '').trim() : '';
+  return v === '' ? null : v;
+}
+
+// ---------------------------------------------------------------- convênio novo
+
+export interface EntradaConvenioNovo {
+  readonly codigo: string;
+  readonly nome: string;
+  readonly tipo: string;
+  readonly registroAns: string | null;
+  readonly bloqueiaSemCredenciamento: boolean;
+  readonly credenciaTodosAoCriar: boolean;
+  readonly dataInicioRelacao: string | null;
+}
+
+/** Inclui a fonte pagadora (convênio) ativa; o código é único na rede. Devolve o id ou nulo se o código já existe. */
+export async function incluirConvenio(
+  e: Escritor,
+  c: EntradaConvenioNovo,
+  usuario: number | null,
+): Promise<number | null> {
+  const ja = await e.uma('SELECT id FROM fonte_pagadora WHERE codigo = ?', [c.codigo]);
+  if (ja) return null;
+  return e.inserir(
+    `INSERT INTO fonte_pagadora (codigo, nome, tipo, registro_ans, situacao, data_inicio_relacao,
+       bloqueia_sem_credenciamento, credencia_todos_ao_criar, criado_em, criado_por)
+     VALUES (?,?,?,?, 'ativa', ?,?,?, CURRENT_TIMESTAMP(3), ?)`,
+    [
+      c.codigo,
+      c.nome,
+      c.tipo,
+      c.registroAns,
+      c.dataInicioRelacao,
+      bit(c.bloqueiaSemCredenciamento),
+      bit(c.credenciaTodosAoCriar),
+      usuario,
+    ],
+  );
+}
+
 // ---------------------------------------------------------------- credenciamento
 
 export async function opcoesCredenciamentoConvenio(

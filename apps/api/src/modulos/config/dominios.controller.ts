@@ -67,7 +67,12 @@ export function problemaDaGravacao(e: unknown, d?: DominioDeclarado): ErroProble
     case 'conflito-versao':
       return new ErroProblema('conflito-de-versao', 409, p.title, p.detail, {
         alteradoPor: 'desconhecido',
-        alteracoes: (p.colunas ?? []).map((campo) => ({ campo, rotulo: rotulo(campo), lido: null, atual: null })),
+        alteracoes: (p.colunas ?? []).map((campo) => ({
+          campo,
+          rotulo: rotulo(campo),
+          lido: null,
+          atual: null,
+        })),
         codigo,
       });
     case 'registro-em-edicao':
@@ -242,8 +247,13 @@ export class DominiosController {
     });
   }
 
-  private async exigirItem(req: RequisicaoAutorizada, d: DominioDeclarado, codigo: string): Promise<ItemDominio> {
-    if (codigo.length === 0 || codigo.length > 120) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
+  private async exigirItem(
+    req: RequisicaoAutorizada,
+    d: DominioDeclarado,
+    codigo: string,
+  ): Promise<ItemDominio> {
+    if (codigo.length === 0 || codigo.length > 120)
+      throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
     const i = await this.fonte.item(this.sessao(req).hospital, d, codigo);
     if (!i) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
     return i;
@@ -307,7 +317,11 @@ export class DominiosController {
   }
 
   private resultado(d: DominioDeclarado, verbo: string, codigo: string): ResultadoGravacao {
-    return { codigo, operacao: `${d.modulo}.${d.recurso}.${verbo}`, destino: destinoNoContrato(this.fonte.destino) };
+    return {
+      codigo,
+      operacao: `${d.modulo}.${d.recurso}.${verbo}`,
+      destino: destinoNoContrato(this.fonte.destino),
+    };
   }
 
   @Post(':modulo/:recurso/itens')
@@ -415,7 +429,9 @@ export class DominiosController {
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
     const atual = await this.exigirItem(req, d, codigo);
     if (atual.ativo)
-      throw new ErroProblema('recusa-de-negocio', 409, 'Já ativo', 'O item já está ativo.', { codigo: 'ja-ativo' });
+      throw new ErroProblema('recusa-de-negocio', 409, 'Já ativo', 'O item já está ativo.', {
+        codigo: 'ja-ativo',
+      });
     try {
       const g = await this.fonte.mudarSituacao(this.contexto(req), d, codigo, versao, true, p.data.motivo);
       return this.resultado(d, 'reativar', g.codigo);
@@ -425,6 +441,7 @@ export class DominiosController {
   }
 
   @Post(':modulo/:recurso/itens/:codigo/excluir')
+  @AuditadoNoHandler('não muda estado: a exclusão é sempre recusada (inativar é a ação auditada)')
   @HttpCode(200)
   @Permissao('config.dominio.ler')
   async excluir(@Param('modulo') m: string, @Param('recurso') r: string): Promise<never> {

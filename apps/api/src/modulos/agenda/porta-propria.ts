@@ -59,6 +59,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { operacaoAgenda } from './operacoes.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
 import type {
@@ -1216,6 +1217,7 @@ export class PortaAgendaPropria implements PortaAgenda {
               'A teleconsulta do portal é marcada pelo módulo do portal.',
             );
           const encaixe = nome === 'agenda.encaixar';
+          const alertas: string[] = [];
           const m = await this.marcarNoHorario(tx, ctx, {
             agenda: e.agenda,
             data: e.data,
@@ -1227,8 +1229,16 @@ export class PortaAgendaPropria implements PortaAgenda {
             observacao: e.observacao ?? null,
             encaixe: encaixe ? ('motivo' in e ? String(e.motivo) : '') : null,
             remarcadaDe: null,
+            alertas,
           });
-          return { marcacao: m, agenda: e.agenda };
+          return alertas.length
+            ? {
+                marcacao: m,
+                agenda: e.agenda,
+                alerta: 'profissional-nao-credenciado',
+                alertaMotivo: alertas[0]!,
+              }
+            : { marcacao: m, agenda: e.agenda };
         },
         alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: Number(r.marcacao) }),
       });
@@ -2142,6 +2152,8 @@ export class PortaAgendaPropria implements PortaAgenda {
       /** Motivo do encaixe; null = vaga da grade. */
       encaixe: string | null;
       remarcadaDe: number | null;
+      /** ADR 0009, decisão 25: recebe o alerta de credenciamento (sem bloqueio) para o resultado. */
+      alertas?: string[];
     },
   ): Promise<number> {
     const a = await this.travarAgenda(tx, ctx, p.agenda);
@@ -2185,6 +2197,17 @@ export class PortaAgendaPropria implements PortaAgenda {
         'A agenda não atende este convênio: escolha outra agenda do mesmo procedimento ou outro convênio.',
         { campos: ['convenio'] },
       );
+    // ADR 0009, decisão 25: o médico da agenda sem credenciamento no convênio alerta ou, se o convênio pede, bloqueia.
+    const credenciamento = await conferirCredenciamentoNoFluxo(tx, {
+      profissionalId: a['profissional_id'] == null ? null : num(a['profissional_id']),
+      fontePagadoraId: num(fp['id']),
+      planoId: null,
+      estabelecimentoId: Number(ctx.estabelecimento),
+      data: p.data,
+      campo: 'convenio',
+    });
+    if (credenciamento)
+      p.alertas?.push(credenciamento.motivo ?? 'O profissional não é credenciado no convênio.');
     const canal = await tx.uma('SELECT id FROM canal_marcacao WHERE codigo = ? AND ativo', [p.canal]);
     if (!canal) throw configuracaoIncompleta(`canal de marcação "${p.canal}"`);
     const natureza = p.encaixe !== null ? 'encaixe' : p.retorno ? 'retorno' : 'primeira_vez';

@@ -6,12 +6,20 @@ import { type Adicional, adicionalDoDia, aplicarAdicional, type ModoAdicional } 
 import { baseDoItem } from './base-calculo.js';
 import { aplicarPercentual, centavos } from './dinheiro.js';
 import type { ItemProducao, RegraRepasse } from './regra.js';
+import { type RegraRepasseParticularIntegral, repasseIntegralVale } from './particular-integral.js';
 import { type RegraIgnorada, resolverRegra } from './resolver-regra.js';
 
 export interface OpcoesCalculo {
   readonly basePadrao: BaseCalculoRepasse;
   readonly modoAdicional: ModoAdicional;
   readonly feriados: ReadonlySet<string>;
+  /**
+   * ADR 0009: a marca da origem "consulta particular vai inteira ao médico" (regra de repasse 100%). Quando vale para
+   * o item, o repasse é o valor COBRADO inteiro, antes das regras comuns e sem adicional.
+   */
+  readonly integrais?: readonly RegraRepasseParticularIntegral[];
+  /** O grupo de faturamento de cada procedimento (para a regra integral por grupo). */
+  readonly grupoDoProcedimento?: ReadonlyMap<number, number>;
 }
 
 export interface MemoriaCalculo {
@@ -62,6 +70,37 @@ export function calcularItem(
   o: OpcoesCalculo,
 ): MemoriaCalculo {
   if (item.executante === null) return pendente(item, 'sem-executante');
+  const executante = item.executante;
+  const integral = (o.integrais ?? []).find((x) =>
+    repasseIntegralVale(x, {
+      fontePagadoraId: item.convenio,
+      profissionalId: executante,
+      itemFaturavelId: item.procedimento,
+      grupoFaturamentoId: o.grupoDoProcedimento?.get(item.procedimento) ?? null,
+    }),
+  );
+  if (integral) {
+    const base = centavos(item.cobrado);
+    const valor = aplicarPercentual(base, integral.percentual);
+    const dimensoes: DimensaoRegra[] = ['convenio', 'procedimento'];
+    if (integral.profissionalId !== null) dimensoes.unshift('profissional');
+    return {
+      item: item.id,
+      beneficiario: executante,
+      regra: null,
+      dimensoes,
+      ignoradas: [],
+      base: 'cobrado',
+      origemBase: 'cobrado',
+      baseCentavos: base,
+      percentual: integral.percentual,
+      valorFixoCentavos: 0,
+      valorSemAdicionalCentavos: valor,
+      adicional: null,
+      valorCentavos: valor,
+      pendencia: null,
+    };
+  }
   const r = resolverRegra(item, regras);
   if (!r.regra) return pendente(item, 'sem-regra', { ignoradas: r.ignoradas });
   const regra = r.regra;

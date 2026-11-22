@@ -33,6 +33,8 @@ import {
   esquemaCancelarAtendimento,
   esquemaConduzirNoConsultorio,
   esquemaEncerrarAtendimento,
+  esquemaLancarItem,
+  esquemaLancarProcedimentoExtra,
   rotuloConta,
   TIPOS_ATENDIMENTO,
   type TipoAtendimento,
@@ -69,6 +71,8 @@ import { ErroProblema } from '../../problema.filter.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
 import type { LiberacaoOperacao, RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { GravacaoFeita } from '../exames/public-api.js';
+import { lancarItem } from '../faturamento/operacoes.js';
+import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import type {
   ContextoAtendimento,
@@ -163,7 +167,11 @@ const pendenteGravacao = (recurso: string) =>
   );
 
 /** Lê e trava uma linha (SELECT ... FOR UPDATE pelo Escritor); null se não houver. */
-async function travarUma<T extends Linha = Linha>(tx: TxOperacao, sql: string, p: readonly unknown[]): Promise<T | null> {
+async function travarUma<T extends Linha = Linha>(
+  tx: TxOperacao,
+  sql: string,
+  p: readonly unknown[],
+): Promise<T | null> {
   const [x] = await tx.consultarParaAtualizar<T>(sql, p, { teto: 1 });
   return x ?? null;
 }
@@ -175,7 +183,9 @@ function recusar(x: Recusa | null, campos?: string[]): void {
 
 /** O dia de hoje (AAAA-MM-DD) no fuso do estabelecimento, dentro da transação. */
 async function hojeDoEstabelecimento(tx: TxOperacao, estabelecimento: number): Promise<string> {
-  const x = await tx.uma<{ f: unknown }>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [estabelecimento]);
+  const x = await tx.uma<{ f: unknown }>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [
+    estabelecimento,
+  ]);
   return localNoFuso(new Date(), texto(x?.f) ?? FUSO_PADRAO).slice(0, 10);
 }
 
@@ -237,7 +247,10 @@ function resumoDaLinha(l: Linha, fuso: string): AtendimentoResumo {
       crm: crm && /^\d{1,9}$/.test(crm) ? Number(crm) : 0,
       nome: texto(l['profissional_nome']) ?? '',
     },
-    especialidade: { codigo: inteiro(l['especialidade_id']) ?? 0, nome: texto(l['especialidade_nome']) ?? '' },
+    especialidade: {
+      codigo: inteiro(l['especialidade_id']) ?? 0,
+      nome: texto(l['especialidade_nome']) ?? '',
+    },
     unidade: inteiro(l['unidade_assistencial_id']) ?? 0,
     carater: caraterDoCodigoTiss(l['carater']),
     senha: l['senha_id'] ? { id: Number(l['senha_id']), texto: String(l['senha_texto'] ?? '') } : null,
@@ -285,7 +298,8 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
         'SELECT id FROM leito_observacao WHERE id = ? AND estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
         [r.leito, estabelecimento],
       );
-      if (!leito) throw recusa('leito-inexistente', 'Leito de observação não encontrado neste estabelecimento.');
+      if (!leito)
+        throw recusa('leito-inexistente', 'Leito de observação não encontrado neste estabelecimento.');
       // Na transferência, a entrada continua a da primeira alocação (a contagem das horas é do paciente).
       let entrada = new Date();
       if (r.anterior) {
@@ -293,7 +307,8 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
           'SELECT data_hora_entrada AS e FROM ocupacao_leito_observacao WHERE id = ? AND atendimento_id = ? AND excluido_em IS NULL',
           [r.anterior, a.id],
         );
-        if (!ant) throw recusa('ocupacao-anterior-desconhecida', 'A ocupação anterior não é deste atendimento.');
+        if (!ant)
+          throw recusa('ocupacao-anterior-desconhecida', 'A ocupação anterior não é deste atendimento.');
         entrada = instante(ant.e) ?? entrada;
       }
       const id = await tx
@@ -348,7 +363,11 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
   };
 }
 
-const TABELAS_GRAVACAO_DIRETA = ['atendimento', 'atendimento_situacao_historico', 'ocupacao_leito_observacao'];
+const TABELAS_GRAVACAO_DIRETA = [
+  'atendimento',
+  'atendimento_situacao_historico',
+  'ocupacao_leito_observacao',
+];
 
 export class PortaAtendimentoPropria implements PortaAtendimento {
   readonly destino = 'banco' as const;
@@ -370,18 +389,26 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
   /** O estabelecimento da sessão (pelo id, ou pelo código quando o mapa ainda não o tinha); sem ele, recusa. */
   private async estabelecimento(c: ContextoAtendimento, l: Leitor): Promise<number> {
     if (c.estabelecimento !== null) return c.estabelecimento;
-    const x = await l.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-      c.hospital,
-    ]);
+    const x = await l.uma<{ id: unknown }>(
+      'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+      [c.hospital],
+    );
     if (!x)
-      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento desconhecido', 'O estabelecimento da sessão não existe.');
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Estabelecimento desconhecido',
+        'O estabelecimento da sessão não existe.',
+      );
     return Number(x.id);
   }
 
   private async fuso(l: Leitor, estabelecimento: number): Promise<string> {
     const ja = this.fusos.get(estabelecimento);
     if (ja) return ja;
-    const x = await l.uma<{ f: unknown }>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [estabelecimento]);
+    const x = await l.uma<{ f: unknown }>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [
+      estabelecimento,
+    ]);
     const f = texto(x?.f) ?? FUSO_PADRAO;
     this.fusos.set(estabelecimento, f);
     return f;
@@ -428,9 +455,19 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     const operacao = OPERACOES_PROPRIAS[op];
     if (!operacao) {
       if (ENTRADAS_OPERACOES_ATENDIMENTO[op]) throw pendenteGravacao(`A operação ${op}`);
-      throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+      throw new ErroOperacao(
+        400,
+        'operacao-desconhecida',
+        'Operação desconhecida',
+        `A operação ${op} não existe.`,
+      );
     }
-    const r = await this.executor.executar(operacao, this.cliente, entrada, await this.contextoNucleo(c, ctx));
+    const r = await this.executor.executar(
+      operacao,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(c, ctx),
+    );
     return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
 
@@ -457,13 +494,18 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       trilha: () => ({ dados: linha()?.dadosDepois ?? null, motivo: linha()?.motivo ?? null }),
     });
     const chave = `direta:${randomUUID()}`;
-    await this.executor.executar(op, this.cliente, { chave }, {
-      cliente: this.cliente,
-      estabelecimento: est,
-      usuario: c.usuario,
-      correlacao: c.correlacao || 'atendimento',
-      chaveIdempotencia: chave,
-    });
+    await this.executor.executar(
+      op,
+      this.cliente,
+      { chave },
+      {
+        cliente: this.cliente,
+        estabelecimento: est,
+        usuario: c.usuario,
+        correlacao: c.correlacao || 'atendimento',
+        chaveIdempotencia: chave,
+      },
+    );
     if (!saida) throw new Error('Gravação direta sem resultado.');
     return (saida as { valor: T }).valor;
   }
@@ -540,14 +582,19 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         { teto: 500 },
       );
       const principal = procs.find((p) => booleano(p['principal']));
-      const conta = await l.uma('SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1', [
-        reg,
-      ]);
+      const conta = await l.uma(
+        'SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1',
+        [reg],
+      );
       const situacaoConta = conta ? 'aberta' : 'semConta';
       const termo = async (id: unknown) => {
         if (!id) return null;
-        const t = await l.uma('SELECT id, codigo_termo, descricao FROM termo_terminologia WHERE id = ?', [id]);
-        return t ? { id: Number(t['id']), codigo: String(t['codigo_termo']), nome: texto(t['descricao']) ?? '' } : null;
+        const t = await l.uma('SELECT id, codigo_termo, descricao FROM termo_terminologia WHERE id = ?', [
+          id,
+        ]);
+        return t
+          ? { id: Number(t['id']), codigo: String(t['codigo_termo']), nome: texto(t['descricao']) ?? '' }
+          : null;
       };
       const ids = await l.uma(
         'SELECT cid_principal_termo_terminologia_id AS c1, cid_secundario_termo_terminologia_id AS c2, solicitante_externo_id AS s FROM atendimento WHERE id = ?',
@@ -692,11 +739,18 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           [est],
           { teto: 1000 },
         )
-      ).map((x) => ({ id: Number(x['id']), descricao: texto(x['descricao']) ?? '', recepcao: Number(x['ponto_recepcao_id']) }));
+      ).map((x) => ({
+        id: Number(x['id']),
+        descricao: texto(x['descricao']) ?? '',
+        recepcao: Number(x['ponto_recepcao_id']),
+      }));
     });
   }
 
-  paAbertos(c: ContextoAtendimento, o: { hoje: string; unidade?: number }): Promise<{ itens: AtendimentoPa[]; cortada: boolean }> {
+  paAbertos(
+    c: ContextoAtendimento,
+    o: { hoje: string; unidade?: number },
+  ): Promise<{ itens: AtendimentoPa[]; cortada: boolean }> {
     return this.ler(c, async (l) => {
       const est = await this.estabelecimento(c, l);
       const fuso = await this.fuso(l, est);
@@ -719,7 +773,9 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           reg: r.reg,
           cabecalho: r.cabecalho,
           paciente: r.paciente.nome,
-          nascimento: x['data_nascimento'] ? localNoFuso(instante(x['data_nascimento'])!, 'UTC').slice(0, 10) : null,
+          nascimento: x['data_nascimento']
+            ? localNoFuso(instante(x['data_nascimento'])!, 'UTC').slice(0, 10)
+            : null,
           senha: r.senha?.texto ?? null,
           prioridade: '0',
           chegada: `${r.data}T${r.hora}:00`,
@@ -757,10 +813,12 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         { teto: 2000 },
       );
       const historico = Number(
-        (await l.uma<{ n: unknown }>(
-          "SELECT COUNT(*) AS n FROM ocupacao_leito_observacao WHERE estabelecimento_id = ? AND situacao = 'encerrada' AND excluido_em IS NULL",
-          [est],
-        ))?.n ?? 0,
+        (
+          await l.uma<{ n: unknown }>(
+            "SELECT COUNT(*) AS n FROM ocupacao_leito_observacao WHERE estabelecimento_id = ? AND situacao = 'encerrada' AND excluido_em IS NULL",
+            [est],
+          )
+        )?.n ?? 0,
       );
       return {
         leitos: linhas.map((x) => {
@@ -808,16 +866,22 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           WHERE pr.excluido_em IS NULL ORDER BY pf.nome`,
       );
       return {
-        convenios: (await lista('SELECT id, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome')).map(
-          (x) => ({ codigo: Number(x['id']), nome: texto(x['nome']) ?? '', ativo: x['situacao'] === 'ativa' }),
-        ),
+        convenios: (
+          await lista('SELECT id, nome, situacao FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome')
+        ).map((x) => ({
+          codigo: Number(x['id']),
+          nome: texto(x['nome']) ?? '',
+          ativo: x['situacao'] === 'ativa',
+        })),
         unidades: (
           await lista(
             'SELECT id, nome FROM unidade_assistencial WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY nome',
             [est],
           )
         ).map((x) => ({ codigo: Number(x['id']), nome: texto(x['nome']) ?? '' })),
-        especialidades: (await lista('SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao')).map((x) => ({
+        especialidades: (
+          await lista('SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao')
+        ).map((x) => ({
           codigo: Number(x['id']),
           nome: texto(x['descricao']) ?? '',
         })),
@@ -838,9 +902,9 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
             [est],
           )
         ).map((x) => ({ codigo: Number(x['id']), nome: texto(x['nome']) ?? '' })),
-        motivosExclusao: (await lista('SELECT id, descricao FROM motivo_cancelamento_operacao WHERE ativo ORDER BY descricao')).map(
-          (x) => ({ codigo: Number(x['id']), nome: texto(x['descricao']) ?? '' }),
-        ),
+        motivosExclusao: (
+          await lista('SELECT id, descricao FROM motivo_cancelamento_operacao WHERE ativo ORDER BY descricao')
+        ).map((x) => ({ codigo: Number(x['id']), nome: texto(x['descricao']) ?? '' })),
         heranca: {},
       };
     });
@@ -858,7 +922,11 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           [t.replace('.', '').toUpperCase(), t],
           { teto: 50 },
         )
-      ).map((x) => ({ id: Number(x['id']), codigo: String(x['codigo_termo']), nome: texto(x['descricao']) ?? '' })),
+      ).map((x) => ({
+        id: Number(x['id']),
+        codigo: String(x['codigo_termo']),
+        nome: texto(x['descricao']) ?? '',
+      })),
     );
   }
 
@@ -875,7 +943,11 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           [t, t],
           { teto: 50 },
         )
-      ).map((x) => ({ id: Number(x['id']), nome: texto(x['nome']) ?? '', registro: texto(x['registro']) ?? '' })),
+      ).map((x) => ({
+        id: Number(x['id']),
+        nome: texto(x['nome']) ?? '',
+        registro: texto(x['registro']) ?? '',
+      })),
     );
   }
 
@@ -938,14 +1010,22 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         [reg, est],
       );
       if (!a) return null;
-      const recusaSituacao = recusaCancelamento({ situacao: String(a['situacao']), temDesfecho: texto(a['desfecho']) !== null });
+      const recusaSituacao = recusaCancelamento({
+        situacao: String(a['situacao']),
+        temDesfecho: texto(a['desfecho']) !== null,
+      });
       const extras = Number(
-        (await l.uma<{ n: unknown }>(
-          'SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND NOT principal AND excluido_em IS NULL',
-          [reg],
-        ))?.n ?? 0,
+        (
+          await l.uma<{ n: unknown }>(
+            'SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND NOT principal AND excluido_em IS NULL',
+            [reg],
+          )
+        )?.n ?? 0,
       );
-      const conta = await l.uma('SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1', [reg]);
+      const conta = await l.uma(
+        'SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1',
+        [reg],
+      );
       const sen = await l.uma(
         'SELECT senha_emitida_id AS s FROM atendimento_senha WHERE atendimento_id = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
         [reg],
@@ -976,17 +1056,18 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       const x = await l.uma(`${SELECT_ATENDIMENTO} AND a.id = ?`, [est, reg]);
       if (!x) return null;
       const r = resumoDaLinha(x, fuso);
-      const alergia = await l.uma(
-        'SELECT alergia_texto_legado AS a FROM paciente WHERE id = ?',
-        [r.paciente.id],
-      );
+      const alergia = await l.uma('SELECT alergia_texto_legado AS a FROM paciente WHERE id = ?', [
+        r.paciente.id,
+      ]);
       return {
         reg: r.reg,
         idPaciente: r.paciente.id ?? 0,
         prontuario: r.paciente.prontuario,
         nome: r.paciente.nome,
         nomeSocial: texto(x['nome_social']),
-        nascimento: x['data_nascimento'] ? localNoFuso(instante(x['data_nascimento'])!, 'UTC').slice(0, 10) : null,
+        nascimento: x['data_nascimento']
+          ? localNoFuso(instante(x['data_nascimento'])!, 'UTC').slice(0, 10)
+          : null,
         convenio: r.convenio.nome,
         data: r.data,
         hora: r.hora,
@@ -1052,7 +1133,13 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
   }
 
   naoIdentificados(): Promise<
-    { paciente: number; prontuario: number; caracteristicas: string; marcadoEm: string; identificadoEm: string | null }[]
+    {
+      paciente: number;
+      prontuario: number;
+      caracteristicas: string;
+      marcadoEm: string;
+      identificadoEm: string | null;
+    }[]
   > {
     return pendenteLeitura('Pacientes não identificados');
   }
@@ -1081,13 +1168,17 @@ async function exigirLocal(tx: TxOperacao, local: number | null | undefined): Pr
     'SELECT id FROM local_atendimento WHERE id = ? AND estabelecimento_id <=> ? AND ativo AND excluido_em IS NULL',
     [local, tx.contexto.estabelecimento],
   );
-  if (!x) throw recusa('local-inexistente', 'Local de atendimento não encontrado neste estabelecimento.', { campos: ['local'] });
+  if (!x)
+    throw recusa('local-inexistente', 'Local de atendimento não encontrado neste estabelecimento.', {
+      campos: ['local'],
+    });
   return local;
 }
 
 /** A marcação volta a ficar sem atendimento (exclusão do atendimento aberto por engano). */
 async function desfazerMarcacao(tx: TxOperacao, atendimento: number): Promise<void> {
-  const m = await travarUma<{ id: unknown; versao: unknown }>(tx,
+  const m = await travarUma<{ id: unknown; versao: unknown }>(
+    tx,
     'SELECT id, versao FROM marcacao_horario WHERE atendimento_id = ? AND excluido_em IS NULL',
     [atendimento],
   );
@@ -1110,13 +1201,20 @@ async function travarAtendimento(tx: TxOperacao, id: number) {
     { teto: 1 },
   );
   if (!a) throw recusa('registro-inexistente', 'O atendimento não existe neste estabelecimento.');
-  return { id, numero: String(a['numero']), situacao: String(a['situacao']), versao: Number(a['versao']), desfecho: texto(a['desfecho']) };
+  return {
+    id,
+    numero: String(a['numero']),
+    situacao: String(a['situacao']),
+    versao: Number(a['versao']),
+    desfecho: texto(a['desfecho']),
+  };
 }
 
 async function senhaDoAtendimento(tx: TxOperacao, id: number): Promise<number> {
-  const s = await tx.uma('SELECT senha_emitida_id AS s FROM atendimento_senha WHERE atendimento_id = ? AND excluido_em IS NULL ORDER BY id LIMIT 1', [
-    id,
-  ]);
+  const s = await tx.uma(
+    'SELECT senha_emitida_id AS s FROM atendimento_senha WHERE atendimento_id = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+    [id],
+  );
   return inteiro(s?.['s']) ?? 0;
 }
 
@@ -1146,14 +1244,17 @@ const OPERACAO_CONDUZIR = definirOperacao({
   entrada: esquemaConduzirNoConsultorio,
   acao: 'alteracao',
   async gravar(tx, e: ConduzirNoConsultorioEntrada) {
-    if (tx.contexto.usuario === null) throw recusa('usuario-obrigatorio', 'A chamada exige o usuário do cliente.');
+    if (tx.contexto.usuario === null)
+      throw recusa('usuario-obrigatorio', 'A chamada exige o usuário do cliente.');
     const a = await travarAtendimento(tx, e.atendimento);
     const local = (await exigirLocal(tx, e.local)) as number;
     const chamadas = Number(
-      (await tx.uma<{ n: unknown }>(
-        'SELECT COUNT(*) AS n FROM chamada_painel WHERE atendimento_id = ? AND excluido_em IS NULL',
-        [a.id],
-      ))?.n ?? 0,
+      (
+        await tx.uma<{ n: unknown }>(
+          'SELECT COUNT(*) AS n FROM chamada_painel WHERE atendimento_id = ? AND excluido_em IS NULL',
+          [a.id],
+        )
+      )?.n ?? 0,
     );
     recusar(recusaConducao(e.evento, situacaoNoConsultorio({ situacao: a.situacao, chamado: chamadas > 0 })));
     const senha = await senhaDoAtendimento(tx, a.id);
@@ -1177,7 +1278,10 @@ const OPERACAO_CONDUZIR = definirOperacao({
         repeticao: chamadas,
       });
       if (senha) {
-        const s = await tx.uma<{ versao: unknown; chamadas: unknown }>('SELECT versao, chamadas FROM senha_emitida WHERE id = ?', [senha]);
+        const s = await tx.uma<{ versao: unknown; chamadas: unknown }>(
+          'SELECT versao, chamadas FROM senha_emitida WHERE id = ?',
+          [senha],
+        );
         if (s)
           await tx.alterar('senha_emitida', senha, Number(s.versao), {
             chamadas: Number(s.chamadas) + 1,
@@ -1197,7 +1301,8 @@ const OPERACAO_ENCERRAR = definirOperacao({
   acao: 'alteracao',
   async gravar(tx, e) {
     const a = await travarAtendimento(tx, e.atendimento);
-    if (a.desfecho || a.situacao === 'encerrado') throw recusa('atendimento-encerrado', 'O atendimento já tem desfecho registrado.');
+    if (a.desfecho || a.situacao === 'encerrado')
+      throw recusa('atendimento-encerrado', 'O atendimento já tem desfecho registrado.');
     if (a.situacao === 'cancelado') throw recusa('atendimento-cancelado', 'O atendimento foi excluído.');
     const d = DESFECHOS.find((x) => x.codigo === e.desfecho);
     if (!d) throw recusa('desfecho-desconhecido', 'Desfecho desconhecido.');
@@ -1215,20 +1320,39 @@ const OPERACAO_ENCERRAR = definirOperacao({
         [e.profissional ?? 0],
       );
       if (!p)
-        throw recusa('profissional-sem-cbo', 'Só o profissional ativo no cadastro registra o desfecho clínico.', {
-          campos: ['profissional'],
-        });
-      if (!ehMedico({ codigoCbo: texto(p.cbo), siglaConselho: texto(p.sigla), inscricaoAtiva: ['ativa', 'provisoria'].includes(texto(p.sit) ?? '') }))
-        throw recusa('categoria-nao-permitida', `Só médico pode registrar ${d.rotulo.toLowerCase()} (Lei 12.842/2013).`, {
-          campos: ['profissional'],
-        });
+        throw recusa(
+          'profissional-sem-cbo',
+          'Só o profissional ativo no cadastro registra o desfecho clínico.',
+          {
+            campos: ['profissional'],
+          },
+        );
+      if (
+        !ehMedico({
+          codigoCbo: texto(p.cbo),
+          siglaConselho: texto(p.sigla),
+          inscricaoAtiva: ['ativa', 'provisoria'].includes(texto(p.sit) ?? ''),
+        })
+      )
+        throw recusa(
+          'categoria-nao-permitida',
+          `Só médico pode registrar ${d.rotulo.toLowerCase()} (Lei 12.842/2013).`,
+          {
+            campos: ['profissional'],
+          },
+        );
     }
     const agora = new Date();
     await mudarSituacao(
       tx,
       a,
       'encerrado',
-      { desfecho: d.codigo, saida_em: agora, alta_medica_em: d.atoMedico ? agora : null, alta_profissional_id: e.profissional ?? null },
+      {
+        desfecho: d.codigo,
+        saida_em: agora,
+        alta_medica_em: d.atoMedico ? agora : null,
+        alta_profissional_id: e.profissional ?? null,
+      },
       { profissional_id: e.profissional ?? null, observacao: e.destino ?? null },
     );
     // A observação em curso termina junto (o leito fica livre).
@@ -1244,7 +1368,9 @@ const OPERACAO_ENCERRAR = definirOperacao({
       );
     return { reg: a.id, cabecalho: a.numero, senha, desfecho: d.codigo };
   },
-  eventos: (e) => [{ tipo: 'atendimento.encerrado', carga: { atendimento: e.atendimento, desfecho: e.desfecho } }],
+  eventos: (e) => [
+    { tipo: 'atendimento.encerrado', carga: { atendimento: e.atendimento, desfecho: e.desfecho } },
+  ],
   alvo: (e) => ({ tabela: 'atendimento', id: e.atendimento }),
 });
 
@@ -1255,23 +1381,39 @@ const OPERACAO_CANCELAR = definirOperacao({
   acao: 'alteracao',
   critica: true,
   async gravar(tx, e: CancelarAtendimentoEntrada) {
-    if (tx.contexto.usuario === null) throw recusa('usuario-obrigatorio', 'A exclusão exige o usuário do cliente.');
+    if (tx.contexto.usuario === null)
+      throw recusa('usuario-obrigatorio', 'A exclusão exige o usuário do cliente.');
     const a = await travarAtendimento(tx, e.atendimento);
     recusar(recusaCancelamento({ situacao: a.situacao, temDesfecho: a.desfecho !== null }));
-    const motivo = await tx.uma('SELECT id FROM motivo_cancelamento_operacao WHERE id = ? AND ativo', [e.motivo]);
-    if (!motivo) throw recusa('motivo-inexistente', 'Motivo de exclusão não encontrado.', { campos: ['motivo'] });
+    const motivo = await tx.uma('SELECT id FROM motivo_cancelamento_operacao WHERE id = ? AND ativo', [
+      e.motivo,
+    ]);
+    if (!motivo)
+      throw recusa('motivo-inexistente', 'Motivo de exclusão não encontrado.', { campos: ['motivo'] });
     const extras = Number(
-      (await tx.uma<{ n: unknown }>(
-        'SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND NOT principal AND excluido_em IS NULL',
-        [a.id],
-      ))?.n ?? 0,
+      (
+        await tx.uma<{ n: unknown }>(
+          'SELECT COUNT(*) AS n FROM atendimento_procedimento WHERE atendimento_id = ? AND NOT principal AND excluido_em IS NULL',
+          [a.id],
+        )
+      )?.n ?? 0,
     );
     if (extras > 0)
-      throw recusa('exclusao-recusada', 'O atendimento tem procedimento extra lançado: estorne antes de excluir.', {
-        dependentes: [{ rotulo: 'Procedimentos extras', quantidade: extras, amostra: [], origem: 'logica' }],
-      });
-    const conta = await tx.uma('SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1', [a.id]);
-    if (conta) throw recusa('exclusao-recusada', 'O atendimento tem conta: a exclusão passa pelo faturamento.');
+      throw recusa(
+        'exclusao-recusada',
+        'O atendimento tem procedimento extra lançado: estorne antes de excluir.',
+        {
+          dependentes: [
+            { rotulo: 'Procedimentos extras', quantidade: extras, amostra: [], origem: 'logica' },
+          ],
+        },
+      );
+    const conta = await tx.uma(
+      'SELECT id FROM atendimento_conta WHERE atendimento_id = ? AND excluido_em IS NULL LIMIT 1',
+      [a.id],
+    );
+    if (conta)
+      throw recusa('exclusao-recusada', 'O atendimento tem conta: a exclusão passa pelo faturamento.');
     await tx.incluir('cancelamento_atendimento', {
       atendimento_id: a.id,
       motivo_cancelamento_operacao_id: e.motivo,
@@ -1296,13 +1438,17 @@ const OPERACAO_CANCELAR = definirOperacao({
     const senha = await senhaDoAtendimento(tx, a.id);
     // A senha só volta à fila se estava em atendimento e é do dia (a recepção pode abrir o atendimento de novo).
     if (senha) {
-      const s = await travarUma<{ situacao: unknown; dia: unknown; versao: unknown }>(tx,
+      const s = await travarUma<{ situacao: unknown; dia: unknown; versao: unknown }>(
+        tx,
         "SELECT situacao, DATE_FORMAT(data_referencia, '%Y-%m-%d') AS dia, versao FROM senha_emitida WHERE id = ?",
         [senha],
       );
       const hoje = await hojeDoEstabelecimento(tx, Number(tx.contexto.estabelecimento));
       if (s && senhaVoltaAFila({ situacao: String(s.situacao), doDia: s.dia === hoje }))
-        await tx.alterar('senha_emitida', senha, Number(s.versao), { situacao: 'aguardando', encerrada_em: null });
+        await tx.alterar('senha_emitida', senha, Number(s.versao), {
+          situacao: 'aguardando',
+          encerrada_em: null,
+        });
     }
     return { reg: a.id, cabecalho: a.numero, senha, motivo: e.motivo };
   },
@@ -1314,11 +1460,14 @@ const OPERACAO_CANCELAR = definirOperacao({
 const OPERACAO_ABRIR = definirOperacao({
   nome: 'atendimento.abrir-atendimento',
   tabelas: TABELAS_ATENDIMENTO,
-  entrada: ENTRADAS_OPERACOES_ATENDIMENTO['atendimento.abrirAtendimento'] as z.ZodType<Record<string, unknown>>,
+  entrada: ENTRADAS_OPERACOES_ATENDIMENTO['atendimento.abrirAtendimento'] as z.ZodType<
+    Record<string, unknown>
+  >,
   acao: 'inclusao',
   async gravar(tx, e) {
     const est = tx.contexto.estabelecimento;
-    if (est === null) throw recusa('estabelecimento-obrigatorio', 'Escolha o estabelecimento para abrir o atendimento.');
+    if (est === null)
+      throw recusa('estabelecimento-obrigatorio', 'Escolha o estabelecimento para abrir o atendimento.');
     const num = (k: string) => (typeof e[k] === 'number' ? (e[k] as number) : null);
     const exigir = async (sql: string, p: readonly unknown[], codigo: string, msg: string, campo: string) => {
       const x = await tx.uma(sql, p);
@@ -1333,7 +1482,9 @@ const OPERACAO_ABRIR = definirOperacao({
       'paciente',
     );
     if (!['ativo', 'provisorio'].includes(String(pac['situacao'])))
-      throw recusa('paciente-inativo', 'Cadastro inativo ou unificado: abra pelo cadastro que ficou ativo.', { campos: ['paciente'] });
+      throw recusa('paciente-inativo', 'Cadastro inativo ou unificado: abra pelo cadastro que ficou ativo.', {
+        campos: ['paciente'],
+      });
     const conv = await exigir(
       'SELECT id, situacao FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL',
       [num('convenio')],
@@ -1341,7 +1492,8 @@ const OPERACAO_ABRIR = definirOperacao({
       'Convênio não encontrado.',
       'convenio',
     );
-    if (conv['situacao'] !== 'ativa') throw recusa('convenio-inativo', 'Convênio inativo.', { campos: ['convenio'] });
+    if (conv['situacao'] !== 'ativa')
+      throw recusa('convenio-inativo', 'Convênio inativo.', { campos: ['convenio'] });
     const prof = await exigir(
       "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
       [num('profissional')],
@@ -1380,14 +1532,21 @@ const OPERACAO_ABRIR = definirOperacao({
     );
     const esp = num('especialidade') ? num('especialidade') : null;
     if (esp !== null)
-      await exigir('SELECT id FROM especialidade_medica WHERE id = ? AND ativo', [esp], 'especialidade-inexistente', 'Especialidade não encontrada.', 'especialidade');
+      await exigir(
+        'SELECT id FROM especialidade_medica WHERE id = ? AND ativo',
+        [esp],
+        'especialidade-inexistente',
+        'Especialidade não encontrada.',
+        'especialidade',
+      );
     const local = await exigirLocal(tx, num('local'));
     const hoje = await hojeDoEstabelecimento(tx, est);
     // Senha da recepção: do estabelecimento, do dia, na fila e sem outro atendimento ativo (regra no domínio).
     const senha = num('senha');
     let senhaVersao = 0;
     if (senha) {
-      const sx = await travarUma<{ situacao: unknown; dia: unknown; versao: unknown; outro: unknown }>(tx,
+      const sx = await travarUma<{ situacao: unknown; dia: unknown; versao: unknown; outro: unknown }>(
+        tx,
         `SELECT se.situacao, DATE_FORMAT(se.data_referencia, '%Y-%m-%d') AS dia, se.versao,
                 (SELECT COUNT(*) FROM atendimento_senha ats JOIN atendimento ao ON ao.id = ats.atendimento_id
                   WHERE ats.senha_emitida_id = se.id AND ats.excluido_em IS NULL AND ao.excluido_em IS NULL
@@ -1410,7 +1569,13 @@ const OPERACAO_ABRIR = definirOperacao({
     const marcacao = num('marcacao');
     let marcacaoVersao = 0;
     if (marcacao) {
-      const mx = await travarUma<{ paciente_id: unknown; atendimento_id: unknown; dia: unknown; versao: unknown }>(tx,
+      const mx = await travarUma<{
+        paciente_id: unknown;
+        atendimento_id: unknown;
+        dia: unknown;
+        versao: unknown;
+      }>(
+        tx,
         `SELECT mh.paciente_id, mh.atendimento_id, DATE_FORMAT(ha.data_referencia, '%Y-%m-%d') AS dia, mh.versao
            FROM marcacao_horario mh JOIN horario_agenda ha ON ha.id = mh.horario_agenda_id
           WHERE mh.id = ? AND mh.estabelecimento_id = ? AND mh.excluido_em IS NULL`,
@@ -1431,34 +1596,55 @@ const OPERACAO_ABRIR = definirOperacao({
     const tele = (e['teleconsulta'] as { id: number } | undefined)?.id ?? null;
     let teleVersao = 0;
     if (tele !== null) {
-      const tx1 = await travarUma<{ versao: unknown }>(tx,
+      const tx1 = await travarUma<{ versao: unknown }>(
+        tx,
         `SELECT versao FROM teleconsulta WHERE id = ? AND estabelecimento_id = ? AND marcacao_horario_id <=> ? AND paciente_id = ?
             AND atendimento_id IS NULL AND situacao NOT IN ('encerrada', 'cancelada') AND excluido_em IS NULL`,
         [tele, est, marcacao, Number(pac['id'])],
       );
       if (!tx1)
-        throw recusa('teleconsulta-indisponivel', 'A teleconsulta não é desta marcação, deste paciente ou já tem atendimento.', {
-          campos: ['teleconsulta'],
-        });
+        throw recusa(
+          'teleconsulta-indisponivel',
+          'A teleconsulta não é desta marcação, deste paciente ou já tem atendimento.',
+          {
+            campos: ['teleconsulta'],
+          },
+        );
       teleVersao = Number(tx1.versao);
     }
     // Responsável declarado na recepção: o parentesco pelo código do domínio do cliente (sem ele, só nome e telefone).
     const resp = e['responsavel'] as { nome: string; parentesco: number; telefone?: string } | undefined;
     const parentesco = resp
       ? inteiro(
-          (await tx.uma<{ id: unknown }>('SELECT id FROM grau_parentesco_dependente WHERE codigo = ? AND ativo', [String(resp.parentesco)]))?.id,
+          (
+            await tx.uma<{ id: unknown }>(
+              'SELECT id FROM grau_parentesco_dependente WHERE codigo = ? AND ativo',
+              [String(resp.parentesco)],
+            )
+          )?.id,
         )
       : null;
     // Plano da fonte pagadora, pelo nome (o contrato ainda manda o nome; pedido ao orquestrador para mandar o id).
     const planoNome = texto(e['plano']);
     const plano = planoNome
       ? inteiro(
-          (await tx.uma<{ id: unknown }>(
-            'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND (codigo = ? OR UPPER(descricao) = UPPER(?)) AND excluido_em IS NULL LIMIT 1',
-            [Number(conv['id']), planoNome, planoNome],
-          ))?.id,
+          (
+            await tx.uma<{ id: unknown }>(
+              'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND (codigo = ? OR UPPER(descricao) = UPPER(?)) AND excluido_em IS NULL LIMIT 1',
+              [Number(conv['id']), planoNome, planoNome],
+            )
+          )?.id,
         )
       : null;
+    // ADR 0009, decisão 25: o médico sem credenciamento no convênio (ou no plano) alerta ou, se o convênio pede, bloqueia.
+    const credenciamento = await conferirCredenciamentoNoFluxo(tx, {
+      profissionalId: Number(prof['id']),
+      fontePagadoraId: Number(conv['id']),
+      planoId: plano ?? null,
+      estabelecimentoId: est,
+      data: hoje,
+      campo: 'profissional',
+    });
     const numero = await tx.proximoNumero('atendimento');
     const agora = new Date();
     const id = await tx.incluir('atendimento', {
@@ -1518,14 +1704,26 @@ const OPERACAO_ABRIR = definirOperacao({
         'Procedimento não encontrado.',
         'procedimento',
       );
-      await tx.incluir('atendimento_procedimento', { atendimento_id: id, sequencia: 1, item_faturavel_id: proc, quantidade: 1, principal: true });
+      await tx.incluir('atendimento_procedimento', {
+        atendimento_id: id,
+        sequencia: 1,
+        item_faturavel_id: proc,
+        quantidade: 1,
+        principal: true,
+      });
     }
     if (senha) {
-      await tx.incluir('atendimento_senha', { atendimento_id: id, senha_emitida_id: senha }).catch((x: unknown) => {
-        if (restricaoUnicaViolada(x)) throw recusa('senha-ja-atendida', 'A senha já tem atendimento aberto.', { campos: ['senha'] });
-        throw x;
+      await tx
+        .incluir('atendimento_senha', { atendimento_id: id, senha_emitida_id: senha })
+        .catch((x: unknown) => {
+          if (restricaoUnicaViolada(x))
+            throw recusa('senha-ja-atendida', 'A senha já tem atendimento aberto.', { campos: ['senha'] });
+          throw x;
+        });
+      await tx.alterar('senha_emitida', senha, senhaVersao, {
+        situacao: 'em_atendimento',
+        paciente_id: Number(pac['id']),
       });
-      await tx.alterar('senha_emitida', senha, senhaVersao, { situacao: 'em_atendimento', paciente_id: Number(pac['id']) });
     }
     if (marcacao) {
       // A marcação é dada como atendida na mesma transação (o paciente chegou e o atendimento foi aberto).
@@ -1540,10 +1738,106 @@ const OPERACAO_ABRIR = definirOperacao({
       });
     }
     if (tele !== null) await tx.alterar('teleconsulta', tele, teleVersao, { atendimento_id: id });
-    return { reg: id, cabecalho: numero.formatado, tipo: String(e['tipo']), senha: senha ?? 0, marcacao: marcacao ?? 0 };
+    const aberto = {
+      reg: id,
+      cabecalho: numero.formatado,
+      tipo: String(e['tipo']),
+      senha: senha ?? 0,
+      marcacao: marcacao ?? 0,
+    };
+    return credenciamento
+      ? { ...aberto, alerta: 'profissional-nao-credenciado', alertaMotivo: credenciamento.motivo ?? '' }
+      : aberto;
   },
   eventos: (_e, r) => [{ tipo: 'atendimento.aberto', carga: { atendimento: r.reg } }],
   alvo: (_e, r) => ({ tabela: 'atendimento', id: r.reg }),
+});
+
+/** Grupo do lançamento do faturamento pelo tipo do item faturável (honorário 2; procedimento e serviço 3). */
+const GRUPO_DO_EXTRA: Readonly<Record<string, 2 | 3>> = { honorario: 2, procedimento: 3, servico: 3 };
+
+/**
+ * O procedimento extra da recepção na conta do atendimento (ADR 0009): pelo lançamento do faturamento, na mesma
+ * transação, com o preço da regra particular do médico ou da agenda (antes da tabela) ou da tabela do convênio, o
+ * credenciamento (alerta ou bloqueio) e o total da conta.
+ */
+const OPERACAO_LANCAR_EXTRA = definirOperacao({
+  nome: 'atendimento.lancar-procedimento-extra',
+  tabelas: [...lancarItem.tabelas],
+  entrada: esquemaLancarProcedimentoExtra,
+  acao: 'inclusao',
+  async gravar(tx, e, ctx) {
+    const est = tx.contexto.estabelecimento;
+    if (est === null)
+      throw recusa('estabelecimento-obrigatorio', 'Escolha o estabelecimento do atendimento.');
+    const a = await tx.uma(
+      'SELECT id, situacao FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [Number(e.atendimento), est],
+    );
+    if (!a)
+      throw recusa('atendimento-inexistente', 'Atendimento não encontrado.', { campos: ['atendimento'] });
+    if (String(a['situacao']) === 'cancelado')
+      throw recusa('atendimento-cancelado', 'O atendimento foi cancelado.', { campos: ['atendimento'] });
+    const vinculo = await tx.uma(
+      `SELECT ac.conta_hospitalar_id FROM atendimento_conta ac
+        WHERE ac.atendimento_id = ? AND ac.excluido_em IS NULL ORDER BY ac.id LIMIT 1`,
+      [Number(a['id'])],
+    );
+    if (!vinculo)
+      throw recusa('atendimento-sem-conta', 'O atendimento não tem conta: abra a conta antes de lançar.');
+    const conta = Number(vinculo['conta_hospitalar_id']);
+    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [conta], { teto: 1 });
+    const item = await tx.uma(
+      `SELECT tipo_item FROM item_faturavel WHERE codigo = ? AND situacao = 'ativo' AND excluido_em IS NULL
+        AND tipo_item IN ('honorario','procedimento','servico') LIMIT 1`,
+      [String(e.procedimento)],
+    );
+    const grupo = item ? GRUPO_DO_EXTRA[String(item['tipo_item'])] : undefined;
+    if (!grupo)
+      throw recusa(
+        'procedimento-fora-da-tabela',
+        'O procedimento não está no catálogo de itens faturáveis.',
+        {
+          campos: ['procedimento'],
+        },
+      );
+    const f = await tx.uma<{ f: unknown }>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [
+      est,
+    ]);
+    const agora = localNoFuso(new Date(), texto(f?.f) ?? FUSO_PADRAO);
+    const r = await lancarItem.gravar(
+      tx,
+      esquemaLancarItem.parse({
+        conta,
+        tipo: grupo,
+        codigo: e.procedimento,
+        quantidade: e.quantidade,
+        data: agora.slice(0, 10),
+        hora: agora.slice(11, 16),
+        local: 0,
+        ato: 0,
+        executante: e.profissional ?? null,
+      }),
+      ctx,
+    );
+    const seq = await tx.uma(
+      'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND id <= ?',
+      [conta, Number(r['id'])],
+    );
+    return {
+      reg: Number(a['id']),
+      seq: Number(seq?.['n'] ?? 1),
+      procedimento: e.procedimento,
+      quantidade: e.quantidade,
+      conta,
+      valor: Number(r['valor'] ?? 0),
+      ...(r['alerta'] ? { alerta: String(r['alerta']), alertaMotivo: String(r['alertaMotivo'] ?? '') } : {}),
+    };
+  },
+  eventos: (_e, r) => [
+    { tipo: 'faturamento.item.lancado', carga: { conta: Number(r['conta']), atendimento: Number(r['reg']) } },
+  ],
+  alvo: (_e, r) => ({ tabela: 'conta_hospitalar', id: Number(r['conta']) }),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cada operação valida a própria entrada (Zod)
@@ -1552,5 +1846,5 @@ const OPERACOES_PROPRIAS: Readonly<Record<string, Operacao<any, ResultadoOperaca
   'atendimento.cancelarAtendimento': OPERACAO_CANCELAR,
   'atendimento.encerrarAtendimento': OPERACAO_ENCERRAR,
   'atendimento.conduzirNoConsultorio': OPERACAO_CONDUZIR,
+  'atendimento.lancarProcedimentoExtra': OPERACAO_LANCAR_EXTRA,
 };
-

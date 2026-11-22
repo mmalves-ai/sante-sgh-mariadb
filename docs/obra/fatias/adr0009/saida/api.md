@@ -83,3 +83,28 @@ Prova: `tsc` de `apps/api` ok; `eslint` e `prettier` ok; unidade `faturamento` e
 6. Gravar `regra_repasse_item` a 100% pela porta de repasse e pelo conector, quando a origem marca a consulta
    particular integral, e usar `repasseIntegralVale` no cálculo, com teste do repasse sobre o valor cobrado pela regra.
 
+
+## Volta 2 (rótulo `adr9b_api`, 2026-11-22), fechada pelo teto G6
+Prova: `tsc` de `apps/api`, `persistencia` e `dominio-repasse` ok (0 erros); `eslint` e `prettier` ok nos arquivos do
+lote; `dominio-repasse` 60/60 (3 testes novos); `permissoes:verificar` VERDE (0 achados). Integração NÃO rodada.
+- Pendência 2: `calcularItem` usa `repasseIntegralVale` (`OpcoesCalculo.integrais` e `grupoDoProcedimento`): 100% do
+  valor cobrado, antes da regra comum e sem adicional.
+- Pendência 4: porta `codigoParticularDoParametro` (estabelecimento vence rede, vigente); o serviço resolve por
+  estabelecimento quando o construtor não fixa o código.
+- Pendência 5: porta `incluirConvenio`; operação `convenio.incluir-convenio` (credencia todos os ativos na mesma
+  transação com `credenciaTodosAoCriar`; particular recusa); rota `POST /api/convenios` (`convenio.contrato.editar`,
+  executor).
+- Pendência 6: `precos/credenciamento-fluxo.ts` (`conferirCredenciamentoNoFluxo`), usado na marcação
+  (`marcarNoHorario`: médico da agenda; resultado leva `alerta`) e na abertura do atendimento (com o plano).
+- Pendência 10: `atendimento.lancarProcedimentoExtra` na porta própria, pelo `lancarItem` do faturamento.
+- Alvo `exame` passado ao domínio no `lancarItem` (item agendável de exame com agenda da marcação).
+- Permissões: `@AuditadoNoHandler` nas 4 rotas (onboarding grava `cliente_evento`; a exclusão de domínio sempre recusa).
+
+### Falta
+1. Pendência 7: teste de integração da regra da agenda no lançamento com marcação sintética
+   (`apps/api/src/modulos/faturamento/porta-propria.int.spec.ts`).
+2. Integração no cliente `adr9b_api` dos caminhos novos: `POST /convenios` com e sem credencia-todos, marcação e abertura
+   com alerta/bloqueio, `lancarProcedimentoExtra` no banco próprio, `codigoParticularDoParametro`.
+3. Repasse na API: carregar as regras integrais (`regra_repasse_item` 100% da fonte particular) e o grupo do
+   procedimento em `repasse/servico.ts` `opcoesCalculo` (hoje o motor aceita, a API não passa).
+4. Suíte de unidade de `apps/api` não rodada depois da mudança.

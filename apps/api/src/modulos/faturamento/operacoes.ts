@@ -419,11 +419,14 @@ async function regraParticularDoItem(
   data: string,
 ): Promise<RegraPrecoParticular | null> {
   if (!quem.particular) return null;
-  const consulta = await tx.uma<Linha>(
-    `SELECT id FROM item_agendavel WHERE item_faturavel_id = ? AND tipo_item = 'consulta' AND excluido_em IS NULL
-      LIMIT 1`,
+  const agendavel = await tx.consultar<Linha>(
+    `SELECT DISTINCT tipo_item FROM item_agendavel WHERE item_faturavel_id = ? AND tipo_item IN ('consulta','exame')
+        AND excluido_em IS NULL`,
     [n(item['id'])],
   );
+  const consulta = agendavel.some((x) => texto(x['tipo_item']) === 'consulta') ? true : null;
+  // O exame da agenda (alvo "exame", só da agenda): o item agendável de exame lançado no atendimento da marcação.
+  const exame = quem.agenda !== null && agendavel.some((x) => texto(x['tipo_item']) === 'exame');
   const pedido = {
     fontePagadoraId: conta.fonte,
     profissionalId: quem.profissional,
@@ -438,6 +441,7 @@ async function regraParticularDoItem(
       itemFaturavelId: n(item['id']),
       grupoFaturamentoId: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
       consulta: consulta !== null,
+      exame,
     },
   });
 }

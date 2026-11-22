@@ -9,6 +9,8 @@
 //   GET  /api/convenios/:id/opcoes-credenciamento                         convenio.credenciamento.ler
 //   PUT  /api/convenios/:id/opcoes-credenciamento                         convenio.credenciamento.editar
 //   POST /api/convenios/:id/credenciar-todos                              convenio.credenciamento.editar
+//   POST /api/convenios                                                   convenio.contrato.editar (convênio novo;
+//        com credenciaTodosAoCriar, credencia os médicos ativos na mesma transação: decisão 26)
 //   GET  /api/agendas/:id/estruturada?data                                agenda.estruturada.ler
 //   GET  /api/agendas/:id/respostas?data&convenio&plano&idade&sexo&item&retorno&encaixe   agenda.estruturada.ler
 //   POST /api/agendas/:id/coberturas | restricoes | preparos              agenda.estruturada.editar
@@ -212,6 +214,14 @@ export class AgendaPrecoController {
   definirOpcoes(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const e = { ...objeto(corpo), fontePagadoraId: inteiro(id, 'convênio', [1, 2147483647]) };
     return this.rodar(() => this.s().definirOpcoes(contextoOperacao(req, 'convenio-opcoes'), e));
+  }
+
+  @Post('convenios')
+  @HttpCode(201)
+  @Permissao('convenio.contrato.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  incluirConvenio(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() => this.s().incluirConvenio(contextoOperacao(req, 'convenio-novo'), objeto(corpo)));
   }
 
   @Post('convenios/:id/credenciar-todos')
