@@ -119,3 +119,22 @@ Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam
   (`esperado_destino`).
 - O painel (`/plataforma/clientes`) chama `criar_cliente.py --json` e `conector.sh listar|vincular --admin`; o
   enfileirar é da API. Prova: `apps/api/src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts`.
+
+## Agenda estruturada a partir do texto (ADR 0009)
+
+- **Mapa:** `REAGENDA.ID` e `SIAGENDA.ID` → `agenda_servico.codigo_origem`; `REAGENDA.PERINI/PERFIN` →
+  `agenda_servico.vigencia_inicio/fim`; `TBCONVEN.PERMITE_ATEND` → `fonte_pagadora.codigo_permissao_atendimento`;
+  `fonte_pagadora.credencia_todos_ao_criar` ligado no cliente importado (decisão 26). As observações da agenda entram
+  sem corte (MEDIUMTEXT).
+- **Extrator** (`sante_conector/estrutura_agenda.py`, funções puras, versão `conector-1`): os formatos da seção 2 da
+  resposta do agente de marcação (valor particular, convênio aceito ou recusado, subplano, convênio com condição,
+  preparo, restrições) viram regras **estimadas** (já valem). Cada trecho fica em `trecho_texto_agenda`, e o não
+  interpretado leva o motivo e continua valendo pelo texto.
+- **Gravação** (`sante_conector/estruturar.py`): o motor a chama depois da carga do mapa, em toda execução, sobre as
+  agendas migradas. O texto inteiro fica em `texto_origem_agenda`, com o hash.
+  - Subplano citado vira `plano_fonte_pagadora` dentro do convênio.
+  - **Sincronizar:** quando o hash muda, as estimadas daquele texto saem (exclusão lógica) e o texto é extraído de
+    novo. As confirmadas ficam (`confirmadas_a_rever`) e não ganham estimada repetida.
+  - O resumo só traz contagens, em `contadores.agenda_estruturada`.
+- **Prova:** `conector/testes/test_estrutura_agenda.py`, com textos sintéticos e as perguntas de aceite num banco
+  descartável.
