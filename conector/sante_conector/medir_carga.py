@@ -35,11 +35,37 @@ def fecho(mapa_exec, tabelas):
 
 class _Recorte(carga_mapa.CargaMapa):
     limites = {}
+    cortadas = frozenset()  # tabelas com mais linhas que o limite do recorte
+    cortes = {}  # tabela -> (coluna da chave inteira, última chave do recorte): a tabela dividida por faixa corta pela chave
 
     def _linhas_mapa(self, p):
         lim = self.limites.get(p["tabela"])
         it = super()._linhas_mapa(p)
+        corte = self.cortes.get(p["tabela"])
+        if lim and corte and self._faixas_so is not None:  # parte de tabela dividida: as mesmas linhas do islice
+            return itertools.takewhile(lambda x: x[0][corte[0]] <= corte[1], it)
         return itertools.islice(it, lim) if lim else it
+
+    def _faixas_divisao(self, p):
+        corte = self.cortes.get(p["tabela"])
+        if p["tabela"] in self.cortadas and not corte:  # cortada sem a última chave: não divide (leria N vezes)
+            return []
+        fx = super()._faixas_divisao(p)
+        return [f for f in fx if f[0] <= corte[1]] if corte else fx
+
+
+def _cortes(lt, limites, totais):
+    """Última chave do recorte (a N-ésima na ordem da chave) de cada tabela de chave inteira cortada."""
+    saida = {}
+    for t, lim in limites.items():
+        ch = lt.chave_primaria(t)
+        if not lim or len(ch) != 1 or totais[t] <= lim:
+            continue
+        r = lt.consultar('SELECT "%s" FROM "%s" ORDER BY 1 ROWS %d TO %d' % (ch[0], t, lim, lim))
+        v = r[0][0] if r else None
+        if v is not None and int(v) == v:  # inteiro ou NUMERIC(n,0) (Decimal)
+            saida[t] = (ch[0], int(v))
+    return saida
 
 
 def impressao(cc, ctl, tabelas):
@@ -61,7 +87,10 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
     plano_todo = carga_mapa.planejar(mapa_exec, presentes)
     nomes = [p["tabela"] for p in plano_todo if p["tabela"] in alvo]
     _Recorte.limites = {t: (limite if t in tabelas else limite_pais) for t in nomes}
-    contagens = {t: min(lt.contar(t), _Recorte.limites[t] or 10 ** 12) for t in nomes}
+    totais = {t: lt.contar(t) for t in nomes}
+    contagens = {t: min(totais[t], _Recorte.limites[t] or 10 ** 12) for t in nomes}
+    _Recorte.cortadas = frozenset(t for t in nomes if _Recorte.limites[t] and totais[t] > _Recorte.limites[t])
+    _Recorte.cortes = _cortes(lt, {t: _Recorte.limites[t] for t in nomes if contagens[t] >= 100000}, totais)
     root = banco.conectar()
     try:
         ctl = controle.preparar(root, codigo, "cliente_" + codigo)
@@ -106,6 +135,7 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
                 "recusa_acima_do_limite": sorted(k for k, e in res["entidades"].items()
                                                  if e.get("recusa_acima_do_limite")),
                 "pendencias": res["pendencias"]["total"],
+                "divididas": dict(getattr(cm, "divididas", {})),
                 "impressao": impressao(cc, ctl, set(nomes))})
             time.sleep(1)
     finally:
@@ -116,22 +146,33 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
 def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
     """Previsão da carga completa: contagem de cada tabela do plano inteiro, ondas e gravadores livres (a maior
     tabela primeiro), com o teto de um gravador e o teto do leitor único. Só contagens."""
+    import os
     mapa_exec = mapa.carregar_execucao()
-    plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()))
+    # CONECTOR_ADIAR (carga em duas passadas, motor.py): a previsão é a da passada sem as tabelas adiadas
+    adiar = {t.strip() for t in (os.environ.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
+    plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()) - adiar)
     cont = {p["tabela"]: lt.contar(p["tabela"]) for p in plano}
     ws = carga_mapa.paralelo.ondas(plano, mapa_exec)
     total_s, por_onda = 0.0, []
+    divididas = set()
     for onda in ws:
-        livres = [0.0] * min(gravadores, len(onda))
-        for i in sorted(onda, key=lambda i: -cont[plano[i]["tabela"]]):
+        tarefas = []  # tabela grande e segura (paralelo.divisivel_spec): uma parte por gravador
+        for i in onda:
+            t = plano[i]["tabela"]
+            q = gravadores if gravadores > 1 and carga_mapa.paralelo.divisivel_spec(plano[i], cont[t]) else 1
+            divididas.update([t] if q > 1 else [])
+            tarefas += [cont[t] / q] * q
+        livres = [0.0] * min(gravadores, len(tarefas))
+        for x in sorted(tarefas, reverse=True):
             j = livres.index(min(livres))
-            livres[j] += cont[plano[i]["tabela"]] / ritmo_gravador
+            livres[j] += x / ritmo_gravador
         linhas = sum(cont[plano[i]["tabela"]] for i in onda)
         s = max(max(livres), linhas / ritmo_leitor)
         total_s += s
         por_onda.append((len(onda), linhas, round(s)))
     maiores = sorted(cont.items(), key=lambda x: -x[1])[:8]
-    return {"tabelas": len(plano), "linhas": sum(cont.values()), "ondas": len(ws), "horas": round(total_s / 3600, 2),
+    return {"adiadas": sorted(adiar), "tabelas": len(plano), "linhas": sum(cont.values()), "ondas": len(ws), "horas": round(total_s / 3600, 2),
+            "divididas": sorted(divididas, key=lambda t: -cont[t])[:15], "linhas_divididas": sum(cont[t] for t in divididas),
             "ondas_mais_longas": sorted(por_onda, key=lambda x: -x[2])[:8],
             "maiores_tabelas": [(t, n, ws_i) for t, n in maiores
                                 for ws_i in [next(k for k, o in enumerate(ws) if any(plano[i]["tabela"] == t for i in o))]]}
