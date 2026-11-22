@@ -538,3 +538,80 @@ export async function lerAgendaEstruturada(
     textos: textos.map(textoDe),
   };
 }
+
+/** Campos da regra que a revisão muda (ADR 0009): confirmar, recusar ou corrigir a estimada. */
+export interface AlteracaoRegraPrecoParticular {
+  readonly valor?: number | undefined;
+  readonly prioridade?: number | undefined;
+  readonly vigenciaInicio?: string | undefined;
+  readonly vigenciaFim?: string | null | undefined;
+  readonly situacaoRevisao?: 'estimada' | 'confirmada' | 'recusada' | undefined;
+  readonly observacao?: string | null | undefined;
+}
+
+const COLUNAS_ALTERACAO_REGRA: Readonly<Record<keyof AlteracaoRegraPrecoParticular, string>> = {
+  valor: 'valor',
+  prioridade: 'prioridade',
+  vigenciaInicio: 'vigencia_inicio',
+  vigenciaFim: 'vigencia_fim',
+  situacaoRevisao: 'situacao_revisao',
+  observacao: 'observacao',
+};
+
+/** Altera os campos informados da regra, com controle de versão. Devolve as linhas afetadas (0 = versão divergente). */
+export async function alterarRegraPrecoParticular(
+  e: Escritor,
+  id: number,
+  versaoEsperada: number,
+  v: AlteracaoRegraPrecoParticular,
+  usuario: number | null,
+): Promise<number> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  for (const k of Object.keys(COLUNAS_ALTERACAO_REGRA) as (keyof AlteracaoRegraPrecoParticular)[]) {
+    if (v[k] === undefined) continue;
+    sets.push(`${COLUNAS_ALTERACAO_REGRA[k]} = ?`);
+    params.push(v[k]);
+  }
+  sets.push('versao = versao + 1', 'alterado_em = CURRENT_TIMESTAMP(3)', 'alterado_por = ?');
+  return e.executar(
+    `UPDATE regra_preco_particular SET ${sets.join(', ')} WHERE id = ? AND versao = ? AND excluido_em IS NULL`,
+    [...params, usuario, id, versaoEsperada],
+  );
+}
+
+/**
+ * Credenciamentos vigentes na data e no estabelecimento (ou na rede) por profissional, por convênio ou pelo par: a
+ * ficha do profissional lista os convênios dele e a do convênio, os profissionais. Ao menos um filtro é obrigatório.
+ */
+export async function listarCredenciamentosVigentes(
+  l: Leitor,
+  q: {
+    readonly profissionalId: number | null;
+    readonly fontePagadoraId: number | null;
+    readonly estabelecimentoId: number;
+    readonly data: string;
+  },
+): Promise<Credenciamento[]> {
+  if (q.profissionalId === null && q.fontePagadoraId === null)
+    throw new Error('listarCredenciamentosVigentes: informe o profissional ou o convênio');
+  const filtros: string[] = [];
+  const params: unknown[] = [];
+  if (q.profissionalId !== null) {
+    filtros.push('c.profissional_id = ?');
+    params.push(q.profissionalId);
+  }
+  if (q.fontePagadoraId !== null) {
+    filtros.push('c.fonte_pagadora_id = ?');
+    params.push(q.fontePagadoraId);
+  }
+  const ls = await l.consultar(
+    `SELECT ${COLUNAS_CRED} FROM profissional_fonte_pagadora c
+      WHERE ${filtros.join(' AND ')} AND c.excluido_em IS NULL
+        AND (c.estabelecimento_id IS NULL OR c.estabelecimento_id = ?) AND ${VIGENTE('c')}
+      ORDER BY c.id`,
+    [...params, q.estabelecimentoId, q.data, q.data],
+    { teto: 5000 },
+  );
+  return ls.map(credenciamentoDe);
+}

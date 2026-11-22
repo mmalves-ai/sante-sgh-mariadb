@@ -92,6 +92,45 @@ export class AgendaPrecoController {
     return this.rodar(() => this.s().incluirRegra(contextoOperacao(req, 'precos-particulares'), corpo));
   }
 
+  @Put('precos-particulares/:id')
+  @HttpCode(200)
+  @Permissao('preco.regraParticular.editar')
+  @AuditadoNoHandler(EXECUTOR)
+  revisarRegra(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = { ...objeto(corpo), id: inteiro(id, 'regra', [1, 2147483647]) };
+    return this.rodar(() => this.s().revisarRegra(contextoOperacao(req, 'precos-particulares'), e));
+  }
+
+  /** Prévia do preço e do credenciamento de um procedimento no atendimento (tela de procedimentos, antes de lançar). */
+  @Get('atendimento/:reg/preco')
+  @Permissao('atendimento.procedimento.lancar')
+  async precoDoAtendimento(
+    @Param('reg') reg: string,
+    @Query() q: Record<string, string>,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const p = validar(
+      z.object({
+        procedimento: z.number().int().positive(),
+        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+      {
+        procedimento: opc(q['procedimento']),
+        data: q['data'] || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),
+      },
+    );
+    const r = await this.rodar(() =>
+      this.s().precoDoAtendimento(
+        ctxDe(req, 'atendimento-preco'),
+        inteiro(reg, 'atendimento', [1, 2147483647]),
+        p.procedimento,
+        p.data,
+      ),
+    );
+    if (!r) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'O atendimento não existe.');
+    return r;
+  }
+
   @Get('precos-particulares/calculo')
   @Permissao('preco.regraParticular.ler')
   calculo(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada) {
@@ -113,12 +152,17 @@ export class AgendaPrecoController {
   @Permissao('convenio.credenciamento.ler')
   credenciamentos(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada) {
     const p = validar(
-      z.object({
-        profissionalId: z.number().int().positive(),
-        fontePagadoraId: z.number().int().positive(),
-        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      }),
-      { profissionalId: opc(q['profissional']), fontePagadoraId: opc(q['convenio']), data: q['data'] },
+      z
+        .object({
+          profissionalId: z.number().int().positive().nullable(),
+          fontePagadoraId: z.number().int().positive().nullable(),
+          data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+        .refine((v) => v.profissionalId !== null || v.fontePagadoraId !== null, {
+          message: 'informe o profissional ou o convênio',
+          path: ['profissional'],
+        }),
+      { profissionalId: nulo(q['profissional']), fontePagadoraId: nulo(q['convenio']), data: q['data'] },
     );
     return this.rodar(() => this.s().credenciamentos(ctxDe(req, 'credenciamentos'), p));
   }

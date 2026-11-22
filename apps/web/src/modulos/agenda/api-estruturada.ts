@@ -36,11 +36,7 @@ const ATENDIMENTO = '/api/atendimento';
 
 /** Rotas que as telas usam e a API ainda não publica (pedidas ao lote API). Formato "MÉTODO /api/caminho/:id". */
 export const ROTAS_PENDENTES_API: readonly string[] = [
-  // revisão da regra estimada (confirmar, recusar, editar) com a versão lida
-  'PUT /api/precos-particulares/:id',
-  // prévia do preço e do credenciamento do procedimento no atendimento (o servidor resolve profissional, convênio,
-  // plano e item a partir do registro; a tela não tem esses ids)
-  'GET /api/atendimento/:id/preco',
+  // vazia: a revisão da regra (PUT) e a prévia do atendimento foram publicadas na conferência final da rodada
 ];
 
 /** Mensagem da gravação quando a API devolve só o resultado da operação (sem a mensagem). */

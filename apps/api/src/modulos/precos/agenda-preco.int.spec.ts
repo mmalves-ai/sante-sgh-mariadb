@@ -557,5 +557,60 @@ describe.skipIf(SEM_BANCO)('ADR 0009 na API (cliente de teste adr9_api)', () => 
       expect(Number(r.resultado['valor'])).toBe(100);
       expect(r.resultado['alerta']).toBeUndefined();
     });
+
+    const atendimentoDa = (conta: number) =>
+      nucleo
+        .lerSomente(ctx(), (l) =>
+          l.uma<Record<string, unknown>>('SELECT atendimento_id FROM conta_hospitalar WHERE id = ?', [conta]),
+        )
+        .then((x) => Number(x?.['atendimento_id']));
+
+    it('prévia do atendimento (GET atendimento/:reg/preco): os mesmos critérios do lançamento', async () => {
+      const part = await s.precoDoAtendimento(ctx(), await atendimentoDa(L.contaPart), L.consulta, hoje);
+      expect([part?.valor, part?.origem]).toEqual([180, 'regra_particular_profissional']);
+      const exame = await s.precoDoAtendimento(ctx(), await atendimentoDa(L.contaPart), L.exame, hoje);
+      expect(exame?.valor).toBe(100);
+      expect(exame?.origem).not.toMatch(/^regra_particular/);
+      // Convênio sem credenciamento do médico Z e sem bloqueio: o preço da tabela, com o alerta.
+      const conv = await s.precoDoAtendimento(ctx(), await atendimentoDa(L.contaConv), L.consulta, hoje);
+      expect([conv?.valor, conv?.credenciamento?.efeito]).toEqual([100, 'alerta']);
+      expect(await s.precoDoAtendimento(ctx(), 2_147_000_000, L.consulta, hoje)).toBeNull();
+    });
+
+    it('credenciamentos por um filtro só (ficha do profissional ou do convênio)', async () => {
+      const doProf = await s.credenciamentos(ctx(), {
+        profissionalId: L.profZ,
+        fontePagadoraId: null,
+        data: hoje,
+      });
+      expect(doProf.map((c) => c.fontePagadoraId)).toContain(L.conv2);
+      const doConv = await s.credenciamentos(ctx(), {
+        profissionalId: null,
+        fontePagadoraId: L.conv2,
+        data: hoje,
+      });
+      expect(doConv.map((c) => c.profissionalId)).toContain(L.profZ);
+    });
+
+    it('revisão da regra (PUT precos-particulares/:id): corrige o valor com a versão lida e recusa a desatualizada', async () => {
+      const [regra] = await s.listarRegras(ctx(), { profissionalId: L.profZ });
+      expect(regra).toBeDefined();
+      const r = regra as NonNullable<typeof regra>;
+      await s.revisarRegra(op(), {
+        id: r.id,
+        versao: r.versao,
+        valores: { valor: 190, situacaoRevisao: 'confirmada' },
+      });
+      const p = await s.precoDoAtendimento(ctx(), await atendimentoDa(L.contaPart), L.consulta, hoje);
+      expect(p?.valor).toBe(190);
+      expect(
+        await codigoDaRecusa(s.revisarRegra(op(), { id: r.id, versao: r.versao, valores: { valor: 1 } })),
+      ).toBe('conflito-versao');
+      expect(
+        await codigoDaRecusa(
+          s.revisarRegra(op(), { id: r.id, versao: r.versao + 1, valores: { vigenciaFim: '2025-12-31' } }),
+        ),
+      ).toBe('vigencia-invalida');
+    });
   });
 });

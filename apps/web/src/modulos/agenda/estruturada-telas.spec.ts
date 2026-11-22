@@ -483,8 +483,10 @@ describe('credenciamento', () => {
     });
   });
 
-  it('no convênio: bloqueia e credencia todos gravam só com a permissão de editar o contrato', async () => {
-    definirSessaoDaTela({ permissoes: ['convenio.contrato.editar', 'convenio.credenciamento.ler'] } as never);
+  it('no convênio: bloqueia e credencia todos gravam só com a permissão de editar o credenciamento', async () => {
+    definirSessaoDaTela({
+      permissoes: ['convenio.credenciamento.editar', 'convenio.credenciamento.ler'],
+    } as never);
     const opcoes = { fontePagadoraId: 2, bloqueiaSemCredenciamento: false, credenciaTodosAoCriar: true };
     const buscar = vi.fn(async (url: string, init?: RequestInit) =>
       init?.method ? json(OK) : String(url).includes('/opcoes-credenciamento') ? json(opcoes) : json(CRED),

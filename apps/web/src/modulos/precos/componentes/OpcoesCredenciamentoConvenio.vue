@@ -30,7 +30,7 @@ watch(
   },
   { immediate: true },
 );
-const podeEditar = computed(() => pode('convenio.contrato.editar'));
+const podeEditar = computed(() => pode('convenio.credenciamento.editar'));
 const podeLerCredenciados = computed(() => pode('convenio.credenciamento.ler'));
 const mudou = computed(
   () =>

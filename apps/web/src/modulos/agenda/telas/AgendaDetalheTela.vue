@@ -48,6 +48,8 @@ watch(
   { immediate: true },
 );
 const podeAlterar = pode('agenda.alterarAgenda');
+// ADR 0009: a regra de preço particular tem permissão própria (a mesma que a API exige no POST e no PUT).
+const podeRegraParticular = computed(() => podePermissao('preco.regraParticular.editar'));
 // ADR 0009: nomes dos convênios para as regras estruturadas e o particular da agenda (dono da regra de preço).
 const nomesConvenio = computed<Record<number, string>>(() =>
   Object.fromEntries((opcoes.data.value?.convenios ?? []).map((c) => [c.codigo, c.nome])),
@@ -428,7 +430,7 @@ function removerEspecialidade(codigo: number): Promise<boolean> {
         :agenda-id="d.agenda.id"
         :nomes-convenio="nomesConvenio"
         :particular-id="particularDaAgenda"
-        :pode-editar="podeAlterar"
+        :pode-editar="podeRegraParticular"
       />
     </template>
     <p v-if="mensagem" role="status" data-testid="agenda-mensagem">{{ mensagem }}</p>

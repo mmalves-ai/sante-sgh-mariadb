@@ -95,6 +95,8 @@ const registroDe = (id: number) => {
 const ativo = computed(() => (p.value ? ativoDaFicha(p.value) : false));
 const reais = computed(() => p.value?.registros.filter(registroReal) ?? []);
 const editar = computed(() => pode('cadastro.profissional.editar') && !!p.value?.dados);
+// ADR 0009: credenciar no convênio pede a permissão que a API exige (convenio.credenciamento.editar).
+const podeCredenciar = computed(() => pode('convenio.credenciamento.editar'));
 // Revisão da D-PROF-39: os controles seguem o que o executor aceita para quem pergunta (`operacoes` da ficha), como o
 // aviso único; sem a gravação liberada, o controle não aparece e o aviso diz por quê.
 const ligada = (acao: string) => (p.value ? acaoLigada(p.value, acao) : false);
@@ -560,7 +562,7 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
             @gravado="recarregar"
           />
           <!-- ADR 0009: credenciamento por convênio, com plano e vigência (alerta ou bloqueio no atendimento). -->
-          <CredenciamentoConvenios :profissional-id="p.id" :pode-editar="editar" />
+          <CredenciamentoConvenios :profissional-id="p.id" :pode-editar="podeCredenciar" />
         </section>
 
         <!-- Login do sistema -->
