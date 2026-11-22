@@ -31,7 +31,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   'SBIS-03': L(
     'Credencial forte em SGH_ACESSO_CREDENCIAL com nova gravação no primeiro login',
     'packages/dominio-acesso/src/identidade/credencial-forte.spec.ts',
-    'apps/api/src/modulos/acesso/aplicacao/rehash-primeiro-login.int.spec.ts',
+    'apps/api/src/modulos/acesso/identidade/servico-identidade.spec.ts',
   ),
   'SBIS-04': L(
     'Política de senha parametrizável (qualidade e ciclo)',
@@ -78,7 +78,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'Backup verificado (/administracao/auditoria/backup): restauração diária e mensal conferidas',
     'packages/dominio-acesso/src/sbis/sbis.spec.ts',
     'apps/api/src/modulos/administracao/sbis/servico.spec.ts',
-    'packages/legado/src/copia/copia-restaurar.spec.ts',
+    'apps/api/src/modulos/administracao/sbis/porta-propria.spec.ts',
   ),
   'SBIS-14': L(
     'TLS entre componentes e privilégio mínimo no banco',
@@ -93,14 +93,14 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   ),
   'SBIS-16': L(
     'SGH_TRILHA só de inclusão com hash encadeado; imutabilidade',
-    'packages/testes/src/integracao/trilha-cadeia.int.spec.ts',
+    'apps/api/src/modulos/administracao/sbis/porta-propria.int.spec.ts',
     'apps/api/src/autorizacao/trilha.spec.ts',
     'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
   ),
   'SBIS-17': L(
     'Catálogo de eventos auditáveis',
-    'packages/legado/src/auditoria/gravacao/registrarEventoLegado.spec.ts',
-    'packages/legado/src/auditoria/repositorios/trilha.spec.ts',
+    'apps/api/src/autorizacao/trilha.spec.ts',
+    'packages/testes/src/integracao/trilha.int.spec.ts',
   ),
   'SBIS-18': L(
     'Evento com ID, data e hora com fuso, estação, usuário e objeto',
@@ -127,7 +127,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   'SBIS-23': L(
     'Termo de uso e privacidade no primeiro acesso e a cada versão',
     'apps/api/src/sessao/termo.spec.ts',
-    'packages/legado/src/acesso/gravacao/termo.spec.ts',
+    'apps/api/src/modulos/administracao/termo-publicar.spec.ts',
   ),
   'SBIS-24': L(
     'Pedido do titular (correção de dado) com resposta, no portal do paciente',
@@ -142,14 +142,14 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   ),
   'SBIS-26': L(
     'Correção do registro clínico só pelo autor, com nova versão; apagar recusado',
-    'packages/testes/src/integracao/imutabilidade-clinica.int.spec.ts',
+    'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
     'apps/api/src/modulos/pep/registro.spec.ts',
-    'packages/legado/src/pep/gravacao/registro-clinico.spec.ts',
+    'apps/api/src/modulos/pep/registro-regras.spec.ts',
   ),
   // ECF (modalidade assistencial)
   'ECF.01': L(
     'Estabelecimento, setores, leitos e profissional com conselho, UF e CBO',
-    'packages/legado/src/nucleo/estabelecimentos.spec.ts',
+    'apps/api/src/modulos/administracao/administracao.spec.ts',
     'packages/dominio-config/src/coexistencia/setores.spec.ts',
     'apps/api/src/modulos/internacao/leitos.spec.ts',
     'packages/dominio-cadastro/src/profissional/categoria.spec.ts',
@@ -163,7 +163,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'Duplicidades, unificação, busca fonética e cabeçalho fixo do paciente',
     'packages/dominio-cadastro/src/duplicidade/escore.spec.ts',
     'packages/dominio-cadastro/src/busca/fonetica.spec.ts',
-    'packages/legado/src/cadastro/gravacao/unificarPaciente.spec.ts',
+    'packages/dominio-cadastro/src/unificacao/referencias-paciente.spec.ts',
     'packages/ui/src/componentes/SanteCabecalhoPaciente.spec.ts',
   ),
   'ECF.06': L(
@@ -187,7 +187,6 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   ),
   'ECF.07.30': L(
     'Preceptoria: residente registra, preceptor valida e coassina',
-    'packages/legado/src/pep/gravacao/preceptoria.spec.ts',
     'apps/api/src/modulos/pep/documentos.spec.ts',
   ),
   'ECF.07.33': L(
@@ -295,12 +294,12 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   'SBIS-37': L(
     'Serviço externo fora do ar: pendente, aviso e reprocessamento',
     'packages/dominio-documento/src/assinatura/reprocessamento.spec.ts',
-    'apps/api/src/modulos/assinatura/reprocessamento.int.spec.ts',
+    'apps/api/src/modulos/assinatura/aplicacao/servico.spec.ts',
   ),
   'SBIS-38': L(
     'Selo de assinado e encadeamento por paciente',
     'packages/dominio-documento/src/assinatura/selo.spec.ts',
-    'packages/legado/src/pep/gravacao/registro-clinico.spec.ts',
+    'apps/api/src/modulos/pep/registro.spec.ts',
   ),
   'SBIS-39': L(
     'Validação ao incluir, assinar, imprimir, importar e exportar',

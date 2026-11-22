@@ -17,4 +17,8 @@ WORKDIR /app
 COPY sante_conector /app/sante_conector
 COPY testes /app/testes
 COPY mapa /app/mapa
+# DS-0002: o usuário padrão da imagem não é root. Os comandos que abrem o arquivo (dm-snapshot, --privileged) pedem
+# root na execução (conector.sh: --user 0:0 junto do --privileged); os demais rodam como este usuário.
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin conector
+USER 10001:10001
 ENTRYPOINT ["python3", "-s", "-m", "sante_conector.cli"]

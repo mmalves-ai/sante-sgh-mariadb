@@ -27,10 +27,10 @@ export const RAIZ = resolve(import.meta.dirname, '../../..');
 export const PASTA_MODULOS = 'apps/api/src/modulos';
 export const PASTA_DDL = 'db/migracoes';
 export const PASTA_ARTEFATOS = 'infra/mariadb/privilegios';
-export const NOME_PASSO_PAPEIS = '0001_papeis_por_modulo';
+export const NOME_ETAPA_PAPEIS = '0001_papeis_por_modulo';
 export const caminhoAlcance = () => `${PASTA_ARTEFATOS}/alcance.json`;
 export const caminhoScript = (lado: 'aplicar' | 'recolher') =>
-  `${PASTA_ARTEFATOS}/${NOME_PASSO_PAPEIS}.${lado}.sql`;
+  `${PASTA_ARTEFATOS}/${NOME_ETAPA_PAPEIS}.${lado}.sql`;
 /** Pasta dos scripts de privilégio (a mesma para todo cliente; o código de hospital antigo é ignorado). */
 export const caminhoScripts = () => PASTA_ARTEFATOS;
 
@@ -120,7 +120,10 @@ const semComentarios = (t: string) =>
 export type ValorConstante = string | readonly string[];
 export type Constantes = ReadonlyMap<string, ValorConstante>;
 
-const ELEMENTO = /\.\.\.\s*([A-Za-z_$][\w$]*)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
+// `...new Set([` (lista sem repetição montada de outras) é só o invólucro: consumido sem captura, os elementos de
+// dentro seguem pelas outras alternativas (sem isso, `new` virava um espalhamento não resolvido e a lista inteira caía).
+const ELEMENTO =
+  /\.\.\.\s*new\s+Set\(\[|\.\.\.\s*([A-Za-z_$][\w$]*)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
 
 /** As constantes de nível de arquivo (string, template sem expressão não resolvida e lista de nomes). */
 export function lerConstantes(
@@ -562,7 +565,7 @@ export function gerarScriptsPapeis(
   versao: string,
 ): { aplicar: string; recolher: string } {
   const cabeca = (lado: string) => [
-    `-- ${NOME_PASSO_PAPEIS}.${lado} (alcance ${versao}). Gerado por pnpm privilegios:gerar; não edite à mão.`,
+    `-- ${NOME_ETAPA_PAPEIS}.${lado} (alcance ${versao}). Gerado por pnpm privilegios:gerar; não edite à mão.`,
     '-- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.',
     '-- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com',
     '-- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.',
