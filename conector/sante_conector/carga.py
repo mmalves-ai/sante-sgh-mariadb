@@ -299,11 +299,19 @@ class Carga:
                                                    (valor,)))
 
     def _inserir(self, tabela, valores):
-        cols = list(valores)
-        sql = "INSERT INTO `%s` (%s, criado_em) VALUES (%s, %s)" % (
-            tabela, ", ".join("`%s`" % c for c in cols), ", ".join(["%s"] * len(cols)), AGORA)
+        # `criado_em` declarado (data de gravação da origem, rodada 6) vale; sem valor, o relógio do banco
+        cols = [c for c in valores if c != "criado_em"]
+        marcas = ["%s"] * len(cols)
+        args = [valores[k] for k in cols]
+        cols.append("criado_em")
+        if valores.get("criado_em") is not None:
+            marcas.append("%s")
+            args.append(valores["criado_em"])
+        else:
+            marcas.append(AGORA)
+        sql = "INSERT INTO `%s` (%s) VALUES (%s)" % (tabela, ", ".join("`%s`" % c for c in cols), ", ".join(marcas))
         with self._c() as c:
-            c.execute(sql, [valores[k] for k in cols])
+            c.execute(sql, args)
             return c.lastrowid
 
     def _carregar_existente(self, tab):

@@ -217,8 +217,9 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS modulo_sistema (id BIGINT UNSIGNE
 # casa (codigo_inexistente_destino, NULL visível); a tabela é do modelo (02_ADM), criada aqui só no banco descartável
 PREPARO_DESTINO += ("CREATE TABLE IF NOT EXISTS usuario (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                     " login VARCHAR(60) NOT NULL, nome VARCHAR(150) NOT NULL, criado_em DATETIME(3) NOT NULL);"
-                    "INSERT INTO usuario (login, nome, criado_em) SELECT 'usuario.exemplo', 'Responsável 1 exemplo',"
-                    " UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE nome = 'Responsável 1 exemplo');")
+                    # conta de serviço sem CPF (ck_usuario_cpf_pessoa: pessoa exige CPF ou dispensa)
+                    "INSERT INTO usuario (login, nome, tipo_conta, criado_em) SELECT 'usuario.exemplo', 'Responsável 1 exemplo',"
+                    " 'servico', UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE nome = 'Responsável 1 exemplo');")
 
 
 def _falso(tipo, i):

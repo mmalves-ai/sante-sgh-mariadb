@@ -286,7 +286,8 @@ PAIS_EXTERNOS = {"TBGRUCONVEN": ["1", "2"], "TBMEDSOL": ["1", "2", "3"], "TBPESS
 # códigos do catálogo oficial de ocupações usados pelo COD da linha pai de TBCBOSUS (o ID nunca é o código)
 # sexo do cadastro do produto (lido por cod:sexo.sigla; a conferência cria só os destinos da fatia)
 PREPARO_SEXO = ("CREATE TABLE IF NOT EXISTS sexo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, sigla CHAR(1));"
-                "INSERT INTO sexo (sigla) VALUES ('M'), ('F');")
+                "INSERT INTO sexo (codigo, descricao, sigla, criado_em) VALUES ('masculino', 'Masculino', 'M', UTC_TIMESTAMP(3)),"
+                " ('feminino', 'Feminino', 'F', UTC_TIMESTAMP(3));")
 PREPARO_DESTINO = PREPARO_SEXO + ("INSERT INTO ocupacao_cbo (codigo_cbo, descricao, criado_em) VALUES"
                    " ('225125', 'Ocupação exemplo um', UTC_TIMESTAMP(3)), ('225124', 'Ocupação exemplo dois', UTC_TIMESTAMP(3)),"
                    " ('223505', 'Ocupação exemplo três', UTC_TIMESTAMP(3)), ('225170', 'Ocupação exemplo quatro', UTC_TIMESTAMP(3))")

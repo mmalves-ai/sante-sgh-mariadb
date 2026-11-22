@@ -47,9 +47,11 @@ def _tabelas_cod(x, saida):
             _tabelas_cod(v, saida)
 
 
-def ddl_destino(plano, raiz=RAIZ_APP, preparo=""):
+def ddl_destino(plano, raiz=RAIZ_APP, preparo="", provas=()):
     """CREATE TABLE (sem FK) das tabelas de destino do plano, dos catálogos oficiais que ele usa, das tabelas que um
-    `cod:` consulta e das que o `PREPARO_DESTINO` das fatias usa (conferidor r5), mais os ADD COLUMN."""
+    `cod:` consulta e das que o `PREPARO_DESTINO` das fatias usa (conferidor r5), mais os ADD COLUMN. `provas`: o SQL
+    das provas de "não copiar" das tabelas presentes, cujas tabelas do destino (FROM/JOIN e `TABLE_NAME = '...'` do
+    CHECK consultado) também são criadas (rodada 6: sem elas a prova dava tudo "faltando" ou nem rodava)."""
     ddl = mapa.ler_ddl(raiz)
     alvo = []
     # a tabela que o próprio preparo cria (CREATE TABLE) fica com ele
@@ -59,6 +61,9 @@ def ddl_destino(plano, raiz=RAIZ_APP, preparo=""):
             _tabelas_cod(p["colunas"][dt], alvo)
     alvo += [t for t in re.findall(r"(?i)\b(?:INSERT\s+(?:IGNORE\s+)?INTO|UPDATE|FROM|JOIN)\s+`?(\w+)`?", preparo or "")
              if t in ddl and t not in criadas]
+    for sql in provas:
+        alvo += [t for t in re.findall(r"(?i)\b(?:FROM|JOIN)\s+`?(\w+)`?(?!\s*\.)", sql) if t in ddl]
+        alvo += [t for t in re.findall(r"(?i)\bTABLE_NAME\s*=\s*'(\w+)'", sql) if t in ddl]
     for p in plano:
         for dt in p["destinos"]:
             alvo.append(dt)
@@ -165,7 +170,8 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 # 2, pedido da L7-01); opcional porque preparos diferentes que criam o estabelecimento colidiriam
                 fs = sintetica.resolver_fatias([nome]) if getattr(mod, "PREPARO_DOS_REQUERIDOS", False) else [nome]
                 prep = "\n".join(getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None) or "" for f in fs)
-                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano, preparo=prep)
+                provas = [pv["sql"] for pv in mapa_exec.get("provas") or [] if pv["tabela"] in presentes]
+                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano, preparo=prep, provas=provas)
                 if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
                     banco.aplicar_script(root, ddl)
                 for f in fs:

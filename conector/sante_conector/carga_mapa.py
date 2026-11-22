@@ -2039,6 +2039,11 @@ class CargaMapa(carga.Carga):
                     "carga": dict(self.cont, por_tabela={})}
         for p in self.plano:
             self._carregar_existente(p["tabela"])
+        # tabelas de continuidade garantidas ANTES da primeira linha: CREATE TABLE faz commit implícito e, no meio de
+        # uma linha, apagaria o SAVEPOINT dela (rodada 6: recusa de restrição virava "SAVEPOINT does not exist")
+        self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
+        self._garantir("segredo_cofre", continuidade.DDL_COFRE)
+        self.cr.commit()
         for i, p in enumerate(self.plano):
             self.progresso(i / len(self.plano), "carregando %s" % p["destinos"][0])
             self._tabela(p)

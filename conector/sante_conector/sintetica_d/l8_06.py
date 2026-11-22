@@ -115,11 +115,12 @@ PREPARO_DESTINO = ";\n".join([
     " INSERT INTO motivo_glosa (id, codigo_tuss, descricao) VALUES (61, '1001', 'Motivo de exemplo')",
     # catálogos-base que a carga da internação (RICADINT, lida aqui pelas cadeias) procura pelo código
     "CREATE TABLE IF NOT EXISTS carater_admissao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30)"
-    " NOT NULL, UNIQUE KEY uq_carater_admissao_codigo (codigo)); INSERT INTO carater_admissao (codigo) VALUES"
-    " ('eletiva'), ('urgencia'), ('emergencia')",
+    " NOT NULL, UNIQUE KEY uq_carater_admissao_codigo (codigo)); INSERT INTO carater_admissao (codigo, descricao,"
+    " criado_em) SELECT c, c, UTC_TIMESTAMP(3) FROM (SELECT 'eletiva' c UNION ALL SELECT 'urgencia' UNION ALL"
+    " SELECT 'emergencia') s",
     "CREATE TABLE IF NOT EXISTS modalidade_internacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo"
     " VARCHAR(30) NOT NULL, UNIQUE KEY uq_modalidade_internacao_codigo (codigo)); INSERT INTO modalidade_internacao"
-    " (codigo) VALUES ('clinica')"])
+    " (codigo, descricao, criado_em) VALUES ('clinica', 'Clínica', UTC_TIMESTAMP(3))"])
 CARREGADAS = ("TBTISSWEBSERV",) + NOVAS
 DA = datetime.date
 DT = datetime.datetime

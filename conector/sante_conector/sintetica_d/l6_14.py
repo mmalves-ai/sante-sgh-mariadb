@@ -69,8 +69,10 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
                    " CREATE TABLE IF NOT EXISTS situacao_leito (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL, UNIQUE KEY uq_situacao_leito_codigo (codigo));"
-                   " INSERT INTO situacao_leito (codigo) VALUES ('livre'), ('ocupado'), ('reservado'), ('higienizacao'),"
-                   " ('interditado'), ('manutencao'), ('bloqueado'), ('inativo')")
+                   " INSERT INTO situacao_leito (codigo, descricao, situacao_base, criado_em) SELECT c, c, c, UTC_TIMESTAMP(3) FROM"
+                   " (SELECT 'livre' c UNION ALL SELECT 'ocupado' UNION ALL SELECT 'reservado' UNION ALL SELECT"
+                   " 'higienizacao' UNION ALL SELECT 'interditado' UNION ALL SELECT 'manutencao' UNION ALL SELECT"
+                   " 'bloqueado' UNION ALL SELECT 'inativo') s")
 # Pais de fora da fatia dados como já carregados. TBUNIDAD (L5, ordem 90) carrega de fato antes de RIBLOCOS.
 # TBCONVEN e TBESPEC (L5) HOJE carregam DEPOIS de RICONFIC e RIESPFIC no mapa: só valem como já carregados depois das
 # dependências RICONFIC -> TBCONVEN e RIESPFIC -> TBESPEC pedidas no L6-14.json; o teste test_ordem_de_carga confere a

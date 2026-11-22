@@ -151,14 +151,15 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    "INSERT INTO estabelecimento () VALUES ();"
                    # sexo e estado civil só são lidos (cod:): a conferência cria apenas os destinos da fatia
                    "CREATE TABLE IF NOT EXISTS sexo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, sigla CHAR(1));"
-                   "INSERT INTO sexo (sigla) VALUES ('M'), ('F');"
+                   "INSERT INTO sexo (codigo, descricao, sigla, criado_em) VALUES ('masculino', 'Masculino', 'M', UTC_TIMESTAMP(3)), ('feminino', 'Feminino', 'F', UTC_TIMESTAMP(3));"
                    "CREATE TABLE IF NOT EXISTS estado_civil (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30));"
-                   "INSERT INTO estado_civil (codigo) VALUES ('1'), ('2');"
+                   "INSERT INTO estado_civil (codigo, descricao, criado_em) VALUES ('1', 'Estado civil um', UTC_TIMESTAMP(3)),"
+                   " ('2', 'Estado civil dois', UTC_TIMESTAMP(3));"
                    # tipo de documento rg do cadastro do produto (L3/L5-05), só lido (cod:)
                    "CREATE TABLE IF NOT EXISTS tipo_documento_identificacao (id BIGINT UNSIGNED AUTO_INCREMENT"
                    " PRIMARY KEY, codigo VARCHAR(30));"
-                   "INSERT INTO tipo_documento_identificacao (codigo) VALUES ('rg');"
+                   "INSERT INTO tipo_documento_identificacao (codigo, descricao, criado_em) VALUES ('rg', 'RG', UTC_TIMESTAMP(3));"
                    "INSERT INTO pessoa_fisica (nome, cpf, origem, criado_em) VALUES ('Pessoa ja cadastrada', '%011d',"
                    " 'sistema', UTC_TIMESTAMP(3));" % CPF_JA_CADASTRADO)
 P1899 = datetime.date(1899, 12, 30)

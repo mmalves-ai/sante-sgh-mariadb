@@ -335,9 +335,10 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
     # catálogos-base do produto (semente pedida à F2.2): tipo de conta e tipo de auditoria pelo código
     " CREATE TABLE IF NOT EXISTS tipo_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL);"
-    " INSERT INTO tipo_conta (codigo) VALUES ('ambulatorial'), ('externa'), ('urgencia'), ('internacao');"
+    " INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) SELECT c, c, c, UTC_TIMESTAMP(3) FROM (SELECT"
+    " 'ambulatorial' c UNION ALL SELECT 'externa' UNION ALL SELECT 'urgencia' UNION ALL SELECT 'internacao') s;"
     " CREATE TABLE IF NOT EXISTS tipo_auditoria (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-    " codigo VARCHAR(30) NOT NULL); INSERT INTO tipo_auditoria (codigo) VALUES ('migracao');"
+    " codigo VARCHAR(30) NOT NULL); INSERT INTO tipo_auditoria (codigo, descricao, categoria, criado_em) VALUES ('migracao', 'Migração', 'administrativa', UTC_TIMESTAMP(3));"
     # versão TISS de troca do carregador oficial (só a 4.03.00; a 3.05.00 da origem fica sem par)
     " INSERT INTO versao_padrao_tiss (codigo_tiss, componente, descricao, vigencia_inicio, versao_fonte, criado_em)"
     " VALUES ('4.03.00', 'troca', 'Versao exemplo', '2024-01-01', 'exemplo', UTC_TIMESTAMP(3));"

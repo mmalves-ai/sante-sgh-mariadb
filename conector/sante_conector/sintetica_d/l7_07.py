@@ -104,9 +104,9 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    # catálogo oficial DCB (forma mínima, código inventado): o conector só lê
                    " CREATE TABLE IF NOT EXISTS tipo_movimento_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(40) NOT NULL UNIQUE);"
-                   " INSERT INTO tipo_movimento_estoque (codigo) VALUES ('migracao_entrada'), ('migracao_saida');"
+                   " INSERT IGNORE INTO tipo_movimento_estoque (codigo, descricao, natureza, sentido, afeta_saldo, afeta_custo_medio, sistema, ativo, criado_em) VALUES ('migracao_entrada', 'Entrada trazida de outro sistema', 'entrada', 'entrada', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3)), ('migracao_saida', 'Saída trazida de outro sistema', 'saida', 'saida', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3));"
                    " CREATE TABLE IF NOT EXISTS tipo_entrada_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " codigo VARCHAR(40) NOT NULL UNIQUE); INSERT INTO tipo_entrada_estoque (codigo) VALUES ('migracao');"
+                   " codigo VARCHAR(40) NOT NULL UNIQUE); INSERT IGNORE INTO tipo_entrada_estoque (codigo, descricao, natureza, tipo_movimento_estoque_id, exige_documento_fiscal, atualiza_custo_medio, atualiza_ultimo_preco, exige_fornecedor, ativo, criado_em) SELECT 'migracao', 'Entrada trazida de outro sistema', 'outra', id, FALSE, FALSE, FALSE, FALSE, FALSE, UTC_TIMESTAMP(3) FROM tipo_movimento_estoque WHERE codigo = 'migracao_entrada';"
                    " CREATE TABLE IF NOT EXISTS principio_ativo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo_dcb VARCHAR(10) NOT NULL UNIQUE, descricao VARCHAR(255) NOT NULL,"
                    " versao_fonte VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);"

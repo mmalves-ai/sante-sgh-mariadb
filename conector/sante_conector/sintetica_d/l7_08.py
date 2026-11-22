@@ -371,7 +371,7 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    # tipos NATIVOS de migração do produto (semente de db/migracoes/11_SUP/07_chaves.sql), achados por cod:
                    " CREATE TABLE IF NOT EXISTS tipo_movimento_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL UNIQUE);"
-                   " INSERT INTO tipo_movimento_estoque (codigo) VALUES ('migracao_entrada'), ('migracao_saida')")
+                   " INSERT IGNORE INTO tipo_movimento_estoque (codigo, descricao, natureza, sentido, afeta_saldo, afeta_custo_medio, sistema, ativo, criado_em) VALUES ('migracao_entrada', 'Entrada trazida de outro sistema', 'entrada', 'entrada', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3)), ('migracao_saida', 'Saída trazida de outro sistema', 'saida', 'saida', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3))")
 
 
 def __getattr__(nome):

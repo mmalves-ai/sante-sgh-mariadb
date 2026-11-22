@@ -89,9 +89,9 @@ PREPARO_DESTINO = (
     # (RECONTAS) acham a conta pela chave alternativa composta, na ordem nova (dependências declaradas)
     "INSERT IGNORE INTO atendimento (id, paciente_id) VALUES (1, 3), (2, 4);"
     "CREATE TABLE IF NOT EXISTS tipo_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL);"
-    "INSERT INTO tipo_conta (codigo) SELECT 'externa' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tipo_conta WHERE"
+    "INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) SELECT 'externa', 'Externa', 'externa', UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tipo_conta WHERE"
     " codigo = 'externa');"
-    "INSERT INTO tipo_conta (codigo) SELECT 'internacao' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tipo_conta WHERE"
+    "INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) SELECT 'internacao', 'Internação', 'internacao', UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tipo_conta WHERE"
     " codigo = 'internacao')")
 
 T0 = datetime.datetime(2026, 3, 2, 8, 30)

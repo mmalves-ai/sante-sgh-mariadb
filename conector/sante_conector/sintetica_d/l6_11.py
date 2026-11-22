@@ -320,15 +320,15 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " ('01234', 'Principio falso A', 'exemplo', NOW(3)), ('01235', 'Principio falso B', 'exemplo', NOW(3));\n"
                    "CREATE TABLE IF NOT EXISTS tipo_item_prescricao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL UNIQUE);\n"
-                   "INSERT INTO tipo_item_prescricao (codigo) VALUES ('6'), ('7');\n"
+                   "INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES ('6', 'Tipo exemplo seis', 'medicamento', UTC_TIMESTAMP(3)), ('7', 'Tipo exemplo sete', 'cuidado', UTC_TIMESTAMP(3));\n"
                    # tipos nativos de migração do estoque (11_SUP/07_chaves.sql) que a requerida L7-07 acha por cod:
                    # (o PREPARO_DESTINO dela não roda aqui: repetiria o estabelecimento único)
                    "CREATE TABLE IF NOT EXISTS tipo_movimento_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(40) NOT NULL UNIQUE);\n"
-                   "INSERT IGNORE INTO tipo_movimento_estoque (codigo) VALUES ('migracao_entrada'), ('migracao_saida');\n"
+                   "INSERT IGNORE INTO tipo_movimento_estoque (codigo, descricao, natureza, sentido, afeta_saldo, afeta_custo_medio, sistema, ativo, criado_em) VALUES ('migracao_entrada', 'Entrada trazida de outro sistema', 'entrada', 'entrada', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3)), ('migracao_saida', 'Saída trazida de outro sistema', 'saida', 'saida', TRUE, FALSE, TRUE, FALSE, UTC_TIMESTAMP(3));\n"
                    "CREATE TABLE IF NOT EXISTS tipo_entrada_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(40) NOT NULL UNIQUE);\n"
-                   "INSERT IGNORE INTO tipo_entrada_estoque (codigo) VALUES ('migracao');\n"
+                   "INSERT IGNORE INTO tipo_entrada_estoque (codigo, descricao, natureza, tipo_movimento_estoque_id, exige_documento_fiscal, atualiza_custo_medio, atualiza_ultimo_preco, exige_fornecedor, ativo, criado_em) SELECT 'migracao', 'Entrada trazida de outro sistema', 'outra', id, FALSE, FALSE, FALSE, FALSE, FALSE, UTC_TIMESTAMP(3) FROM tipo_movimento_estoque WHERE codigo = 'migracao_entrada';\n"
                    # situação do documento (cadastro do produto, achado por cod: no cabeçalho sem evento): SEM a semente
                    # nativa migrado_sem_assinatura, pedida à F2.2 (saida/L6-11.json): prova a recusa visível até lá
                    "CREATE TABLE IF NOT EXISTS situacao_documento_prontuario (id BIGINT UNSIGNED AUTO_INCREMENT"
