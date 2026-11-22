@@ -1,5 +1,6 @@
-import { TELAS_ONDA_0 } from '@sgh/contratos';
+import { ESCRITAS_TELAS_ONDA_0 as escritasDasTelas, TELAS_ONDA_0 } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
+import { operacoesDeclaradas } from '../liberacao/catalogo-operacoes.js';
 import { implantacaoPronta, verificarConferenciaLeituras } from './onda0.js';
 import { chaveDeTelaDaPermissao, situacaoDaChave, situacaoDaLeitura, situacaoDaTela } from './telas.js';
 
@@ -140,5 +141,18 @@ describe('onda 0: leitura sob chave de tela (o servidor confere)', () => {
     const chaves = { 'agenda.consulta': [{ escopo: 'hospital' as const, valor: '*', ligada: true }] };
     expect(situacaoDaLeitura('cadastro.paciente.ler', entradaCom(chaves))).toBe('ligada');
     expect(situacaoDaLeitura('cadastro.historico.ler', entradaCom(chaves))).toBe('desligada');
+  });
+});
+
+// O catálogo de liberação declara as gravações do cadastro à mão (OPERACOES_CADASTRO_E_ACESSO): toda gravação que uma
+// tela declara tem de estar nele, senão a tela de liberação (M08) e o liberacao:ligar-tudo não a mostram.
+describe('gravações das telas de consulta no catálogo de liberação', () => {
+  it('toda gravação de tela (modulo.operacao, fora os eventos de convivência) está no catálogo', () => {
+    const catalogo = new Set(operacoesDeclaradas().map((o) => o.nome));
+    const gravacoes = Object.values(escritasDasTelas)
+      .flat()
+      .filter((n) => /^[a-z][a-zA-Z0-9]*\.[a-z][a-zA-Z0-9]*$/.test(n) && !n.endsWith('Legado'));
+    expect(gravacoes.length).toBeGreaterThan(0);
+    expect(gravacoes.filter((n) => !catalogo.has(n))).toEqual([]);
   });
 });
