@@ -48,6 +48,9 @@ CLIENTE = {
     "rascunho_sem_autor": "atribuir o autor do rascunho clínico, que o finaliza ou apaga",
     "cadastro_provisorio_a_completar": "completar o cadastro provisório",
     "vigencia_sem_evidencia": "informar o início da vigência",
+    "recusa_acima_do_limite": "decidir antes de usar: rever as regras da recusa desta entidade (corrigir na origem e"
+                              " Sincronizar, ou pedir à plataforma a correção do mapa); a conciliação fica não"
+                              " conferida e a execução falha enquanto a recusa passar do limite",
 }
 # informativa: registrada para a trilha; não pede decisão (gravidade baixa, salvo as do cliente acima)
 INFORMATIVA = {"pai_pendente": "resolve-se com a pendência do registro pai (raiz da cadeia)"}
@@ -218,10 +221,25 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
             grupos[("imagem", nome, "alta")] = {"entidade": "imagem", "regra": nome, "gravidade": "alta",
                                                "abertas": q["tabelas"], "resolvidas": 0, "unidade": "tabela"}
 
+    # entidade principal com recusa acima do limite (carga.aplicar_limite_recusa): uma decisão crítica por entidade,
+    # contada por entidade (não soma às pendências por linha, que já trazem cada recusa com a sua regra)
+    acima = []
+    for ent, e in (entidades or {}).items():
+        if not e.get("recusa_acima_do_limite"):
+            continue
+        lidos, rec = int(e.get("registros_origem") or 0), int(e.get("recusados") or 0)
+        acima.append({"entidade": ent, "recusados": rec, "registrosOrigem": lidos})
+        grupos[(ent, "recusa_acima_do_limite", "critica")] = {
+            "entidade": ent, "regra": "recusa_acima_do_limite", "gravidade": "critica", "abertas": 1, "resolvidas": 0,
+            "unidade": "tabela", "detalhe": "%s com %d de %d linhas recusadas (%.1f%%)" % (
+                ent, rec, lidos, 100.0 * rec / max(lidos, rec, 1))}
+
     por_regra = []
     for g in grupos.values():
         g.setdefault("unidade", "linha")
         g["decisao"], g["acao"] = classe(g["regra"], g["gravidade"])
+        if "detalhe" in g:  # contagem no texto da ação (o contrato do painel não tem campo para ela)
+            g["acao"] = "%s: %s" % (g.pop("detalhe"), g["acao"])
         por_regra.append(g)
     por_regra.sort(key=lambda g: (GRAVIDADES.index(g["gravidade"]), -g["abertas"], g["entidade"], g["regra"]))
 
@@ -275,6 +293,7 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
             "semCarga": sorted(por_causa.values(), key=lambda x: x["causa"]),
         },
         "provas": lista_provas,
+        "entidadesAcimaDoLimite": sorted(acima, key=lambda x: (-x["recusados"], x["entidade"])),
         "saidasExternas": 0,
         "redeSemRotaExterna": rede,
     }

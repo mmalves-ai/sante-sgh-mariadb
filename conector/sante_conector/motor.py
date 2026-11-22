@@ -34,6 +34,21 @@ def soma_controle(contagens):
     return hashlib.sha256(txt.encode()).hexdigest()
 
 
+def motivo_conciliacao(entidades, ruins):
+    """Motivo da falha da conciliação (só nomes de entidade e contagens): primeiro as entidades principais com recusa
+    acima do limite, que pedem decisão (relatório L10, `recusa_acima_do_limite`), depois as que divergiram."""
+    acima = [k for k in ruins if entidades[k].get(carga.REGRA_RECUSA_LIMITE)]
+    outras = [k for k in ruins if k not in acima]
+    partes = []
+    if acima:
+        partes.append("recusa acima do limite em entidade principal, decisão no relatório: %s" % ", ".join(
+            "%s %d de %d" % (k, int(entidades[k].get("recusados") or 0), int(entidades[k].get("registros_origem") or 0))
+            for k in acima))
+    if outras:
+        partes.append("conciliação por entidade divergiu: %s" % ", ".join(outras))
+    return "; ".join(partes)
+
+
 def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
     """L10: relatório curto da execução (ADR 0007, item 22) em `contadores.relatorio`: pendências abertas, críticas e
     resolvidas por entidade e regra, o que não carregou, a prova de não copiar e as decisões do cliente."""
@@ -215,7 +230,8 @@ def executar(trab, eid):
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",
                                                           "recusados", "conferido", "soma_destino",
                                                           "aguardam_sincronizar", "editados_no_destino",
-                                                          "apagados_na_origem") if x in v}
+                                                          "apagados_na_origem", carga.REGRA_RECUSA_LIMITE)
+                                         if x in v}
                                      for k, v in resumo["entidades"].items()}
                 # L9: na carga dirigida pelo mapa, o Sincronizar reaplica a origem (vence), guarda a edição do destino
                 # em conflito, exclui logicamente o que sumiu e reativa o que voltou. As 7 tabelas da carga própria
@@ -224,7 +240,7 @@ def executar(trab, eid):
                 cont.update(versao_mapa=resumo["versao_mapa"], pendencias=resumo["pendencias"], carga=resumo["carga"])
                 ruins = sorted(k for k, v in resumo["entidades"].items() if not v["conferido"])
                 if ruins:
-                    raise FalhaExecucao("conciliação por entidade divergiu: %s" % ", ".join(ruins))
+                    raise FalhaExecucao(motivo_conciliacao(resumo["entidades"], ruins))
         # a pendência tabela_sem_mapa entra no resumo do painel (por regra), com as da carga
         if cont.get("tabelas_sem_mapa", {}).get("tabelas"):
             pend = cont.setdefault("pendencias", {"total": 0, "criticas": 0, "por_regra": {}})

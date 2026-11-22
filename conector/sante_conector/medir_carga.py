@@ -103,6 +103,8 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
                 "carga": {k: v for k, v in res["carga"].items() if isinstance(v, int)},
                 "entidades_conferidas": sum(1 for e in res["entidades"].values() if e.get("conferido")),
                 "entidades": len(res["entidades"]),
+                "recusa_acima_do_limite": sorted(k for k, e in res["entidades"].items()
+                                                 if e.get("recusa_acima_do_limite")),
                 "pendencias": res["pendencias"]["total"],
                 "impressao": impressao(cc, ctl, set(nomes))})
             time.sleep(1)

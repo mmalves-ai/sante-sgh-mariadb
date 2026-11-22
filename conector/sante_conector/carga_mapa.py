@@ -1831,7 +1831,7 @@ class CargaMapa(carga.Carga):
             with self.cr.cursor() as c:
                 self._gravar_recs(c, fila, ordem, falhas, 0)
             falhas.sort(key=lambda x: x[2])
-            for rec, _, _ in reversed(falhas):  # desfaz a memória da linha; do fim para o começo, os índices valem
+            for rec, _, _, _ in reversed(falhas):  # desfaz a memória da linha; do fim para o começo, os índices valem
                 (d0, p0, b0), (d1, p1, b1) = rec["ini"], rec["fim"]
                 for t, k, ant in reversed(self._diario[d0:d1]):
                     if ant is None:
@@ -2523,6 +2523,7 @@ class CargaMapa(carga.Carga):
                             "registros_destino": len(destino), "recusados": recusadas if i == 0 else 0,
                             "aguardam_sincronizar": len(aguardam), "editados_no_destino": editados,
                             "apagados_na_origem": apagadas, "soma_origem": so, "soma_destino": sd, "conferido": ok}
+        carga.aplicar_limite_recusa(res)
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
         por_regra = {}
         for tab, _, regra, grav, _ in self.pend:

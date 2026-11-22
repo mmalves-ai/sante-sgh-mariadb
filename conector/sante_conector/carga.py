@@ -33,6 +33,7 @@ Regras (plano F4, seções 6, 6.1 e 7):
 import datetime
 import decimal
 import hashlib
+import os
 import re
 
 import pymysql
@@ -79,6 +80,56 @@ def conciliacao_conferida(lidos, vistas, gravados, recusadas, soma_origem, soma_
     (C1, 2026-11-22: 209 mil atendimentos recusados apareciam como conferidos)."""
     return (lidos == vistas == gravados + recusadas and soma_origem == soma_destino
             and not (lidos and not gravados))
+
+# Entidade principal com recusa acima do limite nunca fica conferida (2026-11-22: a carga real recusou 100% dos
+# atendimentos e a execução saiu "concluída"). A recusa parcial continua registrada como pendência de cada linha; acima
+# do limite a conciliação da entidade fica NÃO conferida, a execução falha (estado vermelho do painel) e o relatório L10
+# destaca a decisão (`recusa_acima_do_limite`). Configurável por ambiente; os nomes valem também com o sufixo `#n`.
+ENTIDADES_PRINCIPAIS = ("estabelecimento", "usuario", "profissional", "paciente", "atendimento", "conta_hospitalar",
+                        "conta_hospitalar_item", "agenda", "agenda_servico", "marcacao_horario")
+RECUSA_LIMITE_PERCENTUAL = 5.0
+RECUSA_LIMITE_LINHAS = 1000
+REGRA_RECUSA_LIMITE = "recusa_acima_do_limite"
+
+
+def limites_recusa(ambiente=None):
+    """(entidades principais, percentual, linhas) do ambiente (`CONECTOR_ENTIDADES_PRINCIPAIS` separadas por vírgula,
+    `CONECTOR_RECUSA_LIMITE_PERCENTUAL`, `CONECTOR_RECUSA_LIMITE_LINHAS`); valor inválido fica no padrão."""
+    amb = os.environ if ambiente is None else ambiente
+    ents = tuple(x.strip() for x in (amb.get("CONECTOR_ENTIDADES_PRINCIPAIS") or "").split(",") if x.strip()) \
+        or ENTIDADES_PRINCIPAIS
+    try:
+        pct = float(amb.get("CONECTOR_RECUSA_LIMITE_PERCENTUAL") or RECUSA_LIMITE_PERCENTUAL)
+    except ValueError:
+        pct = RECUSA_LIMITE_PERCENTUAL
+    try:
+        lin = int(amb.get("CONECTOR_RECUSA_LIMITE_LINHAS") or RECUSA_LIMITE_LINHAS)
+    except ValueError:
+        lin = RECUSA_LIMITE_LINHAS
+    return ents, pct, lin
+
+
+def recusa_acima_do_limite(entidade, lidos, recusados, limites=None):
+    """Entidade principal (nome sem o sufixo `#n`) com recusa acima do percentual OU acima do número de linhas."""
+    ents, pct, lin = limites or limites_recusa()
+    lidos, recusados = int(lidos or 0), int(recusados or 0)
+    if entidade.split("#", 1)[0] not in ents or recusados <= 0:
+        return False
+    return recusados > lin or recusados * 100.0 > pct * max(lidos, recusados)
+
+
+def aplicar_limite_recusa(res, limites=None):
+    """Marca na conciliação (`res`: {entidade: {registros_origem, recusados, conferido}}) as entidades principais com
+    recusa acima do limite: `recusa_acima_do_limite` verdadeiro e `conferido` falso. Devolve as entidades marcadas."""
+    limites = limites or limites_recusa()
+    marcadas = []
+    for ent, r in res.items():
+        if recusa_acima_do_limite(ent, r.get("registros_origem"), r.get("recusados"), limites):
+            r[REGRA_RECUSA_LIMITE] = True
+            r["conferido"] = False
+            marcadas.append(ent)
+    return marcadas
+
 
 def carater_do_atendimento(valor, categoria):
     """(código TISS 23, regra de pendência ou None). 1 e 2 valem como vieram; vazio ou 0 (não informado): estimado
@@ -1090,6 +1141,7 @@ class Carga:
                                    "registros_destino": len(ks), "recusados": 0, "soma_origem": so, "soma_destino": sd,
                                    "conferido": len(ks) == lidos and so == sd,
                                    "observacao": "de-para guardado; vira campo do estabelecimento"}
+        aplicar_limite_recusa(res)
         por_regra = {}
         for tab, _, regra, grav, _ in self.pend:
             k = "%s:%s:%s" % (ENTIDADE_DA_TABELA.get(tab, "outra"), regra, grav)
