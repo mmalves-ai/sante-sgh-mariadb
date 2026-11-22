@@ -195,7 +195,7 @@ def executar(trab, eid):
                                                       sincronizar=ex["tipo"] == "sincronizar",
                                                       confirmar_exclusao_em_massa=bool(
                                                           ex.get("confirmar_exclusao_em_massa"))).executar(
-                                set(tabelas), contagens)
+                                set(tabelas) - adiar, contagens)  # ADIAR/SO valem também aqui: executar() refaz o plano
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]
                             pr, pm = resumo["pendencias"], rm["pendencias"]
