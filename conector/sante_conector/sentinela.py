@@ -100,6 +100,11 @@ REGRAS_PARAMETRO = {
     "dia_recorrente": "dia_recorrente:<ano>: dia do mês (1..31) da DATE no ano-marca; outro ano: NULL sem pendência",
     "mes_recorrente": "mes_recorrente:<ano>: mês (1..12) da DATE no ano-marca; outro ano: NULL sem pendência",
     # rodada 4 (pedido 15c da L8-11): vigência sem fim guardada como data distante
+    # C4 (2026-11-22): faixa etária máxima em que 0 ou um número acima do limite do destino é a marca de "sem limite"
+    "idade_maxima_sem_limite": "idade_maxima_sem_limite:<max>: idade máxima em anos; 0 ou acima de <max> (marca de "
+                               "'sem limite' da origem) vira NULL (sem limite) com a pendência idade_sem_limite "
+                               "(baixa, melhor estimativa: ADR 0007, 18); negativo ou não numérico: NULL com "
+                               "valor_fora_do_dominio",
     "data_fim_aberta": "data_fim_aberta:<ano>: DATE/TIMESTAMP com ano >= <ano> (fim de vigência em aberto, ex.: "
                        "31/12/2999) vira NULL sem pendência; data sentinela: NULL com data_sentinela; o resto fica",
 }
@@ -428,6 +433,14 @@ def aplicar(regra, v):
             return None, "valor_fora_do_dominio"
         inteiro = not isinstance(v, (decimal.Decimal, float)) or v == n
         return (n, None) if inteiro and a <= n <= b else (None, "valor_fora_do_dominio")
+    if par and par[0] == "idade_maxima_sem_limite":
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return None, "valor_fora_do_dominio"
+        if n < 0 or (isinstance(v, (decimal.Decimal, float)) and v != n):
+            return None, "valor_fora_do_dominio"
+        return (None, "idade_sem_limite") if n == 0 or n > par[1][0] else (n, None)
     if par:  # inteiro_zeros_esquerda
         d = _digitos(v)
         n = par[1][0]

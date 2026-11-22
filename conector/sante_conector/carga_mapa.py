@@ -194,6 +194,7 @@ GRAVIDADE_REGRA.update({"valor_elevado_ao_minimo": "baixa", "texto_resumido": "b
                         "segredo_aguarda_cofre": "media", "adotado_existente": "baixa", "vigencia_sem_fonte": "baixa",
                         "pai_ambiguo": "media", "documento_invalido": "media"})
 GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_indefinido": "alta"})
+GRAVIDADE_REGRA.update({"idade_sem_limite": "baixa"})
 GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
                         "sem_item_a_gravar": "baixa"})
 GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})

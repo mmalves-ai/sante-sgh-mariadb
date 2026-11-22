@@ -174,7 +174,8 @@ def _gerar_mapa(r, ins):
     esp["paciente"] = len(ids) - 2
     recusa("prontuario_duplicado"); recusa("nome_ausente")
     # atendimentos: 520 linhas; órfão (paciente inexistente), filho de paciente recusado, número repetido,
-    # categoria desconhecida, caráter ausente, cancelado, saída antes da entrada; fichas e altas
+    # categoria desconhecida, caráter vazio (C1: aceito com caráter estimado e pendência), cancelado, saída antes da
+    # entrada; fichas e altas
     aceitos = [i for n, i in enumerate(ids) if n not in (40, 41)]
     recusado_pac = ids[40]
     base = datetime.datetime(2025, 6, 1, 7, 0)
@@ -189,7 +190,7 @@ def _gerar_mapa(r, ins):
         if n == 32:
             pac = recusado_pac                      # paciente recusado (pai pendente)
         tp = "AIEU"[n % 4] if n != 33 else "Z"
-        car = 1 + n % 2 if n != 34 else None
+        car = 1 + n % 2 if n != 34 else None       # vazio: estimado pela categoria (carater_estimado), não recusa
         entrada = base + datetime.timedelta(minutes=37 * n, microseconds=123456)
         saida = entrada + datetime.timedelta(hours=1 + n % 30) if n % 5 else None
         if n == 35:
@@ -200,7 +201,7 @@ def _gerar_mapa(r, ins):
             entrada = datetime.datetime(1899, 12, 30)  # entrada sentinela: recusada com pendência, sem derrubar nada
         q("ATCABECATEND", [aid, cod, pac, entrada, saida, alta, tp, car, 1 + n % 4,
                            None if n % 11 == 0 else 7000 + n % 6, ativo, entrada])
-        recusado = n in (30, 31, 32, 33, 34, 37)
+        recusado = n in (30, 31, 32, 33, 37)
         if not recusado:
             esp["atendimento"] += 1
         reg += 1
@@ -219,7 +220,7 @@ def _gerar_mapa(r, ins):
         reg += 1
         q("RECADATE", [reg, 1, None, 1, 1])
         recusa("ficha_de_atendimento_inexistente")
-    for x in ("numero_duplicado", "paciente_inexistente", "pai_pendente", "categoria_desconhecida", "carater_ausente",
+    for x in ("numero_duplicado", "paciente_inexistente", "pai_pendente", "categoria_desconhecida",
               "entrada_sentinela"):
         recusa(x)
     return esp

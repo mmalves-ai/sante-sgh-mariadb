@@ -66,6 +66,27 @@ SEXOS = {"M": ("masculino", "Masculino"), "F": ("feminino", "Feminino"), "I": ("
 CATEGORIAS = {"A": ("ambulatorio", "Ambulatório"), "I": ("internacao", "Internação"),
               "E": ("externo", "Externo"), "U": ("pronto_atendimento", "Pronto atendimento")}
 CARATER = {1: "1", 2: "2"}  # domínio TISS 23 (caráter do atendimento): o catálogo oficial é que diz se existe
+# C1 (2026-11-22): caráter vazio ou 0 (57% e 42,6% na amostra; "não informado" na origem) não recusa o atendimento
+# (ADR 0006: continuidade; ADR 0007, 18: melhor estimativa com pendência). A evidência é a categoria do próprio
+# atendimento: pronto atendimento é urgência/emergência (TISS 23, código 2); as demais, eletivo (código 1).
+CARATER_ESTIMADO = {"U": "2"}
+CARATER_ESTIMADO_PADRAO = "1"
+
+
+def conciliacao_conferida(lidos, vistas, gravados, recusadas, soma_origem, soma_destino):
+    """Conciliação de uma entidade: tudo o que foi lido foi visto e está gravado ou recusado, e as somas de controle
+    batem. Tudo recusado (linhas lidas e nada gravado) nunca é conferido: as duas somas vazias empatam sem provar nada
+    (C1, 2026-11-22: 209 mil atendimentos recusados apareciam como conferidos)."""
+    return (lidos == vistas == gravados + recusadas and soma_origem == soma_destino
+            and not (lidos and not gravados))
+
+def carater_do_atendimento(valor, categoria):
+    """(código TISS 23, regra de pendência ou None). 1 e 2 valem como vieram; vazio ou 0 (não informado): estimado
+    pela categoria (carater_estimado, baixa); outro número: estimado do mesmo modo, com carater_fora_do_dominio."""
+    if valor in CARATER:
+        return CARATER[valor], None
+    est = CARATER_ESTIMADO.get(categoria, CARATER_ESTIMADO_PADRAO)
+    return est, ("carater_estimado" if valor in (None, 0) else "carater_fora_do_dominio")
 TIPOS_PROPRIOS = {
     "tipo_documento_identificacao": [("rg", "Registro geral (identidade)")],
     "tipo_endereco": [("residencial", "Residencial")],
@@ -790,7 +811,7 @@ class Carga:
             pac_chave = str(l["ID_RICADPAC"])
             pac, pac_existe = self._de_para("RICADPAC", pac_chave)
             tp = (txt(l["TP_ATENDIMENTO"]) or "").upper()
-            car = CARATER.get(l["CARATER_ATEND"])
+            car, car_pend = carater_do_atendimento(l["CARATER_ATEND"], tp)
             entrada, s0 = momento(l["DATA_HORA_ENTRADA"])
             regra = None
             if not estab:
@@ -801,14 +822,15 @@ class Carga:
                 regra = ("numero_duplicado" if numero else "numero_ausente", "critica")
             elif tp not in CATEGORIAS:
                 regra = ("categoria_desconhecida", "alta")
-            elif not car:
-                regra = ("carater_ausente", "alta")
             elif car not in self.carater:
                 regra = ("catalogo_oficial_ausente_carater_tiss", "critica")
             elif entrada is None:  # depois de momento(): sentinela (1899-12-30, ano < 1800) também não serve
                 regra = ("entrada_sentinela" if s0 else "entrada_ausente", "critica")
             if regra:
                 self._recusar("ATCABECATEND", chave, "atendimento", h, *regra); continue
+            if car_pend:
+                self._pendencia("ATCABECATEND", chave, car_pend,
+                                "baixa" if car_pend == "carater_estimado" else "media")
             saida, s1 = momento(l["DATA_HORA_SAIDA_EFETIVA"])
             if saida and saida < entrada:
                 self._pendencia("ATCABECATEND", chave, "saida_antes_entrada", "media"); saida = None
@@ -973,7 +995,7 @@ class Carga:
             so, sd, editados = self._conferir(ent, tab, destino, vistas, aguardam)
             recusadas = sum(1 for k in vistas if self.existente.get(tab, {}).get(k, (None,))[0] is None)
             lidos = int(contagens.get(tab, 0))
-            ok = lidos == len(vistas) == len(destino) + recusadas and so == sd
+            ok = conciliacao_conferida(lidos, len(vistas), len(destino), recusadas, so, sd)
             res[ent] = {"tabela_origem": tab, "registros_origem": lidos, "registros_destino": len(destino),
                         "recusados": recusadas, "aguardam_sincronizar": len(aguardam),
                         "editados_no_destino": editados, "apagados_na_origem": apagadas,
@@ -1004,7 +1026,7 @@ class Carga:
                 res[ent] = {"tabela_origem": "RICADPAC", "registros_origem": len(origem), "registros_destino": gravados,
                             "recusados": len(destino) - gravados, "editados_no_destino": editados,
                             "soma_origem": so, "soma_destino": sd,
-                            "conferido": set(origem) == set(destino) and so == sd}
+                            "conferido": set(origem) == set(destino) and so == sd and not (destino and not gravados)}
         if "TBTPEMP" in self.tabelas:
             ks = [r[0] for r in self._todas("SELECT chave_original FROM %s.conector_origem WHERE tabela_origem="
                                             "'TBTPEMP'" % self.ctl)]
