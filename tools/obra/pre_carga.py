@@ -5,7 +5,8 @@
       e colunas declaradas, mais a carga própria L3) das áreas pedidas (todas, sem filtro), com os pais delas (fecho de
       dependências). Amostra: tabela folha, as primeiras FOLHA linhas; tabela que é pai de outra, as primeiras PAI
       linhas (o pai pequeno entra inteiro). Filho de um pai truncado entra só se apontar para uma linha do pai que
-      entrou (filtro COL>PAI.CHAVE, pela coluna de referência OBRIGATÓRIA do mapa, no pai truncado com mais registros).
+      entrou (filtro COL>PAI.CHAVE, pela coluna de referência OBRIGATÓRIA do mapa, no pai truncado com mais registros),
+      salvo o filho com mais de TETO_FILTRO registros (aí as primeiras linhas; recusa pai_* nele pode ser da amostra).
   python3 -I tools/obra/pre_carga.py tsv <resultado.json> <recorte.tsv> <saida.tsv>
       TSV por tabela da origem: área, fatia, tabela, destino, amostra, gravados, recusados, recusas por regra.
 """
@@ -17,6 +18,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[2]
 MAPA = RAIZ / "conector/mapa"
 FOLHA, PAI = 1000, 5000
+TETO_FILTRO = 300000  # filho maior que isto não é filtrado: varrer milhões atrás de poucos pais trava a amostra
 L3 = ["TBTPEMP", "TBHOSPIT", "TBUSERS", "RICADPAC", "REALTA", "RECADATE", "ATCABECATEND"]
 
 
@@ -71,7 +73,7 @@ def recorte(saida, areas):
         filtro = ""
         trunc = [(regs(tab.get(p)), c, p) for c, p in refs.get(t, ()) if p in alvo and p != t
                  and regs(tab.get(p)) > lim[p] and "," not in (tab[p].get("chave") or ",")]
-        if trunc:
+        if trunc and regs(tab[t]) <= TETO_FILTRO:
             _, c, p = max(trunc)
             filtro = "%s>%s.%s" % (c, p, tab[p]["chave"])
         linhas.append("%s\t%d\t\t%s\t%s" % (t, lim[t], filtro, tab[t]["modulo"]))
