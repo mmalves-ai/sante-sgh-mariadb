@@ -383,9 +383,7 @@ async function fechar(): Promise<void> {
           <strong>{{ b.nome }}</strong>
           · {{ b.leito || t('enfermagem.comum.semLeito') }} ·
           {{ t('enfermagem.comum.atendimento', { numero: b.numero }) }} ·
-          <span class="secundario">{{
-            t('enfermagem.balanco.horaCorte', { hora: b.horaCorte })
-          }}</span>
+          <span class="secundario">{{ t('enfermagem.balanco.horaCorte', { hora: b.horaCorte }) }}</span>
         </p>
         <SanteAlerta
           v-if="!ligada"

@@ -3,6 +3,7 @@
 // decisão do cliente, pendências abertas, críticas e resolvidas por entidade e regra (com filtro), o que não carregou
 // e a prova de não copiar de cada tabela. Exportável em CSV com o mesmo filtro. Só agregados e entidades de destino.
 import type { ExecucaoConector, RelatorioConector } from '@sgh/contratos';
+import { SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { urlRelatorioCsv } from '../api-onboarding.js';
@@ -36,6 +37,18 @@ const regras = computed(() =>
     ),
   ].sort(),
 );
+const opcoesEntidade = computed(() => [
+  { valor: '', rotulo: t('onboarding.relatorio.todas') },
+  ...entidades.value.map((e) => ({ valor: e, rotulo: rotuloEntidade(e) })),
+]);
+const opcoesRegra = computed(() => [
+  { valor: '', rotulo: t('onboarding.relatorio.todas') },
+  ...regras.value.map((r) => ({ valor: r, rotulo: rotuloRegra(r) })),
+]);
+// Trocar a entidade limpa a regra (a lista de regras depende da entidade).
+watch(entidade, () => {
+  regra.value = '';
+});
 const porRegra = computed(() =>
   (rel.value?.porRegra ?? []).filter(
     (p) => (!entidade.value || p.entidade === entidade.value) && (!regra.value || p.regra === regra.value),
@@ -80,20 +93,18 @@ const exportar = computed(() =>
     </p>
 
     <div class="filtros">
-      <label>
-        {{ t('onboarding.relatorio.filtroEntidade') }}
-        <select v-model="entidade" data-testid="onb-rel-entidade" @change="regra = ''">
-          <option value="">{{ t('onboarding.relatorio.todas') }}</option>
-          <option v-for="e in entidades" :key="e" :value="e">{{ rotuloEntidade(e) }}</option>
-        </select>
-      </label>
-      <label>
-        {{ t('onboarding.relatorio.filtroRegra') }}
-        <select v-model="regra" data-testid="onb-rel-regra">
-          <option value="">{{ t('onboarding.relatorio.todas') }}</option>
-          <option v-for="r in regras" :key="r" :value="r">{{ rotuloRegra(r) }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="entidade"
+        :rotulo="t('onboarding.relatorio.filtroEntidade')"
+        :opcoes="opcoesEntidade"
+        data-testid="onb-rel-entidade"
+      />
+      <SanteSelecao
+        v-model="regra"
+        :rotulo="t('onboarding.relatorio.filtroRegra')"
+        :opcoes="opcoesRegra"
+        data-testid="onb-rel-regra"
+      />
       <a :href="exportar" download data-testid="onb-rel-exportar">{{ t('onboarding.relatorio.exportar') }}</a>
     </div>
 
@@ -233,7 +244,7 @@ const exportar = computed(() =>
 }
 .tabela th,
 .tabela td {
-  border-bottom: 1px solid var(--sgh-borda, #ccc);
+  border-bottom: 1px solid var(--sgh-borda);
   padding: 0.25rem 0.5rem;
   text-align: left;
 }

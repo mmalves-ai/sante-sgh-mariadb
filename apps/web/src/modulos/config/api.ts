@@ -205,4 +205,3 @@ export function contagemExibida(n: number | null, menorQue5: boolean): string {
   if (menorQue5) return '<5';
   return n === null ? '—' : String(n);
 }
-

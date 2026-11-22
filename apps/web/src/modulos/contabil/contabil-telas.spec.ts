@@ -204,7 +204,9 @@ const SIMULACAO: SimulacaoRegra = {
   parcial: false,
   porSituacao: { pendente: 0, contabilizado: 2, semRegra: 0, semConta: 1, substituido: 0, ignorado: 0 },
   lancamentos: [],
-  recusas: [{ fato: 'titulo_pagar:9', situacao: 'semConta', motivo: 'A tabela de integração não tem a conta.' }],
+  recusas: [
+    { fato: 'titulo_pagar:9', situacao: 'semConta', motivo: 'A tabela de integração não tem a conta.' },
+  ],
   totais: {
     debitos: 15000,
     creditos: 15000,

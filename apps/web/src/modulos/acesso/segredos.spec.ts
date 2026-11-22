@@ -140,7 +140,11 @@ describe('regras de tela', () => {
   it('o que falta no cofre segue a ordem do catálogo; a situação decide as ações', () => {
     const h = linha({ tabela: 'estabelecimento', chave: 'id=1', descricao: null });
     expect(
-      colunasSemCofre({ ...h, comValor: ['senha_assinatura', 'senha_provedor'], noCofre: ['senha_assinatura'] }),
+      colunasSemCofre({
+        ...h,
+        comValor: ['senha_assinatura', 'senha_provedor'],
+        noCofre: ['senha_assinatura'],
+      }),
     ).toEqual(['senha_provedor']);
     expect(situacaoDaLinha(linha({}))).toBe('falta-cofre');
     const pronta = linha({ noCofre: ['senha_portal'], bloqueio: null });
@@ -150,7 +154,11 @@ describe('regras de tela', () => {
     const aguardando = linha({ noCofre: ['senha_portal'], bloqueio: 'contingencia-ativa' });
     expect(situacaoDaLinha(aguardando)).toBe('bloqueado');
     expect(podeRetirarLinha(aguardando, true)).toBe(false);
-    const retirada = linha({ comValor: [], noCofre: ['senha_portal'], retiradoEm: '2026-10-28T13:05:00.000Z' });
+    const retirada = linha({
+      comValor: [],
+      noCofre: ['senha_portal'],
+      retiradoEm: '2026-10-28T13:05:00.000Z',
+    });
     expect(situacaoDaLinha(retirada)).toBe('retirado');
     expect(podeGuardarNaLinha(retirada, true)).toBe(false);
     expect(podeGuardarNaLinha(linha({}), true)).toBe(true);
@@ -169,7 +177,10 @@ describe('regras de tela', () => {
     const colunas = mensagensSegredos.colunas as Record<string, Record<string, string>>;
     for (const s of SEGREDOS_LEGADO)
       for (const c of s.colunas) expect(colunas[s.tabela]?.[c], `${s.tabela}.${c}`).toBeTruthy();
-    expect(Object.keys(mensagensSegredos.excecoes).sort()).toEqual(['contas_acesso_modulos', 'integracao_bancaria_externa']);
+    expect(Object.keys(mensagensSegredos.excecoes).sort()).toEqual([
+      'contas_acesso_modulos',
+      'integracao_bancaria_externa',
+    ]);
     // O motivo da tela é de produto: sem código de pendência do planejamento nem menção à cópia de dev.
     const motivos = mensagensSegredos.excecoesMotivo as Record<string, string>;
     for (const e of EXCECOES_SEGREDO_LEGADO) {
@@ -222,7 +233,9 @@ const segredos = (sobre: Partial<SegredosLegadoResposta> = {}): SegredosLegadoRe
     }),
   ],
   linhasTotal: 3,
-  excecoes: [{ objeto: 'integracao_bancaria_externa', motivo: 'lida por gatilhos que escrevem em banco externo' }],
+  excecoes: [
+    { objeto: 'integracao_bancaria_externa', motivo: 'lida por gatilhos que escrevem em banco externo' },
+  ],
   ...sobre,
 });
 
@@ -240,14 +253,14 @@ describe('Credenciais guardadas no banco', () => {
     await flushPromises();
     expect(w.get('[data-testid="segredos-resumo-convenio"]').text()).toContain('<5');
     expect(w.text()).not.toContain('convenio');
-    expect(w.get('[data-testid="segredos-situacao-tbconven-cod-901"]').text()).toBe('Falta guardar no cofre');
-    expect(w.get('[data-testid="segredos-situacao-tbconven-cod-902"]').text()).toBe('Pronta para retirar');
-    expect(w.find('[data-testid="segredos-retirar-tbconven-cod-901"]').exists()).toBe(false);
+    expect(w.get('[data-testid="segredos-situacao-convenio-id-901"]').text()).toBe('Falta guardar no cofre');
+    expect(w.get('[data-testid="segredos-situacao-convenio-id-902"]').text()).toBe('Pronta para retirar');
+    expect(w.find('[data-testid="segredos-retirar-convenio-id-901"]').exists()).toBe(false);
     expect(w.text()).toContain('Dados de acesso ao banco externo do estabelecimento');
     expect(w.text()).toContain('integração bancária automática');
     expect(w.text()).not.toContain('lida por gatilhos');
 
-    await w.get('[data-testid="segredos-guardar-sitpeqv-codigo-5"]').trigger('click');
+    await w.get('[data-testid="segredos-guardar-equipamento_laboratorio-codigo-5"]').trigger('click');
     await flushPromises();
     preencher('segredo-valor', 'credencial-sintetica');
     preencher('segredo-senha', 'senha-sintetica');
@@ -263,7 +276,7 @@ describe('Credenciais guardadas no banco', () => {
     });
     expect(w.get('[data-testid="segredos-aviso"]').text()).toContain('EQUIPAMENTO SINTETICO');
 
-    await w.get('[data-testid="segredos-retirar-tbconven-cod-902"]').trigger('click');
+    await w.get('[data-testid="segredos-retirar-convenio-id-902"]').trigger('click');
     await flushPromises();
     expect(document.body.textContent).toContain('Senha do portal');
     preencher('segredo-senha', 'senha-sintetica');

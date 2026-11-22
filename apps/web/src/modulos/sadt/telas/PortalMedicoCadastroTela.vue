@@ -123,7 +123,14 @@ async function enviar(): Promise<void> {
         </span>
         <span class="campo">
           <label for="medico-cpf">{{ t('sadt.portal.cpf') }}</label>
-          <input id="medico-cpf" v-model="cpf" inputmode="numeric" maxlength="14" autocomplete="off" data-testid="medico-cpf" />
+          <input
+            id="medico-cpf"
+            v-model="cpf"
+            inputmode="numeric"
+            maxlength="14"
+            autocomplete="off"
+            data-testid="medico-cpf"
+          />
         </span>
         <span class="campo">
           <label for="medico-email">{{ t('sadt.portal.email') }}</label>

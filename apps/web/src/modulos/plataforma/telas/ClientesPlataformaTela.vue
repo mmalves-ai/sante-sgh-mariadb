@@ -436,7 +436,7 @@ onBeforeUnmount(parar);
 }
 .tabela th,
 .tabela td {
-  border-bottom: 1px solid var(--sgh-borda, #ccc);
+  border-bottom: 1px solid var(--sgh-borda);
   padding: 0.25rem 0.5rem;
   text-align: left;
 }
@@ -454,7 +454,7 @@ onBeforeUnmount(parar);
   gap: 0.5rem;
 }
 .secundario {
-  color: var(--sgh-texto-secundario, #555);
+  color: var(--sgh-texto-secundario);
 }
 progress {
   width: min(32rem, 100%);

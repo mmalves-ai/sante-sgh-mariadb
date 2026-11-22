@@ -151,7 +151,8 @@ async function salvarMeta(): Promise<void> {
         item: a.item,
         tipo: a.tipo,
         feita: feita.value === 'sim',
-        quando: feita.value === 'sim' && hora.value ? horaDigitadaParaLocal(d.value!.lidoEm, hora.value) : null,
+        quando:
+          feita.value === 'sim' && hora.value ? horaDigitadaParaLocal(d.value!.lidoEm, hora.value) : null,
         motivo: motivo.value.trim() || null,
       },
       novaChaveClassificacao('meta-protocolo'),

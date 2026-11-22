@@ -612,4 +612,3 @@ describe('backup verificado', () => {
     expect(w.find('[data-testid="backup-aviso"]').text()).toContain('Restauração registrada');
   });
 });
-
