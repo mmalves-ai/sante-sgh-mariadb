@@ -195,3 +195,5 @@ GECTRLENTREGADOCSAIDA	GECADDISPENSACAO	L7-08 r4: o setor da entrega é achado pe
 TBDIGITAL_ESPECIALIDADE	TBESPEC	L8-16 r4: a equivalência de especialidade do parceiro digital acha a especialidade do hospital pela chave alternativa (TBESPEC.ID_TBDIGITAL_ESPECIALIDADE, referência do pai para o filho); a especialidade vinha depois na ordem de carga
 MFDESACR	MFCTAREC	L8-12 r4: o ajuste a receber (TP_LAN 1) acha a parcela a receber pela chave de negócio declarada na fatia, sem FK na origem
 TBMEDESP	TBPROFIS	conferidor r4: o profissional da especialidade vem pela referência encadeada ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS; com TBESPEC adiantada (ciclo da L8-16) a especialidade do médico passou a vir antes do profissional
+CCAGENDA	CCSALAS	pedido da fatia L6-16 na rodada 6: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (sala reservada da agenda)
+TBPACTHM	TBCENCUS	conferidor da rodada 6: centro de custo do item incluso do pacote (ref:TBCENCUS); o pai vinha depois do filho na ordem de carga

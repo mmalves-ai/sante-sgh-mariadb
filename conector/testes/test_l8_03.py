@@ -287,7 +287,7 @@ class Declaracoes(unittest.TestCase):
 ARESTAS_PEDIDAS = ("TBCRECOO->TBPROFIS", "TBINDICE->TBCONVEN", "TBPORMED->TBCONVEN", "TBLOCCON->TBCENCUS",
                   # r6: pedido R6-1 (pais do pacote)
                   "TBPACTHM->TBCONVEN", "TBPACTHM->TBTABTHM", "TBPACTHM->TBTABDTH", "TBPACTHM->TBGRAUPARTPROC",
-                  "TBPACTHM->TBLOCCON")
+                  "TBPACTHM->TBLOCCON", "TBPACTHM->TBCENCUS")
 
 
 class OrdemDasReferencias(unittest.TestCase):
@@ -343,6 +343,10 @@ class Pacote(unittest.TestCase):
         self.assertEqual(self._via("pacote_item_incluso.item_faturavel_id"),
                          ["ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id;se:TIPO=1",
                           "ref:TBTABDTH.(TAB,OPE)=(TABELA,PROCTO)/item_faturavel;se:TIPO=2"])
+        # conferidor r6: o mat/med (TIPO 3) tem destino próprio, nunca fica sem alvo
+        self.assertEqual(self._via("pacote_item_incluso.item_referencia_matmed_id"),
+                         ["ref:TBMATMED.(TAB,COD)=(TABELA,PROCTO);se:TIPO=3"])
+        self.assertEqual(self._via("pacote_item_incluso.centro_custo_id"), ["ref:TBCENCUS"])
 
     def test_agrupado_e_vigencia_pela_evidencia(self):
         self.assertIn("antes;agrupar:CON,CONTAS,THM", self._via("pacote.codigo"))

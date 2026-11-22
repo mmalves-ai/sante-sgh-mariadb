@@ -360,7 +360,7 @@ def _ddl():
 DDL = _ddl()
 # pais de fora da fatia dados como já carregados (só pela chave: conector_origem)
 PAIS_EXTERNOS = {"GECADPED": [1, 2], "GELANBAL": [1, 2], "GEVALMEM": [10, 11, 12], "TBUSERS": ["ana", "bia"], "TBEDITREL": [1], "TBEMPHOS": [1],
-                 "TBCENCUS": [10, 20, 30], "TBTP_ENV_LISTA_AVAL_FARM": [1], "GELOCARM": [1, 2], "RICADPAC": [500],
+                 "TBCENCUS": [10, 20, 30], "TBHOSPIT": [1], "TBTP_ENV_LISTA_AVAL_FARM": [1], "GELOCARM": [1, 2], "RICADPAC": [500],
                  "GEITENS": [100, 101], "TBSITUACAOFARMACIA": [1], "PRCHKGERAL": [700, 701], "GEITEMKITRAS": [50, 51],
                  "GEKITRAS": [5], "TBUNICON": ["UN", "MG"], "PRLANGERAL": [1],
                  "RECADATE": [1001, 1002], "PRPRESC": [300], "TBPROFIS": [60], "GETABVIA": ["VO"], "TBLOCCON": [5],
@@ -589,7 +589,8 @@ def linhas(r, ins):
     itens = {}
     for usu, i, v in [("ana", 1, dict({c: _falso(tp, 1) for c, tp, _ in COLUNAS["GEPARAM"]},
                                       ID_TBCBOPRO_FARM_RESP_GERAL=70, OLD_ID_TBCBOPRO_RESP_MANIPULACA=None,
-                                      ID_TBEDITREL_ORDEM_COMPRA=None, ID_TBEMPHOS_INTEG_CONT_CUSTO=1)),
+                                      ID_TBEDITREL_ORDEM_COMPRA=None, ID_TBEMPHOS_INTEG_CONT_CUSTO=1,
+                                      HOSP=1, CDC_CRE=10, CDC_DEB=20)),  # conferidor r6: referências achadas
                       ("bia", 2, dict(GER_DMM="N", CONS_AUT="X", NUM_VIAS=2, PERC_VE_F=D("2.50"),
                                       DATA_EI=dt(2024, 3, 1), ID_TBCBOPRO_FARM_RESP_GERAL=71,
                                       OLD_ID_TBCBOPRO_RESP_MANIPULACA=70, ID_TBEDITREL_ORDEM_COMPRA=1,

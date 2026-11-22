@@ -61,7 +61,7 @@ INSERT IGNORE INTO parametro_definicao (chave, modulo_sistema_id, descricao, tip
     UNION ALL SELECT 'estoque.digitaMarca' AS chave, 'Digita marca (sim/nao)' AS descricao, 'booleano' AS tipo
     UNION ALL SELECT 'estoque.exibeMaterialMedicamentoLista' AS chave, 'Exibe material medicamento lista (sim/nao)' AS descricao, 'booleano' AS tipo
     UNION ALL SELECT 'estoque.modeloEtiquetaDose' AS chave, 'Modelo etiqueta dose' AS descricao, 'inteiro' AS tipo
-    UNION ALL SELECT 'estoque.hospitalPadrao' AS chave, 'Hospital padrao' AS descricao, 'inteiro' AS tipo
+    UNION ALL SELECT 'estoque.hospitalPadrao' AS chave, 'Hospital padrao (id do estabelecimento)' AS descricao, 'inteiro' AS tipo
     UNION ALL SELECT 'estoque.dataEstoqueInicial' AS chave, 'Data estoque inicial' AS descricao, 'data' AS tipo
     UNION ALL SELECT 'estoque.periodoInicioEntrada' AS chave, 'Periodo inicio entrada' AS descricao, 'data' AS tipo
     UNION ALL SELECT 'estoque.periodoFimEntrada' AS chave, 'Periodo fim entrada' AS descricao, 'data' AS tipo
@@ -116,8 +116,8 @@ INSERT IGNORE INTO parametro_definicao (chave, modulo_sistema_id, descricao, tip
     UNION ALL SELECT 'estoque.rastreiaItem' AS chave, 'Rastreia item (sim/nao)' AS descricao, 'booleano' AS tipo
     UNION ALL SELECT 'estoque.lancamentoAVista' AS chave, 'Lancamento a vista (sim/nao)' AS descricao, 'booleano' AS tipo
     UNION ALL SELECT 'estoque.historicoPadraoContabil' AS chave, 'Historico padrao contabil' AS descricao, 'inteiro' AS tipo
-    UNION ALL SELECT 'estoque.centroCustoCredito' AS chave, 'Centro custo credito' AS descricao, 'inteiro' AS tipo
-    UNION ALL SELECT 'estoque.centroCustoDebito' AS chave, 'Centro custo debito' AS descricao, 'inteiro' AS tipo
+    UNION ALL SELECT 'estoque.centroCustoCredito' AS chave, 'Centro custo credito (id do centro de custo)' AS descricao, 'inteiro' AS tipo
+    UNION ALL SELECT 'estoque.centroCustoDebito' AS chave, 'Centro custo debito (id do centro de custo)' AS descricao, 'inteiro' AS tipo
     UNION ALL SELECT 'estoque.imprimeAutorizacaoPagamento' AS chave, 'Imprime autorizacao pagamento (sim/nao)' AS descricao, 'booleano' AS tipo
     UNION ALL SELECT 'estoque.periodoConferenciaRequisicao' AS chave, 'Periodo conferencia requisicao' AS descricao, 'inteiro' AS tipo
     UNION ALL SELECT 'estoque.informaNaturezaOperacao' AS chave, 'Informa natureza operacao (sim/nao)' AS descricao, 'booleano' AS tipo

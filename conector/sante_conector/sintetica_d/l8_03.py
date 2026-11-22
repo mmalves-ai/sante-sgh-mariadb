@@ -257,17 +257,17 @@ def linhas(r, ins):
     q("TBCONVEN", COD=1, NOME="Convênio exemplo um", THM=1)
     q("TBCONVEN", COD=2, NOME="Convênio exemplo dois", THM=2)
     for con, contas, thm, tipo, tab, procto, kw in (
-            (1, "I", 30, 1, 1, 10, dict(NOME="Honorário exemplo", QTDE=D("1.00"), ATO=1, QTDE_DIARIA="N")),
-            (1, "I", 30, 3, 1, 500, dict(QTDE=D("0.00"), ATO=0, QTDE_DIARIA="S")),
+            (1, "I", 30, 1, 1, 10, dict(NOME="Honorário exemplo", QTDE=D("1.00"), ATO=1, QTDE_DIARIA="N", CDC=5)),
+            (1, "I", 30, 3, 2, 101, dict(QTDE=D("0.00"), ATO=0, QTDE_DIARIA="S")),
             (1, "I", 30, 1, 1, 77, dict(NOME="Honorário sem preço", ATO=1, QTDE_DIARIA="N")),
             (2, "A", 99, 1, 1, 10, dict(NOME="Honorário exemplo", ATO=1, QTDE_DIARIA="N"))):
         q("TBPACTHM", CON=con, CONTAS=contas, THM=thm, TIPO=tipo, TABELA=tab, PROCTO=procto, **kw)
     return {
-        # r6: 1 item gravado (a1) sob o pacote A; a2 e a3 recusadas pelo CHECK do alvo (4025); B recusada pelo NOT
+        # r6: a1 (honorário, centro de custo 5) e a2 (mat/med da tabela própria, conferidor r6) gravados sob o pacote A (a2 adota o acordo do convênio que a1 criou); a3 recusada pelo CHECK do alvo (4025); B recusada pelo NOT
         # NULL do pacote (1048); pai_inexistente: grau 1 em a1, a3 e B, preço 1|77 de a3 e os 3 do procedimento de B;
         # presumidos: tipo do pacote nas 4 linhas e descrição de B; vigência pela evidência no pacote e no acordo
-        "TBPACTHM": {"gravados": 1, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 1,
-                                                   "restricao_destino_4025": 2, "valor_fora_do_dominio": 1,
+        "TBPACTHM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 7, "restricao_destino_1048": 1,
+                                                   "restricao_destino_4025": 1, "valor_fora_do_dominio": 1,
                                                    "valor_presumido": 5, "vigencia_sem_fonte": 8}},
         # R5 (ADR 0006): listas -> parametro_opcao; TBCTRTAT 4 sem nome com rótulo presumido; TBIRREGCTRCTA 3 (1048)
         # módulo faturamento e definição do parâmetro: a 1ª lista na ordem do mapa (TBCONVPERCTAPAC) cria os dois e

@@ -3,6 +3,8 @@ ALTER TABLE pacote_item_incluso
   ADD CONSTRAINT fk_pacote_item_incluso_pacote_id FOREIGN KEY (pacote_id) REFERENCES pacote (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_pacote_item_incluso_item_faturavel_id FOREIGN KEY (item_faturavel_id) REFERENCES item_faturavel (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_pacote_item_incluso_grupo_faturamento_id FOREIGN KEY (grupo_faturamento_id) REFERENCES grupo_faturamento (id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_pacote_item_incluso_item_referencia_matmed_id FOREIGN KEY (item_referencia_matmed_id) REFERENCES item_referencia_matmed (id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_pacote_item_incluso_centro_custo_id FOREIGN KEY (centro_custo_id) REFERENCES centro_custo (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_pacote_item_incluso_item_faturavel_similar_id FOREIGN KEY (item_faturavel_similar_id) REFERENCES item_faturavel (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_pacote_item_incluso_funcao_equipe_cobranca_id FOREIGN KEY (funcao_equipe_cobranca_id) REFERENCES funcao_equipe_cobranca (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_pacote_item_incluso_setor_funcional_id FOREIGN KEY (setor_funcional_id) REFERENCES setor_funcional (id) ON DELETE RESTRICT;

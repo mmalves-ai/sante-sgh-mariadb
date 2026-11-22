@@ -144,3 +144,22 @@ Tipo da prova das 41 tabelas que não são copiadas:
   - Fatias ok: L5-07 a L5-11, L6-01, L6-03, L6-05, L6-13, L6-15, L7-03, L8-04, L8-07 a L8-09, L8-11 a L8-14 e
     L8-17 a L8-19.
   - As causas das 35 vermelhas estão nos avisos devolvidos ao orquestrador.
+
+## Rodada 6 (conferidor final, 2026-11-22)
+
+Só contagens; imagem sintética.
+
+### Contagens
+- Cobertura: 1185 carregáveis; CARREGA 1144, DESCARTE 41, BLOQUEADA 0 (largada da rodada 5: 836 / 285 / 64).
+- Autoconferência: 57 de 57 fatias ok (carga e conciliação duas vezes, banco descartável).
+- Suíte do conector: 1200 testes, OK (10 pulados, 2 falhas esperadas).
+
+### Achados da revisão
+- TBPACTHM, mat/med (alta): **corrigido.** O item incluso do pacote ganhou `item_referencia_matmed_id` (12_FAT/05, o CHECK do alvo aceita o mat/med). O TIPO 3 liga por `ref:TBMATMED.(TAB,COD)=(TABELA,PROCTO);se:TIPO=3`. A sintética grava o item de mat/med.
+- TBPACTHM, retrato e centro de custo (média): **corrigido em parte.** O CDC tem destino estruturado (`pacote_item_incluso.centro_custo_id`, `ref:TBCENCUS`, nova aresta TBPACTHM -> TBCENCUS). O LOC_CON de cada item não foi para a chave do pacote: o valor que diverge do primeiro item fica no histórico de mescla, com pendência visível (ADR 0007, 20). Rever se a origem real tem mais de um local por pacote.
+- `adotar_maior` com `agrupar` (média): **corrigido no motor.** Quando o cabeçalho já existe (execução anterior ou outro membro do grupo), o contador recebe `GREATEST`, e essas colunas não geram `grupo_divergente_aguarda_sincronizar`. **Falta** o teste de segunda carga com número maior na origem.
+- GEPARAM (média): **corrigido em parte.** HOSP -> `ref:TBHOSPIT`, CDC_CRE e CDC_DEB -> `ref:TBCENCUS`, guardando o id do destino (semente 11_SUP/09 descrita). UNID_GEST, HIS_PAD, HIS_PAD_SAIDA e CONTA_DESCONTO seguem como código: não há cadastro de unidade gestora, histórico ou conta contábil no mapa (a contabilidade é externa, ver `depara_conta_externa`).
+- L8-15 e PSTPSVIGENCIA (média): **em aberto.** Telefone, endereço e CID do óbito do beneficiário estão só no retrato. Nenhuma fatia grava `telefone_pessoa` nem `endereco_pessoa` hoje: falta a regra de telefone (DDD e número) e a pessoa não tem coluna para o CID do óbito. PSTPSVIGENCIA tem só a trilha. A cobertura ainda conta como CARREGA uma tabela cujo único destino é trilha ou retrato.
+
+### Pedidos aplicados
+- Aresta CCAGENDA -> CCSALAS (L6-16, pedido 23), mapa regenerado.

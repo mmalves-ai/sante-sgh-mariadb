@@ -1935,10 +1935,16 @@ class CargaMapa(carga.Carga):
                         pad = [x for x in cs if isinstance(x, _PADRAO)]
                         if agrupado:  # o resumo é o cabeçalho no destino; anterior com agregado mudado: pendência
                             self.cont["agrupadas"] = self.cont.get("agrupadas", 0) + 1
+                            maiores = [m for m in (op.get("adotar_maior") or ()) if v.get(m) is not None]
+                            if maiores:  # rodada 6: o contador do cabeçalho já existente também só avança (Sincronizar)
+                                with self._c() as c:
+                                    c.execute("UPDATE `%s` SET %s WHERE id=%%s" % (dt, ", ".join(
+                                        "`%s`=GREATEST(COALESCE(`%s`, %%s), %%s)" % (m, m) for m in maiores)),
+                                        [x for m in maiores for x in (v[m], v[m])] + [rid])
                             lido = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
                                 ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0]) if nomes else []
-                            if anterior and any(not isinstance(a, _PADRAO) and canon(a) != canon(b)
-                                                for a, b in zip(cs, lido)):
+                            if anterior and any(not isinstance(a, _PADRAO) and n not in maiores and canon(a) != canon(b)
+                                                for n, a, b in zip(nomes, cs, lido)):
                                 self._pendencia(t, chave, "grupo_divergente_aguarda_sincronizar", "media")
                             cs = lido
                         elif adotado:  # nada é sobrescrito: o resumo é o que está no destino
