@@ -43,6 +43,9 @@ SAIDA=${CONECTOR_SAIDA_DIR:-$RAIZ/.tmp/conector}
 mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
+# O usuário padrão da imagem não é root (DS-0002). Toda execução daqui pede root, como antes: os comandos que abrem o
+# arquivo (dm-snapshot) precisam dele junto do --privileged, e os demais gravam nas pastas e volumes montados.
+COMO_ROOT=(--user 0:0)
 PRIV=()
 case "$1" in registrar|ler-faixa|medir-adr9|medir-carga|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
 REDE=(--network none)
@@ -63,7 +66,7 @@ if [ "$1" = worker ]; then
   SUBREDE=$(docker network inspect "$REDE_INT" -f '{{(index .IPAM.Config 0).Subnet}}')
   CONECTOR_MOTOR_SENHA=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-32)
   export CONECTOR_MOTOR_SENHA
-  docker run --rm --network "$REDE_INT" -v "$AQUI/sante_conector:/app/sante_conector:ro" \
+  docker run --rm "${COMO_ROOT[@]}" --network "$REDE_INT" -v "$AQUI/sante_conector:/app/sante_conector:ro" \
     -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA \
     -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" "$IMG" conta-motor --rede "$SUBREDE" >/dev/null
   unset CONECTOR_MARIADB_SENHA          # o worker nunca recebe a senha root
@@ -90,7 +93,7 @@ elif [ "$1" != worker-separado ]; then
   unset PLATAFORMA_CHAVE_MESTRA ARQUIVOS_RAIZ
 fi
 
-docker run --rm "${REDE[@]}" "${PRIV[@]}" "${ARQ[@]}" \
+docker run --rm "${COMO_ROOT[@]}" "${REDE[@]}" "${PRIV[@]}" "${ARQ[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" -v "$AQUI/mapa:/app/mapa:ro" \
   -v "$RAIZ/db/plataforma:/db-plataforma:ro" -v "$RAIZ/db/migracoes:/app/db/migracoes:ro" \

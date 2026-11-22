@@ -9,7 +9,7 @@ RUN apt-get update -qq \
  && systemctl mask systemd-firstboot.service systemd-udevd.service getty.target console-getty.service \
  && ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 # DS-0002: o usuário padrão da imagem não é root. O systemd como processo 1 exige root, então o ensaio o pede na
-# execução (docker run --user 0:0), e qualquer outro uso da imagem sobe sem privilégio.
+# execução (ensaiar.sh, cmd_servidor: docker run --user 0:0), e qualquer outro uso da imagem sobe sem privilégio.
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin ensaio
 USER 10001:10001
 STOPSIGNAL SIGRTMIN+3

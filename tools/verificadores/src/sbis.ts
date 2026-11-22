@@ -3,6 +3,7 @@
 // (@sgh/contratos) e da tabela `MATRIZ_SBIS` (sbis-matriz.ts) e falha se:
 //   - um requisito do catálogo não tem linha na matriz, ou a matriz cita requisito que o catálogo não tem;
 //   - um requisito não tem teste, ou cita teste que não está versionado;
+//   - uma linha da matriz tem lacuna aberta (a parte do requisito ainda não atendida nunca sai "conforme");
 //   - com --executar, um teste unitário citado falha (os de integração rodam na cópia, pelo verificar:tudo).
 // Gera dist/sbis/matriz-rastreabilidade.{md,json} (item "matriz-rastreabilidade" do pacote de evidências) e o
 // checklist do pacote (itens × requisitos), na versão candidata e a cada execução do CI.
@@ -24,7 +25,9 @@ export interface LinhaRastreabilidade {
   readonly funcionalidade: string;
   readonly testes: readonly { readonly arquivo: string; readonly resultado: ResultadoTeste }[];
   /** 'sem-execucao': a linha está completa, mas nenhum teste rodou (modo estático do `pnpm verificar`). */
-  readonly resultado: 'conforme' | 'nao-conforme' | 'sem-execucao';
+  readonly resultado: 'conforme' | 'nao-conforme' | 'sem-execucao' | 'lacuna';
+  /** A parte do requisito que ainda não é atendida (linha `lacuna` da matriz); null quando não há. */
+  readonly lacuna: string | null;
 }
 
 export interface AchadoSbis {
@@ -70,7 +73,10 @@ export function montarMatrizSbis(
       testes.every((t) => t.resultado !== 'falhou') &&
       linha.testes.every((t) => versionado(t));
     // Conforme só com a execução: sem ela, a linha só prova que o teste existe (regra 9: suíte verde na candidata).
-    const resultado = !valida ? 'nao-conforme' : executou ? 'conforme' : 'sem-execucao';
+    // Lacuna aberta: nunca "conforme" e sempre achado (aceitá-la é exceção do dono, não da matriz).
+    const lacuna = linha.lacuna?.trim() ? linha.lacuna.trim() : null;
+    if (lacuna) achados.push({ codigo: r.codigo, motivo: `lacuna aberta: ${lacuna}` });
+    const resultado = !valida ? 'nao-conforme' : lacuna ? 'lacuna' : executou ? 'conforme' : 'sem-execucao';
     linhas.push({
       codigo: r.codigo,
       nivel: r.nivel,
@@ -80,6 +86,7 @@ export function montarMatrizSbis(
       funcionalidade: linha.funcionalidade,
       testes,
       resultado,
+      lacuna,
     });
   }
   return { linhas, achados };
@@ -112,6 +119,9 @@ export function matrizEmMarkdown(
     '',
     `Gerada por \`pnpm sbis:verificar${executou ? ' --executar' : ''}\`. ${linhas.length} requisitos; ` +
       `${linhas.filter((l) => l.resultado === 'conforme').length} conformes` +
+      (linhas.some((l) => l.resultado === 'lacuna')
+        ? `, ${linhas.filter((l) => l.resultado === 'lacuna').length} com lacuna aberta`
+        : '') +
       (executou
         ? '.'
         : `, ${linhas.filter((l) => l.resultado === 'sem-execucao').length} sem execução (só a estrutura).`),
@@ -121,7 +131,8 @@ export function matrizEmMarkdown(
     ...linhas.map(
       (l) =>
         `| ${l.codigo} | ${l.nivel} | ${l.regime}${l.concessao ? ` (${l.concessao})` : ''} | ${l.funcionalidade} | ` +
-        `${l.testes.map((t) => `\`${t.arquivo}\` (${ROTULO[t.resultado]})`).join('<br>')} | ${l.resultado} |`,
+        `${l.testes.map((t) => `\`${t.arquivo}\` (${ROTULO[t.resultado]})`).join('<br>')} | ` +
+        `${l.lacuna ? `**LACUNA**: ${l.lacuna}` : l.resultado} |`,
     ),
     '',
     '## Checklist do pacote de evidências',

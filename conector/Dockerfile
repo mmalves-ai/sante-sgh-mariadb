@@ -17,8 +17,9 @@ WORKDIR /app
 COPY sante_conector /app/sante_conector
 COPY testes /app/testes
 COPY mapa /app/mapa
-# DS-0002: o usuário padrão da imagem não é root. Os comandos que abrem o arquivo (dm-snapshot, --privileged) pedem
-# root na execução (conector.sh: --user 0:0 junto do --privileged); os demais rodam como este usuário.
+# DS-0002: o usuário padrão da imagem não é root. O conector.sh pede root em toda execução (--user 0:0): a abertura
+# do arquivo (dm-snapshot, com --privileged) exige, e os demais comandos gravam nas pastas montadas. Outro uso da
+# imagem sobe sem root.
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin conector
 USER 10001:10001
 ENTRYPOINT ["python3", "-s", "-m", "sante_conector.cli"]

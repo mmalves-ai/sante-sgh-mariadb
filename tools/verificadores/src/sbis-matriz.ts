@@ -11,9 +11,20 @@ export interface LinhaMatrizSbis {
   readonly funcionalidade: string;
   /** Testes versionados (caminho a partir da raiz) que provam o requisito. */
   readonly testes: readonly string[];
+  /**
+   * Parte do requisito que o produto ainda NÃO atende ou não prova (com a referência do pedido). A linha nunca sai
+   * "conforme" e vira achado do verificador: aceitar a lacuna para a esteira passar é exceção que só o dono autoriza.
+   */
+  readonly lacuna?: string;
 }
 
 const L = (funcionalidade: string, ...testes: string[]): LinhaMatrizSbis => ({ funcionalidade, testes });
+/** Linha com lacuna aberta: os testes listados provam só a parte atendida. */
+const LL = (funcionalidade: string, lacuna: string, ...testes: string[]): LinhaMatrizSbis => ({
+  funcionalidade,
+  testes,
+  lacuna,
+});
 
 export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   // NGS1: segurança da informação
@@ -91,9 +102,11 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'apps/api/src/modulos/digitalizacao/digitalizacao.spec.ts',
     'packages/dominio-acesso/src/cifra-plataforma.spec.ts',
   ),
-  'SBIS-16': L(
+  'SBIS-16': LL(
     'SGH_TRILHA só de inclusão com hash encadeado; imutabilidade',
-    'apps/api/src/modulos/administracao/sbis/porta-propria.int.spec.ts',
+    'a cadeia de integridade da trilha (fecho diário por hash) não tem tabela no modelo; a verificação de ' +
+      'integridade responde "trilha-sem-encadeamento" até o DDL pedido (docs/obra/fatias/f22/saida/05-05.json)',
+    'packages/testes/src/integracao/trilha.int.spec.ts',
     'apps/api/src/autorizacao/trilha.spec.ts',
     'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
   ),
@@ -140,9 +153,11 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'tools/verificadores/src/lgpd/datamart-sem-dado-pessoal.spec.ts',
     'packages/dominio-cadastro/src/paciente/mascaramento.spec.ts',
   ),
-  'SBIS-26': L(
+  'SBIS-26': LL(
     'Correção do registro clínico só pelo autor, com nova versão; apagar recusado',
-    'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
+    'falta o teste de integração em que o banco recusa o DELETE em tabela clínica ao papel do módulo ' +
+      '(pedido em docs/obra/fatias/f22/saida/05-01.json); hoje a recusa é provada só nos scripts de privilégio',
+    'tools/verificadores/src/imutabilidade.spec.ts',
     'apps/api/src/modulos/pep/registro.spec.ts',
     'apps/api/src/modulos/pep/registro-regras.spec.ts',
   ),
@@ -188,6 +203,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   'ECF.07.30': L(
     'Preceptoria: residente registra, preceptor valida e coassina',
     'apps/api/src/modulos/pep/documentos.spec.ts',
+    'apps/api/src/modulos/pep/prescricao.spec.ts',
   ),
   'ECF.07.33': L(
     'Sumário de alta no modelo oficial, editável, em PDF',
@@ -294,7 +310,7 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   'SBIS-37': L(
     'Serviço externo fora do ar: pendente, aviso e reprocessamento',
     'packages/dominio-documento/src/assinatura/reprocessamento.spec.ts',
-    'apps/api/src/modulos/assinatura/aplicacao/servico.spec.ts',
+    'apps/api/src/modulos/assinatura/porta-propria.int.spec.ts',
   ),
   'SBIS-38': L(
     'Selo de assinado e encadeamento por paciente',
