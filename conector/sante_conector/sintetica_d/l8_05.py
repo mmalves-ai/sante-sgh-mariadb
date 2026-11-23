@@ -297,7 +297,7 @@ CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TB
               "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM", "TBVLRMEM") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
 # declaração pronta e comentada (BLOQUEADA, motivo na linha); as três primeiras com linhas específicas na imagem
 COMENTADAS = ()  # conferidor r4: TBPERMEM carrega (modelo 12_FAT/13); TBEMIREFMATMED é da L8-04
-COM_LINHAS = ()
+COM_LINHAS = ("TBCTRMEM",)  # conferidor F4: + tabelas 4 e 5 no domínio real T/F
 # só lida pela referência encadeada (cadastro de versões TISS da origem, catálogo oficial nunca gravado)
 SO_ORIGEM = ("TBVERSAOTISS", "TBCTRMEM")
 # r5: TBTPOBRIGAMAT e as listas do campo adicional da guia saíram da fatia (L8-04, dona pelo índice, pedido R5-1)
@@ -387,6 +387,14 @@ def linhas(r, ins):
     _ins(ins, "TBCTRMEM", COD=3, NOME="Tabela exemplo referencia", REF_BRA="S", REF_SIMP="N", SITUACAO="A")
     for x in [(1, 77, dt(2025, 5, 1), D("10.0"), 3, None, None, 55, "I"),
               (2, 78, dt(2025, 5, 1), D("12.0"), 3, None, None, 55, "I")]:
+        ins("TBPERMEM", list(x))
+    # conferidor F4: domínio REAL da marca é T/F (S/N acima é o legado da fatia). Tabela 4 própria (F/F): o acordo liga
+    # ao item da origem; tabela 5 licenciada (T/F): liga ao espelho pelo código 77. Com 'N,' e 'S' as duas caíam fora
+    # dos dois ramos (item NULL, CHECK 4025): 2 gravados a mais
+    _ins(ins, "TBCTRMEM", COD=4, NOME="Tabela exemplo propria TF", REF_BRA="F", REF_SIMP="F", SITUACAO="A")
+    _ins(ins, "TBCTRMEM", COD=5, NOME="Tabela exemplo referencia TF", REF_BRA="T", REF_SIMP="F", SITUACAO="A")
+    for x in [(1, 5, dt(2025, 6, 1), D("4.0"), 4, None, None, 1, "I"),
+              (2, 77, dt(2025, 6, 1), D("6.0"), 5, None, None, 55, "A")]:
         ins("TBPERMEM", list(x))
     # r5 (ADR 0006, 3; achado): valores por tabela e data: 1 e 2 tabela própria (gravados numa edição de migração da
     # tabela, agrupada); 3 tabela com referência licenciada (pulada: licenca_nao_comprovada); 4 sem valor (CHECK 4025)
@@ -571,7 +579,7 @@ def linhas(r, ins):
     })
     # conferidor r4: preço negociado de mat/med pelo item de referência
     # r5: + item ligado ao espelho (gravado) e código fora do espelho (espelho_codigo_inexistente + CHECK 4025)
-    esperado["TBPERMEM"] = {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 2,
+    esperado["TBPERMEM"] = {"gravados": 6, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 2,
                                                           "valor_fora_do_dominio": 1, "espelho_codigo_inexistente": 1}}
     esperado["TBVLRMEM"] = {"gravados": 2, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_4025": 1,
                                                  "adotado_existente": 1}}  # a fonte matmed_1 já existe: adotada

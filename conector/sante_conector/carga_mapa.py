@@ -694,13 +694,18 @@ class CargaMapa(carga.Carga):
             return None
         return r
 
-    def _cond(self, linha, cond):
-        """Condição de linha (`mapa.condicao`): a coluna (ou a do pai pela encadeada) tem um dos valores."""
+    def _cond(self, linha, cond, pend=None):
+        """Condição de linha (`mapa.condicao`): a coluna (ou a do pai pela encadeada) tem um dos valores.
+        Pai inexistente ou ambíguo pela encadeada NUNCA é "valor vazio" (F4 conferidor: o nulo casava com o vazio de
+        `REF_BRA=N,F,` e a linha de tabela licenciada fora do recorte passava como própria): a condição fica FORA e a
+        regra do pai vai para `pend` (visível; ADR 0007, 19)."""
         v = linha.get(cond["coluna"])
         if cond.get("passos"):
             v, _, pr = self._seguir(linha, cond["coluna"], cond["passos"])
             if pr:
-                v = None
+                if pend is not None:
+                    pend.append((pr, "media"))
+                return False
         if isinstance(v, (str, bytes, bytearray)):
             v = sentinela.aplicar("texto", v)[0]
         s = None if v is None else self._chave(v).strip()
@@ -1353,7 +1358,7 @@ class CargaMapa(carga.Carga):
         for dt in p["destinos"]:
             info = self._info(dt)
             op = (p.get("opcoes") or {}).get(dt) or {}
-            if op.get("se") and not self._cond(linha, op["se"]):  # destino_se: o secundário não grava
+            if op.get("se") and not self._cond(linha, op["se"], pend):  # destino_se: o secundário não grava
                 vals[dt], campos[dt] = [], []
                 continue
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
@@ -1370,7 +1375,7 @@ class CargaMapa(carga.Carga):
                     marcas[nome] = c
                     continue
                 n0 = len(pend)
-                if c.get("se") and not self._cond(linha, c["se"]):
+                if c.get("se") and not self._cond(linha, c["se"], pend):
                     x = None  # condição da coluna fora: NULL sem pendência (a próxima concorrente é tentada)
                 elif nome.startswith("=~"):
                     x = nome[2:]
@@ -2198,9 +2203,11 @@ class CargaMapa(carga.Carga):
             if chave in colide:
                 vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
             else:
-                fora = next((f for f in p.get("filtros") or [] if not self._cond(linha, f)), None)
+                pf = []  # pai do filtro inexistente/ambíguo: recusada pela regra do pai (média), nunca gravada
+                fora = next((f for f in p.get("filtros") or [] if not self._cond(linha, f, pf)), None)
                 if fora is not None:  # so_se: fora do filtro da carga, nunca gravada (pendência baixa, visível)
-                    vals, campos, pend, recusa, adiadas = None, None, [], (fora["regra"] or FILTRO_PADRAO, "baixa"), []
+                    recusa = pf[0] if pf else (fora["regra"] or FILTRO_PADRAO, "baixa")
+                    vals, campos, pend, adiadas = None, None, [], []
                 else:
                     vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
                 if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:

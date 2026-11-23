@@ -221,7 +221,10 @@ def linhas(r, ins):
     for i, tab, cod, n, opm, sit in ((1, 2, 100, "Material exemplo seringa", "N", "A"), (2, 2, 101, "Prótese exemplo", "S", "I"),
                                      (3, 1, 100, "Item exemplo licenciado", "N", "A"), (4, 2, 102, None, None, None),
                                      (5, 2, 103, "Medicamento exemplo", None, "X"),
-                                     (6, 2, 100, "Material exemplo seringa caixa", "N", "A")):
+                                     (6, 2, 100, "Material exemplo seringa caixa", "N", "A"),
+                                     # conferidor F4: tabela 9 sem linha em TBCTRMEM (pai inexistente): recusada
+                                     # (pai_inexistente), nunca gravada como própria (o nulo casava com o vazio)
+                                     (7, 9, 100, "Item exemplo tabela inexistente", "N", "A")):
         # r4 (revisão): 6 = mesmo TAB e COD da 1 com CLASSIF 2 (código TAB_COD_CLASSIF distinto: os dois gravados);
         # fator 100 na 1, zero na 2 (fora da faixa: NULL); unidade 'CX' fora do cadastro na 6 (codigo_inexistente_destino)
         q("TBMATMED", ID=i, TAB=tab, COD=cod, CLASSIF=2 if i == 6 else 1, NOME=n, OPM=opm, SITUACAO=sit, FATOR_Q=1.0,
@@ -276,6 +279,7 @@ def linhas(r, ins):
         "TBIRREGCTRCTA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 3}},
         "TBCONVPERCTAPAC": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
         "TBMATMED": {"gravados": 4, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_1048": 1,
+                                                   "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 2, "valor_presumido": 4,
                                                    "codigo_inexistente_destino": 1}},
         # o código de material (tabela 19) também é procurado na 20 e o contrário (concorrentes): uma

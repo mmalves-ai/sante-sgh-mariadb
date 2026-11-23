@@ -370,6 +370,8 @@ class Sintetica(unittest.TestCase):
                 continue
             recusas = sum(n for rg, n in e["pendencias"].items()
                           if rg.startswith("restricao_destino_") or rg in ("pai_pendente", "licenca_nao_comprovada"))
+            if t == "TBMATMED":  # conferidor F4: pai do filtro inexistente RECUSA a linha (tabela 9 sem TBCTRMEM)
+                recusas += e["pendencias"].get("pai_inexistente", 0)
             self.assertEqual(e["gravados"] + recusas, ins.count(t), t)
 
     def test_bloqueadas_fora_da_imagem(self):

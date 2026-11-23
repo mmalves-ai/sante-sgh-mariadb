@@ -2,8 +2,12 @@
 `licenca_nao_comprovada` no recorte da cadeia. O filtro de linha `so_se:TAB>TBCTRMEM>REF_BRA=N,F` lê a marca de licença
 na tabela de mat/med (TBCTRMEM), mas não havia aresta TBMATMED -> TBCTRMEM (a origem não tem FK e a via `so_se:` não
 gera dependência). Sem a aresta, o fecho do recorte não puxava TBCTRMEM e, na carga, nada garante a tabela antes do
-item: o pai não carregado vira valor nulo na condição e TODA linha (inclusive a da tabela PRÓPRIA do hospital) caía no
-filtro. Na carga real a ordem do mapa salvou por acaso (125.201 próprias gravadas, 785.213 licenciadas puladas).
+item. CORREÇÃO DO TEXTO (conferidor F4): a causa dada no commit 84c694b4 não procede. `_ler_pai` lê o pai da ORIGEM,
+sem depender da ordem de carga; e o pai ausente fazia a linha PASSAR no filtro (o nulo casava com o vazio de
+`N,F,`), não cair. As 20.000 recusas do recorte eram de tabelas licenciadas de fato: na origem, TBMATMED tem 125.201
+linhas de tabela própria (REF_BRA=F e REF_SIMP=F) e 785.213 de licenciadas (T em uma das duas), e as 20.000 primeiras
+pela chave (as do recorte) são TODAS de tabela licenciada (REF_BRA=T; medido por contagem, 22/11). A aresta continua certa (o fecho do recorte precisa do pai); o pai ausente agora RECUSA a
+linha (FiltroComPaiAusente, abaixo, e a TBMATMED 7 da sintética L8-03).
 
 Causa corrigida no mapa (declarado/dependencias.tsv: TBMATMED, TBVLRMEM, TBPERMEM e TBREFMEMTUSS -> TBCTRMEM). Este
 teste reproduz a causa com um mapa sintético (filtro pelo pai sem a aresta: o fecho não puxa o pai) e guarda a
@@ -68,6 +72,32 @@ class FiltroPeloPaiMapaReal(unittest.TestCase):
             self.assertIn("TBCTRMEM", fecho(self.m, {filho}), filho)
         plano = [p["tabela"] for p in carga_mapa.planejar(self.m, self.carregaveis)]
         self.assertLess(plano.index("TBCTRMEM"), plano.index("TBMATMED"))
+
+
+class FiltroComPaiAusente(unittest.TestCase):
+    """Conferidor F4: pai inexistente pela encadeada NÃO é "valor vazio". Antes, o nulo casava com o vazio de
+    `REF_BRA=N,F,` e a linha de tabela licenciada (ou fora do recorte) passava como PRÓPRIA (fere a regra 7 e o ADR
+    0006). Com o pai ausente a condição fica fora e a regra do pai vai para a pendência (ADR 0007, 19). A carga
+    sintética (L8-03, TBMATMED 7, tabela 9 sem linha em TBCTRMEM) confere a recusa pela gravação."""
+    COND = "TAB>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada"
+
+    def _c(self, pai):
+        c = carga_mapa.CargaMapa.__new__(carga_mapa.CargaMapa)
+        c._origem_pai = {("TBCTRMEM", "REF_BRA"): pai}
+        return c
+
+    def test_tabela_sem_linha_no_pai_fica_fora_com_pendencia(self):
+        c, pend = self._c({"1": "F", "3": "T"}), []
+        cond = mapa.condicao(self.COND)
+        self.assertTrue(c._cond({"TAB": 1}, cond))          # própria (domínio real T/F)
+        self.assertFalse(c._cond({"TAB": 3}, cond))         # licenciada
+        self.assertFalse(c._cond({"TAB": 9}, cond, pend))   # sem linha em TBCTRMEM: nunca própria
+        self.assertEqual(pend, [("pai_inexistente", "media")])
+
+    def test_pai_fora_da_imagem_fica_fora(self):
+        pend = []
+        self.assertFalse(self._c({})._cond({"TAB": 1}, mapa.condicao(self.COND), pend))
+        self.assertEqual(pend, [("pai_inexistente", "media")])
 
 
 if __name__ == "__main__":

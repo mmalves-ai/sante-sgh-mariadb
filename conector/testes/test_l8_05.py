@@ -143,7 +143,7 @@ class Plano(unittest.TestCase):
         # conferidor r4: acordo de mat/med carrega pelo item de referência (modelo 12_FAT/13), nunca descarte
         pm = {d["destino"]: d.get("via") for d in self.mapa["colunas_decl"] if d["tabela"] == "TBPERMEM" and d["destino"]
               and d["coluna"] != "COD"}
-        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,")
+        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,F,")  # F4: domínio real T/F
         self.assertNotIn("TBPERMEM", sc)
         self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
         self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
@@ -289,14 +289,14 @@ class ContinuidadeR5(unittest.TestCase):
         dec = [c for c in mapa.carregar_execucao()["colunas_decl"] if c["tabela"] == "TBPERMEM"
                and c["destino"] == "preco_negociado_matmed.item_referencia_matmed_id"]
         por = {c["coluna"]: c["via"] for c in dec}
-        self.assertEqual(por["COD"], "espelho:brasindice;se:TAB>TBCTRMEM>REF_BRA=S")
-        self.assertEqual(por["ID_TBMATMED"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,")
+        self.assertEqual(por["COD"], "espelho:brasindice;se:TAB>TBCTRMEM>REF_BRA=S,T")  # F4: domínio real T/F
+        self.assertEqual(por["ID_TBMATMED"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,F,")  # F4: domínio real T/F
         self.assertEqual(mapa.espelho_spec("espelho:brasindice")["catalogo"], "brasindice")
         from sante_conector import semente_espelho
         self.assertEqual(semente_espelho.ler_declaracao()["brasindice"]["tabela"], "TBVLRMEM")
         # a imagem grava o acordo ligado ao espelho (77) e acusa o código fora dele (78)
         esp = l8_05.linhas(__import__("random").Random(1), lambda t, v: None)["TBPERMEM"]
-        self.assertEqual(esp["gravados"], 4)
+        self.assertEqual(esp["gravados"], 6)  # F4: + própria F/F e licenciada T/F
         self.assertEqual(esp["pendencias"]["espelho_codigo_inexistente"], 1)
 
     def test_semente_do_espelho_declarada(self):

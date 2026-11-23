@@ -246,7 +246,7 @@ def linhas(r, ins):
         CLI: {"gravados": 2, "pendencias": {}},
         FOR: {"gravados": 1, "pendencias": {}},
         TIT: {"gravados": 3, "pendencias": {"pai_inexistente": 1}},
-        ITE: {"gravados": 1, "pendencias": {"licenca_nao_comprovada": 2}},
+        ITE: {"gravados": 1, "pendencias": {"licenca_nao_comprovada": 1, "pai_inexistente": 1}},  # F4: tabela 9 sem pai: pai_inexistente
         INC: {"gravados": 2, "pendencias": {"codigo_inexistente_destino": 1, "restricao_destino_1048": 1}},
         PAR: {"gravados": 3, "pendencias": {"sem_item_a_gravar": 1}},
         KON: {"gravados": 3, "pendencias": {}},

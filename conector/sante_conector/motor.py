@@ -66,6 +66,19 @@ def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
         cr.close()
 
 
+
+def tabelas_da_passada(tabelas, env=None):
+    """(adiar, so, carregar) da passada. Carga em duas passadas (dono, 22/11): CONECTOR_ADIAR lista tabelas da origem
+    (separadas por vírgula) que ficam para uma passada seguinte (ex.: trilhas de auditoria); a leitura, a contagem e o
+    confronto com o gstat continuam sobre TODAS, só a carga delas é adiada. CONECTOR_SO: passada só de algumas tabelas
+    (reprocessa o que uma correção do mapa mudou; a carga é idempotente). `carregar` é o ÚNICO conjunto entregue ao
+    plano, à carga L3 e à CargaMapa.executar (que refaz o plano: receber todas as tabelas carregava as adiadas)."""
+    env = os.environ if env is None else env
+    adiar = {t.strip() for t in (env.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
+    so = {t.strip() for t in (env.get("CONECTOR_SO") or "").split(",") if t.strip()}
+    fora = adiar | (set(tabelas) - so) if so else adiar
+    return adiar, so, set(tabelas) - fora
+
 def executar(trab, eid):
     """Roda a execução `eid` já reivindicada (estado `abrindo`) por `trab`. Nunca levanta: termina em estado final."""
     conn = trab.conn
@@ -164,18 +177,12 @@ def executar(trab, eid):
             # Carga em duas passadas (dono, 22/11): CONECTOR_ADIAR lista tabelas da origem (separadas por vírgula) que
             # ficam para uma passada seguinte (ex.: trilhas de auditoria). A leitura, a contagem e o confronto com o
             # gstat continuam sobre TODAS; só a carga delas é adiada, e o relatório diz quais ficaram.
-            adiar = {t.strip() for t in (os.environ.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
+            adiar, so, carregar = tabelas_da_passada(tabelas)
             if adiar:
-                rel["adiadas"] = sorted(adiar & set(tabelas))
-                cont["adiadas"] = rel["adiadas"]
-            # Passada só de algumas tabelas (CONECTOR_SO, separadas por vírgula): reprocessa o que uma correção do
-            # mapa mudou, sem recarregar o resto (a carga é idempotente; o resto fica como está). Vazio: todas.
-            so = {t.strip() for t in (os.environ.get("CONECTOR_SO") or "").split(",") if t.strip()}
+                rel["adiadas"] = cont["adiadas"] = sorted(adiar & set(tabelas))
             if so:
-                adiar = adiar | (set(tabelas) - so)
-                rel["so"] = sorted(so & set(tabelas))
-                cont["so"] = rel["so"]
-            plano = carga_mapa.planejar(mapa_exec, set(tabelas) - adiar)
+                rel["so"] = cont["so"] = sorted(so & set(tabelas))
+            plano = carga_mapa.planejar(mapa_exec, carregar)
             rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
@@ -186,7 +193,7 @@ def executar(trab, eid):
 
                         def prog_mapa(frac, etapa):
                             plataforma.progresso(conn, eid, 79 + 14 * frac, etapa)
-                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(set(tabelas) - adiar, contagens) or {
+                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(carregar, contagens) or {
                             "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
                             "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
                         if plano:
@@ -195,7 +202,7 @@ def executar(trab, eid):
                                                       sincronizar=ex["tipo"] == "sincronizar",
                                                       confirmar_exclusao_em_massa=bool(
                                                           ex.get("confirmar_exclusao_em_massa"))).executar(
-                                set(tabelas) - adiar, contagens)  # ADIAR/SO valem também aqui: executar() refaz o plano
+                                carregar, contagens)  # ADIAR/SO valem também aqui: executar() refaz o plano
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]
                             pr, pm = resumo["pendencias"], rm["pendencias"]
