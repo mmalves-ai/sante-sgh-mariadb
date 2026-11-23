@@ -14,9 +14,9 @@
 // "restauracao"), do cliente inteiro: o banco é um por cliente, e a cópia é dele, não de um estabelecimento.
 // Concessões (ADR 0003): o produto não convive com sistema anterior; as seis concessões provisórias da convivência
 // não existem e constam encerradas, sem tabela. Reabrir ou prever fim é recusado com o motivo.
-// Prova da cadeia (SBIS-16): a trilha_auditoria do núcleo ainda não é encadeada por hash (pedido de modelo do lote
-// 02-06); até lá, verificarDias recusa com "trilha-sem-encadeamento" (o painel mostra o item pendente e a exportação
-// para a auditoria responde 503 com o motivo), nunca uma prova inventada.
+// Prova da cadeia (SBIS-16): a trilha_auditoria é encadeada por hash pelo núcleo (migração 00_NUCLEO/23), com fecho
+// diário em trilha_auditoria_fecho; verificarDias recalcula a cadeia de cada dia (verificarDiaTrilha do núcleo) e
+// aponta o primeiro elo quebrado, o dia sem fecho ou o fecho divergente.
 // Melhoria: a recusa apurada dentro da transação (item ou ciclo que mudou, ciclo aberto do tipo) desfaz a transação
 // (RecusaGravacaoSbis, 409): o Executor conta "recusa" e nada fica na trilha nem na idempotência.
 // Melhoria: a chave de idempotência é a do pedido (Idempotency-Key, pela TrilhaSbis): o reenvio do mesmo pedido
