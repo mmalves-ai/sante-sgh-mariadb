@@ -288,7 +288,7 @@ def posicao_item(nome):
 
 def eh_item(nome):
     return bool(_ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or ""))
-OPCOES_DESTINO = ("opcional", "adotar:", "adotar_maior:", "adotar_ativo:", "desdobrar:", "complementa", "antes", "agrupar:", "com_falso", "destino_se:",
+OPCOES_DESTINO = ("opcional", "adotar:", "adotar_maior:", "adotar_ativo:", "identidade", "desdobrar:", "complementa", "antes", "agrupar:", "com_falso", "destino_se:",
                   "por_pai")
 # opções de COLUNA na via (resíduo do motor da rodada 4): `exige_dominio` (fora do de-para de valores recusa a linha),
 # `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
@@ -325,7 +325,7 @@ def opcoes_destino(colunas):
             continue
         o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False,
                                   "antes": False, "agrupar": [], "com_falso": False, "se": None,
-                                  "por_pai": False, "adotar_maior": [], "adotar_ativo": []})
+                                  "por_pai": False, "adotar_maior": [], "adotar_ativo": [], "identidade": False})
         for x in (c.get("via") or "").split(";"):
             if x.startswith("destino_se:"):  # rodada 4: o destino (secundário) só grava quando a condição vale
                 o["se"] = condicao(x[11:]) or {"invalida": x[11:]}
@@ -343,6 +343,8 @@ def opcoes_destino(colunas):
                 o["complementa"] = True
             elif x.startswith("adotar:"):
                 o["adotar"] = [y for y in x[7:].split(",") if y]
+            elif x == "identidade":  # a chave de adoção identifica uma PESSOA: valor presumido nunca adota
+                o["identidade"] = True
             elif x.startswith("adotar_ativo:"):  # adota antes o ATIVO de menor id com estas colunas (o do produto)
                 o["adotar_ativo"] = [y for y in x[13:].split(",") if y]
             elif x.startswith("adotar_maior:"):  # rodada 6: na adoção, a coluna guarda o MAIOR (contador)
@@ -446,6 +448,8 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                     erros.append("agrupar com coluna da origem mal formada: %s -> %s" % (t, dt))
             if o["adotar_maior"] and not o["adotar"]:
                 erros.append("adotar_maior sem adotar: %s -> %s" % (t, dt))
+            if o["identidade"] and not o["adotar"]:
+                erros.append("identidade sem adotar: %s -> %s" % (t, dt))
             if o["adotar_ativo"] and not o["adotar"]:
                 erros.append("adotar_ativo sem adotar: %s -> %s" % (t, dt))
             if o["adotar_ativo"] and dt in ddl and "ativo" not in ddl[dt]["colunas"]:

@@ -1892,12 +1892,15 @@ class CargaMapa(carga.Carga):
             self._esvaziando = False
 
     def _adocao_presumida(self, p, vals):
-        """ADR 0007 (18 e 20): valor presumido nunca é chave de identidade. Linha cuja chave de adoção tem coluna
-        presumida (`=~x`) e que ADOTARIA uma linha já gravada é recusada (`adocao_por_valor_presumido`, alta, para
-        revisão humana), em vez de fundir duas pessoas por um dado inventado; sem colisão, grava a linha própria."""
+        """ADR 0007 (18 e 20): valor presumido nunca é chave de identidade. No destino de adoção marcado `identidade`
+        (a chave identifica uma pessoa), a linha cuja chave tem coluna presumida (`=~x`) e que ADOTARIA uma linha já
+        gravada é recusada (`adocao_por_valor_presumido`, alta, para revisão humana), em vez de fundir duas pessoas
+        por um dado inventado; sem colisão, grava a linha própria. Cadastro de configuração (tipo, plano) adota
+        normalmente."""
         for dt, itens in (vals or {}).items():
-            ad = ((p.get("opcoes") or {}).get(dt) or {}).get("adotar") or ()
-            if not ad or not any((dt, a) in getattr(self, "_presumidas", ()) for a in ad):
+            op = (p.get("opcoes") or {}).get(dt) or {}
+            ad = op.get("adotar") or ()
+            if not ad or not op.get("identidade") or not any((dt, a) in getattr(self, "_presumidas", ()) for a in ad):
                 continue
             for _, v in itens:
                 if all(v.get(a) is not None for a in ad) and self._todas(

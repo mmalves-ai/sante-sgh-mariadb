@@ -22,6 +22,8 @@ As demais (DESCARTE em sem_carga.tsv) entram só com a forma (2 linhas falsas ca
 import datetime
 import decimal
 
+CONTAS_VALIDAS = 76  # 4 recusas em 84 contas: 4,8% (abaixo do limite C9 de 5%)
+
 FORMAS = {
     'TBTPPROFPROC': ('ID', [
         ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(20)', True),
@@ -514,6 +516,13 @@ def linhas(r, ins):
              FECHADA=fech, DATA_FEC=dfec, USU_FEC=ufec, TOTAL_CONTA=150.75 * i, DESCONTO=D("1.50"),
              SENHA="AUT%d" % i, MATRICULA="CART-%d" % i, ID_TBTIPPLANO=1, SERIE="EX", VAL_SENHA=dt(2025, 12, 31),
              OBS=("Observacao exemplo %d" % i).encode("cp1252"))
+    # C9 (recusa acima de 5% em entidade principal deixa a conciliação não conferida): as 4 contas recusadas acima
+    # ficam abaixo do limite com CONTAS_VALIDAS contas comuns (junho de 2025, códigos 1000+, sem colisão com as
+    # chaves que a auditoria e o segurado leem), como na proporção real
+    for i in range(9, 9 + CONTAS_VALIDAS):
+        _ins(ins, "FCCTAEXT", ID=i, ANOPRO=2025, MESPRO=6, TIPO_CTA="E", COD=1000 + i, CON=1, REG_ATE=500,
+             BAIXA=dt(2025, 6, 1), HOR_BAI="0900", FECHADA="N", ID_TBTIPPLANO=1, SERIE="EX",
+             VAL_SENHA=dt(2025, 12, 31))
     # auditorias (cópia do cabeçalho antes da auditoria): 1 (concluída, resultado presumido) e 2 (em andamento) gravam;
     # 3 conta recusada (pai_pendente); 4 conta nunca vista (pai_inexistente + 1048); 5 sem auditor (CHECK 4025);
     # 6 sem data (1048)
@@ -564,7 +573,7 @@ def linhas(r, ins):
         "TBVLRDTH": {"gravados": 2, "pendencias": {"restricao_destino_1048": 3, "pai_ambiguo": 1,
                                                    "pai_inexistente": 1, "restricao_destino_4025": 1,
                                                    "pai_pendente": 1}},
-        "FCCTAEXT": {"gravados": 4, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
+        "FCCTAEXT": {"gravados": 4 + CONTAS_VALIDAS, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
                                                    "restricao_destino_4025": 1, "valor_fora_do_dominio": 2}},
         "FCDIAEXT": {"gravados": 2, "pendencias": {"pai_ambiguo": 2, "pai_inexistente": 2, "pai_pendente": 1,
                                                    "restricao_destino_1048": 2}},

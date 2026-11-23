@@ -211,11 +211,15 @@ class SolicitanteExterno(unittest.TestCase):
         v = {"conselho_classe_id": 1, "conselho_unidade_federativa_id": 35, "numero_conselho": "1001"}
         vals = {"solicitante_externo": [("", v)]}
         c._presumidas = {("solicitante_externo", "conselho_classe_id")}
+        self.assertTrue(self.p["opcoes"]["solicitante_externo"]["identidade"])
         self.assertIsNone(c._adocao_presumida(self.p, vals))  # sem colisão: linha própria
         achou.append((7,))
         self.assertEqual(c._adocao_presumida(self.p, vals), ("adocao_por_valor_presumido", "alta"))
         c._presumidas = set()  # conselho da origem: a adoção normal (mesma pessoa) segue
         self.assertIsNone(c._adocao_presumida(self.p, vals))
+        c._presumidas = {("solicitante_externo", "conselho_classe_id")}  # sem `identidade` (configuração): adota
+        self.assertIsNone(c._adocao_presumida({"opcoes": {"solicitante_externo": {"adotar": ["numero_conselho"]}}},
+                                              vals))
         self.assertEqual(carga_mapa.GRAVIDADE_REGRA["adocao_por_valor_presumido"], "alta")
 
     def test_sigla_do_conselho_normalizada(self):

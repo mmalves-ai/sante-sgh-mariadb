@@ -136,6 +136,11 @@ def linhas(r, ins):
                                                    (6, 2026, 4, "E", 803, None, D0, None)):
         linha("FCCTAEXT", ID=i, ANOPRO=ano, MESPRO=mes, TIPO_CTA=tipo, COD=cod, REG_ATE=reg, DT_GUIA=dtg,
               DATA_REQ=dreq, CON=1, BAIXA=D0, HOR_BAI="0800")
+    # C9 (recusa acima de 5% em entidade principal deixa a conciliação não conferida): a conta 6 recusada fica abaixo
+    # do limite com 14 contas comuns (junho de 2026, números 900+, que nenhuma linha desta imagem procura)
+    for i in range(7, 21):
+        linha("FCCTAEXT", ID=i, ANOPRO=2026, MESPRO=6, TIPO_CTA="E", COD=900 + i, REG_ATE=5001, DT_GUIA=D0,
+              CON=1, BAIXA=D0, HOR_BAI="0800")
     # tabelas de honorários (r3, correção: carregam aqui pelo mapa, L8-03, antes do horário e do procedimento, que
     # lê o nome da tabela na origem para o grupo de faturamento)
     # r4: tabelas de mat/med (L8-03, carregam aqui pelo mapa): 1 própria (marcas vazias), 2 de referência comercial,
