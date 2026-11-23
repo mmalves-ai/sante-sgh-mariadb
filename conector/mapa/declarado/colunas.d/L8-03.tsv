@@ -202,7 +202,7 @@ TBPACTHM	TIPO		inteiro			L8-03 r6 (ADR 0006/0007): tipo do item (decisão em F4-
 TBPACTHM	TABELA	pacote_item_incluso.item_faturavel_id			ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id;se:TIPO=1	L8-03 r6 (ADR 0006/0007): honorário: o item faturável do procedimento na tabela de honorários (TABELA,PROCTO)
 TBPACTHM	PROCTO	pacote_item_incluso.item_faturavel_id			ref:TBTABDTH.(TAB,OPE)=(TABELA,PROCTO)/item_faturavel;se:TIPO=2	L8-03 r6 (ADR 0006/0007): diária/taxa: o item faturável da diária ou taxa (TAB,OPE) na tabela de diárias
 TBPACTHM	TABELA	pacote_item_incluso.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD)=(TABELA,PROCTO);se:TIPO=3	L8-03 conferidor r6 (ADR 0006): mat/med: o item da tabela de mat/med do hospital (TAB,COD) na coluna nova do item incluso (12_FAT/05); classificação repetida: pai_ambiguo; item licenciado não carregado: pendência visível
-TBPACTHM	ATO	pacote_item_incluso.funcao_equipe_cobranca_id			ref:TBGRAUPARTPROC;se:TIPO=1	L8-03 r6 (ADR 0006/0007): grau de participação coberto (honorário); inexistente: NULL com pai_inexistente
+TBPACTHM	ATO	pacote_item_incluso.grupo_ato_id			ref:TBTABATO;se:TIPO=1	conta-itens-2 (2026-11-23): honorário: o ATO é o GRUPO de ato coberto (TBTABATO -> grupo_ato, como TBCREPRS.ATO na linha 24), não o grau de participação (TBGRAUPARTPROC); inexistente: NULL com pai_inexistente
 TBPACTHM	QTDE	pacote_item_incluso.quantidade_limite	decimal_positivo			L8-03 r6 (ADR 0006/0007): quantidade coberta; zero ou negativa: NULL (sem limite) com pendência
 TBPACTHM	QTDE_DIARIA	pacote_item_incluso.quantidade_por_diaria	booleano_sn			L8-03 r6 (ADR 0006/0007): S/N: a quantidade vale por diária
 TBPACTHM	NOME	pacote_item_incluso.observacao	texto_nome			L8-03 r6 (ADR 0006/0007): nome do item no pacote

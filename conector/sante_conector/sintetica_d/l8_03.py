@@ -253,7 +253,7 @@ def linhas(r, ins):
                                             (2, 1, 10101012, d(2025, 3, 1), "I", dict(PERC_APOS_HORARIO=D("15.00")))):
         q("TBPERTHM", CONV=conv, TAB=tab, PROCTO=procto, DATA=data, TIPO_PAC=tp, **kw)
     # r6: convênios lidos da origem só pela tabela de honorários (THM); pacote A (1, I, 30): a1 honorário gravado
-    # (grau 1 inexistente), a2 mat/med sem item (CHECK do alvo recusa; quantidade 0), a3 honorário sem preço na
+    # (grupo de ato 1), a2 mat/med sem item (CHECK do alvo recusa; quantidade 0), a3 honorário sem preço na
     # tabela (pai_inexistente, CHECK); pacote B (2, A, 99): procedimento do pacote ausente na tabela 2 (NOT NULL)
     # (r6: TBCONVEN é pai EXTERNO (L5, já carregado) e também lida na origem pela encadeada CON>TBCONVEN>THM; a
     # fonte pagadora externa vem semeada no PREPARO_DESTINO e a linha da origem a completa)
@@ -262,14 +262,15 @@ def linhas(r, ins):
     for con, contas, thm, tipo, tab, procto, kw in (
             (1, "I", 30, 1, 1, 10, dict(NOME="Honorário exemplo", QTDE=D("1.00"), ATO=1, QTDE_DIARIA="N", CDC=5)),
             (1, "I", 30, 3, 2, 101, dict(QTDE=D("0.00"), ATO=0, QTDE_DIARIA="S")),
-            (1, "I", 30, 1, 1, 77, dict(NOME="Honorário sem preço", ATO=1, QTDE_DIARIA="N")),
+            (1, "I", 30, 1, 1, 77, dict(NOME="Honorário sem preço", ATO=7, QTDE_DIARIA="N")),
             (2, "A", 99, 1, 1, 10, dict(NOME="Honorário exemplo", ATO=1, QTDE_DIARIA="N"))):
         q("TBPACTHM", CON=con, CONTAS=contas, THM=thm, TIPO=tipo, TABELA=tab, PROCTO=procto, **kw)
     return {
         # r6: a1 (honorário, centro de custo 5) e a2 (mat/med da tabela própria, conferidor r6) gravados sob o pacote A (a2 adota o acordo do convênio que a1 criou); a3 recusada pelo CHECK do alvo (4025); B recusada pelo NOT
-        # NULL do pacote (1048); pai_inexistente: grau 1 em a1, a3 e B, preço 1|77 de a3 e os 3 do procedimento de B;
+        # NULL do pacote (1048); pai_inexistente (conta-itens-2: ATO = grupo de ato, TBTABATO): grupo 7 de a3 (a1 e B têm
+        # o grupo 1, carregado; nova chave externa mudaria os ids semeados), preço 1|77 de a3 e os 3 do procedimento de B;
         # presumidos: tipo do pacote nas 4 linhas e descrição de B; vigência pela evidência no pacote e no acordo
-        "TBPACTHM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 7, "restricao_destino_1048": 1,
+        "TBPACTHM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 5, "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1, "valor_fora_do_dominio": 1,
                                                    "valor_presumido": 5, "vigencia_sem_fonte": 8}},
         # R5 (ADR 0006): listas -> parametro_opcao; TBCTRTAT 4 sem nome com rótulo presumido; TBIRREGCTRCTA 3 (1048)
@@ -331,3 +332,12 @@ def linhas(r, ins):
         "TBLOCCON": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1,
                                                    "valor_presumido": 5, "pai_inexistente": 1}},
     }
+
+# valor gravado, não só a contagem (conta-itens-2; conferencia._conferir_valores): o ATO do honorário do pacote é o
+# GRUPO de ato (TBTABATO), gravado em pacote_item_incluso.grupo_ato_id, e a função da equipe fica vazia
+CONFERIR_DESTINO = [
+    ("item a1 do pacote (ATO 1 = grupo de ato) com o grupo 1 e sem função da equipe",
+     "SELECT COUNT(*) = 1 AND MIN(grupo_ato_id) = (SELECT id_destino FROM {ctl}.conector_origem"
+     " WHERE tabela_origem='TBTABATO' AND chave_original='1' LIMIT 1) AND MAX(funcao_equipe_cobranca_id) IS NULL"
+     " FROM pacote_item_incluso WHERE grupo_ato_id IS NOT NULL"),
+]

@@ -91,7 +91,7 @@ CREATE TABLE TBTISSWEBSERV (ID_TBCONVEN SMALLINT NOT NULL, ID_TBTISSSCHEMA SMALL
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2", "3"], "TBTISSSCHEMA": ["1", "2"], "FCCTAEXT": ["10", "11", "12"],
                  "TBIRREGULARID": ["1", "2"], "TBESPEC": ["1"], "TBUNIDAD": ["1"], "TBCENCUS": ["1"],
                  "RPEVENTO": ["1"], "TBPROFIS": ["1", "2"], "TBPROCTO": ["1", "2"],
-                 "TBTPLANC": ["1", "2"], "TBGRAUPARTPROC": ["1"], "TBLOCAL": ["1"],  # TBCOOPER fica de fora
+                 "TBTPLANC": ["1", "2"], "TBGRAUPARTPROC": ["1"], "TBTABATO": ["42"], "TBLOCAL": ["1"],  # TBCOOPER fica de fora
                  "ATCABECATEND": ["7001", "7002"], "RICADPAC": ["1", "2"], "TBUSERS": ["usuario.exemplo"],
                  "TBCTRDTH": ["1"], "TBCTRMEM": ["1"], "TBCTRTHM": ["1", "2"], "FCCTAAUD": ["2025|3|E|10"],
                  # diária 5 com o item faturável secundário já gravado (pedido à L8-05); a 6 sem ele
@@ -161,7 +161,8 @@ def linhas(r, ins):
                 UNID=1, CDC=1, ATO=0, LOCAL=0, ESP=1, PROCTO_INI=10101012, SEQ=1, QTDE=D("0"), QTDE_FIN=D("0"),
                 VALOR=D("0"), HORA_INI="0700", HORA_FIN="1900", PERC=D("70"), INCIDE_FILME="S", PROCTO_FIM=0,
                 ID_RPEVENTOS=1, GER_VLR_INTERVALO="N", PERC_FERIADO=D("10"), PERC_FIM_SEMANA=D("0"))
-    for i, mud in [(1, dict(ATO=1, LOCAL=1, COOP=3)),                      # critérios; cooperativa não carregada
+    # conta-itens-2: o ATO da regra é GRUPO de ato (TBTABATO -> grupo_ato), não grau de participação: ATO 42
+    for i, mud in [(1, dict(ATO=42, LOCAL=1, COOP=3)),                     # critérios; cooperativa não carregada
                    (2, dict(MED_PRS="P", COD=0, TIPO_LAN=0, CONV=0, TIPO_CTA="A", ESP=0, UNID=0, CDC=0, PERC=D("0"), VALOR=D("150"),
                             HORA_INI=None, HORA_FIN=None, INCIDE_FILME="N")),            # 0 = todos; valor fixo
                    (3, dict(PERC=D("0"), VALOR=D("0"))),                                 # nenhum dos dois: CHECK
@@ -355,6 +356,10 @@ ESPERADO_R3 = {
 # valor gravado, não só a contagem (revisão de 20c4b234 e f76c7b99; conferencia._conferir_valores)
 _O = "(SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='%s' AND chave_original='%s' AND entidade_destino='%s')"
 CONFERIR_DESTINO = [
+    ("regra 1 (ATO 42 = grupo de ato) com o grupo de ato 42 e sem função da equipe",
+     "SELECT COUNT(*) = 1 AND MIN(i.grupo_ato_id) = (SELECT id_destino FROM {ctl}.conector_origem"
+     " WHERE tabela_origem='TBTABATO' AND chave_original='42' LIMIT 1) AND MAX(i.funcao_equipe_cobranca_id) IS NULL"
+     " FROM regra_repasse_item i WHERE i.regra_repasse_id = " + _O % ("TBREPGER", "1", "regra_repasse")),
     ("item 1 (T, motivo 1001 do catálogo) glosado com o motivo",
      "SELECT situacao = 'glosado' AND motivo_glosa_id IS NOT NULL FROM conta_hospitalar_item WHERE id = "
      + _O % ("FCLANEXT", "1", "conta_hospitalar_item")),

@@ -73,7 +73,7 @@ class Plano(unittest.TestCase):
         self.assertEqual(set(i["escopo_conta"]["valores"].values()), {"internacao", "externa", "todas"})
         self.assertEqual(i["quantidade_final"]["regra"], "decimal_zero_nulo")
         # critérios da regra: nenhum filtro da origem fica de fora (a regra migrada não fica mais ampla)
-        for dc, ref in [("tipo_lancamento_id", "TBTPLANC"), ("funcao_equipe_cobranca_id", "TBGRAUPARTPROC"),
+        for dc, ref in [("tipo_lancamento_id", "TBTPLANC"), ("grupo_ato_id", "TBTABATO"),
                         ("local_atendimento_id", "TBLOCAL"), ("cooperativa_medica_id", "TBCOOPER")]:
             self.assertEqual(i[dc]["referencia"], ref, dc)
         self.assertEqual([x.get("tabela") or x.get("coluna") for x in i["profissional_id"]["passos"]],
