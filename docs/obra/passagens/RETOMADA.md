@@ -128,6 +128,18 @@
    25 GB: abaixo de 2,5 GB o vigia derruba a carga. Rodar a simulação e o push assim que a memória passar de 20 GB
    ou a carga terminar. O Oracle de referência (sante-sgh-oracle) foi parado às 15h37 pela mesma razão
    (religar com docker start depois da carga).
+**CARGA PARADA (23/11, 20h07) pelo vigia de memória v3 (2.472 MB disponíveis).** Execução 11 em "gravando", onda 177 de
+218, 63,1 milhões de linhas lidas (cerca de 55%); MariaDB saudável. Causa: o coordenador do worker chegou a 34 GB e o
+gravador nasce por fork com todo o estado dele (paralelo.py); ao escrever, as páginas se copiam e o par passou de 70 GB.
+- **Não há como continuar:** o Sincronizar exige importação concluída (plataforma.py:108) e o importar recomeça do zero.
+- **Decisão do orquestrador:** rodada `retomar-importacao` (prioridade 1, antes do senha-email): (a) importação
+  interrompida continua de onde parou (tabelas já concluídas puladas pelo controle conector_origem/conector_bloco;
+  a tabela pela metade refeita ou completada), útil também ao hospital real; (b) memória do coordenador limitada
+  (estado por tabela liberado ao fim da tabela; gravador sem herdar o estado inteiro, ou CONECTOR_GRAVADORES=1 até o
+  conserto). Depois: retomar a execução 11 a partir da onda 177, e não recriar o cliente.
+- Enquanto isso, o painel segue na ProntoCardio parcial (só consulta). Não religar o worker antes da rodada: ele
+  marcaria a 11 como falhou (recuperar_orfas), o que a rodada precisa levar em conta.
+
 **ORDEM DO DONO (23/11, 19h): a construção nada para enquanto houver trabalho na fila.** Em 23/11 a construção ficou
 parada das 14h50 em diante porque o orquestrador pediu chat novo e não lançou nada; o dono não mandou parar. A sessão
 nova lança as rodadas logo depois de ler esta passagem (ids-bigint, trilha importada, senha e segundo fator por
