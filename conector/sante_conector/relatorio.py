@@ -27,6 +27,10 @@ PLATAFORMA = {
     "recusa_sem_regra_registrada": "rever a recusa no mapa do conector",
     "sequencia_sem_tabela": "declarar a sequência do produto que continua a numeração da origem",
     "espelho_codigo_inexistente": "atualizar a edição do espelho padrão do catálogo licenciado",
+    "espelho_nao_carregado": "carregar o espelho padrão do catálogo licenciado no cliente e Sincronizar",
+    "personalizacao_hospital_sem_destino": "dar destino à personalização do hospital sobre o item licenciado"
+                                           " (situação, fator, unidade)",
+    "ligacao_espelho_desfeita": "conferir o item que deixou de ligar ao espelho padrão (código ou tabela mudou)",
     "segredo_aguarda_cofre": "configurar a chave mestra do cofre de segredos e Sincronizar",
     "armazenamento_indefinido": "configurar a porta de armazenamento de arquivos do cliente",
     "arquivo_divergente_no_armazenamento": "conferir o arquivo no armazenamento do cliente",

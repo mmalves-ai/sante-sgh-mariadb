@@ -287,7 +287,7 @@ TBMATMED	IDENTIFICACAO		codigo_char			L8-03 r4 (revisão): atributo de cobrança
 TBMATMED	COB_TAXA_LOGISTICA		codigo_char			L8-03 r4 (revisão): atributo de cobrança do item da tabela PRÓPRIA (dado financeiro/fiscal que o hospital usa); sem coluna no item de referência: pedido 17 do L8-03.json à F2.2 (decisão em F4-decisoes-destino.md, L8-02/03/04 r4 revisão); NÃO é descarte
 
 TBREFMEMTUSS	ID		chave_origem			L8-03 r4: chave da origem (conector_origem)
-TBREFMEMTUSS	TAB_FCREFUND	equivalencia_matmed_tuss.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF)=(TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND);so_se:TAB_FCREFUND>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada;so_se:TAB_FCREFUND>TBCTRMEM>REF_SIMP=N,F,!licenca_nao_comprovada	L8-03 r4: item de mat/med pela chave alternativa (tabela, código, classificação); tabela licenciada: recusada com licenca_nao_comprovada (baixa)
+TBREFMEMTUSS	TAB_FCREFUND	equivalencia_matmed_tuss.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF)=(TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND)	L8-03 r4: item de mat/med pela chave alternativa (tabela, código, classificação); conta-itens-2 (conferidor): tabela licenciada também carrega, pelo item ligado ao espelho ou próprio (a equivalência TUSS é do hospital; antes descartada com licenca_nao_comprovada)
 TBREFMEMTUSS	COD_FCREFUND		inteiro			L8-03 r4: parte da chave alternativa do item
 TBREFMEMTUSS	CLASSIF_FCREFUND		inteiro			L8-03 r4: parte da chave alternativa do item
 TBREFMEMTUSS	COD_TUSS	equivalencia_matmed_tuss.termo_terminologia_id	inteiro	tiss:19		L8-03 r4: termo TUSS de materiais e OPME (tabela 19, terminologia pública da ANS)

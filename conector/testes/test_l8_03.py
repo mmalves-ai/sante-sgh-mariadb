@@ -229,10 +229,11 @@ class Declaracoes(unittest.TestCase):
 
     def test_catalogo_licenciado_nunca_carregado(self):
         # r4: o item de mat/med só entra pela tabela PRÓPRIA (filtro de linha pela marca da tabela, pendência baixa)
-        for t, col in (("TBREFMEMTUSS", "TAB_FCREFUND"),):
-            vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == t)
-            for marca in ("REF_BRA", "REF_SIMP"):
-                self.assertIn("so_se:%s>TBCTRMEM>%s=N,F,!licenca_nao_comprovada" % (col, marca), vias, t)
+        # conta-itens-2 (conferidor): a equivalência TUSS do item da tabela licenciada é do hospital e carrega pelo
+        # item ligado ao espelho (ou próprio): sem filtro de licença
+        vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == "TBREFMEMTUSS")
+        self.assertNotIn("licenca_nao_comprovada", vias)
+        self.assertIn("ref:TBMATMED.(TAB,COD,CLASSIF)=(TAB_FCREFUND,COD_FCREFUND,CLASSIF_FCREFUND)", vias)
         # conta-itens-2 (ADR 0006, 3): o item da tabela licenciada LIGA ao espelho (nunca copia o conteúdo dele)
         vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == "TBMATMED")
         for cat, marca in (("brasindice", "REF_BRA"), ("simpro", "REF_SIMP")):

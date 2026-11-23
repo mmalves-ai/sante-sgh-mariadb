@@ -204,7 +204,17 @@ GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
 GRAVIDADE_REGRA.update({"armazenamento_indefinido": "alta", "arquivo_divergente_no_armazenamento": "alta"})
 GRAVIDADE_REGRA.update({"duracao_ausente": "media", "escolha_pelo_maior": "baixa", "escolha_pelo_menor": "baixa",
                         "sem_filho_com_valor": "media", "fora_do_filtro_da_carga": "baixa"})
-GRAVIDADE_REGRA.update({"ligado_espelho": "baixa"})
+GRAVIDADE_REGRA.update({"ligado_espelho": "baixa", "ligacao_espelho_desfeita": "media",
+                        "espelho_nao_carregado": "alta", "personalizacao_hospital_sem_destino": "media"})
+
+# conta-itens-2: colunas que o hospital personaliza sobre o item licenciado (o item do espelho não as guarda)
+PERSONALIZACAO_HOSPITAL = ("situacao", "fator_divisao", "unidade_medida_id")
+
+
+def personalizacao_perdida(nomes, hosp, esp):
+    """Colunas personalizáveis em que o valor do hospital (não nulo, não presumido) difere do item do espelho."""
+    return [n for n, a, b in zip(nomes, hosp, esp) if n in PERSONALIZACAO_HOSPITAL and a is not None
+            and not isinstance(a, _PADRAO) and canon(a) != canon(b)]
 GRAVIDADE_REGRA.update({"rascunho_sem_autor": "alta", "espelho_codigo_inexistente": "media",
                         "espelho_edicao_inexistente": "media", "espelho_ambiguo": "media",
                         "senha_hash_invalido": "media", "senha_aguarda_argon2": "media",
@@ -2007,6 +2017,30 @@ class CargaMapa(carga.Carga):
         self.cont["segredos_no_cofre"] = self.cont.get("segredos_no_cofre", 0) + 1
         return ref
 
+    def _espelho_carregado(self, cat):
+        """O espelho padrão do catálogo licenciado existe no cliente (contagem de itens que a migração não criou,
+        cache). Só com ele comprovado o código ausente é item do hospital; vazio: `espelho_nao_carregado` (alta)."""
+        if cat not in ("brasindice", "simpro"):
+            return True
+        cache = self.__dict__.setdefault("_esp_carregado", {})
+        if cat not in cache:
+            cache[cat] = self._todas("SELECT COUNT(*) FROM item_referencia_matmed WHERE fonte_referencia=%s AND"
+                                     " origem<>'migracao'", (cat,))[0][0] > 0
+        return cache[cat]
+
+    def _desfazer_ligacao(self, t, chave, p, dt, ligado):
+        """Sincronizar: a linha estava ligada ao item do espelho e agora não liga mais a ele (código ou marca mudou,
+        ambíguo, outro item). O item do espelho nunca é sobrescrito: a linha é tratada como nova (religa ou entra como
+        própria) e o conector_origem passa a apontar o novo destino. Devolve True quando desfez."""
+        a = self._atualizar
+        if (a is None or not p.get("ligacoes") or ligado == a[0]
+                or not sincronizar_mod.ligado_ao_espelho(self, t, dt, a[0])):
+            return False
+        self._pendencia(t, chave, "ligacao_espelho_desfeita", "media")
+        self.cont["ligacoes_espelho_desfeitas"] = self.cont.get("ligacoes_espelho_desfeitas", 0) + 1
+        self._atualizar = None
+        return True
+
     def _ligar_espelho(self, esp, codigo, linha, pend):
         """Id da linha do espelho (copiada no cliente com os mesmos ids) pelo código e, com edição, pela edição;
         nunca copia conteúdo licenciado. Ausente: NULL com `espelho_codigo_inexistente`/`espelho_edicao_inexistente`."""
@@ -2258,11 +2292,16 @@ class CargaMapa(carga.Carga):
             if chave in colide:
                 vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
             else:
-                pl, ligado = [], None  # conta-itens-2: item de tabela licenciada liga ao espelho, sem gravar
+                pl, ligado, sem_esp = [], None, None  # conta-itens-2: item de tabela licenciada liga ao espelho
                 for lg in p.get("ligacoes") or ():
                     if self._cond(linha, lg["cond"], []) and linha.get(lg["coluna"]) is not None:
+                        if not self._espelho_carregado(lg["espelho"]["catalogo"]):
+                            # espelho do catálogo vazio no cliente: nunca vira cópia "própria" do licenciado
+                            sem_esp = ("espelho_nao_carregado", "alta")
+                            break
                         ligado = self._ligar_espelho(lg["espelho"], linha.get(lg["coluna"]), linha, pl)
                         break
+                self._desfazer_ligacao(t, chave, p, dts[0], ligado)
                 if ligado is not None and (self._atualizar is None or self._atualizar[0] == ligado):
                     _v, cl, _p, rv, _a = self._valores(p, linha, chave)
                     if rv:  # linha inválida: segue o caminho normal (recusada pela regra dela), nunca ligada
@@ -2274,8 +2313,15 @@ class CargaMapa(carga.Carga):
                         ", ".join("`%s`" % c for c in nomes), dts[0]), (ligado,))[0])
                     hd = hashlib.sha256("|".join(canon(x) for x in cs).encode()).digest()
 
-                    def ligar(ligado=ligado, hd=hd):
+                    difs = personalizacao_perdida(nomes, cl[dts[0]][0][1], cs)
+                    for col in difs:  # o que o hospital personalizou e o item do espelho não guarda (sem destino)
+                        k = "personalizacao_sem_destino_" + col
+                        self.cont[k] = self.cont.get(k, 0) + 1
+
+                    def ligar(ligado=ligado, hd=hd, difs=difs):
                         self._pendencia(t, chave, "ligado_espelho", "baixa")
+                        if difs:
+                            self._pendencia(t, chave, "personalizacao_hospital_sem_destino", "media")
                         self._registrar(t, chave, ents[0], ligado, h, hd)
                     self.cont["ligadas_espelho"] = self.cont.get("ligadas_espelho", 0) + 1
                     if os.environ.get("CONECTOR_SEM_LOTE") == "1":
@@ -2288,7 +2334,9 @@ class CargaMapa(carga.Carga):
                     continue
                 pf = []  # pai do filtro inexistente/ambíguo: recusada pela regra do pai (média), nunca gravada
                 fora = next((f for f in p.get("filtros") or [] if not self._cond(linha, f, pf)), None)
-                if fora is not None:  # so_se: fora do filtro da carga, nunca gravada (pendência baixa, visível)
+                if sem_esp is not None:
+                    vals, campos, pend, recusa, adiadas = None, None, [], sem_esp, []
+                elif fora is not None:  # so_se: fora do filtro da carga, nunca gravada (pendência baixa, visível)
                     recusa = pf[0] if pf else (fora["regra"] or FILTRO_PADRAO, "baixa")
                     vals, campos, pend, adiadas = None, None, [], []
                 else:

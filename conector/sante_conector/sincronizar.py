@@ -55,6 +55,14 @@ def criado_pelo_conector(cm, dt, rid):
     return bool(r) and r[0][0] == "migracao"
 
 
+def ligado_ao_espelho(cm, tab, dt, rid):
+    """conta-itens-2 (ADR 0006, 3): o destino da linha é o item do ESPELHO a que ela foi ligada (`ligar_espelho:` no
+    principal), não um item criado pela migração. O conector não é dono dele: nunca o exclui, reativa nem sobrescreve."""
+    p = _plano(cm, tab) or {}
+    return (bool(p.get("ligacoes")) and rid is not None and bool(p.get("destinos")) and dt == p["destinos"][0]
+            and not criado_pelo_conector(cm, dt, rid))
+
+
 def _chave_ctl(k, base, dt, principal, desd):
     if principal and not desd:
         return k
@@ -185,6 +193,9 @@ def _marcar(cm, tab, chave, excluir):
             tocar = not op.get("complementa")
             if tocar and op.get("adotar") and not criado_pelo_conector(cm, dt, rid):
                 tocar = False
+            if tocar and ligado_ao_espelho(cm, tab, dt, rid):  # item do espelho: só o controle é marcado
+                tocar = False
+                cm.sinc_res["mantidas_espelho"] = cm.sinc_res.get("mantidas_espelho", 0) + 1
             # agrupado e adotado são compartilhados por natureza (a linha `complementa` de um filho nunca prende o pai)
             if tocar and excluir and (op.get("agrupar") or op.get("adotar")) and _compartilhada(cm, dt, rid, cids):
                 tocar = False

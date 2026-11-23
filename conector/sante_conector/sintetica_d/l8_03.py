@@ -238,7 +238,7 @@ def linhas(r, ins):
           LAB=3, FATOR={1: 100.0, 2: 0.0}.get(i), UNI_CON="CX" if i == 6 else None,
           REGISTRO_ANVISA="10000000001" if i == 1 else None, REF_TISS=70000001 if i == 1 else 0)
     # r4: equivalência TUSS: 1 material (tabela 19), 2 medicamento (tabela 20, sem vigência: data da carga),
-    # 3 licenciada, 4 item inexistente (1048), 5 termo inexistente (1048)
+    # 3 licenciada (grava no item ligado ao espelho), 4 item inexistente (1048), 5 termo inexistente (1048)
     for i, tab, cod, tuss, ini in ((1, 2, 100, 70000001, d(2025, 1, 1)), (2, 2, 101, 90000001, None),
                                    (3, 1, 100, 70000001, None), (4, 2, 999, 70000001, None), (5, 2, 103, 11111111, None)):
         q("TBREFMEMTUSS", ID=i, TAB_FCREFUND=tab, COD_FCREFUND=cod, CLASSIF_FCREFUND=1, COD_TUSS=tuss,
@@ -297,11 +297,13 @@ def linhas(r, ins):
         # conta-itens-2: a 3 (item da tabela licenciada) grava ligada ao item do espelho (antes: pai_pendente)
         "TBREFUNI": {"gravados": 3, "pendencias": {"pai_inexistente": 1,
                                                    "restricao_destino_1048": 2, "vigencia_sem_fonte": 5}},
-        "TBREFMEMTUSS": {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 5, "licenca_nao_comprovada": 1,
+        # conta-itens-2 (conferidor): a 3 (tabela licenciada) grava a equivalência no item ligado ao espelho (9601);
+        # a busca do código na tabela concorrente e a vigência pela data da carga somam 1 cada (antes: licença)
+        "TBREFMEMTUSS": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 6,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
                                                        # rodada 5 (ADR 0007, 16): a linha com data própria de
                                                        # evidência não é mais "sem fonte"
-                                                       "vigencia_sem_fonte": 3}},
+                                                       "vigencia_sem_fonte": 4}},
         # r4 (revisão): 2 recusada (procedimento ausente: item e tabela pai_inexistente, tabela NOT NULL 1048); 3 recusada
         # (tipo de paciente fora do domínio); 5 fonte inexistente (pai_inexistente, 1048)
         "TBPERTHM": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
@@ -346,6 +348,9 @@ def linhas(r, ins):
 # valor gravado, não só a contagem (conta-itens-2; conferencia._conferir_valores): o ATO do honorário do pacote é o
 # GRUPO de ato (TBTABATO), gravado em pacote_item_incluso.grupo_ato_id, e a função da equipe fica vazia
 CONFERIR_DESTINO = [
+    ("conta-itens-2 (conferidor): equivalência TUSS da linha 3 (tabela licenciada) no item 9601 do espelho",
+     "SELECT COUNT(*) = 1 FROM equivalencia_matmed_tuss e JOIN {ctl}.conector_origem co ON co.id_destino=e.id"
+     " WHERE co.tabela_origem='TBREFMEMTUSS' AND co.chave_original='3' AND e.item_referencia_matmed_id=9601"),
     ("conta-itens-2: item 3 da tabela licenciada LIGADO ao item 9601 do espelho (nada inserido, descrição intacta)",
      "SELECT (SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='TBMATMED' AND chave_original='3'"
      " LIMIT 1) = 9601 AND (SELECT descricao FROM item_referencia_matmed WHERE id=9601) = 'Item exemplo do espelho'"
