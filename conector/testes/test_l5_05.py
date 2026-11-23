@@ -7,10 +7,11 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l5_05
 
-# na ordem do mapa
-CARREGADAS = ["TBGENERO_SOCIAL", "TBGERSEQ", "TBGRAU_INST", "TBGRUCONVEN", "TBMEDSOL", "TBMUIBGE", "TBORGAOEMIS", "TBPARENTE",
-              "TBPESQUIPLANO", "TBRELIG", "TBSEXO", "TBTIPOATEUNIDADE", "TBTIPOTELEFONE", "TBTPDOCUMENTO", "TBUNIDAD",
-              "TBUNID_IDADE", "TBVULNERABILIDADE_SOCIAL", "TBEMPHOS", "TBEMPHOSLOGO", "TBCBOPRO_TBUNIDAD"]  # lotação depois de TBPROFIS
+# na ordem do mapa (C3, 2026-11-22: TBUNIDAD depende de TBCBOPRO, que agora vem depois de TBPROFIS)
+CARREGADAS = ["TBGENERO_SOCIAL", "TBGERSEQ", "TBGRAU_INST", "TBGRUCONVEN", "TBMEDSOL", "TBMUIBGE", "TBORGAOEMIS",
+              "TBPARENTE", "TBPESQUIPLANO", "TBRELIG", "TBSEXO", "TBTIPOATEUNIDADE", "TBTIPOTELEFONE",
+              "TBTPDOCUMENTO", "TBUNID_IDADE", "TBVULNERABILIDADE_SOCIAL", "TBEMPHOS", "TBEMPHOSLOGO", "TBUNIDAD",
+              "TBCBOPRO_TBUNIDAD"]  # lotação depois de TBPROFIS
 # descarte com motivo de produto (declarado/sem_carga.tsv)
 DESCARTE = {"TBPESSOA": "duplicado"}
 # declaradas e comentadas até o motor ter o mecanismo: nenhuma desde a rodada 3 (conselho_classe em depara.CATALOGOS)
@@ -176,13 +177,30 @@ class SolicitanteExterno(unittest.TestCase):
         self.p = {p["tabela"]: p for p in carga_mapa.planejar(m, {"TBMEDSOL"})}["TBMEDSOL"]
 
     def test_conselho_uf_e_ocupacao_pelos_catalogos_oficiais(self):
-        cols = {c["destino"]: c for c in self.p["colunas"]["solicitante_externo"]}
+        cols = {}
+        for c in self.p["colunas"]["solicitante_externo"]:
+            cols.setdefault(c["destino"], c)  # coluna concorrente: a primeira declarada é a da origem
         self.assertEqual(self.p["destinos"], ["solicitante_externo"])
         self.assertEqual(cols["conselho_classe_id"]["depara"], "conselho_classe")
         self.assertEqual(cols["conselho_unidade_federativa_id"]["depara"], "ibge_uf")
         self.assertEqual(cols["ocupacao_cbo_id"]["depara"], "cbo")
         self.assertEqual(cols["numero_conselho"]["regra"], "texto")
         self.assertNotIn("COD_CONVENIO", self.p["lidas"])
+
+    def test_conselho_nulo_na_origem_presume_crm(self):
+        # causa de 3.680 recusas 1048 na carga real: a origem não guarda o conselho em 3.678 cadastros antigos; a
+        # melhor estimativa pela evidência (ADR 0007, 18) é CRM, presumida e só quando o conselho é NULO (a sigla fora
+        # do catálogo continua recusando)
+        cc = [c for c in self.p["colunas"]["solicitante_externo"] if c["destino"] == "conselho_classe_id"]
+        self.assertEqual([c["coluna"] for c in cc], ["ID_TBCONSPROF", "=~CRM"])
+        self.assertEqual(cc[1]["cod"], ("conselho_classe", "sigla"))
+        self.assertEqual((cc[1]["se"]["coluna"], cc[1]["se"]["valores"]), ("ID_TBCONSPROF", [""]))
+
+    def test_inscricao_repetida_adota_a_ja_gravada(self):
+        # causa das recusas 1062 na carga real (1.250 linhas): o mesmo conselho, UF e número repetido é o mesmo
+        # solicitante; a linha já gravada é adotada (mescla não destrutiva, ADR 0007, 20), nunca recusada
+        self.assertEqual(self.p["opcoes"]["solicitante_externo"]["adotar"],
+                         ["conselho_classe_id", "conselho_unidade_federativa_id", "numero_conselho"])
 
     def test_sigla_do_conselho_normalizada(self):
         from sante_conector import depara
