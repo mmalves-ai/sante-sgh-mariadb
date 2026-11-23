@@ -99,3 +99,20 @@ cada uma com construir, revisão adversarial e correção.
   - revisores lendo só o diff custaram 0,27 a 0,73 M e acharam defeitos reais em todas as rodadas;
   - conferidor que espera uma prova de 50 minutos estoura o G6: a prova longa fica com o orquestrador, em segundo
     plano.
+
+## Sessão de 23/11 (34c8458c): incidente do MariaDB, esteira do GitHub, SBIS e NIR
+
+| Rodada | Estimado | Teto | Gasto (medido) | Por papel |
+|---|---|---|---|---|
+| sbis-16-26 | 10 M | 13 M | 6,1 M | 2 construtores (1,37 M cada, 86% abaixo da base), 2 revisores (0,40 M cada), conferidor 2,52 M |
+| nir-cancelamento | 4 M | 5,2 M | 4,95 M | construtor 2,21 M (77% abaixo da base), revisor 0,72 M, conferidor 2,02 M |
+| Orquestrador | - | - | 9,2 M | 421 turnos |
+
+- Nenhuma rodada passou do teto. A nir-cancelamento ficou 24% acima da estimativa: a fatia (domínio, contrato, DDL,
+  privilégios, tela e e2e) era maior que "construtor de lote de 15 arquivos"; próxima vez, estimar construtor de
+  mudança ponta a ponta como agente de mudança compartilhada (2,5 a 4,5 M).
+- **Qualidade:** os revisores acharam defeitos reais nas duas (5 e 6 achados; na NIR, CHECK que não enxergava o
+  estado e linhas antigas sem tratamento); o verificar:tudo pegou 4 vermelhos que os agentes deixaram.
+- **Desperdício:** (1) os dois conferidores fecharam pelo G6 com o verificar:tudo pela metade (o de 10 min deve ficar
+  com o orquestrador, em segundo plano, como a diag-cadeia); (2) agentes usando npx deixam log em ~/.npm/_logs e o
+  verificar:tudo fica vermelho (o PREFIXO agora proíbe); (3) o orquestrador passou de 150 turnos de novo.
