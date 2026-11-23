@@ -59,6 +59,10 @@ export default defineConfig({
       // M06: Valkey e Mailpit do Compose (loopback) para a fila email do alerta da quebra de vidro.
       env: {
         PRODUTO_NOME: PRODUTO_NOME_E2E,
+        // O E2E é autossuficiente (esteira sem .env): sem AMBIENTE a API não sobe, e sem REDE_PADRAO o loopback não
+        // pertence a rede nenhuma (a sessão sintética fica sem estabelecimento). Valores sintéticos, só se faltarem.
+        AMBIENTE: process.env['AMBIENTE'] ?? 'ci',
+        REDE_PADRAO: process.env['REDE_PADRAO'] ?? 'rede-e2e',
         ACESSO_SINTETICO_INDISPONIVEL: ESTABELECIMENTO_FORA_E2E,
         // M06 (revisão): com a cópia em dev, a sessão sintética só com a marca explícita.
         SESSAO_SINTETICA: 'sim',
