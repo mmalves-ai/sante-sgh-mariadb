@@ -28,11 +28,26 @@ Regra das tabelas concluídas da execução interrompida Y (tabela de controle `
    distintas = as n linhas da tabela foram processadas e commitadas. Tabela com chave de imagem anterior (linha
    "igual" de uma importação mais antiga), linhas filtradas pelo mapa ou vazia NÃO é deduzida: roda de novo (pula pelo
    hash), o que é sempre seguro.
+3. Nas duas regras, o total de chaves principais de T no conector_origem (de QUALQUER imagem) não pode passar da
+   contagem desta execução: chave de linha que sumiu do arquivo (trazida por importação anterior) entraria nas chaves
+   vistas refeitas e a conciliação divergiria; a tabela roda de novo (na dedução o total é exatamente n).
+4. Tabela com coluna em duas fases (autorreferência ou ciclo declarado: NULL na linha, UPDATE no `_fase2` depois de
+   todas as ondas) NUNCA é pulada: a referência adiada só existe na memória e a interrompida pode ter caído antes do
+   `_fase2` (a marca da onda vem antes dele). Ela roda de novo; na linha "igual" cujo destino tem a coluna NULL, a
+   referência adiada é refeita da linha lida (`CargaMapa._readiar`) e o `_fase2` a grava só se continuar NULL
+   (`AND coluna IS NULL`: nunca sobrescreve).
+5. Cadeia: se Y é ela mesma uma continuação (`contadores.continuar_de` = X) e falhou cedo (sem imagem, ou antes de
+   marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são repetidas da
+   execução que a concluiu.
 """
 from .carga import AGORA
 
 
 class NaoContinuavel(RuntimeError):
+    pass
+
+
+class SemImagem(NaoContinuavel):
     pass
 
 
@@ -53,36 +68,75 @@ def _sql_principal(destinos):
     return " AND ".join(cond) or "TRUE", args
 
 
-def concluidas(conn, ctl, anterior, plano, contagens, sha256):
-    """Tabelas do plano concluídas pela execução `anterior` (regra no cabeçalho). Devolve
-    {"tabelas": set, "regra": "marca"|"deducao", "imagem_anterior": id}. Recusa se o arquivo não é o mesmo."""
+def duas_fases(p):
+    """A tabela tem coluna que pode ir para a fase 2 (autorreferência ou ciclo declarado em duas fases: NULL na
+    linha, UPDATE no fim). A referência adiada vive só na memória até o `_fase2`: tabela assim nunca é pulada."""
+    from .carga_mapa import _passos_em_duas_fases
+    return any((c.get("referencia") in p["duas_fases"] and not c.get("passos")) or _passos_em_duas_fases(c, p)
+               for cs in (p.get("colunas") or {}).values() for c in cs)
+
+
+def _uma(conn, ctl, anterior, plano, contagens, sha256):
+    """Concluídas pela própria execução `anterior` (marca ou dedução), sem a cadeia."""
     with conn.cursor() as c:
         c.execute("SELECT id, sha256 FROM `%s`.imagem WHERE execucao_id=%%s" % ctl, (anterior,))
         r = c.fetchone()
         if not r:
-            raise NaoContinuavel("a execução %d não gravou a imagem: não há o que continuar" % anterior)
+            raise SemImagem("a execução %d não gravou a imagem: não há o que continuar" % anterior)
         img, sha = r
         if not sha or sha != sha256:
             raise NaoContinuavel("o arquivo mudou desde a execução %d (sha256 diferente): importe de novo" % anterior)
         c.execute("SELECT tabela_origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=%%s" % ctl, (anterior,))
         marcadas = {x[0] for x in c.fetchall()}
-        if marcadas:
-            return {"tabelas": {p["tabela"] for p in plano if p["tabela"] in marcadas}, "regra": "marca",
-                    "imagem_anterior": img}
         c.execute("SELECT tabela_origem, registros FROM `%s`.imagem_tabela WHERE imagem_id=%%s" % ctl, (img,))
         lidas = {t: int(n) for t, n in c.fetchall()}
         saida = set()
         for p in plano:
             t = p["tabela"]
-            n = lidas.get(t, 0)
-            if n <= 0 or n != int(contagens.get(t, -1)):
+            if marcadas and t not in marcadas:
+                continue
+            n = int(contagens.get(t, -1))
+            if not marcadas and (lidas.get(t, 0) <= 0 or lidas.get(t, 0) != n):
                 continue
             cond, args = _sql_principal(p["destinos"])
-            c.execute("SELECT COUNT(*) FROM `%s`.conector_origem WHERE tabela_origem=%%s AND imagem_id=%%s AND %s"
-                      % (ctl, cond), [t, img] + args)
-            if int(c.fetchone()[0]) == n:
+            c.execute("SELECT COUNT(*), COALESCE(SUM(imagem_id=%%s), 0) FROM `%s`.conector_origem"
+                      " WHERE tabela_origem=%%s AND %s" % (ctl, cond), [img, t] + args)
+            total, desta = (int(x) for x in c.fetchone())
+            # mais chaves principais (de qualquer imagem) que linhas no arquivo: há chave antiga que sumiu do arquivo
+            # e entraria nas vistas refeitas (a conciliação divergiria); a tabela roda de novo
+            if total > n:
+                continue
+            if marcadas or desta == n:
                 saida.add(t)
-        return {"tabelas": saida, "regra": "deducao", "imagem_anterior": img}
+        return saida, ("marca" if marcadas else "deducao"), img
+
+
+def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None):
+    """Tabelas do plano concluídas pela execução `anterior` (regra no cabeçalho). Devolve {"tabelas": set,
+    "regra": "marca"|"deducao" (com "+cadeia" quando herdou), "imagem_anterior": id, "origem": {tabela: execução
+    das pendências}, "duas_fases": tabelas refeitas por terem coluna em duas fases}. Recusa se o arquivo não é o
+    mesmo. `contadores_de(id)`: contadores da execução (cadeia de continuações; None = sem cadeia)."""
+    de = None
+    if contadores_de is not None:
+        de = (contadores_de(anterior) or {}).get("continuar_de")
+    try:
+        tabs, regra, img = _uma(conn, ctl, anterior, plano, contagens, sha256)
+    except SemImagem:
+        if not de:
+            raise
+        tabs, regra, img = set(), "sem_imagem", None
+    origem = {t: anterior for t in tabs}
+    if de:  # a continuação `anterior` falhou antes de marcar o que herdou: herda da que ela continuava
+        r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de)
+        for t, e in r["origem"].items():
+            origem.setdefault(t, e)
+        regra = "%s+cadeia(%d)" % (regra, int(de))
+        img = img or r["imagem_anterior"]
+    refazer = {p["tabela"] for p in plano if p["tabela"] in origem and duas_fases(p)}
+    for t in refazer:
+        origem.pop(t)
+    return {"tabelas": set(origem), "regra": regra, "imagem_anterior": img, "origem": origem,
+            "duas_fases": sorted(refazer)}
 
 
 def marcar(cm, tabelas, onda=None, origem="carregada"):
@@ -98,24 +152,30 @@ def marcar(cm, tabelas, onda=None, origem="carregada"):
     cm._commit()
 
 
-def repetir_pendencias(cm, anterior, tabelas):
-    """Pendências abertas da interrompida nas tabelas puladas: repetidas nesta execução (só metadados: tabela, chave,
-    regra, gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo."""
-    tabelas = sorted(set(tabelas))
-    if not tabelas:
-        return 0
-    marcas = ",".join(["%s"] * len(tabelas))
-    with cm._c() as c:
-        c.execute("SELECT tabela_origem, chave_original, regra, gravidade, detalhe FROM %s.pendencia WHERE execucao_id=%%s"
-                  " AND situacao='aberta' AND tabela_origem IN (%s)" % (cm.ctl, marcas), [anterior] + tabelas)
-        linhas = c.fetchall()
-        for i in range(0, len(linhas), 5000):
-            c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
-                          " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%s)" % (cm.ctl, AGORA),
-                          [(cm.eid,) + tuple(x) for x in linhas[i:i + 5000]])
-    cm.pend.extend((t, k, r, g, d) for t, k, r, g, d in linhas)
+def repetir_pendencias(cm, origem):
+    """Pendências abertas nas tabelas puladas, da execução que as concluiu (`origem` {tabela: execução}; a cadeia de
+    continuações aponta para a que de fato carregou): repetidas nesta execução (só metadados: tabela, chave, regra,
+    gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo."""
+    por = {}
+    for t, e in origem.items():
+        por.setdefault(int(e), []).append(t)
+    total = 0
+    for e, tabelas in sorted(por.items()):
+        tabelas = sorted(tabelas)
+        marcas = ",".join(["%s"] * len(tabelas))
+        with cm._c() as c:
+            c.execute("SELECT tabela_origem, chave_original, regra, gravidade, detalhe FROM %s.pendencia WHERE"
+                      " execucao_id=%%s AND situacao='aberta' AND tabela_origem IN (%s)" % (cm.ctl, marcas),
+                      [e] + tabelas)
+            linhas = c.fetchall()
+            for i in range(0, len(linhas), 5000):
+                c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                              " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%s)" % (cm.ctl, AGORA),
+                              [(cm.eid,) + tuple(x) for x in linhas[i:i + 5000]])
+        cm.pend.extend((t, k, r, g, d) for t, k, r, g, d in linhas)
+        total += len(linhas)
     cm._commit()
-    return len(linhas)
+    return total
 
 
 def reconstruir(cm, p):

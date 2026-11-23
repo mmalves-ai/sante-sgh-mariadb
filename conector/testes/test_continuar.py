@@ -212,6 +212,36 @@ class RegraConcluidas(unittest.TestCase):
         self.root.commit()
         r = continuar.concluidas(self.root, self.ctl, 7, plano, cont, "a" * 64)
         self.assertEqual((r["tabelas"], r["regra"]), ({"B"}, "marca"))  # com marca, só a marca vale
+        # cadeia: a continuação 8 falhou antes de gravar a imagem; a 9 falhou depois da imagem e antes de marcar o que
+        # herdou (as chaves têm a imagem da 7): as duas continuam alcançando o que a 7 concluiu
+        cadeia = {8: {"continuar_de": 7}, 9: {"continuar_de": 8}}
+        r = continuar.concluidas(self.root, self.ctl, 9 - 1, plano, cont, "a" * 64, cadeia.get)
+        self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 7}))
+        self._x("INSERT INTO {b}.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em, ods_versao,"
+                " pagina_bytes, tabelas, registros_total, generators, somente_leitura, criado_em) VALUES"
+                " (9, 'x.fdb', 1, %s, UTC_TIMESTAMP(), 12, 8192, 5, 10, 0, 1, UTC_TIMESTAMP(3))", ("a" * 64,))
+        self.root.commit()
+        r = continuar.concluidas(self.root, self.ctl, 9, plano, cont, "a" * 64, cadeia.get)
+        self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 7}))
+        self.assertRaises(continuar.NaoContinuavel, continuar.concluidas, self.root, self.ctl, 8, plano, cont,
+                          "a" * 64)  # sem a cadeia, a 8 sem imagem não continua
+        # chave antiga que sumiu do arquivo (imagem anterior) além das n de agora: roda de novo, mesmo marcada
+        for k, i in (("1", img), ("2", img), ("velha", img + 99)):
+            self._x("INSERT INTO {b}.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
+                    " hash_linha, imagem_id, criado_em) VALUES ('F', %s, 'e', 1, %s, %s, UTC_TIMESTAMP(3))",
+                    (k, bytes(16), i))
+        self._x("INSERT INTO {b}.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, onda, origem,"
+                " criado_em) VALUES (7, %s, 'F', 0, 'carregada', UTC_TIMESTAMP(3))", (img,))
+        self.root.commit()
+        plano_f = plano + [{"tabela": "F", "destinos": ["dest_f"]}]
+        r = continuar.concluidas(self.root, self.ctl, 7, plano_f, dict(cont, F=2), "a" * 64)
+        self.assertEqual(r["tabelas"], {"B"})
+        # coluna em duas fases (autorreferência): a referência adiada só existe na memória até o _fase2; nunca pulada
+        plano_b = [dict(p, duas_fases={p["tabela"]}, colunas={"dest_b": [{"coluna": "PAI", "destino": "pai_id",
+                                                                         "referencia": "B"}]})
+                   if p["tabela"] == "B" else p for p in plano]
+        r = continuar.concluidas(self.root, self.ctl, 7, plano_b, cont, "a" * 64)
+        self.assertEqual((r["tabelas"], r["duas_fases"]), (set(), ["B"]))
 
 
 # ------------------------------------------------------------------ plataforma (MariaDB)
@@ -294,17 +324,54 @@ class PlataformaContinuar(unittest.TestCase):
 @unittest.skipUnless(NO_CONTAINER, "só no container do conector, com o MariaDB da rede interna")
 class ContinuacaoPontaAPonta(unittest.TestCase):
     def test_interrompida_no_meio_continua_e_fica_igual_a_inteira(self):
+        from sante_conector.sintetica_d import exemplo_l9 as ex
+
+        def escolher(plano, contagens, ws):  # a maior tabela do plano numa onda que não é a primeira, a 60%
+            cand = [plano[i]["tabela"] for w in ws[1:] for i in w]
+            alvo = max(cand, key=lambda t: contagens.get(t, 0))
+            return alvo, int(contagens[alvo] * 0.6)
+        self._ponta(ex, "exemplo_l9", escolher)
+
+    def test_duas_fases_refeitas_na_continuacao(self):
+        """Autorreferência (ex_grupo.grupo_pai_id, fase 2): a interrompida caiu (a) no _fase2, com todas as ondas
+        marcadas, e (b) no meio da própria tabela autorreferente. A continuação refaz a tabela e a fase 2 das linhas
+        "iguais" cuja coluna ficou NULL: o pai de cada grupo é o mesmo da importação inteira."""
+        from sante_conector.sintetica_d import exemplo as ex
+
+        def pais(um, cli, res_r, res_c):
+            sql = ("SELECT g.nome, p.nome FROM `%s`.ex_grupo g LEFT JOIN `%s`.ex_grupo p ON p.id=g.grupo_pai_id"
+                   " ORDER BY 1, 2")
+            ref = um(sql % ("cliente_f4rc_ref", "cliente_f4rc_ref"))
+            self.assertTrue(any(x[1] is not None for x in ref))
+            self.assertEqual(um(sql % (cli, cli)), ref)
+            sql = ("SELECT i.descricao, g.nome, COUNT(*) FROM `%s`.ex_item i LEFT JOIN `%s`.ex_grupo g ON"
+                   " g.id=i.grupo_id GROUP BY 1, 2 ORDER BY 1, 2")
+            self.assertEqual(um(sql % (cli, cli)), um(sql % ("cliente_f4rc_ref", "cliente_f4rc_ref")))
+            self.assertEqual(res_c["carga"]["fase2_gravadas"], res_r["carga"]["fase2_gravadas"])
+            self.assertEqual(res_c["carga"]["fase2_pendentes"], res_r["carga"]["fase2_pendentes"])
+
+        def grupo(plano, contagens, ws):
+            t = next(p["tabela"] for p in plano if p["destinos"][0] == "ex_grupo")
+            return t, contagens[t] // 2
+        self._ponta(ex, "exemplo", lambda *a: "fase2", pais)
+        # a tabela do meio é a primeira (nada a pular); as linhas desfeitas na queda consumiram ids (o
+        # AUTO_INCREMENT não volta no ROLLBACK): a soma de ex_item, que leva o id do grupo, muda; a ligação pelo
+        # nome do grupo tem de ser a mesma (conferida em `pais`)
+        self._ponta(ex, "exemplo", grupo, pais, pulada=False, soma=False)
+
+    def _ponta(self, ex, fatia, escolher, extra=None, pulada=True, soma=True):
+        self.maxDiff = None
         from sante_conector import abridor, banco, controle, sintetica
         from sante_conector.leitor import Leitor
-        from sante_conector.sintetica_d import exemplo_l9 as ex
         d = os.path.join(os.environ.get("CONECTOR_TRABALHO_DIR", "/trabalho"), "continuar-f4rc")
         os.makedirs(d, exist_ok=True)
         arq = os.path.join(d, "v1.fdb")
         for x in (arq, arq[:-4] + ".manifesto.json"):
             if os.path.exists(x):
                 os.remove(x)
-        ex.VERSAO, ex.DDL = 1, ex.ddl(1)
-        sintetica.gerar(arq, versao=1, fatias=["exemplo_l9"])
+        if hasattr(ex, "ddl"):
+            ex.VERSAO, ex.DDL = 1, ex.ddl(1)
+        sintetica.gerar(arq, versao=1, fatias=[fatia])
         root = banco.conectar(None, multi=True)
         sha = "c" * 64
 
@@ -345,6 +412,12 @@ class ContinuacaoPontaAPonta(unittest.TestCase):
                 cc = banco.conectar(cli, autocommit=False)
                 try:
                     cm = carga_mapa.CargaMapa(lt, cc, ctl, eid, img, ex.MAPA_TESTE, **kw)
+                    if falhar == "fase2":  # caiu depois de todas as ondas (marcadas), antes da fase 2
+                        def fase2(self):
+                            raise RuntimeError("interrompida pelo teste no _fase2")
+                        with mock.patch.object(carga_mapa.CargaMapa, "_fase2", fase2):
+                            self.assertRaises(Exception, cm.executar, presentes, contagens)
+                        return cm, None, plano, contagens
                     if falhar:
                         orig = carga_mapa.CargaMapa._linhas_mapa
 
@@ -374,15 +447,13 @@ class ContinuacaoPontaAPonta(unittest.TestCase):
             preparar("f4rc_ref")
             cm_r, res_r, plano, contagens = rodar("f4rc_ref", 1)
             self.assertEqual([k for k, r in res_r["entidades"].items() if not r["conferido"]], [])
-            # a maior tabela do plano falha no meio (60% das linhas lidas) numa onda que não é a primeira
-            ws = paralelo.ondas(plano, ex.MAPA_TESTE)
-            cand = [plano[i]["tabela"] for w in ws[1:] for i in w]
-            alvo = max(cand, key=lambda t: contagens.get(t, 0))
+            falha = escolher(plano, contagens, paralelo.ondas(plano, ex.MAPA_TESTE))
+            alvo = None if falha == "fase2" else falha[0]
             for legado in (True, False):
                 cli, ctl = preparar("f4rc_cont")
                 os.environ["CONECTOR_ESTADO_MIN"] = "1"  # (B) compacta e libera tudo: o resultado não muda
                 try:
-                    rodar("f4rc_cont", 1, falhar=(alvo, int(contagens[alvo] * 0.6)))
+                    rodar("f4rc_cont", 1, falhar=falha)
                     if legado:  # execução anterior à marca (a 11 da ProntoCardio): só a dedução pelo controle
                         um("DELETE FROM `%s`.conector_tabela_concluida" % ctl)
                         root.commit()
@@ -391,15 +462,17 @@ class ContinuacaoPontaAPonta(unittest.TestCase):
                     cm_c, res_c, _, _ = rodar("f4rc_cont", 2, continuar_de=1)
                 finally:
                     os.environ.pop("CONECTOR_ESTADO_MIN", None)
-                self.assertTrue(cm_c.pular, "nenhuma tabela pulada")
+                self.assertTrue(cm_c.pular or not pulada, "nenhuma tabela pulada")
                 self.assertNotIn(alvo, cm_c.pular)
                 ruins = [k for k, r in res_c["entidades"].items() if not r["conferido"]]
                 self.assertEqual(ruins, [], {k: (res_c["entidades"][k], res_r["entidades"][k], k in cm_c.pular)
                                              for k in ruins})
-                chave = ("registros_origem", "registros_destino", "recusados", "soma_destino")
+                chave = ("registros_origem", "registros_destino", "recusados") + (("soma_destino",) if soma else ())
                 self.assertEqual({k: [r[x] for x in chave] for k, r in res_c["entidades"].items()},
                                  {k: [r[x] for x in chave] for k, r in res_r["entidades"].items()})
                 self.assertEqual(destino(cli), destino("cliente_f4rc_ref"))
+                if extra:
+                    extra(um, cli, res_r, res_c)
                 self.assertEqual(regras(cm_c.pend), regras(cm_r.pend))
                 versao_depois = dict(um("SELECT tabela_origem, SUM(versao) FROM `%s`.conector_origem GROUP BY 1"
                                         % ctl))

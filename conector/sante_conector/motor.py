@@ -189,11 +189,13 @@ def executar(trab, eid):
             # continuação de uma importação interrompida (continuar.py): as tabelas que ela concluiu são puladas
             pular, de = frozenset(), (ex["contadores"] or {}).get("continuar_de")
             if de:
-                cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes)
-                pular = frozenset(cc0["tabelas"])
+                cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes,
+                                           lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"))
+                pular = dict(cc0["origem"])  # {tabela: execução que a concluiu (pendências repetidas dela)}
                 rel["continuacao"] = cont["continuacao"] = {
                     "de": int(de), "regra": cc0["regra"], "tabelas_plano": len(plano), "tabelas_puladas": len(pular),
-                    "linhas_puladas": sum(int(contagens.get(t, 0)) for t in pular)}
+                    "linhas_puladas": sum(int(contagens.get(t, 0)) for t in pular),
+                    "refeitas_duas_fases": len(cc0["duas_fases"])}
                 plataforma.progresso(conn, eid, 64, "continuando a execução %d: %d de %d tabelas já concluídas"
                                      % (int(de), len(pular), len(plano)), cont)
             if any(t in carga.MAPA for t in tabelas) or plano:

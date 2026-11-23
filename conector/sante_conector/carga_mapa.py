@@ -662,6 +662,8 @@ class CargaMapa(carga.Carga):
         self._filho_pai = {}                # (dt, coluna, tabela do pai) -> [(id da filha, id esperado do pai)]
         self.chave_cofre = continuidade.chave_mestra()
         self.pular = frozenset(pular)       # continuação: tabelas concluídas pela execução interrompida (continuar.py)
+        # {tabela pulada: execução que a concluiu} (cadeia de continuações); lista simples: a interrompida
+        self.pular_de = dict(pular) if isinstance(pular, dict) else {t: continuar_de for t in self.pular}
         self.continuar_de = continuar_de
         self.memoria = {}                   # medição do estado por onda (paralelo.medir)
 
@@ -2393,6 +2395,7 @@ class CargaMapa(carga.Carga):
             sincronizar_mod.estado_destino(self, p, ents)
         blocos = {}
         adiavel = self._adiavel(p)
+        nulas = self._nulas_duas_fases(p)
         for linha, ch_sem in self._linhas_mapa(p):
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
@@ -2425,6 +2428,8 @@ class CargaMapa(carga.Carga):
                     if falta:  # conta-itens-3: secundário declarado depois da carga: nasce agora, principal intocado
                         self._completar_secundarias(t, chave, h, p, dts, ents, linha, ant[0], falta)
                     self._secundarias_ja_carregadas(p, ents, chave, sit, ant)
+                    if nulas and sit == "igual":
+                        self._readiar(p, linha, chave, ant, nulas)
                 elif ant[3]:
                     self.prop.registrar(t, chave, ant[3], ant[4] or "alta")
                 continue
@@ -2695,10 +2700,57 @@ class CargaMapa(carga.Carga):
             idx[k] = m
         return idx[k]
 
+    def _nulas_duas_fases(self, p):
+        """{destino: {coluna: ids com a coluna NULL}} das colunas em duas fases da tabela (continuar.duas_fases). A
+        referência adiada vive só na memória até o `_fase2`: a importação que caiu antes dele deixou a coluna NULL nas
+        linhas que gravou, e na próxima essas linhas são "iguais" (nunca regravadas). Lido uma vez por tabela."""
+        if not continuar.duas_fases(p):
+            return {}
+        out = {}
+        for dt in p["destinos"]:
+            if self._desdobrado(p, dt):
+                continue
+            for c in p["colunas"][dt]:
+                if (c.get("referencia") in p["duas_fases"] and not c.get("passos")) or _passos_em_duas_fases(c, p):
+                    dc = c["destino"]
+                    if dc in out.get(dt, {}):
+                        continue
+                    ids = {int(r[0]) for r in self._todas("SELECT id FROM `%s` WHERE `%s` IS NULL" % (dt, dc))}
+                    if ids:
+                        out.setdefault(dt, {})[dc] = ids
+        return out
+
+    def _readiar(self, p, linha, chave, ant, nulas):
+        """Linha "igual" com coluna em duas fases NULL no destino: a referência adiada é refeita da linha lida (só
+        as colunas em duas fases, pelo mesmo `_converter`) e entra no `_fase2` com `AND coluna IS NULL`."""
+        t, ex = p["tabela"], self.existente.get(p["tabela"], {})
+        for i, dt in enumerate(p["destinos"]):
+            if dt not in nulas:
+                continue
+            rid = ant[0] if i == 0 else (ex.get("%s/%s" % (chave, dt)) or (None,))[0]
+            if rid is None:
+                continue
+            for c in p["colunas"][dt]:
+                dc = c["destino"]
+                if rid not in nulas[dt].get(dc, ()):
+                    continue
+                if c.get("se") and not self._cond(linha, c["se"], []):
+                    continue
+                _x, recusa, adiada = self._converter(t, chave, p, linha, c, linha.get(c["coluna"]), [],
+                                                     pode_adiar=True)
+                if recusa or adiada is None:
+                    continue
+                if isinstance(adiada, tuple):
+                    self.adiadas.append((dt, dc, rid, adiada[0], adiada[1], t, chave, True))
+                elif adiada:
+                    self.adiadas.append((dt, dc, rid, c["referencia"], adiada, t, chave, True))
+
     def _fase2(self):
         """Referências adiadas (autorreferência e ciclo declarado em duas fases): gravadas por UPDATE no fim."""
         feitas = set()  # colunas concorrentes adiadas: vale a primeira resolvida, na ordem declarada
-        for dt, dc, rid, ref, cpai, t, chave in self.adiadas:
+        for x in self.adiadas:
+            dt, dc, rid, ref, cpai, t, chave = x[:7]
+            so_nulo = len(x) > 7  # refeita de linha "igual" (_readiar): só preenche a coluna que ficou NULL
             if (dt, dc, rid) in feitas:
                 continue
             if ref not in self.existente:
@@ -2709,9 +2761,15 @@ class CargaMapa(carga.Carga):
                 self._pendencia(t, chave, "pai_pendente" if ant else "pai_inexistente", "media")
                 continue
             with self._c() as c:
-                c.execute("UPDATE `%s` SET `%s`=%%s WHERE id=%%s" % (dt, dc), (ant[0], rid))
+                c.execute("UPDATE `%s` SET `%s`=%%s WHERE id=%%s%s" % (dt, dc, " AND `%s` IS NULL" % dc if so_nulo
+                                                                       else ""), (ant[0], rid))
+                mudou = c.rowcount
             feitas.add((dt, dc, rid))
+            if so_nulo and not mudou:
+                continue
             self.cont["fase2_gravadas"] += 1
+            if so_nulo:
+                self.cont["fase2_refeitas"] = self.cont.get("fase2_refeitas", 0) + 1
         self._commit()
 
     # ----- execução -----
@@ -2735,8 +2793,18 @@ class CargaMapa(carga.Carga):
         self.cr.commit()
         if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta, com as pendências
             pul = [t for t in self.tabelas if t in self.pular]
+            # pendências antes da marca: com a marca gravada e as pendências não, a próxima continuação herdaria a
+            # tabela desta execução sem as pendências; sem a marca, herda da anterior (cadeia, continuar.py)
+            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(self, {t: self.pular_de[t] for t in pul})
             continuar.marcar(self, pul, None, "continuada")
-            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(self, self.continuar_de, pul)
+            # de-para oficial usado pelas puladas: carregado como na leitura delas (a pendência global de catálogo
+            # ausente, tabela '-', sai uma vez por execução, também quando só uma tabela pulada o usa)
+            for p in self.plano:
+                if p["tabela"] in self.pular:
+                    for cs in p["colunas"].values():
+                        for c in cs:
+                            if c.get("depara") and depara.conhecido(c["depara"]):
+                                self._depara(c["depara"])
         paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
         self._fase2()
         if self.sinc:
