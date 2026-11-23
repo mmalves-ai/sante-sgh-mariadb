@@ -15,6 +15,14 @@ describe('importação versionada: leitura, validação e comparação', () => {
     const a = lerArquivoPreco('valor_ch,codigo\r\n12.5,7\r\n');
     expect(a.linhas).toEqual([{ linha: 2, codigo: 7, valores: { ch: 12.5 } }]);
   });
+  it('código é id de linha (BIGINT): aceita o item próprio 10^12 + 1 e recusa acima de 2^53 - 1', () => {
+    const a = lerArquivoPreco('codigo;valor_ch\n1000000000001;10\n');
+    expect(a.erros).toEqual([]);
+    expect(a.linhas.map((l) => l.codigo)).toEqual([10 ** 12 + 1]);
+    const b = lerArquivoPreco('codigo;valor_ch\n9007199254740993;10\n0;10\n');
+    expect(b.linhas).toEqual([]);
+    expect(b.erros.map((e) => e.linha)).toEqual([2, 3]);
+  });
   it('recusa leiaute sem coluna obrigatória ou com coluna estranha', () => {
     expect(lerArquivoPreco('codigo;preco\n1;2').erros[0]?.motivo).toMatch(/obrigatórias/);
     expect(lerArquivoPreco('codigo;valor_ch;nome\n1;2;x').erros[0]?.motivo).toMatch(/fora do leiaute/);

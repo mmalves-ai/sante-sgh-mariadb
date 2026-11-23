@@ -36,7 +36,8 @@ export const CATALOGO_HONORARIOS = 'preco.honorarios';
 
 const esquemaNova = z
   .object({
-    tabela: z.number().int().min(0).max(32767),
+    /** tabela_preco.id (BIGINT). */
+    tabela: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     arquivo: textoCp1252(120).pipe(z.string().min(1)),
     conteudo: z.string().min(1).max(2_000_000),
   })

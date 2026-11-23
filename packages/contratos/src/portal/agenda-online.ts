@@ -31,7 +31,8 @@ const id = idBanco;
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
 /** Hora do dia do horário ("HH:MM"). */
 const horaDoDia = esquemaHora;
-const codigo = z.number().int().min(0).max(32767);
+/** Convênio: fonte_pagadora.id (BIGINT); 0 = particular. */
+const codigo = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
 // ── Configuração da agenda online (tela interna, `agenda.configurarAgendaOnline`) ──────────────────────────────────
 

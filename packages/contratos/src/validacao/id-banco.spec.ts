@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ZodType } from 'zod';
 import { esquemaAbrirAtendimento } from '../atendimento/entradas.js';
-import { esquemaLancarItem } from '../faturamento/entradas.js';
+import { esquemaConferirItem, esquemaFecharConta, esquemaLancarItem } from '../faturamento/entradas.js';
+import { esquemaPedidoMarcarEspera } from '../agenda/pedidos.js';
 import { esquemaInternar } from '../internacao/adt.js';
 import { esquemaItemSaida, esquemaRegistrarSaida } from '../suprimentos/entradas.js';
 import {
@@ -70,19 +71,38 @@ describe('id de linha do banco (BIGINT UNSIGNED)', () => {
     expect(caminhosComProblema(esquemaAbrirAtendimento, { cidPrincipal: ACIMA })).toContain('cidPrincipal');
   });
 
-  it('conta: o item faturável próprio entra no lançamento; acima do teto, não', () => {
+  it('conta: a conta (conta_hospitalar.id) aceita 10^12 + 1 e recusa acima de 2^53 - 1, zero e negativo', () => {
     const base = {
       conta: ITEM_PROPRIO,
       tipo: 4,
+      codigo: 101,
       quantidade: 1,
       data: '2026-11-23',
       hora: '10:00',
       local: 0,
       ato: 0,
     };
-    expect(esquemaLancarItem.safeParse({ ...base, codigo: ITEM_PROPRIO }).success).toBe(true);
-    expect(caminhosComProblema(esquemaLancarItem, { ...base, codigo: ACIMA })).toContain('codigo');
-    expect(caminhosComProblema(esquemaLancarItem, { ...base, codigo: -1 })).toContain('codigo');
+    expect(esquemaLancarItem.safeParse(base).success).toBe(true);
+    expect(esquemaFecharConta.safeParse({ conta: ITEM_PROPRIO, versao: '2026-11-23 10:00:00' }).success).toBe(true);
+    for (const conta of [ACIMA, 0, -1])
+      expect(caminhosComProblema(esquemaLancarItem, { ...base, conta })).toContain('conta');
+    expect(
+      caminhosComProblema(esquemaConferirItem, {
+        conta: ITEM_PROPRIO,
+        itens: [{ id: ITEM_PROPRIO, versao: '2026-11-23 10:00:00' }],
+      }),
+    ).toEqual([]);
+    expect(
+      caminhosComProblema(esquemaConferirItem, { conta: 1, itens: [{ id: ACIMA, versao: '2026-11-23 10:00:00' }] }),
+    ).toContain('itens.0.id');
+  });
+
+  it('convênio (fonte_pagadora.id) acima de 32767 entra na espera da agenda; acima de 2^53 - 1, não', () => {
+    const base = { agenda: 1, data: '2026-11-23', hora: '10:00', canal: 'telefone' };
+    expect(caminhosComProblema(esquemaPedidoMarcarEspera, { ...base, convenio: ITEM_PROPRIO })).not.toContain(
+      'convenio',
+    );
+    expect(caminhosComProblema(esquemaPedidoMarcarEspera, { ...base, convenio: ACIMA })).toContain('convenio');
   });
 
   it('estoque: a saída do item próprio passa; acima do teto, não', () => {

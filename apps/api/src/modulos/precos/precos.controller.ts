@@ -117,7 +117,7 @@ export class PrecosController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaHonorarios> {
     const p = paginaDe(q, TETO_PAGINA_PRECOS);
-    return this.servico.honorarios(ctxDe(req, 'honorarios'), inteiro(tab, 'tabela', [0, 32767]), {
+    return this.servico.honorarios(ctxDe(req, 'honorarios'), inteiro(tab, 'tabela'), {
       busca: (q['busca'] ?? '').slice(0, 60),
       ...p,
       data: dataDe(q['data']),
@@ -133,7 +133,7 @@ export class PrecosController {
   ): Promise<VigenciasItem> {
     const r = await this.servico.vigencias(
       ctxDe(req, 'vigencias'),
-      inteiro(tab, 'tabela', [0, 32767]),
+      inteiro(tab, 'tabela'),
       inteiro(cod, 'item'),
     );
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
@@ -150,7 +150,7 @@ export class PrecosController {
     const r = await this.servico.vigenciasValor(
       ctxDe(req, 'vigencias'),
       'diaria',
-      inteiro(tab, 'tabela', [0, 32767]),
+      inteiro(tab, 'tabela'),
       inteiro(ope, 'item'),
     );
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
@@ -167,7 +167,7 @@ export class PrecosController {
     const r = await this.servico.vigenciasValor(
       ctxDe(req, 'vigencias'),
       'matmed',
-      inteiro(tab, 'tabela', [0, 32767]),
+      inteiro(tab, 'tabela'),
       inteiro(cod, 'item'),
     );
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Item não encontrado');
@@ -193,7 +193,7 @@ export class PrecosController {
       );
     return this.servico.proposta(
       ctxDe(req, 'proposta'),
-      inteiro(tab, 'tabela', [0, 32767]),
+      inteiro(tab, 'tabela'),
       pedidoDe(p.data),
     );
   }
@@ -252,7 +252,7 @@ export class PrecosController {
       const r = await this.servico.aplicarReajuste(
         ctxDe(req, 'reajuste'),
         ctxOp,
-        inteiro(tab, 'tabela', [0, 32767]),
+        inteiro(tab, 'tabela'),
         pedidoDe(p.data),
         p.data.confirmacoes ?? {},
         p.data.justificativa,
@@ -323,7 +323,7 @@ export class PrecosController {
     const ctx = ctxDe(req, 'diarias');
     const p = paginaDe(q, TETO_PAGINA_PRECOS);
     const data = dataDe(q['data']) ?? (await this.fonte.hoje(ctx));
-    const r = await this.fonte.itensDiaria(ctx, inteiro(tab, 'tabela', [0, 32767]), {
+    const r = await this.fonte.itensDiaria(ctx, inteiro(tab, 'tabela'), {
       busca: (q['busca'] ?? '').slice(0, 60),
       ...p,
       data,
@@ -348,7 +348,7 @@ export class PrecosController {
     const ctx = ctxDe(req, 'matmed');
     const p = paginaDe(q, TETO_PAGINA_PRECOS);
     const data = dataDe(q['data']) ?? (await this.fonte.hoje(ctx));
-    const r = await this.fonte.itensMatmed(ctx, inteiro(tab, 'tabela', [0, 32767]), {
+    const r = await this.fonte.itensMatmed(ctx, inteiro(tab, 'tabela'), {
       busca: (q['busca'] ?? '').slice(0, 60),
       ...p,
       data,
@@ -363,7 +363,7 @@ export class PrecosController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ValorVigente> {
     const tipo = q['tipo'] === 'diaria' || q['tipo'] === 'matmed' ? q['tipo'] : 'honorario';
-    const convenio = inteiro(q['convenio'], 'convênio', [0, 32767]);
+    const convenio = inteiro(q['convenio'], 'convênio');
     // Fora do escopo da sessão: o mesmo 404 do inexistente.
     exigirNoEscopo(req, convenio);
     const r = await this.servico.valorVigente(ctxDe(req, 'consulta'), {

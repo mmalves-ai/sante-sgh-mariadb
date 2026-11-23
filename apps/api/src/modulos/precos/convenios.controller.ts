@@ -154,7 +154,7 @@ export class ConveniosController {
   @Get(':cod')
   @Permissao('convenio.contrato.ler')
   async contrato(@Param('cod') cod: string, @Req() req: RequisicaoAutorizada): Promise<ContratoConvenio> {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const r = await this.servico.contrato(ctxDe(req, 'contrato'), c, {
       alterarSituacao: podeNa(req, 'convenio.situacao.alterar'),
@@ -171,7 +171,7 @@ export class ConveniosController {
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaModificadores> {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const tipo = (q['tipo'] ?? 'honorarios') as TipoModificador;
     const def = MODIFICADORES[tipo];
@@ -200,7 +200,7 @@ export class ConveniosController {
     @Query('operacao') op: string,
     @Req() req: RequisicaoAutorizada,
   ): Promise<ImpactoSituacao> {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const r = await this.servico.impactoSituacao(
       ctxDe(req, 'impacto'),
@@ -214,7 +214,7 @@ export class ConveniosController {
   @Get(':cod/aceita-atendimento')
   @Permissao('convenio.operadora.ler')
   async aceita(@Param('cod') cod: string, @Req() req: RequisicaoAutorizada) {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const conv = await this.fonte.convenio(ctxDe(req, 'aceita'), c);
     return convenioAceitaAtendimento(conv ? { codigo: conv.codigo, situacao: conv.situacao } : null);
@@ -262,7 +262,7 @@ export class ConveniosController {
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
   ): Promise<ResultadoGravacaoPreco> {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const p = esquemaSituacao.safeParse(corpo);
     if (!p.success)
@@ -311,7 +311,7 @@ export class ConveniosController {
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
   ): Promise<ResultadoGravacaoPreco> {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     const p = esquemaContrato.safeParse(corpo);
     if (!p.success)
@@ -363,7 +363,7 @@ export class ConveniosController {
   @Permissao('convenio.contrato.editar')
   @AuditadoNoHandler('gravação do plano com a trilha junto (memória: registrador da API)')
   async plano(@Param('cod') cod: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     exigirNoEscopo(req, c);
     await exigir(req, 'convenio.contrato.editar', this.trilha);
     const p = esquemaPlano.safeParse(corpo);
@@ -428,7 +428,7 @@ export class ConveniosController {
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
   ) {
-    const c = inteiro(cod, 'convênio', [0, 32767]);
+    const c = inteiro(cod, 'convênio');
     const idPlano = inteiro(id, 'plano');
     exigirNoEscopo(req, c);
     await exigir(req, 'convenio.contrato.editar', this.trilha);

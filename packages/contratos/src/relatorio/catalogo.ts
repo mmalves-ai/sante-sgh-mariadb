@@ -151,7 +151,8 @@ const CONVENIO: ParametroRelatorio = {
   tipo: 'inteiro',
   obrigatorio: false,
   minimo: 1,
-  maximo: 32767,
+  /** fonte_pagadora.id (BIGINT). */
+  maximo: Number.MAX_SAFE_INTEGER,
 };
 
 /** Opções de relatório do faturamento de convênios no menu do legado ("Meus relatórios" e os relatórios do usuário). */
@@ -570,7 +571,8 @@ export const RELATORIOS_CATALOGO: readonly RelatorioCatalogo[] = [
         tipo: 'inteiro',
         obrigatorio: false,
         minimo: 1,
-        maximo: 32767,
+        // local_estoque.id (BIGINT)
+        maximo: Number.MAX_SAFE_INTEGER,
       },
     ],
     colunas: [
@@ -620,7 +622,8 @@ export const RELATORIOS_CATALOGO: readonly RelatorioCatalogo[] = [
         tipo: 'inteiro',
         obrigatorio: false,
         minimo: 1,
-        maximo: 32767,
+        // local_estoque.id (BIGINT)
+        maximo: Number.MAX_SAFE_INTEGER,
       },
     ],
     colunas: [

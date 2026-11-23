@@ -6,7 +6,7 @@ import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaCanal, esquemaHoraAgenda, esquemaMotivoCancelamento, MODOS_REMARCACAO } from './entradas.js';
 import { MOTIVOS_BLOQUEIO, PRIORIDADES_ESPERA, RESULTADOS_CONFIRMACAO } from './vocabulario.js';
-import { idBanco } from '../validacao/id-banco.js';
+import { ID_BANCO_MAXIMO, idBanco } from '../validacao/id-banco.js';
 
 const id = idBanco;
 const texto200 = textoCp1252(200)
@@ -129,7 +129,8 @@ export const esquemaPedidoMarcarEspera = z
     agenda: id,
     data: esquemaDataIso,
     hora: esquemaHoraAgenda,
-    convenio: z.number().int().min(0).max(32767),
+    /** fonte_pagadora.id (BIGINT); 0 = particular. */
+    convenio: z.number().int().min(0).max(ID_BANCO_MAXIMO),
     canal: esquemaCanal,
   })
   .strict();

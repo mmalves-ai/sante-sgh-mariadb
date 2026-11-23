@@ -99,8 +99,9 @@ export function lerArquivoPreco(texto: string): ArquivoLido {
       erros.push({ linha: n, motivo: `Esperadas ${nomes.length} colunas, lidas ${partes.length}.` });
       continue;
     }
+    // O código do leiaute é o id de linha do preço (preco_procedimento.id, BIGINT): inteiro positivo até 2^53 - 1.
     const codigo = numero(partes[indice.get('codigo') ?? 0] ?? '', false);
-    if (codigo === null || !Number.isSafeInteger(codigo) || codigo <= 0 || codigo > 2_147_483_647) {
+    if (codigo === null || !Number.isSafeInteger(codigo) || codigo <= 0) {
       erros.push({ linha: n, motivo: 'Código do item inválido (inteiro positivo).' });
       continue;
     }

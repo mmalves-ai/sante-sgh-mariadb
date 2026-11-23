@@ -136,7 +136,7 @@ export class MotorController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PaginaGenerica> {
     const p = paginaDe(q);
-    const tab = inteiro(q['tabela'], 'tabela', [0, 32767]);
+    const tab = inteiro(q['tabela'], 'tabela');
     return pg(
       await this.fonte.terceiros(
         ctxDe(req, 'terceiros'),

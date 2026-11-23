@@ -5,8 +5,15 @@ import { z } from 'zod';
 import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaRegraFaturabilidade } from './regras/faturabilidade.js';
 import { FORMAS_PAGAMENTO } from './regras/particular.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive();
+/** Id de linha do banco (conta_hospitalar.id, conta_hospitalar_item.id...; BIGINT UNSIGNED). */
+const id = idBanco;
+/**
+ * Código de negócio do item faturável (item_faturavel.codigo, VARCHAR(20) numérico, único no cliente): NÃO é id de
+ * linha. A gravação busca por `codigo = ?`. Inteiro positivo seguro (o código vai ao banco como texto).
+ */
+const codigoItem = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const versao = z.string().min(10).max(40);
 const texto = (max: number) => z.string().trim().max(max);
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -33,7 +40,7 @@ export const esquemaLancarItem = z
     conta: id,
     tipo: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     /** Código do item no grupo: procedimento (2 e 3), operação da diária ou taxa (1), item de mat/med (4). */
-    codigo: id,
+    codigo: codigoItem,
     quantidade: z.number().positive().max(99_999),
     /** AAAA-MM-DD; a data-base do preço (regra 9). */
     data: z.string().regex(DATA),
@@ -116,12 +123,12 @@ export const esquemaEditarPacote = z
   .object({
     id: z.number().int().positive().nullable().default(null),
     convenio: z.number().int().min(0),
-    codigo: id,
+    codigo: codigoItem,
     nome: texto(80).pipe(z.string().min(3)),
     valor: z.number().min(0).max(99_999_999),
     inicio: z.string().regex(DATA),
     fim: z.string().regex(DATA).nullable().default(null),
-    itens: z.array(z.object({ codigo: id, quantidade: z.number().positive().max(9999) }).strict()).max(300),
+    itens: z.array(z.object({ codigo: codigoItem, quantidade: z.number().positive().max(9999) }).strict()).max(300),
     ativo: z.boolean().default(true),
   })
   .strict()
