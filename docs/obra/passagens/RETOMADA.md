@@ -49,7 +49,9 @@
   - roda a partir do worktree `../sante-sgh-wt/velocidade`, commit 96cb876, uma cópia estável do código;
   - `CONECTOR_GRAVADORES=4` e `CONECTOR_ADIAR=TBCABTRILHA,TBLANTRILHASGH` (trilhas de auditoria na 2ª passada).
   - Progresso em `sante-sgh-dados/obra/progresso-carga.log`.
-  - Previsão: fim por volta de 23/11, 3h30.
+  - Previsão (refeita em 23/11, 1h40, pela contagem por tabela em `imagem_tabela`): 165 milhões de linhas mapeadas,
+    menos 50 milhões das trilhas adiadas = 115 milhões; ritmo medido de 6,4 milhões/h; fim por volta de 23/11, entre
+    15h e 18h. Decisão: não reiniciar (a divisão por faixas só vale na primeira carga).
 - **Correções feitas depois de 96cb876 e que a carga não tem:** C8 (contatos), L6-04 e L5-05 (identidade),
   reprocessar recusadas, testes. Estão na main até a6205c2.
 - **Prova da cadeia** (`tools/obra/diag-cadeia.sh` sob o flock, 1 gravador): disparada às 22h32, log em
@@ -61,7 +63,8 @@
 1. Prova da cadeia (23/11, 0h25, depois de dac241fb, que corrigiu o NUMERO numérico que derrubava a carga de pacientes):
    as três etapas estão ok. Achado: plano (TBTIPPLANO, 1048) recusado derruba em cascata contas (FCCTAEXT, RECONTAS),
    itens (FCLANEXT) e produção de repasse (FCINTEGRPA). Rodada `plano-conta` (orçamento 4 M, teto 5,2 M) com um agente
-   corretor em 23/11 0h30. Os 32 destinos zerados sem origem no mapa são tabelas do produto sem fonte (não são perda).
+   corretor em 23/11 0h30: feita (20c4b234, contas 618 -> 3.790 no recorte). Sobra na rodada `conta-itens` (workflow
+   wf_8d5cc7ad-e3e, 23/11 1h35): glosa só com motivo, material na conta, produção de repasse pelo ato. Os 32 destinos zerados sem origem no mapa são tabelas do produto sem fonte (não são perda).
 2. Ao fim da execução 8:
    - juntar a main no worktree `velocidade` (ou rodar da main);
    - fazer a passada `CONECTOR_SO` com `CONECTOR_REPROCESSAR_RECUSADAS=1`, com a lista do conferidor da cadeia-mapa-2:
