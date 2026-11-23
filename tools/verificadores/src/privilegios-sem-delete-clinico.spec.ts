@@ -41,13 +41,13 @@ describe('privilégios gerados: nenhum DELETE em tabela clínica (SBIS-26)', () 
       .filter((m): m is RegExpExecArray => m !== null)
       .map((m) => ({ acoes: m[1]!.split(',').map((a) => a.trim()), tabela: m[2]! }));
     expect(grants.length).toBeGreaterThan(1000);
-    // Conflito conhecido e pendente: o NIR apaga fisicamente a solicitação e a reserva de leito (tx.excluir em
-    // apps/api/src/modulos/adt/nir-porta-propria.ts). Qualquer outra tabela clínica com DELETE no anexo falha aqui.
+    // Nenhuma tabela clínica com DELETE no anexo. O NIR cancelava apagando a solicitação e a reserva de leito: desde
+    // 23/11/2026 o "excluir" cancela com o motivo, quem e quando, e a linha fica (SBIS-26).
     expect(
       grants
         .filter((g) => g.acoes.includes('DELETE') && deleteClinicoProibido(g.tabela))
         .map((g) => g.tabela),
-    ).toEqual(['pedido_leito', 'reserva_leito']);
+    ).toEqual([]);
     for (const t of TABELAS_ALVO)
       expect(grants.find((g) => g.tabela === t)?.acoes, t).not.toContain('DELETE');
     for (const t of ['trilha_auditoria', 'trilha_auditoria_fecho', 'trilha_encadeamento_inicio'])
