@@ -68,6 +68,18 @@
 - Rodada `deadlock-paralelo` (agente em worktree isolado) corrige a causa; depois: parar a 9, juntar a correção no
   `velocidade` e continuar com 4 gravadores.
 - A rodada `conta-itens-2` (material na conta, grupo de ato com DDL novo) entra pela passada de correção no fim.
+- **Mapa antigo na ProntoCardio (conferidor conta-itens-2, 23/11):** as execuções 8 e 9 rodam no `velocidade` SEM
+  ce084c18 (ATO de TBREPGER e TBPACTHM como grupo de ato) e SEM 6805f08b/c3be2be6 (TBMATMED licenciado ligado ao
+  espelho, TBREFMEMTUSS sem filtro de licença). O hash da linha cobre só os bytes da origem: na passada seguinte essas
+  linhas ficam "iguais" e são puladas. Caminho decidido, por tabela:
+  - TBMATMED e TBREFMEMTUSS de tabela licenciada foram RECUSADAS (`licenca_nao_comprovada`): voltam com
+    `CONECTOR_REPROCESSAR_RECUSADAS=1` (já ligado na 9), desde que o código novo esteja no worktree e o espelho do
+    Brasíndice/Simpro esteja semeado no cliente (sem ele: `espelho_nao_carregado`, alta).
+  - TBREPGER e TBPACTHM foram GRAVADAS com `funcao_equipe_cobranca_id` = id de TBGRAUPARTPROC e `grupo_ato_id` NULL:
+    o reprocesso não corrige (a reaplicação só grava as colunas do mapa novo e deixa a função antiga). Caminho:
+    **recarga limpa** do cliente (criar novo cliente pelo painel e importar) antes de usar o repasse; nunca reusar
+    as regras de repasse e os itens inclusos do pacote desta carga. Prova na recarga: contagem de
+    `regra_repasse_item` com `grupo_ato_id` preenchido contra TBREPGER.ATO<>0 lidas.
 
 ## Fila
 
