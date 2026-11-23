@@ -2,7 +2,7 @@
 // executor no mesmo Escritor da gravação, portanto na mesma transação. Desfeita a operação, as duas somem juntas.
 // A carga do evento leva só ids e códigos.
 import { createHash } from 'node:crypto';
-import type { Escritor } from './transacao.js';
+import type { Escritor, Leitor } from './transacao.js';
 
 export const ACOES_TRILHA = [
   'inclusao',
@@ -40,27 +40,287 @@ export function paraJson(v: unknown): string | null {
   return JSON.stringify(v, (_k, x: unknown) => (typeof x === 'bigint' ? x.toString() : x));
 }
 
-/** Grava uma linha da trilha; devolve o id dela. */
+// ── cadeia de hash (SBIS-16) ────────────────────────────────────────────────────────────────────────────
+// Cada estabelecimento (e o escopo 0, dos eventos sem estabelecimento) tem uma cadeia: a linha leva o hash da
+// anterior (hash_anterior) e o SHA-256 do próprio conteúdo canônico mais esse elo (hash_linha). A ordem é dada pela
+// cabeça da cadeia (trilha_cadeia), travada com SELECT ... FOR UPDATE na mesma transação da linha: duas
+// transações concorrentes no mesmo escopo esperam uma pela outra, e a única (estabelecimento_chave, hash_anterior)
+// recusa qualquer bifurcação. O dia da cadeia vem do relógio do banco (UTC_DATE) e nunca volta. Na virada do dia, o
+// núcleo grava o fecho do dia anterior (trilha_auditoria_fecho) na mesma transação; `fecharDiasTrilha` fecha os dias
+// sem evento seguinte. Nenhum gatilho: tudo aqui, na aplicação.
+
+/** Hash anterior do primeiro elo de uma cadeia. */
+export const HASH_GENESE = '0'.repeat(64);
+
+/** Conteúdo canônico de uma linha da trilha, como fica gravado (textos já cortados ao tamanho da coluna). */
+export interface CamposCanonicosTrilha {
+  readonly estabelecimento: number | string | null;
+  readonly usuario: number | string | null;
+  /** 'AAAA-MM-DD HH:MM:SS.mmm' em UTC (textoDataHoraTrilha). */
+  readonly ocorridoEm: string;
+  readonly acao: string;
+  readonly entidade: string;
+  readonly entidadeId: number | string | null;
+  readonly dadosAntes: string | null;
+  readonly dadosDepois: string | null;
+  readonly motivo: string | null;
+  readonly enderecoIp: string | null;
+  readonly correlacao: string | null;
+  /** 'AAAA-MM-DD'. */
+  readonly cadeiaDia: string;
+  readonly hashAnterior: string;
+}
+
+/** Data e hora como a coluna DATETIME(3) guarda (sessão em UTC, ADR 0002). */
+export function textoDataHoraTrilha(d: Date): string {
+  return d.toISOString().replace('T', ' ').slice(0, 23);
+}
+
+const textoOuNulo = (v: unknown): string | null =>
+  v === null || v === undefined ? null : typeof v === 'bigint' ? v.toString() : String(v);
+
+/** SHA-256 (64 hex) do conteúdo canônico: versão do formato e os campos, na ordem, numa lista JSON. */
+export function hashLinhaTrilha(c: CamposCanonicosTrilha): string {
+  const campos = [
+    'trilha.v1',
+    textoOuNulo(c.estabelecimento),
+    textoOuNulo(c.usuario),
+    c.ocorridoEm,
+    c.acao,
+    c.entidade,
+    textoOuNulo(c.entidadeId),
+    c.dadosAntes,
+    c.dadosDepois,
+    c.motivo,
+    c.enderecoIp,
+    c.correlacao,
+    c.cadeiaDia,
+    c.hashAnterior,
+  ];
+  return createHash('sha256').update(JSON.stringify(campos), 'utf8').digest('hex');
+}
+
+interface CabecaCadeia {
+  readonly estabelecimento_id: unknown;
+  readonly ultimo_hash: unknown;
+  readonly ultimo_trilha_auditoria_id: unknown;
+  readonly dia_aberto: unknown;
+  readonly primeiro_trilha_auditoria_id_dia: unknown;
+  readonly hash_inicio_dia: unknown;
+  readonly quantidade_dia: unknown;
+  readonly hoje: unknown;
+  [k: string]: unknown;
+}
+
+const SQL_CABECA = `SELECT estabelecimento_id, ultimo_hash, ultimo_trilha_auditoria_id,
+       DATE_FORMAT(dia_aberto, '%Y-%m-%d') AS dia_aberto, primeiro_trilha_auditoria_id_dia, hash_inicio_dia,
+       quantidade_dia, DATE_FORMAT(UTC_DATE(), '%Y-%m-%d') AS hoje
+  FROM trilha_cadeia`;
+
+/** Grava o fecho do dia aberto da cabeça (idempotente: o dia já fechado fica como está) e zera o dia aberto. */
+async function fecharDiaAberto(e: Escritor, c: CabecaCadeia): Promise<boolean> {
+  const n = await e.executar(
+    `INSERT INTO trilha_auditoria_fecho (estabelecimento_id, dia, primeiro_trilha_auditoria_id,
+       ultimo_trilha_auditoria_id, quantidade, hash_dia, hash_anterior, fechado_em, criado_em, versao)
+     SELECT ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), 1 FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM trilha_auditoria_fecho WHERE estabelecimento_chave = IFNULL(?, 0) AND dia = ?)`,
+    [
+      c.estabelecimento_id ?? null,
+      c.dia_aberto,
+      c.primeiro_trilha_auditoria_id_dia,
+      c.ultimo_trilha_auditoria_id,
+      Number(c.quantidade_dia),
+      c.ultimo_hash,
+      c.hash_inicio_dia,
+      c.estabelecimento_id ?? null,
+      c.dia_aberto,
+    ],
+  );
+  await e.executar(
+    `UPDATE trilha_cadeia
+        SET dia_aberto = NULL, primeiro_trilha_auditoria_id_dia = NULL, hash_inicio_dia = NULL, quantidade_dia = 0,
+            alterado_em = UTC_TIMESTAMP(3), versao = versao + 1
+      WHERE estabelecimento_chave = IFNULL(?, 0)`,
+    [c.estabelecimento_id ?? null],
+  );
+  return n > 0;
+}
+
+/**
+ * Fecha os dias da cadeia que ficaram abertos sem evento seguinte (dia anterior ao de hoje no relógio do banco).
+ * Idempotente: devolve quantos fechos gravou agora. É a operação do fecho diário (agendada uma vez por dia).
+ */
+export async function fecharDiasTrilha(e: Escritor): Promise<number> {
+  const abertas = await e.consultarParaAtualizar<CabecaCadeia>(
+    `${SQL_CABECA} WHERE quantidade_dia > 0 AND dia_aberto < UTC_DATE() ORDER BY estabelecimento_chave`,
+  );
+  let n = 0;
+  for (const c of abertas) if (await fecharDiaAberto(e, c)) n++;
+  return n;
+}
+
+/** Grava uma linha da trilha, encadeada por hash na mesma transação; devolve o id dela. */
 export async function gravarTrilha(e: Escritor, l: LinhaTrilha): Promise<number> {
   if (!(ACOES_TRILHA as readonly string[]).includes(l.acao)) throw new Error('Ação de trilha inválida.');
-  return e.inserir(
-    'INSERT INTO trilha_auditoria (estabelecimento_id, usuario_id, ocorrido_em, acao, entidade, entidade_id, dados_antes, dados_depois, motivo, endereco_ip, correlacao, criado_em, criado_por, versao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+  const est = l.estabelecimento;
+  // Cabeça da cadeia: criada na primeira vez; o ON DUPLICATE KEY já trava a linha existente (exclusiva).
+  await e.executar(
+    `INSERT INTO trilha_cadeia (estabelecimento_id, ultimo_hash, quantidade_dia, criado_em, versao)
+     VALUES (?, ?, 0, UTC_TIMESTAMP(3), 1) ON DUPLICATE KEY UPDATE id = id`,
+    [est, HASH_GENESE],
+  );
+  const [c] = await e.consultarParaAtualizar<CabecaCadeia>(
+    `${SQL_CABECA} WHERE estabelecimento_chave = IFNULL(?, 0)`,
+    [est],
+  );
+  const hoje = typeof c?.hoje === 'string' ? c.hoje : new Date().toISOString().slice(0, 10);
+  const aberto = typeof c?.dia_aberto === 'string' ? c.dia_aberto : null;
+  const qtd = Number(c?.quantidade_dia ?? 0);
+  // O dia da cadeia nunca volta (relógio do banco atrasado não reabre um dia).
+  const dia = aberto !== null && aberto > hoje ? aberto : hoje;
+  if (c && qtd > 0 && aberto !== null && aberto < dia) await fecharDiaAberto(e, c);
+  const novoDia = !(qtd > 0 && aberto === dia);
+  const anterior = typeof c?.ultimo_hash === 'string' ? c.ultimo_hash : HASH_GENESE;
+  const canon: CamposCanonicosTrilha = {
+    estabelecimento: est,
+    usuario: l.usuario,
+    ocorridoEm: textoDataHoraTrilha(l.ocorridoEm),
+    acao: l.acao,
+    entidade: l.entidade.slice(0, 64),
+    entidadeId: l.entidadeId,
+    dadosAntes: paraJson(l.dadosAntes),
+    dadosDepois: paraJson(l.dadosDepois),
+    motivo: l.motivo?.slice(0, 500) ?? null,
+    enderecoIp: l.enderecoIp?.slice(0, 45) ?? null,
+    correlacao: l.correlacao?.slice(0, 64) ?? null,
+    cadeiaDia: dia,
+    hashAnterior: anterior,
+  };
+  const hash = hashLinhaTrilha(canon);
+  const id = await e.inserir(
+    'INSERT INTO trilha_auditoria (estabelecimento_id, usuario_id, ocorrido_em, acao, entidade, entidade_id, dados_antes, dados_depois, motivo, endereco_ip, correlacao, criado_em, criado_por, versao, cadeia_dia, hash_anterior, hash_linha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
     [
-      l.estabelecimento,
+      est,
       l.usuario,
       l.ocorridoEm,
       l.acao,
-      l.entidade.slice(0, 64),
+      canon.entidade,
       l.entidadeId,
-      paraJson(l.dadosAntes),
-      paraJson(l.dadosDepois),
-      l.motivo?.slice(0, 500) ?? null,
-      l.enderecoIp?.slice(0, 45) ?? null,
-      l.correlacao?.slice(0, 64) ?? null,
+      canon.dadosAntes,
+      canon.dadosDepois,
+      canon.motivo,
+      canon.enderecoIp,
+      canon.correlacao,
       l.ocorridoEm,
       l.usuario,
+      dia,
+      anterior,
+      hash,
     ],
   );
+  await e.executar(
+    novoDia
+      ? `UPDATE trilha_cadeia
+            SET ultimo_trilha_auditoria_id = ?, ultimo_hash = ?, dia_aberto = ?, primeiro_trilha_auditoria_id_dia = ?,
+                hash_inicio_dia = ?, quantidade_dia = 1, alterado_em = UTC_TIMESTAMP(3), versao = versao + 1
+          WHERE estabelecimento_chave = IFNULL(?, 0)`
+      : `UPDATE trilha_cadeia
+            SET ultimo_trilha_auditoria_id = ?, ultimo_hash = ?, quantidade_dia = quantidade_dia + 1,
+                alterado_em = UTC_TIMESTAMP(3), versao = versao + 1
+          WHERE estabelecimento_chave = IFNULL(?, 0)`,
+    novoDia ? [id, hash, dia, id, anterior, est] : [id, hash, est],
+  );
+  return id;
+}
+
+/** A verificação da cadeia num dia: linhas do dia, se fecha, e onde quebra (id da linha, ou o motivo). */
+export interface VerificacaoCadeiaDia {
+  readonly dia: string;
+  readonly linhas: number;
+  readonly ok: boolean;
+  /** Id da primeira linha que não fecha; 'sem-fecho' (dia com eventos e sem fecho); 'fecho-divergente'. */
+  readonly quebraEm: string | null;
+}
+
+const MOTIVO_SEM_FECHO = 'sem-fecho';
+const PAGINA_VERIFICACAO = 5000;
+const MOTIVO_FECHO_DIVERGENTE = 'fecho-divergente';
+
+/**
+ * Prova a cadeia de um dia de um escopo (estabelecimento, ou null para o escopo 0): recalcula o hash de cada linha
+ * em ordem, confere cada elo com o anterior, o primeiro elo com o início do dia e o fim com o fecho do dia (ou com
+ * a cabeça, no dia ainda aberto). Use dentro de uma leitura (snapshot único).
+ */
+export async function verificarDiaTrilha(
+  l: Leitor,
+  estabelecimento: number | null,
+  dia: string,
+): Promise<VerificacaoCadeiaDia> {
+  const fecho = await l.uma(
+    `SELECT primeiro_trilha_auditoria_id AS primeiro, ultimo_trilha_auditoria_id AS ultimo, quantidade,
+            hash_dia AS fim, hash_anterior AS inicio
+       FROM trilha_auditoria_fecho WHERE estabelecimento_chave = IFNULL(?, 0) AND dia = ?`,
+    [estabelecimento, dia],
+  );
+  const cab = await l.uma(
+    `SELECT primeiro_trilha_auditoria_id_dia AS primeiro, ultimo_trilha_auditoria_id AS ultimo,
+            quantidade_dia AS quantidade, ultimo_hash AS fim, hash_inicio_dia AS inicio
+       FROM trilha_cadeia
+      WHERE estabelecimento_chave = IFNULL(?, 0) AND quantidade_dia > 0 AND dia_aberto = ?`,
+    [estabelecimento, dia],
+  );
+  const esperado = fecho ?? cab;
+  let anterior = esperado ? textoOuNulo(esperado['inicio']) : null;
+  let n = 0;
+  let primeiro: string | null = null;
+  let ultimo: string | null = null;
+  let quebra: string | null = null;
+  // Em páginas por id, sem guardar o dia na memória (um dia movimentado passa do teto de linhas de uma consulta).
+  for (let desde = 0; ;) {
+    const pagina = await l.consultar(
+      `SELECT id, estabelecimento_id, usuario_id, LEFT(DATE_FORMAT(ocorrido_em, '%Y-%m-%d %H:%i:%s.%f'), 23) AS ocorrido,
+              acao, entidade, entidade_id, CAST(dados_antes AS CHAR) AS antes, CAST(dados_depois AS CHAR) AS depois,
+              motivo, endereco_ip, correlacao, hash_anterior, hash_linha
+         FROM trilha_auditoria
+        WHERE estabelecimento_chave = IFNULL(?, 0) AND cadeia_dia = ? AND id > ?
+        ORDER BY id
+        LIMIT ${PAGINA_VERIFICACAO}`,
+      [estabelecimento, dia, desde],
+    );
+    for (const r of pagina) {
+      n++;
+      ultimo = textoOuNulo(r['id']);
+      primeiro ??= ultimo;
+      if (quebra !== null || !esperado) continue;
+      const recalculado = hashLinhaTrilha({
+        estabelecimento: textoOuNulo(r['estabelecimento_id']),
+        usuario: textoOuNulo(r['usuario_id']),
+        ocorridoEm: String(r['ocorrido']),
+        acao: String(r['acao']),
+        entidade: String(r['entidade']),
+        entidadeId: textoOuNulo(r['entidade_id']),
+        dadosAntes: textoOuNulo(r['antes']),
+        dadosDepois: textoOuNulo(r['depois']),
+        motivo: textoOuNulo(r['motivo']),
+        enderecoIp: textoOuNulo(r['endereco_ip']),
+        correlacao: textoOuNulo(r['correlacao']),
+        cadeiaDia: dia,
+        hashAnterior: textoOuNulo(r['hash_anterior']) ?? '',
+      });
+      if (r['hash_anterior'] !== anterior || r['hash_linha'] !== recalculado) quebra = ultimo;
+      else anterior = recalculado;
+    }
+    if (pagina.length < PAGINA_VERIFICACAO) break;
+    desde = Number(ultimo);
+  }
+  if (!esperado) return { dia, linhas: n, ok: n === 0, quebraEm: n === 0 ? null : MOTIVO_SEM_FECHO };
+  if (quebra !== null) return { dia, linhas: n, ok: false, quebraEm: quebra };
+  const confere =
+    n === Number(esperado['quantidade']) &&
+    anterior === textoOuNulo(esperado['fim']) &&
+    primeiro === textoOuNulo(esperado['primeiro']) &&
+    ultimo === textoOuNulo(esperado['ultimo']);
+  return { dia, linhas: n, ok: confere, quebraEm: confere ? null : MOTIVO_FECHO_DIVERGENTE };
 }
 
 export type CargaEvento = Readonly<Record<string, number | string | boolean | null>>;

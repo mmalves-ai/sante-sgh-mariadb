@@ -44,6 +44,7 @@ import {
   type NucleoProprio,
   type ResultadoOperacao,
   type TxOperacao,
+  verificarDiaTrilha,
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -721,16 +722,26 @@ export class PortaSbisPropria implements PortaSbis {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  verificarDias(_h: string, _dias: readonly string[]): Promise<VerificacaoDiaTrilha[]> {
-    return Promise.reject(
-      new ErroProblema(
-        'indisponivel',
-        503,
-        'Prova da cadeia indisponível',
-        'A trilha de auditoria deste banco ainda não é encadeada por hash: a prova da cadeia não pode ser feita.',
-        { codigo: 'trilha-sem-encadeamento' },
-      ),
-    );
+  /**
+   * SBIS-16: a prova da cadeia de cada dia (o núcleo recalcula o hash de cada linha, confere cada elo e o fim do dia
+   * com o fecho diário, ou com a cabeça da cadeia no dia ainda aberto). Tudo numa leitura só (um retrato do banco).
+   */
+  async verificarDias(h: string, dias: readonly string[]): Promise<VerificacaoDiaTrilha[]> {
+    return this.ler(`sbis-cadeia-${h}`, async (l) => {
+      const est = await l.uma<Linha>(
+        'SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+        [h],
+      );
+      if (!est)
+        throw new ErroProblema(
+          'nao-encontrado',
+          404,
+          'Estabelecimento não encontrado',
+          'O estabelecimento da sessão não existe neste banco.',
+        );
+      const r: VerificacaoDiaTrilha[] = [];
+      for (const dia of dias) r.push(await verificarDiaTrilha(l, Number(est['id']), dia));
+      return r;
+    });
   }
 }

@@ -102,6 +102,15 @@ describe('trilha própria', () => {
         sqls.push({ sql, p });
         return Promise.resolve(99);
       },
+      // SBIS-16: a cabeça da cadeia da trilha (trilha_cadeia), travada e avançada na mesma transação.
+      executar: (sql: string, p: readonly unknown[] = []) => {
+        sqls.push({ sql, p });
+        return Promise.resolve(1);
+      },
+      consultarParaAtualizar: (sql: string, p: readonly unknown[] = []) => {
+        sqls.push({ sql, p });
+        return Promise.resolve([]);
+      },
     } as unknown as Escritor;
     const nucleo: NucleoEscrita = {
       escrever: (ctx, fn) => {
@@ -144,7 +153,7 @@ describe('trilha própria', () => {
       resultado: 'falha',
     });
     expect(f.sqls.some((s) => s.sql.includes('FROM usuario'))).toBe(false);
-    const ins = f.sqls.find((s) => s.sql.startsWith('INSERT'));
+    const ins = f.sqls.find((s) => s.sql.startsWith('INSERT INTO trilha_auditoria'));
     expect(ins?.p[1]).toBeNull();
     expect(ins?.p[3]).toBe('acesso_negado');
   });

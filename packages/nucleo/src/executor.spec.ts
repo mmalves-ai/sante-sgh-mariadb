@@ -75,8 +75,9 @@ describe('Executor: protocolo da operação', () => {
     expect(s).toEqual({
       resultado: { id: 100, codigo: 'X-10' },
       repetida: false,
-      eventos: [102],
-      trilha: 101,
+      eventos: [103],
+      // 101: a cabeça da cadeia da trilha (trilha_cadeia), criada antes do elo.
+      trilha: 102,
     });
     // leitura da idempotência e depois uma única transação de escrita, confirmada.
     expect(b.estados).toEqual([
@@ -97,7 +98,11 @@ describe('Executor: protocolo da operação', () => {
       'SELECT FROM sequencia_negocio',
       'UPDATE sequencia_negocio',
       'INSERT tipo_x',
+      // SBIS-16: a cabeça da cadeia é travada antes do elo e avança depois dele, na mesma transação.
+      'INSERT trilha_cadeia',
+      'SELECT FROM trilha_cadeia',
       'INSERT trilha_auditoria',
+      'UPDATE trilha_cadeia',
       'INSERT integracao_mensagem',
       'INSERT idempotencia_operacao',
     ]);
@@ -124,8 +129,8 @@ describe('Executor: protocolo da operação', () => {
       3,
       hashEntrada('teste.tipo_x.incluir', { descricao: 'Gasolina' }),
     ]);
-    expect(idem[6]).toBe(101);
-    expect(aoConfirmar).toHaveBeenCalledWith('teste_duble', [102]);
+    expect(idem[6]).toBe(102);
+    expect(aoConfirmar).toHaveBeenCalledWith('teste_duble', [103]);
     expect(metricas.contagem('teste.tipo_x.incluir', 'sucesso')).toBe(1);
   });
 

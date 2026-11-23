@@ -9,7 +9,7 @@
 // Os estabelecimentos e os usuários de teste ficam (a trilha aponta para eles); o resto sai no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { REQUISITOS_SBIS } from '@sgh/contratos';
-import { type Escritor, NucleoProprio } from '@sgh/nucleo';
+import { type Escritor, fecharDiasTrilha, gravarTrilha, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { TrilhaSbis } from './porta.js';
@@ -290,7 +290,95 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     const cfg = await porta.configSeguranca(EST_A);
     expect(cfg.limiteTentativas).toBeGreaterThan(0);
     expect(cfg.inatividadeSegundos).toBeGreaterThan(0);
-    expect(await codigo(porta.verificarDias(EST_A, ['2026-11-20']))).toBe('trilha-sem-encadeamento');
+    expect(await codigo(porta.verificarDias('f0206zz', ['2026-11-20']))).toBe('nao-encontrado');
+  });
+
+  // SBIS-16: a cadeia de hash da trilha contra o banco real. Um estabelecimento sintético novo por execução (cadeia
+  // própria, vazia); os dias da cadeia são simulados pelo relógio da sessão (SET timestamp), que é de onde o núcleo
+  // tira o dia (UTC_DATE). Casos: cadeia íntegra com fecho automático na virada do dia, fecho pela operação diária
+  // (idempotente), linha adulterada apontada pelo id e dia com eventos sem fecho.
+  it('prova da cadeia: íntegra, fecho diário, linha adulterada e dia sem fecho', async () => {
+    const codigoC = `c${RODADA}`.slice(0, 10); // ck_estabelecimento_codigo_formato: até 10
+    const ctx = { cliente: CLIENTE, correlacao: `f22l0206-cadeia-${RODADA}`.slice(0, 64) };
+    const [D1, D2, D3] = ['2026-01-10', '2026-01-11', '2026-01-12'] as const;
+    const ids: number[] = [];
+    const estC = await nucleo.escrever(ctx, (e) =>
+      garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [codigoC],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [codigoC, `Hospital sintético ${codigoC}`, `Hospital sintético ${codigoC} (fictício)`, new Date()],
+      ),
+    );
+    const gravar = (dia: string, n: number) =>
+      nucleo.escrever(ctx, async (e) => {
+        await e.executar('SET timestamp = ?', [Date.parse(`${dia}T12:00:00Z`) / 1000]);
+        try {
+          for (let i = 0; i < n; i++)
+            ids.push(
+              await gravarTrilha(e, {
+                estabelecimento: estC,
+                usuario: usuA,
+                acao: 'operacao',
+                entidade: 'teste_cadeia',
+                entidadeId: i + 1,
+                dadosDepois: { dia, i, texto: 'ação sintética' },
+                motivo: i === 0 ? 'motivo sintético' : null,
+                correlacao: ctx.correlacao,
+                ocorridoEm: new Date(`${dia}T12:00:00.${String(100 + i)}Z`),
+              }),
+            );
+        } finally {
+          await e.executar('SET timestamp = DEFAULT');
+        }
+      });
+    const fechos = async (dia?: string) =>
+      Number(
+        (
+          await ler<{ n: unknown }>(
+            `SELECT COALESCE(SUM(quantidade), 0) AS n FROM trilha_auditoria_fecho
+              WHERE estabelecimento_id = ?${dia ? ' AND dia = ?' : ''}`,
+            dia ? [estC, dia] : [estC],
+          )
+        )[0]?.n,
+      );
+
+    await gravar(D1, 3);
+    await gravar(D2, 2); // a virada do dia fecha D1 na mesma transação
+    expect(await porta.verificarDias(codigoC, [D1, D2, D3])).toEqual([
+      { dia: D1, linhas: 3, ok: true, quebraEm: null },
+      { dia: D2, linhas: 2, ok: true, quebraEm: null }, // dia aberto: confere com a cabeça da cadeia
+      { dia: D3, linhas: 0, ok: true, quebraEm: null },
+    ]);
+    expect(await fechos(D1)).toBe(3);
+    expect(await fechos(D2)).toBe(0);
+
+    // O fecho diário fecha D2 (sem evento seguinte); a segunda chamada não grava nada de novo para este escopo.
+    expect(await nucleo.escrever(ctx, (e) => fecharDiasTrilha(e))).toBeGreaterThanOrEqual(1);
+    await nucleo.escrever(ctx, (e) => fecharDiasTrilha(e));
+    expect(await fechos(D2)).toBe(2);
+    expect(await fechos()).toBe(5);
+    expect(await porta.verificarDias(codigoC, [D2])).toEqual([
+      { dia: D2, linhas: 2, ok: true, quebraEm: null },
+    ]);
+
+    // Linha adulterada: a prova aponta o id dela; o dia seguinte continua íntegro.
+    await nucleo.escrever(ctx, (e) =>
+      e.executar("UPDATE trilha_auditoria SET motivo = 'adulterado' WHERE id = ?", [ids[1]]),
+    );
+    expect(await porta.verificarDias(codigoC, [D1, D2])).toEqual([
+      { dia: D1, linhas: 3, ok: false, quebraEm: String(ids[1]) },
+      { dia: D2, linhas: 2, ok: true, quebraEm: null },
+    ]);
+
+    // Dia com eventos e sem fecho (o fecho sumiu): a prova recusa o dia.
+    await nucleo.escrever(ctx, (e) =>
+      e.executar('DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id = ? AND dia = ?', [estC, D2]),
+    );
+    expect(await porta.verificarDias(codigoC, [D2])).toEqual([
+      { dia: D2, linhas: 2, ok: false, quebraEm: 'sem-fecho' },
+    ]);
   });
 
   it('ciclo (quando as tabelas existem): abrir, avaliar, corrigir, verificar por outra pessoa, concluir', async (ctx) => {
