@@ -58,6 +58,17 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## Execução 9 (23/11, 3h05)
+
+- A execução 8 parou na onda 49 de 208 (cerca de 30 milhões de linhas): deadlock 1213 num gravador (UPDATE de
+  lancamento_repasse) e o coordenador esperando para sempre os outros (SIGTERM ignorado). Marcada como falhou.
+- **Execução 9** continua a 8 (a importação pula o que já entrou): worktree `velocidade` com a main até ba82516c
+  (C8, C10, C11, C12, conferidor) mais 914f3f15 (SIGKILL), `CONECTOR_GRAVADORES=1`, `CONECTOR_REPROCESSAR_RECUSADAS=1`,
+  trilhas adiadas. Log do worker em sante-sgh-dados/obra/logs/worker-e9.log.
+- Rodada `deadlock-paralelo` (agente em worktree isolado) corrige a causa; depois: parar a 9, juntar a correção no
+  `velocidade` e continuar com 4 gravadores.
+- A rodada `conta-itens-2` (material na conta, grupo de ato com DDL novo) entra pela passada de correção no fim.
+
 ## Fila
 
 1. Prova da cadeia (23/11, 0h25, depois de dac241fb, que corrigiu o NUMERO numérico que derrubava a carga de pacientes):
