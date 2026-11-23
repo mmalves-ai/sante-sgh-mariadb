@@ -138,3 +138,22 @@ Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam
   - O resumo só traz contagens, em `contadores.agenda_estruturada`.
 - **Prova:** `conector/testes/test_estrutura_agenda.py`, com textos sintéticos e as perguntas de aceite num banco
   descartável.
+
+## Continuar uma importação interrompida (rodada retomar-importacao, 2026-11-23)
+
+- **Pedido:** `conector.sh enfileirar <cliente> importar --continuar` (no código: `plataforma.enfileirar(conn, codigo,
+  "importar", continuar=True)`). Aceito só se a ÚLTIMA importação do cliente terminou em `falhou` (interrompida) e com
+  a mesma origem vinculada; a execução nova leva `contadores.continuar_de`. Ao subir, o worker marca a execução órfã
+  como `falhou` **continuável**: etapa `interrompida: <etapa em que parou>` e `contadores.interrompida`.
+- **O que o motor faz** (`continuar.py`): confere o mesmo arquivo (sha256 da imagem gravada pela interrompida), conta,
+  confronta com o gstat e grava a imagem como sempre, refaz a carga própria do L3 (pula pelo hash), e na carga pelo
+  mapa pula as tabelas concluídas; a tabela do meio e as seguintes rodam normalmente (linha já vista pulada pelo hash,
+  nunca regravada). CONECTOR_ADIAR e CONECTOR_SO valem como sempre. As pendências abertas da interrompida nas tabelas
+  puladas são repetidas, e o estado da conciliação delas vem do conector_origem (nunca da origem).
+- **Tabelas concluídas:** pela marca `conector_tabela_concluida` (gravada a cada onda commitada; a continuação marca as
+  puladas como `continuada`); sem marca (execução anterior a esta versão), por dedução: a imagem da interrompida
+  registrou n > 0 linhas da tabela, a contagem de agora também é n, e o conector_origem tem exatamente n chaves
+  principais da tabela com a imagem da interrompida. O resto roda de novo (seguro: pula pelo hash).
+- **Memória** (`paralelo.py`, cabeçalho): de-para sob demanda e liberado depois da última onda que o usa (tabela com
+  CONECTOR_ESTADO_MIN linhas ou mais, padrão 20 mil); chaves vistas e soma da origem compactadas ao fim da onda; linha
+  `conector memoria onda N: {...}` no stderr do worker e `carga.memoria` (pico e última) no resumo.
