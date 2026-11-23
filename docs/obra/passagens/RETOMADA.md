@@ -161,6 +161,19 @@
    criar_cliente, rodar o semear-acesso do cliente e reiniciar a API (ela guarda os estabelecimentos ao subir).
    O dono entra em https://<ip>:5310/entrar (cliente demo, "Estabelecimento principal", opção do administrador da
    plataforma); só dizer "pode entrar" depois de testar GET /api/estabelecimentos e a recusa 401 de senha errada.
+0c. **Pedido do dono (23/11, 18h50): recuperação de senha e segundo fator por e-mail (rodada `senha-email`, depois da ids-bigint).**
+   - Situação: o "Esqueci a senha" (`apps/api/src/sessao/recuperacao-senha.ts`) só atende usuário de estabelecimento.
+     O administrador da plataforma não tem recuperação. O segundo fator existente não tem código por e-mail.
+   - Fazer: (a) "Esqueci a senha" do administrador da plataforma, pelo e-mail de `administrador_plataforma`, com as
+     mesmas proteções (resposta igual, limite por conta e por origem, token de uso único guardado só como SHA-256,
+     15 min, troca obrigatória depois); (b) segundo fator por código enviado ao e-mail (6 dígitos, validade curta,
+     tentativas limitadas, uso único), como método escolhível ao lado do existente, para usuários e para o
+     administrador da plataforma; (c) o dono vê o e-mail do desenvolvimento: hoje o Mailpit (`sgh-mailpit`, tela
+     em 127.0.0.1:8325) só ouve o loopback. Publicar a tela dele atrás do Caddy, como o Adminer, ou dizer onde ver.
+   - Em 23/11 18h50: o administrador da plataforma (id 6) recebeu senha provisória com troca obrigatória (o dono
+     tinha trocado a do .env no primeiro acesso, em 21/11) e o e-mail passou a `mmalves@hal-ai.com`. A variável
+     `SEMEAR_ADMIN_EMAIL` do `.env` ainda tem o e-mail antigo: o semeador procura o administrador pelo e-mail e
+     criaria um segundo. Atualizar o `.env` (e o registro `tools/verificadores/env-raiz.json`) antes de semear.
 6b. **Painel ligado à ProntoCardio só para consulta (pedido do dono, 23/11 15h):** a API roda com
    `CLIENTE_PADRAO=prontocardio REDE_PADRAO=prontocardio` no ambiente do processo (o .env continua com demo). Não há
    modo só leitura na API: a consulta é por combinação com o dono. Ao reiniciar a API, repetir o override.
