@@ -315,6 +315,29 @@ def telefone(v):
     return None, True
 
 
+ADIAR_ENDERECO = "#adiar_endereco"
+
+
+def cep_origem(v):
+    cep = digitos(v)
+    return cep.zfill(8) if cep and len(cep) <= 8 else None
+
+
+def local_com_ddd(v, ddd):
+    """C8: número local (8 dígitos fixo, 9 celular começando por 9) sem DDD recebe o DDD dado; senão None."""
+    d = digitos(v).lstrip("0")
+    if len(d) == 8 or (len(d) == 9 and d[0] == "9"):
+        return ddd, d
+    return None
+
+
+def nota_endereco(l):
+    return "Endereço da origem sem município identificado: %s" % ", ".join(
+        x for x in (txt(l["ENDERECO"], 150), txt(l["NUMERO"], 20), txt(l["COMPL"], 100), txt(l["BAIRRO"], 100),
+                    "CEP " + digitos(l["CEP"]) if digitos(l["CEP"]) else None,
+                    "IBGE " + digitos(l["IBGE"]) if digitos(l["IBGE"]) else None) if x)
+
+
 def fmt(v):
     """Forma canônica de um campo na soma de controle. Texto vira os bytes CP1252 (hex): o texto gravado no destino e
     os bytes crus normalizados da origem têm de dar o mesmo resultado."""
@@ -367,6 +390,8 @@ def codigo_estabelecimento(chave):
 
 # ---------------- carga ----------------
 class Carga:
+    reprocessar = False  # padrão (continuidade) também para a instância montada sem __init__ (testes)
+
     def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None):
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
         self.progresso = progresso or (lambda pct, etapa: None)
@@ -727,6 +752,7 @@ class Carga:
         self._commit()
 
     def _pacientes(self, linhas):
+        self._enderecos_adiados = []
         pronts = {r[0] for r in self._todas("SELECT numero_prontuario FROM paciente")}
         cpfs = {r[0] for r in self._todas("SELECT cpf FROM pessoa_fisica WHERE cpf IS NOT NULL")}
         estab = self._estab_principal()
@@ -783,14 +809,24 @@ class Carga:
             if self._linha_nova("RICADPAC", chave, "paciente", h, gravar):
                 self.origem.setdefault("paciente", {})[chave] = hd.hex()
                 for ent, k, v in subs:
+                    if ent == ADIAR_ENDERECO:
+                        self._enderecos_adiados.append(v)
+                        continue
                     self.origem.setdefault(ent, {})[k] = v
                 pronts.add(pront)
                 if doc:
                     cpfs.add(doc)
         self._commit()
+        self._resolver_enderecos()
 
     SUBS = (("IDENT", "documento", "documento_pessoa"), ("ENDERECO", "endereco", "endereco_pessoa"),
             ("FONE", "telefone_residencial", "telefone_pessoa"), ("CELULAR", "telefone_celular", "telefone_pessoa"))
+
+    @staticmethod
+    def _presente(col, v):
+        """C8: a subentidade existe na origem. Telefone só com dígitos: a máscara vazia da origem (só pontuação e
+        espaço; 33.158 de 33.161 telefones "inválidos" na cópia real, agregado) não é telefone, e não gera recusa."""
+        return bool(digitos(v)) if col in ("FONE", "CELULAR") else bool(txt(v))
 
     def _subs_ja_carregadas(self, chave, l, somar=True):
         """Paciente já carregado: reemite a regra das subentidades recusadas e, se igual, põe as subentidades que a
@@ -802,7 +838,7 @@ class Carga:
                 if ant is not None and ant[0] is None:
                     self._pendencia("RICADPAC", k, ant[3] or "recusa_sem_regra_registrada", ant[4] or "baixa")
                 continue
-            if not txt(l[col]):
+            if not self._presente(col, l[col]):
                 continue
             if ant is None:
                 v = "sem_registro"
@@ -834,38 +870,117 @@ class Carga:
                 tipo_documento_identificacao_id=self.tipo[("tipo_documento_identificacao", "rg")], principal=True,
                 origem="migracao"))
             sub("documento", "documento_pessoa", did, (bruto(l["IDENT"], 40),))
+        notas = []
         if txt(l["ENDERECO"]):
-            cep = digitos(l["CEP"]); cep = cep.zfill(8) if cep and len(cep) <= 8 else None
+            cep = cep_origem(l["CEP"])
             ibge = digitos(l["IBGE"])
             mun = municipio_ibge(ibge, self.municipio, getattr(self, "municipio6", {}))
-            if not cep or not mun:
+            if cep and not mun:
+                # C8 (ADR 0007, 18): município estimado pelo CEP com a evidência dos endereços já gravados no cliente;
+                # a evidência depende dos outros pacientes, então o endereço é resolvido no fim (_resolver_enderecos)
+                out.append((ADIAR_ENDERECO, "%s/endereco" % chave, (chave, l, pfid, h)))
+            elif not cep:
                 sub("endereco", "endereco_pessoa", None, None, ("endereco_sem_cep_ou_municipio", "media"))
+                notas.append(nota_endereco(l))
             else:
-                num = digitos(l["NUMERO"])[:10] or None
-                eid = self._inserir("endereco_pessoa", dict(
-                    pessoa_fisica_id=pfid, sequencia=1, tipo_endereco_id=self.tipo[("tipo_endereco", "residencial")],
-                    logradouro=txt(l["ENDERECO"], 150), cep=cep, municipio_ibge_id=mun, numero=num,
-                    sem_numero=not num, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAIRRO"], 100),
-                    principal=True, origem="migracao"))
-                # o resumo leva o código do catálogo (7 dígitos), o mesmo que a conferência lê do destino
-                ibge = getattr(self, "municipio_cod", {}).get(mun, ibge)
-                sub("endereco", "endereco_pessoa", eid, (bruto(l["ENDERECO"], 150), cep, ibge, num,
-                                                         bruto(l["COMPL"], 100), bruto(l["BAIRRO"], 100)))
+                self._gravar_endereco(chave, l, pfid, h, cep, mun, ibge, sub)
         seq = 0
+        lidos = {}
         for col, nome, _ in self.SUBS[2:]:
-            if not txt(l[col]):
+            if self._presente(col, l[col]):
+                lidos[col] = telefone(l[col])
+        # C8 (ADR 0007, 18): número local de 8 ou 9 dígitos sem DDD: o DDD do outro telefone válido da mesma linha
+        ddd_linha = next((t[0] for t, ruim in lidos.values() if t and not ruim), None)
+        for col, nome, _ in self.SUBS[2:]:
+            if col not in lidos:
                 continue
-            tel, ruim = telefone(l[col])
-            if ruim or not tel:
+            tel, ruim = lidos[col]
+            estimado = False
+            if (ruim or not tel) and ddd_linha:
+                tel = local_com_ddd(l[col], ddd_linha)
+                estimado = tel is not None
+            if ruim and not estimado or not tel:
                 sub(nome, "telefone_pessoa", None, None, ("telefone_invalido", "baixa"))
+                notas.append("Telefone da origem não reconhecido (%s): %s" % (col, txt(l[col], 40)))
                 continue
+            if estimado:
+                self._pendencia("RICADPAC", "%s/%s" % (chave, nome), "telefone_ddd_do_outro_telefone", "baixa")
             seq += 1
             tipo = nome.split("_", 1)[1]
             tid = self._inserir("telefone_pessoa", dict(
                 pessoa_fisica_id=pfid, sequencia=seq, ddi="55", ddd=tel[0], numero=tel[1],
                 tipo_telefone_id=self.tipo[("tipo_telefone", tipo)], principal=seq == 1, origem="migracao"))
             sub(nome, "telefone_pessoa", tid, (tel[0], tel[1]))
+        if notas:
+            self._anotar_pessoa(pfid, notas)
         return out
+
+    def _gravar_endereco(self, chave, l, pfid, h, cep, mun, ibge, sub):
+        num = digitos(l["NUMERO"])[:10] or None
+        eid = self._inserir("endereco_pessoa", dict(
+            pessoa_fisica_id=pfid, sequencia=1, tipo_endereco_id=self.tipo[("tipo_endereco", "residencial")],
+            logradouro=txt(l["ENDERECO"], 150), cep=cep, municipio_ibge_id=mun, numero=num,
+            sem_numero=not num, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAIRRO"], 100),
+            principal=True, origem="migracao"))
+        # o resumo leva o código do catálogo (7 dígitos), o mesmo que a conferência lê do destino
+        ibge = getattr(self, "municipio_cod", {}).get(mun, ibge)
+        sub("endereco", "endereco_pessoa", eid, (bruto(l["ENDERECO"], 150), cep, ibge, num,
+                                                 bruto(l["COMPL"], 100), bruto(l["BAIRRO"], 100)))
+
+    def _anotar_pessoa(self, pfid, notas):
+        """ADR 0006 (nada perdido): o que a origem tinha e não virou subentidade fica na observação da pessoa."""
+        with self._c() as c:
+            c.execute("UPDATE pessoa_fisica SET observacao=CONCAT_WS('\\n', observacao, %s) WHERE id=%s",
+                      ("\n".join(notas), pfid))
+
+    def _evidencia_cep(self):
+        """(CEP -> município, faixa de 5 dígitos -> município) dos endereços já gravados no cliente, só onde a
+        evidência aponta para um município só."""
+        por_cep, por_faixa = {}, {}
+        for cep, mun in self._todas("SELECT DISTINCT cep, municipio_ibge_id FROM endereco_pessoa"
+                                    " WHERE cep IS NOT NULL AND municipio_ibge_id IS NOT NULL"):
+            por_cep.setdefault(cep, set()).add(mun)
+            por_faixa.setdefault(cep[:5], set()).add(mun)
+        return ({k: next(iter(v)) for k, v in por_cep.items() if len(v) == 1},
+                {k: next(iter(v)) for k, v in por_faixa.items() if len(v) == 1})
+
+    def _resolver_enderecos(self):
+        """C8 (ADR 0007, 18): endereço com CEP e sem município do catálogo. Município pela evidência do cliente: o
+        único do mesmo CEP (pendência baixa `municipio_estimado_pelo_cep`) ou o único da faixa de 5 dígitos
+        (`municipio_estimado_pela_faixa_do_cep`). Sem evidência: recusa `endereco_sem_cep_ou_municipio` e o endereço
+        como veio fica na observação da pessoa (ADR 0006)."""
+        adiados, self._enderecos_adiados = getattr(self, "_enderecos_adiados", []), []
+        if not adiados:
+            return
+        por_cep, por_faixa = self._evidencia_cep()
+        for chave, l, pfid, h in adiados:
+            cep = cep_origem(l["CEP"])
+            k = "%s/endereco" % chave
+            mun, regra = por_cep.get(cep), "municipio_estimado_pelo_cep"
+            if mun is None:
+                mun, regra = por_faixa.get(cep[:5]), "municipio_estimado_pela_faixa_do_cep"
+            feitos = []
+
+            def sub(nome, ent, idd, campos, recusa=None):
+                if recusa:
+                    self._recusar("RICADPAC", k, ent, h, *recusa)
+                    feitos.append(RECUSADO)
+                else:
+                    hd = resumo(campos)
+                    self._registrar("RICADPAC", k, ent, idd, h, hd)
+                    feitos.append(hd.hex())
+            if mun is None:
+                sub("endereco", "endereco_pessoa", None, None, ("endereco_sem_cep_ou_municipio", "media"))
+                self._anotar_pessoa(pfid, [nota_endereco(l)])
+            else:
+                def fazer():
+                    self._gravar_endereco(chave, l, pfid, h, cep, mun, digitos(l["IBGE"]), sub)
+                    self._pendencia("RICADPAC", k, regra, "baixa")
+                    return True
+                if not self._linha_nova("RICADPAC", k, "endereco_pessoa", h, fazer):
+                    feitos[:] = [RECUSADO]
+            self.origem.setdefault("endereco_pessoa", {})[k] = feitos[-1] if feitos else RECUSADO
+        self._commit()
 
     def _estab_principal(self):
         """O estabelecimento do atendimento: o de menor código entre os carregados da origem (a origem medida tem
