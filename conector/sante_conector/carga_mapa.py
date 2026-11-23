@@ -1632,6 +1632,12 @@ class CargaMapa(carga.Carga):
         g = self._grp[0]
         if (t, g) in self._cab:
             return self._cab[(t, g)], False
+        # Varredura dos membros só uma vez por (tabela, grupo): sem cabeçalho achado, as linhas seguintes do mesmo grupo
+        # não varrem de novo (antes era O(n) por linha: 1 milhão de membros num grupo davam 40 linhas/s na carga real).
+        # O cabeçalho gravado depois nesta execução entra em self._cab e é achado antes daqui.
+        varridos = self.__dict__.setdefault("_cab_varrido", set())
+        if (t, g) in varridos:
+            return None, False
         ex = self.existente.get(t, {})
         for m in self._grupos[2][g][1]:
             # Sincronizar de uma linha já carregada: o cabeçalho dela mesma vale (único membro do grupo)
@@ -1639,6 +1645,7 @@ class CargaMapa(carga.Carga):
             e = ex.get(m if principal else "%s/%s" % (m, dt)) if m != chave or proprio else None
             if e and e[0] is not None:
                 return e[0], True
+        varridos.add((t, g))
         return None, False
 
     def _linha_nova(self, tab, chave, entidade, h, fazer):

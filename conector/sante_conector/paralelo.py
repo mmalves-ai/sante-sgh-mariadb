@@ -51,7 +51,7 @@ _ATIVO = [False]  # só o gravador anota as chaves alteradas (no coordenador o d
 # atributos que são do processo (conexões, fila do bloco, linha atual) ou caches por tabela: nunca voltam
 _FORA = frozenset({"lt", "cr", "progresso", "mapa_exec", "plano", "tabelas", "chaves", "_fila", "_diario", "_buf",
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
-                   "_esvaziando", "_adiar_linha", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
+                   "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
                    "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar"})
 
 
