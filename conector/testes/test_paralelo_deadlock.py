@@ -192,3 +192,19 @@ class MecanismoNoBanco(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevisaoAdversarial(unittest.TestCase):
+    """Achados da revisão de ed074d59: cadastro provisório como atualização e motivo sem valor de linha."""
+
+    def test_provisorio_atualiza_o_destino(self):
+        from sante_conector import paralelo
+        self.assertEqual(paralelo._atualiza({"tabela": "TBCONVEN", "destinos": ["fonte_pagadora"], "opcoes": {}}),
+                         {"fonte_pagadora"})
+        self.assertEqual(paralelo._atualiza({"tabela": "OUTRA", "destinos": ["fonte_pagadora"], "opcoes": {}}), set())
+
+    def test_resumo_sem_mensagem_de_erro_comum(self):
+        from sante_conector import paralelo
+        r = paralelo._resumo_erro(ValueError("valor-sigiloso-123"), "T")
+        self.assertNotIn("valor-sigiloso-123", r)
+        self.assertIn("ValueError", r)

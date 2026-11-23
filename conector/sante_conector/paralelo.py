@@ -312,7 +312,8 @@ def fks_banco(cr):
     """{tabela: tabelas que as chaves estrangeiras dela referenciam} no banco de destino (information_schema)."""
     with cr.cursor() as c:
         c.execute("SELECT DISTINCT TABLE_NAME, REFERENCED_TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE"
-                  " WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL")
+                  " WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_SCHEMA=DATABASE()"
+                  " AND REFERENCED_TABLE_NAME IS NOT NULL")
         fks = {}
         for t, r in c.fetchall():
             fks.setdefault(t, set()).add(r)
@@ -337,7 +338,10 @@ def _atualiza(p):
     """Destinos em que a tabela ATUALIZA linhas que não criou (UPDATE de linha de outra tabela do plano):
     `complementa` (a linha do pai recebe as colunas) e `adotar` (a linha existente é mesclada)."""
     ops = p.get("opcoes") or {}
-    return {dt for dt in p["destinos"] if (ops.get(dt) or {}).get("complementa") or (ops.get(dt) or {}).get("adotar")}
+    from .carga_mapa import PROVISORIO  # o cadastro provisório do L3 é completado por UPDATE (complementa implícito)
+    prov = {PROVISORIO[p["tabela"]]} & set(p["destinos"]) if p["tabela"] in PROVISORIO else set()
+    return prov | {dt for dt in p["destinos"]
+                   if (ops.get(dt) or {}).get("complementa") or (ops.get(dt) or {}).get("adotar")}
 
 
 def ondas(plano, mapa_exec, fks=None):
@@ -448,7 +452,7 @@ def _resumo_erro(e, tabela):
     if isinstance(e, pymysql.err.MySQLError):
         txt = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
     else:
-        txt = "%s: %s" % (type(e).__name__, str(e)[:300])
+        txt = "%s (mensagem omitida: pode citar valor de linha)" % type(e).__name__
     tb = traceback.extract_tb(e.__traceback__)
     if tb:
         txt += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
@@ -648,6 +652,19 @@ def carregar(cm, contagens):
             gc.unfreeze()
         try:
             _servir(cm, filhos, fila, ao_feito, somar)
+        except BaseException:
+            # qualquer saída com erro (gravador morto sem "erro", falha no coordenador): nenhum gravador fica vivo
+            # gravando no cliente depois da execução marcada como falha, nem como zumbi
+            for pid in filhos.values():
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                try:
+                    os.waitpid(pid, 0)
+                except OSError:
+                    pass
+            raise
         finally:
             for con in filhos:
                 con.close()
