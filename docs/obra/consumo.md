@@ -78,3 +78,24 @@ cada uma com construir, revisão adversarial e correção.
   - mínimo de turnos até lá;
   - trava de execução pesada (`flock`);
   - não parar rodada no meio para reorganizar.
+
+## Noite de 22 para 23/11/2026: rodadas da cadeia da conta (estimado x gasto, medido com medir_consumo.py)
+
+| Rodada | Estimativa | Teto | Gasto | Agentes |
+|---|---|---|---|---|
+| plano-conta | 4 M | 5,2 M | cerca de 2 M | 1 corretor |
+| conta-itens | 10 M | 13 M | 7,0 M | 3 corretores (1,66 M cada), conferidor 1,49 M, 2 revisores (0,27 M cada) |
+| conta-itens-2 | 9 M | 12 M | 7,3 M | compartilhado 1,66 M, item 2,69 M, conferidor 1,93 M, 2 revisores (0,51 M cada) |
+| deadlock-paralelo | 4 M | 5,2 M | cerca de 1,5 M | 1 corretor em worktree isolado, 1 revisor |
+| conta-itens-3 | 6 M | 8 M | 4,8 M | construtor 3,02 M (68% abaixo da base de 9,51 M), revisor 0,73 M, conferidor 1,08 M |
+| **Total** | **33 M** | **43,4 M** | **cerca de 22,6 M** | 16 agentes |
+
+- Nenhuma rodada passou do teto; todas abaixo da estimativa.
+- **Desperdício da noite:** o ORQUESTRADOR. A sessão passou de 1.950 turnos e 76 M equivalentes, muito acima da regra de
+  sessão curta (cerca de 150 turnos). O custo por turno cresce com o contexto. Causa: acompanhar a carga real ao vivo
+  na mesma sessão.
+- **Aprendido:**
+  - verificação por script (diag-cadeia com DIAG_SO_L3=1 em 3 min) pegou 2 defeitos que a suíte sintética não pegava;
+  - revisores lendo só o diff custaram 0,27 a 0,73 M e acharam defeitos reais em todas as rodadas;
+  - conferidor que espera uma prova de 50 minutos estoura o G6: a prova longa fica com o orquestrador, em segundo
+    plano.

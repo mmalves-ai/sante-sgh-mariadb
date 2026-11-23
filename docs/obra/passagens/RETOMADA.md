@@ -11,6 +11,30 @@
 3. Siga a seção **INCIDENTE** e depois a **fila**, a partir do primeiro item não feito.
 4. **Toda resposta em português** (diretriz do projeto, dono, 23/11).
 
+## Economia de tokens na sessão nova (obrigatório, AGENTS.md e plano-orquestracao.md)
+
+- **Guardião G1 a G6 sempre** (tools/obra/guardiao.py). Workflow com:
+  - `// ORCAMENTO: <id>` e `docs/obra/orcamentos/<id>.md` (com `estimativa_M` e `teto_M` = estimativa + 30%);
+  - PREFIXO idêntico, com o brief colado e "ECONOMIA (regras";
+  - `LIMITE_AGENTES` e o invólucro `chamar()`.
+  - Agente avulso com `ORCAMENTO: <id>` na primeira linha.
+  - Modelo de script: o da rodada conta-itens-3, na pasta workflows/scripts da sessão anterior. Copie a estrutura,
+    troque o BRIEF.
+- **Orçamento é meu** (o dono não aprova).
+  - Ao fechar a rodada, meça com `python3 -I tools/obra/medir_consumo.py <pasta da sessão>` e registre em
+    docs/obra/consumo.md o estimado e o gasto.
+  - Passou do teto: pare, ache a causa, otimize.
+- **Sessão do orquestrador curta:**
+  - a anterior passou de 1.950 turnos (76 M);
+  - durante a carga longa, não fique conversando: vigia em script, relatório só no cron, leitura só por script com
+    saída curta;
+  - ao passar de cerca de 150 turnos, grave a passagem e peça ao dono para abrir chat novo.
+- **Todos os agentes usam o Opus;** a economia vem só da estrutura:
+  - fatia pequena, saída em arquivo, revisor só do diff;
+  - prova longa (diag-cadeia de 50 min) fica com o ORQUESTRADOR em segundo plano, nunca dentro do agente (estoura o
+    G6).
+- **Qualidade não se troca por economia:** revisão adversarial, verificação por script e conferência final sempre.
+
 ## Relatórios periódicos (obrigatório, dono)
 
 - **Agendamento:** CronCreate com `recurring: false`, para daqui a 50 minutos (minuto fora de :00 e :30), com o
