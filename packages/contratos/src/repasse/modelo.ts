@@ -22,7 +22,10 @@ export interface RegraRepasse {
   /** null ou igual ao inicial: um procedimento só; maior: faixa. */
   readonly procedimentoFinal: number | null;
   readonly especialidade: number | null;
+  /** Função do profissional na equipe (grau de participação); null: qualquer. */
   readonly ato: number | null;
+  /** Grupo de ato do procedimento (o da origem é este, não a função); casa com o grupo do item; null: qualquer. */
+  readonly grupoAto: number | null;
   readonly local: number | null;
   readonly unidade: number | null;
   readonly centroCusto: number | null;
@@ -53,7 +56,10 @@ export interface ItemProducao {
   readonly convenio: number;
   readonly procedimento: number;
   readonly especialidade: number | null;
+  /** Função do executante na equipe (grau de participação). */
   readonly ato: number | null;
+  /** Grupo de ato do item faturável do item da conta. */
+  readonly grupoAto: number | null;
   readonly local: number | null;
   readonly unidade: number | null;
   readonly centroCusto: number | null;

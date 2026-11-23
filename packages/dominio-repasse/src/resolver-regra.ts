@@ -1,4 +1,4 @@
-// Regra 1 do M33: a regra mais específica vence (profissional, procedimento, especialidade, ato, local, unidade,
+// Regra 1 do M33: a regra mais específica vence (profissional, procedimento, especialidade, ato, grupo de ato, local, unidade,
 // centro de custo, cooperativa, tipo de lançamento, tipo de conta, convênio); no empate, a vigência mais recente que
 // já começou na data do item; por fim, o maior ID (determinístico). A ordem das dimensões é DIMENSOES_REGRA e é
 // conferida contra as apurações gravadas no teste dourado (a validar com o setor).
@@ -31,6 +31,7 @@ type Simples = Exclude<DimensaoRegra, 'profissional' | 'procedimento' | 'tipoCon
 const SIMPLES: readonly Simples[] = [
   'especialidade',
   'ato',
+  'grupoAto',
   'local',
   'unidade',
   'centroCusto',

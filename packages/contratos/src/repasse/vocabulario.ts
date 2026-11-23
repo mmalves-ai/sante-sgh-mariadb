@@ -61,13 +61,15 @@ export type EstadoVersaoRegra = (typeof ESTADOS_VERSAO_REGRA)[number];
  * Dimensões da regra, da mais específica à mais geral (regra 1; a ordem é a proposta pelo cap-06b §6.7 e é conferida
  * contra as apurações gravadas no teste dourado). No pc: profissional em 103.957 regras (847 profissionais),
  * procedimento em 105.427 (23.915 em faixa), convênio em 105.418 (53), ato em 1.720, unidade em 10.087, tipo de
- * lançamento em 105.280; especialidade, local, centro de custo e cooperativa não usados.
+ * lançamento em 105.280; especialidade, local, centro de custo e cooperativa não usados. O "ato" da regra da origem é
+ * o grupo de ato do procedimento (dimensão grupoAto); a dimensão ato é a função do profissional na equipe.
  */
 export const DIMENSOES_REGRA = [
   'profissional',
   'procedimento',
   'especialidade',
   'ato',
+  'grupoAto',
   'local',
   'unidade',
   'centroCusto',

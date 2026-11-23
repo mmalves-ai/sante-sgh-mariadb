@@ -9,6 +9,26 @@ import {
 } from './resolver-regra.js';
 
 describe('resolverRegra', () => {
+  it('grupo de ato: a regra com grupo casa o item do mesmo grupo e vence a geral; outro grupo não vale', () => {
+    // O "ato" da regra da origem é o grupo de ato do procedimento (não a função na equipe): caso sintético ATO 42.
+    const geral = regra({ id: 1 });
+    const grupo42 = regra({ id: 2, grupoAto: 42, percentual: 70 });
+    const r = resolverRegra(item({ grupoAto: 42 }), [geral, grupo42]);
+    expect(r.regra?.id).toBe(2);
+    expect(r.dimensoes).toEqual(['grupoAto', 'convenio']);
+    const outro = resolverRegra(item({ grupoAto: 7 }), [geral, grupo42]);
+    expect(outro.regra?.id).toBe(1);
+    expect(outro.ignoradas).toContainEqual({ regra: 2, motivo: 'outra-dimensao', dimensao: 'grupoAto' });
+    expect(motivoNaoAplica(grupo42, item({ grupoAto: null }))).toEqual({ motivo: 'outra-dimensao', dimensao: 'grupoAto' });
+  });
+
+  it('grupo de ato é independente da função na equipe: a regra por grupo não olha a função do executante', () => {
+    const grupo42 = regra({ id: 3, grupoAto: 42 });
+    expect(motivoNaoAplica(grupo42, item({ grupoAto: 42, ato: 9 }))).toBeNull();
+    const funcaoEGrupo = regra({ id: 4, grupoAto: 42, ato: 1 });
+    expect(resolverRegra(item({ grupoAto: 42, ato: 1 }), [grupo42, funcaoEGrupo]).regra?.id).toBe(4);
+  });
+
   it('profissional vence procedimento, que vence convênio', () => {
     const geral = regra({ id: 1 });
     const proc = regra({ id: 2, procedimentoInicial: 10101012 });

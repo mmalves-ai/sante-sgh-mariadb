@@ -27,6 +27,8 @@ export const esquemaProporRegraRepasse = z
     procedimentoFinal: z.number().int().min(0).nullable().default(null),
     especialidade: smallint.nullable().default(null),
     ato: smallint.nullable().default(null),
+    /** Grupo de ato do procedimento (id); null: qualquer. */
+    grupoAto: id.nullable().default(null),
     unidade: smallint.nullable().default(null),
     tipoConta: z.enum(['A', 'E', 'I']).default('A'),
     tipoLancamento: z.number().int().min(-1).max(32_767).nullable().default(null),
@@ -164,6 +166,7 @@ export const esquemaIncluirRegraRepasse = z
     procedimentoFinal: z.number().int().min(0).default(0),
     especialidade: smallint.default(0),
     ato: smallint.default(0),
+    grupoAto: z.number().int().min(0).default(0),
     unidade: smallint.default(0),
     tipoConta: z.enum(['A', 'E', 'I']),
     tipoLancamento: z.number().int().min(-1).max(32_767).default(0),

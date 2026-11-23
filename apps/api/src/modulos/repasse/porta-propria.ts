@@ -129,7 +129,7 @@ const PREFIXO_INTEGRAL = 'INTEGRAL-PART-%';
 
 const SQL_REGRAS = `
   SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.profissional_id, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
-         i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.local_atendimento_id,
+         i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.grupo_ato_id, i.local_atendimento_id,
          i.unidade_assistencial_id, i.centro_custo_id, i.cooperativa_medica_id, i.tipo_lancamento_id, i.escopo_conta,
          i.hora_inicio, i.hora_fim, i.percentual, i.valor_fixo, i.percentual_feriado, i.percentual_fim_semana,
          COALESCE(i.evento_repasse_id, r.evento_repasse_id) AS evento
@@ -153,6 +153,8 @@ function regraDe(r: Linha): RegraRepasse {
     procedimentoFinal: cod(r['codigo_procedimento_final']),
     especialidade: nn(r['especialidade_medica_id']),
     ato: nn(r['funcao_equipe_cobranca_id']),
+    // O grupo de ato do procedimento (o "ato" da regra da origem); casa com o grupo do item faturável.
+    grupoAto: nn(r['grupo_ato_id']),
     local: nn(r['local_atendimento_id']),
     unidade: nn(r['unidade_assistencial_id']),
     centroCusto: nn(r['centro_custo_id']),
@@ -697,6 +699,7 @@ async function aplicarOperacao(
         codigo_procedimento_final: n(e['procedimentoFinal']) > 0 ? String(e['procedimentoFinal']) : null,
         especialidade_medica_id: zeroNulo(e['especialidade']),
         funcao_equipe_cobranca_id: zeroNulo(e['ato']),
+        grupo_ato_id: zeroNulo(e['grupoAto']),
         unidade_assistencial_id: zeroNulo(e['unidade']),
         tipo_lancamento_id: zeroNulo(e['tipoLancamento']),
         evento_repasse_id: n(e['evento']),
@@ -1077,7 +1080,7 @@ export class PortaRepassePropria implements PortaRepasse {
     const TETO = 2000;
     return this.ler(c, async (l, est, fuso) => {
       const rs = await l.consultar(
-        `SELECT p.id, chi.realizado_em, ch.fonte_pagadora_id, ifa.codigo AS procedimento, p.funcao_equipe_cobranca_id,
+        `SELECT p.id, chi.realizado_em, ch.fonte_pagadora_id, ifa.codigo AS procedimento, ifa.grupo_ato_id, p.funcao_equipe_cobranca_id,
                 p.tipo_lancamento_id, ch.natureza, p.profissional_id, p.valor_base, at.especialidade_medica_id,
                 at.local_atendimento_id, at.unidade_assistencial_id, COALESCE(chi.centro_custo_id, at.centro_custo_id) AS centro,
                 pr.cooperativa_medica_id
@@ -1103,6 +1106,7 @@ export class PortaRepassePropria implements PortaRepasse {
           procedimento: codigoProcedimento(r['procedimento']),
           especialidade: nn(r['especialidade_medica_id']),
           ato: nn(r['funcao_equipe_cobranca_id']),
+          grupoAto: nn(r['grupo_ato_id']),
           local: nn(r['local_atendimento_id']),
           unidade: nn(r['unidade_assistencial_id']),
           centroCusto: nn(r['centro']),

@@ -735,7 +735,7 @@ regra_percentual_cobranca	FAT	configuracao	F3	Percentual ou valor fixo sobre hon
 regra_rateio_repasse	FAT	configuracao	F8	Rateio do repasse ou do custo do prestador entre setores	R1#49; MV: REG_REPASSE_RATEIO, REPASSE_PRESTADOR_RATEIO_SETOR, RATEIO_REPASSE	06	3
 regra_rateio_repasse_setor	FAT	item	F8	Setores e percentuais de cada regra de rateio do repasse	R1#49; MV: ITEM_RATEIO_REPASSE, ITREG_REPASSE_RATEIO; dep: centro_custo (07)	06	1
 regra_repasse	FAT	configuracao	F3	Regra de repasse por produção de um profissional ou grupo, com favorecido e vigência	R1#43; SP: TBREPGER; MV: REG_REPASSE*	06	7
-regra_repasse_item	FAT	item	F3	Critério e valor da regra: fonte pagadora, procedimento, especialidade, função, horário e percentual	R1#43; SP: TBREPGER; MV: ITREG_REPASSE*, REG_REP_EQP	06	14
+regra_repasse_item	FAT	item	F3	Critério e valor da regra: fonte pagadora, procedimento, especialidade, função, grupo de ato, horário e percentual	R1#43; SP: TBREPGER; MV: ITREG_REPASSE*, REG_REP_EQP	06	14
 regra_repasse_minimo_garantido	FAT	configuracao	F8	Mínimo garantido ao profissional: se a produção não alcança, a apuração complementa	R1#47; MV: REPASSE_VALOR_MINIMO	06	1
 regra_repasse_plantao	FAT	configuracao	F8	Remuneração de plantão por setor: valor por plantão ou por hora, com regras de revisão	R1#47; MV: REPASSE_PLANTAO, REG_REPASSE_PLANTAO_SETOR, REG_REVISA_PLANTAO_SETOR, CONF_PERM_REP_PLANTAO; dep: escala, plantao (07)	06	4
 regra_repasse_profissional	FAT	vinculo	F3	Profissionais aos quais a regra de repasse se aplica	R1#43; SP: TBREPGER_TBCBOPRO; dep: profissional (02)	06	3
