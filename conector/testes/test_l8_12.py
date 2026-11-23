@@ -7,9 +7,11 @@ from pathlib import Path
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_12
 
-CARREGADAS = ["TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG", "TBTIPOLANCVLR", "TBTIPOPAGFOR",
-              "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO", "TBUNIMEN", "TBITEDES", "MFCONPAG",
-              "MFCONPAG_TBCBOPRO", "MFCCCONV", "MFPAGADF", "MFPARAM_MFTIPOLANC", "MFDESACR", "SDMFCONPAG"]
+# na ordem do mapa (C3, 2026-11-22: TBTIPOPAGFOR depende de TBFORNEC; SDGECADNFS de GECADNFS, completado depois dos itens da nota)
+CARREGADAS = ["TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG", "TBTIPOLANCVLR", "TBTPCONTA",
+              "TBBANCOS", "TBNATOPE", "TBTPOCORBANCOPGTO", "TBUNIMEN", "SDGECADNFS", "TBITEDES", "MFCONPAG",
+              "MFCONPAG_TBCBOPRO", "MFCCCONV", "MFPAGADF", "MFPARAM_MFTIPOLANC", "MFDESACR", "SDMFCONPAG",
+              "TBTIPOPAGFOR"]
 # títulos a pagar (rodada 4): vários destinos por linha (parcela principal, título agrupado, tipo de documento, baixa)
 VARIOS_DESTINOS = {"MFCONPAG": {"parcela_pagar", "titulo_pagar", "tipo_documento_financeiro", "baixa_titulo"}}
 # nenhuma tabela da fatia fica sem mecanismo nem esperando decisão (rodada de cobertura total)

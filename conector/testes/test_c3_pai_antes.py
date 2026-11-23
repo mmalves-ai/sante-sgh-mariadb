@@ -11,6 +11,7 @@ sintético (ordem e ondas dos gravadores) e guarda a invariante no mapa real: to
 DEPOIS precisa ser adiável (duas fases) e o destino aceitar NULL; senão a linha daria pai_inexistente sempre."""
 import re
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, paralelo
 
@@ -115,7 +116,14 @@ class MapaReal(unittest.TestCase):
     def setUpClass(cls):
         cls.m = mapa.carregar_execucao()
         cls.plano = carga_mapa.planejar(cls.m, {r["tabela"] for r in cls.m["tabelas"]})
-        cls.ddl = mapa.ler_ddl()
+        # No container o modelo está em /app/db/migracoes (mapa.RAIZ resolve para "/", sem DDL): sem a raiz certa o
+        # DDL vinha vazio, a checagem de NOT NULL falhava e a invariante das referências passava sem olhar nada.
+        raiz = Path("/app") if Path("/app/db/migracoes").is_dir() else mapa.RAIZ
+        cls.ddl = mapa.ler_ddl(raiz)
+
+    def test_ddl_do_modelo_lido(self):
+        self.assertIn("inscricao_conselho", self.ddl)
+        self.assertGreater(len(self.ddl), 100)
 
     def test_profissional_antes_da_inscricao_e_dos_filhos(self):
         pos = {p["tabela"]: i for i, p in enumerate(self.plano)}

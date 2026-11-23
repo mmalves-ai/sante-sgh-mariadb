@@ -755,122 +755,122 @@ TBTPCONTA	TABELA	tipo_conta_bancaria;aplicacao_financeira	tipo_conta_bancaria;ap
 TBBANCOS	TABELA	banco;carteira_cobranca;contrato_cobranca_bancaria;leiaute_bancario	carteira_cobranca;contrato_cobranca_bancaria;leiaute_bancario	banco	FIN	L8	754	49	EMPRESA,COD	N		hash_linha	TBTPCONTA		bancos e carteiras com leiautes de cobrança se dividem em banco, carteira, contrato e leiaute
 TBTPNATOPENF	TABELA	natureza_operacao	natureza_operacao		FIN	L8	755	3	ID	S		hash_linha			vira natureza_operacao
 TBNATOPE	TABELA	natureza_operacao	natureza_operacao		FIN	L8	756	29	COD	S		hash_linha	TBTPNATOPENF		vira natureza_operacao
-GECADNFS	TABELA	nota_entrada;escrituracao_entrada	nota_entrada;escrituracao_entrada		SUP	L7	757	13794	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	TBNATOPE,TBUSERS	NFECADNOTAENTRADA	
-SDGECADNFS	TABELA	escrituracao_entrada	escrituracao_entrada		FIN	L8	758	13794	ID_GECADNFS	S		hash_linha	GECADNFS		vira escrituracao_entrada
-TBTPOCORBANCOPGTO	TABELA	ocorrencia_bancaria;retorno_bancario_item	ocorrencia_bancaria;retorno_bancario_item		FIN	L8	759	113	ID	S		hash_linha		TBTABBCO	ocorrências de retorno bancário por banco
-TBUNIMEN	TABELA	unidade_mensuracao_custo	unidade_mensuracao_custo		FIN	L8	760	1	COD	S		hash_linha			vira unidade_mensuracao_custo
-TBCENCUS	TABELA	centro_custo;classificacao_centro_custo	centro_custo;classificacao_centro_custo		FIN	L8	761	99	COD	S		hash_linha	CHCRITICIDADE,TBLOCCON,TBUNIMEN		
-TBPROFIS	TABELA	profissional;profissional_dado_fiscal;conta_bancaria_profissional	profissional;profissional_dado_fiscal;conta_bancaria_profissional		CAD	L5	762	871	ID	S		hash_linha	FPOCOR_SEFIP,TBCBOPRO,TBCENCUS,TBCOOPER,TBESCOLARIDADE,TBFORNEC,TBGENERO_SOCIAL,TBMUIBGE,TBORGAOEMIS,TBPESSOA,TBTPCONTA,TBUNIDAD,TBUSERS	CDCREDENCIADO,CVCRACHA,CVLOCAL,FPCATEGTRAB,FPCAT_SEFIP,FPTIPO_TRABALHADOR,TBCOR,TBCREPLS,TBETNIA,TBNACION,TBSITCONJUGAL,TBTABBCO,TBTIPLGR,TBUF	
-SHTECNIC	TABELA	profissional;ato_transfusional	profissional;ato_transfusional		CAD	L5	763	1	CRM_TECNICO	S		hash_linha	TBPROFIS		só placeholder
-SITECNIC	TABELA	profissional;responsavel_laudo_setor	profissional;responsavel_laudo_setor		CAD	L5	764	11	CRM	S		hash_linha	TBPROFIS		
-TBCBOPRO	TABELA	inscricao_conselho	inscricao_conselho		CAD	L5	765	2095	ID	S		hash_linha	TBPROFIS	TBCBOSUS,TBSIGLACONSPROF,TBUF	
-PRJUSTIF_IMP_EXPORTACAO	TABELA	exportacao_documento	exportacao_documento		ADM	L5	766	910046	ID	S		faixa_id_hash_bloco	PRTIPO_JUSTIF_EXPORTACAO,PRTPASSINATURA,TBCBOPRO		
-TBUSERS_TBPAPEL	TABELA	usuario_papel_seguranca	usuario_papel_seguranca		ADM	L5	767	1097	ID	S		hash_linha	TBCBOPRO,TBPAPEL,TBUSERS		
-TBUSUCPL	TABELA	usuario_acao_excecao;usuario_vinculo_profissional	usuario_acao_excecao;usuario_vinculo_profissional		ADM	L5	768	400	EMPRESA,USUARIO	N		hash_linha	SIPACSVISIMG,TBCBOPRO,TBPROFIS,TBUSERS		
-TBCBOPRO_TBCONVEN	TABELA	profissional_fonte_pagadora	profissional_fonte_pagadora		CAD	L5	769	90455	ID_TBCBOPRO,ID_TBCONVEN	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		
-TBMEDESP	TABELA	profissional_especialidade	profissional_especialidade		CAD	L5	770	1170	ID_TBCBOPRO,ESP	N		hash_linha	TBCBOPRO,TBESPEC,TBPROFIS		
-TBUNIDAD	TABELA	unidade_assistencial	unidade_assistencial		CAD	L5	771	6	COD	S		hash_linha	TBCBOPRO,TBPROFIS,TBTIPOATEUNIDADE		
-TBUNIUSE	TABELA	usuario_unidade	usuario_unidade		ADM	L5	772	825	USUARIO,UNID	N		hash_linha	TBUNIDAD,TBUSERS		
-TBCBOPRO_TBUNIDAD	TABELA	lotacao_profissional	lotacao_profissional		CAD	L5	773	637	CBOPRO,UNIDAD	N		hash_linha	TBCBOPRO,TBPROFIS,TBUNIDAD		
-REUNIFIC	TABELA	regra_impressao_ficha	regra_impressao_ficha		REC	L6	774	36	COD,UNID,GRAFICA	N		hash_linha	REMODFIC,TBUNIDAD		
-AGCADAGENDA	TABELA	agenda_servico;agenda_recurso	agenda_servico;agenda_recurso		AGE	L6	775	1	ID_CADAGENDA	S		hash_linha	TBCENCUS,TBUNIDAD	RETPAGEN	
-AGCADEIRA	TABELA	recurso_agendavel;agenda_recurso	recurso_agendavel;agenda_recurso		AGE	L6	776	1	ID_CADEIRA	S		hash_linha	AGCADAGENDA,AGCOMPLEXIDADE,AGDURACAO		
-AGDIASINDISP	TABELA	bloqueio_agenda	bloqueio_agenda		AGE	L6	777	1	ID_DIASINDISP	S		hash_linha	AGCADAGENDA,AGCADEIRA,TBUSERS		sem dados reais (linha fictícia); conceito coberto por bloqueio_agenda
-REAGENDA	TABELA	agenda_servico	agenda_servico		AGE	L6	778	138	ID	S		hash_linha	RETP_INTEG_AGENDA_ONLINE,TBCBOPRO,TBPROFIS,TBUSERS		
-REAGECRI	TABELA	geracao_grade;geracao_grade_periodo	geracao_grade;geracao_grade_periodo		AGE	L6	779	4705	NOME,CRM,PERINI,PERFIN,DT_CRIACAO,HR_CRIACAO,STATUS	N		hash_linha	REAGENDA,TBUSERS		
-REAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	agenda_fonte_pagadora		AGE	L6	780	4167	ID	S		hash_linha	REAGENDA,TBCONVEN		
-REAGENDA_TBESPEC	TABELA	agenda_especialidade	agenda_especialidade		AGE	L6	781	995	ID	S		hash_linha	REAGENDA,TBESPEC		
-RECTRAGE	TABELA	agenda_escala	agenda_escala		AGE	L6	782	218	AGENDA,CRM,SEMANA,DURACAO,HOR_INC	N		hash_linha	REAGENDA		
-REPACAGI	TABELA	horario_agenda	horario_agenda		AGE	L6	783	177897	NOME,CRM,DATA,HORA	N		hash_bloco_chave	REAGENDA,TBUSERS		
-SIAGENDA	TABELA	agenda_servico	agenda_servico		AGE	L6	784	40	ID	S		hash_linha	RETP_INTEG_AGENDA_ONLINE,TBPROFIS,TBTABATO,TBUSERS		
-TBGERASENHA	TABELA	gerador_senha	gerador_senha		REC	L6	785	36	ID	S		hash_linha	REAGENDA,SIAGENDA,TBESPEC,TBPROFIS,TBUNIDAD		
-TBSENHAATEND	TABELA	senha_emitida	senha_emitida		REC	L6	786	301109	ID	S		faixa_id_hash_bloco	TBGERASENHA,TBUSERS		
-TBFLUXOATEND	TABELA	evento_senha	evento_senha		REC	L6	787	555695	ID	S		faixa_id_hash_bloco	TBLOCAL,TBSENHAATEND,TBUSERS		
-SIAGECRI	TABELA	geracao_grade;geracao_grade_periodo	geracao_grade;geracao_grade_periodo		AGE	L6	788	1673	NOME,CRM,PERINI,PERFIN,DT_CRIACAO,HR_CRIACAO,EXAME	N		hash_linha	SIAGENDA,TBUSERS		
-SIAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	agenda_fonte_pagadora		AGE	L6	789	968	ID	S		hash_linha	SIAGENDA,TBCONVEN		
-SICTRAGE	TABELA	agenda_escala	agenda_escala		AGE	L6	790	26	AGENDA,CRM,SEMANA,DURACAO,EXAME	N		hash_linha	SIAGENDA		
-SIPACAGI	TABELA	horario_agenda	horario_agenda		AGE	L6	791	70576	NOME,CRM,DATA,HORA,EXAME	N		hash_linha	SIAGENDA		
-GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	ficha_antimicrobiano;liberacao_antimicrobiano		PEP	L6	792	45	ID_GECADANTIMI	S		hash_linha	TBCBOPRO		fichas em uso na Rede (45); paridade com GEANTIMI, que já é F3
-PRPADRECEITA	TABELA	modelo_receita;modelo_receita_item	modelo_receita;modelo_receita_item		PEP	L6	793	628	ID_PADRECEITA	S		hash_linha	TBPROFIS,TBUSERS		
-TBHORMED_TBUNIDAD	TABELA	grade_horario_unidade	grade_horario_unidade		PEP	L6	794	2	ID_TBUNIDAD	S		hash_linha	TBHORMED,TBUNIDAD		
-RELOCLEITO	TABELA	local_observacao	local_observacao		INT	L6	795	2	ID	S		hash_linha	TBCENCUS,TBCLINICA,TBSEXO,TBTIPOACOMOD,TBUNID_IDADE		
-RELEITO	TABELA	leito_observacao	leito_observacao		INT	L6	796	12	ID	S		hash_linha	RELOCLEITO,RETPLEITO,TBTABDTH		
-RIBLOCOS	TABELA	bloco_internacao	bloco_internacao		INT	L6	797	7	BLOCO	N		hash_linha	TBUNIDAD		
-TBHORMED_RIBLOCOS	TABELA	grade_horario_unidade	grade_horario_unidade		PEP	L6	798	7	ID_RIBLOCOS	N		hash_linha	RIBLOCOS,TBHORMED		
-RIACOMOD	TABELA	acomodacao	acomodacao		INT	L6	799	9	BLOCO,ACOMOD	N		hash_linha	RIBLOCOS,TBCENCUS,TBCLINICA,TBLOCCON,TBTIPOACOMOD,TBUNID_IDADE	TBTPACOMTISS	
-RILEITOS	TABELA	leito_hospitalar;reserva_leito	leito_hospitalar;reserva_leito		INT	L6	800	109	ID	S		hash_linha	RIACOMOD,RIBLOCOS		
-TBACOMODLEITO	TABELA	acomodacao	acomodacao		INT	L6	801	12	ID	S		hash_linha	RIACOMOD,RIBLOCOS,TBCENCUS,TBCLINICA,TBLOCCON,TBSEXO,TBTIPOACOMOD,TBUNID_IDADE	TBTPACOMTISS	
-PRFAVORITO	TABELA	painel_filtro_usuario	painel_filtro_usuario		PEP	L6	802	672	ID_PRLOCPACDEFAULT,TIPO_ATENDIMENTO	N		hash_linha	PRLOCPACDEFAULT,RIBLOCOS,TBACOMODLEITO,TBESPEC,TBTIPOACOMOD,TBUNIDAD		
-TBLEITO	TABELA	leito_hospitalar	leito_hospitalar		INT	L6	803	134	ID	S		hash_linha	CHCRITICIDADE,RETPLEITO,RILEITOS,TBACOMODLEITO,TBTABDTH		
-PRLOCAL_ASSISTENCIA	TABELA	local_assistencia	local_assistencia		PEP	L6	804	44	ID	S		hash_linha	TBLEITO,TBUNIDAD		
-CCSALAS	TABELA	sala_cirurgica	sala_cirurgica		CC	L6	805	4	COD	S		hash_linha	TBCENCUS		
-CCAGENDA	TABELA	agendamento_cirurgico;agendamento_cirurgico_equipe	agendamento_cirurgico;agendamento_cirurgico_equipe		CC	L6	806	5265	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCSALAS,TBANESTESIA,TBCBOPRO,TBCONVEN,TBESPEC,TBPROFIS,TBSITAGE,TBUSERS	CCHORAGE,TBSPD_USUARIO	
-CCCADCIR	TABELA	ato_cirurgico;ficha_anestesica;lancamento_ficha_anestesica	ato_cirurgico;ficha_anestesica;lancamento_ficha_anestesica		CC	L6	807	4301	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCSALAS,CCTPURGENCIA,TBANESTESIA,TBCONVEN,TBUSERS		
-CCCADCIR_EXCLUSAO	TABELA	registro_excluido	registro_excluido		ADM	L5	808	3	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCCADCIR,CCTPURGENCIA		cirurgia excluída é cópia de registro excluído, como as demais cópias de exclusão; não é trilha
-CCHISAGE	TABELA	reagendamento_cirurgico	reagendamento_cirurgico		CC	L6	809	5287	DATA_HORA,USUARIO	N		hash_linha	CCAGENDA,CCSALAS,TBCBOPRO,TBPROFIS,TBUSERS		
-CCLANCIR	TABELA	ato_cirurgico_procedimento;participante_cirurgia;uso_gas_medicinal	ato_cirurgico_procedimento;participante_cirurgia;uso_gas_medicinal		CC	L6	810	4395	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCCADCIR,TBCBOPRO,TBESPEC,TBPROCTO		
-CCPROEXT	TABELA	agendamento_cirurgico_procedimento	agendamento_cirurgico_procedimento		CC	L6	811	10	SALA,DATA_HORA,PROCTO	N		hash_linha	CCAGENDA		
-CCSALAS_TBUSERS	TABELA	permissao_sala_usuario	permissao_sala_usuario		CC	L6	812	332	ID_CCSALAS,USUARIO	N		hash_linha	CCSALAS,TBUSERS		
-TBLEITO_CHPROFISLIMP	TABELA	leito_profissional_higienizacao	leito_profissional_higienizacao		HOT	L6	813	136	ID_TBLEITO,ID_CHPROFISLIMP	N		hash_linha	CHPROFISLIMP,TBLEITO		
-SHDOACAO	TABELA	doacao_sangue	doacao_sangue		SADT	L7	814	1	REGISTRO	S		hash_linha	SHINTER,SHTECNIC,TBFATORRH,TBTPSANGUINEO		sem dados reais (placeholder 1899); conceito coberto, dados não migram
-SIPARGER	TABELA	configuracao_setor_diagnostico	configuracao_setor_diagnostico		SADT	L7	815	1	HOSP	S		hash_linha	TBCBOPRO,TBPROFIS,TBUSERS		
-SIPARRX	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor	configuracao_setor_diagnostico;responsavel_laudo_setor		SADT	L7	816	934	USUARIO	N		hash_linha	TBCBOPRO,TBUSERS		
-GECADBAL	TABELA	inventario_estoque	inventario_estoque		SUP	L7	817	251	ANO,MES,DOC	N		hash_linha	TBCENCUS,TBUSERS		
-GECAPELAMP	TABELA	capela_manipulacao	capela_manipulacao		SUP	L7	818	1	ID_GECAPELAMP	S		hash_linha	TBUNIDAD		módulo sem uso no hospital; estrutura mantida
-GECAPELAMP_GEGRUPOMP	TABELA	capela_manipulacao_grupo	capela_manipulacao_grupo		SUP	L7	819	1	ID_GECAPELAMP,ID_GEGRUPOMP	N		hash_linha	GECAPELAMP,GEGRUPOMP		
-GELANBAL	TABELA	inventario_estoque_item;inventario_estoque_divergencia	inventario_estoque_item;inventario_estoque_divergencia		SUP	L7	820	6806	ID	S		hash_linha	GECADBAL,GENOMCOM		
-GERASVALBAL	TABELA	inventario_estoque_lote	inventario_estoque_lote		SUP	L7	821	2354	ID	S		hash_linha	GELANBAL,GERASVALFINAL,GEVALMEM		
-GEUSERS_TBCENCUS	TABELA	usuario_estoque_centro_custo	usuario_estoque_centro_custo		SUP	L7	822	66	USUARIO_GEUSERS,ID_TBCENCUS	N		hash_linha	GEUSERS,TBCENCUS		
-PRPARINTEGEST	TABELA	regra_integracao_prescricao	regra_integracao_prescricao		SUP	L7	823	5	ID_TBCENCUS,TP_PRESCRICAO	N		hash_linha	TBCENCUS,TBTP_ENV_LISTA_AVAL_FARM		
-TBFORNEC	TABELA	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor		SUP	L7	824	2336	COD	S		hash_linha	TBCBOPRO,TBDISPON,TBMUIBGE,TBPESSOA	FPCATEGTRAB,FPCBO,FPTIPO_TRABALHADOR,TBUF	
-SHCLIENT	TABELA	servico_hemoterapia_fornecedor	servico_hemoterapia_fornecedor		SADT	L7	825	1	CODCLIENTE	S		hash_linha	TBFORNEC		só placeholder; recurso a construir
-SHREQUISICAO	TABELA	requisicao_transfusao	requisicao_transfusao		SADT	L7	826	1	ID_SHREQUISICAO	S		hash_linha	SHCLIENT,TBCBOPRO		sem dados reais (placeholder 1899); conceito coberto, dados não migram
-SHBOLSA	TABELA	bolsa_hemocomponente	bolsa_hemocomponente		SADT	L7	827	1	ID_BOLSA	S		hash_linha	SHCLIENT,SHDOACAO,SHLOCAL,SHMOTDEV,SHMOV,SHREQUISICAO,SHTECNIC,TBFATORRH,TBTPSANGUINEO,TBUSERS		sem dados reais (placeholder 1899); conceito coberto, dados não migram
-GEBARRAS	TABELA	insumo_codigo_barras	insumo_codigo_barras		SUP	L7	828	230	ITEM,BARRA	N		hash_linha	GEITENS,TBFORNEC,TBLABORA		
-GECADPED	TABELA	pedido_compra;cotacao;processo_licitatorio	pedido_compra;cotacao;processo_licitatorio		SUP	L7	829	18090	ID	S		hash_linha	GESITUACAOPED,TBCENCUS,TBFORNEC,TBUSERS		
-GECOMPRA	TABELA	nota_entrada_item;pedido_compra_item;insumo_fornecedor	nota_entrada_item;pedido_compra_item;insumo_fornecedor		SUP	L7	830	59376	ITEM,DATA,FORN,NF,DOC	N		hash_linha	GEITENS,TBFORNEC		histórico derivado das entradas e pedidos
-GELANNFS	TABELA	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada		SUP	L7	831	60043	ID_GELANNFS	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	GEITENS,TBFORNEC	NFELANNOTAENTRADA	
-GELANPAC	TABELA	documento_estoque_item;movimento_estoque	documento_estoque_item;movimento_estoque		SUP	L7	832	46832	ID	S		hash_linha	GENOMCOM,TBCBOPRO,TBCENCUS,TBFORNEC,TBUSERS		
-GELANPED	TABELA	pedido_compra_item;cotacao_item;cotacao_resposta_item	pedido_compra_item;cotacao_item;cotacao_resposta_item		SUP	L7	833	325908	ID	S		faixa_id_hash_bloco	GECADPED		
-GEDESPDS	TABELA	pedido_compra_item;processo_licitatorio_item	pedido_compra_item;processo_licitatorio_item		SUP	L7	834	23	ANO,OQUE,DOC,SEQ	N		hash_linha	GELANPED		descrição de serviço vira texto do item
-GELANPEDENTREGA	TABELA	pedido_compra_entrega	pedido_compra_entrega		SUP	L7	835	46	ID_GELANPED,DATA	N		hash_linha	GELANPED		
-GERASVALNFS	TABELA	movimento_lote	movimento_lote		SUP	L7	836	9696	ID	S		hash_linha	GELANNFS,GENOMCOM,GERASVALFINAL,GEVALMEM,TBLABORA		há datas inválidas a sanear
-TBCATFOR	TABELA	empresa_fornecedora_categoria	empresa_fornecedora_categoria		SUP	L7	837	12	FORN,CATEG	N		hash_linha	TBCATEGO,TBFORNEC		
-TBFORNECTEL	TABELA	empresa_fornecedora_contato	empresa_fornecedora_contato		SUP	L7	838	35	ID	S		hash_linha	TBFORNEC,TBTIPOTELEFONE	TBDDD	
-FCCODCON	TABELA	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora		FAT	L8	839	768	CON,ID_TBCBOPRO	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		código do médico no convênio; conta bancária vai para conta_bancaria_profissional
-FCCRECUN	TABELA	regra_credito_producao	regra_credito_producao		FAT	L8	840	12	ID_TBCBOPRO,CON	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		
-FCCTAEXT	TABELA	conta_hospitalar	conta_hospitalar		FAT	L8	841	213641	ID	S	ALTA,DATA_HORA_ULTIMA_ATUALIZACAO	data_alteracao_hash_bloco	TBCBOPRO,TBCONVEN,TBESPEC,TBPROCTO,TBTIPPLANO,TBTISSREGINT,TBUSERS	FCCADNFS,TBCONSPROF,TBTISSCOBERTESPECIAL,TBTISSIDENTBENEFI,TBTISSINDACID,TBTISSMOTAUSENCODVALID,TBTISSREGIMEATEND,TBTISSSAUDEOCUPAC,TBTISSTPCONSUL	
-FCCTAAUD	TABELA	auditoria_conta;auditoria_conta_versao	auditoria_conta;auditoria_conta_versao		FAT	L8	842	8820	ANOPRO,MESPRO,TIPO_CTA,COD	N	ALTA	hash_linha	FCCTAEXT,TBCBOPRO,TBESPEC,TBUSERS		retrato pré e pós auditoria vira versão da conta
-FCDIAEXT	TABELA	conta_hospitalar_segurado	conta_hospitalar_segurado		FAT	L8	843	193738	ANOPRO,MESPRO,COD	N		hash_bloco_chave	FCCTAEXT		
-FCFAIPAC	TABELA	conta_hospitalar_periodo	conta_hospitalar_periodo		FAT	L8	844	21087	ID_FCCTAEXT,TIPO_LAN,SEQ	N		hash_linha	FCCTAEXT		
-FCGUIAS	TABELA	guia_fonte_pagadora	guia_fonte_pagadora		FAT	L8	845	61961	CON,TP_GUIA,GUIA_P,GUIA_S,TP_GUIA_S	N		hash_linha	FCCTAEXT,TBCBOPRO,TBCONVEN		
-FCIRREGULARID	TABELA	pendencia_conta	pendencia_conta		FAT	L8	846	218	ID_FCCTAEXT,ID_TBIRREGULARID,DATA_HORA_INICIO	N		hash_linha	FCCTAEXT,TBIRREGULARID		histórico 2020-2022 migra como pendência resolvida
-FCLANAUD	TABELA	auditoria_conta_item	auditoria_conta_item		FAT	L8	847	1434888	ANOPRO,MESPRO,TIPO_CTA,CONTA,TIPO,DATA,HORA,PROCTO,LOCAL,ATO	N		hash_bloco_chave	TBCBOPRO,TBESPEC,TBUSERS		
-RECONTAS	TABELA	conta_hospitalar	conta_hospitalar		FAT	L8	848	201857	REG,CONTA	N		hash_bloco_chave	FCCTAEXT,TBCBOPRO,TBUSERS		
-RICONTAS	TABELA	conta_hospitalar;conta_hospitalar_periodo	conta_hospitalar;conta_hospitalar_periodo		FAT	L8	849	16399	REG,CONTA	N		hash_linha	TBCBOPRO,TBCENCUS,TBESPEC,TBUSERS		
-FCDIAINT	TABELA	conta_hospitalar_segurado	conta_hospitalar_segurado		FAT	L8	850	13851	ANOPRO,MESPRO,COD	N		hash_linha	RICONTAS		
-RICGUIAS	TABELA	guia_fonte_pagadora	guia_fonte_pagadora		FAT	L8	851	11592		N		hash_linha_sem_chave	RICONTAS,TBCBOPRO,TBUSERS		
-RPLANEVE	TABELA	lancamento_repasse	lancamento_repasse		FAT	L8	852	8675	ID_RPLANEVE	S		hash_linha	RPEVENTO,TBEMPHOS,TBPROFIS	FPCATEGTRAB,TBPREVIDENCIACOMPL	
-RPLANEVE_COMPOSICAOBASE	TABELA	lancamento_repasse_base	lancamento_repasse_base		FAT	L8	853	2383	ID	S		hash_linha	RPEVENTO,RPLANEVE	FPITENSNATRENDIMENTO	
-RPLANEVE_TBCBOPRO	TABELA	lancamento_repasse	lancamento_repasse		FAT	L8	854	8102	ID_RPLANEVE	S		hash_linha	RPLANEVE,TBCBOPRO		profissional beneficiário é coluna do lançamento
-RPRPA	TABELA	rpa;rpa_retencao	rpa;rpa_retencao		FAT	L8	855	5243	ID_RPRPA	S	DATA_HORA_INC_ULT_ALT_ESOC	hash_linha	FPLOTTRIBCAD,TBEMPHOS,TBPROFIS	RPLOTES	
-RPLANRPA	TABELA	rpa_lancamento	rpa_lancamento		FAT	L8	856	8477	ID_RPRPA,ID_RPLANEVE	N		hash_linha	RPLANEVE,RPRPA		
-RPRPA_TBCBOPRO	TABELA	rpa	rpa		FAT	L8	857	4812	ID_RPRPA	S		hash_linha	RPRPA,TBCBOPRO		profissional beneficiário é coluna do RPA
-TBCRECOO	TABELA	membro_cooperativa	membro_cooperativa		FAT	L8	858	345	COO,ID_TBCBOPRO	N		hash_linha	TBCBOPRO,TBCOOPER,TBPROFIS		
-TBCREMED	TABELA	credenciamento_cobranca;profissional_fonte_pagadora	credenciamento_cobranca;profissional_fonte_pagadora		FAT	L8	859	185	ID_TBCBOPRO,CON	N		hash_linha	TBCBOPRO,TBPROFIS		
-TBDTHCDC	TABELA	diaria_taxa_centro_custo	diaria_taxa_centro_custo		FAT	L8	860	3	TAB,DTH,CDC	N		hash_linha	TBCENCUS		
-TBPACTHM	TABELA	pacote;pacote_item_incluso;pacote_contrato	pacote;pacote_item_incluso;pacote_contrato		FAT	L8	861	335	CON,CONTAS,THM,TIPO,TABELA,PROCTO	N		hash_linha	TBCENCUS		
-TBPRESER	TABELA	prestador_terceiro	prestador_terceiro		FAT	L8	862	164	ID	S		hash_linha	TBCBOPRO,TBCENCUS,TBPROFIS,TBRPATPREPASSE,TBTPDOCUMENTO	CDCREDENCIADO	
-DIPERMPS	TABELA	usuario_escopo;perfil_acao	usuario_escopo;perfil_acao		ADM	L5	863	35	USUARIO,ATO,PS,MODULO	N		hash_linha	TBPRESER,TBUSERS		recorte por posto e setor de exame está em uso no SPDATA: paridade F3
-TBCREPRS	TABELA	credenciamento_cobranca	credenciamento_cobranca		FAT	L8	864	44	ATO,PS,CON	N		hash_linha	TBPRESER,TBTABATO		
-TBREPGER	TABELA	regra_repasse;regra_repasse_item	regra_repasse;regra_repasse_item		FAT	L8	865	105430	ID	S		faixa_id_hash_bloco	RPEVENTO,TBCENCUS,TBCONVEN,TBESPEC,TBUNIDAD		
-TBREPGER_TBCBOPRO	TABELA	regra_repasse_profissional	regra_repasse_profissional		FAT	L8	866	98406	ID_TBREPGER	S		hash_linha	TBCBOPRO,TBREPGER		
-FAPARAM	TABELA	competencia_sus	competencia_sus		SUS	L8	867	1		N		hash_linha_sem_chave	TBIRREGCTRCTA,TBPROFIS		competência vira tabela; demais opções do BPA vão para o mecanismo de parâmetros
-FAPARAMA	TABELA	competencia_sus	competencia_sus		SUS	L8	868	1		N		hash_linha_sem_chave	TBIRREGCTRCTA,TBPROFIS		competência vira tabela; demais opções da APAC vão para o mecanismo de parâmetros
-FHLEITOUTI	TABELA	leito_uti_habilitado	leito_uti_habilitado		SUS	L8	869	12		N		hash_linha_sem_chave	FHLEITOUTITP,TBUNIDAD		
-FCRECIBO	TABELA	recibo	recibo		FIN	L8	870	1748	ID	S		hash_linha	FCCTAEXT,TBCBOPRO,TBMOTEXC,TBUSERS		
-MFADIFOR	TABELA	adiantamento	adiantamento		FIN	L8	871	4328	ID_MFADIFOR	S		hash_linha	MFCABECLANC,MFTIPOLANC,TBCTABAN,TBEMPHOS,TBPROFIS		vira adiantamento
-MFADIFOR_TBCBOPRO	TABELA	beneficiario_adiantamento	beneficiario_adiantamento		FIN	L8	872	395	ID_MFADIFOR	S		hash_linha	MFADIFOR,TBCBOPRO		vira beneficiario_adiantamento
+TBTPOCORBANCOPGTO	TABELA	ocorrencia_bancaria;retorno_bancario_item	ocorrencia_bancaria;retorno_bancario_item		FIN	L8	757	113	ID	S		hash_linha		TBTABBCO	ocorrências de retorno bancário por banco
+TBUNIMEN	TABELA	unidade_mensuracao_custo	unidade_mensuracao_custo		FIN	L8	758	1	COD	S		hash_linha			vira unidade_mensuracao_custo
+TBCENCUS	TABELA	centro_custo;classificacao_centro_custo	centro_custo;classificacao_centro_custo		FIN	L8	759	99	COD	S		hash_linha	CHCRITICIDADE,TBLOCCON,TBUNIMEN		
+TBPROFIS	TABELA	profissional;profissional_dado_fiscal;conta_bancaria_profissional	profissional;profissional_dado_fiscal;conta_bancaria_profissional		CAD	L5	760	871	ID	S		hash_linha	FPOCOR_SEFIP,TBCBOPRO,TBCENCUS,TBCOOPER,TBESCOLARIDADE,TBFORNEC,TBGENERO_SOCIAL,TBMUIBGE,TBORGAOEMIS,TBPESSOA,TBTPCONTA,TBUNIDAD,TBUSERS	CDCREDENCIADO,CVCRACHA,CVLOCAL,FPCATEGTRAB,FPCAT_SEFIP,FPTIPO_TRABALHADOR,TBCOR,TBCREPLS,TBETNIA,TBNACION,TBSITCONJUGAL,TBTABBCO,TBTIPLGR,TBUF	
+SHTECNIC	TABELA	profissional;ato_transfusional	profissional;ato_transfusional		CAD	L5	761	1	CRM_TECNICO	S		hash_linha	TBPROFIS		só placeholder
+SITECNIC	TABELA	profissional;responsavel_laudo_setor	profissional;responsavel_laudo_setor		CAD	L5	762	11	CRM	S		hash_linha	TBPROFIS		
+TBCBOPRO	TABELA	inscricao_conselho	inscricao_conselho		CAD	L5	763	2095	ID	S		hash_linha	TBPROFIS	TBCBOSUS,TBSIGLACONSPROF,TBUF	
+PRJUSTIF_IMP_EXPORTACAO	TABELA	exportacao_documento	exportacao_documento		ADM	L5	764	910046	ID	S		faixa_id_hash_bloco	PRTIPO_JUSTIF_EXPORTACAO,PRTPASSINATURA,TBCBOPRO		
+TBUSERS_TBPAPEL	TABELA	usuario_papel_seguranca	usuario_papel_seguranca		ADM	L5	765	1097	ID	S		hash_linha	TBCBOPRO,TBPAPEL,TBUSERS		
+TBUSUCPL	TABELA	usuario_acao_excecao;usuario_vinculo_profissional	usuario_acao_excecao;usuario_vinculo_profissional		ADM	L5	766	400	EMPRESA,USUARIO	N		hash_linha	SIPACSVISIMG,TBCBOPRO,TBPROFIS,TBUSERS		
+TBCBOPRO_TBCONVEN	TABELA	profissional_fonte_pagadora	profissional_fonte_pagadora		CAD	L5	767	90455	ID_TBCBOPRO,ID_TBCONVEN	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		
+TBMEDESP	TABELA	profissional_especialidade	profissional_especialidade		CAD	L5	768	1170	ID_TBCBOPRO,ESP	N		hash_linha	TBCBOPRO,TBESPEC,TBPROFIS		
+TBUNIDAD	TABELA	unidade_assistencial	unidade_assistencial		CAD	L5	769	6	COD	S		hash_linha	TBCBOPRO,TBPROFIS,TBTIPOATEUNIDADE		
+TBUNIUSE	TABELA	usuario_unidade	usuario_unidade		ADM	L5	770	825	USUARIO,UNID	N		hash_linha	TBUNIDAD,TBUSERS		
+TBCBOPRO_TBUNIDAD	TABELA	lotacao_profissional	lotacao_profissional		CAD	L5	771	637	CBOPRO,UNIDAD	N		hash_linha	TBCBOPRO,TBPROFIS,TBUNIDAD		
+REUNIFIC	TABELA	regra_impressao_ficha	regra_impressao_ficha		REC	L6	772	36	COD,UNID,GRAFICA	N		hash_linha	REMODFIC,TBUNIDAD		
+AGCADAGENDA	TABELA	agenda_servico;agenda_recurso	agenda_servico;agenda_recurso		AGE	L6	773	1	ID_CADAGENDA	S		hash_linha	TBCENCUS,TBUNIDAD	RETPAGEN	
+AGCADEIRA	TABELA	recurso_agendavel;agenda_recurso	recurso_agendavel;agenda_recurso		AGE	L6	774	1	ID_CADEIRA	S		hash_linha	AGCADAGENDA,AGCOMPLEXIDADE,AGDURACAO		
+AGDIASINDISP	TABELA	bloqueio_agenda	bloqueio_agenda		AGE	L6	775	1	ID_DIASINDISP	S		hash_linha	AGCADAGENDA,AGCADEIRA,TBUSERS		sem dados reais (linha fictícia); conceito coberto por bloqueio_agenda
+REAGENDA	TABELA	agenda_servico	agenda_servico		AGE	L6	776	138	ID	S		hash_linha	RETP_INTEG_AGENDA_ONLINE,TBCBOPRO,TBPROFIS,TBUSERS		
+REAGECRI	TABELA	geracao_grade;geracao_grade_periodo	geracao_grade;geracao_grade_periodo		AGE	L6	777	4705	NOME,CRM,PERINI,PERFIN,DT_CRIACAO,HR_CRIACAO,STATUS	N		hash_linha	REAGENDA,TBUSERS		
+REAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	agenda_fonte_pagadora		AGE	L6	778	4167	ID	S		hash_linha	REAGENDA,TBCONVEN		
+REAGENDA_TBESPEC	TABELA	agenda_especialidade	agenda_especialidade		AGE	L6	779	995	ID	S		hash_linha	REAGENDA,TBESPEC		
+RECTRAGE	TABELA	agenda_escala	agenda_escala		AGE	L6	780	218	AGENDA,CRM,SEMANA,DURACAO,HOR_INC	N		hash_linha	REAGENDA		
+REPACAGI	TABELA	horario_agenda	horario_agenda		AGE	L6	781	177897	NOME,CRM,DATA,HORA	N		hash_bloco_chave	REAGENDA,TBUSERS		
+SIAGENDA	TABELA	agenda_servico	agenda_servico		AGE	L6	782	40	ID	S		hash_linha	RETP_INTEG_AGENDA_ONLINE,TBPROFIS,TBTABATO,TBUSERS		
+TBGERASENHA	TABELA	gerador_senha	gerador_senha		REC	L6	783	36	ID	S		hash_linha	REAGENDA,SIAGENDA,TBESPEC,TBPROFIS,TBUNIDAD		
+TBSENHAATEND	TABELA	senha_emitida	senha_emitida		REC	L6	784	301109	ID	S		faixa_id_hash_bloco	TBGERASENHA,TBUSERS		
+TBFLUXOATEND	TABELA	evento_senha	evento_senha		REC	L6	785	555695	ID	S		faixa_id_hash_bloco	TBLOCAL,TBSENHAATEND,TBUSERS		
+SIAGECRI	TABELA	geracao_grade;geracao_grade_periodo	geracao_grade;geracao_grade_periodo		AGE	L6	786	1673	NOME,CRM,PERINI,PERFIN,DT_CRIACAO,HR_CRIACAO,EXAME	N		hash_linha	SIAGENDA,TBUSERS		
+SIAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	agenda_fonte_pagadora		AGE	L6	787	968	ID	S		hash_linha	SIAGENDA,TBCONVEN		
+SICTRAGE	TABELA	agenda_escala	agenda_escala		AGE	L6	788	26	AGENDA,CRM,SEMANA,DURACAO,EXAME	N		hash_linha	SIAGENDA		
+SIPACAGI	TABELA	horario_agenda	horario_agenda		AGE	L6	789	70576	NOME,CRM,DATA,HORA,EXAME	N		hash_linha	SIAGENDA		
+GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	ficha_antimicrobiano;liberacao_antimicrobiano		PEP	L6	790	45	ID_GECADANTIMI	S		hash_linha	TBCBOPRO		fichas em uso na Rede (45); paridade com GEANTIMI, que já é F3
+PRPADRECEITA	TABELA	modelo_receita;modelo_receita_item	modelo_receita;modelo_receita_item		PEP	L6	791	628	ID_PADRECEITA	S		hash_linha	TBPROFIS,TBUSERS		
+TBHORMED_TBUNIDAD	TABELA	grade_horario_unidade	grade_horario_unidade		PEP	L6	792	2	ID_TBUNIDAD	S		hash_linha	TBHORMED,TBUNIDAD		
+RELOCLEITO	TABELA	local_observacao	local_observacao		INT	L6	793	2	ID	S		hash_linha	TBCENCUS,TBCLINICA,TBSEXO,TBTIPOACOMOD,TBUNID_IDADE		
+RELEITO	TABELA	leito_observacao	leito_observacao		INT	L6	794	12	ID	S		hash_linha	RELOCLEITO,RETPLEITO,TBTABDTH		
+RIBLOCOS	TABELA	bloco_internacao	bloco_internacao		INT	L6	795	7	BLOCO	N		hash_linha	TBUNIDAD		
+TBHORMED_RIBLOCOS	TABELA	grade_horario_unidade	grade_horario_unidade		PEP	L6	796	7	ID_RIBLOCOS	N		hash_linha	RIBLOCOS,TBHORMED		
+RIACOMOD	TABELA	acomodacao	acomodacao		INT	L6	797	9	BLOCO,ACOMOD	N		hash_linha	RIBLOCOS,TBCENCUS,TBCLINICA,TBLOCCON,TBTIPOACOMOD,TBUNID_IDADE	TBTPACOMTISS	
+RILEITOS	TABELA	leito_hospitalar;reserva_leito	leito_hospitalar;reserva_leito		INT	L6	798	109	ID	S		hash_linha	RIACOMOD,RIBLOCOS		
+TBACOMODLEITO	TABELA	acomodacao	acomodacao		INT	L6	799	12	ID	S		hash_linha	RIACOMOD,RIBLOCOS,TBCENCUS,TBCLINICA,TBLOCCON,TBSEXO,TBTIPOACOMOD,TBUNID_IDADE	TBTPACOMTISS	
+PRFAVORITO	TABELA	painel_filtro_usuario	painel_filtro_usuario		PEP	L6	800	672	ID_PRLOCPACDEFAULT,TIPO_ATENDIMENTO	N		hash_linha	PRLOCPACDEFAULT,RIBLOCOS,TBACOMODLEITO,TBESPEC,TBTIPOACOMOD,TBUNIDAD		
+TBLEITO	TABELA	leito_hospitalar	leito_hospitalar		INT	L6	801	134	ID	S		hash_linha	CHCRITICIDADE,RETPLEITO,RILEITOS,TBACOMODLEITO,TBTABDTH		
+PRLOCAL_ASSISTENCIA	TABELA	local_assistencia	local_assistencia		PEP	L6	802	44	ID	S		hash_linha	TBLEITO,TBUNIDAD		
+CCSALAS	TABELA	sala_cirurgica	sala_cirurgica		CC	L6	803	4	COD	S		hash_linha	TBCENCUS		
+CCAGENDA	TABELA	agendamento_cirurgico;agendamento_cirurgico_equipe	agendamento_cirurgico;agendamento_cirurgico_equipe		CC	L6	804	5265	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCSALAS,TBANESTESIA,TBCBOPRO,TBCONVEN,TBESPEC,TBPROFIS,TBSITAGE,TBUSERS	CCHORAGE,TBSPD_USUARIO	
+CCCADCIR	TABELA	ato_cirurgico;ficha_anestesica;lancamento_ficha_anestesica	ato_cirurgico;ficha_anestesica;lancamento_ficha_anestesica		CC	L6	805	4301	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCSALAS,CCTPURGENCIA,TBANESTESIA,TBCONVEN,TBUSERS		
+CCCADCIR_EXCLUSAO	TABELA	registro_excluido	registro_excluido		ADM	L5	806	3	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCCADCIR,CCTPURGENCIA		cirurgia excluída é cópia de registro excluído, como as demais cópias de exclusão; não é trilha
+CCHISAGE	TABELA	reagendamento_cirurgico	reagendamento_cirurgico		CC	L6	807	5287	DATA_HORA,USUARIO	N		hash_linha	CCAGENDA,CCSALAS,TBCBOPRO,TBPROFIS,TBUSERS		
+CCLANCIR	TABELA	ato_cirurgico_procedimento;participante_cirurgia;uso_gas_medicinal	ato_cirurgico_procedimento;participante_cirurgia;uso_gas_medicinal		CC	L6	808	4395	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	CCCADCIR,TBCBOPRO,TBESPEC,TBPROCTO		
+CCPROEXT	TABELA	agendamento_cirurgico_procedimento	agendamento_cirurgico_procedimento		CC	L6	809	10	SALA,DATA_HORA,PROCTO	N		hash_linha	CCAGENDA		
+CCSALAS_TBUSERS	TABELA	permissao_sala_usuario	permissao_sala_usuario		CC	L6	810	332	ID_CCSALAS,USUARIO	N		hash_linha	CCSALAS,TBUSERS		
+TBLEITO_CHPROFISLIMP	TABELA	leito_profissional_higienizacao	leito_profissional_higienizacao		HOT	L6	811	136	ID_TBLEITO,ID_CHPROFISLIMP	N		hash_linha	CHPROFISLIMP,TBLEITO		
+SHDOACAO	TABELA	doacao_sangue	doacao_sangue		SADT	L7	812	1	REGISTRO	S		hash_linha	SHINTER,SHTECNIC,TBFATORRH,TBTPSANGUINEO		sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SIPARGER	TABELA	configuracao_setor_diagnostico	configuracao_setor_diagnostico		SADT	L7	813	1	HOSP	S		hash_linha	TBCBOPRO,TBPROFIS,TBUSERS		
+SIPARRX	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor	configuracao_setor_diagnostico;responsavel_laudo_setor		SADT	L7	814	934	USUARIO	N		hash_linha	TBCBOPRO,TBUSERS		
+GECADBAL	TABELA	inventario_estoque	inventario_estoque		SUP	L7	815	251	ANO,MES,DOC	N		hash_linha	TBCENCUS,TBUSERS		
+GECAPELAMP	TABELA	capela_manipulacao	capela_manipulacao		SUP	L7	816	1	ID_GECAPELAMP	S		hash_linha	TBUNIDAD		módulo sem uso no hospital; estrutura mantida
+GECAPELAMP_GEGRUPOMP	TABELA	capela_manipulacao_grupo	capela_manipulacao_grupo		SUP	L7	817	1	ID_GECAPELAMP,ID_GEGRUPOMP	N		hash_linha	GECAPELAMP,GEGRUPOMP		
+GELANBAL	TABELA	inventario_estoque_item;inventario_estoque_divergencia	inventario_estoque_item;inventario_estoque_divergencia		SUP	L7	818	6806	ID	S		hash_linha	GECADBAL,GENOMCOM		
+GERASVALBAL	TABELA	inventario_estoque_lote	inventario_estoque_lote		SUP	L7	819	2354	ID	S		hash_linha	GELANBAL,GERASVALFINAL,GEVALMEM		
+GEUSERS_TBCENCUS	TABELA	usuario_estoque_centro_custo	usuario_estoque_centro_custo		SUP	L7	820	66	USUARIO_GEUSERS,ID_TBCENCUS	N		hash_linha	GEUSERS,TBCENCUS		
+PRPARINTEGEST	TABELA	regra_integracao_prescricao	regra_integracao_prescricao		SUP	L7	821	5	ID_TBCENCUS,TP_PRESCRICAO	N		hash_linha	TBCENCUS,TBTP_ENV_LISTA_AVAL_FARM		
+TBFORNEC	TABELA	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor		SUP	L7	822	2336	COD	S		hash_linha	TBCBOPRO,TBDISPON,TBMUIBGE,TBPESSOA	FPCATEGTRAB,FPCBO,FPTIPO_TRABALHADOR,TBUF	
+SHCLIENT	TABELA	servico_hemoterapia_fornecedor	servico_hemoterapia_fornecedor		SADT	L7	823	1	CODCLIENTE	S		hash_linha	TBFORNEC		só placeholder; recurso a construir
+SHREQUISICAO	TABELA	requisicao_transfusao	requisicao_transfusao		SADT	L7	824	1	ID_SHREQUISICAO	S		hash_linha	SHCLIENT,TBCBOPRO		sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SHBOLSA	TABELA	bolsa_hemocomponente	bolsa_hemocomponente		SADT	L7	825	1	ID_BOLSA	S		hash_linha	SHCLIENT,SHDOACAO,SHLOCAL,SHMOTDEV,SHMOV,SHREQUISICAO,SHTECNIC,TBFATORRH,TBTPSANGUINEO,TBUSERS		sem dados reais (placeholder 1899); conceito coberto, dados não migram
+GEBARRAS	TABELA	insumo_codigo_barras	insumo_codigo_barras		SUP	L7	826	230	ITEM,BARRA	N		hash_linha	GEITENS,TBFORNEC,TBLABORA		
+GECADPED	TABELA	pedido_compra;cotacao;processo_licitatorio	pedido_compra;cotacao;processo_licitatorio		SUP	L7	827	18090	ID	S		hash_linha	GESITUACAOPED,TBCENCUS,TBFORNEC,TBUSERS		
+GECOMPRA	TABELA	nota_entrada_item;pedido_compra_item;insumo_fornecedor	nota_entrada_item;pedido_compra_item;insumo_fornecedor		SUP	L7	828	59376	ITEM,DATA,FORN,NF,DOC	N		hash_linha	GEITENS,TBFORNEC		histórico derivado das entradas e pedidos
+GELANNFS	TABELA	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada		SUP	L7	829	60043	ID_GELANNFS	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	GEITENS,TBFORNEC	NFELANNOTAENTRADA	
+GECADNFS	TABELA	nota_entrada;escrituracao_entrada	nota_entrada;escrituracao_entrada		SUP	L7	830	13794	ID	S	DATA_HORA_ULTIMA_ATUALIZACAO	hash_linha	GELANNFS,TBNATOPE,TBUSERS	NFECADNOTAENTRADA	
+GELANPAC	TABELA	documento_estoque_item;movimento_estoque	documento_estoque_item;movimento_estoque		SUP	L7	831	46832	ID	S		hash_linha	GENOMCOM,TBCBOPRO,TBCENCUS,TBFORNEC,TBUSERS		
+GELANPED	TABELA	pedido_compra_item;cotacao_item;cotacao_resposta_item	pedido_compra_item;cotacao_item;cotacao_resposta_item		SUP	L7	832	325908	ID	S		faixa_id_hash_bloco	GECADPED		
+GEDESPDS	TABELA	pedido_compra_item;processo_licitatorio_item	pedido_compra_item;processo_licitatorio_item		SUP	L7	833	23	ANO,OQUE,DOC,SEQ	N		hash_linha	GELANPED		descrição de serviço vira texto do item
+GELANPEDENTREGA	TABELA	pedido_compra_entrega	pedido_compra_entrega		SUP	L7	834	46	ID_GELANPED,DATA	N		hash_linha	GELANPED		
+GERASVALNFS	TABELA	movimento_lote	movimento_lote		SUP	L7	835	9696	ID	S		hash_linha	GELANNFS,GENOMCOM,GERASVALFINAL,GEVALMEM,TBLABORA		há datas inválidas a sanear
+TBCATFOR	TABELA	empresa_fornecedora_categoria	empresa_fornecedora_categoria		SUP	L7	836	12	FORN,CATEG	N		hash_linha	TBCATEGO,TBFORNEC		
+TBFORNECTEL	TABELA	empresa_fornecedora_contato	empresa_fornecedora_contato		SUP	L7	837	35	ID	S		hash_linha	TBFORNEC,TBTIPOTELEFONE	TBDDD	
+FCCODCON	TABELA	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora		FAT	L8	838	768	CON,ID_TBCBOPRO	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		código do médico no convênio; conta bancária vai para conta_bancaria_profissional
+FCCRECUN	TABELA	regra_credito_producao	regra_credito_producao		FAT	L8	839	12	ID_TBCBOPRO,CON	N		hash_linha	TBCBOPRO,TBCONVEN,TBPROFIS		
+FCCTAEXT	TABELA	conta_hospitalar	conta_hospitalar		FAT	L8	840	213641	ID	S	ALTA,DATA_HORA_ULTIMA_ATUALIZACAO	data_alteracao_hash_bloco	TBCBOPRO,TBCONVEN,TBESPEC,TBPROCTO,TBTIPPLANO,TBTISSREGINT,TBUSERS	FCCADNFS,TBCONSPROF,TBTISSCOBERTESPECIAL,TBTISSIDENTBENEFI,TBTISSINDACID,TBTISSMOTAUSENCODVALID,TBTISSREGIMEATEND,TBTISSSAUDEOCUPAC,TBTISSTPCONSUL	
+FCCTAAUD	TABELA	auditoria_conta;auditoria_conta_versao	auditoria_conta;auditoria_conta_versao		FAT	L8	841	8820	ANOPRO,MESPRO,TIPO_CTA,COD	N	ALTA	hash_linha	FCCTAEXT,TBCBOPRO,TBESPEC,TBUSERS		retrato pré e pós auditoria vira versão da conta
+FCDIAEXT	TABELA	conta_hospitalar_segurado	conta_hospitalar_segurado		FAT	L8	842	193738	ANOPRO,MESPRO,COD	N		hash_bloco_chave	FCCTAEXT		
+FCFAIPAC	TABELA	conta_hospitalar_periodo	conta_hospitalar_periodo		FAT	L8	843	21087	ID_FCCTAEXT,TIPO_LAN,SEQ	N		hash_linha	FCCTAEXT		
+FCGUIAS	TABELA	guia_fonte_pagadora	guia_fonte_pagadora		FAT	L8	844	61961	CON,TP_GUIA,GUIA_P,GUIA_S,TP_GUIA_S	N		hash_linha	FCCTAEXT,TBCBOPRO,TBCONVEN		
+FCIRREGULARID	TABELA	pendencia_conta	pendencia_conta		FAT	L8	845	218	ID_FCCTAEXT,ID_TBIRREGULARID,DATA_HORA_INICIO	N		hash_linha	FCCTAEXT,TBIRREGULARID		histórico 2020-2022 migra como pendência resolvida
+FCLANAUD	TABELA	auditoria_conta_item	auditoria_conta_item		FAT	L8	846	1434888	ANOPRO,MESPRO,TIPO_CTA,CONTA,TIPO,DATA,HORA,PROCTO,LOCAL,ATO	N		hash_bloco_chave	TBCBOPRO,TBESPEC,TBUSERS		
+RECONTAS	TABELA	conta_hospitalar	conta_hospitalar		FAT	L8	847	201857	REG,CONTA	N		hash_bloco_chave	FCCTAEXT,TBCBOPRO,TBUSERS		
+RICONTAS	TABELA	conta_hospitalar;conta_hospitalar_periodo	conta_hospitalar;conta_hospitalar_periodo		FAT	L8	848	16399	REG,CONTA	N		hash_linha	TBCBOPRO,TBCENCUS,TBESPEC,TBUSERS		
+FCDIAINT	TABELA	conta_hospitalar_segurado	conta_hospitalar_segurado		FAT	L8	849	13851	ANOPRO,MESPRO,COD	N		hash_linha	RICONTAS		
+RICGUIAS	TABELA	guia_fonte_pagadora	guia_fonte_pagadora		FAT	L8	850	11592		N		hash_linha_sem_chave	RICONTAS,TBCBOPRO,TBUSERS		
+RPLANEVE	TABELA	lancamento_repasse	lancamento_repasse		FAT	L8	851	8675	ID_RPLANEVE	S		hash_linha	RPEVENTO,TBEMPHOS,TBPROFIS	FPCATEGTRAB,TBPREVIDENCIACOMPL	
+RPLANEVE_COMPOSICAOBASE	TABELA	lancamento_repasse_base	lancamento_repasse_base		FAT	L8	852	2383	ID	S		hash_linha	RPEVENTO,RPLANEVE	FPITENSNATRENDIMENTO	
+RPLANEVE_TBCBOPRO	TABELA	lancamento_repasse	lancamento_repasse		FAT	L8	853	8102	ID_RPLANEVE	S		hash_linha	RPLANEVE,TBCBOPRO		profissional beneficiário é coluna do lançamento
+RPRPA	TABELA	rpa;rpa_retencao	rpa;rpa_retencao		FAT	L8	854	5243	ID_RPRPA	S	DATA_HORA_INC_ULT_ALT_ESOC	hash_linha	FPLOTTRIBCAD,TBEMPHOS,TBPROFIS	RPLOTES	
+RPLANRPA	TABELA	rpa_lancamento	rpa_lancamento		FAT	L8	855	8477	ID_RPRPA,ID_RPLANEVE	N		hash_linha	RPLANEVE,RPRPA		
+RPRPA_TBCBOPRO	TABELA	rpa	rpa		FAT	L8	856	4812	ID_RPRPA	S		hash_linha	RPRPA,TBCBOPRO		profissional beneficiário é coluna do RPA
+TBCRECOO	TABELA	membro_cooperativa	membro_cooperativa		FAT	L8	857	345	COO,ID_TBCBOPRO	N		hash_linha	TBCBOPRO,TBCOOPER,TBPROFIS		
+TBCREMED	TABELA	credenciamento_cobranca;profissional_fonte_pagadora	credenciamento_cobranca;profissional_fonte_pagadora		FAT	L8	858	185	ID_TBCBOPRO,CON	N		hash_linha	TBCBOPRO,TBPROFIS		
+TBDTHCDC	TABELA	diaria_taxa_centro_custo	diaria_taxa_centro_custo		FAT	L8	859	3	TAB,DTH,CDC	N		hash_linha	TBCENCUS		
+TBPACTHM	TABELA	pacote;pacote_item_incluso;pacote_contrato	pacote;pacote_item_incluso;pacote_contrato		FAT	L8	860	335	CON,CONTAS,THM,TIPO,TABELA,PROCTO	N		hash_linha	TBCENCUS		
+TBPRESER	TABELA	prestador_terceiro	prestador_terceiro		FAT	L8	861	164	ID	S		hash_linha	TBCBOPRO,TBCENCUS,TBPROFIS,TBRPATPREPASSE,TBTPDOCUMENTO	CDCREDENCIADO	
+DIPERMPS	TABELA	usuario_escopo;perfil_acao	usuario_escopo;perfil_acao		ADM	L5	862	35	USUARIO,ATO,PS,MODULO	N		hash_linha	TBPRESER,TBUSERS		recorte por posto e setor de exame está em uso no SPDATA: paridade F3
+TBCREPRS	TABELA	credenciamento_cobranca	credenciamento_cobranca		FAT	L8	863	44	ATO,PS,CON	N		hash_linha	TBPRESER,TBTABATO		
+TBREPGER	TABELA	regra_repasse;regra_repasse_item	regra_repasse;regra_repasse_item		FAT	L8	864	105430	ID	S		faixa_id_hash_bloco	RPEVENTO,TBCENCUS,TBCONVEN,TBESPEC,TBUNIDAD		
+TBREPGER_TBCBOPRO	TABELA	regra_repasse_profissional	regra_repasse_profissional		FAT	L8	865	98406	ID_TBREPGER	S		hash_linha	TBCBOPRO,TBREPGER		
+FAPARAM	TABELA	competencia_sus	competencia_sus		SUS	L8	866	1		N		hash_linha_sem_chave	TBIRREGCTRCTA,TBPROFIS		competência vira tabela; demais opções do BPA vão para o mecanismo de parâmetros
+FAPARAMA	TABELA	competencia_sus	competencia_sus		SUS	L8	867	1		N		hash_linha_sem_chave	TBIRREGCTRCTA,TBPROFIS		competência vira tabela; demais opções da APAC vão para o mecanismo de parâmetros
+FHLEITOUTI	TABELA	leito_uti_habilitado	leito_uti_habilitado		SUS	L8	868	12		N		hash_linha_sem_chave	FHLEITOUTITP,TBUNIDAD		
+FCRECIBO	TABELA	recibo	recibo		FIN	L8	869	1748	ID	S		hash_linha	FCCTAEXT,TBCBOPRO,TBMOTEXC,TBUSERS		
+MFADIFOR	TABELA	adiantamento	adiantamento		FIN	L8	870	4328	ID_MFADIFOR	S		hash_linha	MFCABECLANC,MFTIPOLANC,TBCTABAN,TBEMPHOS,TBPROFIS		vira adiantamento
+MFADIFOR_TBCBOPRO	TABELA	beneficiario_adiantamento	beneficiario_adiantamento		FIN	L8	871	395	ID_MFADIFOR	S		hash_linha	MFADIFOR,TBCBOPRO		vira beneficiario_adiantamento
+SDGECADNFS	TABELA	escrituracao_entrada	escrituracao_entrada		FIN	L8	872	13794	ID_GECADNFS	S		hash_linha	GECADNFS		vira escrituracao_entrada
 SDGELANNFS	TABELA	escrituracao_item_entrada	escrituracao_item_entrada		FIN	L8	873	56264	ID_GELANNFS	S		hash_linha	GELANNFS		vira escrituracao_item_entrada
 TBGRUDES	TABELA	grupo_natureza_financeira;subgrupo_natureza_financeira;centro_custo	grupo_natureza_financeira;subgrupo_natureza_financeira;centro_custo		FIN	L8	874	40	COD	S		hash_linha	TBCENCUS		grupos do plano gerencial com centro de custo
 TBSUBDES	TABELA	regra_desconto_grupo	regra_desconto_grupo		FAT	L8	875	166	GRUPO,SUBGRUPO	N		hash_linha	TBGRUDES		
