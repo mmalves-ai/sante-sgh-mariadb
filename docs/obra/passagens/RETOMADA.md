@@ -58,17 +58,84 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
-## INCIDENTE (23/11, 9h30): corrupção InnoDB depois de suspensão da VM
+## INCIDENTE (23/11, 9h30): MariaDB de desenvolvimento corrompido. COMECE POR AQUI.
 
-- Das 5h20 às 9h25 nada rodou na VM (sem reinício: uptime 18 h; os crons de relatório não dispararam; o kernel
-  registrou falta de CPU). Ao voltar, o MariaDB passou a ler páginas corrompidas ("Space id and page no stored in the
-  page ... should be") em conector_ctl_prontocardio (conector_origem, pendencia), cliente_prontocardio
-  (conta_hospitalar_item) e cliente_nucleo_d (DROP falha com "Data structure corruption").
-- Execução 10 parada (container do worker parado). plataforma e espelho conferidos por CHECK TABLE: íntegros.
-- Plano: apagar cliente_prontocardio, conector_ctl_prontocardio, cliente_nucleo_d, conector_ctl_nucleo_d,
-  nucleo_d_plataforma (o DROP foi negado pelo classificador do modo automático: precisa do OK do dono) e recarregar a
-  ProntoCardio do zero com a main inteira (até 760ee049), sem passada de correção. Antes, a prova diag-cadeia da
-  conta-itens-3 (interrompida pela suspensão).
+**Estado em 23/11, 9h45 (sessão encerrada a pedido do dono para recomeçar em contexto limpo):**
+
+- **O que houve:** das 5h20 às 9h25 nada rodou na VM, sem reinício (uptime 18 h). Os crons de relatório não
+  dispararam e o kernel registrou falta de CPU ("rcu ... OOM is now expected behavior"). Ao voltar, o MariaDB
+  (container `sante-sgh-mariadb`, volume `sante-sgh-mariadb-data`) passou a ler páginas inválidas ("Space id and page
+  no stored in the page ... should be").
+  - Tabelas afetadas: conector_ctl_prontocardio (conector_origem, pendencia, conector_bloco),
+    cliente_prontocardio (conta_hospitalar_item e outras), cliente_nucleo_d, conector_ctl_nucleo_d e
+    nucleo_d_plataforma.
+- **A corrupção alcança o dicionário interno do InnoDB, ou seja, a instância inteira:**
+  - DROP DATABASE dos 5 bancos acima falha com 1034 "Index ... is corrupt" (o dono autorizou o DROP em 23/11);
+  - num banco NOVO (`zz_teste_drop`, criado por mim como teste e que ficou com a tabela `t`), CREATE TABLE com FK
+    falha com errno 126 "Index is corrupted", e o log diz "Cannot save table statistics ... Data structure
+    corruption";
+  - ou seja, há páginas ruins no espaço do sistema ou no `mysql.innodb_table_stats`/`innodb_index_stats`. Nenhum
+    cliente novo pode ser criado nesta instância como está.
+- **Íntegros pelo CHECK TABLE** (leitura): `plataforma` (6 tabelas; login do dono `admin`) e `espelho` (29 tabelas
+  com dados). Os outros bancos (cliente_f22_o*, cliente_demo, cliente_teste_*, cm_repacagd, cmbanco, f4r4_*) não foram
+  conferidos.
+- **Carga parada:** o container do worker da execução 10 foi parado; a execução 10 ficou com estado "gravando" na
+  tabela conector_execucao da plataforma (marcar como falhou ao retomar). Nenhum container do conector rodando.
+  Vigias de disco e de memória: PARADOS (a sessão acabou).
+
+**Próximos passos, em ordem:**
+
+1. **Investigar a causa da parada das 5h20** (pedido do dono: "identifique o que houve para que não ocorra mais").
+   Leitura só: `journalctl -k --since "2026-11-23 05:00" --until "2026-11-23 09:40"`, `journalctl --since ...` (procure
+   suspend, vmtoolsd, "hung task", "blocked for more than", I/O error, ext4, sda, oom-killer, memória), `last -x`,
+   `/var/log/syslog`, os .crash em /var/crash (antigravity-ide e chrome, de 9h26). Pistas: às 5h09 a memória livre
+   caiu a 7 GB com swap de 13 GB em uso, carga com 4 gravadores (cerca de 30 GB de RSS no coordenador) mais a prova
+   diag-cadeia, mais IDE e Chrome; kworker de writeback a 84% de CPU às 9h26. Hipóteses: falta de memória com swap
+   e escrita travada no disco virtual; pausa ou snapshot da VM no host (VMware: vmtoolsd); disco do host cheio ou lento.
+   Registre a conclusão em docs/obra/consumo.md ou num achado próprio e na memória execucao-pesada-serializada.
+2. **Recuperar o MariaDB (decisão do dono para o passo destrutivo):**
+   a. Despejar (mariadb-dump, só para arquivo em sante-sgh-dados/, nunca no git) o que precisa sobreviver: `plataforma`
+      e `espelho`, e o que mais o dono quiser; os bancos cliente_* de teste e os de prova podem ser recriados pelos
+      scripts (tools/db/criar_cliente.py, semente do espelho por tools/db/espelho.py).
+   b. Com o OK explícito do dono: parar o container, recriar o volume `sante-sgh-mariadb-data` (apagar volume é ação
+      irreversível, regra 9) ou tentar antes `innodb_force_recovery` para despejar; subir e restaurar.
+   c. Reaplicar migrações (validar_migracoes) e conferir.
+3. **Prova da rodada conta-itens-3** (interrompida pela suspensão): `flock .../pesado.lock env CONECTOR_GRAVADORES=1
+   tools/obra/diag-cadeia.sh`; esperado FCLANEXT restricao_destino_1048 perto de 0 (era 6.776) e
+   conta_hospitalar_item acima de 18.241; TBMATMED 20.000 gravados (já provado na conta-itens-2).
+4. **Recarga da ProntoCardio do zero** (o dono já autorizou recriar o cliente de teste):
+   - juntar a main no worktree `../sante-sgh-wt/velocidade` (hoje em 3e3a5c78 = main até ba82516c + correção do
+     deadlock; faltam da main: conta-itens-2 e conta-itens-3, commits 6805f08b a 760ee049, e as migrações 12_FAT/33 e
+     12_FAT/34), suíte verde lá;
+   - recriar o cliente: o comando exato da execução 8 está no transcrito; resumo: apagar cliente/execuções/origem do
+     cliente `prontocardio` na plataforma, `python3 -I tools/db/criar_cliente.py prontocardio "ProntoCardio (teste com
+     a carga da cópia de 19/10/2026)" --origem conector_spdata --json`, `conector/conector.sh vincular prontocardio
+     pc-20261019.fdb`, `conector/conector.sh enfileirar prontocardio importar` e, do worktree,
+     `CONECTOR_GRAVADORES=4 CONECTOR_ADIAR=TBCABTRILHA,TBLANTRILHASGH setsid nohup conector/conector.sh worker >
+     sante-sgh-dados/obra/logs/worker-eN.log 2>&1 &`;
+   - por causa do incidente: considerar 3 gravadores e nenhuma prova pesada junto da carga;
+   - vigias: `tools/obra/vigia-disco.sh 130`; vigia de memória v2; vigia da carga com alarme de parada (estado, etapa,
+     percentual e CPU do worker iguais por 15 min); relatório de 50 minutos por CronCreate;
+   - tamanho: 115 milhões de linhas mapeadas (sem as trilhas), cerca de 6,4 milhões/h: cerca de 18 h.
+5. **Conferência e aviso ao dono** (fila abaixo, item 3), depois a 2ª passada das trilhas.
+
+**Decisões do dono desta noite:** respostas sempre em português; DROP dos 5 bancos de teste autorizado; recarga do zero
+autorizada; investigar a causa da parada.
+
+**Decisões do orquestrador desta noite** (registradas nos orçamentos em docs/obra/orcamentos/):
+- glosa só com motivo (conta-itens);
+- material e medicamento pela proposta B (conta-itens-3);
+- plano genérico na menor fonte, com pendência (plano-conta; um plano por fonte fica para depois de medir o uso);
+- não reiniciar a carga por velocidade.
+
+**Pendências técnicas abertas:**
+- plano genérico ligado a 38 fontes;
+- personalização do hospital sobre item licenciado sem destino;
+- FCCODCON da L8-01 (expectativa sintética antiga);
+- leitor tools/obra/cobertura_conector.py frágil com CHECK em várias linhas;
+- sondas GLOSADO x VLR_PG e FCINTEGRPA sem data;
+- tela web sem grupoAto;
+- historico_mescla_migracao com ON DUPLICATE pode dar 1213 entre gravadores (teórico).
 
 ## Execução 9 (23/11, 3h05)
 
