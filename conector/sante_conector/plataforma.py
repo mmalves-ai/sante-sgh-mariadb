@@ -147,6 +147,12 @@ def consultar(conn, eid):
         return _ler_execucao(cur, eid)
 
 
+def _fim(motivo, n=500):
+    """Motivo no limite da coluna guardando o FIM: a última linha (tipo, código, tabela, arquivo:linha) é a que
+    explica a falha; o começo de um texto longo (cabeçalho de traceback) é o que se perde."""
+    return motivo if len(motivo) <= n else "..." + motivo[-(n - 3):]
+
+
 def transicao(cur, eid, novo, etapa=None, motivo=None, admin_id=None, **campos):
     """Muda o estado dentro de uma transação aberta e grava o evento junto. Recusa transição inválida."""
     ex = _ler_execucao(cur, eid, travar=True)
@@ -156,7 +162,7 @@ def transicao(cur, eid, novo, etapa=None, motivo=None, admin_id=None, **campos):
     if etapa is not None:
         sets.append("etapa=%s"); vals.append(etapa[:120])
     if motivo is not None:
-        sets.append("motivo_falha=%s"); vals.append(motivo[:500])
+        sets.append("motivo_falha=%s"); vals.append(_fim(motivo))
     if novo == "abrindo":
         sets.append("iniciado_em=" + AGORA)
     if novo in FINAIS:
@@ -168,7 +174,7 @@ def transicao(cur, eid, novo, etapa=None, motivo=None, admin_id=None, **campos):
     cur.execute("UPDATE conector_execucao SET " + ", ".join(sets) + " WHERE id=%s", vals + [eid])
     det = {"execucao_id": eid, "estado": novo, "tipo": ex["tipo"], "de": ex["estado"]}
     if motivo:
-        det["motivo"] = motivo[:500]
+        det["motivo"] = _fim(motivo)
     if novo == "concluida" and "contadores" in campos:
         det["contadores"] = campos["contadores"]
     _evento(cur, ex["cliente_id"], EVENTO[ex["tipo"]], det, admin_id)

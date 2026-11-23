@@ -308,14 +308,54 @@ def _juntar(cm, ops, somar=frozenset()):
 
 
 # ----- ondas -----
-def ondas(plano, mapa_exec):
-    """Lista de ondas (índices do plano). B depois de A (A antes no plano) quando uma menciona a outra ou as duas
-    gravam o mesmo destino; a onda de B é a maior onda dessas A mais um."""
+def fks_banco(cr):
+    """{tabela: tabelas que as chaves estrangeiras dela referenciam} no banco de destino (information_schema)."""
+    with cr.cursor() as c:
+        c.execute("SELECT DISTINCT TABLE_NAME, REFERENCED_TABLE_NAME FROM information_schema.KEY_COLUMN_USAGE"
+                  " WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL")
+        fks = {}
+        for t, r in c.fetchall():
+            fks.setdefault(t, set()).add(r)
+    return fks
+
+
+def fks_ddl(raiz):
+    """O mesmo de `fks_banco`, pelos scripts do modelo (db/migracoes), para a previsão e os testes sem banco. Lê os
+    arquivos direto: o ALTER de chaves de um arquivo que vem antes do CREATE na ordem dos nomes também conta."""
+    from .mapa import _arquivos_ddl
+    fks = {}
+    for arq in _arquivos_ddl(raiz):
+        for st in re.split(r";\s*$", arq.read_text(encoding="utf-8"), flags=re.M):
+            m = re.search(r"^\s*(?:CREATE|ALTER) TABLE (?:IF NOT EXISTS )?`?(\w+)`?", st, re.M)
+            if m:
+                for r in re.findall(r"\bREFERENCES\s+`?(\w+)`?", st):
+                    fks.setdefault(m.group(1), set()).add(r)
+    return fks
+
+
+def _atualiza(p):
+    """Destinos em que a tabela ATUALIZA linhas que não criou (UPDATE de linha de outra tabela do plano):
+    `complementa` (a linha do pai recebe as colunas) e `adotar` (a linha existente é mesclada)."""
+    ops = p.get("opcoes") or {}
+    return {dt for dt in p["destinos"] if (ops.get(dt) or {}).get("complementa") or (ops.get(dt) or {}).get("adotar")}
+
+
+def ondas(plano, mapa_exec, fks=None):
+    """Lista de ondas (índices do plano). B depois de A (A antes no plano) quando uma menciona a outra, as duas
+    gravam o mesmo destino ou uma ATUALIZA (`complementa`/`adotar`) linhas de um destino que a outra referencia por
+    chave estrangeira (`fks`: {tabela: referenciadas}); a onda de B é a maior onda dessas A mais um.
+
+    A terceira regra evita o 1213 (deadlock) do InnoDB: o INSERT do filho toma trava compartilhada na linha do pai
+    (verificação da chave estrangeira, mesmo em READ COMMITTED) e o UPDATE do complemento toma trava exclusiva nas
+    mesmas linhas, em ordens diferentes nos dois gravadores (caso real: RPLANEVE_TBCBOPRO complementa
+    lancamento_repasse enquanto RPLANEVE_COMPOSICAOBASE grava lancamento_repasse_base, filho dele, na mesma onda)."""
     idx = {p["tabela"]: i for i, p in enumerate(plano)}
-    por_dest = {}
+    por_dest, por_ref = {}, {}
     for i, p in enumerate(plano):
         for dt in p["destinos"]:
             por_dest.setdefault(dt, set()).add(i)
+            for r in (fks or {}).get(dt, ()):
+                por_ref.setdefault(r, set()).add(i)
     deps = {}
     for d in mapa_exec.get("deps", []):
         deps.setdefault(d.get("tabela"), set()).add(d.get("depende_de"))
@@ -324,6 +364,9 @@ def ondas(plano, mapa_exec):
         txt = json.dumps(p, default=str, sort_keys=True)
         nomes = set(re.findall(r"[A-Za-z_][A-Za-z0-9_$]*", txt)) | deps.get(p["tabela"], set())
         outros = {idx[x] for x in nomes if x in idx} | {j for x in nomes for j in por_dest.get(x, ())}
+        outros |= {j for dt in _atualiza(p) for j in por_ref.get(dt, ())}  # filho de linha que esta atualiza
+        outros |= {j for dt in p["destinos"] for r in (fks or {}).get(dt, ())
+                   for j in por_dest.get(r, ()) if r in _atualiza(plano[j])}  # pai que outra atualiza
         for j in outros - {i}:
             ligados[max(i, j)].add(min(i, j))
     onda = []
@@ -399,8 +442,22 @@ class LeitorRemoto:
                 cli.con.send((0, "fechar", (sid,)))
 
 
+def _resumo_erro(e, tabela):
+    """Motivo curto e sem valores de linha: tabela, tipo, código do banco (a mensagem do servidor pode citar valores,
+    "Duplicate entry ...") e onde falhou (arquivo e linha)."""
+    if isinstance(e, pymysql.err.MySQLError):
+        txt = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
+    else:
+        txt = "%s: %s" % (type(e).__name__, str(e)[:300])
+    tb = traceback.extract_tb(e.__traceback__)
+    if tb:
+        txt += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
+    return "tabela %s: %s" % (tabela or "?", txt)
+
+
 def _gravador(cm, con):
     cli = _Cliente(con)
+    tabela = None
     try:
         _ATIVO[0] = True
         cr0 = cm.cr  # a conexão herdada do coordenador nunca é usada nem fechada aqui
@@ -430,6 +487,7 @@ def _gravador(cm, con):
                 break
             i = tarefa if isinstance(tarefa, int) else tarefa[0]
             p = cm.plano[i]
+            tabela = p["tabela"]
             ents = [cm._nome_ent(p["tabela"], dt) for dt in p["destinos"]]
             _pre_tocar(cm, frozenset([p["tabela"]] + list(p["destinos"]) + ents))
             if not isinstance(tarefa, int):  # uma parte (faixas contíguas) de tabela dividida
@@ -444,9 +502,10 @@ def _gravador(cm, con):
                 cm._faixas_so, cm._faixa_lim, cm._faixa_dts = None, None, frozenset()
             feito = tarefa if isinstance(tarefa, int) else (i, tarefa[2])
         con.send((0, "fim", (_delta(cm, base),)))
-    except BaseException:
-        try:
-            con.send((0, "erro", (traceback.format_exc()[-4000:],)))
+    except BaseException as e:
+        try:  # o resumo (vai ao motivo_falha) e o FIM da pilha (arquivos e linhas, sem a mensagem, que pode ter valores)
+            pilha = "".join(traceback.format_list(traceback.extract_tb(e.__traceback__)[-8:]))
+            con.send((0, "erro", (_resumo_erro(e, tabela), pilha)))
         except BaseException:
             pass
     finally:
@@ -454,6 +513,14 @@ def _gravador(cm, con):
 
 
 # ----- coordenador -----
+class GravadorFalhou(RuntimeError):
+    """Falha de um gravador: a mensagem é o resumo (tabela, tipo, código, arquivo:linha) e `detalhe` o fim da pilha
+    do gravador (arquivos, linhas e código, sem a mensagem da exceção)."""
+
+    def __init__(self, pid, resumo, detalhe=""):
+        super().__init__("gravador %d falhou: %s" % (pid, resumo))
+        self.detalhe = detalhe
+
 def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
     """Atende os gravadores até todos devolverem o estado: leituras da origem, próxima tarefa, reserva de ids do
     destino da tabela dividida e o resultado."""
@@ -503,13 +570,18 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
                 os.waitpid(pid, 0)
                 _juntar(cm, a[0], somar)
             elif op == "erro":
+                del vivos[con]
+                try:
+                    os.waitpid(pid, 0)
+                except OSError:
+                    pass
                 for p in vivos.values():
-                    try:
-                        os.kill(p, signal.SIGTERM)
+                    try:  # SIGKILL: o gravador parado na espera de uma leitura não trata SIGTERM e o waitpid travaria
+                        os.kill(p, signal.SIGKILL)
                         os.waitpid(p, 0)
                     except OSError:
                         pass
-                raise RuntimeError("gravador %d falhou:\n%s" % (pid, a[0]))
+                raise GravadorFalhou(pid, a[0], a[1] if len(a) > 1 else "")
     for g in fluxos.values():
         g.close()
 
@@ -526,7 +598,7 @@ def carregar(cm, contagens):
             cm._tabela(p)
         return
     feitos = [0]
-    ws = ondas(cm.plano, cm.mapa_exec)
+    ws = ondas(cm.plano, cm.mapa_exec, fks_banco(cm.cr))
 
     def ao_feito(f):
         i = f if isinstance(f, int) else f[0]
