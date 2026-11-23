@@ -98,9 +98,7 @@ export function reservaVigente(s: SituacaoReserva): boolean {
  * motivo, quem e quando; SBIS-26). Só a vigente se cancela, e o leito volta a livre; a convertida em internação se
  * corrige pela internação; a já encerrada (expirada ou cancelada) fica como está, no histórico.
  */
-export function decidirCancelamentoReserva(
-  s: SituacaoReserva,
-):
+export function decidirCancelamentoReserva(s: SituacaoReserva):
   | { readonly ok: true }
   | {
       readonly ok: false;
