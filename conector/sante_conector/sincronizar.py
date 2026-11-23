@@ -232,6 +232,8 @@ def excluir_apagadas(cm):
     plano = []
     for p in cm.plano:
         t, vistas = p["tabela"], cm.vistas.get(p["tabela"], set())
+        if hasattr(vistas, "abrir"):  # estado compactado ao fim da onda (paralelo.Compacto): aberto só aqui
+            vistas = vistas.abrir()
         excl = cm._excluidas.setdefault(t, set())
         ativas = [k for k, a in cm.existente.get(t, {}).items()
                   if a[0] is not None and k not in excl and _e_base(k, p["destinos"])]

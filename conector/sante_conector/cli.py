@@ -18,7 +18,8 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
                                           vezes (sintetica_d/<fatia>.py; banco descartável cliente_cf<fatia>)
 Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
-  enfileirar <codigo> importar|sincronizar [--confirmar-exclusao-em-massa]   põe na fila (409 se já há execução ativa)
+  enfileirar <codigo> importar|sincronizar [--confirmar-exclusao-em-massa] [--continuar]   põe na fila (409 se já há
+                                          execução ativa; --continuar: retoma a última importação interrompida)
   cancelar <id>                           cancela execução ainda na fila
   execucao <id>                           estado, etapa, % e contadores
   fila [--limite N]                       últimas execuções
@@ -74,6 +75,7 @@ def main(argv=None):
     p.add_argument("--admin", type=int)
     p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
     p.add_argument("--confirmar-exclusao-em-massa", action="store_true")
+    p.add_argument("--continuar", action="store_true", help="continua a última importação interrompida (continuar.py)")
     p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
@@ -103,7 +105,8 @@ def main(argv=None):
             if a.cmd == "enfileirar":
                 try:
                     eid = plataforma.enfileirar(conn, a.codigo, a.tipo,
-                                                confirmar_exclusao_em_massa=a.confirmar_exclusao_em_massa)
+                                                confirmar_exclusao_em_massa=a.confirmar_exclusao_em_massa,
+                                                continuar=a.continuar)
                     return _json({"execucao_id": eid})
                 except plataforma.ExecucaoAtiva as e:
                     _json({"erro": 409, "motivo": str(e)}); return 3

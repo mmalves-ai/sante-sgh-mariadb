@@ -85,10 +85,14 @@ def vincular_origem(conn, codigo, relativo, admin_id=None, sha256=None):
     return {"cliente_origem_id": oid, "arquivo": v["relativo"], "tamanho_bytes": v["tamanho"], "sha256": sha}
 
 
-def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False):
+def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False, continuar=False):
     """Põe uma execução na fila. ExecucaoAtiva (409) se já houver uma ativa para o cliente (índice único).
     `confirmar_exclusao_em_massa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu
-    fica no evento."""
+    fica no evento. `continuar` (só Importar): continua a última importação do cliente, interrompida (`falhou`) com a
+    mesma origem vinculada; a execução nova leva `contadores.continuar_de` e o motor pula as tabelas que ela concluiu
+    (continuar.py)."""
+    if continuar and tipo != "importar":
+        raise PlataformaErro("continuar só vale para o Importar")
     if tipo not in EVENTO:
         raise PlataformaErro("tipo inválido: importar ou sincronizar")
     confirmar = bool(confirmar_exclusao_em_massa)
@@ -106,12 +110,25 @@ def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=Fa
                             " AND estado='concluida'", (cli["id"],))
                 if not cur.fetchone()[0]:
                     raise PlataformaErro("sincronizar exige uma importação concluída")
+            contadores = None
+            if continuar:
+                cur.execute("SELECT id, estado, cliente_origem_id FROM conector_execucao WHERE cliente_id=%s"
+                            " AND tipo='importar' ORDER BY id DESC LIMIT 1", (cli["id"],))
+                u = cur.fetchone()
+                if not u or u[1] != "falhou":
+                    raise PlataformaErro("continuar exige que a última importação do cliente tenha sido interrompida"
+                                         " (falhou)")
+                if u[2] != r[0]:
+                    raise PlataformaErro("continuar exige a mesma origem vinculada da importação interrompida")
+                contadores = json.dumps({"continuar_de": u[0]})
             cur.execute("INSERT INTO conector_execucao (cliente_id, cliente_origem_id, tipo, estado, etapa,"
-                        " confirmar_exclusao_em_massa, solicitado_em, solicitado_por, criado_em, criado_por) VALUES"
-                        " (%s, %s, %s, 'fila', 'aguardando o motor', %s, " + AGORA + ", %s, " + AGORA + ", %s)",
-                        (cli["id"], r[0], tipo, confirmar, admin_id, admin_id))
+                        " confirmar_exclusao_em_massa, contadores, solicitado_em, solicitado_por, criado_em, criado_por)"
+                        " VALUES (%s, %s, %s, 'fila', 'aguardando o motor', %s, %s, " + AGORA + ", %s, " + AGORA
+                        + ", %s)", (cli["id"], r[0], tipo, confirmar, contadores, admin_id, admin_id))
             eid = cur.lastrowid
             det = {"execucao_id": eid, "estado": "fila", "tipo": tipo}
+            if contadores:
+                det["continuar_de"] = json.loads(contadores)["continuar_de"]
             if confirmar:
                 det.update(confirmar_exclusao_em_massa=True, confirmado_por=admin_id)
             _evento(cur, cli["id"], EVENTO[tipo], det, admin_id)

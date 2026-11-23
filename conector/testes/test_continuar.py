@@ -1,0 +1,425 @@
+"""Continuação de importação interrompida e memória do coordenador (rodada retomar-importacao, 2026-11-23).
+
+Causa: a execução 11 da ProntoCardio foi parada pelo vigia de memória na onda 177 de 218; o sincronizar exige
+importação concluída, um importar novo relia tudo e o worker, ao subir, marcava a órfã como `falhou` apagando a etapa.
+
+- Regra das tabelas concluídas (continuar.py): pela marca `conector_tabela_concluida` ou, sem marca, pela dedução
+  (n linhas na imagem = n chaves principais com a imagem da interrompida no conector_origem).
+- Continuação ponta a ponta (CargaMapa real, leitor real, gravadores em paralelo): a importação falha no meio de uma
+  tabela, a continuação pula as concluídas, completa a do meio pelo hash e termina com a MESMA conciliação, as MESMAS
+  pendências e o MESMO destino de uma importação inteira; as linhas das tabelas puladas não são regravadas.
+- Plataforma: a órfã fica `falhou` continuável (etapa guardada) e o enfileirar --continuar aponta para ela.
+- Memória: o estado grande da tabela é compactado/liberado ao fim da onda, e o gravador (fork) que percorre o estado
+  herdado suja muito menos páginas (Private_Dirty medido). Só dados falsos."""
+import glob
+import json
+import os
+import pickle
+import time
+import tracemalloc
+import unittest
+from unittest import mock
+
+from sante_conector import carga_mapa, continuar, paralelo
+
+
+def _mariadb():
+    try:
+        from sante_conector import banco
+        banco.conectar(None).close()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+TEM_BANCO = _mariadb()
+NO_CONTAINER = os.path.exists("/opt/firebird/bin/isql") and TEM_BANCO
+
+
+# ------------------------------------------------------------------ memória (sem banco)
+class _Prop:
+    def __init__(self):
+        self._pend, self._filhos = {}, {}
+
+
+class _CM:
+    """Estado sintético com a forma do da CargaMapa: de-para, chaves vistas e soma da origem por tabela."""
+
+    def __init__(self, tabelas, linhas):
+        self.plano = [{"tabela": "T%d" % i, "destinos": ["d%d" % i]} for i in range(tabelas)]
+        self.existente, self.vistas, self.origem, self.aguardam, self.pend = {}, {}, {}, {}, []
+        self.prop = _Prop()
+        for i in range(tabelas):
+            t = "T%d" % i
+            ks = [str(100000 + k) for k in range(linhas)]
+            self.existente[t] = {k: (j + 1, bytes(16), bytes(32), None, None) for j, k in enumerate(ks)}
+            self.vistas[t] = set(ks)
+            self.origem["d%d" % i] = {k: "%064x" % (j * 7919) for j, k in enumerate(ks)}
+
+    def _nome_ent(self, t, dt):
+        return dt
+
+
+def _tamanho(cm):
+    """Bytes do estado (pickle das estruturas: proporcional ao que fica em memória) e linhas."""
+    return sum(len(pickle.dumps(getattr(cm, n), protocol=pickle.HIGHEST_PROTOCOL))
+               for n in ("existente", "vistas", "origem"))
+
+
+def _sujo_no_filho(cm):
+    """Fork que faz o que o gravador faz ao nascer (_pre_tocar, _base) e lê o estado herdado; devolve o Private_Dirty
+    do filho em MB (páginas copiadas)."""
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            os.close(r)
+            paralelo._ATIVO[0] = True
+            paralelo._pre_tocar(cm, frozenset(), tudo_pequeno=True)
+            paralelo._base(cm)
+            n = 0
+            for d in (cm.existente, cm.vistas, cm.origem):
+                for v in d.values():
+                    if isinstance(v, (set, dict)):
+                        for _ in v:
+                            n += 1
+            with open("/proc/self/smaps_rollup") as f:
+                kb = sum(int(x.split()[1]) for x in f if x.startswith("Private_Dirty:"))
+            os.write(w, str(kb).encode())
+        finally:
+            os._exit(0)
+    os.close(w)
+    kb = int(os.read(r, 64) or b"0")
+    os.close(r)
+    os.waitpid(pid, 0)
+    return kb / 1024
+
+
+class Memoria(unittest.TestCase):
+    def setUp(self):
+        self._env = os.environ.get("CONECTOR_ESTADO_MIN")
+        os.environ["CONECTOR_ESTADO_MIN"] = "1000"
+
+    def tearDown(self):
+        if self._env is None:
+            os.environ.pop("CONECTOR_ESTADO_MIN", None)
+        else:
+            os.environ["CONECTOR_ESTADO_MIN"] = self._env
+
+    def test_liberado_depois_da_ultima_onda_que_usa(self):
+        cm = _CM(3, 5000)
+        ref = {t: set(v) for t, v in cm.vistas.items()}
+        org = {e: dict(v) for e, v in cm.origem.items()}
+        uso = paralelo.ultimo_uso(3, {2: {0}}, [0, 1, 2])  # T2 usa o de-para de T0
+        self.assertEqual(uso, [2, 1, 2])
+        antes = _tamanho(cm)
+        paralelo._fim_onda(cm, 0, [0], uso, log=False)
+        self.assertIn("T0", cm.existente)                       # T2 (onda 2) ainda usa
+        self.assertIsInstance(cm.vistas["T0"], paralelo.Compacto)
+        paralelo._fim_onda(cm, 1, [1], uso, log=False)
+        self.assertNotIn("T1", cm.existente)                    # ninguém depois usa
+        paralelo._fim_onda(cm, 2, [2], uso, log=False)
+        self.assertEqual(set(cm.existente), set())
+        depois = _tamanho(cm)
+        self.assertLess(depois, antes * 0.35, (antes, depois))
+        for t, v in cm.vistas.items():                          # a conciliação reabre exatamente o que era
+            self.assertEqual(v.abrir(), ref[t])
+        for e, v in cm.origem.items():
+            self.assertEqual(v.abrir(), org[e])
+        m = cm.memoria["ultima"]
+        self.assertEqual((m["existente_linhas"], m["vistas_linhas"], m["origem_linhas"]), (0, 0, 0))
+        print("\nMEMORIA estado (3 tabelas x 5000 linhas): antes %.1f MB, depois %.1f MB" % (
+            antes / 2 ** 20, depois / 2 ** 20))
+
+    def test_estado_pequeno_fica_como_estava(self):
+        os.environ["CONECTOR_ESTADO_MIN"] = "20000"
+        cm = _CM(2, 500)
+        paralelo._fim_onda(cm, 0, [0], [0, 1], log=False)
+        self.assertIsInstance(cm.vistas["T0"], set)
+        self.assertIn("T0", cm.existente)
+
+    @unittest.skipUnless(os.path.exists("/proc/self/smaps_rollup"), "precisa de /proc/self/smaps_rollup")
+    def test_gravador_herda_menos_paginas(self):
+        cm = _CM(3, 150000)
+        tracemalloc.start()
+        tracemalloc.stop()
+        paralelo._rastrear(cm)
+        cru = _sujo_no_filho(cm)
+        uso = paralelo.ultimo_uso(3, {}, [0, 1, 2])
+        for k in range(3):
+            paralelo._fim_onda(cm, k, [k], uso, log=False)
+        paralelo._rastrear(cm)
+        comp = _sujo_no_filho(cm)
+        print("\nMEMORIA gravador (fork, 3 tabelas x 150 mil linhas): Private_Dirty antes %.1f MB, depois %.1f MB"
+              % (cru, comp))
+        self.assertGreater(cru, 20)
+        self.assertLess(comp, cru / 4, (cru, comp))
+
+
+# ------------------------------------------------------------------ regra das concluídas (MariaDB)
+@unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
+class RegraConcluidas(unittest.TestCase):
+    COD = "f4rc_regra"
+
+    def setUp(self):
+        from sante_conector import banco, controle
+        self.root = banco.conectar(None, multi=True)
+        self.cli, self.ctl = "cliente_" + self.COD, controle.nome_ctl(self.COD)
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+            c.execute("CREATE DATABASE `%s`" % self.cli)
+        controle.preparar(self.root, self.COD, self.cli)
+        controle.preparar(self.root, self.COD, self.cli)  # idempotente
+
+    def tearDown(self):
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+        self.root.close()
+
+    def _x(self, sql, args=()):
+        with self.root.cursor() as c:
+            c.execute(sql.replace("{b}", "`%s`" % self.ctl), args)
+            return c.lastrowid
+
+    def test_marca_deducao_e_arquivo(self):
+        img = self._x("INSERT INTO {b}.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em, ods_versao,"
+                      " pagina_bytes, tabelas, registros_total, generators, somente_leitura, criado_em) VALUES"
+                      " (7, 'x.fdb', 1, %s, UTC_TIMESTAMP(), 12, 8192, 5, 10, 0, 1, UTC_TIMESTAMP(3))", ("a" * 64,))
+        for t, n in (("A", 3), ("B", 2), ("C", 2), ("D", 0), ("E", 3)):
+            self._x("INSERT INTO {b}.imagem_tabela (imagem_id, tabela_origem, registros, criado_em)"
+                    " VALUES (%s, %s, %s, UTC_TIMESTAMP(3))", (img, t, n))
+        linhas = [("A", "1", img), ("A", "2", img), ("A", "3", img), ("A", "1/dest_a", img), ("A", "2/dest_a/9", img),
+                  ("B", "1", img), ("C", "1", img), ("C", "2", img + 99), ("E", "1", img), ("E", "2", img),
+                  ("E", "3", img)]
+        for t, k, i in linhas:
+            self._x("INSERT INTO {b}.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
+                    " hash_linha, imagem_id, criado_em) VALUES (%s, %s, 'e', 1, %s, %s, UTC_TIMESTAMP(3))",
+                    (t, k, bytes(16), i))
+        self.root.commit()
+        plano = [{"tabela": t, "destinos": ["dest_" + t.lower()]} for t in "ABCDE"]
+        cont = {"A": 3, "B": 2, "C": 2, "D": 0, "E": 4}
+        r = continuar.concluidas(self.root, self.ctl, 7, plano, cont, "a" * 64)
+        # A: 3 linhas = 3 chaves principais da imagem (as secundárias não contam); B: falta linha; C: chave de imagem
+        # anterior (linha "igual" de outra importação); D: vazia; E: a contagem de agora difere (outro arquivo)
+        self.assertEqual((r["tabelas"], r["regra"]), ({"A"}, "deducao"))
+        self.assertRaises(continuar.NaoContinuavel, continuar.concluidas, self.root, self.ctl, 7, plano, cont, "b" * 64)
+        self.assertRaises(continuar.NaoContinuavel, continuar.concluidas, self.root, self.ctl, 8, plano, cont, "a" * 64)
+        self._x("INSERT INTO {b}.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, onda, origem,"
+                " criado_em) VALUES (7, %s, 'B', 0, 'carregada', UTC_TIMESTAMP(3)), (7, %s, 'Z', 0, 'carregada',"
+                " UTC_TIMESTAMP(3))", (img, img))
+        self.root.commit()
+        r = continuar.concluidas(self.root, self.ctl, 7, plano, cont, "a" * 64)
+        self.assertEqual((r["tabelas"], r["regra"]), ({"B"}, "marca"))  # com marca, só a marca vale
+
+
+# ------------------------------------------------------------------ plataforma (MariaDB)
+PLAT = "plataforma_teste_continuar"
+
+
+@unittest.skipUnless(TEM_BANCO and glob.glob("/db-plataforma/*.sql"), "precisa do MariaDB e das migrações da plataforma")
+class PlataformaContinuar(unittest.TestCase):
+    def setUp(self):
+        from sante_conector import banco
+        self._env = os.environ.get("CONECTOR_PLATAFORMA_BANCO")
+        os.environ["CONECTOR_PLATAFORMA_BANCO"] = PLAT
+        c = banco.conectar(None, multi=True)
+        banco.aplicar_script(c, "DROP DATABASE IF EXISTS `%s`; CREATE DATABASE `%s`" % (PLAT, PLAT))
+        c.select_db(PLAT)
+        for arq in sorted(glob.glob("/db-plataforma/*.sql")):
+            with open(arq, encoding="utf-8") as f:
+                banco.aplicar_script(c, f.read())
+        with c.cursor() as cur:
+            cur.execute("INSERT INTO cliente (codigo, nome, banco_nome, versao_migracao, origem_dados, criado_em)"
+                        " VALUES ('f4rc_plat', 'Cliente de exemplo', 'cliente_f4rc_plat', 'teste/0001',"
+                        " 'conector_spdata', UTC_TIMESTAMP(3))")
+            cid = cur.lastrowid
+            cur.execute("INSERT INTO cliente_origem (cliente_id, tipo, caminho_relativo, tamanho_bytes, sha256,"
+                        " modificado_em, ods_versao, pagina_bytes, vinculado_em, ativo, criado_em) VALUES"
+                        " (%s, 'firebird_arquivo', 'x.fdb', 8192, %s, UTC_TIMESTAMP(), 12, 8192, UTC_TIMESTAMP(3),"
+                        " TRUE, UTC_TIMESTAMP(3))", (cid, "a" * 64))
+        c.close()
+        self.c = banco.conectar(PLAT)
+
+    def tearDown(self):
+        from sante_conector import banco
+        self.c.close()
+        c = banco.conectar(None)
+        with c.cursor() as cur:
+            cur.execute("DROP DATABASE IF EXISTS `%s`" % PLAT)
+        c.close()
+        if self._env is None:
+            os.environ.pop("CONECTOR_PLATAFORMA_BANCO", None)
+        else:
+            os.environ["CONECTOR_PLATAFORMA_BANCO"] = self._env
+
+    def test_orfa_continuavel_e_enfileirar_continuar(self):
+        from sante_conector import plataforma
+        from sante_conector.trabalhador import Trabalhador
+        P = plataforma
+        self.assertRaises(P.PlataformaErro, P.enfileirar, self.c, "f4rc_plat", "importar", continuar=True)  # nada
+        self.assertRaises(P.PlataformaErro, P.enfileirar, self.c, "f4rc_plat", "sincronizar", continuar=True)
+        eid = P.enfileirar(self.c, "f4rc_plat", "importar")
+        t1 = Trabalhador("t1")
+        self.assertEqual(t1.tomar_vaga(), 1)
+        self.assertEqual(t1.reivindicar(), eid)
+        P.mudar_estado(self.c, eid, "lendo", etapa="contando")
+        P.mudar_estado(self.c, eid, "gravando", etapa="gravando")
+        P.progresso(self.c, eid, 70, "carregando 6 tabelas em paralelo (onda 177 de 218)", {"registros_lidos": 5})
+        t1.fechar()  # o worker caiu: a trava da execução some com a conexão
+        t2 = Trabalhador("t2")
+        try:
+            self.assertEqual(t2.recuperar_orfas(), [eid])
+        finally:
+            t2.fechar()
+        ex = P.consultar(self.c, eid)
+        self.assertEqual(ex["estado"], "falhou")
+        self.assertEqual(ex["etapa"], "interrompida: carregando 6 tabelas em paralelo (onda 177 de 218)")
+        self.assertIn("interrompido", ex["motivo_falha"])
+        self.assertIn("--continuar", ex["motivo_falha"])
+        self.assertEqual(ex["contadores"]["interrompida"]["continuavel"], True)
+        self.assertEqual(ex["contadores"]["registros_lidos"], 5)
+        e2 = P.enfileirar(self.c, "f4rc_plat", "importar", continuar=True)
+        self.assertEqual(P.consultar(self.c, e2)["contadores"], {"continuar_de": eid})
+        with self.c.cursor() as cur:
+            cur.execute("SELECT detalhe FROM cliente_evento WHERE JSON_VALUE(detalhe, '$.execucao_id')=%s"
+                        " ORDER BY id DESC LIMIT 1", (e2,))
+            self.assertEqual(json.loads(cur.fetchone()[0])["continuar_de"], eid)
+        P.cancelar(self.c, e2)
+        self.assertRaises(P.PlataformaErro, P.enfileirar, self.c, "f4rc_plat", "importar", continuar=True)  # cancelada
+
+
+# ------------------------------------------------------------------ continuação ponta a ponta (Firebird + MariaDB)
+@unittest.skipUnless(NO_CONTAINER, "só no container do conector, com o MariaDB da rede interna")
+class ContinuacaoPontaAPonta(unittest.TestCase):
+    def test_interrompida_no_meio_continua_e_fica_igual_a_inteira(self):
+        from sante_conector import abridor, banco, controle, sintetica
+        from sante_conector.leitor import Leitor
+        from sante_conector.sintetica_d import exemplo_l9 as ex
+        d = os.path.join(os.environ.get("CONECTOR_TRABALHO_DIR", "/trabalho"), "continuar-f4rc")
+        os.makedirs(d, exist_ok=True)
+        arq = os.path.join(d, "v1.fdb")
+        for x in (arq, arq[:-4] + ".manifesto.json"):
+            if os.path.exists(x):
+                os.remove(x)
+        ex.VERSAO, ex.DDL = 1, ex.ddl(1)
+        sintetica.gerar(arq, versao=1, fatias=["exemplo_l9"])
+        root = banco.conectar(None, multi=True)
+        sha = "c" * 64
+
+        def um(sql, args=()):
+            with root.cursor() as c:
+                c.execute(sql, args)
+                return c.fetchall()
+
+        def preparar(cod):
+            cli, ctl = "cliente_" + cod, controle.nome_ctl(cod)
+            with root.cursor() as c:
+                for b in (cli, ctl):
+                    c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+                c.execute("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_uca1400_ai_ci" % cli)
+            controle.preparar(root, cod, cli)
+            root.select_db(cli)
+            banco.aplicar_script(root, ex.DDL_DESTINO)
+            return cli, ctl
+
+        def rodar(cod, eid, falhar=None, **kw):
+            cli, ctl = "cliente_" + cod, controle.nome_ctl(cod)
+            with abridor.abrir(arq, modo="snapshot", cow_mb=64) as ab, Leitor(ab.dispositivo) as lt:
+                presentes = set(lt.tabelas())
+                contagens = {t: lt.contar(t) for t in presentes}
+                with root.cursor() as c:  # a imagem que o motor grava (a continuação confere o arquivo por ela)
+                    c.execute("INSERT INTO `%s`.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em,"
+                              " ods_versao, pagina_bytes, tabelas, registros_total, generators, somente_leitura,"
+                              " criado_em) VALUES (%%s, 'v1.fdb', 1, %%s, UTC_TIMESTAMP(), 12, 8192, %%s, %%s, 0, 1,"
+                              " UTC_TIMESTAMP(3))" % ctl, (eid, sha, len(contagens), sum(contagens.values())))
+                    img = c.lastrowid
+                    c.executemany("INSERT INTO `%s`.imagem_tabela (imagem_id, tabela_origem, registros, criado_em)"
+                                  " VALUES (%%s, %%s, %%s, UTC_TIMESTAMP(3))" % ctl,
+                                  [(img, t, n) for t, n in contagens.items()])
+                root.commit()
+                plano = carga_mapa.planejar(ex.MAPA_TESTE, presentes)
+                if kw.get("continuar_de"):
+                    kw["pular"] = continuar.concluidas(root, ctl, kw["continuar_de"], plano, contagens, sha)["tabelas"]
+                cc = banco.conectar(cli, autocommit=False)
+                try:
+                    cm = carga_mapa.CargaMapa(lt, cc, ctl, eid, img, ex.MAPA_TESTE, **kw)
+                    if falhar:
+                        orig = carga_mapa.CargaMapa._linhas_mapa
+
+                        def linhas(self, p):
+                            for n, x in enumerate(orig(self, p)):
+                                if p["tabela"] == falhar[0] and n == falhar[1]:
+                                    raise RuntimeError("interrompida pelo teste")
+                                yield x
+                        with mock.patch.object(carga_mapa.CargaMapa, "_linhas_mapa", linhas):
+                            self.assertRaises(Exception, cm.executar, presentes, contagens)
+                        return cm, None, plano, contagens
+                    res = cm.executar(presentes, contagens)
+                finally:
+                    cc.close()
+            return cm, res, plano, contagens
+
+        def destino(cli):
+            return {t: um("SELECT COUNT(*) FROM `%s`.`%s`" % (cli, t))[0][0]
+                    for (t,) in um("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s", (cli,))}
+
+        def regras(pend):
+            r = {}
+            for t, _, regra, _, _ in pend:
+                r[(t, regra)] = r.get((t, regra), 0) + 1
+            return r
+        try:
+            preparar("f4rc_ref")
+            cm_r, res_r, plano, contagens = rodar("f4rc_ref", 1)
+            self.assertEqual([k for k, r in res_r["entidades"].items() if not r["conferido"]], [])
+            # a maior tabela do plano falha no meio (60% das linhas lidas) numa onda que não é a primeira
+            ws = paralelo.ondas(plano, ex.MAPA_TESTE)
+            cand = [plano[i]["tabela"] for w in ws[1:] for i in w]
+            alvo = max(cand, key=lambda t: contagens.get(t, 0))
+            for legado in (True, False):
+                cli, ctl = preparar("f4rc_cont")
+                os.environ["CONECTOR_ESTADO_MIN"] = "1"  # (B) compacta e libera tudo: o resultado não muda
+                try:
+                    rodar("f4rc_cont", 1, falhar=(alvo, int(contagens[alvo] * 0.6)))
+                    if legado:  # execução anterior à marca (a 11 da ProntoCardio): só a dedução pelo controle
+                        um("DELETE FROM `%s`.conector_tabela_concluida" % ctl)
+                        root.commit()
+                    versao_antes = dict(um("SELECT tabela_origem, SUM(versao) FROM `%s`.conector_origem GROUP BY 1"
+                                           % ctl))
+                    cm_c, res_c, _, _ = rodar("f4rc_cont", 2, continuar_de=1)
+                finally:
+                    os.environ.pop("CONECTOR_ESTADO_MIN", None)
+                self.assertTrue(cm_c.pular, "nenhuma tabela pulada")
+                self.assertNotIn(alvo, cm_c.pular)
+                ruins = [k for k, r in res_c["entidades"].items() if not r["conferido"]]
+                self.assertEqual(ruins, [], {k: (res_c["entidades"][k], res_r["entidades"][k], k in cm_c.pular)
+                                             for k in ruins})
+                chave = ("registros_origem", "registros_destino", "recusados", "soma_destino")
+                self.assertEqual({k: [r[x] for x in chave] for k, r in res_c["entidades"].items()},
+                                 {k: [r[x] for x in chave] for k, r in res_r["entidades"].items()})
+                self.assertEqual(destino(cli), destino("cliente_f4rc_ref"))
+                self.assertEqual(regras(cm_c.pend), regras(cm_r.pend))
+                versao_depois = dict(um("SELECT tabela_origem, SUM(versao) FROM `%s`.conector_origem GROUP BY 1"
+                                        % ctl))
+                for t in cm_c.pular:  # nunca regravar linha já vista
+                    self.assertEqual(versao_depois.get(t), versao_antes.get(t), t)
+                marcas = dict(um("SELECT tabela_origem, origem FROM `%s`.conector_tabela_concluida WHERE"
+                                 " execucao_id=2" % ctl))
+                self.assertEqual({t for t, o in marcas.items() if o == "continuada"}, set(cm_c.pular))
+                self.assertEqual(set(marcas), {p["tabela"] for p in plano})
+                self.assertIn("pico", res_c["carga"]["memoria"])
+                print("\nCONTINUACAO (%s): %d de %d tabelas puladas, alvo interrompido %s" % (
+                    "deducao" if legado else "marca", len(cm_c.pular), len(plano), alvo))
+        finally:
+            with root.cursor() as c:
+                for cod in ("f4rc_ref", "f4rc_cont"):
+                    for b in ("cliente_" + cod, controle.nome_ctl(cod)):
+                        c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+            root.close()
+
+
+if __name__ == "__main__":
+    time.sleep(0)
+    unittest.main()

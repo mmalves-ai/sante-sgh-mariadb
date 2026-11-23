@@ -18,8 +18,8 @@ import time
 
 import pymysql
 
-from . import (banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma, preco_origem,
-               relatorio)
+from . import (banco, caminho, carga, carga_mapa, continuar, controle, disco, imagem, mapa, plataforma,
+               preco_origem, relatorio)
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -186,6 +186,16 @@ def executar(trab, eid):
                 rel["reprocessar_recusadas"] = cont["reprocessar_recusadas"] = True
             plano = carga_mapa.planejar(mapa_exec, carregar)
             rel["plano"] = [p["tabela"] for p in plano]
+            # continuação de uma importação interrompida (continuar.py): as tabelas que ela concluiu são puladas
+            pular, de = frozenset(), (ex["contadores"] or {}).get("continuar_de")
+            if de:
+                cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes)
+                pular = frozenset(cc0["tabelas"])
+                rel["continuacao"] = cont["continuacao"] = {
+                    "de": int(de), "regra": cc0["regra"], "tabelas_plano": len(plano), "tabelas_puladas": len(pular),
+                    "linhas_puladas": sum(int(contagens.get(t, 0)) for t in pular)}
+                plataforma.progresso(conn, eid, 64, "continuando a execução %d: %d de %d tabelas já concluídas"
+                                     % (int(de), len(pular), len(plano)), cont)
             if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
                 try:
@@ -203,7 +213,8 @@ def executar(trab, eid):
                                                       entidades_usadas=set(resumo["entidades"]),
                                                       sincronizar=ex["tipo"] == "sincronizar",
                                                       confirmar_exclusao_em_massa=bool(
-                                                          ex.get("confirmar_exclusao_em_massa"))).executar(
+                                                          ex.get("confirmar_exclusao_em_massa")),
+                                                      pular=pular, continuar_de=int(de) if de else None).executar(
                                 carregar, contagens)  # ADIAR/SO valem também aqui: executar() refaz o plano
                             resumo["entidades"].update(rm["entidades"])
                             resumo["versao_mapa"] += "+" + rm["versao_mapa"]

@@ -22,6 +22,17 @@ Ordem do plano:
   (`primeira_carga`): no Sincronizar e na reexecução a tabela vai inteira a um gravador, como antes;
 - onda de uma tabela só, sem divisão, roda no próprio coordenador, como antes.
 
+Memória (rodada retomar-importacao, 2026-11-23; a carga real chegou a 34 GB no coordenador e o par a 70 GB):
+- o de-para (`existente[t]`) é carregado sob demanda e, se grande (CONECTOR_ESTADO_MIN linhas, padrão 20 mil), é
+  liberado ao fim da última onda que o usa (`ondas(..., refs)`: qualquer menção entre as tabelas); quem precisar
+  depois (fase 2, conciliação) relê do conector_origem, que é igual à memória depois do commit;
+- as chaves vistas e a soma da origem da tabela (`vistas[t]`, `origem[ent]`, `aguardam[ent]`), que só a conciliação
+  usa, são COMPACTADAS ao fim da onda (`Compacto`: pickle + zlib num único `bytes`). O gravador que nasce do fork
+  herda um objeto só por tabela: tocar nele copia uma página, e não as páginas de milhões de objetos pequenos (a
+  contagem de referências de cada objeto lido escreve na página, e o fork copia a página inteira);
+- o gravador não devolve o de-para que só LEU do banco (`_SO_CACHE`): o coordenador relê se precisar;
+- `medir` (RSS e linhas do estado) vai ao stderr do worker a cada onda e ao resumo da carga (`carga.memoria`).
+
 Estado em memória: o gravador nasce do fork com todo o estado do coordenador e devolve só a diferença (chaves tocadas
 dos dicionários, cauda das listas, soma dos contadores); o coordenador junta e segue com a fase 2, o Sincronizar, a
 conciliação e o relatório exatamente como antes. `CONECTOR_GRAVADORES=1` é a carga de um processo só, sem mudança.
@@ -32,8 +43,11 @@ import itertools
 import json
 import os
 import re
+import pickle
 import signal
+import sys
 import traceback
+import zlib
 from multiprocessing.connection import Pipe, wait
 
 import pymysql
@@ -52,7 +66,99 @@ _ATIVO = [False]  # só o gravador anota as chaves alteradas (no coordenador o d
 _FORA = frozenset({"lt", "cr", "progresso", "mapa_exec", "plano", "tabelas", "chaves", "_fila", "_diario", "_buf",
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
                    "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
-                   "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar"})
+                   "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar", "pular", "continuar_de", "memoria",
+                   "_carregar_existente", "_registrar"})
+_SO_CACHE = set()  # no gravador: tabelas do plano cujo de-para só foi LIDO do banco (não volta ao coordenador)
+ESTADO_MIN = 20000
+
+
+def estado_min():
+    try:
+        return max(1, int(os.environ.get("CONECTOR_ESTADO_MIN") or ESTADO_MIN))
+    except ValueError:
+        return ESTADO_MIN
+
+
+class Compacto:
+    """Estado de tabela que só a conciliação lê, compactado num único `bytes` (pickle + zlib)."""
+    __slots__ = ("dados", "n")
+
+    def __init__(self, obj):
+        self.dados = zlib.compress(pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL), 1)
+        self.n = len(obj)
+
+    def abrir(self):
+        return pickle.loads(zlib.decompress(self.dados))
+
+    def __len__(self):
+        return self.n
+
+
+def medir(cm):
+    """Tamanho do estado do coordenador (linhas por estrutura e RSS), só contagens."""
+    def soma(d):
+        return sum(len(x) for x in d.values() if isinstance(x, (set, dict)))
+    vistas, origem, aguardam, ext = (getattr(cm, n, None) or {} for n in ("vistas", "origem", "aguardam", "existente"))
+    comp = sum(len(x.dados) for d in (vistas, origem, aguardam) for x in d.values() if isinstance(x, Compacto))
+    try:
+        with open("/proc/self/statm") as f:
+            rss = int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") // 2 ** 20
+    except (OSError, ValueError):
+        rss = None
+    return {"rss_mb": rss, "existente_tabelas": len(ext), "existente_linhas": soma(ext),
+            "vistas_linhas": soma(vistas), "origem_linhas": soma(origem), "pendencias": len(getattr(cm, "pend", ())),
+            "compactado_mb": round(comp / 2 ** 20, 1)}
+
+
+def ultimo_uso(n, refs, pos):
+    """Para cada tabela do plano: a última posição (onda ou índice) de uma tabela ligada a ela, ou a dela."""
+    u = list(pos)
+    for i, js in refs.items():
+        for j in js:
+            u[j], u[i] = max(u[j], pos[i]), max(u[i], pos[j])
+    return u
+
+
+def _fim_onda(cm, k, onda, uso, log=True):
+    """Onda commitada: marca de tabela concluída (continuação), estado grande compactado ou liberado e medição."""
+    tabs = [cm.plano[i]["tabela"] for i in onda]
+    if isinstance(getattr(cm, "cr", None), pymysql.connections.Connection) and not getattr(cm, "_sem_marca", False):
+        from . import continuar
+        try:
+            continuar.marcar(cm, tabs, k)
+        except pymysql.err.ProgrammingError as e:  # controle sem a tabela da marca (preparado à mão em teste)
+            if not (e.args and e.args[0] == 1146):
+                raise
+            cm._sem_marca = True
+    lim = estado_min()
+    if not all(hasattr(cm, n) for n in ("vistas", "origem", "aguardam", "existente", "_nome_ent")):
+        return  # carga de teste sem o estado completo
+    for i in onda:
+        p = cm.plano[i]
+        ents = [cm._nome_ent(p["tabela"], dt) for dt in p["destinos"]]
+        for d, kk in [(cm.vistas, p["tabela"])] + [(cm.origem, e) for e in ents] + [(cm.aguardam, e) for e in ents]:
+            v = d.get(kk)
+            if isinstance(v, (set, dict)) and len(v) >= lim:
+                d[kk] = Compacto(v)
+    livres = set()
+    for j, p in enumerate(cm.plano):
+        t = p["tabela"]
+        if uso[j] <= k and len(cm.existente.get(t) or ()) >= lim:
+            del cm.existente[t]
+            livres.add(t)
+    if livres:
+        for nome in ("_idx_por_pai", "_origem_pai", "_alt", "_alt_lista"):
+            d = getattr(cm, nome, None)
+            for kk in [x for x in (d or {}) if isinstance(x, tuple) and x and x[0] in livres]:
+                del d[kk]
+    m = medir(cm)
+    mem = cm.__dict__.setdefault("memoria", {})
+    mem["ondas"] = mem.get("ondas", 0) + 1
+    mem["ultima"] = m
+    if m["rss_mb"] is not None and m["rss_mb"] >= (mem.get("pico") or {}).get("rss_mb", -1):
+        mem["pico"] = dict(m, onda=k + 1)
+    if log:
+        print("conector memoria onda %d: %s" % (k + 1, json.dumps(m, sort_keys=True)), file=sys.stderr, flush=True)
 
 
 def gravadores():
@@ -242,6 +348,8 @@ def _delta(cm, base):
             ops.append((quem, n, "set", None, v))
         elif isinstance(v, _Rastreado):
             for k, (velho, tam, num) in v.ant.items():
+                if quem == "" and n == "existente" and k in _SO_CACHE:
+                    continue  # de-para só lido do banco: o coordenador relê se precisar
                 novo = dict.get(v, k, _FALTA)
                 lims = _FILTRO.get((n, k)) if quem == "" else None
                 if lims is not None and isinstance(novo, (dict, set)):  # tabela dividida: só as chaves das faixas
@@ -344,7 +452,7 @@ def _atualiza(p):
                    if (ops.get(dt) or {}).get("complementa") or (ops.get(dt) or {}).get("adotar")}
 
 
-def ondas(plano, mapa_exec, fks=None):
+def ondas(plano, mapa_exec, fks=None, refs=None):
     """Lista de ondas (índices do plano). B depois de A (A antes no plano) quando uma menciona a outra, as duas
     gravam o mesmo destino ou uma ATUALIZA (`complementa`/`adotar`) linhas de um destino que a outra referencia por
     chave estrangeira (`fks`: {tabela: referenciadas}); a onda de B é a maior onda dessas A mais um.
@@ -373,6 +481,8 @@ def ondas(plano, mapa_exec, fks=None):
                    for j in por_dest.get(r, ()) if r in _atualiza(plano[j])}  # pai que outra atualiza
         for j in outros - {i}:
             ligados[max(i, j)].add(min(i, j))
+    if refs is not None:  # quem usa o estado de quem (liberação do de-para depois da última onda que o usa)
+        refs.update({i: set(x) for i, x in enumerate(ligados)})
     onda = []
     for i in range(len(plano)):
         onda.append(max((onda[j] + 1 for j in ligados[i]), default=0))
@@ -482,6 +592,19 @@ def _gravador(cm, con):
             a[0] += 1
             return a[0] - 1
         cm._reservar = reservar
+        _SO_CACHE.clear()
+        do_plano = {p["tabela"] for p in cm.plano}
+        carregar0, registrar0 = cm._carregar_existente, cm._registrar
+
+        def carregar_existente(tab):
+            carregar0(tab)
+            if tab in do_plano:
+                _SO_CACHE.add(tab)
+
+        def registrar(tab, *a, **kw):
+            _SO_CACHE.discard(tab)
+            return registrar0(tab, *a, **kw)
+        cm._carregar_existente, cm._registrar = carregar_existente, registrar
         _pre_tocar(cm, frozenset(), tudo_pequeno=True)
         base = _base(cm)
         feito = None
@@ -596,13 +719,25 @@ def carregar(cm, contagens):
     from .leitor import Leitor
     n = gravadores()
     total = len(cm.plano)
+    pular = getattr(cm, "pular", frozenset())
+    refs = {}
     if n <= 1 or not isinstance(cm.lt, Leitor) or not isinstance(cm.cr, pymysql.connections.Connection):
+        ondas(cm.plano, cm.mapa_exec, None, refs)
+        uso = ultimo_uso(total, refs, list(range(total)))
         for i, p in enumerate(cm.plano):
+            if p["tabela"] in pular:  # continuação: concluída pela execução interrompida
+                continue
             cm.progresso(i / total, "carregando %s" % p["destinos"][0])
             cm._tabela(p)
+            _fim_onda(cm, i, [i], uso, log=isinstance(cm.lt, Leitor))
         return
-    feitos = [0]
-    ws = ondas(cm.plano, cm.mapa_exec, fks_banco(cm.cr))
+    feitos = [sum(1 for p in cm.plano if p["tabela"] in pular)]
+    ws = ondas(cm.plano, cm.mapa_exec, fks_banco(cm.cr), refs)
+    pos = [0] * total
+    for k, onda in enumerate(ws):
+        for i in onda:
+            pos[i] = k
+    uso = ultimo_uso(total, refs, pos)
 
     def ao_feito(f):
         i = f if isinstance(f, int) else f[0]
@@ -611,6 +746,13 @@ def carregar(cm, contagens):
                                                                              len(ws)))
     cm.divididas = getattr(cm, "divididas", {})
     for k, onda in enumerate(ws):
+        onda = [i for i in onda if cm.plano[i]["tabela"] not in pular]
+        if not onda:
+            continue
+        # de-para da onda e das tabelas ligadas a ela no coordenador ANTES do fork: os gravadores herdam (sem reler)
+        for t in sorted({cm.plano[j]["tabela"] for i in onda for j in [i] + sorted(refs.get(i, ()))}):
+            if t not in cm.existente:
+                cm._carregar_existente(t)
         tarefas = []  # (linhas estimadas, posição no plano, tarefa: índice ou (índice, parte, partes, lo, hi, faixas))
         for i in onda:
             p, est = cm.plano[i], int(contagens.get(cm.plano[i]["tabela"], 0) or 0)
@@ -629,6 +771,7 @@ def carregar(cm, contagens):
             cm.progresso(feitos[0] / total, "carregando %s (onda %d de %d)" % (p["destinos"][0], k + 1, len(ws)))
             cm._tabela(p)
             feitos[0] += 1
+            _fim_onda(cm, k, onda, uso)
             continue
         cm._commit()  # o que a onda anterior gravou fica visível aos gravadores
         _rastrear(cm)
@@ -668,3 +811,5 @@ def carregar(cm, contagens):
         finally:
             for con in filhos:
                 con.close()
+        cm._commit()
+        _fim_onda(cm, k, onda, uso)

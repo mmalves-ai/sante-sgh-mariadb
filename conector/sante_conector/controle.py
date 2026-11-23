@@ -122,6 +122,18 @@ ALTER TABLE {b}.pendencia
     COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
   ADD INDEX IF NOT EXISTS ix_pendencia_regra (tabela_origem, regra, chave_original(190)),
   ADD INDEX IF NOT EXISTS ix_pendencia_resolvida (resolvida_execucao_id);
+CREATE TABLE IF NOT EXISTS {b}.conector_tabela_concluida (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  execucao_id BIGINT UNSIGNED NOT NULL COMMENT 'conector_execucao.id na plataforma',
+  imagem_id BIGINT UNSIGNED NOT NULL,
+  tabela_origem VARCHAR(63) NOT NULL,
+  onda INT UNSIGNED NULL COMMENT 'Onda da carga paralela (índice a partir de 0); NULL na herdada',
+  origem VARCHAR(12) NOT NULL COMMENT 'carregada nesta execução ou continuada (concluída pela execução continuada)',
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_conector_tabela_concluida (execucao_id, tabela_origem),
+  CONSTRAINT ck_conector_tabela_concluida_origem CHECK (origem IN ('carregada', 'continuada'))
+) COMMENT='Tabela da carga pelo mapa concluída e commitada em cada execução: base da continuação (continuar.py)';
 CREATE TABLE IF NOT EXISTS {b}.conciliacao (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL,

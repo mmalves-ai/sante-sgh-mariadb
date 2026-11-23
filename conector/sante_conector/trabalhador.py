@@ -5,7 +5,9 @@
 - Retirada: `SELECT ... FOR UPDATE SKIP LOCKED` sobre a fila; a passagem para `abrindo` e o evento vão na mesma
   transação. Durante a execução, o trabalhador segura a trava nomeada da execução.
 - Uma execução por cliente: índice único `uq_conector_execucao_cliente_ativo` (estados ativos), já no enfileirar.
-- Órfãs: execução rodando cuja trava ninguém segura (trabalhador caiu) vira `falhou`; snapshot `sscon-e<id>-<ficha>`
+- Órfãs: execução rodando cuja trava ninguém segura (trabalhador caiu) vira `falhou` CONTINUÁVEL: a etapa em que
+  parou fica (`interrompida: <etapa>` e `contadores.interrompida`), e a importação continua por
+  `enfileirar <cliente> importar --continuar` (continuar.py); snapshot `sscon-e<id>-<ficha>`
   sem dono é desmontado pelo abridor separado (o trabalhador não tem privilégio: `separado.py`).
 """
 import os
@@ -96,8 +98,15 @@ class Trabalhador:
         for eid in ids:
             if self._livre(self.trava_execucao(eid)) and self._trava(self.trava_execucao(eid)):
                 try:
-                    plataforma.mudar_estado(self.conn, eid, "falhou", etapa="falhou",
-                                            motivo="trabalhador interrompido (sem trava viva)")
+                    ex = plataforma.consultar(self.conn, eid)
+                    cont = dict(ex["contadores"] or {})
+                    cont["interrompida"] = {"etapa": ex["etapa"], "percentual": ex["percentual"],
+                                            "continuavel": ex["tipo"] == "importar"}
+                    motivo = "trabalhador interrompido (sem trava viva)"
+                    if ex["tipo"] == "importar":
+                        motivo += "; continuável: enfileirar %s importar --continuar" % ex["codigo"]
+                    plataforma.mudar_estado(self.conn, eid, "falhou", etapa=("interrompida: %s" % (ex["etapa"] or ""))[:120],
+                                            motivo=motivo, contadores=cont)
                     feitas.append(eid)
                 except plataforma.PlataformaErro:
                     pass

@@ -180,7 +180,7 @@ import time
 import pymysql
 
 from . import sincronizar as sincronizar_mod
-from . import carga, continuidade, depara, mapa, paralelo, sentinela
+from . import carga, continuar, continuidade, depara, mapa, paralelo, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_linha
 from .pendencia import Propagador
@@ -602,7 +602,8 @@ def _truncar(v, precisao):
 
 class CargaMapa(carga.Carga):
     def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=(),
-                 sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False, limite_global=None):
+                 sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False, limite_global=None,
+                 pular=(), continuar_de=None):
         super().__init__(leitor, cr, ctl, eid, imagem_id, progresso)
         # L9: Sincronizar (a origem vence; edição do destino guardada; exclusão lógica com reativação)
         self.sinc = bool(sincronizar)
@@ -660,6 +661,9 @@ class CargaMapa(carga.Carga):
         self._autoinc = {}                  # destino -> tem `id` autoincremento
         self._filho_pai = {}                # (dt, coluna, tabela do pai) -> [(id da filha, id esperado do pai)]
         self.chave_cofre = continuidade.chave_mestra()
+        self.pular = frozenset(pular)       # continuação: tabelas concluídas pela execução interrompida (continuar.py)
+        self.continuar_de = continuar_de
+        self.memoria = {}                   # medição do estado por onda (paralelo.medir)
 
     # ----- destino -----
     def _info(self, dt):
@@ -2374,6 +2378,8 @@ class CargaMapa(carga.Carga):
     def _tabela(self, p):
         t, dts = p["tabela"], p["destinos"]
         ents = [self._nome_ent(t, dt) for dt in dts]
+        if t not in self.existente:  # de-para sob demanda (liberado depois da última onda que o usa)
+            self._carregar_existente(t)
         self._preparar(p)
         colide = self._colisoes(p)
         self._montar_grupos(p)
@@ -2715,8 +2721,11 @@ class CargaMapa(carga.Carga):
         if not self.plano:
             return {"versao_mapa": VERSAO, "entidades": {}, "pendencias": {"total": 0, "criticas": 0, "por_regra": {}},
                     "carga": dict(self.cont, por_tabela={})}
-        for p in self.plano:
-            self._carregar_existente(p["tabela"])
+        for p in self.plano:  # nome da entidade na ordem do plano (como na carga em ordem): a continuação pula
+            for dt in p["destinos"]:  # tabelas e o destino comum (`complementa`) não pode trocar de nome
+                self._nome_ent(p["tabela"], dt)
+        # o de-para de cada tabela é carregado sob demanda (_tabela, referências, fase 2, conciliação) e o grande é
+        # liberado depois da última onda que o usa (paralelo._fim_onda): carregar todos no início era o pico de memória
         if self.sinc:
             sincronizar_mod.carregar_excluidas(self)
         # tabelas de continuidade garantidas ANTES da primeira linha: CREATE TABLE faz commit implícito e, no meio de
@@ -2724,18 +2733,48 @@ class CargaMapa(carga.Carga):
         self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
         self._garantir("segredo_cofre", continuidade.DDL_COFRE)
         self.cr.commit()
+        if self.pular:  # continuação: as concluídas pela interrompida ficam marcadas também nesta, com as pendências
+            pul = [t for t in self.tabelas if t in self.pular]
+            continuar.marcar(self, pul, None, "continuada")
+            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(self, self.continuar_de, pul)
         paralelo.carregar(self, contagens)  # um leitor e N gravadores (CONECTOR_GRAVADORES; 1 = ordem do plano)
         self._fase2()
         if self.sinc:
             sincronizar_mod.excluir_apagadas(self)
         sincronizar_mod.sequencias(self)
         res = self.conciliar(contagens)
+        res["carga"]["memoria"] = self.memoria
         res["sincronizar"] = sincronizar_mod.resumo(self)
         res["filho_pai"] = self._conferir_filho_pai()
         res["provas"] = self._provas(presentes)
         self._gravar_provas(res)
         self._commit()
         return res
+
+    def _abrir_estado(self, p):
+        """Conciliação: estado da tabela descompactado (paralelo.Compacto), refeito do controle (tabela pulada na
+        continuação) e de-para carregado sob demanda."""
+        t = p["tabela"]
+        if t in self.pular:
+            continuar.reconstruir(self, p)
+        elif t not in self.existente:
+            self._carregar_existente(t)
+        for nome, k in [("vistas", t)] + [(n, self._nome_ent(t, dt)) for dt in p["destinos"]
+                                          for n in ("origem", "aguardam")]:
+            d = getattr(self, nome)
+            if isinstance(d.get(k), paralelo.Compacto):
+                d[k] = d[k].abrir()
+
+    def _fechar_estado(self, p):
+        """Tabela conciliada: nada mais usa o estado GRANDE dela (o pequeno fica, como sempre)."""
+        t, lim = p["tabela"], paralelo.estado_min()
+        if len(self.vistas.get(t) or ()) >= lim or t in self.pular:
+            self.vistas.pop(t, None)
+            self.existente.pop(t, None)
+            for dt in p["destinos"]:
+                e = self._nome_ent(t, dt)
+                self.origem.pop(e, None)
+                self.aguardam.pop(e, None)
 
     def _gravar_provas(self, res):
         """Prova e filho -> pai entram na conciliação (entidade `prova:<TABELA>` e `filho_pai:<destino.coluna>`)."""
@@ -2791,6 +2830,7 @@ class CargaMapa(carga.Carga):
         res = {}
         for p in self.plano:
             t = p["tabela"]
+            self._abrir_estado(p)
             vistas = self.vistas.get(t, set())
             for i, dt in enumerate(p["destinos"]):
                 ent = self._nome_ent(t, dt)
@@ -2828,6 +2868,7 @@ class CargaMapa(carga.Carga):
                             "registros_destino": len(destino), "recusados": recusadas if i == 0 else 0,
                             "aguardam_sincronizar": len(aguardam), "editados_no_destino": editados,
                             "apagados_na_origem": apagadas, "soma_origem": so, "soma_destino": sd, "conferido": ok}
+            self._fechar_estado(p)
         carga.aplicar_limite_recusa(res)
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
         por_regra = {}
