@@ -12,6 +12,7 @@ import {
   SITUACOES_VINCULO_REDE,
   TIPOS_DIVERGENCIA_INDICE_REDE,
 } from './vocabulario.js';
+import { idBancoTexto } from '../validacao/id-banco.js';
 
 /** Teto da página da fila (paginação no servidor). */
 export const TETO_PAGINA_FILA_REDE = 50;
@@ -28,7 +29,7 @@ export const esquemaConsultaFilaRede = z
     /** Só os pares com um cadastro deste estabelecimento (padrão: o da sessão e todos os outros da rede). */
     outroEstabelecimento: codigoEstabelecimento.optional(),
     /** Busca por paciente: o prontuário do cadastro no estabelecimento da sessão. */
-    prontuario: z.coerce.number().int().min(1).max(2_147_483_647).optional(),
+    prontuario: idBancoTexto.optional(),
     pagina: z.coerce.number().int().min(1).max(10_000).default(1),
     porPagina: z.coerce.number().int().min(1).max(TETO_PAGINA_FILA_REDE).default(20),
   })

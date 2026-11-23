@@ -16,8 +16,9 @@ import {
 } from './entradas.js';
 import { esquemaPreviaGrade } from './respostas.js';
 import { motivoCancelamento } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32767);
 const n = z.number().int();
 const txt = z.string();

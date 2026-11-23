@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { esquemaChaveAto } from '../enfermagem/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 /** Os movimentos do consignado (SGH_SUP_CONSIGNADO.TIPO) e o efeito no saldo do fornecedor. */
 export const TIPOS_MOVIMENTO_CONSIGNADO = [
@@ -28,8 +29,8 @@ export const DIAS_ALERTA_CONSIGNADO = 7;
 /** Quantos consumos uma reposição ou um faturamento liga de uma vez. */
 export const MAXIMO_CONSUMOS_REPOSICAO = 50;
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idSgh = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idSgh = idBanco;
 const smallint = z.number().int().min(1).max(32_767);
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());

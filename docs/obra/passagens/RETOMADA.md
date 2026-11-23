@@ -126,6 +126,11 @@
    25 GB: abaixo de 2,5 GB o vigia derruba a carga. Rodar a simulação e o push assim que a memória passar de 20 GB
    ou a carga terminar. O Oracle de referência (sante-sgh-oracle) foi parado às 15h37 pela mesma razão
    (religar com docker start depois da carga).
+**ORDEM DO DONO (23/11, 19h): a construção nada para enquanto houver trabalho na fila.** Em 23/11 a construção ficou
+parada das 14h50 em diante porque o orquestrador pediu chat novo e não lançou nada; o dono não mandou parar. A sessão
+nova lança as rodadas logo depois de ler esta passagem (ids-bigint, trilha importada, senha e segundo fator por
+e-mail), começando pelo que não pesa na memória enquanto a carga rodar.
+
 0b. **Defeito de desenho da SBIS-16 diante da importação (rodada própria, logo depois da ids-bigint):** o conector
    grava trilha_auditoria (L5-05, L5-08, L6-04, L6-11, L7-03; 647 mil linhas na ProntoCardio) sem hash, e a prova da
    cadeia (packages/nucleo/src/trilha.ts ~255) acusa como quebra toda linha sem cadeia acima do marco. Em 23/11

@@ -6,8 +6,9 @@ import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaCanal, esquemaHoraAgenda, esquemaMotivoCancelamento, MODOS_REMARCACAO } from './entradas.js';
 import { MOTIVOS_BLOQUEIO, PRIORIDADES_ESPERA, RESULTADOS_CONFIRMACAO } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const texto200 = textoCp1252(200)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())
   .nullable()

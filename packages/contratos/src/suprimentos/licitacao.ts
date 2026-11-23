@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { esquemaChaveAto } from '../enfermagem/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 /** A chave de liberação por estabelecimento (ficha, seções 8 e 12; DP-13). */
 export const CHAVE_LIBERACAO_LICITACAO = 'licitacao';
@@ -180,8 +181,8 @@ export const PESO_TECNICA_MAXIMO = 70;
 export const TETO_LISTA_LICITACOES = 200;
 export const TETO_ITENS_LICITACAO = 200;
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idSgh = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idSgh = idBanco;
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const opcional = (max: number) =>

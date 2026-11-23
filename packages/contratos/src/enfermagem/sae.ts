@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaDataHoraLocal } from './entradas.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const textoLongo = (max: number) => textoCp1252(max).overwrite((t) => t.trim());
@@ -213,7 +214,7 @@ export interface DominiosSae {
 
 const codigoTermo = z.string().regex(/^[A-Za-z0-9.\-_]{1,20}$/, 'Código de termo inválido.');
 const codigoDominio = z.number().int().min(1).max(32_767);
-const idItem = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const idItem = idBanco;
 const horaDoDia = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no formato HH:mm.');
 
 export const esquemaResultadoSae = z

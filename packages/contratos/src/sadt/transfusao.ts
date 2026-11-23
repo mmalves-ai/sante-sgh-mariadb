@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { esquemaConferente, esquemaLeituraPulseira } from '../enfermagem/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 // ── Vocabulário ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -227,8 +228,8 @@ export type DestinoBolsaReacao = (typeof DESTINOS_BOLSA_REACAO)[number];
 
 // ── Entradas (o mesmo Zod na tela, na API e no serviço) ──────────────────────────────────────────────
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idLongo = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idLongo = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const instante = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?/, 'Data e hora no formato ISO.');
 /** Número da bolsa como impresso na etiqueta (ISBT 128 ou o número do hemocentro): letras, dígitos e hífen. */

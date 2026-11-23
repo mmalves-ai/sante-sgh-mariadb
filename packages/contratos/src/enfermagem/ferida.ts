@@ -9,6 +9,7 @@
 // visto pelo usuário (ADR 0023).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 /** Tipo da ferida. Só a LPP tem estágio NPUAP e entra na incidência. */
 export const TIPOS_LESAO = [
@@ -175,7 +176,7 @@ export const ROTULOS_DESFECHO_LESAO: Readonly<Record<DesfechoLesao, string>> = {
   obito: 'Óbito',
 };
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const hora = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Hora no formato AAAA-MM-DDTHH:mm.');
 const motivoLivre = textoCp1252(300)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())

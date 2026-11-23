@@ -12,8 +12,9 @@ import {
   DESTINOS_SAIDA_BLOCO,
   RESPOSTAS_CHECKLIST,
 } from './bloco-seguro-vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const opcional = (max: number) => livre(max).nullable().default(null);
 const enumDe = <T extends readonly { codigo: string }[]>(l: T) =>

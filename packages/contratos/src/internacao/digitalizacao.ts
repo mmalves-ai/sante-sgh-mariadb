@@ -7,6 +7,7 @@
 // 6). Desligada até a comissão de revisão de prontuários aprovar o fluxo (chave `digitalizacao`, POL-3).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const CHAVE_LIBERACAO_DIGITALIZACAO = 'digitalizacao';
 
@@ -41,8 +42,8 @@ export const TETO_FILA_DIGITALIZACAO = 200;
 /** Prazo de guarda do documento digitalizado (Lei 13.787/2018, art. 6: 20 anos a partir do último registro). */
 export const ANOS_GUARDA_DIGITALIZACAO = 20;
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idLongo = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idLongo = idBanco;
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
 const hash = z.string().regex(/^[a-f0-9]{64}$/, 'Resumo SHA-256 em hexadecimal minúsculo.');
 

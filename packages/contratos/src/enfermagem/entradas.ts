@@ -15,8 +15,9 @@ import {
   TIPOS_SINAL_VITAL,
   TURNOS,
 } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 /** Data e hora local (AAAA-MM-DDTHH:mm[:ss]); o servidor confere contra o relógio do banco. */
 export const esquemaDataHoraLocal = z

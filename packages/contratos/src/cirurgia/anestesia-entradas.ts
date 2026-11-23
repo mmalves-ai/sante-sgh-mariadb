@@ -22,8 +22,9 @@ import {
   VIAS_FICHA,
 } from './anestesia-vocabulario.js';
 import { esquemaProfissional } from './entradas.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32767);
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const opcional = (max: number) => livre(max).nullable().default(null);

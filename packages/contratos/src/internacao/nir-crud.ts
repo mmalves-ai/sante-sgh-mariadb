@@ -6,8 +6,9 @@ import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { CODIGOS_MOTIVO_BLOQUEIO_LEITO, CODIGOS_PRECAUCAO, esquemaChaveLeito } from './adt.js';
 import { ESCOPOS_LIMITE_PERMANENCIA, esquemaPerfilLeito } from './nir.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const motivo = (min: number, max: number, msg: string) => livre(max).pipe(z.string().min(min, msg));
 const motivoAlteracao = () => motivo(5, 300, 'Informe o motivo (ao menos 5 caracteres).');

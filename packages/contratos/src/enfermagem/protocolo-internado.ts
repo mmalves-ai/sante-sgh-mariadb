@@ -12,6 +12,7 @@ import {
   CODIGOS_DESFECHO_PROTOCOLO,
   type TipoProtocoloGerenciado,
 } from '../recepcao/protocolo-gerenciado.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 // ── Vocabulário ────────────────────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ export const ROTULOS_ORIGEM_INTERNADO: Readonly<Record<OrigemInclusaoInternado, 
 /** Limiar padrão do NEWS2 para sugerir o protocolo de sepse (padrão de mercado; parâmetro da instituição). */
 export const LIMIAR_NEWS2_PROTOCOLO_PADRAO = 5;
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const idLongo = z.number().int().positive();
 const codigo = z
   .string()

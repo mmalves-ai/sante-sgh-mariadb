@@ -9,6 +9,7 @@ export {
 export * from './config/coexistencia.js';
 export * from './permissoes/config.js';
 export * from './validacao/erro.js';
+export * from './validacao/id-banco.js';
 export * from './codec/cp1252.js';
 export * from './codec/corpus-cp1252.js';
 export * from './formatacao/data-legada.js';

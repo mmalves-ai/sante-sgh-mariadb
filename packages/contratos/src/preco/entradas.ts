@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { ABAS_EDITAVEIS, ITENS_POR_TRANSACAO } from './constantes.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const smallint = z.number().int().min(0).max(32767);
 export const esquemaDataIso = z
@@ -265,7 +266,7 @@ export type ComponentesPreco = z.infer<typeof esquemaComponentes>;
 
 export const esquemaItemReajuste = z
   .object({
-    codigo: z.number().int().min(1).max(2147483647),
+    codigo: idBanco,
     /** A vigência em que o cálculo se apoiou (null: primeiro preço); reconferida sob a trava. */
     base: z.object({ vigencia: esquemaDataIso, valores: esquemaComponentes }).strict().nullable(),
     novos: esquemaComponentes,

@@ -7,10 +7,11 @@ import { z } from 'zod';
 import { esquemaChaveAto, esquemaDataHoraLocal } from '../enfermagem/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { ETAPAS_OPME_MANUAIS } from './opme-vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 /** IDs das tabelas novas (BIGINT; na prática cabem no inteiro seguro). */
-const idSgh = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const idSgh = idBanco;
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const opcional = (max: number) => livre(max).nullable().default(null);

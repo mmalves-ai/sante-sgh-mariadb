@@ -3,6 +3,7 @@
 // o banco mantém (o novo nunca o grava). Credenciais de estabelecimento nunca entram no SELECT.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const esquemaEstrutura = z.object({
   empresa: z
@@ -139,7 +140,7 @@ export const esquemaIncluirAcomodacao = z
     sexo: z.enum(SEXOS_ACOMODACAO),
     tipo: z.number().int().min(0).max(32767),
     convenio: z.enum(CONVENIOS_ACOMODACAO),
-    centroCusto: z.number().int().positive().max(2_147_483_647),
+    centroCusto: idBanco,
     localConta: z.number().int().positive().max(32767),
     acomodacaoTiss: z.number().int().positive().max(99),
     /** Sem valor: 0 (sem idade mínima), como as acomodações do banco. */

@@ -7,6 +7,7 @@
 // pelo usuário (ADR 0023).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const TIPOS_CONTENCAO = ['leito', 'poltrona'] as const;
 export type TipoContencao = (typeof TIPOS_CONTENCAO)[number];
@@ -54,7 +55,7 @@ export const ROTULOS_ACHADO_CONTENCAO: Readonly<Record<AchadoChecagemContencao, 
 export const SITUACOES_CONTENCAO = ['ativa', 'vencida', 'retirada', 'renovada'] as const;
 export type SituacaoContencao = (typeof SITUACOES_CONTENCAO)[number];
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const motivoLivre = textoCp1252(300)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())
   .pipe(z.string().min(10, 'Descreva o motivo (10 caracteres ou mais).'));

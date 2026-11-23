@@ -13,6 +13,7 @@
 // Nada aqui toca tabela do outro sistema: o orçamento fica em SGH_ORC_* (script 0549); o realizado é só leitura.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBancoOuZero } from '../validacao/id-banco.js';
 
 export const NATUREZAS_ORCAMENTO = ['despesa', 'receita', 'consumo'] as const;
 export type NaturezaOrcamento = (typeof NATUREZAS_ORCAMENTO)[number];
@@ -61,11 +62,11 @@ const versaoLida = z.number().int().min(0);
 
 /** A chave de uma linha (centro × natureza × item). */
 export const esquemaChaveLinha = z.object({
-  centro: z.number().int().min(0).max(2_147_483_647),
+  centro: idBancoOuZero,
   natureza: z.enum(NATUREZAS_ORCAMENTO),
-  grupo: z.number().int().min(0).max(2_147_483_647),
-  subgrupo: z.number().int().min(0).max(2_147_483_647),
-  item: z.number().int().min(0).max(2_147_483_647),
+  grupo: idBancoOuZero,
+  subgrupo: idBancoOuZero,
+  item: idBancoOuZero,
 });
 export type ChaveLinhaOrcamento = z.infer<typeof esquemaChaveLinha>;
 
@@ -135,14 +136,14 @@ export const esquemaConsultaComparativo = z.object({
   /** Recorte por centro de custo (id; 0 é o "sem centro"); sem ele, todos. */
   centro: z
     .string()
-    .regex(/^\d{1,10}$/u, 'Centro de custo inválido.')
+    .regex(/^\d{1,16}$/u, 'Centro de custo inválido.')
     .transform(Number)
-    .pipe(z.number().int().min(0).max(2_147_483_647))
+    .pipe(idBancoOuZero)
     .optional(),
   /** Recorte por item gerencial (grupo.subgrupo.item); sem ele, todos. O consumo de estoque não tem item gerencial. */
   item: z
     .string()
-    .regex(/^\d{1,10}\.\d{1,10}\.\d{1,10}$/u, 'Item gerencial inválido (grupo.subgrupo.item).')
+    .regex(/^\d{1,16}\.\d{1,16}\.\d{1,16}$/u, 'Item gerencial inválido (grupo.subgrupo.item).')
     .optional(),
 });
 export type ConsultaComparativo = z.infer<typeof esquemaConsultaComparativo>;

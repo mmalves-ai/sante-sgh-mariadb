@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import { cnsValido } from '../validacao/cns.js';
 import { esquemaCompetenciaSus } from './sus.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 /** Situação da AIH (SGH_FAT_SUS_AIH.SITUACAO). */
 export const SITUACOES_AIH = [
@@ -79,7 +80,7 @@ const cid = z
 const justificativa = z.string().trim().min(10).max(500);
 const sigtap = z.string().regex(/^\d{10}$/);
 const numeroAih = z.string().regex(/^\d{13}$/);
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 /** CNS (15 dígitos com o dígito conferido): o do autorizador do gestor. */
 const cns = z
   .string()
@@ -178,8 +179,8 @@ export const esquemaFiltroAihs = z
       .string()
       .regex(/^\d{1,13}$/)
       .optional(),
-    prontuario: z.coerce.number().int().positive().max(2_147_483_647).optional(),
-    registro: z.coerce.number().int().positive().max(2_147_483_647).optional(),
+    prontuario: idBancoTexto.optional(),
+    registro: idBancoTexto.optional(),
     pagina: z.coerce.number().int().min(0).default(0),
     porPagina: z.coerce.number().int().min(10).max(200).default(50),
   })

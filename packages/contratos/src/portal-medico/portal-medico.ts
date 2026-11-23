@@ -15,8 +15,9 @@ import type {
 import { type MotivoRecusaAssinatura, TETO_LOTE_ASSINATURA } from '../documento-assinatura/vocabulario.js';
 import type { ExtratoRepasseResposta } from '../repasse/respostas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32767);
 const espacos = (t: string) => t.replace(/\s+/g, ' ').trim();
 

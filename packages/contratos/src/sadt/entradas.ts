@@ -7,10 +7,11 @@ import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { cpfValido, somenteDigitos } from '../validacao/cpf.js';
 import { CODIGOS_ESTADO_AMOSTRA, CODIGOS_MOTIVO_REJEICAO, CODIGOS_SETOR_SADT } from './vocabulario.js';
+import { idBanco, idBancoOuZero } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 /** Id longo (exame lançado, resultado): inteiro seguro. */
-const idDouble = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const idDouble = idBanco;
 const smallint = z.number().int().min(0).max(32_767);
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const maiusculas = (max: number) =>
@@ -30,7 +31,7 @@ export const esquemaChaveExame = z
   .object({
     data: dataIso,
     reg: id,
-    conta: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    conta: idBancoOuZero,
     atend: z.enum(['I', 'E']),
     ato: smallint,
     exame: z.string().min(1).max(4),

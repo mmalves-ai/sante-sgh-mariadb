@@ -6,6 +6,7 @@
 // SGH_OPE_* (nenhuma escrita em tabela do sistema anterior), atrás da chave `operadora.beneficiarios` (que só vale com
 // a do módulo). Os códigos dos domínios são os do vocabulário (vocabulario.ts); a tela mostra o rótulo.
 import { z } from 'zod';
+import { idBancoTexto } from '../validacao/id-banco.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { normalizarTextoCp1252, textoCp1252 } from '../texto-cp1252.js';
 
@@ -303,11 +304,7 @@ export const esquemaBeneficiarioEntrada = z.object({
   /** Data de adesão (início das carências). */
   inclusao: data,
   /** Regra 8: o paciente do hospital que é o mesmo beneficiário (só o ID, sem dado clínico). */
-  pacienteHospital: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(2_147_483_647)
+  pacienteHospital: idBancoTexto
     .nullable()
     .optional()
     .transform((v) => v ?? null),

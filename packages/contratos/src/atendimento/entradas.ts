@@ -16,8 +16,9 @@ import {
   ETAPAS_PA_MANUAIS,
   HERANCAS,
 } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32_767);
 /** Número do atendimento. */
 export const esquemaRegAtendimento = id;

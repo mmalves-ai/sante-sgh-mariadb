@@ -10,10 +10,11 @@
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { cpfValido, somenteDigitos } from '../validacao/cpf.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
-const id = z.number().int().positive().max(2_147_483_647);
-const idGrande = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idGrande = idBanco;
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const horaMinuto = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no formato HH:MM.');
 const dataHoraLocal = z

@@ -7,6 +7,7 @@
 // não corresponde à central do RJ e nunca é gravada.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const CENTRAIS_REGULACAO = [
   { codigo: 'estadual', rotulo: 'Central estadual de regulação' },
@@ -58,7 +59,7 @@ export const FORMATO_NUMERO_REGULACAO = /^[A-Z0-9][A-Z0-9./-]{3,29}$/;
 export const esquemaRegistrarRegulacao = z
   .object({
     /** A solicitação de leito do NIR a que a regulação se liga. */
-    solicitacao: z.number().int().positive().max(2_147_483_647),
+    solicitacao: idBanco,
     central: z.enum(CODIGOS_CENTRAL_REGULACAO),
     sentido: z.enum(['entrada', 'saida']),
     numero: z

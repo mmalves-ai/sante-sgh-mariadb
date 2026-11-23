@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { CODIGOS_TIPO_ATENDIMENTO } from '../atendimento/vocabulario.js';
 import { FINALIDADES_CONSENTIMENTO } from '../cadastro/telas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 /** Tipos de atendimento em que um termo pode ser exigido (os do balcão mais a internação). */
 export const TIPOS_ATENDIMENTO_TERMO = [...CODIGOS_TIPO_ATENDIMENTO, 'internacao'] as const;
@@ -71,8 +72,8 @@ export const esquemaExcluirTermo = z.object({ motivo }).strict();
 export const esquemaAssinarTermo = z
   .object({
     modelo: z.number().int().positive(),
-    prontuario: z.number().int().positive().max(2_147_483_647),
-    senha: z.number().int().positive().max(2_147_483_647).nullable(),
+    prontuario: idBanco,
+    senha: idBanco.nullable(),
     tipoAtendimento: z.enum(TIPOS_ATENDIMENTO_TERMO).nullable(),
     meio: z.enum(MEIOS_ASSINATURA_TERMO),
     signatario: z.number().int().min(0).max(32_767),
@@ -99,7 +100,7 @@ export const esquemaRevogarTermo = z.object({ motivo }).strict();
 
 export const esquemaConsultaTermos = z
   .object({
-    prontuario: z.coerce.number().int().positive().max(2_147_483_647),
+    prontuario: idBancoTexto,
     tipo: z.enum(TIPOS_ATENDIMENTO_TERMO).optional(),
   })
   .strict();

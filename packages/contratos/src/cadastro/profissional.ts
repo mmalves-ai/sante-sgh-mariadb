@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { cnsValido } from '../validacao/cns.js';
 import { cpfValido, somenteDigitos } from '../validacao/cpf.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const maiusculas = (max: number) =>
   textoCp1252(max)
@@ -17,7 +18,7 @@ const dataCivil = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use AAAA-MM-DD.')
   .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && d > '1900-01-01', 'Data inválida.');
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(1).max(32_767);
 const email = textoCp1252(50)
   .overwrite((t) => t.trim().toLowerCase())

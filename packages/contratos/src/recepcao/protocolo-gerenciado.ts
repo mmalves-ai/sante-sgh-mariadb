@@ -8,6 +8,7 @@
 // definição SINTÉTICA de teste (o nome o diz).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 // ── Vocabulário ────────────────────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ const codigo = z
   .string()
   .trim()
   .regex(/^[a-z][a-z0-9-]{1,39}$/, 'Código em minúsculas, sem espaço (letras, números e hífen).');
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 
 export const esquemaCriterioGerenciado = z
   .object({ codigo, titulo: textoCp1252(160).pipe(z.string().min(3)) })

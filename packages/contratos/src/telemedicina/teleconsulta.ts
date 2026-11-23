@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { UFS } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const CHAVE_TELEMEDICINA = 'telemedicina';
 
@@ -73,7 +74,7 @@ export const MOTIVOS_ENCERRAMENTO_TELECONSULTA = [
 ] as const;
 export type MotivoEncerramentoTeleconsulta = (typeof MOTIVOS_ENCERRAMENTO_TELECONSULTA)[number];
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const versao = z.number().int().positive().max(2_147_483_647);
 const livre = (max: number, min: number) =>
   textoCp1252(max)

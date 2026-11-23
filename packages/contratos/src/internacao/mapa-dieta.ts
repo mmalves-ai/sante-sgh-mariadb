@@ -8,8 +8,9 @@ import { z } from 'zod';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaChaveLeito } from './adt.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 
 /** O tipo de linha do mapa (pela dieta prescrita; o jejum prevalece). */

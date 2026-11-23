@@ -22,11 +22,12 @@ import {
   CODIGOS_CATEGORIA_CICLO,
   CODIGOS_PARECER_NPT,
 } from './correcao-base.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export * from './correcao-base.js';
 
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 
 /** A justificativa de toda correção, inativação, cancelamento ou alteração (5 a 500 caracteres). */
 export const esquemaJustificativaCorrecao = livre(500).pipe(

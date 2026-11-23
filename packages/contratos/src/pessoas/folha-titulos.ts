@@ -11,11 +11,12 @@
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import type { ApuracaoFolha } from './folha-periodicos.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const id = z.coerce.number().int().positive();
 const smallint = z.coerce.number().int().min(0).max(32_767);
-const inteiroPositivo = z.number().int().positive().max(2_147_483_647);
+const inteiroPositivo = idBanco;
 
 /** Os destinos da folha que viram título a pagar (um título por destino e vencimento). */
 export const DESTINOS_TITULO_FOLHA = [

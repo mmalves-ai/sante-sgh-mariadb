@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { esquemaCompetenciaSus } from './sus.js';
+import { idBancoOuZero } from '../validacao/id-banco.js';
 
 export const CHAVE_LIBERACAO_CONTRATUALIZACAO = 'contratualizacao';
 /** Teto das listas (contratos e metas de um contrato). */
@@ -260,7 +261,7 @@ const umDe = (codigos: readonly number[], mensagem: string) =>
 export const esquemaIncentivoSus = z
   .object({
     /** Código do incentivo quando o incentivo está no domínio; null para o incentivo só com o nome. */
-    incentivo: z.number().int().min(0).max(2_147_483_647).nullable().default(null),
+    incentivo: idBancoOuZero.nullable().default(null),
     nome: livre(120).pipe(z.string().min(3, 'Informe o nome do incentivo.')),
     valorMensalCentavos: centavos.refine((n) => n > 0, { message: 'Informe o valor mensal do incentivo.' }),
     inicio: dataIso,

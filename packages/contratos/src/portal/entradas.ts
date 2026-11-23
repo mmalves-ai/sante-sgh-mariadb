@@ -18,6 +18,7 @@ import {
   TIPOS_PEDIDO_PORTAL,
   TIPOS_VINCULO_RESPONSAVEL,
 } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const id = z.number().int().positive();
 const idGrande = z.string().regex(/^[1-9]\d{0,18}$/, 'Identificador inválido.');
@@ -240,7 +241,7 @@ export type EscolherTitular = z.infer<typeof esquemaEscolherTitular>;
  */
 export const esquemaPedirVinculo = z
   .object({
-    prontuario: z.number().int().positive().max(2_147_483_647),
+    prontuario: idBanco,
     nascimento: data,
     tipo: z.enum(TIPOS_VINCULO_RESPONSAVEL),
     prova: z.enum(PROVAS_VINCULO),

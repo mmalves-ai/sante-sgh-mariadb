@@ -23,6 +23,7 @@ import {
   JORNADA_SEMANAL_MINIMA,
   type TipoTroca,
 } from './plantao-vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 const id = z.number().int().positive();
 const versao = z.number().int().min(0);
@@ -130,7 +131,7 @@ export const esquemaAcionarSobreaviso = z
     plantao: id,
     motivo,
     /** Número do atendimento (REG) que motivou o acionamento, se houver; nenhum dado do paciente vai junto. */
-    atendimento: z.number().int().positive().max(2_147_483_647).nullable().default(null),
+    atendimento: idBanco.nullable().default(null),
   })
   .strict();
 export type AcionarSobreavisoEntrada = z.infer<typeof esquemaAcionarSobreaviso>;

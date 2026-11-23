@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { esquemaHora } from '../formatacao/hora.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const CHAVE_LIBERACAO_SESSOES = 'sessoes';
 
@@ -38,8 +39,8 @@ export const TETO_SESSOES_PACIENTE = 100;
 /** A duração da sessão em minutos (a categoria curta, média ou longa vem do cadastro de durações). */
 export const DURACAO_SESSAO_MIN = { minimo: 10, maximo: 720 } as const;
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idLongo = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idLongo = idBanco;
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
 
 // ── Agendar a série (`agenda.agendarSessao`) ─────────────────────────────────────────────────────────────────────

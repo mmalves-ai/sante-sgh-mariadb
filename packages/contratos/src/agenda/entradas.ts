@@ -7,10 +7,11 @@ import { lerHoraDigitada } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { CANAIS_MARCACAO, MOTIVOS_BLOQUEIO, MOTIVOS_CANCELAMENTO } from './vocabulario.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const TETO_HORARIOS_POR_GRAVACAO = 400;
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32767);
 /**
  * @deprecated Transição: só o contrato do portal do médico externo ainda o importa (pedido ao lote 21 da F2.4 para

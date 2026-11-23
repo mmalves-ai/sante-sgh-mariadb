@@ -8,6 +8,7 @@
 // de-para aprovado pela enfermagem (regra 7): só índices já vistos no perfil; cor sem opção grava só no novo.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 // ── Cores, prioridades e tempos-alvo (regra 4) ───────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ const codigo = z
   .string()
   .trim()
   .regex(/^[a-z][a-z0-9-]{1,59}$/, 'Código em minúsculas, sem espaço (letras, números e hífen).');
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 
 /** Regra em JSON Logic (cap-11 §11.1) sobre as variáveis da classificação; avaliada na tela e no servidor. */
 export const esquemaRegraDiscriminador: z.ZodType<unknown> = z

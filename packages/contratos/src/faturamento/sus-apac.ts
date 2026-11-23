@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 import { cnsValido } from '../validacao/cns.js';
 import { esquemaCompetenciaSus } from './sus.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 /** Situação da APAC (SGH_FAT_SUS_APAC.SITUACAO). */
 export const SITUACOES_APAC = ['solicitada', 'autorizada', 'negada', 'encerrada', 'cancelada'] as const;
@@ -89,7 +90,7 @@ export type LaudoNefrologia = z.infer<typeof esquemaLaudoNefrologia>;
 export const esquemaLaudoApac = z
   .object({
     /** O registro do atendimento ambulatorial do laudo. */
-    registro: z.number().int().positive().max(2_147_483_647),
+    registro: idBanco,
     /** O procedimento principal SIGTAP (10 dígitos). */
     procedimento: z.string().regex(/^\d{10}$/),
     cidPrincipal: cid,
@@ -188,7 +189,7 @@ export const esquemaFiltroApacs = z
       .string()
       .regex(/^\d{1,13}$/)
       .optional(),
-    prontuario: z.coerce.number().int().positive().max(2_147_483_647).optional(),
+    prontuario: idBancoTexto.optional(),
     /** Só as APACs apresentáveis na competência (validade e continuidade). */
     competencia: esquemaCompetenciaSus.optional(),
     pagina: z.coerce.number().int().min(0).default(0),

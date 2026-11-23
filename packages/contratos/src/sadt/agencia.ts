@@ -19,6 +19,7 @@ import {
   type GrupoAbo,
   type TipagemSanguinea,
 } from './transfusao.js';
+import { idBanco, idBancoOuZero } from '../validacao/id-banco.js';
 
 // ── Vocabulário ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -245,8 +246,8 @@ export interface ExameImunoLancado {
 
 // ── Entradas ─────────────────────────────────────────────────────────────────────────────────────────
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idLongo = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idLongo = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const instante = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?/, 'Data e hora no formato ISO.');
 /** Intensidade da aglutinação (0 a 4 cruzes). */
@@ -351,7 +352,7 @@ export const esquemaMovimentarBolsa = z
     /** A requisição da reserva. */
     requisicao: idLongo.nullable(),
     /** Motivo do cadastro de motivos de devolução ou perda (código); 0 = não informado. */
-    motivoCadastro: z.number().int().min(0).max(2_147_483_647).nullable(),
+    motivoCadastro: idBancoOuZero.nullable(),
     motivo: livre(300).nullable(),
     /** Na liberação da bolsa com a inspeção reprovada na chegada: a reinspeção foi feita e aprovou a bolsa. */
     inspecaoConferida: z.boolean().optional(),

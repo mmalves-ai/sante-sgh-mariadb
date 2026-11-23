@@ -4,8 +4,9 @@
 // atendimento. Número de documento, valor e data gravada nunca vêm da tela (o banco e os gatilhos fazem).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const local = id;
 const quantidade = z
   .number()

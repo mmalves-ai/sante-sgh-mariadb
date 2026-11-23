@@ -15,8 +15,9 @@ import {
   TIPOS_CHEGADA,
   TIPOS_DISPOSITIVO,
 } from './vocabulario.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().positive().max(32_767);
 export const esquemaGuiche = z.number().int().min(1).max(99);
 const codigosPrioridade = PRIORIDADES_SENHA.map((p) => p.codigo) as ['0', '1', '2'];
@@ -277,7 +278,7 @@ export const esquemaConsultaAgendados = z
       .string()
       .regex(/^\d{11}$/)
       .optional(),
-    prontuario: z.coerce.number().int().positive().max(2_147_483_647).optional(),
+    prontuario: idBancoTexto.optional(),
     agenda: z.string().trim().min(2).max(40).optional(),
   })
   .strict();

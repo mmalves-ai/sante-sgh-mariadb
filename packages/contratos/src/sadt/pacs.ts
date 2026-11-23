@@ -6,6 +6,7 @@
 // forma idempotente (a mensagem repetida devolve a primeira resposta; a fora de ordem não rebaixa o status). O link do
 // visualizador aparece no prontuário e, com o laudo liberado, no portal. Fora de produção, só o simulador responde.
 import { z } from 'zod';
+import { idBanco } from '../validacao/id-banco.js';
 
 /** Chave de liberação (POL-3: desligada até o PACS real configurado e a autorização do dono). */
 export const CHAVE_LIBERACAO_WORKLIST = 'imagem.worklist';
@@ -58,7 +59,7 @@ export const FORMATO_ACCESSION = /^[A-Z0-9]{4,16}$/;
 /** UID DICOM (UI, até 64): componentes numéricos separados por ponto, sem zero à esquerda. */
 export const FORMATO_UID_DICOM = /^(0|[1-9]\d*)(\.(0|[1-9]\d*))+$/;
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const uid = z.string().max(64).regex(FORMATO_UID_DICOM, 'UID DICOM inválido.');
 
 export const esquemaFiltroWorklist = z

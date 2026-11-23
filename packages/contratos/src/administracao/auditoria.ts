@@ -4,6 +4,7 @@
 // papel Auditor consulta e exporta a trilha; toda abertura é evento auditado.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 
@@ -30,7 +31,7 @@ export const esquemaConsultaTrilha = z.object({
   evento: z.string().max(80).optional(),
   paciente: z.coerce.number().int().positive().optional(),
   /** Prontuário do paciente (número do prontuário): o filtro de quem chega pelo número, não pelo ID interno. */
-  prontuario: z.coerce.number().int().positive().max(2_147_483_647).optional(),
+  prontuario: idBancoTexto.optional(),
   pagina: z.coerce.number().int().min(1).max(10_000).optional(),
 });
 export type ConsultaTrilha = z.infer<typeof esquemaConsultaTrilha>;
@@ -210,7 +211,7 @@ export type ListaPedidos = z.infer<typeof esquemaListaPedidos>;
  */
 export const esquemaRegistrarPedido = z
   .object({
-    prontuario: z.number().int().positive().max(2_147_483_647).optional(),
+    prontuario: idBanco.optional(),
     idPaciente: z.number().int().positive().optional(),
     tipo: z.enum(TIPOS_PEDIDO_TITULAR),
     canal: z.enum(CANAIS_PEDIDO),

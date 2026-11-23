@@ -13,10 +13,11 @@ import {
   SOLICITANTES_CIRURGIA,
   TIPOS_PENDENCIA,
 } from './vocabulario.js';
+import { idBanco, idBancoOuZero } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32767);
-const inteiro = z.number().int().min(0).max(2_147_483_647);
+const inteiro = idBancoOuZero;
 
 export const esquemaSala = z.number().int().min(1).max(32767);
 export const esquemaDuracaoMin = z.number().int().min(1, 'Duração de ao menos 1 minuto.').max(1439);

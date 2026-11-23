@@ -22,6 +22,7 @@ import {
   type DecisaoProfilaxia,
   type EscalaTev,
 } from './escalas-mercado.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 // ── Escalas ───────────────────────────────────────────────────────────────────────────────────
 
@@ -452,7 +453,7 @@ export type SituacaoReavaliacao = (typeof SITUACOES_REAVALIACAO)[number];
 
 // ── Entradas ──────────────────────────────────────────────────────────────────────────────────
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const dataHoraLocal = z
   .string()

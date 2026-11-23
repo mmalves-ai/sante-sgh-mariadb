@@ -8,8 +8,9 @@ import { z } from 'zod';
 import { esquemaHora } from '../formatacao/hora.js';
 import { esquemaDataIso } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().min(0).max(32_767);
 const maiusculas = (max: number) =>
   textoCp1252(max)

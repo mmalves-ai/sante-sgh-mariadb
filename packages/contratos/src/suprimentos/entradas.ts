@@ -14,8 +14,9 @@ import {
 import { esquemaContratoDoVinculo } from './contrato.js';
 import { esquemaManipulacaoNaSaida } from './manipulacao.js';
 import { esquemaOpmeNaDevolucao, esquemaOpmeNaSaida } from './opme-entradas.js';
+import { idBanco } from '../validacao/id-banco.js';
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const smallint = z.number().int().positive().max(32_767);
 const local = z.number().int().min(1).max(99);
 const quantidade = z

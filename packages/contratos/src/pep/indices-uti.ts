@@ -5,6 +5,7 @@
 // óbitos observados ÷ esperados, com as parcelas impressas). SAPS 3 e a exportação ao parceiro externo dependem da DP-20.
 // Nenhum nome de tabela nem do sistema anterior em texto visto pelo usuário (ADR 0023).
 import { z } from 'zod';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const INDICES_UTI = ['apache2', 'sofa'] as const;
 export type IndiceUti = (typeof INDICES_UTI)[number];
@@ -59,7 +60,7 @@ export interface ConfiguracaoIndicesUti {
 
 // ── Entradas ──────────────────────────────────────────────────────────────────────────────────
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const dataHoraLocal = z
   .string()
   .regex(

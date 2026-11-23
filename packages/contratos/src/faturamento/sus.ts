@@ -4,6 +4,7 @@
 // Nenhuma entrada carrega dado pessoal: a tela manda competência, instrumento e chaves; o servidor lê o resto.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 /** Instrumentos de saída do faturamento SUS (cap-06b §6.6; cap-12 §12.4). */
 export const INSTRUMENTOS_SUS = ['ciha', 'bpa', 'apac', 'aih'] as const;
@@ -213,7 +214,7 @@ export type FiltroCriticasSus = z.infer<typeof esquemaFiltroCriticasSus>;
  */
 export const esquemaRegistrarEquivalenciaSus = z
   .object({
-    procedimento: z.number().int().positive().max(2_147_483_647),
+    procedimento: idBanco,
     sigtap: z.string().regex(/^\d{10}$/),
     versao: versao.optional(),
   })
@@ -222,7 +223,7 @@ export type RegistrarEquivalenciaSusEntrada = z.infer<typeof esquemaRegistrarEqu
 
 /** faturamento.desativarEquivalenciaSus: a equivalência deixa de valer (nada é apagado; a crítica volta na CIHA). */
 export const esquemaDesativarEquivalenciaSus = z
-  .object({ procedimento: z.number().int().positive().max(2_147_483_647), versao })
+  .object({ procedimento: idBanco, versao })
   .strict();
 export type DesativarEquivalenciaSusEntrada = z.infer<typeof esquemaDesativarEquivalenciaSus>;
 
@@ -231,7 +232,7 @@ export const esquemaFiltroEquivalenciasSus = z
   .object({
     termo: z.string().trim().max(60).optional(),
     /** Só a do procedimento do hospital (o diálogo confere se já existe uma). */
-    procedimento: z.coerce.number().int().positive().max(2_147_483_647).optional(),
+    procedimento: idBancoTexto.optional(),
     inativas: z.enum(['sim', 'nao']).default('nao'),
     pagina: z.coerce.number().int().min(0).default(0),
     porPagina: z.coerce.number().int().min(10).max(200).default(50),

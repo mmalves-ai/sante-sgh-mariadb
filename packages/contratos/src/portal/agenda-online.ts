@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { esquemaHora } from '../formatacao/hora.js';
 import { MODALIDADES_MARCACAO, type SituacaoTeleconsulta } from '../telemedicina/teleconsulta.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 export const CHAVE_PORTAL_AGENDA = 'portal.agenda';
 export const CHAVE_PORTAL_PAGAMENTO = 'portal.pagamento';
@@ -26,7 +27,7 @@ export const DIAS_ANTES_PRECHECKIN = 7;
 /** Validade da cobrança Pix ou cartão aberta no portal (minutos). */
 export const MINUTOS_COBRANCA_PORTAL = 30;
 
-const id = z.number().int().positive().max(2_147_483_647);
+const id = idBanco;
 const data = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Data no formato AAAA-MM-DD.');
 /** Hora do dia do horário ("HH:MM"). */
 const horaDoDia = esquemaHora;

@@ -7,6 +7,7 @@
 // Vocabulário do produto. Validadas na tela, na API e na gravação (o mesmo Zod).
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco, idBancoTexto } from '../validacao/id-banco.js';
 
 export const CHAVE_LIBERACAO_ROUPARIA = 'rouparia';
 /** Teto de linhas das listas da rouparia (paginadas pela chave). */
@@ -185,8 +186,8 @@ export type CodigoRecusaRouparia = Exclude<keyof typeof MENSAGENS_ROUPARIA, 'des
 
 // ── Entradas ─────────────────────────────────────────────────────────────────────────────────────
 
-const id = z.number().int().positive().max(2_147_483_647);
-const idSgh = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const id = idBanco;
+const idSgh = idBanco;
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const opcional = (max: number) =>
@@ -272,7 +273,7 @@ export const esquemaFiltroMovimentosRoupa = z
     de: dataIso,
     ate: dataIso,
     tipo: z.enum(CODIGOS_TIPO_MOVIMENTO_ROUPA).nullable().default(null),
-    centroCusto: z.coerce.number().int().positive().max(2_147_483_647).nullable().default(null),
+    centroCusto: idBancoTexto.nullable().default(null),
     antesDe: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
   })
   .strict()

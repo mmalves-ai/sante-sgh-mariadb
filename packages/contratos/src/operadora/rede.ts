@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { UFS } from '../preco/entradas.js';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { idBanco } from '../validacao/id-banco.js';
 
 /** Classificação do estabelecimento na rede (código 1 é a assistência hospitalar). */
 export const CLASSIFICACOES_REDE = {
@@ -115,7 +116,7 @@ const camposPrestador = {
     .regex(/^[a-z][a-z0-9]{1,9}$/)
     .nullable(),
   /** Convênio que representa a operadora no faturamento do hospital (só leitura do cadastro de convênios). */
-  convenio: z.number().int().min(1).max(2_147_483_647).nullable(),
+  convenio: idBanco.nullable(),
 } as const;
 
 export const esquemaCredenciarPrestador = z

@@ -3,6 +3,7 @@
 // (grupos do SIP, procedimentos por grupo do SIP com a vigência, classificação de procedimentos da ANS), só leitura e
 // paginada por chave. As fatias F1 a F8 acrescentam os delas.
 import { z } from 'zod';
+import { idBancoOuZeroTexto } from '../validacao/id-banco.js';
 
 export const SITUACOES_CHAVE_OPERADORA = ['desligada', 'ligada', 'aguardando-modulo'] as const;
 export type SituacaoChaveOperadoraApi = (typeof SITUACOES_CHAVE_OPERADORA)[number];
@@ -38,7 +39,7 @@ export const esquemaGruposSip = z.object({ itens: z.array(esquemaGrupoSip) });
 export type GruposSip = z.infer<typeof esquemaGruposSip>;
 
 /** Cursor da página seguinte dos procedimentos do SIP: `procedimento.grupo.AAAA-MM-DD` (a chave da tabela). */
-export const FORMATO_CURSOR_SIP = /^\d{1,10}\.\d{1,3}\.\d{4}-\d{2}-\d{2}$/;
+export const FORMATO_CURSOR_SIP = /^\d{1,16}\.\d{1,3}\.\d{4}-\d{2}-\d{2}$/;
 
 export const esquemaFiltroProcedimentosSip = z.object({
   grupo: z.coerce.number().int().min(0).max(999).optional(),
@@ -70,7 +71,7 @@ export const esquemaProcedimentosSip = z.object({
 export type ProcedimentosSip = z.infer<typeof esquemaProcedimentosSip>;
 
 export const esquemaFiltroClassificacoesAns = z.object({
-  apos: z.coerce.number().int().min(0).max(2_147_483_647).optional(),
+  apos: idBancoOuZeroTexto.optional(),
   /** Código (só números: o código exato) ou trecho do nome (1 a 60 caracteres, sem diferença de maiúsculas). */
   busca: z.string().trim().min(1).max(60).optional(),
 });

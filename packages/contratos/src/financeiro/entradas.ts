@@ -15,6 +15,7 @@ import {
   TETO_TITULOS_LANCAMENTO_FOLHA,
 } from '../pessoas/folha-titulos.js';
 import { APURACOES_FOLHA } from '../pessoas/folha-periodicos.js';
+import { idBanco, idBancoOuZero } from '../validacao/id-banco.js';
 
 const id = z.number().int().positive();
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,7 +37,7 @@ export const esquemaParcela = z
 export const esquemaRetencao = z
   .object({
     /** Código da conta de desconto ou acréscimo (com o tipo do imposto, quando é retenção). */
-    codigo: z.number().int().positive().max(2_147_483_647),
+    codigo: idBanco,
     valor: dinheiro,
   })
   .strict();
@@ -74,8 +75,8 @@ export const esquemaIncluirTitulosFolha = z
             chave: z.string().min(3).max(40),
             destino: z.enum(DESTINOS_TITULO_FOLHA),
             rotina: z.number().int().min(1).max(99),
-            credor: z.number().int().positive().max(2_147_483_647),
-            documento: z.number().int().positive().max(2_147_483_647),
+            credor: idBanco,
+            documento: idBanco,
             vencimento: data,
             valor: z.number().int().positive().max(9_999_999_999),
             classificacao: esquemaClassificacao,
@@ -90,7 +91,7 @@ export const esquemaIncluirTitulosFolha = z
         z
           .object({
             rotina: z.number().int().min(1).max(99),
-            centroCusto: z.number().int().min(0).max(2_147_483_647),
+            centroCusto: idBancoOuZero,
             natureza: z.enum(NATUREZAS_FATO_FOLHA),
             contabiliza: z.boolean(),
             valor: z.number().int().positive().max(9_999_999_999),
@@ -109,10 +110,10 @@ export const esquemaCriarTituloPagar = z.discriminatedUnion('acao', [
       acao: z.literal('incluir'),
       tipo: z.enum(TIPOS_CREDOR),
       /** Código do fornecedor (no médico, o código do profissional). */
-      credor: z.number().int().positive().max(2_147_483_647),
+      credor: idBanco,
       /** Id do profissional, quando o credor é médico (tipo M). */
       profissional: id.nullable().default(null),
-      documento: z.number().int().positive().max(2_147_483_647),
+      documento: idBanco,
       serie: textoCp1252(3).default(''),
       emissao: data,
       entrada: data.nullable().default(null),
