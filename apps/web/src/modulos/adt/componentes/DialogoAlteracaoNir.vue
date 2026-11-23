@@ -47,9 +47,20 @@ const props = withDefaults(
     pedeSenha?: boolean;
     /** O slot ainda não está completo (ex.: escolha o leito). */
     incompleto?: boolean;
+    /** O tamanho do motivo (o cancelamento aceita de 3 a 500 caracteres; a alteração, de 5 a 300). */
+    minMotivo?: number;
+    maxMotivo?: number;
     testid: string;
   }>(),
-  { texto: '', rotuloMotivo: '', destrutivo: false, pedeSenha: false, incompleto: false },
+  {
+    texto: '',
+    rotuloMotivo: '',
+    destrutivo: false,
+    pedeSenha: false,
+    incompleto: false,
+    minMotivo: 5,
+    maxMotivo: 300,
+  },
 );
 const emit = defineEmits<{ confirmar: [dados: { motivo: string; senha: string }] }>();
 const visivel = defineModel<boolean>('visivel', { required: true });
@@ -76,7 +87,7 @@ const textoDaRecusa = computed(() => {
 const pronto = computed(
   () =>
     !props.incompleto &&
-    motivo.value.trim().length >= 5 &&
+    motivo.value.trim().length >= props.minMotivo &&
     (!props.pedeSenha || senha.value.length > 0) &&
     !enviando.value,
 );
@@ -109,13 +120,13 @@ defineExpose({ executar });
       <SanteCampoTexto
         v-model="motivo"
         :rotulo="rotuloMotivo || t('crudNir.motivo')"
-        :max-bytes="300"
+        :max-bytes="maxMotivo"
         multilinha
         obrigatorio
         :data-testid="`${testid}-motivo`"
       />
-      <p v-if="motivo.trim().length > 0 && motivo.trim().length < 5" class="secundario" role="status">
-        {{ t('crudNir.motivoCurto') }}
+      <p v-if="motivo.trim().length > 0 && motivo.trim().length < minMotivo" class="secundario" role="status">
+        {{ t('crudNir.motivoCurto', { n: minMotivo }) }}
       </p>
       <div v-if="pedeSenha" class="campo-senha">
         <label :for="`${testid}-senha`">{{ t('crudNir.senha') }}</label>

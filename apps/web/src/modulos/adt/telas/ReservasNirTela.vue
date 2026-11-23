@@ -3,7 +3,7 @@
 // que falta, a confirmação do setor de destino, a exceção ao perfil e o conflito (o outro sistema ocupou o leito
 // reservado aqui: o NIR cancela e escolhe outro leito, nunca desfaz a ocupação); as encerradas recentes (consumidas,
 // expiradas, canceladas). O leito reservado aparece no mapa de leitos como "reservado". Reserva nova: pela fila.
-// W0-07: alterar o leito e a validade (só no novo) e excluir a reserva criada por engano, ambos com o motivo num
+// W0-07: alterar o leito e a validade (só no novo) e cancelar a reserva (o excluir cancela: a linha fica), com o motivo num
 // diálogo; a reserva convertida em internação recusa (o diálogo mostra o porquê).
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
@@ -151,9 +151,9 @@ function excluir(d: { motivo: string }): void {
                 @acionar="abrirAlterar(r)"
               />
               <SanteBotao
-                v-if="r.situacao === 'ativa' && !r.conflito && pode('excluirReserva')"
+                v-if="(r.situacao === 'ativa' || r.situacao === 'confirmada') && pode('excluirReserva')"
                 variante="texto"
-                :rotulo="t('crudNir.excluir')"
+                :rotulo="t('crudNir.cancelarComMotivo')"
                 :data-testid="`reserva-excluir-${r.id}`"
                 @acionar="abrirExcluir(r)"
               />
@@ -238,7 +238,9 @@ function excluir(d: { motivo: string }): void {
       v-model:visivel="dExcluir"
       :titulo="t('crudNir.excluirReservaTitulo')"
       :texto="t('crudNir.excluirReservaTexto')"
-      :rotulo-confirmar="t('crudNir.excluir')"
+      :rotulo-confirmar="t('crudNir.cancelarComMotivo')"
+      :min-motivo="3"
+      :max-motivo="500"
       destrutivo
       testid="dialogo-excluir-reserva"
       @confirmar="excluir"

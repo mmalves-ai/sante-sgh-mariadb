@@ -3,7 +3,7 @@
 // equivalente, o paciente, a espera e o prazo, o perfil, a reserva e as ações do estado (o servidor confere de novo):
 // analisar, escolher o leito (os compatíveis com o perfil e, para o supervisor, os de fora com a exceção e a senha),
 // confirmar a reserva, marcar a caminho, concluir pela admissão ou pela transferência, mudar a prioridade, cancelar ou
-// rejeitar com o motivo. W0-07: corrigir o perfil, os recursos e a observação, e excluir a criada por engano (com a
+// rejeitar com o motivo. W0-07: corrigir o perfil, os recursos e a observação, e cancelar pelo excluir (a linha fica; com a
 // senha; com reserva ou transferência vinculada, o servidor recusa com a contagem e o cartão mostra o texto).
 import {
   CODIGOS_PRECAUCAO,
@@ -371,7 +371,7 @@ const perfilTexto = computed(() =>
       <SanteBotao
         v-if="pode('excluir')"
         variante="texto"
-        :rotulo="t('crudNir.excluir')"
+        :rotulo="t('crudNir.cancelarComMotivo')"
         :data-testid="`excluir-${s.id}`"
         @acionar="dExcluir = true"
       />
@@ -406,7 +406,9 @@ const perfilTexto = computed(() =>
       v-model:visivel="dExcluir"
       :titulo="t('crudNir.excluirTitulo')"
       :texto="t('crudNir.excluirTexto')"
-      :rotulo-confirmar="t('crudNir.excluir')"
+      :rotulo-confirmar="t('crudNir.cancelarComMotivo')"
+      :min-motivo="3"
+      :max-motivo="500"
       destrutivo
       pede-senha
       :testid="`dialogo-excluir-${s.id}`"

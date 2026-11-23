@@ -3,7 +3,7 @@
 // tabela.
 export const mensagensCrudNir = {
   motivo: 'Motivo (obrigatório)',
-  motivoCurto: 'Escreva o motivo com ao menos 5 caracteres.',
+  motivoCurto: 'Escreva o motivo com ao menos {n} caracteres.',
   justificativa: 'Justificativa (obrigatória)',
   motivoAlteracao:
     'Motivo da alteração (obrigatório ao trocar um valor já definido; o anterior fica no histórico)',
@@ -13,6 +13,7 @@ export const mensagensCrudNir = {
   corrigir: 'Corrigir',
   alterar: 'Alterar',
   excluir: 'Excluir',
+  cancelarComMotivo: 'Cancelar',
   encerrar: 'Encerrar',
   transferir: 'Transferir de leito',
   corrigirTitulo: 'Corrigir a solicitação de leito',
@@ -35,18 +36,18 @@ export const mensagensCrudNir = {
     berco: 'Berço ou incubadora',
     acompanhante: 'Acompanhante',
   },
-  excluirTitulo: 'Excluir a solicitação criada por engano',
+  excluirTitulo: 'Cancelar a solicitação de leito',
   excluirTexto:
-    'Só a solicitação sem reserva, sem transferência e sem internação gerada pode ser excluída. Com qualquer vínculo, cancele-a com o motivo.',
+    'A solicitação não é apagada: fica cancelada, com o motivo, quem e quando, no histórico. Com o leito reservado, a reserva é cancelada junto e o leito volta a livre.',
   alterarReservaTitulo: 'Alterar a reserva',
   alterarReservaTexto:
     'Escolha outro leito compatível com o perfil e/ou uma nova validade. A reserva que já virou internação não se altera.',
   mesmoLeito: 'Manter o mesmo leito',
   novoLeito: 'Novo leito',
   novaValidade: 'Nova validade (minutos a partir de agora)',
-  excluirReservaTitulo: 'Excluir a reserva feita por engano',
+  excluirReservaTitulo: 'Cancelar a reserva de leito',
   excluirReservaTexto:
-    'Só a reserva ainda não confirmada pelo setor e sem conflito pode ser excluída. A solicitação volta à análise.',
+    'A reserva não é apagada: fica cancelada, com o motivo, quem e quando. O leito volta a livre e a solicitação volta à análise.',
   retirarDpa: 'Retirar a alta prevista',
   retirarDpaTitulo: 'Retirar a alta prevista',
   retirarDpaTexto:
