@@ -140,8 +140,9 @@ class Plano(unittest.TestCase):
         self.assertTrue(mapa.opcoes_destino([x for x in self.mapa["colunas_decl"]
                                              if x["tabela"] == "FCLANEXT"])["trilha_auditoria"]["opcional"])
         pr = self.cols("FCINTEGRPA", "producao_repasse")
-        self.assertEqual([x.get("tabela") or x.get("coluna") for x in pr["funcao_equipe_cobranca_id"]["passos"]],
-                         ["FCLANEXT", "ATO", "TBGRAUPARTPROC"])
+        # C11: função = titular (tipo de profissional 1), nunca o ATO do item (grupo de ato, não grau de participação)
+        self.assertEqual(pr["funcao_equipe_cobranca_id"]["coluna"], "=tipo_prof_1")
+        self.assertEqual(tuple(pr["funcao_equipe_cobranca_id"]["cod"]), ("funcao_equipe_cobranca", "codigo"))
         self.assertEqual(self.plano["FCLANAUD"]["destinos"], ["trilha_auditoria"])
         self.assertEqual(self.cols("FCLANAUD", "trilha_auditoria")["dados_antes"]["coluna"], "#retrato:*")
         for t, ent in (("FCLANEXTSEQITEM", "=conta_hospitalar_item"), ("TBHISTBR", "=tabela_preco")):

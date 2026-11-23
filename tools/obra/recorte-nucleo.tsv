@@ -61,6 +61,9 @@ TBVLRDTH	0			valor do preço de diária e taxa
 TBCTRTHM	0			tabela de preço de procedimento
 TBCTRDTH	0			tabela de preço de diária e taxa
 # --- repasse
+TBTABATO	0			grupo de ato (item faturável, credenciamento, regra de repasse; C11)
+TBGRAUPARTPROC	0			grau de participação = função da equipe (C11)
+TBTPPROFPROC	0			tipo de profissional = função da equipe; titular = função da produção de repasse (C11)
 RPTIPOPRESTADOR	0			tipo de prestador do repasse
 RPEVENTO	0			evento de repasse
 TBREPGER	0			regra de repasse

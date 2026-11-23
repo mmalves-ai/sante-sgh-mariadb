@@ -109,6 +109,10 @@ PREPARO_DESTINO = ";\n".join([
     " 'Técnica utilizada', 'dominio_tiss', '48', UTC_TIMESTAMP(3))",
     "INSERT INTO termo_terminologia (id, terminologia_id, codigo_termo, descricao, criado_em) VALUES"
     " (51, 41, '1', 'Termo de exemplo', UTC_TIMESTAMP(3))",
+    # função da equipe TITULAR (tipo de profissional 1, carregado na L8-05): a produção de repasse a procura pelo
+    # código (C11)
+    "INSERT INTO funcao_equipe_cobranca (codigo, descricao, tipo_funcao, criado_em) VALUES ('tipo_prof_1',"
+    " 'Titular de exemplo', 'outro', UTC_TIMESTAMP(3))",
     # motivo de glosa oficial '1001' (o 9999 fica ausente)
     "CREATE TABLE IF NOT EXISTS motivo_glosa (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo_tuss VARCHAR(10)"
     " NOT NULL, descricao VARCHAR(500) NOT NULL, UNIQUE KEY uq_motivo_glosa_codigo_tuss (codigo_tuss));"
@@ -283,13 +287,13 @@ def _rodada3(ins):
                7: dict(GLOSADO="S", MOTGLO=9999)}.get(i, {})
         q("FCLANEXT", ID=i, ID_FCCTAEXT=cta, ID_TBPROCTO=pr, ID_TBTABDTH=dth, ID_TBMATMED=mm, TIPO=tp, DATA=dt,
           HORA=h, HORA_FINAL=hf, QTDE=qt, UNIT_C=D("100.1234"), VALOR_C=D("100.12"), PACOTE="N", PROCTO=1, LOCAL=1,
-          ATO=1, ID_TBCBOPRO_TITULAR=1, CDC=1, VLR_CH=D("10"), OBS="Observação de exemplo", **fin)
+          ATO=42, ID_TBCBOPRO_TITULAR=1, CDC=1, VLR_CH=D("10"), OBS="Observação de exemplo", **fin)
     # complementos do item: lote do imunobiológico e técnica
     q("REPROEXT", REG=1, PROCTO=1, CRM=1, SEQ=1, ATO=1, ID_FCLANEXT=1, LOTE="LOTE-EX-1", TECNICA=1)
     q("REPROEXT", REG=1, PROCTO=1, CRM=1, SEQ=2, ATO=1, ID_FCLANEXT=3, LOTE="LOTE-EX-2")  # item recusado
     q("REPROEXT", REG=1, PROCTO=1, CRM=1, SEQ=3, ATO=1, ID_FCLANEXT=None, LOTE="LOTE-EX-3")  # sem item
     q("RIPROEXT", REG=1, CONTA=1.0, PROCTO=1, SEQ=1, ID_FCLANEXT=2, TECNICA=5)  # técnica fora do catálogo
-    # produção do repasse
+    # produção do repasse (C11: o ATO 42 do item é grupo de ato, sem grau de participação igual; a função é o titular)
     for i, it, dt in [(1, 1, DT(2025, 3, 31, 18)), (2, 3, DT(2025, 3, 31)), (3, 1, None)]:  # 2: item recusado; 3: sem data (C10: a do item, gravada)
         q("FCINTEGRPA", ID=i, ID_TBTIPOLANCVLR=1, ID_FCLANEXT=it, ID_RPLANEVE=1, VALOR=D("30"), PERCENTUAL=D("30"),
           DATA_HORA_INTEGRACAO=dt)
