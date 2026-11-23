@@ -83,6 +83,26 @@
   tabela conector_execucao da plataforma (marcar como falhou ao retomar). Nenhum container do conector rodando.
   Vigias de disco e de memória: PARADOS (a sessão acabou).
 
+**Diagnóstico da causa (feito em 23/11, 9h50, só leitura):**
+- Kernel: `watchdog: BUG: soft lockup - CPU#14 stuck for 13511s! [vmtoolsd]` às 9h26: a VM ficou 3h45 sem CPU do
+  hipervisor (VMware), das 5h21 às 9h26. Causa do lado do HOST (suspensão/hibernação/economia de energia, snapshot,
+  disco do host cheio ou travado, host sem memória). A VM foi reiniciada às 9h32 (o dono foi perguntado se foi ele).
+- MariaDB com durabilidade máxima: innodb_doublewrite=ON, innodb_flush_log_at_trx_commit=1, O_DIRECT,
+  checksum full_crc32. A corrupção vem de escrita confirmada e perdida/embaralhada pelo disco virtual, não da
+  configuração. Explicado ao dono (o Firebird também corromperia; nunca teve essa carga num congelamento).
+- Pedido ao dono, do lado do host: sem suspensão/hibernação durante carga, sem snapshot durante carga, disco do host
+  com espaço e interno, olhar o vmware.log da VM por volta de 5h20 ("suspend", "stun", "disk full", "sleep").
+- Do nosso lado (a fazer): despejo diário de `plataforma` e `espelho` fora do volume do MariaDB; carga com 3
+  gravadores; vigia de VM parada (diferença entre relógio e batimento).
+- **Estrago provavelmente menor:** depois do reinício, CREATE TABLE com FK funciona (zz_teste_drop.f2 criada), mas o
+  log diz "Cannot save table statistics ... Data structure corruption": o dano está em `mysql.innodb_table_stats` e
+  `mysql.innodb_index_stats` (só estatísticas, reconstruíveis) e nos bancos de teste quentes. O DROP falha porque
+  apaga as estatísticas. Tente nesta ordem, antes de pensar em recriar o volume: (1) mariadb-dump de plataforma e
+  espelho para sante-sgh-dados/backup/; (2) recriar as duas tabelas de estatística (CREATE ... LIKE em tabela nova,
+  RENAME, DROP da velha; ou mariadb-upgrade/script oficial) com `innodb_stats_persistent` desligado se preciso;
+  (3) DROP dos 5 bancos de teste (autorizado) e de zz_teste_drop; (4) se ainda falhar, innodb_force_recovery para
+  despejar e, só com OK explícito do dono, recriar o volume.
+
 **Próximos passos, em ordem:**
 
 1. **Investigar a causa da parada das 5h20** (pedido do dono: "identifique o que houve para que não ocorra mais").
