@@ -66,7 +66,7 @@ class Formas(unittest.TestCase):
 
     def test_condicao_e_cod(self):
         self.assertEqual(mapa.condicao("TIPO=C,"), {"coluna": "TIPO", "passos": None, "valores": ["C", ""],
-                                                    "regra": ""})
+                                                    "regra": "", "cod": None})
         c = mapa.condicao("TAB>T>PROPRIA=S!licenca_nao_comprovada")
         self.assertEqual((c["coluna"], c["passos"][-1], c["regra"]), ("TAB", {"coluna": "PROPRIA"},
                                                                       "licenca_nao_comprovada"))
