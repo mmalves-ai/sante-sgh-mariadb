@@ -83,7 +83,9 @@ describe('id de linha do banco (BIGINT UNSIGNED)', () => {
       ato: 0,
     };
     expect(esquemaLancarItem.safeParse(base).success).toBe(true);
-    expect(esquemaFecharConta.safeParse({ conta: ITEM_PROPRIO, versao: '2026-11-23 10:00:00' }).success).toBe(true);
+    expect(esquemaFecharConta.safeParse({ conta: ITEM_PROPRIO, versao: '2026-11-23 10:00:00' }).success).toBe(
+      true,
+    );
     for (const conta of [ACIMA, 0, -1])
       expect(caminhosComProblema(esquemaLancarItem, { ...base, conta })).toContain('conta');
     expect(
@@ -93,7 +95,10 @@ describe('id de linha do banco (BIGINT UNSIGNED)', () => {
       }),
     ).toEqual([]);
     expect(
-      caminhosComProblema(esquemaConferirItem, { conta: 1, itens: [{ id: ACIMA, versao: '2026-11-23 10:00:00' }] }),
+      caminhosComProblema(esquemaConferirItem, {
+        conta: 1,
+        itens: [{ id: ACIMA, versao: '2026-11-23 10:00:00' }],
+      }),
     ).toContain('itens.0.id');
   });
 
@@ -102,7 +107,9 @@ describe('id de linha do banco (BIGINT UNSIGNED)', () => {
     expect(caminhosComProblema(esquemaPedidoMarcarEspera, { ...base, convenio: ITEM_PROPRIO })).not.toContain(
       'convenio',
     );
-    expect(caminhosComProblema(esquemaPedidoMarcarEspera, { ...base, convenio: ACIMA })).toContain('convenio');
+    expect(caminhosComProblema(esquemaPedidoMarcarEspera, { ...base, convenio: ACIMA })).toContain(
+      'convenio',
+    );
   });
 
   it('estoque: a saída do item próprio passa; acima do teto, não', () => {

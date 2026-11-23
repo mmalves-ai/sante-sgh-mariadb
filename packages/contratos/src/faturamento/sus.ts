@@ -222,9 +222,7 @@ export const esquemaRegistrarEquivalenciaSus = z
 export type RegistrarEquivalenciaSusEntrada = z.infer<typeof esquemaRegistrarEquivalenciaSus>;
 
 /** faturamento.desativarEquivalenciaSus: a equivalência deixa de valer (nada é apagado; a crítica volta na CIHA). */
-export const esquemaDesativarEquivalenciaSus = z
-  .object({ procedimento: idBanco, versao })
-  .strict();
+export const esquemaDesativarEquivalenciaSus = z.object({ procedimento: idBanco, versao }).strict();
 export type DesativarEquivalenciaSusEntrada = z.infer<typeof esquemaDesativarEquivalenciaSus>;
 
 /** A lista de equivalências (paginação no servidor; busca por código ou nome de qualquer dos dois procedimentos). */

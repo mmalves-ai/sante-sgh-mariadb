@@ -128,7 +128,9 @@ export const esquemaEditarPacote = z
     valor: z.number().min(0).max(99_999_999),
     inicio: z.string().regex(DATA),
     fim: z.string().regex(DATA).nullable().default(null),
-    itens: z.array(z.object({ codigo: codigoItem, quantidade: z.number().positive().max(9999) }).strict()).max(300),
+    itens: z
+      .array(z.object({ codigo: codigoItem, quantidade: z.number().positive().max(9999) }).strict())
+      .max(300),
     ativo: z.boolean().default(true),
   })
   .strict()

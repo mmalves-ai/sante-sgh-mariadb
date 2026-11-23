@@ -191,11 +191,7 @@ export class PrecosController {
         'Dados inválidos',
         'Informe o percentual ou os valores.',
       );
-    return this.servico.proposta(
-      ctxDe(req, 'proposta'),
-      inteiro(tab, 'tabela'),
-      pedidoDe(p.data),
-    );
+    return this.servico.proposta(ctxDe(req, 'proposta'), inteiro(tab, 'tabela'), pedidoDe(p.data));
   }
 
   private semGravacao(): void {
