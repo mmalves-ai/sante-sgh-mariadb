@@ -4,7 +4,7 @@
 // analisar, escolher o leito (os compatíveis com o perfil e, para o supervisor, os de fora com a exceção e a senha),
 // confirmar a reserva, marcar a caminho, concluir pela admissão ou pela transferência, mudar a prioridade, cancelar ou
 // rejeitar com o motivo. W0-07: corrigir o perfil, os recursos e a observação, e cancelar pelo excluir (a linha fica; com a
-// senha; com reserva ou transferência vinculada, o servidor recusa com a contagem e o cartão mostra o texto).
+// senha; com a reserva vigente, o servidor a cancela junto e o leito volta a livre).
 import {
   CODIGOS_PRECAUCAO,
   CODIGOS_PRIORIDADE_NIR,

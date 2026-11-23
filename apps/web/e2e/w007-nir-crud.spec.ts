@@ -61,7 +61,7 @@ async function confirmar(p: Page, testid: string, motivo: string, senha?: string
 test.describe('W0-07: correção, alteração e exclusão no NIR, no mapa e no PA @W0-07', () => {
   test.setTimeout(300_000);
 
-  test('fila e reservas: corrigir, excluir (senha; recusa com a contagem), alterar e excluir a reserva; axe', async ({
+  test('fila e reservas: corrigir, cancelar pelo excluir (senha; a reserva junto), alterar e cancelar a reserva; axe', async ({
     page,
     browser,
   }) => {
@@ -72,6 +72,9 @@ test.describe('W0-07: correção, alteração e exclusão no NIR, no mapa e no P
     const s1 = Number((await r1.json()).id);
     const r2 = await postar(med, '/api/nir/solicitacoes', pedido(1002));
     const s2 = Number((await r2.json()).id);
+    const r3 = await postar(med, '/api/nir/solicitacoes', pedido(1003));
+    expect(r3.status(), await r3.text()).toBe(201);
+    const s3 = Number((await r3.json()).id);
     await med.context().close();
 
     await entrar(page, 'SINT.INTERNACAO');
@@ -96,37 +99,57 @@ test.describe('W0-07: correção, alteração e exclusão no NIR, no mapa e no P
     await confirmar(page, `dialogo-excluir-${s1}`, 'Paciente errado na tela', SENHA);
     await expect(page.getByTestId(`solicitacao-${s1}`)).toHaveCount(0);
 
-    // A segunda: reserva pela API do NIR; excluir a solicitação recusa com a contagem (aviso único no diálogo).
-    const leitos = await (await page.request.get(`/api/nir/solicitacoes/${s2}/leitos`)).json();
-    const compat = (leitos.leitos as { compativel: boolean; leito: unknown; chave: string }[]).filter(
-      (l) => l.compativel,
-    );
-    const rr = await postar(page, '/api/nir/reservas', { solicitacao: s2, leito: compat[0]!.leito });
-    expect(rr.status(), await rr.text()).toBe(201);
-    const reserva = Number((await rr.json()).id);
+    // A segunda, com reserva pela API do NIR: excluir cancela a solicitação e a reserva junto (a linha fica para a
+    // auditoria); o cartão sai da fila, o leito volta a livre e a reserva aparece entre as encerradas.
+    const reservarPara = async (sol: number) => {
+      const leitos = await (await page.request.get(`/api/nir/solicitacoes/${sol}/leitos`)).json();
+      const compat = (leitos.leitos as { compativel: boolean; leito: unknown; chave: string }[]).filter(
+        (l) => l.compativel,
+      );
+      const rr = await postar(page, '/api/nir/reservas', { solicitacao: sol, leito: compat[0]!.leito });
+      expect(rr.status(), await rr.text()).toBe(201);
+      return { reserva: Number((await rr.json()).id), chave: compat[0]!.chave };
+    };
+    const situacaoNoMapa = async (chave: string) =>
+      (
+        (await (await page.request.get('/api/leitos/mapa')).json()).leitos as {
+          situacao: string;
+          chave: string;
+        }[]
+      ).find((l) => l.chave === chave)?.situacao;
+    const a2 = await reservarPara(s2);
     await page.reload();
     const c2 = page.getByTestId(`solicitacao-${s2}`);
     await expect(c2).toHaveAttribute('data-estado', 'reservado');
     await c2.getByTestId(`excluir-${s2}`).click();
     await confirmar(page, `dialogo-excluir-${s2}`, 'Paciente errado na tela', SENHA);
-    await expect(page.getByTestId(`dialogo-excluir-${s2}-recusa`)).toContainText(
-      '1 reserva de leito vinculada',
-    );
-    await page.keyboard.press('Escape');
-
-    // Reservas: alterar a validade (motivo) e excluir a reserva feita por engano (a solicitação volta à análise).
+    await expect(page.getByTestId(`solicitacao-${s2}`)).toHaveCount(0);
+    expect(await situacaoNoMapa(a2.chave)).toBe('livre');
     await page.goto('/internacao/nir/reservas');
-    await page.getByTestId(`reserva-alterar-${reserva}`).click();
+    await expect(
+      page.getByTestId('reservas-encerradas').getByTestId(`reserva-encerrada-${a2.reserva}`),
+    ).toBeVisible();
+    await expect(page.getByTestId(`reserva-${a2.reserva}`)).toHaveCount(0);
+
+    // A terceira, reservada: alterar a validade (motivo) e cancelar pelo excluir da reserva feita por engano (a
+    // solicitação volta à análise; a reserva sai das vigentes e fica entre as encerradas).
+    const a3 = await reservarPara(s3);
+    await page.reload();
+    await page.getByTestId(`reserva-alterar-${a3.reserva}`).click();
     const da = page.getByTestId('dialogo-alterar-reserva');
     await campo(da.getByTestId('alterar-reserva-validade')).fill('300');
     await semViolacaoAxe(page, 'diálogo alterar reserva');
     await confirmar(page, 'dialogo-alterar-reserva', 'Transporte atrasado');
     await expect(da).toBeHidden();
-    await page.getByTestId(`reserva-excluir-${reserva}`).click();
+    await page.getByTestId(`reserva-excluir-${a3.reserva}`).click();
     await confirmar(page, 'dialogo-excluir-reserva', 'Reservado no paciente errado');
-    await expect(page.getByTestId(`reserva-${reserva}`)).toHaveCount(0);
+    await expect(page.getByTestId(`reserva-${a3.reserva}`)).toHaveCount(0);
+    await expect(
+      page.getByTestId('reservas-encerradas').getByTestId(`reserva-encerrada-${a3.reserva}`),
+    ).toBeVisible();
+    expect(await situacaoNoMapa(a3.chave)).toBe('livre');
     await page.goto('/internacao/nir/fila');
-    await expect(page.getByTestId(`solicitacao-${s2}`)).toHaveAttribute('data-estado', 'em_analise');
+    await expect(page.getByTestId(`solicitacao-${s3}`)).toHaveAttribute('data-estado', 'em_analise');
     expect(externas).toEqual([]);
   });
 
