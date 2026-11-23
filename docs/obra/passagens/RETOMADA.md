@@ -6,8 +6,43 @@
 2. Avise o dono: "Rodando sob o protocolo de otimização de tokens e reports periódicos". Ligue:
    - o vigia de disco: `tools/obra/vigia-disco.sh 130`, em segundo plano;
    - o vigia de memória v2 (abaixo);
-   - o relatório de 50 minutos: formato da memória `formato-relatorio-50min`, com CronCreate one-shot.
-3. Siga a **fila** abaixo, a partir do primeiro item não feito.
+   - o relatório de 50 minutos (processo abaixo);
+   - **primeiro:** um relatório padrão logo no começo, com o estado do incidente.
+3. Siga a seção **INCIDENTE** e depois a **fila**, a partir do primeiro item não feito.
+4. **Toda resposta em português** (diretriz do projeto, dono, 23/11).
+
+## Relatórios periódicos (obrigatório, dono)
+
+- **Agendamento:** CronCreate com `recurring: false`, para daqui a 50 minutos (minuto fora de :00 e :30), com o
+  prompt EXATO abaixo. Cada relatório agenda o seguinte ao terminar. O agendamento morre com a sessão: na sessão nova,
+  agende de novo logo no começo.
+- **Prompt exato:**
+
+  > Relatório de 50 minutos da obra sante-sgh. Formato OBRIGATÓRIO do dono (memória formato-relatorio-50min): tabelas
+  > 1) Feito: recurso | início | término; 2) Em execução: recurso | início | término previsto | completude %; 3) Por
+  > fazer: recurso | início previsto (data/hora) | tamanho % do total; 4) Completude total % e término previsto.
+  > Depois bullets: status da otimização do consumo (meça com python3 -I tools/obra/medir_consumo.py <pasta da
+  > sessão>; gasto x orçamento, por papel, % da linha de base); achados, reparos e funções feitas na onda; o que já
+  > funciona para testar no browser (URL e caminho); comentários gerais. Cabeçalho "Orquestrando com otimização do
+  > uso de tokens" se houver subagentes. Siglas da saúde explicadas. Ao terminar, agende o próximo com CronCreate
+  > one-shot para daqui a 50 minutos com este mesmo prompt.
+
+- **Pasta da sessão para o medir_consumo:** `/home/mmalves/.claude/projects/-home-mmalves-workspace-redesante-sante-sgh/<id
+  da sessão>` (a da sessão nova; a desta noite era a04c305e-fa76-41e3-b357-d645839b9e20).
+- **Conteúdo que o dono cobra:**
+  - linha de previsão para navegar na ProntoCardio no topo;
+  - tarefas em termos da área hospitalar;
+  - siglas explicadas no primeiro uso (TISS, TUSS, OPME, glosa, repasse...);
+  - números medidos, nunca estimados sem dizer;
+  - falhas relatadas como são (inclusive minhas, como a carga parada sem eu ver);
+  - URL do painel `https://<ip>:5310` (login `admin`) e do Adminer `https://<ip>:5320`; confira o IP com
+    `ip -4 addr show ens33` (DHCP: já foi .101, .104 e 192.168.1.75).
+- **Vigia da carga** (ligar junto com a carga):
+  - log a cada 5 min em `sante-sgh-dados/obra/progresso-carga.log`;
+  - alarme de parada só quando estado, etapa, percentual e contagem ficam iguais e a CPU do worker fica abaixo de 5%
+    por 15 min (a releitura do que já entrou não cresce a contagem e dava alarme falso);
+  - não use COUNT(*) em conector_origem a cada 5 min: pesa (tabela de dezenas de milhões);
+  - use MAX(id) e o `batimento_em` da execução, e acuse também VM parada (relógio andou muito mais que o batimento).
 
 ## Regras que o dono reforçou
 
