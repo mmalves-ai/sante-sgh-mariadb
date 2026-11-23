@@ -42,14 +42,16 @@
   agende de novo logo no começo.
 - **Prompt exato:**
 
-  > Relatório de 50 minutos da obra sante-sgh. Formato OBRIGATÓRIO do dono (memória formato-relatorio-50min): tabelas
+  > Relatório de 50 minutos da obra sante-sgh. PRIMEIRO agende o próximo (CronCreate one-shot para daqui a 50 minutos
+  > com este mesmo prompt) e anote o "Next run". Cabeçalho: "Rodando sob o protocolo de otimização de tokens e reports
+  > periódicos", "Orquestrando com otimização do uso de tokens" e "Relatório de DD/MM HH:MM (de date) · próximo: DD/MM
+  > HH:MM". Formato OBRIGATÓRIO do dono (memória formato-relatorio-50min): tabelas
   > 1) Feito: recurso | início | término; 2) Em execução: recurso | início | término previsto | completude %; 3) Por
   > fazer: recurso | início previsto (data/hora) | tamanho % do total; 4) Completude total % e término previsto.
   > Depois bullets: status da otimização do consumo (meça com python3 -I tools/obra/medir_consumo.py <pasta da
   > sessão>; gasto x orçamento, por papel, % da linha de base); achados, reparos e funções feitas na onda; o que já
   > funciona para testar no browser (URL e caminho); comentários gerais. Cabeçalho "Orquestrando com otimização do
-  > uso de tokens" se houver subagentes. Siglas da saúde explicadas. Ao terminar, agende o próximo com CronCreate
-  > one-shot para daqui a 50 minutos com este mesmo prompt.
+  > uso de tokens" se houver subagentes. Siglas da saúde explicadas.
 
 - **Pasta da sessão para o medir_consumo:** `/home/mmalves/.claude/projects/-home-mmalves-workspace-redesante-sante-sgh/<id
   da sessão>` (a da sessão nova; a desta noite era a04c305e-fa76-41e3-b357-d645839b9e20).
