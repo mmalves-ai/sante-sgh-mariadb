@@ -153,7 +153,13 @@ Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam
 - **Tabelas concluídas:** pela marca `conector_tabela_concluida` (gravada a cada onda commitada; a continuação marca as
   puladas como `continuada`); sem marca (execução anterior a esta versão), por dedução: a imagem da interrompida
   registrou n > 0 linhas da tabela, a contagem de agora também é n, e o conector_origem tem exatamente n chaves
-  principais da tabela com a imagem da interrompida. O resto roda de novo (seguro: pula pelo hash).
+  principais da tabela com a imagem da interrompida. Nas duas regras, tabela com mais chaves principais (de qualquer
+  imagem) que linhas no arquivo roda de novo. O resto roda de novo (seguro: pula pelo hash).
+- **Fase 2:** tabela com coluna em duas fases (autorreferência, ciclo declarado) nunca é pulada: a referência adiada
+  vive só na memória até o `_fase2`. Ela roda de novo, e na linha "igual" cuja coluna ficou NULL no destino a
+  referência é refeita da linha lida e gravada só se a coluna continuar NULL (vale também para importar de novo).
+- **Cadeia:** continuação que falhou cedo (sem imagem, ou antes de marcar o que herdou) não perde a anterior: o
+  `--continuar` seguinte herda as concluídas pela cadeia `contadores.continuar_de`.
 - **Memória** (`paralelo.py`, cabeçalho): de-para sob demanda e liberado depois da última onda que o usa (tabela com
   CONECTOR_ESTADO_MIN linhas ou mais, padrão 20 mil); chaves vistas e soma da origem compactadas ao fim da onda; linha
   `conector memoria onda N: {...}` no stderr do worker e `carga.memoria` (pico e última) no resumo.
