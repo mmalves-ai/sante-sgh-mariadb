@@ -2147,6 +2147,8 @@ class CargaMapa(carga.Carga):
             return "nova", None
         if chave in self._excluidas.get(tab, ()):
             sincronizar_mod.reativar(self, tab, chave)
+        if self._retentar(tab, ant):  # CONECTOR_REPROCESSAR_RECUSADAS: a recusada é tentada de novo, como nova
+            return "nova", None
         if ant[1] == h:
             ja = None
             if ant[0] is None:

@@ -131,6 +131,14 @@ def aplicar_limite_recusa(res, limites=None):
     return marcadas
 
 
+def reprocessar_recusadas(ambiente=None):
+    """CONECTOR_REPROCESSAR_RECUSADAS=1 (passada de reprocesso, depois de corrigir a declaração): a linha já vista e
+    RECUSADA (conector_origem com id_destino nulo e regra de recusa) é tratada como nova e tentada de novo. A linha
+    gravada continua pulada como igual; sem a variável, nada muda (continuidade). Combina com CONECTOR_SO."""
+    ambiente = os.environ if ambiente is None else ambiente
+    return (ambiente.get("CONECTOR_REPROCESSAR_RECUSADAS") or "").strip().lower() in ("1", "s", "sim", "true")
+
+
 def carater_do_atendimento(valor, categoria):
     """(código TISS 23, regra de pendência ou None). 1 e 2 valem como vieram; vazio ou 0 (não informado): estimado
     pela categoria (carater_estimado, baixa); outro número: estimado do mesmo modo, com carater_fora_do_dominio."""
@@ -371,6 +379,7 @@ class Carga:
         self.cont = {"catalogos_criados": 0, "provisorios": 0, "puladas_iguais": 0, "alteradas_aguardam": 0,
                      "recusas_por_restricao": 0}
         self.existente = {}                 # tabela -> {chave: (id_destino, hash, hash_destino, regra, gravidade)}
+        self.reprocessar = reprocessar_recusadas()  # recusada já vista volta a ser tentada (CONECTOR_REPROCESSAR_...)
         self._avisos_ant = {}               # tabela -> {chave: {(regra, gravidade)}}: abertas de execuções anteriores
         self._reemitidas = {}               # (tabela, chave, regra) -> vezes: reemitidas, ainda não recalculadas
         self.pre = {}                       # REALTA/RECADATE lidos antes do atendimento
@@ -548,6 +557,8 @@ class Carga:
         ant = self.existente.get(tab, {}).get(chave)
         if ant is None:
             return "nova", None
+        if self._retentar(tab, ant):
+            return "nova", None
         ja = None
         if ant[0] is None and not MAPA.get(tab, {}).get("sem_destino"):
             ja = ant[3] or "recusa_sem_regra_registrada"
@@ -559,6 +570,15 @@ class Carga:
         self.cont["alteradas_aguardam"] += 1
         self._pendencia(tab, chave, "alteracao_aguarda_sincronizar", "baixa")
         return "alterada", ant
+
+    def _retentar(self, tab, ant):
+        """Recusada já vista que esta passada tenta de novo (reprocessar_recusadas): id_destino nulo COM regra de recusa
+        (a linha sem destino por natureza nunca é recusa). Gravando, nenhuma pendência dela se repete nesta execução, e
+        a antiga fica resolvida (relatorio.resolver); recusada de novo, a pendência é a recalculada agora."""
+        if not (self.reprocessar and ant[0] is None and ant[3]) or MAPA.get(tab, {}).get("sem_destino"):
+            return False
+        self.cont["recusadas_reprocessadas"] = self.cont.get("recusadas_reprocessadas", 0) + 1
+        return True
 
     def _ciclo(self, tab, linha):
         m = MAPA[tab]

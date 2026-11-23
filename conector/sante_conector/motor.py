@@ -182,6 +182,8 @@ def executar(trab, eid):
                 rel["adiadas"] = cont["adiadas"] = sorted(adiar & set(tabelas))
             if so:
                 rel["so"] = cont["so"] = sorted(so & set(tabelas))
+            if carga.reprocessar_recusadas():  # CONECTOR_REPROCESSAR_RECUSADAS: recusadas já vistas tentadas de novo
+                rel["reprocessar_recusadas"] = cont["reprocessar_recusadas"] = True
             plano = carga_mapa.planejar(mapa_exec, carregar)
             rel["plano"] = [p["tabela"] for p in plano]
             if any(t in carga.MAPA for t in tabelas) or plano:
