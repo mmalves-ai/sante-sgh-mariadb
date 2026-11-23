@@ -97,8 +97,11 @@ class Verificador(unittest.TestCase):
         self.assertTrue(any("agrupar só em destino secundário" in e for e in self._erros(sem_antes)))
         sem_grupo = [dict(c, via="antes") if c["via"].startswith("antes") else c for c in par]
         self.assertTrue(any("#grupo_* sem destino agrupado" in e for e in self._erros(sem_grupo)))
+        # conta-itens-3: no secundário agrupado, o cabeçalho do grupo adota o existente (carga_mapa._gravar_ou_adotar)
         com_adotar = [dict(c, via=c["via"] + ";adotar:documento") if c["via"].startswith("antes") else c for c in par]
-        self.assertTrue(any("não combina" in e for e in self._erros(com_adotar)))
+        self.assertFalse(any("não combina" in e for e in self._erros(com_adotar)))
+        com_opcional = [dict(c, via=c["via"] + ";opcional") if c["via"].startswith("antes") else c for c in par]
+        self.assertTrue(any("não combina" in e for e in self._erros(com_opcional)))
         falso = [dict(par[0], coluna="QTD", destino="ex3b_lancamento.quantidade", via="com_falso", tabela="EX3B_LAN")]
         self.assertTrue(any("com_falso só em destino desdobrado" in e for e in self._erros(
             [c for c in self._decl("EX3B_LAN") if c["coluna"] != "QTD"] + falso)))

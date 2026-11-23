@@ -19,7 +19,10 @@ describe('resolverRegra', () => {
     const outro = resolverRegra(item({ grupoAto: 7 }), [geral, grupo42]);
     expect(outro.regra?.id).toBe(1);
     expect(outro.ignoradas).toContainEqual({ regra: 2, motivo: 'outra-dimensao', dimensao: 'grupoAto' });
-    expect(motivoNaoAplica(grupo42, item({ grupoAto: null }))).toEqual({ motivo: 'outra-dimensao', dimensao: 'grupoAto' });
+    expect(motivoNaoAplica(grupo42, item({ grupoAto: null }))).toEqual({
+      motivo: 'outra-dimensao',
+      dimensao: 'grupoAto',
+    });
   });
 
   it('grupo de ato é independente da função na equipe: a regra por grupo não olha a função do executante', () => {

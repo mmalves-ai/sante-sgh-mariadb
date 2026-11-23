@@ -465,10 +465,13 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                     erros.append("agrupar só em destino secundário gravado antes (via antes;agrupar:) ou no "
                                  "principal: %s -> %s" % (t, dt))
                 # rodada 6 (L7-06): no principal, agrupar combina com adotar quando a mescla guarda o maior
-                # (adotar_maior: contador de numeração por tipo e competência)
-                if (o["adotar"] and not (dt == dts[0] and o["adotar_maior"])) or o["desdobrar"] \
+                # (adotar_maior: contador de numeração por tipo e competência).
+                # conta-itens-3 (9779d501): no secundário gravado antes, o cabeçalho do grupo adota o já existente
+                # pela chave de negócio (grupo de faturamento por tabela de mat/med: a primeira linha cria ou adota,
+                # as outras usam; carga_mapa._gravar_ou_adotar com op["adotar"]).
+                if (o["adotar"] and dt == dts[0] and not o["adotar_maior"]) or o["desdobrar"] \
                         or o["complementa"] or o["opcional"]:
-                    erros.append("agrupar não combina com adotar (só no principal com adotar_maior), desdobrar, "
+                    erros.append("agrupar não combina com adotar (no principal, só com adotar_maior), desdobrar, "
                                  "complementa nem opcional: %s -> %s" % (t, dt))
                 if not all(_COL_ORIGEM.fullmatch(x) for x in o["agrupar"]):
                     erros.append("agrupar com coluna da origem mal formada: %s -> %s" % (t, dt))

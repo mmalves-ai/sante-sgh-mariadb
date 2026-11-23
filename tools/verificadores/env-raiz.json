@@ -1,9 +1,9 @@
 {
-  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat).",
+  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat). Registrado de novo em 2026-11-23: o .env ganhou, por decisão do dono, as credenciais do aviso por SES, o token do GitHub e os endereços DEV da VM.",
   "fonte": "stat -c '%a %s %Y' .env",
-  "registradoEm": "2026-11-21",
+  "registradoEm": "2026-11-23",
   "raiz": "/home/mmalves/workspace/redesante/sante-sgh",
   "permissao": "600",
-  "tamanho": 851,
-  "mtime": 1795222681
+  "tamanho": 1199,
+  "mtime": 1795389851
 }

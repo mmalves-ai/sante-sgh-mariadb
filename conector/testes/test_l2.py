@@ -318,7 +318,7 @@ class Plataforma(unittest.TestCase):
                          (uid, "0" * 16, "0" * 16, "1", conta))
         self.assertEqual((a["uid"], a["interfaces"], a["segredo_no_ambiente"]), (0, ["lo"], False))
         self.assertEqual(_um(self.c, "SELECT COUNT(*) FROM mysql.user WHERE user LIKE %s",
-                             ("sscon\\_e%d\\_%%" % eid,))[0], 0)
+                             ("sscon\\_e%d\\_%s" % (eid, banco.ficha_plataforma()),))[0], 0)  # só desta plataforma
         u = banco.conectar(None, usuario=conta, senha=senha)                  # a conta do motor é restrita
         try:
             with u.cursor() as cur:

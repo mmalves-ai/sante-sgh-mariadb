@@ -46,4 +46,13 @@ describe('verificadores:segredos (regra 2)', () => {
       k('SENHA'),
     ]);
   });
+  it('em código, chamada de função é expressão calculada; literal dentro da chamada continua achado', () => {
+    const py = [
+      `    VAL_${k('SENHA')}=dt(2025, 12, 31)),`,
+      `    ${k('SENHA')}=f('literal'),`,
+      `    ${k('SENHA')}='x',`,
+    ];
+    expect(procurarSegredos(py.join('\n'), 'conector/x.py').map((a) => a.linha)).toEqual([2, 3]);
+    expect(procurarSegredos(`${k('SENHA')}=dt(2025)`, '.env.exemplo').map((a) => a.linha)).toEqual([1]);
+  });
 });
