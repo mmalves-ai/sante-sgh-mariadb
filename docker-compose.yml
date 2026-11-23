@@ -35,7 +35,7 @@ services:
         '--default-time-zone=+00:00',
       ]
     volumes:
-      - sante-sgh-mariadb-data:/var/lib/mysql
+      - sante-sgh-mariadb-data-2:/var/lib/mysql
       - ./db:/db:ro
     healthcheck:
       test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
@@ -45,5 +45,5 @@ services:
 volumes:
   sante-sgh-oracle-data:
     name: sante-sgh-oracle-data
-  sante-sgh-mariadb-data:
-    name: sante-sgh-mariadb-data
+  sante-sgh-mariadb-data-2:
+    name: sante-sgh-mariadb-data-2
