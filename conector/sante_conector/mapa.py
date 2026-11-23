@@ -297,7 +297,8 @@ OPCOES_DESTINO = ("opcional", "adotar:", "adotar_maior:", "adotar_ativo:", "iden
 # opções de COLUNA na via (resíduo do motor da rodada 4): `exige_dominio` (fora do de-para de valores recusa a linha),
 # `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
 # concorrente: a pendência valor_presumido em TODA linha, mesmo quando outra declaração deu o valor)
-OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor")
+# `presumida` (concorrente não literal que, quando é a gravada, deixa a pendência valor_presumido: valor estimado)
+OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor", "presumida")
 # rodada 5 (ADR 0006, item 3): ligação ao ESPELHO PADRÃO DA BASE pelo código (e pela edição): `espelho:<catalogo>`
 # ou `espelho:<catalogo>@<COLUNA>` / `espelho:<catalogo>@=<edição>` na via. Catálogo -> tabela que a ligação acha.
 ESPELHO_CATALOGOS = {"brasindice": "item_referencia_matmed", "simpro": "item_referencia_matmed",

@@ -109,7 +109,11 @@ def _comparar(c, res, esperado, erros, rodada, externos=()):
     for ent, r in res["entidades"].items():
         # pai externo (PAIS_EXTERNOS) lido na origem: registrado como já carregado por outra fatia, nunca regravado
         # aqui; a conciliação dele é da fatia dona (rodada 5: o principal do pai pode ser o mesmo destino da fatia)
-        if not r["conferido"] and r.get("tabela_origem") not in externos:
+        # a recusa acima do limite (C9, alerta da carga real) não é divergência na imagem sintética: as recusas da
+        # fatia são deliberadas e conferidas uma a uma pelo esperado (gravados e pendências por regra); vale a
+        # conciliação de contagem e soma, guardada antes do alerta
+        ok = r.get("conciliacao_sem_limite") if r.get("recusa_acima_do_limite") else r["conferido"]
+        if not ok and r.get("tabela_origem") not in externos:
             erros.append("%s: conciliação divergiu em %s (origem %d, destino %d, recusados %d)" % (
                 rodada, ent, r["registros_origem"], r["registros_destino"], r["recusados"]))
     principal = {p["tabela"]: c._nome_ent(p["tabela"], p["destinos"][0]) for p in c.plano}
@@ -130,6 +134,18 @@ def _comparar(c, res, esperado, erros, rodada, externos=()):
                 erros.append("%s: pendências de %s diferentes do esperado: %s" % (rodada, t, ", ".join(
                     "%s=%d/%d" % (k, obtido.get(k, 0), esp.get("pendencias", {}).get(k, 0)) for k in dif
                     if obtido.get(k, 0) != esp.get("pendencias", {}).get(k, 0))))
+
+
+def _conferir_valores(cc, ctl, conferencias, erros):
+    """Valor gravado, não só a contagem (revisão de 20c4b234): a fatia declara `CONFERIR_DESTINO` = [(descrição, SQL)]
+    sobre o banco do cliente; `{ctl}` é o banco de controle (conector_origem liga a chave original ao id gravado). A
+    consulta devolve uma linha com 1 quando o valor está certo; outra coisa (0, NULL, nenhuma linha) é erro."""
+    with cc.cursor() as cur:
+        for desc, sql in conferencias:
+            cur.execute(sql.replace("{ctl}", "`%s`" % ctl))
+            r = cur.fetchone()
+            if not r or r[0] != 1:
+                erros.append("primeira: valor gravado errado: %s (obtido %r)" % (desc, r[0] if r else None))
 
 
 def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
@@ -198,6 +214,7 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 try:
                     c, res = _rodar(lt, cc, "%s" % ctl, 1, mapa_exec, presentes, contagens)
                     _comparar(c, res, esperado, erros, "primeira", set(manif["pais_externos"]))
+                    _conferir_valores(cc, ctl, getattr(mod, "CONFERIR_DESTINO", ()), erros)
                     saida = {"entidades": {k: {x: v[x] for x in ("tabela_origem", "registros_origem",
                                                                  "registros_destino", "recusados", "conferido")}
                                            for k, v in res["entidades"].items()},

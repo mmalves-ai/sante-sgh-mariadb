@@ -126,6 +126,7 @@ def aplicar_limite_recusa(res, limites=None):
     for ent, r in res.items():
         if recusa_acima_do_limite(ent, r.get("registros_origem"), r.get("recusados"), limites):
             r[REGRA_RECUSA_LIMITE] = True
+            r["conciliacao_sem_limite"] = r.get("conferido")  # contagem e soma conferidas, antes do alerta de recusa
             r["conferido"] = False
             marcadas.append(ent)
     return marcadas

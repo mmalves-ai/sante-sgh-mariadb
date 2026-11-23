@@ -160,6 +160,8 @@ Resíduo do motor da rodada 4 (pedidos que ainda bloqueavam tabelas; prova em `s
   declarações anteriores da mesma coluna (o valor certo veio por outro caminho);
 - literal presumido `=~x` em coluna concorrente: a pendência valor_presumido só quando o literal é o valor gravado
   (opção de coluna `marca`: em toda linha, para o aviso deliberado, ex. hora local sem UTC);
+- opção de coluna `presumida` numa concorrente que não é literal (ex.: `ref:...;se:...`): quando é ELA que grava o
+  valor (estimado por outro caminho), a linha deixa a pendência baixa valor_presumido, como o `=~x` (C10 revisado);
 - opção `por_pai` na via de uma coluna do destino PRINCIPAL com `ref:T.K` (ou `ref:T.(K1,K2)=(C1,C2)`): a chave
   alternativa repetida (a mesma pergunta em vários modelos) grava UMA linha do destino POR PAI (item `<chave>/<dt>/<chave
   do pai>`, conciliado como o desdobrado); pai pendente recusa a linha (`pai_pendente`), nenhum pai: `pai_inexistente`.
@@ -1514,6 +1516,9 @@ class CargaMapa(carga.Carga):
                 if dc in pos:  # coluna concorrente: vale a primeira com valor, na ordem declarada
                     if modelo[pos[dc]][1] is None and x is not None:
                         modelo[pos[dc]] = (dc, x)
+                        if c.get("presumida"):  # valor ESTIMADO por outro caminho: visível ao cliente (ADR 0007)
+                            pend.append(("valor_presumido", "baixa"))
+                            self._presumidas.add((dt, dc))
                         if c.get("senao"):  # o valor veio por outro caminho: a recusa de domínio anterior sai
                             apagar.update(i for i in fora[dc] if i < n0)
                     continue

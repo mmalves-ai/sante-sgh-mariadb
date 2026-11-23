@@ -37,6 +37,7 @@ class Limite(unittest.TestCase):
         self.assertEqual(carga.aplicar_limite_recusa(res, PADRAO), ["atendimento"])
         self.assertFalse(res["atendimento"]["conferido"])
         self.assertTrue(res["atendimento"]["recusa_acima_do_limite"])
+        self.assertTrue(res["atendimento"]["conciliacao_sem_limite"])  # contagem e soma conferidas, guardadas
         self.assertTrue(res["paciente"]["conferido"])
         self.assertNotIn("recusa_acima_do_limite", res["paciente"])
         self.assertTrue(res["atendimento_ficha"]["conferido"])

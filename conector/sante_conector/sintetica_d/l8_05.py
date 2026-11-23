@@ -600,3 +600,14 @@ def linhas(r, ins):
         esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     return esperado
 
+# valor gravado, não só a contagem (revisão de 20c4b234; conferencia._conferir_valores): o plano genérico 8 (ligado às
+# fontes 2 e 1) fica na fonte 1, a MENOR, nunca na primeira lida nem na maior
+_O = "(SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='%s' AND chave_original='%s' AND entidade_destino='%s')"
+CONFERIR_DESTINO = [
+    ("plano 8 na fonte 1 (a menor da ligação)",
+     "SELECT fonte_pagadora_id = " + _O % ("TBCONVEN", "1", "externo") + " FROM plano_fonte_pagadora WHERE id = "
+     + _O % ("TBTIPPLANO", "8", "plano_fonte_pagadora")),
+    ("plano 1 na fonte da origem (1)",
+     "SELECT fonte_pagadora_id = " + _O % ("TBCONVEN", "1", "externo") + " FROM plano_fonte_pagadora WHERE id = "
+     + _O % ("TBTIPPLANO", "1", "plano_fonte_pagadora")),
+]

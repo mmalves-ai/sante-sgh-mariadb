@@ -344,10 +344,30 @@ ESPERADO_R3 = {
                    codigo_inexistente_destino=1, valor_presumido=1),
     "REPROEXT": _e(1, pai_inexistente=1, pai_pendente=1),
     "RIPROEXT": _e(1, catalogo_codigo_inexistente=1),
-    "FCINTEGRPA": _e(2, pai_pendente=1),
+    "FCINTEGRPA": _e(2, pai_pendente=1, valor_presumido=1),  # 3: data estimada pela do item, visível (presumida)
     "FCLANAUD": _e(2, pai_inexistente=2),
     # item 3 recusado: a trilha dele também (pai_pendente); item 99 nunca visto: grava com o item NULL
     "FCLANEXTSEQITEM": _e(3, pai_pendente=1, pai_inexistente=1),
     # usuário e tabela nunca vistos: gravam com NULL e pendência
     "TBHISTBR": _e(3, pai_inexistente=2),
 }
+
+# valor gravado, não só a contagem (revisão de 20c4b234 e f76c7b99; conferencia._conferir_valores)
+_O = "(SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='%s' AND chave_original='%s' AND entidade_destino='%s')"
+CONFERIR_DESTINO = [
+    ("item 1 (T, motivo 1001 do catálogo) glosado com o motivo",
+     "SELECT situacao = 'glosado' AND motivo_glosa_id IS NOT NULL FROM conta_hospitalar_item WHERE id = "
+     + _O % ("FCLANEXT", "1", "conta_hospitalar_item")),
+    ("item 7 (T, motivo 9999 fora do catálogo) lançado e sem motivo",
+     "SELECT situacao = 'lancado' AND motivo_glosa_id IS NULL FROM conta_hospitalar_item WHERE id = "
+     + _O % ("FCLANEXT", "7", "conta_hospitalar_item")),
+    ("item 2 (n) lançado", "SELECT situacao = 'lancado' FROM conta_hospitalar_item WHERE id = "
+     + _O % ("FCLANEXT", "2", "conta_hospitalar_item")),
+    ("produção 3 (sem data) integrada na data do item 1",
+     "SELECT DATE(p.integrado_em) = DATE(i.realizado_em) FROM producao_repasse p JOIN conta_hospitalar_item i"
+     " ON i.id = p.conta_hospitalar_item_id WHERE p.id = " + _O % ("FCINTEGRPA", "3", "producao_repasse")
+     + " AND i.id = " + _O % ("FCLANEXT", "1", "conta_hospitalar_item")),
+    ("produção 1 (com data) mantém a data da origem",
+     "SELECT integrado_em = '2025-03-31 18:00:00' FROM producao_repasse WHERE id = "
+     + _O % ("FCINTEGRPA", "1", "producao_repasse")),
+]

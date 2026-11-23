@@ -54,6 +54,8 @@ class Mapa(unittest.TestCase):
         est = cs[1]
         self.assertEqual((est["se"]["coluna"], est["se"]["valores"]), ("DATA_HORA_INTEGRACAO", [""]))
         self.assertEqual([p.get("tabela") or p.get("coluna") for p in est["passos"]], ["FCLANEXT", "DATA"])
+        self.assertTrue(est.get("presumida"))      # estimada: a linha deixa valor_presumido (revisão de 20c4b234)
+        self.assertFalse(cs[0].get("presumida"))   # a data da origem não
         c = carga_mapa.CargaMapa.__new__(carga_mapa.CargaMapa)
         self.assertTrue(c._cond({"DATA_HORA_INTEGRACAO": None}, est["se"]))
         self.assertFalse(c._cond({"DATA_HORA_INTEGRACAO": "2025-01-01 10:00"}, est["se"]))
