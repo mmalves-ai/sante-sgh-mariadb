@@ -58,6 +58,18 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## INCIDENTE (23/11, 9h30): corrupção InnoDB depois de suspensão da VM
+
+- Das 5h20 às 9h25 nada rodou na VM (sem reinício: uptime 18 h; os crons de relatório não dispararam; o kernel
+  registrou falta de CPU). Ao voltar, o MariaDB passou a ler páginas corrompidas ("Space id and page no stored in the
+  page ... should be") em conector_ctl_prontocardio (conector_origem, pendencia), cliente_prontocardio
+  (conta_hospitalar_item) e cliente_nucleo_d (DROP falha com "Data structure corruption").
+- Execução 10 parada (container do worker parado). plataforma e espelho conferidos por CHECK TABLE: íntegros.
+- Plano: apagar cliente_prontocardio, conector_ctl_prontocardio, cliente_nucleo_d, conector_ctl_nucleo_d,
+  nucleo_d_plataforma (o DROP foi negado pelo classificador do modo automático: precisa do OK do dono) e recarregar a
+  ProntoCardio do zero com a main inteira (até 760ee049), sem passada de correção. Antes, a prova diag-cadeia da
+  conta-itens-3 (interrompida pela suspensão).
+
 ## Execução 9 (23/11, 3h05)
 
 - A execução 8 parou na onda 49 de 208 (cerca de 30 milhões de linhas): deadlock 1213 num gravador (UPDATE de
