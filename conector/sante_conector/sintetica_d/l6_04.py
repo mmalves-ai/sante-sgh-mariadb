@@ -123,10 +123,8 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " INSERT INTO categoria_agenda (codigo, descricao, natureza, criado_em) VALUES ('exames', 'Exames', 'exame',"
                    " NOW(3)), ('consultas', 'Consultas', 'consulta', NOW(3)),"
                    " ('agenda_cadeiras', 'Agenda de cadeiras', 'sessao', NOW(3));"
-                   " CREATE TABLE IF NOT EXISTS tipo_marcacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " codigo VARCHAR(30) NOT NULL, natureza VARCHAR(30) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE);"
-                   " INSERT INTO tipo_marcacao (codigo, natureza) VALUES ('exame', 'exame'), ('consulta', 'primeira_vez'),"
-                   " ('retorno', 'retorno');"
+                   # nenhum tipo de marcação: o cliente novo não tem (causa da recusa 1048 em toda marcação na carga
+                   # real); a marcação de exame (SIPACAGD) e a de consulta (REPACAGD) criam ou adotam o seu pelo código
                    " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em)"
                    " SELECT '3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3) FROM DUAL"
                    " WHERE NOT EXISTS (SELECT 1 FROM municipio_ibge WHERE codigo_ibge = '3550308'); "
@@ -360,13 +358,16 @@ def _esperado():
         # procedimento (1 gravado; 9999 sem cadastro: pai_inexistente, entra sem item; 0 sem item); solicitante
         # externo pelo nome (encontrado; não cadastrado: pai_inexistente; ignorado com solicitante da casa); município
         # IBGE do pré-cadastro (encontrado; ausente: catalogo_codigo_inexistente); retrato na trilha (4)
-        "SIPACAGD": {"gravados": 4, "pendencias": {"pai_inexistente": 6, "restricao_destino_1048": 2,
+        # o tipo exame não existe no cliente novo: a 1ª marcação de exame o cria e as outras 3 o adotam
+        "SIPACAGD": {"gravados": 4, "pendencias": {"pai_inexistente": 6, "restricao_destino_1048": 2, "adotado_existente": 3,
                                                    "valor_fora_do_dominio": 1, "catalogo_codigo_inexistente": 1}},
         # marcações de consulta: primeira vez e retorno (autor pela inclusão) gravadas; horário sem situação (1048);
         # horário inexistente (pai_inexistente no horário, na situação e na duração; 1048); retorno 'X' (sem par no
-        # tipo e no S/N: valor_fora_do_dominio 2) e sem canal (1048)
+        # S/N: valor_fora_do_dominio 1; tipo primeira vez presumido: valor_presumido 1) e sem canal (1048). O tipo
+        # de marcação NÃO existe no cliente novo: a 1ª linha cria o seu e as demais do mesmo código o adotam
+        # (causa da recusa 1048 em toda marcação na carga real)
         "REPACAGD": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
-                                                   "valor_fora_do_dominio": 2}},
+                                                   "valor_fora_do_dominio": 1, "valor_presumido": 1}},
         EXC: {"gravados": 1, "pendencias": {"valor_presumido": 3, "data_sentinela": 1, "restricao_destino_1048": 2}},
         # rodada 5
         "TBESTADOCONFIRMACAO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},

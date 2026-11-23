@@ -121,9 +121,18 @@ class L604(unittest.TestCase):
         self.assertEqual(_prontas(), {})
         self.assertEqual(set(self.plano["SIPACAGI"]["destinos"]),
                          {"horario_agenda", "bloqueio_agenda", "motivo_bloqueio_agenda"})
+        # causa da recusa 1048 em todas as marcações da carga real: o cliente novo não tem tipo de marcação; a linha
+        # cria ou adota pelo código o seu ANTES do principal, e o principal aponta para ele (@id:tipo_marcacao)
         for t in ("SIPACAGD", "REPACAGD"):
             self.assertEqual(set(self.plano[t]["destinos"]),
-                             {"marcacao_horario", "pre_cadastro", "marcacao_horario_item", "trilha_auditoria"})
+                             {"marcacao_horario", "pre_cadastro", "marcacao_horario_item", "trilha_auditoria",
+                              "tipo_marcacao"})
+            op = self.plano[t]["opcoes"]["tipo_marcacao"]
+            self.assertTrue(op["antes"])
+            self.assertEqual(op["adotar"], ["codigo"])
+            self.assertEqual([c["coluna"] for c in self.todas(t, "tipo_marcacao_id")], ["@id:tipo_marcacao"])
+        self.assertEqual([c["coluna"] for c in self.plano["REPACAGD"]["colunas"]["tipo_marcacao"]
+                          if c["destino"] == "codigo"], ["=retorno", "=primeira_vez", "=~primeira_vez"])
         fim = self.todas("SIPACAGI", "fim_em")[0]
         self.assertEqual((fim["coluna"], fim["regra"]), ("#data_hora_mais:DATA,HORA,DATA", "data_fim_aberta:1801"))
         dc = [c for c in self.m["colunas_decl"] if (c["tabela"], c["destino"]) == ("SIPACAGI", "horario_agenda.fim_em")]
@@ -136,7 +145,6 @@ class L604(unittest.TestCase):
         self.assertEqual(via[("SIPACAGD", "marcacao_horario.horario_agenda_id")],
                          "ref:SIPACAGI.(NOME,CRM,DATA,HORA)=(NOME,CRM,DATA,HORA)")
         self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "duracao_minutos")], ["HORA", "NOME"])
-        self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "tipo_marcacao_id")], ["RETORNO", "=primeira_vez"])
         self.assertEqual([c["coluna"] for c in self.todas("REPACAGD", "responsavel_usuario_id")],
                          ["USUARIO", "ID_TBUSERS_INCLUSAO"])
         for t in ("SIPACAGD", "REPACAGD"):
