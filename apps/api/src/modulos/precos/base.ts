@@ -185,8 +185,12 @@ export function problemaDoPreco(e: unknown): ErroProblema {
   }
 }
 
-const INTEIRO = /^-?\d{1,9}$/;
-export function inteiro(v: unknown, nome: string, faixa: [number, number] = [0, 2147483647]): number {
+const INTEIRO = /^-?\d{1,16}$/;
+export function inteiro(
+  v: unknown,
+  nome: string,
+  faixa: [number, number] = [0, Number.MAX_SAFE_INTEGER],
+): number {
   const s = typeof v === 'number' ? String(v) : typeof v === 'string' ? v.trim() : '';
   const n = INTEIRO.test(s) ? Number(s) : NaN;
   if (!Number.isSafeInteger(n) || n < faixa[0] || n > faixa[1])

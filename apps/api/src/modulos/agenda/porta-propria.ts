@@ -42,6 +42,7 @@ import {
   esquemaRemarcarConsulta,
   esquemaReverterGrade,
   textoDoMotivo,
+  lerIdBanco,
 } from '@sgh/contratos';
 import { feriadosMoveis, normalizarHora } from '@sgh/dominio-agenda';
 import {
@@ -187,8 +188,7 @@ const num = (v: unknown) => Number(v);
 const numOuNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const bool = (v: unknown) => v === true || Number(v) === 1;
 const txt = (v: unknown) => (v === null || v === undefined ? null : String(v));
-const codigoNum = (v: unknown) =>
-  v !== null && v !== undefined && /^\d{1,9}$/.test(String(v)) ? Number(v) : null;
+const codigoNum = (v: unknown) => (v !== null && v !== undefined ? lerIdBanco(String(v)) : null);
 const instante = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
 const marcadores = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 

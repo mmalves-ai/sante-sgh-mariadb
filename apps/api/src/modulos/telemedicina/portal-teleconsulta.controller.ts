@@ -6,7 +6,7 @@
 //   POST /api/paciente/teleconsultas/:id/espera           o termo aceito e o local informado (portal.entrarSalaEspera)
 //   POST /api/paciente/teleconsultas/:id/entrada          entrar na sala do médico
 import { Body, Controller, Get, Header, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
-import { esquemaEntrarSalaEspera } from '@sgh/contratos';
+import { esquemaEntrarSalaEspera, lerIdBanco } from '@sgh/contratos';
 import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -30,8 +30,7 @@ interface Req {
 const um = (v: string | string[] | undefined): string | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 const idRota = (v: string): number => {
-  if (!/^[1-9]\d{0,9}$/.test(v) || Number(v) > 2_147_483_647)
-    throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
+  if (lerIdBanco(v) === null) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
   return Number(v);
 };
 

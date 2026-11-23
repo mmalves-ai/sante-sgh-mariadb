@@ -10,11 +10,12 @@ export interface PulseiraLida {
 
 /** Interpreta o código lido da pulseira (`P123|A456`); qualquer outro formato: null. */
 export function lerCodigoPulseira(codigo: string): PulseiraLida | null {
-  const m = /^P(\d{1,10})(?:\|A(\d{1,10}))?$/.exec(codigo.trim().toUpperCase());
+  const m = /^P(\d{1,16})(?:\|A(\d{1,16}))?$/.exec(codigo.trim().toUpperCase());
   if (!m) return null;
   const paciente = Number(m[1]);
   const atendimento = m[2] === undefined ? null : Number(m[2]);
   if (!Number.isSafeInteger(paciente) || paciente <= 0) return null;
+  if (atendimento !== null && (!Number.isSafeInteger(atendimento) || atendimento <= 0)) return null;
   return { paciente, atendimento };
 }
 

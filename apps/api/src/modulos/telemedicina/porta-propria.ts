@@ -19,6 +19,7 @@ import {
   horaParaMinutos,
   type MotivoEncerramentoTeleconsulta,
   type SituacaoTeleconsulta,
+  idBanco,
 } from '@sgh/contratos';
 import {
   type ContextoOperacao,
@@ -454,7 +455,7 @@ const corpo =
     }
   };
 
-const idPositivo = z.number().int().positive().max(2_147_483_647);
+const idPositivo = idBanco;
 const versaoZ = z.number().int().positive().max(2_147_483_647);
 const dataZ = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** Hora do dia "HH:MM" (o auxiliar neutro do contrato). */

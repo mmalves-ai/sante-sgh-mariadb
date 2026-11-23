@@ -122,6 +122,7 @@ import {
   type SlaPrioridade,
   TIPOS_EVENTO_CICLO,
   type TipoRecursoAgenda,
+  lerIdBanco,
 } from '@sgh/contratos';
 import {
   alertaDeParada,
@@ -985,7 +986,7 @@ export class ManutencaoController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<EquipamentoPeloCodigo[]> {
     const s = sessaoDe(req);
-    const centroCusto = centro && /^\d{1,9}$/.test(centro) ? Number(centro) : null;
+    const centroCusto = centro ? lerIdBanco(centro) : null;
     const r = await this.porta.equipamentos(s.porta, {
       termo: (termo ?? '').slice(0, 80),
       centroCusto,
@@ -1585,7 +1586,7 @@ export class ManutencaoController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ContratoManutencao[]> {
     const s = sessaoDe(req);
-    const eq = equipamento && /^\d{1,10}$/.test(equipamento) ? Number(equipamento) : null;
+    const eq = equipamento ? lerIdBanco(equipamento) : null;
     const [lidas, relogio] = await Promise.all([
       this.porta.coberturas(s.porta, { equipamento: eq }),
       this.porta.relogio(s.porta),

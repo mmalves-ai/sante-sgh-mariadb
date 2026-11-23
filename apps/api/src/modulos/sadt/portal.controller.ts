@@ -20,6 +20,7 @@ import {
   type ListaPortal,
   type SessaoPortal,
   type ValidacaoLaudo,
+  lerIdBanco,
 } from '@sgh/contratos';
 import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
@@ -182,7 +183,7 @@ export class PortalController {
     @Body() b: unknown,
     @Req() req: Req,
   ): Promise<LaudoPortalAberto> {
-    if (!/^\d{1,10}$/.test(liberacao)) throw new ErroProblema('nao-encontrado', 404, 'Laudo não encontrado');
+    if (lerIdBanco(liberacao) === null) throw new ErroProblema('nao-encontrado', 404, 'Laudo não encontrado');
     const acao = (b as Record<string, unknown> | null)?.['acao'] === 'download' ? 'download' : 'visualizacao';
     return this.portal.abrir(this.sessao(req, true), Number(liberacao), this.ip(req), acao);
   }

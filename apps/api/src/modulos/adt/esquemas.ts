@@ -18,11 +18,12 @@ import {
   esquemaTrocarConvenio,
   esquemaTrocarEspecialidade,
   esquemaTrocarMedico,
+  idBanco,
 } from '@sgh/contratos';
 import { recusa } from '@sgh/nucleo';
 import { z, type ZodType } from 'zod';
 
-const idCadastro = z.number().int().positive().max(2_147_483_647);
+const idCadastro = idBanco;
 
 /**
  * Melhoria: os cadastros escolhidos pela tela vão pelo id (o caráter de admissão e o da TISS, a categoria do

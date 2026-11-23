@@ -486,7 +486,7 @@ export class SusController {
       const ids = String(q['ids'])
         .split(',')
         .map((x) => Number(x.trim()))
-        .filter((x) => Number.isInteger(x) && x > 0 && x <= 2_147_483_647);
+        .filter((x) => Number.isInteger(x) && x > 0 && x <= Number.MAX_SAFE_INTEGER);
       if (ids.length === 0 || ids.length > 100)
         throw new ErroProblema('entrada-invalida', 400, 'Procedimentos inválidos', 'De 1 a 100 IDs.', {
           campos: ['ids'],

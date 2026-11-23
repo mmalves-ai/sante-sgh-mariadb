@@ -4,7 +4,7 @@
 // cita o campo da ficha).
 // Melhoria: o contexto da porta e da gravação é o do @sgh/nucleo (cliente, estabelecimento e usuário por id), e a
 // linha da trilha é a trilha_auditoria do cliente, gravada pela porta na mesma transação.
-import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import { EVENTOS_AUDITAVEIS, lerIdBanco } from '@sgh/contratos';
 import { pode } from '@sgh/dominio-acesso';
 import { ErroOperacao } from '@sgh/nucleo';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -201,8 +201,7 @@ export function problemaDoCadastro(e: unknown): ErroProblema {
 
 /** Inteiro positivo da rota (o mesmo 404 para formato inválido e inexistente: nada vaza). */
 export function idDaRota(v: string): number {
-  if (!/^\d{1,10}$/.test(v) || Number(v) <= 0 || Number(v) > 2_147_483_647)
-    throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
+  if (lerIdBanco(v) === null) throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
   return Number(v);
 }
 

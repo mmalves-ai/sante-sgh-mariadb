@@ -62,8 +62,8 @@ export function interpretarTermo(termo: string, tipo: TipoBuscaPaciente = 'auto'
         );
       return { tipo: 'cpf', cpf: Number(digitos) };
     case 'prontuario':
-      if (!/^\d{1,9}$/.test(digitos) || Number(digitos) <= 0)
-        throw new ErroTermo('prontuario-invalido', 'Prontuário: só números (até 9 dígitos).');
+      if (!/^\d{1,16}$/.test(digitos) || !Number.isSafeInteger(Number(digitos)) || Number(digitos) <= 0)
+        throw new ErroTermo('prontuario-invalido', 'Prontuário: só números (até 16 dígitos).');
       return { tipo: 'prontuario', prontuario: Number(digitos) };
     case 'cns':
       if (!/^\d{15}$/.test(digitos)) throw new ErroTermo('cns-invalido', 'CNS: 15 dígitos.');

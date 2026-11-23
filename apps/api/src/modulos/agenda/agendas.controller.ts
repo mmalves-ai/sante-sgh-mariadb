@@ -83,7 +83,7 @@ export function corpo<T>(
 
 const inteiro = (v: string | undefined): number | null => {
   const n = v === undefined || v === '' ? NaN : Number(v);
-  return Number.isInteger(n) && n > 0 && n <= 2_147_483_647 ? n : null;
+  return Number.isInteger(n) && n > 0 && n <= Number.MAX_SAFE_INTEGER ? n : null;
 };
 
 export const dataDaConsulta = (v: string | undefined): string | null => {

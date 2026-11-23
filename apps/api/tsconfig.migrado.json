@@ -124,6 +124,7 @@
     "src/modulos/atendimento/servico.ts",
     "src/modulos/atendimento/tipos.ts",
     "src/modulos/cadastro/cadastro.spec.ts",
+    "src/modulos/cadastro/id-rota-bigint.spec.ts",
     "src/modulos/cadastro/comum.ts",
     "src/modulos/cadastro/contexto-nucleo.ts",
     "src/modulos/cadastro/massa.spec-util.ts",

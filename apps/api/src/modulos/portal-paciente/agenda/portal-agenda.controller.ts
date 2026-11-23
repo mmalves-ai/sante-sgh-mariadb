@@ -38,6 +38,7 @@ import {
   esquemaRemarcarPortal,
   esquemaRetornoGateway,
   type TipoAgendaOnline,
+  lerIdBanco,
 } from '@sgh/contratos';
 import { AuditadoNoHandler, Publica } from '../../../autorizacao/decoradores.js';
 import { CONFIGURACAO, type Configuracao } from '../../../configuracao.js';
@@ -63,15 +64,14 @@ interface Req {
 const um = (v: string | string[] | undefined): string | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 const idRota = (v: string): number => {
-  if (!/^[1-9]\d{0,9}$/.test(v) || Number(v) > 2_147_483_647)
-    throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
+  if (lerIdBanco(v) === null) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
   return Number(v);
 };
 const tipoRota = (v: string): TipoAgendaOnline => {
   if (v !== 'consulta' && v !== 'exame') throw new ErroProblema('nao-encontrado', 404, 'Não encontrado');
   return v;
 };
-const numeroOuNulo = (v: string | undefined): number | null => (v && /^\d{1,9}$/.test(v) ? Number(v) : null);
+const numeroOuNulo = (v: string | undefined): number | null => (v ? lerIdBanco(v) : null);
 
 @Controller('paciente')
 export class PortalAgendaController {

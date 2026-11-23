@@ -38,7 +38,7 @@ import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { type CargaDeCatalogo, type CtxCatalogos, ErroCargaCatalogo, type Trilha } from './fonte.js';
 import { SERVICO_CATALOGOS, type ServicoCatalogos } from './servico.js';
 
-const INTEIRO = /^\d{1,9}$/;
+const INTEIRO = /^\d{1,16}$/;
 const CODIGO_SIGTAP = /^\d{10}$/;
 const ENTIDADE = /^[a-z][A-Za-z0-9]{1,40}$/;
 const COMPETENCIA = /^\d{4}(0[1-9]|1[0-2])$/;
@@ -87,7 +87,7 @@ function enderecoIpDe(req: RequisicaoAutorizada): string | null {
 
 function inteiro(v: unknown, nome: string, max = 2147483647): number {
   const s = typeof v === 'string' ? v.trim() : String(v ?? '');
-  if (!INTEIRO.test(s) || Number(s) > max)
+  if (!INTEIRO.test(s) || !Number.isSafeInteger(Number(s)) || Number(s) > max)
     throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', `Valor inválido: ${nome}.`);
   return Number(s);
 }
@@ -235,7 +235,7 @@ export class CatalogosController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<DetalheCargaCatalogo> {
     const ctx = ctxDe(req, 'catalogo-carga');
-    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga'));
+    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga', Number.MAX_SAFE_INTEGER));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
     const pg = pagina(q);
     const comparacao = ['novo', 'removido', 'alterado', 'igual'].includes(q['comparacao'] ?? '')
@@ -280,7 +280,7 @@ export class CatalogosController {
       );
     this.semGravacao();
     const ctx = ctxDe(req, 'catalogo-aprovar');
-    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga'));
+    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga', Number.MAX_SAFE_INTEGER));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
     const trilha = this.trilha(
       req,
@@ -365,7 +365,7 @@ export class CatalogosController {
     if (!p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Diga o motivo.');
     this.semGravacao();
     const ctx = ctxDe(req, `catalogo-${para}`);
-    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga'));
+    const c = await this.servico.fonte.carga(ctx, inteiro(id, 'carga', Number.MAX_SAFE_INTEGER));
     if (!c) throw new ErroProblema('nao-encontrado', 404, 'Carga não encontrada');
     const { login } = sessaoDe(req);
     const trilha = this.trilha(

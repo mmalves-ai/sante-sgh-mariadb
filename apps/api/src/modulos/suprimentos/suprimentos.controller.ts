@@ -84,6 +84,7 @@ import {
   type SugestaoCompra,
   type TipoDocumentoEstoque,
   type TransferenciaEnviada,
+  idBanco,
 } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -136,7 +137,7 @@ const comAlerta = async (s: ApoiosSuprimentos, sess: SessaoCadastro) =>
 const esquemaAtender = z
   .object({
     /** O id da requisição (requisicao_material). */
-    requisicao: z.number().int().positive().max(2_147_483_647),
+    requisicao: idBanco,
     itens: z
       .array(
         z

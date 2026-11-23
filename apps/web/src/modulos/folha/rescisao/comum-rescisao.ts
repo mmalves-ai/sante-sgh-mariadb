@@ -102,6 +102,6 @@ export function vinculoDaBusca(itens: readonly DesligadoParaRescisao[], busca: s
   if (!b) return undefined;
   const xs = new Set(filtrarDesligados(itens, b).map((d) => d.vinculo));
   if (xs.size === 1) return [...xs][0];
-  if (xs.size === 0 && /^\d{1,9}$/.test(b)) return Number(b);
+  if (xs.size === 0 && /^\d{1,16}$/.test(b) && Number.isSafeInteger(Number(b))) return Number(b);
   return undefined;
 }

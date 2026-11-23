@@ -58,7 +58,7 @@ const POR_PAGINA = 50;
 const inteiroOuNulo = (v: string | undefined) => {
   if (v === undefined || v === '') return null;
   const n = Number(v);
-  return Number.isInteger(n) && n >= 0 && n <= 2_147_483_647 ? n : null;
+  return Number.isInteger(n) && n >= 0 && n <= Number.MAX_SAFE_INTEGER ? n : null;
 };
 
 @Controller('agenda/consultas')

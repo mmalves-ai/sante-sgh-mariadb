@@ -100,7 +100,7 @@ export class AgendaPrecoController {
   @Permissao('preco.regraParticular.editar')
   @AuditadoNoHandler(EXECUTOR)
   revisarRegra(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
-    const e = { ...objeto(corpo), id: inteiro(id, 'regra', [1, 2147483647]) };
+    const e = { ...objeto(corpo), id: inteiro(id, 'regra', [1, Number.MAX_SAFE_INTEGER]) };
     return this.rodar(() => this.s().revisarRegra(contextoOperacao(req, 'precos-particulares'), e));
   }
 
@@ -125,7 +125,7 @@ export class AgendaPrecoController {
     const r = await this.rodar(() =>
       this.s().precoDoAtendimento(
         ctxDe(req, 'atendimento-preco'),
-        inteiro(reg, 'atendimento', [1, 2147483647]),
+        inteiro(reg, 'atendimento', [1, Number.MAX_SAFE_INTEGER]),
         p.procedimento,
         p.data,
       ),
@@ -202,7 +202,7 @@ export class AgendaPrecoController {
   @Permissao('convenio.credenciamento.ler')
   async opcoes(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const r = await this.rodar(() =>
-      this.s().opcoes(ctxDe(req, 'convenio-opcoes'), inteiro(id, 'convênio', [1, 2147483647])),
+      this.s().opcoes(ctxDe(req, 'convenio-opcoes'), inteiro(id, 'convênio', [1, Number.MAX_SAFE_INTEGER])),
     );
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'O convênio não existe.');
     return r;
@@ -213,7 +213,7 @@ export class AgendaPrecoController {
   @Permissao('convenio.credenciamento.editar')
   @AuditadoNoHandler(EXECUTOR)
   definirOpcoes(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
-    const e = { ...objeto(corpo), fontePagadoraId: inteiro(id, 'convênio', [1, 2147483647]) };
+    const e = { ...objeto(corpo), fontePagadoraId: inteiro(id, 'convênio', [1, Number.MAX_SAFE_INTEGER]) };
     return this.rodar(() => this.s().definirOpcoes(contextoOperacao(req, 'convenio-opcoes'), e));
   }
 
@@ -230,7 +230,7 @@ export class AgendaPrecoController {
   @Permissao('convenio.credenciamento.editar')
   @AuditadoNoHandler(EXECUTOR)
   credenciarTodos(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
-    const e = { ...objeto(corpo), fontePagadoraId: inteiro(id, 'convênio', [1, 2147483647]) };
+    const e = { ...objeto(corpo), fontePagadoraId: inteiro(id, 'convênio', [1, Number.MAX_SAFE_INTEGER]) };
     return this.rodar(() => this.s().credenciarTodos(contextoOperacao(req, 'convenio-credenciar-todos'), e));
   }
 
@@ -246,7 +246,7 @@ export class AgendaPrecoController {
     const a = await this.rodar(() =>
       this.s().agendaEstruturada(
         ctxDe(req, 'agenda-estruturada'),
-        inteiro(id, 'agenda', [1, 2147483647]),
+        inteiro(id, 'agenda', [1, Number.MAX_SAFE_INTEGER]),
         data,
       ),
     );
@@ -272,20 +272,28 @@ export class AgendaPrecoController {
       encaixe: bool(q['encaixe']),
     });
     const r = await this.rodar(() =>
-      this.s().responder(ctxDe(req, 'agenda-respostas'), inteiro(id, 'agenda', [1, 2147483647]), p),
+      this.s().responder(
+        ctxDe(req, 'agenda-respostas'),
+        inteiro(id, 'agenda', [1, Number.MAX_SAFE_INTEGER]),
+        p,
+      ),
     );
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'A agenda não existe.');
     return r;
   }
 
   private daAgenda(id: string, corpo: unknown) {
-    return { ...objeto(corpo), agendaId: inteiro(id, 'agenda', [1, 2147483647]) };
+    return { ...objeto(corpo), agendaId: inteiro(id, 'agenda', [1, Number.MAX_SAFE_INTEGER]) };
   }
 
   /** PUT de cobertura, restrição ou preparo: o corpo é a entrada inteira, com a versão lida. */
   private revisao(id: string, regra: string, corpo: unknown) {
     const { versao, ...valores } = objeto(corpo);
-    return { id: inteiro(regra, 'regra', [1, 2147483647]), versao, valores: this.daAgenda(id, valores) };
+    return {
+      id: inteiro(regra, 'regra', [1, Number.MAX_SAFE_INTEGER]),
+      versao,
+      valores: this.daAgenda(id, valores),
+    };
   }
 
   @Put('agendas/:id/coberturas/:regra')

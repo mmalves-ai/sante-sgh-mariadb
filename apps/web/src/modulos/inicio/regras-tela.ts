@@ -69,7 +69,7 @@ function errosDe(issues: readonly { path: readonly PropertyKey[]; message: strin
 function contextoDe(c: string): number | null | 'invalido' {
   const t = c.trim();
   if (!t) return null;
-  return /^\d{1,10}$/.test(t) && Number(t) > 0 ? Number(t) : 'invalido';
+  return /^\d{1,16}$/.test(t) && Number(t) > 0 && Number.isSafeInteger(Number(t)) ? Number(t) : 'invalido';
 }
 
 /** Regra 7 na tela: o assunto também não leva dado do paciente (o esquema só olha o texto). */

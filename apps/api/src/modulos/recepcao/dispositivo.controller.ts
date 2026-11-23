@@ -32,6 +32,7 @@ import {
   type SenhaEmitida,
   type TelaPainelTv,
   type TotemConfig,
+  idBanco,
 } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import { prioridadeDoGrupo } from '@sgh/dominio-recepcao';
@@ -104,7 +105,7 @@ interface RespostaEventos {
 
 const esquemaSenhaTotem = z
   .object({
-    gerador: z.number().int().positive().max(2_147_483_647),
+    gerador: idBanco,
     grupo: z.number().int().min(0).max(9).nullable().optional(),
   })
   .strict();

@@ -26,6 +26,7 @@ import {
   type ResultadoSessao,
   type SessaoLida,
   type SessoesDoPaciente,
+  lerIdBanco,
 } from '@sgh/contratos';
 import {
   conferirRecurso,
@@ -152,7 +153,7 @@ export class SessoesController {
     const n = Math.min(Math.max(Number(dias ?? 7) || 7, 1), DIAS_GRADE_SESSOES);
     const ate = somarDias(inicio, n);
     const [todos, dominios] = await Promise.all([this.porta.recursos(s.porta), this.porta.dominios(s.porta)]);
-    const filtroAgenda = agenda && /^\d{1,10}$/.test(agenda) ? Number(agenda) : null;
+    const filtroAgenda = agenda ? lerIdBanco(agenda) : null;
     const recursos = todos.filter((r) => filtroAgenda === null || r.agenda === filtroAgenda);
     const p = await this.porta.periodo(
       s.porta,

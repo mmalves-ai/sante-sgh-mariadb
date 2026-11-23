@@ -201,7 +201,7 @@ export function termoDoDia(
   | null {
   const t = (termo ?? '').trim().toUpperCase().slice(0, 40);
   if (t.length === 0) return null;
-  if (/^\d{1,9}$/.test(t)) return { tipo: 'numero', n: Number(t) };
+  if (/^\d{1,16}$/.test(t) && Number.isSafeInteger(Number(t))) return { tipo: 'numero', n: Number(t) };
   const sen = /^([A-Z]{1,4})\s*-?\s*(\d{1,6})$/.exec(t);
   if (sen) return { tipo: 'senha', letra: sen[1] as string, n: Number(sen[2]) };
   return t.length >= 2 ? { tipo: 'nome', t } : null;

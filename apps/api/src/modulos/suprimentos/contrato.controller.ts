@@ -41,6 +41,7 @@ import {
   type PainelContratos,
   PERMISSOES_CONTRATO_CODIGOS as P,
   type TipoEventoContrato,
+  lerIdBanco,
 } from '@sgh/contratos';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -156,7 +157,7 @@ export class ContratoController {
     gravacao: GravacaoAgenda;
   }> {
     const s = sessaoDe(req);
-    const num = (v: string | undefined) => (v && /^\d{1,9}$/.test(v) ? Number(v) : undefined);
+    const num = (v: string | undefined) => (v ? (lerIdBanco(v) ?? undefined) : undefined);
     const f = corpo(esquemaFiltroContratosFornecedor, {
       ...(q['situacao'] ? { situacao: q['situacao'] } : {}),
       ...(q['faixa'] ? { faixa: q['faixa'] } : {}),

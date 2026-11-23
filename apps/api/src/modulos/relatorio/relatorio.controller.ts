@@ -34,6 +34,7 @@ import {
   type RelatorioDescrito,
   type ResultadoRelatorio,
   type TriagemLida,
+  lerIdBanco,
 } from '@sgh/contratos';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -162,7 +163,7 @@ export class CatalogoRelatoriosController {
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
   ): Promise<TriagemLida> {
-    if (!/^\d{1,10}$/.test(id))
+    if (lerIdBanco(id) === null)
       throw new ErroProblema('nao-encontrado', 404, 'Relatório não encontrado na triagem');
     return this.gestao.decidir(sessaoDe(req), Number(id), b);
   }
