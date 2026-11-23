@@ -64,7 +64,21 @@
    as três etapas estão ok. Achado: plano (TBTIPPLANO, 1048) recusado derruba em cascata contas (FCCTAEXT, RECONTAS),
    itens (FCLANEXT) e produção de repasse (FCINTEGRPA). Rodada `plano-conta` (orçamento 4 M, teto 5,2 M) com um agente
    corretor em 23/11 0h30: feita (20c4b234, contas 618 -> 3.790 no recorte). Sobra na rodada `conta-itens` (workflow
-   wf_8d5cc7ad-e3e, 23/11 1h35): glosa só com motivo, material na conta, produção de repasse pelo ato. Os 32 destinos zerados sem origem no mapa são tabelas do produto sem fonte (não são perda).
+   wf_8d5cc7ad-e3e, 23/11 1h35): feita em e3b0745c (C11, produção de repasse pela função titular), f76c7b99 (C12,
+   glosa só com motivo), 677b7316 (conferidor) e ba82516c (teste); suíte 1308 verde; prova diag-cadeia disparada às
+   1h50 (log sante-sgh-dados/obra/logs/diag-ci.log). NÃO edite conector/ enquanto ela roda (código montado ao vivo).
+   Sobra para a rodada seguinte (depois da prova):
+   - material e medicamento na conta (FCLANEXT TIPO 4 -> item faturável): bloqueado pela checagem de licença do
+     ADR 0006(3); o item próprio do hospital tem de entrar ativo; decidir o caminho sem trazer licenciado pelo conector;
+   - TBREPGER.ATO e TBPACTHM.ATO são grupo de ato: DDL novo regra_repasse_item.grupo_ato_id (12_FAT) + domínio do
+     repasse lendo o grupo; depois L8-06 linha 45 e L8-03 linha 205 por ref:TBTABATO;
+   - plano genérico ligado a 38 fontes vira 1 plano na menor fonte: medir quantas contas usam os 2 planos antes de
+     decidir por um plano por fonte;
+   - sondas pendentes (negadas pelo classificador do modo automático para o agente): GLOSADO x VLR_PG<VALOR_C/MOTGLO
+     e FCINTEGRPA sem data de integração; script em scratchpad/sonda/sonda2.py (pode ter sumido).
+   Lista da passada de correção: TBTIPPLANO, TBTIPPLCONV, RICADINT, RIPREINT, FCCTAEXT, FCCTAAUD, FCDIAEXT, FCGUIAS,
+   FCRECIBO, RECONTAS, FCFAIPAC, FCCTAEXT_FCTISSLOTEPROT, FCIRREGULARID, FCLANEXT, FCCTRLANCIHA, FCINTEGRPA,
+   FCLANEXTSEQITEM, REPROEXT, RIPROEXT, SILANEXA (+ a lista do item 2). Os 32 destinos zerados sem origem no mapa são tabelas do produto sem fonte (não são perda).
 2. Ao fim da execução 8:
    - juntar a main no worktree `velocidade` (ou rodar da main);
    - fazer a passada `CONECTOR_SO` com `CONECTOR_REPROCESSAR_RECUSADAS=1`, com a lista do conferidor da cadeia-mapa-2:
