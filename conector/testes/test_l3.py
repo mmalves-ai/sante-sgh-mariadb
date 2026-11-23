@@ -153,6 +153,124 @@ class Recusas(unittest.TestCase):
         so, sd, ed = c._conferir("usuario", "TBUSERS", {"1": ("aa", False), "2": ("cc", False)}, None, ())
         self.assertNotEqual(so, sd)
 
+class C8Contatos(unittest.TestCase):
+    """C8 (ADR 0006 e 0007, 18): máscara vazia não é telefone; DDD do outro telefone; município pelo CEP; sem
+    evidência, recusa visível e o dado na observação da pessoa. Só valores inventados."""
+
+    def _carga(self, evidencia=(), existente=None, pfid=9):
+        b = _Banco()
+        c = carga.Carga(None, b, "ctl", 7, 1)
+        c.existente = {"RICADPAC": dict(existente or {})}
+        c.tipo = {("tipo_telefone", "residencial"): 1, ("tipo_telefone", "celular"): 2,
+                  ("tipo_endereco", "residencial"): 3, ("tipo_documento_identificacao", "rg"): 4}
+        c.municipio, c.municipio6, c.municipio_cod = {"1111111": 50}, {}, {50: "1111111"}
+        c._todas = lambda sql, args=(): ([(pfid,)] if "FROM paciente" in sql else [(1,)] if "MAX(sequencia)" in sql
+                                         else list(evidencia))
+        c._avisos_ant = {}
+        return c, b
+
+    @staticmethod
+    def _linha(fone="", cel="", end="", cep="", ibge=""):
+        return {"IDENT": None, "ENDERECO": end, "CEP": cep, "IBGE": ibge, "NUMERO": "10", "COMPL": None,
+                "BAIRRO": "Centro", "FONE": fone, "CELULAR": cel}
+
+    def _regras(self, c):
+        return sorted(p[2] for p in c.pend)
+
+    def test_mascara_vazia_nao_e_telefone(self):
+        c, b = self._carga()
+        out = c._sub_paciente("1", self._linha(fone="(  )    -    ", cel="(11) 98888-7777"), 9, b"h" * 16)
+        self.assertEqual([(e, k) for e, k, _ in out], [("telefone_pessoa", "1/telefone_celular")])
+        self.assertEqual(self._regras(c), [])
+        self.assertFalse(c._presente("FONE", " ( ) - "))
+        self.assertTrue(c._presente("CELULAR", "11988887777"))
+
+    def test_ddd_do_outro_telefone(self):
+        c, b = self._carga()
+        out = c._sub_paciente("2", self._linha(fone="3333-4444", cel="(21) 98888-7777"), 9, b"h" * 16)
+        self.assertEqual(len([v for _, _, v in out if v != carga.RECUSADO]), 2)
+        self.assertEqual(self._regras(c), ["telefone_ddd_do_outro_telefone"])
+
+    def test_telefone_sem_evidencia_recusa_e_anota(self):
+        c, b = self._carga()
+        out = c._sub_paciente("3", self._linha(cel="12"), 9, b"h" * 16)
+        self.assertEqual([v for _, _, v in out], [carga.RECUSADO])
+        self.assertEqual(self._regras(c), ["telefone_invalido"])
+        self.assertTrue(any(x.startswith("UPDATE pessoa_fisica SET observacao") for x in b.log))
+
+    def test_municipio_pelo_cep_e_pela_faixa(self):
+        c, b = self._carga(evidencia=[("95000000", 50, 1), ("95010000", 50, 2), ("95010200", 50, 1)])
+        c._enderecos_adiados = []
+        for chave, cep in (("4", "95000-000"), ("5", "95010-100"), ("6", "01000-000")):
+            out = c._sub_paciente(chave, self._linha(end="Rua A", cep=cep), 9, b"h" * 16)
+            self.assertEqual([e for e, _, _ in out], [carga.ADIAR_ENDERECO])  # nada gravado antes da evidência
+            c._enderecos_adiados.append(out[0][2])
+        c._resolver_enderecos()
+        self.assertEqual(self._regras(c), ["endereco_sem_cep_ou_municipio", "municipio_estimado_pela_faixa_do_cep",
+                                           "municipio_estimado_pelo_cep"])
+        self.assertNotEqual(c.origem["endereco_pessoa"]["4/endereco"], carga.RECUSADO)
+        self.assertNotEqual(c.origem["endereco_pessoa"]["5/endereco"], carga.RECUSADO)
+        self.assertEqual(c.origem["endereco_pessoa"]["6/endereco"], carga.RECUSADO)
+        self.assertTrue(any(x.startswith("UPDATE pessoa_fisica SET observacao") for x in b.log))
+
+    def test_faixa_exige_evidencia_minima(self):
+        # um endereço só na faixa (ou só estimados, que a consulta exclui) não basta: recusa visível
+        c, b = self._carga(evidencia=[("95010000", 50, 2)])
+        c._enderecos_adiados = []
+        out = c._sub_paciente("8", self._linha(end="Rua A", cep="95010-100"), 9, b"h" * 16)
+        c._enderecos_adiados.append(out[0][2])
+        c._resolver_enderecos()
+        self.assertEqual(self._regras(c), ["endereco_sem_cep_ou_municipio"])
+        vistos = []
+        c._todas = lambda sql, args=(): vistos.append(sql) or []
+        c._evidencia_cep()
+        self.assertTrue("NOT IN" in vistos[0] and "municipio_estimado_pela_faixa_do_cep" in vistos[0])
+
+    def test_endereco_adiado_tem_registro_provisorio_e_retoma(self):
+        # execução interrompida depois do commit do lote e antes de resolver: a 2a passada resolve o endereço
+        c, b = self._carga()
+        c._sub_paciente("4", self._linha(end="Rua A", cep="95000-000"), 9, b"h" * 16)
+        prov = c.existente["RICADPAC"]["4/endereco"]
+        self.assertEqual((prov[0], prov[3]), (None, "endereco_aguarda_evidencia"))
+        c2, _ = self._carga(evidencia=[("95000000", 50, 1)], existente={"4": (77, b"h" * 16, None, None, None),
+                                                                         "4/endereco": prov})
+        c2._enderecos_adiados, c2.origem = [], {}
+        c2._subs_ja_carregadas("4", self._linha(end="Rua A", cep="95000-000"), True, h=b"h" * 16)
+        self.assertEqual(len(c2._enderecos_adiados), 1)
+        c2._resolver_enderecos()
+        self.assertNotEqual(c2.origem["endereco_pessoa"]["4/endereco"], carga.RECUSADO)
+        self.assertEqual(self._regras(c2), ["municipio_estimado_pelo_cep"])
+
+    def test_aviso_da_subchave_gravada_e_reemitido(self):
+        h = b"h" * 16
+        c, _ = self._carga(existente={"1": (77, h, None, None, None), "1/endereco": (5, h, b"r" * 16, None, None)})
+        c._avisos_ant = {"RICADPAC": {"1/endereco": {("municipio_estimado_pelo_cep", "baixa")}}}
+        c.origem = {}
+        c._subs_ja_carregadas("1", self._linha(end="Rua A", cep="95000-000"), True, h=h)
+        self.assertEqual(self._regras(c), ["municipio_estimado_pelo_cep"])
+
+    def test_reprocessa_telefone_recusado_do_paciente_gravado(self):
+        h = b"h" * 16
+        ex = {"1": (77, h, None, None, None), "1/telefone_celular": (None, h, None, "telefone_invalido", "baixa")}
+        lin = self._linha(fone="(21) 3333-4444", cel="98888-7777")
+        c, _ = self._carga(existente=ex)
+        c.origem = {}
+        c._subs_ja_carregadas("1", lin, True, h=h)  # sem reprocessar: a recusa antiga só é reemitida
+        self.assertEqual(c.origem["telefone_pessoa"]["1/telefone_celular"], carga.RECUSADO)
+        c, b = self._carga(existente=ex)
+        c.reprocessar, c.origem = True, {}
+        c._subs_ja_carregadas("1", lin, True, h=h)
+        self.assertNotEqual(c.origem["telefone_pessoa"]["1/telefone_celular"], carga.RECUSADO)
+        self.assertIsNotNone(c.existente["RICADPAC"]["1/telefone_celular"][0])
+        self.assertEqual(self._regras(c), ["telefone_ddd_do_outro_telefone"])
+        self.assertEqual(c.cont["recusadas_reprocessadas"], 1)
+
+    def test_sem_cep_recusa_na_hora_e_anota(self):
+        c, b = self._carga()
+        out = c._sub_paciente("7", self._linha(end="Rua B"), 9, b"h" * 16)
+        self.assertEqual([v for _, _, v in out], [carga.RECUSADO])
+        self.assertEqual(self._regras(c), ["endereco_sem_cep_ou_municipio"])
+
 
 if __name__ == "__main__":
     unittest.main()

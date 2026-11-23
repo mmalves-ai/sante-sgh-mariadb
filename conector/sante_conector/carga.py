@@ -765,7 +765,7 @@ class Carga:
             if sit != "nova":
                 if ant[0] is not None:
                     self._ja_carregada("paciente", chave, sit, ant)
-                    self._subs_ja_carregadas(chave, l, somar=sit == "igual")
+                    self._subs_ja_carregadas(chave, l, somar=sit == "igual", h=h)
                 continue
             nome = txt(l["NOME"], 150)
             pront = l["PRONT"] if isinstance(l["PRONT"], int) and l["PRONT"] > 0 else None
@@ -828,17 +828,35 @@ class Carga:
         espaço; 33.158 de 33.161 telefones "inválidos" na cópia real, agregado) não é telefone, e não gera recusa."""
         return bool(digitos(v)) if col in ("FONE", "CELULAR") else bool(txt(v))
 
-    def _subs_ja_carregadas(self, chave, l, somar=True):
-        """Paciente já carregado: reemite a regra das subentidades recusadas e, se igual, põe as subentidades que a
-        linha da origem produz na soma, com o resumo gravado. Alterado (fora da soma): só a reemissão."""
+    AGUARDA_EVIDENCIA = "endereco_aguarda_evidencia"
+
+    def _refazer_sub(self, chave, l, h, col, sub, ant):
+        """Subentidade do paciente já gravado que esta passada refaz pelas regras atuais: a recusada, com
+        CONECTOR_REPROCESSAR_RECUSADAS (ex.: as correções do C8 chegam ao cliente já carregado), e o endereço que ficou
+        à espera da evidência do CEP numa execução interrompida antes de resolvê-lo (registro provisório
+        `endereco_aguarda_evidencia`, ou sem registro nenhum)."""
+        if sub == "endereco" and (ant is None or ant[0] is None and ant[3] == self.AGUARDA_EVIDENCIA):
+            return True
+        return bool(self.reprocessar and ant is not None and ant[0] is None and ant[3])
+
+    def _subs_ja_carregadas(self, chave, l, somar=True, h=None):
+        """Paciente já carregado: reemite a regra das subentidades recusadas e os avisos abertos das gravadas (L10:
+        município estimado, DDD do outro telefone continuam pendentes) e, se igual, põe as subentidades que a linha
+        da origem produz na soma, com o resumo gravado; a recusada (com reprocessar) e o endereço que aguardava a
+        evidência são refeitos pelas regras atuais. Alterado (fora da soma): só a reemissão."""
         for col, sub, ent in self.SUBS:
             k = "%s/%s" % (chave, sub)
             ant = self.existente.get("RICADPAC", {}).get(k)
+            if ant is not None and ant[0] is not None:
+                self._reemitir_avisos("RICADPAC", k)
             if not somar:
                 if ant is not None and ant[0] is None:
                     self._pendencia("RICADPAC", k, ant[3] or "recusa_sem_regra_registrada", ant[4] or "baixa")
                 continue
             if not self._presente(col, l[col]):
+                continue
+            if h is not None and self._refazer_sub(chave, l, h, col, sub, ant):
+                self._refazer(chave, l, h, sub, ent, k)
                 continue
             if ant is None:
                 v = "sem_registro"
@@ -849,9 +867,35 @@ class Carga:
                 v = ant[2].hex() if ant[2] is not None else "sem_resumo_gravado"
             self.origem.setdefault(ent, {})[k] = v
 
-    def _sub_paciente(self, chave, l, pfid, h):
+    def _refazer(self, chave, l, h, sub, ent, k):
+        """Refaz uma subentidade do paciente já gravado, sob o SAVEPOINT dela, ligada à pessoa do paciente e na
+        sequência seguinte; restrição do destino recusa só ela."""
+        pid = self.existente["RICADPAC"][chave][0]
+        pfid = self._todas("SELECT pessoa_fisica_id FROM paciente WHERE id=%s", (pid,))[0][0]
+        seq = 0
+        if sub.startswith("telefone_"):
+            seq = self._todas("SELECT COALESCE(MAX(sequencia), 0) FROM telefone_pessoa WHERE pessoa_fisica_id=%s",
+                              (pfid,))[0][0] or 0
+        self.cont["recusadas_reprocessadas"] = self.cont.get("recusadas_reprocessadas", 0) + 1
+        out = []
+
+        def fazer():
+            out[:] = self._sub_paciente(chave, l, pfid, h, so={sub}, seq=int(seq))
+            return True
+        if not self._linha_nova("RICADPAC", k, ent, h, fazer):
+            self.origem.setdefault(ent, {})[k] = RECUSADO
+            return
+        for e, kk, v in out:
+            if e == ADIAR_ENDERECO:
+                self._enderecos_adiados = getattr(self, "_enderecos_adiados", [])
+                self._enderecos_adiados.append(v)
+            else:
+                self.origem.setdefault(e, {})[kk] = v
+
+    def _sub_paciente(self, chave, l, pfid, h, so=None, seq=0):
         """Documento, endereço e telefones da pessoa (dentro do SAVEPOINT do paciente). Devolve as linhas da soma da
-        origem: (entidade, chave, resumo ou RECUSADO)."""
+        origem: (entidade, chave, resumo ou RECUSADO). `so`: só essas subentidades (refeitas), telefones a partir
+        da sequência `seq`."""
         out = []
 
         def sub(nome, ent, idd, campos, recusa=None):
@@ -864,27 +908,30 @@ class Carga:
                 self._registrar("RICADPAC", k, ent, idd, h, hd)
                 out.append((ent, k, hd.hex()))
         ident = txt(l["IDENT"], 40)
-        if ident:
+        if ident and (so is None or "documento" in so):
             did = self._inserir("documento_pessoa", dict(
                 pessoa_fisica_id=pfid, sequencia=1, numero=ident,
                 tipo_documento_identificacao_id=self.tipo[("tipo_documento_identificacao", "rg")], principal=True,
                 origem="migracao"))
             sub("documento", "documento_pessoa", did, (bruto(l["IDENT"], 40),))
         notas = []
-        if txt(l["ENDERECO"]):
+        if txt(l["ENDERECO"]) and (so is None or "endereco" in so):
             cep = cep_origem(l["CEP"])
             ibge = digitos(l["IBGE"])
             mun = municipio_ibge(ibge, self.municipio, getattr(self, "municipio6", {}))
             if cep and not mun:
                 # C8 (ADR 0007, 18): município estimado pelo CEP com a evidência dos endereços já gravados no cliente;
                 # a evidência depende dos outros pacientes, então o endereço é resolvido no fim (_resolver_enderecos)
+                # registro provisório: interrompida a execução antes do fim, a próxima passada resolve o endereço
+                # (_subs_ja_carregadas), em vez de perdê-lo em silêncio
+                self._registrar("RICADPAC", "%s/endereco" % chave, "endereco_pessoa", None, h,
+                                recusa=(self.AGUARDA_EVIDENCIA, "baixa"))
                 out.append((ADIAR_ENDERECO, "%s/endereco" % chave, (chave, l, pfid, h)))
             elif not cep:
                 sub("endereco", "endereco_pessoa", None, None, ("endereco_sem_cep_ou_municipio", "media"))
                 notas.append(nota_endereco(l))
             else:
                 self._gravar_endereco(chave, l, pfid, h, cep, mun, ibge, sub)
-        seq = 0
         lidos = {}
         for col, nome, _ in self.SUBS[2:]:
             if self._presente(col, l[col]):
@@ -892,7 +939,7 @@ class Carga:
         # C8 (ADR 0007, 18): número local de 8 ou 9 dígitos sem DDD: o DDD do outro telefone válido da mesma linha
         ddd_linha = next((t[0] for t, ruim in lidos.values() if t and not ruim), None)
         for col, nome, _ in self.SUBS[2:]:
-            if col not in lidos:
+            if col not in lidos or so is not None and nome not in so:
                 continue
             tel, ruim = lidos[col]
             estimado = False
@@ -929,20 +976,33 @@ class Carga:
 
     def _anotar_pessoa(self, pfid, notas):
         """ADR 0006 (nada perdido): o que a origem tinha e não virou subentidade fica na observação da pessoa."""
-        with self._c() as c:
-            c.execute("UPDATE pessoa_fisica SET observacao=CONCAT_WS('\\n', observacao, %s) WHERE id=%s",
-                      ("\n".join(notas), pfid))
+        with self._c() as c:  # idempotente: a nota já anotada (passada de reprocesso) não se repete
+            for n in notas:
+                c.execute("UPDATE pessoa_fisica SET observacao=CONCAT_WS('\\n', observacao, %s) WHERE id=%s"
+                          " AND (observacao IS NULL OR LOCATE(%s, observacao)=0)", (n, pfid, n))
+
+    MIN_EVIDENCIA_FAIXA = 3  # endereços (não estimados) da faixa de 5 dígitos, todos do mesmo município
 
     def _evidencia_cep(self):
-        """(CEP -> município, faixa de 5 dígitos -> município) dos endereços já gravados no cliente, só onde a
-        evidência aponta para um município só."""
+        """(CEP -> município, faixa de 5 dígitos -> município) dos endereços do cliente, só onde a evidência aponta
+        para um município só. Calculada UMA vez, no fim da carga dos pacientes, e nunca com os endereços que o próprio
+        conector estimou (pendência municipio_estimado_* em qualquer execução): estimativa não é evidência, e o
+        resultado não depende da ordem dos lotes. A faixa exige MIN_EVIDENCIA_FAIXA endereços."""
         por_cep, por_faixa = {}, {}
-        for cep, mun in self._todas("SELECT DISTINCT cep, municipio_ibge_id FROM endereco_pessoa"
-                                    " WHERE cep IS NOT NULL AND municipio_ibge_id IS NOT NULL"):
+        for cep, mun, n in self._todas(
+                "SELECT e.cep, e.municipio_ibge_id, COUNT(*) FROM endereco_pessoa e"
+                " WHERE e.cep IS NOT NULL AND e.municipio_ibge_id IS NOT NULL AND e.id NOT IN ("
+                "SELECT o.id_destino FROM {0}.conector_origem o JOIN {0}.pendencia p"
+                " ON p.tabela_origem=o.tabela_origem AND p.chave_original=o.chave_original"
+                " WHERE o.tabela_origem='RICADPAC' AND o.id_destino IS NOT NULL AND p.regra IN"
+                " ('municipio_estimado_pelo_cep', 'municipio_estimado_pela_faixa_do_cep'))"
+                " GROUP BY e.cep, e.municipio_ibge_id".format(self.ctl)):
             por_cep.setdefault(cep, set()).add(mun)
-            por_faixa.setdefault(cep[:5], set()).add(mun)
+            f = por_faixa.setdefault(cep[:5], {})
+            f[mun] = f.get(mun, 0) + int(n)
         return ({k: next(iter(v)) for k, v in por_cep.items() if len(v) == 1},
-                {k: next(iter(v)) for k, v in por_faixa.items() if len(v) == 1})
+                {k: next(iter(v)) for k, v in por_faixa.items()
+                 if len(v) == 1 and sum(v.values()) >= self.MIN_EVIDENCIA_FAIXA})
 
     def _resolver_enderecos(self):
         """C8 (ADR 0007, 18): endereço com CEP e sem município do catálogo. Município pela evidência do cliente: o
