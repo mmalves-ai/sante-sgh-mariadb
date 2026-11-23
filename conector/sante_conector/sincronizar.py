@@ -235,8 +235,15 @@ def excluir_apagadas(cm):
         if hasattr(vistas, "abrir"):  # estado compactado ao fim da onda (paralelo.Compacto): aberto só aqui
             vistas = vistas.abrir()
         excl = cm._excluidas.setdefault(t, set())
+        # o de-para grande é liberado depois da última onda que o usa (paralelo._fim_onda): relido aqui sob demanda,
+        # senão a tabela grande ficaria sem exclusão lógica e sem alerta de exclusão em massa, em silêncio
+        lido = t not in cm.existente
+        if lido:
+            cm._carregar_existente(t)
         ativas = [k for k, a in cm.existente.get(t, {}).items()
                   if a[0] is not None and k not in excl and _e_base(k, p["destinos"])]
+        if lido:
+            cm.existente.pop(t, None)
         apagar = [k for k in ativas if k not in vistas]
         if apagar:
             plano.append((p, t, ativas, apagar))

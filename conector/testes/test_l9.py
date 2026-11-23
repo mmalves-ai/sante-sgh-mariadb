@@ -49,6 +49,20 @@ NO_CONTAINER = os.path.exists("/opt/firebird/bin/isql") and _mariadb()
 
 @unittest.skipUnless(NO_CONTAINER, "só no container do conector, com o MariaDB da rede interna")
 class SincronizarF4r6L9(unittest.TestCase):
+    def test_estado_liberado_por_onda_nao_perde_exclusao(self):
+        """CONECTOR_ESTADO_MIN=1: o de-para de toda tabela é liberado depois da última onda que o usa
+        (paralelo._fim_onda); a exclusão lógica, a reativação e os alertas de exclusão em massa do Sincronizar têm de
+        sair iguais (o de-para é relido sob demanda em sincronizar.excluir_apagadas)."""
+        ant = os.environ.get("CONECTOR_ESTADO_MIN")
+        os.environ["CONECTOR_ESTADO_MIN"] = "1"
+        try:
+            self.test_duas_imagens_edicao_conflito_exclusao_reativacao()
+        finally:
+            if ant is None:
+                os.environ.pop("CONECTOR_ESTADO_MIN", None)
+            else:
+                os.environ["CONECTOR_ESTADO_MIN"] = ant
+
     def test_duas_imagens_edicao_conflito_exclusao_reativacao(self):
         from sante_conector import abridor, banco, controle, sintetica
         from sante_conector.leitor import Leitor
