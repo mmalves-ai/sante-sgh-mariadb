@@ -379,6 +379,28 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     expect(await porta.verificarDias(codigoC, [D2])).toEqual([
       { dia: D2, linhas: 2, ok: false, quebraEm: 'sem-fecho' },
     ]);
+
+    // Concorrência: oito transações ao mesmo tempo no mesmo estabelecimento. A cabeça travada dá ordem total: a
+    // cadeia de hoje fecha inteira, sem elo repetido (única estabelecimento_chave + hash_anterior).
+    const hoje = (await ler<{ d: string }>("SELECT DATE_FORMAT(UTC_DATE(), '%Y-%m-%d') AS d"))[0]!.d;
+    await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        nucleo.escrever(ctx, (e) =>
+          gravarTrilha(e, {
+            estabelecimento: estC,
+            usuario: usuA,
+            acao: 'operacao',
+            entidade: 'teste_cadeia',
+            entidadeId: 100 + i,
+            correlacao: ctx.correlacao,
+            ocorridoEm: new Date(),
+          }),
+        ),
+      ),
+    );
+    expect(await porta.verificarDias(codigoC, [hoje])).toEqual([
+      { dia: hoje, linhas: 8, ok: true, quebraEm: null },
+    ]);
   });
 
   it('ciclo (quando as tabelas existem): abrir, avaliar, corrigir, verificar por outra pessoa, concluir', async (ctx) => {
