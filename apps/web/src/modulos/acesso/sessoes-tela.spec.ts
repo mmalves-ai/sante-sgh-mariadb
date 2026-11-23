@@ -313,3 +313,44 @@ describe('entrada: recusa pelo limite de sessões (W1-01 parte 8b)', () => {
     expect($('erro-entrar')?.textContent).toBe(detalhe);
   });
 });
+
+describe('entrada: falha do servidor não vira "senha errada"', () => {
+  const estabelecimentos = (p: { url: string; metodo: string }) => {
+    if (p.url.includes('/api/sessao/recuperacao/disponivel'))
+      return { status: 200, corpo: { disponivel: false } };
+    if (p.url.includes('/api/sessao/certificado/disponivel'))
+      return { status: 200, corpo: { disponivel: false, agenteLocal: null } };
+    if (p.url.includes('/api/estabelecimentos'))
+      return {
+        status: 200,
+        corpo: {
+          rede: 'rede-teste',
+          estabelecimentos: [{ codigo: 'aa', nome: 'Estabelecimento A', disponivel: true }],
+        },
+      };
+    return null;
+  };
+  const entrarCom = async (status: number, codigo: string) => {
+    simular((p) => {
+      const base = estabelecimentos(p);
+      if (base) return base;
+      if (p.url === '/api/sessao' && p.metodo === 'POST')
+        return { status, corpo: { type: `urn:sgh:problema:${codigo}`, title: 'x', status, codigo } };
+      return { status: 404, corpo: {} };
+    });
+    await montar(EntrarTela);
+    await digitar('campo-login', 'SINT.USUARIO');
+    await digitar('campo-senha', 'Sint#Senha2026');
+    document.querySelector('form.entrar__form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flushPromises();
+    return $('erro-entrar')?.textContent;
+  };
+  it('503 da trilha de auditoria: serviço indisponível', async () => {
+    expect(await entrarCom(503, 'trilha-indisponivel')).toBe(
+      'O serviço está indisponível. Tente de novo em instantes.',
+    );
+  });
+  it('401 da credencial: usuário ou senha inválidos', async () => {
+    expect(await entrarCom(401, 'credencial-invalida')).toBe('Usuário ou senha inválidos.');
+  });
+});

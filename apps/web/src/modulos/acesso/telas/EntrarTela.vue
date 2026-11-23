@@ -148,7 +148,12 @@ async function enviar(): Promise<void> {
         ? t('entrar.muitasTentativas')
         : tipo === 'primeiro-acesso'
           ? t('entrar.primeiroAcesso')
-          : tipo === 'indisponivel' || tipo === 'rede' || tipo === 'rede-desconhecida'
+          : tipo === 'indisponivel' ||
+              tipo === 'rede' ||
+              tipo === 'rede-desconhecida' ||
+              // Falha do servidor (5xx, como a trilha de auditoria indisponível) nunca é "senha errada".
+              !(e instanceof ErroApi) ||
+              e.status >= 500
             ? t('entrar.indisponivelServico')
             : t('entrar.erroGenerico');
   } finally {
