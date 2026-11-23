@@ -58,14 +58,18 @@
 
 ## Fila
 
-1. Ler o resultado da prova da cadeia. Se houver entidade principal zerada, corrigir (rodada pequena com orçamento).
+1. Prova da cadeia (23/11, 0h25, depois de dac241fb, que corrigiu o NUMERO numérico que derrubava a carga de pacientes):
+   as três etapas estão ok. Achado: plano (TBTIPPLANO, 1048) recusado derruba em cascata contas (FCCTAEXT, RECONTAS),
+   itens (FCLANEXT) e produção de repasse (FCINTEGRPA). Rodada `plano-conta` (orçamento 4 M, teto 5,2 M) com um agente
+   corretor em 23/11 0h30. Os 32 destinos zerados sem origem no mapa são tabelas do produto sem fonte (não são perda).
 2. Ao fim da execução 8:
    - juntar a main no worktree `velocidade` (ou rodar da main);
    - fazer a passada `CONECTOR_SO` com `CONECTOR_REPROCESSAR_RECUSADAS=1`, com a lista do conferidor da cadeia-mapa-2:
      TBMEDSOL, FAMEDSOL, TBMEDSOLWEBCAD, REPACAGD, SIPACAGD, REPACAGD_EXCLUSAO, SICADATE, RICADPAC, FCCTAEXT, RECONTAS,
      MFCONPAG, GECADNFS, SDGECADNFS, TBCBOPRO, TBCBOPRO_TBCONVEN, TBCBOPRO_TBUNIDAD, TBMEDESP, TBUSUCPL, TBPRESER,
      FCCODCON, REAGENDA, SIAGENDA, TBAGEBAN, TBCTABAN, TBBANCOS, MFBORDER, MFCTAUSU, TBCTRMEM, TBMATMED, TBVLRMEM,
-     TBPERMEM, TBREFMEMTUSS, FCREFUND, TBPROCTO.
+     TBPERMEM, TBREFMEMTUSS, FCREFUND, TBPROCTO, mais TBTIPPLANO, FCLANEXT, FCINTEGRPA e o que a rodada `plano-conta`
+     devolver.
 3. **Minha conferência:**
    - conciliação por entidade, com o relatório L10 vermelho só no que for justificado;
    - telas populadas: agenda e marcações, médico por convênio, preço particular, repasse, contas, guias, glosa,
