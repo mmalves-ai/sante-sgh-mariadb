@@ -2028,6 +2028,39 @@ class CargaMapa(carga.Carga):
                                      " origem<>'migracao'", (cat,))[0][0] > 0
         return cache[cat]
 
+    def _secundarias_ligado(self, t, chave, h, p, dts, ents, ligado, vals, campos):
+        """conta-itens-3 (proposta B): a linha LIGADA ao item do espelho grava ou adota os destinos secundários, que são
+        do cliente (o item faturável do item de referência): `@id` é o item do espelho, que nunca é tocado. Mesma ordem
+        (`antes`), adoção e registro (`chave/destino`) da gravação normal."""
+        ops = p.get("opcoes") or {}
+        ids = {dts[0]: ligado}
+        ordem = [i for i in range(1, len(dts)) if (ops.get(dts[i]) or {}).get("antes")]
+        ordem += [i for i in range(1, len(dts)) if i not in ordem]
+        for i in ordem:
+            dt, op, primeiro = dts[i], ops.get(dts[i]) or {}, None
+            for (suf, v), (nomes, cs) in zip(vals[dt], campos[dt]):
+                v = dict(v)
+                for c in p["colunas"][dt]:
+                    if c["coluna"] == "@id":
+                        v[c["destino"]] = ligado
+                    elif c["coluna"].startswith("@id:"):
+                        v[c["destino"]] = ids.get(c["coluna"][4:])
+                self._linha = (t, chave)
+                rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"),
+                                                      ativo=op.get("adotar_ativo") or ())
+                if adotado:
+                    self._pendencia(t, chave, "adotado_existente", "baixa")
+                    self.cont["adotadas"] = self.cont.get("adotadas", 0) + 1
+                if nomes and (adotado or any(isinstance(x, _PADRAO) for x in cs)):  # resumo: o que está no destino
+                    cs = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
+                        ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0])
+                hd = hashlib.sha256("|".join(canon(x) for x in cs).encode()).digest()
+                self._registrar(t, "%s/%s%s" % (chave, dt, "/" + suf if suf else ""), dt, rid, h, hd)
+                self.origem.setdefault(ents[i], {})[chave + ("/" + suf if suf else "")] = hd.hex()
+                primeiro = primeiro or rid
+            ids[dt] = primeiro
+        self.cont["secundarias_ligadas_espelho"] = self.cont.get("secundarias_ligadas_espelho", 0) + 1
+
     def _desfazer_ligacao(self, t, chave, p, dt, ligado):
         """Sincronizar: a linha estava ligada ao item do espelho e agora não liga mais a ele (código ou marca mudou,
         ambíguo, outro item). O item do espelho nunca é sobrescrito: a linha é tratada como nova (religa ou entra como
@@ -2318,13 +2351,17 @@ class CargaMapa(carga.Carga):
                         k = "personalizacao_sem_destino_" + col
                         self.cont[k] = self.cont.get(k, 0) + 1
 
-                    def ligar(ligado=ligado, hd=hd, difs=difs):
+                    def ligar(ligado=ligado, hd=hd, difs=difs, vs=_v, cl=cl, pl=_p):
                         self._pendencia(t, chave, "ligado_espelho", "baixa")
                         if difs:
                             self._pendencia(t, chave, "personalizacao_hospital_sem_destino", "media")
                         self._registrar(t, chave, ents[0], ligado, h, hd)
+                        if len(dts) > 1:  # conta-itens-3: os secundários são do cliente (item faturável do item)
+                            for regra, g in pl:
+                                self._pendencia(t, chave, regra, g)
+                            self._secundarias_ligado(t, chave, h, p, dts, ents, ligado, vs, cl)
                     self.cont["ligadas_espelho"] = self.cont.get("ligadas_espelho", 0) + 1
-                    if os.environ.get("CONECTOR_SEM_LOTE") == "1":
+                    if os.environ.get("CONECTOR_SEM_LOTE") == "1" or len(dts) > 1:
                         ligar()
                     else:
                         self._linha_adiada(t, chave, ents[0], h, ligar)

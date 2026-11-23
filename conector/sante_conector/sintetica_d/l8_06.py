@@ -91,11 +91,13 @@ CREATE TABLE TBTISSWEBSERV (ID_TBCONVEN SMALLINT NOT NULL, ID_TBTISSSCHEMA SMALL
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2", "3"], "TBTISSSCHEMA": ["1", "2"], "FCCTAEXT": ["10", "11", "12"],
                  "TBIRREGULARID": ["1", "2"], "TBESPEC": ["1"], "TBUNIDAD": ["1"], "TBCENCUS": ["1"],
                  "RPEVENTO": ["1"], "TBPROFIS": ["1", "2"], "TBPROCTO": ["1", "2"],
-                 "TBTPLANC": ["1", "2"], "TBGRAUPARTPROC": ["1"], "TBTABATO": ["42"], "TBLOCAL": ["1"],  # TBCOOPER fica de fora
+                 "TBTPLANC": ["1", "2", "4"], "TBGRAUPARTPROC": ["1"], "TBTABATO": ["42"], "TBLOCAL": ["1"],  # TBCOOPER fica de fora
                  "ATCABECATEND": ["7001", "7002"], "RICADPAC": ["1", "2"], "TBUSERS": ["usuario.exemplo"],
                  "TBCTRDTH": ["1"], "TBCTRMEM": ["1"], "TBCTRTHM": ["1", "2"], "FCCTAAUD": ["2025|3|E|10"],
                  # diária 5 com o item faturável secundário já gravado (pedido à L8-05); a 6 sem ele
-                 "TBTABDTH": ["5", "5/item_faturavel", "6"]}
+                 "TBTABDTH": ["5", "5/item_faturavel", "6"],
+                 # conta-itens-3: item da tabela de preço 7 com o item faturável secundário gravado (L8-03); o 8 sem ele
+                 "TBMATMED": ["7", "7/item_faturavel", "8"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 # e os catálogos oficiais usados (papel do carregador oficial): versão TISS 3.05.00 de troca e o termo '1' da
 # terminologia TISS 48 (técnica utilizada); o termo '5' fica ausente
@@ -277,7 +279,11 @@ def _rodada3(ins):
             (4, 11, 1, None, None, 1, DT(2025, 3, 5), "1000", "1000", D("0")),   # quantidade zero: CHECK
             (5, 99, 1, None, None, 1, DT(2025, 3, 6), "1000", "1000", D("1")),   # conta nunca vista
             (6, 12, None, 6, None, 2, DT(2025, 3, 7), "1000", "1000", D("1")),   # diária sem item faturável
-            (7, 12, 1, None, None, 1, DT(2025, 3, 8), "1000", "1000", D("1"))]:  # glosado, motivo fora: lançado presumido
+            (7, 12, 1, None, None, 1, DT(2025, 3, 8), "1000", "1000", D("1")),   # glosado, motivo fora: lançado presumido
+            # conta-itens-3 (proposta B): mat/med (TIPO 4) pelo item faturável do item da tabela de preço: 8 grava
+            # (TBMATMED 7 com o secundário item_faturavel); 9 com o item sem o secundário: 1048
+            (8, 12, None, None, 7, 4, DT(2025, 3, 9), "1000", "1000", D("2")),
+            (9, 12, None, None, 8, 4, DT(2025, 3, 9), "1100", "1100", D("1"))]:
         # resultado financeiro: 1 glosado com motivo, recurso, nota, técnica, autorização e autor;
         # 2 sem glosa ('n') e autor nunca visto; 7 glosado (T) com motivo fora do catálogo oficial (C12: lançado
         # presumido, motivo no retrato; antes o CHECK da glosa recusava)
@@ -341,7 +347,9 @@ ESPERADO_R3 = {
     # procedimento e diária gravam (a diária vira o dia); mat/med e diária sem item faturável: 1048; tipo 3 e conta
     # nunca vistos; quantidade zero: CHECK; autor nunca visto; glosado com motivo fora do catálogo: lançado presumido
     # (C12; antes o CHECK da glosa recusava)
-    "FCLANEXT": _e(3, pai_inexistente=4, restricao_destino_1048=3, restricao_destino_4025=1, virada_de_dia=1,
+    # conta-itens-3: 8 (TIPO 4) grava pelo item faturável do item da tabela de preço; 9 sem ele: pai_inexistente
+    # (o secundário 8/item_faturavel não existe) e 1048
+    "FCLANEXT": _e(4, pai_inexistente=5, restricao_destino_1048=4, restricao_destino_4025=1, virada_de_dia=1,
                    codigo_inexistente_destino=1, valor_presumido=1),
     "REPROEXT": _e(1, pai_inexistente=1, pai_pendente=1),
     "RIPROEXT": _e(1, catalogo_codigo_inexistente=1),
@@ -366,6 +374,10 @@ CONFERIR_DESTINO = [
     ("item 7 (T, motivo 9999 fora do catálogo) lançado e sem motivo",
      "SELECT situacao = 'lancado' AND motivo_glosa_id IS NULL FROM conta_hospitalar_item WHERE id = "
      + _O % ("FCLANEXT", "7", "conta_hospitalar_item")),
+    ("conta-itens-3: item 8 (mat/med, TIPO 4) com o item faturável do item 7 da tabela de preço",
+     "SELECT item_faturavel_id = (SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='TBMATMED'"
+     " AND chave_original='7/item_faturavel') FROM conta_hospitalar_item WHERE id = "
+     + _O % ("FCLANEXT", "8", "conta_hospitalar_item")),
     ("item 2 (n) lançado", "SELECT situacao = 'lancado' FROM conta_hospitalar_item WHERE id = "
      + _O % ("FCLANEXT", "2", "conta_hospitalar_item")),
     ("produção 3 (sem data) integrada na data do item 1",

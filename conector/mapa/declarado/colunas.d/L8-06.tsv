@@ -174,6 +174,7 @@ FCLANEXT	ID_FCCTAEXT	conta_hospitalar_item.conta_hospitalar_id	chave_origem			L8
 FCLANEXT	#seq:ID_FCCTAEXT	conta_hospitalar_item.sequencia				L8-06: 1..n por conta na ordem da chave (UNIQUE conta, sequencia)
 FCLANEXT	ID_TBPROCTO	conta_hospitalar_item.item_faturavel_id	chave_origem		ref:TBPROCTO	L8-06: item faturável do procedimento (TBPROCTO vira item_faturavel, L8-03); concorrentes: vale a primeira com valor
 FCLANEXT	ID_TBTABDTH	conta_hospitalar_item.item_faturavel_id	chave_origem		ref:TBTABDTH/item_faturavel	L8-06: item faturável da diária ou taxa (destino secundário item_faturavel de TBTABDTH, L8-05; pedido)
+FCLANEXT	ID_TBMATMED	conta_hospitalar_item.item_faturavel_id	chave_origem		ref:TBMATMED/item_faturavel;se:TIPO=4	conta-itens-3 (proposta B): material e medicamento (TIPO 4) pelo item faturável do item da tabela de preço (destino secundário item_faturavel de TBMATMED, L8-03), inclusive o item de tabela licenciada ligado ao espelho; concorrentes: vale a primeira com valor
 FCLANEXT	TIPO	conta_hospitalar_item.tipo_lancamento_id			ref:TBTPLANC	L8-06: tipo de lançamento (TBTPLANC, L8-04), como FCFAIPAC e TBREPGER
 FCLANEXT	#data_hora:DATA,HORA	conta_hospitalar_item.realizado_em				L8-06: realização (data + hora HHMM em texto); sem data: NOT NULL recusa, visível
 FCLANEXT	#data_hora:DATA,HORA_FINAL,HORA	conta_hospitalar_item.realizado_fim_em				L8-06: fim da realização; antes do início passa para o dia seguinte (virada_de_dia)

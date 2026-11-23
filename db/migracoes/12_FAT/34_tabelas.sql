@@ -13,5 +13,4 @@ ALTER TABLE item_faturavel
 
 ALTER TABLE item_faturavel DROP CONSTRAINT IF EXISTS ck_item_faturavel_insumo;
 ALTER TABLE item_faturavel
-  ADD CONSTRAINT ck_item_faturavel_insumo CHECK (tipo_item NOT IN ('material','medicamento','opme')
-    OR insumo_id IS NOT NULL OR item_referencia_matmed_id IS NOT NULL);
+  ADD CONSTRAINT ck_item_faturavel_insumo CHECK (tipo_item NOT IN ('material','medicamento','opme') OR insumo_id IS NOT NULL OR item_referencia_matmed_id IS NOT NULL);

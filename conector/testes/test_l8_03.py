@@ -33,7 +33,7 @@ DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_coope
             "TBIRREGULARID": ["tipo_pendencia_conta"], "TBIRREGULARID_TBMODULO": ["tipo_pendencia_conta_modulo"],
             "TBITEATE": ["tipo_atendimento_tabela"], "TBLOCCON": ["local_cobranca"],
             "TBPROCTO": ["item_faturavel", "grupo_faturamento"], "TBPORMED": ["valor_porte_medico", "porte_procedimento"],
-            "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed"],
+            "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed", "item_faturavel", "grupo_faturamento"],
             "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"],
             "TBPACTHM": ["pacote_item_incluso", "pacote", "pacote_contrato"]}
 DESTINOS.update({t: ["parametro_opcao", "modulo_sistema", "parametro_definicao"] for t in LISTAS_R5})
@@ -453,8 +453,9 @@ class ValoresNoDestino(unittest.TestCase):
             "item_faturavel": "SELECT i.codigo, i.descricao, i.tipo_item, g.codigo, g.descricao, g.tipo_grupo"
                               " FROM item_faturavel i JOIN grupo_faturamento g ON g.id = i.grupo_faturamento_id"
                               # r6: os itens ex_* são a semente dos pais externos (PREPARO_DESTINO), não da carga
-                              " WHERE i.codigo NOT LIKE 'ex\\_%' ORDER BY i.codigo",
-            "grupos": "SELECT COUNT(*) FROM grupo_faturamento",
+                              " WHERE i.codigo NOT LIKE 'ex\\_%' AND i.codigo LIKE 'proc\\_%' ORDER BY i.codigo",
+            # conta-itens-3: os grupos de mat/med (tabela_matmed_*) são conferidos no CONFERIR_DESTINO da fatia
+            "grupos": "SELECT COUNT(*) FROM grupo_faturamento WHERE codigo NOT LIKE 'tabela\\_matmed\\_%'",
             "valor_porte_medico": "SELECT p.codigo, p.descricao, p.tipo_porte, v.vigencia_inicio, v.ocorrido_em, v.valor,"
                                   " v.fonte_pagadora_id IS NOT NULL FROM valor_porte_medico v JOIN porte_procedimento p"
                                   " ON p.id = v.porte_procedimento_id ORDER BY p.codigo, v.vigencia_inicio",

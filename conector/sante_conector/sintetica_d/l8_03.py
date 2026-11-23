@@ -288,9 +288,13 @@ def linhas(r, ins):
         "TBCONVPERCTAPAC": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
         # conta-itens-2: 3 (licenciada, código no espelho) LIGADA ao item do espelho (gravados conta a ligação, nada
         # é inserido); 8 (licenciada, fora do espelho) gravada como própria com espelho_codigo_inexistente
+        # conta-itens-3: secundários item_faturavel e grupo_faturamento (um por tabela: TAB 2 cria na 1 e é adotado
+        # na 2, 5 e 6; TAB 1 na 3 ou 8, adotado na outra = 4 adotados); presumidos: tipo do item (material, menos a
+        # OPME 2) e tipo do grupo em cada linha gravada, mais os da linha 3 ligada (agora registrados)
         "TBMATMED": {"gravados": 6, "pendencias": {"ligado_espelho": 1, "espelho_codigo_inexistente": 1,
                                                    "restricao_destino_1048": 1, "pai_inexistente": 1,
-                                                   "valor_fora_do_dominio": 2, "valor_presumido": 5,
+                                                   "adotado_existente": 4,
+                                                   "valor_fora_do_dominio": 2, "valor_presumido": 19,
                                                    "codigo_inexistente_destino": 1}},
         # o código de material (tabela 19) também é procurado na 20 e o contrário (concorrentes): uma
         # catalogo_codigo_inexistente por tabela que não tem o código (pedido r4: tiss com várias tabelas)
@@ -359,6 +363,26 @@ CONFERIR_DESTINO = [
      "SELECT COUNT(*) = 1 FROM item_referencia_matmed i JOIN {ctl}.conector_origem co ON co.id_destino=i.id"
      " WHERE co.tabela_origem='TBMATMED' AND co.chave_original='8' AND i.fonte_referencia='outra'"
      " AND i.situacao='ativo'"),
+    ("conta-itens-3: item próprio 1 com item faturável de material ligado ao item de referência dele",
+     "SELECT COUNT(*) = 1 FROM item_faturavel f JOIN {ctl}.conector_origem co ON co.id_destino=f.id"
+     " AND co.tabela_origem='TBMATMED' AND co.chave_original='1/item_faturavel'"
+     " WHERE f.tipo_item='material' AND f.insumo_id IS NULL AND f.item_referencia_matmed_id = (SELECT id_destino"
+     " FROM {ctl}.conector_origem WHERE tabela_origem='TBMATMED' AND chave_original='1' LIMIT 1)"),
+    ("conta-itens-3: OPM = S (item 2) vira item faturável OPME",
+     "SELECT tipo_item = 'opme' FROM item_faturavel WHERE id = (SELECT id_destino FROM {ctl}.conector_origem"
+     " WHERE tabela_origem='TBMATMED' AND chave_original='2/item_faturavel')"),
+    ("conta-itens-3: item 3 LIGADO ao espelho tem item faturável do CLIENTE apontando o 9601 (espelho intacto)",
+     "SELECT COUNT(*) = 1 AND (SELECT descricao FROM item_referencia_matmed WHERE id=9601) = 'Item exemplo do espelho'"
+     " FROM item_faturavel f JOIN {ctl}.conector_origem co ON co.id_destino=f.id AND co.tabela_origem='TBMATMED'"
+     " AND co.chave_original='3/item_faturavel' WHERE f.item_referencia_matmed_id = 9601"),
+    ("conta-itens-3: item 8 licenciado fora do espelho (próprio) com item faturável no item de referência dele",
+     "SELECT COUNT(*) = 1 FROM item_faturavel f JOIN item_referencia_matmed i ON i.id=f.item_referencia_matmed_id"
+     " JOIN {ctl}.conector_origem co ON co.id_destino=i.id AND co.tabela_origem='TBMATMED' AND co.chave_original='8'"
+     " WHERE i.fonte_referencia='outra'"),
+    ("conta-itens-3: todo item faturável de mat/med tem insumo ou item de referência; um grupo por tabela",
+     "SELECT (SELECT COUNT(*) FROM item_faturavel WHERE tipo_item IN ('material','medicamento','opme')"
+     " AND insumo_id IS NULL AND item_referencia_matmed_id IS NULL) = 0"
+     " AND (SELECT COUNT(*) FROM grupo_faturamento WHERE codigo LIKE 'tabela_matmed_%') = 2"),
     ("item a1 do pacote (ATO 1 = grupo de ato) com o grupo 1 e sem função da equipe",
      "SELECT COUNT(*) = 1 AND MIN(grupo_ato_id) = (SELECT id_destino FROM {ctl}.conector_origem"
      " WHERE tabela_origem='TBTABATO' AND chave_original='1' LIMIT 1) AND MAX(funcao_equipe_cobranca_id) IS NULL"
