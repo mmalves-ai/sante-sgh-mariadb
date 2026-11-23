@@ -52,19 +52,24 @@ describe('onda 3: operações da ficha (campos 5 e 9)', () => {
       }
   });
 
-  it('cenário mínimo da ficha: existe com o nome dela ou com o equivalente de perfil (D-CEN-41); o que falta está anotado', () => {
-    const faltam: string[] = [];
-    for (const o of OPERACOES_FICHA_ONDA_3)
-      for (const c of o.cenariosMinimos) {
-        const nome = o.equivalentes?.[c] ?? c;
-        const arq = resolve(assinaturas, o.catalogo[0]!, `${nome}.assinatura.json`);
-        if (!existsSync(arq)) faltam.push(`${o.ficha}/${c}`);
-      }
-    expect(faltam).toEqual(['suprimentos.confirmarEntrega/entrega-parcial']);
-    expect(OPERACOES_FICHA_ONDA_3.find((o) => o.ficha === 'suprimentos.confirmarEntrega')?.nota).toContain(
-      'cenário controlado',
-    );
-  });
+  // As capturas ficam fora do git (regeneráveis do modelo base): na esteira do GitHub o teste se declara pulado e
+  // roda na VM, como os .int.spec que precisam do banco.
+  it.skipIf(!existsSync(assinaturas))(
+    'cenário mínimo da ficha: existe com o nome dela ou com o equivalente de perfil (D-CEN-41); o que falta está anotado',
+    () => {
+      const faltam: string[] = [];
+      for (const o of OPERACOES_FICHA_ONDA_3)
+        for (const c of o.cenariosMinimos) {
+          const nome = o.equivalentes?.[c] ?? c;
+          const arq = resolve(assinaturas, o.catalogo[0]!, `${nome}.assinatura.json`);
+          if (!existsSync(arq)) faltam.push(`${o.ficha}/${c}`);
+        }
+      expect(faltam).toEqual(['suprimentos.confirmarEntrega/entrega-parcial']);
+      expect(OPERACOES_FICHA_ONDA_3.find((o) => o.ficha === 'suprimentos.confirmarEntrega')?.nota).toContain(
+        'cenário controlado',
+      );
+    },
+  );
 });
 
 describe('onda 3: critério (regra 1 do M40 com as condições da onda)', () => {

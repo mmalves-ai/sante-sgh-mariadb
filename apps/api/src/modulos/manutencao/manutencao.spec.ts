@@ -1212,8 +1212,9 @@ describe('treinamento dos operadores e ciclo de vida (W0-08, M3)', () => {
     if (doc.statusCode === 200) {
       expect(doc.headers['content-type']).toContain('application/pdf');
       expect(doc.headers['content-disposition']).toContain('pgts.pdf');
+      // O evento só existe quando o documento sai (sem o conversor, 503 e nada na trilha).
+      expect(a.trilha.eventos.map((l) => l.evento)).toContain('manutencao.pgts.gerado');
     }
-    expect(a.trilha.eventos.map((l) => l.evento)).toContain('manutencao.pgts.gerado');
   });
 });
 
@@ -1356,8 +1357,9 @@ describe('PMOC e infraestrutura crítica (W0-08, M4)', () => {
       if (doc.statusCode === 200) {
         expect(doc.headers['content-type']).toContain('application/pdf');
         expect(doc.headers['content-disposition']).toContain('pmoc-2026-10-01-2026-10-31.pdf');
+        // O evento só existe quando o documento sai (sem o conversor, 503 e nada na trilha).
+        expect(b.trilha.eventos.map((l) => l.evento)).toContain('manutencao.pmoc.gerado');
       }
-      expect(b.trilha.eventos.map((l) => l.evento)).toContain('manutencao.pmoc.gerado');
     } finally {
       await b.fechar();
     }

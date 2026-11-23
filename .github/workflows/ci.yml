@@ -21,6 +21,14 @@ jobs:
       # O runner não tem MariaDB: os .int.spec que abrem o banco próprio se declaram pulados (SGH_NUCLEO_SEM_BANCO).
       # Eles rodam na VM contra um cliente de teste (tools/db/criar_cliente.py), fora da esteira do GitHub.
       SGH_NUCLEO_SEM_BANCO: '1'
+      # Os testes HTTP que pedem PDF/A (RPA do repasse, PGTS e PMOC da manutenção, lista de presença) precisam do
+      # conversor no ar, como na VM; sem ele a API responde 503 "Gerador de PDF indisponível".
+      GOTENBERG_URL: http://127.0.0.1:3318
+    services:
+      gotenberg:
+        image: gotenberg/gotenberg:8.28.0
+        ports:
+          - 127.0.0.1:3318:3000
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
