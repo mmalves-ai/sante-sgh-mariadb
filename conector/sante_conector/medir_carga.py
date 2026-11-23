@@ -99,7 +99,8 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
     cc = banco.conectar("cliente_" + codigo, autocommit=False)
     saida = {"tabelas_no_recorte": len(nomes), "medidas": sorted(tabelas), "passadas": [],
              "gravadores": carga_mapa.paralelo.gravadores(),
-             "ondas": [len(o) for o in carga_mapa.paralelo.ondas([p for p in plano_todo if p["tabela"] in alvo], mapa_exec)]}
+             "ondas": [len(o) for o in carga_mapa.paralelo.ondas([p for p in plano_todo if p["tabela"] in alvo], mapa_exec,
+                                                              carga_mapa.paralelo.fks_banco(cc))]}
     try:
         for vez in range(vezes):
             eid = EID_MEDICAO + int(time.time()) % 1000000
@@ -143,6 +144,13 @@ def medir(lt, origem, codigo, tabelas, limite, limite_pais, vezes, perfil=None):
     return saida
 
 
+def _fks_modelo():
+    """Chaves estrangeiras do modelo (para as ondas da previsão, iguais às da carga): no container em /app."""
+    from pathlib import Path
+    raiz = Path("/app") if Path("/app/db/migracoes").is_dir() else mapa.RAIZ
+    return carga_mapa.paralelo.fks_ddl(raiz)
+
+
 def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
     """Previsão da carga completa: contagem de cada tabela do plano inteiro, ondas e gravadores livres (a maior
     tabela primeiro), com o teto de um gravador e o teto do leitor único. Só contagens."""
@@ -152,7 +160,7 @@ def prever(lt, ritmo_gravador, ritmo_leitor, gravadores):
     adiar = {t.strip() for t in (os.environ.get("CONECTOR_ADIAR") or "").split(",") if t.strip()}
     plano = carga_mapa.planejar(mapa_exec, set(lt.tabelas()) - adiar)
     cont = {p["tabela"]: lt.contar(p["tabela"]) for p in plano}
-    ws = carga_mapa.paralelo.ondas(plano, mapa_exec)
+    ws = carga_mapa.paralelo.ondas(plano, mapa_exec, _fks_modelo())
     total_s, por_onda = 0.0, []
     divididas = set()
     for onda in ws:
