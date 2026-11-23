@@ -516,6 +516,7 @@ async function concluirPedido(
     leito_hospitalar_id: leito,
     data_hora_atendido: agora,
     situacao_pedido_leito_id: situacao,
+    estado_situacao: 'internado',
   });
 }
 

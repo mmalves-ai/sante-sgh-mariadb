@@ -352,4 +352,133 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria do NIR (MariaDB, cliente ${CLIENT
       ),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'configuracao-incompleta');
   });
+
+  it('cancelar em vez de excluir: a solicitação e a reserva ficam com motivo, quem e quando; o leito volta a livre; o banco recusa o cancelamento incompleto', async () => {
+    const p2 = await grava<number>('pedido_leito', (g) =>
+      g.solicitar({
+        origem: 'pa',
+        paciente: M().pacientes[1]!,
+        atendimento: null,
+        cabecalho: null,
+        internacao: null,
+        cirurgia: null,
+        prioridade: 'urgente',
+        prazoMin: 240,
+        perfil: { tiposAcomodacao: [], precaucao: null, intensiva: false } as never,
+        clinica: 'M',
+        especialidade: M().especialidade,
+        cid: null,
+        justificativa: 'Paciente do pronto atendimento',
+        situacaoCodigo: M().situacaoSolicitado,
+        vinculo: M().medico,
+        usuario: M().login,
+      }),
+    );
+    expect(await lerAdt(M(), 'SELECT estado_situacao FROM pedido_leito WHERE id = ?', [p2])).toMatchObject({
+      estado_situacao: 'solicitado',
+    });
+    const r2 = await grava<number>('reserva_leito', (g) =>
+      g.reservar({ solicitacao: p2, leito: leito('02'), validadeMin: 60, excecao: null, usuario: M().login }),
+    );
+    expect(
+      await lerAdt(
+        M(),
+        'SELECT leito_reservado_vigente IS NOT NULL AS vigente FROM reserva_leito WHERE id = ?',
+        [r2],
+      ),
+    ).toMatchObject({ vigente: 1 });
+    // O excluir da tela: a reserva é cancelada e a solicitação também, na mesma gravação; nenhuma linha some.
+    await grava('pedido_leito', async (g) => {
+      await g.encerrarReserva({
+        reserva: r2,
+        situacao: 'cancelada',
+        motivo: 'Solicitação cancelada: paciente errado',
+        usuario: M().login,
+      });
+      return g.transicionar({
+        solicitacao: p2,
+        acao: 'cancelar' as never,
+        de: 'solicitado',
+        para: 'cancelado',
+        motivo: 'Paciente errado na tela',
+        usuario: M().login,
+      });
+    });
+    expect(
+      await lerAdt(
+        M(),
+        `SELECT estado_situacao, data_hora_cancelamento IS NOT NULL AS quando, motivo_cancelamento,
+                cancelado_por_usuario_id = ? AS quem, excluido_em IS NULL AS viva FROM pedido_leito WHERE id = ?`,
+        [M().usuario, p2],
+      ),
+    ).toMatchObject({
+      estado_situacao: 'cancelado',
+      quando: 1,
+      motivo_cancelamento: 'Paciente errado na tela',
+      quem: 1,
+      viva: 1,
+    });
+    expect(await estadoDo(p2)).toBe('cancelado');
+    expect(
+      await lerAdt(
+        M(),
+        `SELECT situacao, encerrada_em IS NOT NULL AS quando, encerrada_por_usuario_id = ? AS quem, motivo_encerramento,
+                leito_reservado_vigente IS NULL AS liberado, excluido_em IS NULL AS viva FROM reserva_leito WHERE id = ?`,
+        [M().usuario, r2],
+      ),
+    ).toMatchObject({
+      situacao: 'cancelada',
+      quando: 1,
+      quem: 1,
+      motivo_encerramento: 'Solicitação cancelada: paciente errado',
+      liberado: 1,
+      viva: 1,
+    });
+    expect((await nir.reservasVigentes(contextoAdt(M()) as never)).some((x) => x.id === r2)).toBe(false);
+    // O leito liberado aceita outra reserva.
+    const p3 = await grava<number>('pedido_leito', (g) =>
+      g.solicitar({
+        origem: 'pa',
+        paciente: M().pacientes[1]!,
+        atendimento: null,
+        cabecalho: null,
+        internacao: null,
+        cirurgia: null,
+        prioridade: 'urgente',
+        prazoMin: 240,
+        perfil: { tiposAcomodacao: [], precaucao: null, intensiva: false } as never,
+        clinica: 'M',
+        especialidade: M().especialidade,
+        cid: null,
+        justificativa: 'Segunda solicitação',
+        situacaoCodigo: M().situacaoSolicitado,
+        vinculo: M().medico,
+        usuario: M().login,
+      }),
+    );
+    const r3 = await grava<number>('reserva_leito', (g) =>
+      g.reservar({ solicitacao: p3, leito: leito('02'), validadeMin: 60, excecao: null, usuario: M().login }),
+    );
+    expect(r3).toBeGreaterThan(r2);
+    // A cancelada não é cancelada de novo.
+    await expect(
+      grava('reserva_leito', (g) =>
+        g.encerrarReserva({ reserva: r2, situacao: 'cancelada', motivo: 'de novo', usuario: M().login }),
+      ),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'reserva-encerrada');
+    // O banco recusa o cancelamento incompleto (CHECK), mesmo fora do domínio.
+    const direto = (sql: string, p: unknown[]) =>
+      M().nucleo.escrever({ cliente: CLIENTE_ADT, correlacao: 'int-0301-check' }, (e) => e.executar(sql, p));
+    for (const [sql, p] of [
+      [
+        'UPDATE pedido_leito SET cancelado_por_usuario_id = NULL, data_hora_cancelamento = NULL, motivo_cancelamento = NULL WHERE id = ?',
+        [p2],
+      ],
+      ["UPDATE pedido_leito SET motivo_cancelamento = '  ' WHERE id = ?", [p2]],
+      ["UPDATE pedido_leito SET estado_situacao = 'em_analise' WHERE id = ?", [p2]],
+      ["UPDATE reserva_leito SET motivo_encerramento = '' WHERE id = ?", [r2]],
+      ['UPDATE reserva_leito SET encerrada_por_usuario_id = NULL WHERE id = ?', [r2]],
+    ] as const)
+      await expect(direto(sql, [...p]), sql).rejects.toBeTruthy();
+  });
 });

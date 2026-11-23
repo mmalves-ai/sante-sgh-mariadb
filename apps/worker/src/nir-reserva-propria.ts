@@ -146,6 +146,7 @@ export class PortaNirPropria implements PortaNir {
           );
         await tx.alterar('pedido_leito', n(p['id']), n(p['versao']), {
           situacao_pedido_leito_id: n(s['id']),
+          estado_situacao: 'em_analise',
           ...(n(p['reserva_leito_id']) === e.reserva ? { reserva_leito_id: null } : {}),
         });
         return { expirou: true, voltouAnalise: true };

@@ -633,6 +633,13 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       [estado],
       `a situação de pedido de leito "${estado}"`,
     );
+  // A cópia do estado na linha (estado_situacao), presa à situação pela chave composta (07_INT/24).
+  const situacaoEEstado = async (id: number) => ({
+    situacao_pedido_leito_id: id,
+    estado_situacao: texto(
+      (await tx.uma('SELECT estado FROM situacao_pedido_leito WHERE id = ?', [id]))?.['estado'],
+    ),
+  });
   const pedido = async (id: number) => {
     const [p] = await tx.consultarParaAtualizar(
       'SELECT pl.id, pl.versao, pl.data_hora_pedido, sp.estado FROM pedido_leito pl JOIN situacao_pedido_leito sp ON sp.id = pl.situacao_pedido_leito_id WHERE pl.id = ? AND pl.estabelecimento_id = ? AND pl.excluido_em IS NULL',
@@ -741,7 +748,7 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         justificativa: s.justificativa,
         data_hora_pedido: agora,
         data_hora_prevista: minutos(agora, s.prazoMin),
-        situacao_pedido_leito_id: s.situacaoCodigo ?? (await situacaoDoEstado('solicitado')),
+        ...(await situacaoEEstado(s.situacaoCodigo ?? (await situacaoDoEstado('solicitado')))),
         internacao_id: s.internacao,
       });
     },
@@ -756,7 +763,7 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
           { colunas: ['situacao'] },
         );
       const muda: Record<string, unknown> = {
-        situacao_pedido_leito_id: t.situacaoCodigo ?? (await situacaoDoEstado(t.para)),
+        ...(await situacaoEEstado(t.situacaoCodigo ?? (await situacaoDoEstado(t.para)))),
       };
       if (t.prioridade) muda['prioridade'] = PRIORIDADE_DA_TELA[t.prioridade] ?? 'media';
       if (t.prazoMinDesdeOPedido !== undefined && t.prazoMinDesdeOPedido !== null)
@@ -764,7 +771,7 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       if (t.para === 'cancelado' || t.para === 'rejeitado')
         Object.assign(muda, {
           data_hora_cancelamento: new Date(),
-          motivo_cancelamento: (t.motivo ?? t.para).slice(0, 500),
+          motivo_cancelamento: (t.motivo?.trim() || t.para).slice(0, 500),
           cancelado_por_usuario_id: usuario(),
         });
       if (t.reserva) muda['reserva_leito_id'] = t.reserva;
