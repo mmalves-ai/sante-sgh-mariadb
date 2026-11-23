@@ -256,6 +256,12 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
   - Não vale para o `new-sgh` nem para outros repositórios.
   - Não inclui `push --force`, reescrita de histórico nem apagar branch remota, que continuam
     precisando de autorização.
+- **Push só sem falha, e sempre push (dono, 2026-11-23).** É proibido subir com falha e é proibido deixar de subir.
+  - Antes de todo push, a esteira inteira passa na VM: `flock sante-sgh-dados/obra/pesado.lock
+    tools/obra/ci-sim.sh <commit>` (worktree limpo, sem `.env`, os mesmos passos do `ci.yml`) termina em
+    `RESULTADO: VERDE`. Commit que não passa fica local até ser reparado.
+  - Toda falha da esteira do GitHub é reparada na causa, sem afrouxar teste, trava nem verificador.
+  - Nunca fazer push com rodada de agentes aberta na mesma árvore (o push leva os commits pela metade).
 - As demais ações irreversíveis ou externas (enviar e-mail, publicar, apagar volume ou imagem)
   continuam **só com autorização do dono**.
 - Antes de apagar ou sobrescrever, olhe o alvo.
