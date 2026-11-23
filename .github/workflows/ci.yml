@@ -29,6 +29,16 @@ jobs:
         image: gotenberg/gotenberg:8.28.0
         ports:
           - 127.0.0.1:3318:3000
+      # O E2E sobe a API com a sessão no Valkey e a fila de e-mail no Mailpit (apps/web/playwright.config.ts: as
+      # mesmas portas de loopback da VM).
+      valkey:
+        image: valkey/valkey:9.0.3-alpine
+        ports:
+          - 127.0.0.1:63718:6379
+      mailpit:
+        image: axllent/mailpit:v1.30.0
+        ports:
+          - 127.0.0.1:1325:1025
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -51,7 +61,10 @@ jobs:
       # trava continua igual.
       - name: Trava de saídas (ambiente:verificar)
         run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm ambiente:verificar
+      # Sem .env no runner: a API e o worker só sobem com o AMBIENTE declarado (ci: neutralizado, sem banco).
       - name: E2E do marco (Chrome do runner, channel chrome)
+        env:
+          AMBIENTE: ci
         run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm e2e -- --grep @M00
       - name: Segurança (gitleaks, Semgrep, OSV, Trivy, SBOM)
         run: ./pnpm seguranca:verificar

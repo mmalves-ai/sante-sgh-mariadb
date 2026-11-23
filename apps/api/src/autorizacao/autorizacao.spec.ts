@@ -296,8 +296,11 @@ describe('cache das permissões (3 min, seção 4)', () => {
     const a = await s.obter('r', 'aa', 'SINT.MASTER');
     const msFrio = performance.now() - fria;
     expect(a.permissoes.length).toBeGreaterThan(2_000);
+    // Regime de cache: 20 leituras de aquecimento (compilação do JIT) fora da conta e 200 medidas; o limite de 5 ms
+    // no p95 continua. Com 50 medidas sem aquecimento, a máquina compartilhada do GitHub passava de 6 ms.
+    for (let i = 0; i < 20; i++) await s.obter('r', 'aa', 'SINT.MASTER');
     const tempos: number[] = [];
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
       const t0 = performance.now();
       await s.obter('r', 'aa', 'SINT.MASTER');
       tempos.push(performance.now() - t0);
