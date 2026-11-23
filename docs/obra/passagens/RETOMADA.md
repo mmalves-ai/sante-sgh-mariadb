@@ -135,10 +135,11 @@
    falham) e 2 do nir-porta-propria.int.spec.ts. Causas: a entrada manda `caraterTiss` e `caraterAdmissao`, que o
    esquema de internar (packages/contratos/src/internacao/adt.ts ~250) não tem mais, e `cidPrincipal` com id 10^12
    (item 1). Os .int.spec não rodam na esteira: considerar rodar `testes:integracao` periodicamente na VM.
-3. **Esteira do GitHub:** ccbb8803 enviado (verificar:tudo local verde). Antes: 9c5b156b passou verificar:tudo e
-   fronteiras e parou na trava (corrigido em 248e6812: env -u das GITHUB_*_URL). E2E @M00 e segurança nunca rodaram
-   lá: conferir pela API (curl com o token GITHUB do .env; não há gh). Resultado do ccbb8803 em
-   sante-sgh-dados/obra/logs/ci-espera.txt.
+3. **Esteira do GitHub: VERDE pela primeira vez em 23/11, 14h05** (a36d5e7c, execução 45216627979, os 6 passos).
+   Regra do dono (AGENTS.md, regra 9): todo push só depois de `flock sante-sgh-dados/obra/pesado.lock
+   tools/obra/ci-sim.sh <commit>` com `RESULTADO: VERDE` (cerca de 35 min; copie o script para fora do worktree antes
+   de rodar, como em sante-sgh-dados/obra/ci-sim-run.sh, porque ele recria o worktree ../sante-sgh-wt/ci-sim).
+   Conferir a esteira pela API (curl com o token GITHUB do .env; não há gh).
 4. **E2E W0-07 do NIR** (apps/web/e2e/w007-nir-crud.spec.ts, reescrito para o cancelamento) não rodou: o Playwright
    não subiu o webServer em 240 s na VM. Investigar.
 5. **Depois da carga (execução 11):** aplicar no cliente_prontocardio as migrações 00_NUCLEO/24 (trilha encadeada,
