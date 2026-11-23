@@ -84,7 +84,7 @@ hash diferente do listado não é o do pacote homologado.
 | 74 | `07_INT/20_tabelas.sql` | tabelas | `da6a37f3844715e15cae59fcc01939fa0c6fa700af1d92c609dd7182b15f045b` | 1 |
 | 75 | `07_INT/21_tabelas.sql` | tabelas | `38d452bb7ddd403d8d929f809f95c2765b24ed722e50c946d6acd356bba3f88e` | 1 |
 | 76 | `07_INT/23_tabelas.sql` | tabelas | `c41da2de98d799309a1ab6ab0c7c097f55f1c56e4c09adb9cb32c1fa56f8fa69` | 1 |
-| 77 | `07_INT/24_tabelas.sql` | tabelas | `78fb94c43d38d3c68826597eea4cf7f2087bb6670d694006899c537984a897ee` | 2 |
+| 77 | `07_INT/24_tabelas.sql` | tabelas | `785e33691aa1aa03c70d89e478a78f68b61740fb694e031d438bd655bbd04691` | 7 |
 | 78 | `08_CC/01_tabelas.sql` | tabelas | `6c261c19517c58201f78c8d839046b4353a5541c692fba42c9ec11d424b467bf` | 45 |
 | 79 | `08_CC/02_tabelas.sql` | tabelas | `7e95cffcd96a279b5b3117ee0972bf5395e802f64d9e70df01f51cf379b50ac0` | 45 |
 | 80 | `08_CC/03_tabelas.sql` | tabelas | `e8300bb3d7e2e85d5beaec83c237c999655bd65bc529347f4f7ed7a9ee73cedf` | 19 |
@@ -285,7 +285,7 @@ hash diferente do listado não é o do pacote homologado.
 | 275 | `07_INT/07_chaves.sql` | chaves | `b3f8ac358293bfb132a555fc11a86bdde96dfb0bed8e5ef899cb5c285563d1e8` | 4 |
 | 276 | `07_INT/21_chaves.sql` | chaves | `da6dadc31322cb09ecbc9446e95d9188a411670e53dcc21e478bce4762a7185f` | 2 |
 | 277 | `07_INT/23_chaves.sql` | chaves | `2ba76d54ba30e826f5a87383581be4805c58e43b30f73a63b7c2cf61db63f939` | 1 |
-| 278 | `07_INT/24_chaves.sql` | chaves | `864182b28d78dfc99468617c1605e9873ce5bdbdc1844c68acabacf9baf3ea9e` | 1 |
+| 278 | `07_INT/24_chaves.sql` | chaves | `da8faf0efcd592c5536b3360f1ccef77fe82de7b4ab181bf10ee47cf85251053` | 2 |
 | 279 | `08_CC/01_chaves.sql` | chaves | `67d25457206a92a33fc8656f26147d3735154852e0512dc003370558e0bc1401` | 39 |
 | 280 | `08_CC/02_chaves.sql` | chaves | `a2debf031f9e6a67432327efbb941fe44adb06ee660da36f50a565130a714651` | 37 |
 | 281 | `08_CC/03_chaves.sql` | chaves | `1cd55e8811444ba588fa66d1653f372034a8c5437317c85fd30ef6aae1e18f74` | 12 |
