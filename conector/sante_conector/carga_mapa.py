@@ -612,6 +612,7 @@ class CargaMapa(carga.Carga):
         self._excluidas = {}                # tabela -> chaves com exclusão lógica (conector_origem.excluido_em)
         self._estado = {}                   # (dt, chave em conector_origem) -> sha256 do destino antes da execução
         self._atualizar = None              # linha da origem sendo reaplicada (Sincronizar)
+        self._desfeito = None               # conta-itens-3: linha cuja ligação ao espelho foi desfeita (Sincronizar)
         self.sinc_res = {"atualizadas": 0, "conflitos": 0, "conflitos_itens": [], "excluidas": 0, "reativadas": 0,
                          "alertas_exclusao_em_massa": [], "blocos": {}, "sequencias": {}}
         self.mapa_exec = mapa_exec
@@ -1672,7 +1673,7 @@ class CargaMapa(carga.Carga):
         ex = self.existente.get(t, {})
         for m in self._grupos[2][g][1]:
             # Sincronizar de uma linha já carregada: o cabeçalho dela mesma vale (único membro do grupo)
-            proprio = getattr(self, "_atualizar", None) is not None
+            proprio = getattr(self, "_atualizar", None) is not None or getattr(self, "_desfeito", None) is not None
             e = ex.get(m if principal else "%s/%s" % (m, dt)) if m != chave or proprio else None
             if e and e[0] is not None:
                 return e[0], True
@@ -2028,16 +2029,25 @@ class CargaMapa(carga.Carga):
                                      " origem<>'migracao'", (cat,))[0][0] > 0
         return cache[cat]
 
-    def _secundarias_ligado(self, t, chave, h, p, dts, ents, ligado, vals, campos):
+    def _secundarias_ligado(self, t, chave, h, p, dts, ents, ligado, vals, campos, so=None):
         """conta-itens-3 (proposta B): a linha LIGADA ao item do espelho grava ou adota os destinos secundários, que são
         do cliente (o item faturável do item de referência): `@id` é o item do espelho, que nunca é tocado. Mesma ordem
-        (`antes`), adoção e registro (`chave/destino`) da gravação normal."""
-        ops = p.get("opcoes") or {}
+        (`antes`), cabeçalho agrupado, adoção e registro (`chave/destino`) da gravação normal; no Sincronizar e na
+        ligação desfeita, o secundário registrado é reaplicado no mesmo id (a origem vence). Com `so`, só esses
+        destinos (secundário a completar numa linha já carregada; `@id` = o principal gravado)."""
+        ops, ex = p.get("opcoes") or {}, self.existente.get(t, {})
         ids = {dts[0]: ligado}
+        for dt in dts[1:]:
+            if so is not None and dt not in so:
+                e = ex.get("%s/%s" % (chave, dt))
+                ids[dt] = e[0] if e else None
+        desf = getattr(self, "_desfeito", None)
         ordem = [i for i in range(1, len(dts)) if (ops.get(dts[i]) or {}).get("antes")]
         ordem += [i for i in range(1, len(dts)) if i not in ordem]
         for i in ordem:
             dt, op, primeiro = dts[i], ops.get(dts[i]) or {}, None
+            if so is not None and dt not in so:
+                continue
             for (suf, v), (nomes, cs) in zip(vals[dt], campos[dt]):
                 v = dict(v)
                 for c in p["colunas"][dt]:
@@ -2046,20 +2056,106 @@ class CargaMapa(carga.Carga):
                     elif c["coluna"].startswith("@id:"):
                         v[c["destino"]] = ids.get(c["coluna"][4:])
                 self._linha = (t, chave)
-                rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"),
-                                                      ativo=op.get("adotar_ativo") or ())
+                kx = "%s/%s%s" % (chave, dt, "/" + suf if suf else "")
+                releitura = False
+                if op.get("agrupar"):  # um por grupo: a primeira linha cria (ou adota), as outras usam
+                    rid, _anterior = self._cabecalho(t, dt, chave)
+                    adotado, releitura = False, rid is not None
+                    if rid is None:
+                        rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"))
+                        self._cab[(t, self._grp[0])] = rid
+                else:
+                    alvo, manter = self._alvo_secundario(t, kx, dt, op, v, desf)
+                    if manter:
+                        rid, adotado = alvo, True
+                        self._pendencia(t, chave, "secundario_compartilhado_mantido", "media")
+                    elif alvo:  # a origem vence: UPDATE do mesmo id; edição do destino guardada
+                        sincronizar_mod.conflito(self, t, kx, dt, alvo, nomes, v)
+                        rid, adotado = sincronizar_mod.atualizar(
+                            self, dt, alvo, v, [str(x) for x in cs if isinstance(x, _PADRAO)]), False
+                    else:
+                        rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"),
+                                                              ativo=op.get("adotar_ativo") or ())
                 if adotado:
                     self._pendencia(t, chave, "adotado_existente", "baixa")
                     self.cont["adotadas"] = self.cont.get("adotadas", 0) + 1
-                if nomes and (adotado or any(isinstance(x, _PADRAO) for x in cs)):  # resumo: o que está no destino
+                if nomes and (adotado or releitura or any(isinstance(x, _PADRAO) for x in cs)):
                     cs = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
                         ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0])
                 hd = hashlib.sha256("|".join(canon(x) for x in cs).encode()).digest()
-                self._registrar(t, "%s/%s%s" % (chave, dt, "/" + suf if suf else ""), dt, rid, h, hd)
+                self._registrar(t, kx, dt, rid, h, hd)
                 self.origem.setdefault(ents[i], {})[chave + ("/" + suf if suf else "")] = hd.hex()
                 primeiro = primeiro or rid
             ids[dt] = primeiro
-        self.cont["secundarias_ligadas_espelho"] = self.cont.get("secundarias_ligadas_espelho", 0) + 1
+        k = "secundarias_completadas" if so is not None else "secundarias_ligadas_espelho"
+        self.cont[k] = self.cont.get(k, 0) + 1
+
+    def _compartilhado(self, t, dt, rid):
+        """Quantas linhas da tabela têm o secundário `dt` registrado neste id (índice montado uma vez)."""
+        idx = self.__dict__.setdefault("_idx_sec", {})
+        if (t, dt) not in idx:
+            m, marca = {}, "/" + dt
+            for k, e in self.existente.get(t, {}).items():
+                if isinstance(k, str) and k.endswith(marca) and e and e[0] is not None:
+                    m[e[0]] = m.get(e[0], 0) + 1
+            idx[(t, dt)] = m
+        return idx[(t, dt)].get(rid, 0)
+
+    def _alvo_secundario(self, t, kx, dt, op, v, desfeito):
+        """(id a reaplicar ou None, manter) do destino SECUNDÁRIO no Sincronizar e na ligação ao espelho desfeita
+        (conta-itens-3): o registrado `chave/destino` segue no mesmo id (nunca um segundo com a mesma chave única).
+        Compartilhado com outra linha (que o adotou): a linha que não é a dona (outro `codigo`) grava ou adota o seu;
+        a dona, com a ligação desfeita, mantém o item como está (a outra linha continua usando-o)."""
+        if self._atualizar is None and desfeito is None:
+            return None, False
+        rid = sincronizar_mod.alvo(self, t, kx, dt, op)
+        if rid is None:
+            return None, False
+        if self._compartilhado(t, dt, rid) > 1:
+            if v.get("codigo") is not None:
+                atual = self._todas("SELECT codigo FROM `%s` WHERE id=%%s" % dt, (rid,))
+                if not atual or canon(atual[0][0]) != canon(v["codigo"]):
+                    return None, False
+            if desfeito is not None:
+                return rid, True
+        return rid, False
+
+    def _preparar_completar(self, p):
+        """Secundários obrigatórios (sem opcional, se, desdobrar, por_pai nem complementa) que nenhuma linha já
+        carregada da tabela tem registrado: declarados no mapa depois da carga. Montado uma vez por tabela."""
+        t, ops = p["tabela"], p.get("opcoes") or {}
+        cache = self.__dict__.setdefault("_sec_novas", {})
+        if t in cache:
+            return
+        ex, novas = self.existente.get(t, {}), []
+        if ex and not self._desdobrado(p, p["destinos"][0]):
+            for dt in p["destinos"][1:]:
+                op = ops.get(dt) or {}
+                if any(op.get(x) for x in ("opcional", "se", "desdobrar", "por_pai", "complementa")):
+                    continue
+                marca = "/" + dt
+                if not any(isinstance(k, str) and k.endswith(marca) for k in ex):
+                    novas.append(dt)
+        cache[t] = novas
+
+    def _secundarias_a_completar(self, p, chave):
+        ex = self.existente.get(p["tabela"], {})
+        return [dt for dt in self.__dict__.get("_sec_novas", {}).get(p["tabela"], ())
+                if "%s/%s" % (chave, dt) not in ex]
+
+    def _completar_secundarias(self, t, chave, h, p, dts, ents, linha, principal, falta):
+        """conta-itens-3: linha já carregada sem o secundário declarado depois (item faturável de TBMATMED): grava ou
+        adota só os secundários, com `@id` = o principal gravado (o próprio ou o item do espelho, intocado)."""
+        vals, campos, _pend, recusa, _adiadas = self._valores(p, linha, chave)
+        if recusa:
+            self._pendencia(t, chave, "secundario_ausente", "media")
+            self.cont["secundarias_ausentes"] = self.cont.get("secundarias_ausentes", 0) + 1
+            return
+        try:
+            self._secundarias_ligado(t, chave, h, p, dts, ents, principal, vals, campos, so=falta)
+        except pymysql.err.MySQLError:  # restrição do destino: o principal fica, a falta fica visível
+            self._pendencia(t, chave, "secundario_ausente", "media")
+            self.cont["secundarias_ausentes"] = self.cont.get("secundarias_ausentes", 0) + 1
 
     def _desfazer_ligacao(self, t, chave, p, dt, ligado):
         """Sincronizar: a linha estava ligada ao item do espelho e agora não liga mais a ele (código ou marca mudou,
@@ -2071,7 +2167,7 @@ class CargaMapa(carga.Carga):
             return False
         self._pendencia(t, chave, "ligacao_espelho_desfeita", "media")
         self.cont["ligacoes_espelho_desfeitas"] = self.cont.get("ligacoes_espelho_desfeitas", 0) + 1
-        self._atualizar = None
+        self._atualizar, self._desfeito = None, a  # os secundários registrados seguem no mesmo id (_alvo_secundario)
         return True
 
     def _ligar_espelho(self, esp, codigo, linha, pend):
@@ -2282,6 +2378,7 @@ class CargaMapa(carga.Carga):
         colide = self._colisoes(p)
         self._montar_grupos(p)
         self._montar_leituras(p)
+        self._preparar_completar(p)
         seqs = [c["coluna"][5:] for dt in dts for c in p["colunas"][dt] if c["coluna"].startswith("#seq:")]
         cont_seq = {}
         inicio, n = time.monotonic(), 0
@@ -2309,7 +2406,7 @@ class CargaMapa(carga.Carga):
                 completar = prov[0]
                 del self.existente[t][chave]
             sit, ant = self._situacao(t, chave, h)
-            self._atualizar = None
+            self._atualizar = self._desfeito = None
             if sit == "alterada" and self.sinc:
                 if suporta:
                     self._atualizar = ant
@@ -2318,6 +2415,9 @@ class CargaMapa(carga.Carga):
                     self._pendencia(t, chave, "alteracao_aguarda_sincronizar", "baixa")
             if sit != "nova" and self._atualizar is None:
                 if ant[0] is not None:
+                    falta = self._secundarias_a_completar(p, chave) if sit != "alterada" else ()
+                    if falta:  # conta-itens-3: secundário declarado depois da carga: nasce agora, principal intocado
+                        self._completar_secundarias(t, chave, h, p, dts, ents, linha, ant[0], falta)
                     self._secundarias_ja_carregadas(p, ents, chave, sit, ant)
                 elif ant[3]:
                     self.prop.registrar(t, chave, ant[3], ant[4] or "alta")
@@ -2403,7 +2503,7 @@ class CargaMapa(carga.Carga):
                 continue
             for regra, g in pend:
                 self._pendencia(t, chave, regra, g)
-            hds, cabs = [], []
+            hds, cabs, desf = [], [], self._desfeito
 
             def gravar():
                 ids = {}
@@ -2440,8 +2540,15 @@ class CargaMapa(carga.Carga):
                             self._linha = (t, chave)
                             kx = chave if i == 0 and not itens_principal else "%s/%s%s" % (
                                 chave, dt, "/" + suf if suf else "")
-                            alvo = sincronizar_mod.alvo(self, t, kx, dt, op) if self._atualizar is not None else None
-                            if alvo:  # Sincronizar: a origem vence (UPDATE do mesmo id); edição do destino guardada
+                            manter = False
+                            if i == 0:
+                                alvo = sincronizar_mod.alvo(self, t, kx, dt, op) if self._atualizar is not None else None
+                            else:  # secundário: também na ligação desfeita (o mesmo id, nunca um segundo com a chave)
+                                alvo, manter = self._alvo_secundario(t, kx, dt, op, v, desf)
+                            if manter:  # dono de um secundário que outra linha adotou: fica como está, visível
+                                rid, adotado = alvo, True
+                                self._pendencia(t, chave, "secundario_compartilhado_mantido", "media")
+                            elif alvo:  # Sincronizar: a origem vence (UPDATE do mesmo id); edição do destino guardada
                                 sincronizar_mod.conflito(self, t, kx, dt, alvo, nomes, v)
                                 rid, adotado = sincronizar_mod.atualizar(
                                     self, dt, alvo, v, [str(x) for x in cs if isinstance(x, _PADRAO)]), False

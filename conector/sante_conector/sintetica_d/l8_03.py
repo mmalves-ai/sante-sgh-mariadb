@@ -288,12 +288,11 @@ def linhas(r, ins):
         "TBCONVPERCTAPAC": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
         # conta-itens-2: 3 (licenciada, código no espelho) LIGADA ao item do espelho (gravados conta a ligação, nada
         # é inserido); 8 (licenciada, fora do espelho) gravada como própria com espelho_codigo_inexistente
-        # conta-itens-3: secundários item_faturavel e grupo_faturamento (um por tabela: TAB 2 cria na 1 e é adotado
-        # na 2, 5 e 6; TAB 1 na 3 ou 8, adotado na outra = 4 adotados); presumidos: tipo do item (material, menos a
-        # OPME 2) e tipo do grupo em cada linha gravada, mais os da linha 3 ligada (agora registrados)
+        # conta-itens-3: secundários item_faturavel e grupo_faturamento (um por tabela, agrupado por TAB como em
+        # TBPROCTO: a primeira linha da tabela cria e as outras usam, sem adotado_existente por linha); presumidos:
+        # tipo do item (material, menos a OPME 2) e tipo do grupo em cada linha gravada, mais os da linha 3 ligada
         "TBMATMED": {"gravados": 6, "pendencias": {"ligado_espelho": 1, "espelho_codigo_inexistente": 1,
                                                    "restricao_destino_1048": 1, "pai_inexistente": 1,
-                                                   "adotado_existente": 4,
                                                    "valor_fora_do_dominio": 2, "valor_presumido": 19,
                                                    "codigo_inexistente_destino": 1}},
         # o código de material (tabela 19) também é procurado na 20 e o contrário (concorrentes): uma

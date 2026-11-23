@@ -30,6 +30,15 @@ Atualizado em: 2026-11-20, 23:00. **Em andamento, sem parar** (dono). Retome por
 
 ## Decisões registradas
 
+- **conta-itens-3, material e medicamento na conta (2026-11-23, proposta B):** o item da tabela de preço de
+  mat/med (TBMATMED) grava o item faturável do cliente (`item_faturavel.item_referencia_matmed_id`), e o item da
+  conta (FCLANEXT TIPO 4) liga por ele. A origem não separa material de medicamento: o item entra como `material`
+  presumido (`opme` quando OPM=S) e o grupo de faturamento por tabela como `material` presumido, ambos visíveis para
+  o cliente reclassificar. **Clientes já carregados** (execuções anteriores da ProntoCardio): o Importar ou o
+  Sincronizar seguinte completa o item faturável das linhas de TBMATMED já gravadas (`secundarias_completadas`,
+  principal intocado); as linhas de FCLANEXT recusadas com 1048 só voltam com o reprocessamento de FCLANEXT depois
+  disso (ou carga nova). Ligação ao estoque (proposta A, GEITENS) descartada.
+
 - **ADR 0003** (aceito em 2026-11-20): F3 é cobertura melhorada; F8 sem esperar virada; conector só por comando do admin sobre cliente zerado.
 
 - **ADR 0002** (aceito em 2026-11-20): respostas do dono às 24 decisões; princípios do modelo (convenções do DDL).
