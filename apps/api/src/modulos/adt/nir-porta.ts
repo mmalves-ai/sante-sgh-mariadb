@@ -84,8 +84,6 @@ export interface GravadorNir {
     motivo: string;
     usuario: string;
   }): Promise<number>;
-  /** Exclui a criada por engano, sem desdobramento (com retrato); com vínculo, recusa com a contagem. */
-  excluirSolicitacao(x: { solicitacao: number; motivo: string; usuario: string }): Promise<number>;
   alterarReserva(r: {
     reserva: number;
     leito: ChaveLeito | null;
@@ -98,13 +96,6 @@ export interface GravadorNir {
     /** A reserva estava confirmada e o leito mudou: voltou a 'ativa' (o setor confirma o leito novo). */
     confirmacaoDesfeita: boolean;
   }>;
-  /** Exclui a reserva ativa criada por engano (com retrato); a convertida em internação recusa 409. */
-  /** Devolve também o ID do retrato na trilha de auditoria (o evento da solicitação o cita). */
-  excluirReserva(r: {
-    reserva: number;
-    motivo: string;
-    usuario: string;
-  }): Promise<{ solicitacao: number; retrato: number }>;
   retirarDpa(d: {
     reg: number;
     anterior: number;

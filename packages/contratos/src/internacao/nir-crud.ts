@@ -11,6 +11,8 @@ const id = z.number().int().positive().max(2_147_483_647);
 const livre = (max: number) => textoCp1252(max).overwrite((t) => t.replace(/\s+/g, ' ').trim());
 const motivo = (min: number, max: number, msg: string) => livre(max).pipe(z.string().min(min, msg));
 const motivoAlteracao = () => motivo(5, 300, 'Informe o motivo (ao menos 5 caracteres).');
+/** O motivo do cancelamento da solicitação ou da reserva de leito (fica na linha, com quem e quando). */
+const motivoCancelamento = () => motivo(3, 500, 'Informe o motivo do cancelamento (ao menos 3 caracteres).');
 
 /** Recursos que a solicitação de leito pode pedir além do perfil (padrão de mercado do NIR). */
 export const RECURSOS_LEITO_NIR = [
@@ -43,9 +45,12 @@ export const esquemaCorrigirSolicitacao = z
   .strict();
 export type CorrigirSolicitacaoEntrada = z.infer<typeof esquemaCorrigirSolicitacao>;
 
-/** Excluir a solicitação criada por engano (operação crítica: senha). */
+/**
+ * "Excluir" a solicitação vira cancelamento com o motivo (operação crítica: senha). A linha nunca é apagada: fica
+ * cancelada, com o motivo, quem e quando, para a auditoria (SBIS-26).
+ */
 export const esquemaExcluirSolicitacao = z
-  .object({ motivo: motivoAlteracao(), senha: z.string().min(1, 'Confirme a sua senha.').max(200) })
+  .object({ motivo: motivoCancelamento(), senha: z.string().min(1, 'Confirme a sua senha.').max(200) })
   .strict();
 export type ExcluirSolicitacaoEntrada = z.infer<typeof esquemaExcluirSolicitacao>;
 
@@ -63,8 +68,8 @@ export const esquemaAlterarReserva = z
   });
 export type AlterarReservaEntrada = z.infer<typeof esquemaAlterarReserva>;
 
-/** Excluir a reserva criada por engano (a convertida em internação recusa). */
-export const esquemaExcluirReserva = z.object({ motivo: motivoAlteracao() }).strict();
+/** "Excluir" a reserva vira cancelamento com o motivo: a linha fica, e o leito volta a livre (a convertida recusa). */
+export const esquemaExcluirReserva = z.object({ motivo: motivoCancelamento() }).strict();
 
 /** Retirar a alta prevista vigente (versão nova marcada como retirada). */
 export const esquemaRetirarDpa = z

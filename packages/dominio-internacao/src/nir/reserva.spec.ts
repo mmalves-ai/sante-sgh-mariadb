@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chaveExpiracao,
   conflitoDaReserva,
+  decidirCancelamentoReserva,
   decidirReserva,
   incompatibilidadeComPerfil,
   type LeitoParaReserva,
@@ -133,5 +134,24 @@ describe('reserva de leito (regra 11)', () => {
     );
     expect(conflitoDaReserva({ situacao: 'ativa', conflitoEm: null }, null)).toBeNull();
     expect(conflitoDaReserva({ situacao: 'expirada', conflitoEm: null }, 880001)).toBeNull();
+  });
+});
+
+describe('cancelamento da reserva (o "excluir" vira cancelamento; SBIS-26)', () => {
+  it('só a vigente se cancela; a convertida em internação e a já encerrada recusam com o código', () => {
+    expect(decidirCancelamentoReserva('ativa')).toEqual({ ok: true });
+    expect(decidirCancelamentoReserva('confirmada')).toEqual({ ok: true });
+    expect(decidirCancelamentoReserva('consumida')).toMatchObject({
+      ok: false,
+      codigo: 'reserva-convertida',
+    });
+    expect(decidirCancelamentoReserva('expirada')).toMatchObject({
+      ok: false,
+      codigo: 'reserva-desatualizada',
+    });
+    expect(decidirCancelamentoReserva('cancelada')).toMatchObject({
+      ok: false,
+      codigo: 'reserva-desatualizada',
+    });
   });
 });

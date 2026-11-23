@@ -762,7 +762,11 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       if (t.prazoMinDesdeOPedido !== undefined && t.prazoMinDesdeOPedido !== null)
         muda['data_hora_prevista'] = minutos(p['data_hora_pedido'] as Date, t.prazoMinDesdeOPedido);
       if (t.para === 'cancelado' || t.para === 'rejeitado')
-        Object.assign(muda, { data_hora_cancelamento: new Date(), motivo_cancelamento: t.motivo ?? t.para });
+        Object.assign(muda, {
+          data_hora_cancelamento: new Date(),
+          motivo_cancelamento: (t.motivo ?? t.para).slice(0, 500),
+          cancelado_por_usuario_id: usuario(),
+        });
       if (t.reserva) muda['reserva_leito_id'] = t.reserva;
       if (t.reg) muda['internacao_id'] = t.reg;
       await tx.alterar('pedido_leito', t.solicitacao, n(p['versao']), muda);
@@ -933,32 +937,6 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         categoria_acomodacao_id: c.perfil.tiposAcomodacao[0] ?? null,
       });
     },
-    async excluirSolicitacao(x) {
-      const p = await pedido(x.solicitacao);
-      const deps = n(
-        (
-          await tx.uma(
-            'SELECT COUNT(*) AS q FROM reserva_leito WHERE pedido_leito_id = ? AND excluido_em IS NULL',
-            [x.solicitacao],
-          )
-        )?.['q'],
-      );
-      const regs = n(
-        (
-          await tx.uma(
-            'SELECT COUNT(*) AS q FROM solicitacao_regulacao WHERE pedido_leito_id = ? AND excluido_em IS NULL',
-            [x.solicitacao],
-          )
-        )?.['q'],
-      );
-      if (deps + regs > 0 || texto(p['estado']) === 'internado')
-        throw recusa(
-          'solicitacao-com-vinculo',
-          `A solicitação não pode ser excluída: ${deps} reserva(s) e ${regs} regulação(ões) ligadas. Cancele-a com o motivo.`,
-        );
-      await tx.excluir('pedido_leito', x.solicitacao, n(p['versao']));
-      return x.solicitacao;
-    },
     async alterarReserva(r) {
       const x = await reserva(r.reserva);
       if (!['ativa', 'confirmada'].includes(texto(x['situacao'])))
@@ -989,13 +967,6 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
       muda['observacao'] = r.motivo;
       await tx.alterar('reserva_leito', r.reserva, n(x['versao']), muda);
       return { solicitacao: n(x['pedido_leito_id']), leitoAnterior: anterior, confirmacaoDesfeita: desfeita };
-    },
-    async excluirReserva(r) {
-      const x = await reserva(r.reserva);
-      if (x['situacao'] === 'consumida')
-        throw recusa('reserva-consumida', 'A reserva virou internação: não pode ser excluída.');
-      await tx.excluir('reserva_leito', r.reserva, n(x['versao']));
-      return { solicitacao: n(x['pedido_leito_id']), retrato: r.reserva };
     },
     async retirarDpa(d) {
       await internacaoDe(d.reg);

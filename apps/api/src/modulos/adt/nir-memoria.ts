@@ -19,9 +19,7 @@ import {
 import {
   type AltaPrevistaRegistrada,
   type BarreiraDaAlta,
-  EVENTOS_SEM_DESDOBRAMENTO,
   type EventoSolicitacaoNir,
-  frasesDependenciasNir,
   type NovaAltaPrevista,
   type NovaBarreira,
   type NovaReserva,
@@ -122,6 +120,15 @@ export class EstadoNirMemoria implements NirParaAdt {
     } catch {
       return 0;
     }
+  }
+
+  /** A linha pelo número, em qualquer hospital, também a encerrada (a cancelada fica: nunca é apagada). */
+  linhaPorId(tabela: 'solicitacao' | 'reserva', id: number) {
+    for (const s of this.hospitais.values()) {
+      const x = tabela === 'solicitacao' ? s.solicitacoes.get(id) : s.reservas.get(id);
+      if (x) return x;
+    }
+    return undefined;
   }
 
   h(hospital: string): EstadoHospital {
@@ -463,10 +470,6 @@ export class EstadoNirMemoria implements NirParaAdt {
     por: string;
     em: string;
   }[] = [];
-  /** Os retratos das exclusões físicas (a trilha de auditoria em memória). */
-  readonly retratos: { hospital: string; tabela: string; chave: string; linha: unknown; motivo: string }[] =
-    [];
-
   private alterou(
     hospital: string,
     a: {
@@ -553,57 +556,6 @@ export class EstadoNirMemoria implements NirParaAdt {
     return 1;
   }
 
-  /** O que depende da solicitação (o mesmo critério do mapa de dependências; as regulações vêm da porta). */
-  dependencias(hospital: string, solicitacao: number, regulacoes: number) {
-    const s = this.h(hospital);
-    const reservas = [...s.reservas.values()].filter((r) => r.solicitacao === solicitacao).length;
-    const transicoes = s.eventos.filter(
-      (e) => e.solicitacao === solicitacao && !EVENTOS_SEM_DESDOBRAMENTO.includes(e.acao),
-    ).length;
-    const internacaoGerada = s.solicitacoes.get(solicitacao)?.regGerado ? 1 : 0;
-    return {
-      reservas,
-      transicoes,
-      regulacoes,
-      internacaoGerada,
-      total: reservas + transicoes + regulacoes + internacaoGerada,
-    };
-  }
-
-  excluirSolicitacao(
-    hospital: string,
-    x: { solicitacao: number; motivo: string; usuario: string },
-    regulacoes: number,
-  ): number {
-    const s = this.h(hospital);
-    const sol = s.solicitacoes.get(x.solicitacao);
-    if (!sol) throw recusa('solicitacao-inexistente', 'A solicitação de leito não existe.');
-    const dep = this.dependencias(hospital, x.solicitacao, regulacoes);
-    if (dep.total > 0)
-      throw recusa(
-        'solicitacao-com-vinculo',
-        `A solicitação não pode ser excluída: ${frasesDependenciasNir(dep)}. Cancele-a com o motivo.`,
-      );
-    this.retratos.push({
-      hospital,
-      tabela: 'pedido_leito',
-      chave: String(x.solicitacao),
-      linha: { ...sol },
-      motivo: x.motivo,
-    });
-    for (const ev of s.eventos.filter((e) => e.solicitacao === x.solicitacao))
-      this.retratos.push({
-        hospital,
-        tabela: 'pedido_leito',
-        chave: String(ev.id),
-        linha: { ...ev },
-        motivo: x.motivo,
-      });
-    s.eventos = s.eventos.filter((e) => e.solicitacao !== x.solicitacao);
-    s.solicitacoes.delete(x.solicitacao);
-    return 1;
-  }
-
   private reservaParaMudar(hospital: string, reserva: number) {
     const x = this.h(hospital).reservas.get(reserva);
     if (!x) throw recusa('reserva-inexistente', 'A reserva não existe.');
@@ -662,43 +614,6 @@ export class EstadoNirMemoria implements NirParaAdt {
       usuario: r.usuario,
     });
     return { solicitacao: x.solicitacao, leitoAnterior: anterior, confirmacaoDesfeita: 'situacao' in antes };
-  }
-
-  excluirReserva(
-    hospital: string,
-    r: { reserva: number; motivo: string; usuario: string },
-  ): { solicitacao: number; retrato: number } {
-    const x = this.reservaParaMudar(hospital, r.reserva);
-    if (x.situacao !== 'ativa' || x.conflitoEm !== null)
-      throw recusa(
-        'reserva-com-desdobramento',
-        x.situacao === 'confirmada'
-          ? 'A reserva já foi confirmada pelo setor de destino: cancele-a com o motivo.'
-          : x.situacao === 'ativa'
-            ? 'A reserva tem conflito com a ocupação registrada: cancele-a com o motivo.'
-            : 'A reserva já está encerrada: fica no histórico.',
-      );
-    // Desdobramento: o paciente já está a caminho do leito com base nesta reserva (como na gravação real).
-    const h = this.h(hospital);
-    const evs = h.eventos.filter((ev) => ev.solicitacao === x.solicitacao);
-    const reservou = Math.max(0, ...evs.filter((ev) => ev.acao === 'reservar').map((ev) => ev.id));
-    if (
-      h.solicitacoes.get(x.solicitacao)?.estado === 'em_transito' ||
-      evs.some((ev) => ev.acao === 'transito' && ev.id > reservou)
-    )
-      throw recusa(
-        'reserva-com-desdobramento',
-        'O paciente já está a caminho do leito com base nesta reserva: cancele-a com o motivo.',
-      );
-    this.retratos.push({
-      hospital,
-      tabela: 'reserva_leito',
-      chave: String(r.reserva),
-      linha: { ...x },
-      motivo: r.motivo,
-    });
-    h.reservas.delete(r.reserva);
-    return { solicitacao: x.solicitacao, retrato: this.retratos.length };
   }
 
   retirarDpa(

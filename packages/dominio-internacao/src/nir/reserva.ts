@@ -93,6 +93,35 @@ export function reservaVigente(s: SituacaoReserva): boolean {
   return s === 'ativa' || s === 'confirmada';
 }
 
+/**
+ * Cancelar a reserva (o antigo "excluir a criada por engano" também cancela: a linha fica para a auditoria, com o
+ * motivo, quem e quando; SBIS-26). Só a vigente se cancela, e o leito volta a livre; a convertida em internação se
+ * corrige pela internação; a já encerrada (expirada ou cancelada) fica como está, no histórico.
+ */
+export function decidirCancelamentoReserva(
+  s: SituacaoReserva,
+):
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly codigo: 'reserva-convertida' | 'reserva-desatualizada';
+      readonly motivo: string;
+    } {
+  if (s === 'consumida')
+    return {
+      ok: false,
+      codigo: 'reserva-convertida',
+      motivo: 'A reserva já virou internação: não se altera nem se cancela (corrija pela internação).',
+    };
+  if (!reservaVigente(s))
+    return {
+      ok: false,
+      codigo: 'reserva-desatualizada',
+      motivo: 'A reserva já está encerrada (expirada ou cancelada): fica no histórico como está.',
+    };
+  return { ok: true };
+}
+
 /** A reserva vigente que passou da validade (o `worker` a expira). */
 export function reservaVencida(r: { situacao: SituacaoReserva; validaAte: string }, agora: string): boolean {
   return reservaVigente(r.situacao) && ms(agora) > ms(r.validaAte);

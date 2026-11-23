@@ -23,9 +23,9 @@
 //   POST /api/nir/situacoes/:id/aprovar            internacao.aprovarDeparaSituacao
 // W0-07 (programa CRUD completo; todas com o motivo, a versão anterior na trilha de auditoria):
 //   POST /api/nir/solicitacoes/:id/corrigir        perfil, recursos e observação (a versão vista confere)
-//   POST /api/nir/solicitacoes/:id/excluir         a criada por engano, sem desdobramento (senha; recusa com a contagem)
+//   POST /api/nir/solicitacoes/:id/excluir         cancela com o motivo (senha): a linha fica, com quem e quando
 //   POST /api/nir/reservas/:id/alterar             outro leito e/ou nova validade
-//   POST /api/nir/reservas/:id/excluir             a ativa criada por engano (a convertida em internação: 409)
+//   POST /api/nir/reservas/:id/excluir             cancela a vigente com o motivo (o leito volta a livre; convertida: 409)
 //   POST /api/nir/dpa/retirar                      retira a alta prevista vigente (versão nova marcada)
 //   POST /api/nir/barreiras/:id/alterar            descrição, responsável e prazo da barreira aberta
 //   POST /api/nir/barreiras/:id/encerrar           resolvida ou cancelada, com o motivo (também a social)
@@ -80,6 +80,7 @@ import {
   type ResultadoNir,
 } from '@sgh/contratos';
 import {
+  decidirCancelamentoReserva,
   decidirReserva,
   idadeEmAnos,
   PRAZOS_PADRAO_NIR,
@@ -623,8 +624,7 @@ export class NirController {
   ): Promise<ResultadoNir> {
     const s = sessaoDe(req);
     const e = corpo(esquemaEncerrarReserva, b);
-    const c = ctxAdt(s);
-    const reserva = (await this.porta.reservasVigentes(c)).find((r) => r.id === idDaRota(id));
+    const reserva = (await this.porta.reservasVigentes(ctxAdt(s))).find((r) => r.id === idDaRota(id));
     if (!reserva)
       throw new ErroProblema(
         'recusa-de-negocio',
@@ -635,6 +635,20 @@ export class NirController {
           codigo: 'reserva-desatualizada',
         },
       );
+    await this.cancelarReservaVigente(s, reserva, e.motivo);
+    return ok(reserva.id, 'Reserva cancelada: a solicitação voltou à análise.');
+  }
+
+  /**
+   * Cancela a reserva vigente com o motivo, quem e quando (a linha fica: SBIS-26) e devolve à análise a solicitação
+   * reservada ou a caminho, na mesma transação: o leito volta a livre e a solicitação nunca fica sem a reserva.
+   */
+  private async cancelarReservaVigente(
+    s: SessaoCadastro,
+    reserva: { id: number; solicitacao: number },
+    motivo: string,
+  ): Promise<void> {
+    const c = ctxAdt(s);
     const sol = await this.servico.solicitacaoAberta(c, reserva.solicitacao);
     const depara = await this.servico.deparaLinhas(c);
     await this.apoio.sgh(
@@ -646,7 +660,7 @@ export class NirController {
         const n = await g.encerrarReserva({
           reserva: reserva.id,
           situacao: 'cancelada',
-          motivo: e.motivo,
+          motivo,
           usuario: s.login,
         });
         if (n === 0)
@@ -668,14 +682,13 @@ export class NirController {
             para: 'em_analise',
             situacaoCodigo: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
             reserva: reserva.id,
-            motivo: e.motivo,
+            motivo,
             usuario: s.login,
           });
         return n;
       },
     );
     this.avisar(s);
-    return ok(reserva.id, 'Reserva cancelada: a solicitação voltou à análise.');
   }
 
   @Post('dpa')
@@ -899,7 +912,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.solicitacaoCancelar)
   @AuditadoNoHandler(
-    'exclusão da solicitação criada por engano (pedido_leito, retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
+    'cancelamento da solicitação com o motivo (pedido_leito: a linha fica, com quem e quando) com a trilha de auditoria na mesma transação',
   )
   async excluir(
     @Param('id') id: string,
@@ -911,16 +924,47 @@ export class NirController {
     if (!this.sessoes || !this.resolvedor)
       throw new ErroProblema('nao-autenticado', 401, 'Confirme a senha', 'Entre com o seu usuário.');
     await reautenticar(this.sessoes, this.resolvedor, req, e.senha);
-    const sol = await this.servico.solicitacaoAberta(ctxAdt(s), idDaRota(id));
+    const c = ctxAdt(s);
+    const sol = await this.servico.solicitacaoAberta(c, idDaRota(id));
+    // "Excluir" é cancelar (decisão do dono, 23/11/2026; SBIS-26): a solicitação nunca é apagada. Vale a mesma
+    // máquina de estados do cancelamento pela fila; a encerrada (internada, cancelada ou rejeitada) recusa.
+    const t = transicao(sol.estado, 'cancelar');
+    if (!t.ok)
+      throw new ErroProblema('recusa-de-negocio', 409, 'Cancelamento recusado', t.motivo, {
+        codigo: t.codigo,
+      });
+    const depara = await this.servico.deparaLinhas(c);
+    const reserva = (await this.porta.reservasVigentes(c)).find((r) => r.solicitacao === sol.id) ?? null;
     await this.apoio.sgh(
       s,
       EVENTOS_AUDITAVEIS.nirSolicitacaoTransicao.codigo,
       P.solicitacaoCancelar,
-      { tabela: 'pedido_leito', id: String(sol.id), paciente: sol.paciente, chave: 'excluir' },
-      (g) => g.excluirSolicitacao({ solicitacao: sol.id, motivo: e.motivo, usuario: s.login }),
+      { tabela: 'pedido_leito', id: String(sol.id), paciente: sol.paciente, chave: `${t.de}>${t.para}` },
+      async (g) => {
+        // Com o leito reservado, a reserva é cancelada na mesma transação (o leito volta a livre).
+        if (reserva)
+          await g.encerrarReserva({
+            reserva: reserva.id,
+            situacao: 'cancelada',
+            motivo: `Solicitação cancelada: ${e.motivo}`.slice(0, 500),
+            usuario: s.login,
+          });
+        return g.transicionar({
+          solicitacao: sol.id,
+          acao: 'cancelar',
+          de: t.de,
+          para: t.para,
+          prioridade: null,
+          prazoMinDesdeOPedido: null,
+          motivo: e.motivo,
+          situacaoCodigo: situacaoEquivalente(t.para, depara)?.codigo ?? null,
+          reserva: reserva?.id ?? null,
+          usuario: s.login,
+        });
+      },
     );
     this.avisar(s);
-    return ok(sol.id, 'Solicitação excluída (criada por engano).');
+    return ok(sol.id, 'Solicitação cancelada com o motivo (fica no histórico).');
   }
 
   /** A reserva pelo número, vigente ou encerrada; a convertida em internação recusa 409 antes de gravar. */
@@ -1005,7 +1049,7 @@ export class NirController {
   @HttpCode(200)
   @Permissao(P.reservaCancelar)
   @AuditadoNoHandler(
-    'exclusão da reserva criada por engano (reserva_leito, retrato na trilha de auditoria) com a trilha de auditoria na mesma transação',
+    'cancelamento da reserva com o motivo (reserva_leito: a linha fica, com quem e quando) com a trilha de auditoria na mesma transação',
   )
   async excluirReserva(
     @Param('id') id: string,
@@ -1014,40 +1058,15 @@ export class NirController {
   ): Promise<ResultadoNir> {
     const s = sessaoDe(req);
     const e = corpo(esquemaExcluirReserva, b);
-    const c = ctxAdt(s);
+    // "Excluir" é cancelar (decisão do dono, 23/11/2026; SBIS-26): a reserva nunca é apagada.
     const r = await this.reservaParaMudar(s, idDaRota(id));
-    const sol = await this.servico.solicitacaoAberta(c, r.solicitacao);
-    const depara = await this.servico.deparaLinhas(c);
-    await this.apoio.sgh(
-      s,
-      EVENTOS_AUDITAVEIS.nirReservaCancelada.codigo,
-      P.reservaCancelar,
-      { tabela: 'reserva_leito', id: String(r.id), paciente: sol.paciente, chave: 'excluir' },
-      async (g) => {
-        const { retrato } = await g.excluirReserva({ reserva: r.id, motivo: e.motivo, usuario: s.login });
-        // A solicitação reservada volta à análise na mesma transação (nunca fica reservada sem reserva). O evento
-        // cita o número da reserva e o do retrato: o 'reservar' anterior aponta uma reserva que já não existe, e é
-        // por esta referência que se acha a linha no histórico de exclusões.
-        if (transicao(sol.estado, 'liberarReserva').ok)
-          await g.transicionar({
-            solicitacao: sol.id,
-            acao: 'liberarReserva',
-            de: sol.estado,
-            para: 'em_analise',
-            situacaoCodigo: situacaoEquivalente('em_analise', depara)?.codigo ?? null,
-            reserva: null,
-            motivo:
-              `Reserva nº ${r.id} excluída (criada por engano; retrato nº ${retrato} no histórico de exclusões): ${e.motivo}`.slice(
-                0,
-                300,
-              ),
-            usuario: s.login,
-          });
-        return r.id;
-      },
-    );
-    this.avisar(s);
-    return ok(r.id, 'Reserva excluída: a solicitação voltou à análise.');
+    const d = decidirCancelamentoReserva(r.situacao);
+    if (!d.ok)
+      throw new ErroProblema('recusa-de-negocio', 409, 'Cancelamento recusado', d.motivo, {
+        codigo: d.codigo,
+      });
+    await this.cancelarReservaVigente(s, r, e.motivo);
+    return ok(r.id, 'Reserva cancelada com o motivo: o leito voltou a livre e a solicitação, à análise.');
   }
 
   @Post('dpa/retirar')

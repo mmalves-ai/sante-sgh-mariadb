@@ -112,14 +112,7 @@ export class PortaNirMemoria implements PortaNir {
       aprovarDepara: async (x) => e.aprovarDepara(h, x),
       registrarEvento: async () => undefined,
       corrigirSolicitacao: async (x) => e.corrigir(h, x),
-      excluirSolicitacao: async (x) =>
-        e.excluirSolicitacao(
-          h,
-          x,
-          (this.regs.get(h) ?? []).filter((r) => r.solicitacao === x.solicitacao).length,
-        ),
       alterarReserva: async (x) => e.alterarReserva(h, x),
-      excluirReserva: async (x) => e.excluirReserva(h, x),
       retirarDpa: async (x) => e.retirarDpa(h, x),
       alterarBarreira: async (x) => e.alterarBarreira(h, x),
       removerLimite: async (x) => e.removerLimite(h, x),

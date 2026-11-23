@@ -358,33 +358,3 @@ export interface ConfiguracaoRegulacaoNir {
     valores: number;
   }[];
 }
-
-/** Eventos da solicitação que não criam vínculo (a exclusão por engano continua possível depois deles). */
-export const EVENTOS_SEM_DESDOBRAMENTO: readonly string[] = [
-  'solicitar',
-  'analisar',
-  'priorizar',
-  'corrigir',
-];
-
-export interface DependenciasSolicitacaoNir {
-  readonly reservas: number;
-  readonly transicoes: number;
-  readonly regulacoes: number;
-  readonly internacaoGerada: number;
-}
-
-/** As dependências da solicitação em frase (a recusa da exclusão diz o que a prende). */
-export function frasesDependenciasNir(d: DependenciasSolicitacaoNir): string {
-  const partes: string[] = [];
-  const p = (q: number, um: string, varios: string) => q > 0 && partes.push(`${q} ${q === 1 ? um : varios}`);
-  p(d.reservas, 'reserva de leito vinculada', 'reservas de leito vinculadas');
-  p(
-    d.transicoes,
-    'transição (trânsito, internação, cancelamento ou reserva)',
-    'transições (trânsito, internação, cancelamento ou reserva)',
-  );
-  p(d.regulacoes, 'registro de regulação', 'registros de regulação');
-  p(d.internacaoGerada, 'internação ou transferência gerada', 'internações ou transferências geradas');
-  return partes.join(', ');
-}

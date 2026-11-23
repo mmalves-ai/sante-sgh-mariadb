@@ -1,10 +1,11 @@
 // W0-07 (programa CRUD completo) pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA (nada
-// conecta a banco): corrigir e excluir a solicitação de leito (recusa de órfão com a contagem), alterar e excluir a
-// reserva (a convertida em internação devolve 409), retirar a DPA, alterar e encerrar a barreira, remover o limite,
+// conecta a banco): corrigir e excluir a solicitação de leito (o excluir cancela com o motivo: a linha fica), alterar e excluir a
+// reserva (que também cancela; a convertida em internação devolve 409), retirar a DPA, alterar e encerrar a barreira, remover o limite,
 // alterar o estado e limpar os atributos do leito — todas com o motivo obrigatório. Dados sintéticos.
 import { mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
@@ -145,7 +146,7 @@ const compativeis = async (s: Sessao, id: number) =>
     }
   ).leitos.filter((l) => l.compativel);
 
-describe('W0-07: solicitação de leito — corrigir e excluir (com a recusa de órfão)', () => {
+describe('W0-07: solicitação de leito — corrigir e excluir (que cancela com o motivo)', () => {
   it('corrigir pede o motivo e a versão vista; grava o perfil, os recursos e a observação com o histórico', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
     const nirS = await entrar('SINT.INTERNACAO');
@@ -193,13 +194,19 @@ describe('W0-07: solicitação de leito — corrigir e excluir (com a recusa de 
     ).toBe(403);
   });
 
-  it('excluir pede a senha; a criada por engano sai com o retrato; com reserva vinculada, recusa com a contagem', async () => {
+  it('excluir pede a senha e vira cancelamento com o motivo: a linha fica, sai da fila; com reserva, o leito volta a livre', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
     const nirS = await entrar('SINT.INTERNACAO');
     const id = (await post(med, '/nir/solicitacoes', pedido(1002))).json().id as number;
     expect(
       (await post(nirS, `/nir/solicitacoes/${id}/excluir`, { motivo: 'Paciente errado na tela' })).statusCode,
     ).toBe(400);
+    // O motivo é obrigatório: de 3 a 500 caracteres.
+    for (const motivo of ['', 'ab', 'x'.repeat(501)])
+      expect(
+        (await post(nirS, `/nir/solicitacoes/${id}/excluir`, { motivo, senha: SENHA })).statusCode,
+        `motivo de ${motivo.length}`,
+      ).toBe(400);
     expect(
       (
         await post(nirS, `/nir/solicitacoes/${id}/excluir`, {
@@ -213,30 +220,40 @@ describe('W0-07: solicitação de leito — corrigir e excluir (com a recusa de 
       senha: SENHA,
     });
     expect(ok.statusCode, ok.body).toBe(200);
+    // Sai da fila ativa, mas a linha continua (consulta por id), cancelada, com o motivo no histórico.
     expect(await item(nirS, id)).toBeUndefined();
+    expect(estadoNir.linhaPorId('solicitacao', id)).toMatchObject({ id, estado: 'cancelado' });
     expect(
-      estadoNir.retratos.filter((r) => r.chave === String(id) && r.tabela === 'pedido_leito').length,
-    ).toBeGreaterThanOrEqual(1);
-    expect(estadoNir.retratos.some((r) => r.tabela === 'pedido_leito')).toBe(true);
+      trilha.eventos.some(
+        (r) => r.evento === EVENTOS_AUDITAVEIS.nirSolicitacaoTransicao.codigo && r.idAlvo === String(id),
+      ),
+    ).toBe(true);
+    // Cancelar de novo recusa: a encerrada não muda mais.
+    const de_novo = await post(nirS, `/nir/solicitacoes/${id}/excluir`, { motivo: 'De novo', senha: SENHA });
+    expect(de_novo.statusCode).toBe(409);
+    expect(de_novo.json().codigo).toBe('estado-final');
     // O paciente pode ter outra solicitação depois (a marca de aberta saiu junto).
     const id2 = (await post(med, '/nir/solicitacoes', pedido(1002))).json().id as number;
     const [leito] = await compativeis(nirS, id2);
-    expect((await post(nirS, '/nir/reservas', { solicitacao: id2, leito: leito!.leito })).statusCode).toBe(
-      201,
-    );
+    const r2 = await post(nirS, '/nir/reservas', { solicitacao: id2, leito: leito!.leito });
+    expect(r2.statusCode).toBe(201);
+    // Com a reserva vinculada também se cancela: a reserva é cancelada junto e o leito volta a livre.
     const rec = await post(nirS, `/nir/solicitacoes/${id2}/excluir`, {
       motivo: 'Paciente errado',
       senha: SENHA,
     });
-    expect(rec.statusCode).toBe(409);
-    expect(rec.json().codigo).toBe('solicitacao-com-vinculo');
-    expect(rec.json().detail).toMatch(/1 reserva de leito vinculada/);
-    expect(rec.json().detail).toMatch(/1 transição/);
-    expect(await item(nirS, id2)).toMatchObject({ estado: 'reservado' });
+    expect(rec.statusCode, rec.body).toBe(200);
+    expect(await item(nirS, id2)).toBeUndefined();
+    expect(estadoNir.linhaPorId('solicitacao', id2)).toMatchObject({ estado: 'cancelado' });
+    expect(estadoNir.linhaPorId('reserva', r2.json().id as number)).toMatchObject({ situacao: 'cancelada' });
+    const mapa = (await get(nirS, '/leitos/mapa')).json() as {
+      leitos: { chave: string; situacao: string }[];
+    };
+    expect(mapa.leitos.find((x) => x.chave === leito!.chave)?.situacao).toBe('livre');
   });
 });
 
-describe('W0-07: reserva — alterar leito e validade, excluir a criada por engano, a convertida recusa', () => {
+describe('W0-07: reserva — alterar leito e validade, excluir (que cancela com o motivo), a convertida recusa', () => {
   it('alterar e excluir com motivo; a solicitação volta à análise; a convertida em internação devolve 409', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
     const nirS = await entrar('SINT.INTERNACAO');
@@ -263,20 +280,30 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     expect(
       estadoNir.alteracoes.filter((a) => a.tabela === 'reserva_leito' && a.chave === String(r)),
     ).toHaveLength(2);
-    // Excluir a reserva criada por engano: sai com retrato, a solicitação volta à análise.
+    // "Excluir" a reserva vira cancelamento com o motivo (3 a 500): a linha fica, o leito volta a livre e a
+    // solicitação volta à análise.
+    expect((await post(nirS, `/nir/reservas/${r}/excluir`, { motivo: 'ab' })).statusCode).toBe(400);
     const ex = await post(nirS, `/nir/reservas/${r}/excluir`, { motivo: 'Reservado no paciente errado' });
     expect(ex.statusCode, ex.body).toBe(200);
     const depois = await item(nirS, id);
     expect(depois).toMatchObject({ estado: 'em_analise', reserva: null });
-    expect(estadoNir.retratos.some((x) => x.tabela === 'reserva_leito' && x.chave === String(r))).toBe(true);
-    // O evento da volta à análise cita a reserva excluída e o retrato (o 'reservar' anterior aponta uma linha que
-    // já não existe: é por esta referência que se acha a linha no histórico de exclusões).
-    const nRetrato = estadoNir.retratos.findIndex(
-      (x) => x.tabela === 'reserva_leito' && x.chave === String(r),
+    expect(estadoNir.linhaPorId('reserva', r)).toMatchObject({ id: r, situacao: 'cancelada' });
+    expect(
+      trilha.eventos.some(
+        (x) => x.evento === EVENTOS_AUDITAVEIS.nirReservaCancelada.codigo && x.idAlvo === String(r),
+      ),
+    ).toBe(true);
+    const mapa2 = (await get(nirS, '/leitos/mapa')).json() as {
+      leitos: { chave: string; situacao: string }[];
+    };
+    expect(mapa2.leitos.find((x) => x.chave === l2!.chave)?.situacao).toBe('livre');
+    expect(depois!.historico.find((e) => e.acao === 'liberarReserva')?.motivo).toBe(
+      'Reservado no paciente errado',
     );
-    expect(depois!.historico.find((e) => e.acao === 'liberarReserva')?.motivo).toContain(
-      `Reserva nº ${r} excluída (criada por engano; retrato nº ${nRetrato + 1} no histórico de exclusões)`,
-    );
+    // A já cancelada não se cancela de novo (fica no histórico como está).
+    const de_novo = await post(nirS, `/nir/reservas/${r}/excluir`, { motivo: 'De novo' });
+    expect(de_novo.statusCode).toBe(409);
+    expect(de_novo.json().codigo).toBe('reserva-desatualizada');
 
     // A reserva convertida em internação: alterar, excluir e cancelar devolvem 409.
     const id4 = (await post(med, '/nir/solicitacoes', pedido(1004))).json().id as number;
@@ -296,11 +323,10 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     expect(
       (await post(nirS, `/nir/reservas/${r4}/cancelar`, { motivo: 'Tentativa de cancelar' })).statusCode,
     ).toBe(409);
-    // A solicitação que virou internação não se exclui (a internação gerada é desdobramento).
+    // A solicitação que virou internação não se cancela (encerrada: estado final).
     const sx = await post(nirS, `/nir/solicitacoes/${id4}/excluir`, { motivo: 'Tentativa', senha: SENHA });
     expect(sx.statusCode).toBe(409);
-    expect(sx.json().codigo).toBe('solicitacao-com-vinculo');
-    expect(sx.json().detail).toMatch(/internação ou transferência gerada/);
+    expect(sx.json().codigo).toBe('estado-final');
   });
   it('trocar o leito da reserva confirmada a devolve a aguardar a confirmação, com a confirmação anterior no histórico', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
@@ -326,7 +352,7 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
     const h = estadoNir.alteracoes.filter((a) => a.tabela === 'reserva_leito' && a.chave === String(r));
     expect(h.at(-1)!.antes).toMatchObject({ leito: l1!.chave, situacao: 'confirmada' });
   });
-  it('a reserva com o paciente em trânsito não se exclui (409 reserva-com-desdobramento); a excluída deixa a referência do retrato', async () => {
+  it('a reserva com o paciente em trânsito também se cancela pelo excluir: a solicitação volta à análise', async () => {
     const med = await entrar('SINT.MEDICO.NIR');
     const nirS = await entrar('SINT.INTERNACAO');
     const id = (await post(med, '/nir/solicitacoes', pedido(1006))).json().id as number;
@@ -337,16 +363,10 @@ describe('W0-07: reserva — alterar leito e validade, excluir a criada por enga
       estadoVisto: 'reservado',
     });
     expect(t.statusCode, t.body).toBe(200);
-    // A reserva continua 'ativa' (o trânsito não muda a situação dela), mas já tem desdobramento.
     const x = await post(nirS, `/nir/reservas/${r}/excluir`, { motivo: 'Reservado no paciente errado' });
-    expect(x.statusCode, x.body).toBe(409);
-    expect(x.json().codigo).toBe('reserva-com-desdobramento');
-    expect(x.json().detail).toMatch(/cancele-a com o motivo/);
-    expect(await item(nirS, id)).toMatchObject({ estado: 'em_transito', reserva: { id: r } });
-    expect(estadoNir.retratos.some((y) => y.tabela === 'reserva_leito' && y.chave === String(r))).toBe(false);
-    // O cancelamento lógico com motivo continua disponível.
-    const c = await post(nirS, `/nir/reservas/${r}/cancelar`, { motivo: 'Reserva feita por engano' });
-    expect(c.statusCode, c.body).toBe(200);
+    expect(x.statusCode, x.body).toBe(200);
+    expect(await item(nirS, id)).toMatchObject({ estado: 'em_analise', reserva: null });
+    expect(estadoNir.linhaPorId('reserva', r)).toMatchObject({ situacao: 'cancelada' });
   });
 });
 
