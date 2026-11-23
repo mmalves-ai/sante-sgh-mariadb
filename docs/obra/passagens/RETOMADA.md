@@ -117,6 +117,46 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## ESTADO EM 23/11, 12h10 (sessão 34c8458c encerrada por tamanho: cerca de 470 turnos). COMECE POR AQUI.
+
+**Ao retomar:** relatório de 50 min (CronCreate), vigia de alarme (`grep -E 'ALARME|FIM'` no progresso-carga.log) e:
+
+1. **Rodada `ids-bigint` (PRIMEIRA, grave):** o espelho (tools/db/espelho.py, BASE_LOCAL = 10^12, desde f45fafbc
+   de 21/11) põe todo item PRÓPRIO do hospital nas tabelas de catálogo com id >= 10^12, mas 64 arquivos de
+   packages/contratos usam `id = z.number().int().positive().max(2_147_483_647)`. Toda gravação que referencie item
+   próprio é recusada com entrada-invalida. Medido em 23/11 12h05 na ProntoCardio (só contagens): 43 tabelas com
+   AUTO_INCREMENT >= 10^12, item_referencia_matmed com 713.571 linhas acima de 10^12; espelho com MAX id 707.188.
+   Correção decidida pelo orquestrador: o contrato aceita id BIGINT até Number.MAX_SAFE_INTEGER (convenção do DDL:
+   BIGINT UNSIGNED), sem mudar o BASE_LOCAL (mudar exigiria refazer a carga). Conferir também a web (parse de id),
+   a API (parâmetros de rota `:id` com ParseInt/regex de 9 ou 10 dígitos) e o worker. Prova: teste HTTP com id
+   10^12 + 1 em pelo menos admissão (cidPrincipal), conta (item faturável) e estoque. Orçamento a fazer
+   (docs/obra/orcamentos/ids-bigint.md); construtor como mudança compartilhada (2,5 a 4,5 M), revisor, conferidor.
+2. **Teste de integração da internação desatualizado:** apps/api/src/modulos/adt/porta-propria.int.spec.ts (10 de 12
+   falham) e 2 do nir-porta-propria.int.spec.ts. Causas: a entrada manda `caraterTiss` e `caraterAdmissao`, que o
+   esquema de internar (packages/contratos/src/internacao/adt.ts ~250) não tem mais, e `cidPrincipal` com id 10^12
+   (item 1). Os .int.spec não rodam na esteira: considerar rodar `testes:integracao` periodicamente na VM.
+3. **Esteira do GitHub:** ccbb8803 enviado (verificar:tudo local verde). Antes: 9c5b156b passou verificar:tudo e
+   fronteiras e parou na trava (corrigido em 248e6812: env -u das GITHUB_*_URL). E2E @M00 e segurança nunca rodaram
+   lá: conferir pela API (curl com o token GITHUB do .env; não há gh). Resultado do ccbb8803 em
+   sante-sgh-dados/obra/logs/ci-espera.txt.
+4. **E2E W0-07 do NIR** (apps/web/e2e/w007-nir-crud.spec.ts, reescrito para o cancelamento) não rodou: o Playwright
+   não subiu o webServer em 240 s na VM. Investigar.
+5. **Depois da carga (execução 11):** aplicar no cliente_prontocardio as migrações 00_NUCLEO/24 (trilha encadeada,
+   SBIS-16) e 07_INT/24 (NIR; antes contar pedido_leito de origem 'sistema' cancelado ou rejeitado e reserva_leito
+   'cancelada' de origem 'sistema'), rodar `tools/db/semear-acesso.ts prontocardio` e reiniciar a API.
+6. **Painel:** API e web sobem à mão (não voltam no reinício): comandos na seção Ambiente; depois de qualquer
+   criar_cliente, rodar o semear-acesso do cliente e reiniciar a API (ela guarda os estabelecimentos ao subir).
+   O dono entra em https://<ip>:5310/entrar (cliente demo, "Estabelecimento principal", opção do administrador da
+   plataforma); só dizer "pode entrar" depois de testar GET /api/estabelecimentos e a recusa 401 de senha errada.
+7. **Processos em segundo plano que morrem no reinício:** vigia-memoria.sh, vigia-disco.sh 130, vigia-carga.sh 11,
+   `tools/obra/despejar-base.sh --laco` (autorizado pelo dono em 23/11), API e web.
+- **Regras reforçadas hoje:** não fazer push com rodada aberta na mesma árvore (o push leva os commits pela metade);
+  o verificar:tudo (10 min) fica com o orquestrador em segundo plano, nunca dentro do conferidor (estoura o G6);
+  agentes usam ./pnpm exec, nunca npx.
+- **Feito hoje:** SBIS-16 e SBIS-26 cumpridas (matriz sem lacuna); NIR com cancelamento em vez de exclusão física
+  (decisão do dono) e nenhuma tabela clínica com DELETE em nenhum papel; esteira com Gotenberg; verificar:tudo verde.
+  Consumo em docs/obra/consumo.md.
+
 ## ESTADO EM 23/11, 10h30 (sessão 34c8458c): incidente RESOLVIDO, recarga em curso
 
 - **MariaDB:** o dicionário do InnoDB estava corrompido (CREATE e DROP falhavam; .ibd sumidos). Por decisão do dono,
