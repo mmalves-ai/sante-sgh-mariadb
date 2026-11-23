@@ -374,10 +374,23 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
 
     // Dia com eventos e sem fecho (o fecho sumiu): a prova recusa o dia.
     await nucleo.escrever(ctx, (e) =>
-      e.executar('DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id = ? AND dia = ?', [estC, D2]),
+      e.executar(
+        "UPDATE trilha_auditoria_fecho SET dia = '2000-01-01' WHERE estabelecimento_id = ? AND dia = ?",
+        [estC, D2],
+      ),
     );
     expect(await porta.verificarDias(codigoC, [D2])).toEqual([
       { dia: D2, linhas: 2, ok: false, quebraEm: 'sem-fecho' },
+    ]);
+    // O fecho de volta ao dia: a prova de D2 fecha de novo (e o dia seguinte emenda nele).
+    await nucleo.escrever(ctx, (e) =>
+      e.executar(
+        "UPDATE trilha_auditoria_fecho SET dia = ? WHERE estabelecimento_id = ? AND dia = '2000-01-01'",
+        [D2, estC],
+      ),
+    );
+    expect(await porta.verificarDias(codigoC, [D2])).toEqual([
+      { dia: D2, linhas: 2, ok: true, quebraEm: null },
     ]);
 
     // Concorrência: oito transações ao mesmo tempo no mesmo estabelecimento. A cabeça travada dá ordem total: a
@@ -400,6 +413,17 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
     );
     expect(await porta.verificarDias(codigoC, [hoje])).toEqual([
       { dia: hoje, linhas: 8, ok: true, quebraEm: null },
+    ]);
+    // Fecho de D2 trocado por outro (cadeia recalculada por fora): o dia seguinte já não emenda nele.
+    await nucleo.escrever(ctx, (e) =>
+      e.executar('UPDATE trilha_auditoria_fecho SET hash_dia = ? WHERE estabelecimento_id = ? AND dia = ?', [
+        'f'.repeat(64),
+        estC,
+        D2,
+      ]),
+    );
+    expect(await porta.verificarDias(codigoC, [hoje])).toEqual([
+      { dia: hoje, linhas: 8, ok: false, quebraEm: 'elo-entre-dias' },
     ]);
   });
 

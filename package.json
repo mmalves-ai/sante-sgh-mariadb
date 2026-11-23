@@ -24,7 +24,7 @@
     "infra:subir": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/infra.ts subir",
     "infra:descer": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/infra.ts descer",
     "ambiente:verificar": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/ambiente.ts",
-    "testes:integracao": "vitest run --config packages/testes/vitest.integracao.config.ts",
+    "testes:integracao": "vitest run --config packages/testes/vitest.integracao.config.ts && vitest run --config tools/verificadores/vitest.integracao.config.ts privilegios-servidor",
     "schema:verificar": "SGH_DEV_PERMITIR_SYSDBA=sim node --import ./tools/verificadores/src/caminhos-sgh.ts tools/schema-check/src/verificar.ts",
     "ensaio:utf8": "SGH_DEV_PERMITIR_SYSDBA=sim node --import ./tools/verificadores/src/caminhos-sgh.ts tools/schema-check/src/ensaio-utf8.ts",
     "ensaio:utf8:converter": "SGH_DEV_PERMITIR_SYSDBA=sim node --import ./tools/verificadores/src/caminhos-sgh.ts tools/schema-check/src/ensaio-utf8-converter.ts",

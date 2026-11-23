@@ -238,37 +238,59 @@ export interface VerificacaoCadeiaDia {
   readonly dia: string;
   readonly linhas: number;
   readonly ok: boolean;
-  /** Id da primeira linha que não fecha; 'sem-fecho' (dia com eventos e sem fecho); 'fecho-divergente'. */
+  /** Id da primeira linha que não fecha (ou da linha fora da cadeia); 'sem-fecho'; 'fecho-divergente'; 'elo-entre-dias'. */
   readonly quebraEm: string | null;
 }
 
 const MOTIVO_SEM_FECHO = 'sem-fecho';
 const PAGINA_VERIFICACAO = 5000;
 const MOTIVO_FECHO_DIVERGENTE = 'fecho-divergente';
+/** O dia não emenda no anterior (dia sumido, fecho trocado ou cadeia recalculada) ou o seguinte não emenda nele. */
+const MOTIVO_ELO_ENTRE_DIAS = 'elo-entre-dias';
 
 /**
  * Prova a cadeia de um dia de um escopo (estabelecimento, ou null para o escopo 0): recalcula o hash de cada linha
- * em ordem, confere cada elo com o anterior, o primeiro elo com o início do dia e o fim com o fecho do dia (ou com
- * a cabeça, no dia ainda aberto). Use dentro de uma leitura (snapshot único).
+ * em ordem, confere cada elo com o anterior, o primeiro elo com o fim do dia fechado anterior (ou a gênese), o fim
+ * com o fecho do dia (ou com a cabeça, no dia ainda aberto) e, no último dia fechado, o fecho com a cabeça da cadeia.
+ * Linha do escopo fora da cadeia gravada depois do encadeamento (marco em trilha_encadeamento_inicio) quebra a prova
+ * e é apontada pelo id. Use dentro de uma leitura (snapshot único).
  */
 export async function verificarDiaTrilha(
   l: Leitor,
   estabelecimento: number | null,
   dia: string,
 ): Promise<VerificacaoCadeiaDia> {
+  const fora = await l.uma(
+    `SELECT MIN(t.id) AS id FROM trilha_auditoria t
+      WHERE t.estabelecimento_chave = IFNULL(?, 0) AND t.cadeia_dia IS NULL
+        AND t.id > IFNULL((SELECT MAX(marco_sem_cadeia) FROM trilha_encadeamento_inicio), 0)`,
+    [estabelecimento],
+  );
+  const idFora = fora ? textoOuNulo(fora['id']) : null;
   const fecho = await l.uma(
     `SELECT primeiro_trilha_auditoria_id AS primeiro, ultimo_trilha_auditoria_id AS ultimo, quantidade,
             hash_dia AS fim, hash_anterior AS inicio
        FROM trilha_auditoria_fecho WHERE estabelecimento_chave = IFNULL(?, 0) AND dia = ?`,
     [estabelecimento, dia],
   );
-  const cab = await l.uma(
-    `SELECT primeiro_trilha_auditoria_id_dia AS primeiro, ultimo_trilha_auditoria_id AS ultimo,
-            quantidade_dia AS quantidade, ultimo_hash AS fim, hash_inicio_dia AS inicio
-       FROM trilha_cadeia
-      WHERE estabelecimento_chave = IFNULL(?, 0) AND quantidade_dia > 0 AND dia_aberto = ?`,
+  const fechoAnterior = await l.uma(
+    `SELECT hash_dia AS fim, ultimo_trilha_auditoria_id AS ultimo
+       FROM trilha_auditoria_fecho WHERE estabelecimento_chave = IFNULL(?, 0) AND dia < ?
+      ORDER BY dia DESC LIMIT 1`,
     [estabelecimento, dia],
   );
+  const haFechoSeguinte = await l.uma(
+    `SELECT 1 AS sim FROM trilha_auditoria_fecho WHERE estabelecimento_chave = IFNULL(?, 0) AND dia > ? LIMIT 1`,
+    [estabelecimento, dia],
+  );
+  const cabeca = await l.uma(
+    `SELECT primeiro_trilha_auditoria_id_dia AS primeiro, ultimo_trilha_auditoria_id AS ultimo,
+            quantidade_dia AS quantidade, ultimo_hash AS fim, hash_inicio_dia AS inicio,
+            DATE_FORMAT(dia_aberto, '%Y-%m-%d') AS dia_aberto
+       FROM trilha_cadeia WHERE estabelecimento_chave = IFNULL(?, 0)`,
+    [estabelecimento],
+  );
+  const cab = cabeca && Number(cabeca['quantidade']) > 0 && cabeca['dia_aberto'] === dia ? cabeca : null;
   const esperado = fecho ?? cab;
   let anterior = esperado ? textoOuNulo(esperado['inicio']) : null;
   let n = 0;
@@ -313,8 +335,23 @@ export async function verificarDiaTrilha(
     if (pagina.length < PAGINA_VERIFICACAO) break;
     desde = Number(ultimo);
   }
+  if (idFora !== null) return { dia, linhas: n, ok: false, quebraEm: idFora };
   if (!esperado) return { dia, linhas: n, ok: n === 0, quebraEm: n === 0 ? null : MOTIVO_SEM_FECHO };
   if (quebra !== null) return { dia, linhas: n, ok: false, quebraEm: quebra };
+  // O dia emenda no fim do dia fechado anterior (ou na gênese), e começa depois do último elo dele.
+  const inicioEsperado = fechoAnterior ? textoOuNulo(fechoAnterior['fim']) : HASH_GENESE;
+  const emendaAntes =
+    textoOuNulo(esperado['inicio']) === inicioEsperado &&
+    (!fechoAnterior || Number(esperado['primeiro']) > Number(fechoAnterior['ultimo']));
+  // O último dia fechado emenda na cabeça: no início do dia aberto seguinte, ou no último elo da cadeia.
+  let emendaDepois = true;
+  if (fecho && !haFechoSeguinte) {
+    const seguinte = cabeca
+      ? textoOuNulo(Number(cabeca['quantidade']) > 0 ? cabeca['inicio'] : cabeca['fim'])
+      : null;
+    emendaDepois = seguinte === textoOuNulo(fecho['fim']);
+  }
+  if (!emendaAntes || !emendaDepois) return { dia, linhas: n, ok: false, quebraEm: MOTIVO_ELO_ENTRE_DIAS };
   const confere =
     n === Number(esperado['quantidade']) &&
     anterior === textoOuNulo(esperado['fim']) &&

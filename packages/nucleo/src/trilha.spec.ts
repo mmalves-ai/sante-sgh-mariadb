@@ -208,11 +208,21 @@ describe('verificarDiaTrilha', () => {
   const c2 = { ...BASE, correlacao: 'c-2', hashAnterior: h1 };
   const h2 = hashLinhaTrilha(c2);
   const fecho = { primeiro: 1, ultimo: 2, quantidade: 2, fim: h2, inicio: HASH_GENESE };
-  const verificar = (linhas: unknown[], f: unknown, cab: unknown = undefined) => {
+  // Cabeça da cadeia sem dia aberto, com o último elo no fim do dia fechado (o dia verificado é o último fechado).
+  const CAB_FECHADA = { primeiro: null, ultimo: 2, quantidade: 0, fim: h2, inicio: null, dia_aberto: null };
+  interface Vizinhos {
+    readonly anterior?: { fim: string; ultimo: number };
+    readonly seguinte?: boolean;
+    readonly fora?: number;
+  }
+  const verificar = (linhas: unknown[], f: unknown, cab: unknown = CAB_FECHADA, v: Vizinhos = {}) => {
     const b = new BancoDuble()
       .quando(/FROM trilha_auditoria\s/, linhas)
       .quando(/FROM trilha_auditoria_fecho/, f ? [f] : [])
-      .quando(/FROM trilha_cadeia/, cab ? [cab] : []);
+      .quando(/dia < \?/, v.anterior ? [v.anterior] : [])
+      .quando(/dia > \?/, v.seguinte ? [{ sim: 1 }] : [])
+      .quando(/FROM trilha_cadeia/, cab ? [cab] : [])
+      .quando(/cadeia_dia IS NULL/, [{ id: v.fora ?? null }]);
     return lerSomente(b.fonte(), CONFIG_TESTE, CTX, (l) => verificarDiaTrilha(l, 3, '2026-11-20'));
   };
 
@@ -226,7 +236,55 @@ describe('verificarDiaTrilha', () => {
   });
 
   it('dia aberto confere com a cabeça da cadeia', async () => {
-    expect((await verificar([linhaBanco(1, c1), linhaBanco(2, c2)], null, fecho)).ok).toBe(true);
+    const aberta = { ...fecho, dia_aberto: '2026-11-20' };
+    expect((await verificar([linhaBanco(1, c1), linhaBanco(2, c2)], null, aberta)).ok).toBe(true);
+  });
+
+  it('emenda no dia fechado anterior: fim dele igual ao início do dia e primeiro elo depois do último dele', async () => {
+    const linhas = [linhaBanco(1, c1), linhaBanco(2, c2)];
+    expect(
+      (await verificar(linhas, fecho, CAB_FECHADA, { anterior: { fim: HASH_GENESE, ultimo: 0 } })).ok,
+    ).toBe(true);
+  });
+
+  it('dia anterior sumido ou fecho trocado: o início não emenda no fim do dia fechado anterior', async () => {
+    const linhas = [linhaBanco(1, c1), linhaBanco(2, c2)];
+    const outro = { fim: 'f'.repeat(64), ultimo: 0 };
+    expect(await verificar(linhas, fecho, CAB_FECHADA, { anterior: outro })).toMatchObject({
+      ok: false,
+      quebraEm: 'elo-entre-dias',
+    });
+    const antes = { fim: HASH_GENESE, ultimo: 5 }; // o dia anterior termina depois do primeiro elo deste
+    expect((await verificar(linhas, fecho, CAB_FECHADA, { anterior: antes })).quebraEm).toBe(
+      'elo-entre-dias',
+    );
+  });
+
+  it('último dia fechado: a cabeça da cadeia tem de emendar nele (dia seguinte sumido ou cadeia trocada)', async () => {
+    const linhas = [linhaBanco(1, c1), linhaBanco(2, c2)];
+    const trocada = { ...CAB_FECHADA, fim: 'a'.repeat(64) };
+    expect((await verificar(linhas, fecho, trocada)).quebraEm).toBe('elo-entre-dias');
+    expect((await verificar(linhas, fecho, null)).quebraEm).toBe('elo-entre-dias');
+    // Dia aberto seguinte: emenda pelo início dele.
+    const abertaDepois = {
+      ...CAB_FECHADA,
+      quantidade: 1,
+      inicio: h2,
+      fim: 'b'.repeat(64),
+      dia_aberto: '2026-11-21',
+    };
+    expect((await verificar(linhas, fecho, abertaDepois)).ok).toBe(true);
+    // Há fecho seguinte: a emenda é provada no dia seguinte, não contra a cabeça.
+    expect((await verificar(linhas, fecho, trocada, { seguinte: true })).ok).toBe(true);
+  });
+
+  it('linha do escopo fora da cadeia acima do marco do encadeamento: a prova aponta o id dela', async () => {
+    expect(
+      await verificar([linhaBanco(1, c1), linhaBanco(2, c2)], fecho, CAB_FECHADA, { fora: 77 }),
+    ).toMatchObject({
+      ok: false,
+      quebraEm: '77',
+    });
   });
 
   it('linha adulterada: aponta o id dela', async () => {

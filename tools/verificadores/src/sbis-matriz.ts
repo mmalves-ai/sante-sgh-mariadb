@@ -19,12 +19,7 @@ export interface LinhaMatrizSbis {
 }
 
 const L = (funcionalidade: string, ...testes: string[]): LinhaMatrizSbis => ({ funcionalidade, testes });
-/** Linha com lacuna aberta: os testes listados provam só a parte atendida. */
-const LL = (funcionalidade: string, lacuna: string, ...testes: string[]): LinhaMatrizSbis => ({
-  funcionalidade,
-  testes,
-  lacuna,
-});
+// Linha com lacuna aberta (campo `lacuna`) só com autorização do dono; hoje nenhuma.
 
 export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
   // NGS1: segurança da informação
@@ -102,13 +97,18 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'apps/api/src/modulos/digitalizacao/digitalizacao.spec.ts',
     'packages/dominio-acesso/src/cifra-plataforma.spec.ts',
   ),
-  'SBIS-16': LL(
-    'SGH_TRILHA só de inclusão com hash encadeado; imutabilidade',
-    'a cadeia de integridade da trilha (fecho diário por hash) não tem tabela no modelo; a verificação de ' +
-      'integridade responde "trilha-sem-encadeamento" até o DDL pedido (docs/obra/fatias/f22/saida/05-05.json)',
+  'SBIS-16': L(
+    'Trilha só de inclusão, encadeada por hash (SHA-256) por estabelecimento, calculada pelo núcleo na mesma transação ' +
+      '(gravarTrilha, sem gatilho; cabeça trilha_cadeia travada, única do elo contra bifurcação); fecho diário por hash ' +
+      '(trilha_auditoria_fecho, na virada do dia ou por fecharDiasTrilha); prova do dia (verificarDiaTrilha) que ' +
+      'recalcula cada elo, emenda o dia no anterior e na cabeça e aponta linha quebrada, linha fora da cadeia, dia sem ' +
+      'fecho ou fecho divergente; fecho e marco só de inclusão nos papéis do banco',
+    'packages/nucleo/src/trilha.spec.ts',
+    'apps/api/src/modulos/administracao/sbis/porta-propria.int.spec.ts',
     'packages/testes/src/integracao/trilha.int.spec.ts',
     'apps/api/src/autorizacao/trilha.spec.ts',
     'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
+    'tools/verificadores/src/privilegios-sem-delete-clinico.spec.ts',
   ),
   'SBIS-17': L(
     'Catálogo de eventos auditáveis',
@@ -153,11 +153,15 @@ export const MATRIZ_SBIS: Readonly<Record<string, LinhaMatrizSbis>> = {
     'tools/verificadores/src/lgpd/datamart-sem-dado-pessoal.spec.ts',
     'packages/dominio-cadastro/src/paciente/mascaramento.spec.ts',
   ),
-  'SBIS-26': LL(
-    'Correção do registro clínico só pelo autor, com nova versão; apagar recusado',
-    'falta o teste de integração em que o banco recusa o DELETE em tabela clínica ao papel do módulo ' +
-      '(pedido em docs/obra/fatias/f22/saida/05-01.json); hoje a recusa é provada só nos scripts de privilégio',
+  'SBIS-26': L(
+    'Correção do registro clínico só pelo autor, com nova versão; apagar recusado no domínio e no servidor: o papel do ' +
+      'módulo e o papel da conta da aplicação (anexo da implantação) não têm DELETE em tabela clínica, e o MariaDB ' +
+      'recusa (1142) pela conta real com SET DEFAULT ROLE',
+    'tools/verificadores/src/privilegios-servidor.int.spec.ts',
+    'tools/verificadores/src/privilegios-sem-delete-clinico.spec.ts',
     'tools/verificadores/src/imutabilidade.spec.ts',
+    'tools/verificadores/src/privilegios.spec.ts',
+    'packages/dominio-acesso/src/imutabilidade/imutabilidade.spec.ts',
     'apps/api/src/modulos/pep/registro.spec.ts',
     'apps/api/src/modulos/pep/registro-regras.spec.ts',
   ),

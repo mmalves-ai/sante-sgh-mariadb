@@ -15,6 +15,7 @@
 // Melhoria: nome de tabela só passa pelo padrão de identificador do modelo (nada de SQL montado com texto livre).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { deleteClinicoProibido } from '@sgh/contratos';
 import { lerMigracoes } from './listas.ts';
 
 export const PAPEL = 'papel_aplicacao';
@@ -22,7 +23,12 @@ const ORDEM_ACOES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 export type AcaoGrant = (typeof ORDEM_ACOES)[number];
 
 /** Tabelas só de acréscimo: a aplicação lê e inclui, nunca altera nem apaga. */
-export const SO_ACRESCIMO: ReadonlySet<string> = new Set(['trilha_auditoria', 'cliente_evento']);
+export const SO_ACRESCIMO: ReadonlySet<string> = new Set([
+  'trilha_auditoria',
+  'trilha_auditoria_fecho',
+  'trilha_encadeamento_inicio',
+  'cliente_evento',
+]);
 
 /** O banco a que o anexo se aplica. */
 export type BancoDoAnexo = 'cliente' | 'plataforma';
@@ -114,7 +120,10 @@ export function privilegiosDoPapel(
     .sort((a, b) => (a.tabela < b.tabela ? -1 : 1))
     .map((t) => {
       if (SO_ACRESCIMO.has(t.tabela)) return { tabela: t.tabela, acoes: ['SELECT', 'INSERT'] as const };
-      const apaga = !t.exclusaoLogica || comExclusaoFisica.has(t.tabela);
+      // SBIS-26: registro clínico nunca é apagado (corrige-se por nova versão): sem DELETE, mesmo sem exclusão lógica.
+      // Exceção só onde o código apaga fisicamente (comExclusaoFisica), conflito registrado no teste do anexo.
+      const apaga =
+        comExclusaoFisica.has(t.tabela) || (!t.exclusaoLogica && !deleteClinicoProibido(t.tabela));
       return { tabela: t.tabela, acoes: ORDEM_ACOES.filter((a) => a !== 'DELETE' || apaga) };
     });
 }
@@ -159,7 +168,7 @@ export function anexoDePrivilegios(
     '-- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a',
     '-- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).',
     '-- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).',
-    `-- ${itens.length} tabelas. Só de acréscimo: ${[...SO_ACRESCIMO].sort().join(', ')}; tabela com exclusão lógica não recebe DELETE.`,
+    `-- ${itens.length} tabelas. Só de acréscimo: ${[...SO_ACRESCIMO].sort().join(', ')}; tabela com exclusão lógica e tabela clínica não recebem DELETE.`,
     '',
     COMANDO_PAPEL,
     '',

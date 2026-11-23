@@ -5,16 +5,17 @@
 // do alcance (e UPDATE onde o papel só lê). O MariaDB recusa com ER_TABLEACCESS_DENIED_ERROR (1142) antes de olhar
 // linha: o WHERE nunca casa linha (id = -1), então nada é tocado nem se o servidor aceitasse. Também confere que o
 // gerador nunca concede DELETE a tabela clínica para papel nenhum. Conta e papel são apagados no fim.
-// Nenhum dado lido. SGH_NUCLEO_SEM_BANCO=1 pula o arquivo.
+// Nenhum dado lido. SGH_NUCLEO_SEM_BANCO=1 pula o arquivo. A parte estática (o que o script e o alcance concedem)
+// fica em privilegios-sem-delete-clinico.spec.ts, que roda na esteira.
 // Rodar: ./pnpm exec vitest run --config tools/verificadores/vitest.integracao.config.ts src/privilegios-servidor.int.spec.ts
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { deleteClinicoProibido, ehTabelaClinica } from '@sgh/contratos';
-import { errnoDe, lerConfiguracaoNucleo, NucleoProprio } from '@sgh/nucleo';
+import { ehTabelaClinica } from '@sgh/contratos';
+import { errnoDe, fecharDiasTrilha, gravarTrilha, lerConfiguracaoNucleo, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ambienteDoRepositorio } from './copia-leitura.ts';
-import { caminhoScript, gerarArtefatos, RAIZ } from './privilegios.ts';
+import { caminhoScript, concessoesDoScript as concessoesDoArquivo, RAIZ } from './privilegios.ts';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'teste_nucleo';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -23,48 +24,11 @@ const ER_TABLEACCESS_DENIED_ERROR = 1142;
 const MODULOS = ['pep', 'enfermagem'] as const;
 const TABELAS_ALVO = ['registro_assistencial', 'prescricao'] as const;
 
-const GRANT = /^GRANT ([A-Z, ]+) ON ([a-z][a-z0-9_]*) TO (sgh_mod_[a-z_]+);$/;
-
-interface Concessao {
-  readonly acoes: readonly string[];
-  readonly tabela: string;
-  readonly papel: string;
-}
-
-/** As concessões do script versionado (o mesmo texto que a TI roda no banco de cada cliente). */
-function concessoesDoScript(): Concessao[] {
-  const texto = readFileSync(resolve(RAIZ, caminhoScript('aplicar')), 'utf8');
-  const saida: Concessao[] = [];
-  for (const linha of texto.split('\n')) {
-    const m = GRANT.exec(linha.trim());
-    if (m) saida.push({ acoes: m[1]!.split(',').map((a) => a.trim()), tabela: m[2]!, papel: m[3]! });
-  }
-  return saida;
-}
-
-describe('privilégios gerados: nenhum DELETE em tabela clínica (SBIS-26)', () => {
-  it('o alcance gerado e o script versionado não concedem DELETE clínico a papel nenhum', () => {
-    const a = gerarArtefatos();
-    expect(a.alcances.length).toBeGreaterThan(10);
-    const doAlcance = a.alcances.flatMap((x) =>
-      Object.entries(x.objetos)
-        .filter(([t, acoes]) => acoes.includes('DELETE') && deleteClinicoProibido(t))
-        .map(([t]) => `${x.modulo}:${t}`),
-    );
-    expect(doAlcance).toEqual([]);
-    const script = concessoesDoScript();
-    // O parser leu o script inteiro: toda linha GRANT casou.
-    const linhasGrant = readFileSync(resolve(RAIZ, caminhoScript('aplicar')), 'utf8')
-      .split('\n')
-      .filter((l) => l.startsWith('GRANT ')).length;
-    expect(script.length).toBe(linhasGrant);
-    expect(script.filter((c) => c.acoes.includes('DELETE') && deleteClinicoProibido(c.tabela))).toEqual([]);
-    // O script versionado é o que o gerador produz hoje.
-    expect(readFileSync(resolve(RAIZ, caminhoScript('aplicar')), 'utf8')).toBe(a.aplicar);
-    // Os alvos do teste no servidor são clínicos de fato.
-    for (const t of TABELAS_ALVO) expect(deleteClinicoProibido(t), t).toBe(true);
-  });
-});
+const LER_SCRIPT = () => readFileSync(resolve(RAIZ, caminhoScript('aplicar')), 'utf8');
+const concessoesDoScript = () => concessoesDoArquivo(LER_SCRIPT());
+/** O anexo da implantação: o papel único da conta da aplicação no banco do cliente (papel_aplicacao). */
+const ANEXO_APLICACAO = 'docs/implantacao/anexos/privilegios-papel.sql';
+const GRANT_ANEXO = /^GRANT ([A-Z, ]+) ON ([a-z][a-z0-9_]*) TO papel_aplicacao;$/;
 
 describe.skipIf(SEM_BANCO)(
   `servidor recusa DELETE clínico ao papel do módulo (SBIS-26, cliente ${CLIENTE})`,
@@ -124,6 +88,21 @@ describe.skipIf(SEM_BANCO)(
           await admin(`GRANT ${c.acoes.join(', ')} ON \`${banco}\`.${c.tabela} TO ${papel}`);
         await admin(`GRANT ${papel} TO '${conta}'@'%'`);
       }
+      // O papel da conta da aplicação em produção (anexo da implantação, papel padrão da conta): só os GRANT dele
+      // (os REVOKE do anexo retiram o que um papel novo não tem).
+      const aplicacao = `sgh_t26_apl_${sufixo}`;
+      papeis.set('aplicacao', aplicacao);
+      await admin(`CREATE ROLE ${aplicacao}`);
+      const anexo = readFileSync(resolve(RAIZ, ANEXO_APLICACAO), 'utf8').split('\n');
+      let n = 0;
+      for (const linha of anexo) {
+        const m = GRANT_ANEXO.exec(linha.trim());
+        if (!m) continue;
+        n++;
+        await admin(`GRANT ${m[1]} ON \`${banco}\`.${m[2]} TO ${aplicacao}`);
+      }
+      expect(n).toBe(anexo.filter((l) => l.startsWith('GRANT ')).length);
+      await admin(`GRANT ${aplicacao} TO '${conta}'@'%'`);
     });
 
     afterAll(async () => {
@@ -182,6 +161,43 @@ describe.skipIf(SEM_BANCO)(
       expect(await tentar('DELETE FROM trilha_auditoria WHERE id = -1')).toBe(ER_TABLEACCESS_DENIED_ERROR);
       // Controle: o mesmo papel corrige o registro (UPDATE concedido), então a recusa acima é do privilégio.
       expect(await tentar('UPDATE registro_assistencial SET id = id WHERE id = -1')).toBeNull();
+    });
+
+    it('papel da aplicação (anexo da implantação): DELETE clínico recusado; a trilha encadeada grava pelo núcleo', async () => {
+      await assumir('aplicacao');
+      for (const t of TABELAS_ALVO) {
+        expect(await tentar(`DELETE FROM ${t} WHERE id = -1`), t).toBe(ER_TABLEACCESS_DENIED_ERROR);
+      }
+      // SBIS-16 pela conta real: cabeça da cadeia (INSERT, FOR UPDATE, UPDATE), elo e fecho do dia, desfeitos no fim.
+      const id = await efemero.escrever(
+        { cliente: CLIENTE, correlacao: 'sbis26-trilha' },
+        async (e) => {
+          const x = await gravarTrilha(e, {
+            estabelecimento: null,
+            usuario: null,
+            acao: 'operacao',
+            entidade: 'teste_privilegio',
+            entidadeId: null,
+            correlacao: 'sbis26-trilha',
+            ocorridoEm: new Date(),
+          });
+          await fecharDiasTrilha(e);
+          return x;
+        },
+        false,
+      );
+      expect(id).toBeGreaterThan(0);
+      // O fecho e o marco do encadeamento só recebem inclusão; a trilha não se altera nem se apaga.
+      expect(await tentar('UPDATE trilha_auditoria_fecho SET versao = versao WHERE id = -1')).toBe(
+        ER_TABLEACCESS_DENIED_ERROR,
+      );
+      expect(await tentar('DELETE FROM trilha_auditoria_fecho WHERE id = -1')).toBe(
+        ER_TABLEACCESS_DENIED_ERROR,
+      );
+      expect(await tentar('UPDATE trilha_encadeamento_inicio SET versao = versao WHERE id = -1')).toBe(
+        ER_TABLEACCESS_DENIED_ERROR,
+      );
+      expect(await tentar('DELETE FROM trilha_auditoria WHERE id = -1')).toBe(ER_TABLEACCESS_DENIED_ERROR);
     });
   },
 );

@@ -44,7 +44,11 @@ export const ARQUIVOS_DO_EXECUTOR = [
 ] as const;
 
 /** Tabelas só de inclusão (nenhum papel altera nem apaga: o plano que pedir isso é recusado). */
-export const SO_INCLUSAO: readonly string[] = ['trilha_auditoria'];
+export const SO_INCLUSAO: readonly string[] = [
+  'trilha_auditoria',
+  'trilha_auditoria_fecho',
+  'trilha_encadeamento_inicio',
+];
 
 /**
  * Pastas do DDL cujas tabelas guardam registro clínico (prontuário, centro cirúrgico, diagnóstico): DELETE nelas
@@ -615,4 +619,23 @@ export function alcanceVersionado(raiz = RAIZ): { versao: string; alcances: Alca
   const p = resolve(raiz, caminhoAlcance());
   if (!existsSync(p)) return null;
   return JSON.parse(readFileSync(p, 'utf8')) as { versao: string; alcances: AlcanceModulo[] };
+}
+
+const GRANT_PAPEL_MODULO = /^GRANT ([A-Z, ]+) ON ([a-z][a-z0-9_]*) TO (sgh_mod_[a-z_]+);$/;
+
+/** Uma concessão do script versionado dos papéis por módulo. */
+export interface ConcessaoPapel {
+  readonly acoes: readonly string[];
+  readonly tabela: string;
+  readonly papel: string;
+}
+
+/** As concessões do script aplicar versionado (o mesmo texto que a TI roda no banco de cada cliente). */
+export function concessoesDoScript(texto: string): ConcessaoPapel[] {
+  const saida: ConcessaoPapel[] = [];
+  for (const linha of texto.split('\n')) {
+    const m = GRANT_PAPEL_MODULO.exec(linha.trim());
+    if (m) saida.push({ acoes: m[1]!.split(',').map((a) => a.trim()), tabela: m[2]!, papel: m[3]! });
+  }
+  return saida;
 }
