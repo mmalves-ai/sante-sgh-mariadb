@@ -202,6 +202,22 @@ class SolicitanteExterno(unittest.TestCase):
         self.assertEqual(self.p["opcoes"]["solicitante_externo"]["adotar"],
                          ["conselho_classe_id", "conselho_unidade_federativa_id", "numero_conselho"])
 
+    def test_conselho_presumido_nao_adota(self):
+        # ADR 0007 (18 e 20): o CRM presumido nunca é chave de identidade: com a chave já gravada, recusa para revisão
+        # (adocao_por_valor_presumido), nunca funde o solicitante sem conselho com o CRM verdadeiro
+        c = object.__new__(carga_mapa.CargaMapa)
+        achou = []
+        c._todas = lambda sql, args=(): achou
+        v = {"conselho_classe_id": 1, "conselho_unidade_federativa_id": 35, "numero_conselho": "1001"}
+        vals = {"solicitante_externo": [("", v)]}
+        c._presumidas = {("solicitante_externo", "conselho_classe_id")}
+        self.assertIsNone(c._adocao_presumida(self.p, vals))  # sem colisão: linha própria
+        achou.append((7,))
+        self.assertEqual(c._adocao_presumida(self.p, vals), ("adocao_por_valor_presumido", "alta"))
+        c._presumidas = set()  # conselho da origem: a adoção normal (mesma pessoa) segue
+        self.assertIsNone(c._adocao_presumida(self.p, vals))
+        self.assertEqual(carga_mapa.GRAVIDADE_REGRA["adocao_por_valor_presumido"], "alta")
+
     def test_sigla_do_conselho_normalizada(self):
         from sante_conector import depara
         self.assertEqual(depara.norm_conselho(b" CRM "), "CRM")
@@ -237,7 +253,8 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(sorted(esp), sorted(CARREGADAS))
         for t, e in esp.items():
             recusas = sum(n for r, n in e["pendencias"].items()
-                          if r.startswith("restricao_destino_") or r == "codigo_colisao_caixa")
+                          if r.startswith("restricao_destino_") or r in ("codigo_colisao_caixa",
+                                                                          "adocao_por_valor_presumido"))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in AGUARDAM + list(DESCARTE):
             self.assertNotIn("CREATE TABLE %s " % t, l5_05.DDL)

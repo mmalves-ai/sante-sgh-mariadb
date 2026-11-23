@@ -117,6 +117,21 @@ class L604(unittest.TestCase):
         self.assertTrue(j[1]["coluna"].startswith("="))
         self.assertNotIn("marcacao_horario_id", c)   # a marcação foi apagada na origem: nada a ligar
 
+    def test_tipo_de_marcacao_adota_o_ativo_da_natureza(self):
+        # cliente que já tem o tipo 'consulta' de natureza primeira_vez: a marcação adota ESSE (o ativo de menor id da
+        # natureza, que o produto usa), sem criar 'primeira_vez' nem mesclar a configuração do cliente
+        c = object.__new__(carga_mapa.CargaMapa)
+        sqls, ins = [], []
+        c._todas = lambda sql, args=(): sqls.append(sql) or ([(3,)] if "ativo ORDER BY id" in sql else [])
+        c._inserir = lambda dt, v: ins.append(v) or 99
+        v = {"codigo": "primeira_vez", "descricao": "Primeira vez", "natureza": "primeira_vez"}
+        self.assertEqual(c._gravar_ou_adotar("tipo_marcacao", v, ["codigo"], ativo=["natureza"]), (3, True))
+        self.assertEqual(ins, [])
+        self.assertIn("`natureza`=%s AND ativo ORDER BY id LIMIT 1", sqls[0])
+        # natureza ausente no cliente: cria pelo código
+        c._todas = lambda sql, args=(): []
+        self.assertEqual(c._gravar_ou_adotar("tipo_marcacao", v, ["codigo"], ativo=["natureza"]), (99, False))
+
     def test_horario_e_marcacao_carregam(self):
         self.assertEqual(_prontas(), {})
         self.assertEqual(set(self.plano["SIPACAGI"]["destinos"]),
@@ -130,6 +145,9 @@ class L604(unittest.TestCase):
             op = self.plano[t]["opcoes"]["tipo_marcacao"]
             self.assertTrue(op["antes"])
             self.assertEqual(op["adotar"], ["codigo"])
+            # o tipo ATIVO de menor id da mesma natureza (critério do produto) vence o código: cliente que já tem
+            # 'consulta' (primeira_vez) não ganha um segundo tipo da mesma natureza
+            self.assertEqual(op["adotar_ativo"], ["natureza"])
             self.assertEqual([c["coluna"] for c in self.todas(t, "tipo_marcacao_id")], ["@id:tipo_marcacao"])
         self.assertEqual([c["coluna"] for c in self.plano["REPACAGD"]["colunas"]["tipo_marcacao"]
                           if c["destino"] == "codigo"], ["=retorno", "=primeira_vez", "=~primeira_vez"])

@@ -198,7 +198,9 @@ DADOS = [
     # 1048); 4 sem UF (1048); 5 repete conselho, UF e número do 1 (ADOTA a linha do 1: adotado_existente e nome
     # divergente guardado em historico_mescla_migracao, ADR 0007, 20; antes recusava com 1062); 6 CBO inexistente (pai_inexistente,
     # anulável) e S/N fora do domínio (padrão ativo); 7 mesmo número do 1 em outra UF (gravado); 8 sem conselho na
-    # origem (ID_TBCONSPROF nulo): CRM presumido pela evidência (ADR 0007, 18; causa de 3.680 recusas 1048 na carga real)
+    # origem (ID_TBCONSPROF nulo): CRM presumido pela evidência (ADR 0007, 18; causa de 3.680 recusas 1048 na carga real);
+    # 9 sem conselho na origem com o número e a UF do CRM do 1, outro nome: o CRM presumido NÃO adota o 1 (valor
+    # presumido nunca é chave de identidade): recusa adocao_por_valor_presumido para revisão
     ("TBMEDSOL", [[1, 1001, "Solicitante exemplo um", "C1", "SP", 1, 501, "S"],
                   [2, 1002, "Solicitante  exemplo   dois", None, "RJ", 2, None, "N"],
                   [3, 1003, "Solicitante exemplo três", None, "SP", 3, 501, "S"],
@@ -206,11 +208,12 @@ DADOS = [
                   [5, 1001, "Solicitante exemplo cinco", None, "SP", 1, 502, "S"],
                   [6, 1006, "Solicitante exemplo seis", None, "SP", 1, 999, "X"],
                   [7, 1001, "Solicitante exemplo sete", None, "RJ", 1, 502, None],
-                  [8, 1008, "Solicitante exemplo oito", None, "SP", None, None, "S"]],
+                  [8, 1008, "Solicitante exemplo oito", None, "SP", None, None, "S"],
+                  [9, 1001, "Solicitante exemplo nove", None, "SP", None, None, "S"]],
      {"gravados": 6, "pendencias": {"catalogo_codigo_inexistente": 1, "pai_inexistente": 1, "valor_fora_do_dominio": 1,
                                     "valor_presumido": 1,
                                     "restricao_destino_1048": 2, "adotado_existente": 1,
-                                    "mescla_conflito_origem_guardada": 1}}),
+                                    "mescla_conflito_origem_guardada": 1, "adocao_por_valor_presumido": 1}}),
 ]
 
 # pais de outras fatias: só as colunas da referência encadeada (inscrição -> CBO, profissional; CBO -> código oficial)

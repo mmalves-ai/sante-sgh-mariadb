@@ -194,6 +194,7 @@ GRAVIDADE_REGRA.update({"valor_elevado_ao_minimo": "baixa", "texto_resumido": "b
                         "segredo_aguarda_cofre": "media", "adotado_existente": "baixa", "vigencia_sem_fonte": "baixa",
                         "pai_ambiguo": "media", "documento_invalido": "media"})
 GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_indefinido": "alta"})
+GRAVIDADE_REGRA.update({"adocao_por_valor_presumido": "alta"})
 GRAVIDADE_REGRA.update({"idade_sem_limite": "baixa"})
 GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
                         "sem_item_a_gravar": "baixa"})
@@ -1355,6 +1356,7 @@ class CargaMapa(carga.Carga):
         destino desdobrado tem um sufixo (rótulo) por item; o opcional sem valor da origem fica com lista vazia."""
         t = p["tabela"]
         vals, campos, pend, adiadas = {}, {}, [], []
+        self._presumidas = set()  # (destino, coluna) gravada por valor presumido (`=~x`) nesta linha
         for dt in p["destinos"]:
             info = self._info(dt)
             op = (p.get("opcoes") or {}).get(dt) or {}
@@ -1380,8 +1382,11 @@ class CargaMapa(carga.Carga):
                 elif nome.startswith("=~"):
                     x = nome[2:]
                     # presumida só quando é a gravada (`marca`: em toda linha, aviso deliberado da fatia)
-                    if c.get("marca") or not (dc in pos and modelo[pos[dc]][1] is not None):
+                    gravada = not (dc in pos and modelo[pos[dc]][1] is not None)
+                    if c.get("marca") or gravada:
                         pend.append(("valor_presumido", "baixa"))
+                    if gravada:
+                        self._presumidas.add((dt, dc))
                 elif c.get("por_pai"):
                     pp_itens, recusa = self._por_pai(t, chave, linha, c, pend)
                     if recusa:
@@ -1886,7 +1891,22 @@ class CargaMapa(carga.Carga):
         finally:
             self._esvaziando = False
 
-    def _gravar_ou_adotar(self, dt, v, adotar, complementa=False, maior=()):
+    def _adocao_presumida(self, p, vals):
+        """ADR 0007 (18 e 20): valor presumido nunca é chave de identidade. Linha cuja chave de adoção tem coluna
+        presumida (`=~x`) e que ADOTARIA uma linha já gravada é recusada (`adocao_por_valor_presumido`, alta, para
+        revisão humana), em vez de fundir duas pessoas por um dado inventado; sem colisão, grava a linha própria."""
+        for dt, itens in (vals or {}).items():
+            ad = ((p.get("opcoes") or {}).get(dt) or {}).get("adotar") or ()
+            if not ad or not any((dt, a) in getattr(self, "_presumidas", ()) for a in ad):
+                continue
+            for _, v in itens:
+                if all(v.get(a) is not None for a in ad) and self._todas(
+                        "SELECT id FROM `%s` WHERE %s LIMIT 1" % (dt, " AND ".join("`%s`=%%s" % a for a in ad)),
+                        tuple(v[a] for a in ad)):
+                    return ("adocao_por_valor_presumido", "alta")
+        return None
+
+    def _gravar_ou_adotar(self, dt, v, adotar, complementa=False, maior=(), ativo=()):
         """(id, adotado): com `adotar`, a linha do destino que já tem as mesmas colunas (uma só) é adotada; com
         `complementa`, a linha do pai (`id` resolvido pela referência) recebe as colunas por UPDATE."""
         if complementa:
@@ -1897,6 +1917,13 @@ class CargaMapa(carga.Carga):
                     c.execute("UPDATE `%s` SET %s WHERE id=%%s" % (dt, ", ".join("`%s`=%%s" % x for x in cols)),
                               [v[x] for x in cols] + [rid])
             return rid, False
+        if ativo and all(v.get(a) is not None for a in ativo):
+            # `adotar_ativo:` o ATIVO de menor id com estas colunas (o mesmo critério do produto) vence a adoção pelo
+            # código: a configuração do cliente não é duplicada nem mesclada
+            ids = self._todas("SELECT id FROM `%s` WHERE %s AND ativo ORDER BY id LIMIT 1" % (
+                dt, " AND ".join("`%s`=%%s" % a for a in ativo)), tuple(v[a] for a in ativo))
+            if ids:
+                return ids[0][0], True
         if adotar and all(v.get(a) is not None for a in adotar):
             ids = self._todas("SELECT id FROM `%s` WHERE %s LIMIT 2" % (dt, " AND ".join("`%s`=%%s" % a for a in adotar)),
                               tuple(v[a] for a in adotar))
@@ -2219,6 +2246,8 @@ class CargaMapa(carga.Carga):
                     vals, campos, pend, adiadas = None, None, [], []
                 else:
                     vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
+                    if not recusa:
+                        recusa = self._adocao_presumida(p, vals)
                 if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:
                     recusa = ("sem_item_a_gravar", "baixa")  # nada a gravar: visível, conta como recusada
             if recusa and self._atualizar is not None:  # a linha antiga fica como estava, à espera da correção
@@ -2288,7 +2317,8 @@ class CargaMapa(carga.Carga):
                                 sincronizar_mod.conflito(self, t, kx, dt, v["id"], nomes, v)
                                 rid, adotado = sincronizar_mod.atualizar(self, dt, v["id"], v), False
                             else:
-                                rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
+                                rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"),
+                                                                      ativo=op.get("adotar_ativo") or ())
                         for c in p["colunas"][dt]:  # filho -> pai de código derivado (ADR 0007, 19)
                             if c.get("pai_derivado") and v.get(c["destino"]) is not None and not adotado:
                                 self._filho_pai.setdefault((dt, c["destino"], c["pai_derivado"]), []).append(

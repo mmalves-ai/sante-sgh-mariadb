@@ -267,7 +267,9 @@ class Plataforma(unittest.TestCase):
                 soma = dict(cur.fetchall())
             self.assertEqual(soma, MANIF["contagens"])
             self.assertEqual(_um(self.c, "SELECT COUNT(*) FROM mysql.user WHERE user LIKE %s",
-                                 ("sscon\\_e%d\\_%%" % eid,))[0], 0)       # usuário da execução removido
+                                 ("sscon\\_e%d\\_%s" % (eid, banco.ficha_plataforma()),))[0], 0)
+            # usuário da execução removido (o desta plataforma: o servidor é compartilhado por várias plataformas,
+            # e outra pode ter uma execução de mesmo número em andamento)
             es = plataforma.enfileirar(self.c, "exemplo_l2a", "sincronizar")
             ex2 = t.laco(uma=True)
             self.assertEqual((ex2["id"], ex2["estado"]), (es, "concluida"), ex2.get("motivo_falha"))
