@@ -149,6 +149,9 @@
    criar_cliente, rodar o semear-acesso do cliente e reiniciar a API (ela guarda os estabelecimentos ao subir).
    O dono entra em https://<ip>:5310/entrar (cliente demo, "Estabelecimento principal", opção do administrador da
    plataforma); só dizer "pode entrar" depois de testar GET /api/estabelecimentos e a recusa 401 de senha errada.
+6b. **Painel ligado à ProntoCardio só para consulta (pedido do dono, 23/11 15h):** a API roda com
+   `CLIENTE_PADRAO=prontocardio REDE_PADRAO=prontocardio` no ambiente do processo (o .env continua com demo). Não há
+   modo só leitura na API: a consulta é por combinação com o dono. Ao reiniciar a API, repetir o override.
 7. **Processos em segundo plano que morrem no reinício:** vigia-memoria.sh, vigia-disco.sh 130, vigia-carga.sh 11,
    `tools/obra/despejar-base.sh --laco` (autorizado pelo dono em 23/11), API e web.
 - **Regras reforçadas hoje:** não fazer push com rodada aberta na mesma árvore (o push leva os commits pela metade);
