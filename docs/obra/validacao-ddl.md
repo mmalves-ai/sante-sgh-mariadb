@@ -11,7 +11,7 @@
 | erros_sql | 0 |
 | tabelas_com_erro | 0 |
 | colunas_id_sem_fk | 76 |
-| fks | 14119 |
+| fks | 14120 |
 | gatilhos | 0 |
 | plataforma_erros | 0 |
 | total_erros | 0 |
