@@ -48,6 +48,8 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
   let porta: PortaRepassePropria;
   const ids = {
     est: 0,
+    grupoAto: 0,
+    grupoAtoOutro: 0,
     outroEst: 0,
     analista: 0,
     gestor: 0,
@@ -283,6 +285,10 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
         tipo_item: 'taxa',
         grupo_faturamento_id: grupo,
       });
+      // conta-itens-2: o grupo de ato do item faturável (TIPOATO da origem) é a dimensão grupoAto da regra
+      ids.grupoAto = await porCodigo('grupo_ato', `${P}-GA`, { descricao: 'GRUPO DE ATO L0304R' });
+      ids.grupoAtoOutro = await porCodigo('grupo_ato', `${P}-GB`, { descricao: 'OUTRO GRUPO DE ATO L0304R' });
+      await e.executar('UPDATE item_faturavel SET grupo_ato_id = ? WHERE id = ?', [ids.grupoAto, fat]);
       const item = await e.inserir(
         `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade, valor_unitario,
            valor_total, situacao, criado_em) VALUES (?, 1, ?, ?, 1, 500, 500, 'conferido', ?)`,
@@ -626,6 +632,61 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     const r = resolverRegra(item, todas);
     expect([r.regra?.id, r.regra?.percentual]).toEqual([faixa, 30]);
     expect(resolverRegra({ ...item, procedimento: 99305000 }, todas).regra?.id).not.toBe(faixa);
+  });
+
+  it('grupo de ato (conta-itens-2): a produção lê o grupo do item faturável e a regra do grupo casa só nele', async () => {
+    const { versao } = await porta.gravarSgh(ctx, trilha('regra_repasse_versao'), (g) =>
+      g.proporVersao({
+        substitui: null,
+        proposta: JSON.stringify({
+          vigencia: '2026-01-01',
+          beneficiario: 'M',
+          evento: ids.evento,
+          grupoAto: ids.grupoAto,
+        }),
+        justificativa: 'Grupo de ato',
+        autor: 'l0304r.analista',
+      }),
+    );
+    await porta.gravarSgh(gestor, trilha('regra_repasse_versao'), (g) =>
+      g.decidirVersao({ versao, para: 'aprovada', por: 'l0304r.gestor', justificativa: 'Conferida' }),
+    );
+    // inclusão: a regra grava grupo_ato_id e volta com grupoAto na leitura (ida e volta pela porta)
+    const doGrupo = Number(
+      (
+        await porta.executar(
+          gestor,
+          'repasse.incluirRegra',
+          {
+            versao,
+            vigencia: '2026-01-01',
+            beneficiario: 'M',
+            convenio: ids.fonte,
+            tipoConta: 'A',
+            percentual: 45,
+            valorFixo: 0,
+            evento: ids.evento,
+            grupoAto: ids.grupoAto,
+            procedimentoInicial: 99304012,
+            procedimentoFinal: 99304012,
+          },
+          octx(gestor),
+        )
+      ).resultado['regra'],
+    );
+    const todas = await porta.todasRegras(ctx, { convenio: ids.fonte, data: '2026-10-15' });
+    expect(todas.find((x) => x.id === doGrupo)).toMatchObject({
+      grupoAto: ids.grupoAto,
+      ato: null,
+      percentual: 45,
+    });
+    // produção: o item entrega o grupo de ato do item faturável (JOIN ifa.grupo_ato_id)
+    const item = (await porta.producao(ctx, comp, 0)).itens.find((x) => x.id === ids.producao)!;
+    expect(item.grupoAto).toBe(ids.grupoAto);
+    // casa a regra do grupo; com outro grupo ou sem grupo (item sem grupo no faturável) cai em outra regra
+    expect(resolverRegra(item, todas).regra?.id).toBe(doGrupo);
+    expect(resolverRegra({ ...item, grupoAto: ids.grupoAtoOutro }, todas).regra?.id).not.toBe(doGrupo);
+    expect(resolverRegra({ ...item, grupoAto: null }, todas).regra?.id).not.toBe(doGrupo);
   });
 
   it('apuração: grava o período com a memória e passa pela conferência e aprovação', async () => {
