@@ -332,8 +332,9 @@ def local_com_ddd(v, ddd):
 
 
 def nota_endereco(l):
+    """NUMERO é numérico na origem real (como em `_gravar_endereco`): vai por `digitos`, nunca por `txt`."""
     return "Endereço da origem sem município identificado: %s" % ", ".join(
-        x for x in (txt(l["ENDERECO"], 150), txt(l["NUMERO"], 20), txt(l["COMPL"], 100), txt(l["BAIRRO"], 100),
+        x for x in (txt(l["ENDERECO"], 150), digitos(l["NUMERO"])[:20] or None, txt(l["COMPL"], 100), txt(l["BAIRRO"], 100),
                     "CEP " + digitos(l["CEP"]) if digitos(l["CEP"]) else None,
                     "IBGE " + digitos(l["IBGE"]) if digitos(l["IBGE"]) else None) if x)
 

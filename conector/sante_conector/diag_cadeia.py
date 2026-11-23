@@ -15,8 +15,10 @@ filtro pai -> filho entre duas tabelas do MAPA não vê os valores guardados no 
 `recorte_linhas` traz só as do L3. Filtro com pai no L3 (lido no coordenador) vale sempre. Para filtrar filho de pai
 do mapa, rode com CONECTOR_GRAVADORES=1.
 """
+import os
 import re
 import time
+import traceback
 
 from . import banco, carga, carga_mapa, controle, mapa, preco_origem
 from .medir_carga import EID_MEDICAO, fecho
@@ -30,8 +32,11 @@ DESTINO = ("estabelecimento", "empresa", "usuario", "pessoa_fisica", "profission
 
 
 def sem_valor(e):
-    """Só o tipo e a mensagem sem os trechos entre aspas (a mensagem do banco pode citar valores)."""
-    return {"falhou": type(e).__name__, "msg": re.sub(r"'[^']*'", "'?'", str(e))[:300]}
+    """Só o tipo, a mensagem sem os trechos entre aspas (a mensagem do banco pode citar valores) e onde falhou
+    (arquivo:linha função dos últimos quadros, sem valores de variáveis)."""
+    onde = ["%s:%d %s" % (os.path.basename(q.filename), q.lineno, q.name)
+            for q in traceback.extract_tb(e.__traceback__)[-6:]]
+    return {"falhou": type(e).__name__, "msg": re.sub(r"'[^']*'", "'?'", str(e))[:300], "onde": onde}
 
 
 def ler_recorte(caminho):
@@ -206,6 +211,9 @@ def executar(lt, origem, codigo, caminho_recorte):
             cc.rollback()
             saida["etapas"]["l3"] = sem_valor(e)
             res = {"entidades": {}}
+        if os.environ.get("DIAG_SO_L3"):  # depuração: só a carga própria (minutos em vez de ~50)
+            saida.update(_consultas(cc, ctl))
+            return saida
         t0 = time.monotonic()
         try:
             rm = Mapa(lt, cc, ctl, eid, iid, mapa_exec, entidades_usadas=set(res.get("entidades") or {})).executar(
