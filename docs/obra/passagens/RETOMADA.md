@@ -117,6 +117,26 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## ESTADO EM 23/11, 10h30 (sessão 34c8458c): incidente RESOLVIDO, recarga em curso
+
+- **MariaDB:** o dicionário do InnoDB estava corrompido (CREATE e DROP falhavam; .ibd sumidos). Por decisão do dono,
+  o compose usa o volume novo `sante-sgh-mariadb-data-2` (commit f5f9fa84); o velho `sante-sgh-mariadb-data` (23 GB)
+  fica guardado e só se apaga com novo OK. Restaurados de `sante-sgh-dados/backup/`: plataforma, espelho e o usuário
+  dono_leitura. Os 10 clientes de teste foram recriados (`sante-sgh-dados/obra/recriar-clientes-teste.sh`).
+  NÃO trazidos: f4r4_*, cm_*, cmbanco_*, conector_ctl_cm* e cliente_cm*/cliente_nucleo_d (bancos de prova; refazer
+  pelas provas se precisar).
+- **Despejo:** `tools/obra/despejar-base.sh` (458e951d). O laço diário (--laco, apaga com mais de 7 dias) foi barrado
+  pelo modo automático: perguntar ao dono se liga.
+- **Vigias** (scripts em `sante-sgh-dados/obra/`): vigia-memoria.sh (v2 recriado), vigia-disco (tools/obra),
+  vigia-carga.sh <execução> (log em progresso-carga.log; ALARME e FIM).
+- **Recarga:** execução 11, iniciada 23/11 10h22, worktree `velocidade` com a main até c8d4b742 juntada (suíte do
+  conector 1.342 verde), `CONECTOR_GRAVADORES=3`, trilhas adiadas. Log: `sante-sgh-dados/obra/logs/worker-e11.log`.
+  Previsão: cerca de 18 h (perto de 24/11, 4h a 6h). Antes do congelamento a execução 10 estava em 90% (onda 161/218).
+- **Esteira do GitHub:** nunca ficou verde. 7ab0c11b sobe o Gotenberg na esteira e pula o teste das capturas
+  (fora do git). Sobram SBIS-16 e SBIS-26: rodada `sbis-16-26` (workflow wf_ef17244e-bae, orçamento 10 M, teto 13 M).
+  Ao terminar: medir com medir_consumo.py e registrar em consumo.md; conferir a esteira pela API do GitHub
+  (curl com o token GITHUB do .env; não há gh na VM).
+
 ## INCIDENTE (23/11, 9h30): MariaDB de desenvolvimento corrompido. COMECE POR AQUI.
 
 **Estado em 23/11, 9h45 (sessão encerrada a pedido do dono para recomeçar em contexto limpo):**
