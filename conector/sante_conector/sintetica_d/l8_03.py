@@ -105,6 +105,10 @@ PREPARO_DESTINO = (
     " INSERT IGNORE INTO fonte_pagadora (id, codigo, nome, tipo, criado_em) VALUES"
     " (2, 'ex_fonte_1', 'Fonte exemplo um', 'operadora', UTC_TIMESTAMP(3)),"
     " (3, 'ex_fonte_2', 'Fonte exemplo dois', 'operadora', UTC_TIMESTAMP(3));"
+    # conta-itens-2 (ADR 0006, 3): o espelho padrão da base no cliente (criar_cliente): o item Brasíndice 100, ao qual
+    # o item 3 da tabela licenciada 1 LIGA pelo código (o 104 da mesma tabela não está no espelho: entra próprio)
+    " INSERT IGNORE INTO item_referencia_matmed (id, fonte_referencia, codigo_referencia, descricao, tipo_produto,"
+    " criado_em) VALUES (9601, 'brasindice', '100', 'Item exemplo do espelho', 'outro', UTC_TIMESTAMP(3));"
     " SET FOREIGN_KEY_CHECKS=1")
 
 
@@ -224,7 +228,10 @@ def linhas(r, ins):
                                      (6, 2, 100, "Material exemplo seringa caixa", "N", "A"),
                                      # conferidor F4: tabela 9 sem linha em TBCTRMEM (pai inexistente): recusada
                                      # (pai_inexistente), nunca gravada como própria (o nulo casava com o vazio)
-                                     (7, 9, 100, "Item exemplo tabela inexistente", "N", "A")):
+                                     (7, 9, 100, "Item exemplo tabela inexistente", "N", "A"),
+                                     # conta-itens-2: tabela licenciada 1, código fora do espelho: item PRÓPRIO
+                                     # ativo com espelho_codigo_inexistente (nada fica fora); o 3 liga ao espelho
+                                     (8, 1, 104, "Item exemplo licenciado fora do espelho", "N", "A")):
         # r4 (revisão): 6 = mesmo TAB e COD da 1 com CLASSIF 2 (código TAB_COD_CLASSIF distinto: os dois gravados);
         # fator 100 na 1, zero na 2 (fora da faixa: NULL); unidade 'CX' fora do cadastro na 6 (codigo_inexistente_destino)
         q("TBMATMED", ID=i, TAB=tab, COD=cod, CLASSIF=2 if i == 6 else 1, NOME=n, OPM=opm, SITUACAO=sit, FATOR_Q=1.0,
@@ -279,14 +286,17 @@ def linhas(r, ins):
         "TBCTRTAT": {"gravados": 3, "pendencias": {"valor_presumido": 1, "adotado_existente": 5}},
         "TBIRREGCTRCTA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 3}},
         "TBCONVPERCTAPAC": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
-        "TBMATMED": {"gravados": 4, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_1048": 1,
-                                                   "pai_inexistente": 1,
-                                                   "valor_fora_do_dominio": 2, "valor_presumido": 4,
+        # conta-itens-2: 3 (licenciada, código no espelho) LIGADA ao item do espelho (gravados conta a ligação, nada
+        # é inserido); 8 (licenciada, fora do espelho) gravada como própria com espelho_codigo_inexistente
+        "TBMATMED": {"gravados": 6, "pendencias": {"ligado_espelho": 1, "espelho_codigo_inexistente": 1,
+                                                   "restricao_destino_1048": 1, "pai_inexistente": 1,
+                                                   "valor_fora_do_dominio": 2, "valor_presumido": 5,
                                                    "codigo_inexistente_destino": 1}},
         # o código de material (tabela 19) também é procurado na 20 e o contrário (concorrentes): uma
         # catalogo_codigo_inexistente por tabela que não tem o código (pedido r4: tiss com várias tabelas)
-        "TBREFUNI": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
-                                                   "restricao_destino_1048": 2, "vigencia_sem_fonte": 4}},
+        # conta-itens-2: a 3 (item da tabela licenciada) grava ligada ao item do espelho (antes: pai_pendente)
+        "TBREFUNI": {"gravados": 3, "pendencias": {"pai_inexistente": 1,
+                                                   "restricao_destino_1048": 2, "vigencia_sem_fonte": 5}},
         "TBREFMEMTUSS": {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 5, "licenca_nao_comprovada": 1,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
                                                        # rodada 5 (ADR 0007, 16): a linha com data própria de
@@ -336,6 +346,14 @@ def linhas(r, ins):
 # valor gravado, não só a contagem (conta-itens-2; conferencia._conferir_valores): o ATO do honorário do pacote é o
 # GRUPO de ato (TBTABATO), gravado em pacote_item_incluso.grupo_ato_id, e a função da equipe fica vazia
 CONFERIR_DESTINO = [
+    ("conta-itens-2: item 3 da tabela licenciada LIGADO ao item 9601 do espelho (nada inserido, descrição intacta)",
+     "SELECT (SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='TBMATMED' AND chave_original='3'"
+     " LIMIT 1) = 9601 AND (SELECT descricao FROM item_referencia_matmed WHERE id=9601) = 'Item exemplo do espelho'"
+     " AND (SELECT COUNT(*) FROM item_referencia_matmed WHERE fonte_referencia='brasindice') = 1"),
+    ("conta-itens-2: item 8 da tabela licenciada fora do espelho entra PRÓPRIO e ativo (fonte outra)",
+     "SELECT COUNT(*) = 1 FROM item_referencia_matmed i JOIN {ctl}.conector_origem co ON co.id_destino=i.id"
+     " WHERE co.tabela_origem='TBMATMED' AND co.chave_original='8' AND i.fonte_referencia='outra'"
+     " AND i.situacao='ativo'"),
     ("item a1 do pacote (ATO 1 = grupo de ato) com o grupo 1 e sem função da equipe",
      "SELECT COUNT(*) = 1 AND MIN(grupo_ato_id) = (SELECT id_destino FROM {ctl}.conector_origem"
      " WHERE tabela_origem='TBTABATO' AND chave_original='1' LIMIT 1) AND MAX(funcao_equipe_cobranca_id) IS NULL"

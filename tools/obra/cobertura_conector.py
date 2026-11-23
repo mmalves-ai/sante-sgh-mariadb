@@ -102,8 +102,8 @@ FONTES_LICENCIADAS = re.compile(r"^=~?(brasindice|simpro|cbhpm|correios)", re.I)
 
 def _so_proprio(decl, t):
     linhas = [c for c in decl if c["tabela"] == t]
-    filtra = any("!licenca_nao_comprovada" in x for c in linhas for x in (c.get("via") or "").split(";")
-                 if x.startswith("so_se:"))
+    filtra = any(("!licenca_nao_comprovada" in x and x.startswith("so_se:")) or x.startswith("ligar_espelho:")
+                 for c in linhas for x in (c.get("via") or "").split(";"))
     literal = any(FONTES_LICENCIADAS.match(c.get("coluna") or "") for c in linhas if c.get("destino"))
     return filtra and not literal
 

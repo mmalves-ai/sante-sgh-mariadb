@@ -310,6 +310,25 @@ LICENCIADAS_ESPELHO = {"fonte_referencia_matmed", "edicao_referencia_matmed", "i
 _ESPELHO = re.compile(r"espelho:([a-z]+)(?:@([A-Z0-9_$]+|=[A-Za-z0-9._/-]{1,30}))?")
 
 
+# conta-itens-2 (ADR 0006, 3): a LINHA do hospital que é item de tabela licenciada LIGA ao item do espelho, sem gravar:
+# `ligar_espelho:<catalogo>:<COLUNA_CODIGO>:<condição>` na via (condição como a do `se:`). Condição verdadeira e o
+# código acha o item no espelho: o conector_origem da linha aponta para ele (pendência baixa `ligado_espelho`), nada é
+# gravado nem sobrescrito. Não acha: a linha segue como item PRÓPRIO do hospital (o que a declaração grava) com a
+# pendência do `espelho:` (`espelho_codigo_inexistente`/`espelho_ambiguo`): nada fica fora (importação é continuidade).
+_LIGAR = re.compile(r"ligar_espelho:([a-z]+):([A-Z0-9_$]+):(.+)")
+
+
+def ligar_espelho_spec(x):
+    """`ligar_espelho:<catalogo>:<COLUNA>:<condição>` -> {"espelho", "coluna", "cond"} ou None."""
+    m = _LIGAR.fullmatch(x or "")
+    if not m or m.group(1) not in ("brasindice", "simpro"):
+        return None
+    cd = condicao(m.group(3))
+    if cd is None or cd["regra"]:
+        return None
+    return {"espelho": {"catalogo": m.group(1), "edicao_coluna": "", "edicao": ""}, "coluna": m.group(2), "cond": cd}
+
+
 def espelho_spec(x):
     """`espelho:<catalogo>[@<COLUNA>|@=<edição>]` -> {"catalogo", "edicao_coluna", "edicao"} ou None."""
     m = _ESPELHO.fullmatch(x or "")
@@ -397,6 +416,8 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                 cols = ([cs[1]] if isinstance(cs[1], str) else cs[1]) if cs else []
                 if not cs or (ddl and (cs[0] not in ddl or any(y not in ddl[cs[0]]["colunas"] for y in cols))):
                     erros.append("cod: a tabela.coluna inexistente no DDL: %s.%s -> %s" % (c["tabela"], n, x[4:]))
+            if x.startswith("ligar_espelho:") and ligar_espelho_spec(x) is None:
+                erros.append("ligar_espelho: mal formado: %s.%s -> %s" % (c["tabela"], n, x))
             if x.startswith("espelho:") and espelho_spec(x) is None:
                 erros.append("espelho: mal formado ou catálogo desconhecido: %s.%s -> %s" % (c["tabela"], n, x))
             for pre in ("se:", "so_se:", "destino_se:"):

@@ -204,6 +204,7 @@ GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
 GRAVIDADE_REGRA.update({"armazenamento_indefinido": "alta", "arquivo_divergente_no_armazenamento": "alta"})
 GRAVIDADE_REGRA.update({"duracao_ausente": "media", "escolha_pelo_maior": "baixa", "escolha_pelo_menor": "baixa",
                         "sem_filho_com_valor": "media", "fora_do_filtro_da_carga": "baixa"})
+GRAVIDADE_REGRA.update({"ligado_espelho": "baixa"})
 GRAVIDADE_REGRA.update({"rascunho_sem_autor": "alta", "espelho_codigo_inexistente": "media",
                         "espelho_edicao_inexistente": "media", "espelho_ambiguo": "media",
                         "senha_hash_invalido": "media", "senha_aguarda_argon2": "media",
@@ -493,6 +494,11 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                 ler(col)
         for f in filtros:
             _ler_cond(f, ler)
+        ligacoes = [lg for c in decl[t] for x in (c.get("via") or "").split(";") if x.startswith("ligar_espelho:")
+                    for lg in [mapa.ligar_espelho_spec(x)] if lg]
+        for lg in ligacoes:
+            _ler_cond(lg["cond"], ler)
+            ler(lg["coluna"])
         retratos = {}
         for dt in dts:
             for c in cols[dt]:
@@ -512,7 +518,7 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                       "retratos": retratos, "segredos": segredos,
                       "regras_geradas": {n: g.get("regra") or "" for n, g in geradas.get(t, {}).items()},
                       "estrategia": r.get("estrategia", ""), "opcoes": {dt: opcoes.get(dt, {}) for dt in dts},
-                      "filtros": filtros,
+                      "filtros": filtros, "ligacoes": ligacoes,
                       "duas_fases": {p for f, p in quebras if f == t} | {t}})
     return plano
 
@@ -2252,6 +2258,34 @@ class CargaMapa(carga.Carga):
             if chave in colide:
                 vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
             else:
+                pl, ligado = [], None  # conta-itens-2: item de tabela licenciada liga ao espelho, sem gravar
+                for lg in p.get("ligacoes") or ():
+                    if self._cond(linha, lg["cond"], []) and linha.get(lg["coluna"]) is not None:
+                        ligado = self._ligar_espelho(lg["espelho"], linha.get(lg["coluna"]), linha, pl)
+                        break
+                if ligado is not None and (self._atualizar is None or self._atualizar[0] == ligado):
+                    _v, cl, _p, rv, _a = self._valores(p, linha, chave)
+                    if rv:  # linha inválida: segue o caminho normal (recusada pela regra dela), nunca ligada
+                        ligado = None
+                if ligado is not None and (self._atualizar is None or self._atualizar[0] == ligado):
+                    # o resumo é o relido do item do espelho (como na adoção): a conciliação confere a ligação
+                    nomes = cl[dts[0]][0][0]
+                    cs = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
+                        ", ".join("`%s`" % c for c in nomes), dts[0]), (ligado,))[0])
+                    hd = hashlib.sha256("|".join(canon(x) for x in cs).encode()).digest()
+
+                    def ligar(ligado=ligado, hd=hd):
+                        self._pendencia(t, chave, "ligado_espelho", "baixa")
+                        self._registrar(t, chave, ents[0], ligado, h, hd)
+                    self.cont["ligadas_espelho"] = self.cont.get("ligadas_espelho", 0) + 1
+                    if os.environ.get("CONECTOR_SEM_LOTE") == "1":
+                        ligar()
+                    else:
+                        self._linha_adiada(t, chave, ents[0], h, ligar)
+                    self.origem.setdefault(ents[0], {})[chave] = hd.hex()
+                    if self._fila and self._fila[-1]["linha"][:2] == (t, chave):
+                        self._fila[-1]["origem"] = [(ents[0], chave)]
+                    continue
                 pf = []  # pai do filtro inexistente/ambíguo: recusada pela regra do pai (média), nunca gravada
                 fora = next((f for f in p.get("filtros") or [] if not self._cond(linha, f, pf)), None)
                 if fora is not None:  # so_se: fora do filtro da carga, nunca gravada (pendência baixa, visível)
@@ -2259,6 +2293,7 @@ class CargaMapa(carga.Carga):
                     vals, campos, pend, adiadas = None, None, [], []
                 else:
                     vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
+                    pend = list(pend) + pl  # licenciado sem item no espelho: entra como próprio, com a pendência
                     if not recusa:
                         recusa = self._adocao_presumida(p, vals)
                 if not recusa and self._desdobrado(p, dts[0]) and not vals[dts[0]]:
