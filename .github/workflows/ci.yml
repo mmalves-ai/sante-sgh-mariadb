@@ -46,9 +46,12 @@ jobs:
         run: ./pnpm fronteiras:provar
       # A API e o worker não sobem se a trava de saídas recusar o ambiente: o passo próprio mostra qual
       # chave foi recusada (só o nome e o host, nunca valores), antes de o E2E esperar o servidor.
+      # O executor do GitHub injeta GITHUB_API_URL, GITHUB_GRAPHQL_URL e GITHUB_SERVER_URL (metadados do runner, não
+      # integração do produto): a trava as recusa como destino externo. Saem só do processo que sobe o sistema; a
+      # trava continua igual.
       - name: Trava de saídas (ambiente:verificar)
-        run: ./pnpm ambiente:verificar
+        run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm ambiente:verificar
       - name: E2E do marco (Chrome do runner, channel chrome)
-        run: ./pnpm e2e -- --grep @M00
+        run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm e2e -- --grep @M00
       - name: Segurança (gitleaks, Semgrep, OSV, Trivy, SBOM)
         run: ./pnpm seguranca:verificar
