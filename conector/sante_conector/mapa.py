@@ -198,14 +198,17 @@ def colunas_da_linha(passo):
         if passo.get("modo") in ("composta", "alt_composta") else []
 
 
-_COND = re.compile(r"([A-Z0-9_$]+)((?:>[^=!]+)?)(?:=([^!]*))?(?:!([a-z][a-z0-9_]*))?")
+_COND = re.compile(r"([A-Z0-9_$]+)((?:>[^=!@]+)?)(?:=([^!@]*))?(?:@cod:([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*))?"
+                   r"(?:!([a-z][a-z0-9_]*))?")
 
 
 def condicao(spec):
     """Condição de linha (rodada 4, `se:`, `destino_se:` e `so_se:` na via): `COL[>T>X..][=v1,v2][!regra]`. A coluna
     desta linha (ou, pela encadeada terminada em coluna, a do pai) tem um dos valores (texto aparado; inteiro sem
     '.0'; valor vazio na lista casa o nulo) ou, sem lista, tem valor. `!regra` só no `so_se:` (padrão
-    `fora_do_filtro_da_carga`). None se mal formada."""
+    `fora_do_filtro_da_carga`). `@cod:<tabela>.<coluna>` (C12, glosa do item): o valor, além disso, acha exatamente
+    uma linha de `<tabela>.<coluna>` no DESTINO, como o `cod:` (zero e vazio não acham; ex.: o item só é glosado com
+    o motivo da glosa reconhecido no catálogo). None se mal formada."""
     m = _COND.fullmatch(spec or "")
     if not m:
         return None
@@ -215,7 +218,8 @@ def condicao(spec):
         if not passos or "coluna" not in passos[-1]:
             return None
     return {"coluna": m.group(1), "passos": passos,
-            "valores": None if m.group(3) is None else m.group(3).split(","), "regra": m.group(4) or ""}
+            "valores": None if m.group(3) is None else m.group(3).split(","), "regra": m.group(6) or "",
+            "cod": (m.group(4), m.group(5)) if m.group(4) else None}
 
 
 _COD_COMPOSTO = re.compile(r"([a-z][a-z0-9_]*)\.\(([a-z0-9_]+(?:,[a-z0-9_]+)+)\)=\(((?:valor|=[^,()]*)"

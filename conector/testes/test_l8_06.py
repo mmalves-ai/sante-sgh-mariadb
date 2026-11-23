@@ -132,7 +132,9 @@ class Plano(unittest.TestCase):
         it = self.cols("FCLANEXT", "conta_hospitalar_item")
         self.assertEqual(it["sequencia"]["coluna"], "#seq:ID_FCCTAEXT")
         self.assertEqual(self.plano["FCLANEXT"]["destinos"], ["conta_hospitalar_item", "trilha_auditoria"])
-        self.assertEqual(it["situacao"]["valores"], {"1": "glosado", "0": "lancado", "": "lancado"})
+        sit = [c for c in self.plano["FCLANEXT"]["colunas"]["conta_hospitalar_item"] if c["destino"] == "situacao"]
+        self.assertEqual(sit[0]["valores"], {"1": "glosado", "0": "lancado", "": "lancado"})  # C12: só com motivo
+        self.assertEqual([c["coluna"] for c in sit], ["GLOSADO", "=lancado", "=~lancado"])
         self.assertEqual(tuple(it["motivo_glosa_id"]["cod"]), ("motivo_glosa", "codigo_tuss"))
         self.assertEqual(it["tecnica_termo_terminologia_id"]["depara"], "tiss:48")
         tr = self.cols("FCLANEXT", "trilha_auditoria")

@@ -276,15 +276,16 @@ def _rodada3(ins):
             (4, 11, 1, None, None, 1, DT(2025, 3, 5), "1000", "1000", D("0")),   # quantidade zero: CHECK
             (5, 99, 1, None, None, 1, DT(2025, 3, 6), "1000", "1000", D("1")),   # conta nunca vista
             (6, 12, None, 6, None, 2, DT(2025, 3, 7), "1000", "1000", D("1")),   # diária sem item faturável
-            (7, 12, 1, None, None, 1, DT(2025, 3, 8), "1000", "1000", D("1"))]:  # glosado, motivo fora: CHECK
+            (7, 12, 1, None, None, 1, DT(2025, 3, 8), "1000", "1000", D("1"))]:  # glosado, motivo fora: lançado presumido
         # resultado financeiro: 1 glosado com motivo, recurso, nota, técnica, autorização e autor;
-        # 2 sem glosa ('n') e autor nunca visto; 7 glosado com motivo fora do catálogo oficial
-        fin = {1: dict(GLOSADO="S", MOTGLO=1001, VLR_PG=D("60"), DT_PG=DA(2025, 5, 10), VLR_RE=D("40.12"),
+        # 2 sem glosa ('n') e autor nunca visto; 7 glosado (T) com motivo fora do catálogo oficial (C12: lançado
+        # presumido, motivo no retrato; antes o CHECK da glosa recusava)
+        fin = {1: dict(GLOSADO="T", MOTGLO=1001, VLR_PG=D("60"), DT_PG=DA(2025, 5, 10), VLR_RE=D("40.12"),
                        QTD_RE=D("1"), DT_RE=DA(2025, 5, 20), MOTREA=2, N_PROCES="PROC-EX-1", NOTA=123456,
                        TECNICA="1", COD_AUTORIZ="AUT-EX-1", USUARIO="usuario.exemplo",
                        SEQUENCIAL_ITEM_FATURADO=1),
                2: dict(GLOSADO="n", MOTGLO=0, USUARIO="usuario.fora", NOTA=0, COD_AUTORIZ="  "),
-               7: dict(GLOSADO="S", MOTGLO=9999)}.get(i, {})
+               7: dict(GLOSADO="T", MOTGLO=9999)}.get(i, {})
         q("FCLANEXT", ID=i, ID_FCCTAEXT=cta, ID_TBPROCTO=pr, ID_TBTABDTH=dth, ID_TBMATMED=mm, TIPO=tp, DATA=dt,
           HORA=h, HORA_FINAL=hf, QTDE=qt, UNIT_C=D("100.1234"), VALOR_C=D("100.12"), PACOTE="N", PROCTO=1, LOCAL=1,
           ATO=42, ID_TBCBOPRO_TITULAR=1, CDC=1, VLR_CH=D("10"), OBS="Observação de exemplo", **fin)
@@ -337,9 +338,10 @@ ESPERADO_R3 = {
     "TBHISTTABTHME": _e(1, adotado_existente=1, valor_presumido=1),
     "TBHISTTABTHMI": _e(1, adotado_existente=1, pai_inexistente=1, restricao_destino_1048=1, valor_presumido=2),
     # procedimento e diária gravam (a diária vira o dia); mat/med e diária sem item faturável: 1048; tipo 3 e conta
-    # nunca vistos; quantidade zero: CHECK; autor nunca visto; glosado com motivo fora do catálogo: CHECK da glosa
-    "FCLANEXT": _e(2, pai_inexistente=4, restricao_destino_1048=3, restricao_destino_4025=2, virada_de_dia=1,
-                   codigo_inexistente_destino=1),
+    # nunca vistos; quantidade zero: CHECK; autor nunca visto; glosado com motivo fora do catálogo: lançado presumido
+    # (C12; antes o CHECK da glosa recusava)
+    "FCLANEXT": _e(3, pai_inexistente=4, restricao_destino_1048=3, restricao_destino_4025=1, virada_de_dia=1,
+                   codigo_inexistente_destino=1, valor_presumido=1),
     "REPROEXT": _e(1, pai_inexistente=1, pai_pendente=1),
     "RIPROEXT": _e(1, catalogo_codigo_inexistente=1),
     "FCINTEGRPA": _e(2, pai_pendente=1),

@@ -131,7 +131,7 @@ Mecanismos da rodada 4 de cobertura (pedidos das fatias; prova em `sintetica_d/e
   `minutos_hhmm`); sem duração na linha, a de outra tabela pela `ref:` da via (encadeada terminada em coluna, ou
   `ref:T.(..)=(..)@coluna`, a que o pai gravou no destino); sem nenhuma: NULL com `duracao_ausente`; fim no dia
   seguinte: pendência baixa `virada_de_dia`;
-- condições (`mapa.condicao`): `se:COL[>T>X][=v1,v2]` na via de uma coluna (fora: NULL sem pendência; a próxima
+- condições (`mapa.condicao`): `se:COL[>T>X][=v1,v2][@cod:tab.col]` na via de uma coluna (fora: NULL sem pendência; a próxima
   concorrente é tentada), `destino_se:...` num destino SECUNDÁRIO (fora: o destino não grava, como `opcional`) e
   `so_se:...[!regra]` na tabela (linha fora do filtro: recusada com a pendência BAIXA da regra, nunca gravada; ex.:
   item de referência comercial sem licença do cliente);
@@ -710,6 +710,11 @@ class CargaMapa(carga.Carga):
         if isinstance(v, (str, bytes, bytearray)):
             v = sentinela.aplicar("texto", v)[0]
         s = None if v is None else self._chave(v).strip()
+        if cond.get("cod"):  # `@cod:`: o valor acha uma linha do destino (sem pendência: a coluna do `cod:` a deixa)
+            if not s or s == "0" or (cond["valores"] is not None and s not in cond["valores"]):
+                return False
+            r = self._id_por_codigo(cond["cod"][0], cond["cod"][1], s)
+            return r is not None and r is not _AMBIGUO
         if cond["valores"] is None:
             return bool(s)
         return (s or "") in cond["valores"]

@@ -18,6 +18,6 @@ FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	1	consulta	L8-06: guia de con
 FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	2	sp_sadt	L8-06: guia de SP/SADT
 FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	3	resumo_internacao	L8-06: resumo de internação
 FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	4	honorario_individual	L8-06: honorário individual
-FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	1	glosado	L8-06: S (qualquer caixa): item glosado
-FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	0	lancado	L8-06: N: item sem glosa
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	1	glosado	L8-06: T ou S (qualquer caixa): item glosado (só com motivo reconhecido, C12: colunas.d)
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	0	lancado	L8-06: F ou N: item sem glosa
 FCLANEXT	GLOSADO	conta_hospitalar_item.situacao		lancado	L8-06: nulo: item sem glosa
