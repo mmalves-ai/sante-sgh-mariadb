@@ -179,7 +179,7 @@ FCLANEXT	#data_hora:DATA,HORA	conta_hospitalar_item.realizado_em				L8-06: reali
 FCLANEXT	#data_hora:DATA,HORA_FINAL,HORA	conta_hospitalar_item.realizado_fim_em				L8-06: fim da realização; antes do início passa para o dia seguinte (virada_de_dia)
 FCLANEXT	QTDE	conta_hospitalar_item.quantidade	decimal			L8-06: quantidade; zero ou negativa: CHECK recusa, visível
 FCLANEXT	UNIT_C	conta_hospitalar_item.valor_unitario	decimal			L8-06: valor unitário cobrado (4 casas)
-FCLANEXT	PERC	conta_hospitalar_item.percentual_cobranca	decimal			L8-06: percentual de cobrança (múltiplos, via de acesso); nulo: padrão 100
+FCLANEXT	PERC	conta_hospitalar_item.percentual_cobranca	decimal_nao_negativo			L8-06: percentual de cobrança (múltiplos, via de acesso); nulo: padrão 100; C10 (carga real): negativo (medido só em material: -10, -15, -20, -25, -50 em 1.138 de 25.143 itens do recorte; o valor total já é unitário x quantidade) é ajuste de preço da origem, não percentual de cobrança: vira o padrão 100 com valor_fora_do_dominio (antes: CHECK 4025 recusava o item)
 FCLANEXT	VLR_CH	conta_hospitalar_item.valor_honorario	decimal			L8-06: valor do honorário
 FCLANEXT	VLR_COP	conta_hospitalar_item.valor_custo_operacional	decimal			L8-06: custo operacional
 FCLANEXT	VLR_FILME	conta_hospitalar_item.valor_filme	decimal			L8-06: valor do filme
@@ -222,6 +222,7 @@ FCINTEGRPA	ID_FCLANEXT	producao_repasse.profissional_id			ref:FCLANEXT>ID_TBCBOP
 FCINTEGRPA	VALOR	producao_repasse.valor_repasse	decimal_nao_negativo			L8-06: valor integrado ao repasse
 FCINTEGRPA	PERCENTUAL	producao_repasse.percentual	decimal_nao_negativo			L8-06: percentual aplicado
 FCINTEGRPA	DATA_HORA_INTEGRACAO	producao_repasse.integrado_em	data_hora			L8-06: envio ao repasse; vazio: NOT NULL recusa, visível
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.integrado_em	data_hora		ref:FCLANEXT>DATA;se:DATA_HORA_INTEGRACAO=	C10 (carga real, 2026-11-23): integração sem data na origem (medido: 6.812 de 10.726, todas com a data do item): integrado_em ESTIMADO pela data de realização do item (concorrente: vale só com DATA_HORA_INTEGRACAO vazia); antes o NOT NULL recusava a produção (1048)
 FCLANAUD	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L8-06: histórico da auditoria item a item como trilha da auditoria da conta (retrato completo; F4-decisoes-destino.md)
 FCLANAUD	DATA_GRA	trilha_auditoria.ocorrido_em	data		trilha_auditoria	L8-06: data da gravação da auditoria; vazia: a realização do item (concorrente)
 FCLANAUD	#data_hora:DATA,HORA	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-06: realização do item auditado (concorrente)

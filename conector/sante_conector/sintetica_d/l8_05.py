@@ -410,11 +410,13 @@ def linhas(r, ins):
         for i in (1, 2):
             ins(tab, [_falso(tp, i) for _, tp, _ in COLUNAS[tab]])
     # planos: 3 repete o código 1 na fonte 1 (chave única: 1062); 4 sem nome (1048); 5 S/N fora do domínio (padrão
-    # falso, gravado); 6 fonte nunca vista (pai_inexistente + 1048); 7 sem fonte (1048)
+    # falso, gravado); 6 fonte nunca vista (pai_inexistente + 1048); 7 sem fonte e sem ligação (pai_inexistente +
+    # 1048); 8 sem fonte, ligado às fontes 2 e 1 por TBTIPPLCONV (C10: fonte estimada 1, a menor, escolha_pelo_menor)
     for i, cod, nome, cop, conv in [(1, 1, "Plano basico exemplo", "S", 1), (2, 2, "Plano  especial  ex", "N", 1),
                                     (3, 1, "Plano repetido ex", "N", 1), (4, 3, None, "S", 2),
                                     (5, 4, "Plano quatro ex", "X", 2), (6, 5, "Plano orfao ex", "N", 99),
-                                    (7, 6, "Plano sem fonte ex", "N", None)]:
+                                    (7, 6, "Plano sem fonte ex", "N", None),
+                                    (8, 7, "Plano generico ex", "N", None)]:
         _ins(ins, "TBTIPPLANO", ID=i, COD=cod, NOME=nome, PLANO_COOPART=cop, ID_TBCONVEN=conv)
     # diárias e taxas: 2 cobra taxa fora do domínio (padrão verdadeiro, gravado); 4 sem nome (1048); 5 tabela nunca
     # vista (pai_inexistente + 1048); 6 meses negativos (NULL com pendência, gravado); 7 repete TAB 1 + OPE 10 (1062);
@@ -479,8 +481,9 @@ def linhas(r, ins):
              GRUPO=g, SUBGRUPO=sg, ITEM=it, CTA_CONTABIL=cta)
     # diária por plano e local: 1 com local; 2 todos os locais; 3 sem diária (1048); 4 fonte nunca vista
     # (pai_inexistente + 1048); 5 plano recusado (TBTIPPLANO 4: pai_pendente); 6 local nunca visto (NULL, gravado)
+    # 7 e 8: plano genérico 8 (fonte estimada pelo C10), gravados
     for conv, pl, dth, loc in [(1, 1, 1, 1), (1, 2, 2, None), (2, 5, None, None), (9, 1, 1, None), (2, 4, 3, None),
-                               (2, 1, 6, 7)]:
+                               (2, 1, 6, 7), (2, 8, 2, None), (1, 8, 3, None)]:
         _ins(ins, "TBTIPPLCONV", CONV=conv, ID_TBTIPPLANO=pl, ID_TBTABDTH=dth, ID_TBLOCCON=loc)
     # versões TISS da origem: 1 = 4.03.00 (no catálogo oficial); 2 = 3.05.00 (sem par no catálogo)
     for i, cod in [(1, "4.03.00"), (2, "3.05.00")]:
@@ -547,8 +550,9 @@ def linhas(r, ins):
         for rpa, lan in [(1, 10), (2, 11), (1, 99)]:
             _ins(ins, "RPLANRPA", ID_RPRPA=rpa, ID_RPLANEVE=lan)
     esperado = {
-        "TBTIPPLANO": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_1048": 3,
-                                                     "valor_fora_do_dominio": 1, "pai_inexistente": 1}},
+        "TBTIPPLANO": {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_1048": 3,
+                                                     "valor_fora_do_dominio": 1, "pai_inexistente": 2,
+                                                     "escolha_pelo_menor": 1}},
         "TBTABDTH": {"gravados": 4, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 3,
                                                    "restricao_destino_1048": 2, "restricao_destino_1062": 1,
                                                    "pai_inexistente": 1}},
@@ -566,8 +570,8 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 1}},
         "TBVLRTHM": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
-        "TBTIPPLCONV": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 2,
-                                                      "pai_pendente": 1, "vigencia_sem_fonte": 5}},
+        "TBTIPPLCONV": {"gravados": 5, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 2,
+                                                      "pai_pendente": 1, "vigencia_sem_fonte": 7}},
         "TBTISS": {"gravados": 1, "pendencias": {"catalogo_codigo_inexistente": 2, "pai_inexistente": 2,
                                                  "restricao_destino_1048": 2, "vigencia_sem_fonte": 3}},
         "TBVLRDTH": {"gravados": 2, "pendencias": {"restricao_destino_1048": 3, "pai_ambiguo": 1,

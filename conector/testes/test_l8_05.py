@@ -69,8 +69,9 @@ class Plano(unittest.TestCase):
                     ("TBEMIREF", "classificacao_despesa_id"): "TBCLASSI",
                     ("TBENTCON", "fonte_pagadora_id"): "TBCONVEN",
                     ("TBVLRTHM", "preco_procedimento_id"): "TBTABTHM(TAB,COD)"}
-        for (t, dc), ref in esperado.items():
-            self.assertEqual(self.cols(t)[dc]["referencia"], ref, (t, dc))
+        for (t, dc), ref in esperado.items():  # concorrentes (C10: fonte estimada do plano): vale a primeira
+            primeira = next(c for c in self.plano[t]["colunas"][DESTINOS[t][0]] if c["destino"] == dc)
+            self.assertEqual(primeira["referencia"], ref, (t, dc))
         # a chave composta do pai é a do mapa (TAB,COD), na mesma ordem
         self.assertEqual(self.cols("TBVLRTHM")["preco_procedimento_id"]["passos"][0]["arg"], ["TAB", "COD"])
 

@@ -290,7 +290,7 @@ def _rodada3(ins):
     q("REPROEXT", REG=1, PROCTO=1, CRM=1, SEQ=3, ATO=1, ID_FCLANEXT=None, LOTE="LOTE-EX-3")  # sem item
     q("RIPROEXT", REG=1, CONTA=1.0, PROCTO=1, SEQ=1, ID_FCLANEXT=2, TECNICA=5)  # técnica fora do catálogo
     # produção do repasse
-    for i, it, dt in [(1, 1, DT(2025, 3, 31, 18)), (2, 3, DT(2025, 3, 31)), (3, 1, None)]:  # 2: item recusado; 3: sem data
+    for i, it, dt in [(1, 1, DT(2025, 3, 31, 18)), (2, 3, DT(2025, 3, 31)), (3, 1, None)]:  # 2: item recusado; 3: sem data (C10: a do item, gravada)
         q("FCINTEGRPA", ID=i, ID_TBTIPOLANCVLR=1, ID_FCLANEXT=it, ID_RPLANEVE=1, VALOR=D("30"), PERCENTUAL=D("30"),
           DATA_HORA_INTEGRACAO=dt)
     # histórico da auditoria (retrato completo)
@@ -338,7 +338,7 @@ ESPERADO_R3 = {
                    codigo_inexistente_destino=1),
     "REPROEXT": _e(1, pai_inexistente=1, pai_pendente=1),
     "RIPROEXT": _e(1, catalogo_codigo_inexistente=1),
-    "FCINTEGRPA": _e(1, pai_pendente=1, restricao_destino_1048=1),
+    "FCINTEGRPA": _e(2, pai_pendente=1),
     "FCLANAUD": _e(2, pai_inexistente=2),
     # item 3 recusado: a trilha dele também (pai_pendente); item 99 nunca visto: grava com o item NULL
     "FCLANEXTSEQITEM": _e(3, pai_pendente=1, pai_inexistente=1),
