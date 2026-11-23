@@ -121,6 +121,19 @@
 
 **Ao retomar:** relatório de 50 min (CronCreate), vigia de alarme (`grep -E 'ALARME|FIM'` no progresso-carga.log) e:
 
+0. **PUSH PENDENTE (23/11 16h20):** bc29b4f6 e o commit desta passagem estão só locais. A simulação da esteira
+   (tools/obra/ci-sim.sh) foi adiada porque a memória disponível caiu a 8 a 12 GB com o worker da carga em cerca de
+   25 GB: abaixo de 2,5 GB o vigia derruba a carga. Rodar a simulação e o push assim que a memória passar de 20 GB
+   ou a carga terminar. O Oracle de referência (sante-sgh-oracle) foi parado às 15h37 pela mesma razão
+   (religar com docker start depois da carga).
+0b. **Defeito de desenho da SBIS-16 diante da importação (rodada própria, logo depois da ids-bigint):** o conector
+   grava trilha_auditoria (L5-05, L5-08, L6-04, L6-11, L7-03; 647 mil linhas na ProntoCardio) sem hash, e a prova da
+   cadeia (packages/nucleo/src/trilha.ts ~255) acusa como quebra toda linha sem cadeia acima do marco. Em 23/11
+   16h10 as migrações 00_NUCLEO/23 e 24 foram aplicadas na ProntoCardio (marco 649.796) para o dono entrar (sem
+   elas o login dava 503 trilha-indisponivel); as linhas que a carga gravar depois do marco vão aparecer como
+   quebra. Corrigir: marcar a linha importada (coluna de origem ou escopo próprio) e tirá-la da cadeia, ou o
+   conector encadear; reclassificar as já gravadas pelo conector_ctl_prontocardio.conector_origem
+   (entidade_destino='trilha_auditoria', id_destino). Vale também para o conector diferencial (sincronizar).
 1. **Rodada `ids-bigint` (PRIMEIRA, grave):** o espelho (tools/db/espelho.py, BASE_LOCAL = 10^12, desde f45fafbc
    de 21/11) põe todo item PRÓPRIO do hospital nas tabelas de catálogo com id >= 10^12, mas 64 arquivos de
    packages/contratos usam `id = z.number().int().positive().max(2_147_483_647)`. Toda gravação que referencie item
@@ -142,8 +155,7 @@
    Conferir a esteira pela API (curl com o token GITHUB do .env; não há gh).
 4. **E2E W0-07 do NIR** (apps/web/e2e/w007-nir-crud.spec.ts, reescrito para o cancelamento) não rodou: o Playwright
    não subiu o webServer em 240 s na VM. Investigar.
-5. **Depois da carga (execução 11):** aplicar no cliente_prontocardio as migrações 00_NUCLEO/24 (trilha encadeada,
-   SBIS-16) e 07_INT/24 (NIR; antes contar pedido_leito de origem 'sistema' cancelado ou rejeitado e reserva_leito
+5. **Depois da carga (execução 11):** 00_NUCLEO/23 e 24 JÁ aplicadas (23/11 16h10); aplicar no cliente_prontocardio a 07_INT/24 (NIR; antes contar pedido_leito de origem 'sistema' cancelado ou rejeitado e reserva_leito
    'cancelada' de origem 'sistema'), rodar `tools/db/semear-acesso.ts prontocardio` e reiniciar a API.
 6. **Painel:** API e web sobem à mão (não voltam no reinício): comandos na seção Ambiente; depois de qualquer
    criar_cliente, rodar o semear-acesso do cliente e reiniciar a API (ela guarda os estabelecimentos ao subir).
