@@ -23,11 +23,17 @@ export type MetodoSegundoFator = (typeof METODOS_SEGUNDO_FATOR)[number];
 export const ehMetodoSegundoFator = (v: unknown): v is MetodoSegundoFator =>
   typeof v === 'string' && (METODOS_SEGUNDO_FATOR as readonly string[]).includes(v);
 
-export type RecusaCodigoEmail = 'muitos-envios' | 'sem-email';
+export type RecusaCodigoEmail = 'muitos-envios' | 'sem-email' | 'metodo-nao-escolhido';
+
+const MENSAGEM_RECUSA: Record<RecusaCodigoEmail, string> = {
+  'muitos-envios': 'Muitos códigos pedidos; aguarde.',
+  'sem-email': 'Conta sem e-mail cadastrado.',
+  'metodo-nao-escolhido': 'O código por e-mail não é o segundo fator escolhido nesta conta.',
+};
 
 export class ErroCodigoEmail extends Error {
   constructor(readonly codigo: RecusaCodigoEmail) {
-    super(codigo === 'muitos-envios' ? 'Muitos códigos pedidos; aguarde.' : 'Conta sem e-mail cadastrado.');
+    super(MENSAGEM_RECUSA[codigo]);
     this.name = 'ErroCodigoEmail';
   }
 }

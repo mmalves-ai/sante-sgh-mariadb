@@ -18,6 +18,7 @@ import {
   contaUsuario,
   type DesfechoConferenciaCodigo,
   ehMetodoSegundoFator,
+  ErroCodigoEmail,
   type MetodoSegundoFator,
   ServicoCodigoEmail,
 } from './codigo-email.js';
@@ -40,17 +41,26 @@ import {
 export type NucleoAcessoEmail = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 export const TABELA_PREFERENCIA_SEGUNDO_FATOR = 'preferencia_segundo_fator';
 
+// A conta ativa de pessoa COM vínculo vigente no estabelecimento pedido (código), como a porta de memória decide pelo
+// par estabelecimento e login: sem vínculo, nada é enviado.
 const SQL_EMAIL_CONTA = `SELECT u.id, u.email FROM usuario u
- WHERE u.login = ? AND u.excluido_em IS NULL AND u.situacao = 'ativo' AND u.tipo_conta = 'pessoa'`;
+   JOIN usuario_estabelecimento ue
+     ON ue.usuario_id = u.id AND ue.excluido_em IS NULL
+    AND ue.vigencia_inicio <= UTC_DATE() AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= UTC_DATE())
+   JOIN estabelecimento e ON e.id = ue.estabelecimento_id AND e.codigo = ?
+  WHERE u.login = ? AND u.excluido_em IS NULL AND u.situacao = 'ativo' AND u.tipo_conta = 'pessoa'
+  LIMIT 1`;
 
-/** O e-mail da conta ativa de pessoa (null: sem conta, inativa, de serviço ou sem e-mail válido). */
+/** O e-mail da conta ativa de pessoa vinculada ao estabelecimento (null: sem conta, sem vínculo, inativa, de serviço
+ *  ou sem e-mail válido). */
 async function emailDaConta(
   nucleo: NucleoAcessoEmail,
   cliente: string,
+  estabelecimento: string,
   login: string,
 ): Promise<{ id: number; email: string } | null> {
   const r = await nucleo.lerSomente({ cliente, correlacao: 'acesso-email' }, (l) =>
-    l.uma(SQL_EMAIL_CONTA, [login]),
+    l.uma(SQL_EMAIL_CONTA, [estabelecimento, login]),
   );
   const email = r ? String(r['email'] ?? '').trim() : '';
   return r && ENDERECO_EMAIL.test(email) ? { id: Number(r['id']), email } : null;
@@ -67,7 +77,7 @@ export class EnvioRecuperacaoPropria implements PortaEnvioRecuperacao {
   ) {}
 
   async enviar(m: MensagemRecuperacao): Promise<boolean> {
-    const conta = await emailDaConta(this.nucleo, this.cliente, m.login);
+    const conta = await emailDaConta(this.nucleo, this.cliente, m.estabelecimento, m.login);
     if (!conta) return false;
     await this.email.enviar({
       para: conta.email,
@@ -196,20 +206,34 @@ export class PreferenciaSegundoFatorPropria {
   }
 }
 
-/** O código de 6 dígitos ao e-mail do usuário do cliente (depois da senha conferida no login). */
+/** O código de 6 dígitos ao e-mail do usuário do cliente (depois da senha conferida no login). Só vale para quem
+ *  ESCOLHEU o e-mail como segundo fator: quem usa o aplicativo não troca de fator por um mais fraco. */
 export class SegundoFatorEmailUsuario {
   constructor(
     private readonly nucleo: NucleoAcessoEmail,
     private readonly cliente: (rede: string) => string,
     private readonly codigos: ServicoCodigoEmail,
+    private readonly preferencia: Pick<PreferenciaSegundoFatorPropria, 'metodo'>,
   ) {}
 
+  private async exigirEscolha(rede: string, estabelecimento: string, login: string): Promise<void> {
+    if ((await this.preferencia.metodo(rede, estabelecimento, login)) !== 'email')
+      throw new ErroCodigoEmail('metodo-nao-escolhido');
+  }
+
   async emitir(rede: string, estabelecimento: string, login: string): Promise<{ validadeMinutos: number }> {
-    const conta = await emailDaConta(this.nucleo, this.cliente(rede), login);
+    await this.exigirEscolha(rede, estabelecimento, login);
+    const conta = await emailDaConta(this.nucleo, this.cliente(rede), estabelecimento, login);
     return this.codigos.emitir(contaUsuario(rede, estabelecimento, login), conta?.email ?? null);
   }
 
-  conferir(rede: string, estabelecimento: string, login: string, codigo: string): Promise<DesfechoConferenciaCodigo> {
+  async conferir(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    codigo: string,
+  ): Promise<DesfechoConferenciaCodigo> {
+    await this.exigirEscolha(rede, estabelecimento, login);
     return this.codigos.conferir(contaUsuario(rede, estabelecimento, login), String(codigo ?? ''));
   }
 }
@@ -260,12 +284,13 @@ export function montarAcessoEmailProprio(d: DependenciasAcessoEmail): ServicosAc
     aviso,
   });
   const codigos = d.email ? new ServicoCodigoEmail(d.armazem, d.email) : null;
+  const preferencia = new PreferenciaSegundoFatorPropria(d.nucleo, resolver, executor);
   const np = d.plataforma !== undefined ? d.plataforma : nucleoPlataforma(d.nucleo);
   return {
     recuperacao,
     trocaRapida,
-    preferencia: new PreferenciaSegundoFatorPropria(d.nucleo, resolver, executor),
-    codigoUsuario: codigos ? new SegundoFatorEmailUsuario(d.nucleo, () => d.cliente, codigos) : null,
+    preferencia,
+    codigoUsuario: codigos ? new SegundoFatorEmailUsuario(d.nucleo, () => d.cliente, codigos, preferencia) : null,
     recuperacaoPlataforma: np
       ? new ServicoRecuperacaoPlataforma(np, d.armazem, d.email, codigos, {
           linkTela: `${base}/plataforma/recuperar-senha`,

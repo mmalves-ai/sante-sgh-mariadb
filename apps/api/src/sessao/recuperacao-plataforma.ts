@@ -52,7 +52,13 @@ export type TipoEventoCredencialPlataforma =
 
 export class ErroRecuperacaoPlataforma extends Error {
   constructor(
-    readonly codigo: 'indisponivel' | 'muitos-pedidos' | 'entrada-invalida' | 'token-invalido' | 'conta-impedida',
+    readonly codigo:
+      | 'indisponivel'
+      | 'muitos-pedidos'
+      | 'entrada-invalida'
+      | 'token-invalido'
+      | 'conta-impedida'
+      | 'metodo-nao-escolhido',
     readonly status: 400 | 409 | 429 | 503,
     mensagem: string,
   ) {
@@ -279,12 +285,23 @@ export class ServicoRecuperacaoPlataforma {
     });
   }
 
+  /** O código por e-mail só vale para quem o escolheu: quem usa o aplicativo não troca por um fator mais fraco. */
+  private exigirEmailEscolhido(adm: LinhaAdm): void {
+    if (adm.metodo_segundo_fator !== 'email')
+      throw new ErroRecuperacaoPlataforma(
+        'metodo-nao-escolhido',
+        409,
+        'O código por e-mail não é o segundo fator escolhido nesta conta.',
+      );
+  }
+
   /** Envia o código ao e-mail do administrador (depois da senha conferida no login). */
   async emitirCodigo(id: number, ip: string | null, correlacao: string): Promise<{ validadeMinutos: number }> {
     if (!this.codigos) throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
     const adm = await this.lerPorId(id);
     if (!adm || !bool(adm.ativo))
       throw new ErroRecuperacaoPlataforma('conta-impedida', 409, 'A conta não está ativa.');
+    this.exigirEmailEscolhido(adm);
     const r = await this.codigos.emitir(contaPlataforma(id), String(adm.email), 'Código de acesso da plataforma');
     await this.evento(id, 'codigo_email_enviado', ip, correlacao).catch(() => undefined);
     return r;
@@ -298,6 +315,10 @@ export class ServicoRecuperacaoPlataforma {
     correlacao: string,
   ): Promise<DesfechoConferenciaCodigo> {
     if (!this.codigos) throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
+    const adm = await this.lerPorId(id);
+    if (!adm || !bool(adm.ativo))
+      throw new ErroRecuperacaoPlataforma('conta-impedida', 409, 'A conta não está ativa.');
+    this.exigirEmailEscolhido(adm);
     const r = await this.codigos.conferir(contaPlataforma(id), String(codigo ?? ''));
     await this.evento(id, r === 'ok' ? 'codigo_email_conferido' : 'codigo_email_recusado', ip, correlacao).catch(
       (e: unknown) =>

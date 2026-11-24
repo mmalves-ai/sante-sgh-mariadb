@@ -33,6 +33,8 @@ const BANCO = `cliente_${CLIENTE}`;
 const PLAT = 'plataforma_validacao_acesso_email';
 const REDE = 'rede-teste';
 const HOSPITAL = 'aem01';
+/** Estabelecimento fictício SEM vínculo com as contas aem (o pedido por ele não manda e-mail). */
+const OUTRO = 'aem02';
 const LOGIN = 'aem.maria';
 const SEM_EMAIL = 'aem.semail';
 const RAPIDO = { memoria: 8_192, passes: 1, paralelismo: 1 };
@@ -49,11 +51,12 @@ function sql(banco: string | null, texto: string): string {
 const tokenDe = (texto: string) => /token=([A-Za-z0-9_-]{43})/.exec(texto)?.[1] ?? '';
 const codigoDe = (texto: string) => /(\d{6})/.exec(texto)?.[1] ?? '';
 
-/** A configuração com a chave acesso.recuperacaoSenha ligada no estabelecimento inteiro. */
+/** A configuração com a chave acesso.recuperacaoSenha ligada no estabelecimento inteiro e o pré-requisito cumprido. */
 const configuracao = {
   chaves: () =>
     Promise.resolve([{ chave: 'acesso.recuperacaoSenha', tipo: 'recurso', ligada: true, escopo: 'hospital', valor: '*' }]),
-  prerequisitos: () => Promise.resolve([]),
+  prerequisitos: () =>
+    Promise.resolve([{ recurso: 'acesso.recuperacaoSenha', tipo: 'aprovacao', situacao: 'cumprido', validade: null }]),
   valoresParametro: () => Promise.resolve([]),
 } as unknown as FonteConfiguracao & { valoresParametro: () => Promise<[]> };
 
@@ -72,8 +75,9 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     sql(
       BANCO,
       `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em)
-         SELECT '${HOSPITAL}', 'Hospital fictício aem', 'Hospital fictício aem (teste)', NOW(3) FROM DUAL
-          WHERE NOT EXISTS (SELECT 1 FROM estabelecimento WHERE codigo = '${HOSPITAL}');
+         SELECT x.c, 'Hospital fictício aem', 'Hospital fictício aem (teste)', NOW(3)
+           FROM (SELECT '${HOSPITAL}' AS c UNION ALL SELECT '${OUTRO}') x
+          WHERE NOT EXISTS (SELECT 1 FROM estabelecimento WHERE codigo = x.c);
        INSERT INTO usuario (login, nome, dispensa_cpf, email, criado_em)
          SELECT l, 'Conta fictícia aem', TRUE, e, NOW(3)
            FROM (SELECT '${LOGIN}' AS l, 'aem.maria@exemplo.invalid' AS e UNION ALL SELECT '${SEM_EMAIL}', NULL) x
@@ -149,9 +153,15 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
       expect(await s.recuperacao.pedir(REDE, { estabelecimento: HOSPITAL, login }, '10.0.0.9', ORIGEM)).toHaveProperty(
         'mensagem',
       );
+    // Conta existente, mas sem vínculo com o estabelecimento pedido: a mesma resposta e nenhum e-mail.
+    expect(await s.recuperacao.disponivel(REDE, OUTRO)).toEqual({ disponivel: true });
+    expect(
+      await s.recuperacao.pedir(REDE, { estabelecimento: OUTRO, login: LOGIN }, '10.0.0.9', ORIGEM),
+    ).toHaveProperty('mensagem');
     await s.recuperacao.aguardarEnvios();
     const novas = email.enviadas.slice(antes);
     expect(novas.map((m) => m.para)).toEqual(['aem.maria@exemplo.invalid']);
+    expect(novas[0]?.texto).toContain(`no estabelecimento ${HOSPITAL}`);
     expect(novas[0]?.texto).toContain('http://127.0.0.1:5173/recuperar-senha?token=');
     const token = tokenDe(novas[0]?.texto ?? '');
     const r = await s.recuperacao.usar(REDE, token, ORIGEM);
@@ -171,6 +181,16 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
   it('usuário: escolhe o código no e-mail (Executor) e confere o código uma vez', async () => {
     const ator = { rede: REDE, hospital: HOSPITAL, login: LOGIN, estacao: null, correlacao: 'aem-escolha' };
     expect(await s.preferencia.metodo(REDE, HOSPITAL, LOGIN)).toBe('aplicativo');
+    const codigos = s.codigoUsuario;
+    expect(codigos).not.toBe(null);
+    if (!codigos) return;
+    // Quem usa o aplicativo não recebe nem confere código por e-mail (nada de trocar por um fator mais fraco).
+    const antesApp = email.enviadas.length;
+    await expect(codigos.emitir(REDE, HOSPITAL, LOGIN)).rejects.toMatchObject({ codigo: 'metodo-nao-escolhido' });
+    await expect(codigos.conferir(REDE, HOSPITAL, LOGIN, '123456')).rejects.toMatchObject({
+      codigo: 'metodo-nao-escolhido',
+    });
+    expect(email.enviadas.length).toBe(antesApp);
     expect(await s.preferencia.escolher(ator, 'email')).toEqual({ anterior: 'aplicativo' });
     expect(await s.preferencia.metodo(REDE, HOSPITAL, LOGIN)).toBe('email');
     expect(await s.preferencia.escolher(ator, 'aplicativo')).toEqual({ anterior: 'email' });
@@ -178,16 +198,14 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     await expect(s.preferencia.escolher({ ...ator, login: SEM_EMAIL }, 'email')).rejects.toMatchObject({
       problema: { codigo: 'sem-email' },
     });
-    const codigos = s.codigoUsuario;
-    expect(codigos).not.toBe(null);
-    if (!codigos) return;
     const antes = email.enviadas.length;
     await codigos.emitir(REDE, HOSPITAL, LOGIN);
     const codigo = codigoDe(email.enviadas[antes]?.texto ?? '');
     expect(email.enviadas[antes]?.para).toBe('aem.maria@exemplo.invalid');
     expect(await codigos.conferir(REDE, HOSPITAL, LOGIN, codigo)).toBe('ok');
     expect(await codigos.conferir(REDE, HOSPITAL, LOGIN, codigo)).toBe('invalido');
-    await expect(codigos.emitir(REDE, HOSPITAL, SEM_EMAIL)).rejects.toMatchObject({ codigo: 'sem-email' });
+    // A conta sem e-mail não consegue escolher o e-mail; continua no aplicativo e não recebe código.
+    await expect(codigos.emitir(REDE, HOSPITAL, SEM_EMAIL)).rejects.toMatchObject({ codigo: 'metodo-nao-escolhido' });
   }, 60_000);
 
   it('administrador da plataforma: esqueci a senha, troca obrigatória e código no e-mail', async () => {

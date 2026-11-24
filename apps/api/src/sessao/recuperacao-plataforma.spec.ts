@@ -146,4 +146,16 @@ describe('ServicoRecuperacaoPlataforma', () => {
     ]);
     await expect(s.escolherMetodoSegundoFator(5, 'sms' as never, null, 'c')).rejects.toMatchObject({ status: 400 });
   });
+
+  it('segundo fator: quem usa o aplicativo não recebe nem confere código por e-mail (409)', async () => {
+    const { s, email, banco } = montar([adm(6, 'adm6@exemplo.invalid')]);
+    expect(await s.metodoSegundoFator(6)).toBe('aplicativo');
+    await expect(s.emitirCodigo(6, null, 'c')).rejects.toMatchObject({ codigo: 'metodo-nao-escolhido', status: 409 });
+    await expect(s.conferirCodigo(6, '123456', null, 'c')).rejects.toMatchObject({
+      codigo: 'metodo-nao-escolhido',
+      status: 409,
+    });
+    expect(email.enviadas).toHaveLength(0);
+    expect(banco.eventos).toHaveLength(0);
+  });
 });
