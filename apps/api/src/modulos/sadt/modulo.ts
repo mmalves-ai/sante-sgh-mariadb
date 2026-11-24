@@ -38,6 +38,7 @@ import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
 import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
+import { OrcamentoExamesController, SERVICO_ORCAMENTO_SADT } from './orcamento-exames.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
@@ -131,6 +132,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       PacsController,
       CatalogoSadtController,
       PedidoSadtController,
+      OrcamentoExamesController,
       MapaTrabalhoController,
       LaudoRedacaoController,
     ],
@@ -157,6 +159,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoPedidoSadt } = await import('./aplicacao/pedido-propria.js');
           return new ServicoPedidoSadt(ctx.nucleo);
+        },
+      },
+      // Orçamento de exames particulares e conversão (05-SADT linha 26): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_ORCAMENTO_SADT,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoOrcamentoSadt } = await import('./aplicacao/orcamento-propria.js');
+          return new ServicoOrcamentoSadt(ctx.nucleo);
         },
       },
       // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): só no banco do cliente (sem ele, 503).

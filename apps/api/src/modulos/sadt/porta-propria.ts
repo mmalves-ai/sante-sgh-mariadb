@@ -494,7 +494,8 @@ async function orcamentosLidos(l: Leitor, ls: readonly Linha[], hoje: string): P
             e.id AS exame_id, e.codigo, e.nome, e.tipo_servico, mi.sigla_padrao
        FROM orcamento_particular_item oi
        LEFT JOIN item_faturavel itf ON itf.id = oi.item_faturavel_id
-       LEFT JOIN exame e ON (e.item_faturavel_id = oi.item_faturavel_id OR (oi.item_faturavel_id IS NULL AND e.codigo = oi.descricao))
+       LEFT JOIN exame e ON (e.id = oi.exame_id OR (oi.exame_id IS NULL AND (e.item_faturavel_id = oi.item_faturavel_id
+                   OR (oi.item_faturavel_id IS NULL AND e.codigo = oi.descricao))))
                    AND e.excluido_em IS NULL
        LEFT JOIN modalidade_imagem mi ON mi.id = e.modalidade_imagem_id
       WHERE oi.tipo_item = 'exame' AND oi.excluido_em IS NULL AND oi.orcamento_particular_id IN (${lista(ids.length)})
