@@ -334,7 +334,7 @@ export async function apurarConta(
             x.aplica_internacao, x.aplica_ambulatorial, x.aplica_externo, x.aplica_urgencia, x.aplica_domiciliar,
             DATE_FORMAT(x.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(x.vigencia_fim, '%Y-%m-%d') AS fim
        FROM regra_lancamento_excecao x JOIN regra_lancamento rl ON rl.id = x.regra_lancamento_id
-      WHERE rl.ativo = TRUE AND rl.gatilho IN ('abertura_atendimento','diaria_internacao') AND x.excluido_em IS NULL`,
+      WHERE rl.ativo = TRUE AND rl.gatilho IN ('abertura_atendimento','diaria_internacao')`,
     [],
     { teto: 5000 },
   );

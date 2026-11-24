@@ -101,6 +101,11 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`DELETE FROM integracao_mensagem WHERE estabelecimento_id IN (${em})`, ests);
 }
 
+// Uma faixa por marca (A: porta-propria, N: NIR, C: conta-entrada): duas marcas na mesma faixa colidem no número de
+// prontuário e na ordem do cadastro quando as massas convivem no mesmo cliente.
+const BASE_PRONTUARIO: Readonly<Record<string, number>> = { A: 930_100, N: 930_200, C: 930_300 };
+const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030 };
+
 export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
   const nucleo = new NucleoProprio();
   const P = `L0301${marca}`;
@@ -199,7 +204,7 @@ export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
           [nome, agora],
         );
       const pacientes: number[] = [];
-      for (const [k, base] of [1, 2, 3].map((k) => [k, marca === 'A' ? 930_100 : 930_200] as const)) {
+      for (const [k, base] of [1, 2, 3].map((k) => [k, BASE_PRONTUARIO[marca] ?? 930_900] as const)) {
         const pf = await pessoa(`PACIENTE SINTETICO ${P} ${k}`);
         pacientes.push(
           await g(
@@ -256,7 +261,7 @@ export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
       for (const [k, etapa] of etapas.entries())
         await cad('situacao_limpeza', `${P}-${etapa}`.slice(0, 30), {
           descricao: `${etapa} ${P}`,
-          ordem: (marca === 'A' ? 3010 : 3020) + k,
+          ordem: (BASE_ORDEM[marca] ?? 3090) + k,
           cor: '#336699',
           etapa,
         });

@@ -258,3 +258,21 @@ describe('exceções da regra de lançamento e tabela forçada', () => {
     expect(r.lancar.find((l) => l.chave === 'diaria')?.tabelaPreco).toBeNull();
   });
 });
+
+describe('troca de acomodação e taxas', () => {
+  it('a diária do dia é refeita na nova acomodação; a taxa do mesmo dia continua (não depende da acomodação)', () => {
+    const taxas = [taxa({ regraItem: 1 })];
+    const r = apurarLancamentos(
+      base({
+        taxas,
+        trechos: [{ inicio: '2026-11-20T13:00', fim: null, categoriaAcomodacao: UTI }],
+        vigentes: [
+          { id: 1, chave: 'diaria', dia: '2026-11-20', item: 100, categoriaAcomodacao: ENF },
+          { id: 2, chave: 'taxa:1', dia: '2026-11-20', item: 500, categoriaAcomodacao: ENF },
+        ],
+      }),
+    );
+    expect(r.estornar).toEqual([{ id: 1, motivo: 'troca_acomodacao' }]);
+    expect(r.lancar.map((l) => `${l.chave}:${l.item}`)).toEqual(['diaria:200']);
+  });
+});

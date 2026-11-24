@@ -493,7 +493,9 @@ export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracaoLancamen
       });
       continue;
     }
-    if (d.item === v.item && d.categoriaAcomodacao === v.categoriaAcomodacao) {
+    // A taxa não depende da acomodação: só a diária é refeita quando a acomodação do dia muda.
+    const taxa = d.chave.startsWith('taxa:');
+    if (d.item === v.item && (taxa || d.categoriaAcomodacao === v.categoriaAcomodacao)) {
       atendidos.add(k);
       continue;
     }

@@ -282,6 +282,10 @@ describe.skipIf(SEM_BANCO_ADT)(`conta na entrada e diárias automáticas (MariaD
       await e.executar('UPDATE internacao SET data_hora_entrada = ? WHERE id = ?', [t, internacao]);
       await e.executar('UPDATE ocupacao_leito SET data_hora_inicio = ? WHERE internacao_id = ?', [t, internacao]);
       await e.executar('UPDATE conta_hospitalar SET inicio_em = ? WHERE id = ?', [t, conta]);
+      await e.executar(
+        'UPDATE atendimento a JOIN internacao i ON i.atendimento_id = a.id SET a.entrada_em = ? WHERE i.id = ?',
+        [t, internacao],
+      );
     });
     const r2 = await rotina();
     expect(Number(r2['lancados'])).toBeGreaterThan(0);
@@ -341,11 +345,11 @@ describe.skipIf(SEM_BANCO_ADT)(`conta na entrada e diárias automáticas (MariaD
     expect(
       await lerAdt(
         M(),
-        `SELECT c.situacao, c.valor_total + 0 AS total, mc.codigo FROM conta_hospitalar c
+        `SELECT c.situacao, c.valor_total = 0 AS zerada, mc.codigo FROM conta_hospitalar c
            JOIN motivo_cancelamento_conta mc ON mc.id = c.motivo_cancelamento_conta_id WHERE c.id = ?`,
         [conta],
       ),
-    ).toMatchObject({ situacao: 'cancelada', total: 0, codigo: 'ENTRADA_EXCLUIDA' });
+    ).toMatchObject({ situacao: 'cancelada', zerada: 1, codigo: 'ENTRADA_EXCLUIDA' });
   });
 
   it('transferir mantém a diária do dia; a troca de acomodação estorna ("troca_acomodacao") e lança a da nova', async () => {
@@ -360,12 +364,10 @@ describe.skipIf(SEM_BANCO_ADT)(`conta na entrada e diárias automáticas (MariaD
     });
     expect(await vigentes(conta, 'diaria')).toBe(1);
     expect(await estornos(conta, 'troca_acomodacao')).toBe(0);
-    // A acomodação ocupada na entrada passa a ser a UTI (massa sintética): a diária do dia troca de item.
+    // A acomodação ocupada passa a ser a UTI (massa sintética; as duas ocupações, porque a transferência no mesmo minuto
+    // da entrada faz da segunda a ocupação do instante da entrada): a diária do dia troca de item.
     await escrever((e) =>
-      e.executar(
-        'UPDATE ocupacao_leito SET categoria_acomodacao_id = ? WHERE internacao_id = ? ORDER BY data_hora_inicio, id LIMIT 1',
-        [cfg.uti, internacao],
-      ),
+      e.executar('UPDATE ocupacao_leito SET categoria_acomodacao_id = ? WHERE internacao_id = ?', [cfg.uti, internacao]),
     );
     expect(await apurar(conta)).toMatchObject({ lancados: 1, estornados: 1 });
     expect(await estornos(conta, 'troca_acomodacao')).toBe(1);
