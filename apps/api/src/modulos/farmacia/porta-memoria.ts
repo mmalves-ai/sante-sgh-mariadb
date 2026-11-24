@@ -1142,7 +1142,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         locais: [{ id: LOCAL_FARMACIA_SINTETICO, nome: 'FARMACIA SINTETICA' }],
         tiposItem: [],
         grupos: [],
-        frequencias: [],
+        frequencias: [{ id: 1, nome: '8/8H SINTETICA', dosesPorDia: 3 }],
       },
     };
   }
@@ -1190,7 +1190,7 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   }
 
   private gravarGrade(s: Estado, e: GravarHorariosPadraoEntrada): Record<string, number> {
-    const rs = conferirHorariosPadrao(e.horarios, null);
+    const rs = conferirHorariosPadrao(e.horarios, e.frequencia === 1 ? 3 : null);
     if (rs[0])
       throw recusaOp(
         rs[0].codigo,
