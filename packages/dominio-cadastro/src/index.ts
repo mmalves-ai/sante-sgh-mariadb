@@ -5,6 +5,7 @@ export * from './busca/fonetica.js';
 export * from './busca/termo.js';
 export * from './duplicidade/escore.js';
 export * from './profissional/categoria.js';
+export * from './profissional/financeiro.js';
 export * from './solicitante/deduplicacao.js';
 export * from './paciente/mascaramento.js';
 export * from './paciente/historico.js';
