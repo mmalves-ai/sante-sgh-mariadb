@@ -15,3 +15,5 @@ export * from './tiss/demonstrativo.js';
 export * from './tiss/operadora.js';
 // M51: faturamento SUS próprio (competência SUS, crítica prévia, CIHA; BPA, APAC e AIH nas etapas 2 a 4).
 export * from './sus/index.js';
+// F3.0: a conta aberta na entrada do paciente e o lançamento automático de diárias e taxas (apuração idempotente).
+export * from './conta/admissao.js';
