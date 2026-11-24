@@ -633,6 +633,13 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Clientes cujo ciclo de integração o worker roda (separados por vírgula). Vazio: os ativos da plataforma.',
   ),
   v(
+    'FATURAMENTO_ROTINA_DIARIA',
+    'rotinas',
+    'opcional',
+    '',
+    'Lançamento automático do dia nas contas abertas (diárias e taxas). Em produção roda sempre, salvo "desligado"; em desenvolvimento e homologação só com "ligado".',
+  ),
+  v(
     'ACESSO_CONTAS_DORMENTES_ESTABELECIMENTOS',
     'seguranca',
     'opcional',

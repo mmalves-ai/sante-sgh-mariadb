@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 04ceeb40eaf0). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 7dc7890a902e). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2495,7 +2495,7 @@ GRANT SELECT ON resultado_analito TO sgh_mod_qualidade;
 GRANT SELECT ON resultado_exame TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON reuniao_comissao TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON revisao_decisao_antimicrobiano TO sgh_mod_qualidade;
-GRANT SELECT, UPDATE ON revisao_prontuario TO sgh_mod_qualidade;
+GRANT SELECT, INSERT, UPDATE ON revisao_prontuario TO sgh_mod_qualidade;
 GRANT SELECT ON revisao_prontuario_item TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON risco_institucional TO sgh_mod_qualidade;
 GRANT SELECT ON risco_institucional_controle TO sgh_mod_qualidade;
@@ -2952,7 +2952,7 @@ GRANT SELECT ON usuario_estoque_classificacao TO sgh_mod_suprimentos;
 GRANT SELECT ON usuario_vinculo_profissional TO sgh_mod_suprimentos;
 GRANT SELECT ON acomodacao TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON apac TO sgh_mod_sus;
-GRANT SELECT, INSERT ON apac_procedimento TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON apac_procedimento TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON arquivo TO sgh_mod_sus;
 GRANT SELECT ON atendimento TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON autorizacao_apac TO sgh_mod_sus;
@@ -2999,12 +2999,12 @@ GRANT SELECT ON procedimento_sigtap_habilitacao TO sgh_mod_sus;
 GRANT SELECT ON procedimento_sigtap_leito TO sgh_mod_sus;
 GRANT SELECT ON procedimento_sigtap_registro TO sgh_mod_sus;
 GRANT SELECT ON procedimento_sigtap_valor TO sgh_mod_sus;
-GRANT SELECT, INSERT ON producao_ambulatorial_sus TO sgh_mod_sus;
-GRANT SELECT, INSERT ON producao_ambulatorial_sus_item TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON producao_ambulatorial_sus TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON producao_ambulatorial_sus_item TO sgh_mod_sus;
 GRANT SELECT ON profissional TO sgh_mod_sus;
 GRANT SELECT ON profissional_ocupacao TO sgh_mod_sus;
-GRANT SELECT, INSERT ON registro_ciha TO sgh_mod_sus;
-GRANT SELECT, INSERT ON registro_ciha_procedimento TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON registro_ciha TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON registro_ciha_procedimento TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_apac TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_bpa TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_ciha TO sgh_mod_sus;

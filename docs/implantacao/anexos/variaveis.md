@@ -174,6 +174,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `PORTAL_VIGENCIA_MS` | opcional |  | Intervalo ou tamanho: vigência dos acessos ao portal. Vazio: o padrão. |
 | `BUSCA_CONFERENCIA_MS` | opcional |  | Intervalo ou tamanho: conferência do índice de busca. Vazio: o padrão. |
 | `RELATORIO_ENVIO_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: envio agendado de relatórios. Vazio: o padrão. |
+| `FATURAMENTO_ROTINA_DIARIA` | opcional |  | Lançamento automático do dia nas contas abertas (diárias e taxas). Em produção roda sempre, salvo "desligado"; em desenvolvimento e homologação só com "ligado". |
 
 ## Observabilidade e sondas
 

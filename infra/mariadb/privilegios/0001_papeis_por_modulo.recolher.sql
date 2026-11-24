@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 04ceeb40eaf0). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 7dc7890a902e). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2445,7 +2445,7 @@ REVOKE SELECT ON resultado_analito FROM sgh_mod_qualidade;
 REVOKE SELECT ON resultado_exame FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON reuniao_comissao FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON revisao_decisao_antimicrobiano FROM sgh_mod_qualidade;
-REVOKE SELECT, UPDATE ON revisao_prontuario FROM sgh_mod_qualidade;
+REVOKE SELECT, INSERT, UPDATE ON revisao_prontuario FROM sgh_mod_qualidade;
 REVOKE SELECT ON revisao_prontuario_item FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON risco_institucional FROM sgh_mod_qualidade;
 REVOKE SELECT ON risco_institucional_controle FROM sgh_mod_qualidade;
@@ -2902,7 +2902,7 @@ REVOKE SELECT ON usuario_estoque_classificacao FROM sgh_mod_suprimentos;
 REVOKE SELECT ON usuario_vinculo_profissional FROM sgh_mod_suprimentos;
 REVOKE SELECT ON acomodacao FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON apac FROM sgh_mod_sus;
-REVOKE SELECT, INSERT ON apac_procedimento FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON apac_procedimento FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON arquivo FROM sgh_mod_sus;
 REVOKE SELECT ON atendimento FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON autorizacao_apac FROM sgh_mod_sus;
@@ -2949,12 +2949,12 @@ REVOKE SELECT ON procedimento_sigtap_habilitacao FROM sgh_mod_sus;
 REVOKE SELECT ON procedimento_sigtap_leito FROM sgh_mod_sus;
 REVOKE SELECT ON procedimento_sigtap_registro FROM sgh_mod_sus;
 REVOKE SELECT ON procedimento_sigtap_valor FROM sgh_mod_sus;
-REVOKE SELECT, INSERT ON producao_ambulatorial_sus FROM sgh_mod_sus;
-REVOKE SELECT, INSERT ON producao_ambulatorial_sus_item FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON producao_ambulatorial_sus FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON producao_ambulatorial_sus_item FROM sgh_mod_sus;
 REVOKE SELECT ON profissional FROM sgh_mod_sus;
 REVOKE SELECT ON profissional_ocupacao FROM sgh_mod_sus;
-REVOKE SELECT, INSERT ON registro_ciha FROM sgh_mod_sus;
-REVOKE SELECT, INSERT ON registro_ciha_procedimento FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON registro_ciha FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON registro_ciha_procedimento FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_apac FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_bpa FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_ciha FROM sgh_mod_sus;

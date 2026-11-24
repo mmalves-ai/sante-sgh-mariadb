@@ -7,7 +7,7 @@
 -- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a
 -- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).
 -- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).
--- 3695 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, sugestao_notificacao_resolvida, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
+-- 3699 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, sugestao_notificacao_resolvida, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
 
 CREATE ROLE IF NOT EXISTS papel_aplicacao;
 
@@ -1643,6 +1643,7 @@ GRANT SELECT, INSERT, UPDATE ON dose_unitarizada TO papel_aplicacao;
 REVOKE DELETE ON dose_unitarizada FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON duracao_sessao TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON edicao_referencia_matmed TO papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE, DELETE ON edicao_terminologia_enfermagem TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON elemento_despesa TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON elemento_exame_laboratorio_apoio TO papel_aplicacao;
 REVOKE DELETE ON elemento_exame_laboratorio_apoio FROM papel_aplicacao;
@@ -2687,6 +2688,7 @@ GRANT SELECT, INSERT, UPDATE ON laboratorio_apoio TO papel_aplicacao;
 REVOKE DELETE ON laboratorio_apoio FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON lacuna_ficha_anestesica TO papel_aplicacao;
 REVOKE DELETE ON lacuna_ficha_anestesica FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE, DELETE ON lancamento_automatico_conta TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON lancamento_automatico_rubrica TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON lancamento_avulso_prestador TO papel_aplicacao;
 REVOKE DELETE ON lancamento_avulso_prestador FROM papel_aplicacao;
@@ -2792,6 +2794,7 @@ GRANT SELECT, INSERT, UPDATE ON licenca_catalogo TO papel_aplicacao;
 REVOKE DELETE ON licenca_catalogo FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON ligacao_tarifada TO papel_aplicacao;
 REVOKE DELETE ON ligacao_tarifada FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ligacao_termo_enfermagem TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON limite_delta_analito TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON limite_dose_principio TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON limite_opme_procedimento TO papel_aplicacao;
@@ -5349,6 +5352,7 @@ REVOKE DELETE ON termo_livro_controlado FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON termo_relacao TO papel_aplicacao;
 REVOKE DELETE ON termo_relacao FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON termo_terminologia TO papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE, DELETE ON termo_terminologia_enfermagem TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON termo_terminologia_vigencia TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON termo_uso_versao TO papel_aplicacao;
 REVOKE DELETE ON termo_uso_versao FROM papel_aplicacao;

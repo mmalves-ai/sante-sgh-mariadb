@@ -1,3 +1,6 @@
+// Limpeza da trilha de auditoria das massas sintéticas dos testes de integração (ordem das FKs da cadeia do SBIS-16).
+// Só para testes: nunca no código de produção (o verificador de imutabilidade recusa DELETE em trilha_auditoria lá).
+// Cópia idêntica de apps/api/src/teste/limpar-trilha.spec-util.ts (o worker não importa a API).
 // Auxiliar comum dos testes de integração da API e do worker: limpeza da trilha de auditoria das massas sintéticas
 // (banco próprio do cliente).
 // Desde a cadeia por hash (SBIS-16, db/migracoes/00_NUCLEO/23_tabelas.sql), a cabeça da cadeia (trilha_cadeia) e o
@@ -9,7 +12,7 @@
 // estabelecimento, então a de qualquer outro estabelecimento (e a do escopo 0, dos eventos sem estabelecimento) fica
 // intacta, sem elo apagado no meio. Antes de apagar, confere no information_schema que toda chave estrangeira para a
 // trilha (e para o evento de auditoria) é tratada aqui; chave nova não tratada recusa, em vez de falhar pela metade.
-import type { Escritor } from './transacao.js';
+import type { Escritor } from '@sgh/nucleo';
 
 /** Os estabelecimentos sintéticos da massa: por id, pelos códigos ou pelo prefixo do código. */
 export type EstabelecimentosDaMassa =

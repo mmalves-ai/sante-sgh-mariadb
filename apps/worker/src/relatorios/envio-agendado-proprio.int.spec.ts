@@ -7,7 +7,8 @@
 // mascarados, e não conclui duas vezes; as falhas seguidas contam do histórico e zeram com o envio feito; o
 // agendamento de outro estabelecimento é recusado. Massa sintética (e-mails
 // .invalid), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
-import { limparTrilhaDaMassa, NucleoProprio } from '@sgh/nucleo';
+import { NucleoProprio } from '@sgh/nucleo';
+import { limparTrilhaDaMassa } from '../teste/limpar-trilha.spec-util.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   escrever,
