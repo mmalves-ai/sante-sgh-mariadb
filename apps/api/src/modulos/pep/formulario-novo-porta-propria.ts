@@ -109,6 +109,7 @@ const TIPO_CAMPO_DO_CODIGO: ReadonlyMap<string, string> = new Map(
 const COLUNAS_VERSAO = `v.id, m.id AS modelo_id, m.codigo, m.versao AS versao_modelo,
   m.publicada_modelo_documento_versao_id AS publicada_id, v.numero_versao, v.situacao, v.titulo, v.tipo_registro,
   v.formato, v.dados, v.hash_definicao, v.destino_publicacao, v.origem_modelo_documento_versao_id AS baseado_em,
+  v.usuario_id AS autor_id, v.aprovacao_usuario_id AS aprovador_id,
   ua.login AS autor, uap.login AS aprovador, v.aprovada_em, v.parecer, up.login AS publicador, v.publicada_em,
   upo.login AS aposentador, v.aposentada_em, v.motivo_aposentadoria, v.versao,
   COALESCE(v.alterado_em, v.criado_em) AS atualizado_em`;
@@ -214,7 +215,8 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
       return {
         pode: false,
         codigo: 'operacao-indisponivel',
-        motivo: 'No banco próprio a versão publicada já é o modelo do prontuário: não há modelo a criar em outro sistema.',
+        motivo:
+          'No banco próprio a versão publicada já é o modelo do prontuário: não há modelo a criar em outro sistema.',
       };
     return c.estabelecimento === null
       ? { pode: false, codigo: 'sem-estabelecimento', motivo: 'Escolha o estabelecimento da sessão.' }
@@ -233,7 +235,8 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
     trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorFormularioNovo) => Promise<T>,
   ): Promise<T> {
-    if (c.estabelecimento === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    if (c.estabelecimento === null)
+      throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
     let saida: { valor: T } | null = null;
     const linha = () => (typeof trilha === 'function' ? (saida ? trilha(saida.valor) : null) : trilha);
     const op = definirOperacao({
@@ -277,7 +280,9 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
 
   versao(c: ContextoFormularioNovo, id: number): Promise<FormularioNovoLido | null> {
     return this.ler(c, 'versao', async (l, fuso) => {
-      const x = await l.uma(`SELECT ${COLUNAS_VERSAO} ${DE_VERSAO} WHERE v.id = ? AND ${SO_DO_CONSTRUTOR}`, [id]);
+      const x = await l.uma(`SELECT ${COLUNAS_VERSAO} ${DE_VERSAO} WHERE v.id = ? AND ${SO_DO_CONSTRUTOR}`, [
+        id,
+      ]);
       if (!x) return null;
       return versaoLida(x, (await casosDe(l, [id])).get(id) ?? [], fuso);
     });
@@ -339,8 +344,7 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
   async dadosDoPlano(c: ContextoFormularioNovo, codigo: string, reusos: readonly number[]) {
     const codigosExistentes = await this.codigosEmUso(c);
     codigosExistentes.delete(codigo.toUpperCase());
-    const banco =
-      reusos.length === 0 ? [] : await this.ler(c, 'plano', (l) => perguntas(l, { ids: reusos }));
+    const banco = reusos.length === 0 ? [] : await this.ler(c, 'plano', (l) => perguntas(l, { ids: reusos }));
     // As opções são do próprio campo (modelo_campo_opcao): não há cadastro de respostas compartilhado.
     return { codigosExistentes, banco, respostasCadastradas: [] };
   }
@@ -401,11 +405,23 @@ async function perguntas(
 /** Gravador das versões do construtor dentro da transação do executor (as recusas da porta de memória). */
 function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormularioNovo {
   const agora = () => new Date();
+  /**
+   * Conta de quem grava, resolvida uma vez e de forma estrita: o login tem de existir em usuario e ser a mesma linha do
+   * usuário da sessão. Nunca troca um login desconhecido pelo id da sessão (a versão e os eventos ficariam com outra
+   * identidade e os quatro olhos não a reconheceriam).
+   */
+  const contas = new Map<string, number>();
   const conta = async (login: string): Promise<number> => {
+    const chave = login.toUpperCase();
+    const pronta = contas.get(chave);
+    if (pronta !== undefined) return pronta;
     const u = await tx.uma('SELECT id FROM usuario WHERE login = ?', [login]);
-    if (u) return num(u['id']);
-    if (usuarioDaSessao !== null) return usuarioDaSessao;
-    throw recusa('usuario-inexistente', 'A conta da sessão não existe neste cliente.');
+    if (!u) throw recusa('usuario-inexistente', 'A conta da sessão não existe neste cliente.');
+    const id = num(u['id']);
+    if (usuarioDaSessao !== null && id !== usuarioDaSessao)
+      throw recusa('usuario-inexistente', 'O login informado não é a conta da sessão neste cliente.');
+    contas.set(chave, id);
+    return id;
   };
   /** SELECT ... FOR UPDATE (pelo Escritor): a versão e o modelo ficam travados até o fim da transação. */
   const travarUma = async (sql: string, p: unknown[]): Promise<Linha | null> =>
@@ -437,33 +453,55 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
       );
     return num(t['id']);
   };
-  const gravarCasos = async (versao: number, casos: readonly { nome: string; caso: unknown }[], quem: number) => {
-    const em = agora();
-    for (const [i, x] of casos.entries())
-      await tx.executar(
-        `INSERT INTO modelo_documento_caso_teste
-           (modelo_documento_versao_id, ordem, nome, dados, criado_em, criado_por, versao)
-         VALUES (?, ?, ?, ?, ?, ?, 1)
-         ON DUPLICATE KEY UPDATE nome = VALUES(nome), dados = VALUES(dados), excluido_em = NULL, excluido_por = NULL,
-           alterado_em = VALUES(criado_em), alterado_por = VALUES(criado_por), versao = versao + 1`,
-        [versao, i + 1, x.nome, JSON.stringify(x.caso), em, quem],
-      );
-    await tx.executar(
-      `UPDATE modelo_documento_caso_teste SET excluido_em = ?, excluido_por = ?, versao = versao + 1
-        WHERE modelo_documento_versao_id = ? AND ordem > ? AND excluido_em IS NULL`,
-      [em, quem, versao, casos.length],
+  /**
+   * Casos de teste da versão pelas escritas auditadas (vão à trilha da operação): o caso de cada ordem é incluído ou
+   * alterado com a versão lida; o que sobra além da nova lista fica excluído (lógico), e reaparece se a ordem voltar.
+   */
+  const gravarCasos = async (
+    versao: number,
+    casos: readonly { nome: string; caso: unknown }[],
+    quem: number,
+  ) => {
+    const atuais = await tx.consultarParaAtualizar(
+      `SELECT id, ordem, excluido_em, versao FROM modelo_documento_caso_teste
+        WHERE modelo_documento_versao_id = ? ORDER BY ordem`,
+      [versao],
     );
+    const daOrdem = new Map(atuais.map((x) => [num(x['ordem']), x] as const));
+    for (const [i, x] of casos.entries()) {
+      const dados = JSON.stringify(x.caso);
+      const atual = daOrdem.get(i + 1);
+      if (!atual)
+        await tx.incluir('modelo_documento_caso_teste', {
+          modelo_documento_versao_id: versao,
+          ordem: i + 1,
+          nome: x.nome,
+          dados,
+        });
+      else
+        await tx.alterar('modelo_documento_caso_teste', num(atual['id']), num(atual['versao']), {
+          nome: x.nome,
+          dados,
+          excluido_em: null,
+          excluido_por: null,
+        });
+    }
+    const em = agora();
+    for (const x of atuais)
+      if (num(x['ordem']) > casos.length && x['excluido_em'] === null)
+        await tx.alterar('modelo_documento_caso_teste', num(x['id']), num(x['versao']), {
+          excluido_em: em,
+          excluido_por: quem,
+        });
   };
-  /** Quatro olhos (D-APROV-45): quem salvou qualquer alteração da versão. */
-  const escreveu = async (v: Linha, login: string): Promise<boolean> => {
+  /** Quatro olhos (D-APROV-45): quem salvou qualquer alteração da versão, pela conta (usuario_id), nunca pelo texto. */
+  const escreveu = async (v: Linha, usuario: number): Promise<boolean> => {
     const salvos = await tx.consultar(
-      `SELECT DISTINCT u.login FROM modelo_documento_evento e JOIN usuario u ON u.id = e.usuario_id
-        WHERE e.modelo_documento_versao_id = ? AND e.tipo_evento = 'salvo'`,
+      `SELECT DISTINCT usuario_id FROM modelo_documento_evento
+        WHERE modelo_documento_versao_id = ? AND tipo_evento = 'salvo'`,
       [num(v['id'])],
     );
-    return [String(v['autor'] ?? ''), ...salvos.map((x) => String(x['login']))].some(
-      (a) => a.toUpperCase() === login.toUpperCase(),
-    );
+    return [numOuNull(v['autor_id']), ...salvos.map((x) => num(x['usuario_id']))].includes(usuario);
   };
 
   return {
@@ -477,7 +515,8 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
         const estado = ESTADO_DA_SITUACAO[String(v['situacao'])];
         if (estado === 'publicado' || estado === 'aposentado')
           throw recusa('imutavel', 'Versão publicada não se altera: crie uma nova versão a partir dela.');
-        if (estado !== 'rascunho') throw recusa('estado-invalido', 'Em revisão: devolva ao rascunho antes de alterar.');
+        if (estado !== 'rascunho')
+          throw recusa('estado-invalido', 'Em revisão: devolva ao rascunho antes de alterar.');
         if (p.versaoEsperada !== null && String(num(v['versao'])) !== p.versaoEsperada)
           throw recusa(
             'versao-concorrente',
@@ -498,7 +537,9 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
         await evento(p.id, 'salvo', autor, null, null);
         return { id: p.id, versao: num(v['numero_versao']), versaoLinha: String(nova) };
       }
-      const modelo = await travarUma('SELECT id, versao FROM modelo_documento_clinico WHERE codigo = ?', [p.codigo]);
+      const modelo = await travarUma('SELECT id, versao FROM modelo_documento_clinico WHERE codigo = ?', [
+        p.codigo,
+      ]);
       let modeloId: number;
       let numero: number;
       if (p.baseadoEm !== null) {
@@ -516,14 +557,18 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
           [modeloId],
         );
         if (aberta)
-          throw recusa('versao-aberta', 'Já há uma versão deste formulário em rascunho ou em revisão: continue nela.');
+          throw recusa(
+            'versao-aberta',
+            'Já há uma versão deste formulário em rascunho ou em revisão: continue nela.',
+          );
         const ultimo = await tx.uma(
           'SELECT MAX(numero_versao) AS n FROM modelo_documento_versao WHERE modelo_documento_clinico_id = ?',
           [modeloId],
         );
         numero = num(ultimo?.['n'] ?? 0) + 1;
       } else {
-        if (modelo) throw recusa('codigo-em-uso', `O código ${p.codigo} já é de outro formulário: escolha outro.`);
+        if (modelo)
+          throw recusa('codigo-em-uso', `O código ${p.codigo} já é de outro formulário: escolha outro.`);
         modeloId = await tx.incluir('modelo_documento_clinico', {
           codigo: p.codigo,
           titulo: p.titulo,
@@ -592,10 +637,15 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
       let hash: string | null = null;
       let texto: string | null = null;
       if (p.tipo === 'revisao') {
-        nova = await alterar({ situacao: 'revisao', aprovada_em: null, aprovacao_usuario_id: null, parecer: null });
+        nova = await alterar({
+          situacao: 'revisao',
+          aprovada_em: null,
+          aprovacao_usuario_id: null,
+          parecer: null,
+        });
         await modeloSemPublicada('revisao');
       } else if (p.tipo === 'aprovado') {
-        if (await escreveu(v, m.por)) throw recusa('aprovador-e-autor', 'Quem escreveu a versão não a aprova.');
+        if (await escreveu(v, por)) throw recusa('aprovador-e-autor', 'Quem escreveu a versão não a aprova.');
         texto = p.parecer;
         nova = await alterar({ aprovada_em: em, aprovacao_usuario_id: por, parecer: p.parecer });
       } else if (p.tipo === 'devolvido') {
@@ -608,10 +658,12 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
         });
         await modeloSemPublicada('rascunho');
       } else if (p.tipo === 'publicado') {
-        const aprovador = textoOuNull(v['aprovador']);
+        const aprovador = numOuNull(v['aprovador_id']);
         if (aprovador === null) throw recusa('sem-aprovacao', 'Falta a aprovação da comissão de prontuário.');
-        if (await escreveu(v, aprovador)) throw recusa('aprovador-e-autor', 'Quem escreveu a versão não a aprova.');
-        if (await escreveu(v, m.por)) throw recusa('publicador-e-autor', 'Quem escreveu a versão não a publica.');
+        if (await escreveu(v, aprovador))
+          throw recusa('aprovador-e-autor', 'Quem escreveu a versão não a aprova.');
+        if (await escreveu(v, por))
+          throw recusa('publicador-e-autor', 'Quem escreveu a versão não a publica.');
         hash = p.contentHash;
         nova = await alterar({
           situacao: 'publicada',

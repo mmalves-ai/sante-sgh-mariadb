@@ -108,7 +108,9 @@ describe('PortaFormularioNovoPropria (dublê)', () => {
   });
 
   it('usa o cliente da configuração quando a sessão não traz, e o fuso padrão sem estabelecimento', async () => {
-    const d = duble((sql) => (sql.includes('UTC_TIMESTAMP') ? [{ agora: new Date('2026-11-21T01:30:00Z') }] : []));
+    const d = duble((sql) =>
+      sql.includes('UTC_TIMESTAMP') ? [{ agora: new Date('2026-11-21T01:30:00Z') }] : [],
+    );
     const hoje = await new PortaFormularioNovoPropria(d.nucleo, 'cfg').hoje({
       ...C,
       cliente: '',
@@ -134,10 +136,16 @@ describe('PortaFormularioNovoPropria (dublê)', () => {
     expect((await porta.podeGravar({ ...C, estabelecimento: null }, 'x')).codigo).toBe('sem-estabelecimento');
     await expect(porta.executar()).rejects.toBeInstanceOf(ErroOperacao);
     await expect(
-      porta.gravarSgh({ ...C, estabelecimento: null }, { acao: 'operacao', entidade: 'x', entidadeId: null } as never, async () => 1),
+      porta.gravarSgh(
+        { ...C, estabelecimento: null },
+        { acao: 'operacao', entidade: 'x', entidadeId: null } as never,
+        async () => 1,
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'sem-estabelecimento' } });
     expect(d.executou()).toBe(0);
-    expect(await porta.gravarSgh(C, { acao: 'operacao', entidade: 'x', entidadeId: null } as never, async () => 1)).toBe(1);
+    expect(
+      await porta.gravarSgh(C, { acao: 'operacao', entidade: 'x', entidadeId: null } as never, async () => 1),
+    ).toBe(1);
     expect(d.executou()).toBe(1);
   });
 
@@ -181,7 +189,9 @@ describe('PortaFormularioNovoPropria (dublê)', () => {
 
   it('códigos em uso: todos os do cliente, em maiúsculas; o plano tira o próprio código', async () => {
     const d = duble((sql) =>
-      sql.includes('SELECT codigo FROM modelo_documento_clinico') ? [{ codigo: 'ENF02' }, { codigo: 'evol_x' }] : [],
+      sql.includes('SELECT codigo FROM modelo_documento_clinico')
+        ? [{ codigo: 'ENF02' }, { codigo: 'evol_x' }]
+        : [],
     );
     const porta = new PortaFormularioNovoPropria(d.nucleo, 'cfg');
     expect([...(await porta.codigosEmUso(C))].sort()).toEqual(['ENF02', 'EVOL_X']);
