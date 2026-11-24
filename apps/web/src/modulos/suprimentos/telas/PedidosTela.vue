@@ -3,6 +3,7 @@
 // cotação (`/suprimentos/cotacao`, modo "cotacao"). Lista os pedidos do ano por situação; cria o pedido (o centro de
 // custo, os itens e os fornecedores convidados: a linha mestre de cada item e uma proposta por fornecedor); o número
 // e os valores derivados são do banco. Itens sugeridos pelo ponto de pedido chegam pela tela de sugestão.
+import { mensagensPedidoGestao as M } from '../i18n-pedido-gestao.js';
 import { type ContratoDoVinculo, TIPOS_COMPRA } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -137,6 +138,12 @@ async function criar(): Promise<void> {
               :to="`/suprimentos/pedidos/${p.ano}/${p.doc}/cotacao`"
               :data-testid="`ped-cotacao-${p.ano}-${p.doc}`"
               >{{ t('suprimentos.cotacao.abrir') }}</RouterLink
+            >
+            ·
+            <RouterLink
+              :to="`/suprimentos/pedidos/${p.ano}/${p.doc}/acompanhar`"
+              :data-testid="`ped-acompanhar-${p.ano}-${p.doc}`"
+              >{{ M.acompanhar }}</RouterLink
             >
           </td>
         </tr>

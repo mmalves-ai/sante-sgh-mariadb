@@ -39,6 +39,11 @@ const FUNCIONALIDADES = {
       'suprimentos.criarPedido': 'suprimentos.pedido.criar',
       'suprimentos.registrarProposta': 'suprimentos.cotacao.escolher',
       'suprimentos.definirVencedorCotacao': 'suprimentos.cotacao.escolher',
+      // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
+      'suprimentos.programarEntregasPedido': 'suprimentos.pedido.criar',
+      'suprimentos.acompanharPedido': 'suprimentos.pedido.criar',
+      'suprimentos.cancelarCompra': 'suprimentos.pedido.aprovar',
+      'suprimentos.gravarMotivoCancelamentoCompra': 'suprimentos.pedido.aprovar',
     },
     extras: {
       aprovarPedido: 'suprimentos.pedido.aprovar',

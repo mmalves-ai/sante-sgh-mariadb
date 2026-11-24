@@ -27,6 +27,7 @@ import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
 import { OpmeController } from './opme.controller.js';
 import { PORTA_OPME, type PortaOpme } from './opme-porta.js';
+import { PedidoGestaoController } from './pedido-gestao.controller.js';
 import { PortaOpmeMemoria } from './opme-porta-memoria.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
 import { PortaSuprimentosMemoria } from './porta-memoria.js';
@@ -119,6 +120,8 @@ export async function modulo(
     controllers: [
       SuprimentosController,
       CadastroEstoqueController,
+      // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
+      PedidoGestaoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
     ],
     providers: [

@@ -110,6 +110,14 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     meta: { permissao: 'suprimentos.cotacao.ler' },
   },
   {
+    // F3.6 (05-SUP linha 20): acompanhar o pedido emitido (agenda de entregas, contatos e cancelamento).
+    path: '/suprimentos/pedidos/:ano(\\d+)/:doc(\\d+)/acompanhar',
+    name: 'suprimentos.pedidoGestao',
+    component: () => import('./telas/PedidoGestaoTela.vue'),
+    props: true,
+    meta: { permissao: 'suprimentos.pedido.ler' },
+  },
+  {
     path: '/suprimentos/aprovacoes',
     name: 'suprimentos.aprovacoes',
     component: () => import('./telas/AprovacoesTela.vue'),
