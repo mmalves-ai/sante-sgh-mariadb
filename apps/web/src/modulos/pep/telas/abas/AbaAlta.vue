@@ -299,7 +299,12 @@ async function cancelar(): Promise<void> {
         <SanteBotao tipo="submit" :rotulo="t('pep.doc.alta.registrar')" />
       </form>
       <AvisoConsulta :acao="dados.data.value.obitoAcao" />
-      <form v-if="dados.data.value.obitoAcao.pode" class="form" @submit.prevent="obito">
+      <form
+        v-if="dados.data.value.obitoAcao.pode && !dados.data.value.obito"
+        class="form"
+        data-testid="form-obito"
+        @submit.prevent="obito"
+      >
         <h3>{{ t('pep.doc.alta.obito') }}</h3>
         <div class="linha">
           <label
