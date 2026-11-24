@@ -209,6 +209,15 @@ elif [ "$1" = testar-origem ]; then
 else
   unset PLATAFORMA_CHAVE_MESTRA ARQUIVOS_RAIZ
 fi
+# testes (dev): o usuário só leitura do servidor simulado, para os testes da leitura direta (ServidorSimulado) não
+# serem pulados; nunca em produção, nunca impresso
+SIM=$DADOS/segredos/fb-prontocardio.env
+if [ "$1" = testes ] && [ "${AMBIENTE:-dev}" != producao ] && [ -f "$SIM" ]; then
+  FB_SIM_LEITOR_USUARIO=$(grep '^FB_SIM_LEITOR_USUARIO=' "$SIM" | cut -d= -f2-)
+  FB_SIM_LEITOR_SENHA=$(grep '^FB_SIM_LEITOR_SENHA=' "$SIM" | cut -d= -f2-)
+  export FB_SIM_LEITOR_USUARIO FB_SIM_LEITOR_SENHA
+  ARQ+=(-e FB_SIM_LEITOR_USUARIO -e FB_SIM_LEITOR_SENHA)
+fi
 
 docker run --rm "${COMO_ROOT[@]}" "${REDE[@]}" "${PRIV[@]}" "${ARQ[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \

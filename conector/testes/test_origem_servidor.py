@@ -206,6 +206,16 @@ class ServidorSimulado(unittest.TestCase):
             with self.assertRaises(Exception):
                 lt.consultar("UPDATE RDB$DATABASE SET RDB$DESCRIPTION = NULL")
 
+    def test_contar_generators_sem_usage(self):
+        """O usuário só leitura (role de SELECT) conta os generators pelo catálogo; GEN_ID exigiria USAGE."""
+        with origem.abrir_leitor_servidor(_servidor()) as lt:
+            n = lt.contar_generators()
+            self.assertIsInstance(n, int)
+            self.assertGreaterEqual(n, 0)
+            if n:
+                with self.assertRaises(Exception):
+                    lt.generators()
+
     def test_identidade_estavel_entre_conexoes(self):
         with origem.abrir_leitor_servidor(_servidor()) as a:
             ia = origem.identidade_base(a)

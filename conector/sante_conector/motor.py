@@ -165,8 +165,12 @@ class Painel:
 
     def carga(self, frac, etapa):
         """Progresso da carga (carga.Batimento): percentual por LINHAS processadas (Placar), não por tabelas."""
-        f = self.placar.fracao() if self.placar.linhas_total() else frac
-        self.progresso(5 + 89 * max(0.0, min(1.0, f)), etapa)
+        if self.placar.linhas_total():
+            # o percentual da execução É o das linhas (linhas_processadas / linhas_total), de 1 a 94,99: abaixo, as
+            # etapas de preparo (1); acima, a conciliação (95) e o fim (100)
+            self.progresso(max(1.0, min(94.99, 100.0 * self.placar.fracao())), etapa)
+        else:
+            self.progresso(5 + 89 * max(0.0, min(1.0, frac)), etapa)
 
     def estado(self, novo, **kw):
         """Mudança de estado do motor: com a pausa pedida, para aqui (ponto seguro) em vez de mudar."""
@@ -404,7 +408,8 @@ def _pausar(conn, eid, cont, painel, log):
         plataforma.mudar_estado(conn, eid, "pausando", etapa=("pausando: %s" % (ex["etapa"] or ""))[:120])
     plataforma.mudar_estado(conn, eid, "pausada", etapa=("pausada: %s" % (ex["etapa"] or "").replace(
         "pausando: ", ""))[:120], contadores=cont)
-    log.etapa("pausada", "continuável: retomar pela tela (importação com continuação)")
+    log.etapa("pausada", "retomar pela tela: o diferencial refaz a leitura e o hash pula o que já entrou"
+              if ex.get("modo") == "diferencial" else "continuável: retomar pela tela (importação com continuação)")
 
 
 def executar(trab, eid):
@@ -471,7 +476,7 @@ def executar(trab, eid):
                 generators = lt.contar_generators()
                 cont.update(leitura_direta=True, identidade_base=ident, tabelas=len(tabelas),
                             registros_lidos=sum(contagens.values()), generators=generators)
-                painel.estado("gravando", etapa="gravando a imagem na base de controle", percentual=5,
+                painel.estado("gravando", etapa="gravando a imagem na base de controle", percentual=1,
                               contadores=cont)
                 try:
                     ods = int(str(ident.get("ods") or "0").split(".")[0])
@@ -500,7 +505,7 @@ def executar(trab, eid):
                     rel["contagens"] = contagens
                     generators = lt.contar_generators()
                 # fonte independente, no mesmo snapshot, com o leitor fechado (o embarcado não divide o arquivo)
-                painel.progresso(5, "confrontando com o gstat")
+                painel.progresso(1, "confrontando com o gstat")
                 gs = imagem.gstat_registros(ab.dispositivo)
                 conf = imagem.confrontar_gstat({"contagens": contagens}, None, gs)["gstat"]
                 cont.update(abertura=ab.resumo(), tabelas=len(tabelas), registros_lidos=sum(contagens.values()),
@@ -509,7 +514,7 @@ def executar(trab, eid):
                                    "divergentes": conf["divergentes"]})
                 if not somente_leitura:
                     raise FalhaExecucao("o banco não estava em modo somente leitura na abertura")
-                painel.estado("gravando", etapa="gravando a imagem na base de controle", percentual=5,
+                painel.estado("gravando", etapa="gravando a imagem na base de controle", percentual=1,
                               contadores=cont)
                 corte = datetime.datetime.fromtimestamp(org["mtime"], datetime.timezone.utc).replace(tzinfo=None)
                 img = {"arquivo": org["relativo"], "tamanho": org["tamanho"], "sha256": sha_antes, "corte": corte,
