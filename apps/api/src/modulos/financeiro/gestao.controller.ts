@@ -8,6 +8,8 @@
 //   GET  /api/financeiro/gestao/perfis                    os perfis de acesso do estabelecimento
 //   GET  /api/financeiro/gestao/tipos-lancamento?perfil=  os tipos de lançamento com a marca do perfil
 //   POST /api/financeiro/gestao/tipos-lancamento          { perfil, tipo, liberado }
+//   POST /api/financeiro/gestao/tipos-lancamento/restricao { perfil, restrito } (restrito sem tipo: nada passa)
+//   GET  /api/financeiro/gestao/lancamentos?alvo=&termo=  busca pelo número do título ou documento do movimento
 // A gravação vai pelo apoio da tesouraria (liberação, permissão da operação, trilha e idempotência no executor); a
 // leitura, direto no banco do cliente (sem núcleo: 503, falha fechada).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
@@ -30,12 +32,14 @@ import { ApoiosFinanceiro } from './apoios.js';
 import {
   ALVOS_RECLASSIFICACAO,
   type AlvoReclassificacao,
+  buscarLancamentos,
   centrosDoEstabelecimento,
   classificacaoAtual,
   type ClassificacaoAtualResposta,
   escopoDoUsuario,
   esquemaEscopoConta,
   esquemaReclassificar,
+  esquemaRestricaoTipoLancamento,
   esquemaTipoLancamentoPerfil,
   perfisDoEstabelecimento,
   tiposDoPerfil,
@@ -159,7 +163,7 @@ export class GestaoFinanceiroController {
   @Permissao('financeiro.parametro.ler')
   tipos(@Query('perfil') perfil: string | undefined, @Req() req: RequisicaoAutorizada) {
     const n = idDe(perfil, 'Perfil');
-    return this.ler(req, (l) => tiposDoPerfil(l, n));
+    return this.ler(req, (l, est) => tiposDoPerfil(l, est, n));
   }
 
   @Post('tipos-lancamento')
@@ -173,5 +177,30 @@ export class GestaoFinanceiroController {
       corpo(esquemaTipoLancamentoPerfil, b),
       'Tipo de lançamento do perfil gravado.',
     );
+  }
+
+  @Post('tipos-lancamento/restricao')
+  @HttpCode(200)
+  @Permissao('financeiro.parametro.editar')
+  @AuditadoNoHandler('financeiro.manterRestricaoTipoLancamento pelo executor (trilha na mesma transação)')
+  manterRestricao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.manterRestricaoTipoLancamento',
+      corpo(esquemaRestricaoTipoLancamento, b),
+      'Restrição de tipos do perfil gravada.',
+    );
+  }
+
+  @Get('lancamentos')
+  @Permissao('financeiro.classificacao.ler')
+  lancamentos(
+    @Query('alvo') alvo: string | undefined,
+    @Query('termo') termo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    if (!ALVOS_RECLASSIFICACAO.includes(alvo as AlvoReclassificacao))
+      throw new ErroProblema('entrada-invalida', 400, 'Lançamento inválido', 'Escolha o tipo do lançamento.');
+    return this.ler(req, (l, est) => buscarLancamentos(l, est, alvo as AlvoReclassificacao, termo ?? ''));
   }
 }

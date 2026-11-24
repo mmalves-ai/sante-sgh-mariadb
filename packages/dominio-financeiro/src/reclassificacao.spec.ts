@@ -88,9 +88,38 @@ describe('permissões do financeiro', () => {
       'escopo-vigencia-invertida',
     );
   });
-  it('tipo de lançamento: lista branca por perfil; sem lista, a permissão da operação vale', () => {
+  it('tipo de lançamento: lista branca por perfil; sem perfil restrito, a permissão da operação vale', () => {
+    const restrito = (liberados: number[]) => ({ restrito: true, concedeOperacao: true, liberados });
+    const livre = { restrito: false, concedeOperacao: true, liberados: [] };
     expect(conferirTipoLancamento([], 5, 'Tarifa')).toBeNull();
-    expect(conferirTipoLancamento([5, 6], 5, 'Tarifa')).toBeNull();
-    expect(conferirTipoLancamento([6], 5, 'Tarifa')?.codigo).toBe('tipo-lancamento-nao-liberado');
+    expect(conferirTipoLancamento([livre], 5, 'Tarifa')).toBeNull();
+    expect(conferirTipoLancamento([restrito([5, 6])], 5, 'Tarifa')).toBeNull();
+    expect(conferirTipoLancamento([restrito([6])], 5, 'Tarifa')?.codigo).toBe('tipo-lancamento-nao-liberado');
+  });
+  it('tipo de lançamento: retirar o último tipo deixa o perfil restrito sem nada (nunca libera tudo)', () => {
+    expect(
+      conferirTipoLancamento([{ restrito: true, concedeOperacao: true, liberados: [] }], 5, 'Tarifa')?.codigo,
+    ).toBe('tipo-lancamento-nao-liberado');
+  });
+  it('tipo de lançamento: dois perfis acumulam, avaliados perfil a perfil', () => {
+    const restrito = { restrito: true, concedeOperacao: true, liberados: [6] };
+    // O perfil livre que dá a operação não perde nada com um perfil restrito a mais.
+    expect(
+      conferirTipoLancamento(
+        [restrito, { restrito: false, concedeOperacao: true, liberados: [] }],
+        5,
+        'Tarifa',
+      ),
+    ).toBeNull();
+    // O perfil livre que não dá a operação (de outra área) não abre o tipo.
+    expect(
+      conferirTipoLancamento(
+        [restrito, { restrito: false, concedeOperacao: false, liberados: [] }],
+        5,
+        'Tarifa',
+      )?.codigo,
+    ).toBe('tipo-lancamento-nao-liberado');
+    // Dois restritos: vale a união das listas.
+    expect(conferirTipoLancamento([restrito, { ...restrito, liberados: [5] }], 5, 'Tarifa')).toBeNull();
   });
 });

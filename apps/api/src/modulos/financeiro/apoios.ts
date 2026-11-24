@@ -52,6 +52,7 @@ export const FUNCIONALIDADES_FINANCEIRO = {
       'financeiro.reclassificarLancamento': 'financeiro.classificacao.editar',
       'financeiro.manterEscopoConta': 'financeiro.parametro.editar',
       'financeiro.manterTipoLancamento': 'financeiro.parametro.editar',
+      'financeiro.manterRestricaoTipoLancamento': 'financeiro.parametro.editar',
     },
     extras: {
       importarExtrato: 'financeiro.conciliacao.conciliar',

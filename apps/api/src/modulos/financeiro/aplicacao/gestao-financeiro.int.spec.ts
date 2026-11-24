@@ -31,6 +31,8 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
   let centro2 = 0;
   let natureza112 = 0;
   let perfil = 0;
+  let perfilLivre = 0;
+  let perfilOutroEst = 0;
   const consultar = (sql: string, p: unknown[]) =>
     m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'gf-02-07' }, (l) => l.consultar(sql, p));
   const executar = (nome: string, entrada: unknown, usuario = m.lanca) => {
@@ -76,13 +78,38 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
       };
     });
     ({ centro2, natureza112, perfil } = ids);
+    // Um perfil livre que dá a operação (para o acúmulo de perfis) e um perfil de outro estabelecimento.
+    ({ perfilLivre, perfilOutroEst } = await escrever<{ perfilLivre: number; perfilOutroEst: number }>(
+      async (e) => {
+        const agora = new Date();
+        const garantir = async (codigo: string, est: number) => {
+          const l = await e.uma<{ id: number }>('SELECT id FROM perfil_acesso WHERE codigo = ?', [codigo]);
+          return l
+            ? Number(l.id)
+            : e.inserir(
+                "INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, ?, 'PERFIL SINTETICO L0207', ?)",
+                [est, codigo, agora],
+              );
+        };
+        return {
+          perfilLivre: await garantir('L0207-TL2', m.est),
+          perfilOutroEst: await garantir('L0207-TL3', m.outroEst),
+        };
+      },
+    ));
   });
 
   afterAll(async () => {
     if (!m) return;
     await escrever(async (e) => {
-      await e.executar('DELETE FROM permissao_tipo_lancamento WHERE perfil_acesso_id = ?', [perfil]);
-      await e.executar('DELETE FROM usuario_perfil WHERE perfil_acesso_id = ?', [perfil]);
+      const ps = [perfil, perfilLivre, perfilOutroEst];
+      for (const t of [
+        'permissao_tipo_lancamento',
+        'restricao_tipo_lancamento_perfil',
+        'perfil_acao',
+        'usuario_perfil',
+      ])
+        await e.executar(`DELETE FROM ${t} WHERE perfil_acesso_id IN (?, ?, ?)`, ps);
       await e.executar(
         `DELETE r FROM rateio_lancamento r JOIN movimento_bancario b ON b.id = r.movimento_bancario_id
           WHERE b.estabelecimento_id = ?`,
@@ -170,6 +197,34 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
       [titulo, m.est],
     );
     expect(String(trilha?.['motivo'])).toBe(MOTIVO);
+    // O antes e o depois completos do rateio, com os ids das linhas substituídas e das novas.
+    const [rat] = await consultar(
+      `SELECT JSON_EXTRACT(dados_depois, '$.dados.reclassificacao') AS r FROM trilha_auditoria
+        WHERE entidade = 'titulo_pagar' AND entidade_id = ? AND estabelecimento_id = ? ORDER BY id DESC LIMIT 1`,
+      [titulo, m.est],
+    );
+    const r = JSON.parse(String(rat?.['r'])) as {
+      antes: { centroCusto: number; percentual: number; valor: number }[];
+      depois: { centroCusto: number; percentual: number; valor: number }[];
+      linhasSubstituidas: number[];
+      linhasNovas: number[];
+    };
+    expect(r.antes.length).toBeGreaterThan(0);
+    expect(r.antes.reduce((s, x) => s + x.valor, 0)).toBe(1_000);
+    expect(r.depois).toEqual([
+      { centroCusto: m.centro, percentual: 40, valor: 400 },
+      { centroCusto: centro2, percentual: 60, valor: 600 },
+    ]);
+    const idsLinhas = await consultar(
+      'SELECT id, excluido_em IS NOT NULL AS subst FROM rateio_lancamento WHERE titulo_pagar_id = ? ORDER BY sequencia',
+      [titulo],
+    );
+    expect(r.linhasSubstituidas).toEqual(
+      idsLinhas.filter((x) => Number(x['subst']) === 1).map((x) => Number(x['id'])),
+    );
+    expect(r.linhasNovas).toEqual(
+      idsLinhas.filter((x) => Number(x['subst']) === 0).map((x) => Number(x['id'])),
+    );
     expect(Number(trilha?.['depois'])).toBe(natureza112);
     expect(Number(trilha?.['antes'])).not.toBe(natureza112);
     // Igual à atual: nada a reclassificar.
@@ -280,5 +335,52 @@ describe.skipIf(SEM_BANCO)('gestão do financeiro: reclassificação e permissõ
       [perfil, outro],
     );
     expect([Number(linha?.['fora']), Number(linha?.['excluido_por'])]).toEqual([1, m.lanca]);
+    // Retirar o ÚLTIMO tipo: o perfil continua restrito, com a lista vazia, e a transferência segue recusada.
+    await executar('financeiro.manterTipoLancamento', { perfil, tipo: tipoTransf, liberado: false });
+    expect(await codigoDaGravacao(transfere())).toBe('tipo-lancamento-nao-liberado');
+    const [marca] = await consultar(
+      "SELECT COUNT(*) AS n FROM restricao_tipo_lancamento_perfil WHERE perfil_acesso_id = ? AND estabelecimento_id = ? AND operacao = 'banco' AND excluido_em IS NULL",
+      [perfil, m.est],
+    );
+    expect(Number(marca?.['n'])).toBe(1);
+    // Dois perfis: um perfil livre que NÃO dá a operação não abre o tipo; o que dá a operação abre (acumula).
+    await escrever(async (e) => {
+      await e.executar(
+        'INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [m.paga, perfilLivre, m.est, '2000-01-01', new Date()],
+      );
+    });
+    expect(await codigoDaGravacao(transfere())).toBe('tipo-lancamento-nao-liberado');
+    await escrever(async (e) => {
+      await e.executar(
+        `INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em)
+         SELECT ?, id, ? FROM acao_sistema WHERE codigo = 'financeiro.movimento.criar'`,
+        [perfilLivre, new Date()],
+      );
+    });
+    expect(await codigoDaGravacao(transfere())).toBe('gravou');
+    await escrever(async (e) => {
+      await e.executar('DELETE FROM usuario_perfil WHERE perfil_acesso_id = ?', [perfilLivre]);
+    });
+    expect(await codigoDaGravacao(transfere())).toBe('tipo-lancamento-nao-liberado');
+    // Desfazer a restrição é explícito: a marca fica (excluída, com quem) e a transferência volta a passar.
+    await executar('financeiro.manterRestricaoTipoLancamento', { perfil, restrito: false });
+    expect(await codigoDaGravacao(transfere())).toBe('gravou');
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.manterRestricaoTipoLancamento', { perfil, restrito: false }),
+      ),
+    ).toBe('sem-mudanca');
+    // Perfil de outro estabelecimento: a gravação é recusada e nada grava.
+    expect(
+      await codigoDaGravacao(
+        executar('financeiro.manterTipoLancamento', { perfil: perfilOutroEst, tipo: outro, liberado: true }),
+      ),
+    ).toBe('perfil-inexistente');
+    const [nada] = await consultar(
+      'SELECT COUNT(*) AS n FROM permissao_tipo_lancamento WHERE perfil_acesso_id = ?',
+      [perfilOutroEst],
+    );
+    expect(Number(nada?.['n'])).toBe(0);
   });
 });
