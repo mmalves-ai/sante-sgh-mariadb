@@ -281,6 +281,23 @@ export class LocaisAtendimentoPropria {
     );
   }
 
+  /** Usuários ativos do cliente para a escolha na tela (por nome ou login; até 20). */
+  async candidatos(termo: string): Promise<{ usuario: number; login: string; nome: string }[]> {
+    const t = `%${termo.replace(/[%_\\]/g, '').slice(0, 60)}%`;
+    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'locais-atendimento' }, async (l) =>
+      (
+        await l.consultar(
+          'SELECT id, login, nome FROM usuario WHERE excluido_em IS NULL AND (nome LIKE ? OR login LIKE ?) ORDER BY nome LIMIT 20',
+          [t, t],
+        )
+      ).map((x) => ({
+        usuario: num(x['id']),
+        login: String(x['login']),
+        nome: String(x['nome'] ?? x['login']),
+      })),
+    );
+  }
+
   async manter(
     c: ContextoLocais & { correlacao: string; chaveIdempotencia: string; enderecoIp?: string },
     entrada: unknown,

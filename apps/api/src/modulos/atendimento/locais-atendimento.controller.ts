@@ -1,7 +1,7 @@
 // Rotas da manutenção dos locais de atendimento (02-REC linha 34). Ler: quem consulta a estrutura dos locais
 // (organizacao.local.ler). Manter: quem edita o local (organizacao.local.editar), na unidade da sessão; a inclusão
 // do local vem junto com o horário (a declaração do cadastro genérico remete para esta tela). Sem banco próprio, 503.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -47,6 +47,14 @@ export class LocaisAtendimentoController {
   lista(@Req() req: RequisicaoAutorizada): Promise<LocaisDaUnidade> {
     const s = sessaoDe(req);
     return this.exigirBanco().lista({ hospital: s.hospital, login: s.login });
+  }
+
+  @Get('usuarios-candidatos')
+  @Permissao('organizacao.local.editar')
+  candidatos(@Query('termo') termo: string | undefined) {
+    const t = (termo ?? '').trim();
+    if (t.length < 2) return Promise.resolve([]);
+    return this.exigirBanco().candidatos(t);
   }
 
   @Post()
