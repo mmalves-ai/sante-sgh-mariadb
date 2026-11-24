@@ -2,6 +2,7 @@
 import { mensagensAdministracao } from '../modulos/administracao/i18n.js';
 import { mensagensCatalogos } from '../modulos/catalogos/i18n.js';
 import { mensagensPrecos } from '../modulos/precos/i18n.js';
+import { mensagensCobrancaFonte } from '../modulos/precos/i18n-cobranca.js';
 import { mensagensPep } from '../modulos/pep/i18n.js';
 import { mensagensConsultas } from '../modulos/consultas/i18n.js';
 import { mensagensInternacao } from '../modulos/internacao/i18n.js';
@@ -2301,6 +2302,7 @@ export const mensagensWeb = {
   },
   // M12: convênios, contratos, tabelas de preço e motor de preços.
   precos: mensagensPrecos,
+  cobrancaFonte: mensagensCobrancaFonte,
   adm: mensagensAdministracao,
   catalogos: mensagensCatalogos,
   // M15: prontuário ao vivo (consulta) e registro de acesso ao prontuário.
