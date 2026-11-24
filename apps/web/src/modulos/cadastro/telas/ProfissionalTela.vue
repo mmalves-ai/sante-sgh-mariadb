@@ -33,6 +33,7 @@ import {
   lerVinculosProfissional,
   situacaoProfissional,
 } from '../api-cadastro.js';
+import ComplementoProfissional from '../componentes/ComplementoProfissional.vue';
 import CredenciamentoConvenios from '../componentes/CredenciamentoConvenios.vue';
 import EdicaoProfissional from '../componentes/EdicaoProfissional.vue';
 import VinculoLoginProfissional from '../componentes/VinculoLoginProfissional.vue';
@@ -462,6 +463,8 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
           <section v-if="editarAba('acaoDados') && p.dados" class="cartao">
             <EdicaoProfissional :ficha="p" secao="dados" @gravado="recarregar" />
           </section>
+          <!-- F3.1 (02-CAD linha 16): RQE, assinatura, dado fiscal e contas do repasse. -->
+          <ComplementoProfissional :id-profissional="Number(props.id)" />
         </template>
 
         <!-- Registros -->
