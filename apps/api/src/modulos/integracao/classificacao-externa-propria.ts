@@ -4,12 +4,16 @@
 //   - o recebimento da classificação (`classificacao_externa_recebida`) ligada ao atendimento do pronto atendimento:
 //     idempotente pelo sistema e pelo identificador externo; a que não confere fica gravada como rejeitada, com o
 //     motivo; a mais nova do atendimento vale e as anteriores passam a substituídas (nada é apagado);
+//   - a aplicação: a recebida vigente gera a classificação interna (`classificacao_risco`, origem integração, concluída,
+//     com a versão vigente do protocolo do estabelecimento) e passa a aplicada, ligada à interna; se o atendimento já
+//     tinha classificação interna concluída, a nova a reclassifica (nada é apagado);
 //   - a visão do atendimento: as classificações recebidas, com o prazo do atendimento médico.
 import {
   CONDICOES_PREFERENCIAIS,
   type CondicaoPreferencial,
   conferirClassificacaoRecebida,
   perfisParaEnvio,
+  planoAplicacao,
   prazoAtendimento,
   situacaoNaChegada,
   validarPerfilPrioridade,
@@ -127,7 +131,7 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
     if (erros.length) throw recusa(erros, 'Perfil recusado');
     return this.gravar(
       c,
-      'integracao.classificacaoExterna.configurarPerfil',
+      'integracao.classificacao_externa.configurar_perfil',
       ['perfil_prioridade_externa'],
       async (tx) => {
         let sistema: number | null = null;
@@ -181,7 +185,7 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
     const x = entradaValida(esquemaClassificacaoRecebida, entrada);
     return this.gravar(
       c,
-      'integracao.classificacaoExterna.receber',
+      'integracao.classificacao_externa.receber',
       ['classificacao_externa_recebida'],
       async (tx, est) => {
         const s = await tx.uma('SELECT id FROM sistema_externo WHERE codigo = ? AND excluido_em IS NULL', [
@@ -266,6 +270,144 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
               situacao: 'substituida',
             });
         return { id, situacao: chegada.situacao, repetida: false, motivos: erros.map((e) => e.codigo) };
+      },
+    );
+  }
+
+  /**
+   * Aplica a classificação recebida ao atendimento: gera a classificação interna e liga as duas. O classificador é o
+   * profissional identificado na recebida ou, sem ele, o profissional de quem aplica (que confere e assume).
+   */
+  aplicar(
+    c: ContextoComunicacao,
+    recebida: number,
+    agora: Date = new Date(),
+  ): Promise<{ id: number; classificacaoRiscoId: number; reclassificou: number | null }> {
+    return this.gravar(
+      c,
+      'integracao.classificacao_externa.aplicar',
+      ['classificacao_externa_recebida', 'classificacao_risco'],
+      async (tx, est, usuario) => {
+        const [r] = await tx.consultarParaAtualizar(
+          `SELECT r.id, r.versao, r.atendimento_id, r.profissional_id, r.situacao, r.cor, r.tempo_alvo_minutos,
+                  r.classificado_em, r.queixa_principal, r.descricao_prioridade, r.codigo_prioridade, a.paciente_id
+             FROM classificacao_externa_recebida r JOIN atendimento a ON a.id = r.atendimento_id
+            WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+          [recebida, est],
+          { teto: 1 },
+        );
+        if (!r) throw naoEncontrado('Classificação recebida');
+        const classificadoEm = new Date(r['classificado_em'] as string);
+        const { erros, plano } = planoAplicacao({
+          situacao: String(r['situacao']) as 'recebida',
+          cor: txtOuNull(r['cor']),
+          tempoAlvoMinutos: numOuNull(r['tempo_alvo_minutos']),
+          classificadoEm,
+          queixaPrincipal: txtOuNull(r['queixa_principal']),
+          descricaoPrioridade: txtOuNull(r['descricao_prioridade']),
+          codigoPrioridade: String(r['codigo_prioridade']),
+        });
+        if (!plano) throw recusa(erros);
+        const n = await tx.uma(
+          "SELECT id FROM nivel_prioridade WHERE codigo = ? AND contexto = 'classificacao_risco' AND ativo = TRUE",
+          [plano.cor],
+        );
+        if (!n)
+          throw recusa([
+            {
+              campo: 'cor',
+              codigo: 'nivel-nao-cadastrado',
+              mensagem: `O nível "${plano.cor}" não está cadastrado.`,
+            },
+          ]);
+        const v = await tx.uma(
+          `SELECT v.id FROM protocolo_classificacao_risco_versao v
+             JOIN protocolo_classificacao_estabelecimento pe
+               ON pe.protocolo_classificacao_risco_id = v.protocolo_classificacao_risco_id
+              AND pe.estabelecimento_id = ? AND pe.excluido_em IS NULL
+              AND pe.vigencia_inicio <= ? AND (pe.vigencia_fim IS NULL OR pe.vigencia_fim > ?)
+            WHERE v.vigencia_inicio <= ? AND (v.vigencia_fim IS NULL OR v.vigencia_fim > ?)
+            ORDER BY v.vigencia_inicio DESC, v.id DESC LIMIT 1`,
+          [est, agora, agora, agora, agora],
+        );
+        if (!v)
+          throw recusa([
+            {
+              campo: 'protocolo',
+              codigo: 'sem-protocolo-vigente',
+              mensagem: 'O estabelecimento não tem protocolo de classificação de risco vigente.',
+            },
+          ]);
+        let prof = numOuNull(r['profissional_id']);
+        if (prof === null) {
+          const p = await tx.uma(
+            `SELECT p.id FROM usuario u JOIN pessoa_fisica pf ON pf.cpf = u.cpf AND pf.excluido_em IS NULL
+               JOIN profissional p ON p.pessoa_fisica_id = pf.id AND p.situacao = 'ativo' AND p.excluido_em IS NULL
+              WHERE u.id = ? AND u.cpf IS NOT NULL LIMIT 1`,
+            [usuario],
+          );
+          if (!p)
+            throw recusa([
+              {
+                campo: 'profissional',
+                codigo: 'sem-vinculo-assistencial',
+                mensagem:
+                  'A recebida não identifica o classificador e quem aplica não tem vínculo profissional ativo.',
+              },
+            ]);
+          prof = num(p['id']);
+        }
+        const atendimento = num(r['atendimento_id']);
+        const [ant] = await tx.consultarParaAtualizar(
+          `SELECT id, versao FROM classificacao_risco WHERE atendimento_id = ? AND situacao = 'concluida'
+              AND excluido_em IS NULL ORDER BY inicio_em DESC, id DESC`,
+          [atendimento],
+          { teto: 1 },
+        );
+        let motivo: number | null = null;
+        if (ant) {
+          const m = await tx.uma(
+            "SELECT id FROM motivo_reclassificacao WHERE tipo = 'outro' AND ativo = TRUE ORDER BY id LIMIT 1",
+            [],
+          );
+          if (!m)
+            throw recusa([
+              {
+                campo: 'motivo',
+                codigo: 'motivo-nao-cadastrado',
+                mensagem: 'O motivo de reclassificação "outro" não está cadastrado.',
+              },
+            ]);
+          motivo = num(m['id']);
+          await tx.alterar('classificacao_risco', num(ant['id']), num(ant['versao']), {
+            situacao: 'reclassificada',
+          });
+        }
+        const interna = await tx.incluir('classificacao_risco', {
+          estabelecimento_id: est,
+          atendimento_id: atendimento,
+          paciente_id: num(r['paciente_id']),
+          protocolo_classificacao_risco_versao_id: num(v['id']),
+          proposto_nivel_prioridade_id: num(n['id']),
+          nivel_prioridade_id: num(n['id']),
+          sobreposta: false,
+          tempo_alvo_minutos: plano.tempoAlvoMinutos,
+          prazo_atendimento_em: plano.prazo,
+          queixa_principal: plano.queixa,
+          classificador_profissional_id: prof,
+          inicio_em: classificadoEm,
+          classificado_em: classificadoEm,
+          situacao: 'concluida',
+          anterior_classificacao_risco_id: ant ? num(ant['id']) : null,
+          motivo_reclassificacao_id: motivo,
+          descricao_mudanca_quadro: ant ? 'Classificação recebida do sistema de triagem' : null,
+          origem: 'integracao',
+        });
+        await tx.alterar('classificacao_externa_recebida', recebida, num(r['versao']), {
+          situacao: 'aplicada',
+          classificacao_risco_id: interna,
+        });
+        return { id: recebida, classificacaoRiscoId: interna, reclassificou: ant ? num(ant['id']) : null };
       },
     );
   }

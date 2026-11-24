@@ -210,7 +210,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
     if (erros.length) throw recusa(erros, 'Pacote recusado');
     return this.gravar(
       c,
-      'integracao.parceiro.configurarPacote',
+      'integracao.parceiro.configurar_pacote',
       ['pacote_parceiro', 'pacote_parceiro_campo'],
       async (tx, _est, usuario) => {
         const d = await tx.uma('SELECT id FROM parceiro_dados WHERE codigo = ? AND excluido_em IS NULL', [
@@ -308,7 +308,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
   ): Promise<{ id: number; proximaRevisao: string }> {
     return this.gravar(
       c,
-      'integracao.parceiro.revisarMinimizacao',
+      'integracao.parceiro.revisar_minimizacao',
       ['pacote_parceiro'],
       async (tx, _est, usuario) => {
         const p = await tx.uma(
@@ -354,7 +354,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
     const x = entradaValida(esquemaEntrega, entrada);
     return this.gravar(
       c,
-      'integracao.parceiro.registrarEntrega',
+      'integracao.parceiro.registrar_entrega',
       ['entrega_pacote_parceiro'],
       async (tx, est, usuario) => {
         const p = await tx.uma(
@@ -442,7 +442,7 @@ export class PortaPacotesParceiroPropria extends BaseComunicacaoPropria {
   /** Enviada, confirmada (com protocolo), rejeitada ou falhou (com a mensagem): só para a frente. */
   mudarEntrega(c: ContextoComunicacao, entrega: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaSituacaoEntrega, entrada);
-    return this.gravar(c, 'integracao.parceiro.situacaoEntrega', ['entrega_pacote_parceiro'], async (tx) => {
+    return this.gravar(c, 'integracao.parceiro.situacao_entrega', ['entrega_pacote_parceiro'], async (tx) => {
       const e = await tx.uma(
         'SELECT id, situacao, versao FROM entrega_pacote_parceiro WHERE id = ? FOR UPDATE',
         [entrega],

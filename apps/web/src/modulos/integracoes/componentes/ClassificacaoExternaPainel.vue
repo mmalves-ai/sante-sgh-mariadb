@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // F3.9, 08-INTG L140: os perfis de prioridade enviados ao sistema de triagem (com o código que ele conhece e a ordem) e,
 // por atendimento do pronto atendimento, as classificações recebidas: a vigente com o prazo do atendimento médico, as
-// substituídas e as rejeitadas com o motivo (nada é apagado).
+// substituídas e as rejeitadas com o motivo (nada é apagado). A vigente se aplica com um clique, na própria linha:
+// vira a classificação interna do atendimento (e reclassifica a interna anterior, se houver).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { gravarPerfil, lerPerfis, recebidasDoAtendimento } from '../api-comunicacao.js';
+import { aplicarRecebida, gravarPerfil, lerPerfis, recebidasDoAtendimento } from '../api-comunicacao.js';
 
 const CONDICOES = [
   'gestante',
@@ -37,6 +38,9 @@ const { t } = useI18n({
       prazo: 'Prazo do atendimento médico',
       nenhuma: 'Nenhuma classificação recebida para este atendimento.',
       gravado: 'Gravado.',
+      aplicar: 'Aplicar ao atendimento',
+      aplicada: 'Classificação aplicada ao atendimento.',
+      reclassificada: 'Classificação aplicada: a classificação interna anterior foi reclassificada.',
     },
   },
 });
@@ -80,6 +84,21 @@ const recebidas = useQuery({
   queryFn: () => recebidasDoAtendimento(atendimento.value!),
   enabled: computed(() => !!atendimento.value),
 });
+const aplicando = ref<number | null>(null);
+async function aplicar(id: number) {
+  aviso.value = '';
+  falha.value = '';
+  aplicando.value = id;
+  try {
+    const r = await aplicarRecebida(id);
+    aviso.value = r.reclassificou ? t('reclassificada') : t('aplicada');
+    await cliente.invalidateQueries({ queryKey: ['integracoes', 'classificacao', 'atendimento'] });
+  } catch (e) {
+    falha.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    aplicando.value = null;
+  }
+}
 const data = (v: string) => new Date(v).toLocaleString('pt-BR');
 </script>
 
@@ -131,6 +150,17 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
         <td>{{ x.perfil ?? '' }}</td>
         <td>{{ x.situacao }}{{ x.motivoRejeicao ? `: ${x.motivoRejeicao}` : '' }}</td>
         <td>{{ x.prazoAtendimento ? `${t('prazo')}: ${data(x.prazoAtendimento)}` : '' }}</td>
+        <td>
+          <button
+            v-if="x.situacao === 'recebida'"
+            type="button"
+            :disabled="aplicando !== null"
+            :data-testid="`classificacao-aplicar-${x.id}`"
+            @click="aplicar(x.id)"
+          >
+            {{ t('aplicar') }}
+          </button>
+        </td>
       </tr>
     </table>
   </section>

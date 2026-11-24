@@ -20,6 +20,7 @@
 //   PUT  /api/integracoes/classificacao-externa/perfis         inclui ou altera o perfil (com a versão lida)
 //   GET  /api/integracoes/classificacao-externa/perfis/envio   o que vai ao sistema de triagem (?sistema=)
 //   POST /api/integracoes/classificacao-externa/recebidas      recebe a classificação do atendimento (idempotente)
+//   POST /api/integracoes/classificacao-externa/recebidas/:id/aplicacao  gera a classificação interna da recebida
 //   GET  /api/integracoes/classificacao-externa/atendimento/:a as recebidas do atendimento, com o prazo
 import {
   Body,
@@ -243,6 +244,14 @@ export class ComunicacaoController {
   @Permissao(PC.classificacaoCriar)
   receber(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return com(this.classificacao, req, (p, c) => p.receber(c, corpo));
+  }
+
+  @Post('classificacao-externa/recebidas/:id/aplicacao')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
+  @HttpCode(201)
+  @Permissao(PC.classificacaoCriar)
+  aplicar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return com(this.classificacao, req, (p, c) => p.aplicar(c, id));
   }
 
   @Get('classificacao-externa/atendimento/:a')

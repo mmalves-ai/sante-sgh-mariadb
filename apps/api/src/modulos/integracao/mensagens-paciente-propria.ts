@@ -220,7 +220,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     if (erros.length) throw recusa(erros, 'Modelo recusado');
     return this.gravar(
       c,
-      'integracao.mensagem.configurarModelo',
+      'integracao.mensagem.configurar_modelo',
       ['modelo_mensagem_paciente'],
       async (tx, est) => {
         const alvo = x.doCliente ? null : est;
@@ -297,7 +297,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     const x = entradaValida(esquemaRegraEnvio, entrada);
     return this.gravar(
       c,
-      'integracao.mensagem.configurarRegra',
+      'integracao.mensagem.configurar_regra',
       ['regra_envio_mensagem_paciente'],
       async (tx, est) => {
         const m = await tx.uma(
@@ -354,7 +354,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     const x = entradaValida(esquemaPedidoMensagem, entrada);
     return this.gravar(
       c,
-      'integracao.mensagem.pedirEnvio',
+      'integracao.mensagem.pedir_envio',
       ['pedido_mensagem_paciente'],
       async (tx, est, usuario) => {
         const r = await tx.uma(
@@ -491,7 +491,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
       throw recusa([{ campo: 'motivo', codigo: 'motivo-obrigatorio', mensagem: 'Informe o motivo.' }]);
     return this.gravar(
       c,
-      'integracao.mensagem.cancelarEnvio',
+      'integracao.mensagem.cancelar_envio',
       ['pedido_mensagem_paciente'],
       async (tx, est) => {
         const p = await this.pedidoDoEstabelecimento(tx, id, est);
@@ -516,7 +516,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
   marcarEnviado(c: ContextoComunicacao, id: number, identificadorExterno: string): Promise<{ id: number }> {
     return this.gravar(
       c,
-      'integracao.mensagem.marcarEnviado',
+      'integracao.mensagem.marcar_enviado',
       ['pedido_mensagem_paciente'],
       async (tx, est) => {
         const p = await this.pedidoDoEstabelecimento(tx, id, est);
@@ -546,7 +546,7 @@ export class PortaMensagensPacientePropria extends BaseComunicacaoPropria {
     const x = entradaValida(esquemaRetornoMensagem, entrada);
     return this.gravar(
       c,
-      'integracao.mensagem.registrarRetorno',
+      'integracao.mensagem.registrar_retorno',
       ['pedido_mensagem_paciente_retorno', 'pedido_mensagem_paciente'],
       async (tx, est) => {
         const p = await this.pedidoDoEstabelecimento(tx, id, est);

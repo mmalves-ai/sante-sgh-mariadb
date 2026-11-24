@@ -33,6 +33,20 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM modelo_mensagem_paciente WHERE estabelecimento_id IN ${est}`, E);
   await e.executar(`DELETE FROM consentimento_titular WHERE estabelecimento_id IN ${est}`, E);
   await e.executar(`DELETE FROM classificacao_externa_recebida WHERE estabelecimento_id IN ${est}`, E);
+  await e.executar(
+    `UPDATE classificacao_risco SET anterior_classificacao_risco_id = NULL WHERE estabelecimento_id IN ${est}`,
+    E,
+  );
+  await e.executar(`DELETE FROM classificacao_risco WHERE estabelecimento_id IN ${est}`, E);
+  const prot =
+    "(SELECT x.id FROM (SELECT id FROM protocolo_classificacao_risco WHERE codigo = 'f396-prot') x)";
+  await e.executar(
+    `DELETE FROM protocolo_classificacao_estabelecimento WHERE protocolo_classificacao_risco_id IN ${prot}`,
+  );
+  await e.executar(
+    `DELETE FROM protocolo_classificacao_risco_versao WHERE protocolo_classificacao_risco_id IN ${prot}`,
+  );
+  await e.executar("DELETE FROM protocolo_classificacao_risco WHERE codigo = 'f396-prot'");
   await e.executar("DELETE FROM perfil_prioridade_externa WHERE codigo LIKE 'f396-%'");
   await e.executar("DELETE FROM sistema_externo WHERE codigo = 'f396-tri'");
   const pac =
@@ -57,7 +71,15 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
   let msg: PortaMensagensPacientePropria;
   let pac: PortaPacotesParceiroPropria;
   let cla: PortaClassificacaoExternaPropria;
-  let m: { est: number; est2: number; usuario: number; paciente: number; atdPa: number; atdAmb: number };
+  let m: {
+    est: number;
+    est2: number;
+    usuario: number;
+    paciente: number;
+    atdPa: number;
+    atdAmb: number;
+    prof: number;
+  };
   const ctx = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P, hospital: P });
   const ctx2 = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P2, hospital: P2 });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
@@ -104,6 +126,23 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
         `INSERT INTO sistema_externo (codigo, nome, categoria, finalidade, criado_em)
          VALUES ('f396-tri', 'Triagem (teste)', 'triagem', 'Classificação de risco (teste)', ?)`,
         [agora],
+      );
+      await e.executar(
+        `INSERT INTO protocolo_classificacao_risco (codigo, nome, tipo, situacao, criado_em)
+         VALUES ('f396-prot', 'Protocolo (teste)', 'institucional', 'publicado', ?)`,
+        [agora],
+      );
+      const prot = await e.uma("SELECT id FROM protocolo_classificacao_risco WHERE codigo = 'f396-prot'");
+      await e.executar(
+        `INSERT INTO protocolo_classificacao_risco_versao (protocolo_classificacao_risco_id, operacao, dados, ocorrido_em,
+           numero_versao, vigencia_inicio, motivo_publicacao, publicado_por_usuario_id, criado_em)
+         VALUES (?, 'inclusao', '{}', ?, '1.0', ?, 'Teste', ?, ?)`,
+        [prot!['id'], agora, new Date(agora.getTime() - 86_400_000), usuario['id'], agora],
+      );
+      await e.executar(
+        `INSERT INTO protocolo_classificacao_estabelecimento (protocolo_classificacao_risco_id, estabelecimento_id,
+           vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)`,
+        [prot!['id'], est, new Date(agora.getTime() - 86_400_000), agora],
       );
       await e.executar(
         `INSERT INTO parceiro_dados (codigo, nome, tipo, finalidade, base_legal, criado_em)
@@ -159,6 +198,7 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
           paciente: Number(paciente['id']),
           atdPa: await atd(pa, 'pa'),
           atdAmb: await atd(amb, 'amb'),
+          prof: Number(prof['id']),
         };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -590,5 +630,65 @@ describe.skipIf(SEM_BANCO)('F3.9-6 contra o MariaDB (contrato de efeito)', () =>
     expect(
       new Date(visao[0]!.prazoAtendimento!).getTime() - new Date(visao[0]!.classificadoEm).getTime(),
     ).toBe(3_600_000);
+
+    // Aplicação: a rejeitada não vira classificação interna; a vigente vira, com o classificador identificado.
+    expect((await erro(cla.aplicar(ctx(), rej.id))).codigo).toBe('nao-vigente');
+    expect((await erro(cla.aplicar(ctx2(), b.id))).status).toBe(404);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+      e.executar('UPDATE classificacao_externa_recebida SET profissional_id = ? WHERE id IN (?, ?)', [
+        m.prof,
+        b.id,
+        a.id,
+      ]),
+    );
+    const ap = await cla.aplicar(ctx(), b.id);
+    expect(ap.reclassificou).toBeNull();
+    expect((await erro(cla.aplicar(ctx(), b.id))).codigo).toBe('nao-vigente');
+    const [interna] = await ler(
+      `SELECT c.situacao, c.origem, c.tempo_alvo_minutos AS t, n.codigo AS cor, c.classificador_profissional_id AS prof,
+              TIMESTAMPDIFF(MINUTE, c.classificado_em, c.prazo_atendimento_em) AS prazo, c.paciente_id AS pac,
+              r.situacao AS sr, r.classificacao_risco_id AS liga
+         FROM classificacao_risco c JOIN nivel_prioridade n ON n.id = c.nivel_prioridade_id
+         JOIN classificacao_externa_recebida r ON r.id = ?
+        WHERE c.id = ?`,
+      [b.id, ap.classificacaoRiscoId],
+    );
+    expect(interna).toMatchObject({
+      situacao: 'concluida',
+      origem: 'integracao',
+      cor: 'amarelo',
+      sr: 'aplicada',
+    });
+    expect([Number(interna!['t']), Number(interna!['prazo']), Number(interna!['prof'])]).toEqual([
+      60,
+      60,
+      m.prof,
+    ]);
+    expect([Number(interna!['pac']), Number(interna!['liga'])]).toEqual([
+      m.paciente,
+      ap.classificacaoRiscoId,
+    ]);
+    // Nova classificação externa mais recente: substitui a aplicada e, aplicada, reclassifica a interna (nada apagado).
+    const c3 = await cla.receber(ctx(), { ...rec('T-3', 5), cor: 'laranja', tempoAlvoMinutos: 10 }, agora);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+      e.executar('UPDATE classificacao_externa_recebida SET profissional_id = ? WHERE id = ?', [
+        m.prof,
+        c3.id,
+      ]),
+    );
+    const ap2 = await cla.aplicar(ctx(), c3.id);
+    expect(ap2.reclassificou).toBe(ap.classificacaoRiscoId);
+    const internas = await ler(
+      `SELECT c.id, c.situacao, n.codigo AS cor, c.anterior_classificacao_risco_id AS ant FROM classificacao_risco c
+         JOIN nivel_prioridade n ON n.id = c.nivel_prioridade_id WHERE c.atendimento_id = ? ORDER BY c.id`,
+      [m.atdPa],
+    );
+    expect(internas.map((x) => [x['situacao'], x['cor']])).toEqual([
+      ['reclassificada', 'amarelo'],
+      ['concluida', 'laranja'],
+    ]);
+    expect(Number(internas[1]!['ant'])).toBe(ap.classificacaoRiscoId);
+    const [sb] = await ler('SELECT situacao FROM classificacao_externa_recebida WHERE id = ?', [b.id]);
+    expect(sb!['situacao']).toBe('substituida');
   }, 120_000);
 });
