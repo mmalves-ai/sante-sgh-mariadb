@@ -8,7 +8,11 @@
 //   - Equipe assistencial: um único responsável principal vigente por atendimento, e a função de responsável é de
 //     categoria médica; o mesmo profissional não entra duas vezes na mesma função ao mesmo tempo; a saída grava o fim
 //     e o motivo (histórico nunca apagado). Quem está na equipe vigente tem vínculo com o paciente e recebe pendências
-//     quando marcado para recebê-las.
+//     quando marcado para recebê-las. Só entra quem tem lotação vigente no estabelecimento, com categoria que
+//     combina com a da função (pelo CBO da lotação); a especialidade só em função médica e só uma do profissional.
+//   - A equipe vale enquanto o atendimento está aberto: no fim do atendimento ela se encerra (e os membros vigentes
+//     saem com o motivo), e o vínculo pela equipe deixa de valer.
+import type { CategoriaAssistencial } from '@sgh/contratos';
 
 export type TipoAtendimentoProntuario =
   'todos' | 'internacao' | 'pronto_atendimento' | 'ambulatorio' | 'hospital_dia' | 'externo';
@@ -90,7 +94,25 @@ export interface ConfiguracaoSetor extends ConfiguracaoProntuario {
   readonly ativo: boolean;
 }
 
-/** Padrão do estabelecimento quando o setor não tem configuração: sem retroativo e assinatura eletrônica. */
+/**
+ * O padrão do estabelecimento a partir do parâmetro de tolerância do retroativo (minutos, por estabelecimento): 0 =
+ * sem retroativo; acima de 0, retroativo aceito com a tolerância em horas cheias (mínimo 1). Sem parâmetro, o padrão do
+ * código. A assinatura exigida do estabelecimento segue a do código (a política de assinatura é a do módulo próprio).
+ */
+export function configuracaoPadraoDoEstabelecimento(
+  toleranciaMinutos: number | null,
+): ConfiguracaoProntuario {
+  if (toleranciaMinutos === null || !Number.isFinite(toleranciaMinutos) || toleranciaMinutos < 0)
+    return CONFIGURACAO_PRONTUARIO_PADRAO;
+  if (toleranciaMinutos === 0) return { ...CONFIGURACAO_PRONTUARIO_PADRAO, permiteRetroativo: false };
+  return {
+    ...CONFIGURACAO_PRONTUARIO_PADRAO,
+    permiteRetroativo: true,
+    toleranciaRetroativoHoras: Math.min(720, Math.max(1, Math.ceil(toleranciaMinutos / 60))),
+  };
+}
+
+/** Padrão do código quando o setor não tem configuração: sem retroativo e assinatura eletrônica. */
 export const CONFIGURACAO_PRONTUARIO_PADRAO: ConfiguracaoProntuario = {
   permiteRetroativo: false,
   toleranciaRetroativoHoras: null,
@@ -189,6 +211,32 @@ export interface NovoMembro {
   readonly profissional: number;
   readonly funcao: FuncaoEquipe;
   readonly recebeNotificacao: boolean;
+  /** Categorias (pelo CBO) das lotações vigentes do profissional NO estabelecimento; vazia = sem vínculo com ele. */
+  readonly categoriasNoEstabelecimento: readonly (CategoriaAssistencial | null)[];
+  readonly especialidade: number | null;
+  /** Especialidades ativas do cadastro do profissional. */
+  readonly especialidadesDoProfissional: readonly number[];
+}
+
+const MULTIPROFISSIONAIS: readonly CategoriaAssistencial[] = [
+  'fisioterapia',
+  'nutricao',
+  'psicologia',
+  'fonoaudiologia',
+  'odontologia',
+  'farmacia',
+  'servico-social',
+];
+
+/** A categoria do profissional combina com a da função? (administrativa aceita qualquer lotação) */
+export function categoriaCombinaComFuncao(
+  funcao: CategoriaFuncaoEquipe,
+  categorias: readonly (CategoriaAssistencial | null)[],
+): boolean {
+  if (funcao === 'administrativa') return categorias.length > 0;
+  if (funcao === 'medica') return categorias.includes('medico');
+  if (funcao === 'enfermagem') return categorias.includes('enfermagem');
+  return categorias.some((c) => c !== null && MULTIPROFISSIONAIS.includes(c));
 }
 
 export const vigentes = (membros: readonly MembroEquipe[]): MembroEquipe[] =>
@@ -200,6 +248,30 @@ export function validarInclusaoMembro(atuais: readonly MembroEquipe[], novo: Nov
   const v = vigentes(atuais);
   if (!novo.funcao.ativo)
     erros.push({ campo: 'funcao', codigo: 'funcao-inativa', mensagem: 'A função está inativa.' });
+  if (novo.categoriasNoEstabelecimento.length === 0)
+    erros.push({
+      campo: 'profissional',
+      codigo: 'profissional-sem-lotacao',
+      mensagem: 'O profissional não tem lotação vigente neste estabelecimento.',
+    });
+  else if (!categoriaCombinaComFuncao(novo.funcao.categoria, novo.categoriasNoEstabelecimento))
+    erros.push({
+      campo: 'profissional',
+      codigo: 'categoria-incompativel',
+      mensagem: 'A categoria do profissional não combina com a da função.',
+    });
+  if (novo.especialidade !== null && novo.funcao.categoria !== 'medica')
+    erros.push({
+      campo: 'especialidade',
+      codigo: 'especialidade-sem-funcao-medica',
+      mensagem: 'A especialidade só vale em função médica.',
+    });
+  else if (novo.especialidade !== null && !novo.especialidadesDoProfissional.includes(novo.especialidade))
+    erros.push({
+      campo: 'especialidade',
+      codigo: 'especialidade-de-outro',
+      mensagem: 'A especialidade não está no cadastro do profissional.',
+    });
   if (novo.funcao.responsavelPrincipal && novo.funcao.categoria !== 'medica')
     erros.push({
       campo: 'funcao',
@@ -235,6 +307,24 @@ export function validarSaidaMembro(membro: MembroEquipe | undefined, motivo: str
       mensagem: 'Informe o motivo da saída (3 a 500).',
     });
   return erros;
+}
+
+/** O atendimento ainda está aberto (a equipe vale)? Encerrado, cancelado ou com saída gravada: não. */
+export function atendimentoAberto(situacao: string, saidaEm: string | Date | null): boolean {
+  return saidaEm === null && situacao !== 'encerrado' && situacao !== 'cancelado';
+}
+
+/** Encerramento da equipe no fim do atendimento: recusa equipe já encerrada; devolve os membros vigentes a fechar. */
+export function planoEncerramentoEquipe(
+  situacao: string,
+  membros: readonly MembroEquipe[],
+): { readonly erros: ErroRegra[]; readonly membrosAEncerrar: number[] } {
+  if (situacao === 'encerrada')
+    return {
+      erros: [{ campo: 'equipe', codigo: 'equipe-encerrada', mensagem: 'A equipe já foi encerrada.' }],
+      membrosAEncerrar: [],
+    };
+  return { erros: [], membrosAEncerrar: vigentes(membros).map((m) => m.id) };
 }
 
 /** Vínculo pela equipe: o profissional está na equipe vigente do paciente. */

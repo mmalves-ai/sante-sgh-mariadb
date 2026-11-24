@@ -6,14 +6,20 @@
 //   - configuração do prontuário por setor e tipo de atendimento (`configuracao_setor_prontuario`): leitura, gravação
 //     (inclui ou altera com a versão lida) e a resolução da que vale (regra do domínio);
 //   - equipe assistencial do atendimento (`equipe_assistencial_paciente` e `equipe_assistencial_membro`, funções em
-//     `funcao_equipe_assistencial`): inclusão de membro com as regras do domínio e saída com fim e motivo.
+//     `funcao_equipe_assistencial`): inclusão de membro com as regras do domínio (lotação vigente no estabelecimento,
+//     categoria do CBO que combina com a da função, especialidade do profissional), saída com fim e motivo e
+//     encerramento da equipe no fim do atendimento (o vínculo pela equipe só vale com o atendimento aberto).
 // Toda leitura e gravação fica no estabelecimento da sessão; SQL parametrizado; as gravações pelo executor (trilha).
 import { randomUUID } from 'node:crypto';
 import {
+  atendimentoAberto,
+  categoriaDoCbo,
+  type ConfiguracaoProntuario,
   type ConfiguracaoSetor,
   type ErroRegra,
   type FuncaoEquipe,
   type MembroEquipe,
+  planoEncerramentoEquipe,
   resolverConfiguracaoProntuario,
   temVinculoPelaEquipe,
   type TipoAtendimentoProntuario,
@@ -113,6 +119,16 @@ export const esquemaMembro = z
   })
   .strict();
 export const esquemaSaida = z.object({ motivo: z.string().min(1).max(500) }).strict();
+
+/** Violação de chave única (a outra transação gravou primeiro). */
+const duplicada = (e: unknown): boolean => {
+  const o = e as { errno?: number; code?: string; message?: string; cause?: unknown } | null;
+  if (!o) return false;
+  if (o.errno === 1062 || o.code === 'ER_DUP_ENTRY' || /Duplicate entry/.test(String(o.message ?? '')))
+    return true;
+  return o.cause !== undefined && o.cause !== e ? duplicada(o.cause) : false;
+};
+const conflito = (codigo: string, detalhe: string) => new ErroOperacao(409, codigo, 'Conflito', detalhe);
 
 const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -385,7 +401,11 @@ export class PortaEquipePainelPropria {
     const x = entradaValida(z.object({ unidade: z.number().int().positive().nullable() }).strict(), entrada);
     return this.gravar(c, 'pep.painel.filtroPadrao', ['painel_filtro_usuario'], async (tx, est, usuario) => {
       if (x.unidade !== null) {
-        const u = await tx.uma('SELECT id FROM unidade_assistencial WHERE id = ?', [x.unidade]);
+        const u = await tx.uma(
+          `SELECT id FROM unidade_assistencial
+            WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL`,
+          [x.unidade, est.id],
+        );
         if (!u) throw naoEncontrado('Unidade');
       }
       const a = await tx.uma(
@@ -428,7 +448,8 @@ export class PortaEquipePainelPropria {
     return this.ler(c, 'config-setor', async (l, est) => {
       const r = await l.consultar(
         `SELECT c.*, s.nome AS setor_nome FROM configuracao_setor_prontuario c
-           JOIN setor_funcional s ON s.id = c.setor_funcional_id
+           JOIN setor_funcional s
+             ON s.id = c.setor_funcional_id AND s.estabelecimento_id = c.estabelecimento_id AND s.excluido_em IS NULL
           WHERE c.estabelecimento_id = ? ORDER BY s.nome, c.tipo_atendimento LIMIT 1000`,
         [est.id],
       );
@@ -437,9 +458,14 @@ export class PortaEquipePainelPropria {
   }
 
   /** A configuração que vale para o setor e o tipo de atendimento (regra do domínio), e de onde veio. */
-  async configuracaoVigente(c: ContextoDocs, setor: number | null, tipo: TipoAtendimentoProntuario) {
+  async configuracaoVigente(
+    c: ContextoDocs,
+    setor: number | null,
+    tipo: TipoAtendimentoProntuario,
+    padraoEstabelecimento?: ConfiguracaoProntuario,
+  ) {
     const linhas = await this.configuracoesSetor(c);
-    return resolverConfiguracaoProntuario(linhas, setor, tipo);
+    return resolverConfiguracaoProntuario(linhas, setor, tipo, padraoEstabelecimento);
   }
 
   setores(c: ContextoDocs): Promise<{ id: number; nome: string }[]> {
@@ -477,24 +503,35 @@ export class PortaEquipePainelPropria {
           ativo: x.ativo,
         };
         const a = await tx.uma(
-          'SELECT id, versao FROM configuracao_setor_prontuario WHERE setor_funcional_id = ? AND tipo_atendimento = ? FOR UPDATE',
-          [x.setor, x.tipoAtendimento],
+          `SELECT id, versao FROM configuracao_setor_prontuario
+            WHERE estabelecimento_id = ? AND setor_funcional_id = ? AND tipo_atendimento = ? FOR UPDATE`,
+          [est.id, x.setor, x.tipoAtendimento],
         );
         if (a) {
-          await tx.alterar(
-            'configuracao_setor_prontuario',
-            num(a['id']),
-            x.versao ?? num(a['versao']),
-            valores,
-          );
+          // Alterar exige a versão lida: sem ela, a linha foi gravada por outro depois que a tela abriu.
+          if (x.versao === null)
+            throw conflito(
+              'configuracao-existente',
+              'Este setor e tipo já têm configuração gravada; recarregue e altere a partir dela.',
+            );
+          await tx.alterar('configuracao_setor_prontuario', num(a['id']), x.versao, valores);
           return { tabela: 'configuracao_setor_prontuario', id: num(a['id']) };
         }
-        const id = await tx.incluir('configuracao_setor_prontuario', {
-          estabelecimento_id: est.id,
-          setor_funcional_id: x.setor,
-          tipo_atendimento: x.tipoAtendimento,
-          ...valores,
-        });
+        const id = await tx
+          .incluir('configuracao_setor_prontuario', {
+            estabelecimento_id: est.id,
+            setor_funcional_id: x.setor,
+            tipo_atendimento: x.tipoAtendimento,
+            ...valores,
+          })
+          .catch((e: unknown) => {
+            if (duplicada(e))
+              throw conflito(
+                'configuracao-existente',
+                'Outro usuário acabou de gravar este setor e tipo; recarregue.',
+              );
+            throw e;
+          });
         return { tabela: 'configuracao_setor_prontuario', id };
       },
     );
@@ -542,15 +579,20 @@ export class PortaEquipePainelPropria {
     return this.ler(c, 'vinculo-equipe', async (l, est) => {
       const r = await l.consultar(
         `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal,
-                m.recebe_notificacao, m.inicio_em, m.fim_em
+                m.recebe_notificacao, m.inicio_em, m.fim_em, a.situacao AS atd_situacao, a.saida_em AS atd_saida
            FROM equipe_assistencial_membro m
            JOIN equipe_assistencial_paciente e ON e.id = m.equipe_assistencial_paciente_id
+           JOIN atendimento a ON a.id = e.atendimento_id AND a.excluido_em IS NULL
           WHERE e.paciente_id = ? AND e.estabelecimento_id = ? AND e.situacao = 'ativa' AND e.excluido_em IS NULL
             AND m.excluido_em IS NULL AND m.profissional_id = ?`,
         [paciente, est.id, profissional],
       );
+      // Só a equipe de atendimento aberto: a de uma internação antiga não dá vínculo para sempre.
+      const abertos = r.filter((x) =>
+        atendimentoAberto(String(x['atd_situacao']), (x['atd_saida'] as Date | null) ?? null),
+      );
       return temVinculoPelaEquipe(
-        r.map((x) => membroLido({ ...x, nome: '', descricao: '' }, est.fuso)),
+        abertos.map((x) => membroLido({ ...x, nome: '', descricao: '' }, est.fuso)),
         profissional,
       );
     });
@@ -569,10 +611,15 @@ export class PortaEquipePainelPropria {
       ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
       async (tx, est) => {
         const a = await tx.uma(
-          'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          `SELECT id, paciente_id, situacao, saida_em FROM atendimento
+            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [atendimento, est.id],
         );
         if (!a) throw naoEncontrado('Atendimento');
+        if (!atendimentoAberto(String(a['situacao']), (a['saida_em'] as Date | null) ?? null))
+          throw recusaRegra([
+            { campo: 'atendimento', codigo: 'atendimento-encerrado', mensagem: 'O atendimento já terminou.' },
+          ]);
         const f = await tx.uma(
           'SELECT id, categoria, responsavel_principal, ativo FROM funcao_equipe_assistencial WHERE id = ?',
           [x.funcao],
@@ -582,20 +629,50 @@ export class PortaEquipePainelPropria {
           x.profissional,
         ]);
         if (!p) throw naoEncontrado('Profissional');
+        // Lotação vigente no estabelecimento da sessão (a categoria vem do CBO) e especialidades do cadastro.
+        const lotacoes = await tx.consultar(
+          `SELECT o.codigo_cbo FROM lotacao_profissional lp JOIN ocupacao_cbo o ON o.id = lp.ocupacao_cbo_id
+            WHERE lp.profissional_id = ? AND lp.estabelecimento_id = ? AND lp.ativo = TRUE AND lp.excluido_em IS NULL
+              AND lp.vigencia_inicio <= CURRENT_DATE AND (lp.vigencia_fim IS NULL OR lp.vigencia_fim >= CURRENT_DATE)`,
+          [x.profissional, est.id],
+        );
+        const especialidades = await tx.consultar(
+          `SELECT especialidade_medica_id FROM profissional_especialidade
+            WHERE profissional_id = ? AND ativo = TRUE AND excluido_em IS NULL`,
+          [x.profissional],
+        );
         const agora = new Date();
         const e = await tx.uma(
-          'SELECT id FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+          'SELECT id, situacao FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL FOR UPDATE',
           [atendimento],
         );
+        if (e && String(e['situacao']) === 'encerrada')
+          throw recusaRegra([
+            {
+              campo: 'equipe',
+              codigo: 'equipe-encerrada',
+              mensagem: 'A equipe deste atendimento foi encerrada.',
+            },
+          ]);
+        // Duas primeiras inclusões ao mesmo tempo: a segunda bate na chave única do atendimento e vira conflito.
         const equipe = e
           ? num(e['id'])
-          : await tx.incluir('equipe_assistencial_paciente', {
-              estabelecimento_id: est.id,
-              atendimento_id: atendimento,
-              paciente_id: num(a['paciente_id']),
-              inicio_em: agora,
-              situacao: 'ativa',
-            });
+          : await tx
+              .incluir('equipe_assistencial_paciente', {
+                estabelecimento_id: est.id,
+                atendimento_id: atendimento,
+                paciente_id: num(a['paciente_id']),
+                inicio_em: agora,
+                situacao: 'ativa',
+              })
+              .catch((err: unknown) => {
+                if (duplicada(err))
+                  throw conflito(
+                    'equipe-concorrente',
+                    'Outra pessoa abriu a equipe agora; recarregue e inclua de novo.',
+                  );
+                throw err;
+              });
         const atuais = (await tx.consultar(`${SQL_MEMBROS} FOR UPDATE`, [equipe])).map((m) =>
           membroLido(m, est.fuso),
         );
@@ -609,6 +686,9 @@ export class PortaEquipePainelPropria {
           profissional: x.profissional,
           funcao,
           recebeNotificacao: x.recebeNotificacao,
+          categoriasNoEstabelecimento: lotacoes.map((l) => categoriaDoCbo(txt(l['codigo_cbo']))),
+          especialidade: x.especialidade,
+          especialidadesDoProfissional: especialidades.map((l) => num(l['especialidade_medica_id'])),
         });
         if (erros.length) throw recusaRegra(erros);
         const seq = await tx.uma(
@@ -626,6 +706,88 @@ export class PortaEquipePainelPropria {
           inicio_em: agora,
         });
         return { tabela: 'equipe_assistencial_membro', id, equipe };
+      },
+    );
+  }
+
+  /** O paciente do atendimento do estabelecimento (para a guarda de vínculo antes de ler ou mexer na equipe). */
+  pacienteDoAtendimento(c: ContextoDocs, atendimento: number): Promise<number> {
+    return this.ler(c, 'paciente-atendimento', async (l, est) => {
+      const a = await l.uma(
+        'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [atendimento, est.id],
+      );
+      if (!a) throw naoEncontrado('Atendimento');
+      return num(a['paciente_id']);
+    });
+  }
+
+  /** Especialidades ativas do profissional (a tela só oferece as dele). */
+  especialidadesDoProfissional(
+    c: ContextoDocs,
+    profissional: number,
+  ): Promise<{ id: number; descricao: string }[]> {
+    return this.ler(c, 'especialidades', async (l) =>
+      (
+        await l.consultar(
+          `SELECT e.id, e.descricao FROM profissional_especialidade pe
+             JOIN especialidade_medica e ON e.id = pe.especialidade_medica_id
+            WHERE pe.profissional_id = ? AND pe.ativo = TRUE AND pe.excluido_em IS NULL
+            ORDER BY pe.principal DESC, e.descricao LIMIT 100`,
+          [profissional],
+        )
+      ).map((x) => ({ id: num(x['id']), descricao: String(x['descricao']) })),
+    );
+  }
+
+  /**
+   * Fim do atendimento: encerra a equipe (situação e fim) e fecha os membros vigentes com o motivo (nova versão das
+   * linhas; nada apagado). Daí em diante, a equipe não dá vínculo nem recebe inclusão.
+   */
+  encerrarEquipe(
+    c: ContextoDocs,
+    atendimento: number,
+    entrada: unknown,
+  ): Promise<{ id: number; membros: number }> {
+    const x = entradaValida(esquemaSaida, entrada);
+    return this.gravar(
+      c,
+      'pep.equipe.encerrarEquipe',
+      ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
+      async (tx, est) => {
+        const e = await tx.uma(
+          `SELECT id, situacao, versao FROM equipe_assistencial_paciente
+            WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+          [atendimento, est.id],
+        );
+        if (!e) throw naoEncontrado('Equipe');
+        const membros = (await tx.consultar(`${SQL_MEMBROS} FOR UPDATE`, [e['id']])).map((m) =>
+          membroLido(m, est.fuso),
+        );
+        const plano = planoEncerramentoEquipe(String(e['situacao']), membros);
+        if (plano.erros.length) throw recusaRegra(plano.erros);
+        const motivo = x.motivo.trim();
+        if (motivo.length < 3)
+          throw recusaRegra([
+            { campo: 'motivo', codigo: 'motivo-invalido', mensagem: 'Informe o motivo (3 a 500).' },
+          ]);
+        const agora = new Date();
+        for (const id of plano.membrosAEncerrar) {
+          const mb = membros.find((m) => m.id === id)!;
+          await tx.alterar('equipe_assistencial_membro', id, mb.versao, {
+            fim_em: agora,
+            motivo_saida: motivo,
+          });
+        }
+        await tx.alterar('equipe_assistencial_paciente', num(e['id']), num(e['versao']), {
+          situacao: 'encerrada',
+          fim_em: agora,
+        });
+        return {
+          tabela: 'equipe_assistencial_paciente',
+          id: num(e['id']),
+          membros: plano.membrosAEncerrar.length,
+        };
       },
     );
   }

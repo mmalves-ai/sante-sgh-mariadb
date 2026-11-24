@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  atendimentoAberto,
   avaliarRetroativo,
+  categoriaCombinaComFuncao,
+  configuracaoPadraoDoEstabelecimento,
   CONFIGURACAO_PRONTUARIO_PADRAO,
   type ConfiguracaoSetor,
   destinatariosDePendencias,
+  planoEncerramentoEquipe,
   type FuncaoEquipe,
   type MembroEquipe,
   resolverConfiguracaoProntuario,
@@ -31,6 +35,24 @@ describe('pacientes acompanhados e colunas do painel', () => {
       'coluna-desconhecida',
       'coluna-repetida',
     ]);
+  });
+});
+
+describe('padrão do prontuário do estabelecimento', () => {
+  it('vem do parâmetro de tolerância (minutos): 0 sem retroativo, acima disso horas cheias; sem parâmetro, o do código', () => {
+    expect(configuracaoPadraoDoEstabelecimento(null)).toEqual(CONFIGURACAO_PRONTUARIO_PADRAO);
+    expect(configuracaoPadraoDoEstabelecimento(0).permiteRetroativo).toBe(false);
+    expect(configuracaoPadraoDoEstabelecimento(90)).toMatchObject({
+      permiteRetroativo: true,
+      toleranciaRetroativoHoras: 2,
+    });
+    expect(configuracaoPadraoDoEstabelecimento(15).toleranciaRetroativoHoras).toBe(1);
+  });
+  it('estabelecimento vale sobre o padrão do código quando o setor não tem configuração', () => {
+    const est = configuracaoPadraoDoEstabelecimento(120);
+    const r = resolverConfiguracaoProntuario([], 10, 'internacao', est);
+    expect(r).toEqual({ configuracao: est, origem: 'padrao' });
+    expect(r.configuracao.toleranciaRetroativoHoras).toBe(2);
   });
 });
 
@@ -101,28 +123,103 @@ describe('equipe assistencial', () => {
     fim: null,
     ...o,
   });
-  it('um único responsável principal vigente, de função médica, sem repetir profissional na função', () => {
-    const atuais = [m(1, 100, 1, { responsavelPrincipal: true })];
+  const ok = {
+    categoriasNoEstabelecimento: ['medico', 'enfermagem'] as const,
+    especialidade: null,
+    especialidadesDoProfissional: [] as number[],
+  };
+  it('só entra quem tem lotação no estabelecimento, com categoria da função e especialidade dele em função médica', () => {
+    const base = { ...ok, profissional: 5, recebeNotificacao: false };
+    expect(
+      codigos(validarInclusaoMembro([], { ...base, funcao: enfRef, categoriasNoEstabelecimento: [] })),
+    ).toEqual(['profissional-sem-lotacao']);
     expect(
       codigos(
-        validarInclusaoMembro(atuais, { profissional: 101, funcao: assistente, recebeNotificacao: true }),
+        validarInclusaoMembro([], {
+          ...base,
+          funcao: assistente,
+          categoriasNoEstabelecimento: ['enfermagem'],
+        }),
       ),
-    ).toEqual(['responsavel-duplicado']);
-    expect(
-      validarInclusaoMembro(atuais, { profissional: 102, funcao: enfRef, recebeNotificacao: true }),
-    ).toEqual([]);
+    ).toEqual(['categoria-incompativel']);
     expect(
       codigos(
-        validarInclusaoMembro(atuais, { profissional: 100, funcao: assistente, recebeNotificacao: false }),
+        validarInclusaoMembro([], {
+          ...base,
+          funcao: assistente,
+          especialidade: 9,
+          especialidadesDoProfissional: [3],
+        }),
       ),
-    ).toContain('membro-repetido');
-    const encerrado = [m(1, 100, 1, { responsavelPrincipal: true, fim: '2026-11-21T08:00:00' })];
+    ).toEqual(['especialidade-de-outro']);
     expect(
-      validarInclusaoMembro(encerrado, { profissional: 101, funcao: assistente, recebeNotificacao: true }),
+      validarInclusaoMembro([], {
+        ...base,
+        funcao: assistente,
+        especialidade: 3,
+        especialidadesDoProfissional: [3],
+      }),
     ).toEqual([]);
     expect(
       codigos(
         validarInclusaoMembro([], {
+          ...base,
+          funcao: enfRef,
+          especialidade: 3,
+          especialidadesDoProfissional: [3],
+        }),
+      ),
+    ).toEqual(['especialidade-sem-funcao-medica']);
+    expect(categoriaCombinaComFuncao('multiprofissional', ['fisioterapia'])).toBe(true);
+    expect(categoriaCombinaComFuncao('multiprofissional', ['medico'])).toBe(false);
+    expect(categoriaCombinaComFuncao('administrativa', [null])).toBe(true);
+  });
+  it('a equipe vale com o atendimento aberto e se encerra no fim dele, fechando os vigentes', () => {
+    expect(atendimentoAberto('em_atendimento', null)).toBe(true);
+    expect(atendimentoAberto('encerrado', null)).toBe(false);
+    expect(atendimentoAberto('em_observacao', '2026-11-21T08:00:00')).toBe(false);
+    const eq = [m(1, 100, 1), m(2, 101, 2, { fim: '2026-11-21' }), m(3, 102, 2)];
+    expect(planoEncerramentoEquipe('ativa', eq)).toEqual({ erros: [], membrosAEncerrar: [1, 3] });
+    expect(codigos(planoEncerramentoEquipe('encerrada', eq).erros)).toEqual(['equipe-encerrada']);
+  });
+  it('um único responsável principal vigente, de função médica, sem repetir profissional na função', () => {
+    const atuais = [m(1, 100, 1, { responsavelPrincipal: true })];
+    expect(
+      codigos(
+        validarInclusaoMembro(atuais, {
+          ...ok,
+          profissional: 101,
+          funcao: assistente,
+          recebeNotificacao: true,
+        }),
+      ),
+    ).toEqual(['responsavel-duplicado']);
+    expect(
+      validarInclusaoMembro(atuais, { ...ok, profissional: 102, funcao: enfRef, recebeNotificacao: true }),
+    ).toEqual([]);
+    expect(
+      codigos(
+        validarInclusaoMembro(atuais, {
+          ...ok,
+          profissional: 100,
+          funcao: assistente,
+          recebeNotificacao: false,
+        }),
+      ),
+    ).toContain('membro-repetido');
+    const encerrado = [m(1, 100, 1, { responsavelPrincipal: true, fim: '2026-11-21T08:00:00' })];
+    expect(
+      validarInclusaoMembro(encerrado, {
+        ...ok,
+        profissional: 101,
+        funcao: assistente,
+        recebeNotificacao: true,
+      }),
+    ).toEqual([]);
+    expect(
+      codigos(
+        validarInclusaoMembro([], {
+          ...ok,
           profissional: 1,
           funcao: { ...enfRef, responsavelPrincipal: true, ativo: false },
           recebeNotificacao: false,
