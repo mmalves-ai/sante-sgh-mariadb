@@ -69,25 +69,34 @@ export function gravadorCuidadoSae(
         saida: (r) => ({ ids: ids(r['ids']) }),
         gravar: async (tx, est, fuso) => {
           const prof = await exigirProfissional(tx, c, est);
-          const proc = await tx.uma<{ id: number }>(
+          // Trava a linha do processo (o mesmo SELECT ... FOR UPDATE de registrarSae): prescrever e registrar ficam em
+          // fila, e a leitura dos planos abaixo (também travada) enxerga a versão confirmada mais recente.
+          const [proc] = await tx.consultarParaAtualizar<{ id: number }>(
             `SELECT id FROM processo_enfermagem
               WHERE atendimento_id = ? AND estabelecimento_id = ? AND situacao = 'aberto' AND excluido_em IS NULL
               ORDER BY id DESC LIMIT 1`,
             [x.atendimento, est],
           );
           if (!proc || num(proc.id) !== x.sae) throw SAE_MUDOU();
-          const planos = new Set(
-            (
-              await tx.consultar<{ id: number }>(
-                `SELECT p.id FROM plano_intervencao_enfermagem p
+          // No banco próprio o processo guarda o mesmo id em todas as versões: o novo registro inativa os diagnósticos
+          // da versão anterior. A intervenção deste atendimento cujo diagnóstico já foi inativado é de versão vencida
+          // (sae-mudou, como a memória, em que cada versão tem id próprio); a que não é deste atendimento nem deste
+          // estabelecimento é de outro processo.
+          const pedidas = [...new Set(x.atividades.map((a) => a.intervencao))];
+          const planos = new Map(
+            (pedidas.length === 0
+              ? []
+              : await tx.consultarParaAtualizar<{ id: number; situacao: string }>(
+                  `SELECT p.id, d.situacao FROM plano_intervencao_enfermagem p
                    JOIN diagnostico_enfermagem_paciente d ON d.id = p.diagnostico_enfermagem_paciente_id
-                  WHERE d.atendimento_id = ? AND d.estabelecimento_id = ? AND d.situacao = 'ativo'
+                  WHERE p.id IN (${marcadores(pedidas.length)}) AND d.atendimento_id = ? AND d.estabelecimento_id = ?
                     AND d.excluido_em IS NULL AND p.excluido_em IS NULL`,
-                [x.atendimento, est],
-              )
-            ).map((p) => num(p.id)),
+                  [...pedidas, x.atendimento, est],
+                )
+            ).map((p) => [num(p.id), texto(p.situacao)] as const),
           );
-          if (x.atividades.some((a) => !planos.has(a.intervencao)))
+          if (pedidas.some((i) => planos.has(i) && planos.get(i) !== 'ativo')) throw SAE_MUDOU();
+          if (pedidas.some((i) => !planos.has(i)))
             throw recusa('intervencao-de-outro-processo', 'A intervenção não é do processo vigente.');
           const novos: number[] = [];
           for (const a of x.atividades)

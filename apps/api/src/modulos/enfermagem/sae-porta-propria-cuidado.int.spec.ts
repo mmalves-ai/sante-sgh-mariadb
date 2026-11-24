@@ -66,11 +66,11 @@ describe.skipIf(SEM_BANCO)('porta própria da prescrição de enfermagem (MariaD
   });
 
   const c = () => contextoDe(m!);
-  const registrar = (versaoVista: number) =>
-    porta.gravarSgh(c(), null, (g) =>
+  const registrar = (versaoVista: number, ctx = c(), atendimento = m!.atendimento) =>
+    porta.gravarSgh(ctx, null, (g) =>
       g.registrarSae({
         paciente: m!.paciente,
-        atendimento: m!.atendimento,
+        atendimento,
         versaoVista,
         sistema: 'NNN',
         versaoTerminologia: '2024',
@@ -259,7 +259,32 @@ describe.skipIf(SEM_BANCO)('porta própria da prescrição de enfermagem (MariaD
     expect(a).toMatchObject({ paciente: m!.paciente, revisadoEm: null });
     await registrar(1);
     expect(await porta.atividadesVigentes(c(), [m!.atendimento])).toEqual([]);
+    // O processo guarda o mesmo id em todas as versões: a intervenção da versão anterior (diagnóstico inativado pelo
+    // novo registro) é recusada como sae-mudou, como na memória, e nada é gravado.
+    const antes = await contar(
+      'SELECT COUNT(*) AS n FROM atividade_cuidado_enfermagem WHERE atendimento_id = ?',
+      [m!.atendimento],
+    );
+    expect(await recusada(prescrever(processo, intervencao, `k4-${marca}`))).toBe('sae-mudou');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM atividade_cuidado_enfermagem WHERE atendimento_id = ?', [
+        m!.atendimento,
+      ]),
+    ).toBe(antes);
     expect((await porta.atividade(c(), atividade))?.revisadoEm).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
     expect(await porta.atividade(contextoDe(m!, m!.outroEst), atividade)).toBeNull();
+  });
+
+  it('a intervenção que existe em outro atendimento de outro estabelecimento é de outro processo', async () => {
+    const fora = contextoDe(m!, m!.outroEst);
+    await registrar(0, fora, m!.atendimentoOutro);
+    const deFora = (await porta.sae(fora, m!.atendimentoOutro)).itens.find(
+      (i) => i.tipo === 'intervencao',
+    )!.id;
+    expect(deFora).toBeGreaterThan(0);
+    const vigente = (await porta.sae(c(), m!.atendimento)).itens.find((i) => i.tipo === 'intervencao')!;
+    expect(await recusada(prescrever(processo, deFora, `k5-${marca}`))).toBe('intervencao-de-outro-processo');
+    // A intervenção vigente do próprio atendimento continua aceita depois da nova versão.
+    expect((await prescrever(processo, vigente.id, `k6-${marca}`)).ids).toHaveLength(1);
   });
 });
