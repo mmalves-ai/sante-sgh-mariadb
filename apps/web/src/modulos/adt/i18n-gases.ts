@@ -1,0 +1,31 @@
+// Textos do uso de gases medicinais por paciente (F3.4, 04-INT linha 82): iniciar, trocar fluxo, encerrar e lançar.
+export const mensagensGases = {
+  titulo: 'Gases medicinais do paciente',
+  texto:
+    'Registre o início e o fim de cada gás à beira do leito. A troca de fluxo encerra o uso atual e abre o seguinte. O lançamento na conta cobra o tempo acumulado pela regra do convênio e lança só a diferença.',
+  gas: 'Gás (código do insumo)',
+  fluxo: 'Fluxo (L/min)',
+  local: 'Local',
+  iniciar: 'Iniciar uso',
+  trocar: 'Trocar fluxo',
+  encerrar: 'Encerrar',
+  cancelar: 'Cancelar (registro por engano)',
+  motivo: 'Motivo do cancelamento',
+  lancar: 'Lançar na conta',
+  lancado: 'Lançado: {n} item(ns) na conta.',
+  inicio: 'Início',
+  fim: 'Fim',
+  horas: 'Horas',
+  situacao: 'Situação',
+  faturado: 'Na conta',
+  nenhum: 'Nenhum gás registrado neste atendimento.',
+  situacoes: { em_uso: 'Em uso', encerrado: 'Encerrado', cancelado: 'Cancelado' },
+  locais: {
+    leito: 'Leito',
+    centro_cirurgico: 'Centro cirúrgico',
+    sala_procedimento: 'Sala de procedimento',
+    pronto_atendimento: 'Pronto atendimento',
+    transporte: 'Transporte',
+    outro: 'Outro',
+  },
+};

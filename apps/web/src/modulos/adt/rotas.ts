@@ -54,6 +54,14 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // F3.4, 04-INT L82: gases medicinais do paciente pelo atendimento.
+    path: `/internacao/atendimentos/:atd${reg}/gases`,
+    name: 'adt.gases',
+    component: () => import('./telas/GasesTela.vue'),
+    props: true,
+    meta: { permissao: 'enfermagem.dispositivo.ler' },
+  },
+  {
     path: '/internacao/documentos',
     name: 'adt.documentos',
     component: () => import('./telas/DocumentosInternacaoTela.vue'),
