@@ -60,6 +60,7 @@ describe.skipIf(SEM_BANCO)('portal de resultados sobre o banco próprio (cliente
     const portal = new ServicoPortal(porta, 'rede', portalLigado, null, 'Produto');
     expect(await portal.validar(hospital, 'CODIGO-INEXISTENTE-0210')).toEqual({
       valido: false,
+      numero: null,
       emitidoEm: null,
       estabelecimento: null,
       exames: 0,
