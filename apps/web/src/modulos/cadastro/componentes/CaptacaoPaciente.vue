@@ -67,9 +67,11 @@ void carregar();
     <p v-if="itens.length === 0">{{ t('vinculos.captacao.nenhuma') }}</p>
     <ul v-else>
       <li v-for="i in itens" :key="i.id">
-        {{ `${i.captadoEm.slice(0, 10)} — ${canal(i.canal)} — ${i.tipoIndicacao.descricao}` }}
-        <template v-if="i.indicador">{{ `: ${i.indicador}` }}</template>
-        <template v-if="i.campanha">{{ ` (${i.campanha})` }}</template>
+        {{
+          `${i.captadoEm.slice(0, 10)} — ${canal(i.canal)} — ${i.tipoIndicacao.descricao}` +
+          (i.indicador ? `: ${i.indicador}` : '') +
+          (i.campanha ? ` (${i.campanha})` : '')
+        }}
       </li>
     </ul>
     <form v-if="podeEditar && opcoes" data-testid="nova-captacao" @submit.prevent="registrar">
