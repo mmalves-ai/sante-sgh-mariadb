@@ -109,4 +109,5 @@ export * from './especialidades/obstetricia.js';
 export * from './especialidades/lactario.js';
 export * from './especialidades/ciclo-de-vida.js';
 export * from './equipe-painel/regras.js';
+export * from './equipe-painel/filtros.js';
 export * from './impressao-justificada.js';
