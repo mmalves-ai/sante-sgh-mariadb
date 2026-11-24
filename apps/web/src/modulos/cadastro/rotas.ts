@@ -8,6 +8,13 @@ const id = '(\\d+)';
 
 export const rotasCadastro: RouteRecordRaw[] = [
   {
+    // F3.1 (02-CAD linha 28): calendário de feriados e dias não úteis por abrangência.
+    path: '/cadastros/estrutura/calendario',
+    name: 'cadastro.calendario',
+    component: () => import('./telas/CalendarioTela.vue'),
+    meta: { permissao: 'organizacao.estrutura.ler' },
+  },
+  {
     path: '/cadastros/pacientes',
     name: 'cadastro.pacientes',
     component: () => import('./telas/BuscaPacientesTela.vue'),
