@@ -264,8 +264,16 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
     m = await montarMassa(nucleo);
     porta = new PortaPessoasPropria(nucleo, cifra);
   }, 120_000);
+  /** Tabela 07 do eSocial SINTÉTICA desta execução (versão da fonte própria), apagada no fim. */
+  const tabela07: number[] = [];
   afterAll(async () => {
-    await limparMassa(nucleo, m, async () => undefined);
+    await limparMassa(nucleo, m, async (e) => {
+      if (m) await e.executar('DELETE FROM dependente WHERE colaborador_id = ?', [m.colab]);
+      for (const t of tabela07) {
+        await e.executar('DELETE FROM codigo_esocial WHERE tabela_esocial_id = ?', [t]);
+        await e.executar('DELETE FROM tabela_esocial WHERE id = ?', [t]);
+      }
+    });
     await nucleo?.encerrar();
   });
 
@@ -302,6 +310,95 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
       ativo: true,
     });
     expect(await porta.hoje(ctx(m, m.rh))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('dependente novo: tipo do eSocial pelo parentesco, sequência, CPF como o do titular; sem catálogo e CPF repetido recusam', async () => {
+    const dep = (cpf: string | null, extra: Record<string, unknown> = {}) => ({
+      vinculo: m.vinculo,
+      nome: `DEPENDENTE SINTETICO ${SUFIXO}`,
+      nascimento: '2020-05-10',
+      parentesco: '03',
+      cpfHmac: cpf ? cifra.hmac(cpf) : null,
+      cpfCifrado: cpf ? cifra.cifrar(cpf) : null,
+      dependenteIr: cpf !== null,
+      dependenteSalarioFamilia: false,
+      por: 'rh',
+      ...extra,
+    });
+    const incluir = (d: ReturnType<typeof dep>) =>
+      porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'dependente'), (g) =>
+        g.incluirDependente(d as Parameters<GravadorPessoas['incluirDependente']>[0]),
+      );
+    // Sem a tabela 07 no catálogo (o cliente de teste começa vazio), recusa: nunca grava tipo inventado.
+    const [antes] = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-dep' }, (l) =>
+      l.consultar(
+        `SELECT COUNT(*) AS k FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id
+          WHERE t.fonte = 'esocial' AND t.codigo_oficial IN ('07', '7') AND c.codigo_esocial IN ('03', '3', '99')`,
+      ),
+    );
+    if (Number(antes?.['k']) === 0)
+      expect(await codigo(incluir(dep(null, { dependenteIr: false })))).toBe('catalogo-pendente');
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `massa-dep-${SUFIXO}` }, async (e) => {
+      const t = await e.inserir(
+        "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES ('esocial', '07', 'TIPOS DE DEPENDENTE SINTETICA', ?, NOW(3))",
+        [`t-${SUFIXO}`],
+      );
+      tabela07.push(t);
+      for (const [cod, desc] of [
+        ['03', 'FILHO SINTETICO'],
+        ['99', 'AGREGADO SINTETICO'],
+      ])
+        await e.inserir(
+          'INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, NOW(3))',
+          [t, cod, desc, '2099-01-01'],
+        );
+    });
+    // Vigência futura: ainda não vale hoje (o catálogo é por vigência).
+    expect(await codigo(incluir(dep(null, { dependenteIr: false })))).toBe('catalogo-pendente');
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `massa-dep-${SUFIXO}` }, (e) =>
+      e.executar('UPDATE codigo_esocial SET vigencia_inicio = NULL WHERE tabela_esocial_id = ?', [
+        tabela07[0],
+      ]),
+    );
+    const cpf = cpfSintetico();
+    const id1 = await incluir(dep(cpf));
+    const id2 = await incluir(dep(null, { dependenteIr: false, parentesco: '99', nascimento: '2001-02-03' }));
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-dep' }, (l) =>
+      l.consultar(
+        `SELECT dp.id, dp.sequencia, dp.cpf IS NOT NULL AS tem_cpf, dp.dependente_irrf, dp.descricao_dependencia,
+                dp.data_inicio_dependencia >= dp.data_nascimento AS inicio_ok, dp.origem, dp.criado_por, ce.codigo_esocial
+           FROM dependente dp JOIN codigo_esocial ce ON ce.id = dp.tipo_dependente_codigo_esocial_id
+          WHERE dp.colaborador_id = ? ORDER BY dp.sequencia`,
+        [m.colab],
+      ),
+    );
+    expect(linhas.map((x) => [Number(x['id']), Number(x['sequencia']), String(x['codigo_esocial'])])).toEqual(
+      [
+        [Number(id1), 1, '03'],
+        [Number(id2), 2, '99'],
+      ],
+    );
+    expect(
+      linhas.map((x) => [Number(x['tem_cpf']), Number(x['dependente_irrf']), Number(x['inicio_ok'])]),
+    ).toEqual([
+      [1, 1, 1],
+      [0, 0, 1],
+    ]);
+    expect(linhas[0]!['descricao_dependencia']).toBeNull();
+    expect(linhas[1]!['descricao_dependencia']).toBe('Agregado/Outros');
+    expect(linhas.every((x) => x['origem'] === 'sistema' && Number(x['criado_por']) === m.rh)).toBe(true);
+    // A leitura devolve o parentesco (código do eSocial) e o CPF como o do titular (HMAC e cifra, nunca em claro).
+    const lidos = await porta.dependentes(ctx(m, m.rh), m.vinculo);
+    expect(lidos.map((x) => x.parentesco)).toEqual(['03', '99']);
+    expect(lidos[0]!.cpfHmac).toBe(cifra.hmac(cpf));
+    expect(cifra.decifrar(lidos[0]!.cpfCifrado)).toBe(cpf);
+    expect(lidos[1]!.cpfHmac).toBeNull();
+    // O mesmo CPF duas vezes no colaborador recusa com o campo.
+    expect(await codigo(incluir(dep(cpf)))).toBe('cpf-repetido');
+    // Vínculo de outro estabelecimento: a releitura não acha (nada gravado).
+    expect(await codigo(incluir(dep(null, { dependenteIr: false, vinculo: m.vinculo2 })))).toBe(
+      'desatualizado',
+    );
   });
 
   it('correção: vai à trilha com o valor anterior e o novo e volta na leitura', async () => {

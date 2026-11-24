@@ -158,6 +158,36 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     ]);
   });
 
+  it('dependente para o IRRF ou o salário-família sem CPF é recusado (eSocial); sem efeito fiscal, sem CPF passa', async () => {
+    const { servico } = montar();
+    const h = 't-dep-cpf';
+    const v = (await servico.admitir(sessao(h), admissao())).id;
+    const base = {
+      vinculo: v,
+      nome: 'FILHA SINTETICA',
+      nascimento: '2026-01-10',
+      parentesco: '03',
+      cpf: null,
+    };
+    for (const marca of [{ dependenteIr: true }, { dependenteSalarioFamilia: true }])
+      expect(
+        await recusa(
+          servico.incluirDependente(sessao(h), {
+            ...base,
+            dependenteIr: false,
+            dependenteSalarioFamilia: false,
+            ...marca,
+          }),
+        ),
+      ).toMatchObject({ status: 409, codigo: 'cpf-obrigatorio' });
+    const ok = await servico.incluirDependente(sessao(h), {
+      ...base,
+      dependenteIr: false,
+      dependenteSalarioFamilia: false,
+    });
+    expect(ok.id).toBeGreaterThan(0);
+  });
+
   it('o dependente se encerra com data e motivo (sai da ficha, nunca apagado); repetir dá 404; data futura, 409', async () => {
     const { servico, trilha } = montar();
     const h = 't-dep';

@@ -16,9 +16,11 @@
 // para o desligamento num estabelecimento não bloquear a conta de quem continua ativo em outro (o bloqueio também
 // recusa, no Executor, a conta de quem tem vínculo ativo em outro estabelecimento).
 // Melhoria: a conferência da habilitação trava pela versão lida na tela (quando vem) e guarda a observação na trilha.
+// fecho-1: o dependente novo grava o tipo de dependente do eSocial (tabela 07) pelo parentesco da tela (o mesmo código),
+// com a sequência por colaborador, o CPF como o do titular e a dependência a partir do dia da inclusão.
 // Pendências de modelo (pedidos do lote 03-09): a admissão pela ficha rápida (o modelo exige nascimento, sexo, grau
-// de instrução, categoria, tipo de vínculo, cargo do quadro e salário, que a entrada da tela não traz); o dependente
-// novo ou versionado (tipo de dependente do eSocial por parentesco); as unidades onde o registro atende; e o índice
+// de instrução, categoria, tipo de vínculo, cargo do quadro e salário, que a entrada da tela não traz); a versão nova
+// do dependente; as unidades onde o registro atende; e o índice
 // do CPF por HMAC (até lá a busca por CPF compara o HMAC dos colaboradores do estabelecimento).
 import {
   alterarAuditado,
@@ -30,7 +32,9 @@ import {
   type Leitor,
   type NucleoProprio,
   recusa,
+  restricaoUnicaViolada,
 } from '@sgh/nucleo';
+import { PARENTESCOS_DEPENDENTE } from '@sgh/contratos';
 import { z } from 'zod';
 import {
   type GravacaoFeita,
@@ -648,13 +652,57 @@ export class PortaPessoasPropria implements PortaPessoas {
         });
       },
       incluirHistorico: (h) => historico(h),
-      incluirDependente: () =>
-        Promise.reject(
-          modeloPendente(
-            'A inclusão de dependente',
-            'O dependente exige o tipo de dependente do eSocial, que o parentesco da tela ainda não indica.',
-          ),
-        ),
+      incluirDependente: async (d) => {
+        // O colaborador do vínculo do estabelecimento, travado: a sequência do dependente é por colaborador.
+        const [col] = await e.consultarParaAtualizar<{ id: number }>(
+          `SELECT c.id FROM vinculo_trabalho vt JOIN colaborador c ON c.id = vt.colaborador_id
+            WHERE vt.id = ? AND vt.estabelecimento_id = ? AND c.excluido_em IS NULL`,
+          [d.vinculo, est],
+        );
+        if (!col) throw desatualizado();
+        const hoje = localNoFuso(new Date(), await fusoDoEstabelecimento(e, est)).slice(0, 10);
+        const tipo = await tipoDependenteEsocial(e, d.parentesco, hoje);
+        // O CPF chega cifrado (como o do titular) e vai ao modelo como o do colaborador; a leitura volta HMAC e cifra.
+        const cpf = d.cpfCifrado ? this.cifra.decifrar(d.cpfCifrado) : null;
+        if (d.cpfCifrado && !cpf)
+          throw recusa('cpf-ilegivel', 'O CPF do dependente não decifra com a chave deste ambiente.');
+        if (cpf && d.cpfHmac && this.cifra.hmac(cpf) !== d.cpfHmac)
+          throw recusa('cpf-ilegivel', 'O CPF do dependente não confere com a chave de busca.');
+        const seq = await e.uma<{ s: unknown }>(
+          'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM dependente WHERE colaborador_id = ?',
+          [col.id],
+        );
+        const agora = new Date();
+        return e
+          .inserir(
+            `INSERT INTO dependente (colaborador_id, sequencia, nome, cpf, data_nascimento,
+               tipo_dependente_codigo_esocial_id, descricao_dependencia, dependente_irrf, dependente_salario_familia,
+               data_inicio_dependencia, origem, criado_em, criado_por, versao)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistema', ?, ?, 1)`,
+            [
+              n(col.id),
+              n(seq?.s),
+              d.nome,
+              cpf,
+              d.nascimento,
+              tipo,
+              d.parentesco === PARENTESCO_OUTROS ? PARENTESCOS_DEPENDENTE[PARENTESCO_OUTROS] : null,
+              d.dependenteIr,
+              d.dependenteSalarioFamilia,
+              // A dependência vale da inclusão (nunca antes do nascimento: CHECK do modelo).
+              hoje < d.nascimento ? d.nascimento : hoje,
+              agora,
+              c.usuario,
+            ],
+          )
+          .catch((x: unknown) => {
+            if (restricaoUnicaViolada(x) === 'uq_dependente_colaborador_id_cpf')
+              throw recusa('cpf-repetido', 'Este CPF já é de outro dependente deste colaborador.', {
+                campos: ['cpf'],
+              });
+            throw x;
+          });
+      },
       encerrarDependente: async (d) => {
         const x = await e.uma<{ id: number; versao: number }>(
           `SELECT dp.id, dp.versao FROM dependente dp
@@ -1055,8 +1103,9 @@ export class PortaPessoasPropria implements PortaPessoas {
       (
         await l.consultar(
           `SELECT dp.id, dp.nome, dp.data_nascimento, dp.descricao_dependencia, dp.cpf, dp.dependente_irrf,
-                  dp.dependente_salario_familia, dp.data_inicio_dependencia
+                  dp.dependente_salario_familia, dp.data_inicio_dependencia, ce.codigo_esocial AS parentesco
              FROM dependente dp JOIN vinculo_trabalho vt ON vt.colaborador_id = dp.colaborador_id
+             LEFT JOIN codigo_esocial ce ON ce.id = dp.tipo_dependente_codigo_esocial_id
             WHERE vt.id = ? AND vt.estabelecimento_id = ? AND dp.excluido_em IS NULL AND dp.data_fim_dependencia IS NULL
             ORDER BY dp.sequencia, dp.id`,
           [vinculo, est],
@@ -1067,7 +1116,9 @@ export class PortaPessoasPropria implements PortaPessoas {
           id: n(r['id']),
           nome: texto(r['nome']),
           nascimento: dataIso(r['data_nascimento']) ?? '',
-          parentesco: texto(r['descricao_dependencia']),
+          parentesco: r['parentesco']
+            ? texto(r['parentesco']).padStart(2, '0')
+            : texto(r['descricao_dependencia']),
           cpfHmac: cpf ? this.cifra.hmac(cpf) : null,
           cpfCifrado: cpf ? this.cifra.cifrar(cpf) : null,
           dependenteIr: verdadeiro(r['dependente_irrf']),
@@ -1201,4 +1252,30 @@ export class PortaPessoasPropria implements PortaPessoas {
 
 export function portaPessoasIndisponivel(): PortaPessoas {
   return portaIndisponivel<PortaPessoas>(METODOS_PORTA_PESSOAS);
+}
+
+/** Agregado/outros: o único tipo do eSocial que leva a descrição da dependência. */
+const PARENTESCO_OUTROS = '99';
+/** Tabela 07 do eSocial (tipos de dependente), com e sem o zero à esquerda conforme a carga. */
+const TABELA_TIPO_DEPENDENTE = ['07', '7'] as const;
+
+/**
+ * O parentesco da tela é o código do tipo de dependente do eSocial (tabela 07): o ID do catálogo oficial carregado no
+ * cliente, vigente no dia. Sem o código no catálogo, recusa (nunca grava tipo inventado).
+ */
+async function tipoDependenteEsocial(l: Leitor, parentesco: string, dia: string): Promise<number> {
+  const x = await l.uma<{ id: unknown }>(
+    `SELECT c.id FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id
+      WHERE t.fonte = 'esocial' AND t.codigo_oficial IN (?, ?) AND c.codigo_esocial IN (?, ?)
+        AND (c.vigencia_inicio IS NULL OR c.vigencia_inicio <= ?) AND (c.vigencia_fim IS NULL OR c.vigencia_fim >= ?)
+      ORDER BY c.vigencia_inicio DESC, c.id DESC LIMIT 1`,
+    [...TABELA_TIPO_DEPENDENTE, parentesco, String(Number(parentesco)), dia, dia],
+  );
+  if (!x)
+    throw recusa(
+      'catalogo-pendente',
+      `O tipo de dependente ${parentesco} não está na tabela 07 do eSocial carregada neste cliente.`,
+      { campos: ['parentesco'] },
+    );
+  return n(x.id);
 }

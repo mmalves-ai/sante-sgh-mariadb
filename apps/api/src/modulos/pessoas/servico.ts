@@ -986,6 +986,13 @@ export class ServicoPessoas {
     const hoje = await this.porta.hoje(s.porta);
     if (diasEntre(hoje, e.nascimento) > 0)
       throw recusaRegra('nascimento-futuro', 'A data de nascimento não pode ser futura.', ['nascimento']);
+    // eSocial (S-2200/S-2205): dependente para o IRRF ou para o salário-família vai com o CPF.
+    if ((e.dependenteIr || e.dependenteSalarioFamilia) && !e.cpf)
+      throw recusaRegra(
+        'cpf-obrigatorio',
+        'Dependente para o imposto de renda ou para o salário-família exige o CPF.',
+        ['cpf'],
+      );
     const r = await this.apoio.sgh(
       s,
       E.pessoasDependenteIncluido.codigo,
