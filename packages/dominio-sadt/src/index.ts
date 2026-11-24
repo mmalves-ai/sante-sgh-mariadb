@@ -4,6 +4,7 @@
 export * from './exame/estados.js';
 export * from './exame/restricoes.js';
 export * from './exame/pedido.js';
+export * from './exame/limites.js';
 export * from './referencia/versao.js';
 export * from './referencia/data-do-exame.js';
 export * from './critico/escalonamento.js';
