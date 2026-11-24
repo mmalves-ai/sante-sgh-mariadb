@@ -6,7 +6,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
 // estão neste repositório); a contagem do cabeçalho acompanha.
 // F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":408,"M":189,"P":57,"N":162};
+// F3.7 (06-FAT L46): o item "Favorecidos e prestadores terceiros" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":409,"M":190,"P":57,"N":162};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -223,6 +224,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.repasse-medico.integracao-contabil-do-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Integração contábil do repasse"],"titulo":"Integração contábil do repasse","selo":"M","fase":3,"rota":"/repasse/integracao-contabil","permissao":"repasse.evento.ler"},
   {"id":"faturamento.repasse-medico.configuracoes-do-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Configurações do repasse"],"titulo":"Configurações do repasse","selo":"M","fase":3,"rota":"/repasse/configuracoes","permissao":"repasse.parametro.ler"},
   {"id":"faturamento.repasse-medico.cooperativas-e-credenciamento-medico","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Cooperativas e credenciamento médico"],"titulo":"Cooperativas e credenciamento médico","selo":"M","fase":3,"rota":"/repasse/cooperativas","permissao":"repasse.cooperativa.ler"},
+  {"id":"faturamento.repasse-medico.favorecidos-e-prestadores-terceiros","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Favorecidos e prestadores terceiros"],"titulo":"Favorecidos e prestadores terceiros","selo":"M","fase":3,"rota":"/repasse/favorecidos","permissao":"repasse.cooperativa.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.beneficiarios-planos-e-contratos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Beneficiários, planos e contratos"],"titulo":"Beneficiários, planos e contratos","selo":"N","fase":6,"rota":"/operadora/beneficiarios","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.rede-credenciada-e-prestadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Rede credenciada e prestadora"],"titulo":"Rede credenciada e prestadora","selo":"N","fase":6,"rota":"/operadora/rede","permissao":"operadora.prestador.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.atendimento-autorizacao-e-protocolos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Atendimento, autorização e protocolos"],"titulo":"Atendimento, autorização e protocolos","selo":"N","fase":6,"rota":"/operadora/autorizacoes","permissao":"operadora.dominio.ler"},

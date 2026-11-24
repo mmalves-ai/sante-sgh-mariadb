@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('408 itens: M 189, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 408, M: 189, P: 57, N: 162 });
+  it('409 itens: M 190, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 409, M: 190, P: 57, N: 162 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -220,6 +220,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/repasse/apuracao', // M33
         '/repasse/configuracoes', // M33 (CRUD genérico do subitem)
         '/repasse/cooperativas', // M33 (CRUD genérico do subitem)
+        '/repasse/favorecidos', // F3.7 (06-FAT L46)
         '/repasse/integracao-contabil', // M33 (CRUD genérico do subitem)
         '/repasse/lancamentos', // M33
         '/repasse/meu-extrato', // M33 (só o próprio médico)
