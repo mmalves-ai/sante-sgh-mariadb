@@ -63,3 +63,4 @@ export * from './usuario/troca-rapida.js';
 export * from './usuario/conselho.js';
 export * from './usuario/usuario-modelo.js';
 export * from './usuario/cadastro-usuario.js';
+export * from './preferencias/preferencias-usuario.js';
