@@ -2,6 +2,7 @@
 // (ADR 0023): "o outro sistema" só onde a pessoa precisa saber que a ocupação veio de fora.
 import { mensagensControlesAssistenciais } from './i18n-controles-assistenciais.js';
 import { mensagensGases } from './i18n-gases.js';
+import { mensagensLeitosSus } from './i18n-leitos-sus.js';
 import { mensagensRegistros } from './i18n-registros.js';
 import { mensagensSameGuarda } from './i18n-same-guarda.js';
 
@@ -12,6 +13,8 @@ export const mensagensAdt = {
   controles: mensagensControlesAssistenciais,
   // F3.4, 04-INT L82: gases medicinais por paciente (i18n-gases.ts).
   gases: mensagensGases,
+  // F78.04-2, 04-INT L79 e L80: leitos do sistema público e comunicação à operadora (i18n-leitos-sus.ts).
+  leitosSus: mensagensLeitosSus,
   // F3.4, 04-INT L67: diagnósticos e acidente da internação (i18n-registros.ts).
   registros: mensagensRegistros,
   carregando: 'Carregando…',

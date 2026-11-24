@@ -226,4 +226,19 @@ export const rotasAdt: RouteRecordRaw[] = [
     component: () => import('./telas/RegulacaoTela.vue'),
     meta: { permissao: 'internacao.regulacao.ler' },
   },
+  {
+    // F78.04-2, 04-INT L79: leitos do sistema público (habilitação, leitos do programa, capacidade e teto).
+    path: '/internacao/leitos-sus',
+    name: 'adt.leitosSus',
+    component: () => import('./telas/LeitosSusTela.vue'),
+    meta: { permissao: 'faturamento.susLeitoUti.ler' },
+  },
+  {
+    // F78.04-2, 04-INT L80: comunicação da internação e da alta à operadora, pela internação.
+    path: `/internacao/:reg${reg}/comunicacoes-operadora`,
+    name: 'adt.comunicacoesOperadora',
+    component: () => import('./telas/ComunicacaoOperadoraTela.vue'),
+    props: true,
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
 ];
