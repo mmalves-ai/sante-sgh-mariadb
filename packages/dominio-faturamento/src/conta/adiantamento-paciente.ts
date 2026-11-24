@@ -75,7 +75,7 @@ export interface SaldoAdiantamento {
   readonly saldo: number;
   readonly recebidoEm: string;
   readonly situacao: SituacaoAdiantamento;
-  /** Já aplicado nesta conta (a aplicação é uma por adiantamento e conta; a nova soma na mesma linha). */
+  /** Já tem aplicação viva nesta conta (cada aplicação é uma linha nova; a anterior nunca é reescrita). */
   readonly jaNaConta: boolean;
 }
 

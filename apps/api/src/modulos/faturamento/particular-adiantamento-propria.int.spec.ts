@@ -2,12 +2,17 @@
 // padrão (06-FAT linha 40) contra o MariaDB real. Massa SINTÉTICA com códigos "F3710" (nenhuma pessoa real):
 // - recebimento no caixa aberto do operador (adiantamento_paciente + movimento_caixa ligado + total da sessão);
 // - caução na urgência recusada sem a declaração voluntária e aceita com ela;
+// - atendimento de outro paciente recusado; a urgência sai do caráter do atendimento (o operador não a desmarca);
+// - Pix sem comprovante recusado sem o conector; o simulado devolve identificador único (nunca texto fixo);
 // - aplicação do saldo na conta do mais antigo para o mais novo (aplicacao_adiantamento_paciente, saldo e situação);
-// - estorno da aplicação marcado (nada apagado) com o valor de volta ao saldo;
+// - estorno da aplicação marcado com o motivo (nada apagado) e o valor de volta ao saldo; aplicar de novo cria outra
+//   linha (sequência) e o estorno continua no extrato; estorno com a conta faturada recusado;
+// - devolução com conta aberta devendo só com a confirmação;
 // - devolução em dinheiro (devolucao_adiantamento_paciente "devolvida", movimento_caixa de saída, total da sessão);
 // - extrato da conta corrente com saldo corrido;
 // - modelo cadastrado com itens, prévia, orçamento gerado do modelo (preço da tabela particular, honorário pela
-//   função, linha sem preço recusada até o valor ser digitado) e modelo inativado sem afetar o orçamento.
+//   função, linha sem preço recusada até o valor ser digitado, preço de linha com preço recusado) e modelo inativado
+//   sem afetar o orçamento; modelo exclusivo de outro estabelecimento não é inativado daqui.
 // No fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -17,6 +22,7 @@ import { ServicoParticularAdiantamento } from './particular-adiantamento.control
 import {
   contaCorrentePaciente,
   listarModelos,
+  previaComPrecos,
   previaDoModelo,
   TIPO_MOVIMENTO_ADIANTAMENTO,
   TIPO_MOVIMENTO_DEVOLUCAO,
@@ -45,9 +51,9 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
   let s: ServicoParticularAdiantamento;
   const ids: Record<string, number> = {};
   const criados: string[] = [];
-  const op = (): ContextoOperacao => ({
+  const op = (est?: number): ContextoOperacao => ({
     cliente: CLIENTE,
-    estabelecimento: ids['est']!,
+    estabelecimento: est ?? ids['est']!,
     usuario: ids['usuario']!,
     correlacao: 'teste-f3710',
     chaveIdempotencia: `f3710-${randomUUID()}`,
@@ -105,6 +111,12 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         `${P}A`,
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
+      );
+      ids['estB'] = await g(
+        'estabelecimento',
+        `${P}B`,
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P} SINTETICO B`, `ESTAB ${P} SINTETICO B`, agora],
       );
       await limpar(e);
       ids['usuario'] = await garantir(
@@ -210,6 +222,19 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
           [pp, agora, total, total, agora],
         );
       }
+      ids['caraterUrg'] = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+        ['F5U'],
+        "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, urgencia, criado_em) VALUES ('F5U', ?, 'teste', TRUE, ?)",
+        [`CARATER URGENCIA SINTETICO ${P}`, agora],
+      );
+      ids['atendUrg'] = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'aberto', '2026-01-21 08:00:00', ?)`,
+        [ids['est'], `${P}-AU`, ids['paciente'], ids['categoria'], ids['caraterUrg'], ids['fonte'], agora],
+      );
       const atend = await e.inserir(
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, situacao, entrada_em, criado_em)
@@ -263,7 +288,7 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     await escrever(async (e) => {
       await limpar(e);
       for (const c of criados) await e.executar('DELETE FROM tipo_movimento_caixa WHERE codigo = ?', [c]);
-      await limparTrilhaDaMassa(e, { ids: [ids['est']!] });
+      await limparTrilhaDaMassa(e, { ids: [ids['est']!, ids['estB']!] });
     });
     await nucleo.encerrar?.();
   });
@@ -297,8 +322,43 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       atendimentoUrgencia: true,
     };
     expect(await codigoDo(s.gravar('adiantamento.receber', op(), urg))).toBe('entrada-invalida');
-    const a2 = await s.gravar('adiantamento.receber', op(), { ...urg, declaracaoVoluntaria: true });
+    // A urgência vem do caráter do atendimento: desmarcar no corpo não libera a caução exigida.
+    expect(
+      await codigoDo(
+        s.gravar('adiantamento.receber', op(), {
+          ...urg,
+          atendimentoUrgencia: false,
+          atendimentoId: ids['atendUrg'],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    // Atendimento que não é do paciente neste estabelecimento.
+    expect(
+      await codigoDo(
+        s.gravar('adiantamento.receber', op(ids['estB']), { ...urg, atendimentoId: ids['atendUrg'] }),
+      ),
+    ).toBe('atendimento-inexistente');
+    // Sem o conector (produção ou ambiente desconhecido), Pix sem comprovante é recusado.
+    const semConector = new ServicoParticularAdiantamento(nucleo, undefined);
+    expect(semConector.simulado).toBe(false);
+    // (a regra do domínio pede o comprovante no campo; a operação ainda confere 'sem-conector' por defesa)
+    expect(
+      await codigoDo(
+        semConector.gravar('adiantamento.receber', op(), { ...urg, declaracaoVoluntaria: true }),
+      ),
+    ).toBe('entrada-invalida');
+    const a2 = await s.gravar('adiantamento.receber', op(), {
+      ...urg,
+      atendimentoId: ids['atendUrg'],
+      declaracaoVoluntaria: true,
+    });
     ids['a2'] = Number(a2['id']);
+    const t = await uma(
+      'SELECT identificador_transacao, atendimento_urgencia, atendimento_id FROM adiantamento_paciente WHERE id = ?',
+      [ids['a2']],
+    );
+    expect(String(t!['identificador_transacao'])).toMatch(/^SIM-[0-9A-F]{16}$/);
+    expect([Number(t!['atendimento_urgencia']), Number(t!['atendimento_id'])]).toEqual([1, ids['atendUrg']]);
     const sessao = await uma('SELECT total_dinheiro, total_pix FROM sessao_caixa WHERE id = ?', [
       ids['sessao'],
     ]);
@@ -329,25 +389,28 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     );
   });
 
-  it('estorna a aplicação sem apagar e devolve o saldo em dinheiro pelo caixa', async () => {
+  it('estorna a aplicação sem apagar, aplica de novo em outra linha e devolve só com a confirmação', async () => {
     const ap = await uma(
-      'SELECT id FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? AND conta_hospitalar_id = ?',
+      'SELECT id, sequencia FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? AND conta_hospitalar_id = ?',
       [ids['a2'], ids['conta']],
     );
+    expect(Number(ap!['sequencia'])).toBe(1);
     const est = await s.gravar('adiantamento.estornar', op(), {
       aplicacaoId: ap!['id'],
       motivo: 'item retirado',
     });
     expect(est['saldo']).toBe(500);
     const marcado = await uma(
-      'SELECT estornado, estornado_em, excluido_em FROM aplicacao_adiantamento_paciente WHERE id = ?',
+      'SELECT estornado, estornado_em, excluido_em, motivo_estorno, estornador_usuario_id FROM aplicacao_adiantamento_paciente WHERE id = ?',
       [ap!['id']],
     );
     expect([
       Number(marcado!['estornado']),
       marcado!['estornado_em'] !== null,
       marcado!['excluido_em'],
-    ]).toEqual([1, true, null]);
+      marcado!['motivo_estorno'],
+      Number(marcado!['estornador_usuario_id']),
+    ]).toEqual([1, true, null, 'item retirado', ids['usuario']]);
     expect(
       await codigoDo(
         s.gravar('adiantamento.devolver', op(), {
@@ -356,10 +419,11 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
           forma: 'dinheiro',
           favorecidoNome: 'FAVORECIDO SINTETICO',
           motivo: 'alta',
+          confirmarContaAberta: true,
         }),
       ),
     ).toBe('entrada-invalida');
-    const devolver = (valor: number, forma: string, chavePix: string | null = null) =>
+    const devolver = (valor: number, forma: string, chavePix: string | null = null, confirmar = true) =>
       s.gravar('adiantamento.devolver', op(), {
         adiantamentoId: ids['a2'],
         valor,
@@ -367,12 +431,32 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         chavePix,
         favorecidoNome: 'FAVORECIDO SINTETICO',
         motivo: 'alta',
+        confirmarContaAberta: confirmar,
       });
+    // A conta ainda deve 300: devolver sem a confirmação é recusado.
+    expect(await codigoDo(devolver(300, 'dinheiro', null, false))).toBe('conta-em-aberto');
     // Na gaveta: fundo 50 + dinheiro 400 = 450; 500 em dinheiro não sai.
     expect(await codigoDo(devolver(500, 'dinheiro'))).toBe('caixa-sem-dinheiro');
     const d = await devolver(300, 'dinheiro');
     expect(d['saldo']).toBe(200);
-    const pix = await devolver(200, 'pix', 'chave-sintetica');
+    // Aplicar de novo o mesmo adiantamento na mesma conta: linha nova (sequência 2); a estornada fica como está.
+    const r = await s.gravar('adiantamento.aplicar', op(), {
+      contaId: ids['conta'],
+      valor: 100,
+      adiantamentos: [ids['a2']],
+    });
+    expect(r['parcelas']).toEqual([{ adiantamento: ids['a2'], valor: 100 }]);
+    const linhas = await escrever((e) =>
+      e.consultar<Record<string, unknown>>(
+        'SELECT sequencia, valor, estornado FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? ORDER BY sequencia',
+        [ids['a2']],
+      ),
+    );
+    expect(linhas.map((x) => [Number(x['sequencia']), Number(x['valor']), Number(x['estornado'])])).toEqual([
+      [1, 300, 1],
+      [2, 100, 0],
+    ]);
+    const pix = await devolver(100, 'pix', 'chave-sintetica');
     expect([pix['saldo'], pix['movimento']]).toEqual([0, null]);
     const dev = await uma(
       'SELECT situacao, sequencia, movimento_caixa_id, devolvido_em FROM devolucao_adiantamento_paciente WHERE id = ?',
@@ -406,10 +490,28 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       'aplicacao',
       'estorno_aplicacao',
       'devolucao',
+      'aplicacao',
       'devolucao',
     ]);
     expect([cc.extrato.creditos, cc.extrato.debitos, cc.extrato.saldo]).toEqual([1200, 1200, 0]);
-    expect(cc.contasAbertas.find((c) => c.id === ids['conta'])?.devido).toBe(300);
+    expect(cc.contasAbertas.find((c) => c.id === ids['conta'])?.devido).toBe(200);
+    expect(cc.aplicacoes.filter((x) => x.estornado).map((x) => x.motivoEstorno)).toEqual(['item retirado']);
+    // Conta faturada: o uso do saldo nela não é mais estornado.
+    const viva = cc.aplicacoes.find((x) => !x.estornado && x.adiantamento === ids['a2'])!;
+    await escrever((e) =>
+      e.executar("UPDATE conta_hospitalar SET situacao = 'faturada' WHERE id = ?", [ids['conta']]),
+    );
+    try {
+      expect(
+        await codigoDo(
+          s.gravar('adiantamento.estornar', op(), { aplicacaoId: viva.id, motivo: 'tarde demais' }),
+        ),
+      ).toBe('conta-fechada');
+    } finally {
+      await escrever((e) =>
+        e.executar("UPDATE conta_hospitalar SET situacao = 'aberta' WHERE id = ?", [ids['conta']]),
+      );
+    }
   });
 
   it('cadastra o modelo, gera o orçamento pela tabela particular e inativa o modelo', async () => {
@@ -446,6 +548,20 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     expect(
       await codigoDo(s.gravar('modelo.gerarOrcamento', op(), { ...gerar, modeloId: ids['modelo'] })),
     ).toBe('sem-preco');
+    // O valor na hora vale só para a linha sem preço: trocar o preço do procedimento (linha 1) é recusado.
+    expect(
+      await codigoDo(
+        s.gravar('modelo.gerarOrcamento', op(), {
+          ...gerar,
+          modeloId: ids['modelo'],
+          precos: { '1': 1, '4': 40 },
+        }),
+      ),
+    ).toBe('preco-fora-da-linha');
+    const pre2 = await nucleo.lerSomente(ctxL(), (l) =>
+      previaComPrecos(l, ids['est']!, ids['modelo']!, { '4': 40 }),
+    );
+    expect([pre2.montado.total, pre2.montado.semPreco]).toEqual([2104, []]);
     const o = await s.gravar('modelo.gerarOrcamento', op(), {
       ...gerar,
       modeloId: ids['modelo'],
@@ -468,6 +584,13 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       [o['id']],
     );
     expect([Number(itens!['n']), Number(itens!['t'])]).toEqual([5, 2104]);
+    // O modelo exclusivo de outro estabelecimento não é inativado daqui.
+    const mb = await s.gravar('modelo.cadastrar', op(ids['estB']), { ...base, codigo: `${P}MB` });
+    expect(
+      await codigoDo(
+        s.gravar('modelo.inativar', op(), { modeloId: mb['id'], motivo: 'outro estabelecimento' }),
+      ),
+    ).toBe('modelo-inexistente');
     await s.gravar('modelo.inativar', op(), { modeloId: ids['modelo'], motivo: 'revisão de preços' });
     const ina = await uma('SELECT ativo FROM modelo_orcamento WHERE id = ?', [ids['modelo']]);
     expect(Number(ina!['ativo'])).toBe(0);

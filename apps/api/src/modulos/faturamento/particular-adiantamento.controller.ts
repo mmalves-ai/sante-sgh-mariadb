@@ -7,12 +7,14 @@
 //   POST /api/faturamento/aplicacoes-adiantamento/:id/estorno faturamento.recibo.emitir (com motivo)
 //   POST /api/faturamento/adiantamentos/:id/devolucoes       faturamento.recibo.emitir (devolve o saldo)
 //   GET  /api/faturamento/modelos-orcamento                  faturamento.orcamento.ler
-//   GET  /api/faturamento/modelos-orcamento/:id/previa       faturamento.orcamento.ler (montagem antes de gravar)
+//   GET  /api/faturamento/modelos-orcamento/:id/previa       faturamento.orcamento.ler (montagem antes de gravar;
+//                                                             ?precos=seq:valor só para a linha sem preço)
+//   GET  /api/faturamento/modelos-orcamento/opcoes?termo=    faturamento.orcamento.ler (acomodações, funções, itens)
 //   POST /api/faturamento/modelos-orcamento                  faturamento.regra.editar
 //   POST /api/faturamento/modelos-orcamento/:id/inativacao   faturamento.regra.editar (com motivo)
 //   POST /api/faturamento/modelos-orcamento/:id/orcamentos   faturamento.orcamento.criar (gera o orçamento)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -24,21 +26,26 @@ import {
   gravarParticular,
   listarModelos,
   type NomeOperacaoParticular,
-  previaDoModelo,
+  opcoesDoModelo,
+  previaComPrecos,
 } from './particular-adiantamento-propria.js';
 
 export const SERVICO_PARTICULAR_ADIANTAMENTO = Symbol('SERVICO_PARTICULAR_ADIANTAMENTO');
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
+const AMBIENTES_SIMULADOS: readonly string[] = ['dev', 'ci', 'teste', 'homologacao'];
 
 export class ServicoParticularAdiantamento {
   private readonly executor: Executor;
   constructor(
     private readonly nucleo: NucleoProprio,
-    /** Fora de produção, o conector de Pix e cartão é o simulado (nunca o real em dev/ci). */
-    private readonly ambiente: string = (process.env['AMBIENTE'] ?? 'dev').trim() || 'dev',
+    /** O ambiente da configuração da API (ctx.configuracao.ambiente); ausente ou desconhecido vale produção. */
+    ambiente: string | null | undefined,
   ) {
     this.executor = nucleo.criarExecutor({});
+    this.simulado = AMBIENTES_SIMULADOS.includes((ambiente ?? '').trim());
   }
+  /** Fora de produção, o conector de Pix e cartão é o simulado (nunca o real em dev, ci e homologação). */
+  readonly simulado: boolean;
   ler<T>(ctx: ContextoNucleo, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = ctx.estabelecimento;
     if (est === null)
@@ -53,8 +60,7 @@ export class ServicoParticularAdiantamento {
     ctx: Parameters<typeof gravarParticular>[2],
     e: Record<string, unknown>,
   ) {
-    const entrada =
-      nome === 'adiantamento.receber' ? { ...e, conectorEletronico: this.ambiente !== 'producao' } : e;
+    const entrada = nome === 'adiantamento.receber' ? { ...e, simulado: this.simulado } : e;
     return gravarParticular(this.executor, nome, ctx, entrada);
   }
 }
@@ -139,13 +145,41 @@ export class ParticularAdiantamentoController {
     );
   }
 
+  @Get('faturamento/modelos-orcamento/opcoes')
+  @Permissao('faturamento.orcamento.ler')
+  opcoes(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'particular-adiantamento'), (l) =>
+        opcoesDoModelo(l, (termo ?? '').slice(0, 60)),
+      ),
+    );
+  }
+
   @Get('faturamento/modelos-orcamento/:id/previa')
   @Permissao('faturamento.orcamento.ler')
-  previa(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+  previa(
+    @Param('id') id: string,
+    @Query('precos') precos: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     const m = inteiro(id, 'id');
+    // precos=4:40,5:12.5 (sequência da linha sem preço → unitário digitado na hora), o mesmo que a gravação aceita.
+    const informados: Record<string, number> = {};
+    for (const par of (precos ?? '').split(',').filter(Boolean)) {
+      const [k, v] = par.split(':');
+      const valor = Number(v);
+      if (!k || !/^\d+$/.test(k) || !Number.isFinite(valor) || valor < 0)
+        throw new ErroProblema(
+          'entrada-invalida',
+          400,
+          'Entrada inválida',
+          'Preço da linha inválido na prévia.',
+        );
+      informados[k] = valor;
+    }
     return this.rodar(() =>
       this.s().ler(ctxDe(req, 'particular-adiantamento'), async (l, est) => {
-        const p = await previaDoModelo(l, est, m);
+        const p = await previaComPrecos(l, est, m, informados);
         return { fonte: p.fonte, ...p.montado };
       }),
     );

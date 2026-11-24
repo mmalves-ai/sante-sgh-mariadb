@@ -121,7 +121,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         provide: SERVICO_PARTICULAR_ADIANTAMENTO,
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
-            ? new ServicoParticularAdiantamento(ctx.nucleo)
+            ? new ServicoParticularAdiantamento(ctx.nucleo, ctx.configuracao.ambiente)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.

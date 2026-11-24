@@ -33,6 +33,7 @@ const esquemaContaCorrente = z.object({
       aplicadoEm: z.string(),
       valor: z.number(),
       estornado: z.boolean(),
+      motivoEstorno: z.string().nullable(),
     }),
   ),
   contasAbertas: z.array(
@@ -42,6 +43,15 @@ const esquemaContaCorrente = z.object({
       situacao: z.string(),
       total: z.number(),
       devido: z.number(),
+    }),
+  ),
+  atendimentos: z.array(
+    z.object({
+      id: z.number(),
+      numero: z.string(),
+      entradaEm: z.string().nullable(),
+      situacao: z.string(),
+      urgencia: z.boolean(),
     }),
   ),
   extrato: z.object({
@@ -112,7 +122,26 @@ const esquemaPrevia = z.object({
 export type PreviaModelo = z.infer<typeof esquemaPrevia>;
 
 export const lerModelos = () => ler(`${F}/modelos-orcamento`, esquemaModelos);
-export const lerPrevia = (modelo: number) => ler(`${F}/modelos-orcamento/${modelo}/previa`, esquemaPrevia);
+/** A prévia com os valores digitados na hora para as linhas sem preço (o total muda enquanto se digita). */
+export const lerPrevia = (modelo: number, precos: Readonly<Record<string, number>> = {}) => {
+  const p = Object.entries(precos)
+    .filter(([, v]) => Number.isFinite(v) && v >= 0)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',');
+  return ler(
+    `${F}/modelos-orcamento/${modelo}/previa${p ? `?precos=${encodeURIComponent(p)}` : ''}`,
+    esquemaPrevia,
+  );
+};
+const opcao = z.object({ id: z.number(), codigo: z.string(), descricao: z.string() });
+const esquemaOpcoes = z.object({
+  acomodacoes: z.array(opcao),
+  funcoes: z.array(opcao.extend({ percentual: z.number().nullable() })),
+  itens: z.array(opcao),
+});
+export type OpcoesModelo = z.infer<typeof esquemaOpcoes>;
+export const lerOpcoesModelo = (termo = '') =>
+  ler(`${F}/modelos-orcamento/opcoes?termo=${encodeURIComponent(termo)}`, esquemaOpcoes);
 export const cadastrarModelo = (corpo: Record<string, unknown>, chave: string) =>
   enviar(`${F}/modelos-orcamento`, corpo, qualquer, chave);
 export const inativarModelo = (modelo: number, motivo: string, chave: string) =>

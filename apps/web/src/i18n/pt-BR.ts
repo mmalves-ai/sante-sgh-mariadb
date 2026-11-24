@@ -33,6 +33,7 @@ import { mensagensFaturamento } from '../modulos/faturamento/i18n.js';
 import { mensagensContratualizacao } from '../modulos/faturamento/i18n-contratualizacao.js';
 import { mensagensAuditoriaTramite } from '../modulos/faturamento/i18n-auditoria-tramite.js';
 import { mensagensMovimentosConta } from '../modulos/faturamento/i18n-movimentos.js';
+import { mensagensParticular } from '../modulos/faturamento/i18n-particular.js';
 import { mensagensSus } from '../modulos/faturamento/i18n-sus.js';
 import { mensagensTiss } from '../modulos/tiss/i18n.js';
 import { mensagensFinanceiro } from '../modulos/financeiro/i18n.js';
@@ -2372,6 +2373,8 @@ export const mensagensWeb = {
   // M55 (etapa 5): contratualização SUS (contratos com o gestor, metas, apuração e repasse estimado).
   contratualizacaoSus: mensagensContratualizacao,
   movimentosConta: mensagensMovimentosConta,
+  // F3.7 (06-FAT linhas 39 e 40): conta corrente do paciente e modelos de orçamento.
+  particular: mensagensParticular,
   auditoriaTramite: mensagensAuditoriaTramite,
   tiss: mensagensTiss,
   financeiro: mensagensFinanceiro,

@@ -278,4 +278,28 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/WorklistFaturamentoTela.vue'),
     meta: { permissao: 'faturamento.conta.ler' },
   },
+  // F3.7 (06-FAT linha 39): conta corrente do paciente particular (busca pelo menu ou direto pelo paciente).
+  {
+    path: '/faturamento/conta-corrente',
+    name: 'faturamento.contaCorrenteBusca',
+    component: () => import('./telas/ContaCorrentePacienteTela.vue'),
+    meta: {
+      permissao: 'faturamento.pagamento.ler',
+      menu: 'Faturamento > Particular > Conta corrente do paciente',
+    },
+  },
+  {
+    path: '/faturamento/pacientes/:id(\\d+)/conta-corrente',
+    name: 'faturamento.contaCorrente',
+    component: () => import('./telas/ContaCorrentePacienteTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.pagamento.ler' },
+  },
+  // F3.7 (06-FAT linha 40): modelos de orçamento padrão por procedimento e acomodação.
+  {
+    path: '/faturamento/modelos-orcamento',
+    name: 'faturamento.modelosOrcamento',
+    component: () => import('./telas/ModelosOrcamentoTela.vue'),
+    meta: { permissao: 'faturamento.orcamento.ler', menu: 'Faturamento > Particular > Modelos de orçamento' },
+  },
 ];

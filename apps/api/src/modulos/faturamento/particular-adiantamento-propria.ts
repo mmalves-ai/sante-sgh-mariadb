@@ -4,9 +4,11 @@
 // Contrato de efeito (particular-adiantamento-propria.int.spec.ts):
 // - adiantamento.receber: adiantamento_paciente (número AD-, tipo, saldo = valor, sessão do caixa aberta do operador,
 //   forma, comprovante) e o movimento_caixa de entrada ligado a ele; o total da espécie na sessão do caixa somado.
-// - adiantamento.aplicar: aplicacao_adiantamento_paciente por adiantamento usado na conta (do mais antigo ao mais
-//   novo), o saldo e a situação de cada adiantamento refeitos. Nada de movimento de caixa (o dinheiro já entrou).
-// - adiantamento.estornar: a aplicação fica marcada estornada (nunca apagada) e o valor volta ao saldo.
+// - adiantamento.aplicar: uma linha NOVA de aplicacao_adiantamento_paciente por adiantamento usado na conta (do mais
+//   antigo ao mais novo; sequência por adiantamento, migração 14_FIN/97), o saldo e a situação de cada adiantamento
+//   refeitos. Nada de movimento de caixa (o dinheiro já entrou). Aplicar de novo nunca reescreve a linha anterior.
+// - adiantamento.estornar: a aplicação fica marcada estornada (quem, quando e o motivo na linha; nunca apagada nem
+//   desfeita) e o valor volta ao saldo; recusado com a conta faturada, enviada, paga ou cancelada.
 // - adiantamento.devolver: devolucao_adiantamento_paciente "devolvida" (sequência, favorecido, motivo); em dinheiro,
 //   o movimento_caixa de saída na sessão aberta e o total em dinheiro dela abatido; saldo e situação refeitos.
 // - modelo.cadastrar: modelo_orcamento e modelo_orcamento_item (o código é único; para mudar um modelo, cadastra-se
@@ -14,6 +16,7 @@
 // - modelo.inativar: ativo = falso (o orçamento já gerado continua apontando para ele).
 // - modelo.gerarOrcamento: orcamento_particular (modelo_orcamento_id, acomodação, validade do modelo, bruto, total)
 //   e os itens montados pelo domínio (preço do modelo ou da tabela particular vigente, honorário pela função).
+import { randomBytes } from 'node:crypto';
 import {
   type EntradaAdiantamento,
   extratoContaCorrente,
@@ -55,6 +58,9 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 /** Tipos de movimento de caixa usados aqui (cadastro da instituição; a ausência é recusada com a orientação). */
 export const TIPO_MOVIMENTO_ADIANTAMENTO = 'adiantamento_paciente';
 export const TIPO_MOVIMENTO_DEVOLUCAO = 'devolucao_adiantamento';
+/** Conta que não muda mais: o saldo do paciente não entra nela nem sai dela (estorno). */
+const CONTA_SEM_MUDANCA: readonly string[] = ['faturada', 'enviada', 'paga', 'cancelada'];
+const SQL_CONTA_SEM_MUDANCA = CONTA_SEM_MUDANCA.map((x) => `'${x}'`).join(',');
 const TOTAL_DA_ESPECIE: Readonly<Record<string, string>> = {
   dinheiro: 'total_dinheiro',
   cartao_debito: 'total_cartao_debito',
@@ -162,6 +168,8 @@ async function refazerSaldo(tx: TxOperacao, id: number, delta: number, devolvido
 }
 
 const id = z.coerce.number().int().positive();
+/** Identificador devolvido pelo conector simulado de Pix e cartão (fora de produção): único, nunca um texto fixo. */
+export const transacaoSimulada = () => `SIM-${randomBytes(8).toString('hex').toUpperCase()}`;
 const forma = z.enum(FORMAS_ADIANTAMENTO);
 
 // ── Linha 39: adiantamento e caução ─────────────────────────────────────────────────────────────
@@ -179,8 +187,8 @@ export const esquemaReceberAdiantamento = z.object({
   pagadorNome: z.string().trim().max(150).nullable().default(null),
   pagadorCpf: z.string().trim().nullable().default(null),
   observacao: z.string().trim().max(2000).nullable().default(null),
-  /** Posto pela rota: fora de produção, o conector de Pix e cartão é o simulado. */
-  conectorEletronico: z.boolean().default(false),
+  /** Posto pelo serviço (nunca pelo corpo): fora de produção, o conector de Pix e cartão é o simulado. */
+  simulado: z.boolean().default(false),
 });
 
 export const opReceberAdiantamento = definirOperacao({
@@ -192,13 +200,40 @@ export const opReceberAdiantamento = definirOperacao({
     const operador = usuarioDe(ctx);
     const pac = await paciente(tx, e.pacienteId);
     const pacienteEhPagador = !e.pagadorNome;
-    const entrada: EntradaAdiantamento = { ...e, pacienteEhPagador };
+    // O atendimento tem de ser do paciente e do estabelecimento; a urgência sai do caráter dele e o operador nunca a
+    // desmarca (a caução exigida na urgência é vedada, Lei 12.653/2012).
+    let urgencia = e.atendimentoUrgencia;
+    if (e.atendimentoId !== null) {
+      const at = await tx.uma<Linha>(
+        `SELECT at.id, c.urgencia FROM atendimento at
+           LEFT JOIN carater_atendimento_tiss c ON c.id = at.carater_atendimento_tiss_id
+          WHERE at.id = ? AND at.paciente_id = ? AND at.estabelecimento_id = ? AND at.excluido_em IS NULL`,
+        [e.atendimentoId, pac.id, est],
+      );
+      if (!at)
+        throw recusa('atendimento-inexistente', 'O atendimento não é deste paciente neste estabelecimento.', {
+          campos: ['atendimentoId'],
+        });
+      urgencia = urgencia || Boolean(n(at['urgencia']));
+    }
+    const entrada: EntradaAdiantamento = {
+      ...e,
+      atendimentoUrgencia: urgencia,
+      pacienteEhPagador,
+      conectorEletronico: e.simulado,
+    };
     exigirValido(validarAdiantamento(entrada));
     const sessao = await sessaoAberta(tx, est, operador);
     const tipoMov = await tipoMovimento(tx, TIPO_MOVIMENTO_ADIANTAMENTO, 'entrada');
     const formaId = await formaDe(tx, e.forma, ['recebimento', 'ambos']);
     const eletronico = e.forma === 'pix' || e.forma.startsWith('cartao');
-    const comprovante = e.comprovante ?? (eletronico ? 'simulado' : null);
+    if (eletronico && !e.comprovante && !e.simulado)
+      throw recusa(
+        'sem-conector',
+        'O conector de Pix e cartão não está configurado: registre o comprovante (NSU ou identificador do Pix).',
+        { campos: ['comprovante'] },
+      );
+    const comprovante = e.comprovante ?? (eletronico ? transacaoSimulada() : null);
     const numero = await numeroDe(tx, ctx, 'adiantamento_paciente', 'AD-');
     const agora = new Date();
     const ad = await tx.incluir('adiantamento_paciente', {
@@ -216,7 +251,7 @@ export const opReceberAdiantamento = definirOperacao({
       sessao_caixa_id: n(sessao['id']),
       quantidade_parcelas: e.parcelas,
       identificador_transacao: comprovante,
-      atendimento_urgencia: e.atendimentoUrgencia,
+      atendimento_urgencia: urgencia,
       declaracao_voluntaria: e.declaracaoVoluntaria,
       situacao: 'ativo',
       observacao: e.observacao,
@@ -264,10 +299,10 @@ export const opAplicarAdiantamento = definirOperacao({
     );
     if (!conta || nn(conta['paciente_id']) === null)
       throw recusa('conta-inexistente', 'A conta não existe neste estabelecimento.', { campos: ['contaId'] });
-    if (['cancelada', 'faturada'].includes(txt(conta['situacao'])))
+    if (CONTA_SEM_MUDANCA.includes(txt(conta['situacao'])))
       throw recusa(
         'conta-fechada',
-        'A conta está cancelada ou faturada: o adiantamento não entra mais nela.',
+        'A conta está faturada, enviada, paga ou cancelada: o adiantamento não entra mais nela.',
         {
           campos: ['contaId'],
         },
@@ -275,7 +310,7 @@ export const opAplicarAdiantamento = definirOperacao({
     const saldos = await tx.consultarParaAtualizar<Linha>(
       `SELECT a.id, a.saldo, a.recebido_em, a.situacao,
               (SELECT COUNT(*) FROM aplicacao_adiantamento_paciente x WHERE x.adiantamento_paciente_id = a.id
-                 AND x.conta_hospitalar_id = ?) AS na_conta
+                 AND x.conta_hospitalar_id = ? AND x.estornado = FALSE) AS na_conta
          FROM adiantamento_paciente a
         WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.saldo > 0
           AND a.situacao IN ('ativo','aplicado_parcial')`,
@@ -298,31 +333,21 @@ export const opAplicarAdiantamento = definirOperacao({
     const agora = new Date();
     const aplicacoes: number[] = [];
     for (const p of plano.parcelas) {
-      const ja = await tx.uma<Linha>(
-        'SELECT id, versao, valor, estornado FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? AND conta_hospitalar_id = ?',
-        [p.adiantamento, e.contaId],
+      // Cada aplicação é um evento novo (sequência por adiantamento): a anterior e o estorno dela ficam como estão.
+      const seq = await tx.uma<Linha>(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ?',
+        [p.adiantamento],
       );
-      if (ja) {
-        // Uma linha por adiantamento e conta: a nova aplicação soma (ou reativa a estornada); a trilha guarda o antes.
-        const valor = r2((n(ja['estornado']) ? 0 : n(ja['valor'])) + p.valor);
-        await tx.alterar('aplicacao_adiantamento_paciente', n(ja['id']), n(ja['versao']), {
-          valor,
-          estornado: false,
-          estornado_em: null,
+      aplicacoes.push(
+        await tx.incluir('aplicacao_adiantamento_paciente', {
+          adiantamento_paciente_id: p.adiantamento,
+          sequencia: n(seq?.['s']),
+          conta_hospitalar_id: e.contaId,
           aplicado_em: agora,
+          valor: p.valor,
           aplicador_usuario_id: usuario,
-        });
-        aplicacoes.push(n(ja['id']));
-      } else
-        aplicacoes.push(
-          await tx.incluir('aplicacao_adiantamento_paciente', {
-            adiantamento_paciente_id: p.adiantamento,
-            conta_hospitalar_id: e.contaId,
-            aplicado_em: agora,
-            valor: p.valor,
-            aplicador_usuario_id: usuario,
-          }),
-        );
+        }),
+      );
       await refazerSaldo(tx, p.adiantamento, -p.valor);
     }
     return { id: aplicacoes[0]!, aplicacoes, total: plano.total, parcelas: plano.parcelas };
@@ -341,8 +366,9 @@ export const opEstornarAplicacao = definirOperacao({
   entrada: esquemaEstornarAplicacao,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
+    const usuario = usuarioDe(ctx);
     const [a] = await tx.consultarParaAtualizar<Linha>(
-      `SELECT x.id, x.versao, x.valor, x.estornado, x.adiantamento_paciente_id
+      `SELECT x.id, x.versao, x.valor, x.estornado, x.adiantamento_paciente_id, x.conta_hospitalar_id
          FROM aplicacao_adiantamento_paciente x JOIN adiantamento_paciente a ON a.id = x.adiantamento_paciente_id
         WHERE x.id = ? AND a.estabelecimento_id = ? AND x.excluido_em IS NULL`,
       [e.aplicacaoId, est],
@@ -351,9 +377,26 @@ export const opEstornarAplicacao = definirOperacao({
     if (!a) throw recusa('aplicacao-inexistente', 'A aplicação não existe.', { campos: ['aplicacaoId'] });
     if (n(a['estornado']))
       throw recusa('aplicacao-estornada', 'A aplicação já foi estornada.', { campos: [] });
+    // A conta faturada ou cancelada não muda mais: o estorno do uso do saldo vale só com a conta aberta.
+    const contaId = nn(a['conta_hospitalar_id']);
+    if (contaId !== null) {
+      const [c] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT id, situacao FROM conta_hospitalar WHERE id = ?',
+        [contaId],
+        { teto: 1 },
+      );
+      if (c && CONTA_SEM_MUDANCA.includes(txt(c['situacao'])))
+        throw recusa(
+          'conta-fechada',
+          'A conta está faturada, enviada, paga ou cancelada: o uso do saldo nela não é mais estornado.',
+          { campos: ['aplicacaoId'] },
+        );
+    }
     await tx.alterar('aplicacao_adiantamento_paciente', e.aplicacaoId, n(a['versao']), {
       estornado: true,
       estornado_em: new Date(),
+      motivo_estorno: e.motivo,
+      estornador_usuario_id: usuario,
     });
     const saldo = await refazerSaldo(tx, n(a['adiantamento_paciente_id']), n(a['valor']));
     return { id: e.aplicacaoId, saldo };
@@ -371,7 +414,22 @@ export const esquemaDevolverAdiantamento = z.object({
   chavePix: z.string().trim().max(77).nullable().default(null),
   comprovante: z.string().trim().max(60).nullable().default(null),
   motivo: z.string().trim().max(500),
+  /** Devolver com conta aberta devendo só com a confirmação explícita (e o motivo). */
+  confirmarContaAberta: z.boolean().default(false),
 });
+
+/** O que o paciente ainda deve nas contas abertas do estabelecimento (total − caixa − adiantamento aplicado). */
+async function devidoEmAberto(tx: Consulta, est: number, pacienteId: number): Promise<number> {
+  const contas = await tx.consultar<Linha>(
+    `SELECT id FROM conta_hospitalar WHERE paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+        AND situacao NOT IN (${SQL_CONTA_SEM_MUDANCA})`,
+    [pacienteId, est],
+    { teto: 200 },
+  );
+  let t = 0;
+  for (const c of contas) t += Math.max(0, await devidoNaConta(tx, n(c['id'])));
+  return r2(t);
+}
 
 export const opDevolverAdiantamento = definirOperacao({
   nome: 'faturamento.adiantamento-paciente.devolver',
@@ -381,7 +439,7 @@ export const opDevolverAdiantamento = definirOperacao({
     const est = estDe(ctx);
     const usuario = usuarioDe(ctx);
     const [a] = await tx.consultarParaAtualizar<Linha>(
-      'SELECT id, numero, saldo, situacao FROM adiantamento_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      'SELECT id, numero, paciente_id, saldo, situacao FROM adiantamento_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [e.adiantamentoId, est],
       { teto: 1 },
     );
@@ -390,6 +448,14 @@ export const opDevolverAdiantamento = definirOperacao({
     exigirValido(
       validarDevolucao({ ...e, saldo: n(a['saldo']), situacao: txt(a['situacao']) as SituacaoAdiantamento }),
     );
+    // Boa prática: o saldo abate a conta aberta antes de sair do hospital; devolver assim mesmo pede confirmação.
+    const devido = await devidoEmAberto(tx, est, n(a['paciente_id']));
+    if (devido > 0 && !e.confirmarContaAberta)
+      throw recusa(
+        'conta-em-aberto',
+        `O paciente deve ${devido.toFixed(2)} em conta aberta: use o saldo na conta ou confirme a devolução com o motivo.`,
+        { campos: ['confirmarContaAberta'], devido },
+      );
     const formaId = await formaDe(tx, e.forma, ['pagamento', 'ambos', 'recebimento']);
     const agora = new Date();
     let sessaoId: number | null = null;
@@ -452,7 +518,7 @@ export const opDevolverAdiantamento = definirOperacao({
     return { id: dev, saldo, movimento: mov };
   },
   alvo: (_e, r) => ({ tabela: 'devolucao_adiantamento_paciente', id: r.id }),
-  trilha: (e) => ({ motivo: e.motivo }),
+  trilha: (e) => ({ motivo: e.motivo, confirmarContaAberta: e.confirmarContaAberta }),
 });
 
 /** A conta corrente do paciente: adiantamentos com saldo, aplicações por conta, devoluções e o extrato corrido. */
@@ -468,7 +534,7 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
   );
   const apl = await l.consultar<Linha>(
     `SELECT x.id, x.adiantamento_paciente_id, x.conta_hospitalar_id, ch.numero AS conta, x.aplicado_em, x.valor,
-            x.estornado, x.estornado_em
+            x.estornado, x.estornado_em, x.motivo_estorno
        FROM aplicacao_adiantamento_paciente x JOIN adiantamento_paciente a ON a.id = x.adiantamento_paciente_id
        LEFT JOIN conta_hospitalar ch ON ch.id = x.conta_hospitalar_id
       WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND x.excluido_em IS NULL ORDER BY x.aplicado_em, x.id`,
@@ -485,9 +551,18 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
   const contas = await l.consultar<Linha>(
     `SELECT ch.id, ch.numero, ch.situacao, ch.valor_total FROM conta_hospitalar ch
       WHERE ch.paciente_id = ? AND ch.estabelecimento_id = ? AND ch.excluido_em IS NULL
-        AND ch.situacao NOT IN ('cancelada','faturada') ORDER BY ch.id DESC`,
+        AND ch.situacao NOT IN (${SQL_CONTA_SEM_MUDANCA}) ORDER BY ch.id DESC`,
     [pacienteId, est],
     { teto: 50 },
+  );
+  // Os atendimentos do paciente aqui, para a tela escolher (a urgência sai do caráter, nunca de uma marca solta).
+  const atendimentos = await l.consultar<Linha>(
+    `SELECT at.id, at.numero, at.entrada_em, at.situacao, COALESCE(c.urgencia, FALSE) AS urgencia
+       FROM atendimento at LEFT JOIN carater_atendimento_tiss c ON c.id = at.carater_atendimento_tiss_id
+      WHERE at.paciente_id = ? AND at.estabelecimento_id = ? AND at.excluido_em IS NULL
+      ORDER BY at.entrada_em DESC, at.id DESC`,
+    [pacienteId, est],
+    { teto: 20 },
   );
   const lanc: LancamentoCorrente[] = [];
   for (const a of ads)
@@ -556,8 +631,17 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
       aplicadoEm: new Date(x['aplicado_em'] as Date).toISOString(),
       valor: n(x['valor']),
       estornado: Boolean(n(x['estornado'])),
+      motivoEstorno:
+        x['motivo_estorno'] === null || x['motivo_estorno'] === undefined ? null : txt(x['motivo_estorno']),
     })),
     contasAbertas,
+    atendimentos: atendimentos.map((a) => ({
+      id: n(a['id']),
+      numero: txt(a['numero']),
+      entradaEm: a['entrada_em'] ? new Date(a['entrada_em'] as Date).toISOString() : null,
+      situacao: txt(a['situacao']),
+      urgencia: Boolean(n(a['urgencia'])),
+    })),
     extrato,
   };
 }
@@ -639,10 +723,11 @@ export const opInativarModelo = definirOperacao({
   nome: 'faturamento.modelo-orcamento.inativar',
   tabelas: ['modelo_orcamento'],
   entrada: esquemaInativarModelo,
-  async gravar(tx, e) {
+  async gravar(tx, e, ctx) {
+    // Só o modelo visível no estabelecimento da sessão (o de todos ou o dele); o exclusivo de outro não existe aqui.
     const [m] = await tx.consultarParaAtualizar<Linha>(
-      'SELECT id, versao, ativo FROM modelo_orcamento WHERE id = ?',
-      [e.modeloId],
+      'SELECT id, versao, ativo FROM modelo_orcamento WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)',
+      [e.modeloId, estDe(ctx)],
       { teto: 1 },
     );
     if (!m) throw recusa('modelo-inexistente', 'O modelo não existe.', { campos: ['modeloId'] });
@@ -718,6 +803,28 @@ export async function previaDoModelo(
   return { modelo: m, fonte, montado };
 }
 
+/**
+ * A montagem com os valores digitados na hora: só a linha que a tabela e o modelo deixaram sem preço recebe valor
+ * (mudar o preço do modelo ou da tabela é desconto do orçamento, com fluxo e trilha próprios).
+ */
+export async function previaComPrecos(
+  tx: Consulta,
+  est: number,
+  modeloId: number,
+  precos: Readonly<Record<string, number>>,
+) {
+  const base = await previaDoModelo(tx, est, modeloId);
+  const chaves = Object.keys(precos);
+  const fora = chaves.filter((k) => !base.montado.semPreco.includes(Number(k)));
+  if (fora.length)
+    throw recusa(
+      'preco-fora-da-linha',
+      `Só a linha sem preço recebe valor na hora; a linha ${fora.join(', ')} tem preço do modelo ou da tabela (use o desconto do orçamento).`,
+      { campos: fora.map((k) => `precos.${k}`) },
+    );
+  return chaves.length ? previaDoModelo(tx, est, modeloId, precos) : base;
+}
+
 export const esquemaGerarOrcamento = z.object({
   modeloId: id,
   pacienteId: id.nullable().default(null),
@@ -739,7 +846,7 @@ export const opGerarOrcamentoDoModelo = definirOperacao({
     if (e.pacienteId) await paciente(tx, e.pacienteId);
     // Linhas sem preço: o valor digitado na hora entra na montagem (administração e acréscimo incidem sobre ele);
     // a que continuar sem valor é recusada (orçamento sem furo).
-    const { modelo, fonte, montado } = await previaDoModelo(tx, est, e.modeloId, e.precos);
+    const { modelo, fonte, montado } = await previaComPrecos(tx, est, e.modeloId, e.precos);
     const linhas = montado.linhas;
     const faltam = montado.semPreco;
     if (faltam.length)
@@ -823,6 +930,36 @@ export async function listarModelos(l: Consulta, est: number) {
     validadeDias: nn(m['validade_dias']),
     itens: n(m['itens']),
   }));
+}
+
+/** Opções do cadastro do modelo: acomodações e funções ativas e os itens faturáveis pelo código ou pela descrição. */
+export async function opcoesDoModelo(l: Consulta, termo: string) {
+  const t = termo.trim();
+  const acomodacoes = await l.consultar<Linha>(
+    'SELECT id, codigo, descricao FROM categoria_acomodacao WHERE ativo = TRUE ORDER BY descricao',
+    [],
+    { teto: 300 },
+  );
+  const funcoes = await l.consultar<Linha>(
+    'SELECT id, codigo, descricao, percentual_cobranca FROM funcao_equipe_cobranca WHERE ativo = TRUE ORDER BY ordem_apresentacao, descricao',
+    [],
+    { teto: 300 },
+  );
+  const itens =
+    t.length >= 2
+      ? await l.consultar<Linha>(
+          `SELECT id, codigo, descricao FROM item_faturavel WHERE excluido_em IS NULL AND (codigo LIKE ? OR descricao LIKE ?)
+            ORDER BY codigo = ? DESC, descricao LIMIT 20`,
+          [`${t}%`, `%${t}%`, t],
+          { teto: 20 },
+        )
+      : [];
+  const op = (x: Linha) => ({ id: n(x['id']), codigo: txt(x['codigo']), descricao: txt(x['descricao']) });
+  return {
+    acomodacoes: acomodacoes.map(op),
+    funcoes: funcoes.map((f) => ({ ...op(f), percentual: nn(f['percentual_cobranca']) })),
+    itens: itens.map(op),
+  };
 }
 
 export const OPERACOES_PARTICULAR = {
