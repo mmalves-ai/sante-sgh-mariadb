@@ -64,8 +64,20 @@ NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/v"$NODE_VER"*/bin 2>/dev/null | tai
 SHA="$(git -C "$RAIZ" rev-parse --verify "$REF^{commit}")" || { echo "e2e-vm: ref inválida: $REF" >&2; exit 2; }
 
 # Uma execução pesada de cada vez (VM caiu por memória em 22/11) e folga de memória antes de subir.
-exec 9>"$DADOS/pesado.lock"
-flock 9
+# Chamado já debaixo de `flock pesado.lock` (algum ancestral segura a trava): não pega de novo, senão o processo
+# espera o próprio pai para sempre (impasse de 24/11 18h).
+ja_travado() {
+  local p=$PPID
+  while [[ "$p" -gt 1 ]]; do
+    if tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -q "^flock [^ ]*pesado\.lock "; then return 0; fi
+    p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null || echo 1)
+  done
+  return 1
+}
+if ! ja_travado; then
+  exec 9>"$DADOS/pesado.lock"
+  flock 9
+fi
 MIN_GB="${MIN_GB:-10}"
 while :; do
   a=$(awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo)
