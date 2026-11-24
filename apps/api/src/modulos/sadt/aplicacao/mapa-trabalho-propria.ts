@@ -112,13 +112,13 @@ export class ServicoMapaTrabalho {
   }
 
   /** Retém o exame na bancada, com o motivo (fora do lote até ser solto). */
-  reter(c: ContextoSadt, entrada: unknown): Promise<RetencaoGravada> {
+  async reter(c: ContextoSadt, entrada: unknown): Promise<RetencaoGravada> {
     const e = esquemaReterExame.parse(entrada);
     return this.gravar(c, 'sadt.mapa.reter', true, e.exame, e.motivo);
   }
 
   /** Devolve o exame retido à fila da bancada. */
-  soltar(c: ContextoSadt, entrada: unknown): Promise<RetencaoGravada> {
+  async soltar(c: ContextoSadt, entrada: unknown): Promise<RetencaoGravada> {
     const e = esquemaSoltarExame.parse(entrada);
     return this.gravar(c, 'sadt.mapa.soltar', false, e.exame, null);
   }
