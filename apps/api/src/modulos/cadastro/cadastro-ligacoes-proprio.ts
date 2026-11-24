@@ -99,9 +99,9 @@ const opIncluirProcedimento = (t: RegistroTrilhaTela) =>
       )
         throw recusaCampo('procedimento-inexistente', 'Procedimento não encontrado.', 'procedimento');
       recusarErros(errosPeriodoProcedimento({ inicio: e.vigenciaInicio, fim: e.vigenciaFim }));
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, item_faturavel_id, vigencia_inicio, vigencia_fim FROM especialidade_procedimento
-          WHERE especialidade_medica_id = ? AND item_faturavel_id = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+          WHERE especialidade_medica_id = ? AND item_faturavel_id = ? AND ativo AND excluido_em IS NULL`,
         [e.especialidade, e.procedimento],
       );
       const cruzam = periodosSobrepostos(
@@ -181,9 +181,9 @@ const opGravarOcupacao = (t: RegistroTrilhaTela) =>
         throw naoAchado('Especialidade');
       if (!(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.ocupacao])))
         throw recusaCampo('cbo-inexistente', 'Ocupação (CBO) não encontrada.', 'ocupacao');
-      const linhas = await tx.consultar(
+      const linhas = await tx.consultarParaAtualizar(
         `SELECT id, ocupacao_cbo_id, principal, versao, excluido_em FROM especialidade_ocupacao
-          WHERE especialidade_medica_id = ? FOR UPDATE`,
+          WHERE especialidade_medica_id = ?`,
         [e.especialidade],
       );
       const ativas = linhas.filter((l) => l['excluido_em'] === null);
@@ -233,7 +233,11 @@ const opRetirarOcupacao = (t: RegistroTrilhaTela) =>
         [e.id, e.dono],
       );
       if (!x) throw naoAchado('Registro');
-      await tx.excluir('especialidade_ocupacao', e.id, e.versao);
+      // Exclusão lógica: a linha fica (com a marca de quem retirou) e religar a mesma ocupação a reaproveita.
+      await tx.alterar('especialidade_ocupacao', e.id, e.versao, {
+        excluido_em: new Date(),
+        excluido_por: tx.contexto.usuario,
+      });
       if (bool(x['principal'])) {
         const s = await tx.uma(
           `SELECT id, versao FROM especialidade_ocupacao WHERE especialidade_medica_id = ? AND excluido_em IS NULL
@@ -339,11 +343,11 @@ const opIncluirLotacao = (t: RegistroTrilhaTela, restrito: number | null) =>
           'Escolha o tipo ou o subtipo do vínculo de trabalho.',
           'tipoVinculo',
         );
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, estabelecimento_id, unidade_assistencial_id, ocupacao_cbo_id, vigencia_inicio, vigencia_fim,
                 carga_horaria_ambulatorial + carga_horaria_hospitalar + carga_horaria_outros AS carga,
                 ocupacao_padrao, versao
-           FROM lotacao_profissional WHERE profissional_id = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
+           FROM lotacao_profissional WHERE profissional_id = ? AND ativo AND excluido_em IS NULL`,
         [e.profissional],
       );
       const c = conflitosLotacao(
@@ -568,9 +572,9 @@ const opCodigoFonte = (t: RegistroTrilhaTela) =>
         throw recusaCampo('fonte-inexistente', 'Fonte pagadora não encontrada.', 'fonte');
       const codigo = e.codigo.trim();
       if (e.ativo) recusarErros(errosCodigoNaFonte(codigo));
-      const atual = await tx.uma(
+      const [atual] = await tx.consultarParaAtualizar(
         `SELECT id, codigo_na_fonte, ativo, versao FROM solicitante_externo_fonte_pagadora
-          WHERE solicitante_externo_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL FOR UPDATE`,
+          WHERE solicitante_externo_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL`,
         [e.solicitante, e.fonte],
       );
       if (!atual) {
@@ -890,7 +894,7 @@ export class CadastroLigacoesProprio {
       const like = `%${(termo ?? '').replace(/[%_]/g, '')}%`;
       const [ests, unids, vincs, cbos, procs, esps] = await Promise.all([
         l.consultar(
-          'SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL${soEst} ORDER BY nome_fantasia',
+          `SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL${soEst} ORDER BY nome_fantasia`,
           estP,
         ),
         l.consultar(

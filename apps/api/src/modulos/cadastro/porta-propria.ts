@@ -48,6 +48,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import {
+  chaveSolicitante,
   conferirRegistroDevolvido,
   planoDeDesfazer,
   RECUSA_REGISTRO_ALTERADO,
@@ -2056,7 +2057,9 @@ export const OPERACAO_CADASTRAR_SOLICITANTE = definirOperacao({
   entrada: esquemaCadastrarSolicitante,
   acao: 'inclusao',
   async gravar(tx, e) {
-    const conselho = await tx.uma('SELECT id FROM conselho_classe WHERE id = ? AND ativo', [e.conselho]);
+    const conselho = await tx.uma('SELECT id, sigla FROM conselho_classe WHERE id = ? AND ativo', [
+      e.conselho,
+    ]);
     if (!conselho)
       throw recusa('conselho-inexistente', 'Conselho não encontrado no cadastro de conselhos.', {
         campos: ['conselho'],
@@ -2065,14 +2068,26 @@ export const OPERACAO_CADASTRAR_SOLICITANTE = definirOperacao({
     if (!uf) throw recusa('uf-inexistente', 'UF não encontrada.', { campos: ['uf'] });
     if (e.cbo !== undefined && !(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.cbo])))
       throw recusa('cbo-inexistente', 'Ocupação (CBO) não encontrada.', { campos: ['cbo'] });
-    const repetido = await tx.uma(
-      'SELECT id FROM solicitante_externo WHERE conselho_classe_id = ? AND conselho_unidade_federativa_id = ? AND numero_conselho = ?',
-      [e.conselho, Number(uf['id']), String(e.numero)],
+    // Repetição pela chave do domínio (conselho, UF e número normalizados: "012345" e "12345" são o mesmo registro),
+    // não pela comparação exata do texto gravado.
+    const sigla = String(conselho['sigla']);
+    const chave = chaveSolicitante({ conselho: sigla, uf: e.uf, numero: e.numero });
+    const candidatos = await tx.consultar(
+      `SELECT id, numero_conselho FROM solicitante_externo
+        WHERE conselho_classe_id = ? AND conselho_unidade_federativa_id = ?
+          AND (numero_conselho = ? OR TRIM(LEADING '0' FROM TRIM(numero_conselho)) = ?)`,
+      [e.conselho, Number(uf['id']), String(e.numero), String(e.numero)],
     );
+    const repetido = candidatos.find((r) => {
+      const n = String(r['numero_conselho'] ?? '').trim();
+      return /^\d+$/.test(n) && chaveSolicitante({ conselho: sigla, uf: e.uf, numero: Number(n) }) === chave;
+    });
     if (repetido)
-      throw recusa('solicitante-existente', 'Já existe um solicitante com este conselho, UF e número.', {
-        campos: ['numero'],
-      });
+      throw recusa(
+        'solicitante-existente',
+        `Já existe um solicitante com este conselho, UF e número (cadastro ${Number(repetido['id'])}).`,
+        { campos: ['numero'] },
+      );
     const id = await tx.incluir('solicitante_externo', {
       nome: e.nome,
       conselho_classe_id: e.conselho,

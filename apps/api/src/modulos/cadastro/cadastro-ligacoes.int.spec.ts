@@ -9,6 +9,7 @@ import { NucleoProprio } from '@sgh/nucleo';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CadastroLigacoesProprio } from './cadastro-ligacoes-proprio.js';
+import { OPERACAO_CADASTRAR_SOLICITANTE } from './porta-propria.js';
 import {
   CLIENTE_F22,
   contextoPorta,
@@ -446,5 +447,47 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     expect(f.instituicaoCnes).toBe('1234567');
     const fb = await s.fichaSolicitante(c(), b);
     expect(fb.faltaParaGuia).toEqual(['cbo']);
+  });
+
+  it('solicitante: a inclusão recusa o repetido pela chave do domínio (zeros à esquerda não escapam)', async () => {
+    const sigla = String(
+      (await um<{ sigla: unknown }>('SELECT sigla FROM unidade_federativa WHERE id = ?', [m!.uf]))!.sigla,
+    );
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar(
+        `INSERT INTO solicitante_externo (nome, conselho_classe_id, numero_conselho, conselho_unidade_federativa_id,
+           data_inscricao, ativo, criado_em) VALUES (?, ?, '009914077', ?, '2026-01-01', TRUE, NOW(3))`,
+        [`ZERO ${MARCA} LIG SINTETICA`, m!.conselho, m!.uf],
+      ),
+    );
+    const ex = nucleo.criarExecutor();
+    const ctx = () => ({
+      cliente: CLIENTE_F22,
+      estabelecimento: m!.estabelecimento,
+      usuario: m!.usuario,
+      correlacao: COR,
+      chaveIdempotencia: `f3-1-4:${Math.random()}`,
+    });
+    const incluir = (numero: number, nome: string) =>
+      ex.executar(
+        OPERACAO_CADASTRAR_SOLICITANTE,
+        CLIENTE_F22,
+        { nome, conselho: m!.conselho, uf: sigla, numero },
+        ctx(),
+      );
+    await expect(incluir(9_914_077, `REPETIDO ${MARCA} LIG SINTETICA`)).rejects.toMatchObject({
+      problema: { codigo: 'solicitante-existente' },
+    });
+    const novo = await incluir(9_914_078, `NOVO ${MARCA} LIG SINTETICA`);
+    const id = Number((novo.resultado as { solicitante: unknown }).solicitante);
+    const linhas = await todos(
+      'SELECT numero_conselho, ativo FROM solicitante_externo WHERE conselho_classe_id = ? AND conselho_unidade_federativa_id = ? AND numero_conselho IN (?, ?, ?) ORDER BY id',
+      [m!.conselho, m!.uf, '009914077', '9914077', '9914078'],
+    );
+    expect(linhas.map((r) => [String(r['numero_conselho']), Number(r['ativo'])])).toEqual([
+      ['009914077', 1],
+      ['9914078', 1],
+    ]);
+    expect(id).toBeGreaterThan(0);
   });
 });
