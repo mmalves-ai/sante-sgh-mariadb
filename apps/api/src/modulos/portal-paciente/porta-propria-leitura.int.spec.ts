@@ -404,6 +404,12 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
       situacao: 'identidade-verificada',
     });
     expect(await leituras.filaCopias(C, { pendentes: false, idPaciente: pac[1]! })).toEqual([]);
+    // A fila completa (com a janela dos decididos) e a busca pelo protocolo rodam no banco e acham a mesma cópia.
+    expect((await leituras.filaCopias(C, { pendentes: false })).map((x) => x.idPedido)).toEqual([massa.copia]);
+    const porProtocolo = await leituras.filaCopias(C, { pendentes: false, protocolo: fila[0]!.protocolo });
+    expect(porProtocolo.map((x) => x.idPedido)).toEqual([massa.copia]);
+    expect(await leituras.filaCopias(C, { pendentes: false, protocolo: 'NAO-EXISTE' })).toEqual([]);
+    expect(await leituras.filaCopias(C2, { pendentes: false, protocolo: fila[0]!.protocolo })).toEqual([]);
     const atos = await leituras.atosCopia(C, massa.copia);
     expect(atos.map((a) => [a.ato, a.usuario])).toEqual([
       ['solicitacao', `SGH.PORTAL.C${massa.conta}`],
