@@ -1,7 +1,8 @@
-// As funcionalidades do SADT (ficha do M26, seção 12): uma chave de liberação por setor (laboratório, imagem, métodos
-// gráficos, endoscopia) e as do novo (rastreio, valor crítico, portal) e da recepção (requisição, orçamento). Cada uma
-// é um apoio de gravação do M18 (POL-3: completa e DESLIGADA até a conferência; o administrador liga por
-// estabelecimento, setor ou pessoa), com o mapa operação → permissão de agir que vale também no servidor.
+// As funcionalidades do SADT (ficha do M26, seção 12; F3.5): um apoio por setor (laboratório, imagem, métodos
+// gráficos, endoscopia), os do novo (rastreio, valor crítico, portal) e os da recepção (requisição, orçamento), com o
+// mapa operação → permissão de agir que vale também no servidor. Decisão de produto (F3, "tudo ligado"): nenhum deles
+// tem chave de liberação; quem pode agir é decidido só pela permissão do cargo. A chave fica como o nome do recurso na
+// trilha.
 import {
   CHAVES_SADT,
   type GravacaoSadt,
@@ -59,7 +60,13 @@ export class ApoiosSadt {
     cache: CacheConfig | null,
   ) {
     const apoio = (chave: string, nome: string, operacoes: Readonly<Record<string, string>>) =>
-      new ApoioGravacao<GravadorSghSadt>({ chave, nome, operacoes }, porta, trilha, configuracao, cache);
+      new ApoioGravacao<GravadorSghSadt>(
+        { chave, nome, operacoes, semLiberacao: true },
+        porta,
+        trilha,
+        configuracao,
+        cache,
+      );
     this.setores = {
       laboratorio: apoio(CHAVES_SADT.laboratorio, NOMES_SETOR.laboratorio, OPERACOES_LABORATORIO),
       imagem: apoio(CHAVES_SADT.imagem, NOMES_SETOR.imagem, OPERACOES_LAUDO),

@@ -85,6 +85,11 @@ export interface ConfiguracaoApoio {
   readonly nome: string;
   /** Operações da tela e a permissão de agir de cada uma. */
   readonly operacoes: Readonly<Record<string, string>>;
+  /**
+   * Tudo ligado para todos (decisão de produto, F3): a funcionalidade não tem chave de liberação; vale só a permissão
+   * do cargo em cada operação. A chave continua como o nome do recurso na trilha.
+   */
+  readonly semLiberacao?: boolean;
 }
 
 export class ApoioGravacao<G> {
@@ -118,6 +123,7 @@ export class ApoioGravacao<G> {
 
   /** A funcionalidade vale para esta sessão (pessoa e setor)? */
   async liberacao(s: SessaoCadastro): Promise<{ ligada: boolean; motivo: string | null }> {
+    if (this.cfg.semLiberacao) return { ligada: true, motivo: null };
     const semConfiguracao = `A configuração das funcionalidades do estabelecimento não está disponível: ${this.cfg.nome} fica em consulta.`;
     let dados: Awaited<ReturnType<ApoioGravacao<G>['dadosLiberacao']>>;
     try {

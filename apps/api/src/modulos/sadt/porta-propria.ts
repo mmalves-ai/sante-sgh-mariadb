@@ -47,6 +47,7 @@ import {
   type ContextoOperacao,
   definirOperacao,
   ErroOperacao,
+  garantirSequencia,
   erroConflitoVersao,
   type Executor,
   type Leitor,
@@ -55,12 +56,20 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { alvosDoAviso, avisoDoAlvo, type RegraCriticoCandidata } from '@sgh/dominio-sadt';
+import {
+  alvosDoAviso,
+  avisoDoAlvo,
+  dataDaReferencia,
+  numeroDoLaudo,
+  prefixoDoNumeroLaudo,
+  type RegraCriticoCandidata,
+  SEQUENCIA_NUMERO_LAUDO,
+} from '@sgh/dominio-sadt';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
-import { OPERACOES_SADT_PENDENTES } from './operacoes.js';
+import { OPERACOES_SADT_DIRETAS, OPERACOES_SADT_PENDENTES } from './operacoes.js';
 import {
   type AcessoPortalLido,
   type ApoioSadtLido,
@@ -101,6 +110,7 @@ const TABELAS_GRAVACAO = [
   'visualizacao_resultado_exame',
   'emissao_laudo',
   'emissao_laudo_exame',
+  'sequencia_negocio',
   'orcamento_particular',
   'pedido_vinculo_profissional_externo',
   'conta_portal_profissional_externo',
@@ -247,7 +257,7 @@ const SQL_EXAME = `
          COALESCE(prof.nome_exibicao, pfp.nome) AS solicitante,
          mb.descricao AS material, rc.id AS recipiente_id, rc.descricao AS recipiente,
          ed.id AS especialidade_id, ed.descricao AS especialidade,
-         am.id AS amostra_id, am.codigo_barras, am.situacao AS amostra_situacao,
+         am.id AS amostra_id, am.codigo_barras, am.situacao AS amostra_situacao, am.coletada_em,
          COALESCE(am.alterado_em, am.criado_em) AS amostra_em,
          EXISTS (SELECT 1 FROM visualizacao_resultado_exame v JOIN resultado_exame re ON re.id = v.resultado_exame_id
                   WHERE re.exame_item_id = ei.id) AS visualizado,
@@ -732,6 +742,7 @@ export class PortaSadtPropria implements PortaSadt {
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
 
   async podeGravar(_c: ContextoSadt, op: string): Promise<LiberacaoGravacao> {
+    if (OPERACOES_SADT_DIRETAS.has(op)) return { pode: true, codigo: null, motivo: null };
     const motivo = OPERACOES_SADT_PENDENTES[op];
     if (motivo)
       return {
@@ -924,10 +935,16 @@ export class PortaSadtPropria implements PortaSadt {
       const [r] = await l.consultar(`${SQL_EXAME} AND ei.id = ?`, [est, id], { teto: 1 });
       if (!r) return null;
       const exame = exameDe(r, hoje);
+      // A faixa, o crítico e a idade valem na data do exame (coleta; sem ela, a solicitação), nunca na de hoje.
+      const dia = dataDaReferencia({
+        coletadaEm: dataIso(r['coletada_em']),
+        solicitadoEm: dataIso(r['solicitado_em']),
+        hoje,
+      });
       const pac = await l.uma(
         `SELECT pf.sexo_id, DATEDIFF(?, pf.data_nascimento) AS dias
            FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
-        [hoje, exame.paciente.id],
+        [dia, exame.paciente.id],
       );
       const re = await l.uma(
         `SELECT id, situacao, texto_resultado, conclusao FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL`,
@@ -958,7 +975,7 @@ export class PortaSadtPropria implements PortaSadt {
                   AND (idade_minima_dias IS NULL OR idade_minima_dias <= ?) AND (idade_maxima_dias IS NULL OR idade_maxima_dias >= ?)
                 ORDER BY exame_analito_id, sexo_id IS NULL, (idade_minima_dias IS NULL AND idade_maxima_dias IS NULL),
                          COALESCE(idade_maxima_dias, 4294967295) - COALESCE(idade_minima_dias, 0), vigencia_inicio DESC, id DESC`,
-              [...eas, hoje, hoje, pac?.['sexo_id'] ?? null, pac?.['dias'] ?? null, pac?.['dias'] ?? null],
+              [...eas, dia, dia, pac?.['sexo_id'] ?? null, pac?.['dias'] ?? null, pac?.['dias'] ?? null],
               { teto: 5000 },
             ),
             'exame_analito_id',
@@ -972,7 +989,7 @@ export class PortaSadtPropria implements PortaSadt {
                 WHERE analito_id IN (${lista(analitos.length)}) AND ativo = TRUE AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
                   AND (exame_id IS NULL OR exame_id = ?) AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
                 ORDER BY analito_id, estabelecimento_id IS NULL, exame_id IS NULL, vigencia_inicio DESC, id DESC`,
-              [...analitos, est, exame.exame.id, hoje, hoje],
+              [...analitos, est, exame.exame.id, dia, dia],
               { teto: 5000 },
             ),
             'analito_id',
@@ -2635,10 +2652,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         motivo = n(mr['id']);
       }
       const quando = agora();
-      const numero = await tx.proximoNumero('laudo_exame');
+      // O número do laudo (F3.5): a numeração do estabelecimento, criada na primeira emissão quando ainda não existe.
+      await garantirSequencia(
+        tx,
+        { tipo: SEQUENCIA_NUMERO_LAUDO, estabelecimento: est, prefixo: prefixoDoNumeroLaudo(est) },
+        { usuario, agora: quando },
+      );
+      const numero = numeroDoLaudo(await tx.proximoNumero(SEQUENCIA_NUMERO_LAUDO));
       const id = await tx.incluir('emissao_laudo', {
         estabelecimento_id: est,
-        numero: numero.formatado,
+        numero,
         codigo_autenticacao: r.codigo,
         paciente_id: n(itens[0]!['paciente_id']),
         requisicao_exame_id: n(itens[0]!['requisicao']),
@@ -2663,7 +2686,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
           const v = await tx.uma('SELECT versao FROM exame_item WHERE id = ?', [n(i['id'])]);
           await tx.alterar('exame_item', n(i['id']), n(v?.['versao']), { emitido_em: quando });
         }
-      return id;
+      return { id, numero };
     },
 
     /** Um protocolo ativo por atendimento: o novo revoga o anterior (o código impresso antes deixa de valer). */

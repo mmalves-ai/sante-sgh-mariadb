@@ -127,7 +127,7 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
     const emitir = (via: number, motivo: string | null) =>
       porta.gravarSgh(
         c,
-        (id: number) => linhaTela(m!, 'sadt.laudo.emitido', 'emissao_laudo', id),
+        (r: { id: number }) => linhaTela(m!, 'sadt.laudo.emitido', 'emissao_laudo', r.id),
         (g) =>
           g.registrarLaudoEmitido({
             impressao: 0,
@@ -140,10 +140,11 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
             idsExames: [m!.itemLiberado],
           }),
       );
-    const id = await emitir(1, null);
+    const { id, numero } = await emitir(1, null);
     expect(
       await um('SELECT numero, tipo_emissao, versao FROM emissao_laudo WHERE id = ?', [id]),
     ).toMatchObject({
+      numero,
       tipo_emissao: 'pdf',
       versao: 1,
     });
@@ -170,7 +171,10 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
     expect(codigoDe(await emitir(2, 'motivo livre qualquer').catch((e: unknown) => e))).toBe(
       'motivo-nao-cadastrado',
     );
-    await emitir(2, 'Paciente perdeu a primeira via');
+    const via2 = await emitir(2, 'Paciente perdeu a primeira via');
+    // O número do laudo: sequencial no estabelecimento, um por emissão (a 2ª via tem o seu, logo depois).
+    const valor = (t: string) => Number(/(\d+)$/.exec(t)?.[1]);
+    expect(valor(via2.numero)).toBe(valor(numero) + 1);
     expect(await porta.laudosDoExame(c, m!.itemLiberado)).toMatchObject([{ codigo: cod1, segundasVias: 1 }]);
     expect((await porta.exame(c, m!.itemLiberado))?.estado).toBe('emitido');
 

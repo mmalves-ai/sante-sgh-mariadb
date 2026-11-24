@@ -152,18 +152,19 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           impressao: 0,
+          numero: 'LAU1-1',
           codigo: '0b1c2d3e-4f50-4617-8899-aabbccddeeff',
           exames: 1,
           segundaVia: false,
           pdf: Buffer.from('%PDF-1.4\n% SINTETICO\n%%EOF\n').toString('base64'),
           hash: 'a'.repeat(64),
-          mensagem: 'Laudo emitido (0b1c2d3e-4f50-4617-8899-aabbccddeeff).',
+          mensagem: 'Laudo emitido: número LAU1-1 (autenticação 0b1c2d3e-4f50-4617-8899-aabbccddeeff).',
         }),
       });
     });
     const download = page.waitForEvent('download');
     await page.getByTestId(`laudo-emitir-${at}`).click();
-    await expect(page.getByTestId('laudos-mensagem')).toContainText('Laudo emitido');
+    await expect(page.getByTestId('laudos-mensagem')).toContainText('Laudo emitido: número LAU1-1');
     // O código impresso se confere no balcão (o código interceptado acima não existe na memória: "não encontrado").
     await page.getByTestId('laudos-codigo').fill('0b1c2d3e-4f50-4617-8899-aabbccddeeff');
     await page.getByTestId('laudos-codigo').press('Enter');

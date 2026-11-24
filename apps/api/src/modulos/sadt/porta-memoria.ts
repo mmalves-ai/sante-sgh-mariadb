@@ -1207,7 +1207,8 @@ export class PortaSadtMemoria implements PortaSadt {
             por: r.usuario,
             vias: r.via,
           });
-        return s.proximo++;
+        const id = s.proximo++;
+        return { id, numero: `LAU-${id}` };
       },
       criarProtocoloPortal: async (r) => {
         for (const a of s.acessos)

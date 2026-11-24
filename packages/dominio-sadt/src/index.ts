@@ -4,6 +4,7 @@
 export * from './exame/estados.js';
 export * from './exame/restricoes.js';
 export * from './referencia/versao.js';
+export * from './referencia/data-do-exame.js';
 export * from './critico/escalonamento.js';
 export * from './critico/regra-aviso.js';
 export * from './indicadores/tat.js';
@@ -11,6 +12,7 @@ export * from './orcamento/conversao.js';
 export * from './amostra/rastreio.js';
 export * from './laudo/habilitacao.js';
 export * from './laudo/autenticacao.js';
+export * from './laudo/numero.js';
 export * from './portal/acesso.js';
 export * from './pacs/index.js';
 export * from './transfusao/index.js';

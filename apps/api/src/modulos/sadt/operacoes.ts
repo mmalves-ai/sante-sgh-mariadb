@@ -46,8 +46,13 @@ export const OPERACOES_SADT_PENDENTES: Readonly<Record<string, string>> = {
   'sadt.registrarLaudo': `o registro do laudo ${CONTRATO}`,
   'sadt.liberarExame': `a liberação do exame ${CONTRATO}`,
   'sadt.retificarResultado': `a retificação do resultado ${CONTRATO}`,
-  'sadt.emitirLaudo': `a emissão do laudo ${CONTRATO}`,
   'sadt.criarOrcamento': `o orçamento do diagnóstico ${CONTRATO}`,
   'sadt.registrarVisualizacaoPortal': `a visualização no portal ${CONTRATO}`,
   'sadt.abrirRequisicao': `a abertura da requisição ${CONTRATO}`,
 };
+
+/**
+ * Operações que gravam direto pela porta (gravarSgh, com a trilha na mesma transação), sem esperar o contrato novo: a
+ * emissão do laudo (F3.5, linha 16) grava a emissão com o número do laudo, o código de autenticação, o hash e os exames.
+ */
+export const OPERACOES_SADT_DIRETAS: ReadonlySet<string> = new Set(['sadt.emitirLaudo']);

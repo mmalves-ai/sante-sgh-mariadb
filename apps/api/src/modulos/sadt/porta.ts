@@ -229,7 +229,7 @@ export interface GravadorSghSadt {
     motivo: string | null;
     usuario: string;
     idsExames?: readonly number[];
-  }): Promise<number>;
+  }): Promise<{ id: number; numero: string }>;
   criarProtocoloPortal(r: {
     paciente: number;
     reg: number;

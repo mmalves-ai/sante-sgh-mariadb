@@ -34,6 +34,7 @@ import {
   codigoDeAutenticacao,
   codigoProtocolo,
   conferirColeta,
+  fraseDaEmissao,
   indicadoresCriticos,
   podeMudar,
   podeNoEstado,
@@ -591,7 +592,7 @@ export class ServicoSadt {
     }
     const hash = emitido.emissao.sha256;
     const impressao = anterior?.impressao ?? 0;
-    await apoio.sgh(
+    const gravado = await apoio.sgh(
       s,
       EVENTOS_AUDITAVEIS.sadtLaudoEmitido.codigo,
       'sadt.laudo.imprimir',
@@ -611,12 +612,13 @@ export class ServicoSadt {
     this.notificador?.avisar(s.hospital);
     return {
       impressao,
+      numero: gravado.numero,
       codigo,
       exames: e.exames.length,
       segundaVia: e.segundaVia,
       pdf: Buffer.from(emitido.pdf).toString('base64'),
       hash,
-      mensagem: e.segundaVia ? `2ª via do laudo emitida (${codigo}).` : `Laudo emitido (${codigo}).`,
+      mensagem: fraseDaEmissao({ numero: gravado.numero, segundaVia: e.segundaVia, codigo }),
     };
   }
 

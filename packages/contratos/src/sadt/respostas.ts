@@ -301,6 +301,8 @@ export type ColetaRegistrada = z.infer<typeof esquemaColetaRegistrada>;
 
 export const esquemaLaudoEmitido = z.object({
   impressao: n,
+  /** O número do laudo: sequencial, único por estabelecimento, gerado na emissão (F3.5). */
+  numero: txt,
   codigo: txt,
   exames: n,
   segundaVia: z.boolean(),
