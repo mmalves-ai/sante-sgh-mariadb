@@ -67,11 +67,7 @@ const esquemaLocal = z
     setor: id.nullable().default(null),
     capacidade: z.number().int().positive().max(1_000_000).nullable().default(null),
   })
-  .strict()
-  .refine((l) => l.pai !== null || l.nivel === 'arquivo' || l.nivel === 'sala', {
-    message: 'O local do topo da árvore é o arquivo ou uma sala.',
-    path: ['pai'],
-  });
+  .strict();
 
 const esquemaAbrir = z
   .object({
@@ -258,6 +254,11 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
 
   incluirLocal(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaLocal, entrada);
+    // Regra da árvore com a mensagem ao usuário (a entrada inválida só destaca o campo).
+    if (e.pai === null && e.nivel !== 'arquivo' && e.nivel !== 'sala')
+      throw recusaRegra('Local recusado', [
+        { campo: 'pai', mensagem: 'O local do topo da árvore é o arquivo ou uma sala: escolha o local pai.' },
+      ]);
     return this.gravar(c, 'same.guarda.incluir-local', ['local_arquivo'], async (tx, est) => {
       let caminho = e.descricao;
       if (e.pai !== null) {
@@ -692,7 +693,11 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
               [ultimo['id'], anterior?.['id'] ?? null, volume],
             )
           : null;
-        await tx.excluir('movimento_prontuario', num(ultimo['id']), num(ultimo['versao']));
+        // Exclusão lógica: o movimento desfeito fica no histórico com quem e quando o desfez (nada apagado).
+        await tx.alterar('movimento_prontuario', num(ultimo['id']), num(ultimo['versao']), {
+          excluido_em: new Date(),
+          excluido_por: usuario,
+        });
         if (fechada)
           await tx.alterar('movimento_prontuario', num(fechada['id']), num(fechada['versao']), {
             devolvido_em: null,
