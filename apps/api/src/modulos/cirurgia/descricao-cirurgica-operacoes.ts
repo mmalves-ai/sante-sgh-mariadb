@@ -12,12 +12,14 @@ import {
   type DescricaoAtual,
   ErroDescricaoCirurgica,
   FASES_INTERCORRENCIA,
+  funcaoDescreveCirurgia,
   GRAVIDADES_INTERCORRENCIA,
+  type MembroEquipeDescricao,
   type SituacaoDescricao,
 } from '@sgh/dominio-cirurgia';
 import { definirOperacao, type Operacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
-import { FUSO_PADRAO, instante, n, nn, texto } from './banco-apoio.js';
+import { FUSO_PADRAO, instante, n, nn, texto, textoOuNulo } from './banco-apoio.js';
 
 type Linha = Record<string, unknown>;
 
@@ -109,8 +111,12 @@ async function atoTravado(tx: TxOperacao, ato: number) {
   );
   if (!a || texto(a['situacao']) === 'cancelado')
     throw recusa('registro-inexistente', 'O ato cirúrgico não existe neste estabelecimento.');
+  // A equipe viva do ato (o participante retirado, com excluido_em, não é mais autor) com a função de cada um.
   const equipe = await tx.consultar(
-    'SELECT DISTINCT profissional_id FROM participante_cirurgia WHERE ato_cirurgico_id = ?',
+    `SELECT pc.profissional_id, f.funcao_medica, f.grau_participacao_tiss
+       FROM participante_cirurgia pc
+       JOIN funcao_equipe_cirurgica f ON f.id = pc.funcao_equipe_cirurgica_id
+      WHERE pc.ato_cirurgico_id = ? AND pc.excluido_em IS NULL`,
     [ato],
   );
   const data = (v: unknown) =>
@@ -119,7 +125,14 @@ async function atoTravado(tx: TxOperacao, ato: number) {
     est: e,
     entrada: data(a['entrada_sala_em']),
     saida: data(a['saida_sala_em']),
-    equipe: equipe.map((l) => n(l['profissional_id'])),
+    equipe: equipe.map((l): MembroEquipeDescricao => {
+      const medica = l['funcao_medica'] === true || n(l['funcao_medica']) === 1;
+      return {
+        profissional: n(l['profissional_id']),
+        funcaoMedica: medica,
+        cirurgica: funcaoDescreveCirurgia(textoOuNulo(l['grau_participacao_tiss']), medica),
+      };
+    }),
   };
 }
 

@@ -2,7 +2,8 @@
 // cliente f22_o3, com massa SINTÉTICA (códigos "C0396"; nenhuma pessoa real): o rascunho com achados, salvar e assinar
 // (situação, horários e conta da assinatura), a descrição assinada que não muda (recusa), o adendo que a deixa
 // "retificada" com o texto original intacto, o achado retirado do rascunho marcado como excluído (nunca apagado), a
-// intercorrência com sequência e profissional, as recusas (fora da equipe, fora da janela, sem conduta), a trilha de
+// intercorrência com sequência e profissional, as recusas (fora da equipe, participante retirado, anestesista que não
+// descreve, fora da janela, sem conduta), o isolamento entre estabelecimentos (ato, descrição, leitura), a trilha de
 // cada gravação e a leitura por ato e por paciente.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -18,6 +19,9 @@ interface Massa {
   est: number;
   usuario: number;
   outroUsuario: number;
+  anestesistaUsuario: number;
+  est2: number;
+  ato2: number;
   paciente: number;
   cirurgiao: number;
   ato: number;
@@ -29,17 +33,18 @@ interface Massa {
 const nucleo = new NucleoProprio();
 let m: Massa;
 let porta: PortaDescricaoCirurgicaPropria;
-const ctx = (usuario = m.usuario): ContextoPortaM18 => ({
+const ctx = (usuario = m.usuario, est = m.est): ContextoPortaM18 => ({
   cliente: CLIENTE,
-  estabelecimento: m.est,
+  estabelecimento: est,
   usuario,
   correlacao: 'teste-f344',
 });
-const op = (usuario = m.usuario): ContextoOperacao => ({
-  ...ctx(usuario),
+const op = (usuario = m.usuario, est = m.est): ContextoOperacao => ({
+  ...ctx(usuario, est),
   chaveIdempotencia: `t0396-${randomUUID()}`,
 });
-const exec = (o: string, e: unknown, usuario = m.usuario) => porta.executar(ctx(usuario), o, e, op(usuario));
+const exec = (o: string, e: unknown, usuario = m.usuario, est = m.est) =>
+  porta.executar(ctx(usuario, est), o, e, op(usuario, est));
 const codigo = async (p: Promise<unknown>) =>
   p.then(
     () => null,
@@ -72,13 +77,18 @@ async function montar(e: Escritor): Promise<Massa> {
       [codigo, `${codigo} SINTETICO`, ...ks.map((k) => extra[k]), agora],
     );
   };
-  const est = await g(
-    'SELECT id FROM estabelecimento WHERE codigo = ?',
-    [P],
-    'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
-    [P, 'ESTAB SINTETICO DESCRICAO', 'ESTAB SINTETICO DESCRICAO', agora],
-  );
-  await limpar(e, est);
+  const estab = async (codigo: string) => {
+    const id = await g(
+      'SELECT id FROM estabelecimento WHERE codigo = ?',
+      [codigo],
+      'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+      [codigo, `ESTAB SINTETICO ${codigo}`, `ESTAB SINTETICO ${codigo}`, agora],
+    );
+    await limpar(e, id);
+    return id;
+  };
+  const est = await estab(P);
+  const est2 = await estab(`${P}B`);
   const usuario = async (login: string) =>
     g(
       'SELECT id FROM usuario WHERE login = ?',
@@ -109,17 +119,21 @@ async function montar(e: Escritor): Promise<Massa> {
   );
   const cirurgiao = await prof(`CIRURGIAO SINTETICO ${P}`);
   const outro = await prof(`OUTRO MEDICO SINTETICO ${P}`);
+  const anestesista = await prof(`ANESTESISTA SINTETICO ${P}`);
   const u1 = await usuario('c0396.cirurgiao');
   const u2 = await usuario('c0396.outro');
-  for (const [u, p] of [
-    [u1, cirurgiao],
-    [u2, outro],
+  const u3 = await usuario('c0396.anestesista');
+  for (const [u, p, es] of [
+    [u1, cirurgiao, est],
+    [u2, outro, est],
+    [u3, anestesista, est],
+    [u1, cirurgiao, est2],
   ] as const)
     await g(
       'SELECT id FROM usuario_vinculo_profissional WHERE usuario_id = ? AND estabelecimento_id = ?',
-      [u, est],
+      [u, es],
       'INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?)',
-      [u, est, p, '2020-01-01', agora],
+      [u, es, p, '2020-01-01', agora],
     );
   const convenio = await g(
     'SELECT id FROM fonte_pagadora WHERE codigo = ?',
@@ -139,58 +153,80 @@ async function montar(e: Escritor): Promise<Massa> {
     "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES (?, 'CARATER SINTETICO', 'teste', ?)",
     [`${P}c`, agora],
   );
-  const atendimento = await g(
-    'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
-    [est, `${P}-AT`],
-    `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
-       fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [est, `${P}-AT`, paciente, categoria, caraterTiss, convenio, cirurgiao, agora, agora],
-  );
-  const ua = await g(
-    'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
-    [est, 'CC1'],
-    "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, 'CC1', 'BLOCO SINTETICO', 'centro_cirurgico', ?)",
-    [est, agora],
-  );
-  const uc = await g(
-    'SELECT id FROM unidade_cirurgica WHERE unidade_assistencial_id = ?',
-    [ua],
-    'INSERT INTO unidade_cirurgica (estabelecimento_id, unidade_assistencial_id, funciona_24_horas, criado_em) VALUES (?, ?, TRUE, ?)',
-    [est, ua, agora],
-  );
-  const sala = await g(
-    'SELECT id FROM sala_cirurgica WHERE estabelecimento_id = ? AND codigo = ?',
-    [est, 'S1'],
-    "INSERT INTO sala_cirurgica (estabelecimento_id, unidade_cirurgica_id, codigo, descricao, situacao, criado_em) VALUES (?, ?, 'S1', 'SALA SINTETICA 1', 'ativa', ?)",
-    [est, uc, agora],
-  );
   const carater = Number(
     (await e.uma<{ id: number }>('SELECT id FROM carater_cirurgia ORDER BY id LIMIT 1'))!.id,
   );
-  const funcao = await cad('funcao_equipe_cirurgica', 'cirurgiao');
+  // Funções com códigos próprios do teste: cirurgião (médica, grau TISS 00) e anestesista (médica, grau 06).
+  const funcao = await cad('funcao_equipe_cirurgica', `${P}-CIR`, {
+    funcao_medica: true,
+    grau_participacao_tiss: '00',
+  });
+  const funcaoAnestesia = await cad('funcao_equipe_cirurgica', `${P}-ANE`, {
+    funcao_medica: true,
+    grau_participacao_tiss: '06',
+  });
   const entrada = new Date(agora.getTime() - 3 * 3600_000);
   const saida = new Date(agora.getTime() - 3600_000);
-  const ato = await e.inserir(
-    `INSERT INTO ato_cirurgico (estabelecimento_id, numero, atendimento_id, paciente_id, sala_cirurgica_id, carater_cirurgia_id,
-       entrada_sala_em, inicio_cirurgia_em, fim_cirurgia_em, saida_sala_em, situacao, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'realizado', ?)`,
-    [
-      est,
-      `${P}-${Date.now() % 1e6}`,
-      atendimento,
-      paciente,
-      sala,
-      carater,
-      entrada,
-      entrada,
-      saida,
-      saida,
-      agora,
-    ],
+  const atoEm = async (est: number) => {
+    const atendimento = await g(
+      'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+      [est, `${P}-AT`],
+      `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+         fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [est, `${P}-AT`, paciente, categoria, caraterTiss, convenio, cirurgiao, agora, agora],
+    );
+    const ua = await g(
+      'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
+      [est, 'CC1'],
+      "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, 'CC1', 'BLOCO SINTETICO', 'centro_cirurgico', ?)",
+      [est, agora],
+    );
+    const uc = await g(
+      'SELECT id FROM unidade_cirurgica WHERE unidade_assistencial_id = ?',
+      [ua],
+      'INSERT INTO unidade_cirurgica (estabelecimento_id, unidade_assistencial_id, funciona_24_horas, criado_em) VALUES (?, ?, TRUE, ?)',
+      [est, ua, agora],
+    );
+    const sala = await g(
+      'SELECT id FROM sala_cirurgica WHERE estabelecimento_id = ? AND codigo = ?',
+      [est, 'S1'],
+      "INSERT INTO sala_cirurgica (estabelecimento_id, unidade_cirurgica_id, codigo, descricao, situacao, criado_em) VALUES (?, ?, 'S1', 'SALA SINTETICA 1', 'ativa', ?)",
+      [est, uc, agora],
+    );
+    const ato = await e.inserir(
+      `INSERT INTO ato_cirurgico (estabelecimento_id, numero, atendimento_id, paciente_id, sala_cirurgica_id, carater_cirurgia_id,
+         entrada_sala_em, inicio_cirurgia_em, fim_cirurgia_em, saida_sala_em, situacao, criado_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'realizado', ?)`,
+      [
+        est,
+        `${P}-${Date.now() % 1e6}`,
+        atendimento,
+        paciente,
+        sala,
+        carater,
+        entrada,
+        entrada,
+        saida,
+        saida,
+        agora,
+      ],
+    );
+    await e.inserir(
+      'INSERT INTO participante_cirurgia (ato_cirurgico_id, sequencia, profissional_id, funcao_equipe_cirurgica_id, criado_em) VALUES (?, 1, ?, ?, ?)',
+      [ato, cirurgiao, funcao, agora],
+    );
+    return ato;
+  };
+  const ato = await atoEm(est);
+  const ato2 = await atoEm(est2);
+  // O anestesista está na equipe viva, mas a função não descreve; o outro médico foi retirado da equipe.
+  await e.inserir(
+    'INSERT INTO participante_cirurgia (ato_cirurgico_id, sequencia, profissional_id, funcao_equipe_cirurgica_id, criado_em) VALUES (?, 2, ?, ?, ?)',
+    [ato, anestesista, funcaoAnestesia, agora],
   );
   await e.inserir(
-    'INSERT INTO participante_cirurgia (ato_cirurgico_id, sequencia, profissional_id, funcao_equipe_cirurgica_id, criado_em) VALUES (?, 1, ?, ?, ?)',
-    [ato, cirurgiao, funcao, agora],
+    'INSERT INTO participante_cirurgia (ato_cirurgico_id, sequencia, profissional_id, funcao_equipe_cirurgica_id, criado_em, excluido_em) VALUES (?, 3, ?, ?, ?, ?)',
+    [ato, outro, funcao, agora, agora],
   );
   const achados = [
     await cad('achado_cirurgico_padrao', `${P}-A1`),
@@ -204,7 +240,20 @@ async function montar(e: Escritor): Promise<Massa> {
     exige_conduta: false,
     evento_adverso: true,
   });
-  return { est, usuario: u1, outroUsuario: u2, paciente, cirurgiao, ato, achados, tipo, tipoSemConduta };
+  return {
+    est,
+    usuario: u1,
+    outroUsuario: u2,
+    anestesistaUsuario: u3,
+    est2,
+    ato2,
+    paciente,
+    cirurgiao,
+    ato,
+    achados,
+    tipo,
+    tipoSemConduta,
+  };
 }
 
 const TEXTO = 'Incisão mediana, dissecção por planos, hemostasia rigorosa e síntese por planos.';
@@ -227,8 +276,11 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
     const base = { versao: null, ato: m.ato, descricaoTecnica: 'curta', achados: [{ achado: m.achados[0] }] };
     const r1 = await exec('cirurgia.salvarDescricao', base);
     const id = Number(r1.resultado['descricao']);
-    // Fora da equipe: recusa.
+    // Participante retirado da equipe (excluido_em): fora da equipe. Anestesista da equipe viva: a função não descreve.
     expect(await codigo(exec('cirurgia.salvarDescricao', base, m.outroUsuario))).toBe('fora-da-equipe');
+    expect(await codigo(exec('cirurgia.salvarDescricao', base, m.anestesistaUsuario))).toBe(
+      'funcao-nao-descreve',
+    );
     // Assinar com a técnica curta: recusa com o código da pendência.
     expect(await codigo(exec('cirurgia.salvarDescricao', { ...base, versao: 1, assinar: true }))).toBe(
       'descricao-tecnica-curta',
@@ -355,7 +407,12 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
 
   it('leitura do ato e visão por paciente', async () => {
     const t = (await porta.tela(ctx(), m.ato))!;
-    expect(t.eu).toEqual({ profissional: m.cirurgiao, naEquipe: true });
+    expect(t.eu).toEqual({ profissional: m.cirurgiao, naEquipe: true, descreve: true });
+    // A equipe lida é a viva: o retirado não aparece; o anestesista aparece, sem descrever.
+    expect(t.equipe.map((x) => x.descreve)).toEqual([true, false]);
+    const tAnest = (await porta.tela(ctx(m.anestesistaUsuario), m.ato))!;
+    expect(tAnest.eu).toMatchObject({ naEquipe: true, descreve: false });
+    expect((await porta.tela(ctx(m.outroUsuario), m.ato))!.eu.naEquipe).toBe(false);
     expect(t.descricoes).toHaveLength(1);
     expect(t.descricoes[0]).toMatchObject({ situacao: 'retificada', achados: [{ achado: m.achados[1] }] });
     expect(t.descricoes[0]!.adendos).toHaveLength(2);
@@ -363,5 +420,53 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
     expect(await porta.tela(ctx(), 999999999)).toBeNull();
     const pac = await porta.doPaciente(ctx(), m.paciente);
     expect(pac[0]).toMatchObject({ ato: m.ato, situacao: 'retificada', adendos: 2, intercorrencias: 2 });
+  });
+
+  it('isolamento entre estabelecimentos: ato, descrição e leituras de outro estabelecimento', async () => {
+    const base = { versao: null, descricaoTecnica: TEXTO, achados: [] };
+    // Ato do estabelecimento 2 pela sessão no estabelecimento 1: recusa sem revelar o ato.
+    expect(await codigo(exec('cirurgia.salvarDescricao', { ...base, ato: m.ato2 }))).toBe(
+      'registro-inexistente',
+    );
+    expect(
+      await codigo(
+        exec('cirurgia.registrarIntercorrencia', {
+          ato: m.ato2,
+          tipo: m.tipo,
+          ocorridoEm: '2026-01-01 10:00',
+          fase: 'intraoperatorio',
+          gravidade: 'leve',
+          conduta: 'x',
+        }),
+      ),
+    ).toBe('registro-inexistente');
+    expect(await porta.tela(ctx(), m.ato2)).toBeNull();
+    // A descrição assinada no estabelecimento 2 (pela sessão de lá) não aceita adendo pela sessão do 1.
+    const r = await exec(
+      'cirurgia.salvarDescricao',
+      { ...base, ato: m.ato2, assinar: true },
+      m.usuario,
+      m.est2,
+    );
+    const id2 = Number(r.resultado['descricao']);
+    expect(
+      await codigo(
+        exec('cirurgia.adendoDescricao', {
+          descricao: id2,
+          texto: 'Complemento',
+          motivo: 'Omissão no texto',
+        }),
+      ),
+    ).toBe('registro-inexistente');
+    const [k] = await ler<{ k: number }>(
+      'SELECT COUNT(*) AS k FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id = ?',
+      [id2],
+    );
+    expect(Number(k!.k)).toBe(0);
+    // A visão por paciente só traz os atos do estabelecimento da sessão.
+    const p1 = await porta.doPaciente(ctx(), m.paciente);
+    expect(p1.map((x) => x.ato)).not.toContain(m.ato2);
+    const p2 = await porta.doPaciente(ctx(m.usuario, m.est2), m.paciente);
+    expect(p2.map((x) => x.ato)).toEqual([m.ato2]);
   });
 });

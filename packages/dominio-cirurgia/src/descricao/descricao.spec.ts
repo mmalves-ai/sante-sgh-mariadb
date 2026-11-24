@@ -5,6 +5,7 @@ import {
   conferirGravacaoDescricao,
   conferirIntercorrencia,
   ErroDescricaoCirurgica,
+  funcaoDescreveCirurgia,
   pendenciasDaDescricao,
 } from './descricao.js';
 
@@ -46,10 +47,26 @@ describe('descrição cirúrgica', () => {
       ),
     ).toEqual(['pecas-sem-descricao', 'sangramento-implausivel', 'achado-repetido']);
   });
-  it('só quem está na equipe do ato descreve', () => {
-    expect(codigo(() => conferirAutorDaDescricao(null, [1]))).toBe('sem-profissional');
-    expect(codigo(() => conferirAutorDaDescricao(9, [1, 2]))).toBe('fora-da-equipe');
-    expect(conferirAutorDaDescricao(2, [1, 2])).toBe(2);
+  it('só o cirurgião ou o auxiliar médico da equipe do ato descreve', () => {
+    const cir = (profissional: number) => ({ profissional, funcaoMedica: true, cirurgica: true });
+    expect(codigo(() => conferirAutorDaDescricao(null, [cir(1)]))).toBe('sem-profissional');
+    expect(codigo(() => conferirAutorDaDescricao(9, [cir(1), cir(2)]))).toBe('fora-da-equipe');
+    expect(conferirAutorDaDescricao(2, [cir(1), cir(2)])).toBe(2);
+    // Instrumentador (não médico) e anestesista (médico, mas não cirúrgico) na equipe: recusados.
+    const instrumentador = { profissional: 3, funcaoMedica: false, cirurgica: false };
+    const anestesista = { profissional: 4, funcaoMedica: true, cirurgica: false };
+    expect(codigo(() => conferirAutorDaDescricao(3, [cir(1), instrumentador]))).toBe('funcao-nao-descreve');
+    expect(codigo(() => conferirAutorDaDescricao(4, [cir(1), anestesista]))).toBe('funcao-nao-descreve');
+    // Com duas funções no ato, basta uma que descreva.
+    expect(conferirAutorDaDescricao(4, [anestesista, cir(4)])).toBe(4);
+  });
+  it('função que descreve: médica com grau TISS de cirurgião ou auxiliar', () => {
+    expect(funcaoDescreveCirurgia('00', true)).toBe(true);
+    expect(funcaoDescreveCirurgia('04', true)).toBe(true);
+    expect(funcaoDescreveCirurgia('06', true)).toBe(false);
+    expect(funcaoDescreveCirurgia('05', false)).toBe(false);
+    expect(funcaoDescreveCirurgia('00', false)).toBe(false);
+    expect(funcaoDescreveCirurgia(null, true)).toBe(false);
   });
   it('assinada não muda; outro cirurgião não altera; versão vista', () => {
     const p = { profissional: 5, versao: 1, assinar: false };

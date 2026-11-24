@@ -81,14 +81,43 @@ const TEXTOS: Record<PendenciaDescricao, string> = {
 };
 export const textoPendenciaDescricao = (p: PendenciaDescricao) => TEXTOS[p];
 
-/** O profissional da sessão participou do ato (é da equipe registrada)? Sem vínculo de profissional, recusa. */
-export function conferirAutorDaDescricao(profissional: number | null, equipe: readonly number[]): number {
+/** Graus de participação da terminologia TISS que descrevem a cirurgia: cirurgião (00) e auxiliares médicos (01 a 04). */
+export const GRAUS_TISS_CIRURGIAO = ['00', '01', '02', '03', '04'] as const;
+
+/** Um participante vivo da equipe do ato, com a função que exerce. */
+export interface MembroEquipeDescricao {
+  readonly profissional: number;
+  /** A função é exercida por médico (função da equipe marcada como médica). */
+  readonly funcaoMedica: boolean;
+  /** A função é de cirurgião ou auxiliar cirúrgico (grau TISS 00 a 04), não de anestesia, instrumentação etc. */
+  readonly cirurgica: boolean;
+}
+
+/** A função descreve a cirurgia? Só a função médica com grau de cirurgião ou de auxiliar cirúrgico. */
+export const funcaoDescreveCirurgia = (grauTiss: string | null, funcaoMedica: boolean): boolean =>
+  funcaoMedica && grauTiss !== null && (GRAUS_TISS_CIRURGIAO as readonly string[]).includes(grauTiss.trim());
+
+/**
+ * O profissional da sessão é cirurgião (ou auxiliar médico) na equipe viva do ato? Sem vínculo de profissional,
+ * recusa; fora da equipe, recusa; na equipe só em função que não descreve a cirurgia (anestesista, instrumentador,
+ * circulante, perfusionista), recusa.
+ */
+export function conferirAutorDaDescricao(
+  profissional: number | null,
+  equipe: readonly MembroEquipeDescricao[],
+): number {
   if (profissional === null)
     throw recusa('sem-profissional', 'A sua conta não tem vínculo de profissional neste estabelecimento.');
-  if (!equipe.includes(profissional))
+  const funcoes = equipe.filter((m) => m.profissional === profissional);
+  if (funcoes.length === 0)
     throw recusa(
       'fora-da-equipe',
       'Só quem está na equipe registrada do ato descreve a cirurgia. Confira a equipe no registro do ato.',
+    );
+  if (!funcoes.some((m) => m.funcaoMedica && m.cirurgica))
+    throw recusa(
+      'funcao-nao-descreve',
+      'Só o cirurgião ou o auxiliar médico da equipe descreve a cirurgia; a sua função no ato não descreve.',
     );
   return profissional;
 }

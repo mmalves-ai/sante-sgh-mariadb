@@ -10,6 +10,7 @@ import {
   recusa,
   type ResultadoOperacao,
 } from '@sgh/nucleo';
+import { funcaoDescreveCirurgia } from '@sgh/dominio-cirurgia';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, n, nn, textoOuNulo, texto, verdadeiro } from './banco-apoio.js';
@@ -47,8 +48,9 @@ export interface TelaDescricaoCirurgica {
     entrada: string | null;
     saida: string | null;
   };
-  readonly eu: { profissional: number | null; naEquipe: boolean };
-  readonly equipe: { profissional: number; nome: string; funcao: string }[];
+  /** naEquipe: está na equipe viva do ato; descreve: a função dele descreve a cirurgia (cirurgião ou auxiliar médico). */
+  readonly eu: { profissional: number | null; naEquipe: boolean; descreve: boolean };
+  readonly equipe: { profissional: number; nome: string; funcao: string; descreve: boolean }[];
   readonly descricoes: DescricaoLida[];
   readonly intercorrencias: {
     sequencia: number;
@@ -105,6 +107,8 @@ const SQL_ATO = `
     JOIN sala_cirurgica s ON s.id = a.sala_cirurgica_id
    WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'`;
 const NOME_PROF = `COALESCE(pr.nome_exibicao, pfp.nome)`;
+const descreve = (e: Record<string, unknown>) =>
+  funcaoDescreveCirurgia(textoOuNulo(e['grau_participacao_tiss']), verdadeiro(e['funcao_medica']));
 
 export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
   readonly destino = 'banco' as const;
@@ -145,12 +149,13 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
         [c.usuario, est],
       );
       const equipe = await l.consultar(
-        `SELECT pc.profissional_id, ${NOME_PROF} AS nome, f.descricao AS funcao
+        `SELECT pc.profissional_id, ${NOME_PROF} AS nome, f.descricao AS funcao, f.funcao_medica,
+                f.grau_participacao_tiss
            FROM participante_cirurgia pc
            JOIN profissional pr ON pr.id = pc.profissional_id
            JOIN pessoa_fisica pfp ON pfp.id = pr.pessoa_fisica_id
-           LEFT JOIN funcao_equipe_cirurgica f ON f.id = pc.funcao_equipe_cirurgica_id
-          WHERE pc.ato_cirurgico_id = ? ORDER BY pc.id`,
+           JOIN funcao_equipe_cirurgica f ON f.id = pc.funcao_equipe_cirurgica_id
+          WHERE pc.ato_cirurgico_id = ? AND pc.excluido_em IS NULL ORDER BY pc.id`,
         [ato],
       );
       const ds = await l.consultar(
@@ -231,11 +236,15 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
         eu: {
           profissional,
           naEquipe: profissional !== null && equipe.some((e) => n(e['profissional_id']) === profissional),
+          descreve:
+            profissional !== null &&
+            equipe.some((e) => n(e['profissional_id']) === profissional && descreve(e)),
         },
         equipe: equipe.map((e) => ({
           profissional: n(e['profissional_id']),
           nome: texto(e['nome']),
           funcao: texto(e['funcao']),
+          descreve: descreve(e),
         })),
         descricoes,
         intercorrencias: ints.map((i) => ({
