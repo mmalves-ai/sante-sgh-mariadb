@@ -232,7 +232,7 @@ export class LeiturasRevisaoComplementoQ3 {
           WHERE x.id = ?`,
         [est, id, id],
       );
-      return r ? (await prontuarios(l, [r]))[0] ?? null : null;
+      return r ? ((await prontuarios(l, [r]))[0] ?? null) : null;
     });
   }
 
@@ -309,9 +309,13 @@ async function publicarChecklistRevisao(
   const codigo = codigoChecklistRevisao(p.comissao);
   const modelo =
     (
-      await tx.consultarParaAtualizar('SELECT id FROM modelo_checklist_qualidade WHERE codigo = ?', [codigo], {
-        teto: 1,
-      })
+      await tx.consultarParaAtualizar(
+        'SELECT id FROM modelo_checklist_qualidade WHERE codigo = ?',
+        [codigo],
+        {
+          teto: 1,
+        },
+      )
     )[0]?.['id'] ??
     (await tx.incluir('modelo_checklist_qualidade', {
       codigo,

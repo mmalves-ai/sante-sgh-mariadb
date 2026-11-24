@@ -57,78 +57,81 @@ describe.skipIf(SEM_BANCO_QUA)(
       leituras = new LeiturasRevisaoComplementoQ3(m.nucleo);
       c = ctxBanco(m.est, m.codigoEst, m.usuario);
       cOutro = ctxBanco(m.outro, m.codigoOutro, m.usuario);
-      await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-teste-qualidade-q3' }, async (e) => {
-        const hoje = new Date();
-        const garantir = async (sel: string, p: unknown[], ins: string, pi: unknown[]) =>
-          (await e.uma<{ id: number }>(sel, p))?.id ?? e.inserir(ins, pi);
-        const tipoComissao = await garantir(
-          'SELECT id FROM tipo_comissao WHERE codigo = ?',
-          ['sintq3_rev'],
-          "INSERT INTO tipo_comissao (codigo, descricao, criado_em) VALUES ('sintq3_rev', 'Revisão sintética', ?)",
-          [hoje],
-        );
-        const comissao = await e.inserir(
-          'INSERT INTO comissao_hospitalar (estabelecimento_id, tipo_comissao_id, nome, criado_em) VALUES (?, ?, ?, ?)',
-          [m.est, tipoComissao, `COMISSAO SINTETICA Q3 ${NUM}`, hoje],
-        );
-        const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
-          'PESSOA SINTETICA Q3',
-          hoje,
-        ]);
-        const prof = await e.inserir(
-          "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
-          [pf, hoje],
-        );
-        const vinculo = await e.inserir(
-          'INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
-          [m.gestor, prof, '2026-01-01', hoje],
-        );
-        const paciente = await e.inserir(
-          "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
-          [pf, NUM, hoje],
-        );
-        const categoria = await garantir(
-          'SELECT id FROM categoria_atendimento WHERE codigo = ?',
-          ['sintq3_int'],
-          "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES ('sintq3_int', 'Categoria sintética', 'internacao', ?)",
-          [hoje],
-        );
-        const carater = await garantir(
-          'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
-          ['sq3'],
-          "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('sq3', 'Caráter sintético', 'teste', ?)",
-          [hoje],
-        );
-        const fonte = await garantir(
-          'SELECT id FROM fonte_pagadora WHERE codigo = ?',
-          ['SINTQ3'],
-          "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES ('SINTQ3', 'Fonte sintética Q3', 'particular', ?)",
-          [hoje],
-        );
-        const atendimento = (k: string) =>
-          e.inserir(
-            `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+      await m.nucleo.escrever(
+        { cliente: CLIENTE_QUA, correlacao: 'preparo-teste-qualidade-q3' },
+        async (e) => {
+          const hoje = new Date();
+          const garantir = async (sel: string, p: unknown[], ins: string, pi: unknown[]) =>
+            (await e.uma<{ id: number }>(sel, p))?.id ?? e.inserir(ins, pi);
+          const tipoComissao = await garantir(
+            'SELECT id FROM tipo_comissao WHERE codigo = ?',
+            ['sintq3_rev'],
+            "INSERT INTO tipo_comissao (codigo, descricao, criado_em) VALUES ('sintq3_rev', 'Revisão sintética', ?)",
+            [hoje],
+          );
+          const comissao = await e.inserir(
+            'INSERT INTO comissao_hospitalar (estabelecimento_id, tipo_comissao_id, nome, criado_em) VALUES (?, ?, ?, ?)',
+            [m.est, tipoComissao, `COMISSAO SINTETICA Q3 ${NUM}`, hoje],
+          );
+          const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+            'PESSOA SINTETICA Q3',
+            hoje,
+          ]);
+          const prof = await e.inserir(
+            "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+            [pf, hoje],
+          );
+          const vinculo = await e.inserir(
+            'INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+            [m.gestor, prof, '2026-01-01', hoje],
+          );
+          const paciente = await e.inserir(
+            "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+            [pf, NUM, hoje],
+          );
+          const categoria = await garantir(
+            'SELECT id FROM categoria_atendimento WHERE codigo = ?',
+            ['sintq3_int'],
+            "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES ('sintq3_int', 'Categoria sintética', 'internacao', ?)",
+            [hoje],
+          );
+          const carater = await garantir(
+            'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+            ['sq3'],
+            "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('sq3', 'Caráter sintético', 'teste', ?)",
+            [hoje],
+          );
+          const fonte = await garantir(
+            'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+            ['SINTQ3'],
+            "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES ('SINTQ3', 'Fonte sintética Q3', 'particular', ?)",
+            [hoje],
+          );
+          const atendimento = (k: string) =>
+            e.inserir(
+              `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
                carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-            [m.est, `${NUM}${k}`, paciente, categoria, carater, fonte, prof, hoje, hoje],
+              [m.est, `${NUM}${k}`, paciente, categoria, carater, fonte, prof, hoje, hoje],
+            );
+          const tipoPendencia = await garantir(
+            'SELECT id FROM tipo_pendencia_prontuario WHERE codigo = ?',
+            ['sintq3_rev'],
+            "INSERT INTO tipo_pendencia_prontuario (codigo, descricao, categoria, criado_em) VALUES ('sintq3_rev', 'Revisão sintética', 'documento', ?)",
+            [hoje],
           );
-        const tipoPendencia = await garantir(
-          'SELECT id FROM tipo_pendencia_prontuario WHERE codigo = ?',
-          ['sintq3_rev'],
-          "INSERT INTO tipo_pendencia_prontuario (codigo, descricao, categoria, criado_em) VALUES ('sintq3_rev', 'Revisão sintética', 'documento', ?)",
-          [hoje],
-        );
-        ids = {
-          comissao,
-          pf,
-          prof,
-          vinculo,
-          paciente,
-          atendimento1: await atendimento('1'),
-          atendimento2: await atendimento('2'),
-          tipoPendencia,
-        };
-      });
+          ids = {
+            comissao,
+            pf,
+            prof,
+            vinculo,
+            paciente,
+            atendimento1: await atendimento('1'),
+            atendimento2: await atendimento('2'),
+            tipoPendencia,
+          };
+        },
+      );
     });
 
     afterAll(async () => {
@@ -147,7 +150,9 @@ describe.skipIf(SEM_BANCO_QUA)(
               ids['atendimento2'],
             ]);
             await run('DELETE FROM revisao_prontuario WHERE comissao_hospitalar_id = ?', [ids['comissao']]);
-            await run('DELETE FROM sorteio_revisao_prontuario WHERE comissao_hospitalar_id = ?', [ids['comissao']]);
+            await run('DELETE FROM sorteio_revisao_prontuario WHERE comissao_hospitalar_id = ?', [
+              ids['comissao'],
+            ]);
             await run(
               `DELETE i FROM modelo_checklist_qualidade_item i
                  JOIN modelo_checklist_qualidade_versao v ON v.id = i.modelo_checklist_qualidade_versao_id
@@ -162,7 +167,10 @@ describe.skipIf(SEM_BANCO_QUA)(
             await run('DELETE FROM modelo_checklist_qualidade WHERE codigo = ?', [
               `revisao_prontuario_${ids['comissao']}`,
             ]);
-            await run('DELETE FROM atendimento WHERE id IN (?, ?)', [ids['atendimento1'], ids['atendimento2']]);
+            await run('DELETE FROM atendimento WHERE id IN (?, ?)', [
+              ids['atendimento1'],
+              ids['atendimento2'],
+            ]);
             await run('DELETE FROM paciente WHERE id = ?', [ids['paciente']]);
             await run('DELETE FROM usuario_profissional WHERE id = ?', [ids['vinculo']]);
             await run('DELETE FROM comissao_hospitalar WHERE id = ?', [ids['comissao']]);
@@ -180,15 +188,29 @@ describe.skipIf(SEM_BANCO_QUA)(
 
     it('publicarChecklistRevisao: a primeira revisão fica vigente; a seguinte substitui a vigente conferida pela versão', async () => {
       const r1 = await gravar((g) =>
-        g.publicarChecklistRevisao({ comissao: ids['comissao']!, itens, motivo: null, vigente: null, agora, usuario: m.login }),
+        g.publicarChecklistRevisao({
+          comissao: ids['comissao']!,
+          itens,
+          motivo: null,
+          vigente: null,
+          agora,
+          usuario: m.login,
+        }),
       );
       expect(r1.revisao).toBe(1);
       // Sem citar a vigente: recusa (nunca duas vigentes).
       await expect(
         gravar((g) =>
-          g.publicarChecklistRevisao({ comissao: ids['comissao']!, itens, motivo: 'x', vigente: null, agora, usuario: m.login }),
+          g.publicarChecklistRevisao({
+            comissao: ids['comissao']!,
+            itens,
+            motivo: 'x',
+            vigente: null,
+            agora,
+            usuario: m.login,
+          }),
         ),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ problema: { status: 409 } });
       // Versão desatualizada da vigente: recusa.
       await expect(
         gravar((g) =>
@@ -201,7 +223,7 @@ describe.skipIf(SEM_BANCO_QUA)(
             usuario: m.login,
           }),
         ),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ problema: { status: 409 } });
       const r2 = await gravar((g) =>
         g.publicarChecklistRevisao({
           comissao: ids['comissao']!,
@@ -265,7 +287,16 @@ describe.skipIf(SEM_BANCO_QUA)(
           `INSERT INTO pendencia_prontuario (estabelecimento_id, atendimento_id, paciente_id, tipo_pendencia_prontuario_id,
              responsavel_profissional_id, descricao, apontada_em, apontada_por_usuario_id, prazo_em, criado_em)
            VALUES (?, ?, ?, ?, ?, 'Falta assinatura.', ?, ?, '2026-11-10', ?)`,
-          [m.est, ids['atendimento1'], ids['paciente'], ids['tipoPendencia'], ids['prof'], hoje, m.usuario, hoje],
+          [
+            m.est,
+            ids['atendimento1'],
+            ids['paciente'],
+            ids['tipoPendencia'],
+            ids['prof'],
+            hoje,
+            m.usuario,
+            hoje,
+          ],
         );
         const item = await e.uma<{ id: number }>(
           "SELECT id FROM modelo_checklist_qualidade_item WHERE modelo_checklist_qualidade_versao_id = ? AND codigo = 'assinatura'",
@@ -319,11 +350,23 @@ describe.skipIf(SEM_BANCO_QUA)(
       // Responder: versão errada recusa; a certa resolve, com quem e quando.
       await expect(
         gravar((g) =>
-          g.responderPendenciaRevisao({ id: ids['pend']!, versao: 7, resposta: 'Assinado.', agora, usuario: m.login }),
+          g.responderPendenciaRevisao({
+            id: ids['pend']!,
+            versao: 7,
+            resposta: 'Assinado.',
+            agora,
+            usuario: m.login,
+          }),
         ),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ problema: { status: 409 } });
       const r = await gravar((g) =>
-        g.responderPendenciaRevisao({ id: ids['pend']!, versao: 1, resposta: 'Assinado.', agora, usuario: m.login }),
+        g.responderPendenciaRevisao({
+          id: ids['pend']!,
+          versao: 1,
+          resposta: 'Assinado.',
+          agora,
+          usuario: m.login,
+        }),
       );
       expect(r.versao).toBe(2);
       const lida = await leituras.pendenciaRevisao(c, ids['pend']!);
@@ -337,9 +380,15 @@ describe.skipIf(SEM_BANCO_QUA)(
       // A já resolvida não se responde de novo; o outro estabelecimento não a alcança.
       await expect(
         gravar((g) =>
-          g.responderPendenciaRevisao({ id: ids['pend']!, versao: 2, resposta: 'De novo.', agora, usuario: m.login }),
+          g.responderPendenciaRevisao({
+            id: ids['pend']!,
+            versao: 2,
+            resposta: 'De novo.',
+            agora,
+            usuario: m.login,
+          }),
         ),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ problema: { status: 409 } });
       expect(await leituras.pendenciaRevisao(cOutro, ids['pend']!)).toBeNull();
     });
   },
