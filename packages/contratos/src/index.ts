@@ -90,7 +90,6 @@ export * from './pep/prontuario.js';
 export * from './permissoes/pep.js';
 // M23: documentos, exames, resultados e multiprofissional.
 export * from './pep/documentos.js';
-export * from './pep/impressao-prontuario.js';
 // M14: domínios em massa (lote gerado), consultas somente leitura de todas as tabelas e matriz fechada.
 export * from './consultas/tipos.js';
 export * from './consultas/catalogo.js';
