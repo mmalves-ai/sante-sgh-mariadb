@@ -1733,6 +1733,7 @@ export class ServicoDocumentos {
       atendimento: e.atendimento,
       tipo: e.tipo ?? null,
       procedimento: e.procedimento,
+      texto: e.texto ?? null,
       cbo: prof.cbo,
       hashConteudo: await hashCanonico({
         paciente,

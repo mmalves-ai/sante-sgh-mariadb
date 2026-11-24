@@ -221,6 +221,8 @@ export interface PortaDocumentos {
       cbo: number | null;
       hashConteudo: string;
       comoSuporte?: boolean;
+      /** Texto do termo apresentado ao paciente; sem ele, o do modelo (ou o procedimento). */
+      texto?: string | null;
     },
   ): Promise<{ id: number; documento: number }>;
   mudarSituacaoTcle(
