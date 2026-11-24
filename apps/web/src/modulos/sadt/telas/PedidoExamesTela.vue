@@ -220,9 +220,12 @@ async function verEventos(item: number): Promise<void> {
     <div v-if="atendimento === null" class="linha">
       <label for="pedido-busca">{{ t('sadt.pedido.buscarPaciente') }}</label>
       <input id="pedido-busca" v-model="busca" data-testid="pedido-busca" @keyup.enter="buscar" />
-      <SanteBotao :disabled="busca.trim().length < 2" data-testid="pedido-buscar" @click="buscar">
-        {{ t('sadt.pedido.buscar') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.buscar')"
+        :desabilitado="busca.trim().length < 2"
+        data-testid="pedido-buscar"
+        @acionar="buscar"
+      />
     </div>
     <ul v-if="atendimento === null && encontrados" data-testid="pedido-encontrados">
       <li v-if="encontrados.length === 0">{{ t('sadt.pedido.nenhumAtendimento') }}</li>
@@ -230,9 +233,11 @@ async function verEventos(item: number): Promise<void> {
         {{ a.nome }} ·
         {{ a.idadeAnos === null ? t('sadt.pedido.semIdade') : t('sadt.pedido.idade', { n: a.idadeAnos }) }} ·
         {{ t('sadt.pedido.atendimento') }} {{ a.numero }}
-        <SanteBotao :data-testid="`pedido-escolher-${a.id}`" @click="escolher(a)">
-          {{ t('sadt.pedido.escolher') }}
-        </SanteBotao>
+        <SanteBotao
+          :rotulo="t('sadt.pedido.escolher')"
+          :data-testid="`pedido-escolher-${a.id}`"
+          @acionar="escolher(a)"
+        />
       </li>
     </ul>
 
@@ -243,9 +248,7 @@ async function verEventos(item: number): Promise<void> {
           <input v-model="pacienteConfirmado" type="checkbox" data-testid="pedido-paciente-confirmado" />
           {{ t('sadt.pedido.pacienteConfirmado') }}
         </label>
-        <SanteBotao data-testid="pedido-trocar" @click="trocar">{{
-          t('sadt.pedido.trocarPaciente')
-        }}</SanteBotao>
+        <SanteBotao :rotulo="t('sadt.pedido.trocarPaciente')" data-testid="pedido-trocar" @acionar="trocar" />
       </header>
 
       <div class="linha">
@@ -319,9 +322,12 @@ async function verEventos(item: number): Promise<void> {
           />
         </template>
       </div>
-      <SanteBotao :disabled="!podeGravar" data-testid="pedido-gravar" @click="gravar">
-        {{ t('sadt.pedido.gravar') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.gravar')"
+        :desabilitado="!podeGravar"
+        data-testid="pedido-gravar"
+        @acionar="gravar"
+      />
     </template>
     <p v-if="mensagem" role="status" data-testid="pedido-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />
@@ -352,16 +358,17 @@ async function verEventos(item: number): Promise<void> {
               maxlength="500"
             />
             <SanteBotao
-              :disabled="!motivoCancelar[i.id]"
+              :rotulo="t('sadt.pedido.cancelar')"
+              :desabilitado="!motivoCancelar[i.id]"
               :data-testid="`pedido-cancelar-${i.id}`"
-              @click="cancelar(i.id)"
-            >
-              {{ t('sadt.pedido.cancelar') }}
-            </SanteBotao>
+              @acionar="cancelar(i.id)"
+            />
           </template>
-          <SanteBotao :data-testid="`pedido-eventos-${i.id}`" @click="verEventos(i.id)">
-            {{ t('sadt.pedido.linhaDoTempo') }}
-          </SanteBotao>
+          <SanteBotao
+            :rotulo="t('sadt.pedido.linhaDoTempo')"
+            :data-testid="`pedido-eventos-${i.id}`"
+            @acionar="verEventos(i.id)"
+          />
           <ol v-if="linhaDoTempo[i.id]" :data-testid="`pedido-linha-${i.id}`">
             <li v-for="(ev, k) in linhaDoTempo[i.id]" :key="k">
               {{ quando(ev.em) }} · {{ ev.evento }}<template v-if="ev.motivo"> · {{ ev.motivo }}</template>
@@ -388,7 +395,7 @@ async function verEventos(item: number): Promise<void> {
 }
 .cabecalho {
   padding: 0.5rem;
-  border: 1px solid var(--sante-borda, #ccc);
+  border: 1px solid var(--sgh-borda);
 }
 fieldset {
   display: grid;
@@ -399,6 +406,6 @@ fieldset {
 }
 .avisos .bloqueio,
 .bloqueio {
-  color: var(--sante-erro, #b00020);
+  color: var(--sgh-perigo);
 }
 </style>

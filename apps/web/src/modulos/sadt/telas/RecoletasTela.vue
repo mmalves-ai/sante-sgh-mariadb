@@ -115,12 +115,18 @@ const cancelar = (id: number) =>
         :opcoes="opcoes"
         data-testid="recoleta-motivo"
       />
-      <SanteBotao :disabled="!codigo || !motivo" data-testid="recoleta-pedir" @click="pedir">
-        {{ t('sadt.pedido.pedirRecoleta') }}
-      </SanteBotao>
-      <SanteBotao :disabled="!codigo" data-testid="recoleta-aliquotar" @click="aliquotar">
-        {{ t('sadt.pedido.gerarAliquotas') }}
-      </SanteBotao>
+      <SanteBotao
+        :rotulo="t('sadt.pedido.pedirRecoleta')"
+        :desabilitado="!codigo || !motivo"
+        data-testid="recoleta-pedir"
+        @acionar="pedir"
+      />
+      <SanteBotao
+        :rotulo="t('sadt.pedido.gerarAliquotas')"
+        :desabilitado="!codigo"
+        data-testid="recoleta-aliquotar"
+        @acionar="aliquotar"
+      />
     </div>
     <p v-if="mensagem" role="status" data-testid="recoleta-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />
@@ -155,12 +161,11 @@ const cancelar = (id: number) =>
           :data-testid="`recoleta-estacao-${r.id}`"
         />
         <SanteBotao
-          :disabled="!identificadores[r.id] || !(estacao[r.id] ?? '').trim()"
+          :rotulo="t('sadt.pedido.coletar')"
+          :desabilitado="!identificadores[r.id] || !(estacao[r.id] ?? '').trim()"
           :data-testid="`recoleta-coletar-${r.id}`"
-          @click="coletar(r.id)"
-        >
-          {{ t('sadt.pedido.coletar') }}
-        </SanteBotao>
+          @acionar="coletar(r.id)"
+        />
       </div>
       <div class="linha">
         <input v-model="motivoCancelar[r.id]" :aria-label="t('sadt.pedido.motivo')" maxlength="500" />
@@ -179,9 +184,11 @@ const cancelar = (id: number) =>
           :opcoes="opcoesMotivoExames"
           @update:model-value="(v: string) => (motivoExames = { ...motivoExames, [r.id]: v })"
         />
-        <SanteBotao :disabled="!podeCancelar(r.id)" @click="cancelar(r.id)">
-          {{ t('sadt.pedido.cancelarRecoleta') }}
-        </SanteBotao>
+        <SanteBotao
+          :rotulo="t('sadt.pedido.cancelarRecoleta')"
+          :desabilitado="!podeCancelar(r.id)"
+          @acionar="cancelar(r.id)"
+        />
       </div>
     </article>
   </section>

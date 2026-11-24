@@ -4,7 +4,7 @@
 // (o do médico primeiro) com os campos preenchidos pelas medidas, o texto, e "salvar e assinar" num clique. Depois de
 // assinado, o texto só muda por retificação com motivo; o histórico de versões fica ao lado.
 import { faixaDaGrandezaDoPaciente, superficieCorporal } from '@sgh/dominio-sadt';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
@@ -64,6 +64,19 @@ const roteador = useRouter();
 const itemTexto = ref(String(rota.query['item'] ?? ''));
 const dados = ref<LaudoEmRedacao | null>(null);
 const motivos = ref<{ id: number; descricao: string }[]>([]);
+const vazio = { valor: '', rotulo: '—' };
+const opModelos = computed(() => [
+  vazio,
+  ...(dados.value?.modelos ?? []).map((m) => ({ valor: String(m.id), rotulo: m.nome })),
+]);
+const opResultados = (Object.keys(M.resultados) as (keyof typeof M.resultados)[]).map((valor) => ({
+  valor,
+  rotulo: M.resultados[valor],
+}));
+const opMotivos = computed(() => [
+  vazio,
+  ...motivos.value.map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+]);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const faltam = ref<string[]>([]);
@@ -232,7 +245,7 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
     <form class="linha" @submit.prevent="carregar">
       <label for="laudo-item">{{ M.item }}</label>
       <input id="laudo-item" v-model="itemTexto" inputmode="numeric" data-testid="laudo-item" />
-      <SanteBotao type="submit" data-testid="laudo-abrir">{{ M.abrir }}</SanteBotao>
+      <SanteBotao :rotulo="M.abrir" tipo="submit" data-testid="laudo-abrir" />
     </form>
     <ErroSadt v-if="erro" :erro="erro" />
     <p v-if="mensagem" role="status" data-testid="laudo-mensagem">{{ mensagem }}</p>
@@ -275,19 +288,18 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
             </div>
           </fieldset>
           <div class="linha">
-            <label>
-              {{ M.modelo }}
-              <select v-model="f.modelo" data-testid="laudo-modelo">
-                <option value="">—</option>
-                <option v-for="m in dados.modelos" :key="m.id" :value="String(m.id)">{{ m.nome }}</option>
-              </select>
-            </label>
+            <SanteSelecao
+              v-model="f.modelo"
+              :rotulo="M.modelo"
+              :opcoes="opModelos"
+              data-testid="laudo-modelo"
+            />
             <SanteBotao
-              :disabled="!f.modelo || !podeEditar"
+              :rotulo="M.aplicar"
+              :desabilitado="!f.modelo || !podeEditar"
               data-testid="laudo-aplicar"
-              @click="aplicarModelo"
-              >{{ M.aplicar }}</SanteBotao
-            >
+              @acionar="aplicarModelo"
+            />
           </div>
           <p v-if="faltam.length" role="note">{{ M.faltam.replace('{c}', faltam.join(', ')) }}</p>
           <label
@@ -295,12 +307,12 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
             <textarea v-model="f.texto" rows="14" :disabled="!podeEditar" data-testid="laudo-texto" />
           </label>
           <div class="linha">
-            <label>
-              {{ M.resultado }}
-              <select v-model="f.resultado" data-testid="laudo-resultado">
-                <option v-for="(r, k) in M.resultados" :key="k" :value="k">{{ r }}</option>
-              </select>
-            </label>
+            <SanteSelecao
+              v-model="f.resultado"
+              :rotulo="M.resultado"
+              :opcoes="opResultados"
+              data-testid="laudo-resultado"
+            />
             <label
               ><input v-model="f.achadoCritico" type="checkbox" data-testid="laudo-critico" />
               {{ M.critico }}</label
@@ -313,27 +325,29 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
             />
           </div>
           <div v-if="dados.pode.salvar" class="linha">
-            <SanteBotao data-testid="laudo-salvar" @click="salvar(false)">{{ M.salvar }}</SanteBotao>
-            <SanteBotao data-testid="laudo-revisao" @click="salvar(true)">{{ M.revisao }}</SanteBotao>
-            <SanteBotao data-testid="laudo-assinar" @click="assinar">{{ M.assinar }}</SanteBotao>
+            <SanteBotao :rotulo="M.salvar" data-testid="laudo-salvar" @acionar="salvar(false)" />
+            <SanteBotao :rotulo="M.revisao" data-testid="laudo-revisao" @acionar="salvar(true)" />
+            <SanteBotao :rotulo="M.assinar" data-testid="laudo-assinar" @acionar="assinar" />
           </div>
           <div v-if="dados.pode.retificar" class="linha">
-            <label>
-              {{ M.motivo }}
-              <select v-model="f.motivo" data-testid="laudo-motivo">
-                <option value="">—</option>
-                <option v-for="m in motivos" :key="m.id" :value="String(m.id)">{{ m.descricao }}</option>
-              </select>
-            </label>
+            <SanteSelecao
+              v-model="f.motivo"
+              :rotulo="M.motivo"
+              :opcoes="opMotivos"
+              data-testid="laudo-motivo"
+            />
             <input
               v-model="f.motivoTexto"
               :aria-label="M.motivoTexto"
               :placeholder="M.motivoTexto"
               maxlength="500"
             />
-            <SanteBotao :disabled="!motivoOk" data-testid="laudo-retificar" @click="retificar">{{
-              M.retificar
-            }}</SanteBotao>
+            <SanteBotao
+              :rotulo="M.retificar"
+              :desabilitado="!motivoOk"
+              data-testid="laudo-retificar"
+              @acionar="retificar"
+            />
           </div>
         </div>
         <aside class="versoes" data-testid="laudo-versoes">
@@ -378,7 +392,7 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
   align-items: center;
 }
 .medida.fora input {
-  border-color: var(--sante-cor-alerta, #b45309);
+  border-color: var(--sgh-alerta);
 }
 textarea {
   width: 100%;

@@ -6,7 +6,7 @@
 // marcados e os obrigatórios num só clique, cada um com as cópias da regra; os sob demanda podem ser marcados; o
 // obrigatório ainda não emitido fica em aviso.
 import { MOMENTOS_DOCUMENTO_INTERNACAO, obrigatoriosPendentes } from '@sgh/dominio-internacao';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -29,6 +29,12 @@ const IMPRESSOS = [
 ] as const;
 const copias = ref<Record<string, number>>({ ficha: 1, pulseira: 1, etiqueta: 1 });
 const momento = ref<string>('admissao');
+const opMomentos = computed(() =>
+  MOMENTOS_DOCUMENTO_INTERNACAO.map((m) => ({
+    valor: m as string,
+    rotulo: t(`adt.documentos.momentos.${m}`),
+  })),
+);
 const fichas = useQuery({
   queryKey: computed(() => ['adt', 'fichas', reg.value, momento.value]),
   queryFn: () => lerFichasDoMomento(reg.value, momento.value),
@@ -153,12 +159,12 @@ const configuracao = rotaDoSubitem('internacao');
       </ul>
       <section class="painel" aria-labelledby="imp-fichas">
         <h2 id="imp-fichas">{{ t('adt.impressos.configuradas') }}</h2>
-        <label for="imp-momento">{{ t('adt.impressos.momento') }}</label>
-        <select id="imp-momento" v-model="momento" data-testid="imp-momento">
-          <option v-for="m in MOMENTOS_DOCUMENTO_INTERNACAO" :key="m" :value="m">
-            {{ t(`adt.documentos.momentos.${m}`) }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="momento"
+          :rotulo="t('adt.impressos.momento')"
+          :opcoes="opMomentos"
+          data-testid="imp-momento"
+        />
         <ErroAdt v-if="fichas.isError.value" :erro="fichas.error.value" />
         <p v-else-if="fichas.data.value && fichas.data.value.fichas.length === 0">{{ t('adt.nenhum') }}</p>
         <ul v-else-if="fichas.data.value" class="lista-simples" data-testid="imp-fichas">

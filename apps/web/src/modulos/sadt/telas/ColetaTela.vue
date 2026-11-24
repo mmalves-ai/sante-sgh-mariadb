@@ -227,14 +227,13 @@ async function coletar(indice: number): Promise<void> {
                 data-testid="mapa-motivo"
               />
               <SanteBotao
-                :disabled="
+                :rotulo="retidoDe(b, e.id) !== null ? t('sadt.coleta.soltar') : t('sadt.coleta.reter')"
+                :desabilitado="
                   ocupado || (retidoDe(b, e.id) === null && (motivoReter[e.id] ?? '').trim().length < 5)
                 "
                 data-testid="mapa-reter"
-                @click="alternarRetencao(e.id, retidoDe(b, e.id) !== null)"
-              >
-                {{ retidoDe(b, e.id) !== null ? t('sadt.coleta.soltar') : t('sadt.coleta.reter') }}
-              </SanteBotao>
+                @acionar="alternarRetencao(e.id, retidoDe(b, e.id) !== null)"
+              />
             </template>
           </li>
         </ul>

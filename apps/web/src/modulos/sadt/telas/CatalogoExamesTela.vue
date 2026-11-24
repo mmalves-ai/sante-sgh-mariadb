@@ -16,7 +16,7 @@ import {
   validarLimitesFaixa,
   type FalhaCatalogo,
 } from '@sgh/dominio-sadt';
-import { SanteBotao } from '@sgh/ui';
+import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { z } from 'zod';
 import { enviar, ler } from '../../exames/api-exames.js';
@@ -99,6 +99,23 @@ const ficha = ref<Linha | null>(null);
 const erro = ref('');
 const aviso = ref('');
 const opcoes = ref<Record<string, Opcao[]>>({});
+// Combos (SanteSelecao): o valor vazio é '' (como o formulário sempre mandou); a ficha guarda o valor como veio.
+type ValorCombo = string | number | null;
+const valorDe = (l: Linha, k: string): ValorCombo => {
+  const v = l[k];
+  return typeof v === 'string' || typeof v === 'number' ? v : '';
+};
+const comVazio = (vazio: string | undefined) =>
+  vazio === undefined ? [] : [{ valor: '' as ValorCombo, rotulo: vazio }];
+const opFixas = (xs: readonly string[], vazio?: string) => [
+  ...comVazio(vazio),
+  ...xs.map((x) => ({ valor: x as ValorCombo, rotulo: x })),
+];
+const opLista = (xs: readonly Opcao[] | undefined, vazio?: string) => [
+  ...comVazio(vazio),
+  ...(xs ?? []).map((o) => ({ valor: o.id as ValorCombo, rotulo: o.nome })),
+];
+const DADOS_PACIENTE = ['peso', 'altura', 'idade', 'sexo', 'superficie_corporal', 'raca_cor'] as const;
 const exame = reactive<Linha>({});
 
 /** A data de hoje no fuso de quem usa a tela (não em UTC: depois das 21h em Brasília seria o dia seguinte). */
@@ -420,12 +437,14 @@ const filtrada = (qual: string, chave: string) => {
       <aside>
         <form @submit.prevent="buscar">
           <input v-model="termo" :placeholder="T.busca" :aria-label="T.buscarExame" />
-          <select v-model="tipo" :aria-label="T.tipoServico">
-            <option value="">{{ T.todos }}</option>
-            <option v-for="x in TIPOS_SERVICO_EXAME" :key="x" :value="x">{{ x }}</option>
-          </select>
-          <SanteBotao type="submit">{{ T.buscar }}</SanteBotao>
-          <SanteBotao type="button" @click="novoExame">{{ T.novoExame }}</SanteBotao>
+          <SanteSelecao
+            v-model="tipo"
+            :rotulo="T.tipoServico"
+            ocultar-rotulo
+            :opcoes="opFixas(TIPOS_SERVICO_EXAME, T.todos)"
+          />
+          <SanteBotao :rotulo="T.buscar" tipo="submit" />
+          <SanteBotao :rotulo="T.novoExame" @acionar="novoExame" />
         </form>
         <ul>
           <li v-for="e in lista" :key="String(e['id'])">
@@ -452,22 +471,25 @@ const filtrada = (qual: string, chave: string) => {
             <small v-if="falhasExame['nome']" class="erro">{{ falhasExame['nome'] }}</small></label
           >
           <label>{{ T.nomePopular }} <input v-model="exame['nomePopular']" maxlength="150" /></label>
-          <label
-            >{{ T.tipo }}
-            <select v-model="exame['tipoServico']" name="tipoServico">
-              <option v-for="x in TIPOS_SERVICO_EXAME" :key="x" :value="x">{{ x }}</option>
-            </select>
-          </label>
-          <label v-if="exame['tipoServico'] === 'imagem'"
-            >{{ T.modalidade }}
-            <select v-model="exame['modalidadeImagemId']" name="modalidadeImagemId">
-              <option value="">{{ T.escolha }}</option>
-              <option v-for="o in opcoes['modalidades'] ?? []" :key="o.id" :value="o.id">{{ o.nome }}</option>
-            </select>
+          <div class="campo-selecao">
+            <SanteSelecao
+              :model-value="valorDe(exame, 'tipoServico')"
+              :rotulo="T.tipo"
+              :opcoes="opFixas(TIPOS_SERVICO_EXAME)"
+              @update:model-value="(v) => (exame['tipoServico'] = v)"
+            />
+          </div>
+          <div v-if="exame['tipoServico'] === 'imagem'" class="campo-selecao">
+            <SanteSelecao
+              :model-value="valorDe(exame, 'modalidadeImagemId')"
+              :rotulo="T.modalidade"
+              :opcoes="opLista(opcoes['modalidades'], T.escolha)"
+              @update:model-value="(v) => (exame['modalidadeImagemId'] = v)"
+            />
             <small v-if="falhasExame['modalidadeImagemId']" class="erro">{{
               falhasExame['modalidadeImagemId']
             }}</small>
-          </label>
+          </div>
           <label>{{ T.idadeMin }} <input v-model="exame['idadeMinimaDias']" type="number" min="0" /></label>
           <label
             >{{ T.idadeMax }} <input v-model="exame['idadeMaximaDias']" type="number" min="0" />
@@ -492,11 +514,11 @@ const filtrada = (qual: string, chave: string) => {
           <label><input v-model="exame['exigeLaudo']" type="checkbox" /> {{ T.exigeLaudo }}</label>
           <label><input v-model="exame['ativo']" type="checkbox" /> {{ T.ativo }}</label>
           <SanteBotao
-            type="submit"
+            :rotulo="T.gravarExame"
+            tipo="submit"
             data-testid="salvar-exame"
-            :disabled="Object.keys(falhasExame).length > 0"
-            >{{ T.gravarExame }}</SanteBotao
-          >
+            :desabilitado="Object.keys(falhasExame).length > 0"
+          />
         </form>
         <template v-if="ficha">
           <section v-for="s in SECOES" :key="s.t" :data-testid="`secao-${s.t}`">
@@ -508,19 +530,16 @@ const filtrada = (qual: string, chave: string) => {
                 :class="{ inativo: !v['ativo'] }"
               >
                 {{ rotulo(v) }}<span v-if="v['padrao']"> {{ T.padrao }}</span>
-                <SanteBotao
-                  v-if="v['ativo']"
-                  type="button"
+                <SanteBotao v-if="v['ativo']"
+                  :rotulo="T.inativar"
                   :data-testid="`inativar-${s.t}-${v['id']}`"
-                  @click="inativar(s.t, v)"
-                  >{{ T.inativar }}</SanteBotao
-                >
+                  @acionar="inativar(s.t, v)"
+                />
                 <template v-if="s.t === 'analito'">
                   <SanteBotao
-                    type="button"
-                    @click="analitoAberto = analitoAberto === Number(v['id']) ? null : Number(v['id'])"
-                    >{{ T.faixasFormula }}</SanteBotao
-                  >
+                    :rotulo="T.faixasFormula"
+                    @acionar="analitoAberto = analitoAberto === Number(v['id']) ? null : Number(v['id'])"
+                  />
                   <div v-if="analitoAberto === Number(v['id'])" class="analito">
                     <table>
                       <thead>
@@ -574,15 +593,14 @@ const filtrada = (qual: string, chave: string) => {
                             falhasFaixas[i]?.['vigenciaInicio']
                           }}</small></label
                         >
-                        <label
-                          >{{ T.sexo }}
-                          <select v-model="fx['sexoId']">
-                            <option value="">{{ T.todos }}</option>
-                            <option v-for="o in opcoes['sexos'] ?? []" :key="o.id" :value="o.id">
-                              {{ o.nome }}
-                            </option>
-                          </select>
-                        </label>
+                        <div class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(fx, 'sexoId')"
+                            :rotulo="T.sexo"
+                            :opcoes="opLista(opcoes['sexos'], T.todos)"
+                            @update:model-value="(v) => (fx['sexoId'] = v)"
+                          />
+                        </div>
                         <label
                           >{{ T.idadeMin }} <input v-model="fx['idadeMinimaDias']" type="number" min="0"
                         /></label>
@@ -592,30 +610,30 @@ const filtrada = (qual: string, chave: string) => {
                             falhasFaixas[i]?.['idadeMaximaDias']
                           }}</small></label
                         >
-                        <label
-                          >{{ T.material }}
-                          <select v-model="fx['materialBiologicoId']">
-                            <option value="">{{ T.qualquer }}</option>
-                            <option v-for="o in opcoes['materiais'] ?? []" :key="o.id" :value="o.id">
-                              {{ o.nome }}
-                            </option>
-                          </select>
-                        </label>
-                        <label
-                          >{{ T.metodo }}
-                          <select v-model="fx['metodoAnaliticoId']">
-                            <option value="">{{ T.qualquer }}</option>
-                            <option v-for="o in opcoes['metodos'] ?? []" :key="o.id" :value="o.id">
-                              {{ o.nome }}
-                            </option>
-                          </select>
-                        </label>
-                        <label
-                          >{{ T.condicao }}
-                          <select v-model="fx['condicao']">
-                            <option v-for="x in CONDICOES_FAIXA" :key="x" :value="x">{{ x }}</option>
-                          </select>
-                        </label>
+                        <div class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(fx, 'materialBiologicoId')"
+                            :rotulo="T.material"
+                            :opcoes="opLista(opcoes['materiais'], T.qualquer)"
+                            @update:model-value="(v) => (fx['materialBiologicoId'] = v)"
+                          />
+                        </div>
+                        <div class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(fx, 'metodoAnaliticoId')"
+                            :rotulo="T.metodo"
+                            :opcoes="opLista(opcoes['metodos'], T.qualquer)"
+                            @update:model-value="(v) => (fx['metodoAnaliticoId'] = v)"
+                          />
+                        </div>
+                        <div class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(fx, 'condicao')"
+                            :rotulo="T.condicao"
+                            :opcoes="opFixas(CONDICOES_FAIXA)"
+                            @update:model-value="(v) => (fx['condicao'] = v)"
+                          />
+                        </div>
                         <label
                           v-for="[k, r] in [
                             ['referenciaMinima', T.refMin],
@@ -639,14 +657,13 @@ const filtrada = (qual: string, chave: string) => {
                             falhasFaixas[i]?.['referenciaTexto']
                           }}</small></label
                         >
-                        <SanteBotao v-if="faixas.length > 1" type="button" @click="faixas.splice(i, 1)">{{
-                          T.tirarFaixa
-                        }}</SanteBotao>
+                        <SanteBotao v-if="faixas.length > 1"
+                          :rotulo="T.tirarFaixa"
+                          @acionar="faixas.splice(i, 1)"
+                        />
                       </fieldset>
-                      <SanteBotao type="button" @click="faixas.push(faixaVazia())">{{
-                        T.outraFaixa
-                      }}</SanteBotao>
-                      <SanteBotao type="submit" :disabled="faixasComFalha">{{ T.novaFaixa }}</SanteBotao>
+                      <SanteBotao :rotulo="T.outraFaixa" @acionar="faixas.push(faixaVazia())" />
+                      <SanteBotao :rotulo="T.novaFaixa" tipo="submit" :desabilitado="faixasComFalha" />
                     </form>
                     <p v-for="fo in v['formulas'] as Linha[]" :key="String(fo['id'])">
                       {{ fo['vigenciaInicio'] }}: {{ fo['expressao'] }}
@@ -667,57 +684,48 @@ const filtrada = (qual: string, chave: string) => {
                       </label>
                       <fieldset v-for="(vr, j) in formula['variaveis'] as Linha[]" :key="j">
                         <label>{{ T.variavel }} <input v-model="vr['identificador']" maxlength="10" /></label>
-                        <label
-                          >{{ T.fonte }}
-                          <select v-model="vr['fonte']">
-                            <option v-for="x in ['analito', 'dado_paciente', 'digitado']" :key="x" :value="x">
-                              {{ x }}
-                            </option>
-                          </select>
-                        </label>
-                        <label v-if="vr['fonte'] === 'analito'"
-                          >{{ T.analito }}
-                          <select v-model="vr['analitoId']" required>
-                            <option value="">{{ T.escolha }}</option>
-                            <option v-for="o in analitosDoExame(Number(v['id']))" :key="o.id" :value="o.id">
-                              {{ o.nome }}
-                            </option>
-                          </select>
-                        </label>
-                        <label v-if="vr['fonte'] === 'dado_paciente'"
-                          >{{ T.dadoPaciente }}
-                          <select v-model="vr['dadoPaciente']" required>
-                            <option
-                              v-for="x in [
-                                'peso',
-                                'altura',
-                                'idade',
-                                'sexo',
-                                'superficie_corporal',
-                                'raca_cor',
-                              ]"
-                              :key="x"
-                              :value="x"
-                            >
-                              {{ x }}
-                            </option>
-                          </select>
-                        </label>
+                        <div class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(vr, 'fonte')"
+                            :rotulo="T.fonte"
+                            :opcoes="opFixas(['analito', 'dado_paciente', 'digitado'])"
+                            @update:model-value="(v) => (vr['fonte'] = v)"
+                          />
+                        </div>
+                        <div v-if="vr['fonte'] === 'analito'" class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(vr, 'analitoId')"
+                            :rotulo="T.analito"
+                            :opcoes="opLista(analitosDoExame(Number(v['id'])), T.escolha)"
+                            obrigatorio
+                            @update:model-value="(v) => (vr['analitoId'] = v)"
+                          />
+                        </div>
+                        <div v-if="vr['fonte'] === 'dado_paciente'" class="campo-selecao">
+                          <SanteSelecao
+                            :model-value="valorDe(vr, 'dadoPaciente')"
+                            :rotulo="T.dadoPaciente"
+                            :opcoes="opFixas(DADOS_PACIENTE)"
+                            obrigatorio
+                            @update:model-value="(v) => (vr['dadoPaciente'] = v)"
+                          />
+                        </div>
                       </fieldset>
                       <SanteBotao
-                        type="button"
-                        @click="(formula['variaveis'] as Linha[]).push(variavelVazia())"
-                        >{{ T.maisVariavel }}</SanteBotao
-                      >
+                        :rotulo="T.maisVariavel"
+                        @acionar="(formula['variaveis'] as Linha[]).push(variavelVazia())"
+                      />
                       <small v-if="falhasFormula['variaveis']" class="erro">{{
                         falhasFormula['variaveis']
                       }}</small>
                       <label
                         >{{ T.inicio }} <input v-model="formula['vigenciaInicio']" type="date" required
                       /></label>
-                      <SanteBotao type="submit" :disabled="Object.keys(falhasFormula).length > 0">{{
-                        T.novaFormula
-                      }}</SanteBotao>
+                      <SanteBotao
+                        :rotulo="T.novaFormula"
+                        tipo="submit"
+                        :desabilitado="Object.keys(falhasFormula).length > 0"
+                      />
                     </form>
                   </div>
                 </template>
@@ -736,16 +744,23 @@ const filtrada = (qual: string, chave: string) => {
                     :placeholder="T.buscar"
                     :aria-label="`${c.r} (${T.buscar})`"
                   />
-                  <select v-model="(novo[s.t] as Linha)[c.k]" :name="c.k">
-                    <option value="">{{ T.escolha }}</option>
-                    <option v-for="o in filtrada(c.lista, `${s.t}.${c.k}`)" :key="o.id" :value="o.id">
-                      {{ o.nome }}
-                    </option>
-                  </select>
+                  <SanteSelecao
+                    :model-value="valorDe(novo[s.t] as Linha, c.k)"
+                    :rotulo="c.r"
+                    ocultar-rotulo
+                    :opcoes="opLista(filtrada(c.lista, `${s.t}.${c.k}`), T.escolha)"
+                    :data-testid="`novo-${s.t}-${c.k}`"
+                    @update:model-value="(v) => ((novo[s.t] as Linha)[c.k] = v)"
+                  />
                 </template>
-                <select v-else-if="c.fixas" v-model="(novo[s.t] as Linha)[c.k]" :name="c.k">
-                  <option v-for="x in c.fixas" :key="x" :value="x">{{ x }}</option>
-                </select>
+                <SanteSelecao
+                  v-else-if="c.fixas"
+                  :model-value="valorDe(novo[s.t] as Linha, c.k)"
+                  :rotulo="c.r"
+                  ocultar-rotulo
+                  :opcoes="opFixas(c.fixas)"
+                  :data-testid="`novo-${s.t}-${c.k}`"
+                  @update:model-value="(v) => ((novo[s.t] as Linha)[c.k] = v)" />
                 <input
                   v-else-if="c.tipo === 'checkbox'"
                   v-model="(novo[s.t] as Linha)[c.k]"
@@ -759,7 +774,7 @@ const filtrada = (qual: string, chave: string) => {
                   step="any"
                   :name="c.k"
               /></label>
-              <SanteBotao type="submit">{{ T.incluir }}</SanteBotao>
+              <SanteBotao :rotulo="T.incluir" tipo="submit" />
             </form>
           </section>
         </template>
@@ -782,7 +797,7 @@ const filtrada = (qual: string, chave: string) => {
   font-weight: 600;
 }
 .erro {
-  color: var(--sante-perigo, #b00020);
+  color: var(--sgh-perigo);
 }
 form {
   display: flex;
@@ -795,6 +810,6 @@ fieldset {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  border: 1px solid var(--sante-borda, #ccc);
+  border: 1px solid var(--sgh-borda);
 }
 </style>

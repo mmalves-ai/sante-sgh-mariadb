@@ -2,6 +2,7 @@
 // Gases medicinais do paciente (F3.4, 04-INT linha 82): `/internacao/atendimentos/:atd/gases`. Visão por paciente:
 // os usos do atendimento, o início com fluxo e local, a troca de fluxo numa ação só (encerra o atual e abre o
 // seguinte), o encerramento, o cancelamento com motivo (nada se apaga) e o lançamento na conta pelo tempo acumulado.
+import { SanteSelecao } from '@sgh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -35,6 +36,9 @@ const LOCAIS = [
 const insumo = ref<number | null>(null);
 const fluxo = ref<number | null>(null);
 const local = ref('leito');
+const opLocais = computed(() =>
+  LOCAIS.map((l) => ({ valor: l as string, rotulo: t(`adt.gases.locais.${l}`) })),
+);
 const motivo = ref('');
 const aviso = ref('');
 const erro = ref<unknown>(null);
@@ -86,12 +90,12 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
         >{{ t('adt.gases.fluxo') }}
         <input v-model.number="fluxo" type="number" min="0" step="0.5" data-testid="gas-fluxo"
       /></label>
-      <label
-        >{{ t('adt.gases.local') }}
-        <select v-model="local" data-testid="gas-local">
-          <option v-for="l in LOCAIS" :key="l" :value="l">{{ t(`adt.gases.locais.${l}`) }}</option>
-        </select></label
-      >
+      <SanteSelecao
+        v-model="local"
+        :rotulo="t('adt.gases.local')"
+        :opcoes="opLocais"
+        data-testid="gas-local"
+      />
       <button type="submit" :disabled="!valido || acao.isPending.value" data-testid="gas-iniciar">
         {{ t('adt.gases.iniciar') }}
       </button>
