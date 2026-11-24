@@ -19,7 +19,7 @@
 // o mesmo arquivo entra uma vez por tabela; a publicação aponta o lote do reajuste e a rejeição exige o motivo.
 // Melhoria: os contatos do convênio por área ficam em contato_fonte_pagadora; o CNPJ, o endereço e a nota fiscal são
 // os da pessoa jurídica (a do convênio ou a tomadora) e se editam no cadastro dela.
-// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores, os índices, o credenciamento, o de-para, os portes e as
+// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores, o credenciamento, o de-para e as
 // referências de terceiros ainda não são lidos do modelo (a tela mostra vazio e as gravações ficam não liberadas).
 import { randomUUID } from 'node:crypto';
 import type {
@@ -43,6 +43,12 @@ import {
 import { z } from 'zod';
 import { civil, FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { mesmoValor, valorParaGravar } from './campos-contrato.js';
+import {
+  indicesConvenioPropria,
+  indicesNaDataPropria,
+  porteNaDataPropria,
+  portesPropria,
+} from './indices-propria.js';
 import type {
   ContextoGravacaoPreco,
   CtxPrecos,
@@ -226,7 +232,8 @@ function convenioDe(r: Linha): ConvenioPreco {
     honorariosExterna: nn(r['tab_externa']),
     diarias: nn(r['tab_diarias']),
     matmed: nn(r['tab_matmed']),
-    porte: null,
+    // A tabela de porte anestésico do convênio é a de honorários do acordo (internação, senão a externa).
+    porte: nn(r['tab_internacao']) ?? nn(r['tab_externa']),
   };
 }
 
@@ -600,8 +607,8 @@ export class FontePrecosPropria implements FontePrecos {
     );
   }
 
-  indicesConvenio() {
-    return naoLido([]);
+  indicesConvenio(c: CtxPrecos, cod: number) {
+    return this.ler(c, (l, est) => indicesConvenioPropria(l, est, cod));
   }
 
   tiss(c: CtxPrecos, cod: number) {
@@ -952,12 +959,12 @@ export class FontePrecosPropria implements FontePrecos {
     );
   }
 
-  indicesNaData() {
-    return naoLido(new Map<number, number>());
+  indicesNaData(c: CtxPrecos, conv: number, data: string) {
+    return this.ler(c, (l, est) => indicesNaDataPropria(l, est, conv, data));
   }
 
-  porteNaData() {
-    return naoLido(null);
+  porteNaData(c: CtxPrecos, conv: number, porte: string, data: string) {
+    return this.ler(c, (l, est) => porteNaDataPropria(l, est, conv, porte, data));
   }
 
   credenciamento() {
@@ -1009,8 +1016,8 @@ export class FontePrecosPropria implements FontePrecos {
     return naoLido(paginaVazia());
   }
 
-  portes() {
-    return naoLido(paginaVazia());
+  portes(c: CtxPrecos, tab: number | null, pagina: number, porPagina: number) {
+    return this.ler(c, (l, est) => portesPropria(l, est, tab, pagina, porPagina));
   }
 
   terceiros() {

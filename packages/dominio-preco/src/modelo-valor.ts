@@ -129,7 +129,7 @@ export function explicarValor(
     const filme = item.filmeM2 ?? 0;
     if (filme !== 0 && indices.filme == null) falta.push('valor do filme do convênio na data');
     const passos = [
-      'Modelo CH (AMB): total = valor do CH × (CH + custo operacional) + valor do filme × filme (SPINDVAL).',
+      'Modelo CH (AMB): total = valor do CH × (CH + custo operacional) + valor do filme × filme.',
     ];
     if (falta.length > 0) return { modelo, total: null, passos, falta };
     const total = (indices.ch ?? 0) * (item.ch + (item.cope ?? 0)) + (indices.filme ?? 0) * filme;
