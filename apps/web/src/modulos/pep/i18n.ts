@@ -3,6 +3,7 @@ import { mensagensPrescricao } from './i18n-prescricao.js';
 import { mensagensDocumentos } from './i18n-documentos.js';
 import { mensagensRegistroClinico } from './i18n-registro.js';
 import { mensagensFormularioNovo } from './i18n-formulario-novo.js';
+import { mensagensEquipePainel } from './i18n-equipe-painel.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -13,6 +14,8 @@ export const mensagensPep = {
   doc: mensagensDocumentos,
   // M45, etapa 1: construtor de formulários novos.
   formNovo: mensagensFormularioNovo,
+  // F3.3 (L91, L94): equipe assistencial e regras do prontuário por setor.
+  equipe: mensagensEquipePainel,
   carregando: 'Carregando…',
   busca: {
     titulo: 'Prontuário ao vivo: consulta',

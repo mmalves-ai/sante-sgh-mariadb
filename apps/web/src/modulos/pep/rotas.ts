@@ -279,6 +279,20 @@ export const rotasPep: RouteRecordRaw[] = [
   },
   // M23 (ficha, seção 7): prontuário de uso diário (painel, prontuário com cabeçalho fixo e abas, pareceres,
   // pendências de assinatura e a validação pública do documento).
+  // F3.3 (L91, L94): regras do prontuário por setor e equipe assistencial do atendimento.
+  {
+    path: '/pep/prontuario-setor',
+    name: 'pep.prontuarioSetor',
+    component: () => import('./telas/ConfiguracaoSetorProntuarioTela.vue'),
+    meta: { permissao: 'pep.admin.ler' },
+  },
+  {
+    path: `/pep/equipe/:atendimento${id}`,
+    name: 'pep.equipe',
+    component: () => import('./telas/EquipeAssistencialTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.painel.ler' },
+  },
   {
     path: '/pep/pacientes',
     name: 'pep.pacientes',

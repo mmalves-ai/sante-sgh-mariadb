@@ -13,6 +13,13 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { lerPainel } from '../api-documentos.js';
 import { dataHoraBr } from '../formato.js';
+import {
+  acompanhar,
+  deixarDeAcompanhar,
+  gravarColunas,
+  lerAcompanhados,
+  lerColunas,
+} from '../api-equipe-painel.js';
 import { chavePainel, gravarPreferenciasPainel, lerPreferenciasPainel } from '../preferencias-painel.js';
 
 const { t } = useI18n();
@@ -45,6 +52,28 @@ watch(
   },
   { immediate: true },
 );
+// F3.3 (L90): acompanhados e colunas vêm do banco, por usuário (a troca de computador não perde o painel); o
+// navegador guarda só a unidade e serve de reserva quando o banco não responde.
+const doBanco = ref(false);
+watch(
+  chave,
+  async (k) => {
+    if (!k) return;
+    try {
+      const [a, c] = await Promise.all([lerAcompanhados(), lerColunas()]);
+      favoritos.value = a.itens.map((x) => x.paciente);
+      const cols = c.colunas.filter((x): x is ColunaPainel =>
+        (COLUNAS_PAINEL as readonly string[]).includes(x),
+      );
+      if (cols.length >= 2) colunas.value = cols;
+      doBanco.value = true;
+    } catch {
+      doBanco.value = false;
+    }
+  },
+  { immediate: true },
+);
+const erroPreferencia = ref<string | null>(null);
 const soFavoritos = ref(false);
 const vinculo = ref<VinculoPainel>('todos');
 const termo = ref('');
@@ -99,17 +128,33 @@ function destino(paciente: number): string {
 const ver = (c: ColunaPainel) => (configurar.value ? colunas.value : COLUNAS_PAINEL).includes(c);
 const colunasVistas = computed(() => COLUNAS_PAINEL.filter(ver));
 
-function alternarFavorito(p: number): void {
+async function alternarFavorito(p: number): Promise<void> {
   if (!configurar.value) return;
-  favoritos.value = favoritos.value.includes(p)
-    ? favoritos.value.filter((x) => x !== p)
-    : [...favoritos.value, p];
+  const tinha = favoritos.value.includes(p);
+  favoritos.value = tinha ? favoritos.value.filter((x) => x !== p) : [...favoritos.value, p];
+  if (!doBanco.value) return;
+  try {
+    erroPreferencia.value = null;
+    await (tinha ? deixarDeAcompanhar(p) : acompanhar(p));
+  } catch (e) {
+    favoritos.value = tinha ? [...favoritos.value, p] : favoritos.value.filter((x) => x !== p);
+    erroPreferencia.value = e instanceof Error ? e.message : String(e);
+  }
 }
-function alternarColuna(c: ColunaPainel): void {
+async function alternarColuna(c: ColunaPainel): Promise<void> {
   if (!configurar.value) return;
+  const antes = colunas.value;
   if (colunas.value.includes(c)) {
     if (colunas.value.length > 2) colunas.value = colunas.value.filter((x) => x !== c);
   } else colunas.value = COLUNAS_PAINEL.filter((x) => x === c || colunas.value.includes(x));
+  if (!doBanco.value || antes === colunas.value) return;
+  try {
+    erroPreferencia.value = null;
+    await gravarColunas(colunas.value);
+  } catch (e) {
+    colunas.value = antes;
+    erroPreferencia.value = e instanceof Error ? e.message : String(e);
+  }
 }
 </script>
 
@@ -149,6 +194,7 @@ function alternarColuna(c: ColunaPainel): void {
         @acionar="mostrarColunas = !mostrarColunas"
       />
     </form>
+    <SanteAlerta v-if="erroPreferencia" :texto="erroPreferencia" data-testid="painel-erro-preferencia" />
     <fieldset v-if="mostrarColunas && configurar" class="colunas" data-testid="painel-colunas">
       <legend>{{ t('pep.doc.painel.colunas') }}</legend>
       <label v-for="c in COLUNAS_PAINEL" :key="c">
