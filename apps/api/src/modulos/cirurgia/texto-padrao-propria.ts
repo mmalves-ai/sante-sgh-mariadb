@@ -128,7 +128,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   /** Preenche os campos do texto com os valores, sem gravar (a descrição usa o resultado). */
-  preencher(c: ContextoPortaPropria, id: number, entrada: unknown) {
+  async preencher(c: ContextoPortaPropria, id: number, entrada: unknown) {
     const x = entradaValida(
       z.object({ valores: z.record(z.string(), z.string().max(2000)) }).strict(),
       entrada,
@@ -231,7 +231,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
   }
 
-  alterar(
+  async alterar(
     c: ContextoPortaPropria,
     id: number,
     entrada: unknown,
@@ -258,7 +258,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   /** Tira de uso ou volta ao uso (nunca apaga: a descrição já assinada guarda o texto que usou). */
-  definirUso(
+  async definirUso(
     c: ContextoPortaPropria,
     id: number,
     entrada: unknown,

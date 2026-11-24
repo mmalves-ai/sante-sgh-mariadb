@@ -77,6 +77,13 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'enfermagem.dispositivo.ler' },
   },
   {
+    // F3.4-3, 04-INT L82: regra de cobrança dos gases (faixas e uso simultâneo).
+    path: '/internacao/gases/regras',
+    name: 'adt.gases.regras',
+    component: () => import('./telas/RegrasGasTela.vue'),
+    meta: { permissao: 'convenio.contrato.ler' },
+  },
+  {
     path: '/internacao/documentos',
     name: 'adt.documentos',
     component: () => import('./telas/DocumentosInternacaoTela.vue'),

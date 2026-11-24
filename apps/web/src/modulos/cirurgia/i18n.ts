@@ -1,6 +1,9 @@
 // Textos das telas do centro cirúrgico (M18). Sem nome de sistema antigo (ADR 0023): o que foi gravado fora destas
 // telas aparece só como "gravado fora destas telas".
+import { mensagensTextoPadrao } from './i18n-texto-padrao.js';
 export const mensagensCirurgia = {
+  // F3.4-3, 04-CC L91: cadastro do texto padrão da descrição (i18n-texto-padrao.ts).
+  textosPadrao: mensagensTextoPadrao,
   carregando: 'Carregando…',
   nenhuma: 'Nada encontrado.',
   emConsulta: 'Centro cirúrgico em consulta',

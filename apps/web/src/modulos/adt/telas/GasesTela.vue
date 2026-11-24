@@ -78,6 +78,11 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
   <section class="tela-agenda" aria-labelledby="gases-titulo" data-testid="tela-gases">
     <h1 id="gases-titulo">{{ t('adt.gases.titulo') }}</h1>
     <p>{{ t('adt.gases.texto') }}</p>
+    <p>
+      <RouterLink :to="{ name: 'adt.gases.regras' }" data-testid="gases-ir-regras">{{
+        t('adt.gases.irRegras')
+      }}</RouterLink>
+    </p>
     <ErroAdt v-if="usos.isError.value" :erro="usos.error.value" />
     <ErroAdt v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status" data-testid="gases-aviso">{{ aviso }}</p>
