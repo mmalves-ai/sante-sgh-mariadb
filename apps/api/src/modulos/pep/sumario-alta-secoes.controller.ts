@@ -19,7 +19,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { TIPOS_ATENDIMENTO_SECAO, type TipoAtendimentoSecao } from '@sgh/dominio-pep';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -87,6 +87,7 @@ export class SumarioAltaSecoesController {
   }
 
   @Put('secoes')
+  @AuditadoNoHandler('executor: trilha na mesma transação da configuração do sumário de alta')
   @Permissao(PERMISSOES_SUMARIO_SECOES.editar)
   gravarSecao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     exigirNivelDoCliente(corpo, sessaoDe(req).pode);
@@ -106,6 +107,7 @@ export class SumarioAltaSecoesController {
   }
 
   @Put('periodos')
+  @AuditadoNoHandler('executor: trilha na mesma transação da configuração do sumário de alta')
   @Permissao(PERMISSOES_SUMARIO_SECOES.editar)
   gravarPeriodo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarPeriodo(c, corpo));

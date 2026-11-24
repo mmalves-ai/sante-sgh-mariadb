@@ -25,7 +25,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -68,6 +68,7 @@ export class SameGuardaController {
   }
 
   @Post('locais')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
   incluirLocal(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
@@ -107,6 +108,7 @@ export class SameGuardaController {
   }
 
   @Post('volumes')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
   abrir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
@@ -114,6 +116,7 @@ export class SameGuardaController {
   }
 
   @Post('volumes/:id/movimentos')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
   movimentar(
@@ -131,6 +134,7 @@ export class SameGuardaController {
   }
 
   @Post('volumes/:id/descarte')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_GUARDA.descartar)
   descartar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
@@ -138,6 +142,7 @@ export class SameGuardaController {
   }
 
   @Post('volumes/:id/desfazer')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_GUARDA.desfazer)
   desfazer(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
@@ -145,6 +150,7 @@ export class SameGuardaController {
   }
 
   @Post('volumes/:id/extravio')
+  @AuditadoNoHandler('executor: trilha na mesma transação da guarda do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_GUARDA.movimentar)
   extravio(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {

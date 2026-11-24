@@ -27,7 +27,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -63,6 +63,7 @@ export class SameTramiteController {
   }
 
   @Post('setores')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   setor(@Req() req: RequisicaoAutorizada, @Body() b: unknown) {
@@ -93,6 +94,7 @@ export class SameTramiteController {
   }
 
   @Post('protocolos')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   emitir(@Req() req: RequisicaoAutorizada, @Body() b: unknown) {
@@ -100,6 +102,7 @@ export class SameTramiteController {
   }
 
   @Post('protocolos/:id/receber')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   receber(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
@@ -107,6 +110,7 @@ export class SameTramiteController {
   }
 
   @Post('protocolos/:id/cancelar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   cancelar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
@@ -120,6 +124,7 @@ export class SameTramiteController {
   }
 
   @Post('solicitacoes')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   solicitar(@Req() req: RequisicaoAutorizada, @Body() b: unknown) {
@@ -133,6 +138,7 @@ export class SameTramiteController {
   }
 
   @Post('solicitacoes/:id/cancelar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   cancelarSolicitacao(
@@ -144,6 +150,7 @@ export class SameTramiteController {
   }
 
   @Post('solicitacoes/:id/nao-localizado')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   naoLocalizado(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
@@ -151,6 +158,7 @@ export class SameTramiteController {
   }
 
   @Post('saidas-guarda/:movimento/cobrar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   cobrarSaidaGuarda(@Req() req: RequisicaoAutorizada, @Param('movimento', ParseIntPipe) movimento: number) {
@@ -170,6 +178,7 @@ export class SameTramiteController {
   }
 
   @Post('emprestimos')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(201)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   emprestar(@Req() req: RequisicaoAutorizada, @Body() b: unknown) {
@@ -177,6 +186,7 @@ export class SameTramiteController {
   }
 
   @Post('emprestimos/:id/devolver')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   devolver(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
@@ -184,6 +194,7 @@ export class SameTramiteController {
   }
 
   @Post('emprestimos/:id/cobrar')
+  @AuditadoNoHandler('executor: trilha na mesma transação do trâmite do prontuário')
   @HttpCode(200)
   @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
   cobrar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {

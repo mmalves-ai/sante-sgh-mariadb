@@ -38,7 +38,7 @@ import {
   resolverConfiguracaoProntuario,
   type TipoAtendimentoProntuario,
 } from '@sgh/dominio-pep';
-import { Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -140,12 +140,14 @@ export class EquipePainelController {
   }
 
   @Post('painel/acompanhados')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
   acompanhar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.acompanhar(c, corpo));
   }
 
   @Post('painel/acompanhados/:paciente/fim')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
   deixar(@Req() req: RequisicaoAutorizada, @Param('paciente', ParseIntPipe) paciente: number) {
     return this.com(req, (p, c) => p.deixarDeAcompanhar(c, paciente));
@@ -158,6 +160,7 @@ export class EquipePainelController {
   }
 
   @Put('painel/colunas')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
   gravarColunas(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarColunas(c, corpo));
@@ -170,6 +173,7 @@ export class EquipePainelController {
   }
 
   @Put('painel/filtro-padrao')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.painelConfigurar)
   gravarFiltroPadrao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarFiltroPadrao(c, corpo));
@@ -195,6 +199,7 @@ export class EquipePainelController {
   }
 
   @Put('prontuario-setor')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.setorEditar)
   gravarConfiguracao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.gravarConfiguracaoSetor(c, corpo));
@@ -227,6 +232,7 @@ export class EquipePainelController {
   }
 
   @Post('equipe/atendimento/:atendimento/encerramento')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.equipeGerenciar)
   encerrar(
     @Req() req: RequisicaoAutorizada,
@@ -240,6 +246,7 @@ export class EquipePainelController {
   }
 
   @Post('equipe/atendimento/:atendimento')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.equipeGerenciar)
   incluir(
     @Req() req: RequisicaoAutorizada,
@@ -253,6 +260,7 @@ export class EquipePainelController {
   }
 
   @Post('equipe/membro/:membro/saida')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
   @Permissao(PERMISSOES_EQUIPE_PAINEL.equipeGerenciar)
   saida(
     @Req() req: RequisicaoAutorizada,
