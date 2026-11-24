@@ -196,6 +196,44 @@ describe.skipIf(SEM_BANCO)('orçamento de exames e conversão em atendimento (Ma
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
   });
 
+  it('validade padrão pelo parâmetro sadt.validadeOrcamentoDias do estabelecimento; a digitada prevalece', async () => {
+    const c = contexto(m!);
+    // O dia de hoje do estabelecimento sai da prévia com validade digitada de 1 dia.
+    const um1 = await servico.previa(c, entrada([{ exame: m!.exameLab, valor: 10 }], { validadeDias: 1 }));
+    const hoje = Date.parse(`${um1.validade}T00:00:00Z`) - 86_400_000;
+    const dias = (v: string) => Math.round((Date.parse(`${v}T00:00:00Z`) - hoje) / 86_400_000);
+    const base = await servico.previa(c, entrada([{ exame: m!.exameLab, valor: 10 }]));
+    // Sem valor no estabelecimento: o padrão da definição semeada (30 dias).
+    expect(dias(base.validade)).toBe(30);
+    let valor = 0;
+    try {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35orc' }, async (e) => {
+        const d = await e.uma(
+          "SELECT id FROM parametro_definicao WHERE chave = 'sadt.validadeOrcamentoDias'",
+          [],
+        );
+        expect(d).toBeTruthy();
+        valor = await e.inserir(
+          `INSERT INTO parametro_valor (parametro_definicao_id, nivel, estabelecimento_id, valor, vigencia_inicio, motivo,
+             criado_em) VALUES (?, 'estabelecimento', ?, '7', '2020-01-01', 'teste sintético', ?)`,
+          [d!['id'], m!.base.est, new Date()],
+        );
+      });
+      const p = await servico.previa(c, entrada([{ exame: m!.exameLab, valor: 10 }]));
+      expect(dias(p.validade)).toBe(7);
+      const digitada = await servico.previa(
+        c,
+        entrada([{ exame: m!.exameLab, valor: 10 }], { validadeDias: 3 }),
+      );
+      expect(dias(digitada.validade)).toBe(3);
+    } finally {
+      if (valor)
+        await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-s35orc' }, (e) =>
+          e.executar('DELETE FROM parametro_valor WHERE id = ?', [valor]),
+        );
+    }
+  });
+
   it('grava o orçamento, converte no atendimento do paciente e recusa a segunda conversão', async () => {
     const c = contexto(m!);
     const corpoOrc = entrada([{ exame: m!.exameLab, quantidade: 2, valor: 12.5 }], {

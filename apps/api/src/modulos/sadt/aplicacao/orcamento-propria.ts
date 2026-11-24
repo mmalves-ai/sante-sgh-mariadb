@@ -86,7 +86,8 @@ export const esquemaOrcamentoExames = z
       )
       .max(100),
     desconto: z.number().default(0),
-    validadeDias: z.number().int().min(1).max(180).default(30),
+    /** Sem valor, vale o parâmetro sadt.validadeOrcamentoDias do estabelecimento (ou da rede; padrão 30). */
+    validadeDias: z.number().int().min(1).max(180).optional(),
     observacao: z.string().trim().max(2000).nullable().default(null),
   })
   .strict();
@@ -176,6 +177,25 @@ function daRegra<T>(fn: () => T): T {
     if (e instanceof RecusaOrcamento) throw recusa(e.codigo, e.message, { campos: [...e.campos] });
     throw e;
   }
+}
+
+/**
+ * A validade padrão do orçamento (parâmetro sadt.validadeOrcamentoDias): o valor vigente do estabelecimento antes do da
+ * rede; sem valor, o padrão da definição; sem definição carregada, 30 dias. Fora de 1 a 180, vale 30.
+ */
+async function validadePadrao(l: Leitor, est: number): Promise<number> {
+  const r = await l.uma(
+    `SELECT COALESCE((SELECT v.valor FROM parametro_valor v
+                       WHERE v.parametro_definicao_id = d.id AND v.vigencia_inicio <= NOW()
+                         AND (v.vigencia_fim IS NULL OR v.vigencia_fim > NOW())
+                         AND ((v.nivel = 'estabelecimento' AND v.estabelecimento_id = ?) OR v.nivel = 'rede')
+                       ORDER BY FIELD(v.nivel, 'estabelecimento', 'rede'), v.vigencia_inicio DESC LIMIT 1),
+                     d.valor_padrao) AS valor
+       FROM parametro_definicao d WHERE d.chave = 'sadt.validadeOrcamentoDias' AND d.ativo = TRUE`,
+    [est],
+  );
+  const dias = Number(r?.['valor']);
+  return Number.isInteger(dias) && dias >= 1 && dias <= 180 ? dias : 30;
 }
 
 async function hojeDo(l: Leitor, est: number): Promise<string> {
@@ -296,7 +316,7 @@ export class ServicoOrcamentoSadt {
       bruto: m.bruto,
       desconto: m.desconto,
       total: m.total,
-      validade: validadeDoOrcamento(hoje, e.validadeDias),
+      validade: validadeDoOrcamento(hoje, e.validadeDias ?? (await validadePadrao(l, est))),
     };
   }
 

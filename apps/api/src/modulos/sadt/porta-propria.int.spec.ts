@@ -449,6 +449,16 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
     const par = await porta.parametros(c, 'laboratorio', m!.base.login);
     expect(par.ocultos).toEqual([]);
     expect(par.campos.every((x) => x.campo.startsWith('sadt.'))).toBe(true);
+    // 05-SADT linha 25 (migração 10_SADT/97): as definições semeadas, com o padrão; só as do próprio setor.
+    const campo = (k: string) => par.campos.find((x) => x.campo === k)?.valor;
+    expect(campo('sadt.laboratorio.numeracaoExame')).toBe('continua');
+    expect(campo('sadt.laboratorio.exigeMaterial')).toBe('true');
+    expect(campo('sadt.laboratorio.viasLaudo')).toBe('1');
+    expect(campo('sadt.validadeOrcamentoDias')).toBe('30');
+    expect(par.campos.some((x) => x.campo.startsWith('sadt.imagem.'))).toBe(false);
+    expect((await porta.parametros(c, 'imagem', m!.base.login)).campos.map((x) => x.campo)).toContain(
+      'sadt.imagem.exigeMaterial',
+    );
     const ind = await porta.indicadores(c, {
       inicio: hoje,
       fim: hoje,
