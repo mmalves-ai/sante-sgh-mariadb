@@ -220,6 +220,8 @@ export const mensagensRegistroClinico = {
     'rascunho-de-outro-atendimento':
       'O rascunho é de outro atendimento deste paciente: continue-o no atendimento dele.',
     'rascunho-de-outro-formulario': 'O rascunho é de outro paciente ou formulário.',
+    'rascunho-importado-ilegivel':
+      'As respostas do rascunho importado não correspondem ao formulário publicado: ele não é aberto vazio. Descarte-o ou peça a revisão do formulário.',
     'correcao-sem-suspensao': 'Suspenda o registro com a justificativa antes de registrar a correção.',
     'correcao-por-outro': 'Só o autor do registro suspenso registra a correção dele.',
     'correcao-de-outro-modelo': 'A correção é feita no mesmo modelo do registro corrigido.',
