@@ -8,6 +8,7 @@ import {
   conferirKitPadrao,
   diferencaItensKit,
   type GravarKitPadraoEntrada,
+  type KitPadraoDoProcedimento,
   type KitPadraoCadastro,
   type ProcedimentoKitBusca,
   type TipoKitPadrao,
@@ -156,21 +157,25 @@ export async function gravarKitPadrao(
   for (const [i, p] of e.procedimentos.entries()) {
     const chave = chaveProcedimentoKit(p);
     novos.add(chave);
-    const ref =
+    // A linha do procedimento fica travada até o fim da transação: duas gravações do padrão do mesmo procedimento
+    // passam uma de cada vez, e a segunda enxerga o padrão que a primeira gravou (leitura com trava, abaixo).
+    const [ref] =
       p.procedimentoCirurgico !== null
-        ? await tx.uma<Linha>('SELECT id FROM procedimento_cirurgico WHERE id = ? AND ativo', [
-            p.procedimentoCirurgico,
-          ])
-        : await tx.uma<Linha>("SELECT id FROM item_faturavel WHERE id = ? AND situacao = 'ativo'", [
-            p.itemFaturavel,
-          ]);
+        ? await tx.consultarParaAtualizar<Linha>(
+            'SELECT id, ativo AS vale FROM procedimento_cirurgico WHERE id = ?',
+            [p.procedimentoCirurgico],
+          )
+        : await tx.consultarParaAtualizar<Linha>(
+            "SELECT id, situacao = 'ativo' AS vale FROM item_faturavel WHERE id = ?",
+            [p.itemFaturavel],
+          );
     const antigo = porAlvo.get(chave);
-    if (!ref && !(antigo && antigo['excluido_em'] === null))
+    if (!(ref && verdadeiro(ref['vale'])) && !(antigo && antigo['excluido_em'] === null))
       throw recusa('referencia-inexistente', `O procedimento da linha ${i + 1} não está ativo.`, {
         campos: [`procedimentos.${i}`],
       });
     if (p.padrao && e.ativo) {
-      const conflito = await tx.uma<Linha>(
+      const [conflito] = await tx.consultarParaAtualizar<Linha>(
         `SELECT k.codigo FROM kit_material_procedimento kp
            JOIN kit_material k ON k.id = kp.kit_material_id
           WHERE k.estabelecimento_id = ? AND k.ativo AND k.excluido_em IS NULL AND k.id <> ?
@@ -319,4 +324,33 @@ export async function buscarProcedimentosKit(l: Leitor, termo: string): Promise<
       nome: String(r['descricao']),
     })),
   ];
+}
+
+/**
+ * Os kits padrão ativos das cirurgias (vínculo ativo, marcado como padrão, de kit ativo do estabelecimento): a
+ * sugestão do gasto de sala do ato os soma à lista padrão de material (regra `linhasDoKitPadrao`).
+ */
+export async function lerKitsPadraoDosProcedimentos(
+  l: Leitor,
+  est: number,
+  procedimentos: readonly number[],
+): Promise<KitPadraoDoProcedimento[]> {
+  if (!procedimentos.length) return [];
+  return (
+    await l.consultar<Linha>(
+      `SELECT kp.id, kp.procedimento_cirurgico_id, kp.kit_material_id, kp.quantidade_kits
+         FROM kit_material_procedimento kp
+         JOIN kit_material k ON k.id = kp.kit_material_id
+        WHERE k.estabelecimento_id = ? AND k.ativo AND k.excluido_em IS NULL
+          AND kp.padrao AND kp.excluido_em IS NULL
+          AND kp.procedimento_cirurgico_id IN (${procedimentos.map(() => '?').join(', ')})
+        ORDER BY kp.id`,
+      [est, ...procedimentos],
+    )
+  ).map((r) => ({
+    vinculo: n(r['id']),
+    procedimento: n(r['procedimento_cirurgico_id']),
+    kit: n(r['kit_material_id']),
+    quantidadeKits: n(r['quantidade_kits']),
+  }));
 }

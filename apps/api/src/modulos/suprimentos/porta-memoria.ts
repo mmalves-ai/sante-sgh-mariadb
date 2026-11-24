@@ -23,7 +23,11 @@ import {
   type HistoricoCompra,
   type InventarioLido,
   type ItemBusca,
+  conferirKitPadrao,
+  type GravarKitPadraoEntrada,
+  type KitPadraoCadastro,
   type KitRastreavel,
+  type ProcedimentoKitBusca,
   type LotesDoPaciente,
   type ParametrosEstoque,
   type PedidoDetalhe,
@@ -242,6 +246,7 @@ interface Estado {
   envios: EnvioM[];
   inventarios: InventarioM[];
   kits: KitM[];
+  kitsPadrao: KitPadraoCadastro[];
   fechados: { ano: number; mes: number; exportado: boolean }[];
   ocorrenciasMes: { tipo: string; ano: number; mes: number; motivo: string; autor: string; em: string }[];
   pontos: Map<string, { prazoDias: number; estoqueSeguranca: number | null }>;
@@ -334,6 +339,13 @@ const chaveSaldo = (item: number, local: number) => `${item}:${local}`;
 const localNome = (c: number) => LOCAIS.find((l) => l.codigo === c)?.nome ?? `LOCAL ${c}`;
 
 /** Recusa do domínio vira a recusa da operação (Problem Details em português, os campos). */
+/** Cirurgias e procedimentos SINTÉTICOS para o vínculo do kit padrão na sessão de dev/ci. */
+const PROCEDIMENTOS_KIT: ProcedimentoKitBusca[] = [
+  { procedimentoCirurgico: 701, itemFaturavel: null, codigo: 'CIR-701', nome: 'CIRURGIA FICTICIA DE HERNIA' },
+  { procedimentoCirurgico: 702, itemFaturavel: null, codigo: 'CIR-702', nome: 'CIRURGIA FICTICIA DE JOELHO' },
+  { procedimentoCirurgico: null, itemFaturavel: 801, codigo: 'PRC-801', nome: 'CURATIVO FICTICIO GRANDE' },
+];
+
 function recusar(r: RecusaSuprimentos | readonly RecusaSuprimentos[] | null): void {
   const lista = r === null ? [] : Array.isArray(r) ? r : [r as RecusaSuprimentos];
   const p = lista[0];
@@ -371,6 +383,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
       envios: [],
       inventarios: [],
       kits: [],
+      kitsPadrao: [],
       fechados: [2, 3, 4].map((n) => ({ ...mesAnterior(corrente, n), exportado: true })),
       ocorrenciasMes: [],
       pontos: new Map(),
@@ -998,6 +1011,8 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         l.validade = e.validade;
         return { id: l.id, ano: r.ano, mes: r.mes };
       }
+      case 'suprimentos.gravarKitPadrao':
+        return this.gravarKitPadrao(s, e as GravarKitPadraoEntrada);
       default:
         throw recusa('operacao-desconhecida', 'Operação não disponível nesta tela.');
     }
@@ -2206,12 +2221,85 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     const k = s.kits.find((x) => x.id === id);
     return k ? this.kitLido(s, k, hoje, alertaDias) : null;
   }
-  // F3.6 (05-SUP linha 13): o cadastro do kit padrão só existe no banco próprio (a memória de dev/ci fica em consulta).
-  async kitsPadraoCadastro() {
-    return [];
+  // F3.6 (05-SUP linha 13): o cadastro do kit padrão na sessão sintética, com as mesmas regras puras da API (código
+  // repetido, insumo inexistente, procedimento inexistente, segundo padrão do mesmo procedimento e versão velha).
+  private gravarKitPadrao(s: Estado, e: GravarKitPadraoEntrada): Record<string, number> {
+    recusar(conferirKitPadrao(e));
+    if (s.kitsPadrao.some((x) => x.codigo === e.codigo && x.id !== (e.kit ?? 0)))
+      throw recusa('kit-codigo-duplicado', `O código ${e.codigo} já é de outro kit deste estabelecimento.`, {
+        campos: ['codigo'],
+      });
+    const atual = e.kit === undefined ? undefined : s.kitsPadrao.find((x) => x.id === e.kit);
+    if (e.kit !== undefined && !atual)
+      throw recusa('kit-inexistente', 'O kit não existe neste estabelecimento.', { campos: ['kit'] });
+    if (atual && atual.versao !== e.versao)
+      throw new ErroOperacao(
+        409,
+        'conflito-versao',
+        'Registro alterado',
+        'Outra pessoa alterou o kit: recarregue.',
+      );
+    const itens = e.itens.map((i, linha) => {
+      const it = s.itens.get(i.insumo);
+      if (!it)
+        throw recusa('referencia-inexistente', `O item da linha ${linha + 1} não está ativo no estoque.`, {
+          campos: [`itens.${linha}.insumo`],
+        });
+      return { ...i, nome: it.nome, unidade: it.unidade };
+    });
+    const procedimentos = e.procedimentos.map((p, i) => {
+      const ref = PROCEDIMENTOS_KIT.find(
+        (x) => x.procedimentoCirurgico === p.procedimentoCirurgico && x.itemFaturavel === p.itemFaturavel,
+      );
+      if (!ref)
+        throw recusa('referencia-inexistente', `O procedimento da linha ${i + 1} não está ativo.`, {
+          campos: [`procedimentos.${i}`],
+        });
+      const outro = s.kitsPadrao.find(
+        (k) =>
+          k.ativo &&
+          k.id !== (e.kit ?? 0) &&
+          k.procedimentos.some(
+            (x) =>
+              x.padrao &&
+              x.procedimentoCirurgico === p.procedimentoCirurgico &&
+              x.itemFaturavel === p.itemFaturavel,
+          ),
+      );
+      if (p.padrao && e.ativo && outro)
+        throw recusa(
+          'kit-padrao-duplicado',
+          `O procedimento da linha ${i + 1} já tem o kit ${outro.codigo} como padrão: desmarque um dos dois.`,
+          { campos: [`procedimentos.${i}.padrao`] },
+        );
+      return { ...p, codigo: ref.codigo, nome: ref.nome };
+    });
+    const valores = {
+      codigo: e.codigo,
+      nome: e.nome,
+      tipo: e.tipo,
+      permiteQuantidadeAcima: e.permiteQuantidadeAcima,
+      permiteSimilar: e.permiteSimilar,
+      observacao: e.observacao,
+      ativo: e.ativo,
+      itens,
+      procedimentos,
+    };
+    if (atual) {
+      Object.assign(atual, valores, { versao: atual.versao + 1 });
+      return { id: atual.id, kit: atual.id };
+    }
+    const id = 9000 + s.kitsPadrao.length + 1;
+    s.kitsPadrao.push({ id, versao: 1, ...valores });
+    return { id, kit: id };
   }
-  async procedimentosKit() {
-    return [];
+  async kitsPadraoCadastro(c: ContextoSuprimentos): Promise<KitPadraoCadastro[]> {
+    return structuredClone(this.e(c).kitsPadrao);
+  }
+  async procedimentosKit(_c: ContextoSuprimentos, termo: string): Promise<ProcedimentoKitBusca[]> {
+    const t = termo.trim().toUpperCase();
+    if (t.length < 2) return [];
+    return PROCEDIMENTOS_KIT.filter((x) => x.codigo === t || x.nome.includes(t));
   }
   async kitsPadrao(c: ContextoSuprimentos) {
     const s = this.e(c);

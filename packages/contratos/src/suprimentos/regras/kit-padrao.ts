@@ -132,3 +132,50 @@ export function diferencaItensKit<
   }
   return { entram, mudam, saem: atuais.filter((a) => !ficam.has(a.insumo)) };
 }
+
+/** O kit marcado como padrão de uma cirurgia (o vínculo ativo de um kit ativo). */
+export interface KitPadraoDoProcedimento {
+  readonly vinculo: number;
+  readonly procedimento: number;
+  readonly kit: number;
+  readonly quantidadeKits: number;
+}
+
+/**
+ * As linhas que o kit padrão acrescenta à lista padrão de material da cirurgia, para a sugestão do gasto de sala: o
+ * padrão entra como linha geral do serviço (qualquer cirurgião e anestesia), com a quantidade de kits do vínculo e sem
+ * obrigatoriedade. Se a lista do procedimento já cita o mesmo kit numa linha ativa, vale a linha da lista (a
+ * quantidade e a obrigatoriedade escolhidas para ela). O id da linha acrescentada é o do vínculo, negativo, para não
+ * se confundir com uma linha gravada da lista.
+ */
+export function linhasDoKitPadrao(
+  lista: readonly { readonly procedimento: number; readonly kit: number | null; readonly ativo: boolean }[],
+  padroes: readonly KitPadraoDoProcedimento[],
+): {
+  readonly id: number;
+  readonly procedimento: number;
+  readonly cirurgiao: null;
+  readonly tipoAnestesia: null;
+  readonly insumo: null;
+  readonly kit: number;
+  readonly quantidade: number;
+  readonly obrigatorio: false;
+  readonly ativo: true;
+}[] {
+  const citados = new Set(
+    lista.filter((l) => l.ativo && l.kit !== null).map((l) => `${l.procedimento}:${l.kit ?? 0}`),
+  );
+  return padroes
+    .filter((p) => !citados.has(`${p.procedimento}:${p.kit}`))
+    .map((p) => ({
+      id: -p.vinculo,
+      procedimento: p.procedimento,
+      cirurgiao: null,
+      tipoAnestesia: null,
+      insumo: null,
+      kit: p.kit,
+      quantidade: p.quantidadeKits,
+      obrigatorio: false,
+      ativo: true,
+    }));
+}

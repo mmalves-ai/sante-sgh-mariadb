@@ -5,6 +5,7 @@ import {
   conferirKitPadrao,
   diferencaItensKit,
   type KitPadraoConferido,
+  linhasDoKitPadrao,
 } from '@sgh/contratos';
 
 const base: KitPadraoConferido = {
@@ -93,5 +94,29 @@ describe('diferencaItensKit', () => {
   it('sem mudança, nada a gravar', () => {
     const d = diferencaItensKit([i(1, 2, true)], [i(1, 2, true)]);
     expect([d.entram, d.mudam, d.saem]).toEqual([[], [], []]);
+  });
+});
+
+describe('linhasDoKitPadrao (o padrão muda a sugestão do gasto de sala)', () => {
+  const padrao = { vinculo: 7, procedimento: 5, kit: 30, quantidadeKits: 2 };
+  it('o kit padrão entra como linha geral do serviço, com a quantidade de kits e id negativo', () => {
+    expect(linhasDoKitPadrao([], [padrao])).toEqual([
+      {
+        id: -7,
+        procedimento: 5,
+        cirurgiao: null,
+        tipoAnestesia: null,
+        insumo: null,
+        kit: 30,
+        quantidade: 2,
+        obrigatorio: false,
+        ativo: true,
+      },
+    ]);
+  });
+  it('a linha ativa da lista que já cita o kit prevalece; a inativa ou de outro procedimento, não', () => {
+    expect(linhasDoKitPadrao([{ procedimento: 5, kit: 30, ativo: true }], [padrao])).toEqual([]);
+    expect(linhasDoKitPadrao([{ procedimento: 5, kit: 30, ativo: false }], [padrao])).toHaveLength(1);
+    expect(linhasDoKitPadrao([{ procedimento: 6, kit: 30, ativo: true }], [padrao])).toHaveLength(1);
   });
 });

@@ -23,6 +23,7 @@ import {
   type SituacaoGastoSala,
   transicaoGastoSala,
 } from '@sgh/dominio-cirurgia';
+import { linhasDoKitPadrao } from '@sgh/contratos';
 import { SITUACOES_CONTA_LANCAVEL } from '@sgh/contratos/regras-faturamento';
 import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -42,6 +43,7 @@ import {
   registrarSaida,
   TABELAS_OPERACOES_SUPRIMENTOS,
 } from '../suprimentos/porta-propria.js';
+import { lerKitsPadraoDosProcedimentos } from '../suprimentos/kit-padrao.js';
 
 export const PORTA_GASTO_SALA = Symbol('PORTA_GASTO_SALA');
 
@@ -290,13 +292,18 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
   ) {
     const procs = ato.procedimentos.map((p) => p.id);
     if (!procs.length) return [];
-    const lista = (
+    const gravada = (
       await l.consultar<Linha>(
         `SELECT * FROM lista_material_procedimento
           WHERE estabelecimento_id = ? AND ativo AND procedimento_cirurgico_id IN (${procs.map(() => '?').join(', ')})`,
         [est, ...procs],
       )
     ).map(linhaLista);
+    // F3.6 (05-SUP linha 13): o kit padrão da cirurgia entra na sugestão quando a lista não o cita.
+    const lista = [
+      ...gravada,
+      ...linhasDoKitPadrao(gravada, await lerKitsPadraoDosProcedimentos(l, est, procs)),
+    ];
     const idsKit = [...new Set(lista.map((x) => x.kit).filter((k): k is number => k !== null))];
     const kits = idsKit.length
       ? (
