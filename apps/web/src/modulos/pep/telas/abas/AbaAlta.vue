@@ -174,7 +174,7 @@ async function cancelar(): Promise<void> {
         :texto="t('pep.doc.alta.obitoRegistrado', { data: dataHoraBr(dados.data.value.obito.em) })"
       />
       <form
-        v-if="dados.data.value.obito && dados.data.value.obitoAcao.pode"
+        v-if="dados.data.value.cancelarObitoAcao?.pode"
         class="form"
         data-testid="form-cancelar-obito"
         @submit.prevent="cancelar"

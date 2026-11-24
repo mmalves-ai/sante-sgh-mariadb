@@ -1785,6 +1785,7 @@ export class ServicoDocumentos {
         obito: null,
         finalizar: { pode: false, motivo: 'O paciente não tem atendimento.' },
         obitoAcao: { pode: false, motivo: 'O paciente não tem atendimento.' },
+        cancelarObitoAcao: { pode: false, motivo: 'O paciente não tem atendimento.' },
       };
     const [sumarios, transf, obito, problemas, alergias, episodio] = await Promise.all([
       this.porta.sumarios(c, at.id),
@@ -1837,6 +1838,9 @@ export class ServicoDocumentos {
         ? { pode: false, motivo: 'O sumário de alta deste atendimento já foi finalizado.' }
         : acoes.finalizar,
       obitoAcao: obito ? { pode: false, motivo: 'O óbito do paciente já foi registrado.' } : acoes.obito,
+      cancelarObitoAcao: obito
+        ? acoes.obito
+        : { pode: false, motivo: 'O paciente não tem declaração de óbito vigente.' },
     };
   }
 

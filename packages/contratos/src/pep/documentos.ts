@@ -744,6 +744,8 @@ export interface AltaPaciente {
   readonly obito: { id: number; em: string; numero: string | null; documento: number | null } | null;
   readonly finalizar: AcaoLiberada;
   readonly obitoAcao: AcaoLiberada;
+  /** Cancelar a declaração vigente (03-PEP L126): a mesma ação clínica de quem emite, só com declaração vigente. */
+  readonly cancelarObitoAcao: AcaoLiberada;
 }
 
 export const esquemaRelatorioTransferencia = z
