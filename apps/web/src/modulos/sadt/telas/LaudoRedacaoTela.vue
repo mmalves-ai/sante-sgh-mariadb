@@ -3,6 +3,7 @@
 // o exame e o paciente, as medidas por seção com a faixa e a marca de fora da referência na hora, o modelo sugerido
 // (o do médico primeiro) com os campos preenchidos pelas medidas, o texto, e "salvar e assinar" num clique. Depois de
 // assinado, o texto só muda por retificação com motivo; o histórico de versões fica ao lado.
+import { faixaDoPaciente, superficieCorporal } from '@sgh/dominio-sadt';
 import { SanteBotao } from '@sgh/ui';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -102,13 +103,21 @@ const corpo = (): CorpoLaudo => ({
   valores: valores(),
 });
 
-// A marca de fora da referência na hora, pela faixa que a API devolveu para o paciente.
-const superficie = computed(() => {
-  const p = numero(f.peso);
-  const a = numero(f.altura);
-  return p && a ? Math.sqrt((p * a) / 3600) : null;
-});
-const faixaDe = (g: number) => dados.value?.valores.find((v) => v.grandeza === g)?.faixa ?? null;
+// A marca de fora da referência na hora: a faixa sai de todas as faixas do exame pela mesma regra do domínio
+// (faixaDoPaciente), com o sexo, a idade e a data do exame e o peso e a altura digitados; vale para a medida nova também.
+const superficie = computed(() => superficieCorporal(numero(f.peso), numero(f.altura)));
+function faixaDe(g: number) {
+  const d = dados.value;
+  if (!d) return null;
+  const fx = faixaDoPaciente(d.faixas, g, {
+    sexo: d.paciente.sexo,
+    idadeDias: d.paciente.idadeDias,
+    pesoKg: numero(f.peso),
+    alturaCm: numero(f.altura),
+    dataExame: d.paciente.dataExame,
+  });
+  return fx ? { minima: fx.minima, maxima: fx.maxima, indexada: fx.indexadaSuperficie } : null;
+}
 const faixaTexto = (g: number) => {
   const fx = faixaDe(g);
   return fx ? `${M.faixa} ${fx.minima ?? '…'}–${fx.maxima ?? '…'}${fx.indexada ? ' /m²' : ''}` : '';
@@ -147,6 +156,8 @@ async function carregar(): Promise<void> {
     f.resultado = (d.laudo?.resultado ?? '') as typeof f.resultado;
     f.achadoCritico = d.laudo?.achadoCritico ?? false;
     f.achadoCriticoDescricao = d.laudo?.achadoCriticoDescricao ?? '';
+    f.peso = d.laudo?.pesoKg != null ? String(d.laudo.pesoKg) : '';
+    f.altura = d.laudo?.alturaCm != null ? String(d.laudo.alturaCm) : '';
     f.medidas = Object.fromEntries(
       d.valores.map((v) => [v.grandeza, v.numero !== null ? String(v.numero) : (v.texto ?? '')]),
     );

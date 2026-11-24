@@ -10,6 +10,10 @@ import {
   avaliarValores,
   camposDoModelo,
   conferirAssinante,
+  conferirDonoDoModelo,
+  conferirExameParaLaudo,
+  conferirRetificador,
+  dataDoExame,
   conferirMotivoRetificacao,
   conferirTextoParaAssinar,
   ehMedico,
@@ -93,7 +97,13 @@ export const esquemaModeloLaudo = z.object({
 
 export interface LaudoEmRedacao {
   readonly exame: { item: number; exame: number; nome: string; setor: number; tipoSetor: string };
-  readonly paciente: { id: number; sexo: 'feminino' | 'masculino' | null; idadeDias: number | null };
+  readonly paciente: {
+    id: number;
+    sexo: 'feminino' | 'masculino' | null;
+    idadeDias: number | null;
+    /** A data do exame (realização, coleta ou pedido): a da faixa e da idade. */
+    dataExame: string;
+  };
   readonly laudo: {
     id: number;
     situacao: SituacaoLaudo;
@@ -105,6 +115,10 @@ export interface LaudoEmRedacao {
     modelo: number | null;
     versaoAtual: number;
     versao: number;
+    /** O peso, a altura e a superfície gravados no laudo (a tela os traz de volta). */
+    pesoKg: number | null;
+    alturaCm: number | null;
+    superficieCorporal: number | null;
   } | null;
   readonly versoes: readonly {
     numero: number;
@@ -172,6 +186,12 @@ function daRegra<T>(fn: () => T): T {
 
 const TABELAS = ['laudo_diagnostico', 'laudo_diagnostico_versao', 'valor_grandeza_laudo', 'modelo_laudo'];
 
+interface MedidasPaciente {
+  pesoKg: number | null;
+  alturaCm: number | null;
+  superficieCorporal: number | null;
+}
+
 interface Base {
   item: number;
   exame: number;
@@ -181,6 +201,32 @@ interface Base {
   paciente: number;
   sexo: 'feminino' | 'masculino' | null;
   idadeDias: number | null;
+  situacao: string;
+  realizadoEm: string | null;
+  dataExame: string;
+}
+
+/** O conteúdo coberto pelo hash da versão (exportado para a conferência reproduzir o hash a partir do banco). */
+export function hashDaVersao(c: {
+  titulo: string | null;
+  texto: string;
+  resultado: string | null;
+  achadoCritico: boolean;
+  paciente: { pesoKg: number | null; alturaCm: number | null; superficieCorporal: number | null };
+  valores: readonly { grandeza: number; numero: number | null; texto: string | null; fora: boolean }[];
+}): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        texto: c.texto,
+        titulo: c.titulo,
+        resultado: c.resultado,
+        achadoCritico: c.achadoCritico,
+        paciente: c.paciente,
+        valores: c.valores,
+      }),
+    )
+    .digest('hex');
 }
 
 // ── Serviço ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -246,7 +292,8 @@ export class ServicoLaudoRedacao {
   private async base(l: Leitor, est: number, item: number): Promise<Base> {
     const r = await l.uma(
       `SELECT ei.id, ei.exame_id, ex.nome AS exame_nome, COALESCE(ei.setor_diagnostico_id, q.setor_diagnostico_id) AS setor,
-              sd.tipo AS tipo_setor, q.paciente_id, sx.sigla AS sexo, DATEDIFF(CURRENT_DATE, pf.data_nascimento) AS idade_dias
+              sd.tipo AS tipo_setor, q.paciente_id, sx.sigla AS sexo, ei.situacao, ei.realizado_em, ei.coletado_em, q.solicitado_em,
+              DATEDIFF(DATE(COALESCE(ei.realizado_em, ei.coletado_em, q.solicitado_em)), pf.data_nascimento) AS idade_dias
          FROM exame_item ei
          JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id
          JOIN exame ex ON ex.id = ei.exame_id
@@ -272,7 +319,27 @@ export class ServicoLaudoRedacao {
       paciente: n(r['paciente_id']),
       sexo: sexoDe(r['sexo']),
       idadeDias: nn(r['idade_dias']),
+      situacao: texto(r['situacao']),
+      realizadoEm: dataIso(r['realizado_em']),
+      dataExame: dataDoExame(
+        dataIso(r['realizado_em']),
+        dataIso(r['coletado_em']),
+        dataIso(r['solicitado_em']) ?? new Date().toISOString(),
+      ),
     };
+  }
+
+  /** O profissional é responsável vigente do setor pelos laudos (assina, revisa ou responde tecnicamente)? */
+  private async responsavelDoSetor(l: Leitor, setor: number, exame: number, profissional: number) {
+    const r = await l.uma(
+      `SELECT id FROM responsavel_laudo_setor
+        WHERE setor_diagnostico_id = ? AND profissional_id = ? AND (exame_id IS NULL OR exame_id = ?)
+          AND (assina_laudo OR revisa_laudo OR responsavel_tecnico) AND excluido_em IS NULL
+          AND vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)
+        LIMIT 1`,
+      [setor, profissional, exame],
+    );
+    return r !== null && r !== undefined;
   }
 
   private async catalogo(l: Leitor, exame: number) {
@@ -366,7 +433,7 @@ export class ServicoLaudoRedacao {
       idadeDias: b.idadeDias,
       pesoKg,
       alturaCm,
-      dataExame: new Date().toISOString().slice(0, 10),
+      dataExame: b.dataExame,
     };
   }
 
@@ -378,7 +445,7 @@ export class ServicoLaudoRedacao {
       const cat = await this.catalogo(l, b.exame);
       const ld = await l.uma(
         `SELECT id, situacao, titulo, texto, resultado, achado_critico, achado_critico_descricao, modelo_laudo_id,
-                versao_atual, versao
+                versao_atual, versao, peso_kg, altura_cm, superficie_corporal
            FROM laudo_diagnostico WHERE exame_item_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [item, est],
       );
@@ -394,6 +461,9 @@ export class ServicoLaudoRedacao {
             modelo: nn(ld['modelo_laudo_id']),
             versaoAtual: n(ld['versao_atual']),
             versao: n(ld['versao']),
+            pesoKg: nn(ld['peso_kg']),
+            alturaCm: nn(ld['altura_cm']),
+            superficieCorporal: nn(ld['superficie_corporal']),
           }
         : null;
       const versoes = laudo
@@ -432,7 +502,7 @@ export class ServicoLaudoRedacao {
           cat.grandezas,
           brutos.filter((v) => cat.grandezas.some((g) => g.id === v.grandeza)),
           cat.faixas,
-          this.paciente(b, null, null),
+          this.paciente(b, laudo?.pesoKg ?? null, laudo?.alturaCm ?? null),
         ),
       );
       const profissional = await this.profissionalDoUsuario(l, c.usuario);
@@ -476,7 +546,7 @@ export class ServicoLaudoRedacao {
       };
       return {
         exame: { item, exame: b.exame, nome: b.nomeExame, setor: b.setor, tipoSetor: b.tipoSetor },
-        paciente: { id: b.paciente, sexo: b.sexo, idadeDias: b.idadeDias },
+        paciente: { id: b.paciente, sexo: b.sexo, idadeDias: b.idadeDias, dataExame: b.dataExame },
         laudo,
         versoes,
         secoes: cat.secoes,
@@ -587,33 +657,44 @@ export class ServicoLaudoRedacao {
     exigirObrigatorias: boolean,
   ) {
     const b = await this.base(tx, est, item);
+    daRegra(() => conferirExameParaLaudo(b.situacao, b.realizadoEm));
     const [ld] = await tx.consultarParaAtualizar(
-      'SELECT id, situacao, versao, versao_atual FROM laudo_diagnostico WHERE exame_item_id = ? AND excluido_em IS NULL',
-      [item],
+      `SELECT id, situacao, versao, versao_atual, peso_kg, altura_cm, laudista_profissional_id FROM laudo_diagnostico
+        WHERE exame_item_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [item, est],
       { teto: 1 },
     );
+    // Sem peso e altura novos, valem os gravados no laudo: a retificação sem redigitar mantém a mesma avaliação.
+    const herda = p.pesoKg === null && p.alturaCm === null && ld;
+    const pesoKg = herda ? nn(ld['peso_kg']) : p.pesoKg;
+    const alturaCm = herda ? nn(ld['altura_cm']) : p.alturaCm;
+    const medidas = { pesoKg, alturaCm, superficieCorporal: superficieCorporal(pesoKg, alturaCm) };
     const cat = await this.catalogo(tx, b.exame);
     const av = daRegra(() =>
       avaliarValores(
         cat.grandezas,
         p.valores,
         cat.faixas,
-        this.paciente(b, p.pesoKg, p.alturaCm),
+        this.paciente(b, pesoKg, alturaCm),
         exigirObrigatorias,
       ),
     );
     if (p.modelo !== null) {
-      const m = await tx.uma('SELECT id FROM modelo_laudo WHERE id = ? AND estabelecimento_id = ?', [
-        p.modelo,
-        est,
-      ]);
-      if (!m) throw recusa('modelo-inexistente', 'O modelo não existe neste estabelecimento.');
+      const m = await tx.uma(
+        'SELECT id FROM modelo_laudo WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE',
+        [p.modelo, est],
+      );
+      if (!m)
+        throw recusa('modelo-inexistente', 'O modelo não existe neste estabelecimento ou está inativo.');
     }
-    return { b, ld: ld ?? null, av };
+    return { b, ld: ld ?? null, av, medidas };
   }
 
-  private campos(p: z.infer<typeof esquemaAssinarLaudo>) {
+  private campos(p: z.infer<typeof esquemaAssinarLaudo>, m: MedidasPaciente) {
     return {
+      peso_kg: m.pesoKg,
+      altura_cm: m.alturaCm,
+      superficie_corporal: m.superficieCorporal,
       modelo_laudo_id: p.modelo,
       titulo: p.titulo,
       texto: p.texto,
@@ -632,11 +713,12 @@ export class ServicoLaudoRedacao {
     p: z.infer<typeof esquemaAssinarLaudo>,
     situacao: SituacaoLaudo,
     av: readonly ValorAvaliado[],
+    m: MedidasPaciente,
   ): Promise<number> {
     let laudo: number;
     if (ld) {
       laudo = n(ld['id']);
-      await tx.alterar('laudo_diagnostico', laudo, n(ld['versao']), { ...this.campos(p), situacao });
+      await tx.alterar('laudo_diagnostico', laudo, n(ld['versao']), { ...this.campos(p, m), situacao });
     } else {
       laudo = await tx.incluir('laudo_diagnostico', {
         estabelecimento_id: est,
@@ -646,7 +728,7 @@ export class ServicoLaudoRedacao {
         tipo_laudo: 'definitivo',
         situacao,
         versao_atual: 1,
-        ...this.campos(p),
+        ...this.campos(p, m),
       });
     }
     await this.gravarValores(tx, laudo, av);
@@ -661,6 +743,7 @@ export class ServicoLaudoRedacao {
     av: readonly ValorAvaliado[],
     profissional: number,
     motivo: { id: number | null; texto: string | null },
+    m: MedidasPaciente,
   ): Promise<number> {
     const nums = (
       await tx.consultar(
@@ -678,13 +761,24 @@ export class ServicoLaudoRedacao {
       texto: v.texto,
       fora: v.foraReferencia,
     }));
-    const hash = createHash('sha256')
-      .update(JSON.stringify({ texto: p.texto, titulo: p.titulo, resultado: p.resultado, valores: foto }))
-      .digest('hex');
+    const hash = hashDaVersao({
+      titulo: p.titulo,
+      texto: p.texto,
+      resultado: p.resultado,
+      achadoCritico: p.achadoCritico,
+      paciente: m,
+      valores: foto,
+    });
     await tx.incluir('laudo_diagnostico_versao', {
       laudo_diagnostico_id: laudo,
       operacao: numero === 1 ? 'inclusao' : 'alteracao',
-      dados: JSON.stringify({ valores: foto, resultado: p.resultado, achadoCritico: p.achadoCritico }),
+      dados: JSON.stringify({
+        valores: foto,
+        resultado: p.resultado,
+        achadoCritico: p.achadoCritico,
+        achadoCriticoDescricao: p.achadoCritico ? p.achadoCriticoDescricao : null,
+        paciente: m,
+      }),
       ocorrido_em: new Date(),
       usuario_id: tx.contexto.usuario,
       numero_versao: numero,
@@ -703,14 +797,14 @@ export class ServicoLaudoRedacao {
   salvar(c: ContextoSadt, item: number, entrada: unknown): Promise<LaudoGravado> {
     const p = esquemaSalvarLaudo.parse(entrada);
     return this.gravar(c, 'sadt.laudo.rascunho', 'laudo_diagnostico', async (tx, est) => {
-      const { b, ld, av } = await this.preparar(tx, est, item, p, false);
+      const { b, ld, av, medidas } = await this.preparar(tx, est, item, p, false);
       const situacao = daRegra(() =>
         situacaoDepois(
           ld ? (texto(ld['situacao']) as SituacaoLaudo) : null,
           p.revisao ? 'enviar_revisao' : 'salvar',
         ),
       );
-      const laudo = await this.gravarRascunho(tx, est, b, ld, p, situacao, av);
+      const laudo = await this.gravarRascunho(tx, est, b, ld, p, situacao, av, medidas);
       return {
         id: laudo,
         situacao,
@@ -725,18 +819,24 @@ export class ServicoLaudoRedacao {
   assinar(c: ContextoSadt, item: number, entrada: unknown): Promise<LaudoGravado> {
     const p = esquemaAssinarLaudo.parse(entrada);
     return this.gravar(c, 'sadt.laudo.assinado', 'laudo_diagnostico', async (tx, est) => {
-      const { b, ld, av } = await this.preparar(tx, est, item, p, true);
+      const { b, ld, av, medidas } = await this.preparar(tx, est, item, p, true);
       const situacao = daRegra(() =>
         situacaoDepois(ld ? (texto(ld['situacao']) as SituacaoLaudo) : null, 'assinar'),
       );
       daRegra(() => conferirTextoParaAssinar(p.texto));
       const v = await this.assinante(tx, tx.contexto.usuario);
-      daRegra(() => conferirAssinante(v, v !== null && ehMedico(v.cbo)));
-      const laudo = await this.gravarRascunho(tx, est, b, ld, p, 'rascunho', av);
-      const numero = await this.versao(tx, laudo, 'assinado', p, av, v!.profissional, {
-        id: null,
-        texto: null,
-      });
+      daRegra(() => conferirAssinante(v, b.tipoSetor));
+      const laudo = await this.gravarRascunho(tx, est, b, ld, p, 'rascunho', av, medidas);
+      const numero = await this.versao(
+        tx,
+        laudo,
+        'assinado',
+        p,
+        av,
+        v!.profissional,
+        { id: null, texto: null },
+        medidas,
+      );
       const [atual] = await tx.consultarParaAtualizar(
         'SELECT versao FROM laudo_diagnostico WHERE id = ?',
         [laudo],
@@ -765,7 +865,7 @@ export class ServicoLaudoRedacao {
   retificar(c: ContextoSadt, item: number, entrada: unknown): Promise<LaudoGravado> {
     const p = esquemaRetificarLaudo.parse(entrada);
     return this.gravar(c, 'sadt.laudo.retificado', 'laudo_diagnostico', async (tx, est) => {
-      const { ld, av } = await this.preparar(tx, est, item, p, true);
+      const { b, ld, av, medidas } = await this.preparar(tx, est, item, p, true);
       if (!ld) throw recusa('laudo-nao-assinado', 'O exame ainda não tem laudo assinado.');
       const situacao = daRegra(() => situacaoDepois(texto(ld['situacao']) as SituacaoLaudo, 'retificar'));
       daRegra(() => conferirMotivoRetificacao(p.motivo, p.motivoTexto));
@@ -776,14 +876,22 @@ export class ServicoLaudoRedacao {
           throw recusa('motivo-inexistente', 'O motivo de retificação não existe ou está inativo.');
       }
       const v = await this.assinante(tx, tx.contexto.usuario);
-      daRegra(() => conferirAssinante(v, v !== null && ehMedico(v.cbo)));
+      daRegra(() => conferirAssinante(v, b.tipoSetor));
+      const responsavel = await this.responsavelDoSetor(tx, b.setor, b.exame, v!.profissional);
+      daRegra(() => conferirRetificador(nn(ld['laudista_profissional_id']), v!.profissional, responsavel));
       const laudo = n(ld['id']);
-      await tx.alterar('laudo_diagnostico', laudo, n(ld['versao']), { ...this.campos(p) });
+      await tx.alterar('laudo_diagnostico', laudo, n(ld['versao']), { ...this.campos(p, medidas) });
       await this.gravarValores(tx, laudo, av);
-      const numero = await this.versao(tx, laudo, 'retificado', p, av, v!.profissional, {
-        id: p.motivo,
-        texto: p.motivoTexto,
-      });
+      const numero = await this.versao(
+        tx,
+        laudo,
+        'retificado',
+        p,
+        av,
+        v!.profissional,
+        { id: p.motivo, texto: p.motivoTexto },
+        medidas,
+      );
       const [atual] = await tx.consultarParaAtualizar(
         'SELECT versao FROM laudo_diagnostico WHERE id = ?',
         [laudo],
@@ -808,7 +916,8 @@ export class ServicoLaudoRedacao {
   salvarModelo(c: ContextoSadt, entrada: unknown): Promise<{ id: number; campos: string[] }> {
     const p = esquemaModeloLaudo.parse(entrada);
     return this.gravar(c, 'sadt.laudo.modelo', 'modelo_laudo', async (tx, est) => {
-      const profissional = p.pessoal ? await this.profissionalDoUsuario(tx, tx.contexto.usuario) : null;
+      const sessao = await this.profissionalDoUsuario(tx, tx.contexto.usuario);
+      const profissional = p.pessoal ? sessao : null;
       if (p.pessoal && profissional === null)
         throw recusa('sem-profissional', 'O modelo pessoal precisa de um profissional ligado à sua conta.');
       const repetido = await tx.uma(
@@ -833,11 +942,15 @@ export class ServicoLaudoRedacao {
         return { id: novo, campos: camposDoModelo(p.texto) };
       }
       const [m] = await tx.consultarParaAtualizar(
-        'SELECT id, versao FROM modelo_laudo WHERE id = ? AND estabelecimento_id = ?',
+        'SELECT id, versao, profissional_id FROM modelo_laudo WHERE id = ? AND estabelecimento_id = ?',
         [p.id, est],
       );
       if (!m) throw recusa('modelo-inexistente', 'O modelo não existe neste estabelecimento.');
-      await tx.alterar('modelo_laudo', p.id, n(m['versao']), dados);
+      // O modelo pessoal só muda pelo dono; na alteração o dono não muda (nem o pessoal vira do estabelecimento, nem o
+      // do estabelecimento vira pessoal de quem o edita).
+      const dono = nn(m['profissional_id']);
+      daRegra(() => conferirDonoDoModelo(dono, sessao));
+      await tx.alterar('modelo_laudo', p.id, n(m['versao']), { ...dados, profissional_id: dono });
       return { id: p.id, campos: camposDoModelo(p.texto) };
     });
   }

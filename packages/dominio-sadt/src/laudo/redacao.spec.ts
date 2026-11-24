@@ -11,6 +11,10 @@ import {
   aplicarModelo,
   camposDoModelo,
   conferirAssinante,
+  conferirDonoDoModelo,
+  conferirExameParaLaudo,
+  conferirRetificador,
+  dataDoExame,
   conferirMotivoRetificacao,
   conferirTextoParaAssinar,
   ordenarModelos,
@@ -47,14 +51,14 @@ describe('redação do laudo', () => {
     expect(codigo(() => conferirMotivoRetificacao(null, 'erro'))).toBe('retificacao-sem-motivo');
     expect(codigo(() => conferirMotivoRetificacao(3, null))).toBeNull();
     expect(codigo(() => conferirMotivoRetificacao(null, 'Lateralidade trocada no texto'))).toBeNull();
-    expect(codigo(() => conferirAssinante(null, true))).toBe('sem-vinculo');
-    expect(codigo(() => conferirAssinante({ cbo: '225125', conselhoAtivo: false }, true))).toBe(
+    expect(codigo(() => conferirAssinante(null, 'imagem'))).toBe('sem-vinculo');
+    expect(codigo(() => conferirAssinante({ cbo: '225125', conselhoAtivo: false }, 'imagem'))).toBe(
       'conselho-inativo',
     );
-    expect(codigo(() => conferirAssinante({ cbo: '223405', conselhoAtivo: true }, false))).toBe(
+    expect(codigo(() => conferirAssinante({ cbo: '223405', conselhoAtivo: true }, 'metodos_graficos'))).toBe(
       'laudo-privativo-medico',
     );
-    expect(codigo(() => conferirAssinante({ cbo: '225125', conselhoAtivo: true }, true))).toBeNull();
+    expect(codigo(() => conferirAssinante({ cbo: '225125', conselhoAtivo: true }, 'imagem'))).toBeNull();
     expect(proximaVersao([])).toBe(1);
     expect(proximaVersao([1, 3, 2])).toBe(4);
   });
@@ -178,5 +182,34 @@ describe('laudo estruturado', () => {
       'grandeza-obrigatoria',
     );
     expect(codigo(() => avaliarValores(gs, [{ grandeza: 1, numero: 1, texto: null }], [], p))).toBeNull();
+  });
+
+  it('só lauda o exame realizado; o cancelado e o pedido ainda não feito são recusados', () => {
+    expect(codigo(() => conferirExameParaLaudo('solicitado', null))).toBe('exame-nao-realizado');
+    expect(codigo(() => conferirExameParaLaudo('agendado', null))).toBe('exame-nao-realizado');
+    expect(codigo(() => conferirExameParaLaudo('cancelado', '2026-11-20'))).toBe('exame-cancelado');
+    expect(codigo(() => conferirExameParaLaudo('recusado', null))).toBe('exame-cancelado');
+    expect(codigo(() => conferirExameParaLaudo('em_analise', null))).toBeNull();
+    expect(codigo(() => conferirExameParaLaudo('agendado', '2026-11-20T10:00:00Z'))).toBeNull();
+  });
+
+  it('a data do exame é a da realização, senão a da coleta, senão a do pedido', () => {
+    expect(dataDoExame('2026-11-20T10:00:00Z', '2026-11-19', '2026-11-18')).toBe('2026-11-20');
+    expect(dataDoExame(null, '2026-11-19T08:00', '2026-11-18')).toBe('2026-11-19');
+    expect(dataDoExame(null, null, '2026-11-18 07:00')).toBe('2026-11-18');
+  });
+
+  it('retifica o próprio laudista ou o responsável do setor; o colega não', () => {
+    expect(codigo(() => conferirRetificador(7, 7, false))).toBeNull();
+    expect(codigo(() => conferirRetificador(7, 8, false))).toBe('retificacao-de-outro-laudista');
+    expect(codigo(() => conferirRetificador(7, 8, true))).toBeNull();
+    expect(codigo(() => conferirRetificador(null, 8, false))).toBeNull();
+  });
+
+  it('o modelo pessoal só muda pelo dono', () => {
+    expect(codigo(() => conferirDonoDoModelo(null, 5))).toBeNull();
+    expect(codigo(() => conferirDonoDoModelo(5, 5))).toBeNull();
+    expect(codigo(() => conferirDonoDoModelo(5, 6))).toBe('modelo-de-outro-profissional');
+    expect(codigo(() => conferirDonoDoModelo(5, null))).toBe('modelo-de-outro-profissional');
   });
 });

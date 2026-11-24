@@ -16,7 +16,12 @@ const esquemaValor = z.object({
 });
 export const esquemaLaudoEmRedacao = z.object({
   exame: z.object({ item: n, exame: n, nome: txt, setor: n, tipoSetor: txt }),
-  paciente: z.object({ id: n, sexo: z.enum(['feminino', 'masculino']).nullable(), idadeDias: n.nullable() }),
+  paciente: z.object({
+    id: n,
+    sexo: z.enum(['feminino', 'masculino']).nullable(),
+    idadeDias: n.nullable(),
+    dataExame: txt,
+  }),
   laudo: z
     .object({
       id: n,
@@ -28,6 +33,9 @@ export const esquemaLaudoEmRedacao = z.object({
       achadoCriticoDescricao: txt.nullable(),
       modelo: n.nullable(),
       versaoAtual: n,
+      pesoKg: n.nullable(),
+      alturaCm: n.nullable(),
+      superficieCorporal: n.nullable(),
     })
     .nullable(),
   versoes: z.array(
@@ -43,6 +51,24 @@ export const esquemaLaudoEmRedacao = z.object({
       casasDecimais: n.nullable(),
       obrigatoria: z.boolean(),
       secao: n.nullable(),
+    }),
+  ),
+  /** Todas as faixas do exame: a tela escolhe a do paciente na hora, pela mesma regra do domínio. */
+  faixas: z.array(
+    z.object({
+      grandeza: n,
+      sexo: z.enum(['feminino', 'masculino']).nullable(),
+      idadeMinimaDias: n.nullable(),
+      idadeMaximaDias: n.nullable(),
+      pesoMinimoKg: n.nullable(),
+      pesoMaximoKg: n.nullable(),
+      superficieMinima: n.nullable(),
+      superficieMaxima: n.nullable(),
+      minima: n.nullable(),
+      maxima: n.nullable(),
+      indexadaSuperficie: z.boolean(),
+      vigenciaInicio: txt,
+      vigenciaFim: txt.nullable(),
     }),
   ),
   valores: z.array(esquemaValor),

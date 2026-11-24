@@ -3,10 +3,13 @@
 // referência marcada pela faixa do paciente, indexada pela superfície corporal); a assinatura recusada sem médico e sem
 // a medida obrigatória, sem gravar nada; a assinatura do médico com a versão 1, o hash e a foto das medidas; o rascunho
 // recusado depois de assinado; a retificação com motivo que vira a versão 2 sem apagar a 1; a medida retirada marcada
-// como excluída (nunca apagada); o modelo pessoal com os campos variáveis. Saída só com contagens.
+// como excluída (nunca apagada); o modelo pessoal com os campos variáveis. E ainda (corretor F3.5-4): o exame não
+// realizado recusado; a faixa pela data do exame (vigência); o peso e a altura gravados e herdados na retificação (a
+// marca da medida indexada se mantém); o hash reproduzido do banco; a trilha de cada gravação; a recusa de outro
+// estabelecimento, do modelo inativo ou de outro estabelecimento e do modelo pessoal de outro médico. Só contagens.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ServicoLaudoRedacao } from './laudo-redacao.js';
+import { hashDaVersao, ServicoLaudoRedacao } from './laudo-redacao.js';
 import {
   CLIENTE,
   contexto,
@@ -61,6 +64,12 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
          VALUES (?, 55, 75, '2020-01-01', ?)`,
         [ids.fe, agora],
       );
+      // Faixa da FE vigente só até 21/11/2026 (40 a 50): vale para o exame realizado em 20/11, não para o dia de hoje.
+      await e.executar(
+        `INSERT INTO faixa_referencia_grandeza (grandeza_laudo_id, referencia_minima, referencia_maxima, vigencia_inicio, vigencia_fim, criado_em)
+         VALUES (?, 40, 50, '2026-11-01', '2026-11-21', ?)`,
+        [ids.fe, agora],
+      );
       await e.executar(
         `INSERT INTO faixa_referencia_grandeza (grandeza_laudo_id, referencia_maxima, indexada_superficie, vigencia_inicio, criado_em)
          VALUES (?, 115, TRUE, '2020-01-01', ?)`,
@@ -85,7 +94,10 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         await x(`DELETE FROM valor_grandeza_laudo WHERE laudo_diagnostico_id IN ${laudos}`, []);
         await x(`DELETE FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id IN ${laudos}`, []);
         await x('DELETE FROM laudo_diagnostico WHERE exame_item_id = ?', [m!.itemImagem]);
-        await x('DELETE FROM modelo_laudo WHERE estabelecimento_id = ?', [m!.base.est]);
+        await x('DELETE FROM modelo_laudo WHERE estabelecimento_id IN (?, ?)', [
+          m!.base.est,
+          m!.base.outroEst,
+        ]);
         await x('DELETE FROM faixa_referencia_grandeza WHERE grandeza_laudo_id IN (?, ?, ?)', [
           ids.fe,
           ids.massa,
@@ -104,6 +116,15 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
   it('rascunho com modelo e medidas, assinatura do médico, retificação com versão, nada apagado', async () => {
     const c = contexto(m!);
     const item = m!.itemImagem;
+    const trilha = async (entidade: string, id: number) =>
+      Number(
+        (
+          await um('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ?', [
+            entidade,
+            id,
+          ])
+        )?.['n'],
+      );
     // Modelo pessoal com campos variáveis.
     const modelo = await servico.salvarModelo(c, {
       codigo: `M${m!.marca}`.slice(0, 30),
@@ -116,6 +137,7 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     });
     ids.modelo = modelo.id;
     expect(modelo.campos).toEqual(['fe', 'massa_ve', 'superficie_corporal']);
+    expect(await trilha('modelo_laudo', modelo.id)).toBe(1);
     const previa = await servico.previaModelo(c, item, modelo.id, {
       valores: [{ grandeza: ids.fe, numero: 62, texto: null }],
       pesoKg: 80,
@@ -123,7 +145,73 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     });
     expect(previa.faltam).toEqual(['massa_ve']);
 
-    // Rascunho: medidas avaliadas pela faixa (FE 48 abaixo; massa 240 g / 2 m² = 120 acima de 115).
+    // O exame ainda não realizado (solicitado) não se lauda: nada gravado.
+    expect(await falha(servico.salvar(c, item, { texto: 'Rascunho antes do exame.' }))).toBe(
+      'exame-nao-realizado',
+    );
+    expect(await um('SELECT COUNT(*) AS n FROM laudo_diagnostico WHERE exame_item_id = ?', [item])).toEqual({
+      n: 0,
+    });
+    await nucleo.escrever(ctxT, (e) =>
+      e.executar(
+        "UPDATE exame_item SET situacao = 'em_analise', realizado_em = '2026-11-20 10:00:00' WHERE id = ?",
+        [item],
+      ),
+    );
+
+    // Outro estabelecimento não abre nem grava o exame; o modelo de outro estabelecimento e o inativo são recusados.
+    const cOutro = { ...c, estabelecimento: m!.base.outroEst };
+    expect(await falha(servico.abrir(cOutro, item))).toBe('exame-inexistente');
+    expect(await falha(servico.salvar(cOutro, item, { texto: 'Laudo de outro estabelecimento.' }))).toBe(
+      'exame-inexistente',
+    );
+    const agora = new Date();
+    const modeloOutroEst = await nucleo.escrever(ctxT, (e) =>
+      e.inserir(
+        "INSERT INTO modelo_laudo (estabelecimento_id, codigo, nome, tipo, texto, ativo, criado_em) VALUES (?, ?, 'Outro', 'texto', 'x', TRUE, ?)",
+        [m!.base.outroEst, `O${m!.marca}`.slice(0, 30), agora],
+      ),
+    );
+    const modeloInativo = await nucleo.escrever(ctxT, (e) =>
+      e.inserir(
+        "INSERT INTO modelo_laudo (estabelecimento_id, codigo, nome, tipo, texto, ativo, criado_em) VALUES (?, ?, 'Inativo', 'texto', 'x', FALSE, ?)",
+        [m!.base.est, `I${m!.marca}`.slice(0, 30), agora],
+      ),
+    );
+    for (const mod of [modeloOutroEst, modeloInativo])
+      expect(await falha(servico.salvar(c, item, { modelo: mod, texto: 'Laudo com modelo recusado.' }))).toBe(
+        'modelo-inexistente',
+      );
+    // O modelo pessoal de outro médico não muda (nem vira do estabelecimento).
+    const modeloAlheio = await nucleo.escrever(ctxT, (e) =>
+      e.inserir(
+        "INSERT INTO modelo_laudo (estabelecimento_id, codigo, nome, tipo, texto, profissional_id, ativo, criado_em) VALUES (?, ?, 'Alheio', 'texto', 'x', ?, TRUE, ?)",
+        [m!.base.est, `A${m!.marca}`.slice(0, 30), m!.base.profissional2, agora],
+      ),
+    );
+    expect(
+      await falha(
+        servico.salvarModelo(c, {
+          id: modeloAlheio,
+          codigo: `A${m!.marca}`.slice(0, 30),
+          nome: 'Apropriado',
+          pessoal: false,
+          texto: 'texto novo',
+        }),
+      ),
+    ).toBe('modelo-de-outro-profissional');
+    expect(
+      await um('SELECT profissional_id AS p, nome FROM modelo_laudo WHERE id = ?', [modeloAlheio]),
+    ).toEqual({
+      p: m!.base.profissional2,
+      nome: 'Alheio',
+    });
+    expect(await um('SELECT COUNT(*) AS n FROM laudo_diagnostico WHERE exame_item_id = ?', [item])).toEqual({
+      n: 0,
+    });
+
+    // Rascunho: medidas avaliadas pela faixa do dia do exame (FE 48 dentro de 40–50, vigente em 20/11; pela faixa de
+    // hoje seria fora); massa 240 g / 2 m² = 120 acima de 115 (indexada).
     const r = await servico.salvar(c, item, {
       modelo: modelo.id,
       texto: previa.texto,
@@ -135,19 +223,31 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         { grandeza: ids.obs, texto: 'Sem alterações' },
       ],
     });
-    expect(r).toMatchObject({ situacao: 'rascunho', valores: 3, foraReferencia: 2 });
+    expect(r).toMatchObject({ situacao: 'rascunho', valores: 3, foraReferencia: 1 });
+    const medidasRascunho = await todos(
+      'SELECT grandeza_laudo_id AS g, sequencia, valor_numerico AS v, fora_referencia AS fora, excluido_em IS NOT NULL AS excl FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
+      [r.id],
+    );
+    expect(medidasRascunho.map((x) => ({ g: x['g'], fora: x['fora'] }))).toEqual([
+      { g: ids.fe, fora: 0 },
+      { g: ids.massa, fora: 1 },
+      { g: ids.obs, fora: 0 },
+    ]);
     expect(
-      await todos(
-        'SELECT grandeza_laudo_id AS g, sequencia, fora_referencia AS fora FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
+      await um(
+        'SELECT peso_kg + 0 AS p, altura_cm + 0 AS a, superficie_corporal + 0 AS sc FROM laudo_diagnostico WHERE id = ?',
         [r.id],
       ),
-    ).toEqual([
-      { g: ids.fe, sequencia: 1, fora: 1 },
-      { g: ids.massa, sequencia: 2, fora: 1 },
-      { g: ids.obs, sequencia: 3, fora: 0 },
-    ]);
+    ).toEqual({ p: 80, a: 180, sc: 2 });
+    expect(await trilha('laudo_diagnostico', r.id)).toBe(1);
 
-    // Assinatura: sem a medida obrigatória e sem médico, recusada sem gravar nada.
+    // A reabertura usa o peso e a altura gravados: a massa indexada continua fora; a data do exame vem da realização.
+    const reaberto = await servico.abrir(c, item);
+    expect(reaberto.paciente.dataExame).toBe('2026-11-20');
+    expect(reaberto.laudo).toMatchObject({ pesoKg: 80, alturaCm: 180, superficieCorporal: 2 });
+    expect(reaberto.valores.find((v) => v.grandeza === ids.massa)?.foraReferencia).toBe(true);
+
+    // Assinatura: sem a medida obrigatória e sem médico, recusada sem gravar nada (as medidas ficam iguais).
     expect(await falha(servico.assinar(c, item, { texto: 'Laudo de teste completo.', valores: [] }))).toBe(
       'grandeza-obrigatoria',
     );
@@ -166,6 +266,13 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     ).toEqual({
       n: 0,
     });
+    expect(
+      await todos(
+        'SELECT grandeza_laudo_id AS g, sequencia, valor_numerico AS v, fora_referencia AS fora, excluido_em IS NOT NULL AS excl FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
+        [r.id],
+      ),
+    ).toEqual(medidasRascunho);
+    expect(await trilha('laudo_diagnostico', r.id)).toBe(1);
 
     // Vínculo de médico ativo para o profissional da conta (massa sintética).
     await nucleo.escrever(ctxT, async (e) => {
@@ -193,6 +300,7 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       );
     });
 
+    // FE 60 fora de 40–50 (faixa do dia do exame) e massa indexada fora.
     const a = await servico.assinar(c, item, {
       modelo: modelo.id,
       texto: 'Fração de ejeção de 60%. Laudo de teste.',
@@ -208,7 +316,7 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       situacao: 'assinado',
       versaoAtual: 1,
       valores: 2,
-      foraReferencia: 1,
+      foraReferencia: 2,
     });
     const l1 = await um(
       `SELECT situacao, versao_atual, laudista_profissional_id IS NOT NULL AS laudista, assinado_em IS NOT NULL AS assinado
@@ -227,6 +335,7 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       { g: ids.massa, excluida: 0 },
       { g: ids.obs, excluida: 1 },
     ]);
+    expect(await trilha('laudo_diagnostico', r.id)).toBe(2);
 
     // Depois de assinado, o rascunho é recusado; a retificação exige motivo.
     expect(await falha(servico.salvar(c, item, { texto: 'mudar' }))).toBe('laudo-assinado');
@@ -238,32 +347,81 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         }),
       ),
     ).toBe('retificacao-sem-motivo');
+    // Retificação SEM redigitar peso e altura: herda os gravados; a massa indexada continua fora (sem mudança clínica).
     const rt = await servico.retificar(c, item, {
       motivo: ids.motivo,
       texto: 'Fração de ejeção de 58%. Laudo retificado.',
+      valores: [
+        { grandeza: ids.fe, numero: 58 },
+        { grandeza: ids.massa, numero: 240 },
+      ],
+    });
+    expect(rt).toMatchObject({ situacao: 'retificado', versaoAtual: 2, foraReferencia: 2 });
+    // Segunda retificação retira a massa: fica marcada como excluída, nunca apagada.
+    const rt3 = await servico.retificar(c, item, {
+      motivoTexto: 'Medida da massa retirada por revisão.',
+      texto: 'Fração de ejeção de 58%. Laudo retificado sem a massa.',
       valores: [{ grandeza: ids.fe, numero: 58 }],
     });
-    expect(rt).toMatchObject({ situacao: 'retificado', versaoAtual: 2 });
+    expect(rt3).toMatchObject({ situacao: 'retificado', versaoAtual: 3 });
+    expect(
+      await todos(
+        'SELECT grandeza_laudo_id AS g, fora_referencia AS fora, excluido_em IS NOT NULL AS excluida FROM valor_grandeza_laudo WHERE laudo_diagnostico_id = ? ORDER BY sequencia',
+        [r.id],
+      ),
+    ).toEqual([
+      { g: ids.fe, fora: 1, excluida: 0 },
+      { g: ids.massa, fora: 1, excluida: 1 },
+      { g: ids.obs, fora: 0, excluida: 1 },
+    ]);
     const versoes = await todos(
-      `SELECT numero_versao AS v, situacao, motivo_retificacao_laudo_id IS NOT NULL AS motivo, CHAR_LENGTH(hash_sha256) AS h,
-              JSON_LENGTH(dados, '$.valores') AS medidas
+      `SELECT numero_versao AS v, situacao, motivo_retificacao_laudo_id IS NOT NULL OR motivo IS NOT NULL AS motivo,
+              CHAR_LENGTH(hash_sha256) AS h, JSON_LENGTH(dados, '$.valores') AS medidas
          FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id = ? ORDER BY numero_versao`,
       [r.id],
     );
     expect(versoes).toEqual([
       { v: 1, situacao: 'assinado', motivo: 0, h: 64, medidas: 2 },
-      { v: 2, situacao: 'retificado', motivo: 1, h: 64, medidas: 1 },
+      { v: 2, situacao: 'retificado', motivo: 1, h: 64, medidas: 2 },
+      { v: 3, situacao: 'retificado', motivo: 1, h: 64, medidas: 1 },
     ]);
+    // O hash de cada versão se reproduz do que ficou no banco (texto, título e foto) e muda com o conteúdo; a foto
+    // guarda o peso, a altura e a superfície usados.
+    const fotos = await todos(
+      'SELECT numero_versao AS v, titulo, texto, dados, hash_sha256 AS h FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id = ? ORDER BY numero_versao',
+      [r.id],
+    );
+    const hashes = fotos.map((f) => {
+      const d = (typeof f['dados'] === 'string' ? JSON.parse(f['dados']) : f['dados']) as {
+        valores: { grandeza: number; numero: number | null; texto: string | null; fora: boolean }[];
+        resultado: string | null;
+        achadoCritico: boolean;
+        paciente: { pesoKg: number | null; alturaCm: number | null; superficieCorporal: number | null };
+      };
+      expect(d.paciente).toEqual({ pesoKg: 80, alturaCm: 180, superficieCorporal: 2 });
+      const calculado = hashDaVersao({
+        titulo: (f['titulo'] as string | null) ?? null,
+        texto: String(f['texto']),
+        resultado: d.resultado,
+        achadoCritico: d.achadoCritico,
+        paciente: d.paciente,
+        valores: d.valores,
+      });
+      expect(calculado).toBe(f['h']);
+      return calculado;
+    });
+    expect(new Set(hashes).size).toBe(3);
+    expect(await trilha('laudo_diagnostico', r.id)).toBe(4);
 
     // A tela lê tudo numa chamada: o laudo, as versões, as medidas e o modelo pessoal sugerido.
     const tela = await servico.abrir(c, item);
-    expect(tela.laudo).toMatchObject({ situacao: 'retificado', versaoAtual: 2 });
-    expect(tela.versoes.map((v) => v.numero)).toEqual([2, 1]);
+    expect(tela.laudo).toMatchObject({ situacao: 'retificado', versaoAtual: 3 });
+    expect(tela.versoes.map((v) => v.numero)).toEqual([3, 2, 1]);
     expect(tela.valores.map((v) => v.grandeza)).toEqual([ids.fe]);
     expect(tela.modelos[0]?.id).toBe(modelo.id);
     expect(tela.pode).toEqual({ salvar: false, assinar: false, retificar: true });
 
     // O exame de laboratório não lauda por aqui.
     expect(await falha(servico.abrir(c, m!.itemLab))).toBe('setor-sem-laudo');
-  }, 60_000);
+  }, 90_000);
 });

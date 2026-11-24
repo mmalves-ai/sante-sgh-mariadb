@@ -2,6 +2,7 @@
 // ou a partir de um modelo com campos variáveis), é assinado pelo médico habilitado e, depois de assinado, só muda por
 // retificação com motivo: cada assinatura e cada retificação viram uma versão própria, e a anterior nunca é apagada.
 // Regra pura, sem banco.
+import { podeLaudar, type VinculoProfissional } from './habilitacao.js';
 
 export class RecusaLaudo extends Error {
   constructor(
@@ -67,19 +68,79 @@ export function conferirMotivoRetificacao(motivoCadastro: number | null, motivoT
     );
 }
 
-/** Quem assina o laudo de imagem e de métodos gráficos: médico com registro ativo no conselho. */
-export function conferirAssinante(
-  v: { cbo: string; conselhoAtivo: boolean } | null,
-  ehMedico: boolean,
-): void {
-  if (!v)
-    throw new RecusaLaudo('sem-vinculo', 'A sessão não tem vínculo profissional com registro no conselho.');
-  if (!v.conselhoAtivo)
-    throw new RecusaLaudo('conselho-inativo', 'O registro no conselho do vínculo não está ativo.');
-  if (!ehMedico)
+/**
+ * Quem assina ou retifica o laudo de imagem e de métodos gráficos: a regra única de quem lauda (`podeLaudar`, regra 8 do
+ * M26, em @sgh/contratos), sem regra paralela. O laudo destes setores é privativo de médico (Lei 12.842/2013); o ato
+ * dado à regra é o do setor (métodos gráficos ou imagem, que inclui a endoscopia e os demais laudos médicos).
+ */
+export function conferirAssinante(v: VinculoProfissional | null, tipoSetor: string): void {
+  const ato = tipoSetor === 'metodos_graficos' ? ATO_METODOS_GRAFICOS : ATO_IMAGEM;
+  const r = podeLaudar(ato, v);
+  if (r.pode) return;
+  const codigo = !v ? 'sem-vinculo' : !v.conselhoAtivo ? 'conselho-inativo' : 'laudo-privativo-medico';
+  throw new RecusaLaudo(codigo, r.motivo ?? 'O vínculo da sessão não pode assinar este laudo.');
+}
+/** Atos do vocabulário do SADT usados para a regra única (ambos privativos de médico). */
+const ATO_IMAGEM = 42;
+const ATO_METODOS_GRAFICOS = 90;
+
+/** Situações do exame em que ele já foi feito (há o que laudar). */
+const REALIZADO: ReadonlySet<string> = new Set([
+  'coletado',
+  'em_analise',
+  'resultado_digitado',
+  'revisado',
+  'liberado',
+  'entregue',
+]);
+
+/**
+ * O laudo só se redige e assina para o exame realizado: o pedido ainda não feito (solicitado, autorizado, agendado) e o
+ * cancelado ou recusado são recusados. A marca de realização (`realizadoEm`) basta mesmo se a situação ficou atrás.
+ */
+export function conferirExameParaLaudo(situacao: string, realizadoEm: string | null): void {
+  if (situacao === 'cancelado' || situacao === 'recusado')
+    throw new RecusaLaudo('exame-cancelado', 'O exame foi cancelado ou recusado: não há laudo a escrever.');
+  if (!REALIZADO.has(situacao) && !realizadoEm)
     throw new RecusaLaudo(
-      'laudo-privativo-medico',
-      'O laudo de imagem e de métodos gráficos é privativo de médico (Lei 12.842/2013).',
+      'exame-nao-realizado',
+      'O exame ainda não foi realizado: registre a realização antes de laudar.',
+    );
+}
+
+/**
+ * A data de referência do exame (AAAA-MM-DD), que escolhe a faixa vigente e a idade do paciente: a da realização, senão
+ * a da coleta, senão a do pedido. O laudo redigido ou retificado dias depois continua avaliado pelo dia do exame.
+ */
+export function dataDoExame(realizado: string | null, coletado: string | null, pedido: string): string {
+  return (realizado ?? coletado ?? pedido).slice(0, 10);
+}
+
+/**
+ * Quem retifica o laudo assinado: o próprio laudista da versão vigente, ou o responsável vigente do setor pelos laudos
+ * (coordenação: assina, revisa ou é responsável técnico). Outro médico, mesmo habilitado, não muda o laudo de um colega.
+ */
+export function conferirRetificador(
+  laudistaAtual: number | null,
+  profissional: number,
+  responsavelDoSetor: boolean,
+): void {
+  if (laudistaAtual !== null && laudistaAtual !== profissional && !responsavelDoSetor)
+    throw new RecusaLaudo(
+      'retificacao-de-outro-laudista',
+      'Só o médico que assinou o laudo, ou o responsável do setor pelos laudos, pode retificá-lo.',
+    );
+}
+
+/**
+ * Quem altera um modelo de laudo: o modelo pessoal só pelo dono (nem vira modelo do estabelecimento, nem muda de dono);
+ * o modelo do estabelecimento, por quem tem a permissão da tela.
+ */
+export function conferirDonoDoModelo(donoAtual: number | null, profissional: number | null): void {
+  if (donoAtual !== null && donoAtual !== profissional)
+    throw new RecusaLaudo(
+      'modelo-de-outro-profissional',
+      'Este modelo é pessoal de outro médico e não pode ser alterado.',
     );
 }
 
