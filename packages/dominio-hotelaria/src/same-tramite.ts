@@ -130,11 +130,15 @@ export function conferirEmprestimo(v: {
   readonly situacao: SituacaoVolumeEmprestimo;
   readonly noLocal: boolean;
   readonly emprestimoAberto: boolean;
+  /** O volume está num protocolo enviado e ainda não conferido. */
+  readonly emTransito?: boolean;
 }): ProblemaTramite[] {
   if (v.situacao === 'eliminado') return [{ campo: 'volume', mensagem: 'O volume foi eliminado.' }];
   if (v.situacao === 'extraviado') return [{ campo: 'volume', mensagem: 'O volume está extraviado.' }];
   if (v.situacao === 'emprestado' || v.emprestimoAberto)
     return [{ campo: 'volume', mensagem: 'O volume já está emprestado: registre a devolução antes.' }];
+  if (v.emTransito)
+    return [{ campo: 'volume', mensagem: 'O volume está em trânsito num protocolo ainda não recebido.' }];
   if (!v.noLocal)
     return [{ campo: 'volume', mensagem: 'O volume não está no arquivo (fora do local de guarda).' }];
   return [];
@@ -171,4 +175,109 @@ export function conferirSolicitacaoAberta(situacao: SituacaoSolicitacao): Proble
   return situacao === 'pendente' || situacao === 'em_atendimento'
     ? []
     : [{ campo: 'solicitacao', mensagem: 'A solicitação já foi atendida ou cancelada.' }];
+}
+
+// ------------------------------------------------------------------------- custódia única (trilha da guarda, F3.9-4)
+// A posse do volume tem uma fonte só: o movimento da guarda (movimento_prontuario). O empréstimo e o protocolo gravam o
+// movimento; o empréstimo é o documento do pedido (motivo, prazo, cobrança) preso ao movimento de saída.
+
+/** Onde o volume está: no arquivo (local) ou com um setor (o destino do último movimento). */
+export interface PosseVolume {
+  readonly situacao: SituacaoVolumeEmprestimo;
+  readonly noLocal: boolean;
+  readonly localArquivo: number | null;
+  readonly setorAtual: number | null;
+  /** Há saída da guarda sem retorno (empréstimo pelo trâmite ou pela guarda). */
+  readonly saidaAberta: boolean;
+  /** O volume está num protocolo enviado e ainda não conferido. */
+  readonly emTransito: boolean;
+}
+
+/** O lado do trâmite: o setor funcional e o arquivo a que o setor de trâmite responde. */
+export interface PontaTramite {
+  readonly setor: number | null;
+  readonly local: number | null;
+}
+
+/** O volume pode ir no lote? Tem de estar com o remetente, fora de empréstimo e de outro lote em trânsito; e o
+ * destinatário tem de ter setor ou arquivo para registrar a nova posse. */
+export function conferirVolumeNoProtocolo(
+  v: PosseVolume,
+  remetente: PontaTramite,
+  destinatario: PontaTramite,
+): string[] {
+  if (v.situacao === 'eliminado') return ['O volume foi eliminado.'];
+  if (v.situacao === 'extraviado') return ['O volume está extraviado.'];
+  if (v.situacao === 'emprestado' || v.saidaAberta)
+    return ['O volume está emprestado: registre a devolução antes de enviá-lo.'];
+  if (v.emTransito) return ['O volume já está em outro protocolo ainda não recebido.'];
+  const r: string[] = [];
+  const comRemetente = v.noLocal
+    ? remetente.local !== null && remetente.local === v.localArquivo
+    : v.setorAtual !== null && remetente.setor === v.setorAtual;
+  if (!comRemetente) r.push('O volume não está com o setor remetente.');
+  if (destinatario.setor === null && destinatario.local === null)
+    r.push('O setor de destino não tem setor nem arquivo vinculado para receber o volume.');
+  return r;
+}
+
+/** A nova posse do volume recebido no protocolo: no arquivo do destinatário, ou com o setor dele. A situação fica. */
+export function posseAoReceber(
+  v: Pick<PosseVolume, 'situacao' | 'localArquivo'>,
+  destinatario: PontaTramite,
+): {
+  readonly situacao: SituacaoVolumeEmprestimo;
+  readonly noLocal: boolean;
+  readonly localArquivo: number | null;
+} {
+  return destinatario.local !== null
+    ? { situacao: v.situacao, noLocal: true, localArquivo: destinatario.local }
+    : { situacao: v.situacao, noLocal: false, localArquivo: v.localArquivo };
+}
+
+/** A situação do volume na volta do empréstimo: a de antes da saída (aberto, encerrado ou arquivado); sem registro
+ * dela (empréstimo antigo ou pela guarda), arquivado. */
+export function situacaoAposDevolucao(anterior: string | null): SituacaoVolumeEmprestimo {
+  return anterior === 'aberto' || anterior === 'encerrado' || anterior === 'arquivado'
+    ? anterior
+    : 'arquivado';
+}
+
+export type SituacaoItemSolicitacao = 'pendente' | 'atendido' | 'nao_localizado' | 'emprestado' | 'cancelado';
+
+/** A situação da solicitação pelos itens: com pendente e algum já tratado, em atendimento; sem pendente, atendida (tudo
+ * entregue), atendida em parte (algum não localizado) ou cancelada (nada a entregar). */
+export function situacaoDaSolicitacaoPelosItens(
+  itens: readonly SituacaoItemSolicitacao[],
+): SituacaoSolicitacao {
+  const validos = itens.filter((i) => i !== 'cancelado');
+  const pendentes = validos.filter((i) => i === 'pendente').length;
+  const entregues = validos.filter((i) => i === 'emprestado' || i === 'atendido').length;
+  if (validos.length === 0) return 'cancelada';
+  if (pendentes > 0) return pendentes === validos.length ? 'pendente' : 'em_atendimento';
+  if (entregues === validos.length) return 'atendida';
+  return entregues > 0 ? 'atendida_parcial' : 'cancelada';
+}
+
+/** O cancelamento da solicitação: só aberta e com motivo (os itens pendentes ficam cancelados; nada se apaga). */
+export function conferirCancelamentoSolicitacao(
+  situacao: SituacaoSolicitacao,
+  motivo: string | null,
+): ProblemaTramite[] {
+  const r = conferirSolicitacaoAberta(situacao);
+  if (!motivo?.trim()) r.push({ campo: 'motivo', mensagem: 'O cancelamento exige o motivo.' });
+  return r;
+}
+
+/** O item não localizado: só item pendente de solicitação aberta, com a observação de onde se procurou. */
+export function conferirNaoLocalizado(
+  situacao: SituacaoSolicitacao,
+  item: SituacaoItemSolicitacao,
+  motivo: string | null,
+): ProblemaTramite[] {
+  const r = conferirSolicitacaoAberta(situacao);
+  if (item !== 'pendente')
+    r.push({ campo: 'item', mensagem: 'Só o item pendente pode ficar não localizado.' });
+  if (!motivo?.trim()) r.push({ campo: 'motivo', mensagem: 'Diga onde o volume foi procurado.' });
+  return r;
 }

@@ -17,3 +17,16 @@ INSERT INTO motivo_solicitacao_prontuario
   ('pesquisa', 'Pesquisa científica aprovada', TRUE, 'pesquisa', FALSE, TRUE, FALSE, 15, NOW(3)),
   ('judicial', 'Processo judicial ou pedido do paciente', TRUE, 'processo_judicial', FALSE, TRUE, FALSE, 10, NOW(3))
 ON DUPLICATE KEY UPDATE codigo = codigo;
+
+-- Correção F3.9-5 (custódia única com a guarda, 24/11/2026): o empréstimo fica preso ao movimento de saída da guarda
+-- (a posse do volume tem uma fonte só) e guarda a situação do volume antes da saída, para a devolução restaurá-la. O
+-- item da solicitação ganha a observação de por que saiu da fila (não localizado ou cancelado).
+ALTER TABLE emprestimo_prontuario
+  ADD COLUMN IF NOT EXISTS movimento_prontuario_id BIGINT UNSIGNED NULL COMMENT 'Movimento de saída da guarda que levou o volume' AFTER solicitacao_prontuario_id,
+  ADD COLUMN IF NOT EXISTS situacao_anterior_volume VARCHAR(20) NULL COMMENT 'Situação do volume antes da saída (a devolução a restaura)' AFTER movimento_prontuario_id;
+ALTER TABLE emprestimo_prontuario ADD INDEX IF NOT EXISTS ix_emprestimo_prontuario_movimento (movimento_prontuario_id);
+ALTER TABLE emprestimo_prontuario DROP CONSTRAINT IF EXISTS ck_emprestimo_prontuario_situacao_anterior;
+ALTER TABLE emprestimo_prontuario ADD CONSTRAINT ck_emprestimo_prontuario_situacao_anterior
+  CHECK (situacao_anterior_volume IS NULL OR situacao_anterior_volume IN ('aberto','encerrado','arquivado'));
+ALTER TABLE solicitacao_prontuario_item
+  ADD COLUMN IF NOT EXISTS observacao VARCHAR(500) NULL COMMENT 'Por que o item saiu da fila sem entrega (não localizado, cancelado)' AFTER movimento_prontuario_id;

@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirCancelamentoProtocolo,
+  conferirCancelamentoSolicitacao,
   conferirEmprestimo,
+  conferirNaoLocalizado,
+  conferirVolumeNoProtocolo,
   conferirProtocolo,
   conferirRecebimento,
   conferirSolicitacaoAberta,
   conteudoDoProtocolo,
   diasDeAtraso,
+  type PosseVolume,
+  posseAoReceber,
   prazoDoEmprestimo,
+  situacaoAposDevolucao,
+  situacaoDaSolicitacaoPelosItens,
   situacaoDaSolicitacao,
   situacaoPelosItens,
 } from './same-tramite.js';
@@ -119,5 +126,90 @@ describe('solicitação e empréstimo de prontuário', () => {
     expect(situacaoDaSolicitacao(1, 0)).toBe('pendente');
     expect(conferirSolicitacaoAberta('pendente')).toEqual([]);
     expect(conferirSolicitacaoAberta('cancelada')).toHaveLength(1);
+  });
+});
+
+describe('custódia única com a guarda', () => {
+  const noArquivo: PosseVolume = {
+    situacao: 'arquivado',
+    noLocal: true,
+    localArquivo: 10,
+    setorAtual: null,
+    saidaAberta: false,
+    emTransito: false,
+  };
+  const arquivo = { setor: null, local: 10 };
+  const unidade = { setor: 5, local: null };
+
+  it('só põe no lote o volume que está com o remetente, fora de empréstimo e de outro lote', () => {
+    expect(conferirVolumeNoProtocolo(noArquivo, arquivo, unidade)).toEqual([]);
+    expect(conferirVolumeNoProtocolo({ ...noArquivo, emTransito: true }, arquivo, unidade)[0]).toMatch(
+      /outro protocolo/,
+    );
+    expect(conferirVolumeNoProtocolo({ ...noArquivo, saidaAberta: true }, arquivo, unidade)[0]).toMatch(
+      /emprestado/,
+    );
+    expect(
+      conferirVolumeNoProtocolo({ ...noArquivo, situacao: 'emprestado' }, arquivo, unidade),
+    ).toHaveLength(1);
+    expect(conferirVolumeNoProtocolo(noArquivo, unidade, arquivo)[0]).toMatch(/remetente/);
+    const comSetor: PosseVolume = { ...noArquivo, noLocal: false, setorAtual: 5 };
+    expect(conferirVolumeNoProtocolo(comSetor, unidade, arquivo)).toEqual([]);
+    expect(conferirVolumeNoProtocolo(comSetor, { setor: 6, local: null }, arquivo)[0]).toMatch(/remetente/);
+    expect(conferirVolumeNoProtocolo(noArquivo, arquivo, { setor: null, local: null })[0]).toMatch(/destino/);
+  });
+
+  it('o recebimento põe o volume no arquivo ou com o setor do destinatário, sem mudar a situação', () => {
+    expect(posseAoReceber({ situacao: 'aberto', localArquivo: 10 }, unidade)).toEqual({
+      situacao: 'aberto',
+      noLocal: false,
+      localArquivo: 10,
+    });
+    expect(posseAoReceber({ situacao: 'aberto', localArquivo: 10 }, { setor: null, local: 11 })).toEqual({
+      situacao: 'aberto',
+      noLocal: true,
+      localArquivo: 11,
+    });
+  });
+
+  it('o empréstimo recusa o volume em trânsito num protocolo', () => {
+    expect(
+      conferirEmprestimo({
+        situacao: 'arquivado',
+        noLocal: true,
+        emprestimoAberto: false,
+        emTransito: true,
+      })[0]?.mensagem,
+    ).toMatch(/trânsito/);
+  });
+
+  it('a devolução restaura a situação de antes do empréstimo', () => {
+    expect(situacaoAposDevolucao('aberto')).toBe('aberto');
+    expect(situacaoAposDevolucao('encerrado')).toBe('encerrado');
+    expect(situacaoAposDevolucao(null)).toBe('arquivado');
+    expect(situacaoAposDevolucao('emprestado')).toBe('arquivado');
+  });
+});
+
+describe('solicitação que sai da fila sem empréstimo', () => {
+  it('recalcula a situação pelos itens', () => {
+    expect(situacaoDaSolicitacaoPelosItens(['pendente', 'pendente'])).toBe('pendente');
+    expect(situacaoDaSolicitacaoPelosItens(['emprestado', 'pendente'])).toBe('em_atendimento');
+    expect(situacaoDaSolicitacaoPelosItens(['nao_localizado', 'pendente'])).toBe('em_atendimento');
+    expect(situacaoDaSolicitacaoPelosItens(['emprestado', 'atendido'])).toBe('atendida');
+    expect(situacaoDaSolicitacaoPelosItens(['emprestado', 'nao_localizado'])).toBe('atendida_parcial');
+    expect(situacaoDaSolicitacaoPelosItens(['nao_localizado'])).toBe('cancelada');
+    expect(situacaoDaSolicitacaoPelosItens(['cancelado', 'emprestado'])).toBe('atendida');
+    expect(situacaoDaSolicitacaoPelosItens(['cancelado'])).toBe('cancelada');
+  });
+
+  it('cancela só a aberta e com motivo; não localizado só o item pendente, com onde se procurou', () => {
+    expect(conferirCancelamentoSolicitacao('pendente', 'Paciente teve alta')).toEqual([]);
+    expect(conferirCancelamentoSolicitacao('em_atendimento', ' ').map((p) => p.campo)).toEqual(['motivo']);
+    expect(conferirCancelamentoSolicitacao('atendida', 'x').map((p) => p.campo)).toEqual(['solicitacao']);
+    expect(conferirNaoLocalizado('pendente', 'pendente', 'Estante 4 e arquivo morto')).toEqual([]);
+    expect(conferirNaoLocalizado('pendente', 'emprestado', 'x').map((p) => p.campo)).toEqual(['item']);
+    expect(conferirNaoLocalizado('em_atendimento', 'pendente', null).map((p) => p.campo)).toEqual(['motivo']);
+    expect(conferirNaoLocalizado('cancelada', 'pendente', 'x').map((p) => p.campo)).toEqual(['solicitacao']);
   });
 });

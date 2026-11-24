@@ -126,6 +126,37 @@ export class SameTramiteController {
     return this.com(req, (p, c) => p.solicitar(c, b));
   }
 
+  @Get('solicitacoes/:id/itens')
+  @Permissao(PERMISSOES_SAME_TRAMITE.ler)
+  itensDaSolicitacao(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return this.com(req, async (p, c) => ({ itens: await p.itensDaSolicitacao(c, id) }));
+  }
+
+  @Post('solicitacoes/:id/cancelar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
+  cancelarSolicitacao(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: unknown,
+  ) {
+    return this.com(req, (p, c) => p.cancelarSolicitacao(c, id, b));
+  }
+
+  @Post('solicitacoes/:id/nao-localizado')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
+  naoLocalizado(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() b: unknown) {
+    return this.com(req, (p, c) => p.naoLocalizado(c, id, b));
+  }
+
+  @Post('saidas-guarda/:movimento/cobrar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_SAME_TRAMITE.gravar)
+  cobrarSaidaGuarda(@Req() req: RequisicaoAutorizada, @Param('movimento', ParseIntPipe) movimento: number) {
+    return this.com(req, (p, c) => p.cobrarSaidaGuarda(c, movimento));
+  }
+
   @Get('emprestimos')
   @Permissao(PERMISSOES_SAME_TRAMITE.ler)
   emprestimos(

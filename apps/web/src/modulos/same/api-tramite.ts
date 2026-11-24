@@ -32,7 +32,10 @@ export const esquemaProtocolo = z.object({
 });
 export type ProtocoloTela = z.infer<typeof esquemaProtocolo>;
 export const esquemaEmprestimo = z.object({
-  id: z.number(),
+  /** Nulo na saída por empréstimo feita na guarda, ainda sem documento (cobra-se pelo movimento). */
+  id: z.number().nullable(),
+  movimento: z.number().nullable(),
+  origem: z.enum(['tramite', 'guarda']),
   numero: z.string(),
   volume: z.object({ id: z.number(), matricula: z.string().nullable(), paciente: z.number() }),
   destino: z.string(),
@@ -72,3 +75,26 @@ export const devolver = (id: number, versao: number) =>
 export const cobrar = (id: number, versao: number) =>
   enviar(`${T}/emprestimos/${id}/cobrar`, { versao }, qualquer, chave('cobrar'));
 export const solicitar = (corpo: unknown) => enviar(`${T}/solicitacoes`, corpo, qualquer, chave('solicitar'));
+export const esquemaItemSolicitacao = z.object({
+  id: z.number(),
+  sequencia: z.number(),
+  paciente: z.number(),
+  volume: z.number().nullable(),
+  matricula: z.string().nullable(),
+  situacao: z.string(),
+  observacao: z.string().nullable(),
+  atendidoEm: z.string().nullable(),
+});
+export const lerItensSolicitacao = (id: number) =>
+  ler(`${T}/solicitacoes/${id}/itens`, z.object({ itens: z.array(esquemaItemSolicitacao) }));
+export const cancelarSolicitacao = (id: number, motivo: string, versao: number) =>
+  enviar(`${T}/solicitacoes/${id}/cancelar`, { motivo, versao }, qualquer, chave('cancelarSolicitacao'));
+export const naoLocalizado = (id: number, item: number, motivo: string, versao: number) =>
+  enviar(
+    `${T}/solicitacoes/${id}/nao-localizado`,
+    { item, motivo, versao },
+    qualquer,
+    chave('naoLocalizado'),
+  );
+export const cobrarSaidaGuarda = (movimento: number) =>
+  enviar(`${T}/saidas-guarda/${movimento}/cobrar`, {}, qualquer, chave('cobrarSaidaGuarda'));

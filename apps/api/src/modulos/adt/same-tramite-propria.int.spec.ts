@@ -5,11 +5,16 @@
 // Prova o que fica no banco: o lote com os itens em sequência, a conferência item a item (recebido com instante e quem,
 // recusado com motivo) e a situação do lote pelos itens; o cancelamento sem apagar; a solicitação com os itens; o
 // empréstimo com o prazo do motivo, o volume emprestado fora do local e a solicitação atendida em parte; a cobrança do
-// atraso e a devolução que devolve o volume ao arquivo.
+// atraso e a devolução que devolve o volume ao arquivo. Custódia única com a guarda (F3.9-4): o volume recebido no lote
+// ganha o movimento da guarda e a nova posse; o volume em trânsito ou emprestado não entra em outro lote nem sai por
+// empréstimo; o empréstimo e a devolução aparecem no histórico da guarda; a devolução pela guarda fecha o empréstimo; a
+// saída por empréstimo feita na guarda entra nos atrasados e é cobrada; a devolução restaura a situação 'aberto'; a
+// solicitação sai da fila por item não localizado e por cancelamento com motivo.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { PortaSameGuardaPropria } from './same-guarda-propria.js';
 import { PortaSameTramitePropria } from './same-tramite-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -27,6 +32,7 @@ interface Massa {
   trB: number;
   v1: number;
   v2: number;
+  v3: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -46,6 +52,7 @@ async function limpar(e: Escritor): Promise<void> {
       [P],
     );
     await e.executar(`DELETE FROM protocolo_tramite WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM movimento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM volume_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar('DELETE FROM setor_tramite WHERE codigo LIKE ?', [`${P}-%`]);
     await e.executar(`DELETE FROM local_arquivo WHERE estabelecimento_id IN ${est}`, [P]);
@@ -60,6 +67,16 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaSameTramitePropria;
+  let guarda: PortaSameGuardaPropria;
+  const versaoVolume = async (v: number) =>
+    Number((await um('SELECT versao FROM volume_prontuario WHERE id = ?', [v]))['versao']);
+  const movimentos = (v: number) =>
+    ler(
+      `SELECT op.tipo, m.protocolo_tramite_id, m.destino_setor_funcional_id, m.previsao_retorno, m.devolvido_em
+         FROM movimento_prontuario m JOIN operacao_movimento_prontuario op ON op.id = m.operacao_movimento_prontuario_id
+        WHERE m.volume_prontuario_id = ? AND m.excluido_em IS NULL ORDER BY m.id`,
+      [v],
+    );
   let m: Massa;
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
@@ -93,20 +110,20 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
          VALUES (?, 'arquivo', ?, 'Arquivo sintético', 'Arquivo sintético', TRUE, ?)`,
         [est, `${P}-ARQ`, agora],
       );
-      const tr = (c: string, t: string, local: number | null) =>
+      const tr = (c: string, t: string, local: number | null, setorF: number | null) =>
         e.inserir(
-          `INSERT INTO setor_tramite (codigo, descricao, tipo, local_arquivo_id, registra_movimento, ativo, criado_em)
-           VALUES (?, ?, ?, ?, TRUE, TRUE, ?)`,
-          [`${P}-${c}`, `Trâmite sintético ${c}`, t, local, agora],
+          `INSERT INTO setor_tramite (codigo, descricao, tipo, setor_funcional_id, local_arquivo_id, registra_movimento, ativo, criado_em)
+           VALUES (?, ?, ?, ?, ?, TRUE, TRUE, ?)`,
+          [`${P}-${c}`, `Trâmite sintético ${c}`, t, setorF, local, agora],
         );
-      const trA = await tr('A', 'arquivo', arquivo);
-      const trB = await tr('B', 'faturamento', null);
-      const volume = (n: number) =>
+      const trA = await tr('A', 'arquivo', arquivo, null);
+      const trB = await tr('B', 'faturamento', null, setorB);
+      const volume = (n: number, situacao = 'arquivado') =>
         e.inserir(
           `INSERT INTO volume_prontuario (estabelecimento_id, paciente_id, tipo_documento_arquivo_id, numero_volume,
              local_arquivo_id, aberto_em, abertura_usuario_id, no_local, situacao, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, 'arquivado', ?)`,
-          [est, paciente['id'], tipo['id'], n, arquivo, agora, usuario['id'], agora],
+           VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)`,
+          [est, paciente['id'], tipo['id'], n, arquivo, agora, usuario['id'], situacao, agora],
         );
       return {
         est,
@@ -119,9 +136,11 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
         trB,
         v1: await volume(1),
         v2: await volume(2),
+        v3: await volume(3, 'aberto'),
       };
     });
     porta = new PortaSameTramitePropria(nucleo, CLIENTE);
+    guarda = new PortaSameGuardaPropria(nucleo, CLIENTE);
   }, 60_000);
 
   afterAll(async () => {
@@ -155,8 +174,36 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
       [3, 'documento'],
     ]);
     const ids = itens.map((i) => Number(i['id']));
+    // Em trânsito: o volume não entra noutro lote nem sai por empréstimo.
+    await expect(
+      porta.emitirProtocolo(ctx(), {
+        remetente: m.trA,
+        destinatario: m.trB,
+        itens: [{ tipo: 'volume_prontuario', alvo: m.v2 }],
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const motivoAud = Number(
+      (await um("SELECT id FROM motivo_solicitacao_prontuario WHERE codigo = 'auditoria'"))['id'],
+    );
+    await expect(
+      porta.emprestar(ctx(), { volume: m.v2, destinoSetor: m.setorA, motivo: motivoAud }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    // O volume tem de estar com o remetente: o v1 está no arquivo, não com o setor B.
+    await expect(
+      porta.emitirProtocolo(ctx(), {
+        remetente: m.trB,
+        destinatario: m.trA,
+        itens: [{ tipo: 'volume_prontuario', alvo: m.v3 }],
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
     const a = await porta.receber(ctx(), r.id, { itens: [{ item: ids[0], aceito: true }], versao: 1 });
     expect(a.situacao).toBe('recebido_parcial');
+    // A nova posse do v1 vai para a trilha da guarda: com o setor B, fora do arquivo, situação mantida.
+    expect(await movimentos(m.v1)).toMatchObject([
+      { tipo: 'recebimento', protocolo_tramite_id: r.id, destino_setor_funcional_id: m.setorB },
+    ]);
+    const v1 = await um('SELECT situacao, no_local FROM volume_prontuario WHERE id = ?', [m.v1]);
+    expect([v1['situacao'], Number(v1['no_local'])]).toEqual(['arquivado', 0]);
     await expect(
       porta.receber(ctx(), r.id, { itens: [{ item: ids[1], aceito: false }], versao: 2 }),
     ).rejects.toMatchObject({ problema: { status: 422 } });
@@ -225,8 +272,8 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
       destino: m.trB,
       motivo,
       itens: [
-        { paciente: m.paciente, volume: m.v1 },
         { paciente: m.paciente, volume: m.v2 },
+        { paciente: m.paciente, volume: m.v3 },
       ],
     });
     expect(
@@ -241,14 +288,14 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
     ).toBe(2);
     expect((await porta.solicitacoesAbertas(ctx())).map((x) => x.id)).toContain(s.id);
 
-    const v = await um('SELECT versao FROM volume_prontuario WHERE id = ?', [m.v1]);
+    const v = await um('SELECT versao FROM volume_prontuario WHERE id = ?', [m.v2]);
     const e = await porta.emprestar(ctx(), {
-      volume: m.v1,
+      volume: m.v2,
       destinoSetor: m.setorB,
       solicitacao: s.id,
       versao: Number(v['versao']),
     });
-    expect(e.solicitacao).toBe('atendida_parcial');
+    expect(e.solicitacao).toBe('em_atendimento');
     const emp = await um('SELECT * FROM emprestimo_prontuario WHERE id = ?', [e.id]);
     expect(emp).toMatchObject({ situacao: 'emprestado', solicitacao_prontuario_id: s.id });
     expect(Number(emp['motivo_solicitacao_prontuario_id'])).toBe(motivo);
@@ -257,28 +304,39 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
         new Date(emp['emprestado_em'] as Date).getTime()) /
       86_400_000;
     expect(Math.round(dias)).toBe(5);
-    const vol = await um('SELECT situacao, no_local, versao FROM volume_prontuario WHERE id = ?', [m.v1]);
+    expect(emp['situacao_anterior_volume']).toBe('arquivado');
+    // O empréstimo é a saída da guarda: aparece no histórico do volume, com o destino e a previsão = prazo.
+    const saida = await movimentos(m.v2);
+    expect(saida).toMatchObject([
+      { tipo: 'emprestimo', destino_setor_funcional_id: m.setorB, devolvido_em: null },
+    ]);
+    expect(new Date(saida[0]!['previsao_retorno'] as Date).getTime()).toBe(
+      new Date(emp['prazo_devolucao'] as Date).getTime(),
+    );
+    const hist = (await guarda.volumesDoPaciente(ctx(), m.paciente)).find((x) => x.id === m.v2);
+    expect(hist?.movimentos.map((x) => x.operacao.tipo)).toContain('emprestimo');
+    const vol = await um('SELECT situacao, no_local, versao FROM volume_prontuario WHERE id = ?', [m.v2]);
     expect([vol['situacao'], Number(vol['no_local'])]).toEqual(['emprestado', 0]);
     expect((await um('SELECT situacao FROM solicitacao_prontuario WHERE id = ?', [s.id]))['situacao']).toBe(
-      'atendida_parcial',
+      'em_atendimento',
     );
     expect(
       (
         await um(
           'SELECT situacao FROM solicitacao_prontuario_item WHERE solicitacao_prontuario_id = ? AND volume_prontuario_id = ?',
-          [s.id, m.v1],
+          [s.id, m.v2],
         )
       )['situacao'],
     ).toBe('emprestado');
     await expect(
-      porta.emprestar(ctx(), { volume: m.v1, destinoSetor: m.setorA, motivo, versao: Number(vol['versao']) }),
+      porta.emprestar(ctx(), { volume: m.v2, destinoSetor: m.setorA, motivo, versao: Number(vol['versao']) }),
     ).rejects.toMatchObject({ problema: { status: 422 } });
 
     // No prazo, não se cobra; vencido, cobra e aparece nos atrasados.
     await expect(porta.cobrar(ctx(), e.id, 1)).rejects.toMatchObject({ problema: { status: 422 } });
     await nucleo.escrever({ cliente: CLIENTE, correlacao: `prazo-${P}` }, (w) =>
       w.executar(
-        'UPDATE emprestimo_prontuario SET emprestado_em = NOW(3) - INTERVAL 9 DAY, prazo_devolucao = NOW(3) - INTERVAL 4 DAY WHERE id = ?',
+        'UPDATE emprestimo_prontuario SET emprestado_em = NOW(3) - INTERVAL 9 DAY, prazo_devolucao = NOW(3) - INTERVAL 4 DAY + INTERVAL 1 HOUR WHERE id = ?',
         [e.id],
       ),
     );
@@ -301,9 +359,133 @@ describe.skipIf(SEM_BANCO)('PortaSameTramitePropria contra o MariaDB (contrato d
     expect(dev['situacao']).toBe('devolvido');
     expect(dev['devolvido_em']).not.toBeNull();
     expect(Number(dev['recebedor_usuario_id'])).toBe(m.usuario);
-    const volta = await um('SELECT situacao, no_local FROM volume_prontuario WHERE id = ?', [m.v1]);
+    const volta = await um('SELECT situacao, no_local FROM volume_prontuario WHERE id = ?', [m.v2]);
     expect([volta['situacao'], Number(volta['no_local'])]).toEqual(['arquivado', 1]);
+    const trilha = await movimentos(m.v2);
+    expect(trilha.map((x) => x['tipo'])).toEqual(['emprestimo', 'devolucao']);
+    expect(trilha[0]!['devolvido_em']).not.toBeNull();
     const doPaciente = await porta.emprestimos(ctx(), { paciente: m.paciente, atrasados: false });
     expect(doPaciente.find((x) => x.id === e.id)).toMatchObject({ situacao: 'devolvido', diasAtraso: 0 });
+  });
+
+  it('devolve o volume aberto à situação de antes; a devolução pela guarda fecha o empréstimo', async () => {
+    const motivo = Number(
+      (await um("SELECT id FROM motivo_solicitacao_prontuario WHERE codigo = 'assistencia'"))['id'],
+    );
+    const e1 = await porta.emprestar(ctx(), { volume: m.v3, destinoSetor: m.setorA, motivo });
+    expect(
+      (await um('SELECT situacao_anterior_volume FROM emprestimo_prontuario WHERE id = ?', [e1.id]))[
+        'situacao_anterior_volume'
+      ],
+    ).toBe('aberto');
+    const v1 = Number((await um('SELECT versao FROM emprestimo_prontuario WHERE id = ?', [e1.id]))['versao']);
+    await porta.devolver(ctx(), e1.id, { versao: v1 });
+    const aberto = await um('SELECT situacao, no_local FROM volume_prontuario WHERE id = ?', [m.v3]);
+    expect([aberto['situacao'], Number(aberto['no_local'])]).toEqual(['aberto', 1]);
+
+    // Emprestado pelo trâmite e devolvido pela guarda: o empréstimo sai dos abertos e não é mais cobrado.
+    const e2 = await porta.emprestar(ctx(), { volume: m.v3, destinoSetor: m.setorA, motivo });
+    await guarda.movimentar(ctx(), m.v3, {
+      operacao: 'devolucao',
+      responsavel: 'Arquivista sintética',
+      versao: await versaoVolume(m.v3),
+    });
+    const abertos = await porta.emprestimos(ctx(), { paciente: null, atrasados: false });
+    expect(abertos.map((x) => x.id)).not.toContain(e2.id);
+    const doPaciente = await porta.emprestimos(ctx(), { paciente: m.paciente, atrasados: false });
+    expect(doPaciente.find((x) => x.id === e2.id)?.situacao).toBe('devolvido');
+    await expect(porta.cobrar(ctx(), e2.id, 1)).rejects.toMatchObject({ problema: { status: 422 } });
+    const movs = (await movimentos(m.v3)).length;
+    await porta.devolver(ctx(), e2.id, { versao: 1 });
+    expect(
+      (await um('SELECT situacao, devolvido_em FROM emprestimo_prontuario WHERE id = ?', [e2.id]))[
+        'situacao'
+      ],
+    ).toBe('devolvido');
+    expect((await movimentos(m.v3)).length).toBe(movs);
+
+    // Emprestado pela guarda: entra nos atrasados e é cobrado, ganhando o documento do empréstimo.
+    const amanha = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    const g = await guarda.movimentar(ctx(), m.v3, {
+      operacao: 'emprestimo',
+      responsavel: 'Auditora sintética',
+      setorDestino: m.setorA,
+      previsaoRetorno: amanha,
+      versao: await versaoVolume(m.v3),
+    });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `prazo-g-${P}` }, (w) =>
+      w.executar(
+        'UPDATE movimento_prontuario SET movimentado_em = NOW(3) - INTERVAL 6 DAY, previsao_retorno = NOW(3) - INTERVAL 3 DAY + INTERVAL 1 HOUR WHERE id = ?',
+        [g.id],
+      ),
+    );
+    const atrasados = await porta.emprestimos(ctx(), { paciente: null, atrasados: true });
+    const daGuarda = atrasados.find((x) => x.movimento === g.id);
+    expect(daGuarda).toMatchObject({ id: null, origem: 'guarda', diasAtraso: 3 });
+    await expect(
+      porta.emprestar(ctx(), { volume: m.v3, destinoSetor: m.setorB, motivo }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const cob = await porta.cobrarSaidaGuarda(ctx(), g.id);
+    expect(cob.cobrancas).toBe(1);
+    expect(
+      await um(
+        'SELECT situacao, movimento_prontuario_id, cobrancas_enviadas FROM emprestimo_prontuario WHERE id = ?',
+        [cob.id],
+      ),
+    ).toMatchObject({ situacao: 'emprestado', movimento_prontuario_id: g.id, cobrancas_enviadas: 1 });
+    await expect(porta.cobrarSaidaGuarda(ctx(), g.id)).rejects.toMatchObject({ problema: { status: 422 } });
+    expect(
+      (await porta.emprestimos(ctx(), { paciente: null, atrasados: true })).filter(
+        (x) => x.movimento === g.id,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('tira a solicitação da fila: item não localizado e cancelamento com motivo, sem apagar', async () => {
+    const motivo = Number(
+      (await um("SELECT id FROM motivo_solicitacao_prontuario WHERE codigo = 'faturamento'"))['id'],
+    );
+    const s = await porta.solicitar(ctx(), {
+      localArquivo: m.arquivo,
+      destino: m.trB,
+      motivo,
+      itens: [
+        { paciente: m.paciente, volume: m.v1 },
+        { paciente: m.paciente, volume: m.v2 },
+      ],
+    });
+    const itens = await porta.itensDaSolicitacao(ctx(), s.id);
+    await expect(
+      porta.naoLocalizado(ctx(), s.id, { item: itens[0]!.id, motivo: ' ', versao: 1 }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    const n = await porta.naoLocalizado(ctx(), s.id, {
+      item: itens[0]!.id,
+      motivo: 'Procurado na estante e no setor B',
+      versao: 1,
+    });
+    expect(n.situacao).toBe('em_atendimento');
+    await expect(porta.cancelarSolicitacao(ctx(), s.id, { motivo: '', versao: 2 })).rejects.toMatchObject({
+      problema: { status: 422 },
+    });
+    const c = await porta.cancelarSolicitacao(ctx(), s.id, { motivo: 'Paciente teve alta', versao: 2 });
+    expect(c.situacao).toBe('cancelada');
+    expect(
+      await um(
+        'SELECT situacao, justificativa_finalizacao, finalizada_em IS NOT NULL AS fechada, excluido_em FROM solicitacao_prontuario WHERE id = ?',
+        [s.id],
+      ),
+    ).toMatchObject({
+      situacao: 'cancelada',
+      justificativa_finalizacao: 'Paciente teve alta',
+      fechada: 1,
+      excluido_em: null,
+    });
+    const fim = await ler(
+      'SELECT situacao, observacao FROM solicitacao_prontuario_item WHERE solicitacao_prontuario_id = ? ORDER BY sequencia',
+      [s.id],
+    );
+    expect(fim.map((x) => x['situacao'])).toEqual(['nao_localizado', 'cancelado']);
+    expect(fim[0]!['observacao']).toBe('Procurado na estante e no setor B');
+    expect((await porta.solicitacoesAbertas(ctx())).map((x) => x.id)).not.toContain(s.id);
   });
 });
