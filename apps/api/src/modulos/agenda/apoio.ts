@@ -31,6 +31,7 @@ export const ctxAgenda = (s: SessaoCadastro): ContextoAgenda => ({
   escopo: escopoDaRequisicao(s.req),
   login: s.login,
   gestorDeAgendas: s.pode('agenda.cobertura.editar'),
+  administrador: s.req.sgh?.sessao.usuario.ator === 'plataforma',
 });
 
 /**

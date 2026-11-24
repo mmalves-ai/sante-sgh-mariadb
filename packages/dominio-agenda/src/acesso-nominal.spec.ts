@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { acessoNominal, mudarLista, podeMarcarNaAgenda, podeVerAgenda } from './acesso-nominal.js';
+import {
+  acessoNominal,
+  mudarLista,
+  podeGravarNaAgenda,
+  podeMarcarNaAgenda,
+  podeVerAgenda,
+} from './acesso-nominal.js';
 
 const lista = [
   { usuario: 1, podeMarcar: true },
@@ -21,6 +27,24 @@ describe('acesso nominal à agenda (02-AGE linha 40)', () => {
     expect(podeMarcarNaAgenda('gestor')).toBe(false);
     expect(podeVerAgenda('gestor')).toBe(true);
     expect(podeVerAgenda('sem-acesso')).toBe(false);
+  });
+  it('o administrador da plataforma vê e marca em qualquer agenda, mesmo fora da lista ou só como consulta', () => {
+    expect(acessoNominal(lista, 3, false, true)).toBe('administrador');
+    expect(acessoNominal(lista, 2, true, true)).toBe('administrador');
+    expect(acessoNominal([], 3, false, true)).toBe('livre');
+    expect(podeVerAgenda('administrador') && podeMarcarNaAgenda('administrador')).toBe(true);
+    expect(podeGravarNaAgenda('administrador', 'manutencao')).toBe(true);
+  });
+  it('gravação: marcação só de quem marca; manutenção também do gestor; quem só consulta não grava', () => {
+    expect(podeGravarNaAgenda('livre', 'marcacao') && podeGravarNaAgenda('marca', 'marcacao')).toBe(true);
+    expect(podeGravarNaAgenda('consulta', 'marcacao')).toBe(false);
+    expect(podeGravarNaAgenda('gestor', 'marcacao')).toBe(false);
+    expect(podeGravarNaAgenda('sem-acesso', 'marcacao')).toBe(false);
+    expect(podeGravarNaAgenda('gestor', 'manutencao') && podeGravarNaAgenda('marca', 'manutencao')).toBe(
+      true,
+    );
+    expect(podeGravarNaAgenda('consulta', 'manutencao')).toBe(false);
+    expect(podeGravarNaAgenda('sem-acesso', 'manutencao')).toBe(false);
   });
   it('a lista nunca fica sem quem marca', () => {
     expect(mudarLista([], { acao: 'incluir', usuario: 5, podeMarcar: false })).toMatchObject({

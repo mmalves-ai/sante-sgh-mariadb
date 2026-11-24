@@ -74,7 +74,7 @@ import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
 import { grupoLegalDaEspera } from './prioridade-espera.js';
 import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
-import { agendasOcultas, exigirMarcacaoNominal } from './usuarios-agenda.js';
+import { agendasOcultas, exigirGravacaoNominal, type PapelNominal } from './usuarios-agenda.js';
 import type {
   ContextoAgenda,
   ContextoGravacao,
@@ -257,6 +257,8 @@ export class PortaAgendaPropria implements PortaAgenda {
   private readonly estabs = new Map<string, Estab>();
   private readonly fusos = new Map<number, string>();
   private readonly operacoes: Readonly<Record<string, Operacao<never, ResultadoOperacao>>>;
+  /** 02-AGE 40: o papel da sessão (gestor de agendas, administrador) para a trava nominal, por contexto da gravação. */
+  private readonly papeis = new WeakMap<ContextoOperacao, PapelNominal>();
 
   constructor(
     private readonly nucleo: NucleoAgenda,
@@ -298,6 +300,11 @@ export class PortaAgendaPropria implements PortaAgenda {
     return (estabelecimento !== null && this.fusos.get(estabelecimento)) || 'America/Sao_Paulo';
   }
 
+  /** 02-AGE 40: agendas restritas que a sessão não vê (fora da lista, sem ser gestor nem administrador). */
+  private ocultas(l: Leitor, c: ContextoAgenda, e: Estab): Promise<Set<number>> {
+    return agendasOcultas(l, e.id, c.login, c.gestorDeAgendas === true, c.administrador === true);
+  }
+
   private async ler<T>(c: ContextoAgenda, fn: (l: Leitor, e: Estab) => Promise<T>): Promise<T> {
     const e = await this.estab(c);
     return this.nucleo.lerSomente(
@@ -316,7 +323,7 @@ export class PortaAgendaPropria implements PortaAgenda {
         'usuario-sem-conta',
         'Gravar na agenda exige uma conta de usuário do cliente (o responsável fica no registro).',
       );
-    return {
+    const ctx: ContextoOperacao = {
       cliente: this.cliente,
       estabelecimento: e.id,
       usuario: num(u['id']),
@@ -324,6 +331,18 @@ export class PortaAgendaPropria implements PortaAgenda {
       chaveIdempotencia: `${c.chaveIdempotencia}${sufixo}`.slice(0, 80),
       ...(c.enderecoIp ? { enderecoIp: c.enderecoIp } : {}),
     };
+    this.papeis.set(ctx, { gestor: c.gestorDeAgendas === true, administrador: c.administrador === true });
+    return ctx;
+  }
+
+  /** 02-AGE 40: a lista nominal da agenda aceita esta gravação (marcação ou manutenção)? */
+  private exigirNominal(
+    tx: TxOperacao,
+    ctx: ContextoOperacao,
+    agenda: number,
+    tipo: 'marcacao' | 'manutencao',
+  ): Promise<void> {
+    return exigirGravacaoNominal(tx, agenda, ctx.usuario, tipo, this.papeis.get(ctx));
   }
 
   // ── Gravações ─────────────────────────────────────────────────────────────────────────────────────
@@ -404,7 +423,7 @@ export class PortaAgendaPropria implements PortaAgenda {
     const agora = this.agora();
     return this.ler(c, async (l, e) => {
       // 02-AGE 40: a agenda restrita a uma lista de usuários some para quem não está nela.
-      const ocultas = await agendasOcultas(l, e.id, c.login, c.gestorDeAgendas === true);
+      const ocultas = await this.ocultas(l, c, e);
       return (await l.consultar(`${SELECT_AGENDA} ORDER BY a.nome`, [agora, agora, e.id]))
         .map((x) => this.agendaDaLinha(x, e.fuso))
         .filter((a) => !ocultas.has(a.id));
@@ -415,7 +434,7 @@ export class PortaAgendaPropria implements PortaAgenda {
     const agora = this.agora();
     return this.ler(c, async (l, e) => {
       const x = await l.uma(`${SELECT_AGENDA} AND a.id = ?`, [agora, agora, e.id, id]);
-      if (x && (await agendasOcultas(l, e.id, c.login, c.gestorDeAgendas === true)).has(id)) return null;
+      if (x && (await this.ocultas(l, c, e)).has(id)) return null;
       return x ? this.agendaDaLinha(x, e.fuso) : null;
     });
   }
@@ -774,8 +793,13 @@ export class PortaAgendaPropria implements PortaAgenda {
         [e.id, ...params],
         { teto: TETO_LEITURA + 1 },
       );
+      // 02-AGE 40: marcações de agenda restrita somem dos painéis de quem não vê a agenda.
+      const ocultas = await this.ocultas(l, c, e);
       return {
-        itens: linhas.slice(0, TETO_LEITURA).map((x) => this.marcacaoDaLinha(x, e.fuso)),
+        itens: linhas
+          .slice(0, TETO_LEITURA)
+          .map((x) => this.marcacaoDaLinha(x, e.fuso))
+          .filter((m) => m.agenda === null || !ocultas.has(m.agenda)),
         truncado: linhas.length > TETO_LEITURA,
       };
     });
@@ -804,6 +828,8 @@ export class PortaAgendaPropria implements PortaAgenda {
         id,
       ]);
       if (!x) return null;
+      const agendaDaMarcacao = numOuNull(x['agenda_servico_id']);
+      if (agendaDaMarcacao !== null && (await this.ocultas(l, c, e)).has(agendaDaMarcacao)) return null;
       let telefone = txt(x['pc_telefone']);
       let celular = txt(x['pc_celular']);
       if (x['pessoa_fisica_id'] !== null && x['pessoa_fisica_id'] !== undefined) {
@@ -848,7 +874,11 @@ export class PortaAgendaPropria implements PortaAgenda {
     if (f.agendas && f.agendas.length === 0) return { itens: [], truncado: false };
     const agora = this.agora();
     return this.ler(c, async (l, e) => {
-      const filtro = f.agendas ? `AND h.agenda_servico_id IN (${marcadores(f.agendas.length)})` : '';
+      // 02-AGE 40: a agenda restrita não aparece na busca de vagas de quem não está na lista dela.
+      const ocultas = [...(await this.ocultas(l, c, e))];
+      const filtro =
+        (f.agendas ? `AND h.agenda_servico_id IN (${marcadores(f.agendas.length)})` : '') +
+        (ocultas.length > 0 ? ` AND h.agenda_servico_id NOT IN (${marcadores(ocultas.length)})` : '');
       const linhas = await l.consultar(
         `SELECT h.agenda_servico_id, a.nome, h.data_referencia, h.inicio_em FROM horario_agenda h
          JOIN agenda_servico a ON a.id = h.agenda_servico_id
@@ -856,7 +886,7 @@ export class PortaAgendaPropria implements PortaAgenda {
            AND h.situacao = 'livre' AND h.tipo_horario = 'regular' AND h.vagas_ocupadas < h.vagas
            AND h.inicio_em > ? AND h.data_referencia BETWEEN ? AND ? ${filtro}
          ORDER BY h.inicio_em, h.agenda_servico_id LIMIT ${limite + 1}`,
-        [e.id, agora, f.de, f.ate, ...(f.agendas ?? [])],
+        [e.id, agora, f.de, f.ate, ...(f.agendas ?? []), ...ocultas],
         { teto: limite + 1 },
       );
       return {
@@ -1589,6 +1619,10 @@ export class PortaAgendaPropria implements PortaAgenda {
             throw recusa('geracao-revertida', 'A geração já foi revertida.');
         },
         gravar: async (tx, e, ctx) => {
+          const [g] = await tx.consultar('SELECT agenda_servico_id FROM geracao_grade WHERE id = ?', [
+            e.geracao,
+          ]);
+          if (g) await this.exigirNominal(tx, ctx, num(g['agenda_servico_id']), 'manutencao');
           const agora = this.agora();
           const [t] = await tx.consultar(
             'SELECT COUNT(*) AS n, MAX(versao) AS v FROM horario_agenda WHERE geracao_grade_id = ? AND excluido_em IS NULL',
@@ -1991,7 +2025,7 @@ export class PortaAgendaPropria implements PortaAgenda {
           })
           .strict(),
         gravar: async (tx, e, ctx) => {
-          if (e.agenda) await this.travarAgenda(tx, ctx, e.agenda);
+          if (e.agenda) await this.travarAgenda(tx, ctx, e.agenda, 'marcacao');
           const esp =
             e.especialidade === null
               ? null
@@ -2152,7 +2186,12 @@ export class PortaAgendaPropria implements PortaAgenda {
 
   // ── Apoio das operações ───────────────────────────────────────────────────────────────────────────
 
-  private async travarAgenda(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
+  private async travarAgenda(
+    tx: TxOperacao,
+    ctx: ContextoOperacao,
+    id: number,
+    tipo: 'marcacao' | 'manutencao' = 'manutencao',
+  ): Promise<Linha> {
     const [a] = await tx.consultarParaAtualizar(
       `SELECT id, versao, ativo, duracao_horario_minutos, teleatendimento, permite_encaixe, encaixes_por_dia,
          profissional_id
@@ -2167,13 +2206,15 @@ export class PortaAgendaPropria implements PortaAgenda {
         'Agenda não encontrada',
         'A agenda não existe mais.',
       );
+    await this.exigirNominal(tx, ctx, id, tipo);
     return a;
   }
 
   private async travarMarcacao(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
     const [m] = await tx.consultarParaAtualizar(
       `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.encaixe, m.retorno, m.observacao, m.chegada_em,
-         m.atendido_em, m.canal_marcacao_id, s.significado, fp.codigo AS convenio, h.inicio_em
+         m.atendido_em, m.canal_marcacao_id, s.significado, fp.codigo AS convenio, h.inicio_em,
+         h.agenda_servico_id AS agenda_nominal
        FROM marcacao_horario m JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
        JOIN fonte_pagadora fp ON fp.id = m.fonte_pagadora_id JOIN horario_agenda h ON h.id = m.horario_agenda_id
        WHERE m.id = ? AND m.estabelecimento_id = ? AND m.excluido_em IS NULL`,
@@ -2187,6 +2228,7 @@ export class PortaAgendaPropria implements PortaAgenda {
         'Marcação não encontrada',
         'A marcação não existe mais.',
       );
+    await this.exigirNominal(tx, ctx, num(m['agenda_nominal']), 'marcacao');
     const sig = String(m['significado']);
     if (sig === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada ou remarcada.');
     if (m['atendido_em'] !== null || sig === 'realizada')
@@ -2279,10 +2321,9 @@ export class PortaAgendaPropria implements PortaAgenda {
       alertas?: string[];
     },
   ): Promise<number> {
-    const a = await this.travarAgenda(tx, ctx, p.agenda);
+    const a = await this.travarAgenda(tx, ctx, p.agenda, 'marcacao');
     if (!bool(a['ativo']))
       throw recusa('agenda-inativa', 'A agenda está inativa: não aceita marcação nem geração.');
-    await exigirMarcacaoNominal(tx, p.agenda, ctx.usuario);
     const fuso = this.fuso(ctx.estabelecimento);
     const inicio = instanteDe(fuso, p.data, p.hora);
     if (inicio.getTime() <= this.agora().getTime())

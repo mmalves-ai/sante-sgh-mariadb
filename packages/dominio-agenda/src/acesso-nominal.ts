@@ -4,10 +4,19 @@
 //   - quem está na lista só para consulta vê, mas não marca;
 //   - quem não está na lista não vê nem marca; o gestor de agendas (cargo com a manutenção da agenda) vê para
 //     manter a lista, mas só marca se estiver nela.
+// O administrador da plataforma pode tudo (ADR 0002): vê e marca em qualquer agenda, sem entrar na lista.
+// Gravações na agenda restrita (decisão do domínio, 02-AGE 40):
+//   - "marcação" (marcar, encaixar, remarcar, cancelar, confirmar, registrar falta, desfazer encaixe, incluir na
+//     espera, registrar contato de confirmação): só quem marca (livre, marca, administrador);
+//   - "manutenção" (gerar e reverter grade, bloquear horários, escala, cobertura, dados da agenda): quem marca e o
+//     gestor de agendas; quem só consulta e quem está fora da lista não mantêm a agenda.
 // A lista nunca fica num estado em que ninguém marca: retirar ou rebaixar o último que marca é recusado (a agenda
 // viraria só leitura para todos); para abrir a agenda de novo, retira-se a lista inteira, de uma vez.
 
-export type AcessoNominal = 'livre' | 'marca' | 'consulta' | 'gestor' | 'sem-acesso';
+export type AcessoNominal = 'livre' | 'marca' | 'consulta' | 'gestor' | 'administrador' | 'sem-acesso';
+
+/** O tipo de gravação na agenda, para a trava nominal. */
+export type GravacaoNaAgenda = 'marcacao' | 'manutencao';
 
 export interface PermitidoNaAgenda {
   readonly usuario: number;
@@ -19,15 +28,22 @@ export function acessoNominal(
   lista: readonly PermitidoNaAgenda[],
   usuario: number | null,
   gestor = false,
+  administrador = false,
 ): AcessoNominal {
   if (lista.length === 0) return 'livre';
+  if (administrador) return 'administrador';
   const eu = usuario === null ? undefined : lista.find((p) => p.usuario === usuario);
   if (eu) return eu.podeMarcar ? 'marca' : 'consulta';
   return gestor ? 'gestor' : 'sem-acesso';
 }
 
 export const podeVerAgenda = (a: AcessoNominal): boolean => a !== 'sem-acesso';
-export const podeMarcarNaAgenda = (a: AcessoNominal): boolean => a === 'livre' || a === 'marca';
+export const podeMarcarNaAgenda = (a: AcessoNominal): boolean =>
+  a === 'livre' || a === 'marca' || a === 'administrador';
+
+/** A gravação é aceita pela lista nominal? Marcação exige marcar; manutenção aceita também o gestor de agendas. */
+export const podeGravarNaAgenda = (a: AcessoNominal, tipo: GravacaoNaAgenda): boolean =>
+  tipo === 'marcacao' ? podeMarcarNaAgenda(a) : podeMarcarNaAgenda(a) || a === 'gestor';
 
 export type MudancaNaLista =
   | { readonly acao: 'incluir'; readonly usuario: number; readonly podeMarcar: boolean }

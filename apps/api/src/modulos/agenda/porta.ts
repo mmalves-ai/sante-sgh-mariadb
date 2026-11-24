@@ -46,6 +46,8 @@ export interface ContextoAgenda {
   readonly login?: string;
   /** Gestor de agendas (manutenção da agenda): vê a agenda restrita para manter a lista, sem marcar. */
   readonly gestorDeAgendas?: boolean;
+  /** 02-AGE 40: administrador da plataforma (pode tudo, ADR 0002): vê e marca na agenda restrita sem estar na lista. */
+  readonly administrador?: boolean;
 }
 
 /** Contexto de uma gravação: quem grava, a correlação e a chave de idempotência do pedido. */

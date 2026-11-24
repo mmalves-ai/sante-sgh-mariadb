@@ -11,7 +11,7 @@ export const esquemaListaUsuariosAgenda = z.object({
   usuarios: z.array(
     z.object({ usuario: z.number(), login: z.string(), nome: z.string(), podeMarcar: z.boolean() }),
   ),
-  meuAcesso: z.enum(['livre', 'marca', 'consulta', 'gestor', 'sem-acesso']),
+  meuAcesso: z.enum(['livre', 'marca', 'consulta', 'gestor', 'administrador', 'sem-acesso']),
 });
 export type ListaUsuariosAgenda = z.infer<typeof esquemaListaUsuariosAgenda>;
 

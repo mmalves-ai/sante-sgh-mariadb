@@ -47,7 +47,12 @@ export class UsuariosAgendaController {
   }
 
   private ctx(s: SessaoCadastro) {
-    return { hospital: s.hospital, login: s.login, gestor: s.pode('agenda.cobertura.editar') };
+    return {
+      hospital: s.hospital,
+      login: s.login,
+      gestor: s.pode('agenda.cobertura.editar'),
+      administrador: s.req.sgh?.sessao.usuario.ator === 'plataforma',
+    };
   }
 
   @Get('agendas/:id/usuarios')

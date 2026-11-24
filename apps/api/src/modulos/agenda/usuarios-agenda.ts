@@ -7,9 +7,10 @@
 import {
   acessoNominal,
   type AcessoNominal,
+  type GravacaoNaAgenda,
   mudarLista,
   type PermitidoNaAgenda,
-  podeMarcarNaAgenda,
+  podeGravarNaAgenda,
   podeVerAgenda,
 } from '@sgh/dominio-agenda';
 import {
@@ -73,21 +74,52 @@ export async function listaNominal(l: Consulta, agenda: number): Promise<Permiti
   ).map((x) => ({ usuario: num(x['usuario_id']), podeMarcar: Boolean(Number(x['pode_marcar'])) }));
 }
 
-/** Trava da marcação (dentro da transação da porta): agenda restrita só aceita quem está na lista e marca. */
-export async function exigirMarcacaoNominal(tx: TxOperacao, agenda: number, usuario: number): Promise<void> {
-  const a = acessoNominal(await listaNominal(tx, agenda), usuario);
-  if (!podeMarcarNaAgenda(a))
-    throw recusa(
-      'agenda-restrita',
-      a === 'consulta'
-        ? 'Você só consulta esta agenda: a marcação é de quem está na lista dela com permissão de marcar.'
-        : 'Esta agenda é restrita a uma lista de usuários, e você não está nela.',
-    );
+/** Papel da sessão que a lista nominal considera além da própria lista. */
+export interface PapelNominal {
+  /** Gestor de agendas (cargo com a manutenção da agenda): vê e mantém, mas só marca se estiver na lista. */
+  readonly gestor: boolean;
+  /** Administrador da plataforma: pode tudo (ADR 0002). */
+  readonly administrador: boolean;
 }
+
+const SEM_PAPEL: PapelNominal = { gestor: false, administrador: false };
+
+/**
+ * Trava nominal de uma gravação na agenda (dentro da transação da porta): marcação exige estar na lista com
+ * "pode marcar"; manutenção aceita também o gestor de agendas. Agenda sem lista: vale só o escopo do cargo.
+ */
+export async function exigirGravacaoNominal(
+  tx: TxOperacao,
+  agenda: number,
+  usuario: number | null,
+  tipo: GravacaoNaAgenda,
+  papel: PapelNominal = SEM_PAPEL,
+): Promise<void> {
+  // Processo automático do sistema (sem usuário): a lista nominal é das sessões de usuário.
+  if (usuario === null) return;
+  const a = acessoNominal(await listaNominal(tx, agenda), usuario, papel.gestor, papel.administrador);
+  if (podeGravarNaAgenda(a, tipo)) return;
+  throw recusa(
+    'agenda-restrita',
+    a === 'consulta'
+      ? 'Você só consulta esta agenda: a gravação nela é de quem está na lista com permissão de marcar.'
+      : a === 'gestor'
+        ? 'Como gestor de agendas você mantém esta agenda, mas a marcação nela é de quem está na lista com permissão de marcar.'
+        : 'Esta agenda é restrita a uma lista de usuários, e você não está nela.',
+  );
+}
+
+/** Trava da marcação (agenda de consulta, procedimento, sessão ou exame): só quem está na lista e marca. */
+export const exigirMarcacaoNominal = (
+  tx: TxOperacao,
+  agenda: number,
+  usuario: number | null,
+  papel: PapelNominal = SEM_PAPEL,
+): Promise<void> => exigirGravacaoNominal(tx, agenda, usuario, 'marcacao', papel);
 
 /**
  * Agendas do estabelecimento que o login NÃO vê pela lista nominal (as livres e as em que ele está ficam fora).
- * O gestor de agendas vê todas (para manter a lista). Sem login (leitura interna do sistema, sem sessão), nada
+ * O gestor de agendas vê todas (para manter a lista), e o administrador da plataforma também. Sem login (leitura interna do sistema, sem sessão), nada
  * se esconde: a trava vale para as sessões de usuário.
  */
 export async function agendasOcultas(
@@ -95,8 +127,9 @@ export async function agendasOcultas(
   estabelecimento: number,
   login: string | undefined,
   gestor: boolean,
+  administrador = false,
 ): Promise<Set<number>> {
-  if (!login) return new Set();
+  if (!login || administrador) return new Set();
   const linhas = await l.consultar(
     `SELECT au.agenda_servico_id AS agenda, au.usuario_id, au.pode_marcar, (u.login = ?) AS eu
        FROM agenda_usuario au JOIN agenda_servico a ON a.id = au.agenda_servico_id
@@ -122,6 +155,7 @@ export interface ContextoUsuariosAgenda {
   readonly hospital: string;
   readonly login: string;
   readonly gestor: boolean;
+  readonly administrador?: boolean;
 }
 
 export class UsuariosAgendaPropria {
@@ -183,7 +217,7 @@ export class UsuariosAgendaPropria {
           nome: String(x['nome'] ?? x['login']),
           podeMarcar: Boolean(Number(x['pode_marcar'])),
         }));
-        const meuAcesso = acessoNominal(usuarios, q.usuario, c.gestor);
+        const meuAcesso = acessoNominal(usuarios, q.usuario, c.gestor, c.administrador === true);
         // Quem não vê a agenda não vê a lista dela (falha fechada: 404 como agenda inexistente).
         if (!podeVerAgenda(meuAcesso)) return null;
         return { agenda, restrita: usuarios.length > 0, usuarios, meuAcesso };

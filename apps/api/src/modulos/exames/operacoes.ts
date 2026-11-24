@@ -36,6 +36,7 @@ import {
 } from '@sgh/nucleo';
 import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
 import { dataNoFuso, preCadastroDaMarcacao } from '../agenda/pre-cadastro-marcacao.js';
+import { exigirMarcacaoNominal } from '../agenda/usuarios-agenda.js';
 import { instanteCivil, minutosDaHora, normalizarHora } from './relogio.js';
 
 type Linha = Record<string, unknown>;
@@ -139,6 +140,8 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
   const usuario = usuarioDe(ctx);
   const a = await agendaDeExame(tx, est, e.agenda);
   if (!a.ativo) throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita marcação.');
+  // 02-AGE 40: agenda de exame restrita a uma lista de usuários só aceita quem está nela com "pode marcar".
+  await exigirMarcacaoNominal(tx, a.id, usuario);
   const inicio = instanteCivil(e.data, e.hora, await fusoDe(tx, est));
   if (inicio.getTime() <= Date.now())
     throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
@@ -250,11 +253,12 @@ interface Desfazer {
 }
 
 /** Marcação travada para desfazer: a situação, o horário e o paciente. */
-async function marcacaoTravada(tx: TxOperacao, est: number, id: number): Promise<Linha> {
+async function marcacaoTravada(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
+  const est = estabelecimentoDe(ctx);
   // Só marcação de agenda de exame: a permissão de exame não alcança consulta, procedimento nem sessão.
   const [m] = await tx.consultarParaAtualizar(
     `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.fonte_pagadora_id, m.observacao,
-            m.retorno, m.chegada_em, m.atendido_em, s.significado
+            m.retorno, m.chegada_em, m.atendido_em, s.significado, h.agenda_servico_id AS agenda_nominal
        FROM marcacao_horario m
        JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
        JOIN horario_agenda h ON h.id = m.horario_agenda_id
@@ -264,6 +268,8 @@ async function marcacaoTravada(tx: TxOperacao, est: number, id: number): Promise
     [id, est],
   );
   if (!m) throw naoEncontrado('Marcação não encontrada', 'A marcação não existe mais.');
+  // 02-AGE 40: cancelar ou remarcar na agenda restrita é de quem está na lista dela com "pode marcar".
+  await exigirMarcacaoNominal(tx, n(m['agenda_nominal']), usuarioDe(ctx));
   if (m['significado'] === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada.');
   if (m['atendido_em'] !== null || ['realizada', 'em_atendimento'].includes(String(m['significado'])))
     throw recusa('ja-atendido', 'O exame já foi atendido: a marcação não pode mais ser desfeita.');
@@ -349,7 +355,7 @@ export const cancelarExame = definirOperacao<CancelarExameEntrada, ResultadoOper
   acao: 'alteracao',
   entrada: esquemaCancelarExame,
   async gravar(tx, e, ctx) {
-    const m = await marcacaoTravada(tx, estabelecimentoDe(ctx), e.marcacao);
+    const m = await marcacaoTravada(tx, ctx, e.marcacao);
     const cancelamento = await desfazerMarcacao(tx, ctx, m, {
       marcacao: e.marcacao,
       motivo: e.motivo,
@@ -371,7 +377,7 @@ export const remarcarExame = definirOperacao<RemarcarExameEntrada, ResultadoOper
   entrada: esquemaRemarcarExame,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    const m = await marcacaoTravada(tx, est, e.marcacao);
+    const m = await marcacaoTravada(tx, ctx, e.marcacao);
     const [atual] = await tx.consultar(
       'SELECT agenda_servico_id, inicio_em FROM horario_agenda WHERE id = ?',
       [n(m['horario_agenda_id'])],
