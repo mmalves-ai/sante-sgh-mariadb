@@ -57,6 +57,9 @@ const { t } = useI18n({
       finalidade: 'Finalidade',
       aceitaComunicacao: 'Aceita comunicações não obrigatórias',
       aceiteDeclarado: 'Confirmo que o titular declarou o aceite agora',
+      aceiteEm: 'aceite em {data}',
+      revogarAceite: 'Retirar o aceite',
+      reativar: 'Voltar a usar',
       cpf: 'CPF do responsável',
       nome: 'Nome (só para CPF ainda não cadastrado)',
       nascimento: 'Nascimento do responsável',
@@ -447,9 +450,26 @@ async function confirmarEncerramento(): Promise<void> {
         <li v-for="x in contatos.data.value?.emails ?? []" :key="x.id" :data-testid="`email-${x.id}`">
           <strong v-if="x.principal">{{ t('principal') }} ·</strong>
           {{ x.email }} · {{ t(`finalidades.${x.finalidade}`) }}
-          <span v-if="x.aceitaComunicacao">· {{ t('aceitaComunicacao') }}</span>
+          <span v-if="x.aceitaComunicacao"
+            >· {{ t('aceitaComunicacao')
+            }}<template v-if="x.aceiteEm">
+              ({{ t('aceiteEm', { data: x.aceiteEm.split('-').reverse().join('/') }) }})</template
+            ></span
+          >
           <span v-if="!x.ativo"> · {{ t('fora') }}</span>
+          <SanteBotao
+            v-if="podeEditar && !x.ativo"
+            :rotulo="t('reativar')"
+            :data-testid="`email-reativar-${x.id}`"
+            @acionar="executar(() => ajustarContato(paciente, 'email', x.id, 'reativar'))"
+          />
           <template v-if="podeEditar && x.ativo">
+            <SanteBotao
+              v-if="x.aceitaComunicacao"
+              :rotulo="t('revogarAceite')"
+              :data-testid="`email-revogar-${x.id}`"
+              @acionar="executar(() => ajustarContato(paciente, 'email', x.id, 'revogar-aceite'))"
+            />
             <SanteBotao
               v-if="!x.principal"
               :rotulo="t('tornarPrincipal')"

@@ -4,6 +4,7 @@
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { gravarComRegra } from './cadastro-com-regra.js';
 import { FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import {
   CEP_TESTE,
@@ -24,6 +25,9 @@ const CPF_ADULTO = cpfSintetico('990102311');
 const CPF_MENOR = cpfSintetico('990102312');
 const CPF_MAE = cpfSintetico('990102313');
 const CPF_TIO = cpfSintetico('990102314');
+const CPF_NOVO = cpfSintetico('990102315');
+const CPF_SEM_DATA = cpfSintetico('990102316');
+const CPF_PRIMO = cpfSintetico('990102317');
 
 async function limparFicha(nucleo: NucleoProprio, m: Massa | null): Promise<void> {
   if (!m) return;
@@ -33,7 +37,23 @@ async function limparFicha(nucleo: NucleoProprio, m: Massa | null): Promise<void
          (SELECT p.pessoa_fisica_id FROM paciente p WHERE p.id = r.paciente_id) WHERE pf.nome LIKE ?`,
       [`%${MARCA}%`],
     );
-    await e.executar('DELETE FROM regra_campo_cadastro WHERE estabelecimento_id = ?', [m.estabelecimento]);
+    await e.executar('DELETE FROM regra_campo_cadastro WHERE estabelecimento_id = ? OR rotulo = ?', [
+      m.estabelecimento,
+      MARCA,
+    ]);
+    // O aceite do e-mail vira consentimento do titular: solta o e-mail e apaga o consentimento da massa.
+    const doTeste = `SELECT p.id FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE pf.nome LIKE ?`;
+    await e.executar(
+      `UPDATE email_pessoa SET consentimento_titular_id = NULL WHERE consentimento_titular_id IN
+         (SELECT id FROM consentimento_titular WHERE paciente_id IN (${doTeste}))`,
+      [`%${MARCA}%`],
+    );
+    await e.executar(
+      `DELETE h FROM consentimento_titular_historico h JOIN consentimento_titular k ON k.id = h.consentimento_titular_id
+        WHERE k.paciente_id IN (${doTeste})`,
+      [`%${MARCA}%`],
+    );
+    await e.executar(`DELETE FROM consentimento_titular WHERE paciente_id IN (${doTeste})`, [`%${MARCA}%`]);
   });
 }
 
@@ -158,6 +178,90 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
     });
     expect(semFonte.map((x) => x.campo)).toEqual(['email']);
     expect(comFonte.map((x) => x.campo)).toEqual(['email', 'nomeMae']);
+    // O caminho do POST pacientes: a regra da fonte pagadora recusa o cadastro nela e nada é gravado.
+    const cadastro = new PortaCadastroPropria(nucleo, CLIENTE_F22);
+    const novo = {
+      nome: `NOVO FICHA ${MARCA}`,
+      nascimento: '1990-02-03',
+      sexo: 'F' as const,
+      cpf: CPF_NOVO,
+      naturalidade: 'BELO HORIZONTE',
+      ufNaturalidade: 'MG',
+      cep: CEP_TESTE,
+      numero: 11,
+      email: 'f22l0102novo@exemplo.invalid',
+    };
+    const pessoasDoCpf = async () =>
+      Number((await um('SELECT COUNT(*) AS n FROM pessoa_fisica WHERE cpf = ?', [CPF_NOVO]))?.['n']);
+    const viaRota = (escopo: Parameters<typeof gravarComRegra>[4]) =>
+      gravarComRegra(ficha, c(), novo, 'cadastro', escopo, () =>
+        cadastro.cadastrar(contextoPorta(m!), novo as never, contextoGravacao(m!)),
+      );
+    expect(await codigo(viaRota({ modulo: null, tipoAtendimento: null, fontePagadora: m!.fonte }))).toBe(
+      'campos-exigidos',
+    );
+    expect(await pessoasDoCpf()).toBe(0);
+    // Sem a fonte (regra geral), o mesmo cadastro grava.
+    expect(await codigo(viaRota({ modulo: null, tipoAtendimento: null, fontePagadora: null }))).toBe(
+      'gravou',
+    );
+    expect(await pessoasDoCpf()).toBe(1);
+    // O caminho do PUT: somente leitura por tipo de atendimento recusa a mudança e o paciente fica na mesma versão.
+    await ficha.gravarRegraCampo(
+      c(),
+      { ...base, campo: 'telefone', tipoAtendimento: 'internacao', exigencia: 'somente_leitura' },
+      trilha('r'),
+    );
+    const versao = async () =>
+      Number((await um('SELECT versao FROM paciente WHERE id = ?', [adulto]))?.['versao']);
+    const v0 = await versao();
+    const alterarViaRota = (tipo: 'internacao' | null) =>
+      gravarComRegra(
+        ficha,
+        c(),
+        { telefone: '3133334444' },
+        'alteracao',
+        { modulo: null, tipoAtendimento: tipo, fontePagadora: null },
+        () => Promise.resolve('gravou'),
+      );
+    expect(await codigo(alterarViaRota('internacao'))).toBe('campos-exigidos');
+    expect(await alterarViaRota(null)).toBe('gravou');
+    expect(await versao()).toBe(v0);
+    // Regra de outro estabelecimento: nem gravada nem inativada pela sessão deste.
+    const outro = Number(
+      (await um('SELECT id FROM estabelecimento WHERE id <> ? ORDER BY id LIMIT 1', [m!.estabelecimento]))?.[
+        'id'
+      ],
+    );
+    expect(outro).toBeGreaterThan(0);
+    expect(
+      await codigo(
+        ficha.gravarRegraCampo(
+          c(),
+          { ...base, estabelecimento: outro, exigencia: 'obrigatorio' },
+          trilha('r'),
+        ),
+      ),
+    ).toBe('regra-de-outro-estabelecimento');
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-ficha-outra' }, (x) =>
+      x.executar(
+        `INSERT INTO regra_campo_cadastro (estabelecimento_id, entidade, campo, tipo_atendimento, exigencia, rotulo, ativo, criado_em)
+         VALUES (?, 'paciente', 'email', 'todos', 'obrigatorio', ?, TRUE, NOW(3))`,
+        [outro, MARCA],
+      ),
+    );
+    const alheia = Number(
+      (
+        await um('SELECT id FROM regra_campo_cadastro WHERE rotulo = ? AND estabelecimento_id = ?', [
+          MARCA,
+          outro,
+        ])
+      )?.['id'],
+    );
+    expect(await codigo(ficha.inativarRegraCampo(c(), alheia, 1, trilha('r')))).toBe('regra-inexistente');
+    expect(
+      Number((await um('SELECT ativo FROM regra_campo_cadastro WHERE id = ?', [alheia]))?.['ativo']),
+    ).toBe(1);
     await ficha.inativarRegraCampo(c(), id, 2, trilha('r'));
     expect(Number((await um('SELECT ativo FROM regra_campo_cadastro WHERE id = ?', [id]))?.['ativo'])).toBe(
       0,
@@ -209,6 +313,17 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
     expect(enc?.['vigencia_fim']).not.toBeNull();
     expect(Number(enc?.['principal'])).toBe(0);
     const lidos = await ficha.contatos(c(), adulto);
+    // Encerrado no mesmo dia em que entrou: deixa de valer já (intervalo vazio) e não é encerrado de novo.
+    expect(lidos.enderecos.find((x) => x.id === e2)?.vigente).toBe(false);
+    expect(
+      await codigo(
+        ficha.ajustarContato(
+          c(),
+          { paciente: adulto, especie: 'endereco', id: e2, acao: 'encerrar' },
+          trilha('e'),
+        ),
+      ),
+    ).toBe('contato-inexistente');
     expect(lidos.enderecos.filter((x) => x.vigente && x.principal)).toHaveLength(1);
     expect(lidos.enderecos.find((x) => x.id === e1)).toBeDefined();
 
@@ -262,6 +377,29 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
     ).toMatchObject({
       finalidade: 'notificacao',
     });
+    const aceite = await um(
+      `SELECT k.situacao, k.autorizado_em, k.criado_por FROM email_pessoa e
+         JOIN consentimento_titular k ON k.id = e.consentimento_titular_id WHERE e.id = ?`,
+      [m1],
+    );
+    expect(aceite?.['situacao']).toBe('autorizado');
+    expect(aceite?.['autorizado_em']).not.toBeNull();
+    expect((await ficha.contatos(c(), adulto)).emails.find((x) => x.id === m1)?.aceiteEm).not.toBeNull();
+    // Revogar o aceite sem encerrar o e-mail: o consentimento fica revogado, o contato segue em uso.
+    await ficha.ajustarContato(
+      c(),
+      { paciente: adulto, especie: 'email', id: m1, acao: 'revogar-aceite' },
+      trilha('m'),
+    );
+    const rev = await um(
+      `SELECT e.aceita_comunicacao, e.excluido_em, k.situacao, k.revogado_em FROM email_pessoa e
+         JOIN consentimento_titular k ON k.id = e.consentimento_titular_id WHERE e.id = ?`,
+      [m1],
+    );
+    expect(Number(rev?.['aceita_comunicacao'])).toBe(0);
+    expect(rev?.['excluido_em']).toBeNull();
+    expect(rev?.['situacao']).toBe('revogado');
+    expect(rev?.['revogado_em']).not.toBeNull();
     const emails = await contar('email_pessoa');
     await ficha.ajustarContato(
       c(),
@@ -272,6 +410,26 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
     expect(
       (await um('SELECT excluido_em FROM email_pessoa WHERE id = ?', [m1]))?.['excluido_em'],
     ).not.toBeNull();
+    // O e-mail que saiu de uso não é incluído de novo: é reativado (a mesma linha).
+    expect(
+      await codigo(
+        ficha.incluirEmail(
+          c(),
+          { ...mail, email: 'f22l0102@exemplo.invalid', aceitaComunicacao: false, aceiteDeclarado: false },
+          trilha('m'),
+        ),
+      ),
+    ).toBe('email-fora-de-uso');
+    await ficha.ajustarContato(
+      c(),
+      { paciente: adulto, especie: 'email', id: m1, acao: 'reativar' },
+      trilha('m'),
+    );
+    expect(await contar('email_pessoa')).toBe(emails);
+    expect((await ficha.contatos(c(), adulto)).emails.find((x) => x.id === m1)).toMatchObject({
+      ativo: true,
+      aceitaComunicacao: false,
+    });
   });
 
   it('responsáveis: pessoa única pelo CPF, poderes, pendência do menor e encerramento que não deixa o menor sem representante', async () => {
@@ -379,5 +537,65 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
       { paciente: adulto, id: cur, levantamentoCuratela: true, motivo: 'levantamento' },
       trilha('r'),
     );
+    expect((await ficha.responsaveis(c(), adulto)).itens.find((x) => x.id === cur)?.vigente).toBe(false);
+    // Representante sem data de nascimento: a maioridade não está provada.
+    expect(
+      await codigo(
+        ficha.incluirResponsavel(
+          c(),
+          {
+            ...base,
+            paciente: adulto,
+            cpf: CPF_SEM_DATA,
+            nome: `SEM DATA FICHA ${MARCA}`,
+            nascimento: null,
+            papel: 'curador',
+            autorizarProcedimento: true,
+          },
+          trilha('r'),
+        ),
+      ),
+    ).toBe('responsavel-invalido');
+    // Incluído e encerrado no mesmo dia; e o que só começa no futuro: os dois deixam de valer (intervalo vazio).
+    const familiar = {
+      ...base,
+      paciente: adulto,
+      cpf: CPF_PRIMO,
+      nome: `PRIMO FICHA ${MARCA}`,
+      papel: 'familiar' as const,
+      autorizarProcedimento: false,
+      receberInformacao: false,
+      retirarDocumento: false,
+    };
+    const hoje = await ficha.incluirResponsavel(c(), { ...familiar, vigenciaInicio: null }, trilha('r'));
+    const futuro = await ficha.incluirResponsavel(
+      c(),
+      { ...familiar, nome: null, papel: 'acompanhante', vigenciaInicio: '2099-01-01' },
+      trilha('r'),
+    );
+    for (const id of [hoje, futuro])
+      await ficha.encerrarResponsavel(
+        c(),
+        { paciente: adulto, id, levantamentoCuratela: false, motivo: 'fim' },
+        trilha('r'),
+      );
+    const itens = (await ficha.responsaveis(c(), adulto)).itens;
+    expect(itens.find((x) => x.id === hoje)?.vigente).toBe(false);
+    expect(itens.find((x) => x.id === futuro)?.vigente).toBe(false);
+    const vigentesHoje = await um<{ n: unknown }>(
+      `SELECT COUNT(*) AS n FROM responsavel_paciente WHERE id IN (?, ?) AND vigencia_inicio <= CURRENT_DATE
+         AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
+      [hoje, futuro],
+    );
+    expect(Number(vigentesHoje?.n)).toBe(0);
+    expect(
+      await codigo(
+        ficha.encerrarResponsavel(
+          c(),
+          { paciente: adulto, id: hoje, levantamentoCuratela: false, motivo: 'fim' },
+          trilha('r'),
+        ),
+      ),
+    ).toBe('vinculo-inexistente');
   });
 });

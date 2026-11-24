@@ -43,6 +43,7 @@ const esquemaContatos = z.object({
       finalidade: z.string(),
       principal: z.boolean(),
       aceitaComunicacao: z.boolean(),
+      aceiteEm: z.string().nullable(),
       ativo: z.boolean(),
     }),
   ),
@@ -138,7 +139,7 @@ export const ajustarContato = (
   id: number,
   especie: 'endereco' | 'telefone' | 'email',
   contato: number,
-  acao: 'principal' | 'encerrar',
+  acao: 'principal' | 'encerrar' | 'revogar-aceite' | 'reativar',
 ) => gravar(`${P}/${id}/contatos/${especie}/${contato}/${acao}`);
 export const incluirResponsavel = (id: number, corpo: object) => gravar(`${P}/${id}/responsaveis`, corpo);
 export const encerrarResponsavel = (id: number, vinculo: number, corpo: object) =>
