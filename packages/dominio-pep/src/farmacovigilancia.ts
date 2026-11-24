@@ -3,7 +3,9 @@
 //
 // Reação adversa a medicamento (RAM): registrada por quem atende, avaliada pela farmácia clínica (causalidade),
 // notificada à vigilância (Notivisa, RDC 36/2013 e RDC 4/2009 da farmacovigilância) e encerrada com o desfecho. A
-// reação grave (nível de gravidade a partir do limiar) ou com óbito só encerra depois de notificada. Nada se apaga:
+// reação grave (nível de gravidade a partir do limiar) ou com óbito só encerra depois de notificada. Encerrar pede a
+// avaliação da farmácia; notificar também, salvo a reação grave ou com óbito, que se notifica já (prazo curto da RDC
+// 36/2013: óbito em 72 h) e segue pendente de avaliação até a farmácia avaliar. Nada se apaga:
 // a inativação (registro feito por engano) pede justificativa e cada passo fica no histórico da reação.
 //
 // Uso contínuo: a lista de medicamentos de casa atravessa os atendimentos do paciente; a reconciliação (admissão,
@@ -101,6 +103,8 @@ export interface PassoReacao {
   readonly nivelGravidade: number;
   readonly nivelGrave?: number;
   readonly jaNotificada: boolean;
+  /** A farmácia clínica já avaliou (causalidade); ausente, deduzido da situação. */
+  readonly jaAvaliada?: boolean;
   readonly causalidade?: number | null;
   readonly desfecho?: string | null;
   readonly justificativa?: string | null;
@@ -115,9 +119,35 @@ export function passoReacao(p: PassoReacao): { situacao: SituacaoReacao } | { fa
         `A reação ${p.situacaoAtual.replace('_', ' ')} não aceita este passo.`,
       ),
     };
-  if (p.etapa === 'avaliacao_farmacia' && !p.causalidade)
-    return { falha: falha('causalidade-obrigatoria', 'A avaliação da farmácia pede a causalidade.') };
+  const avaliada = p.jaAvaliada ?? ['avaliada', 'notificada', 'encerrada'].includes(p.situacaoAtual);
+  if (p.etapa === 'avaliacao_farmacia') {
+    if (!p.causalidade)
+      return { falha: falha('causalidade-obrigatoria', 'A avaliação da farmácia pede a causalidade.') };
+    // Notificada antes da avaliação (grave ou óbito): avaliada, segue notificada.
+    return { situacao: p.jaNotificada ? 'notificada' : 'avaliada' };
+  }
+  if (p.etapa === 'notificacao') {
+    if (p.jaNotificada) return { falha: falha('ja-notificada', 'A reação já foi notificada à vigilância.') };
+    if (!avaliada) {
+      if (!exigeNotificacao(p.nivelGravidade, p.desfecho, p.nivelGrave))
+        return {
+          falha: falha(
+            'avaliacao-pendente',
+            'A farmácia clínica avalia a reação (causalidade) antes de notificar a reação não grave.',
+          ),
+        };
+      // Grave ou óbito: notifica já; a situação segue pendente de avaliação (a farmácia avalia depois).
+      return { situacao: p.situacaoAtual };
+    }
+  }
   if (p.etapa === 'encerramento') {
+    if (!avaliada)
+      return {
+        falha: falha(
+          'avaliacao-pendente',
+          'A farmácia clínica avalia a reação (causalidade) antes de encerrar.',
+        ),
+      };
     if (!p.desfecho || !(DESFECHOS_REACAO as readonly string[]).includes(p.desfecho))
       return { falha: falha('desfecho-obrigatorio', 'Encerrar pede o desfecho da reação.') };
     if (exigeNotificacao(p.nivelGravidade, p.desfecho, p.nivelGrave) && !p.jaNotificada)

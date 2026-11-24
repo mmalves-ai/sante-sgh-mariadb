@@ -237,3 +237,81 @@ describe('uso contínuo e reconciliação pela lista', () => {
     expect(fonteNaReconciliacao('familiar')).toBe('familiar');
   });
 });
+
+describe('avaliação da farmácia antes de notificar e de encerrar', () => {
+  it('encerrar sem a avaliação é recusado (avaliacao-pendente), mesmo com o desfecho', () => {
+    expect(
+      passoReacao({
+        etapa: 'encerramento',
+        situacaoAtual: 'registrada',
+        nivelGravidade: 1,
+        jaNotificada: false,
+        jaAvaliada: false,
+        desfecho: 'recuperado',
+      }),
+    ).toEqual({ falha: expect.objectContaining({ codigo: 'avaliacao-pendente' }) });
+    // notificada antes da avaliação (grave): ainda pede a avaliação para encerrar
+    expect(
+      passoReacao({
+        etapa: 'encerramento',
+        situacaoAtual: 'em_avaliacao',
+        nivelGravidade: 3,
+        jaNotificada: true,
+        jaAvaliada: false,
+        desfecho: 'recuperado',
+      }),
+    ).toEqual({ falha: expect.objectContaining({ codigo: 'avaliacao-pendente' }) });
+  });
+
+  it('reação não grave só notifica depois da avaliação', () => {
+    expect(
+      passoReacao({
+        etapa: 'notificacao',
+        situacaoAtual: 'registrada',
+        nivelGravidade: 1,
+        jaNotificada: false,
+      }),
+    ).toEqual({ falha: expect.objectContaining({ codigo: 'avaliacao-pendente' }) });
+  });
+
+  it('reação grave ou com óbito notifica já, sem esperar a farmácia, e segue pendente de avaliação', () => {
+    expect(
+      passoReacao({
+        etapa: 'notificacao',
+        situacaoAtual: 'registrada',
+        nivelGravidade: 3,
+        jaNotificada: false,
+      }),
+    ).toEqual({ situacao: 'registrada' });
+    expect(
+      passoReacao({
+        etapa: 'notificacao',
+        situacaoAtual: 'em_avaliacao',
+        nivelGravidade: 1,
+        jaNotificada: false,
+        desfecho: 'obito',
+      }),
+    ).toEqual({ situacao: 'em_avaliacao' });
+    // a avaliação posterior leva a reação já notificada para notificada
+    expect(
+      passoReacao({
+        etapa: 'avaliacao_farmacia',
+        situacaoAtual: 'registrada',
+        nivelGravidade: 3,
+        jaNotificada: true,
+        causalidade: 1,
+      }),
+    ).toEqual({ situacao: 'notificada' });
+  });
+
+  it('notificar duas vezes é recusado', () => {
+    expect(
+      passoReacao({
+        etapa: 'notificacao',
+        situacaoAtual: 'registrada',
+        nivelGravidade: 3,
+        jaNotificada: true,
+      }),
+    ).toEqual({ falha: expect.objectContaining({ codigo: 'ja-notificada' }) });
+  });
+});

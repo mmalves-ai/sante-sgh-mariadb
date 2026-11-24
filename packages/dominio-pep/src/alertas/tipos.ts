@@ -59,6 +59,10 @@ export interface AlergiaAtiva {
   readonly nome: string;
   /** Princípios ativos ligados à alergia (o cadastro de alergias × princípios). */
   readonly principios: readonly number[];
+  /** Itens do cadastro ligados (reação adversa a um item sem princípio ativo no cadastro): cruza pelo produto. */
+  readonly produtos?: readonly number[];
+  /** Medicamento informado só pelo nome (reação adversa sem cadastro): cruza pelo nome do produto. */
+  readonly nomesInformados?: readonly string[];
 }
 
 export interface ParInteracao {
