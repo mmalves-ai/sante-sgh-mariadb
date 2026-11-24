@@ -739,3 +739,53 @@ describe('revisão de segurança do "como" (credencial, alvo, volta, substituiç
     expect(com.statusCode).toBe(200);
   });
 });
+
+describe('e-mail de entrada das contas (pedido do dono: a primeira conta tem o e-mail alterável depois de entrar)', () => {
+  const trocar = (n: Navegador, id: string, email: string, csrf = true) =>
+    app.inject({
+      method: 'PUT',
+      url: `/api/plataforma/contas/${id}/email`,
+      headers: csrf ? plat(n) : { cookie: cookie(n) },
+      payload: { email },
+    });
+  // Os logins deste bloco não contam no teto por origem dos blocos anteriores (mesmo endereço do inject).
+  beforeEach(async () => {
+    await armazem.apagar('plataforma:tentativas-origem:127.0.0.1');
+  });
+
+  it('a plataforma muda o próprio e-mail (CSRF, unicidade, auditoria) e entra pelo novo', async () => {
+    const p = await entrarPlataforma(C.plataforma);
+    const id = (await repo.contaPorEmail(C.plataforma))!.id;
+    expect((await trocar(p, id, 'plataforma.nova@sintetico.invalid', false)).statusCode).toBe(403);
+    expect((await trocar(p, id, C.suporte)).statusCode).toBe(409);
+    expect((await trocar(p, id, 'sem-arroba')).statusCode).toBe(400);
+    expect((await trocar(p, '999999', 'x@sintetico.invalid')).statusCode).toBe(404);
+    expect((await trocar(p, id, ' Plataforma.Nova@Sintetico.invalid ')).statusCode).toBe(204);
+    const ev = repo.eventos[0]!;
+    expect(ev).toMatchObject({ ator: id, evento: 'plataforma.conta.email.alterado', contaAlvo: id });
+    expect(JSON.parse(ev.detalhe ?? '{}')).toEqual({
+      anterior: C.plataforma,
+      novo: 'plataforma.nova@sintetico.invalid',
+    });
+    // A sessão continua; o login seguinte é pelo e-mail novo.
+    const eu = await app.inject({ method: 'GET', url: '/api/plataforma/eu', headers: plat(p) });
+    expect(eu.json().conta.email).toBe('plataforma.nova@sintetico.invalid');
+    const n = await entrarPlataforma('plataforma.nova@sintetico.invalid');
+    expect((await trocar(n, id, C.plataforma)).statusCode).toBe(204);
+  });
+
+  it('a plataforma muda o e-mail de um suporte; o suporte não muda e-mail nenhum', async () => {
+    const p = await entrarPlataforma(C.plataforma);
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/plataforma/suportes',
+      headers: plat(p),
+      payload: { email: 'troca.email@sintetico.invalid' },
+    });
+    const { id } = r.json() as { id: string };
+    expect((await trocar(p, id, 'trocado@sintetico.invalid')).statusCode).toBe(204);
+    expect((await repo.contaPorId(id))!.email).toBe('trocado@sintetico.invalid');
+    const s = await entrarPlataforma(C.suporte);
+    expect((await trocar(s, id, 'outro@sintetico.invalid')).statusCode).toBe(403);
+  });
+});

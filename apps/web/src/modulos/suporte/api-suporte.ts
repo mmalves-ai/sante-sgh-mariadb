@@ -231,6 +231,21 @@ export async function definirAtribuicoes(
   );
 }
 
+/** Muda o e-mail de entrada de uma conta da plataforma ou do suporte (a própria inclusive). */
+export async function alterarEmailConta(
+  id: string,
+  email: string,
+  buscar: typeof fetch = fetch,
+): Promise<void> {
+  await vazio(
+    await buscar(`/api/plataforma/contas/${encodeURIComponent(id)}/email`, {
+      method: 'PUT',
+      headers: escrita(),
+      body: JSON.stringify({ email }),
+    }),
+  );
+}
+
 export async function gerarConvite(id: string, buscar: typeof fetch = fetch): Promise<ConviteTela> {
   return json(
     await buscar(`/api/plataforma/suportes/${encodeURIComponent(id)}/convite`, {

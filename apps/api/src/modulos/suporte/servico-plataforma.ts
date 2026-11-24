@@ -116,6 +116,8 @@ const TENTATIVAS_JANELA_S = 15 * 60;
 /** Último passo TOTP aceito por conta: dura mais que a janela de ±1 passo (90 s). */
 const TOTP_PASSO_TTL_S = 120;
 export const CONVITE_HORAS = 72;
+/** Auditoria das contas: e-mail de entrada alterado pela plataforma. */
+export const EVENTO_EMAIL_ALTERADO = 'plataforma.conta.email.alterado';
 
 function iguais(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -503,6 +505,38 @@ export class ServicoPlataforma {
       ),
     );
     return { token: cv.token, expiraEm: cv.ate.toISOString() };
+  }
+
+  /**
+   * Muda o e-mail de entrada de uma conta da plataforma ou do suporte, inclusive a própria (pedido do dono: o e-mail
+   * da primeira conta, criada na inicialização, é alterável depois de entrar). Só a PLATAFORMA; o e-mail é único
+   * (conflito, 409); a auditoria das contas leva o anterior e o novo na mesma transação. Senha, segundo fator e
+   * sessões ficam como estão (o login seguinte é pelo e-mail novo).
+   */
+  async alterarEmail(ator: ContaComAtribuicoes, id: string, email: string, estacao: string): Promise<void> {
+    this.exigirDesignar(ator);
+    const alvo = await this.contaCompleta(id);
+    if (!alvo) throw new ErroPlataforma('nao-encontrado', 'Conta não encontrada.');
+    if (alvo.email === email) return;
+    const outra = await this.tentar(() => this.repo.contaPorEmail(email));
+    if (outra && outra.id !== id) throw new ErroPlataforma('conflito', 'Já existe conta com este e-mail.');
+    try {
+      await this.repo.alterarConta(
+        id,
+        { email },
+        {
+          ator: ator.id,
+          evento: EVENTO_EMAIL_ALTERADO,
+          contaAlvo: id,
+          detalhe: JSON.stringify({ anterior: alvo.email, novo: email }),
+          estacao,
+        },
+      );
+    } catch (e) {
+      if (e instanceof Error && e.message === 'uq_conta_plataforma_email')
+        throw new ErroPlataforma('conflito', 'Já existe conta com este e-mail.');
+      throw new ErroPlataforma('indisponivel', 'O serviço da plataforma está indisponível.');
+    }
   }
 
   async definirFuncao(ator: ContaComAtribuicoes, id: string, ativo: boolean, estacao: string): Promise<void> {

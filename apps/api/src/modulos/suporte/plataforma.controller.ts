@@ -21,6 +21,7 @@ import {
   esquemaAceitarConvite,
   esquemaAtribuicoes,
   esquemaCorrigir,
+  esquemaEmailPlataforma,
   esquemaEntrarComo,
   esquemaEntrarPlataforma,
   esquemaFuncaoSuporte,
@@ -42,6 +43,7 @@ import {
   type TipoProblema,
   type UsuarioComo,
 } from '@sgh/contratos';
+import { z } from 'zod';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { AuditadoNoHandler, Publica } from '../../autorizacao/decoradores.js';
@@ -68,6 +70,8 @@ import type { ServicoComo } from './servico-como.js';
 import { type ContaComAtribuicoes, ErroPlataforma, type ServicoPlataforma } from './servico-plataforma.js';
 
 export const SERVICO_PLATAFORMA = Symbol('SERVICO_PLATAFORMA');
+/** PUT /api/plataforma/contas/:id/email. */
+const esquemaEmailConta = z.object({ email: esquemaEmailPlataforma }).strict();
 export const SERVICO_COMO = Symbol('SERVICO_COMO');
 
 interface Req {
@@ -313,6 +317,21 @@ export class PlataformaController {
     try {
       await p.definirFuncao(conta, id, d.ativo, estacaoDaRequisicao(req));
       if (!d.ativo) await c.encerrarDaConta(id, null, 'funcao-retirada');
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  @Put('contas/:id/email')
+  @HttpCode(204)
+  @Publica('designação: só a conta da plataforma (CSRF próprio; conferida no serviço)')
+  @AuditadoNoHandler('a auditoria das contas (plataforma.conta.email.alterado) na mesma transação')
+  async alterarEmail(@Param('id') id: string, @Body() corpo: unknown, @Req() req: Req): Promise<void> {
+    const conta = await this.conta(req, true);
+    if (!NUMERO.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Conta não encontrada');
+    const d = this.analisar(esquemaEmailConta, corpo);
+    try {
+      await this.servicos().p.alterarEmail(conta, id, d.email, estacaoDaRequisicao(req));
     } catch (e) {
       this.erro(e);
     }

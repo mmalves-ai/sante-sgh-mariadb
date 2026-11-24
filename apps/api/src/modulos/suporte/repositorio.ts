@@ -262,8 +262,11 @@ export class RepositorioPlataformaMemoria implements RepositorioPlataforma {
     if (!c) throw new Error('conta_plataforma: conta não alterada.');
     if (condicao && c.conviteHash !== condicao.conviteHash)
       throw new ErroConviteMudou('conta_plataforma: o convite mudou.');
+    if (m.email !== undefined && [...this.contasMem.values()].some((x) => x.id !== id && x.email === m.email))
+      throw new Error('uq_conta_plataforma_email');
     this.contasMem.set(id, {
       ...c,
+      ...(m.email !== undefined ? { email: m.email } : {}),
       ...(m.ativo !== undefined ? { ativo: m.ativo } : {}),
       ...(m.cifra !== undefined ? { cifra: m.cifra } : {}),
       ...(m.totpEnv !== undefined ? { totpEnv: m.totpEnv } : {}),

@@ -19,7 +19,9 @@ import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { mensagensContaEmail } from '../i18n-conta-email.js';
 import {
+  alterarEmailConta,
   buscarEu,
   corrigir,
   criarSuporte,
@@ -35,7 +37,8 @@ import {
   trilhaLegado,
 } from '../api-suporte.js';
 
-const { t } = useI18n();
+const { t, locale, mergeLocaleMessage } = useI18n();
+mergeLocaleMessage(locale.value, mensagensContaEmail);
 const roteador = useRouter();
 const eu = ref<EuPlataforma | null>(null);
 const aba = ref<'suportes' | 'auditoria' | 'contas'>('auditoria');
@@ -55,6 +58,30 @@ const convite = ref('');
 const mensagem = ref('');
 const marcados = ref<Record<string, string[]>>({});
 const suportes = computed(() => contas.value.filter((c) => c.papel === 'SUPORTE'));
+/** Conta com o e-mail em edição (a própria ou a de um suporte) e o valor digitado. */
+const editandoEmail = ref<string | null>(null);
+const emailNovo = ref('');
+
+function editarEmail(id: string, atual: string): void {
+  editandoEmail.value = id;
+  emailNovo.value = atual;
+  mensagem.value = '';
+}
+
+async function salvarEmail(): Promise<void> {
+  const id = editandoEmail.value;
+  if (!id) return;
+  try {
+    await alterarEmailConta(id, emailNovo.value);
+    editandoEmail.value = null;
+    mensagem.value = t('suporte.emailAlterado');
+    if (eu.value && id === eu.value.conta.id) eu.value = await buscarEu();
+    await carregarContas();
+  } catch (e) {
+    mensagem.value =
+      e instanceof ErroApi && e.status === 409 ? t('suporte.emailEmUso') : t('suporte.erroSalvar');
+  }
+}
 
 function linkConvite(token: string, ate: string): string {
   return t('suporte.convite', {
@@ -225,6 +252,28 @@ const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR'
     <p v-if="mensagem" role="status" data-testid="suporte-mensagem">{{ mensagem }}</p>
 
     <div v-if="aba === 'suportes'" role="tabpanel">
+      <section class="suporte__minha-conta" data-testid="minha-conta">
+        <h2>{{ t('suporte.minhaConta') }}</h2>
+        <p>
+          <span data-testid="minha-conta-email">{{ eu.conta.email }}</span>
+          <button
+            v-if="editandoEmail !== eu.conta.id"
+            type="button"
+            data-testid="alterar-meu-email"
+            @click="editarEmail(eu.conta.id, eu.conta.email)"
+          >
+            {{ t('suporte.alterarEmail') }}
+          </button>
+        </p>
+      </section>
+      <form v-if="editandoEmail" class="suporte__novo" data-testid="form-email" @submit.prevent="salvarEmail">
+        <label>
+          <span>{{ t('suporte.novoEmail') }}</span>
+          <input v-model="emailNovo" type="email" required maxlength="254" data-testid="novo-email" />
+        </label>
+        <SanteBotao :rotulo="t('suporte.salvarEmail')" tipo="submit" data-testid="salvar-email" />
+        <button type="button" @click="editandoEmail = null">{{ t('suporte.cancelar') }}</button>
+      </form>
       <form class="suporte__novo" @submit.prevent="cadastrar">
         <label>
           <span>{{ t('suporte.email') }}</span>
@@ -252,6 +301,13 @@ const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR'
               <small v-if="!c.senhaDefinida"> · {{ t('suporte.senhaPendente') }}</small>
               <small v-if="c.segundoFator"> · {{ t('suporte.segundoFatorAtivo') }}</small>
               <button type="button" @click="reconvidar(c)">{{ t('suporte.novoConvite') }}</button>
+              <button
+                type="button"
+                :data-testid="`alterar-email-${c.email}`"
+                @click="editarEmail(c.id, c.email)"
+              >
+                {{ t('suporte.alterarEmail') }}
+              </button>
             </td>
             <td>
               <button type="button" :data-testid="`funcao-${c.email}`" @click="alternar(c)">

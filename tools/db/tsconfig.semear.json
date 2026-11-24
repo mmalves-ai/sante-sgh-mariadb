@@ -4,6 +4,11 @@
   "compilerOptions": {
     "erasableSyntaxOnly": false
   },
-  "include": ["semear-acesso.ts", "semear-acesso.spec.ts"],
+  "include": [
+    "semear-acesso.ts",
+    "semear-acesso.spec.ts",
+    "plataforma-criar-admin.ts",
+    "plataforma-criar-admin.spec.ts"
+  ],
   "exclude": []
 }
