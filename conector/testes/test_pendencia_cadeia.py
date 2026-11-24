@@ -209,3 +209,71 @@ class Migracao(Cadeia):
             nomes = [d[0] for d in c.description]
             chaves = " ".join(str(dict(zip(nomes, x)).get("possible_keys")) for x in c.fetchall())
         self.assertIn("ix_pendencia_execucao_tabela", chaves)
+
+
+@unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
+class DescartarCopiadas(unittest.TestCase):
+    COD = "pq_descarte"
+
+    def setUp(self):
+        from sante_conector import banco
+        self.root = banco.conectar(None, multi=True)
+        self.cli, self.ctl = "cliente_" + self.COD, controle.nome_ctl(self.COD)
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+            c.execute("CREATE DATABASE `%s`" % self.cli)
+        controle.preparar(self.root, self.COD, self.cli)
+        self.cn = banco.conectar(None, autocommit=False)
+        k = [("TAB_A", "k%d" % i, "pai_pendente", "alta", None) for i in range(3)] + \
+            [("TAB_B", "k9", "restricao_destino_1048", "critica", "coluna_x"), ("TAB_X", None, "tabela_sem_mapa", "alta", None)]
+        n1 = ("TAB_A", "n1", "valor_presumido", "baixa", None)
+        linhas = [(10,) + x for x in k]                                   # a que carregou
+        linhas += [(11,) + x for x in k] + [(11,) + n1]                   # cópia (continuação antiga) + própria
+        linhas += [(12,) + x for x in k] + [(12,) + n1]                   # cópia da 11 (inclui a n1 da 11)
+        linhas += [(12, "TAB_A", "n2", "valor_presumido", "baixa", None),  # só na 12
+                   (12, "TAB_B", "k9", "restricao_destino_1048", "critica", "coluna_y"),   # outro detalhe: não é cópia
+                   (12, "TAB_A", "k0", "pai_pendente", "media", None)]                    # outra gravidade: idem
+        linhas += [(30,) + x for x in k]                                  # outra importação, fora da cadeia
+        with self.cn.cursor() as c:
+            c.executemany("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                          " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,NOW())" % self.ctl, linhas)
+        self.cn.commit()
+        controle.gravar_cadeia(self.cn, self.ctl, 11, 10)
+        controle.gravar_cadeia(self.cn, self.ctl, 12, 11)
+        self.cn.commit()
+
+    def tearDown(self):
+        self.cn.close()
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+        self.root.close()
+
+    def _abertas(self):
+        return sorted(relatorio._contar(self.cn, self.ctl, 12, controle.cadeia(self.cn, self.ctl, 12))[0])
+
+    def test_conta_e_apaga_so_duplicatas(self):
+        from sante_conector import descarte_pendencias as dp
+        leitura = self._abertas()
+        r = dp.descartar(self.cn, self.ctl, lote=2)             # sem --executar: só conta
+        self.assertEqual(r["modo"], "contagem")
+        self.assertEqual(r["antes"], {"10": 5, "11": 6, "12": 9})
+        self.assertEqual(r["duplicatas"], {"11": 5, "12": 6})
+        self.assertEqual(r["depois"], r["antes"])
+        self.assertEqual(self._abertas(), leitura)
+        passos = []
+        r = dp.descartar(self.cn, self.ctl, executar=True, lote=2, progresso=lambda e, z, n: passos.append(e))
+        self.assertEqual(r["duplicatas"], {"11": 5, "12": 6})
+        self.assertEqual(r["depois"], {"10": 5, "11": 1, "12": 3})
+        self.assertGreater(len(passos), 2)                      # em pedaços, com commit a cada um
+        with self.cn.cursor() as c:
+            c.execute("SELECT execucao_id, chave_original, COALESCE(detalhe,''), gravidade FROM `%s`.pendencia"
+                      " WHERE execucao_id IN (11,12) ORDER BY 1,2,3" % self.ctl)
+            self.assertEqual(c.fetchall(), ((11, "n1", "", "baixa"), (12, "k0", "", "media"),
+                                            (12, "k9", "coluna_y", "critica"), (12, "n2", "", "baixa")))
+            c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=30" % self.ctl)
+            self.assertEqual(c.fetchone()[0], 5)                # fora da cadeia: intocada
+        self.assertEqual(self._abertas(), leitura)              # a leitura pela cadeia não muda
+        r = dp.descartar(self.cn, self.ctl, executar=True)      # idempotente
+        self.assertEqual(r["duplicatas"], {"11": 0, "12": 0})
