@@ -135,18 +135,27 @@ const esquemaFila = z.array(
     tipo: z.string(),
     situacao: z.string(),
     fonte: z.string(),
+    paciente: z.string(),
+    prontuario: z.number(),
+    atendimentoId: z.number().nullable(),
+    contaId: z.number().nullable(),
     solicitadaEm: textoN,
     temSenha: z.boolean(),
+    validadeSenha: textoN,
     cirurgia: z.boolean(),
+    cirurgiaPrevista: textoN,
+    prazoPendencia: textoN,
     responsavel: textoN,
     pendencias: z.number(),
   }),
 );
 export type GuiaNaFila = z.infer<typeof esquemaFila>[number];
-export const lerGuiasConvenio = (situacao: string | null, minhas: boolean) => {
+/** A fila das guias; `cirurgia` monta a fila do centro cirúrgico (só guias de cirurgia, pela data prevista). */
+export const lerGuiasConvenio = (situacao: string | null, minhas: boolean, cirurgia = false) => {
   const q = new URLSearchParams();
   if (situacao) q.set('situacao', situacao);
   if (minhas) q.set('minhas', '1');
+  if (cirurgia) q.set('cirurgia', '1');
   return ler(`${F}/guias-convenio?${q.toString()}`, esquemaFila);
 };
 

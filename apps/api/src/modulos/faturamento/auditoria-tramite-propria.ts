@@ -25,6 +25,7 @@ import {
   avaliarParecerItem,
   cnpjValido,
   concluirAuditoria,
+  conferirConclusaoAuditoria,
   contaEditavel,
   conteudoDoProtocolo,
   DECISOES_ITEM_AUDITORIA,
@@ -430,6 +431,35 @@ export const opConcluirAuditoria = definirOperacao({
       [e.auditoriaId],
       { teto: 5_000 },
     );
+    // Todo item cobrado tem parecer e nenhum mudou depois dele: o item lançado depois da abertura não conta como
+    // mantido sem ter sido visto, e o valor auditado sai do total real da conta.
+    const ativos = await tx.consultar<Linha>(
+      `SELECT id, quantidade, valor_total FROM conta_hospitalar_item
+        WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND situacao NOT IN ('estornado','transferido','sem_cobranca')`,
+      [conta],
+      { teto: 5_000 },
+    );
+    const cobertura = conferirConclusaoAuditoria(
+      ativos.map((i) => ({ id: n(i['id']), quantidade: n(i['quantidade']), valor: n(i['valor_total']) })),
+      pareceres.map((p) => ({
+        itemId: n(p['item']),
+        quantidadeOriginal: n(p['quantidade_original']),
+        valorOriginal: n(p['valor_original']),
+      })),
+    );
+    if (cobertura.semParecer.length)
+      throw recusa(
+        'item-sem-parecer',
+        `Há ${cobertura.semParecer.length} item(ns) da conta sem parecer (lançados depois da abertura ou ainda não vistos): registre o parecer de cada um antes de concluir.`,
+        { campos: ['itemId'], itens: cobertura.semParecer },
+      );
+    if (cobertura.mudados.length)
+      throw recusa(
+        'item-mudou',
+        'Um item auditado mudou ou saiu da conta depois do parecer: registre o parecer de novo antes de concluir.',
+        { campos: ['itemId'], itens: cobertura.mudados },
+      );
+    const totalAntes = (await totalDosItens(tx, conta)).valor_total;
     const mudam = pareceres.filter((p) => txt(p['decisao']) !== 'mantido');
     if (mudam.length && !contaEditavel(txt(c['situacao'])))
       throw recusa(
@@ -489,7 +519,7 @@ export const opConcluirAuditoria = definirOperacao({
     if (mudam.length)
       await tx.alterar('conta_hospitalar', conta, n(c['versao']), await totalDosItens(tx, conta));
     const fim = concluirAuditoria(
-      n(a['valor_original']),
+      totalAntes,
       pareceres.map((p) => ({
         decisao: txt(p['decisao']) as (typeof DECISOES_ITEM_AUDITORIA)[number],
         valorOriginal: n(p['valor_original']),
@@ -730,13 +760,9 @@ export const opEmitirProtocolo = definirOperacao({
     for (const [k, i] of e.itens.entries()) {
       if (!i.alvoId) continue;
       const [, tabela] = COLUNA_ALVO[i.tipo];
-      const filtro =
-        tabela === 'conta_hospitalar' || tabela === 'atendimento' ? ' AND estabelecimento_id = ?' : '';
+      // As quatro tabelas têm o estabelecimento: item de outro estabelecimento não entra no protocolo.
       if (
-        !(await tx.uma(
-          `SELECT id FROM ${tabela} WHERE id = ?${filtro}`,
-          filtro ? [i.alvoId, est] : [i.alvoId],
-        ))
+        !(await tx.uma(`SELECT id FROM ${tabela} WHERE id = ? AND estabelecimento_id = ?`, [i.alvoId, est]))
       )
         throw recusa('nao-encontrado', 'Um item do protocolo não existe neste estabelecimento.', {
           campos: [`itens.${k}`],
@@ -995,11 +1021,16 @@ export async function guiaAcompanhamentoPropria(l: Leitor, est: number, guia: nu
   };
 }
 
-/** A fila das guias do convênio no hospital: abertas primeiro (pendente, em análise, solicitada), filtro por situação. */
+/**
+ * A fila das guias do convênio no hospital, por paciente: abertas (pendente, em análise, solicitada), com o paciente
+ * (nome e prontuário), o atendimento e a conta para abrir num clique, o prazo da pendência aberta mais próxima e a
+ * validade da senha; o que vence primeiro vem antes. A fila do centro cirúrgico (`cirurgia`) traz só as guias de
+ * cirurgia agendada, na ordem da data prevista da cirurgia.
+ */
 export async function guiasConvenioPropria(
   l: Leitor,
   est: number,
-  f: { situacao: string | null; minhas: boolean; usuario: number | null },
+  f: { situacao: string | null; minhas: boolean; usuario: number | null; cirurgia?: boolean },
 ) {
   const filtros: string[] = ['g.estabelecimento_id = ?', 'g.excluido_em IS NULL'];
   const p: unknown[] = [est];
@@ -1011,19 +1042,30 @@ export async function guiasConvenioPropria(
     filtros.push('g.responsavel_usuario_id = ?');
     p.push(f.usuario);
   }
+  if (f.cirurgia) filtros.push('g.agendamento_cirurgico_id IS NOT NULL');
+  const ordem = f.cirurgia
+    ? 'ac.inicio_previsto_em IS NULL, ac.inicio_previsto_em, g.data_solicitacao'
+    : "prazo IS NULL, prazo, g.data_validade_senha IS NULL, g.data_validade_senha, FIELD(g.situacao, 'pendente', 'em_analise', 'solicitada', 'rascunho'), g.data_solicitacao";
   const gs = await l.consultar<Linha>(
     `SELECT g.id, g.numero, g.numero_guia_operadora, g.tipo_guia, g.situacao, g.data_solicitacao, g.senha,
-            g.agendamento_cirurgico_id, f.nome AS fonte, u.login AS responsavel,
+            g.data_validade_senha, g.agendamento_cirurgico_id, g.atendimento_id, g.conta_hospitalar_id,
+            ac.inicio_previsto_em, f.nome AS fonte, u.login AS responsavel, pa.numero_prontuario,
+            CASE WHEN pf.usa_nome_social AND pf.nome_social IS NOT NULL THEN pf.nome_social ELSE pf.nome END AS paciente,
             (SELECT COUNT(*) FROM guia_pendencia gp WHERE gp.guia_fonte_pagadora_id = g.id
-                AND gp.situacao IN ('aberta','em_tratamento') AND gp.excluido_em IS NULL) AS pendencias
+                AND gp.situacao IN ('aberta','em_tratamento') AND gp.excluido_em IS NULL) AS pendencias,
+            (SELECT MIN(gp.prazo_em) FROM guia_pendencia gp WHERE gp.guia_fonte_pagadora_id = g.id
+                AND gp.situacao IN ('aberta','em_tratamento') AND gp.excluido_em IS NULL) AS prazo
        FROM guia_fonte_pagadora g JOIN fonte_pagadora f ON f.id = g.fonte_pagadora_id
+       JOIN paciente pa ON pa.id = g.paciente_id JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+       LEFT JOIN agendamento_cirurgico ac ON ac.id = g.agendamento_cirurgico_id
        LEFT JOIN usuario u ON u.id = g.responsavel_usuario_id
       WHERE ${filtros.join(' AND ')}
-      ORDER BY FIELD(g.situacao, 'pendente', 'em_analise', 'solicitada', 'rascunho') , g.data_solicitacao
+      ORDER BY ${ordem}
       LIMIT 300`,
     p,
     { teto: 300 },
   );
+  const dia = (v: unknown) => (v === null || v === undefined ? null : (iso(v)?.slice(0, 10) ?? null));
   return gs.map((g) => ({
     id: n(g['id']),
     numero: txt(g['numero']),
@@ -1031,9 +1073,16 @@ export async function guiasConvenioPropria(
     tipo: txt(g['tipo_guia']),
     situacao: txt(g['situacao']),
     fonte: txt(g['fonte']),
+    paciente: txt(g['paciente']),
+    prontuario: n(g['numero_prontuario']),
+    atendimentoId: nn(g['atendimento_id']),
+    contaId: nn(g['conta_hospitalar_id']),
     solicitadaEm: iso(g['data_solicitacao']),
     temSenha: g['senha'] !== null,
+    validadeSenha: dia(g['data_validade_senha']),
     cirurgia: g['agendamento_cirurgico_id'] !== null,
+    cirurgiaPrevista: g['inicio_previsto_em'] === null ? null : iso(g['inicio_previsto_em']),
+    prazoPendencia: g['prazo'] === null ? null : iso(g['prazo']),
     responsavel: g['responsavel'] === null ? null : txt(g['responsavel']),
     pendencias: n(g['pendencias']),
   }));

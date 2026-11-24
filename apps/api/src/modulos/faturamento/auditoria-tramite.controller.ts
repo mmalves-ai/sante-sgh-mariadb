@@ -13,7 +13,7 @@
 //   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/cancelamento  faturamento.protocolo.registrar
-//   GET  /api/faturamento/guias-convenio?situacao=&minhas=1   faturamento.guia.ler (fila: abertas primeiro)
+//   GET  /api/faturamento/guias-convenio?situacao=&minhas=1&cirurgia=1 faturamento.guia.ler (fila por paciente e prazo)
 //   GET  /api/faturamento/guias/:id/acompanhamento             faturamento.guia.ler
 //   POST /api/faturamento/guias/:id/resposta                   faturamento.pendencia.editar
 //   POST /api/faturamento/guias/:id/pendencias                 faturamento.pendencia.editar
@@ -205,13 +205,19 @@ export class AuditoriaTramiteController {
   guias(
     @Query('situacao') situacao: string | undefined,
     @Query('minhas') minhas: string | undefined,
+    @Query('cirurgia') cirurgia: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ) {
     const ctx = ctxDe(req, ORIGEM);
     const sit = situacao && /^[a-z_]{3,30}$/.test(situacao) ? situacao : null;
     return this.rodar(() =>
       this.s().ler(ctx, (l, est) =>
-        guiasConvenioPropria(l, est, { situacao: sit, minhas: minhas === '1', usuario: ctx.usuario ?? null }),
+        guiasConvenioPropria(l, est, {
+          situacao: sit,
+          minhas: minhas === '1',
+          usuario: ctx.usuario ?? null,
+          cirurgia: cirurgia === '1',
+        }),
       ),
     );
   }

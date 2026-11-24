@@ -122,6 +122,32 @@ export function concluirAuditoria(
   };
 }
 
+/**
+ * Antes de concluir, todo item cobrado da conta tem parecer e nenhum item auditado mudou depois do parecer. O item
+ * lançado depois da abertura não está no retrato "antes" nem foi visto pelo auditor: sem parecer, a conclusão é
+ * recusada (nunca conta como mantido). O parecer de um item que saiu da conta ou mudou de quantidade ou valor também
+ * recusa: o auditor registra de novo.
+ */
+export function conferirConclusaoAuditoria(
+  itensAtivos: readonly { readonly id: number; readonly quantidade: number; readonly valor: number }[],
+  pareceres: readonly {
+    readonly itemId: number;
+    readonly quantidadeOriginal: number;
+    readonly valorOriginal: number;
+  }[],
+): { semParecer: number[]; mudados: number[] } {
+  const ativos = new Map(itensAtivos.map((i) => [i.id, i]));
+  const vistos = new Set(pareceres.map((p) => p.itemId));
+  const semParecer = itensAtivos.filter((i) => !vistos.has(i.id)).map((i) => i.id);
+  const mudados = pareceres
+    .filter((p) => {
+      const i = ativos.get(p.itemId);
+      return !i || r2(i.valor) !== r2(p.valorOriginal) || r4(i.quantidade) !== r4(p.quantidadeOriginal);
+    })
+    .map((p) => p.itemId);
+  return { semParecer, mudados };
+}
+
 /** Quem audita: auditor do hospital (usuário ou profissional) ou a empresa externa da operadora. */
 export function validarAberturaAuditoria(e: {
   readonly modalidade: ModalidadeAuditoria;
@@ -270,8 +296,9 @@ export function validarRespostaGuia(e: {
   if (guiaEncerrada(e.situacaoAtual)) erros['resposta'] = 'A guia está encerrada: não recebe resposta.';
   const autoriza = e.resposta === 'autorizada' || e.resposta === 'autorizada_parcial';
   if (autoriza && vazio(e.senha)) erros['senha'] = 'Informe a senha dada pela operadora.';
-  if (autoriza && e.pendenciasAbertas > 0)
-    erros['resposta'] = 'Resolva as pendências abertas da guia antes de registrar a autorização.';
+  // Qualquer resposta tira a guia de "pendente": com pendência aberta a situação e as pendências ficariam incoerentes.
+  if (e.pendenciasAbertas > 0)
+    erros['resposta'] = 'Resolva as pendências abertas da guia antes de registrar a resposta da operadora.';
   if (e.validadeSenha && e.validadeSenha < e.hoje) erros['validadeSenha'] = 'A senha já venceu.';
   if (e.resposta === 'negada' && vazio(e.motivoNegacao))
     erros['motivoNegacao'] = 'Diga o motivo da negativa.';

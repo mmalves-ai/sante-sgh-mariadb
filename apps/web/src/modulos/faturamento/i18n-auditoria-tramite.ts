@@ -11,6 +11,10 @@ export const mensagensAuditoriaTramite = {
   justificativa: 'Justificativa',
   cancelar: 'Cancelar',
   salvar: 'Salvar',
+  atalhos: {
+    guiasConvenio: 'Autorização e pendências das guias do convênio',
+    protocolos: 'Protocolo de documentos entre setores',
+  },
   auditoria: {
     link: 'Auditoria item a item',
     titulo: 'Auditoria da conta {numero}',
@@ -93,6 +97,13 @@ export const mensagensAuditoriaTramite = {
   },
   guia: {
     titulo: 'Guias do convênio',
+    paciente: 'Paciente',
+    prontuario: 'prontuário {n}',
+    abrirConta: 'Abrir a conta',
+    filaCirurgia: 'Fila do centro cirúrgico (pela data da cirurgia)',
+    cirurgiaPrevista: 'Cirurgia prevista',
+    prazo: 'Prazo da pendência',
+    validadeSenha: 'Validade da senha',
     filtro: 'Situação',
     abertas: 'Abertas',
     minhas: 'Só as minhas',

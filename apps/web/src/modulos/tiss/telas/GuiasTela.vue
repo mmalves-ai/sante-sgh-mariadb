@@ -26,6 +26,9 @@ const convenios = computed(() => opcoesConvenio(apoio.data.value?.convenios, t('
 <template>
   <section class="tela-agenda" aria-labelledby="gu-titulo" data-testid="tela-tiss-guias">
     <h1 id="gu-titulo">{{ t('tiss.guias.titulo') }}</h1>
+    <RouterLink to="/faturamento/guias-convenio" data-testid="gu-guias-convenio">{{
+      t('auditoriaTramite.atalhos.guiasConvenio')
+    }}</RouterLink>
     <p>{{ t('tiss.guias.texto') }}</p>
     <form class="filtros" @submit.prevent="filtro = { convenio, competencia }">
       <span class="campo">

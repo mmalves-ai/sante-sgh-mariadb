@@ -12,6 +12,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import {
   abrirPendenciaGuia,
   anexarGuia,
@@ -27,10 +28,14 @@ const { t } = useI18n();
 const qc = useQueryClient();
 const situacao = ref<string | null>(null);
 const minhas = ref(false);
+const cirurgia = ref(false);
 const fila = useQuery({
-  queryKey: ['faturamento', 'guias-convenio', situacao, minhas],
-  queryFn: () => lerGuiasConvenio(situacao.value, minhas.value),
+  queryKey: ['faturamento', 'guias-convenio', situacao, minhas, cirurgia],
+  queryFn: () => lerGuiasConvenio(situacao.value, minhas.value, cirurgia.value),
 });
+const dia = (v: string | null) => (v ? new Date(v).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—');
+/** O prazo já passou ou a senha já venceu: a linha pede atenção. */
+const vencido = (v: string | null) => !!v && v.slice(0, 10) < new Date().toISOString().slice(0, 10);
 const escolhida = ref<number | null>(null);
 const guia = useQuery({
   queryKey: ['faturamento', 'guia-convenio', escolhida],
@@ -187,6 +192,10 @@ async function anexar() {
         </select>
       </label>
       <label><input v-model="minhas" type="checkbox" /> {{ t('auditoriaTramite.guia.minhas') }}</label>
+      <label
+        ><input v-model="cirurgia" type="checkbox" data-testid="gc-fila-cirurgia" />
+        {{ t('auditoriaTramite.guia.filaCirurgia') }}</label
+      >
     </div>
     <p v-if="fila.data.value && !fila.data.value.length" class="secundario">
       {{ t('auditoriaTramite.guia.vazio') }}
@@ -194,10 +203,15 @@ async function anexar() {
     <table v-if="fila.data.value?.length">
       <thead>
         <tr>
+          <th>{{ t('auditoriaTramite.guia.paciente') }}</th>
           <th>{{ t('auditoriaTramite.guia.numero') }}</th>
           <th>{{ t('auditoriaTramite.guia.fonte') }}</th>
           <th>{{ t('auditoriaTramite.situacao') }}</th>
           <th>{{ t('auditoriaTramite.guia.pendencias') }}</th>
+          <th>
+            {{ t(cirurgia ? 'auditoriaTramite.guia.cirurgiaPrevista' : 'auditoriaTramite.guia.prazo') }}
+          </th>
+          <th>{{ t('auditoriaTramite.guia.validadeSenha') }}</th>
           <th>{{ t('auditoriaTramite.guia.responsavel') }}</th>
         </tr>
       </thead>
@@ -210,12 +224,26 @@ async function anexar() {
           @click="escolhida = g.id"
         >
           <td>
+            {{ g.paciente }}
+            <span class="secundario">· {{ t('auditoriaTramite.guia.prontuario', { n: g.prontuario }) }}</span>
+            <RouterLink
+              v-if="g.contaId"
+              :to="`/faturamento/contas/${g.contaId}`"
+              :data-testid="`gc-conta-${g.numero}`"
+              @click.stop
+              >{{ t('auditoriaTramite.guia.abrirConta') }}</RouterLink
+            >
+          </td>
+          <td>
             {{ g.numero }}<span v-if="g.numeroOperadora" class="secundario"> · {{ g.numeroOperadora }}</span>
             <span v-if="g.cirurgia" class="secundario"> · {{ t('auditoriaTramite.guia.cirurgia') }}</span>
           </td>
           <td>{{ g.fonte }}</td>
           <td>{{ t(`auditoriaTramite.guia.situacoes.${g.situacao}`) }}</td>
           <td>{{ g.pendencias }}</td>
+          <td v-if="cirurgia">{{ dataHora(g.cirurgiaPrevista) }}</td>
+          <td v-else :class="{ alerta: vencido(g.prazoPendencia) }">{{ dataHora(g.prazoPendencia) }}</td>
+          <td :class="{ alerta: vencido(g.validadeSenha) }">{{ dia(g.validadeSenha) }}</td>
           <td>{{ g.responsavel ?? t('auditoriaTramite.guia.semResponsavel') }}</td>
         </tr>
       </tbody>
@@ -349,3 +377,10 @@ async function anexar() {
     </aside>
   </section>
 </template>
+
+<style scoped>
+.alerta {
+  color: var(--cor-erro, #b00020);
+  font-weight: 600;
+}
+</style>

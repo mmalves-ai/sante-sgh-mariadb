@@ -3,6 +3,7 @@ import {
   avaliarParecerItem,
   cnpjValido,
   concluirAuditoria,
+  conferirConclusaoAuditoria,
   conteudoDoProtocolo,
   podeNoProtocolo,
   situacaoAoResolver,
@@ -83,6 +84,22 @@ describe('auditoria da conta: parecer do item', () => {
 });
 
 describe('auditoria da conta: conclusão e abertura', () => {
+  it('recusa concluir com item sem parecer (lançado depois da abertura) ou item mudado depois do parecer', () => {
+    const itens = [
+      { id: 1, quantidade: 2, valor: 100 },
+      { id: 2, quantidade: 1, valor: 50 },
+    ];
+    const p1 = { itemId: 1, quantidadeOriginal: 2, valorOriginal: 100 };
+    const p2 = { itemId: 2, quantidadeOriginal: 1, valorOriginal: 50 };
+    expect(conferirConclusaoAuditoria(itens, [p1, p2])).toEqual({ semParecer: [], mudados: [] });
+    expect(conferirConclusaoAuditoria([...itens, { id: 3, quantidade: 1, valor: 9 }], [p1, p2])).toEqual({
+      semParecer: [3],
+      mudados: [],
+    });
+    expect(conferirConclusaoAuditoria(itens, [p1, { ...p2, valorOriginal: 40 }]).mudados).toEqual([2]);
+    // O item do parecer saiu da conta (estornado ou transferido) depois do parecer.
+    expect(conferirConclusaoAuditoria([itens[0]!], [p1, p2])).toEqual({ semParecer: [], mudados: [2] });
+  });
   it('soma o efeito e diz o resultado', () => {
     expect(concluirAuditoria(500, [])).toMatchObject({ valorAuditado: 500, resultado: 'sem_alteracao' });
     expect(
@@ -170,6 +187,20 @@ describe('guia do convênio: resposta, pendência e anexo', () => {
       validarRespostaGuia({ ...r, resposta: 'autorizada', senha: 'A1', pendenciasAbertas: 1 }),
     ).toHaveProperty('resposta');
     expect(validarRespostaGuia({ ...r, resposta: 'negada' })).toHaveProperty('motivoNegacao');
+    // Nenhuma resposta tira a guia de "pendente" com pendência aberta: negada e em análise também esperam.
+    for (const resposta of ['em_analise', 'negada'] as const)
+      expect(
+        validarRespostaGuia({
+          ...r,
+          situacaoAtual: 'pendente',
+          resposta,
+          motivoNegacao: 'x',
+          pendenciasAbertas: 1,
+        }),
+      ).toHaveProperty('resposta');
+    expect(
+      validarRespostaGuia({ ...r, situacaoAtual: 'pendente', resposta: 'negada', motivoNegacao: 'x' }),
+    ).toEqual({});
     expect(
       validarRespostaGuia({ ...r, resposta: 'autorizada', senha: 'A', validadeSenha: '2026-11-01' }),
     ).toHaveProperty('validadeSenha');
