@@ -75,7 +75,8 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
       nascimento: '1980-05-17',
       sexo: 'F',
       cep: CEP_TESTE,
-      cidade: 'BELO HORIZONTE',
+      // O nome vem do município do catálogo oficial (IBGE) quando o cliente já o tem carregado; a massa só o garante.
+      cidade: expect.stringMatching(/^belo horizonte$/i),
       uf: 'MG',
       celular: '31999990102',
       contatoNome: `CONTATO ${MARCA}`,
@@ -138,7 +139,7 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
       50,
     );
     expect(ids.ids).toContain(idUm);
-    expect((await porta.lerCep(c, CEP_TESTE))?.cidade).toBe('BELO HORIZONTE');
+    expect((await porta.lerCep(c, CEP_TESTE))?.cidade).toMatch(/^belo horizonte$/i);
     expect(await porta.cepExiste(c, '00000001')).toBe(false);
   });
 
