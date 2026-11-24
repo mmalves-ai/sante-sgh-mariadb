@@ -35,6 +35,7 @@ import {
 import { z } from 'zod';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import * as Alergias from './alergias-propria.js';
+import * as HistoricoAlergias from './alergias-historico-propria.js';
 import * as Painel from './documentos-propria-painel.js';
 import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
 import { OPERACOES_PEP_RESTO, operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
@@ -966,6 +967,12 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   }
   versaoAlergias(...a: Parameters<PortaDocumentos['versaoAlergias']>) {
     return Alergias.versaoAlergias(this.nucleo, this.cliente, ...a);
+  }
+  historicoAlergia(...a: Parameters<PortaDocumentos['historicoAlergia']>) {
+    return HistoricoAlergias.historicoDaAlergia(this.nucleo, this.cliente, ...a);
+  }
+  manifestacoesAlergicas(...a: Parameters<PortaDocumentos['manifestacoesAlergicas']>) {
+    return HistoricoAlergias.catalogoManifestacoes(this.nucleo, this.cliente, ...a);
   }
   catalogoExames(...a: Parameters<PortaDocumentos['catalogoExames']>) {
     return this.exames.catalogoExames(...a);

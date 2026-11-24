@@ -8,6 +8,7 @@
 //   POST /api/pep/paciente/:p/documentos/:tipo/:id/imprimir       PDF/A (1ª via; 2ª via com motivo)
 //   POST /api/pep/paciente/:p/exportar                            prontuário completo (crítica, justificativa)
 //   GET|POST /api/pep/paciente/:p/alergias[/:id/inativar]         alergias (executor)
+//   GET  /api/pep/paciente/:p/alergias/:id/historico               linha do tempo e manifestações da alergia
 //   GET|POST /api/pep/paciente/:p/problemas[/:id/situacao]        lista de problemas (só do novo)
 //   GET|POST /api/pep/paciente/:p/exames                          pedidos de exame (executor), avisos
 //   GET  /api/pep/paciente/:p/resultados                          resultados, tendência, críticos
@@ -41,6 +42,7 @@ import {
 import {
   type AcaoLiberada,
   type AlergiasPaciente,
+  type HistoricoAlergia,
   type AltaPaciente,
   type AnexosPaciente,
   type CabecalhoPep,
@@ -594,6 +596,26 @@ export class DocumentosPepController {
       paciente,
       tabelaAlvo: 'alergia_paciente',
       chaveNaturalAlvo: `parte:alergias;n:${r.ativas.length}`,
+    };
+    return r;
+  }
+
+  @Get('paciente/:p/alergias/:id/historico')
+  @Permissao('pep.alergia.ler')
+  @Auditar('pep.cabecalho.lido')
+  async historicoAlergia(
+    @Param('p') p: string,
+    @Param('id') i: string,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<HistoricoAlergia> {
+    const s = sessaoDe(req);
+    const paciente = await this.paciente(s, p, 'pep.alergia.ler', true);
+    const alergia = idDaRota(i);
+    const r = await this.servico.historicoAlergia(this.c(s), paciente, alergia);
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'alergia_paciente',
+      chaveNaturalAlvo: `parte:alergia-historico;id:${alergia};n:${r.passos.length}`,
     };
     return r;
   }

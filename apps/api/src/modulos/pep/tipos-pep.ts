@@ -138,6 +138,8 @@ export const esquemaGravacaoAlergia = z
     reacao: textoCp1252(200).optional(),
     gravidade: z.enum(GRAVIDADES_ALERGIA).optional(),
     origem: z.enum(ORIGENS_ALERGIA).optional(),
+    /** Manifestações do catálogo (03-PEP L100); a porta própria grava em alergia_paciente_manifestacao. */
+    manifestacoes: z.array(ID).max(10).optional(),
     versao: z.string().max(200),
     hashConteudo: HASH,
     comoSuporte: z.boolean().optional(),

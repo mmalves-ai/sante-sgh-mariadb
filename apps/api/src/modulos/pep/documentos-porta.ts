@@ -8,6 +8,7 @@
 import type { LinhaCausaObito } from '@sgh/dominio-pep';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
+import type { HistoricoAlergia, ManifestacaoAlergica } from '@sgh/contratos';
 import type {
   AlergiaDoProntuarioLida,
   AnexoLido,
@@ -122,6 +123,10 @@ export interface PortaDocumentos {
     cbos: readonly number[],
   ): Promise<{ registro: number; modelo: string; dataHora: string | null }[]>;
   versaoAlergias(c: ContextoDocs, paciente: number): Promise<string>;
+  /** Linha do tempo e manifestações da alergia do paciente (03-PEP L100); 404 se a alergia não é dele. */
+  historicoAlergia(c: ContextoDocs, paciente: number, alergia: number): Promise<HistoricoAlergia>;
+  /** Catálogo de manifestações ativas, por nome. */
+  manifestacoesAlergicas(c: ContextoDocs): Promise<ManifestacaoAlergica[]>;
   catalogoExames(c: ContextoDocs, termo: string | null): Promise<ExameCatalogoLido[]>;
   examesPorId(c: ContextoDocs, ids: readonly number[]): Promise<ExameCatalogoLido[]>;
   kits(c: ContextoDocs): Promise<{ id: number; nome: string; exames: number[] }[]>;

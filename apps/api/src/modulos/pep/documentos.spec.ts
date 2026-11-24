@@ -133,10 +133,21 @@ describe('prontuário de uso diário (M23)', () => {
     const a = (await get(medico, '/api/pep/paciente/1003/alergias')).json();
     expect(a.criar.pode).toBe(true);
     expect(a.registros.map((r: { registro: number }) => r.registro)).toContain(registro);
+    // 03-PEP L100: o catálogo de manifestações vem na leitura; "nega alergias" com manifestação é recusado.
+    expect(a.manifestacoes.map((m: { id: number }) => m.id)).toEqual(expect.arrayContaining([1, 2]));
+    const negaComManif = await post(medico, '/api/pep/paciente/1003/alergias', {
+      registro,
+      nega: true,
+      manifestacoes: [1],
+      versao: '',
+    });
+    expect(negaComManif.statusCode).toBe(400);
+    expect(negaComManif.json().codigo).toBe('manifestacao-em-declaracao');
     const r = await post(medico, '/api/pep/paciente/1003/alergias', {
       registro,
       agente: 1,
       principios: [1],
+      manifestacoes: [2, 1, 2],
       reacao: 'Urticária',
       gravidade: 'leve',
       origem: 'relato-paciente',
@@ -153,6 +164,18 @@ describe('prontuário de uso diário (M23)', () => {
       versao: String(depois.ativas[0].id),
     });
     expect(inativar.statusCode).toBe(200);
+    // Histórico (03-PEP L100): a alergia retirada mostra a inclusão e a retirada com o motivo, e as manifestações.
+    const hist = await get(medico, `/api/pep/paciente/1003/alergias/${depois.ativas[0].id}/historico`);
+    expect(hist.statusCode).toBe(200);
+    expect(hist.json().manifestacoes.map((m: { id: number }) => m.id)).toEqual([1, 2]);
+    expect(hist.json().passos.map((x: { titulo: string }) => x.titulo)).toEqual([
+      'Registrada',
+      'Retirada da lista',
+    ]);
+    expect(hist.json().passos[1].motivo).toBe('Alergia descartada em teste');
+    expect(
+      (await get(medico, '/api/pep/paciente/1001/alergias/' + depois.ativas[0].id + '/historico')).statusCode,
+    ).toBe(404);
   });
 
   it('painel: internado há 30 h sem evolução médica tem o alerta; a evolução médica do atendimento o tira', async () => {

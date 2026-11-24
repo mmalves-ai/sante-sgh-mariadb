@@ -1002,7 +1002,12 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   async historicoAlergia(c: ContextoDocs, paciente: number, alergia: number) {
     const a = this.est(c.hospital).alergias.find((x) => x.id === alergia && x.paciente === paciente);
     if (!a)
-      throw new ErroOperacao(404, 'registro-inexistente', 'Alergia não encontrada', 'A alergia não é deste paciente.');
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Alergia não encontrada',
+        'A alergia não é deste paciente.',
+      );
     const ids = new Set(a.manifestacoes ?? []);
     return {
       alergia,
