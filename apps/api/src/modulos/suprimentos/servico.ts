@@ -52,6 +52,11 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   'suprimentos.desconsolidarDocumento': 'Documento desconsolidado.',
   'suprimentos.corrigirValidadeLote': 'Validade do lote corrigida.',
   'suprimentos.gravarKitPadrao': 'Kit padrão gravado.',
+  'suprimentos.programarEntregasPedido': 'Entregas programadas.',
+  'suprimentos.acompanharPedido': 'Contato com o fornecedor registrado.',
+  'suprimentos.cancelarCompra': 'Cancelamento registrado.',
+  'suprimentos.gravarMotivoCancelamentoCompra': 'Motivo de cancelamento gravado.',
+  'suprimentos.recalcularSaldos': 'Recálculo do saldo registrado.',
 };
 
 const resultado = (

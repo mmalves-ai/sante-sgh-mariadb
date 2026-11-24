@@ -48,3 +48,5 @@ export * from './farmacia-parametros.js';
 export * from './cadastro-estoque.js';
 // F3.6 (05-SUP linha 13): kit padrão (composição e vínculo ao procedimento).
 export * from './kit-padrao.js';
+// F3.6 (05-SUP linha 16): recálculo auditado do saldo e do custo médio pelo razão.
+export * from './recalculo-saldo.js';

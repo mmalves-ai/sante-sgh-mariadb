@@ -10,6 +10,11 @@ import {
   esquemaDesconsolidar,
   esquemaFecharMes,
   esquemaGravarKitPadrao,
+  esquemaAcompanharPedido,
+  esquemaCancelarCompra,
+  esquemaGravarMotivoCancelamentoCompra,
+  esquemaProgramarEntregasPedido,
+  esquemaRecalcularSaldos,
   esquemaMovimentoDireto,
   esquemaReabrirMes,
   esquemaRegistrarBalanco,
@@ -49,6 +54,12 @@ export const ENTRADAS_SUPRIMENTOS: Readonly<Record<string, ZodTypeAny>> = {
   'suprimentos.desconsolidarDocumento': esquemaDesconsolidar,
   'suprimentos.corrigirValidadeLote': esquemaCorrigirValidade,
   'suprimentos.gravarKitPadrao': esquemaGravarKitPadrao,
+  // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
+  'suprimentos.programarEntregasPedido': esquemaProgramarEntregasPedido,
+  'suprimentos.acompanharPedido': esquemaAcompanharPedido,
+  'suprimentos.cancelarCompra': esquemaCancelarCompra,
+  'suprimentos.gravarMotivoCancelamentoCompra': esquemaGravarMotivoCancelamentoCompra,
+  'suprimentos.recalcularSaldos': esquemaRecalcularSaldos,
 };
 
 /** A operação do estoque pelo nome (a entrada valida a requisição); desconhecida: recusa. */

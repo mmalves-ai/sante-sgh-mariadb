@@ -53,6 +53,7 @@ import {
   esquemaMovimentoDireto,
   esquemaPontoPedidoItem,
   esquemaReabrirMes,
+  esquemaRecalcularSaldos,
   esquemaReceberTransferencia,
   esquemaRegistrarContagem,
   esquemaRegistrarDevolucao,
@@ -79,6 +80,7 @@ import {
   type PedidoDetalhe,
   type PosicaoMensal,
   type RastreioLote,
+  type PreviaRecalculo,
   type RecalculosEstoque,
   type ResultadoSuprimentos,
   type SaldoItem,
@@ -852,6 +854,33 @@ export class SuprimentosController {
   @Permissao('suprimentos.recalculo.ler')
   recalculos(@Req() req: RequisicaoAutorizada): Promise<RecalculosEstoque> {
     return this.porta.recalculos(ctx(sessaoDe(req)));
+  }
+
+  /** F3.6 (05-SUP linha 16): a prévia do recálculo pelo razão (lê, nunca grava). */
+  @Post('recalculos/previa')
+  @HttpCode(200)
+  @Permissao('suprimentos.recalculo.executar')
+  previaRecalculo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PreviaRecalculo> {
+    if (!this.porta.previaRecalculo)
+      throw new ErroProblema(
+        'recalculo-sem-banco',
+        503,
+        'O recálculo pelo razão só existe com o banco do cliente.',
+      );
+    return this.porta.previaRecalculo(ctx(sessaoDe(req)), corpo(esquemaRecalcularSaldos, b));
+  }
+
+  /** F3.6 (05-SUP linha 16): aplica o recálculo (saldos refeitos e o registro auditado, pelo executor). */
+  @Post('recalculos')
+  @HttpCode(200)
+  @Permissao('suprimentos.recalculo.executar')
+  @AuditadoNoHandler('suprimentos.recalcularSaldos pelo executor (trilha na mesma transação)')
+  recalcular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSuprimentos> {
+    return this.servico.executar(
+      sessaoDe(req),
+      'suprimentos.recalcularSaldos',
+      corpo(esquemaRecalcularSaldos, b),
+    );
   }
 
   @Get('parametros')

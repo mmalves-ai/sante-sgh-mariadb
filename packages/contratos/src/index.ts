@@ -228,6 +228,7 @@ export * from './suprimentos/vocabulario.js';
 export * from './suprimentos/entradas.js';
 // F3.6 (05-SUP linha 13): kit padrão.
 export * from './suprimentos/kit-padrao.js';
+export * from './suprimentos/recalculo-saldo.js';
 export * from './suprimentos/respostas.js';
 // M41: onda 3 (setores, operações e chaves da liberação; painel de acompanhamento dos efeitos no estoque).
 export * from './suprimentos/onda3.js';

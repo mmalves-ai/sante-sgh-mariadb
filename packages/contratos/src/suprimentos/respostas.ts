@@ -306,6 +306,10 @@ export const esquemaRecalculos = z.object({
       tela: n.nullable(),
       terminado: z.boolean(),
       competencia: texto,
+      // F3.6 (05-SUP linha 16): o motivo e o que o recálculo corrigiu (opcionais: a porta de memória não os tem).
+      motivo: texto.optional(),
+      insumos: n.nullable().optional(),
+      diferencaValor: n.nullable().optional(),
     }),
   ),
 });

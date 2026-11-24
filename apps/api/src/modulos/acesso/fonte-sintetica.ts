@@ -1416,6 +1416,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'suprimentos.pedido.aprovar',
         'suprimentos.requisicao.autorizar',
         'suprimentos.fechamento.reabrir',
+        'suprimentos.recalculo.executar',
       ),
     },
   },

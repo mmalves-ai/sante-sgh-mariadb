@@ -39,7 +39,12 @@ import type {
 } from '@sgh/contratos';
 import type { FaixaAlcada } from '@sgh/dominio-suprimentos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
-import type { KitPadraoCadastro, ProcedimentoKitBusca } from '@sgh/contratos';
+import type {
+  KitPadraoCadastro,
+  PreviaRecalculo,
+  ProcedimentoKitBusca,
+  RecalcularSaldosEntrada,
+} from '@sgh/contratos';
 
 export const PORTA_SUPRIMENTOS = Symbol('PORTA_SUPRIMENTOS');
 
@@ -183,9 +188,17 @@ export interface PortaSuprimentos extends PortaGravacaoM18<GravadorSghSuprimento
     o: { ano: number; situacao?: number; termo?: string },
   ): Promise<{ itens: PedidoResumo[]; cortada: boolean }>;
   pedido(c: ContextoSuprimentos, ano: number, doc: number): Promise<PedidoDetalhe | null>;
+  /** F3.6 (05-SUP linha 20): a gestão do pedido emitido; só o banco próprio (sem ela, 503). */
+  gestaoPedido?(
+    c: ContextoSuprimentos,
+    ano: number,
+    doc: number,
+  ): Promise<import('@sgh/contratos').GestaoPedidoCompra | null>;
   historicoCompras(c: ContextoSuprimentos, item: number): Promise<HistoricoCompra>;
   fechamentos(c: ContextoSuprimentos, corrente: { ano: number; mes: number }): Promise<FechamentosEstoque>;
   recalculos(c: ContextoSuprimentos): Promise<RecalculosEstoque>;
+  /** F3.6 (05-SUP linha 16): a prévia do recálculo pelo razão (só a porta do banco a tem). */
+  previaRecalculo?(c: ContextoSuprimentos, e: RecalcularSaldosEntrada): Promise<PreviaRecalculo>;
   parametros(c: ContextoSuprimentos, login: string): Promise<ParametrosEstoque>;
   escopo(c: ContextoSuprimentos, login: string): Promise<EscopoUsuarioEstoque | null>;
   fornecedores(c: ContextoSuprimentos, termo: string): Promise<{ itens: FornecedorLido[]; cortada: boolean }>;

@@ -162,6 +162,13 @@ export const PERMISSOES_SUPRIMENTOS_M28: readonly DeclaracaoPermissao[] = [
     },
   ),
   p('suprimentos.recalculo.ler', 'Consultar os recálculos de saldo feitos'),
+  p(
+    'suprimentos.recalculo.executar',
+    'Recalcular o saldo e o custo médio do estoque pelo razão (com motivo, auditado)',
+    {
+      criticidade: 'critica',
+    },
+  ),
   p('suprimentos.sugestao.ler', 'Consultar o ponto de pedido e a sugestão de compra (curvas ABC e XYZ)'),
   p('suprimentos.sugestao.gerarPedido', 'Gerar o pedido de compra a partir da sugestão'),
   p(

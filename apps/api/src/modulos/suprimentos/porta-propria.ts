@@ -118,6 +118,8 @@ import {
   TIPOS_MOVIMENTO_LOCAL,
   type TransferenciaEnviada,
   type TransferirEntrada,
+  type PreviaRecalculo,
+  type RecalcularSaldosEntrada,
 } from '@sgh/contratos';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
@@ -145,6 +147,25 @@ import {
   OPERACAO_KIT_PADRAO,
   TABELAS_KIT_PADRAO,
 } from './kit-padrao.js';
+import {
+  acompanharPedido,
+  baixarEntregasRecebidas,
+  cancelarCompra,
+  gravarMotivoCancelamentoCompra,
+  lerGestaoPedido,
+  OPERACAO_ACOMPANHAR_PEDIDO,
+  OPERACAO_CANCELAR_COMPRA,
+  OPERACAO_MOTIVO_CANCELAMENTO,
+  OPERACAO_PROGRAMAR_ENTREGAS,
+  programarEntregasPedido,
+  TABELAS_GESTAO_PEDIDO,
+} from './pedido-gestao.js';
+import {
+  apurarRecalculo,
+  OPERACAO_RECALCULO_SALDO,
+  recalcularSaldos,
+  TABELAS_RECALCULO_SALDO,
+} from './recalculo-saldo.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoSuprimentos = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -2625,10 +2646,14 @@ async function registrarEntradaNF(
         quantidade_recebida: qtd(n(pi['quantidade_recebida']) + it.quantidade),
       });
       pi['quantidade_recebida'] = qtd(n(pi['quantidade_recebida']) + it.quantidade);
+      // F3.6 (05-SUP linha 20): a agenda de entregas do item abate da mais antiga para a mais nova.
+      await baixarEntregasRecebidas(tx, n(pi['id']), it.quantidade);
     }
   }
   if (pedido) {
-    const tudo = itensPedido.every((r) => n(r['quantidade_recebida']) >= n(r['quantidade']));
+    const tudo = itensPedido.every(
+      (r) => n(r['quantidade_recebida']) + n(r['quantidade_cancelada']) >= n(r['quantidade']),
+    );
     await tx.alterar('pedido_compra', n(pedido['id']), n(pedido['versao']), {
       situacao: tudo ? 'recebido' : 'parcialmente_recebido',
       ...(pedido['aprovado_em'] ? {} : { aprovado_em: agora }),
@@ -3261,6 +3286,12 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
   'suprimentos.desconsolidarDocumento': desconsolidarDocumento as Manipulador,
   'suprimentos.corrigirValidadeLote': corrigirValidadeLote as Manipulador,
   [OPERACAO_KIT_PADRAO]: gravarKitPadrao as Manipulador,
+  // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
+  [OPERACAO_PROGRAMAR_ENTREGAS]: programarEntregasPedido as Manipulador,
+  [OPERACAO_ACOMPANHAR_PEDIDO]: acompanharPedido as Manipulador,
+  [OPERACAO_CANCELAR_COMPRA]: cancelarCompra as Manipulador,
+  [OPERACAO_MOTIVO_CANCELAMENTO]: gravarMotivoCancelamentoCompra as Manipulador,
+  [OPERACAO_RECALCULO_SALDO]: recalcularSaldos as Manipulador,
 };
 
 /** As tabelas que as operações do estoque gravam. */
@@ -3296,6 +3327,10 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   ...TABELAS_CONTA_ESTOQUE.filter((t) => t !== 'movimento_estoque'),
   // F3.6 (05-SUP linha 13): o cadastro do kit padrão.
   ...TABELAS_KIT_PADRAO,
+  // F3.6 (05-SUP linha 20): entregas programadas, acompanhamento e motivo de cancelamento do pedido.
+  ...TABELAS_GESTAO_PEDIDO,
+  // F3.6 (05-SUP linha 16): o recálculo auditado do saldo.
+  ...TABELAS_RECALCULO_SALDO,
 ] as const;
 
 /** O nome da operação no núcleo (minúsculas com sublinhado: suprimentos.registrar_saida). */
@@ -3373,11 +3408,17 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
       },
       alvo: (_e, r) => ({
         tabela:
-          op === OPERACAO_KIT_PADRAO
-            ? 'kit_material'
-            : op.endsWith('Pedido') || op.endsWith('Cotacao') || op.endsWith('Proposta')
+          op === OPERACAO_MOTIVO_CANCELAMENTO
+            ? 'motivo_cancelamento_compra'
+            : op === OPERACAO_CANCELAR_COMPRA
               ? 'pedido_compra'
-              : 'documento_estoque',
+              : op === OPERACAO_KIT_PADRAO
+                ? 'kit_material'
+                : op === OPERACAO_RECALCULO_SALDO
+                  ? 'recalculo_saldo_estoque'
+                  : op.endsWith('Pedido') || op.endsWith('Cotacao') || op.endsWith('Proposta')
+                    ? 'pedido_compra'
+                    : 'documento_estoque',
         id: typeof r['id'] === 'number' && r['id'] > 0 ? r['id'] : null,
       }),
       eventos: (_e, r) => [{ tipo: nomeNoNucleo(o.nome), carga: { id: r['id'] ?? null } }],
@@ -4265,6 +4306,13 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
   }
 
   /** O pedido de compra pelo número no ano, com os itens, as propostas da cotação e as escolhas. */
+  /** F3.6 (05-SUP linha 20): a gestão do pedido emitido (agenda de entregas, contatos e motivos). */
+  gestaoPedido(c: ContextoSuprimentos, ano: number, doc: number) {
+    return this.ler(c, async (l, est) =>
+      lerGestaoPedido(l, est, ano, doc, await hojeNoEstabelecimento(l, est)),
+    );
+  }
+
   pedido(c: ContextoSuprimentos, ano: number, doc: number) {
     return this.ler(c, async (l, est): Promise<PedidoDetalhe | null> => {
       const [cab] = await consultarPedidos(l, est, { ano, numero: doc, situacoes: [], limite: 1 });
@@ -4412,7 +4460,8 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
     return this.ler(c, async (l, est): Promise<RecalculosEstoque> => ({
       itens: (
         await l.consultar<Linha>(
-          `SELECT r.id, r.ocorrido_em, r.concluido_em, u.login, r.situacao, r.competencia_inicio, r.competencia_fim
+          `SELECT r.id, r.ocorrido_em, r.concluido_em, u.login, r.situacao, r.competencia_inicio, r.competencia_fim,
+                  r.motivo, r.insumos_atingidos, r.diferenca_valor_total
              FROM recalculo_saldo_estoque r LEFT JOIN usuario u ON u.id = r.usuario_id
             WHERE r.estabelecimento_id = ? ORDER BY r.ocorrido_em DESC, r.id DESC LIMIT 100`,
           [est],
@@ -4429,6 +4478,9 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
             ? ` a ${dataIso(r['competencia_fim']).slice(0, 7)}`
             : ''
         }`,
+        motivo: texto(r['motivo']),
+        insumos: r['insumos_atingidos'] === null ? null : n(r['insumos_atingidos']),
+        diferencaValor: r['diferenca_valor_total'] === null ? null : n(r['diferenca_valor_total']),
       })),
     }));
   }
@@ -4586,6 +4638,21 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
 
   kit(c: ContextoSuprimentos, id: number, hoje: string, alertaDias: number) {
     return this.ler(c, async (l, est) => (await lerKits(l, est, id, hoje, alertaDias))[0] ?? null);
+  }
+
+  /** F3.6 (05-SUP linha 16): a prévia do recálculo (lê, nunca grava). */
+  previaRecalculo(c: ContextoSuprimentos, e: RecalcularSaldosEntrada): Promise<PreviaRecalculo> {
+    return this.ler(c, async (l, est) => {
+      const a = await apurarRecalculo(l, est, e, await hojeNoEstabelecimento(l, est));
+      return {
+        abertura: a.abertura,
+        saldos: a.saldos,
+        diferencas: a.diferencas,
+        diferencaQuantidadeTotal: a.diferencaQuantidadeTotal,
+        diferencaValorTotal: a.diferencaValorTotal,
+        pendentes: a.pendentes,
+      };
+    });
   }
 
   /** F3.6 (05-SUP linha 13): o cadastro dos kits padrão (ativos e inativos) e a busca do procedimento do vínculo. */

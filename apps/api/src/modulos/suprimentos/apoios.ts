@@ -70,6 +70,7 @@ const FUNCIONALIDADES = {
     operacoes: {
       'suprimentos.fecharMes': 'suprimentos.fechamento.fechar',
       'suprimentos.reabrirMes': 'suprimentos.fechamento.reabrir',
+      'suprimentos.recalcularSaldos': 'suprimentos.recalculo.executar',
     },
     extras: {},
   },
