@@ -70,6 +70,7 @@ import {
   type SessaoCadastro,
   sessaoDe,
 } from './comum.js';
+import { escopoDaConsulta, gravarComRegra } from './cadastro-com-regra.js';
 import { FICHA_COMPLEMENTAR, type FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import { PORTA_CADASTRO, type PortaCadastro } from './porta.js';
 import {
@@ -486,6 +487,7 @@ export class PacientesController {
   async cadastrar(
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
+    @Query() consulta: Record<string, unknown> = {},
   ): Promise<{ idPaciente: number; prontuario: number }> {
     const s = sessaoDe(req);
     const e = esquemaCadastrarPaciente.safeParse(corpo);
@@ -494,10 +496,9 @@ export class PacientesController {
         campos: [...new Set(e.error.issues.map((i) => i.path.join('.')))],
       });
     const ctx = contextoOperacao(s, 'cadastro-paciente');
-    await this.ficha?.conferirCampos(s.porta, e.data, 'cadastro').catch((x: unknown) => {
-      throw problemaDoCadastro(x);
-    });
-    const r = await this.porta.cadastrar(s.porta, e.data, ctx).catch((x: unknown) => {
+    const r = await gravarComRegra(this.ficha, s.porta, e.data, 'cadastro', escopoDaConsulta(consulta), () =>
+      this.porta.cadastrar(s.porta, e.data, ctx),
+    ).catch((x: unknown) => {
       throw problemaDoCadastro(x);
     });
     await this.trilhaMemoria(
@@ -518,6 +519,7 @@ export class PacientesController {
     @Param('id') id: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
+    @Query() consulta: Record<string, unknown> = {},
   ): Promise<{ idPaciente: number }> {
     const s = sessaoDe(req);
     const n = idDaRota(id);
@@ -529,10 +531,14 @@ export class PacientesController {
         campos: [...new Set(e.error.issues.map((i) => i.path.slice(-1).join('.') || 'alteracoes'))],
       });
     const ctx = contextoOperacao(s, 'cadastro-alteracao');
-    await this.ficha?.conferirCampos(s.porta, e.data.alteracoes, 'alteracao').catch((x: unknown) => {
-      throw problemaDoCadastro(x);
-    });
-    const r = await this.porta.alterar(s.porta, e.data, ctx).catch((x: unknown) => {
+    const r = await gravarComRegra(
+      this.ficha,
+      s.porta,
+      e.data.alteracoes,
+      'alteracao',
+      escopoDaConsulta(consulta),
+      () => this.porta.alterar(s.porta, e.data, ctx),
+    ).catch((x: unknown) => {
       throw problemaDoCadastro(x);
     });
     await this.trilhaMemoria(

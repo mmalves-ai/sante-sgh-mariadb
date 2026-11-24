@@ -3,6 +3,7 @@ import {
   errosEmail,
   errosEndereco,
   errosTelefone,
+  fimDoEncerramento,
   principalDepois,
   sucessorDoPrincipal,
   vigenteEm,
@@ -175,6 +176,34 @@ describe('responsáveis do paciente', () => {
         hoje,
       ),
     ).toEqual(['mesma-pessoa', 'vigenciaFim']);
+    // Representante sem data de nascimento: a maioridade não está provada.
+    expect(
+      errosResponsavel(
+        { ...base, papel: 'curador', poderes: poderesPadrao('curador'), nascimentoResponsavel: null },
+        hoje,
+      ),
+    ).toEqual(['nascimento-representante']);
+    expect(
+      errosResponsavel({ ...base, poderes: poderesPadrao('familiar'), nascimentoResponsavel: null }, hoje),
+    ).toEqual([]);
+  });
+
+  it('encerramento: fim ontem; começado hoje ou no futuro fica com o intervalo vazio (nunca vigente)', () => {
+    expect(fimDoEncerramento('2026-01-01', hoje)).toBe('2026-11-23');
+    expect(fimDoEncerramento(null, hoje)).toBe('2026-11-23');
+    expect(fimDoEncerramento(hoje, hoje)).toBe('2026-11-23');
+    expect(fimDoEncerramento('2026-12-01', hoje)).toBe('2026-11-30');
+    expect(fimDoEncerramento('2027-01-01', hoje)).toBe('2026-12-31');
+    for (const inicio of ['2026-01-01', hoje, '2026-12-01'])
+      expect(vigenteEm({ vigenciaInicio: inicio, vigenciaFim: fimDoEncerramento(inicio, hoje) }, hoje)).toBe(
+        false,
+      );
+    expect(
+      vigenteEm(
+        { vigenciaInicio: '2026-12-01', vigenciaFim: fimDoEncerramento('2026-12-01', hoje) },
+        '2026-12-01',
+      ),
+    ).toBe(false);
   });
 
   it('pendências: menor sem representante e comprovante de curatela ausente', () => {

@@ -1,7 +1,7 @@
 // Responsável legal, familiares e dependentes do paciente (F3.1, 02-CAD linha 4). Regra pura:
 //   - papel, poderes (autorizar procedimento, receber informação, retirar documento) e vigência;
 //   - só quem representa o paciente (responsável legal, guardião, tutor, curador) autoriza procedimento, e precisa
-//     ser maior de idade;
+//     ser maior de idade, com a data de nascimento conhecida;
 //   - menor de idade (pela data de nascimento) não fica sem representante vigente: o encerramento do último é
 //     recusado até haver outro (ou a maioridade); paciente sob curatela (incapaz) não fica sem curador, salvo com o
 //     levantamento da curatela declarado;
@@ -78,6 +78,9 @@ export function errosResponsavel(r: ResponsavelNovo, hoje: string): string[] {
   if (r.vigenciaFim !== null && r.vigenciaFim < r.vigenciaInicio) erros.push('vigenciaFim');
   if (r.poderes.autorizarProcedimento && !PAPEIS_REPRESENTANTE.includes(papel))
     erros.push('autorizarProcedimento');
+  // Quem representa prova a maioridade: sem a data de nascimento, a representação é recusada.
+  if (PAPEIS_REPRESENTANTE.includes(papel) && r.nascimentoResponsavel === null)
+    erros.push('nascimento-representante');
   if (PAPEIS_REPRESENTANTE.includes(papel) && menorDeIdade(r.nascimentoResponsavel, hoje))
     erros.push('representante-menor');
   return erros;

@@ -19,6 +19,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from './comum.js';
 import {
   type ContatosPessoa,
+  ACOES_CONTATO,
   type EspecieContato,
   FICHA_COMPLEMENTAR,
   type FichaComplementarPropria,
@@ -191,12 +192,21 @@ export class FichaComplementarController {
   ) {
     const s = sessaoDe(req);
     const n = idDaRota(p);
-    if (!ESPECIES.includes(especie as EspecieContato) || (acao !== 'principal' && acao !== 'encerrar'))
+    if (
+      !ESPECIES.includes(especie as EspecieContato) ||
+      !(ACOES_CONTATO as readonly string[]).includes(acao) ||
+      ((acao === 'revogar-aceite' || acao === 'reativar') && especie !== 'email')
+    )
       throw new ErroProblema('nao-encontrado', 404, 'Rota inexistente');
     const r = await this.rodar(() =>
       this.servico().ajustarContato(
         s.porta,
-        { paciente: n, especie: especie as EspecieContato, id: idDaRota(cid), acao },
+        {
+          paciente: n,
+          especie: especie as EspecieContato,
+          id: idDaRota(cid),
+          acao: acao as (typeof ACOES_CONTATO)[number],
+        },
         this.trilha(s, 'cadastro.ajustarContatoPessoa', `${especie}_pessoa`, n),
       ),
     );
@@ -325,8 +335,12 @@ export class FichaComplementarController {
   async gravarRegra(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const b = corpoDe(corpo);
+    // Sem "toda a rede", a regra é do estabelecimento da sessão (resolvido pelo código quando o mapa não o traz).
+    const est = sim(b['todaRede'])
+      ? null
+      : await this.rodar(() => this.servico().estabelecimentoDaSessao(s.porta));
     const e = {
-      estabelecimento: sim(b['todaRede']) ? null : s.porta.estabelecimento,
+      estabelecimento: est,
       campo: txt(b['campo']) ?? '',
       modulo: id(b['modulo']),
       tipoAtendimento: (txt(b['tipoAtendimento']) ?? 'todos') as TipoAtendimentoRegra,

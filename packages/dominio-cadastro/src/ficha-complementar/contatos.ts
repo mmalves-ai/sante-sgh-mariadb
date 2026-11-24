@@ -83,6 +83,20 @@ export function vigenteEm(
   );
 }
 
+/** Dia civil anterior (AAAA-MM-DD). */
+export function diaAnterior(d: string): string {
+  const [a, m, dd] = d.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(a, m - 1, dd - 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Fim da vigência ao encerrar hoje: ontem (deixa de valer hoje). O registro que começou hoje ou começa no futuro não
+ * tem ontem na vigência: o fim fica no dia anterior ao início (o intervalo vazio, nunca vigente). Nada se apaga.
+ */
+export function fimDoEncerramento(inicio: string | null, hoje: string): string {
+  return inicio !== null && inicio >= hoje ? diaAnterior(inicio) : diaAnterior(hoje);
+}
+
 /**
  * O principal depois de incluir ou escolher um: o novo marcado vira o único principal; sem marcação, o primeiro
  * contato da pessoa vira principal (a pessoa nunca fica sem principal quando tem contato ativo).

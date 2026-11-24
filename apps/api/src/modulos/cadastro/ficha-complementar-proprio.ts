@@ -18,6 +18,7 @@ import {
   errosResponsavel,
   errosTelefone,
   EXIGENCIAS_CAMPO,
+  fimDoEncerramento,
   pendenciasRepresentacao,
   principalDepois,
   recusaEncerramento,
@@ -33,6 +34,7 @@ import {
   definirOperacao,
   ErroOperacao,
   type Executor,
+  garantirSequencia,
   type Leitor,
   recusa,
   type TxOperacao,
@@ -40,6 +42,7 @@ import {
 import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
+import { TIPO_TERMO_BALCAO } from './porta-propria-consentimento.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 export const FICHA_COMPLEMENTAR = Symbol('FICHA_COMPLEMENTAR');
@@ -55,8 +58,12 @@ const data = (v: unknown): string | null =>
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1';
 
-const ontemDe = (hoje: string): string =>
-  data(new Date(new Date(`${hoje}T12:00:00`).getTime() - 86_400_000))!;
+/**
+ * Endereço em uso: o fim não passou e o intervalo não é o vazio do encerramento (fim antes do início). O começado no
+ * futuro fica na lista como programado.
+ */
+const VIGENTE_ENDERECO =
+  ' AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE) AND (vigencia_inicio IS NULL OR vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio)';
 
 /** Data civil de hoje no relógio do banco. */
 async function hojeDe(x: Leitor | TxOperacao): Promise<string> {
@@ -96,8 +103,7 @@ async function ajustarPrincipal(
   pessoa: number,
   novo: { id: number; principal: boolean },
 ): Promise<void> {
-  const vig =
-    tabela === 'endereco_pessoa' ? ' AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)' : '';
+  const vig = tabela === 'endereco_pessoa' ? VIGENTE_ENDERECO : '';
   const ativos = await tx.consultar(
     `SELECT id, principal, versao FROM ${tabela} WHERE pessoa_fisica_id = ? AND excluido_em IS NULL${vig}`,
     [pessoa],
@@ -147,6 +153,12 @@ const operacaoGravarRegra = (trilha: RegistroTrilhaTela) =>
             : 'Confira o campo, a exigência e o tipo de atendimento da regra.',
           ['campo', 'exigencia', 'tipoAtendimento'],
         );
+      if (e.estabelecimento !== null && e.estabelecimento !== tx.contexto.estabelecimento)
+        throw recusaCampos(
+          'regra-de-outro-estabelecimento',
+          'A regra só é gravada para o estabelecimento da sessão ou para toda a rede.',
+          ['estabelecimento'],
+        );
       if (e.modulo !== null && !(await tx.uma('SELECT id FROM modulo_recepcao WHERE id = ?', [e.modulo])))
         throw recusaCampos('modulo-inexistente', 'O módulo de recepção não existe.', ['modulo']);
       if (
@@ -189,6 +201,14 @@ const operacaoInativarRegra = (trilha: RegistroTrilhaTela) =>
     entrada: esquemaId,
     acao: 'alteracao',
     async gravar(tx, e) {
+      // Só a regra do estabelecimento da sessão ou a de toda a rede (a que a leitura mostra); a de outro
+      // estabelecimento é tratada como inexistente.
+      const r = await tx.uma(
+        `SELECT id FROM regra_campo_cadastro
+          WHERE id = ? AND entidade = 'paciente' AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+        [e.id, tx.contexto.estabelecimento],
+      );
+      if (!r) throw recusaCampos('regra-inexistente', 'A regra não existe neste estabelecimento.', ['id']);
       await tx.alterar('regra_campo_cadastro', e.id, e.versao, { ativo: false });
       return { id: e.id };
     },
@@ -332,10 +352,85 @@ const esquemaEmail = z
   .strict();
 export type EntradaEmail = z.infer<typeof esquemaEmail>;
 
+/** Finalidade gravada no consentimento do aceite (sem o endereço do e-mail). */
+const FINALIDADE_ACEITE =
+  'Comunicações não obrigatórias por e-mail (aceite declarado no cadastro de contatos)';
+
+/** O aceite de comunicação do e-mail vira consentimento do titular, com data e hora, usuário e histórico. */
+async function registrarAceite(tx: TxOperacao, paciente: number): Promise<number> {
+  const termo = await tx.uma(
+    "SELECT id FROM tipo_termo_lgpd WHERE codigo = ? AND ativo AND finalidade = 'consentimento'",
+    [TIPO_TERMO_BALCAO],
+  );
+  if (!termo)
+    throw new ErroOperacao(
+      503,
+      'catalogo-incompleto',
+      'Catálogo incompleto',
+      'O tipo de termo do consentimento não está cadastrado neste cliente. Nada foi gravado.',
+    );
+  const agora = new Date();
+  const est = tx.contexto.estabelecimento;
+  await garantirSequencia(
+    tx,
+    { tipo: 'consentimento_titular', estabelecimento: est, prefixo: 'TC-' },
+    { usuario: tx.contexto.usuario, agora },
+  );
+  const numero = await tx.proximoNumero('consentimento_titular');
+  const id = await tx.incluir('consentimento_titular', {
+    estabelecimento_id: est,
+    numero: numero.formatado,
+    tipo_termo_lgpd_id: Number(termo['id']),
+    paciente_id: paciente,
+    finalidade: FINALIDADE_ACEITE,
+    tipo_signatario: 'paciente',
+    situacao: 'autorizado',
+    emitido_em: agora,
+    autorizado_em: agora,
+    canal_registro: 'balcao',
+  });
+  await tx.incluir('consentimento_titular_historico', {
+    consentimento_titular_id: id,
+    operacao: 'inclusao',
+    situacao_nova: 'autorizado',
+    dados: JSON.stringify({ canal: 'balcao', origem: 'email_pessoa' }),
+    ocorrido_em: agora,
+    usuario_id: tx.contexto.usuario,
+  });
+  return id;
+}
+
+/** Revoga o consentimento do aceite (o contato fica; o histórico guarda a revogação). */
+async function revogarAceite(tx: TxOperacao, consentimento: number | null): Promise<void> {
+  if (consentimento === null) return;
+  const k = await tx.uma(
+    'SELECT id, versao, situacao FROM consentimento_titular WHERE id = ? AND revogado_em IS NULL AND excluido_em IS NULL',
+    [consentimento],
+  );
+  if (!k) return;
+  const agora = new Date();
+  await tx.alterar('consentimento_titular', consentimento, Number(k['versao']), {
+    situacao: 'revogado',
+    revogado_em: agora,
+    motivo_revogacao: 'Aceite de comunicação por e-mail retirado pelo titular',
+  });
+  await tx.incluir('consentimento_titular_historico', {
+    consentimento_titular_id: consentimento,
+    operacao: 'alteracao',
+    situacao_anterior: String(k['situacao']),
+    situacao_nova: 'revogado',
+    dados: JSON.stringify({ canal: 'balcao', origem: 'email_pessoa' }),
+    ocorrido_em: agora,
+    usuario_id: tx.contexto.usuario,
+  });
+}
+
+const TABELAS_ACEITE = ['consentimento_titular', 'consentimento_titular_historico', 'sequencia_negocio'];
+
 const operacaoIncluirEmail = (trilha: RegistroTrilhaTela) =>
   definirOperacao({
     nome: 'cadastro.incluir-email-pessoa',
-    tabelas: ['email_pessoa'],
+    tabelas: ['email_pessoa', ...TABELAS_ACEITE],
     entrada: esquemaEmail,
     acao: 'inclusao',
     async gravar(tx, e) {
@@ -349,8 +444,10 @@ const operacaoIncluirEmail = (trilha: RegistroTrilhaTela) =>
       );
       if (ja)
         throw recusaCampos(
-          'email-repetido',
-          ja['excluido_em'] ? 'Este e-mail já foi da pessoa e saiu de uso.' : 'A pessoa já tem este e-mail.',
+          ja['excluido_em'] ? 'email-fora-de-uso' : 'email-repetido',
+          ja['excluido_em']
+            ? 'Este e-mail já foi da pessoa e saiu de uso: reative-o na lista de e-mails.'
+            : 'A pessoa já tem este e-mail.',
           ['email'],
         );
       const id = await tx.incluir('email_pessoa', {
@@ -360,7 +457,7 @@ const operacaoIncluirEmail = (trilha: RegistroTrilhaTela) =>
         finalidade: e.finalidade,
         principal: false,
         aceita_comunicacao: e.aceitaComunicacao,
-        observacao: e.aceitaComunicacao ? 'Aceite de comunicação declarado pelo titular no cadastro' : null,
+        consentimento_titular_id: e.aceitaComunicacao ? await registrarAceite(tx, e.paciente) : null,
       });
       await ajustarPrincipal(tx, 'email_pessoa', pessoa, { id, principal: e.principal });
       return { id };
@@ -370,6 +467,7 @@ const operacaoIncluirEmail = (trilha: RegistroTrilhaTela) =>
   });
 
 const ESPECIES = { endereco: 'endereco_pessoa', telefone: 'telefone_pessoa', email: 'email_pessoa' } as const;
+export const ACOES_CONTATO = ['principal', 'encerrar', 'revogar-aceite', 'reativar'] as const;
 export type EspecieContato = keyof typeof ESPECIES;
 
 const esquemaAcaoContato = z
@@ -377,26 +475,51 @@ const esquemaAcaoContato = z
     paciente: z.number().int().positive(),
     especie: z.enum(['endereco', 'telefone', 'email']),
     id: z.number().int().positive(),
-    acao: z.enum(['principal', 'encerrar']),
+    acao: z.enum(ACOES_CONTATO),
   })
   .strict();
 
 const operacaoAcaoContato = (trilha: RegistroTrilhaTela) =>
   definirOperacao({
     nome: 'cadastro.ajustar-contato-pessoa',
-    tabelas: ['endereco_pessoa', 'telefone_pessoa', 'email_pessoa'],
+    tabelas: ['endereco_pessoa', 'telefone_pessoa', 'email_pessoa', ...TABELAS_ACEITE],
     entrada: esquemaAcaoContato,
     acao: 'alteracao',
     async gravar(tx, e) {
       const tabela = ESPECIES[e.especie];
       const { pessoa } = await pacienteDe(tx, e.paciente);
-      const vig =
-        e.especie === 'endereco' ? ' AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)' : '';
+      if ((e.acao === 'revogar-aceite' || e.acao === 'reativar') && e.especie !== 'email')
+        throw recusaCampos('acao-invalida', 'Esta ação vale só para o e-mail.', ['acao']);
+      if (e.acao === 'reativar') {
+        // O e-mail que saiu de uso volta (a mesma linha; a trilha guarda a saída e a volta), sem aceite.
+        const fora = await tx.uma(
+          'SELECT id, versao FROM email_pessoa WHERE id = ? AND pessoa_fisica_id = ? AND excluido_em IS NOT NULL',
+          [e.id, pessoa],
+        );
+        if (!fora)
+          throw recusaCampos('contato-inexistente', 'O e-mail não existe ou já está em uso.', ['id']);
+        await tx.alterar('email_pessoa', e.id, Number(fora['versao']), {
+          excluido_em: null,
+          excluido_por: null,
+          principal: false,
+          aceita_comunicacao: false,
+          consentimento_titular_id: null,
+        });
+        await ajustarPrincipal(tx, 'email_pessoa', pessoa, { id: e.id, principal: false });
+        return { id: e.id };
+      }
+      const vig = e.especie === 'endereco' ? VIGENTE_ENDERECO : '';
       const alvo = await tx.uma(
         `SELECT id, versao, principal FROM ${tabela} WHERE id = ? AND pessoa_fisica_id = ? AND excluido_em IS NULL${vig}`,
         [e.id, pessoa],
       );
       if (!alvo) throw recusaCampos('contato-inexistente', 'O contato não existe ou já saiu de uso.', ['id']);
+      if (e.acao === 'revogar-aceite') {
+        const m = await tx.uma('SELECT consentimento_titular_id FROM email_pessoa WHERE id = ?', [e.id]);
+        await revogarAceite(tx, num(m?.['consentimento_titular_id']));
+        await tx.alterar('email_pessoa', e.id, Number(alvo['versao']), { aceita_comunicacao: false });
+        return { id: e.id };
+      }
       if (e.acao === 'principal') {
         await ajustarPrincipal(tx, tabela, pessoa, { id: e.id, principal: true });
         return { id: e.id };
@@ -412,18 +535,21 @@ const operacaoAcaoContato = (trilha: RegistroTrilhaTela) =>
       }));
       const sucessor = sucessorDoPrincipal(lista, e.id);
       if (e.especie === 'endereco') {
-        // Encerra a vigência ontem (o endereço deixa de valer hoje); a linha fica.
+        // Deixa de valer hoje (fim ontem; o começado hoje ou no futuro, intervalo vazio); a linha fica.
         const hoje = await hojeDe(tx);
-        const ontem = ontemDe(hoje);
         const ini = await tx.uma('SELECT vigencia_inicio FROM endereco_pessoa WHERE id = ?', [e.id]);
-        const inicio = data(ini?.['vigencia_inicio']);
         await tx.alterar(tabela, e.id, Number(alvo['versao']), {
           principal: false,
-          vigencia_fim: inicio && inicio > ontem ? inicio : ontem,
+          vigencia_fim: fimDoEncerramento(data(ini?.['vigencia_inicio']), hoje),
         });
       } else {
+        if (e.especie === 'email') {
+          const m = await tx.uma('SELECT consentimento_titular_id FROM email_pessoa WHERE id = ?', [e.id]);
+          await revogarAceite(tx, num(m?.['consentimento_titular_id']));
+        }
         await tx.alterar(tabela, e.id, Number(alvo['versao']), {
           principal: false,
+          ...(e.especie === 'email' ? { aceita_comunicacao: false } : {}),
           excluido_em: new Date(),
           excluido_por: tx.contexto.usuario,
         });
@@ -472,11 +598,13 @@ export type EntradaResponsavel = z.infer<typeof esquemaResponsavel>;
 
 const PAPEIS_SQL = PAPEIS_RESPONSAVEL.map(() => '?').join(', ');
 
-async function vigentesDe(tx: Leitor | TxOperacao, paciente: number) {
+/** Vínculos vigentes hoje; com `futuros`, também os que ainda vão começar (os que podem ser encerrados). */
+async function vigentesDe(tx: Leitor | TxOperacao, paciente: number, futuros = false) {
   const v = await tx.consultar(
     `SELECT id, papel, versao, comprovante_arquivo_id, vigencia_inicio FROM responsavel_paciente
       WHERE paciente_id = ? AND excluido_em IS NULL AND papel IN (${PAPEIS_SQL})
-        AND vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
+        ${futuros ? '' : 'AND vigencia_inicio <= CURRENT_DATE'}
+        AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE) AND (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio)`,
     [paciente, ...PAPEIS_RESPONSAVEL],
     { teto: TETO },
   );
@@ -528,11 +656,15 @@ const operacaoIncluirResponsavel = (trilha: RegistroTrilhaTela) =>
           'responsavel-invalido',
           erros.includes('mesma-pessoa')
             ? 'O responsável não pode ser o próprio paciente.'
-            : erros.includes('representante-menor')
-              ? 'Quem representa o paciente precisa ser maior de idade.'
-              : erros.includes('autorizarProcedimento')
-                ? 'Só o representante legal (responsável legal, guardião, tutor ou curador) autoriza procedimento.'
-                : 'Confira o papel e a vigência do responsável.',
+            : erros.includes('nascimento-representante')
+              ? ja
+                ? 'Quem representa o paciente precisa ter a data de nascimento no cadastro: complete o cadastro da pessoa antes.'
+                : 'Informe a data de nascimento de quem representa o paciente (prova da maioridade).'
+              : erros.includes('representante-menor')
+                ? 'Quem representa o paciente precisa ser maior de idade.'
+                : erros.includes('autorizarProcedimento')
+                  ? 'Só o representante legal (responsável legal, guardião, tutor ou curador) autoriza procedimento.'
+                  : 'Confira o papel e a vigência do responsável.',
           erros,
         );
       if (
@@ -592,7 +724,7 @@ const operacaoEncerrarResponsavel = (trilha: RegistroTrilhaTela) =>
       const p = await pacienteDe(tx, e.paciente);
       const hoje = await hojeDe(tx);
       const vigentes = await vigentesDe(tx, e.paciente);
-      const alvo = vigentes.find((v) => v.id === e.id);
+      const alvo = (await vigentesDe(tx, e.paciente, true)).find((v) => v.id === e.id);
       if (!alvo)
         throw recusaCampos('vinculo-inexistente', 'O vínculo não existe ou já foi encerrado.', ['id']);
       const r = recusaEncerramento(p.nascimento, vigentes, e.id, hoje, e.levantamentoCuratela);
@@ -614,8 +746,8 @@ const operacaoEncerrarResponsavel = (trilha: RegistroTrilhaTela) =>
         .join(' | ')
         .slice(0, 500);
       await tx.alterar('responsavel_paciente', e.id, alvo.versao, {
-        // Deixa de valer hoje (fim ontem); o vínculo começado hoje fica com o fim no próprio início.
-        vigencia_fim: alvo.inicio && alvo.inicio >= ontemDe(hoje) ? alvo.inicio : ontemDe(hoje),
+        // Deixa de valer hoje (fim ontem); o começado hoje ou no futuro fica com o intervalo vazio (nunca vigente).
+        vigencia_fim: fimDoEncerramento(alvo.inicio, hoje),
         observacao: obs,
       });
       return { id: e.id };
@@ -663,6 +795,8 @@ export interface ContatosPessoa {
     finalidade: string;
     principal: boolean;
     aceitaComunicacao: boolean;
+    /** Data do consentimento do titular que registrou o aceite (nulo: sem aceite vigente). */
+    aceiteEm: string | null;
     ativo: boolean;
   }[];
 }
@@ -699,6 +833,11 @@ export class FichaComplementarPropria {
 
   private ler<T>(c: ContextoPorta, fn: (l: Leitor) => Promise<T>): Promise<T> {
     return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: c.correlacao || 'cadastro' }, fn);
+  }
+
+  /** O estabelecimento da sessão (pelo código, quando o contexto não traz o id). */
+  estabelecimentoDaSessao(c: ContextoPorta): Promise<number> {
+    return this.estabelecimento(c);
   }
 
   private async estabelecimento(c: ContextoPorta): Promise<number> {
@@ -820,7 +959,7 @@ export class FichaComplementarPropria {
       const en = await l.uma(
         `SELECT cep, logradouro, numero, sem_numero, complemento, COALESCE(bairro_nome, CAST(bairro_id AS CHAR)) AS bairro
            FROM endereco_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL
-            AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE) ORDER BY principal DESC, id LIMIT 1`,
+            ${VIGENTE_ENDERECO} ORDER BY principal DESC, id LIMIT 1`,
         [pessoa],
       );
       const tel = await l.consultar(
@@ -896,8 +1035,10 @@ export class FichaComplementarPropria {
         { teto: TETO },
       );
       const em = await l.consultar(
-        `SELECT id, email, finalidade, principal, aceita_comunicacao, excluido_em FROM email_pessoa
-          WHERE pessoa_fisica_id = ? ORDER BY excluido_em IS NOT NULL, principal DESC, id DESC`,
+        `SELECT e.id, e.email, e.finalidade, e.principal, e.aceita_comunicacao, e.excluido_em,
+                k.autorizado_em AS aceite_em
+           FROM email_pessoa e LEFT JOIN consentimento_titular k ON k.id = e.consentimento_titular_id
+          WHERE e.pessoa_fisica_id = ? ORDER BY e.excluido_em IS NOT NULL, e.principal DESC, e.id DESC`,
         [pessoa],
         { teto: TETO },
       );
@@ -936,6 +1077,7 @@ export class FichaComplementarPropria {
           finalidade: String(x['finalidade']),
           principal: bool(x['principal']),
           aceitaComunicacao: bool(x['aceita_comunicacao']),
+          aceiteEm: data(x['aceite_em']),
           ativo: x['excluido_em'] === null || x['excluido_em'] === undefined,
         })),
       };
@@ -972,7 +1114,7 @@ export class FichaComplementarPropria {
   }
   ajustarContato(
     c: ContextoPorta,
-    e: { paciente: number; especie: EspecieContato; id: number; acao: 'principal' | 'encerrar' },
+    e: { paciente: number; especie: EspecieContato; id: number; acao: (typeof ACOES_CONTATO)[number] },
     t: RegistroTrilhaTela,
   ): Promise<number> {
     return this.executar(c, operacaoAcaoContato(t) as never, e, t);
