@@ -1,6 +1,7 @@
 // Regras dos ajustes de valor na conta (F3.7, 06-FAT linhas 17, 18 e 20).
 import { describe, expect, it } from 'vitest';
 import {
+  etapaDaAlcada,
   acrescimoDoItem,
   alertasDoPacote,
   classificarItens,
@@ -312,6 +313,50 @@ describe('correções da revisão (linhas 17, 18 e 20)', () => {
     expect(conferirAlcadaDoValor(150, niveis, 3, [11]).motivo).toContain('não está na alçada');
     expect(conferirAlcadaDoValor(9999, niveis, 5, []).nivel?.id).toBe(2);
     expect(conferirAlcadaDoValor(9999, [], 3, [])).toEqual({ nivel: null, motivo: null });
+  });
+  it('alçada em série: níveis cuja faixa contém o valor, um após o outro, cada um por uma pessoa', () => {
+    const niveis = [
+      { id: 1, nivel: 1, perfilId: 10, usuarioId: null, valorMinimo: 0, valorMaximo: null },
+      { id: 2, nivel: 2, perfilId: null, usuarioId: 5, valorMinimo: 1000, valorMaximo: null },
+      { id: 3, nivel: 3, perfilId: 20, usuarioId: null, valorMinimo: 0, valorMaximo: 50 },
+      {
+        id: 4,
+        nivel: 4,
+        perfilId: 30,
+        usuarioId: null,
+        valorMinimo: 0,
+        valorMaximo: null,
+        obrigatorio: false,
+      },
+    ];
+    const serie = { modo: 'serie' as const, permiteAutoaprovacao: false };
+    // 5000: níveis 1 e 2 (o 3 não alcança, o 4 não é obrigatório); o nível 2 não decide antes do 1.
+    expect(etapaDaAlcada(5000, niveis, serie, [], 5, []).motivo).toContain('nível 1');
+    const n1 = etapaDaAlcada(5000, niveis, serie, [], 3, [10]);
+    expect([n1.nivel?.id, n1.conclui, n1.faltam]).toEqual([1, false, [1, 2]]);
+    // Quem aprovou o nível 1 não aprova o 2, nem pelo usuário.
+    expect(etapaDaAlcada(5000, niveis, serie, [{ nivel: 1, usuarioId: 5 }], 5, []).motivo).toContain(
+      'já aprovou',
+    );
+    const n2 = etapaDaAlcada(5000, niveis, serie, [{ nivel: 1, usuarioId: 3 }], 5, []);
+    expect([n2.nivel?.id, n2.conclui]).toEqual([2, true]);
+    // 30: níveis 1 e 3; em paralelo o 3 decide antes do 1.
+    const par = etapaDaAlcada(30, niveis, { modo: 'paralelo', permiteAutoaprovacao: false }, [], 7, [20]);
+    expect([par.nivel?.id, par.conclui, par.faltam]).toEqual([3, false, [1, 3]]);
+    expect(etapaDaAlcada(30, niveis, serie, [], 7, [20]).motivo).toContain('nível 1');
+    // Fora da alçada e cargo sem alçada.
+    expect(etapaDaAlcada(30, niveis, serie, [], 9, [99]).motivo).toContain('não está na alçada');
+    const so = [{ id: 9, nivel: 1, perfilId: 10, usuarioId: null, valorMinimo: 0, valorMaximo: 100 }];
+    expect(etapaDaAlcada(150, so, serie, [], 3, [10]).motivo).toContain('passa a alçada cadastrada');
+    // Só não obrigatórios alcançam o valor: um deles basta.
+    const opc = [{ ...niveis[3]! }];
+    expect(etapaDaAlcada(10, opc, serie, [], 1, [30]).conclui).toBe(true);
+    expect(etapaDaAlcada(10, [], serie, [], 1, []).conclui).toBe(true);
+  });
+  it('autoaprovação só quando a alçada permite e só para aprovar', () => {
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 5, 'aprovar', true)).toBeNull();
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 5, 'recusar', true)).toContain('não pode');
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 5, 'aprovar', false)).toContain('não pode');
   });
   it('pacote: versão encerrada vale pelo retrato; a aberta pela composição atual', () => {
     const atual = { inclusoes: [{ itemId: 1 }], excecoes: [{ itemId: 2 }], tetos: [], diarias: [] };

@@ -702,6 +702,110 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     expect([Number(c!['valor_desconto']), Number(c!['valor_total'])]).toEqual([90.5, 414.5]);
   });
 
+  it('alçada em série: dois níveis um após o outro, cada um por uma pessoa; autoaprovação só se a alçada permite', async () => {
+    // Alçada mais nova (vigência posterior à do caso anterior): série, com autoaprovação; nível 1 de quem pede (u1) e
+    // de u2 sem teto, nível 2 de u3 a partir de 30.
+    const alc = await escrever(async (e) => {
+      const agora = new Date();
+      const a = await e.inserir(
+        `INSERT INTO alcada_aprovacao (estabelecimento_id, tipo_documento_aprovacao_id, descricao, modo_aprovacao,
+           permite_autoaprovacao, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, 'serie', 1, '2021-01-01', ?)`,
+        [ids.est, ids.tipoAprov, `ALCADA SERIE ${P}`, agora],
+      );
+      const nv = (seq: number, nivel: number, usuario: number, min: number) =>
+        e.inserir(
+          `INSERT INTO alcada_aprovacao_nivel (alcada_aprovacao_id, sequencia, nivel, aprovador_usuario_id,
+             valor_unitario_minimo, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [a, seq, nivel, usuario, min, agora],
+        );
+      return {
+        a,
+        n1: await nv(1, 1, ids.u2, 0),
+        n1b: await nv(2, 1, ids.u1, 0),
+        n2: await nv(3, 2, ids.u3, 30),
+      };
+    });
+    const [mot] = await linhas('SELECT id FROM motivo_ajuste_conta WHERE codigo = ?', [`${P}D`]);
+    const [antes] = await linhas('SELECT valor_desconto FROM conta_hospitalar WHERE id = ?', [m.conta]);
+    const d = (await s.gravar('ajuste.pedir', op(), {
+      contaId: m.conta,
+      tipo: 'desconto',
+      motivoId: Number(mot!['id']),
+      valor: 40,
+      justificativa: 'Desconto que pede dois níveis',
+    })) as { id: number; pedidoAprovacaoId: number };
+    const [aj] = await linhas('SELECT versao FROM ajuste_conta WHERE id = ?', [d.id]);
+    const versao = Number(aj!['versao']);
+    const decidir = (u: number) =>
+      s.gravar('ajuste.decidir', op(u), { id: d.id, versao, decisao: 'aprovar' });
+    // O nível 2 não decide antes do 1.
+    expect(await codigoDo(decidir(ids.u3))).toBe('alcada');
+    const r1 = (await decidir(ids.u2)) as { situacao: string; avisos: string };
+    expect(r1.situacao).toBe('pendente_aprovacao');
+    expect(r1.avisos).toContain('falta o nível 2');
+    const [meio] = await linhas(
+      `SELECT a.situacao, p.situacao AS pedido, p.nivel_atual, p.alcada_aprovacao_nivel_id, c.valor_desconto
+         FROM ajuste_conta a JOIN pedido_aprovacao p ON p.id = a.pedido_aprovacao_id
+         JOIN conta_hospitalar c ON c.id = a.conta_hospitalar_id WHERE a.id = ?`,
+      [d.id],
+    );
+    expect([
+      meio!['situacao'],
+      meio!['pedido'],
+      Number(meio!['nivel_atual']),
+      Number(meio!['alcada_aprovacao_nivel_id']),
+      Number(meio!['valor_desconto']),
+    ]).toEqual(['pendente_aprovacao', 'pendente', 2, alc.n2, Number(antes!['valor_desconto'])]);
+    // Quem aprovou o nível 1 não aprova o 2.
+    expect(await codigoDo(decidir(ids.u2))).toBe('alcada');
+    await decidir(ids.u3);
+    const [fim] = await linhas(
+      `SELECT a.situacao, p.situacao AS pedido, c.valor_desconto FROM ajuste_conta a
+         JOIN pedido_aprovacao p ON p.id = a.pedido_aprovacao_id JOIN conta_hospitalar c ON c.id = a.conta_hospitalar_id
+        WHERE a.id = ?`,
+      [d.id],
+    );
+    expect([fim!['situacao'], fim!['pedido'], Number(fim!['valor_desconto'])]).toEqual([
+      'aprovado',
+      'aprovado',
+      Number(antes!['valor_desconto']) + 40,
+    ]);
+    const dec = await linhas(
+      'SELECT aprovador_usuario_id, alcada_aprovacao_nivel_id, nivel FROM decisao_aprovacao WHERE pedido_aprovacao_id = ? ORDER BY id',
+      [d.pedidoAprovacaoId],
+    );
+    expect(
+      dec.map((x) => [
+        Number(x['aprovador_usuario_id']),
+        Number(x['alcada_aprovacao_nivel_id']),
+        Number(x['nivel']),
+      ]),
+    ).toEqual([
+      [ids.u2, alc.n1, 1],
+      [ids.u3, alc.n2, 2],
+    ]);
+    // Autoaprovação: 10 cabe só no nível 1, e a alçada permite que quem pediu (u1, do nível 1) aprove.
+    const p2 = (await s.gravar('ajuste.pedir', op(), {
+      contaId: m.conta,
+      tipo: 'desconto',
+      motivoId: Number(mot!['id']),
+      valor: 10,
+      justificativa: 'Desconto pequeno autoaprovado',
+    })) as { id: number };
+    const [aj2] = await linhas('SELECT versao FROM ajuste_conta WHERE id = ?', [p2.id]);
+    await s.gravar('ajuste.decidir', op(ids.u1), {
+      id: p2.id,
+      versao: Number(aj2!['versao']),
+      decisao: 'aprovar',
+    });
+    const [auto] = await linhas('SELECT situacao, decidido_por_usuario_id FROM ajuste_conta WHERE id = ?', [
+      p2.id,
+    ]);
+    expect([auto!['situacao'], Number(auto!['decidido_por_usuario_id'])]).toEqual(['aprovado', ids.u1]);
+  });
+
   it('pacote: conta de data antiga segue o retrato da versão encerrada, não a composição atual', async () => {
     const ap = (await s.gravar('pacote.aplicar', op(), { contaId: m.conta4, pacoteId: m.pacote })) as {
       id: number;
