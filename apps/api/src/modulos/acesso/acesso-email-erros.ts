@@ -4,11 +4,12 @@ import { ErroProblema } from '../../problema.filter.js';
 import { ErroCodigoEmail } from '../../sessao/codigo-email.js';
 import { ErroRecuperacaoPlataforma } from '../../sessao/recuperacao-plataforma.js';
 
-const DO_CODIGO: Record<ErroCodigoEmail['codigo'], [import('@sgh/contratos').TipoProblema, number, string]> = {
-  'metodo-nao-escolhido': ['recusa-de-negocio', 409, 'Segundo fator por e-mail não escolhido'],
-  'sem-email': ['recusa-de-negocio', 409, 'Conta sem e-mail'],
-  'muitos-envios': ['muitas-tentativas', 429, 'Muitos envios'],
-};
+const DO_CODIGO: Record<ErroCodigoEmail['codigo'], [import('@sgh/contratos').TipoProblema, number, string]> =
+  {
+    'metodo-nao-escolhido': ['recusa-de-negocio', 409, 'Segundo fator por e-mail não escolhido'],
+    'sem-email': ['recusa-de-negocio', 409, 'Conta sem e-mail'],
+    'muitos-envios': ['muitas-tentativas', 429, 'Muitos envios'],
+  };
 
 const DA_PLATAFORMA: Record<
   ErroRecuperacaoPlataforma['codigo'],

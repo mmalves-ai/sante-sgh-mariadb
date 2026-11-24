@@ -357,7 +357,9 @@ export class AcessoController {
       );
     // O código do segundo fator (aplicativo ou e-mail) vem à parte: o contrato da entrada da plataforma não o descreve.
     const codigo = esquemaCodigoSegundoFator.safeParse(
-      corpo && typeof corpo === 'object' ? (corpo as Record<string, unknown>)['codigoSegundoFator'] : undefined,
+      corpo && typeof corpo === 'object'
+        ? (corpo as Record<string, unknown>)['codigoSegundoFator']
+        : undefined,
     );
     try {
       const posto = this.postoDaEntrada(req);

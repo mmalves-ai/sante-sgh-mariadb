@@ -128,7 +128,9 @@ describe('segundo fator por código no e-mail na entrada da plataforma', () => {
   it('pede o código, recusa o vencido e entra com o certo', async () => {
     const { g, emitidos } = gancho('email');
     const { servico } = montar({ config: { segundoFatorEmail: g, plataforma, cliente: 'cliente_a' } });
-    await expect(servico.entrarPlataforma(ent, REDE)).rejects.toMatchObject({ codigo: 'segundo-fator-email' });
+    await expect(servico.entrarPlataforma(ent, REDE)).rejects.toMatchObject({
+      codigo: 'segundo-fator-email',
+    });
     expect(emitidos).toEqual(['plataforma:7']);
     await expect(
       servico.entrarPlataforma({ ...ent, codigoSegundoFator: '999999' }, REDE),

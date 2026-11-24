@@ -470,7 +470,11 @@ export class ServicoSessao {
             'O código venceu ou as tentativas acabaram. Entre de novo para receber outro código.',
             'segundo-fator-email-esgotado',
           )
-        : new ErroSessao('segundo-fator-necessario', 'Código do segundo fator inválido.', 'segundo-fator-invalido');
+        : new ErroSessao(
+            'segundo-fator-necessario',
+            'Código do segundo fator inválido.',
+            'segundo-fator-invalido',
+          );
     } catch (e) {
       if (e instanceof ErroSessao) throw e;
       if (e instanceof ErroCodigoEmail && e.codigo === 'muitos-envios')

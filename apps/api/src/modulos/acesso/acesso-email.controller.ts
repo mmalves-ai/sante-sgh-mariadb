@@ -73,10 +73,17 @@ export class AcessoEmailController {
       throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária', e.detalhe);
     }
     if (e instanceof Error && e.name === 'ErroOperacao') {
-      const pr = (e as Error & { problema: { status: number; title: string; detail?: string; codigo?: string } })
-        .problema;
+      const pr = (
+        e as Error & { problema: { status: number; title: string; detail?: string; codigo?: string } }
+      ).problema;
       if (pr.status === 409)
-        throw new ErroProblema('recusa-de-negocio', 409, pr.title, pr.detail, pr.codigo ? { codigo: pr.codigo } : {});
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          pr.title,
+          pr.detail,
+          pr.codigo ? { codigo: pr.codigo } : {},
+        );
     }
     throw e;
   }
@@ -104,12 +111,15 @@ export class AcessoEmailController {
   private async metodoDe(r: Registro): Promise<MetodoSegundoFator> {
     const s = this.servicos;
     if (!s) return 'aplicativo';
-    if (r.plataforma) return (await this.plataforma().metodoSegundoFator(r.plataforma.idAdministrador)) ?? 'aplicativo';
+    if (r.plataforma)
+      return (await this.plataforma().metodoSegundoFator(r.plataforma.idAdministrador)) ?? 'aplicativo';
     return s.preferencia.metodo(r.rede, r.estabelecimento, r.login);
   }
 
   private emailDisponivel(r: Registro): boolean {
-    return r.plataforma ? this.servicos?.recuperacaoPlataforma?.disponivel === true : !!this.servicos?.codigoUsuario;
+    return r.plataforma
+      ? this.servicos?.recuperacaoPlataforma?.disponivel === true
+      : !!this.servicos?.codigoUsuario;
   }
 
   // ── "Esqueci a senha" do administrador da plataforma ──
@@ -130,7 +140,11 @@ export class AcessoEmailController {
     const r = esquemaPedidoPlataforma.safeParse(corpo);
     if (!r.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Informe o e-mail.');
     try {
-      return await p.pedir(r.data.email, req.ip ?? null, correlacaoDaRequisicao(req, 'plataforma-recuperacao'));
+      return await p.pedir(
+        r.data.email,
+        req.ip ?? null,
+        correlacaoDaRequisicao(req, 'plataforma-recuperacao'),
+      );
     } catch (e) {
       this.erro(e);
     }
@@ -140,7 +154,9 @@ export class AcessoEmailController {
   @Post('sessao/plataforma/recuperacao/usar')
   @HttpCode(200)
   @Publica('o token de uso único do e-mail é a prova de posse (consumido de forma atômica)')
-  @AuditadoNoHandler('linha do tempo da credencial no banco plataforma (senha_redefinida), na mesma transação')
+  @AuditadoNoHandler(
+    'linha do tempo da credencial no banco plataforma (senha_redefinida), na mesma transação',
+  )
   async usarRecuperacaoPlataforma(
     @Body() corpo: unknown,
     @Req() req: Req,
@@ -155,7 +171,11 @@ export class AcessoEmailController {
         'O link de recuperação é inválido. Peça outro em "Esqueci a senha".',
       );
     try {
-      return await p.usar(r.data.token, req.ip ?? null, correlacaoDaRequisicao(req, 'plataforma-recuperacao'));
+      return await p.usar(
+        r.data.token,
+        req.ip ?? null,
+        correlacaoDaRequisicao(req, 'plataforma-recuperacao'),
+      );
     } catch (e) {
       this.erro(e);
     }
@@ -170,7 +190,10 @@ export class AcessoEmailController {
     try {
       const lido = await this.sessao!.ler(id, rede);
       if (!lido) throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
-      return { metodo: await this.metodoDe(lido.registro), emailDisponivel: this.emailDisponivel(lido.registro) };
+      return {
+        metodo: await this.metodoDe(lido.registro),
+        emailDisponivel: this.emailDisponivel(lido.registro),
+      };
     } catch (e) {
       this.erro(e);
     }
@@ -180,7 +203,9 @@ export class AcessoEmailController {
   @Post('sessao/segundo-fator/metodo')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
-  @AuditadoNoHandler('acesso.segundo-fator.escolhido na mesma transação (cliente) ou linha do tempo (plataforma)')
+  @AuditadoNoHandler(
+    'acesso.segundo-fator.escolhido na mesma transação (cliente) ou linha do tempo (plataforma)',
+  )
   async escolherMetodoSegundoFator(@Body() corpo: unknown, @Req() req: Req): Promise<MetodoSegundoFatorTela> {
     const { id, rede } = await this.sessaoDoPedido(req, true);
     const r = esquemaEscolherMetodo.safeParse(corpo);
