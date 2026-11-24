@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import RetencoesPainel from '../componentes/RetencoesPainel.vue';
 import TabelaRegistros from '../componentes/TabelaRegistros.vue';
 import { gerarDeclaracao, listarDeclaracoes, novaChave } from '../api-financeiro.js';
 import { usarFinanceiro } from '../usar-financeiro.js';
@@ -16,7 +17,7 @@ import { usarFinanceiro } from '../usar-financeiro.js';
 const props = defineProps<{ tipo: 'dmed' | 'reinf' }>();
 const { t } = useI18n();
 const qc = useQueryClient();
-const { apoio, pode, motivo, motivoFuncionalidade } = usarFinanceiro();
+const { apoio, pode, tem, motivo, motivoFuncionalidade } = usarFinanceiro();
 const lista = useQuery({
   queryKey: computed(() => ['financeiro', 'declaracoes', props.tipo]),
   queryFn: () => listarDeclaracoes(props.tipo),
@@ -103,6 +104,13 @@ async function gerar() {
     <h2>{{ t('financeiro.declaracoes.geradas') }}</h2>
     <ErroFaturamento v-if="lista.error.value" :erro="lista.error.value" />
     <TabelaRegistros v-else :registros="registros" :colunas="colunas" testid="dc-lista" />
+    <!-- F3.8, 07-FIN linha 109: regras de retenção com vigência e recolhimento do retido da competência. -->
+    <RetencoesPainel
+      v-if="tipo === 'reinf'"
+      :competencia="periodo"
+      :pode-editar="tem('financeiro.parametro.editar')"
+      :pode-recolher="tem('financeiro.tituloPagar.criar')"
+    />
   </section>
 </template>
 

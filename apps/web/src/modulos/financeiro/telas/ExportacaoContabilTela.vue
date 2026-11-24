@@ -1,24 +1,24 @@
 <script setup lang="ts">
 // Exportação contábil (ficha do M32, seção 7): `/financeiro/contabil/exportacao`. O lote do período pela régua
 // escolhida, com a contagem e a soma de débitos e créditos para a conferência do contador, e o de-para de convênio e
-// tipo de lançamento para a conta contábil (editado no cadastro genérico; o lançamento sem conta fica contado).
+// a conta do escritório contábil por evento, lado e natureza (DeParaContabilPainel; o lançamento sem conta fica contado).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { RouterLink } from 'vue-router';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import TabelaRegistros from '../componentes/TabelaRegistros.vue';
-import { exportarLote, lerDePara, listarLotes, novaChave } from '../api-financeiro.js';
+import DeParaContabilPainel from '../componentes/DeParaContabilPainel.vue';
+import { exportarLote, listarLotes, novaChave } from '../api-financeiro.js';
 import { usarFinanceiro } from '../usar-financeiro.js';
 
 const { t } = useI18n();
 const qc = useQueryClient();
-const { apoio, pode, motivo, motivoFuncionalidade } = usarFinanceiro();
+const { apoio, pode, tem, motivo, motivoFuncionalidade } = usarFinanceiro();
+const podeEditarDePara = computed(() => tem('financeiro.parametro.editar'));
 const lotes = useQuery({ queryKey: ['financeiro', 'lotes'], queryFn: () => listarLotes() });
-const dePara = useQuery({ queryKey: ['financeiro', 'de-para'], queryFn: () => lerDePara() });
 const periodo = ref('');
 const regua = ref<'competencia' | 'caixa'>('competencia');
 watch(
@@ -96,32 +96,8 @@ async function exportar() {
     <h2>{{ t('financeiro.contabil.lotes') }}</h2>
     <ErroFaturamento v-if="lotes.error.value" :erro="lotes.error.value" />
     <TabelaRegistros v-else :registros="lotes.data.value ?? []" :colunas="colunas" testid="ec-lotes" />
-    <h2>{{ t('financeiro.contabil.dePara') }}</h2>
-    <RouterLink to="/cadastros/dominios/grupo/financeiroContabil">{{
-      t('financeiro.parametros.editar')
-    }}</RouterLink>
-    <ErroFaturamento v-if="dePara.error.value" :erro="dePara.error.value" />
-    <table v-else-if="dePara.data.value?.length" class="tabela" data-testid="ec-de-para">
-      <thead>
-        <tr>
-          <th scope="col">{{ t('financeiro.convenio') }}</th>
-          <th scope="col">{{ t('financeiro.contabil.tipoConta') }}</th>
-          <th scope="col">{{ t('financeiro.contabil.tipoLancamento') }}</th>
-          <th scope="col">{{ t('financeiro.classificacao') }}</th>
-          <th scope="col">{{ t('financeiro.contabil.contaContabil') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(d, i) in dePara.data.value" :key="i">
-          <td>{{ d.convenio }}</td>
-          <td>{{ d.tipoConta }}</td>
-          <td>{{ d.tipoLancamento }}</td>
-          <td>{{ d.grupo }}.{{ d.subgrupo }}.{{ d.item }}</td>
-          <td>{{ d.conta ?? t('financeiro.contabil.semConta') }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else>{{ t('financeiro.nenhum') }}</p>
+    <!-- F3.8, 07-FIN linha 100: o de-para por evento mantido aqui, com o que falta no período escolhido. -->
+    <DeParaContabilPainel :periodo="periodo" :regua="regua" :pode-editar="podeEditarDePara" />
   </section>
 </template>
 
