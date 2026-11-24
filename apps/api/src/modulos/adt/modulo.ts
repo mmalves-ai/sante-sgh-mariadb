@@ -34,6 +34,8 @@ import { INTEGRACAO_OS_LEITO, IntegracaoOsLeitoAdt } from './os-leito.js';
 import { PORTA_ADT, type PortaAdt, portaAdtIndisponivel } from './porta.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 import { PortaAdtPropria } from './porta-propria.js';
+import { DocumentosInternacaoController, DOCUMENTOS_INTERNACAO } from './documentos-internacao.controller.js';
+import { PortaDocumentosInternacao } from './documentos-internacao.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { AVISOS_ADT } from './simbolos.js';
@@ -96,10 +98,15 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       RegulacaoController,
       HigienizacaoController,
       SameController,
+      DocumentosInternacaoController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
       { provide: PORTA_NIR, useValue: nir },
+      {
+        provide: DOCUMENTOS_INTERNACAO,
+        useValue: ctx.nucleo && !opcoes.adt ? new PortaDocumentosInternacao(ctx.nucleo) : null,
+      },
       { provide: AVISOS_ADT, useValue: new AvisosAtendimento(null, 'leitos') },
       { provide: AVISOS_ATENDIMENTO, useValue: new AvisosAtendimento(null) },
       {

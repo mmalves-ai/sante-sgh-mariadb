@@ -113,6 +113,10 @@ const configuracao = rotaDoSubitem('internacao');
       <ErroAdt v-if="erro" :erro="erro" />
       <p class="secundario">
         <RouterLink :to="configuracao">{{ t('dominios.subitens.internacao') }}</RouterLink>
+        ·
+        <RouterLink to="/internacao/documentos" data-testid="imp-configurar-documentos">{{
+          t('adt.impressos.configurar')
+        }}</RouterLink>
       </p>
     </template>
   </section>

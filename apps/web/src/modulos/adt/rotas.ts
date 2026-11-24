@@ -54,6 +54,12 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    path: '/internacao/documentos',
+    name: 'adt.documentos',
+    component: () => import('./telas/DocumentosInternacaoTela.vue'),
+    meta: { permissao: 'internacao.impresso.emitir' },
+  },
+  {
     path: `/internacao/:reg${reg}/impressos`,
     name: 'adt.impressos',
     component: () => import('./telas/ImpressosInternacaoTela.vue'),

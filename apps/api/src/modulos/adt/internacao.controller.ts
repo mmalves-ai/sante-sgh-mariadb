@@ -587,7 +587,7 @@ export class InternacaoController {
         'Internação não encontrada',
         'A internação não existe mais.',
       );
-    let modelo: { modelo: number; nome: string } | null = null;
+    let modelo: { modelo: number; nome: string; texto?: string } | null = null;
     if (e.modelo !== undefined) {
       const f = (await this.porta.fichas(ctxAdt(s), d.reg)).find((x) => x.modelo === e.modelo);
       if (e.impresso !== 'ficha' || !f)
@@ -598,7 +598,7 @@ export class InternacaoController {
           'Esta ficha não está entre as que a configuração manda imprimir para esta internação.',
           { codigo: 'ficha-nao-configurada' },
         );
-      modelo = { modelo: f.modelo, nome: f.nome };
+      modelo = { modelo: f.modelo, nome: f.nome, ...(f.texto ? { texto: f.texto } : {}) };
     }
     const gerado =
       e.formato === 'pdf' ? await this.pdf(s, d, modelo) : await this.zpl(s, d, e.impresso, e.copias);
@@ -622,7 +622,7 @@ export class InternacaoController {
   private async pdf(
     s: SessaoCadastro,
     d: DadosImpressoInternacao,
-    modelo: { modelo: number; nome: string } | null = null,
+    modelo: { modelo: number; nome: string; texto?: string } | null = null,
   ): Promise<ImpressoGerado> {
     const fonte = this.documento;
     if (!fonte)
@@ -655,6 +655,8 @@ export class InternacaoController {
           { rotulo: 'Leito', valor: d.leito },
           { rotulo: 'Convênio', valor: d.convenio },
           { rotulo: 'Médico assistente', valor: d.medico || 'Não informado' },
+          // O texto do modelo escolhido pela regra de convênio e especialidade (F3.4, 04-INT linha 69).
+          ...(modelo?.texto ? [{ rotulo: 'Documento', valor: modelo.texto }] : []),
         ],
         autor: s.login,
       });

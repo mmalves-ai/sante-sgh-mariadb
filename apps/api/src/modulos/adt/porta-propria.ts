@@ -66,6 +66,7 @@ import {
   texto,
 } from './operacoes.js';
 import { chaveDaGravacaoDireta, type ComIdempotencia } from './apoio-idempotente.js';
+import { PortaDocumentosInternacao } from './documentos-internacao.js';
 import type {
   AltaMedicaDecidida,
   ContextoAdt,
@@ -1378,9 +1379,33 @@ export class PortaAdtPropria implements PortaAdt {
     });
   }
 
-  /** As fichas extras da internação pela configuração de documentos: por ora nenhuma (vale a ficha padrão). */
-  async fichas(): Promise<{ modelo: number; grafica: boolean; nome: string; copias: number }[]> {
-    return [];
+  /** Os documentos da internação pela regra de convênio, especialidade e modalidade (F3.4, 04-INT linha 69). */
+  async fichas(
+    c: ContextoAdt,
+    reg: number,
+  ): Promise<
+    {
+      modelo: number;
+      grafica: boolean;
+      nome: string;
+      copias: number;
+      texto?: string;
+      obrigatorio?: boolean;
+    }[]
+  > {
+    const docs = await new PortaDocumentosInternacao(this.nucleo, this.executor).documentos(
+      c,
+      reg,
+      'admissao',
+    );
+    return (docs ?? []).map((d) => ({
+      modelo: d.modelo,
+      grafica: true,
+      nome: d.titulo,
+      copias: d.copias,
+      texto: d.texto,
+      obrigatorio: d.obrigatorio,
+    }));
   }
 
   profissional(c: ContextoAdt, login: string): Promise<ProfissionalDaSessao | null> {
