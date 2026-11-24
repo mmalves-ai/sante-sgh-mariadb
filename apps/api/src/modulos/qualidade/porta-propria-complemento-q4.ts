@@ -5,7 +5,7 @@
 //   registrados, o total de membros na data, os convidados em texto, a assinatura da ata e a da versão anterior, o
 //   instante do cancelamento). A reunião é do estabelecimento pela comissão (comissao_hospitalar.estabelecimento_id).
 // - Retificação: a linha é travada (SELECT ... FOR UPDATE) e conferida pela versão; a reunião cancelada e a assinatura
-//   lida pela tela diferente da gravada recusam `versao-divergente` (nada é gravado). Retificar a ata assinada limpa a
+//   lida pela tela diferente da gravada recusam `versao-desatualizada` (nada é gravado). Retificar a ata assinada limpa a
 //   assinatura (o texto novo aguarda nova assinatura) e guarda a assinatura anterior. A versão anterior inteira vai à
 //   trilha da mesma operação (dados.versaoAnterior, ação `retificacao`), que `versoes` lê: histórico só de acréscimo.
 // - Quem grava a reunião, a assinatura e o cancelamento (outras famílias) usa as mesmas colunas: presentes_registrados
@@ -33,6 +33,9 @@ import { type ReuniaoComissaoRegistrada, recusaVersaoGestao } from './tipos.js';
 
 /** Os métodos da porta da gestão que este complemento cobre (a ligação na porta completa é do integrador). */
 export const METODOS_COMPLEMENTO_Q4 = ['reuniao', 'reunioes', 'retificarAta'] as const;
+
+/** As tabelas que as gravações deste complemento escrevem (o integrador as soma às declaradas na porta completa). */
+export const TABELAS_COMPLEMENTO_Q4 = ['reuniao_comissao'] as const;
 
 /** Teto das reuniões de uma comissão (a reunião é mensal ou menos: o teto nunca é alcançado no uso real). */
 export const TETO_REUNIOES = 5000;
