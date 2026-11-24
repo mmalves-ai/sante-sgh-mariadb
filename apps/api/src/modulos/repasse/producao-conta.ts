@@ -9,13 +9,21 @@
 //     apuração); a já apurada ou paga ganha estorno_repasse 'pendente' do restante no período seguinte e passa a
 //     'estornado';
 //   - glosa (repasse.estornoEmGlosa): antes da apuração reduz a base (total: estorna); depois, estorno_repasse
-//     proporcional (motivo glosa, ligado ao glosa_item do item) no período seguinte, só a diferença do já estornado.
-// Idempotente: sincronizar de novo não duplica produção nem débito. Nenhum gatilho: tudo aqui, na mesma transação.
+//     proporcional (motivo glosa, ligado ao glosa_item do item), só a diferença do já estornado;
+//   - produção que o item não gera mais (participante removido ou pago fora do hospital, função, recebedor ou executor
+//     trocado): tratada como item sem cobrança; a chave nova nasce pela regra do momento;
+//   - glosa revertida: antes da apuração a base volta (a estornada volta a 'pendente'); depois, o débito pendente a
+//     mais é cancelado (o excesso já descontado numa apuração conferida fica como pendência 'credito-apos-desconto');
+//   - o débito cai no primeiro período aberto a partir do seguinte ao da conta e do mês do evento (competenciaDoDebito)
+//     e é descontado pela apuração desse período (porta-propria.ts, gravarApuracao).
+// Idempotente: sincronizar de novo não duplica produção nem débito; a conta é travada (FOR UPDATE) antes da leitura,
+// e duas sincronizações da mesma conta correm em fila. Nenhum gatilho: tudo aqui, na mesma transação.
 import { type BaseCalculoRepasse, definicaoParametro, type ItemProducao } from '@sgh/contratos';
 import {
   type AcaoEstornoProducao,
   calcularItem,
   centavos as emCentavos,
+  competenciaDoDebito,
   estornoDaProducao,
   type EventoProducao,
   type FormaPagamentoParticipante,
@@ -57,6 +65,8 @@ export interface ResumoProducaoConta {
   readonly estornadas: number;
   readonly reduzidas: number;
   readonly debitos: number;
+  /** Produções com débito a mais desfeito (glosa revertida depois da apuração). */
+  readonly creditos: number;
   /** Itens que não geraram produção, por motivo (contagem). */
   readonly pendencias: Readonly<Record<string, number>>;
 }
@@ -120,8 +130,16 @@ export async function sincronizarProducaoDaConta(
   if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   const usuario = ctx.usuario;
   if (usuario === null) throw recusa('sem-usuario', 'A gravação exige o usuário da sessão.');
+  // A trava da conta põe em fila as sincronizações da mesma conta (lançamento, fechamento, a operação própria): a
+  // chave única da produção aceita NULL no prestador e no tipo de lançamento e não barra a duplicata sozinha.
+  const travada = await tx.consultarParaAtualizar<Linha>(
+    'SELECT id FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    [d.conta, est],
+  );
+  if (travada.length === 0)
+    throw recusa('conta-inexistente', 'A conta não existe neste estabelecimento.', { campos: ['conta'] });
   const conta = await tx.uma<Linha>(
-    `SELECT ch.id, ch.fonte_pagadora_id, ch.natureza, ch.competencia, at.especialidade_medica_id,
+    `SELECT ch.id, ch.fonte_pagadora_id, ch.natureza, ch.competencia, ch.situacao, at.especialidade_medica_id,
             at.local_atendimento_id, at.unidade_assistencial_id, at.centro_custo_id, e.fuso_horario
        FROM conta_hospitalar ch
        JOIN atendimento at ON at.id = ch.atendimento_id
@@ -163,7 +181,15 @@ export async function sincronizarProducaoDaConta(
     [conta['id'], ...(d.itens ?? [])],
     { teto: 20000 },
   );
-  const resumo = { geradas: 0, estornadas: 0, reduzidas: 0, debitos: 0, pendencias: {} as Record<string, number> };
+  const contaFechada = ['fechada', 'faturada', 'enviada', 'paga'].includes(texto(conta['situacao']));
+  const resumo = {
+    geradas: 0,
+    estornadas: 0,
+    reduzidas: 0,
+    debitos: 0,
+    creditos: 0,
+    pendencias: {} as Record<string, number>,
+  };
   if (ls.length === 0) return resumo;
   const ids = ls.map((r) => n(r['id']));
   const participantes = new Map<number, ItemContaProducao['participantes'][number][]>();
@@ -257,6 +283,20 @@ export async function sincronizarProducaoDaConta(
     ))
       estornado.set(n(r['producao_repasse_id']), emCentavos(n(r['v'])));
   }
+  // Competência do débito: períodos com apuração já conferida (não se recalculam mais) passam adiante.
+  const fechadas = new Set(
+    (
+      await tx.consultar<Linha>(
+        `SELECT DATE_FORMAT(competencia, '%Y-%m') AS c FROM apuracao_repasse
+          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND competencia > ?
+            AND situacao NOT IN ('em_apuracao', 'apurada', 'cancelada')
+          ORDER BY competencia`,
+        [est, `${competenciaConta}-01`],
+        { teto: 1000 },
+      )
+    ).map((r) => texto(r['c'])),
+  );
+  const competenciaDebito = competenciaDoDebito(competenciaConta, civil(new Date(), fuso).data.slice(0, 7), fechadas);
   const porItem = new Map<number, Linha[]>();
   for (const p of existentes) {
     const k = n(p['conta_hospitalar_item_id']);
@@ -311,17 +351,18 @@ export async function sincronizarProducaoDaConta(
         {
           situacao,
           integrada,
+          vigente: planejadas.has(k),
           baseCentavos: base,
           baseOriginalCentavos: planejadas.get(k)?.baseCentavos ?? base,
           repassadoCentavos: apurado.get(id) ?? emCentavos(n(g['valor_repasse'])),
           jaEstornadoCentavos: estornado.get(id) ?? 0,
-          competencia: competenciaConta,
+          competenciaDebito,
         },
         estornoEmGlosa,
       );
       await aplicar(tx, acao, { id, versao: n(g['versao']), est, usuario, conta: d.conta, item: it.item.id }, resumo);
     }
-    if (!geraNoEvento(momento, d.evento)) continue;
+    if (!geraNoEvento(momento, d.evento, contaFechada)) continue;
     for (const p of plano.producoes) {
       if (vistas.has(chave(p))) continue;
       // Glosa já registrada no item quando a produção nasce: a mesma regra do estorno antes da apuração.
@@ -330,11 +371,12 @@ export async function sincronizarProducaoDaConta(
         {
           situacao: 'pendente',
           integrada: false,
+          vigente: true,
           baseCentavos: p.baseCentavos,
           baseOriginalCentavos: p.baseCentavos,
           repassadoCentavos: 0,
           jaEstornadoCentavos: 0,
-          competencia: competenciaConta,
+          competenciaDebito,
         },
         estornoEmGlosa,
       );
@@ -408,38 +450,76 @@ async function gerar(
   });
 }
 
-async function aplicar(
-  tx: TxOperacao,
-  acao: AcaoEstornoProducao,
-  p: { id: number; versao: number; est: number; usuario: number; conta: number; item: number },
-  resumo: { estornadas: number; reduzidas: number; debitos: number },
-): Promise<void> {
+type Resumo = { estornadas: number; reduzidas: number; debitos: number; creditos: number; pendencias: Record<string, number> };
+type AlvoProducao = { id: number; versao: number; est: number; usuario: number; conta: number; item: number };
+
+async function aplicar(tx: TxOperacao, acao: AcaoEstornoProducao, p: AlvoProducao, resumo: Resumo): Promise<void> {
   if (acao.acao === 'nada') return;
   if (acao.acao === 'estornar') {
     await tx.alterar('producao_repasse', p.id, p.versao, { situacao: 'estornado' });
     resumo.estornadas += 1;
     return;
   }
-  if (acao.acao === 'reduzir') {
+  if (acao.acao === 'reduzir' || acao.acao === 'reativar') {
     // A prévia do repasse é refeita pela apuração (o recálculo usa a base nova); aqui ela sai até lá.
     await tx.alterar('producao_repasse', p.id, p.versao, {
       valor_base: reais(acao.baseCentavos),
       valor_repasse: null,
       percentual: null,
+      ...(acao.acao === 'reativar' ? { situacao: 'pendente' } : {}),
     });
     resumo.reduzidas += 1;
     return;
   }
-  // Débito no período seguinte, ligado à produção (e ao glosa_item do item, na glosa).
+  if (acao.acao === 'debitar') {
+    await incluirDebito(tx, p, acao.valorCentavos, acao.competencia, acao.motivo);
+    if (acao.encerrar) await tx.alterar('producao_repasse', p.id, p.versao, { situacao: 'estornado' });
+    resumo.debitos += 1;
+    return;
+  }
+  // Débito a mais (glosa revertida): cancela os débitos ainda não descontados (pendentes, ou aplicados numa apuração
+  // ainda aberta, que o recálculo refaz), do mais novo ao mais velho; o que passar do excesso volta como débito novo.
+  const abertos = await tx.consultarParaAtualizar<Linha>(
+    `SELECT e.id, e.versao, e.valor FROM estorno_repasse e
+       LEFT JOIN apuracao_repasse a ON a.id = e.apuracao_repasse_id
+      WHERE e.producao_repasse_id = ? AND e.excluido_em IS NULL
+        AND (e.situacao = 'pendente' OR (e.situacao = 'aplicado' AND a.situacao IN ('em_apuracao', 'apurada')))
+      ORDER BY e.id DESC`,
+    [p.id],
+    { teto: 1000 },
+  );
+  let cancelado = 0;
+  for (const e of abertos) {
+    if (cancelado >= acao.valorCentavos) break;
+    await tx.alterar('estorno_repasse', n(e['id']), n(e['versao']), { situacao: 'cancelado' });
+    cancelado += emCentavos(n(e['valor']));
+  }
+  if (cancelado > acao.valorCentavos)
+    await incluirDebito(tx, p, cancelado - acao.valorCentavos, acao.competencia, 'glosa');
+  if (cancelado < acao.valorCentavos)
+    // O excesso já descontado numa apuração conferida não se desfaz aqui: fica como pendência (contagem).
+    resumo.pendencias['credito-apos-desconto'] = (resumo.pendencias['credito-apos-desconto'] ?? 0) + 1;
+  if (acao.reabrir) await tx.alterar('producao_repasse', p.id, p.versao, { situacao: 'apurado' });
+  resumo.creditos += 1;
+}
+
+/** Débito no período do débito, ligado à produção (e ao glosa_item do item, na glosa). */
+async function incluirDebito(
+  tx: TxOperacao,
+  p: AlvoProducao,
+  valorCentavos: number,
+  competencia: string,
+  motivoPedido: 'glosa' | 'ajuste',
+): Promise<void> {
   const glosa =
-    acao.motivo === 'glosa'
+    motivoPedido === 'glosa'
       ? await tx.uma<Linha>(
           `SELECT gi.id FROM glosa_item gi WHERE gi.conta_hospitalar_item_id = ? AND gi.excluido_em IS NULL
             ORDER BY gi.id DESC LIMIT 1`,
           [p.item],
         )
       : null;
-  const motivo = acao.motivo === 'glosa' && glosa ? 'glosa' : 'ajuste';
+  const motivo = motivoPedido === 'glosa' && glosa ? 'glosa' : 'ajuste';
   await garantirSequencia(
     tx,
     { tipo: 'estorno_repasse', estabelecimento: p.est, prefixo: 'ER-' },
@@ -453,17 +533,15 @@ async function aplicar(
     glosa_item_id: motivo === 'glosa' ? n(glosa?.['id']) : null,
     conta_hospitalar_id: p.conta,
     motivo,
-    valor: reais(acao.valorCentavos),
-    competencia: `${acao.competencia}-01`,
+    valor: reais(valorCentavos),
+    competencia: `${competencia}-01`,
     justificativa:
-      acao.motivo === 'glosa'
+      motivoPedido === 'glosa'
         ? 'Glosa do item da conta depois da apuração do repasse.'
-        : 'Item da conta estornado depois da apuração do repasse.',
+        : 'Item da conta estornado (ou produção que o item não gera mais) depois da apuração do repasse.',
     situacao: 'pendente',
     usuario_id: p.usuario,
   });
-  if (acao.encerrar) await tx.alterar('producao_repasse', p.id, p.versao, { situacao: 'estornado' });
-  resumo.debitos += 1;
 }
 
 export const esquemaSincronizarProducaoConta = z
@@ -492,6 +570,7 @@ export const sincronizarProducaoConta = definirOperacao<SincronizarProducaoConta
       estornadas: r.estornadas,
       reduzidas: r.reduzidas,
       debitos: r.debitos,
+      creditos: r.creditos,
       pendencias: Object.values(r.pendencias).reduce((a, b) => a + b, 0),
     };
   },

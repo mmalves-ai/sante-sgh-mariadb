@@ -65,11 +65,28 @@ export type PendenciaProducao = 'sem-executante' | 'sem-funcao-titular';
 const SITUACOES_SEM_COBRANCA: ReadonlySet<string> = new Set(['estornado', 'sem_cobranca', 'transferido']);
 
 /** A produção nasce agora? No lançamento só se a regra é "lancamento"; no fechamento vale para as duas (o fechamento
- * completa o que faltou); a mudança do item só estorna ou reduz, nunca cria. */
-export function geraNoEvento(momento: MomentoProducao, evento: EventoProducao): boolean {
-  if (evento === 'mudanca-item') return false;
+ * completa o que faltou). A mudança do item (equipe, executor, glosa revertida) completa o que o item passou a gerar
+ * quando a regra é "lancamento" ou a conta já foi fechada; antes do fechamento, na regra "fechamento", só estorna. */
+export function geraNoEvento(momento: MomentoProducao, evento: EventoProducao, contaFechada = false): boolean {
   if (evento === 'fechamento') return true;
+  if (evento === 'mudanca-item') return momento === 'lancamento' || contaFechada;
   return momento === 'lancamento';
+}
+
+/**
+ * A competência do débito (estorno depois da apuração): o primeiro período ainda aberto a partir do seguinte ao da
+ * conta e do mês do evento (glosa ou estorno). Período com apuração já conferida (ou aprovada, liberada, paga) é
+ * fechado e passa adiante: o débito nunca fica preso numa apuração que não se recalcula mais.
+ */
+export function competenciaDoDebito(
+  competenciaConta: string,
+  competenciaEvento: string,
+  fechadas: ReadonlySet<string>,
+): string {
+  const seguinte = competenciaSeguinte(competenciaConta);
+  let c = seguinte > competenciaEvento ? seguinte : competenciaEvento;
+  for (let i = 0; i <= fechadas.size && fechadas.has(c); i++) c = competenciaSeguinte(c);
+  return c;
 }
 
 /** Lê o parâmetro (texto) como momento; valor fora da lista volta ao padrão, o lançamento. */
@@ -135,21 +152,27 @@ export interface ProducaoGravada {
   readonly situacao: string;
   /** Entrou numa apuração já conferida (ou está apurada ou paga): o estorno vira débito no período seguinte. */
   readonly integrada: boolean;
+  /** A chave da produção (profissional, prestador, função) ainda está entre as que o item gera hoje. Falso: o
+   * participante saiu, passou a ser pago fora do hospital, trocou de função ou de recebedor, ou o executor mudou. */
+  readonly vigente: boolean;
   readonly baseCentavos: number;
   /** Base que o item dá hoje sem glosa (a da produção planejada); a redução pela glosa parte dela. */
   readonly baseOriginalCentavos: number;
   readonly repassadoCentavos: number;
+  /** Débitos (estorno_repasse) da produção ainda não cancelados. */
   readonly jaEstornadoCentavos: number;
-  /** Competência da conta (AAAA-MM). */
-  readonly competencia: string;
+  /** Competência (AAAA-MM) em que cai o débito ou o seu ajuste: competenciaDoDebito. */
+  readonly competenciaDebito: string;
 }
 
 export type AcaoEstornoProducao =
   | { readonly acao: 'nada' }
   /** Produção ainda não apurada: sai da apuração (situação estornado), sem débito. */
   | { readonly acao: 'estornar' }
-  /** Glosa parcial antes da apuração: a base passa a ser a parte não glosada. */
+  /** Antes da apuração: a base passa a ser a que o item dá hoje (glosa parcial, glosa revertida, base mudada). */
   | { readonly acao: 'reduzir'; readonly baseCentavos: number }
+  /** Produção estornada e não apurada que o item volta a gerar (glosa revertida, participante de volta): pendente. */
+  | { readonly acao: 'reativar'; readonly baseCentavos: number }
   /** Produção já apurada ou paga: débito (positivo) no período seguinte; `encerrar` leva a produção a estornado. */
   | {
       readonly acao: 'debitar';
@@ -157,59 +180,80 @@ export type AcaoEstornoProducao =
       readonly competencia: string;
       readonly motivo: 'glosa' | 'ajuste';
       readonly encerrar: boolean;
+    }
+  /** Produção já apurada com débito acima do devido (glosa revertida no recurso): o excesso de débito é desfeito
+   * (cancela o débito ainda pendente); `reabrir` volta a produção estornada a apurado. */
+  | {
+      readonly acao: 'creditar';
+      readonly valorCentavos: number;
+      readonly competencia: string;
+      readonly reabrir: boolean;
     };
 
 const FINAIS: ReadonlySet<string> = new Set(['estornado', 'cancelado']);
 
 /**
- * O que fazer com a produção quando o item muda. Item estornado (ou sem cobrança, transferido, excluído) estorna por
- * inteiro; glosa (repasse.estornoEmGlosa ligado) estorna a parte glosada: antes da apuração reduz a base (ou estorna,
- * se a glosa é total), depois da apuração vira débito proporcional no período seguinte, nunca acima do repassado.
+ * O que fazer com a produção quando o item muda. A produção espelha o item: item estornado (ou sem cobrança,
+ * transferido, excluído), ou chave que o item não gera mais, estorna por inteiro; a glosa (repasse.estornoEmGlosa
+ * ligado) estorna a parte glosada: antes da apuração reduz a base (ou estorna, se a glosa é total), depois da apuração
+ * vira débito proporcional no período seguinte, nunca acima do repassado. A glosa revertida desfaz o que fez: antes da
+ * apuração restaura a base ou reativa a produção; depois, desfaz o débito a mais. Idempotente: o débito é sempre o
+ * devido menos o já debitado.
  */
 export function estornoDaProducao(
   item: ItemContaProducao,
   p: ProducaoGravada,
   estornoEmGlosa: boolean,
 ): AcaoEstornoProducao {
-  if (FINAIS.has(p.situacao)) return { acao: 'nada' };
-  const semCobranca = item.excluido || SITUACOES_SEM_COBRANCA.has(item.situacao);
+  if (p.situacao === 'cancelado') return { acao: 'nada' };
+  const estornada = p.situacao === 'estornado';
+  const semCobranca = !p.vigente || item.excluido || SITUACOES_SEM_COBRANCA.has(item.situacao);
   if (semCobranca) {
-    if (!p.integrada) return { acao: 'estornar' };
+    if (!p.integrada) return estornada ? { acao: 'nada' } : { acao: 'estornar' };
     const restante = p.repassadoCentavos - p.jaEstornadoCentavos;
     if (restante <= 0) return { acao: 'nada' };
     return {
       acao: 'debitar',
       valorCentavos: restante,
-      competencia: competenciaSeguinte(p.competencia),
+      competencia: p.competenciaDebito,
       motivo: 'ajuste',
-      encerrar: true,
+      encerrar: !estornada,
     };
   }
   const totalItem = centavos(item.valorTotal);
-  const glosa = Math.min(centavos(item.valorGlosado), totalItem);
-  if (!estornoEmGlosa || glosa <= 0 || totalItem <= 0) return { acao: 'nada' };
+  const glosa = estornoEmGlosa && totalItem > 0 ? Math.max(0, Math.min(centavos(item.valorGlosado), totalItem)) : 0;
+  const total = glosa > 0 && glosa >= totalItem;
   if (!p.integrada) {
-    if (glosa >= totalItem) return { acao: 'estornar' };
-    const base = Number(
-      dividirArredondando(BigInt(p.baseOriginalCentavos) * BigInt(totalItem - glosa), BigInt(totalItem)),
-    );
+    if (total) return estornada ? { acao: 'nada' } : { acao: 'estornar' };
+    const base =
+      glosa > 0
+        ? Number(dividirArredondando(BigInt(p.baseOriginalCentavos) * BigInt(totalItem - glosa), BigInt(totalItem)))
+        : p.baseOriginalCentavos;
+    if (estornada) return { acao: 'reativar', baseCentavos: base };
     return base === p.baseCentavos ? { acao: 'nada' } : { acao: 'reduzir', baseCentavos: base };
   }
-  // A parte glosada do item aplicada ao repassado (mesma proporção), nunca acima dele. A sincronização é idempotente:
-  // o débito é o devido menos o já estornado da produção (a glosa que cresce gera só a diferença).
-  const devido = Math.min(
-    p.repassadoCentavos,
-    Number(dividirArredondando(BigInt(p.repassadoCentavos) * BigInt(glosa), BigInt(totalItem))),
-  );
+  // Com a regra desligada, a produção apurada não ganha nem perde débito por glosa.
+  if (!estornoEmGlosa) return { acao: 'nada' };
+  // A parte glosada do item aplicada ao repassado (mesma proporção), nunca acima dele.
+  const devido =
+    glosa > 0
+      ? Math.min(
+          p.repassadoCentavos,
+          Number(dividirArredondando(BigInt(p.repassadoCentavos) * BigInt(glosa), BigInt(totalItem))),
+        )
+      : 0;
   const valor = devido - p.jaEstornadoCentavos;
-  if (valor <= 0) return { acao: 'nada' };
-  return {
-    acao: 'debitar',
-    valorCentavos: valor,
-    competencia: competenciaSeguinte(p.competencia),
-    motivo: 'glosa',
-    encerrar: glosa >= totalItem,
-  };
+  if (valor > 0)
+    return {
+      acao: 'debitar',
+      valorCentavos: valor,
+      competencia: p.competenciaDebito,
+      motivo: 'glosa',
+      encerrar: total && !estornada,
+    };
+  if (valor < 0)
+    return { acao: 'creditar', valorCentavos: -valor, competencia: p.competenciaDebito, reabrir: estornada && !total };
+  return { acao: 'nada' };
 }
 
 /** Soma da apuração do período: base e repasse das produções que valem (parcelas e total, em centavos). */

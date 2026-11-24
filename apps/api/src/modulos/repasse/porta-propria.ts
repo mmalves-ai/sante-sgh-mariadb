@@ -115,6 +115,7 @@ const TABELAS = [
   'rpa_lancamento',
   'rpa_retencao',
   'producao_repasse',
+  'estorno_repasse',
   'sequencia_negocio',
 ] as const;
 
@@ -468,10 +469,22 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
         );
       let id: number;
       const agora = new Date();
+      // Débitos do período (estorno de repasse depois da apuração, producao-conta.ts): os pendentes da competência e os
+      // já aplicados a esta apuração (no recálculo) são descontados do bruto; os pendentes passam a 'aplicado' aqui.
+      const debitos = await tx.consultarParaAtualizar(
+        `SELECT id, versao, valor, situacao FROM estorno_repasse
+          WHERE estabelecimento_id = ? AND competencia = ? AND excluido_em IS NULL
+            AND (situacao = 'pendente' OR (situacao = 'aplicado' AND apuracao_repasse_id = ?))
+          ORDER BY id`,
+        [est, competencia, a ? n(a['id']) : 0],
+        { teto: 20000 },
+      );
+      const descontoCentavos = debitos.reduce((t, x) => t + Math.round(n(x['valor']) * 100), 0);
       const valores = {
         valor_faturado: d.totais.base,
         valor_bruto: d.totais.valor,
-        valor_liquido: d.totais.valor,
+        valor_descontos: descontoCentavos / 100,
+        valor_liquido: (Math.round(d.totais.valor * 100) - descontoCentavos) / 100,
         situacao: 'apurada',
         concluida_em: agora,
       };
@@ -520,6 +533,13 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           valor_repasse: m.valor,
         });
       }
+      for (const x of debitos)
+        if (texto(x['situacao']) === 'pendente')
+          await tx.alterar('estorno_repasse', n(x['id']), n(x['versao']), {
+            situacao: 'aplicado',
+            apuracao_repasse_id: id,
+            aplicado_em: agora,
+          });
       return { apuracao: id, recalculada: Boolean(a) };
     },
     async transicionarApuracao(d) {

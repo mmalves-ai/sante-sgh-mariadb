@@ -1,6 +1,7 @@
 // Produção do repasse a partir da conta (F3, motores): quando nasce, quantas linhas, base e estorno. Massa sintética.
 import { describe, expect, it } from 'vitest';
 import {
+  competenciaDoDebito,
   estornoDaProducao,
   funcaoTitular,
   geraNoEvento,
@@ -33,17 +34,20 @@ const gravada = (p: Partial<ProducaoGravada> = {}): ProducaoGravada => ({
   baseOriginalCentavos: 50_000,
   repassadoCentavos: 35_000,
   jaEstornadoCentavos: 0,
-  competencia: '2026-10',
+  vigente: true,
+  competenciaDebito: '2026-11',
   ...p,
 });
 
 describe('momento da produção', () => {
-  it('lançamento gera só com a regra "lancamento"; o fechamento completa nas duas; a mudança nunca cria', () => {
+  it('lançamento gera só com a regra "lancamento"; o fechamento completa nas duas; a mudança completa na regra lançamento ou com a conta fechada', () => {
     expect(geraNoEvento('lancamento', 'lancamento')).toBe(true);
     expect(geraNoEvento('fechamento', 'lancamento')).toBe(false);
     expect(geraNoEvento('fechamento', 'fechamento')).toBe(true);
     expect(geraNoEvento('lancamento', 'fechamento')).toBe(true);
-    expect(geraNoEvento('lancamento', 'mudanca-item')).toBe(false);
+    expect(geraNoEvento('lancamento', 'mudanca-item')).toBe(true);
+    expect(geraNoEvento('fechamento', 'mudanca-item')).toBe(false);
+    expect(geraNoEvento('fechamento', 'mudanca-item', true)).toBe(true);
   });
   it('parâmetro fora da lista volta ao lançamento', () => {
     expect(momentoDoParametro('fechamento')).toBe('fechamento');
@@ -141,6 +145,78 @@ describe('estorno da produção', () => {
     expect(estornoDaProducao(item({ situacao: 'glosado', valorGlosado: 100 }), gravada(), false)).toEqual({
       acao: 'nada',
     });
+  });
+});
+
+describe('produção que o item não gera mais', () => {
+  it('participante removido ou pago fora do hospital: antes da apuração estorna; depois, débito do restante', () => {
+    expect(estornoDaProducao(item(), gravada({ vigente: false }), true)).toEqual({ acao: 'estornar' });
+    expect(estornoDaProducao(item(), gravada({ vigente: false, situacao: 'estornado' }), true)).toEqual({
+      acao: 'nada',
+    });
+    expect(
+      estornoDaProducao(item(), gravada({ vigente: false, integrada: true, situacao: 'apurado' }), true),
+    ).toEqual({ acao: 'debitar', valorCentavos: 35_000, competencia: '2026-11', motivo: 'ajuste', encerrar: true });
+    expect(
+      estornoDaProducao(
+        item(),
+        gravada({ vigente: false, integrada: true, situacao: 'estornado', jaEstornadoCentavos: 35_000 }),
+        true,
+      ),
+    ).toEqual({ acao: 'nada' });
+  });
+});
+
+describe('glosa revertida (recurso aceito)', () => {
+  it('antes da apuração: a base volta à original; a estornada pela glosa total volta a pendente', () => {
+    expect(estornoDaProducao(item({ valorGlosado: 0 }), gravada({ baseCentavos: 40_000 }), true)).toEqual({
+      acao: 'reduzir',
+      baseCentavos: 50_000,
+    });
+    expect(estornoDaProducao(item({ valorGlosado: 0 }), gravada({ situacao: 'estornado' }), true)).toEqual({
+      acao: 'reativar',
+      baseCentavos: 50_000,
+    });
+    expect(estornoDaProducao(item({ valorGlosado: 250 }), gravada({ situacao: 'estornado' }), true)).toEqual({
+      acao: 'reativar',
+      baseCentavos: 25_000,
+    });
+    // O item estornado não volta: a produção estornada fica como está.
+    expect(estornoDaProducao(item({ situacao: 'estornado' }), gravada({ situacao: 'estornado' }), true)).toEqual({
+      acao: 'nada',
+    });
+  });
+  it('depois da apuração: o débito a mais é desfeito; a estornada pela glosa total volta a apurado', () => {
+    expect(
+      estornoDaProducao(
+        item({ valorGlosado: 0 }),
+        gravada({ integrada: true, situacao: 'apurado', jaEstornadoCentavos: 7_000 }),
+        true,
+      ),
+    ).toEqual({ acao: 'creditar', valorCentavos: 7_000, competencia: '2026-11', reabrir: false });
+    expect(
+      estornoDaProducao(
+        item({ valorGlosado: 100 }),
+        gravada({ integrada: true, situacao: 'estornado', jaEstornadoCentavos: 35_000 }),
+        true,
+      ),
+    ).toEqual({ acao: 'creditar', valorCentavos: 28_000, competencia: '2026-11', reabrir: true });
+    expect(
+      estornoDaProducao(
+        item({ valorGlosado: 500 }),
+        gravada({ integrada: true, situacao: 'estornado', jaEstornadoCentavos: 35_000 }),
+        true,
+      ),
+    ).toEqual({ acao: 'nada' });
+  });
+});
+
+describe('competência do débito', () => {
+  it('o primeiro período aberto a partir do seguinte ao da conta e do mês do evento', () => {
+    expect(competenciaDoDebito('2026-10', '2026-10', new Set())).toBe('2026-11');
+    expect(competenciaDoDebito('2026-06', '2026-11', new Set())).toBe('2026-11');
+    expect(competenciaDoDebito('2026-06', '2026-11', new Set(['2026-11', '2026-12']))).toBe('2027-01');
+    expect(competenciaDoDebito('2026-12', '2026-12', new Set(['2027-01']))).toBe('2027-02');
   });
 });
 
