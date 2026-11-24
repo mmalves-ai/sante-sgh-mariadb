@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
+import { escopoDaRota } from '../escopo-regra-campo.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
@@ -197,6 +198,9 @@ watch(
 
 // 02-CAD linha 6: a ficha nova vinda da chegada do pré-cadastro (/novo?preCadastro=<id>) já abre preenchida com o que
 // a central de marcação gravou e, ao gravar o paciente, liga o pré-cadastro a ele (marcações, captações e carteira).
+// 02-CAD linha 2: o escopo da regra de campo (módulo, tipo de atendimento, fonte pagadora) que a tela de origem passou
+// na rota da ficha segue na consulta do POST/PUT de pacientes; sem escopo, valem as regras gerais.
+const escopoRegra = computed(() => escopoDaRota(rota.query));
 const preCadastroId = computed(() => {
   const v = Number(rota.query['preCadastro']);
   return novo.value && Number.isInteger(v) && v > 0 ? v : null;
@@ -377,7 +381,7 @@ async function salvar(): Promise<void> {
       await procurarCpf();
       if (candidatos.value && candidatos.value.length > 0) return;
       const pre = preCadastroId.value;
-      const r = await cadastrarPaciente(e);
+      const r = await cadastrarPaciente(e, fetch, escopoRegra.value);
       const ligado = pre === null ? null : await ligarPreCadastro(pre, r.idPaciente);
       await roteador.replace(`/cadastros/pacientes/${r.idPaciente}`);
       mensagem.value = [t('cadastro.ficha.criado', { prontuario: r.prontuario }), ligado]
@@ -391,7 +395,7 @@ async function salvar(): Promise<void> {
         editando.value = false;
         return;
       }
-      await alterarPaciente(idNumero.value, versao.value, a);
+      await alterarPaciente(idNumero.value, versao.value, a, fetch, escopoRegra.value);
       await cliente.invalidateQueries({ queryKey: ['cadastro', 'ficha', idNumero.value] });
       mensagem.value = t('cadastro.ficha.salvo');
       editando.value = false;

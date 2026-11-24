@@ -63,6 +63,7 @@ import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
 import { erroDaResposta } from '../../casca/erros/problem-details.js';
 
+import { consultaDoEscopo, type EscopoRegraCampo } from './escopo-regra-campo.js';
 const JSON_ACEITO = { accept: 'application/json' };
 
 async function lerJson<T>(r: Response, esquema: z.ZodType<T>): Promise<T> {
@@ -137,9 +138,10 @@ export async function incluirSolicitante(
 export async function cadastrarPaciente(
   e: CadastrarPacienteEntrada | Record<string, unknown>,
   buscar: typeof fetch = fetch,
+  escopo?: EscopoRegraCampo | null,
 ): Promise<{ idPaciente: number; prontuario: number }> {
   return lerJson(
-    await buscar(P, escrita('POST', e)),
+    await buscar(`${P}${consultaDoEscopo(escopo)}`, escrita('POST', e)),
     z.object({ idPaciente: z.number(), prontuario: z.number() }),
   );
 }
@@ -149,9 +151,10 @@ export async function alterarPaciente(
   versao: string,
   alteracoes: Partial<AlteracoesPaciente> | Record<string, unknown>,
   buscar: typeof fetch = fetch,
+  escopo?: EscopoRegraCampo | null,
 ): Promise<{ idPaciente: number }> {
   return lerJson(
-    await buscar(`${P}/${id}`, escrita('PUT', { versao, alteracoes })),
+    await buscar(`${P}/${id}${consultaDoEscopo(escopo)}`, escrita('PUT', { versao, alteracoes })),
     z.object({ idPaciente: z.number() }),
   );
 }
