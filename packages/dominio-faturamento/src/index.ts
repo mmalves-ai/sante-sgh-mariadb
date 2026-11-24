@@ -23,3 +23,5 @@ export * from './competencia/reabertura.js';
 export * from './conta/complementos.js';
 // F3.7 (06-FAT linhas 14, 15 e 16): equipe do item, kit de cobrança e transferência de itens entre contas.
 export * from './conta/movimentos.js';
+// F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixa de numeração de guias.
+export * from './tiss/configuracao.js';
