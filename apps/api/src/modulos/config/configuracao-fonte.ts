@@ -676,21 +676,6 @@ export function chavesIniciaisSinteticas(): ChaveLiberacao[] {
       alteradoPor: 'SINT.ADMIN',
       alteradoEm: '2026-10-25T00:00:00.000Z',
     },
-    // M57 (etapa 2): a unificação de prontuários (o E2E @M57.2 percorre). O acesso cruzado ao prontuário
-    // (`rede.acessoCruzado`) fica DESLIGADO também aqui: a DP-42 não foi decidida (o E2E confere a recusa).
-    {
-      id: 'sintetica-m57-2',
-      tipo: 'recurso',
-      chave: 'cadastro.unificacao',
-      escopo: 'hospital',
-      valor: '*',
-      ligada: true,
-      ligadaAntes: null,
-      lote: null,
-      justificativa: 'Sessão sintética de desenvolvimento e testes',
-      alteradoPor: 'SINT.ADMIN',
-      alteradoEm: '2026-10-25T00:00:00.000Z',
-    },
     // M28: estoque, nota fiscal, compras, inventário, kits, fechamento e saneamento (o E2E @M28 percorre).
     ...RECURSOS_SINTETICOS_M28.map((chave, i) => ({
       id: `sintetica-m28-${i + 1}`,
@@ -1378,16 +1363,6 @@ export function prerequisitosIniciaisSinteticos(): PrerequisitoRecurso[] {
     // M57 (etapa 3): a validação dos painéis e a conferência do DPO (dispensadas na sintética).
     {
       recurso: 'rede.bi',
-      tipo: 'aprovacao',
-      situacao: 'dispensado',
-      validade: null,
-      evidencia: 'sessão sintética de desenvolvimento e testes (sem dado real)',
-      alteradoPor: 'SINT.ADMIN',
-      alteradoEm: '2026-10-25T00:00:00.000Z',
-    },
-    // M57 (etapa 2): o cenário controlado e a conferência da unificação (dispensados na sintética).
-    {
-      recurso: 'cadastro.unificacao',
       tipo: 'aprovacao',
       situacao: 'dispensado',
       validade: null,

@@ -118,7 +118,7 @@ describe.skipIf(!SUPORTE)('unificação numa sessão "como" (correção do M57.2
       headers: h(direto),
     });
     expect(at.statusCode).toBe(200);
-    // Fora do "como", liberada (a sessão sintética liga a chave cadastro.unificacao).
+    // Fora do "como", liberada (só a permissão do cargo: sem chave de liberação, F3.1).
     const filaDireta = await app.inject({
       method: 'GET',
       url: '/api/cadastros/pacientes/duplicidades',

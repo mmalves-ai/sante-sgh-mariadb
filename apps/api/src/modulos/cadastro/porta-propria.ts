@@ -30,6 +30,8 @@ import {
   esquemaCadastrarPaciente,
   esquemaCadastrarSolicitante,
   esquemaUnificarPaciente,
+  esquemaDesfazerUnificacao,
+  type DesfazerUnificacaoEntrada,
   type EstadoOperacao,
   type UnificarPacienteEntrada,
 } from '@sgh/contratos';
@@ -45,7 +47,12 @@ import {
   restricaoUnicaViolada,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { planoDeUnificacao, tabelasDaUnificacao } from '@sgh/dominio-cadastro';
+import {
+  conferirRegistroDevolvido,
+  planoDeDesfazer,
+  planoDeUnificacao,
+  tabelasDaUnificacao,
+} from '@sgh/dominio-cadastro';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPorta, GravacaoFeita, PortaCadastro } from './porta.js';
@@ -570,13 +577,14 @@ export class PortaCadastroPropria implements PortaCadastro {
     return this.ler(c, async (l) =>
       (
         await l.consultar(
-          `SELECT absorvido_paciente_id, mantido_paciente_id, unificado_em FROM unificacao_cadastro
+          `SELECT id, absorvido_paciente_id, mantido_paciente_id, unificado_em FROM unificacao_cadastro
             WHERE (absorvido_paciente_id = ? OR mantido_paciente_id = ?) AND situacao = 'efetivada' AND excluido_em IS NULL
             ORDER BY unificado_em DESC LIMIT 100`,
           [id, id],
           { teto: 100 },
         )
       ).map((x) => ({
+        id: Number(x['id']),
         absorvido: Number(x['absorvido_paciente_id']),
         sobrevivente: Number(x['mantido_paciente_id']),
         em: instanteIso(x['unificado_em']),
@@ -676,6 +684,26 @@ export class PortaCadastroPropria implements PortaCadastro {
       await this.contextoNucleo(ctx),
     );
     return { resultado: { idPaciente: Number(r.resultado.idPaciente) }, trilha: r.trilha };
+  }
+
+  async desfazerUnificacao(
+    _c: ContextoPorta,
+    entrada: DesfazerUnificacaoEntrada,
+    ctx: ContextoGravacao,
+  ): Promise<GravacaoFeita<{ idAbsorvido: number; idSobrevivente: number }>> {
+    const r = await this.executor.executar(
+      OPERACAO_DESFAZER_UNIFICACAO,
+      this.cliente,
+      entrada,
+      await this.contextoNucleo(ctx),
+    );
+    return {
+      resultado: {
+        idAbsorvido: Number(r.resultado.idAbsorvido),
+        idSobrevivente: Number(r.resultado.idSobrevivente),
+      },
+      trilha: r.trilha,
+    };
   }
 
   async unificar(
@@ -1846,6 +1874,128 @@ export const OPERACAO_UNIFICAR_PACIENTE = definirOperacao({
     },
   ],
   alvo: (e) => ({ tabela: 'paciente', id: e.idAbsorvido }),
+});
+
+/**
+ * F3.1 (02-CAD linha 7): desfaz a unificação pelos itens que ela registrou, na ordem inversa. Regra no domínio
+ * (planoDeDesfazer, conferirRegistroDevolvido); tudo ou nada: um registro movido de novo recusa a reversão inteira.
+ * O absorvido volta a ativo, a unificação fica revertida (com motivo e responsável) e o par da fila volta a aberto.
+ */
+export const OPERACAO_DESFAZER_UNIFICACAO = definirOperacao({
+  nome: 'cadastro.desfazer-unificacao',
+  tabelas: [
+    ...new Set([
+      'paciente',
+      'unificacao_cadastro',
+      'unificacao_cadastro_item',
+      'suspeita_duplicidade',
+      'paciente_versao',
+      ...tabelasDaUnificacao(),
+    ]),
+  ],
+  entrada: esquemaDesfazerUnificacao,
+  acao: 'alteracao',
+  async gravar(tx, e) {
+    if (tx.contexto.usuario === null)
+      throw recusa('usuario-obrigatorio', 'Desfazer a unificação exige o usuário do cliente.');
+    const [u] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+      `SELECT id, situacao, reversivel, mantido_paciente_id, absorvido_paciente_id, versao FROM unificacao_cadastro
+        WHERE id = ? AND excluido_em IS NULL`,
+      [e.idUnificacao],
+      { teto: 1 },
+    );
+    if (!u) throw recusa('registro-inexistente', 'A unificação não existe.');
+    const mantido = Number(u['mantido_paciente_id']);
+    const absorvido = Number(u['absorvido_paciente_id']);
+    const itens = (
+      await tx.consultarParaAtualizar<Record<string, unknown>>(
+        `SELECT id, sequencia, tabela, registro_id, coluna, situacao, versao FROM unificacao_cadastro_item
+          WHERE unificacao_cadastro_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+        [e.idUnificacao],
+        { teto: 100_000 },
+      )
+    ).map((x) => ({
+      id: Number(x['id']),
+      sequencia: Number(x['sequencia']),
+      tabela: String(x['tabela']),
+      registroId: Number(x['registro_id']),
+      coluna: String(x['coluna']),
+      situacao: String(x['situacao']),
+      versao: Number(x['versao']),
+    }));
+    const plano = planoDeDesfazer(
+      { situacao: String(u['situacao']), reversivel: Boolean(Number(u['reversivel'])), mantido, absorvido },
+      itens,
+      e.motivo,
+    );
+    if (!plano.ok) throw recusa(plano.recusa.codigo, plano.recusa.mensagem);
+    const permitidas = new Set(tabelasDaUnificacao());
+    const agora = new Date();
+    const versaoDoItem = new Map(itens.map((i) => [i.id, i.versao]));
+    for (const item of plano.devolver) {
+      if (!permitidas.has(item.tabela))
+        throw recusa('desfazer-conflito', `A tabela ${item.tabela} não é mais coberta pela unificação.`);
+      const tabela = conferirNome(item.tabela);
+      const coluna = conferirNome(item.coluna);
+      const [r] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+        `SELECT id, versao, ${coluna} AS alvo FROM ${tabela} WHERE id = ?`,
+        [item.registroId],
+        { teto: 1 },
+      );
+      const conflito = conferirRegistroDevolvido(item, r ? Number(r['alvo']) : null, mantido);
+      if (conflito) throw recusa(conflito.codigo, conflito.mensagem);
+      await tx
+        .alterar(tabela, item.registroId, Number(r!['versao']), { [coluna]: absorvido })
+        .catch((x: unknown) => {
+          if (restricaoUnicaViolada(x))
+            throw recusa(
+              'desfazer-conflito',
+              `O cadastro absorvido já tem um registro igual em ${tabela}: nada foi desfeito.`,
+            );
+          throw x;
+        });
+      await tx.alterar('unificacao_cadastro_item', item.id, Number(versaoDoItem.get(item.id)), {
+        situacao: 'revertido',
+        revertido_em: agora,
+      });
+    }
+    const [p] = await tx.consultarParaAtualizar<{
+      situacao: unknown;
+      sobrevivente_paciente_id: unknown;
+      versao: unknown;
+    }>(
+      'SELECT situacao, sobrevivente_paciente_id, versao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      [absorvido],
+      { teto: 1 },
+    );
+    if (!p || String(p.situacao) !== 'unificado' || Number(p.sobrevivente_paciente_id) !== mantido)
+      throw recusa(
+        'desfazer-conflito',
+        'O cadastro absorvido não está mais unificado neste: nada foi desfeito.',
+      );
+    await tx.alterar('paciente', absorvido, Number(p.versao), {
+      situacao: 'ativo',
+      sobrevivente_paciente_id: null,
+    });
+    await tx.alterar('unificacao_cadastro', e.idUnificacao, Number(u['versao']), {
+      situacao: 'revertida',
+      revertido_em: agora,
+      revertido_por_usuario_id: tx.contexto.usuario,
+      motivo_reversao: e.motivo.trim(),
+    });
+    // O par da fila volta a aberto (a decisão de unificar foi desfeita; o analista decide de novo).
+    await tx.executar(
+      `UPDATE suspeita_duplicidade SET situacao = 'aberto', decidido_por_usuario_id = NULL, decidido_em = NULL,
+          unificacao_cadastro_id = NULL, alterado_em = ?, alterado_por = ?, versao = versao + 1
+        WHERE unificacao_cadastro_id = ? AND situacao = 'unificado' AND excluido_em IS NULL`,
+      [agora, tx.contexto.usuario, e.idUnificacao],
+    );
+    // O retrato do desfazer entra com o motivo "unificacao" (o domínio de motivos do retrato).
+    await gravarRetrato(tx, absorvido, 'alteracao', 'unificacao');
+    return { idAbsorvido: absorvido, idSobrevivente: mantido, unificacao: e.idUnificacao };
+  },
+  eventos: (e) => [{ tipo: 'cadastro.paciente.unificacao_desfeita', carga: { unificacao: e.idUnificacao } }],
+  alvo: (e) => ({ tabela: 'unificacao_cadastro', id: e.idUnificacao }),
 });
 
 export const OPERACAO_CADASTRAR_SOLICITANTE = definirOperacao({

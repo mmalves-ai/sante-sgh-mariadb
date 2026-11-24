@@ -4505,7 +4505,7 @@ export const EVENTOS_AUDITAVEIS = {
   },
   // F3.1 (02-CAD linha 7): desfazer a unificação, com motivo (os registros voltam ao cadastro absorvido).
   pacienteUnificacaoDesfeita: {
-    codigo: 'cadastro.paciente.unificacao-desfeita',
+    codigo: 'cadastro.paciente.unificacao_desfeita',
     descricao:
       'Unificação de prontuários desfeita com motivo: os registros transferidos voltam ao cadastro absorvido, que é reativado',
     legado: null,

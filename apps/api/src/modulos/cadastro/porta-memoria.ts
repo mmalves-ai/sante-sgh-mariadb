@@ -14,6 +14,8 @@ import {
   esquemaCadastrarPaciente,
   esquemaCadastrarSolicitante,
   esquemaUnificarPaciente,
+  esquemaDesfazerUnificacao,
+  type DesfazerUnificacaoEntrada,
   type EstadoOperacao,
   type UnificarPacienteEntrada,
 } from '@sgh/contratos';
@@ -667,10 +669,16 @@ export class PortaCadastroMemoria implements PortaCadastro {
   async unificacoes(c: ContextoPorta, id: number) {
     const l = this.e(c).pacientes.get(id);
     const u = l ? Number(l['UNIFICADO_EM']) : id;
-    if (l && u !== id) return [{ absorvido: id, sobrevivente: u, em: '2025-06-01T10:00:00.000' }];
+    // Na memória, a unificação é identificada pelo prontuário absorvido (um absorvido só tem uma unificação viva).
+    if (l && u !== id) return [{ id, absorvido: id, sobrevivente: u, em: '2025-06-01T10:00:00.000' }];
     return [...this.e(c).pacientes.values()]
       .filter((x) => Number(x['UNIFICADO_EM']) === id && Number(x['ID']) !== id)
-      .map((x) => ({ absorvido: Number(x['ID']), sobrevivente: id, em: '2025-06-01T10:00:00.000' }));
+      .map((x) => ({
+        id: Number(x['ID']),
+        absorvido: Number(x['ID']),
+        sobrevivente: id,
+        em: '2025-06-01T10:00:00.000',
+      }));
   }
 
   async homonimos(c: ContextoPorta, ids: readonly number[]) {
@@ -855,6 +863,40 @@ export class PortaCadastroMemoria implements PortaCadastro {
           ...(e.justificativa ? { justificativa: e.justificativa } : {}),
         });
     return { resultado: { idAbsorvido: e.idAbsorvido, idSobrevivente: e.idSobrevivente }, trilha: null };
+  }
+
+  /**
+   * F3.1: desfaz a unificação (na memória, o id da unificação é o do absorvido): o absorvido volta a ativo e os pares
+   * da fila que a unificação decidiu voltam a abertos. Mesma regra de motivo do domínio.
+   */
+  async desfazerUnificacao(c: ContextoPorta, bruta: DesfazerUnificacaoEntrada) {
+    const r = esquemaDesfazerUnificacao.safeParse(bruta);
+    if (!r.success) throw erroEntradaInvalida([...new Set(r.error.issues.map((i) => i.path.join('.')))]);
+    const s = this.e(c);
+    const id = r.data.idUnificacao;
+    const a = s.pacientes.get(id);
+    const sobrevivente = a ? Number(a['UNIFICADO_EM']) : id;
+    if (!a || sobrevivente === id)
+      throw recusa('registro-inexistente', 'A unificação não existe ou já foi desfeita.');
+    s.pacientes.set(id, { ...a, ATIVO: true, UNIFICADO_EM: id, CARIMBO: new Date() });
+    for (const [n, p] of s.fila)
+      if (
+        p.situacao === 'unificado_no_legado' &&
+        ((p.a === id && p.b === sobrevivente) || (p.b === id && p.a === sobrevivente))
+      ) {
+        const reaberto: ParFila & { justificativa?: string } = {
+          id: p.id,
+          a: p.a,
+          b: p.b,
+          escore: p.escore,
+          criterios: p.criterios,
+          situacao: 'aberto',
+          decididoPor: null,
+          decididoEm: null,
+        };
+        s.fila.set(n, reaberto);
+      }
+    return { resultado: { idAbsorvido: id, idSobrevivente: sobrevivente }, trilha: null };
   }
 
   /** E2E: alteração "por fora" (outra estação gravou antes), para o aviso de colisão. */

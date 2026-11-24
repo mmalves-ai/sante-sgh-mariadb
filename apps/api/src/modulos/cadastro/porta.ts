@@ -14,6 +14,7 @@ import type {
   EntidadeBusca,
   EstadoOperacao,
   UnificarPacienteEntrada,
+  DesfazerUnificacaoEntrada,
 } from '@sgh/contratos';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
@@ -140,6 +141,12 @@ export interface PortaCadastro {
   unificar(
     c: ContextoPorta,
     entrada: UnificarPacienteEntrada,
+    ctx: ContextoGravacao,
+  ): Promise<GravacaoFeita<{ idAbsorvido: number; idSobrevivente: number }>>;
+  /** F3.1: desfaz uma unificação registrada (os registros voltam ao absorvido, que é reativado), com motivo. */
+  desfazerUnificacao(
+    c: ContextoPorta,
+    entrada: DesfazerUnificacaoEntrada,
     ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idAbsorvido: number; idSobrevivente: number }>>;
 
@@ -274,6 +281,7 @@ const METODOS_PORTA_CADASTRO = [
   'cadastrar',
   'alterar',
   'unificar',
+  'desfazerUnificacao',
   'gruposCandidatos',
   'lerFila',
   'lerPar',

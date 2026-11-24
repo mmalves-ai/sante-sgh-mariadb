@@ -12,7 +12,8 @@
 //   POST /api/cadastros/pacientes/duplicidades/atualizar  pares novos pela regra do escore
 //   POST /api/cadastros/pacientes/duplicidades/:id/decisao  "É outra pessoa" (só SGH_CAD_DUPLICIDADE)
 //   POST /api/cadastros/pacientes/duplicidades/:id/unificar  M57.2: "Unificar" (executor: cadastro.unificarPaciente;
-//                                                           crítica, com a senha; chave cadastro.unificacao)
+//                                                           crítica, com a senha; só a permissão cadastro.paciente.unificar)
+//   POST /api/cadastros/pacientes/unificacoes/:id/desfazer   F3.1: desfazer a unificação, com motivo e senha
 // A busca e a abertura da ficha são eventos de acesso (cap-06a §6.1; cap-08 §8.12): "sem trilha, sem dado".
 // As gravações no legado passam pelo executor (trilha dupla na mesma transação); as SGH_, pela transação SGH_
 // com a SGH_TRILHA junto. Com a porta em memória (sessão sintética), o registrador da API registra.
@@ -37,6 +38,7 @@ import {
   esquemaConsultaBuscaPaciente,
   esquemaDecisaoDuplicidade,
   esquemaPedidoUnificacao,
+  esquemaPedidoDesfazerUnificacao,
   type EnderecoCep,
   esquemaPedidoConsentimento,
   EVENTOS_AUDITAVEIS,
@@ -60,13 +62,6 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import {
-  CACHE_CONFIG,
-  type CacheConfig,
-  FONTE_CONFIGURACAO,
-  type FonteConfiguracao,
-} from '../config/public-api.js';
-import { LiberacaoPep } from '../pep/liberacao-pep.js';
-import {
   contextoOperacao,
   idDaRota,
   linhaTrilha,
@@ -88,8 +83,6 @@ import {
 
 const POR_PAGINA_HISTORICO = 100;
 const POR_PAGINA_FILA = 25;
-/** M57.2: a chave de liberação da unificação (POL-3; recursos.ts). */
-export const CHAVE_LIBERACAO_UNIFICACAO = 'cadastro.unificacao';
 const OPERACAO_UNIFICAR = 'cadastro.unificarPaciente';
 /**
  * Correção do M57.2 (ADR 0021): na sessão "como", a unificação é recusada (falha fechada). O gatilho do banco altera o
@@ -101,37 +94,22 @@ const MOTIVO_UNIFICACAO_COMO =
 
 @Controller('cadastros/pacientes')
 export class PacientesController {
-  private readonly liberacao: LiberacaoPep;
-
   constructor(
     @Inject(PORTA_CADASTRO) private readonly porta: PortaCadastro,
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
-    @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
-    @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
-  ) {
-    this.liberacao = new LiberacaoPep(configuracao, cache);
-  }
+  ) {}
 
   /**
-   * M57.2: "Unificar" pode agora? A permissão, a chave `cadastro.unificacao` (POL-3: falta o cenário controlado) e o
-   * passo 0 do executor; senão, o motivo (a fila mostra o botão desabilitado com ele).
+   * "Unificar" pode agora? Só a permissão `cadastro.paciente.unificar` do cargo (F3.1: tudo ligado para todos, sem chave
+   * de liberação) e o passo 0 do executor; senão, o motivo (a fila mostra o botão desabilitado com ele).
    */
   private async unificacao(s: SessaoCadastro): Promise<FilaDuplicidades['unificacao']> {
     const estado = this.porta.estado(OPERACAO_UNIFICAR, s.hospital) ?? 'especificada';
     if (!s.pode('cadastro.paciente.unificar'))
       return { estado, disponivel: false, motivo: 'Seu perfil não permite unificar prontuários.' };
     if (s.req.sghComo !== undefined) return { estado, disponivel: false, motivo: MOTIVO_UNIFICACAO_COMO };
-    const l = await this.liberacao.consultar(s, CHAVE_LIBERACAO_UNIFICACAO);
-    if (!l.ligada)
-      return {
-        estado,
-        disponivel: false,
-        motivo:
-          l.motivo ??
-          'A unificação de prontuários ainda não está liberada neste estabelecimento: compare lado a lado e marque "É outra pessoa" quando for o caso.',
-      };
     const g = await this.porta.podeGravar(s.porta, OPERACAO_UNIFICAR, s.login).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
@@ -416,6 +394,59 @@ export class PacientesController {
       EVENTOS_AUDITAVEIS.pacienteUnificado.codigo,
       'cadastro.paciente',
       `${absorvido}>${fica}`,
+    );
+    return r.resultado;
+  }
+
+  /**
+   * F3.1 (02-CAD linha 7): desfaz uma unificação registrada. Mesma permissão e mesma confirmação de senha da
+   * unificação; o motivo fica na própria unificação (revertida), e nada se apaga.
+   */
+  @Post('unificacoes/:id/desfazer')
+  @HttpCode(200)
+  @Permissao('cadastro.paciente.unificar')
+  @AuditadoNoHandler('executor: trilha na mesma transação da receita (memória: registrador da API)')
+  async desfazerUnificacao(
+    @Param('id') id: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ idAbsorvido: number; idSobrevivente: number }> {
+    const s = sessaoDe(req);
+    if (req.sghComo !== undefined)
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Desfazer numa sessão de suporte',
+        MOTIVO_UNIFICACAO_COMO,
+        {
+          codigo: 'como-sem-correcao',
+        },
+      );
+    const d = esquemaPedidoDesfazerUnificacao.safeParse(corpo);
+    if (!d.success)
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Dados inválidos',
+        'Escreva o motivo de desfazer a unificação (5 a 400 letras).',
+        { campos: [...new Set(d.error.issues.map((i) => i.path.join('.') || 'motivo'))] },
+      );
+    const n = idDaRota(id);
+    const reautenticadoEm =
+      this.porta.destino === 'memoria' && !req.sgh?.real
+        ? Date.now()
+        : await reautenticar(this.sessoes, this.resolvedorObrigatorio(), req, d.data.senha);
+    const ctx = { ...contextoOperacao(s, 'cadastro-unificacao-desfeita'), reautenticadoEm };
+    const r = await this.porta
+      .desfazerUnificacao(s.porta, { idUnificacao: n, motivo: d.data.motivo }, ctx)
+      .catch((x: unknown) => {
+        throw problemaDoCadastro(x);
+      });
+    await this.trilhaMemoria(
+      s,
+      EVENTOS_AUDITAVEIS.pacienteUnificacaoDesfeita.codigo,
+      'cadastro.paciente',
+      String(n),
     );
     return r.resultado;
   }

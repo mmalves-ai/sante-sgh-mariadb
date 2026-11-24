@@ -2683,30 +2683,6 @@ export const RECURSOS_DESLIGADOS: readonly RecursoDesligado[] = [
       },
     ],
   },
-  // Ficha do M57, seção 5 (etapa 2; especificada no M11): a unificação de prontuários duplicados do mesmo
-  // estabelecimento pelo Sante. A receita está completa, mas o que mais o programa de hoje move (atendimentos, contas,
-  // documentos) só se sabe pelo cenário controlado na homologação: até lá, desligada.
-  {
-    chave: 'cadastro.unificacao',
-    titulo: 'Unificação de prontuários duplicados',
-    descricao:
-      'Na fila de duplicidades, "Unificar" o par: o prontuário absorvido fica inativo e aponta para o que fica, e a fila registra a unificação.',
-    decisao: 'POL-3 e ficha do M57 (seção 5)',
-    marco: 'M57',
-    prerequisitos: [
-      {
-        tipo: 'aprovacao',
-        descricao:
-          'Cenário controlado da unificação capturado na homologação (o que mais é movido junto: atendimentos, contas, documentos) e as assinaturas com 0 diferença.',
-        responsavel: 'responsável técnico',
-      },
-      {
-        tipo: 'aprovacao',
-        descricao: 'Conferência da unificação pelo chave-usuário do arquivo médico (SAME).',
-        responsavel: 'chave-usuário do SAME',
-      },
-    ],
-  },
   // Ficha do M46, seção 12 (etapa 1): APA, ficha anestésica e SRPA, por bloco inteiro, primeiro no pc; recolher = o
   // bloco volta ao processo atual, e o que já foi registrado no novo continua legível.
   {

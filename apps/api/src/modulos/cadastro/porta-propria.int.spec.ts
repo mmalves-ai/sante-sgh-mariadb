@@ -309,6 +309,66 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
         contextoGravacao(mm),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'cadastro-inativo' } });
+
+    // F3.1 (02-CAD linha 7): desfazer, com motivo. Contrato de efeito: os 3 registros voltam ao absorvido (versão 3),
+    // os itens ficam "revertido", a unificação fica "revertida" com motivo e responsável, o absorvido volta a ativo, o
+    // par volta a aberto e um retrato novo é gravado. Nada se apaga.
+    const [u] = await porta.unificacoes(c, idUm);
+    expect(u?.id).toBeGreaterThan(0);
+    await expect(
+      porta.desfazerUnificacao(c, { idUnificacao: u!.id!, motivo: 'abc' }, contextoGravacao(mm)),
+    ).rejects.toBeTruthy();
+    const retratosAntes = await contar('SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ?', [
+      idDois,
+    ]);
+    const desf = await porta.desfazerUnificacao(
+      c,
+      { idUnificacao: u!.id!, motivo: 'Eram pessoas diferentes (teste)' },
+      contextoGravacao(mm),
+    );
+    expect(desf.resultado).toEqual({ idAbsorvido: idDois, idSobrevivente: idUm });
+    for (const [t, id] of [
+      ['alergia_paciente', dep.alergia],
+      ['cobertura_paciente', dep.cobertura],
+      ['atendimento', dep.atendimento],
+    ] as const)
+      expect(
+        await contar(`SELECT COUNT(*) AS n FROM ${t} WHERE id = ? AND paciente_id = ? AND versao = 3`, [
+          id,
+          idDois,
+        ]),
+      ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM unificacao_cadastro_item WHERE unificacao_cadastro_id = ? AND situacao = 'revertido' AND revertido_em IS NOT NULL",
+        [u!.id],
+      ),
+    ).toBe(3);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM unificacao_cadastro WHERE id = ? AND situacao = 'revertida' AND revertido_por_usuario_id = ? AND motivo_reversao = 'Eram pessoas diferentes (teste)' AND excluido_em IS NULL",
+        [u!.id, mm.usuario],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM paciente WHERE id = ? AND situacao = 'ativo' AND sobrevivente_paciente_id IS NULL",
+        [idDois],
+      ),
+    ).toBe(1);
+    expect((await porta.lerPar(c, par!.id))?.situacao).toBe('aberto');
+    expect(await contar('SELECT COUNT(*) AS n FROM paciente_versao WHERE paciente_id = ?', [idDois])).toBe(
+      retratosAntes + 1,
+    );
+    expect(await porta.unificacoes(c, idUm)).toEqual([]);
+    // Desfazer de novo é recusado (já revertida); nada muda.
+    await expect(
+      porta.desfazerUnificacao(
+        c,
+        { idUnificacao: u!.id!, motivo: 'Segunda tentativa' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'ja-revertida' } });
   });
 
   it('e-mail de volta a um valor já usado (A→B→A) reativa a linha; o mesmo e-mail não muda nada', async () => {

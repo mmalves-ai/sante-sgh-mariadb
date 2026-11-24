@@ -8,4 +8,5 @@ export * from './profissional/categoria.js';
 export * from './solicitante/deduplicacao.js';
 export * from './paciente/mascaramento.js';
 export * from './paciente/historico.js';
+export * from './unificacao/desfazer.js';
 export * from './unificacao/referencias-paciente.js';

@@ -217,7 +217,7 @@ describe('fila de duplicidades (regras 6 e 7)', () => {
     expect(a.json().novos).toBeGreaterThanOrEqual(2);
     const fila = (await get(s, '/api/cadastros/pacientes/duplicidades')).json();
     expect(fila.itens[0].criterios).toContain('cpf');
-    // M57.2: na sessão sintética a chave cadastro.unificacao está ligada (com o núcleo, a receita segue desligada).
+    // F3.1: a unificação segue só a permissão do cargo (sem chave de liberação).
     expect(fila.unificacao.disponivel).toBe(true);
     const par = fila.itens.find((x: { a: { id: number } }) => x.a.id === 1001);
     const um = (await get(s, `/api/cadastros/pacientes/duplicidades/${par.id}`)).json();

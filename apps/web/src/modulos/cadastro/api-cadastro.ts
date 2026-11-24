@@ -195,6 +195,18 @@ export async function atualizarFila(buscar: typeof fetch = fetch): Promise<{ nov
   );
 }
 
+/** F3.1: desfazer uma unificação registrada (motivo obrigatório; a senha confirma a ação crítica). */
+export async function desfazerUnificacao(
+  id: number,
+  pedido: { motivo: string; senha?: string },
+  buscar: typeof fetch = fetch,
+): Promise<{ idAbsorvido: number; idSobrevivente: number }> {
+  return lerJson(
+    await buscar(`${P}/unificacoes/${id}/desfazer`, escrita('POST', pedido)),
+    z.object({ idAbsorvido: z.number(), idSobrevivente: z.number() }),
+  );
+}
+
 /** M57.2: "Unificar" o par da fila (`fica`: o lado que fica; a senha confirma a ação crítica). */
 export async function unificarPar(
   id: number,

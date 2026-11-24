@@ -201,7 +201,13 @@ export const esquemaHistoricoCadastro = z.object({
   porPagina: z.number().int(),
   total: z.number().int(),
   unificacoes: z.array(
-    z.object({ absorvido: z.number().int(), sobrevivente: z.number().int(), em: z.string().nullable() }),
+    z.object({
+      /** A unificação registrada (para desfazer); ausente quando a origem não a registra. */
+      id: z.number().int().optional(),
+      absorvido: z.number().int(),
+      sobrevivente: z.number().int(),
+      em: z.string().nullable(),
+    }),
   ),
 });
 export type HistoricoCadastro = z.infer<typeof esquemaHistoricoCadastro>;

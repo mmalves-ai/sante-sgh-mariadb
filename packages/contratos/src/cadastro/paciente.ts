@@ -198,3 +198,21 @@ export const esquemaPedidoUnificacao = z
   })
   .strict();
 export type PedidoUnificacao = z.infer<typeof esquemaPedidoUnificacao>;
+
+/** Desfazer uma unificação (F3.1, 02-CAD linha 7): a unificação registrada e o motivo (fica no histórico). */
+export const esquemaDesfazerUnificacao = z
+  .object({
+    idUnificacao: z.number().int().positive(),
+    motivo: z.string().trim().min(5).max(400),
+  })
+  .strict();
+export type DesfazerUnificacaoEntrada = z.infer<typeof esquemaDesfazerUnificacao>;
+
+/** Pedido da tela para desfazer: o motivo e a senha (ação crítica, como a unificação). */
+export const esquemaPedidoDesfazerUnificacao = z
+  .object({
+    motivo: z.string().trim().min(5).max(400),
+    senha: z.string().min(1).max(64).optional(),
+  })
+  .strict();
+export type PedidoDesfazerUnificacao = z.infer<typeof esquemaPedidoDesfazerUnificacao>;
