@@ -24,3 +24,5 @@ export * from './texto-padrao.js';
 export * from './descricao/index.js';
 // F3.4 (04-CC linha 100): gasto de sala do ato (sugestão pela lista padrão, conferência e situação até o débito).
 export * from './gasto-sala/index.js';
+// F3.4 (04-CC linha 92): grade de funcionamento da sala (faixas por dia, vigência, feriado e reserva).
+export * from './grade-sala.js';
