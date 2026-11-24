@@ -74,7 +74,7 @@ export interface EntradaInscricao {
 }
 
 /** Idade em anos completos na data. */
-export function idadeEm(nascimento: string, data: string): number {
+export function idadeNaData(nascimento: string, data: string): number {
   const [an, mn, dn] = nascimento.split('-').map(Number) as [number, number, number];
   const [ad, md, dd] = data.split('-').map(Number) as [number, number, number];
   return ad - an - (md < mn || (md === mn && dd < dn) ? 1 : 0);
@@ -119,7 +119,7 @@ export function conferirInscricao(e: EntradaInscricao): RecusaLinha[] {
       mensagem: 'A inscrição não começa antes do nascimento.',
     });
   if (e.faixa && e.nascimento) {
-    const idade = idadeEm(e.nascimento, e.vigenciaInicio);
+    const idade = idadeNaData(e.nascimento, e.vigenciaInicio);
     if (
       (e.faixa.minima !== null && idade < e.faixa.minima) ||
       (e.faixa.maxima !== null && idade > e.faixa.maxima)

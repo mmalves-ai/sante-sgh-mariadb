@@ -230,6 +230,16 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F8 (02-CAD linha 11): catálogo de programas de saúde e linhas de cuidado.
+  {
+    codigo: 'cadastro.linhaCuidado.editar',
+    descricao:
+      'Manter o catálogo de programas de saúde e linhas de cuidado (código, critérios de entrada e saída, faixa etária e exigência do profissional de referência)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 export type PermissaoCadastro = (typeof PERMISSOES_CADASTRO_M11)[number]['codigo'];

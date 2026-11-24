@@ -7,7 +7,7 @@ import {
   type EntradaInscricao,
   type EstadoLinha,
   estadoDeEntrada,
-  idadeEm,
+  idadeNaData,
   totaisPorEstado,
 } from './linha-cuidado.js';
 
@@ -80,8 +80,8 @@ describe('inscrição', () => {
     expect(conferirInscricao({ ...base, faixa: { minima: 60, maxima: null } })).toEqual([]);
   });
   it('idade em anos completos', () => {
-    expect(idadeEm('1960-05-10', '2026-05-09')).toBe(65);
-    expect(idadeEm('1960-05-10', '2026-05-10')).toBe(66);
+    expect(idadeNaData('1960-05-10', '2026-05-09')).toBe(65);
+    expect(idadeNaData('1960-05-10', '2026-05-10')).toBe(66);
   });
 });
 
