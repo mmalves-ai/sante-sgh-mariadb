@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   avaliarValores,
   type FaixaDaGrandeza,
-  faixaDoPaciente,
+  faixaDaGrandezaDoPaciente,
   type GrandezaDoLaudo,
   superficieCorporal,
   valoresParaModelo,
@@ -132,8 +132,8 @@ describe('laudo estruturado', () => {
       f(1, { sexo: 'feminino', minima: 54, maxima: 74 }),
       f(1, { sexo: 'masculino', minima: 0, maxima: 1, vigenciaFim: '2025-12-31' }),
     ];
-    expect(faixaDoPaciente(fs, 1, p)?.minima).toBe(52);
-    expect(faixaDoPaciente(fs, 1, { ...p, sexo: null })?.minima).toBe(50);
+    expect(faixaDaGrandezaDoPaciente(fs, 1, p)?.minima).toBe(52);
+    expect(faixaDaGrandezaDoPaciente(fs, 1, { ...p, sexo: null })?.minima).toBe(50);
   });
 
   it('marca fora da referência (direta e indexada pela superfície), arredonda e numera pela ordem', () => {

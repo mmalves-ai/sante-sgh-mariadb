@@ -234,9 +234,13 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
       { g: ids.obs, fora: 0 },
     ]);
     expect(
-      await um(
-        'SELECT peso_kg + 0 AS p, altura_cm + 0 AS a, superficie_corporal + 0 AS sc FROM laudo_diagnostico WHERE id = ?',
-        [r.id],
+      Object.fromEntries(
+        Object.entries(
+          (await um(
+            'SELECT peso_kg AS p, altura_cm AS a, superficie_corporal AS sc FROM laudo_diagnostico WHERE id = ?',
+            [r.id],
+          )) ?? {},
+        ).map(([k, v]) => [k, Number(v)]),
       ),
     ).toEqual({ p: 80, a: 180, sc: 2 });
     expect(await trilha('laudo_diagnostico', r.id)).toBe(1);

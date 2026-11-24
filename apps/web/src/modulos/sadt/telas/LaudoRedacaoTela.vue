@@ -3,7 +3,7 @@
 // o exame e o paciente, as medidas por seção com a faixa e a marca de fora da referência na hora, o modelo sugerido
 // (o do médico primeiro) com os campos preenchidos pelas medidas, o texto, e "salvar e assinar" num clique. Depois de
 // assinado, o texto só muda por retificação com motivo; o histórico de versões fica ao lado.
-import { faixaDoPaciente, superficieCorporal } from '@sgh/dominio-sadt';
+import { faixaDaGrandezaDoPaciente, superficieCorporal } from '@sgh/dominio-sadt';
 import { SanteBotao } from '@sgh/ui';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -104,12 +104,12 @@ const corpo = (): CorpoLaudo => ({
 });
 
 // A marca de fora da referência na hora: a faixa sai de todas as faixas do exame pela mesma regra do domínio
-// (faixaDoPaciente), com o sexo, a idade e a data do exame e o peso e a altura digitados; vale para a medida nova também.
+// (faixaDaGrandezaDoPaciente), com o sexo, a idade e a data do exame e o peso e a altura digitados; vale para a medida nova também.
 const superficie = computed(() => superficieCorporal(numero(f.peso), numero(f.altura)));
 function faixaDe(g: number) {
   const d = dados.value;
   if (!d) return null;
-  const fx = faixaDoPaciente(d.faixas, g, {
+  const fx = faixaDaGrandezaDoPaciente(d.faixas, g, {
     sexo: d.paciente.sexo,
     idadeDias: d.paciente.idadeDias,
     pesoKg: numero(f.peso),

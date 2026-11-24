@@ -68,7 +68,7 @@ const dentro = (v: number | null, min: number | null, max: number | null) =>
   v === null ? min === null && max === null : (min === null || v >= min) && (max === null || v <= max);
 
 /** A faixa da grandeza que vale para o paciente na data do exame (a mais específica: com sexo antes da geral). */
-export function faixaDoPaciente(
+export function faixaDaGrandezaDoPaciente(
   faixas: readonly FaixaDaGrandeza[],
   grandeza: number,
   p: PacienteDoExame,
@@ -146,7 +146,7 @@ export function avaliarValores(
         : g.casasDecimais === null
           ? v.numero
           : Math.round(v.numero * 10 ** g.casasDecimais) / 10 ** g.casasDecimais;
-    const f = faixaDoPaciente(faixas, g.id, p);
+    const f = faixaDaGrandezaDoPaciente(faixas, g.id, p);
     let fora = false;
     if (f && numero !== null) {
       const base = f.indexadaSuperficie ? (sc ? numero / sc : null) : numero;
