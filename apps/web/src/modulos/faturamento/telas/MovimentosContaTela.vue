@@ -17,7 +17,9 @@ import {
   type ParticipantePedido,
   transferirItens,
 } from '../api-movimentos.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
+import KitCadastro from '../componentes/KitCadastro.vue';
 
 const props = defineProps<{ id: string }>();
 const { t } = useI18n();
@@ -142,6 +144,14 @@ async function lancar() {
     kit.id = 0;
     kit.vezes = 1;
   }
+}
+
+// Cadastro do kit na mesma tela (quem pode editar as regras de cobrança): gravado, já aparece na lista para lançar.
+const podeCadastrarKit = computed(() => pode('faturamento.regra.editar'));
+async function kitGravado(codigo: string) {
+  erro.value = null;
+  aviso.value = t('movimentosConta.kitGravado', { codigo });
+  await qc.invalidateQueries({ queryKey: ['faturamento', 'movimentos'] });
 }
 
 // ── Transferência ──
@@ -346,6 +356,14 @@ async function transferir() {
             {{ t('movimentosConta.lancarKit') }}
           </button>
         </form>
+
+        <KitCadastro
+          v-if="podeCadastrarKit"
+          :fonte-pagadora-id="q.data.value.fontePagadoraId"
+          :fonte="q.data.value.fonte"
+          @gravado="kitGravado"
+          @erro="(e) => (erro = e)"
+        />
 
         <h2>{{ t('movimentosConta.transferir') }}</h2>
         <form class="filtros" data-testid="mov-form-transferir" @submit.prevent="transferir">

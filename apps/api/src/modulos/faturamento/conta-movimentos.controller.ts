@@ -6,6 +6,7 @@
 //   POST /api/faturamento/itens/:item/equipe             faturamento.item.lancar (a equipe inteira do item)
 //   POST /api/faturamento/contas/:id/kits                faturamento.item.lancar (lança um kit de cobrança)
 //   POST /api/faturamento/kits                           faturamento.regra.editar (cadastro do kit com os componentes)
+//   GET  /api/faturamento/itens-cobranca?termo=          faturamento.regra.editar (itens para o cadastro do kit)
 //   POST /api/faturamento/contas/:id/transferencias      faturamento.auditoria.ajustar (itens para outra conta)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
@@ -16,6 +17,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/base.js';
 import {
+  buscarItensCobrancaPropria,
   buscarProfissionaisPropria,
   gravarMovimentos,
   movimentosContaPropria,
@@ -83,6 +85,14 @@ export class MovimentosContaController {
   profissionaisEquipe(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
     return this.rodar(() =>
       this.s().ler(ctxDe(req, 'conta-movimentos'), (l) => buscarProfissionaisPropria(l, String(termo ?? ''))),
+    );
+  }
+
+  @Get('faturamento/itens-cobranca')
+  @Permissao('faturamento.regra.editar')
+  itensCobranca(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'conta-movimentos'), (l) => buscarItensCobrancaPropria(l, String(termo ?? ''))),
     );
   }
 

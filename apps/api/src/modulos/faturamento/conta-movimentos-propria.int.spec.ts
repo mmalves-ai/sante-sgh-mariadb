@@ -12,7 +12,7 @@ import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoMovimentosConta } from './conta-movimentos.controller.js';
-import { movimentosContaPropria } from './conta-movimentos-propria.js';
+import { buscarItensCobrancaPropria, movimentosContaPropria } from './conta-movimentos-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -443,6 +443,18 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       ordemApresentacao: 2,
       ativo: true,
     });
+  });
+
+  it('cadastro do kit na tela: busca do item por código e a fonte pagadora da conta na leitura', async () => {
+    const achados = await s.ler(ctxL(), (l) => buscarItensCobrancaPropria(l, '8374000'));
+    expect(achados.map((i) => i.id)).toEqual(expect.arrayContaining([ids['item'], ids['itemKit']]));
+    expect((await s.ler(ctxL(), (l) => buscarItensCobrancaPropria(l, '83740004')))[0]?.id).toBe(
+      ids['itemKit'],
+    );
+    expect(await s.ler(ctxL(), (l) => buscarItensCobrancaPropria(l, '8'))).toEqual([]);
+    const v = await s.ler(ctxL(), (l, est) => movimentosContaPropria(l, est, ids['contaA']!));
+    expect(v.fontePagadoraId).toBe(ids['fonteA']);
+    expect(v.fonte.length).toBeGreaterThan(0);
   });
 
   it('kit de cobrança: cadastro, lançamento aberto e fechado na conta, fonte errada recusada', async () => {
