@@ -16,7 +16,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F78.04-1 (04-INT linhas 74, 75 e 78): os itens "Quadro clínico e evolução da regulação", "Auditoria do isolamento" e
 // "Formulários da declaração de óbito" entraram à mão (mesmo motivo); a contagem acompanha.
 // F8 (05-SADT linha 6): o item "Limites do pedido de exame" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":419,"M":195,"P":57,"N":167};
+// F3.1 (02-CAD linha 28): o item "Calendário de feriados e dias não úteis" entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":420,"M":195,"P":57,"N":168};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -365,6 +367,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"cadastros.estrutura.blocos-acomodacoes-e-leitos","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Estrutura","Blocos, acomodações e leitos"],"titulo":"Blocos, acomodações e leitos","selo":"M","fase":1,"rota":"/cadastros/estrutura/leitos","permissao":"organizacao.leito.ler"},
   {"id":"cadastros.estrutura.locais-de-atendimento-guiches-feriados-prioridades","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Estrutura","Locais de atendimento, guichês, feriados, prioridades"],"titulo":"Locais de atendimento, guichês, feriados, prioridades","selo":"M","fase":1,"rota":"/cadastros/estrutura/locais","permissao":"organizacao.local.ler"},
   {"id":"cadastros.estrutura.locais-de-conta-e-unidades-de-consumo","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Estrutura","Locais de conta e unidades de consumo"],"titulo":"Locais de conta e unidades de consumo","selo":"M","fase":1,"rota":"/cadastros/estrutura/locais-conta","permissao":"organizacao.localConta.ler"},
+  {"id":"cadastros.estrutura.calendario-de-feriados-e-dias-nao-uteis","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Estrutura","Calendário de feriados e dias não úteis"],"titulo":"Calendário de feriados e dias não úteis","selo":"N","fase":2,"rota":"/cadastros/estrutura/calendario","permissao":"organizacao.estrutura.ler"},
   {"id":"cadastros.convenios-e-contratos.convenios-operadoras-planos-e-classes","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Convênios e contratos","Convênios/operadoras, planos e classes"],"titulo":"Convênios/operadoras, planos e classes","selo":"M","fase":1,"rota":"/cadastros/convenios","permissao":"convenio.operadora.ler"},
   {"id":"cadastros.convenios-e-contratos.parametros-tiss-por-convenio","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Convênios e contratos","Parâmetros TISS por convênio"],"titulo":"Parâmetros TISS por convênio","selo":"M","fase":1,"rota":"/cadastros/convenios?aba=tiss","permissao":"convenio.contrato.ler"},
   {"id":"cadastros.convenios-e-contratos.regras-de-honorarios-e-mat-med-modificadores","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Convênios e contratos","Regras de honorários e mat/med"],"titulo":"Regras de honorários e mat/med","selo":"M","fase":1,"rota":"/cadastros/convenios?aba=modificadores","permissao":"convenio.contrato.ler"},

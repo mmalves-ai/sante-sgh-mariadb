@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('418 itens: M 195, P 57, N 166, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 419, M: 195, P: 57, N: 167 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 420, M: 195, P: 57, N: 168 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(419);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(420);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -207,6 +207,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/enfermagem/procedimentos',
         '/cadastros/especialidades', // M11
         '/cadastros/estrutura', // M10
+        '/cadastros/estrutura/calendario', // F3.1 (02-CAD linha 28)
         '/cadastros/estrutura/centros-custo',
         '/cadastros/estrutura/leitos',
         '/cadastros/estrutura/locais',
