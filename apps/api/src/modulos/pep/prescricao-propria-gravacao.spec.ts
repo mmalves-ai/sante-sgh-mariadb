@@ -96,7 +96,7 @@ describe('apoio da gravação da prescrição própria', () => {
     expect(decisaoGravada('exibido', null)).toBe('aceitou');
   });
 
-  it('recusa com 501 o que ainda não tem adaptador e com 422 a dose zero', () => {
+  it('recusa com 501 o que ainda não tem adaptador e com 422 a incoerência clínica (dose zero, dieta, ventilação)', () => {
     const codigo = (f: () => void) => {
       try {
         f();
@@ -106,8 +106,25 @@ describe('apoio da gravação da prescrição própria', () => {
       }
     };
     expect(codigo(() => conferirItensSuportados([item(med)]))).toBeNull();
-    expect(codigo(() => conferirItensSuportados([item({ tipo: 'dieta' })]))).toBe(
+    expect(codigo(() => conferirItensSuportados([item({ tipo: 'procedimento' })]))).toBe(
       '501:pendente-modelo-proprio',
+    );
+    expect(codigo(() => conferirItensSuportados([item({ tipo: 'hemoterapia' })]))).toBe(
+      '501:pendente-modelo-proprio',
+    );
+    // Dieta, solução, ventilação e "se necessário" gravam; a coerência clínica do domínio vira 422.
+    const dieta = {
+      tipo: 'dieta',
+      quantidade: 1500,
+      velocidade: 60,
+      unidadeInfusao: null,
+      caracteristicas: [],
+    };
+    expect(codigo(() => conferirItensSuportados([item({ ...dieta, unidadeInfusao: 2 })]))).toBeNull();
+    expect(codigo(() => conferirItensSuportados([item(dieta)]))).toBe('422:dieta-velocidade-sem-unidade');
+    expect(codigo(() => conferirItensSuportados([item({ ...med, seNecessario: [1, 2] })]))).toBeNull();
+    expect(codigo(() => conferirItensSuportados([item({ tipo: 'vni', fio2: 10 })]))).toBe(
+      '422:ventilacao-fio2-fora-da-faixa',
     );
     expect(codigo(() => conferirItensSuportados([item({ ...med, kit: [{ produto: 1 }] })]))).toBe(
       '501:pendente-modelo-proprio',

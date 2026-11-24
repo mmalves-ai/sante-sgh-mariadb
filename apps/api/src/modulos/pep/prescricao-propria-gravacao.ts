@@ -26,6 +26,12 @@ import {
 import { categoriaPorOcupacao, exigeCoassinatura, PLANO_DO_TIPO } from '@sgh/contratos';
 import { z } from 'zod';
 import type { ContextoPrescricao } from './prescricao-porta.js';
+import {
+  categoriaDoDetalhe,
+  conferirItensGravaveis,
+  gravarDetalhe,
+  produtoDoItem,
+} from './prescricao-propria-itens.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type {
   CabecalhoDocumentoLido,
@@ -1412,16 +1418,9 @@ export async function profissionalDaSessao(
   return null;
 }
 
-/** Só os tipos de item com adaptador: medicamento padronizado sem kit nem "se necessário". */
+/** Os tipos de item com adaptador (prescricao-propria-itens.ts) e a coerência clínica do domínio. */
 export function conferirItensSuportados(itens: readonly ItemGravacao[]): void {
-  for (const it of itens) {
-    const d = it.detalhe;
-    if (d.tipo !== 'medicamento') throw recusaPendenteGravacao(`item do tipo ${d.tipo}`);
-    if (d.naoPadronizado) throw recusaPendenteGravacao('medicamento não padronizado');
-    if (d.kit.length > 0) throw recusaPendenteGravacao('kit do medicamento');
-    if (d.seNecessario.length > 0) throw recusaPendenteGravacao('motivos de "se necessário"');
-    if (d.dose <= 0) throw recusar(422, 'dose-invalida', 'A dose do medicamento tem de ser maior que zero.');
-  }
+  conferirItensGravaveis(itens);
 }
 
 /** SELECT ... FOR UPDATE de uma linha (o núcleo põe a trava; o caminho de leitura recusa FOR UPDATE no texto). */
@@ -1505,7 +1504,7 @@ async function idPorSigla(tx: TxOperacao, tabela: 'unidade_prescricao' | 'via_de
   return num(x['id']);
 }
 
-/** Insere o item (medicamento) com o detalhe e os horários pendentes; devolve o id e quantos horários. */
+/** Insere o item (qualquer tipo com adaptador) com o detalhe e os horários pendentes; devolve o id e quantos horários. */
 async function inserirItem(
   tx: TxOperacao,
   est: Estabelecimento,
@@ -1519,8 +1518,8 @@ async function inserirItem(
   sgh: GravacaoPrescricao['sgh'] | undefined,
 ): Promise<{ item: number; horarios: number }> {
   const d = it.detalhe;
-  if (d.tipo !== 'medicamento') throw recusaPendenteGravacao(`item do tipo ${d.tipo}`);
-  const categoria = CATEGORIA_DO_PLANO[it.plano];
+  const categoria = CATEGORIA_DO_PLANO[it.plano] ?? categoriaDoDetalhe(d);
+  const produtoItem = produtoDoItem(d);
   const tipo =
     it.plano >= BASE_PLANO_PROPRIO
       ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ?', [it.plano - BASE_PLANO_PROPRIO])
@@ -1529,26 +1528,30 @@ async function inserirItem(
             `SELECT t.id FROM tipo_item_prescricao t WHERE t.categoria = ?
               ORDER BY (t.id = (SELECT ip.tipo_item_prescricao_id FROM item_prescritivel ip WHERE ip.id = ?)) DESC,
                        t.ativo DESC, t.id LIMIT 1`,
-            [categoria, d.produto],
+            [categoria, produtoItem],
           )
         : null;
   if (!tipo) throw recusar(422, 'tipo-item-sem-cadastro', 'O tipo do item não está no cadastro.');
-  const produto = await tx.uma('SELECT id FROM item_prescritivel WHERE id = ? AND excluido_em IS NULL', [
-    d.produto,
-  ]);
-  if (!produto) throw recusar(422, 'cadastro-inexistente', 'O produto não está no cadastro.');
+  if (produtoItem !== null) {
+    const produto = await tx.uma('SELECT id FROM item_prescritivel WHERE id = ? AND excluido_em IS NULL', [
+      produtoItem,
+    ]);
+    if (!produto) throw recusar(422, 'cadastro-inexistente', 'O produto não está no cadastro.');
+  }
   const calculo = sgh?.itens.find((x) => x.chave === it.chave) ?? null;
   const item = await tx.incluir('prescricao_item', {
     prescricao_id: prescricao,
     sequencia,
     tipo_item_prescricao_id: num(tipo['id']),
-    item_prescritivel_id: d.produto,
+    item_prescritivel_id: produtoItem,
     frequencia_administracao_id: it.frequencia,
     via_de_uso_id: it.via ? await idPorSigla(tx, 'via_de_uso', it.via) : null,
     inicio_em: inicio,
     fim_em: fim,
-    prioridade: d.agora ? 'agora' : 'rotina',
-    nao_ajustar_horario: d.naoAjustar,
+    quantidade: d.tipo === 'dieta' ? d.quantidade : null,
+    prioridade: 'agora' in d && d.agora ? 'agora' : 'rotina',
+    nao_ajustar_horario: 'naoAjustar' in d && d.naoAjustar,
+    se_necessario: d.tipo === 'medicamento' && d.seNecessario.length > 0,
     situacao: 'ativo',
     lancamento_profissional_id: prof.profissional,
     observacao_enfermagem: it.observacao,
@@ -1561,19 +1564,16 @@ async function inserirItem(
     calculo_clearance: calculo?.clearance ?? null,
     dose_por_unidade: calculo?.dosePorUnidade ?? null,
     horario_gerado: it.horarios.length > 0,
-    justificativa_alergia: d.justificativaAlergia,
+    justificativa_alergia: d.tipo === 'medicamento' ? d.justificativaAlergia : null,
     origem: 'sistema',
   });
-  await tx.incluir('prescricao_item_medicamento', {
-    prescricao_item_id: item,
-    item_prescritivel_id: d.produto,
-    dose: d.dose,
-    unidade_prescricao_id: await idPorSigla(tx, 'unidade_prescricao', d.unidade),
-    tempo_infusao_minutos: d.tempoInfusaoMinutos,
-    iniciar_agora: d.agora,
-    nao_ajustar_horario: d.naoAjustar,
-    justificativa_alergia: d.justificativaAlergia,
-    origem: 'sistema',
+  await gravarDetalhe(tx, d, {
+    item,
+    profissional: prof.profissional,
+    usuario: prof.usuario,
+    agora: new Date(),
+    instante: (civil) => instanteLocal(civil, est.fuso),
+    unidade: (sigla) => idPorSigla(tx, 'unidade_prescricao', sigla),
   });
   if (it.horarios.length > 0) {
     const s = await tx.uma(

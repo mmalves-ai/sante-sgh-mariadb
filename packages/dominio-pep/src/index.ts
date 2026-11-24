@@ -45,6 +45,7 @@ export * from './prescricao/horarios-previstos.js';
 export * from './prescricao/calculo-dose.js';
 export * from './prescricao/estados.js';
 export * from './prescricao/se-necessario.js';
+export * from './prescricao/itens-gravaveis.js';
 export * from './prescricao/renovacao.js';
 export * from './prescricao/copia.js';
 export * from './prescricao/protocolo.js';
