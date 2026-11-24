@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirAliquotagem,
+  conferirColetaDaRecoleta,
   conferirFechamentoRecoleta,
+  destinoDosExamesAoCancelar,
   conferirRecoleta,
   planoDeSubamostras,
   type RegraSubamostra,
@@ -24,8 +26,14 @@ const ex = (exameItem: number, exame: number) => ({ exameItem, exame, setor: 1, 
 
 describe('recoleta', () => {
   it('rejeita a original ainda ativa, aceita a já rejeitada e recusa as demais', () => {
-    expect(conferirRecoleta('recebida', false, motivo)).toEqual({ rejeitarOriginal: true });
-    expect(conferirRecoleta('rejeitada', false, motivo)).toEqual({ rejeitarOriginal: false });
+    expect(conferirRecoleta('recebida', false, motivo)).toEqual({
+      rejeitarOriginal: true,
+      rejeitarAliquotas: [],
+    });
+    expect(conferirRecoleta('rejeitada', false, motivo)).toEqual({
+      rejeitarOriginal: false,
+      rejeitarAliquotas: [],
+    });
     expect(() => conferirRecoleta('descartada', false, motivo)).toThrow(/situação/);
     expect(() => conferirRecoleta('recebida', true, motivo)).toThrow(/pendente/);
     expect(() => conferirRecoleta('recebida', false, null)).toThrow(/motivo/);
@@ -35,6 +43,45 @@ describe('recoleta', () => {
     expect(() => conferirFechamentoRecoleta('pendente', 'coletar')).not.toThrow();
     expect(() => conferirFechamentoRecoleta('coletada', 'coletar')).toThrow(/já foi/);
     expect(() => conferirFechamentoRecoleta('agendada', 'cancelar', '')).toThrow(/motivo/);
+  });
+  it('a primária aliquotada rejeita junto as alíquotas vivas; a alíquota não pede recoleta', () => {
+    expect(
+      conferirRecoleta('aliquotada', false, motivo, {
+        ehAliquota: false,
+        aliquotas: [
+          { id: 5, situacao: 'recebida' },
+          { id: 6, situacao: 'rejeitada' },
+          { id: 7, situacao: 'em_analise' },
+        ],
+      }),
+    ).toEqual({ rejeitarOriginal: true, rejeitarAliquotas: [5, 7] });
+    expect(() => conferirRecoleta('recebida', false, motivo, { ehAliquota: true, aliquotas: [] })).toThrow(
+      /primária/,
+    );
+  });
+  it('coleta da recoleta: identificadores, estação e pulseira do próprio paciente no internado', () => {
+    const base = {
+      internado: true,
+      identificadoresConferidos: true,
+      pulseiraLida: 'P42|2026',
+      pulseiraDoPaciente: ['P42', '1234'],
+      estacao: 'posto-1',
+    };
+    expect(() => conferirColetaDaRecoleta(base)).not.toThrow();
+    expect(() => conferirColetaDaRecoleta({ ...base, pulseiraLida: '1234' })).not.toThrow();
+    expect(() => conferirColetaDaRecoleta({ ...base, identificadoresConferidos: false })).toThrow(
+      /nome completo/,
+    );
+    expect(() => conferirColetaDaRecoleta({ ...base, estacao: ' ' })).toThrow(/estação/);
+    expect(() => conferirColetaDaRecoleta({ ...base, pulseiraLida: null })).toThrow(/pulseira/);
+    expect(() => conferirColetaDaRecoleta({ ...base, pulseiraLida: 'P421' })).toThrow(/não é do paciente/);
+    expect(() => conferirColetaDaRecoleta({ ...base, internado: false, pulseiraLida: null })).not.toThrow();
+  });
+  it('cancelar a recoleta pede o destino dos exames', () => {
+    expect(() => destinoDosExamesAoCancelar(null, null)).toThrow(/cancelar ou manter/);
+    expect(() => destinoDosExamesAoCancelar('cancelar', null)).toThrow(/motivo/);
+    expect(destinoDosExamesAoCancelar('cancelar', 3)).toEqual({ cancelarExames: true });
+    expect(destinoDosExamesAoCancelar('manter', null)).toEqual({ cancelarExames: false });
   });
 });
 
@@ -64,6 +111,9 @@ describe('sub-amostras', () => {
       planoDeSubamostras([ex(1, 10)], [regra({ id: 5 }), regra({ id: 6, material: 7, bancada: 300 })])[0],
     ).toMatchObject({ regra: 6, bancada: 300 });
     expect(planoDeSubamostras([ex(1, 10)], [regra({ material: 8 })])).toEqual([]);
+    // Item sem setor não pega a regra de setor nenhum; a regra de outro setor não vale.
+    expect(planoDeSubamostras([{ ...ex(1, 10), setor: null }], [regra({})])).toEqual([]);
+    expect(planoDeSubamostras([ex(1, 10)], [regra({ setor: 2 })])).toEqual([]);
   });
   it('a primária se divide recebida, uma vez e com regra', () => {
     const p = [{ regra: 1, bancada: null, setor: 1, exameItens: [1] }];

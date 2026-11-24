@@ -8,6 +8,7 @@ import type { DeclaracaoPermissao } from './tipos.js';
 export const PERMISSOES_SADT_CODIGOS = {
   requisicaoLer: 'sadt.requisicao.ler',
   requisicaoCriar: 'sadt.requisicao.criar',
+  requisicaoAutorizarExcecao: 'sadt.requisicao.autorizarExcecao',
   lancamentoLer: 'sadt.lancamento.ler',
   lancamentoLancar: 'sadt.lancamento.lancar',
   lancamentoReceber: 'sadt.lancamento.receber',
@@ -65,6 +66,12 @@ export const PERMISSOES_SADT_M26: readonly DeclaracaoPermissao[] = [
     'Abrir a requisição de exames do atendimento (convênio, médico solicitante, autorização e guia)',
 
     { categoria: 'administrativa' },
+  ),
+  p(
+    'sadt.requisicao.autorizarExcecao',
+    'Autorizar a exceção a uma restrição clínica do exame (sexo, idade, material, horário, repetição) com justificativa; quem só pede não libera a própria exceção',
+
+    { criticidade: 'sensivel' },
   ),
   p('sadt.lancamento.ler', 'Ver os pedidos do prontuário a receber e os exames lançados do dia por setor'),
   p(

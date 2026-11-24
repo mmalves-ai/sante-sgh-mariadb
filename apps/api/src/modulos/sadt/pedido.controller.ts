@@ -1,6 +1,9 @@
 // Pedido de exames, cancelamento do item, kit com versão, recoleta e sub-amostras (F3.5, 05-SADT linhas 4, 5 e 7):
 //   POST /api/sadt/pedidos/avaliar               as restrições do pedido na hora (nada gravado)
 //   POST /api/sadt/pedidos                       abre a requisição com os itens (avulsos e kits) e as exceções
+//                                                (exceção nova só com sadt.requisicao.autorizarExcecao)
+//   GET  /api/sadt/pedidos/atendimentos?busca    busca do atendimento por número, prontuário ou nome
+//   GET  /api/sadt/pedidos/atendimentos/:id      cabeçalho do paciente e as requisições com os itens
 //   POST /api/sadt/itens/:id/cancelar            cancela o item com o motivo do cadastro
 //   GET  /api/sadt/itens/:id/eventos             a trilha clínica do item pedido
 //   GET  /api/sadt/pedidos/motivos               motivos ativos de cancelamento e de recoleta
@@ -12,6 +15,8 @@
 // Tudo ligado para todos: o que cada cargo faz vem só da permissão de cada rota.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import { pode } from '@sgh/dominio-acesso';
+import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -20,6 +25,7 @@ import { corpo } from '../exames/public-api.js';
 import {
   esquemaCancelarItem,
   esquemaCancelarRecoleta,
+  esquemaColetarRecoleta,
   esquemaPedidoExames,
   esquemaPedirRecoleta,
   esquemaVersaoKit,
@@ -27,6 +33,10 @@ import {
 } from './aplicacao/pedido-propria.js';
 
 export const SERVICO_PEDIDO_SADT = Symbol('SERVICO_PEDIDO_SADT');
+
+/** Quem grava pode autorizar a exceção à restrição do exame (permissão própria; o administrador da plataforma pode tudo). */
+const autorizaExcecao = (req: RequisicaoAutorizada) =>
+  !!req.sgh && pode(req.sgh.ability, 'sadt.requisicao.autorizarExcecao');
 
 @Controller('sadt')
 export class PedidoSadtController {
@@ -43,14 +53,30 @@ export class PedidoSadtController {
   @Permissao('sadt.requisicao.ler')
   @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
   avaliar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.s.avaliarPedido(sessaoDe(req).porta, corpo(esquemaPedidoExames, b));
+    return this.s.avaliarPedido(sessaoDe(req).porta, corpo(esquemaPedidoExames, b), autorizaExcecao(req));
   }
 
   @Post('pedidos')
   @Permissao('sadt.requisicao.criar')
   @AuditadoNoHandler('a requisição e os itens com a trilha_auditoria na mesma transação')
   abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.s.abrirPedido(sessaoDe(req).porta, corpo(esquemaPedidoExames, b));
+    return this.s.abrirPedido(sessaoDe(req).porta, corpo(esquemaPedidoExames, b), autorizaExcecao(req));
+  }
+
+  @Get('pedidos/atendimentos')
+  @Permissao('sadt.requisicao.ler')
+  @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
+  async buscarAtendimentos(@Query('busca') busca: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return { itens: await this.s.buscarAtendimentos(sessaoDe(req).porta, String(busca ?? '').slice(0, 80)) };
+  }
+
+  @Get('pedidos/atendimentos/:id')
+  @Permissao('sadt.requisicao.ler')
+  @Auditar(EVENTOS_AUDITAVEIS.sadtExamesLidos.codigo)
+  async doAtendimento(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const r = await this.s.pedidosDoAtendimento(sessaoDe(req).porta, idDaRota(id));
+    if (r === null) throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
+    return { ...r, podeAutorizarExcecao: autorizaExcecao(req) };
   }
 
   @Get('pedidos/motivos')
@@ -113,8 +139,12 @@ export class PedidoSadtController {
   @HttpCode(200)
   @Permissao('sadt.amostra.coletar')
   @AuditadoNoHandler('a amostra da recoleta com a trilha_auditoria na mesma transação')
-  coletarRecoleta(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
-    return this.s.coletarRecoleta(sessaoDe(req).porta, idDaRota(id));
+  coletarRecoleta(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = corpo(esquemaColetarRecoleta, b ?? {});
+    return this.s.coletarRecoleta(sessaoDe(req).porta, idDaRota(id), {
+      ...e,
+      estacao: (e.estacao || estacaoDaRequisicao(req)).slice(0, 64),
+    });
   }
 
   @Post('recoletas/:id/cancelar')

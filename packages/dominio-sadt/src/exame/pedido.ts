@@ -168,6 +168,10 @@ export function restricoesAcionadas(
     if (r.setor !== null && r.setor !== s.setor) continue;
     if (r.unidade !== null && r.unidade !== s.unidade) continue;
     const motivos: RestricaoAcionada['motivo'][] = [];
+    // O dado que a regra exige e o pedido não traz (sexo ou material desconhecido) vira alerta, nunca aprovação calada.
+    const incertos: RestricaoAcionada['motivo'][] = [];
+    if (r.sexo !== null && s.sexo === null) incertos.push('sexo');
+    if (r.material !== null && s.material === null) incertos.push('material');
     if (r.sexo !== null && s.sexo !== null && s.sexo !== r.sexo) motivos.push('sexo');
     if (
       s.idadeDias !== null &&
@@ -188,7 +192,20 @@ export function restricoesAcionadas(
     )
       motivos.push('repeticao');
     const primeiro = motivos[0];
-    if (primeiro === undefined) continue;
+    if (primeiro === undefined) {
+      const incerto = incertos[0];
+      if (incerto !== undefined)
+        saida.push({
+          regra: r.id,
+          exame: r.exame,
+          tipo: 'alerta',
+          motivo: incerto,
+          mensagem: `${r.mensagem} (${incerto === 'sexo' ? 'sexo do paciente' : 'material do exame'} não informado: confira antes de gravar.)`,
+          permiteExcecao: r.permiteExcecao,
+          excecao: excecaoDe(r.id),
+        });
+      continue;
+    }
     saida.push({
       regra: r.id,
       exame: r.exame,
@@ -211,13 +228,22 @@ export interface DecisaoDoPedido {
 }
 
 /**
- * Decide se o pedido segue. O bloqueio sem exceção vigente recusa, a não ser que a regra aceite exceção e a tela traga
- * a justificativa (10 caracteres ou mais): aí o pedido segue e a exceção do item é registrada. O alerta pede só a
+ * Decide se o pedido segue. O bloqueio sem exceção vigente recusa, a não ser que a regra aceite exceção, a tela traga
+ * a justificativa (10 caracteres ou mais) e quem grava tenha a permissão de autorizar a exceção: aí o pedido segue e a
+ * exceção do item é registrada com quem autorizou. O alerta pede só a
  * confirmação da tela.
  */
 export function decisaoDoPedido(
   acionadas: readonly RestricaoAcionada[],
-  o: { readonly confirmado: boolean; readonly justificativa: string | null },
+  o: {
+    readonly confirmado: boolean;
+    readonly justificativa: string | null;
+    /**
+     * Quem grava tem a permissão de autorizar exceção à restrição do exame. Sem ela, o bloqueio que aceita exceção
+     * recusa o pedido com "restricao-autorizacao": quem pede não libera a própria exceção.
+     */
+    readonly podeAutorizarExcecao: boolean;
+  },
 ): DecisaoDoPedido {
   const justificada = (o.justificativa ?? '').trim().length >= 10;
   const novas: number[] = [];
@@ -230,6 +256,13 @@ export function decisaoDoPedido(
         segue: false,
         codigo: 'restricao-justificativa',
         motivo: `${a.mensagem} Informe a justificativa da exceção (10 caracteres ou mais).`,
+        excecoesNovas: [],
+      };
+    if (!o.podeAutorizarExcecao)
+      return {
+        segue: false,
+        codigo: 'restricao-autorizacao',
+        motivo: `${a.mensagem} A exceção precisa ser autorizada por quem tem a permissão de autorizar exceção à restrição do exame.`,
         excecoesNovas: [],
       };
     if (!novas.includes(a.regra)) novas.push(a.regra);

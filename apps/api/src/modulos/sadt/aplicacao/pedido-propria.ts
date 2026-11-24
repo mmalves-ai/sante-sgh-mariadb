@@ -7,9 +7,11 @@ import {
   codigoDaAmostra,
   conferirAliquotagem,
   conferirCancelamento,
+  conferirColetaDaRecoleta,
   conferirFechamentoRecoleta,
   conferirRecoleta,
   decisaoDoPedido,
+  destinoDosExamesAoCancelar,
   type ExameDaAmostra,
   idadeEmDias,
   itensDaVersaoDoKit,
@@ -91,7 +93,19 @@ export const esquemaPedirRecoleta = z.object({
   coletaPrevistaEm: z.string().datetime({ offset: true }).nullable().default(null),
 });
 
-export const esquemaCancelarRecoleta = z.object({ motivo: z.string().trim().min(5).max(500) });
+export const esquemaCancelarRecoleta = z.object({
+  motivo: z.string().trim().min(5).max(500),
+  /** O que acontece com os exames que esperavam a recoleta: cancelar com o motivo do cadastro ou manter pendentes. */
+  destinoExames: z.enum(['cancelar', 'manter']).nullable().default(null),
+  motivoCancelamentoExame: id.nullable().default(null),
+});
+
+/** A coleta da recoleta com a identificação positiva do paciente (a mesma exigência da coleta comum). */
+export const esquemaColetarRecoleta = z.object({
+  identificadoresConferidos: z.boolean().default(false),
+  pulseira: z.string().trim().max(120).nullable().default(null),
+  estacao: z.string().trim().max(64).nullable().default(null),
+});
 
 // ── Saídas ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -129,6 +143,17 @@ export interface RecoletaLida {
   readonly motivo: string;
   readonly solicitadaEm: string;
   readonly paciente: number;
+}
+
+export interface AtendimentoDoPedido {
+  readonly id: number;
+  readonly numero: string;
+  readonly paciente: number;
+  readonly nome: string;
+  readonly prontuario: string;
+  readonly sexo: Sexo | null;
+  readonly nascimento: string | null;
+  readonly idadeAnos: number | null;
 }
 
 // ── Utilitários ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -204,6 +229,27 @@ function regraDe(r: Linha): RegraRestricao {
   };
 }
 
+const SELECT_ATENDIMENTO = `SELECT a.id, a.numero, a.paciente_id, pa.numero_prontuario, pf.nome, pf.nome_social,
+       pf.usa_nome_social, pf.data_nascimento, sx.sigla AS sexo
+  FROM atendimento a JOIN paciente pa ON pa.id = a.paciente_id
+  JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id LEFT JOIN sexo sx ON sx.id = pf.sexo_id`;
+
+function atendimentoDe(a: Linha): AtendimentoDoPedido {
+  const nasc = dataIso(a['data_nascimento']);
+  const dias = nasc ? idadeEmDias(nasc, new Date().toISOString().slice(0, 10)) : null;
+  const social = Number(a['usa_nome_social'] ?? 0) === 1 || a['usa_nome_social'] === true;
+  return {
+    id: n(a['id']),
+    numero: texto(a['numero']),
+    paciente: n(a['paciente_id']),
+    nome: social && a['nome_social'] ? texto(a['nome_social']) : texto(a['nome']),
+    prontuario: texto(a['numero_prontuario']),
+    sexo: sexoDe(a['sexo']),
+    nascimento: nasc,
+    idadeAnos: dias === null ? null : Math.floor(dias / 365.25),
+  };
+}
+
 // ── Serviço ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 export class ServicoPedidoSadt {
@@ -274,10 +320,10 @@ export class ServicoPedidoSadt {
   // ── Pedido ────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** A avaliação do pedido antes de gravar (a tela mostra os avisos na hora, sem gravar nada). */
-  avaliarPedido(c: ContextoSadt, entrada: unknown): Promise<AvaliacaoDoPedido> {
+  avaliarPedido(c: ContextoSadt, entrada: unknown, podeAutorizarExcecao = false): Promise<AvaliacaoDoPedido> {
     const p = esquemaPedidoExames.parse(entrada);
     return this.ler(c, async (l, est) => {
-      const a = await this.avaliar(l, est, p);
+      const a = await this.avaliar(l, est, p, podeAutorizarExcecao);
       return {
         itens: a.itens.map((i) => ({ sequencia: i.sequencia, exame: i.exame, kitVersao: i.kitVersao })),
         restricoes: a.acionadas,
@@ -286,7 +332,7 @@ export class ServicoPedidoSadt {
     });
   }
 
-  private async avaliar(l: Leitor, est: number, p: PedidoExames) {
+  private async avaliar(l: Leitor, est: number, p: PedidoExames, podeAutorizarExcecao: boolean) {
     const at = await l.uma(
       `SELECT a.id, a.paciente_id, a.fonte_pagadora_id, a.profissional_id, a.unidade_assistencial_id,
               pf.data_nascimento, sx.sigla AS sexo
@@ -328,14 +374,36 @@ export class ServicoPedidoSadt {
       });
     }
     const urgente = p.prioridade !== 'rotina';
-    const itens = daRegra(() =>
+    const montados = daRegra(() =>
       itensDoPedido(
         p.exames.map((e) => ({ ...e, urgente: e.urgente || urgente })),
         kits,
         urgente,
       ),
     );
-    const exames = [...new Set(itens.map((i) => i.exame))];
+    // O setor de cada item (avulso ou de kit) é do estabelecimento da sessão, como o setor do pedido.
+    const setoresItens = [...new Set(montados.map((i) => i.setor).filter((x): x is number => x !== null))];
+    if (setoresItens.length) {
+      const sOk = await l.consultar(
+        `SELECT id FROM setor_diagnostico WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${lista(setoresItens.length)})`,
+        [est, ...setoresItens],
+      );
+      if (sOk.length !== setoresItens.length)
+        throw recusa(
+          'setor-inexistente',
+          'O setor executante de algum exame não existe neste estabelecimento.',
+        );
+    }
+    const exames = [...new Set(montados.map((i) => i.exame))];
+    // Sem material escolhido, vale o material padrão do cadastro do exame (a restrição por material é avaliada nele).
+    const padroes = await l.consultar(
+      `SELECT exame_id, MIN(material_biologico_id) AS material FROM exame_material
+        WHERE exame_id IN (${lista(exames.length)}) GROUP BY exame_id`,
+      exames,
+    );
+    const padraoDe = (exame: number) =>
+      nn(padroes.find((x) => n(x['exame_id']) === exame)?.['material'] ?? null);
+    const itens = montados.map((i) => ({ ...i, material: i.material ?? padraoDe(i.exame) }));
     const ok = await l.consultar(
       `SELECT id FROM exame WHERE ativo = TRUE AND excluido_em IS NULL AND id IN (${lista(exames.length)})`,
       exames,
@@ -392,15 +460,19 @@ export class ServicoPedidoSadt {
         excecaoDe,
       ),
     );
-    const decisao = decisaoDoPedido(acionadas, { confirmado: p.confirmado, justificativa: p.justificativa });
+    const decisao = decisaoDoPedido(acionadas, {
+      confirmado: p.confirmado,
+      justificativa: p.justificativa,
+      podeAutorizarExcecao,
+    });
     return { at, itens, acionadas, decisao, paciente };
   }
 
   /** Abre a requisição com os itens (avulsos e de kit), já com as restrições decididas e as exceções registradas. */
-  abrirPedido(c: ContextoSadt, entrada: unknown): Promise<PedidoGravado> {
+  abrirPedido(c: ContextoSadt, entrada: unknown, podeAutorizarExcecao = false): Promise<PedidoGravado> {
     const p = esquemaPedidoExames.parse(entrada);
     return this.gravar(c, 'sadt.pedido.aberto', 'requisicao_exame', (tx, est) =>
-      this.abrirNaTransacao(tx, est, p),
+      this.abrirNaTransacao(tx, est, p, podeAutorizarExcecao),
     );
   }
 
@@ -408,8 +480,13 @@ export class ServicoPedidoSadt {
    * O corpo da abertura do pedido dentro de uma transação já aberta (a conversão do orçamento abre o pedido na mesma
    * transação que marca o orçamento convertido). As tabelas tocadas são as de TABELAS_PEDIDO.
    */
-  async abrirNaTransacao(tx: TxOperacao, est: number, p: PedidoExames): Promise<PedidoGravado> {
-    const a = await this.avaliar(tx, est, p);
+  async abrirNaTransacao(
+    tx: TxOperacao,
+    est: number,
+    p: PedidoExames,
+    podeAutorizarExcecao = false,
+  ): Promise<PedidoGravado> {
+    const a = await this.avaliar(tx, est, p, podeAutorizarExcecao);
     if (!a.decisao.segue)
       throw recusa(a.decisao.codigo ?? 'restricao', a.decisao.motivo ?? 'Pedido recusado.');
     const usuario = tx.contexto.usuario;
@@ -622,6 +699,75 @@ export class ServicoPedidoSadt {
     }));
   }
 
+  // ── Paciente e atendimento do pedido (a tela escolhe por busca, nunca por número digitado às cegas) ──────────────
+
+  /** Atendimentos do estabelecimento pelo número do atendimento, pelo prontuário ou pelo nome do paciente. */
+  buscarAtendimentos(c: ContextoSadt, termo: string): Promise<AtendimentoDoPedido[]> {
+    const t = termo.trim();
+    if (t.length < 2) return Promise.resolve([]);
+    const digitos = /^\d+$/.test(t);
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `${SELECT_ATENDIMENTO}
+          WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL
+            AND (${digitos ? 'a.numero = ? OR pa.numero_prontuario = ?' : 'pf.nome LIKE ? OR pf.nome_social LIKE ?'})
+          ORDER BY a.id DESC LIMIT 30`,
+        digitos ? [est, t, t] : [est, `%${t}%`, `%${t}%`],
+      );
+      return ls.map(atendimentoDe);
+    });
+  }
+
+  /**
+   * O cabeçalho do paciente do atendimento (nome, idade, sexo, prontuário, estabelecimento) e as requisições dele no
+   * estabelecimento, com os itens e a situação de cada um: a visão por paciente onde se cancela o item depois do pedido.
+   */
+  pedidosDoAtendimento(c: ContextoSadt, atendimento: number) {
+    return this.ler(c, async (l, est) => {
+      const a = await l.uma(`${SELECT_ATENDIMENTO} WHERE a.id = ? AND a.estabelecimento_id = ?`, [
+        atendimento,
+        est,
+      ]);
+      if (!a) return null;
+      const reqs = await l.consultar(
+        `SELECT r.id, r.numero, r.situacao, r.solicitado_em, r.prioridade FROM requisicao_exame r
+          WHERE r.paciente_id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL
+          ORDER BY r.solicitado_em DESC LIMIT 50`,
+        [n(a['paciente_id']), est],
+      );
+      const itens = reqs.length
+        ? await l.consultar(
+            `SELECT ei.id, ei.requisicao_exame_id, ei.sequencia, ei.situacao, ei.coleta_pendente, e.nome
+               FROM exame_item ei JOIN exame e ON e.id = ei.exame_id
+              WHERE ei.excluido_em IS NULL AND ei.requisicao_exame_id IN (${lista(reqs.length)})
+              ORDER BY ei.requisicao_exame_id, ei.sequencia`,
+            reqs.map((r) => n(r['id'])),
+          )
+        : [];
+      const est_ = await l.uma('SELECT nome FROM estabelecimento WHERE id = ?', [est]);
+      return {
+        atendimento: { ...atendimentoDe(a), estabelecimento: texto(est_?.['nome']) },
+        requisicoes: reqs.map((r) => ({
+          id: n(r['id']),
+          numero: texto(r['numero']),
+          situacao: texto(r['situacao']),
+          prioridade: texto(r['prioridade']),
+          solicitadaEm:
+            r['solicitado_em'] instanceof Date ? r['solicitado_em'].toISOString() : texto(r['solicitado_em']),
+          itens: itens
+            .filter((i) => n(i['requisicao_exame_id']) === n(r['id']))
+            .map((i) => ({
+              id: n(i['id']),
+              sequencia: n(i['sequencia']),
+              exame: texto(i['nome']),
+              situacao: texto(i['situacao']),
+              coletaPendente: Number(i['coleta_pendente'] ?? 0) === 1 || i['coleta_pendente'] === true,
+            })),
+        })),
+      };
+    });
+  }
+
   // ── Kit com versão ────────────────────────────────────────────────────────────────────────────────────────
 
   kits(c: ContextoSadt): Promise<KitVigente[]> {
@@ -664,7 +810,26 @@ export class ServicoPedidoSadt {
   ): Promise<{ id: number; versao: number; numeroVersao: number }> {
     const p = esquemaVersaoKit.parse(entrada);
     const itens = daRegra(() => itensDaVersaoDoKit(p.itens));
-    return this.gravar(c, 'sadt.kit.versao', 'kit_exame', async (tx) => {
+    return this.gravar(c, 'sadt.kit.versao', 'kit_exame', async (tx, est) => {
+      const exs = [...new Set(itens.map((i) => i.exame))];
+      const okEx = await tx.consultar(
+        `SELECT id FROM exame WHERE ativo = TRUE AND excluido_em IS NULL AND id IN (${lista(exs.length)})`,
+        exs,
+      );
+      if (okEx.length !== exs.length)
+        throw recusa('exame-inexistente', 'Algum exame do kit não existe ou está inativo.');
+      const sets = [...new Set(itens.map((i) => i.setor).filter((x): x is number => x !== null))];
+      if (sets.length) {
+        const okS = await tx.consultar(
+          `SELECT id FROM setor_diagnostico WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${lista(sets.length)})`,
+          [est, ...sets],
+        );
+        if (okS.length !== sets.length)
+          throw recusa(
+            'setor-inexistente',
+            'O setor de algum exame do kit não existe neste estabelecimento.',
+          );
+      }
       const agora = new Date();
       let kit = p.kit;
       let numero = 1;
@@ -732,7 +897,7 @@ export class ServicoPedidoSadt {
     const p = esquemaPedirRecoleta.parse(entrada);
     return this.gravar(c, 'sadt.recoleta.pedida', 'nova_coleta', async (tx, est) => {
       const [am] = await tx.consultarParaAtualizar(
-        `SELECT am.id, am.versao, am.situacao, am.requisicao_exame_id, r.paciente_id
+        `SELECT am.id, am.versao, am.situacao, am.requisicao_exame_id, am.amostra_pai_id, r.paciente_id
            FROM amostra_biologica am LEFT JOIN requisicao_exame r ON r.id = am.requisicao_exame_id
           WHERE am.id = ? AND am.estabelecimento_id = ? AND am.excluido_em IS NULL`,
         [amostra, est],
@@ -749,11 +914,19 @@ export class ServicoPedidoSadt {
         'SELECT ativo, gera_nova_amostra, descricao FROM motivo_nova_coleta WHERE id = ?',
         [p.motivo],
       );
-      const { rejeitarOriginal } = daRegra(() =>
+      const aliquotas = await tx.consultarParaAtualizar(
+        'SELECT id, versao, situacao FROM amostra_biologica WHERE amostra_pai_id = ? AND excluido_em IS NULL',
+        [amostra],
+      );
+      const { rejeitarOriginal, rejeitarAliquotas } = daRegra(() =>
         conferirRecoleta(
           texto(am['situacao']),
           !!aberta,
           m ? { ativo: Boolean(m['ativo']), geraNovaAmostra: Boolean(m['gera_nova_amostra']) } : null,
+          {
+            ehAliquota: am['amostra_pai_id'] !== null,
+            aliquotas: aliquotas.map((x) => ({ id: n(x['id']), situacao: texto(x['situacao']) })),
+          },
         ),
       );
       const agora = new Date();
@@ -771,6 +944,23 @@ export class ServicoPedidoSadt {
           usuario_id: usuario,
           descricao: texto(m!['descricao']).slice(0, 500),
           dados: JSON.stringify({ de: texto(am['situacao']), recoleta: true }),
+        });
+      }
+      // As alíquotas vivas da primária são rejeitadas junto: o exame fica ligado a uma única amostra viva (a nova). O
+      // vínculo antigo fica no banco como histórico; amostra rejeitada não atende exame (a coleta comum também lê assim).
+      for (const al of aliquotas.filter((x) => rejeitarAliquotas.includes(n(x['id'])))) {
+        await tx.alterar('amostra_biologica', n(al['id']), n(al['versao']), {
+          situacao: 'rejeitada',
+          motivo_nova_coleta_id: p.motivo,
+        });
+        await tx.incluir('amostra_biologica_evento', {
+          amostra_biologica_id: n(al['id']),
+          operacao: 'alteracao',
+          evento: 'rejeitada',
+          ocorrido_em: agora,
+          usuario_id: usuario,
+          descricao: texto(m!['descricao']).slice(0, 500),
+          dados: JSON.stringify({ de: texto(al['situacao']), recoleta: true, amostraPai: amostra }),
         });
       }
       const itens = await tx.consultarParaAtualizar(
@@ -821,19 +1011,34 @@ export class ServicoPedidoSadt {
   coletarRecoleta(
     c: ContextoSadt,
     recoleta: number,
+    entrada: unknown,
   ): Promise<{ id: number; amostra: number; codigo: string }> {
+    const e = esquemaColetarRecoleta.parse(entrada ?? {});
     const prefixo = c.hospital ?? 'H';
     return this.gravar(c, 'sadt.recoleta.coletada', 'nova_coleta', async (tx, est) => {
       const [nc] = await tx.consultarParaAtualizar(
         `SELECT nc.id, nc.versao, nc.situacao, nc.amostra_biologica_id, nc.requisicao_exame_id, nc.motivo_nova_coleta_id,
-                am.material_biologico_id, am.recipiente_coleta_id, am.setor_diagnostico_id
+                am.material_biologico_id, am.recipiente_coleta_id, am.setor_diagnostico_id, nc.paciente_id,
+                p.numero_prontuario,
+                EXISTS (SELECT 1 FROM internacao i WHERE i.atendimento_id = r.atendimento_id) AS internado
            FROM nova_coleta nc JOIN amostra_biologica am ON am.id = nc.amostra_biologica_id
+           JOIN requisicao_exame r ON r.id = nc.requisicao_exame_id JOIN paciente p ON p.id = nc.paciente_id
           WHERE nc.id = ? AND nc.estabelecimento_id = ? AND nc.excluido_em IS NULL`,
         [recoleta, est],
         { teto: 1 },
       );
       if (!nc) throw recusa('recoleta-inexistente', 'A recoleta não existe neste estabelecimento.');
       daRegra(() => conferirFechamentoRecoleta(texto(nc['situacao']), 'coletar'));
+      const internado = Number(nc['internado'] ?? 0) === 1 || nc['internado'] === true;
+      daRegra(() =>
+        conferirColetaDaRecoleta({
+          internado,
+          identificadoresConferidos: e.identificadoresConferidos,
+          pulseiraLida: e.pulseira,
+          pulseiraDoPaciente: [`P${n(nc['paciente_id'])}`, texto(nc['numero_prontuario'])].filter(Boolean),
+          estacao: e.estacao,
+        }),
+      );
       const original = n(nc['amostra_biologica_id']);
       const itens = await tx.consultarParaAtualizar(
         `SELECT ei.id, ei.versao FROM amostra_biologica_exame abe JOIN exame_item ei ON ei.id = abe.exame_item_id
@@ -891,7 +1096,13 @@ export class ServicoPedidoSadt {
         evento: 'coletada',
         ocorrido_em: agora,
         usuario_id: usuario,
-        dados: JSON.stringify({ recoleta, amostraOriginal: original }),
+        dados: JSON.stringify({
+          recoleta,
+          amostraOriginal: original,
+          identificadoresConferidos: true,
+          pulseiraConferida: internado,
+          estacao: e.estacao,
+        }),
       });
       await tx.alterar('nova_coleta', recoleta, n(nc['versao']), {
         situacao: 'coletada',
@@ -902,22 +1113,100 @@ export class ServicoPedidoSadt {
     });
   }
 
-  cancelarRecoleta(c: ContextoSadt, recoleta: number, entrada: unknown): Promise<{ id: number }> {
+  /**
+   * Cancela a recoleta com o motivo e decide o destino dos exames que a esperavam (regra no domínio): cancelados com o
+   * motivo do cadastro, ou mantidos pendentes de coleta com o aviso. Cada exame recebe o evento com o usuário.
+   */
+  cancelarRecoleta(
+    c: ContextoSadt,
+    recoleta: number,
+    entrada: unknown,
+  ): Promise<{ id: number; exames: number }> {
     const p = esquemaCancelarRecoleta.parse(entrada);
     return this.gravar(c, 'sadt.recoleta.cancelada', 'nova_coleta', async (tx, est) => {
       const [nc] = await tx.consultarParaAtualizar(
-        'SELECT id, versao, situacao FROM nova_coleta WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        'SELECT id, versao, situacao, amostra_biologica_id FROM nova_coleta WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [recoleta, est],
         { teto: 1 },
       );
       if (!nc) throw recusa('recoleta-inexistente', 'A recoleta não existe neste estabelecimento.');
       daRegra(() => conferirFechamentoRecoleta(texto(nc['situacao']), 'cancelar', p.motivo));
+      const { cancelarExames } = daRegra(() =>
+        destinoDosExamesAoCancelar(p.destinoExames, p.motivoCancelamentoExame),
+      );
+      if (cancelarExames) {
+        const m = await tx.uma(
+          'SELECT ativo, aplica_a, exige_complemento FROM motivo_cancelamento_item_exame WHERE id = ?',
+          [p.motivoCancelamentoExame],
+        );
+        daRegra(() =>
+          conferirCancelamento(
+            'solicitado',
+            m
+              ? {
+                  ativo: Boolean(m['ativo']),
+                  aplicaA: texto(m['aplica_a']) as 'exame',
+                  exigeComplemento: false,
+                }
+              : { ativo: false, aplicaA: 'exame', exigeComplemento: false },
+            p.motivo,
+          ),
+        );
+      }
+      const agora = new Date();
+      const usuario = tx.contexto.usuario;
+      const itens = await tx.consultarParaAtualizar(
+        `SELECT ei.id, ei.versao, ei.situacao, ei.setor_diagnostico_id FROM amostra_biologica_exame abe
+           JOIN exame_item ei ON ei.id = abe.exame_item_id
+          WHERE abe.amostra_biologica_id = ? AND abe.excluido_em IS NULL AND ei.excluido_em IS NULL
+            AND ei.situacao = 'solicitado' AND ei.coleta_pendente = TRUE`,
+        [n(nc['amostra_biologica_id'])],
+      );
+      const aviso = `Recoleta cancelada: ${p.motivo}`.slice(0, 500);
+      for (const i of itens) {
+        if (cancelarExames) {
+          await tx.alterar('exame_item', n(i['id']), n(i['versao']), {
+            situacao: 'cancelado',
+            cancelado_em: agora,
+            cancelado_por_usuario_id: usuario,
+            motivo_cancelamento_item_exame_id: p.motivoCancelamentoExame,
+            coleta_pendente: false,
+          });
+          await tx.incluir('item_exame_evento', {
+            exame_item_id: n(i['id']),
+            operacao: 'alteracao',
+            evento: 'cancelado',
+            ocorrido_em: agora,
+            usuario_id: usuario,
+            situacao_anterior: 'solicitado',
+            situacao_nova: 'cancelado',
+            motivo_cancelamento_item_exame_id: p.motivoCancelamentoExame,
+            motivo: aviso,
+            setor_diagnostico_id: nn(i['setor_diagnostico_id']),
+            dados: JSON.stringify({ recoleta, recoletaCancelada: true }),
+          });
+        } else {
+          await tx.alterar('exame_item', n(i['id']), n(i['versao']), { motivo_pendencia: aviso });
+          await tx.incluir('item_exame_evento', {
+            exame_item_id: n(i['id']),
+            operacao: 'alteracao',
+            evento: 'nova_coleta',
+            ocorrido_em: agora,
+            usuario_id: usuario,
+            situacao_anterior: 'solicitado',
+            situacao_nova: 'solicitado',
+            motivo: aviso,
+            setor_diagnostico_id: nn(i['setor_diagnostico_id']),
+            dados: JSON.stringify({ recoleta, recoletaCancelada: true, mantidoPendente: true }),
+          });
+        }
+      }
       await tx.alterar('nova_coleta', recoleta, n(nc['versao']), {
         situacao: 'cancelada',
-        cancelada_em: new Date(),
+        cancelada_em: agora,
         motivo_cancelamento: p.motivo,
       });
-      return { id: recoleta };
+      return { id: recoleta, exames: itens.length };
     });
   }
 
@@ -972,8 +1261,9 @@ export class ServicoPedidoSadt {
       const material = n(am['material_biologico_id']);
       const exames: ExameDaAmostra[] = (
         await tx.consultar(
-          `SELECT ei.id, ei.exame_id, ei.setor_diagnostico_id FROM amostra_biologica_exame abe
-             JOIN exame_item ei ON ei.id = abe.exame_item_id
+          `SELECT ei.id, ei.exame_id, COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id) AS setor_diagnostico_id
+             FROM amostra_biologica_exame abe JOIN exame_item ei ON ei.id = abe.exame_item_id
+             JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
             WHERE abe.amostra_biologica_id = ? AND abe.excluido_em IS NULL AND ei.situacao <> 'cancelado'`,
           [amostra],
         )
@@ -987,8 +1277,13 @@ export class ServicoPedidoSadt {
       const regras: RegraSubamostra[] = ids.length
         ? (
             await tx.consultar(
-              `SELECT * FROM regra_subamostra WHERE ativo = TRUE AND exame_id IN (${lista(ids.length)})`,
-              ids,
+              // Só as regras dos setores deste estabelecimento (e com destino também dele, quando há destino).
+              `SELECT rs.* FROM regra_subamostra rs
+                 JOIN setor_diagnostico sd ON sd.id = rs.setor_diagnostico_id AND sd.estabelecimento_id = ?
+                 LEFT JOIN setor_diagnostico dd ON dd.id = rs.destino_setor_diagnostico_id
+                WHERE rs.ativo = TRUE AND rs.exame_id IN (${lista(ids.length)})
+                  AND (rs.destino_setor_diagnostico_id IS NULL OR dd.estabelecimento_id = ?)`,
+              [est, ...ids, est],
             )
           ).map((r) => ({
             id: n(r['id']),

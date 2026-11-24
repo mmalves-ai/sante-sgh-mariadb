@@ -113,30 +113,67 @@ describe('restrições clínicas da solicitação', () => {
   });
   it('decisão: bloqueio recusa, exceção vigente libera, justificativa vira exceção nova, alerta pede confirmação', () => {
     const b = restricoesAcionadas([regra({ sexo: 'feminino' })], sol());
-    expect(decisaoDoPedido(b, { confirmado: true, justificativa: 'x'.repeat(20) })).toMatchObject({
+    expect(
+      decisaoDoPedido(b, { confirmado: true, justificativa: 'x'.repeat(20), podeAutorizarExcecao: true }),
+    ).toMatchObject({
       segue: false,
       codigo: 'restricao-bloqueio',
     });
     const comExcecao = restricoesAcionadas([regra({ sexo: 'feminino' })], sol(), () => 99);
-    expect(decisaoDoPedido(comExcecao, { confirmado: false, justificativa: null })).toMatchObject({
+    expect(
+      decisaoDoPedido(comExcecao, { confirmado: false, justificativa: null, podeAutorizarExcecao: false }),
+    ).toMatchObject({
       segue: true,
       excecoesNovas: [],
     });
     const aceita = restricoesAcionadas([regra({ sexo: 'feminino', permiteExcecao: true })], sol());
-    expect(decisaoDoPedido(aceita, { confirmado: true, justificativa: 'curta' }).codigo).toBe(
-      'restricao-justificativa',
-    );
     expect(
-      decisaoDoPedido(aceita, { confirmado: true, justificativa: 'paciente transgênero' }),
+      decisaoDoPedido(aceita, { confirmado: true, justificativa: 'curta', podeAutorizarExcecao: true })
+        .codigo,
+    ).toBe('restricao-justificativa');
+    expect(
+      decisaoDoPedido(aceita, {
+        confirmado: true,
+        justificativa: 'paciente transgênero',
+        podeAutorizarExcecao: true,
+      }),
     ).toMatchObject({
       segue: true,
       excecoesNovas: [1],
     });
     const alerta = restricoesAcionadas([regra({ tipo: 'alerta', sexo: 'feminino' })], sol());
-    expect(decisaoDoPedido(alerta, { confirmado: false, justificativa: null }).codigo).toBe(
-      'restricao-confirmar',
-    );
-    expect(decisaoDoPedido(alerta, { confirmado: true, justificativa: null }).segue).toBe(true);
+    expect(
+      decisaoDoPedido(alerta, { confirmado: false, justificativa: null, podeAutorizarExcecao: false }).codigo,
+    ).toBe('restricao-confirmar');
+    expect(
+      decisaoDoPedido(alerta, { confirmado: true, justificativa: null, podeAutorizarExcecao: false }).segue,
+    ).toBe(true);
+  });
+  it('quem só pede não libera a própria exceção: sem a permissão de autorizar, o bloqueio recusa', () => {
+    const aceita = restricoesAcionadas([regra({ sexo: 'feminino', permiteExcecao: true })], sol());
+    expect(
+      decisaoDoPedido(aceita, {
+        confirmado: true,
+        justificativa: 'paciente transgênero',
+        podeAutorizarExcecao: false,
+      }),
+    ).toMatchObject({ segue: false, codigo: 'restricao-autorizacao', excecoesNovas: [] });
+  });
+  it('sexo ou material desconhecido numa regra que os exige vira alerta, nunca aprovação calada', () => {
+    const semMaterial = restricoesAcionadas([regra({ material: 8 })], sol({ material: null }));
+    expect(semMaterial).toMatchObject([{ tipo: 'alerta', motivo: 'material' }]);
+    expect(
+      decisaoDoPedido(semMaterial, { confirmado: false, justificativa: null, podeAutorizarExcecao: false })
+        .codigo,
+    ).toBe('restricao-confirmar');
+    expect(restricoesAcionadas([regra({ sexo: 'feminino' })], sol({ sexo: null }))).toMatchObject([
+      { tipo: 'alerta', motivo: 'sexo' },
+    ]);
+    // O motivo certo vence o incerto e mantém o tipo da regra.
+    expect(
+      restricoesAcionadas([regra({ sexo: 'feminino', material: 8 })], sol({ material: null }))[0],
+    ).toMatchObject({ tipo: 'bloqueio', motivo: 'sexo' });
+    expect(restricoesAcionadas([regra({ material: 7 })], sol())).toEqual([]);
   });
 });
 

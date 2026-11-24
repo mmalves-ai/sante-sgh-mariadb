@@ -28,22 +28,44 @@ export interface MotivoRecoleta {
   readonly geraNovaAmostra: boolean;
 }
 
+/** Situações em que a amostra já não atende exame nenhum (o vínculo com o exame fica só como histórico). */
+export const AMOSTRA_INATIVA = ['rejeitada', 'cancelada', 'descartada'] as const;
+const inativa = (s: string) => (AMOSTRA_INATIVA as readonly string[]).includes(s);
+
+export interface FamiliaDaAmostra {
+  /** A amostra pedida é uma alíquota (tem amostra primária). */
+  readonly ehAliquota: boolean;
+  /** As alíquotas da amostra primária, com a situação de cada uma. */
+  readonly aliquotas: readonly { readonly id: number; readonly situacao: string }[];
+}
+
 /**
  * Confere o pedido de recoleta: a amostra precisa estar coletada (ou rejeitada), sem outra recoleta em aberto, e o
- * motivo ativo. Devolve se a amostra original deve ser rejeitada junto (quando ainda estava ativa).
+ * motivo ativo. A recoleta é uma nova coleta do paciente, por isso nasce sempre da amostra primária: pedida numa
+ * alíquota, é recusada (a tela leva à primária). As alíquotas ainda ativas da primária são rejeitadas junto, para que
+ * cada exame fique ligado a uma única amostra viva (a nova). Devolve o que rejeitar; nada é apagado.
  */
 export function conferirRecoleta(
   situacaoAmostra: string,
   recoletaAberta: boolean,
   motivo: MotivoRecoleta | null,
-): { readonly rejeitarOriginal: boolean } {
+  familia: FamiliaDaAmostra = { ehAliquota: false, aliquotas: [] },
+): { readonly rejeitarOriginal: boolean; readonly rejeitarAliquotas: readonly number[] } {
   if (!motivo || !motivo.ativo)
     throw new RecusaAmostra('motivo-invalido', 'Escolha um motivo de recoleta ativo.');
+  if (familia.ehAliquota)
+    throw new RecusaAmostra(
+      'recoleta-pela-primaria',
+      'A recoleta é pedida pela amostra primária do paciente: as alíquotas dela são rejeitadas junto.',
+    );
   if (!RECOLETAVEIS.has(situacaoAmostra))
     throw new RecusaAmostra('amostra-sem-recoleta', 'A amostra não está numa situação que permita recoleta.');
   if (recoletaAberta)
     throw new RecusaAmostra('recoleta-aberta', 'Já existe recoleta pendente para esta amostra.');
-  return { rejeitarOriginal: situacaoAmostra !== 'rejeitada' };
+  return {
+    rejeitarOriginal: situacaoAmostra !== 'rejeitada',
+    rejeitarAliquotas: familia.aliquotas.filter((a) => !inativa(a.situacao)).map((a) => a.id),
+  };
 }
 
 /** Passagens da recoleta pendente: a coleta só fecha a pendente, e o cancelamento pede motivo. */
@@ -56,6 +78,60 @@ export function conferirFechamentoRecoleta(
     throw new RecusaAmostra('recoleta-fechada', 'A recoleta já foi coletada ou cancelada.');
   if (acao === 'cancelar' && (motivo ?? '').trim().length < 5)
     throw new RecusaAmostra('motivo-obrigatorio', 'Informe o motivo do cancelamento da recoleta.');
+}
+
+/**
+ * A identificação positiva na coleta da recoleta (meta 1 de segurança do paciente), com a mesma exigência da coleta
+ * comum: os dois identificadores conferidos sempre e, no internado, a pulseira lida do próprio paciente. A estação de
+ * coleta é obrigatória (vai para o evento da amostra nova).
+ */
+export function conferirColetaDaRecoleta(c: {
+  readonly internado: boolean;
+  readonly identificadoresConferidos: boolean;
+  readonly pulseiraLida: string | null;
+  /** Os códigos aceitos para a pulseira deste paciente (id com prefixo P, prontuário). */
+  readonly pulseiraDoPaciente: readonly string[];
+  readonly estacao: string | null;
+}): void {
+  if (!c.identificadoresConferidos)
+    throw new RecusaAmostra(
+      'coleta-nao-conferida',
+      'Confira o nome completo e a data de nascimento com o paciente antes de coletar.',
+    );
+  if (!(c.estacao ?? '').trim())
+    throw new RecusaAmostra('sem-estacao', 'Informe a estação ou o posto de coleta.');
+  if (!c.internado) return;
+  const lida = (c.pulseiraLida ?? '').trim().toUpperCase();
+  if (!lida)
+    throw new RecusaAmostra(
+      'coleta-nao-conferida',
+      'Leia a pulseira do paciente internado antes de coletar.',
+    );
+  const ok = c.pulseiraDoPaciente.some((p) => {
+    const q = p.toUpperCase();
+    return lida === q || lida.startsWith(`${q}|`);
+  });
+  if (!ok)
+    throw new RecusaAmostra('pulseira-divergente', 'A pulseira lida não é do paciente desta recoleta.');
+}
+
+/**
+ * O destino dos exames quando a recoleta é cancelada: "cancelar" cancela cada exame com o motivo de cancelamento do
+ * cadastro (o exame sai da fila); "manter" deixa o exame pendente de coleta, com o aviso explícito da recoleta
+ * cancelada (a coleta comum o retoma). A escolha é obrigatória.
+ */
+export function destinoDosExamesAoCancelar(
+  destino: 'cancelar' | 'manter' | null | undefined,
+  motivoCancelamentoExame: number | null | undefined,
+): { readonly cancelarExames: boolean } {
+  if (destino !== 'cancelar' && destino !== 'manter')
+    throw new RecusaAmostra(
+      'destino-obrigatorio',
+      'Diga o que acontece com os exames: cancelar ou manter pendentes de coleta.',
+    );
+  if (destino === 'cancelar' && !motivoCancelamentoExame)
+    throw new RecusaAmostra('motivo-invalido', 'Escolha o motivo de cancelamento dos exames.');
+  return { cancelarExames: destino === 'cancelar' };
 }
 
 // ── Sub-amostras ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -103,7 +179,9 @@ export function planoDeSubamostras(
     const candidatas = regras.filter(
       (r) =>
         r.exame === e.exame &&
-        (e.setor === null || r.setor === e.setor) &&
+        // O setor do item manda: item sem setor não pega regra de setor nenhum (evita a regra de outro estabelecimento).
+        e.setor !== null &&
+        r.setor === e.setor &&
         (r.material ?? e.material) === e.material,
     );
     const r = candidatas.find((x) => x.material !== null) ?? candidatas[0];
