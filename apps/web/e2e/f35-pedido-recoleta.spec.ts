@@ -21,11 +21,13 @@ async function entrar(page: Page, login: string): Promise<void> {
 }
 
 test.describe('@F35-2 pedido de exames e recoletas pelo menu do SADT', () => {
-  test('o laboratório abre o pedido e as recoletas pelo menu; sem banco a tela avisa; axe', async ({
+  test('a biomédica do laboratório abre o pedido e as recoletas pelo menu; sem banco a tela avisa; axe', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.LABORATORIO');
+    // A biomédica do laboratório: inclui o lançamento do laboratório (6116, sadt.requisicao.criar) e o rastreio e a
+    // coleta (2731, 6810, sadt.amostra.ler). O perfil genérico do laboratório (só as opções do M14) não pede exames.
+    await entrar(page, 'SINT.BIOMEDICO');
 
     // Pedido de exames pelo menu.
     await (await itemDoMenu(page, 'Pedido de exames')).click();
