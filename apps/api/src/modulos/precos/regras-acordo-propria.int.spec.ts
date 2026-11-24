@@ -28,13 +28,28 @@ describe('vigenteNaData', () => {
 describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', () => {
   let nucleo: NucleoProprio;
   let leitor: LeitorRegrasAcordo;
-  const ids = { est: 0, outroEst: 0, fonte: 0, tabela: 0, contrato: 0, grupo: 0, item: 0, via: 0 };
+  const ids = {
+    est: 0,
+    outroEst: 0,
+    fonte: 0,
+    tabela: 0,
+    contrato: 0,
+    grupo: 0,
+    item: 0,
+    via: 0,
+    funcao: 0,
+    regime: 0,
+  };
   let c: CtxPrecos;
 
   const limpar = async (e: Escritor) => {
     await e.executar('DELETE FROM regra_percentual_cobranca WHERE fonte_pagadora_id = ?', [ids.fonte]);
     await e.executar('DELETE FROM regra_via_acesso WHERE via_acesso_cirurgico_id = ?', [ids.via]);
     await e.executar('DELETE FROM item_isento_cobranca WHERE fonte_pagadora_id = ?', [ids.fonte]);
+    await e.executar(
+      'DELETE r FROM item_alto_custo_contrato r JOIN contrato_fonte_pagadora k ON k.id = r.contrato_fonte_pagadora_id WHERE k.fonte_pagadora_id = ?',
+      [ids.fonte],
+    );
     await e.executar('DELETE FROM teto_cobranca WHERE fonte_pagadora_id = ?', [ids.fonte]);
     await e.executar(
       'DELETE r FROM regra_desconto_grupo r JOIN contrato_fonte_pagadora k ON k.id = r.contrato_fonte_pagadora_id WHERE k.fonte_pagadora_id = ?',
@@ -102,6 +117,21 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
         "INSERT INTO via_acesso_cirurgico (codigo, descricao, criado_em) VALUES (?, 'VIAS DIFERENTES F37R', ?)",
         [`${P}-DIF`, agora],
       );
+      ids.funcao = await garantir(
+        e,
+        'SELECT id FROM funcao_equipe_cobranca WHERE codigo = ?',
+        [`${P}-AUX1`],
+        "INSERT INTO funcao_equipe_cobranca (codigo, descricao, tipo_funcao, ordem_auxiliar, criado_em) VALUES (?, 'PRIMEIRO AUXILIAR F37R', 'auxiliar', 1, ?)",
+        [`${P}-AUX1`, agora],
+      );
+      // Regime sintético (código fora do padrão oficial), apagado no fim.
+      ids.regime = await garantir(
+        e,
+        "SELECT id FROM regime_atendimento WHERE codigo_tiss = ? AND versao_fonte = 'TESTE-F37R'",
+        [P],
+        "INSERT INTO regime_atendimento (codigo_tiss, descricao, versao_fonte, criado_em) VALUES (?, 'INTERNACAO F37R', 'TESTE-F37R', ?)",
+        [P, agora],
+      );
       await limpar(e);
       ids.contrato = await e.inserir(
         `INSERT INTO contrato_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, numero, descricao, vigencia_inicio,
@@ -111,8 +141,9 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       // Percentual: 120% do honorário vigente; 80% do mat/med encerrado em 2025-06-30.
       await e.inserir(
         `INSERT INTO regra_percentual_cobranca (estabelecimento_id, fonte_pagadora_id, contrato_fonte_pagadora_id,
-           tabela_preco_id, componente, percentual, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, 'honorario', 120, '2025-01-01', ?)`,
-        [ids.est, ids.fonte, ids.contrato, ids.tabela, agora],
+           tabela_preco_id, funcao_equipe_cobranca_id, componente, percentual, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, ?, ?, 'honorario', 120, '2025-01-01', ?)`,
+        [ids.est, ids.fonte, ids.contrato, ids.tabela, ids.funcao, agora],
       );
       await e.inserir(
         `INSERT INTO regra_percentual_cobranca (estabelecimento_id, fonte_pagadora_id, contrato_fonte_pagadora_id,
@@ -128,8 +159,9 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       // Via de acesso: a do convênio (2º procedimento a 50%) e a padrão de todas (70%), no estabelecimento.
       await e.inserir(
         `INSERT INTO regra_via_acesso (estabelecimento_id, descricao, fonte_pagadora_id, via_acesso_cirurgico_id,
-           ordem_procedimento, percentual, vigencia_inicio, criado_em) VALUES (?, 'SEGUNDO F37R', ?, ?, 2, 50, '2025-01-01', ?)`,
-        [ids.est, ids.fonte, ids.via, agora],
+           item_faturavel_id, ordem_procedimento, percentual, vigencia_inicio, criado_em)
+         VALUES (?, 'SEGUNDO F37R', ?, ?, ?, 2, 50, '2025-01-01', ?)`,
+        [ids.est, ids.fonte, ids.via, ids.item, agora],
       );
       await e.inserir(
         `INSERT INTO regra_via_acesso (estabelecimento_id, descricao, fonte_pagadora_id, via_acesso_cirurgico_id,
@@ -144,13 +176,26 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       );
       await e.inserir(
         `INSERT INTO item_isento_cobranca (estabelecimento_id, fonte_pagadora_id, contrato_fonte_pagadora_id,
-           item_faturavel_id, motivo, vigencia_inicio, criado_em) VALUES (NULL, ?, ?, ?, 'INCLUSO NO PACOTE F37R', '2025-01-01', ?)`,
-        [ids.fonte, ids.contrato, ids.item, agora],
+           item_faturavel_id, regime_atendimento_id, motivo, vigencia_inicio, criado_em)
+         VALUES (NULL, ?, ?, ?, ?, 'INCLUSO NO PACOTE F37R', '2025-01-01', ?)`,
+        [ids.fonte, ids.contrato, ids.item, ids.regime, agora],
       );
       await e.inserir(
         `INSERT INTO teto_cobranca (estabelecimento_id, fonte_pagadora_id, abrangencia, grupo_faturamento_id, valor_teto,
            acao, vigencia_inicio, criado_em) VALUES (?, ?, 'grupo', ?, 5000, 'alertar', '2025-01-01', ?)`,
         [ids.est, ids.fonte, ids.grupo, agora],
+      );
+      // Teto da conta que transfere o excedente para outra fonte (aqui a própria, sintética).
+      await e.inserir(
+        `INSERT INTO teto_cobranca (estabelecimento_id, fonte_pagadora_id, abrangencia, valor_teto, acao,
+           excedente_fonte_pagadora_id, vigencia_inicio, criado_em)
+         VALUES (?, ?, 'conta', 20000, 'transferir_excedente', ?, '2025-01-01', ?)`,
+        [ids.est, ids.fonte, ids.fonte, agora],
+      );
+      await e.inserir(
+        `INSERT INTO item_alto_custo_contrato (contrato_fonte_pagadora_id, item_faturavel_id, regra, valor_negociado,
+           vigencia_inicio, criado_em) VALUES (?, ?, 'preco_negociado', 1500, '2025-01-01', ?)`,
+        [ids.contrato, ids.item, agora],
       );
     });
     c = {
@@ -169,6 +214,7 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
     if (!nucleo) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f37-regras' }, async (e) => {
       await limpar(e);
+      await e.executar("DELETE FROM regime_atendimento WHERE id = ? AND versao_fonte = 'TESTE-F37R'", [ids.regime]);
     });
     await nucleo.encerrar();
   });
@@ -178,6 +224,11 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
     expect(r.percentuais.map((p) => [p.componente, p.percentual, p.vigente])).toEqual([
       ['honorario', 120, true],
       ['matmed', 80, false],
+    ]);
+    // Cada restrição da regra aparece: o 120% é só do primeiro auxiliar; o mat/med vale para toda função e conta.
+    expect(r.percentuais.map((p) => [p.funcaoEquipe, p.tipoConta, p.plano])).toEqual([
+      ['PRIMEIRO AUXILIAR F37R', null, null],
+      [null, null, null],
     ]);
     const antes = await leitor.regras(c, ids.fonte, '2025-03-01');
     expect(antes.percentuais.every((p) => p.vigente)).toBe(true);
@@ -195,15 +246,22 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
       vigente: true,
     });
     // A do convênio primeiro, a padrão de todas depois; a de outro estabelecimento não aparece.
-    expect(r.viasAcesso.map((v) => [v.descricao, v.ordem, v.percentual, v.padraoDeTodas])).toEqual([
-      ['SEGUNDO F37R', 2, 50, false],
-      ['PADRAO F37R', 2, 70, true],
+    expect(r.viasAcesso.map((v) => [v.descricao, v.ordem, v.percentual, v.padraoDeTodas, v.item, v.tipoLancamento])).toEqual([
+      ['SEGUNDO F37R', 2, 50, false, 'CONSULTA SINTETICA F37R', null],
+      ['PADRAO F37R', 2, 70, true, null, null],
     ]);
-    expect(r.isentos.map((i) => [i.item, i.motivo, i.vigente])).toEqual([
-      ['CONSULTA SINTETICA F37R', 'INCLUSO NO PACOTE F37R', true],
+    // O isento só no regime de internação não aparece como isento em tudo.
+    expect(r.isentos.map((i) => [i.item, i.regime, i.motivo, i.vigente])).toEqual([
+      ['CONSULTA SINTETICA F37R', 'INTERNACAO F37R', 'INCLUSO NO PACOTE F37R', true],
     ]);
-    expect(r.tetos.map((t) => [t.abrangencia, t.grupo, t.valorTeto, t.acao])).toEqual([
-      ['grupo', 'MATERIAIS F37R', 5000, 'alertar'],
+    expect(
+      r.tetos.map((t) => [t.abrangencia, t.grupo, t.plano, t.valorTeto, t.acao, t.excedenteFonte, t.excedentePlano]),
+    ).toEqual([
+      ['conta', null, null, 20000, 'transferir_excedente', 'OPERADORA F37R SINTETICA', null],
+      ['grupo', 'MATERIAIS F37R', null, 5000, 'alertar', null, null],
+    ]);
+    expect(r.altoCusto.map((a) => [a.regra, a.item, a.plano, a.valorBase, a.valorNegociado, a.vigente])).toEqual([
+      ['preco_negociado', 'CONSULTA SINTETICA F37R', null, null, 1500, true],
     ]);
   });
 
@@ -214,5 +272,6 @@ describe.skipIf(SEM_BANCO)('regras do acordo com a fonte pagadora (MariaDB)', ()
     expect(r.viasAcesso.map((v) => v.descricao)).toEqual(['OUTRO F37R']);
     expect(r.isentos.map((i) => i.motivo)).toEqual(['INCLUSO NO PACOTE F37R']);
     expect(r.tetos).toEqual([]);
+    expect(r.altoCusto).toEqual([]);
   });
 });

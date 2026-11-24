@@ -54,8 +54,10 @@ import {
 import {
   indicesConvenioPropria,
   indicesNaDataPropria,
+  porteAnestesicoNaDataPropria,
   porteNaDataPropria,
   portesPropria,
+  type RegimePorte,
 } from './indices-propria.js';
 import type {
   ContextoGravacaoPreco,
@@ -240,7 +242,8 @@ function convenioDe(r: Linha): ConvenioPreco {
     honorariosExterna: nn(r['tab_externa']),
     diarias: nn(r['tab_diarias']),
     matmed: nn(r['tab_matmed']),
-    // A tabela de porte anestésico do convênio é a de honorários do acordo (internação, senão a externa).
+    // Tabela de porte anestésico mostrada na tela do convênio: a de honorários do acordo vigente hoje (internação,
+    // senão a ambulatorial). O valor do porte numa data e num regime sai de porteAnestesicoNaData, nunca daqui.
     porte: nn(r['tab_internacao']) ?? nn(r['tab_externa']),
   };
 }
@@ -973,6 +976,11 @@ export class FontePrecosPropria implements FontePrecos {
 
   porteNaData(c: CtxPrecos, conv: number, porte: string, data: string) {
     return this.ler(c, (l, est) => porteNaDataPropria(l, est, conv, porte, data));
+  }
+
+  /** Porte anestésico do acordo pela tabela de honorários do regime vigente na data do atendimento. */
+  porteAnestesicoNaData(c: CtxPrecos, conv: number, regime: RegimePorte, porte: string, data: string) {
+    return this.ler(c, (l, est) => porteAnestesicoNaDataPropria(l, est, conv, regime, porte, data));
   }
 
   credenciamento(

@@ -21,7 +21,22 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (MariaDB)', () => {
   let nucleo: NucleoProprio;
   let fonte: FontePrecosPropria;
-  const ids = { est: 0, outroEst: 0, fonte: 0, tabela: 0, contrato: 0, ch: 0, filme: 0, uco: 0, porte: 0 };
+  const ids = {
+    est: 0,
+    outroEst: 0,
+    fonte: 0,
+    tabela: 0,
+    tabelaB: 0,
+    amb1: 0,
+    amb2: 0,
+    contrato: 0,
+    ch: 0,
+    ch2: 0,
+    chInativo: 0,
+    filme: 0,
+    uco: 0,
+    porte: 0,
+  };
   let c: CtxPrecos;
   let outro: CtxPrecos;
 
@@ -34,7 +49,11 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
       ids.fonte,
       ids.tabela,
     ]);
-    await e.executar('DELETE FROM valor_porte_anestesico WHERE tabela_preco_id = ?', [ids.tabela]);
+    await e.executar('DELETE FROM valor_porte_anestesico WHERE tabela_preco_id IN (?, ?, ?)', [
+      ids.tabela,
+      ids.amb1,
+      ids.amb2,
+    ]);
     await e.executar(
       'DELETE ctv FROM contrato_tabela_vigencia ctv JOIN contrato_fonte_pagadora k ON k.id = ctv.contrato_fonte_pagadora_id WHERE k.fonte_pagadora_id = ?',
       [ids.fonte],
@@ -88,17 +107,31 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
            VALUES (?, ?, 'HONORARIOS F37I', 'honorario', 'propria', 'real', 'ativa', ?)`,
         [ids.est, `${P}-HON`, agora],
       );
-      const indice = (codigo: string, tipo: string) =>
+      const tabela = (estab: number, codigo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM tabela_preco WHERE estabelecimento_id = ? AND codigo = ?',
+          [estab, codigo],
+          `INSERT INTO tabela_preco (estabelecimento_id, codigo, descricao, tipo_item, referencia, moeda_calculo, situacao, criado_em)
+             VALUES (?, ?, ?, 'honorario', 'propria', 'real', 'ativa', ?)`,
+          [estab, codigo, `HONORARIOS ${codigo}`, agora],
+        );
+      ids.tabelaB = await tabela(ids.outroEst, `${P}-HONB`);
+      ids.amb1 = await tabela(ids.est, `${P}-AMB1`);
+      ids.amb2 = await tabela(ids.est, `${P}-AMB2`);
+      const indice = (codigo: string, tipo: string, ativo = true) =>
         garantir(
           e,
           'SELECT id FROM indice_cobranca WHERE codigo = ?',
           [codigo],
-          'INSERT INTO indice_cobranca (codigo, descricao, tipo_indice, criado_em) VALUES (?, ?, ?, ?)',
-          [codigo, `INDICE ${codigo}`, tipo, agora],
+          'INSERT INTO indice_cobranca (codigo, descricao, tipo_indice, ativo, criado_em) VALUES (?, ?, ?, ?, ?)',
+          [codigo, `INDICE ${codigo}`, tipo, ativo, agora],
         );
       ids.ch = await indice(`${P}-CH`, 'coeficiente_honorario');
       ids.filme = await indice(`${P}-FILME`, 'filme');
       ids.uco = await indice(`${P}-UCO`, 'custo_operacional');
+      ids.ch2 = await indice(`${P}-CH2`, 'coeficiente_honorario');
+      ids.chInativo = await indice(`${P}-CHX`, 'coeficiente_honorario', false);
       ids.porte = await garantir(
         e,
         'SELECT id FROM porte_procedimento WHERE codigo = ?',
@@ -117,9 +150,19 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
            VALUES (?, 'honorario_internacao', ?, '2025-01-01', ?)`,
         [ids.contrato, ids.tabela, agora],
       );
+      // Ambulatorial: AMB1 em 2025, AMB2 desde 2026 (o porte anestésico segue o regime e a data do atendimento).
+      for (const [tab, ini, fim] of [
+        [ids.amb1, '2025-01-01', '2025-12-31'],
+        [ids.amb2, '2026-01-01', null],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO contrato_tabela_vigencia (contrato_fonte_pagadora_id, tipo_item, tabela_preco_id, vigencia_inicio,
+             vigencia_fim, criado_em) VALUES (?, 'honorario_ambulatorial', ?, ?, ?, ?)`,
+          [ids.contrato, tab, ini, fim, agora],
+        );
       const valor = (
         indice: number,
-        escopo: 'fonte' | 'tabela',
+        escopo: 'fonte' | 'tabela' | 'fonte+B',
         vig: string,
         v: number,
         operacao = 'inclusao',
@@ -131,8 +174,8 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
             indice,
             operacao,
             agora,
-            escopo === 'fonte' ? ids.fonte : null,
-            escopo === 'tabela' ? ids.tabela : null,
+            escopo === 'tabela' ? null : ids.fonte,
+            escopo === 'tabela' ? ids.tabela : escopo === 'fonte+B' ? ids.tabelaB : null,
             vig,
             v,
             agora,
@@ -146,6 +189,12 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
       await valor(ids.filme, 'tabela', '2025-01-01', 21.7);
       await valor(ids.uco, 'fonte', '2025-01-01', 12);
       await valor(ids.uco, 'fonte', '2026-01-01', 99, 'exclusao');
+      // Linha da fonte com a tabela de OUTRO estabelecimento: nunca vale para este (venceria pela vigência).
+      await valor(ids.ch, 'fonte+B', '2026-05-01', 0.99);
+      // Índice inativo: fora do cálculo e da linha do tempo.
+      await valor(ids.chInativo, 'fonte', '2026-04-01', 0.77);
+      // Segundo CH no acordo a partir de 2027: dois índices do mesmo tipo no mesmo nível (ambíguo).
+      await valor(ids.ch2, 'fonte', '2027-01-01', 0.6);
       for (const [vig, v] of [
         ['2025-01-01', 200],
         ['2026-02-01', 210],
@@ -163,6 +212,15 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
           `INSERT INTO valor_porte_anestesico (tabela_preco_id, ocorrido_em, porte_anestesico, vigencia_inicio, valor,
              valor_horario_especial, criado_em) VALUES (?, ?, ?, '2025-01-01', ?, ?, ?)`,
           [ids.tabela, agora, porte, v, v * 1.3, agora],
+        );
+      for (const [tab, v] of [
+        [ids.amb1, 80],
+        [ids.amb2, 95],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO valor_porte_anestesico (tabela_preco_id, ocorrido_em, porte_anestesico, vigencia_inicio, valor,
+             criado_em) VALUES (?, ?, '1', '2025-01-01', ?, ?)`,
+          [tab, agora, v, agora],
         );
     });
     c = {
@@ -198,8 +256,20 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
     expect(em2026.get(5)).toBe(12);
     // Antes de toda vigência: nada.
     expect((await fonte.indicesNaData(c, ids.fonte, '2024-06-01')).size).toBe(0);
-    // Outro estabelecimento não vê a tabela do acordo deste (só o valor do acordo da fonte pagadora).
-    expect((await fonte.indicesNaData(outro, ids.fonte, '2025-06-01')).get(4)).toBeUndefined();
+    // A linha da fonte com a tabela de outro estabelecimento (0,99 desde 2026-05) não entra: o CH segue 0,55.
+    // O índice inativo (0,77 desde 2026-04) também não.
+    expect((await fonte.indicesNaData(c, ids.fonte, '2026-06-01')).get(1)).toBe(0.55);
+    // O outro estabelecimento não tem acordo com a fonte: nada vale para ele (nem o CH e o UCO do acordo).
+    expect((await fonte.indicesNaData(outro, ids.fonte, '2025-06-01')).size).toBe(0);
+    expect((await fonte.indicesNaData(outro, ids.fonte, '2026-06-01')).size).toBe(0);
+    expect(await fonte.porteNaData(outro, ids.fonte, `${P}3A`, '2026-06-01')).toBeNull();
+    expect(await fonte.indicesConvenio(outro, ids.fonte)).toEqual([]);
+  });
+
+  it('dois CH diferentes valorados no acordo na mesma data: recusa em vez de escolher um em silêncio', async () => {
+    await expect(fonte.indicesNaData(c, ids.fonte, '2027-06-01')).rejects.toMatchObject({
+      problema: { codigo: 'indice-ambiguo' },
+    });
   });
 
   it('porte de honorário na data pelo código; desconhecido é null', async () => {
@@ -232,7 +302,10 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
     const lista = await fonte.indicesConvenio(c, ids.fonte);
     const ch = lista.filter((i) => i.tipo === 'indice' && i.chave === '1').map((i) => [i.data, i.valor]);
     // Na mesma data, o valor do acordo encobre o da tabela (0,40 não aparece: nunca valeu para este convênio).
+    // O CH2 (outro índice do mesmo tipo) aparece com a sua vigência; o inativo e o da tabela de outro
+    // estabelecimento, não.
     expect(ch).toEqual([
+      ['2027-01-01', 0.6],
       ['2026-03-01', 0.55],
       ['2025-01-01', 0.5],
     ]);
@@ -255,5 +328,19 @@ describe.skipIf(SEM_BANCO)('índices de cobrança e portes da fonte própria (Ma
     ]);
     expect(await fonte.portes(c, ids.tabela, 1, 1)).toMatchObject({ total: 2 });
     expect((await fonte.portes(outro, ids.tabela, 0, 50)).total).toBe(0);
+  });
+
+  it('porte anestésico na data: a tabela sai do regime e da vigência do acordo, não da data de hoje', async () => {
+    const em = (regime: 'internacao' | 'ambulatorial', data: string) =>
+      fonte.porteAnestesicoNaData(c, ids.fonte, regime, '1', data);
+    expect(await em('internacao', '2025-06-01')).toEqual({
+      tabela: ids.tabela,
+      valor: 150.5,
+      valorHorarioEspecial: 195.65,
+    });
+    expect(await em('ambulatorial', '2025-06-01')).toMatchObject({ tabela: ids.amb1, valor: 80 });
+    expect(await em('ambulatorial', '2026-06-01')).toMatchObject({ tabela: ids.amb2, valor: 95 });
+    expect(await em('internacao', '2024-06-01')).toBeNull();
+    expect(await fonte.porteAnestesicoNaData(outro, ids.fonte, 'internacao', '1', '2025-06-01')).toBeNull();
   });
 });

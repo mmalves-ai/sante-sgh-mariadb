@@ -2,7 +2,9 @@
 // valor fixo sobre honorário, custo operacional, anestesia, filme e mat/med (regra_percentual_cobranca); desconto
 // ou acréscimo por grupo de despesa (regra_desconto_grupo); percentual por via de acesso na cirurgia múltipla
 // (regra_via_acesso, a regra da fonte pagadora e a padrão de todas); itens isentos (item_isento_cobranca) e tetos
-// de cobrança com a ação no excedente (teto_cobranca). Cada regra vem com a vigência e a marca "vigente na data".
+// de cobrança com a ação no excedente (teto_cobranca) e itens de alto custo do acordo (item_alto_custo_contrato). Cada
+// regra vem com TODAS as dimensões que a restringem (plano, grupo, item, função da equipe, tipo de conta, regime, tipo
+// de lançamento, destino do excedente): uma dimensão nula é "vale para todos". E com a vigência e "vigente na data".
 // Escopo: o estabelecimento da sessão (as regras com estabelecimento nulo valem para todos); nada de outro
 // estabelecimento. Somente leitura.
 import type { Leitor, NucleoProprio } from '@sgh/nucleo';
@@ -33,6 +35,8 @@ export interface RegrasDoAcordo {
     readonly plano: string | null;
     readonly grupo: string | null;
     readonly item: string | null;
+    readonly funcaoEquipe: string | null;
+    readonly tipoConta: string | null;
     readonly percentual: number | null;
     readonly valorFixo: number | null;
     readonly quantidadeFixa: number | null;
@@ -54,6 +58,8 @@ export interface RegrasDoAcordo {
     readonly ordem: number;
     readonly percentual: number;
     readonly criterio: string;
+    readonly item: string | null;
+    readonly tipoLancamento: string | null;
     readonly padraoDeTodas: boolean;
   })[];
   readonly isentos: readonly (VigenciaRegra & {
@@ -61,17 +67,30 @@ export interface RegrasDoAcordo {
     readonly item: string | null;
     readonly grupo: string | null;
     readonly plano: string | null;
+    readonly regime: string | null;
     readonly motivo: string;
   })[];
   readonly tetos: readonly (VigenciaRegra & {
     readonly id: number;
     readonly abrangencia: string;
+    readonly plano: string | null;
     readonly item: string | null;
     readonly grupo: string | null;
     readonly valorTeto: number | null;
     readonly quantidadeMaxima: number | null;
     readonly ocorrenciasMaximas: number | null;
     readonly acao: string;
+    readonly excedenteFonte: string | null;
+    readonly excedentePlano: string | null;
+  })[];
+  readonly altoCusto: readonly (VigenciaRegra & {
+    readonly id: number;
+    readonly plano: string | null;
+    readonly item: string | null;
+    readonly grupo: string | null;
+    readonly regra: string;
+    readonly valorBase: number | null;
+    readonly valorNegociado: number | null;
   })[];
 }
 
@@ -95,12 +114,15 @@ export async function regrasDoAcordoPropria(
   data: string,
 ): Promise<RegrasDoAcordo> {
   const percentuais = await l.consultar(
-    `SELECT r.*, p.descricao AS plano, g.descricao AS grupo, i.descricao AS item
+    `SELECT r.*, p.descricao AS plano, g.descricao AS grupo, i.descricao AS item, fe.descricao AS funcao_equipe,
+            tc.descricao AS tipo_conta
        FROM regra_percentual_cobranca r
        JOIN tabela_preco t ON t.id = r.tabela_preco_id AND t.estabelecimento_id = ?
        LEFT JOIN plano_fonte_pagadora p ON p.id = r.plano_fonte_pagadora_id
        LEFT JOIN grupo_faturamento g ON g.id = r.grupo_faturamento_id
        LEFT JOIN item_faturavel i ON i.id = r.item_faturavel_id
+       LEFT JOIN funcao_equipe_cobranca fe ON fe.id = r.funcao_equipe_cobranca_id
+       LEFT JOIN tipo_conta tc ON tc.id = r.tipo_conta_id
       WHERE r.fonte_pagadora_id = ? AND ${DO_ESTAB('r')}
       ORDER BY r.componente, r.vigencia_inicio DESC, r.id DESC`,
     [est, conv, est],
@@ -118,31 +140,50 @@ export async function regrasDoAcordoPropria(
     { teto: 2_000 },
   );
   const vias = await l.consultar(
-    `SELECT r.*, v.descricao AS via
+    `SELECT r.*, v.descricao AS via, i.descricao AS item, tl.descricao AS tipo_lancamento
        FROM regra_via_acesso r JOIN via_acesso_cirurgico v ON v.id = r.via_acesso_cirurgico_id
+       LEFT JOIN item_faturavel i ON i.id = r.item_faturavel_id
+       LEFT JOIN tipo_lancamento tl ON tl.id = r.tipo_lancamento_id
       WHERE (r.fonte_pagadora_id = ? OR r.fonte_pagadora_id IS NULL) AND ${DO_ESTAB('r')}
       ORDER BY (r.fonte_pagadora_id IS NULL), v.descricao, r.ordem_procedimento, r.vigencia_inicio DESC, r.id DESC`,
     [conv, est],
     { teto: 2_000 },
   );
   const isentos = await l.consultar(
-    `SELECT r.*, i.descricao AS item, g.descricao AS grupo, p.descricao AS plano
+    `SELECT r.*, i.descricao AS item, g.descricao AS grupo, p.descricao AS plano, ra.descricao AS regime
        FROM item_isento_cobranca r
        LEFT JOIN item_faturavel i ON i.id = r.item_faturavel_id
        LEFT JOIN grupo_faturamento g ON g.id = r.grupo_faturamento_id
        LEFT JOIN plano_fonte_pagadora p ON p.id = r.plano_fonte_pagadora_id
+       LEFT JOIN regime_atendimento ra ON ra.id = r.regime_atendimento_id
       WHERE r.fonte_pagadora_id = ? AND ${DO_ESTAB('r')}
       ORDER BY r.vigencia_inicio DESC, r.id DESC`,
     [conv, est],
     { teto: 2_000 },
   );
   const tetos = await l.consultar(
-    `SELECT r.*, i.descricao AS item, g.descricao AS grupo
+    `SELECT r.*, i.descricao AS item, g.descricao AS grupo, p.descricao AS plano, xf.nome AS excedente_fonte,
+            xp.descricao AS excedente_plano
        FROM teto_cobranca r
        LEFT JOIN item_faturavel i ON i.id = r.item_faturavel_id
        LEFT JOIN grupo_faturamento g ON g.id = r.grupo_faturamento_id
+       LEFT JOIN plano_fonte_pagadora p ON p.id = r.plano_fonte_pagadora_id
+       LEFT JOIN fonte_pagadora xf ON xf.id = r.excedente_fonte_pagadora_id
+       LEFT JOIN plano_fonte_pagadora xp ON xp.id = r.excedente_plano_fonte_pagadora_id
       WHERE r.fonte_pagadora_id = ? AND ${DO_ESTAB('r')}
       ORDER BY r.abrangencia, r.vigencia_inicio DESC, r.id DESC`,
+    [conv, est],
+    { teto: 2_000 },
+  );
+  const altoCusto = await l.consultar(
+    `SELECT r.*, p.descricao AS plano, i.descricao AS item, g.descricao AS grupo
+       FROM item_alto_custo_contrato r
+       JOIN contrato_fonte_pagadora k ON k.id = r.contrato_fonte_pagadora_id
+       LEFT JOIN plano_fonte_pagadora p ON p.id = r.plano_fonte_pagadora_id
+       LEFT JOIN item_faturavel i ON i.id = r.item_faturavel_id
+       LEFT JOIN grupo_faturamento g ON g.id = r.grupo_faturamento_id
+      WHERE k.fonte_pagadora_id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL
+      ORDER BY r.regra, r.vigencia_inicio DESC, r.id DESC`,
     [conv, est],
     { teto: 2_000 },
   );
@@ -156,6 +197,8 @@ export async function regrasDoAcordoPropria(
       plano: txt(r['plano']),
       grupo: txt(r['grupo']),
       item: txt(r['item']),
+      funcaoEquipe: txt(r['funcao_equipe']),
+      tipoConta: txt(r['tipo_conta']),
       percentual: num(r['percentual']),
       valorFixo: num(r['valor_fixo']),
       quantidadeFixa: num(r['quantidade_fixa']),
@@ -197,6 +240,8 @@ export async function regrasDoAcordoPropria(
       ordem: Number(r['ordem_procedimento']),
       percentual: Number(r['percentual']),
       criterio: String(r['criterio_ordem']),
+      item: txt(r['item']),
+      tipoLancamento: txt(r['tipo_lancamento']),
       padraoDeTodas: r['fonte_pagadora_id'] === null || r['fonte_pagadora_id'] === undefined,
       ...vig(r, data, sim(r['ativo'])),
     })),
@@ -205,18 +250,32 @@ export async function regrasDoAcordoPropria(
       item: txt(r['item']),
       grupo: txt(r['grupo']),
       plano: txt(r['plano']),
+      regime: txt(r['regime']),
       motivo: String(r['motivo']),
       ...vig(r, data),
     })),
     tetos: tetos.map((r) => ({
       id: Number(r['id']),
       abrangencia: String(r['abrangencia']),
+      plano: txt(r['plano']),
       item: txt(r['item']),
       grupo: txt(r['grupo']),
       valorTeto: num(r['valor_teto']),
       quantidadeMaxima: num(r['quantidade_maxima']),
       ocorrenciasMaximas: num(r['ocorrencias_maximas']),
       acao: String(r['acao']),
+      excedenteFonte: txt(r['excedente_fonte']),
+      excedentePlano: txt(r['excedente_plano']),
+      ...vig(r, data, sim(r['ativo'])),
+    })),
+    altoCusto: altoCusto.map((r) => ({
+      id: Number(r['id']),
+      plano: txt(r['plano']),
+      item: txt(r['item']),
+      grupo: txt(r['grupo']),
+      regra: String(r['regra']),
+      valorBase: num(r['valor_base']),
+      valorNegociado: num(r['valor_negociado']),
       ...vig(r, data, sim(r['ativo'])),
     })),
   };
