@@ -5,7 +5,8 @@
 //   POST /api/sadt/catalogo/exames/:id                           altera o exame (versão vista; desativa sem apagar)
 //   POST /api/sadt/catalogo/exames/:id/:tipo                     inclui ou altera o vínculo (setor, material,
 //                                                                preparo, lateralidade, ligado, analito)
-//   POST /api/sadt/catalogo/analitos-exame/:id/faixas            nova versão da faixa de referência
+//   GET  /api/sadt/catalogo/opcoes                               listas dos seletores (setor, material, analito...)
+//   POST /api/sadt/catalogo/analitos-exame/:id/faixas            nova versão da faixa (uma ou várias, cobertura)
 //   POST /api/sadt/catalogo/analitos-exame/:id/formulas          nova versão da fórmula de cálculo
 // Ler: `sadt.catalogo.ler`; gravar: `sadt.catalogo.editar` (o cargo dá o nível de acesso; o administrador pode tudo).
 // Toda gravação exige a Idempotency-Key e vai à trilha na mesma transação (Executor).
@@ -19,7 +20,7 @@ import {
   CATALOGO_SADT,
   ESQUEMAS_VINCULO,
   esquemaExameCatalogo,
-  esquemaFaixaCatalogo,
+  esquemaFaixasCatalogo,
   esquemaFormulaCatalogo,
   type PortaCatalogoSadtPropria,
   type TipoVinculo,
@@ -52,6 +53,12 @@ export class CatalogoSadtController {
     return this.p().listar(sessaoDe(req).porta, String(termo ?? '').slice(0, 80), tipo ? String(tipo) : null);
   }
 
+  @Get('opcoes')
+  @Permissao('sadt.catalogo.ler')
+  opcoes(@Req() req: RequisicaoAutorizada) {
+    return this.p().opcoes(sessaoDe(req).porta);
+  }
+
   @Get('exames/:id')
   @Permissao('sadt.catalogo.ler')
   ficha(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
@@ -72,11 +79,12 @@ export class CatalogoSadtController {
   @Permissao('sadt.catalogo.editar')
   @AuditadoNoHandler('o exame com a trilha_auditoria na mesma transação (Executor)')
   alterar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    const e = corpo(esquemaExameCatalogo, b);
+    // Alteração: só os campos enviados (o que a tela não mandou continua como está no banco).
+    const e = corpo(esquemaExameCatalogo.partial(), b);
     if (!e.versao)
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
     const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
-    return this.p().salvarExame(c, idDaRota(id), e);
+    return this.p().salvarExame(c, idDaRota(id), b);
   }
 
   @Post('exames/:id/:tipo')
@@ -92,11 +100,15 @@ export class CatalogoSadtController {
     if (!(TIPOS as string[]).includes(tipo))
       throw new ErroProblema('nao-encontrado', 404, 'Vínculo desconhecido', `Use: ${TIPOS.join(', ')}.`);
     const t = tipo as TipoVinculo;
-    const e = corpo(ESQUEMAS_VINCULO[t], b) as Record<string, unknown>;
-    if (e['id'] && !e['versao'])
+    const alteracao = Boolean(b && typeof b === 'object' && (b as Record<string, unknown>)['id']);
+    const e = corpo(alteracao ? ESQUEMAS_VINCULO[t].partial() : ESQUEMAS_VINCULO[t], b) as Record<
+      string,
+      unknown
+    >;
+    if (alteracao && !e['versao'])
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
     const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
-    return this.p().salvarVinculo(c, t, idDaRota(id), e);
+    return this.p().salvarVinculo(c, t, idDaRota(id), b);
   }
 
   @Post('analitos-exame/:id/faixas')
@@ -105,7 +117,7 @@ export class CatalogoSadtController {
   @AuditadoNoHandler('a faixa de referência e a versão com a trilha_auditoria na mesma transação (Executor)')
   faixa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
-    return this.p().novaFaixa(c, idDaRota(id), corpo(esquemaFaixaCatalogo, b));
+    return this.p().novaFaixa(c, idDaRota(id), corpo(esquemaFaixasCatalogo, b));
   }
 
   @Post('analitos-exame/:id/formulas')

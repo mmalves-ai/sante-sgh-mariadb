@@ -8,12 +8,13 @@
 // versão da faixa guarda o que mudou); o exame sai por desativação com a data. As regras ficam no domínio
 // (@sgh/dominio-sadt, catalogo/regras.ts) e são conferidas antes de gravar, com a mensagem por campo.
 import {
+  type ExameCatalogo,
+  type FalhaCatalogo,
   padroesADesmarcar,
-  planejarNovaVersaoFaixa,
+  planejarNovasFaixas,
+  planejarNovaVersaoFormula,
   validarExame,
   validarExameLigado,
-  validarFormula,
-  type FalhaCatalogo,
 } from '@sgh/dominio-sadt';
 import {
   type ContextoNucleo,
@@ -176,6 +177,25 @@ export const esquemaFormulaCatalogo = z.object({
     )
     .max(30),
 });
+
+/** Uma ou várias faixas numa operação (a cobertura de idade que sobra vai junto; ver o domínio). */
+export const esquemaFaixasCatalogo = z.union([
+  z.object({ faixas: z.array(esquemaFaixaCatalogo).min(1).max(20) }),
+  esquemaFaixaCatalogo.transform((f) => ({ faixas: [f] })),
+]);
+
+/**
+ * Na alteração vale só o que veio: o esquema parcial (sem default) e só as chaves presentes no corpo. O campo que a tela
+ * não mandou continua como está no banco.
+ */
+export function soEnviados(
+  esquema: { partial(): { parse(x: unknown): unknown } },
+  entrada: unknown,
+): Record<string, unknown> {
+  const bruto = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
+  const lido = esquema.partial().parse(bruto) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(lido).filter(([k]) => bruto[k] !== undefined));
+}
 
 const TABELAS = [
   'exame',
@@ -357,70 +377,90 @@ export class PortaCatalogoSadtPropria {
     return JSON.parse(String(r.resultado['resultado'] ?? 'null')) as T;
   }
 
-  /** Inclui (sem id) ou altera (com id e a versão vista) o exame, depois de conferir as regras do domínio. */
-  salvarExame(c: ContextoCatalogo, exameId: number | null, e: ExameCatalogoEntrada) {
-    const falhas = validarExame(e);
-    if (falhas.length) recusar(falhas);
+  /**
+   * Inclui (sem id) ou altera (com id e a versão vista) o exame, depois de conferir as regras do domínio. Na alteração
+   * grava só os campos enviados; a regra é conferida sobre o exame como fica (o do banco com o que mudou).
+   */
+  salvarExame(c: ContextoCatalogo, exameId: number | null, entrada: unknown) {
+    const enviado = exameId ? soEnviados(esquemaExameCatalogo, entrada) : esquemaExameCatalogo.parse(entrada);
     return this.gravar(c, exameId ? 'exame-alterado' : 'exame-incluido', 'exame', async (tx) => {
-      const { versao: v, ativo, ...resto } = e;
-      const valores = { ...colunas(resto), ativo };
+      const [atual] = exameId
+        ? await tx.consultarParaAtualizar(`SELECT * FROM exame WHERE id = ? AND excluido_em IS NULL`, [
+            exameId,
+          ])
+        : [null];
+      if (exameId && !atual) throw inexistente('O exame');
+      const fica = { ...(atual ? camel(atual) : {}), ...enviado } as unknown as ExameCatalogo & {
+        ativo: boolean;
+      };
+      const falhas = validarExame(fica);
+      if (falhas.length) recusar(falhas);
       const duplicado = await tx.consultar(
         `SELECT id FROM exame WHERE (codigo = ? OR sigla = ?) AND id <> ? LIMIT 1`,
-        [e.codigo, e.sigla, exameId ?? 0],
+        [fica.codigo, fica.sigla, exameId ?? 0],
       );
       if (duplicado.length)
         recusar([{ campo: 'codigo', mensagem: 'Já existe exame com este código ou sigla.' }]);
-      if (!exameId) {
-        const novo = await tx.incluir('exame', { ...valores, desativado_em: ativo ? null : new Date() });
+      const valores = colunas(enviado);
+      if (!exameId || !atual) {
+        const novo = await tx.incluir('exame', { ...valores, desativado_em: fica.ativo ? null : new Date() });
         return { id: novo, versao: 1 };
       }
-      const [atual] = await tx.consultarParaAtualizar(`SELECT ativo FROM exame WHERE id = ?`, [exameId]);
-      if (!atual) throw inexistente('O exame');
-      const desativado = !ativo && bool(atual['ativo']) ? { desativado_em: new Date() } : {};
-      const reativado = ativo ? { desativado_em: null } : {};
-      const nova = await tx.alterar('exame', exameId, v ?? 0, { ...valores, ...desativado, ...reativado });
+      if ('ativo' in enviado && Boolean(enviado['ativo']) !== bool(atual['ativo']))
+        valores['desativado_em'] = enviado['ativo'] ? null : new Date();
+      const nova = await tx.alterar('exame', exameId, Number(enviado['versao'] ?? 0), valores);
       return { id: exameId, versao: nova };
     });
   }
 
-  /** Inclui ou altera um vínculo do exame; "remover" é inativar (ativo = false), nunca apagar. */
-  salvarVinculo(c: ContextoCatalogo, tipo: TipoVinculo, exameId: number, entrada: Record<string, unknown>) {
-    const e = ESQUEMAS_VINCULO[tipo].parse(entrada) as Record<string, unknown> & {
-      id?: number;
-      versao?: number;
-      ativo: boolean;
-      padrao?: boolean;
-    };
+  /**
+   * Inclui ou altera um vínculo do exame; "remover" é inativar (ativo = false), nunca apagar. Na alteração grava só os
+   * campos enviados (o resto continua como está).
+   */
+  salvarVinculo(c: ContextoCatalogo, tipo: TipoVinculo, exameId: number, entrada: unknown) {
+    const bruto = (entrada && typeof entrada === 'object' ? entrada : {}) as Record<string, unknown>;
+    const alteracao = bruto['id'] !== undefined && bruto['id'] !== null;
+    const e = alteracao
+      ? soEnviados(ESQUEMAS_VINCULO[tipo], bruto)
+      : (ESQUEMAS_VINCULO[tipo].parse(bruto) as Record<string, unknown>);
+    const vid = alteracao ? Number(e['id']) : null;
     const tabela = TABELA_VINCULO[tipo];
-    return this.gravar(c, `${tipo}-${e.id ? 'alterado' : 'incluido'}`, tabela, async (tx) => {
+    return this.gravar(c, `${tipo}-${vid ? 'alterado' : 'incluido'}`, tabela, async (tx) => {
       const [ex] = await tx.consultarParaAtualizar(
         `SELECT id FROM exame WHERE id = ? AND excluido_em IS NULL`,
         [exameId],
       );
       if (!ex) throw inexistente('O exame');
-      if (tipo === 'ligado' && e.ativo) {
+      let atual: Record<string, unknown> = {};
+      if (vid) {
+        const [l] = await tx.consultarParaAtualizar(`SELECT * FROM ${tabela} WHERE id = ?`, [vid]);
+        if (!l || Number(l['exame_id']) !== exameId) throw inexistente('O vínculo');
+        atual = camel(l);
+      }
+      const fica = { ...atual, ...e };
+      if (tipo === 'ligado' && fica['ativo']) {
         const ligacoes = await tx.consultar(
           `SELECT exame_id AS de, secundario_exame_id AS para FROM exame_secundario
             WHERE ativo = TRUE AND excluido_em IS NULL AND id <> ?`,
-          [e.id ?? 0],
+          [vid ?? 0],
         );
         const falhas = validarExameLigado(
           exameId,
-          Number(e['secundarioExameId']),
+          Number(fica['secundarioExameId']),
           ligacoes.map((l) => ({ de: Number(l['de']), para: Number(l['para']) })),
         );
         if (falhas.length) recusar(falhas);
       }
+      const valores = colunas(e);
+      if (tipo === 'material' && 'ativo' in e && Boolean(e['ativo']) !== Boolean(atual['ativo'] ?? true))
+        valores['inativado_em'] = e['ativo'] ? null : new Date();
+      if (tipo === 'material' && !vid && !e['ativo']) valores['inativado_em'] = new Date();
       let alvo: number;
-      const valores = { ...colunas(e), exame_id: exameId };
-      if (tipo === 'material' && !e.ativo) Object.assign(valores, { inativado_em: new Date() });
-      if (e.id) {
-        const [l] = await tx.consultarParaAtualizar(`SELECT exame_id FROM ${tabela} WHERE id = ?`, [e.id]);
-        if (!l || Number(l['exame_id']) !== exameId) throw inexistente('O vínculo');
-        await tx.alterar(tabela, e.id, e.versao ?? 0, valores);
-        alvo = e.id;
-      } else alvo = await tx.incluir(tabela, valores);
-      if (e.padrao && e.ativo) {
+      if (vid) {
+        await tx.alterar(tabela, vid, Number(e['versao'] ?? 0), valores);
+        alvo = vid;
+      } else alvo = await tx.incluir(tabela, { ...valores, exame_id: exameId });
+      if (fica['padrao'] && fica['ativo']) {
         const outros = await tx.consultarParaAtualizar(
           `SELECT id, padrao, ativo, versao FROM ${tabela} WHERE exame_id = ? AND padrao = TRUE`,
           [exameId],
@@ -437,9 +477,12 @@ export class PortaCatalogoSadtPropria {
     });
   }
 
-  /** Nova versão da faixa de referência do analito no exame: encerra a anterior do estrato e guarda as versões. */
+  /**
+   * Nova versão da faixa de referência do analito no exame (uma ou várias faixas numa operação): encerra na véspera as
+   * do estrato que as novas cobrem inteiras e guarda as versões. A cobertura parcial é recusada pelo domínio.
+   */
   novaFaixa(c: ContextoCatalogo, exameAnalitoId: number, entrada: unknown) {
-    const f = esquemaFaixaCatalogo.parse(entrada);
+    const { faixas } = esquemaFaixasCatalogo.parse(entrada);
     return this.gravar(c, 'faixa-nova-versao', 'faixa_referencia', async (tx, hoje) => {
       const [ea] = await tx.consultarParaAtualizar(`SELECT id FROM exame_analito WHERE id = ?`, [
         exameAnalitoId,
@@ -448,10 +491,13 @@ export class PortaCatalogoSadtPropria {
       const vigentes = await tx.consultarParaAtualizar(
         `SELECT * FROM faixa_referencia WHERE exame_analito_id = ? AND ativo = TRUE
             AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
-        [exameAnalitoId, f.vigenciaInicio],
+        [
+          exameAnalitoId,
+          faixas.reduce((m, f) => (f.vigenciaInicio < m ? f.vigenciaInicio : m), '9999-12-31'),
+        ],
       );
-      const plano = planejarNovaVersaoFaixa(
-        f,
+      const plano = planejarNovasFaixas(
+        faixas,
         vigentes.map((v) => ({
           id: Number(v['id']),
           sexoId: num(v['sexo_id']),
@@ -487,58 +533,78 @@ export class PortaCatalogoSadtPropria {
           vigente_de: agora,
         });
       }
-      const nova = await tx.incluir('faixa_referencia', { ...colunas(f), exame_analito_id: exameAnalitoId });
-      await tx.incluir('faixa_referencia_versao', {
-        faixa_referencia_id: nova,
-        operacao: 'inclusao',
-        dados: JSON.stringify(f),
-        ocorrido_em: agora,
-        usuario_id: c.usuario ?? null,
-        vigente_de: agora,
-      });
-      return { id: nova, encerradas: plano.encerrar.map((x) => x.id) };
+      const ids: number[] = [];
+      for (const f of faixas) {
+        const nova = await tx.incluir('faixa_referencia', {
+          ...colunas(f),
+          exame_analito_id: exameAnalitoId,
+        });
+        await tx.incluir('faixa_referencia_versao', {
+          faixa_referencia_id: nova,
+          operacao: 'inclusao',
+          dados: JSON.stringify(f),
+          ocorrido_em: agora,
+          usuario_id: c.usuario ?? null,
+          vigente_de: agora,
+        });
+        ids.push(nova);
+      }
+      return { id: ids[0] as number, ids, encerradas: plano.encerrar.map((x) => x.id) };
     });
   }
 
-  /** Nova versão da fórmula do analito calculado: conferida na hora; a anterior em vigor se encerra na véspera. */
+  /**
+   * Nova versão da fórmula do analito calculado. As regras (expressão, variáveis do mesmo exame, sem autorreferência
+   * nem ciclo, só analito calculado, nada retroativo, encerramento da anterior na véspera) são do domínio.
+   */
   novaFormula(c: ContextoCatalogo, exameAnalitoId: number, entrada: unknown) {
     const f = esquemaFormulaCatalogo.parse(entrada);
-    const falhas = validarFormula(
-      f.expressao,
-      f.variaveis.map((v) => v.identificador),
-    );
-    for (const v of f.variaveis) {
-      if (v.fonte === 'analito' && !v.analitoId)
-        falhas.push({ campo: 'variaveis', mensagem: `A variável ${v.identificador} precisa do analito.` });
-      if ((v.fonte === 'dado_paciente') !== (v.dadoPaciente !== null))
-        falhas.push({
-          campo: 'variaveis',
-          mensagem: `A variável ${v.identificador}: dado do paciente só com a fonte paciente.`,
-        });
-    }
-    if (falhas.length) recusar(falhas);
     return this.gravar(c, 'formula-nova-versao', 'formula_calculo', async (tx, hoje) => {
-      if (f.vigenciaInicio < hoje)
-        recusar([
-          { campo: 'vigenciaInicio', mensagem: 'A nova fórmula começa hoje ou depois (nada retroativo).' },
-        ]);
-      const [ea] = await tx.consultarParaAtualizar(`SELECT id FROM exame_analito WHERE id = ?`, [
-        exameAnalitoId,
-      ]);
+      const [ea] = await tx.consultarParaAtualizar(
+        `SELECT id, exame_id, analito_id, calculado FROM exame_analito WHERE id = ?`,
+        [exameAnalitoId],
+      );
       if (!ea) throw inexistente('O analito do exame');
+      const doExame = await tx.consultar(
+        `SELECT analito_id FROM exame_analito WHERE exame_id = ? AND ativo = TRUE`,
+        [Number(ea['exame_id'])],
+      );
+      const deps = await tx.consultar(
+        `SELECT ea.analito_id AS calculado, vf.analito_id AS usa
+           FROM formula_calculo fc
+           JOIN exame_analito ea ON ea.id = fc.exame_analito_id
+           JOIN variavel_formula vf ON vf.formula_calculo_id = fc.id AND vf.excluido_em IS NULL
+          WHERE ea.exame_id = ? AND ea.id <> ? AND fc.ativo = TRUE AND vf.analito_id IS NOT NULL
+            AND (fc.vigencia_fim IS NULL OR fc.vigencia_fim >= ?)`,
+        [Number(ea['exame_id']), exameAnalitoId, f.vigenciaInicio],
+      );
       const vigentes = await tx.consultarParaAtualizar(
-        `SELECT id, versao, vigencia_inicio FROM formula_calculo
+        `SELECT id, versao, vigencia_inicio, vigencia_fim FROM formula_calculo
           WHERE exame_analito_id = ? AND ativo = TRUE AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
         [exameAnalitoId, f.vigenciaInicio],
       );
-      for (const v of vigentes) {
-        if ((dia(v['vigencia_inicio']) ?? '') >= f.vigenciaInicio)
-          recusar([{ campo: 'vigenciaInicio', mensagem: 'Já há fórmula começando nesta data ou depois.' }]);
-        const fim = new Date(`${f.vigenciaInicio}T00:00:00Z`);
-        fim.setUTCDate(fim.getUTCDate() - 1);
-        await tx.alterar('formula_calculo', Number(v['id']), Number(v['versao']), {
-          vigencia_fim: fim.toISOString().slice(0, 10),
-        });
+      const porAnalito = new Map<number, number[]>();
+      for (const d of deps)
+        porAnalito.set(Number(d['calculado']), [
+          ...(porAnalito.get(Number(d['calculado'])) ?? []),
+          Number(d['usa']),
+        ]);
+      const plano = planejarNovaVersaoFormula(f, {
+        hoje,
+        analitoAlvoId: Number(ea['analito_id']),
+        calculado: bool(ea['calculado']),
+        analitosDoExame: doExame.map((x) => Number(x['analito_id'])),
+        vigentes: vigentes.map((v) => ({
+          id: Number(v['id']),
+          vigenciaInicio: dia(v['vigencia_inicio']) ?? '',
+          vigenciaFim: dia(v['vigencia_fim']),
+        })),
+        dependencias: [...porAnalito].map(([analitoId, usa]) => ({ analitoId, usa })),
+      });
+      if (plano.falhas.length) recusar(plano.falhas);
+      for (const enc of plano.encerrar) {
+        const v = vigentes.find((x) => Number(x['id']) === enc.id) as Linha;
+        await tx.alterar('formula_calculo', enc.id, Number(v['versao']), { vigencia_fim: enc.vigenciaFim });
       }
       const seq = await tx.consultar(`SELECT COUNT(*) AS n FROM formula_calculo WHERE exame_analito_id = ?`, [
         exameAnalitoId,
@@ -563,10 +629,46 @@ export class PortaCatalogoSadtPropria {
           analito_id: v.fonte === 'analito' ? v.analitoId : null,
           dado_paciente: v.dadoPaciente,
         });
-      return { id: nova, encerradas: vigentes.map((v) => Number(v['id'])) };
+      return { id: nova, encerradas: plano.encerrar.map((x) => x.id) };
+    });
+  }
+
+  /** As listas para os seletores da tela (id e nome, só os ativos), em vez de digitar o id. */
+  opcoes(c: ContextoCatalogo) {
+    const fontes: Record<string, string> = {
+      setores: `SELECT id, nome FROM setor_diagnostico WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome`,
+      materiais: `SELECT id, descricao AS nome FROM material_biologico WHERE ativo = TRUE ORDER BY descricao`,
+      recipientes: `SELECT id, descricao AS nome FROM recipiente_coleta WHERE ativo = TRUE ORDER BY descricao`,
+      preparos: `SELECT id, descricao AS nome FROM orientacao_preparo WHERE ativo = TRUE ORDER BY descricao`,
+      analitos: `SELECT id, CONCAT(nome, ' (', codigo, ')') AS nome FROM analito
+                  WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome`,
+      sexos: `SELECT id, descricao AS nome FROM sexo WHERE ativo = TRUE ORDER BY id`,
+      modalidades: `SELECT id, descricao AS nome FROM modalidade_imagem WHERE ativo = TRUE ORDER BY descricao`,
+      metodos: `SELECT id, descricao AS nome FROM metodo_analitico WHERE ativo = TRUE ORDER BY descricao`,
+      exames: `SELECT id, CONCAT(sigla, ' · ', nome) AS nome FROM exame
+                WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome LIMIT 2000`,
+    };
+    return this.ler(c, async (l) => {
+      const r: Record<string, { id: number; nome: string }[]> = {};
+      for (const [k, sql] of Object.entries(fontes))
+        r[k] = (await l.consultar(sql, [])).map((x) => ({ id: Number(x['id']), nome: String(x['nome']) }));
+      return r;
     });
   }
 }
+
+/** As colunas BOOLEAN (TINYINT 1/0 no driver) e DECIMAL (texto no driver) do catálogo, devolvidas como tipo de JS. */
+const BOOLEANOS = new Set([
+  'ativo',
+  'padrao',
+  'atende_feriado',
+  'lanca_automaticamente',
+  'obrigatorio',
+  'calculado',
+  'exige_laudo',
+]);
+const DECIMAIS =
+  /^(volume_minimo_ml|custo_unitario|multiplicador_cobranca|(referencia|alerta|critico|absurdo)_(minima|maxima|minimo|maximo))$/;
 
 /** Linha do banco → objeto da tela (snake_case → camelCase; datas em ISO). */
 function camel(l: Linha): Record<string, unknown> {
@@ -580,7 +682,11 @@ function camel(l: Linha): Record<string, unknown> {
           : v.toISOString()
         : typeof v === 'bigint'
           ? Number(v)
-          : v;
+          : BOOLEANOS.has(k)
+            ? bool(v)
+            : DECIMAIS.test(k) && v !== null
+              ? Number(v)
+              : v;
   }
   return r;
 }

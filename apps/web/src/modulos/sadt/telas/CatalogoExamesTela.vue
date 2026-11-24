@@ -2,88 +2,150 @@
 // Catálogo de exames do diagnóstico (F3.5, análise 05-SADT linhas 1 a 3): `/sadt/catalogo`. Uma ficha por exame numa
 // tela só, sem abrir janela por vínculo: à esquerda a busca; à direita o exame (inclui e altera com a versão vista), onde
 // é feito, o material, o preparo, a lateralidade, os exames ligados e os analitos com a faixa de referência (todas as
-// versões, a vigente em destaque) e a fórmula. A validação do domínio volta por campo (422) e aparece na hora; nada se
-// apaga: "inativar" deixa o histórico, e a faixa e a fórmula ganham nova versão com a data de início.
+// versões, a vigente em destaque) e a fórmula.
+// Melhorias: tudo por seletor com busca (setor, material, recipiente, preparo, analito, exame, sexo, modalidade,
+// método), nunca por id digitado; as regras do domínio (@sgh/dominio-sadt) conferem cada campo na hora, antes de
+// enviar; a faixa traz o estrato completo (sexo, idade, material, método, condição, alerta, crítico e absurdo) e pode
+// ir com outras faixas na mesma gravação (para cobrir a idade que sobra); a alteração manda só o que a tela mostra (o
+// servidor preserva o resto) e "inativar" manda só id, versão e ativo. Nada se apaga.
+import {
+  CONDICOES_FAIXA,
+  TIPOS_SERVICO_EXAME,
+  validarExame,
+  validarFormula,
+  validarLimitesFaixa,
+  type FalhaCatalogo,
+} from '@sgh/dominio-sadt';
 import { SanteBotao } from '@sgh/ui';
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { z } from 'zod';
 import { enviar, ler } from '../../exames/api-exames.js';
 import { novaChave } from '../api-sadt.js';
 
 type Linha = Record<string, unknown>;
+type Opcao = { id: number; nome: string };
 const B = '/api/sadt/catalogo';
 const qualquer = z.any();
-const TIPOS = ['laboratorio', 'imagem', 'metodo_grafico', 'anatomia_patologica', 'hemoterapia', 'outro'];
 
 /** Os textos da tela (a extração para o i18n do módulo fica com o integrador). */
-const TXT: readonly string[] = [
-  'Nome, código ou sigla',
-  'Buscar exame',
-  'Tipo de serviço',
-  'CT - HDL',
-  'CT=analito:12; HDL=digitado',
-  'Catálogo de exames',
-  'Todos',
-  'Buscar',
-  'Novo exame',
-  'Código',
-  'Sigla',
-  'Nome',
-  'Tipo',
-  'Modalidade (id)',
-  'Idade mínima (dias)',
-  'Idade máxima (dias)',
-  'Prazo (h)',
-  'Exige laudo',
-  'Ativo',
-  'Gravar exame',
-  '(padrão)',
-  'Inativar',
-  'Faixas e fórmula',
-  'Início',
-  'Fim',
-  'Sexo',
-  'Idade (dias)',
-  'Referência',
-  'Crítico',
-  'Sexo (id)',
-  'Ref. mín.',
-  'Ref. máx.',
-  'Crítico mín.',
-  'Crítico máx.',
-  'Texto',
-  'Nova versão da faixa',
-  'Descrição',
-  'Expressão',
-  'Variáveis',
-  'Nova versão da fórmula',
-  'Incluir',
-];
+const T = {
+  titulo: 'Catálogo de exames',
+  busca: 'Nome, código ou sigla',
+  buscarExame: 'Buscar exame',
+  tipoServico: 'Tipo de serviço',
+  todos: 'Todos',
+  buscar: 'Buscar',
+  novoExame: 'Novo exame',
+  codigo: 'Código',
+  sigla: 'Sigla',
+  nome: 'Nome',
+  nomePopular: 'Nome popular',
+  tipo: 'Tipo',
+  modalidade: 'Modalidade',
+  idadeMin: 'Idade mínima (dias)',
+  idadeMax: 'Idade máxima (dias)',
+  prazo: 'Prazo (h)',
+  limite: 'Limite de pedidos',
+  periodo: 'No período (dias)',
+  custo: 'Custo unitário',
+  exigeLaudo: 'Exige laudo',
+  ativo: 'Ativo',
+  gravarExame: 'Gravar exame',
+  padrao: '(padrão)',
+  inativar: 'Inativar',
+  faixasFormula: 'Faixas e fórmula',
+  inicio: 'Início',
+  fim: 'Fim',
+  emVigor: 'em vigor',
+  sexo: 'Sexo',
+  idade: 'Idade (dias)',
+  referencia: 'Referência',
+  critico: 'Crítico',
+  material: 'Material',
+  metodo: 'Método',
+  condicao: 'Condição',
+  refMin: 'Ref. mín.',
+  refMax: 'Ref. máx.',
+  alertaMin: 'Alerta mín.',
+  alertaMax: 'Alerta máx.',
+  criticoMin: 'Crítico mín.',
+  criticoMax: 'Crítico máx.',
+  absurdoMin: 'Absurdo mín.',
+  absurdoMax: 'Absurdo máx.',
+  texto: 'Texto',
+  outraFaixa: 'Mais uma faixa na mesma gravação',
+  tirarFaixa: 'Tirar esta faixa',
+  novaFaixa: 'Gravar nova versão da faixa',
+  descricao: 'Descrição',
+  expressao: 'Expressão',
+  exprExemplo: 'CT - HDL',
+  variavel: 'Variável',
+  fonte: 'Fonte',
+  analito: 'Analito',
+  dadoPaciente: 'Dado do paciente',
+  maisVariavel: 'Mais uma variável',
+  novaFormula: 'Gravar nova versão da fórmula',
+  incluir: 'Incluir',
+  qualquer: 'qualquer',
+  escolha: 'Escolha',
+  semLimite: 'sem limite',
+  ate: 'até',
+} as const;
+
 const termo = ref('');
 const tipo = ref('');
 const lista = ref<Linha[]>([]);
 const ficha = ref<Linha | null>(null);
 const erro = ref('');
 const aviso = ref('');
+const opcoes = ref<Record<string, Opcao[]>>({});
 const exame = reactive<Linha>({});
+
+/** A data de hoje no fuso de quem usa a tela (não em UTC: depois das 21h em Brasília seria o dia seguinte). */
+function hojeLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 const novo = reactive<Record<string, Linha>>({
-  setor: { setorDiagnosticoId: null, padrao: true },
-  material: { materialBiologicoId: null, padrao: true, conservacao: 'ambiente' },
-  preparo: { orientacaoPreparoId: null, publico: 'todos' },
+  setor: { setorDiagnosticoId: '', padrao: true, prazoEntregaHoras: '', atendeFeriado: false },
+  material: { materialBiologicoId: '', recipienteColetaId: '', padrao: true, conservacao: 'ambiente' },
+  preparo: { orientacaoPreparoId: '', publico: 'todos' },
   lateralidade: { lado: 'direito', multiplicadorCobranca: 1 },
-  ligado: { secundarioExameId: null, tipoRelacao: 'secundario' },
-  analito: { analitoId: null, ordem: 1 },
+  ligado: { secundarioExameId: '', tipoRelacao: 'secundario', lancaAutomaticamente: true },
+  analito: { analitoId: '', ordem: 1, obrigatorio: true, calculado: false },
 });
-const faixa = reactive<Linha>({ condicao: 'nenhuma', vigenciaInicio: new Date().toISOString().slice(0, 10) });
+const faixaVazia = (): Linha => ({
+  sexoId: '',
+  idadeMinimaDias: '',
+  idadeMaximaDias: '',
+  materialBiologicoId: '',
+  metodoAnaliticoId: '',
+  condicao: 'nenhuma',
+  referenciaTexto: '',
+  vigenciaInicio: hojeLocal(),
+});
+const faixas = ref<Linha[]>([faixaVazia()]);
+const variavelVazia = (): Linha => ({ identificador: '', fonte: 'analito', analitoId: '', dadoPaciente: '' });
 const formula = reactive<Linha>({
   descricao: '',
   expressao: '',
-  vigenciaInicio: new Date().toISOString().slice(0, 10),
-  variaveis: '',
+  casasDecimais: '',
+  vigenciaInicio: hojeLocal(),
+  variaveis: [variavelVazia()],
 });
 const analitoAberto = ref<number | null>(null);
 
 const numOuNulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
+const nomeDe = (lista: string, id: unknown) =>
+  opcoes.value[lista]?.find((o) => o.id === Number(id))?.nome ??
+  (id === null || id === undefined ? '' : String(id));
+const porCampo = (falhas: readonly FalhaCatalogo[]) => {
+  const r: Record<string, string> = {};
+  for (const f of falhas) r[f.campo] = r[f.campo] ? `${r[f.campo]} ${f.mensagem}` : f.mensagem;
+  return r;
+};
 
 async function tentar(fn: () => Promise<unknown>, ok: string) {
   erro.value = '';
@@ -103,6 +165,7 @@ async function buscar() {
 
 async function abrir(id: number) {
   ficha.value = (await ler(`${B}/exames/${id}`, qualquer)) as Linha;
+  for (const k of Object.keys(exame)) delete exame[k];
   Object.assign(exame, ficha.value['exame'] as Linha);
 }
 
@@ -112,20 +175,33 @@ function novoExame() {
   Object.assign(exame, { codigo: '', sigla: '', nome: '', tipoServico: 'laboratorio', ativo: true });
 }
 
+onMounted(async () => {
+  try {
+    opcoes.value = (await ler(`${B}/opcoes`, qualquer)) as Record<string, Opcao[]>;
+  } catch (e) {
+    erro.value = e instanceof Error ? e.message : String(e);
+  }
+});
+
 const corpoExame = computed(() => ({
-  versao: exame['id'] ? Number(exame['versao']) : undefined,
-  codigo: String(exame['codigo'] ?? ''),
-  sigla: String(exame['sigla'] ?? ''),
-  nome: String(exame['nome'] ?? ''),
+  ...(exame['id'] ? { versao: Number(exame['versao']) } : {}),
+  codigo: String(exame['codigo'] ?? '').trim(),
+  sigla: String(exame['sigla'] ?? '').trim(),
+  nome: String(exame['nome'] ?? '').trim(),
+  nomePopular: (exame['nomePopular'] as string) || null,
   tipoServico: String(exame['tipoServico'] ?? ''),
   modalidadeImagemId: numOuNulo(exame['modalidadeImagemId']),
   idadeMinimaDias: numOuNulo(exame['idadeMinimaDias']),
   idadeMaximaDias: numOuNulo(exame['idadeMaximaDias']),
   prazoEntregaHoras: numOuNulo(exame['prazoEntregaHoras']),
-  orientacaoGeral: (exame['orientacaoGeral'] as string) || null,
+  limiteSolicitacoes: numOuNulo(exame['limiteSolicitacoes']),
+  periodoLimiteDias: numOuNulo(exame['periodoLimiteDias']),
+  custoUnitario: numOuNulo(exame['custoUnitario']),
   exigeLaudo: Boolean(exame['exigeLaudo']),
   ativo: Boolean(exame['ativo']),
 }));
+/** As regras do exame conferidas na hora, campo a campo. */
+const falhasExame = computed(() => porCampo(validarExame(corpoExame.value)));
 
 const salvarExame = () =>
   tentar(async () => {
@@ -140,62 +216,101 @@ const salvarExame = () =>
     await buscar();
   }, 'Exame gravado.');
 
-function corpoVinculo(t: string, v: Linha): Linha {
+/** O corpo do vínculo novo: os ids e números como número, o vazio como nulo (o servidor põe o default). */
+function corpoVinculo(v: Linha): Linha {
   const r: Linha = {};
-  for (const [k, x] of Object.entries(v)) r[k] = /Id$|ordem|multiplicador/.test(k) ? numOuNulo(x) : x;
+  for (const [k, x] of Object.entries(v)) {
+    if (typeof x === 'boolean') r[k] = x;
+    else if (/Id$|ordem|multiplicador|Horas$|Ml$/.test(k)) {
+      const n = numOuNulo(x);
+      if (n !== null) r[k] = n;
+    } else if (x !== '' && x !== null) r[k] = x;
+  }
   return r;
 }
 
-const salvarVinculo = (t: string, v: Linha) =>
+const salvarVinculo = (t: string, corpo: Linha, ok = 'Vínculo gravado.') =>
   tentar(async () => {
-    await enviar(
-      `${B}/exames/${Number(exame['id'])}/${t}`,
-      corpoVinculo(t, v),
-      qualquer,
-      novaChave(`catalogo.${t}`),
-    );
+    await enviar(`${B}/exames/${Number(exame['id'])}/${t}`, corpo, qualquer, novaChave(`catalogo.${t}`));
     await abrir(Number(exame['id']));
-  }, 'Vínculo gravado.');
+  }, ok);
 
-const inativar = (t: string, v: Linha) => salvarVinculo(t, { ...v, ativo: false });
+/** Inativar manda só id, versão e ativo: o resto do vínculo continua como está. */
+const inativar = (t: string, v: Linha) =>
+  salvarVinculo(t, { id: Number(v['id']), versao: Number(v['versao']), ativo: false }, 'Vínculo inativado.');
+
+const corpoFaixa = (f: Linha): Linha => {
+  const c: Linha = {};
+  for (const [k, x] of Object.entries(f))
+    c[k] = ['condicao', 'vigenciaInicio', 'referenciaTexto'].includes(k) ? x || null : numOuNulo(x);
+  c['condicao'] = f['condicao'] || 'nenhuma';
+  return c;
+};
+/** Os limites de cada faixa conferidos na hora. */
+const falhasFaixas = computed(() =>
+  faixas.value.map((f) => {
+    const c = corpoFaixa(f) as never as Parameters<typeof validarLimitesFaixa>[0];
+    const r = porCampo(validarLimitesFaixa(c));
+    const min = numOuNulo(f['idadeMinimaDias']);
+    const max = numOuNulo(f['idadeMaximaDias']);
+    if (min !== null && max !== null && min > max)
+      r['idadeMaximaDias'] = 'A idade máxima é menor que a mínima.';
+    if (String(f['vigenciaInicio'] ?? '') < hojeLocal()) r['vigenciaInicio'] = 'Começa hoje ou depois.';
+    return r;
+  }),
+);
+const faixasComFalha = computed(() => falhasFaixas.value.some((r) => Object.keys(r).length > 0));
 
 const novaFaixa = (eaId: number) =>
   tentar(async () => {
-    const c: Linha = {};
-    for (const [k, x] of Object.entries(faixa))
-      c[k] = ['condicao', 'vigenciaInicio', 'referenciaTexto'].includes(k) ? x || null : numOuNulo(x);
-    c['condicao'] = faixa['condicao'] || 'nenhuma';
-    await enviar(`${B}/analitos-exame/${eaId}/faixas`, c, qualquer, novaChave('catalogo.faixa'));
+    await enviar(
+      `${B}/analitos-exame/${eaId}/faixas`,
+      { faixas: faixas.value.map(corpoFaixa) },
+      qualquer,
+      novaChave('catalogo.faixa'),
+    );
+    faixas.value = [faixaVazia()];
     await abrir(Number(exame['id']));
   }, 'Nova versão da faixa gravada; a anterior se encerra na véspera.');
 
-/** Variáveis no formato "CT=analito:12; HDL=digitado; P=paciente:peso". */
-function variaveis(txt: string) {
-  return txt
-    .split(';')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => {
-      const [id, resto = 'digitado'] = s.split('=').map((x) => x.trim());
-      const [fonte, ref] = resto.split(':');
-      return {
-        identificador: id,
-        descricao: id,
-        fonte: fonte === 'paciente' ? 'dado_paciente' : fonte,
-        analitoId: fonte === 'analito' ? Number(ref) : null,
-        dadoPaciente: fonte === 'paciente' ? ref : null,
-      };
-    });
-}
+const corpoVariaveis = computed(() =>
+  (formula['variaveis'] as Linha[])
+    .filter((v) => String(v['identificador'] ?? '').trim())
+    .map((v) => ({
+      identificador: String(v['identificador']).trim(),
+      descricao: String(v['identificador']).trim(),
+      fonte: String(v['fonte']),
+      analitoId: v['fonte'] === 'analito' ? numOuNulo(v['analitoId']) : null,
+      dadoPaciente: v['fonte'] === 'dado_paciente' ? (v['dadoPaciente'] as string) || null : null,
+    })),
+);
+/** A expressão e as variáveis conferidas na hora. */
+const falhasFormula = computed(() =>
+  String(formula['expressao'] ?? '').trim()
+    ? porCampo(
+        validarFormula(
+          String(formula['expressao']),
+          corpoVariaveis.value.map((v) => v.identificador),
+        ),
+      )
+    : {},
+);
+/** Os analitos do exame aberto (a variável da fórmula só aponta para eles, nunca para o próprio calculado). */
+const analitosDoExame = (eaId: number) =>
+  ((ficha.value?.['analitos'] as Linha[] | undefined) ?? [])
+    .filter((a) => a['ativo'] && Number(a['id']) !== eaId)
+    .map((a) => ({ id: Number(a['analitoId']), nome: String(a['nomeAnalito'] ?? a['analitoId']) }));
 
 const novaFormula = (eaId: number) =>
   tentar(async () => {
     await enviar(
       `${B}/analitos-exame/${eaId}/formulas`,
       {
-        ...formula,
+        descricao: formula['descricao'],
+        expressao: formula['expressao'],
+        vigenciaInicio: formula['vigenciaInicio'],
         casasDecimais: numOuNulo(formula['casasDecimais']),
-        variaveis: variaveis(String(formula['variaveis'] ?? '')),
+        variaveis: corpoVariaveis.value,
       },
       qualquer,
       novaChave('catalogo.formula'),
@@ -203,14 +318,24 @@ const novaFormula = (eaId: number) =>
     await abrir(Number(exame['id']));
   }, 'Nova versão da fórmula gravada.');
 
-const SECOES: { t: string; titulo: string; chave: string; campos: [string, string][] }[] = [
+/** Os campos de cada vínculo novo: seletor com a lista do catálogo, opções fixas, número ou marcação. */
+type Campo = {
+  k: string;
+  r: string;
+  lista?: string;
+  fixas?: readonly string[];
+  tipo?: 'number' | 'checkbox';
+};
+const SECOES: { t: string; titulo: string; chave: string; campos: Campo[] }[] = [
   {
     t: 'setor',
     titulo: 'Onde é feito (setor executante)',
     chave: 'setores',
     campos: [
-      ['setorDiagnosticoId', 'Setor (id)'],
-      ['prazoEntregaHoras', 'Prazo (h)'],
+      { k: 'setorDiagnosticoId', r: 'Setor', lista: 'setores' },
+      { k: 'prazoEntregaHoras', r: 'Prazo (h)', tipo: 'number' },
+      { k: 'atendeFeriado', r: 'Atende feriado', tipo: 'checkbox' },
+      { k: 'padrao', r: 'Padrão', tipo: 'checkbox' },
     ],
   },
   {
@@ -218,9 +343,15 @@ const SECOES: { t: string; titulo: string; chave: string; campos: [string, strin
     titulo: 'Material e recipiente',
     chave: 'materiais',
     campos: [
-      ['materialBiologicoId', 'Material (id)'],
-      ['recipienteColetaId', 'Recipiente (id)'],
-      ['conservacao', 'Conservação'],
+      { k: 'materialBiologicoId', r: 'Material', lista: 'materiais' },
+      { k: 'recipienteColetaId', r: 'Recipiente', lista: 'recipientes' },
+      {
+        k: 'conservacao',
+        r: 'Conservação',
+        fixas: ['ambiente', 'refrigerado', 'congelado', 'protegido_luz', 'gelo'],
+      },
+      { k: 'volumeMinimoMl', r: 'Volume mínimo (mL)', tipo: 'number' },
+      { k: 'padrao', r: 'Padrão', tipo: 'checkbox' },
     ],
   },
   {
@@ -228,8 +359,8 @@ const SECOES: { t: string; titulo: string; chave: string; campos: [string, strin
     titulo: 'Preparo do paciente',
     chave: 'preparos',
     campos: [
-      ['orientacaoPreparoId', 'Orientação (id)'],
-      ['publico', 'Público'],
+      { k: 'orientacaoPreparoId', r: 'Orientação', lista: 'preparos' },
+      { k: 'publico', r: 'Público', fixas: ['todos', 'adulto', 'crianca', 'gestante', 'idoso'] },
     ],
   },
   {
@@ -237,8 +368,8 @@ const SECOES: { t: string; titulo: string; chave: string; campos: [string, strin
     titulo: 'Lateralidade',
     chave: 'lateralidades',
     campos: [
-      ['lado', 'Lado'],
-      ['multiplicadorCobranca', 'Multiplicador'],
+      { k: 'lado', r: 'Lado', fixas: ['direito', 'esquerdo', 'bilateral'] },
+      { k: 'multiplicadorCobranca', r: 'Multiplicador', tipo: 'number' },
     ],
   },
   {
@@ -246,8 +377,9 @@ const SECOES: { t: string; titulo: string; chave: string; campos: [string, strin
     titulo: 'Exames ligados',
     chave: 'ligados',
     campos: [
-      ['secundarioExameId', 'Exame (id)'],
-      ['tipoRelacao', 'Relação'],
+      { k: 'secundarioExameId', r: 'Exame', lista: 'exames' },
+      { k: 'tipoRelacao', r: 'Relação', fixas: ['secundario', 'correlacionado', 'incluido'] },
+      { k: 'lancaAutomaticamente', r: 'Lança junto', tipo: 'checkbox' },
     ],
   },
   {
@@ -255,8 +387,10 @@ const SECOES: { t: string; titulo: string; chave: string; campos: [string, strin
     titulo: 'Analitos do exame',
     chave: 'analitos',
     campos: [
-      ['analitoId', 'Analito (id)'],
-      ['ordem', 'Ordem'],
+      { k: 'analitoId', r: 'Analito', lista: 'analitos' },
+      { k: 'ordem', r: 'Ordem', tipo: 'number' },
+      { k: 'obrigatorio', r: 'Obrigatório', tipo: 'checkbox' },
+      { k: 'calculado', r: 'Calculado', tipo: 'checkbox' },
     ],
   },
 ];
@@ -270,21 +404,28 @@ const rotulo = (v: Linha) =>
       v['lado'] ??
       v['id'],
   );
+/** Filtro do seletor com busca: digita parte do nome e a lista encolhe. */
+const filtros = reactive<Record<string, string>>({});
+const filtrada = (lista: string, chave: string) => {
+  const f = (filtros[chave] ?? '').toLowerCase();
+  const l = opcoes.value[lista] ?? [];
+  return f ? l.filter((o) => o.nome.toLowerCase().includes(f)).slice(0, 200) : l.slice(0, 200);
+};
 </script>
 
 <template>
   <section class="catalogo" data-testid="catalogo-exames">
-    <h1>{{ TXT[5] }}</h1>
+    <h1>{{ T.titulo }}</h1>
     <div class="grade">
       <aside>
         <form @submit.prevent="buscar">
-          <input v-model="termo" :placeholder="TXT[0]" :aria-label="TXT[1]" />
-          <select v-model="tipo" :aria-label="TXT[2]">
-            <option value="">{{ TXT[6] }}</option>
-            <option v-for="x in TIPOS" :key="x" :value="x">{{ x }}</option>
+          <input v-model="termo" :placeholder="T.busca" :aria-label="T.buscarExame" />
+          <select v-model="tipo" :aria-label="T.tipoServico">
+            <option value="">{{ T.todos }}</option>
+            <option v-for="x in TIPOS_SERVICO_EXAME" :key="x" :value="x">{{ x }}</option>
           </select>
-          <SanteBotao type="submit">{{ TXT[7] }}</SanteBotao>
-          <SanteBotao type="button" @click="novoExame">{{ TXT[8] }}</SanteBotao>
+          <SanteBotao type="submit">{{ T.buscar }}</SanteBotao>
+          <SanteBotao type="button" @click="novoExame">{{ T.novoExame }}</SanteBotao>
         </form>
         <ul>
           <li v-for="e in lista" :key="String(e['id'])">
@@ -297,25 +438,65 @@ const rotulo = (v: Linha) =>
       <main v-if="exame['codigo'] !== undefined">
         <p v-if="erro" role="alert" class="erro">{{ erro }}</p>
         <p v-if="aviso" role="status">{{ aviso }}</p>
-        <form class="exame" @submit.prevent="salvarExame">
-          <label>{{ TXT[9] }} <input v-model="exame['codigo']" required maxlength="30" /></label>
-          <label>{{ TXT[10] }} <input v-model="exame['sigla']" required maxlength="10" /></label>
-          <label>{{ TXT[11] }} <input v-model="exame['nome']" required maxlength="150" /></label>
+        <form class="exame" data-testid="form-exame" @submit.prevent="salvarExame">
           <label
-            >{{ TXT[12] }}
-            <select v-model="exame['tipoServico']">
-              <option v-for="x in TIPOS" :key="x" :value="x">{{ x }}</option>
+            >{{ T.codigo }} <input v-model="exame['codigo']" required maxlength="30" name="codigo" />
+            <small v-if="falhasExame['codigo']" class="erro">{{ falhasExame['codigo'] }}</small></label
+          >
+          <label
+            >{{ T.sigla }} <input v-model="exame['sigla']" required maxlength="10" name="sigla" />
+            <small v-if="falhasExame['sigla']" class="erro">{{ falhasExame['sigla'] }}</small></label
+          >
+          <label
+            >{{ T.nome }} <input v-model="exame['nome']" required maxlength="150" name="nome" />
+            <small v-if="falhasExame['nome']" class="erro">{{ falhasExame['nome'] }}</small></label
+          >
+          <label>{{ T.nomePopular }} <input v-model="exame['nomePopular']" maxlength="150" /></label>
+          <label
+            >{{ T.tipo }}
+            <select v-model="exame['tipoServico']" name="tipoServico">
+              <option v-for="x in TIPOS_SERVICO_EXAME" :key="x" :value="x">{{ x }}</option>
             </select>
           </label>
           <label v-if="exame['tipoServico'] === 'imagem'"
-            >{{ TXT[13] }} <input v-model="exame['modalidadeImagemId']" required
-          /></label>
-          <label>{{ TXT[14] }} <input v-model="exame['idadeMinimaDias']" type="number" min="0" /></label>
-          <label>{{ TXT[15] }} <input v-model="exame['idadeMaximaDias']" type="number" min="0" /></label>
-          <label>{{ TXT[16] }} <input v-model="exame['prazoEntregaHoras']" type="number" min="0" /></label>
-          <label><input v-model="exame['exigeLaudo']" type="checkbox" /> {{ TXT[17] }}</label>
-          <label><input v-model="exame['ativo']" type="checkbox" /> {{ TXT[18] }}</label>
-          <SanteBotao type="submit" data-testid="salvar-exame">{{ TXT[19] }}</SanteBotao>
+            >{{ T.modalidade }}
+            <select v-model="exame['modalidadeImagemId']" name="modalidadeImagemId">
+              <option value="">{{ T.escolha }}</option>
+              <option v-for="o in opcoes['modalidades'] ?? []" :key="o.id" :value="o.id">{{ o.nome }}</option>
+            </select>
+            <small v-if="falhasExame['modalidadeImagemId']" class="erro">{{
+              falhasExame['modalidadeImagemId']
+            }}</small>
+          </label>
+          <label>{{ T.idadeMin }} <input v-model="exame['idadeMinimaDias']" type="number" min="0" /></label>
+          <label
+            >{{ T.idadeMax }} <input v-model="exame['idadeMaximaDias']" type="number" min="0" />
+            <small v-if="falhasExame['idadeMaximaDias']" class="erro">{{
+              falhasExame['idadeMaximaDias']
+            }}</small></label
+          >
+          <label>{{ T.prazo }} <input v-model="exame['prazoEntregaHoras']" type="number" min="0" /></label>
+          <label>{{ T.limite }} <input v-model="exame['limiteSolicitacoes']" type="number" min="0" /></label>
+          <label
+            >{{ T.periodo }} <input v-model="exame['periodoLimiteDias']" type="number" min="0" />
+            <small v-if="falhasExame['periodoLimiteDias']" class="erro">{{
+              falhasExame['periodoLimiteDias']
+            }}</small></label
+          >
+          <label
+            >{{ T.custo }} <input v-model="exame['custoUnitario']" type="number" min="0" step="0.01" />
+            <small v-if="falhasExame['custoUnitario']" class="erro">{{
+              falhasExame['custoUnitario']
+            }}</small></label
+          >
+          <label><input v-model="exame['exigeLaudo']" type="checkbox" /> {{ T.exigeLaudo }}</label>
+          <label><input v-model="exame['ativo']" type="checkbox" /> {{ T.ativo }}</label>
+          <SanteBotao
+            type="submit"
+            data-testid="salvar-exame"
+            :disabled="Object.keys(falhasExame).length > 0"
+            >{{ T.gravarExame }}</SanteBotao
+          >
         </form>
         <template v-if="ficha">
           <section v-for="s in SECOES" :key="s.t" :data-testid="`secao-${s.t}`">
@@ -326,29 +507,32 @@ const rotulo = (v: Linha) =>
                 :key="String(v['id'])"
                 :class="{ inativo: !v['ativo'] }"
               >
-                {{ rotulo(v) }}<span v-if="v['padrao']"> {{ TXT[20] }}</span>
+                {{ rotulo(v) }}<span v-if="v['padrao']"> {{ T.padrao }}</span>
                 <SanteBotao
                   v-if="v['ativo']"
                   type="button"
-                  @click="inativar(s.t, { ...v, id: v['id'], versao: v['versao'] })"
-                  >{{ TXT[21] }}</SanteBotao
+                  :data-testid="`inativar-${s.t}-${v['id']}`"
+                  @click="inativar(s.t, v)"
+                  >{{ T.inativar }}</SanteBotao
                 >
                 <template v-if="s.t === 'analito'">
                   <SanteBotao
                     type="button"
                     @click="analitoAberto = analitoAberto === Number(v['id']) ? null : Number(v['id'])"
-                    >{{ TXT[22] }}</SanteBotao
+                    >{{ T.faixasFormula }}</SanteBotao
                   >
                   <div v-if="analitoAberto === Number(v['id'])" class="analito">
                     <table>
                       <thead>
                         <tr>
-                          <th>{{ TXT[23] }}</th>
-                          <th>{{ TXT[24] }}</th>
-                          <th>{{ TXT[25] }}</th>
-                          <th>{{ TXT[26] }}</th>
-                          <th>{{ TXT[27] }}</th>
-                          <th>{{ TXT[28] }}</th>
+                          <th>{{ T.inicio }}</th>
+                          <th>{{ T.fim }}</th>
+                          <th>{{ T.sexo }}</th>
+                          <th>{{ T.idade }}</th>
+                          <th>{{ T.material }}</th>
+                          <th>{{ T.condicao }}</th>
+                          <th>{{ T.referencia }}</th>
+                          <th>{{ T.critico }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -358,9 +542,20 @@ const rotulo = (v: Linha) =>
                           :class="{ vigente: !f['vigenciaFim'] }"
                         >
                           <td>{{ f['vigenciaInicio'] }}</td>
-                          <td>{{ f['vigenciaFim'] ?? 'em vigor' }}</td>
-                          <td>{{ f['sexoId'] ?? 'todos' }}</td>
-                          <td>{{ f['idadeMinimaDias'] ?? 0 }}{{ '–' }}{{ f['idadeMaximaDias'] ?? '∞' }}</td>
+                          <td>{{ f['vigenciaFim'] ?? T.emVigor }}</td>
+                          <td>{{ f['sexoId'] ? nomeDe('sexos', f['sexoId']) : T.todos }}</td>
+                          <td>
+                            {{ f['idadeMinimaDias'] ?? 0 }} {{ T.ate }}
+                            {{ f['idadeMaximaDias'] ?? T.semLimite }}
+                          </td>
+                          <td>
+                            {{
+                              f['materialBiologicoId']
+                                ? nomeDe('materiais', f['materialBiologicoId'])
+                                : T.qualquer
+                            }}
+                          </td>
+                          <td>{{ f['condicao'] }}</td>
                           <td>
                             {{
                               f['referenciaTexto'] ??
@@ -371,54 +566,200 @@ const rotulo = (v: Linha) =>
                         </tr>
                       </tbody>
                     </table>
-                    <form @submit.prevent="novaFaixa(Number(v['id']))">
-                      <label
-                        >{{ TXT[23] }} <input v-model="faixa['vigenciaInicio']" type="date" required
-                      /></label>
-                      <label>{{ TXT[29] }} <input v-model="faixa['sexoId']" /></label>
-                      <label
-                        >{{ TXT[30] }} <input v-model="faixa['referenciaMinima']" type="number" step="any"
-                      /></label>
-                      <label
-                        >{{ TXT[31] }} <input v-model="faixa['referenciaMaxima']" type="number" step="any"
-                      /></label>
-                      <label
-                        >{{ TXT[32] }} <input v-model="faixa['criticoMinimo']" type="number" step="any"
-                      /></label>
-                      <label
-                        >{{ TXT[33] }} <input v-model="faixa['criticoMaximo']" type="number" step="any"
-                      /></label>
-                      <label
-                        >{{ TXT[34] }} <input v-model="faixa['referenciaTexto']" maxlength="300"
-                      /></label>
-                      <SanteBotao type="submit">{{ TXT[35] }}</SanteBotao>
+                    <form data-testid="form-faixa" @submit.prevent="novaFaixa(Number(v['id']))">
+                      <fieldset v-for="(fx, i) in faixas" :key="i">
+                        <label
+                          >{{ T.inicio }} <input v-model="fx['vigenciaInicio']" type="date" required />
+                          <small v-if="falhasFaixas[i]?.['vigenciaInicio']" class="erro">{{
+                            falhasFaixas[i]?.['vigenciaInicio']
+                          }}</small></label
+                        >
+                        <label
+                          >{{ T.sexo }}
+                          <select v-model="fx['sexoId']">
+                            <option value="">{{ T.todos }}</option>
+                            <option v-for="o in opcoes['sexos'] ?? []" :key="o.id" :value="o.id">
+                              {{ o.nome }}
+                            </option>
+                          </select>
+                        </label>
+                        <label
+                          >{{ T.idadeMin }} <input v-model="fx['idadeMinimaDias']" type="number" min="0"
+                        /></label>
+                        <label
+                          >{{ T.idadeMax }} <input v-model="fx['idadeMaximaDias']" type="number" min="0" />
+                          <small v-if="falhasFaixas[i]?.['idadeMaximaDias']" class="erro">{{
+                            falhasFaixas[i]?.['idadeMaximaDias']
+                          }}</small></label
+                        >
+                        <label
+                          >{{ T.material }}
+                          <select v-model="fx['materialBiologicoId']">
+                            <option value="">{{ T.qualquer }}</option>
+                            <option v-for="o in opcoes['materiais'] ?? []" :key="o.id" :value="o.id">
+                              {{ o.nome }}
+                            </option>
+                          </select>
+                        </label>
+                        <label
+                          >{{ T.metodo }}
+                          <select v-model="fx['metodoAnaliticoId']">
+                            <option value="">{{ T.qualquer }}</option>
+                            <option v-for="o in opcoes['metodos'] ?? []" :key="o.id" :value="o.id">
+                              {{ o.nome }}
+                            </option>
+                          </select>
+                        </label>
+                        <label
+                          >{{ T.condicao }}
+                          <select v-model="fx['condicao']">
+                            <option v-for="x in CONDICOES_FAIXA" :key="x" :value="x">{{ x }}</option>
+                          </select>
+                        </label>
+                        <label
+                          v-for="[k, r] in [
+                            ['referenciaMinima', T.refMin],
+                            ['referenciaMaxima', T.refMax],
+                            ['alertaMinimo', T.alertaMin],
+                            ['alertaMaximo', T.alertaMax],
+                            ['criticoMinimo', T.criticoMin],
+                            ['criticoMaximo', T.criticoMax],
+                            ['absurdoMinimo', T.absurdoMin],
+                            ['absurdoMaximo', T.absurdoMax],
+                          ] as [string, string][]"
+                          :key="k"
+                          >{{ r }} <input v-model="fx[k]" type="number" step="any" />
+                          <small v-if="falhasFaixas[i]?.[k]" class="erro">{{
+                            falhasFaixas[i]?.[k]
+                          }}</small></label
+                        >
+                        <label
+                          >{{ T.texto }} <input v-model="fx['referenciaTexto']" maxlength="300" />
+                          <small v-if="falhasFaixas[i]?.['referenciaTexto']" class="erro">{{
+                            falhasFaixas[i]?.['referenciaTexto']
+                          }}</small></label
+                        >
+                        <SanteBotao v-if="faixas.length > 1" type="button" @click="faixas.splice(i, 1)">{{
+                          T.tirarFaixa
+                        }}</SanteBotao>
+                      </fieldset>
+                      <SanteBotao type="button" @click="faixas.push(faixaVazia())">{{
+                        T.outraFaixa
+                      }}</SanteBotao>
+                      <SanteBotao type="submit" :disabled="faixasComFalha">{{ T.novaFaixa }}</SanteBotao>
                     </form>
                     <p v-for="fo in v['formulas'] as Linha[]" :key="String(fo['id'])">
                       {{ fo['vigenciaInicio'] }}: {{ fo['expressao'] }}
-                      {{ fo['vigenciaFim'] ? `(até ${fo['vigenciaFim']})` : '(em vigor)' }}
+                      {{ fo['vigenciaFim'] ? `(${T.ate} ${fo['vigenciaFim']})` : `(${T.emVigor})` }}
                     </p>
-                    <form @submit.prevent="novaFormula(Number(v['id']))">
-                      <label>{{ TXT[36] }} <input v-model="formula['descricao']" required /></label>
+                    <form
+                      v-if="v['calculado']"
+                      data-testid="form-formula"
+                      @submit.prevent="novaFormula(Number(v['id']))"
+                    >
+                      <label>{{ T.descricao }} <input v-model="formula['descricao']" required /></label>
                       <label
-                        >{{ TXT[37] }} <input v-model="formula['expressao']" required :placeholder="TXT[3]"
-                      /></label>
+                        >{{ T.expressao }}
+                        <input v-model="formula['expressao']" required :placeholder="T.exprExemplo" />
+                        <small v-if="falhasFormula['expressao']" class="erro">{{
+                          falhasFormula['expressao']
+                        }}</small>
+                      </label>
+                      <fieldset v-for="(vr, j) in formula['variaveis'] as Linha[]" :key="j">
+                        <label>{{ T.variavel }} <input v-model="vr['identificador']" maxlength="10" /></label>
+                        <label
+                          >{{ T.fonte }}
+                          <select v-model="vr['fonte']">
+                            <option v-for="x in ['analito', 'dado_paciente', 'digitado']" :key="x" :value="x">
+                              {{ x }}
+                            </option>
+                          </select>
+                        </label>
+                        <label v-if="vr['fonte'] === 'analito'"
+                          >{{ T.analito }}
+                          <select v-model="vr['analitoId']" required>
+                            <option value="">{{ T.escolha }}</option>
+                            <option v-for="o in analitosDoExame(Number(v['id']))" :key="o.id" :value="o.id">
+                              {{ o.nome }}
+                            </option>
+                          </select>
+                        </label>
+                        <label v-if="vr['fonte'] === 'dado_paciente'"
+                          >{{ T.dadoPaciente }}
+                          <select v-model="vr['dadoPaciente']" required>
+                            <option
+                              v-for="x in [
+                                'peso',
+                                'altura',
+                                'idade',
+                                'sexo',
+                                'superficie_corporal',
+                                'raca_cor',
+                              ]"
+                              :key="x"
+                              :value="x"
+                            >
+                              {{ x }}
+                            </option>
+                          </select>
+                        </label>
+                      </fieldset>
+                      <SanteBotao
+                        type="button"
+                        @click="(formula['variaveis'] as Linha[]).push(variavelVazia())"
+                        >{{ T.maisVariavel }}</SanteBotao
+                      >
+                      <small v-if="falhasFormula['variaveis']" class="erro">{{
+                        falhasFormula['variaveis']
+                      }}</small>
                       <label
-                        >{{ TXT[38] }} <input v-model="formula['variaveis']" :placeholder="TXT[4]"
+                        >{{ T.inicio }} <input v-model="formula['vigenciaInicio']" type="date" required
                       /></label>
-                      <label
-                        >{{ TXT[23] }} <input v-model="formula['vigenciaInicio']" type="date" required
-                      /></label>
-                      <SanteBotao type="submit">{{ TXT[39] }}</SanteBotao>
+                      <SanteBotao type="submit" :disabled="Object.keys(falhasFormula).length > 0">{{
+                        T.novaFormula
+                      }}</SanteBotao>
                     </form>
                   </div>
                 </template>
               </li>
             </ul>
-            <form class="novo" @submit.prevent="salvarVinculo(s.t, novo[s.t] as Linha)">
-              <label v-for="[k, r] in s.campos" :key="k"
-                >{{ r }} <input v-model="(novo[s.t] as Linha)[k]"
+            <form
+              class="novo"
+              :data-testid="`novo-${s.t}`"
+              @submit.prevent="salvarVinculo(s.t, corpoVinculo(novo[s.t] as Linha))"
+            >
+              <label v-for="c in s.campos" :key="c.k"
+                >{{ c.r }}
+                <template v-if="c.lista">
+                  <input
+                    v-model="filtros[`${s.t}.${c.k}`]"
+                    :placeholder="T.buscar"
+                    :aria-label="`${c.r} (${T.buscar})`"
+                  />
+                  <select v-model="(novo[s.t] as Linha)[c.k]" :name="c.k">
+                    <option value="">{{ T.escolha }}</option>
+                    <option v-for="o in filtrada(c.lista, `${s.t}.${c.k}`)" :key="o.id" :value="o.id">
+                      {{ o.nome }}
+                    </option>
+                  </select>
+                </template>
+                <select v-else-if="c.fixas" v-model="(novo[s.t] as Linha)[c.k]" :name="c.k">
+                  <option v-for="x in c.fixas" :key="x" :value="x">{{ x }}</option>
+                </select>
+                <input
+                  v-else-if="c.tipo === 'checkbox'"
+                  v-model="(novo[s.t] as Linha)[c.k]"
+                  type="checkbox"
+                  :name="c.k" />
+                <input
+                  v-else
+                  v-model="(novo[s.t] as Linha)[c.k]"
+                  type="number"
+                  min="0"
+                  step="any"
+                  :name="c.k"
               /></label>
-              <SanteBotao type="submit">{{ TXT[40] }}</SanteBotao>
+              <SanteBotao type="submit">{{ T.incluir }}</SanteBotao>
             </form>
           </section>
         </template>
@@ -449,5 +790,11 @@ form {
   gap: 0.5rem;
   align-items: end;
   margin: 0.5rem 0;
+}
+fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border: 1px solid var(--sante-borda, #ccc);
 }
 </style>
