@@ -1882,6 +1882,7 @@ export const mensagensWeb = {
       cadastradoEm: 'Cadastrado em {data}; última alteração em {alterado}.',
       editar: 'Alterar o cadastro',
       historico: 'Linha do tempo do cadastro',
+      contatosResponsaveis: 'Contatos e responsáveis',
       salvo: 'Cadastro salvo.',
       criado: 'Paciente cadastrado com o prontuário {prontuario}.',
       semGravacao: 'Só consulta: {motivo}',

@@ -417,6 +417,9 @@ const sim = (b: boolean) => (b ? t('cadastro.sim') : t('cadastro.nao'));
           <RouterLink v-if="f && f.permissoes.lerHistorico" :to="`/cadastros/pacientes/${f.id}/historico`">{{
             t('cadastro.ficha.historico')
           }}</RouterLink>
+          <RouterLink v-if="f" :to="`/cadastros/pacientes/${f.id}/contatos`" data-testid="link-contatos">{{
+            t('cadastro.ficha.contatosResponsaveis')
+          }}</RouterLink>
         </nav>
       </header>
 
