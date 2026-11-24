@@ -6,6 +6,7 @@
 // recebe excluido_em e o cancelamento muda a situação. O escopo é o do estabelecimento da sessão (operadora ligada a
 // ele, contrato e produto dele); fora dele, 404 sem dizer se existe.
 import {
+  ADITIVOS_COM_EFEITO,
   carenciasAplicadas,
   lerParametro,
   PARAMETROS_OPERADORA,
@@ -13,13 +14,17 @@ import {
   passoDoPedidoCartao,
   planoCancelamento,
   planoResponsavel,
+  podeDesistirCancelamento,
   podeEfetivarCancelamento,
+  problemasDaAssinatura,
   type ProblemaCadastro,
   problemasDaAbrangencia,
   problemasDoAditivo,
   problemasDoDepartamento,
   problemasDoPedidoCartao,
   somarDias,
+  somarMeses,
+  type TipoContratacao,
   type TipoResponsavelOperadora,
   valorDoParametro,
 } from '@sgh/dominio-operadora';
@@ -64,6 +69,7 @@ export const TABELAS_CADASTRO_COMPLEMENTAR = [
   'area_abrangencia_produto',
   'carencia_aplicada',
   'solicitacao_cartao_beneficiario',
+  'cartao_beneficiario',
   'sequencia_negocio',
 ] as const;
 
@@ -298,11 +304,69 @@ export class PortaCadastroComplementarPropria {
   }
   private static async contratoDoEst(l: Leitor, est: number, id: number) {
     const r = await l.uma(
-      'SELECT id, versao, operadora_saude_id, inicio_vigencia, fim_vigencia, tipo_vigencia, situacao FROM contrato_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      `SELECT cp.id, cp.versao, cp.operadora_saude_id, cp.inicio_vigencia, cp.fim_vigencia, cp.tipo_vigencia, cp.situacao,
+              cl.tipo_contratacao
+         FROM contrato_plano cp JOIN classificacao_plano cl ON cl.id = cp.classificacao_plano_id
+        WHERE cp.id = ? AND cp.estabelecimento_id = ? AND cp.excluido_em IS NULL`,
       [id, est],
     );
     if (!r) throw naoEncontrado();
     return r;
+  }
+  /** O plano citado no aditivo é do mesmo estabelecimento do contrato (a FK só confere que existe). */
+  private static async planoDoEst(l: Leitor, est: number, id: number | null, campo: string): Promise<void> {
+    if (id === null) return;
+    const r = await l.uma(
+      `SELECT 1 AS ok FROM plano_comercializado pc JOIN produto_plano pp ON pp.id = pc.produto_plano_id
+        WHERE pc.id = ? AND pc.estabelecimento_id = ? AND pp.estabelecimento_id = ? AND pc.excluido_em IS NULL`,
+      [id, est, est],
+    );
+    if (!r)
+      throw recusa('plano-fora-do-contrato', 'O plano não é do estabelecimento deste contrato.', {
+        campos: [campo],
+      });
+  }
+  /** O aditivo vigente de prorrogação ou renovação estende a vigência do contrato (prazo determinado). */
+  private static async aplicarAditivo(
+    tx: TxOperacao,
+    est: number,
+    contrato: number,
+    tipo: string,
+    novaVigenciaFim: string | null,
+  ): Promise<void> {
+    if (!ADITIVOS_COM_EFEITO.includes(tipo) || !novaVigenciaFim) return;
+    const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
+    const fim = dataIso(ctr['fim_vigencia']);
+    if (fim !== null && novaVigenciaFim <= fim)
+      throw recusa('vigencia-invalida', 'O novo fim precisa ser depois do fim atual do contrato.', {
+        campos: ['novaVigenciaFim'],
+      });
+    await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
+      fim_vigencia: novaVigenciaFim,
+      tipo_vigencia: 'determinada',
+    });
+  }
+  /** Encerra o contrato na data de efeito e fecha a vigência dos beneficiários abertos. */
+  private static async encerrarContrato(tx: TxOperacao, est: number, contrato: number, efeito: string) {
+    const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
+    const inicio = dataIso(ctr['inicio_vigencia']) ?? efeito;
+    await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
+      situacao: 'encerrado',
+      fim_vigencia: efeito < inicio ? inicio : efeito,
+      tipo_vigencia: 'determinada',
+    });
+    // A vigência dos beneficiários termina com o contrato (a baixa cadastral de cada um segue pela rotina de baixa).
+    const bens = await tx.consultarParaAtualizar(
+      'SELECT id, versao, inicio_vigencia FROM beneficiario_plano WHERE contrato_plano_id = ? AND excluido_em IS NULL AND fim_vigencia IS NULL',
+      [contrato],
+      { teto: 100_000 },
+    );
+    for (const b of bens) {
+      const ini = dataIso(b['inicio_vigencia']) ?? efeito;
+      await tx.alterar('beneficiario_plano', Number(b['id']), Number(b['versao']), {
+        fim_vigencia: efeito < ini ? ini : efeito,
+      });
+    }
   }
   private static async beneficiarioDoEst(l: Leitor, est: number, id: number) {
     const r = await l.uma(
@@ -579,6 +643,8 @@ export class PortaCadastroComplementarPropria {
             situacao: textoObrigatorio(ctr['situacao']),
           }),
         );
+        await PortaCadastroComplementarPropria.planoDoEst(tx, est, x.planoAnterior, 'planoAnterior');
+        await PortaCadastroComplementarPropria.planoDoEst(tx, est, x.planoNovo, 'planoNovo');
         const vigente = x.assinatura !== null;
         const id = await tx.incluir('aditivo_contrato_plano', {
           contrato_plano_id: contrato,
@@ -599,12 +665,48 @@ export class PortaCadastroComplementarPropria {
           descricao: x.descricao,
           situacao: vigente ? 'vigente' : 'rascunho',
         });
-        // O aditivo assinado de prorrogação ou renovação estende a vigência do contrato (prazo determinado).
-        if (vigente && x.novaVigenciaFim && (x.tipo === 'vigencia' || x.tipo === 'renovacao'))
-          await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
-            fim_vigencia: x.novaVigenciaFim,
-            tipo_vigencia: 'determinada',
-          });
+        if (vigente)
+          await PortaCadastroComplementarPropria.aplicarAditivo(tx, est, contrato, x.tipo, x.novaVigenciaFim);
+        return { id };
+      },
+    );
+  }
+
+  /** Assina o aditivo em rascunho: passa a vigente e aplica o efeito (prorrogação ou renovação). */
+  assinarAditivo(c: ContextoSessao, id: number, assinatura: string, trilha: Trilha) {
+    return this.gravar(
+      c,
+      'operadora.aditivo.assinar',
+      'aditivo_contrato_plano',
+      trilha,
+      async (tx, est, hoje) => {
+        const r = await umaTravada(
+          tx,
+          `SELECT a.id, a.versao, a.situacao, a.tipo_aditivo, a.data_efeito, a.nova_vigencia_fim, a.contrato_plano_id
+             FROM aditivo_contrato_plano a JOIN contrato_plano cp ON cp.id = a.contrato_plano_id
+            WHERE a.id = ? AND cp.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+          [id, est],
+        );
+        if (!r) throw naoEncontrado();
+        exigir(
+          problemasDaAssinatura(
+            textoObrigatorio(r['situacao']),
+            assinatura,
+            dataIso(r['data_efeito']) ?? '',
+            hoje,
+          ),
+        );
+        await tx.alterar('aditivo_contrato_plano', id, Number(r['versao']), {
+          situacao: 'vigente',
+          data_assinatura: assinatura,
+        });
+        await PortaCadastroComplementarPropria.aplicarAditivo(
+          tx,
+          est,
+          Number(r['contrato_plano_id']),
+          textoObrigatorio(r['tipo_aditivo']),
+          dataIso(r['nova_vigencia_fim']),
+        );
         return { id };
       },
     );
@@ -654,6 +756,16 @@ export class PortaCadastroComplementarPropria {
           diasInadimplencia: Number(
             await PortaCadastroComplementarPropria.parametro(tx, op, 'dias_inadimplencia_cancelamento', hoje),
           ),
+          diaLimiteNotificacao: Number(
+            await PortaCadastroComplementarPropria.parametro(
+              tx,
+              op,
+              'dia_limite_notificacao_inadimplencia',
+              hoje,
+            ),
+          ),
+          tipoContratacao: textoObrigatorio(ctr['tipo_contratacao']) as TipoContratacao,
+          inicioContrato: dataIso(ctr['inicio_vigencia']) ?? hoje,
         });
         exigir(plano.problemas);
         await garantirSequencia(
@@ -669,13 +781,21 @@ export class PortaCadastroComplementarPropria {
           solicitante: x.solicitante,
           solicitado_em: new Date(),
           data_efeito: plano.dataEfeito,
-          situacao: plano.situacao,
+          situacao: plano.efetivarJa ? 'efetivado' : plano.situacao,
+          efetivado_em: plano.efetivarJa ? new Date() : null,
+          efetivado_por_usuario_id: plano.efetivarJa ? tx.contexto.usuario : null,
           dias_atraso: x.diasAtraso,
           aviso_recebimento: x.avisoRecebimento,
           aviso_entregue_em: x.avisoEntregueEm,
           observacao: x.observacao,
         });
-        await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), { situacao: 'em_cancelamento' });
+        // Pedido do titular no contrato individual (RN 412): efeito na ciência, sem depender de outra pessoa.
+        if (plano.efetivarJa)
+          await PortaCadastroComplementarPropria.encerrarContrato(tx, est, contrato, plano.dataEfeito);
+        else
+          await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
+            situacao: 'em_cancelamento',
+          });
         return { id };
       },
     );
@@ -698,34 +818,89 @@ export class PortaCadastroComplementarPropria {
         const efeito = dataIso(r['data_efeito']) ?? hoje;
         const p = podeEfetivarCancelamento(textoObrigatorio(r['situacao']), efeito, hoje);
         if (p) exigir([p]);
-        const contrato = Number(r['contrato_plano_id']);
-        const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
         await tx.alterar('cancelamento_contrato_plano', id, Number(r['versao']), {
           situacao: 'efetivado',
           efetivado_em: new Date(),
           efetivado_por_usuario_id: tx.contexto.usuario,
         });
-        const inicio = dataIso(ctr['inicio_vigencia']) ?? efeito;
-        await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), {
-          situacao: 'encerrado',
-          fim_vigencia: efeito < inicio ? inicio : efeito,
-          tipo_vigencia: 'determinada',
-        });
-        // A vigência dos beneficiários termina com o contrato (a baixa cadastral de cada um segue pela rotina de baixa).
-        const bens = await tx.consultarParaAtualizar(
-          'SELECT id, versao, inicio_vigencia FROM beneficiario_plano WHERE contrato_plano_id = ? AND excluido_em IS NULL AND fim_vigencia IS NULL',
-          [contrato],
-          { teto: 100_000 },
+        await PortaCadastroComplementarPropria.encerrarContrato(
+          tx,
+          est,
+          Number(r['contrato_plano_id']),
+          efeito,
         );
-        for (const b of bens) {
-          const ini = dataIso(b['inicio_vigencia']) ?? efeito;
-          await tx.alterar('beneficiario_plano', Number(b['id']), Number(b['versao']), {
-            fim_vigencia: efeito < ini ? ini : efeito,
-          });
-        }
         return { id };
       },
     );
+  }
+
+  /** Desistência do pedido antes da efetivação: o pedido fica guardado como cancelado e o contrato volta a ativo. */
+  desistirCancelamento(c: ContextoSessao, id: number, motivo: string | null, trilha: Trilha) {
+    return this.gravar(
+      c,
+      'operadora.cancelamento.desistir',
+      'cancelamento_contrato_plano',
+      trilha,
+      async (tx, est) => {
+        const r = await umaTravada(
+          tx,
+          `SELECT k.id, k.versao, k.situacao, k.contrato_plano_id FROM cancelamento_contrato_plano k
+           JOIN contrato_plano cp ON cp.id = k.contrato_plano_id WHERE k.id = ? AND cp.estabelecimento_id = ?`,
+          [id, est],
+        );
+        if (!r) throw naoEncontrado();
+        const p = podeDesistirCancelamento(textoObrigatorio(r['situacao']), motivo);
+        if (p) exigir([p]);
+        await tx.alterar('cancelamento_contrato_plano', id, Number(r['versao']), {
+          situacao: 'cancelado',
+          motivo_reversao: (motivo ?? '').trim().slice(0, 500),
+        });
+        const contrato = Number(r['contrato_plano_id']);
+        const aberto = await tx.uma(
+          "SELECT 1 AS ok FROM cancelamento_contrato_plano WHERE contrato_plano_id = ? AND id <> ? AND excluido_em IS NULL AND situacao IN ('solicitado','agendado') LIMIT 1",
+          [contrato, id],
+        );
+        const ctr = await PortaCadastroComplementarPropria.contratoDoEst(tx, est, contrato);
+        if (!aberto && textoObrigatorio(ctr['situacao']) === 'em_cancelamento')
+          await tx.alterar('contrato_plano', contrato, Number(ctr['versao']), { situacao: 'ativo' });
+        return { id };
+      },
+    );
+  }
+
+  /**
+   * Efetiva os pedidos do estabelecimento com a data de efeito alcançada (rotina diária ou botão da tela). Cada pedido
+   * é uma operação própria, com a sua trilha; o que falhar fica na lista de recusados, sem travar os demais.
+   */
+  async efetivarCancelamentosVencidos(
+    c: ContextoSessao,
+    trilha: Trilha,
+  ): Promise<{ efetivados: number[]; recusados: { id: number; codigo: string }[] }> {
+    const ids = await this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT k.id FROM cancelamento_contrato_plano k JOIN contrato_plano cp ON cp.id = k.contrato_plano_id
+            WHERE cp.estabelecimento_id = ? AND k.excluido_em IS NULL AND k.situacao IN ('solicitado','agendado')
+              AND k.data_efeito <= CURRENT_DATE ORDER BY k.data_efeito, k.id`,
+          [est],
+          { teto: 5000 },
+        )
+      ).map((r) => Number(r['id'])),
+    );
+    const efetivados: number[] = [];
+    const recusados: { id: number; codigo: string }[] = [];
+    for (const id of ids) {
+      try {
+        await this.efetivarCancelamento(c, id, trilha);
+        efetivados.push(id);
+      } catch (e) {
+        recusados.push({
+          id,
+          codigo: e instanceof ErroOperacao ? String(e.problema.codigo ?? 'erro') : 'erro',
+        });
+      }
+    }
+    return { efetivados, recusados };
   }
 
   // ---- abrangência ----
@@ -969,7 +1144,7 @@ export class PortaCadastroComplementarPropria {
         );
         const aberto = await tx.uma(
           `SELECT 1 AS ok FROM solicitacao_cartao_beneficiario p JOIN situacao_solicitacao_cartao s ON s.id = p.situacao_solicitacao_cartao_id
-          WHERE p.beneficiario_plano_id = ? AND p.excluido_em IS NULL AND s.situacao_final = FALSE AND s.codigo = 'solicitado' LIMIT 1`,
+          WHERE p.beneficiario_plano_id = ? AND p.excluido_em IS NULL AND s.situacao_final = FALSE LIMIT 1`,
           [beneficiario],
         );
         if (aberto)
@@ -1003,6 +1178,68 @@ export class PortaCadastroComplementarPropria {
     );
   }
 
+  /**
+   * A emissão do pedido gera a via de fato, pela mesma regra da segunda via do cadastro: via seguinte, as anteriores
+   * canceladas (nunca apagadas), validade pelo parâmetro da operadora limitada ao fim do contrato de prazo determinado.
+   */
+  private static async novaVia(
+    tx: TxOperacao,
+    hoje: string,
+    pedido: number,
+    r: Record<string, unknown>,
+  ): Promise<number> {
+    const ben = Number(r['beneficiario_plano_id']);
+    const b = await umaTravada(
+      tx,
+      `SELECT b.id, b.versao, b.situacao, b.matricula, b.via_cartao, cp.operadora_saude_id, cp.fim_vigencia
+         FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id WHERE b.id = ?`,
+      [ben],
+    );
+    if (!b || textoObrigatorio(b['situacao']) !== 'ativo')
+      throw recusa('beneficiario-inativo', 'Só o beneficiário ativo recebe cartão.', {
+        campos: ['beneficiario'],
+      });
+    const m = await tx.uma<{ v: unknown }>(
+      'SELECT COALESCE(MAX(via), 0) AS v FROM cartao_beneficiario WHERE beneficiario_plano_id = ?',
+      [ben],
+    );
+    const via = Math.max(inteiro(m?.['v']) ?? 0, inteiro(b['via_cartao']) ?? 0) + 1;
+    const anteriores = await tx.consultarParaAtualizar(
+      "SELECT id, versao FROM cartao_beneficiario WHERE beneficiario_plano_id = ? AND situacao <> 'cancelado' AND excluido_em IS NULL",
+      [ben],
+      { teto: 100 },
+    );
+    for (const a of anteriores)
+      await tx.alterar('cartao_beneficiario', Number(a['id']), Number(a['versao']), {
+        situacao: 'cancelado',
+        cancelado_em: new Date(),
+        cancelado_por_usuario_id: tx.contexto.usuario,
+      });
+    await tx.alterar('beneficiario_plano', ben, Number(b['versao']), { via_cartao: via });
+    const meses = Number(
+      await PortaCadastroComplementarPropria.parametro(
+        tx,
+        Number(b['operadora_saude_id']),
+        'validade_cartao_meses',
+        hoje,
+      ),
+    );
+    const padrao = somarMeses(hoje, meses);
+    const fim = dataIso(b['fim_vigencia']);
+    return tx.incluir('cartao_beneficiario', {
+      beneficiario_plano_id: ben,
+      numero_cartao: textoObrigatorio(b['matricula']),
+      via,
+      formato: 'fisico',
+      emitido_em: hoje,
+      validade: fim !== null && fim >= hoje && fim < padrao ? fim : padrao,
+      solicitacao_cartao_beneficiario_id: pedido,
+      motivo_solicitacao_cartao_id: r['motivo_solicitacao_cartao_id'] ?? null,
+      situacao: 'emitido',
+      cobrar_emissao: booleano(r['cobra_taxa']),
+    });
+  }
+
   avancarPedidoCartao(
     c: ContextoSessao,
     id: number,
@@ -1014,10 +1251,11 @@ export class PortaCadastroComplementarPropria {
       'operadora.cartao.avancar',
       'solicitacao_cartao_beneficiario',
       trilha,
-      async (tx, est) => {
+      async (tx, est, hoje) => {
         const r = await umaTravada(
           tx,
-          `SELECT p.id, p.versao, p.beneficiario_plano_id, s.codigo FROM solicitacao_cartao_beneficiario p
+          `SELECT p.id, p.versao, p.beneficiario_plano_id, p.motivo_solicitacao_cartao_id, p.cobra_taxa, s.codigo
+             FROM solicitacao_cartao_beneficiario p
            JOIN situacao_solicitacao_cartao s ON s.id = p.situacao_solicitacao_cartao_id
           WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL`,
           [id, est],
@@ -1030,11 +1268,7 @@ export class PortaCadastroComplementarPropria {
         };
         if (para === 'emitido') {
           valores['emitido_em'] = new Date();
-          const cartao = await tx.uma(
-            "SELECT id FROM cartao_beneficiario WHERE beneficiario_plano_id = ? AND situacao IN ('emitido','ativo','entregue') ORDER BY via DESC, id DESC LIMIT 1",
-            [r['beneficiario_plano_id']],
-          );
-          if (cartao) valores['cartao_beneficiario_id'] = cartao['id'];
+          valores['cartao_beneficiario_id'] = await PortaCadastroComplementarPropria.novaVia(tx, hoje, id, r);
         }
         if (para === 'entregue') valores['entregue_em'] = new Date();
         await tx.alterar('solicitacao_cartao_beneficiario', id, Number(r['versao']), valores);
@@ -1057,6 +1291,9 @@ export const METODOS_CADASTRO_COMPLEMENTAR: ReadonlySet<string> = new Set([
   'cancelamentos',
   'solicitarCancelamento',
   'efetivarCancelamento',
+  'desistirCancelamento',
+  'efetivarCancelamentosVencidos',
+  'assinarAditivo',
   'abrangencia',
   'definirAbrangencia',
   'carencias',

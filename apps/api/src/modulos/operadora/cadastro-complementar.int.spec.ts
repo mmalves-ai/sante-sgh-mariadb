@@ -4,6 +4,7 @@
 // aditivo que estende a vigência, cancelamento com protocolo e efetivação, área de abrangência com retirada guardada,
 // carências aplicadas com teto legal e o pedido de cartão com situação e taxa pelo parâmetro.
 // SGH_NUCLEO_SEM_BANCO=1 pula o banco.
+import { somarDias } from '@sgh/dominio-operadora';
 import type { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
@@ -57,6 +58,10 @@ async function limparComplementar(n: NucleoProprio, m: MassaBase) {
     await e.executar(`DELETE FROM aditivo_contrato_plano WHERE contrato_plano_id IN (${ctr})`, ests);
     await e.executar(`DELETE FROM cancelamento_contrato_plano WHERE contrato_plano_id IN (${ctr})`, ests);
     await e.executar(`DELETE FROM carencia_aplicada WHERE beneficiario_plano_id IN (${ben})`, ests);
+    await e.executar(
+      `UPDATE cartao_beneficiario SET solicitacao_cartao_beneficiario_id = NULL WHERE solicitacao_cartao_beneficiario_id IN (SELECT id FROM solicitacao_cartao_beneficiario WHERE estabelecimento_id IN (?, ?))`,
+      ests,
+    );
     await e.executar(`DELETE FROM solicitacao_cartao_beneficiario WHERE estabelecimento_id IN (?, ?)`, ests);
     await e.executar(
       `DELETE FROM area_abrangencia_produto WHERE produto_plano_id IN (SELECT id FROM produto_plano WHERE estabelecimento_id IN (?, ?))`,
@@ -282,6 +287,48 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       [ctr],
     );
     expect(cp).toEqual({ fim: '2027-12-31', tipo: 'determinada' });
+    // O plano citado precisa ser do estabelecimento do contrato (a FK sozinha aceitaria o de outro).
+    const [outro] = await q<{ id: unknown }>(
+      'SELECT id FROM plano_comercializado WHERE estabelecimento_id <> ? ORDER BY id LIMIT 1',
+      [massa!.est],
+    );
+    for (const plano of [2_147_000_000, ...(outro ? [Number(outro['id'])] : [])])
+      expect(
+        await codigoDe(
+          porta!.registrarAditivo(
+            c,
+            ctr,
+            { ...ad, tipo: 'inclusao_plano', planoNovo: plano, efeito: '2026-04-01', novaVigenciaFim: null },
+            trilha('adt'),
+          ),
+        ),
+      ).toBe('plano-fora-do-contrato');
+    // Rascunho de prorrogação não mexe no contrato; a assinatura o torna vigente e aplica o efeito.
+    const rasc = await porta!.registrarAditivo(
+      c,
+      ctr,
+      { ...ad, tipo: 'vigencia', assinatura: null, efeito: '2026-05-01', novaVigenciaFim: '2028-06-30' },
+      trilha('adt'),
+    );
+    const fimDe = async () =>
+      (
+        await q<{ fim: unknown }>(
+          "SELECT DATE_FORMAT(fim_vigencia, '%Y-%m-%d') AS fim FROM contrato_plano WHERE id = ?",
+          [ctr],
+        )
+      )[0]!['fim'];
+    expect(await fimDe()).toBe('2027-12-31');
+    await porta!.assinarAditivo(c, rasc.id, '2026-04-20', trilha('adt'));
+    expect(await fimDe()).toBe('2028-06-30');
+    expect(await codigoDe(porta!.assinarAditivo(c, rasc.id, '2026-04-20', trilha('adt')))).toBe(
+      'situacao-invalida',
+    );
+    await porta!.assinarAditivo(c, ads[1]!.id, '2026-03-15', trilha('adt'));
+    expect((await porta!.aditivos(c, ctr)).map((a) => [a.sequencia, a.situacao, a.assinatura])).toEqual([
+      [1, 'vigente', '2026-03-01'],
+      [2, 'vigente', '2026-03-15'],
+      [3, 'vigente', '2026-04-20'],
+    ]);
 
     const prod = cart!.produto;
     expect(
@@ -320,20 +367,31 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
     expect([Number(bp!['g']), Number(bp!['d'])]).toEqual([1, 30]);
 
     const op = cart!.operadora;
+    const [mot] = await q<{ id: unknown }>(
+      "SELECT id FROM motivo_solicitacao_cartao WHERE codigo = 'l0210-perda'",
+    );
     await porta!.definirParametro(
       c,
       op,
       { chave: 'cobra_segunda_via_cartao', valor: true, inicio: null, justificativa: null },
       trilha('par'),
     );
+    // Cobrança ligada com a taxa no padrão zero: recusa, nunca cobra R$ 0 em silêncio.
+    expect(
+      await codigoDe(
+        porta!.solicitarCartao(
+          c,
+          ben,
+          { primeiraVia: false, motivo: Number(mot!['id']), canal: 'balcao', observacao: null },
+          trilha('crt'),
+        ),
+      ),
+    ).toBe('taxa-invalida');
     await porta!.definirParametro(
       c,
       op,
       { chave: 'valor_taxa_segunda_via', valor: 25, inicio: null, justificativa: null },
       trilha('par'),
-    );
-    const [mot] = await q<{ id: unknown }>(
-      "SELECT id FROM motivo_solicitacao_cartao WHERE codigo = 'l0210-perda'",
     );
     expect(
       await codigoDe(
@@ -365,6 +423,43 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       'passo-invalido',
     );
     await porta!.avancarPedidoCartao(c, ped.id, 'emitido', trilha('crt'));
+    // A emissão gera a via de fato, ligada ao pedido; só ela fica válida (as anteriores canceladas, não apagadas).
+    const [via] = await q<{
+      cid: unknown;
+      v: unknown;
+      ped: unknown;
+      s: unknown;
+      cobra: unknown;
+      validas: unknown;
+    }>(
+      `SELECT p.cartao_beneficiario_id AS cid, k.via AS v, k.solicitacao_cartao_beneficiario_id AS ped, k.situacao AS s,
+              k.cobrar_emissao AS cobra,
+              (SELECT COUNT(*) FROM cartao_beneficiario x WHERE x.beneficiario_plano_id = p.beneficiario_plano_id AND x.situacao <> 'cancelado') AS validas
+         FROM solicitacao_cartao_beneficiario p JOIN cartao_beneficiario k ON k.id = p.cartao_beneficiario_id WHERE p.id = ?`,
+      [ped.id],
+    );
+    expect(via).toBeDefined();
+    expect([Number(via!['ped']), via!['s'], Number(via!['cobra']), Number(via!['validas'])]).toEqual([
+      ped.id,
+      'emitido',
+      1,
+      1,
+    ]);
+    const [bv] = await q<{ v: unknown }>('SELECT via_cartao AS v FROM beneficiario_plano WHERE id = ?', [
+      ben,
+    ]);
+    expect(Number(bv!['v'])).toBe(Number(via!['v']));
+    // Pedido emitido ainda não é final: outro pedido continua barrado.
+    expect(
+      await codigoDe(
+        porta!.solicitarCartao(
+          c,
+          ben,
+          { primeiraVia: false, motivo: Number(mot!['id']), canal: 'portal', observacao: null },
+          trilha('crt'),
+        ),
+      ),
+    ).toBe('pedido-em-aberto');
     await porta!.avancarPedidoCartao(c, ped.id, 'entregue', trilha('crt'));
     const [pc] = await q<{ s: unknown; taxa: unknown; cobra: unknown; emi: unknown; ent: unknown }>(
       `SELECT s.codigo AS s, p.valor_taxa AS taxa, p.cobra_taxa AS cobra, p.emitido_em IS NOT NULL AS emi, p.entregue_em IS NOT NULL AS ent
@@ -385,9 +480,11 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
     });
   });
 
-  it('08-SGO L94: cancelamento por inadimplência recusado sem notificação; a pedido do titular, protocolo e efetivação', async () => {
+  it('08-SGO L94: cancelamento com notificação no prazo, desistência, efeito imediato do titular e efetivação dos vencidos', async () => {
     const c = contexto(massa!);
     const ctr = cart!.contrato;
+    const [h] = await q<{ h: unknown }>("SELECT DATE_FORMAT(CURRENT_DATE, '%Y-%m-%d') AS h");
+    const hoje = String(h!['h']);
     const base = {
       dataEfeito: null,
       diasAtraso: null,
@@ -395,21 +492,44 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
       avisoEntregueEm: null,
       observacao: null,
     };
+    const inadimp = { ...base, motivo: motivoInadimplencia, solicitante: 'inadimplencia', diasAtraso: 70 };
+    const situacaoDoContrato = async () =>
+      (await q<{ s: unknown }>('SELECT situacao AS s FROM contrato_plano WHERE id = ?', [ctr]))[0]!['s'];
+    expect(await codigoDe(porta!.solicitarCancelamento(c, ctr, inadimp, trilha('x')))).toBe(
+      'notificacao-obrigatoria',
+    );
+    // Aviso há 5 dias com 70 de atraso: saiu no 65º dia, depois do 50º do parâmetro.
     expect(
       await codigoDe(
         porta!.solicitarCancelamento(
           c,
           ctr,
-          { ...base, motivo: motivoInadimplencia, solicitante: 'inadimplencia', diasAtraso: 70 },
-          trilha('can'),
+          { ...inadimp, avisoEntregueEm: somarDias(hoje, -5) },
+          trilha('x'),
         ),
       ),
-    ).toBe('notificacao-obrigatoria');
+    ).toBe('notificacao-fora-do-prazo');
+    // Aviso no 45º dia e efeito daqui a 5 dias: agendado; a efetivação espera a data; a desistência devolve o contrato.
+    const ag = await porta!.solicitarCancelamento(
+      c,
+      ctr,
+      { ...inadimp, avisoEntregueEm: somarDias(hoje, -25), dataEfeito: somarDias(hoje, 5) },
+      trilha('operadora.cancelamento.solicitado'),
+    );
+    expect(await situacaoDoContrato()).toBe('em_cancelamento');
+    expect(await codigoDe(porta!.efetivarCancelamento(c, ag.id, trilha('x')))).toBe('efeito-futuro');
+    expect(await codigoDe(porta!.desistirCancelamento(c, ag.id, ' ', trilha('x')))).toBe(
+      'motivo-obrigatorio',
+    );
+    await porta!.desistirCancelamento(c, ag.id, 'Débito quitado', trilha('operadora.cancelamento.desistido'));
+    expect(await situacaoDoContrato()).toBe('ativo');
+
+    // Pedido do titular no contrato individual (RN 412): efetivado na mesma operação, sem passo manual.
     const k = await porta!.solicitarCancelamento(
       c,
       ctr,
       { ...base, motivo: motivoPedido, solicitante: 'titular' },
-      trilha('can'),
+      trilha('operadora.cancelamento.solicitado'),
     );
     expect(
       await codigoDe(
@@ -417,34 +537,69 @@ describe.skipIf(!PODE)('cadastro complementar da operadora no banco (F78.08-1)',
           c,
           ctr,
           { ...base, motivo: motivoPedido, solicitante: 'titular' },
-          trilha('can'),
+          trilha('x'),
         ),
       ),
     ).toBe('contrato-sem-vigencia');
-    const [ec] = await q<{ s: unknown }>('SELECT situacao AS s FROM contrato_plano WHERE id = ?', [ctr]);
-    expect(ec!['s']).toBe('em_cancelamento');
-    await porta!.efetivarCancelamento(c, k.id, trilha('can'));
-    expect(await codigoDe(porta!.efetivarCancelamento(c, k.id, trilha('can')))).toBe('situacao-invalida');
-    const [kc] = await q<{ s: unknown; p: unknown; e: unknown }>(
-      'SELECT situacao AS s, protocolo AS p, efetivado_em IS NOT NULL AS e FROM cancelamento_contrato_plano WHERE id = ?',
+    expect(await codigoDe(porta!.efetivarCancelamento(c, k.id, trilha('x')))).toBe('situacao-invalida');
+    const [kc] = await q<{ s: unknown; p: unknown; e: unknown; d: unknown }>(
+      "SELECT situacao AS s, protocolo AS p, efetivado_em IS NOT NULL AS e, DATE_FORMAT(data_efeito, '%Y-%m-%d') AS d FROM cancelamento_contrato_plano WHERE id = ?",
       [k.id],
     );
-    expect(kc!['s']).toBe('efetivado');
+    expect([kc!['s'], Number(kc!['e']), kc!['d']]).toEqual(['efetivado', 1, hoje]);
     expect(String(kc!['p']).length).toBeGreaterThan(0);
-    expect(Number(kc!['e'])).toBe(1);
-    const [fim] = await q<{ s: unknown; abertos: unknown }>(
-      `SELECT cp.situacao AS s, (SELECT COUNT(*) FROM beneficiario_plano b WHERE b.contrato_plano_id = cp.id AND b.fim_vigencia IS NULL) AS abertos
-         FROM contrato_plano cp WHERE cp.id = ?`,
-      [ctr],
+    const fechado = async () =>
+      (
+        await q<{ s: unknown; abertos: unknown }>(
+          `SELECT cp.situacao AS s, (SELECT COUNT(*) FROM beneficiario_plano b WHERE b.contrato_plano_id = cp.id AND b.fim_vigencia IS NULL) AS abertos
+             FROM contrato_plano cp WHERE cp.id = ?`,
+          [ctr],
+        )
+      ).map((r) => [r['s'], Number(r['abertos'])])[0];
+    expect(await fechado()).toEqual(['encerrado', 0]);
+
+    // Efetivação dos vencidos (a rotina diária): massa volta o contrato a ativo e pede por inadimplência com efeito hoje.
+    await nucleo!.escrever({ cliente: CLIENTE, correlacao: 'preparo-f7808' }, (e) =>
+      e.executar("UPDATE contrato_plano SET situacao = 'ativo', versao = versao + 1 WHERE id = ?", [ctr]),
     );
-    expect([fim!['s'], Number(fim!['abertos'])]).toEqual(['encerrado', 0]);
-    // Nada apagado: o histórico do pedido continua consultável.
-    expect((await porta!.cancelamentos(c, ctr)).map((x) => x.situacao)).toEqual(['efetivado']);
-    // A trilha registrou as gravações da operação.
-    const t = await q<{ n: unknown }>(
-      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE tabela_alvo = 'cancelamento_contrato_plano' AND id_alvo = ?",
-      [String(k.id)],
-    ).catch(() => [{ n: -1 }]);
-    expect(Number(t[0]!['n'])).not.toBe(0);
+    const venc = await porta!.solicitarCancelamento(
+      c,
+      ctr,
+      { ...inadimp, avisoEntregueEm: somarDias(hoje, -25) },
+      trilha('operadora.cancelamento.solicitado'),
+    );
+    expect(await situacaoDoContrato()).toBe('em_cancelamento');
+    expect(await porta!.efetivarCancelamentosVencidos(c, trilha('operadora.cancelamento.efetivado'))).toEqual(
+      {
+        efetivados: [venc.id],
+        recusados: [],
+      },
+    );
+    expect(await situacaoDoContrato()).toBe('encerrado');
+    // Nada apagado: o histórico dos pedidos continua consultável.
+    expect((await porta!.cancelamentos(c, ctr)).map((x) => [x.id, x.situacao])).toEqual([
+      [ag.id, 'cancelado'],
+      [k.id, 'efetivado'],
+      [venc.id, 'efetivado'],
+    ]);
+    // A trilha registrou cada operação no próprio pedido (sem engolir erro de consulta).
+    const operacoes = async (id: number) =>
+      (
+        await q<{ op: unknown }>(
+          `SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) AS op FROM trilha_auditoria
+            WHERE entidade = 'cancelamento_contrato_plano' AND entidade_id = ?
+              AND JSON_EXTRACT(dados_depois, '$.operacao') IS NOT NULL ORDER BY op`,
+          [id],
+        )
+      ).map((r) => r['op']);
+    expect(await operacoes(ag.id)).toEqual([
+      'operadora.cancelamento.desistir',
+      'operadora.cancelamento.solicitar',
+    ]);
+    expect(await operacoes(k.id)).toEqual(['operadora.cancelamento.solicitar']);
+    expect(await operacoes(venc.id)).toEqual([
+      'operadora.cancelamento.efetivar',
+      'operadora.cancelamento.solicitar',
+    ]);
   });
 });

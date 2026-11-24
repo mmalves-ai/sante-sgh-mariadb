@@ -10,7 +10,10 @@
 //   POST operadora/complementar/contratos/:id/aditivos            operadora.beneficiario.editar
 //   GET  operadora/complementar/contratos/:id/cancelamentos       operadora.beneficiario.ler
 //   POST operadora/complementar/contratos/:id/cancelamentos       operadora.beneficiario.editar
+//   POST operadora/complementar/aditivos/:id/assinar               operadora.beneficiario.editar
 //   POST operadora/complementar/cancelamentos/:id/efetivar        operadora.beneficiario.editar
+//   POST operadora/complementar/cancelamentos/:id/desistir        operadora.beneficiario.editar
+//   POST operadora/complementar/cancelamentos/efetivar-vencidos   operadora.beneficiario.editar
 //   GET  operadora/complementar/produtos/:id/abrangencia          operadora.beneficiario.ler
 //   POST operadora/complementar/produtos/:id/abrangencia          operadora.beneficiario.editar
 //   GET  operadora/complementar/beneficiarios/:id/carencias       operadora.beneficiario.ler
@@ -102,6 +105,8 @@ const esquemaCartao = z.object({
   canal: z.enum(['balcao', 'portal', 'contratante']),
   observacao: z.string().max(1000).nullable(),
 });
+const esquemaAssinatura = z.object({ assinatura: data });
+const esquemaDesistencia = z.object({ motivo: z.string().min(1).max(500) });
 const esquemaPassoCartao = z.object({ para: z.enum(['emitido', 'entregue', 'cancelado']) });
 
 @Controller()
@@ -211,6 +216,22 @@ export class CadastroComplementarOperadoraController {
     );
   }
 
+  @Post('operadora/complementar/aditivos/:id/assinar')
+  @HttpCode(200)
+  @Permissao(EDITAR)
+  @AuditadoNoHandler(AUD)
+  assinarAditivo(@Param('id') a: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    return this.ok(
+      this.porta.assinarAditivo(
+        s.porta,
+        idDaRota(a),
+        corpo(esquemaAssinatura, b).assinatura,
+        this.trilha(s, 'operadora.aditivo.assinado', 'aditivo_contrato_plano'),
+      ),
+    );
+  }
+
   @Get('operadora/complementar/contratos/:id/cancelamentos')
   @Permissao(LER)
   cancelamentos(@Param('id') ctr: string, @Req() req: RequisicaoAutorizada) {
@@ -243,6 +264,36 @@ export class CadastroComplementarOperadoraController {
       this.porta.efetivarCancelamento(
         s.porta,
         idDaRota(k),
+        this.trilha(s, 'operadora.cancelamento.efetivado', 'cancelamento_contrato_plano'),
+      ),
+    );
+  }
+
+  @Post('operadora/complementar/cancelamentos/:id/desistir')
+  @HttpCode(200)
+  @Permissao(EDITAR)
+  @AuditadoNoHandler(AUD)
+  desistirCancelamento(@Param('id') k: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    return this.ok(
+      this.porta.desistirCancelamento(
+        s.porta,
+        idDaRota(k),
+        corpo(esquemaDesistencia, b).motivo,
+        this.trilha(s, 'operadora.cancelamento.desistido', 'cancelamento_contrato_plano'),
+      ),
+    );
+  }
+
+  @Post('operadora/complementar/cancelamentos/efetivar-vencidos')
+  @HttpCode(200)
+  @Permissao(EDITAR)
+  @AuditadoNoHandler(AUD)
+  efetivarCancelamentosVencidos(@Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    return this.ok(
+      this.porta.efetivarCancelamentosVencidos(
+        s.porta,
         this.trilha(s, 'operadora.cancelamento.efetivado', 'cancelamento_contrato_plano'),
       ),
     );
