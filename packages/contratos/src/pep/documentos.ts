@@ -716,6 +716,19 @@ export const esquemaSumarioAlta = z
     plano: textoCp1252(2000).optional(),
     encaminhamentos: z.array(textoCp1252(200)).max(20).default([]),
     condicaoAlta: textoCp1252(200).optional(),
+    // F3.3 (L124): texto das seções configuradas pelo estabelecimento, pelo código da seção.
+    secoes: z
+      .array(
+        z
+          .object({
+            codigo: z.string().min(1).max(30),
+            titulo: textoCp1252(150).optional(),
+            texto: textoCp1252(4000),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional(),
   })
   .strict();
 export type SumarioAltaEstruturado = z.infer<typeof esquemaSumarioAlta>;

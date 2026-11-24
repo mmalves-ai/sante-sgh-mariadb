@@ -16,6 +16,8 @@ import {
   salvarSumario,
 } from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
+import SecoesSumarioAlta from '../../componentes/documentos/SecoesSumarioAlta.vue';
+import type { TextoSecao } from '../../api-sumario-secoes.js';
 import { dataHoraBr } from '../../formato.js';
 
 const props = defineProps<{ paciente: number }>();
@@ -42,6 +44,8 @@ const f = ref({
   encaminhamentos: '',
   condicao: '',
 });
+// F3.3 (L124): texto das seções configuradas pelo estabelecimento (pelo código da seção).
+const secoes = ref<TextoSecao[]>([]);
 watch(
   () => dados.data.value?.sumario,
   (s) => {
@@ -57,6 +61,7 @@ watch(
       encaminhamentos: linhas(s.encaminhamentos),
       condicao: s.condicaoAlta ?? '',
     };
+    secoes.value = (s.secoes ?? []).map((x) => ({ ...x }));
   },
   { immediate: true },
 );
@@ -75,6 +80,7 @@ function sumario(): SumarioAltaEstruturado {
     ...(v.plano.trim() ? { plano: v.plano.trim() } : {}),
     encaminhamentos: deLinhas(v.encaminhamentos),
     ...(v.condicao.trim() ? { condicaoAlta: v.condicao.trim() } : {}),
+    ...(secoes.value.length ? { secoes: secoes.value.map((x) => ({ ...x, texto: x.texto.trim() })) } : {}),
   };
 }
 const versaoAtual = computed(() => {
@@ -242,6 +248,12 @@ async function cancelar(): Promise<void> {
           ><span>{{ t('pep.doc.alta.condicao') }}</span
           ><input v-model="f.condicao" maxlength="200" data-testid="sumario-condicao"
         /></label>
+        <SecoesSumarioAlta
+          v-if="dados.data.value.atendimento"
+          v-model="secoes"
+          :atendimento="dados.data.value.atendimento.id"
+          :desabilitado="dados.data.value.finalizado"
+        />
         <AvisoConsulta :acao="dados.data.value.finalizar" />
         <div v-if="!dados.data.value.finalizado" class="acoes">
           <SanteBotao

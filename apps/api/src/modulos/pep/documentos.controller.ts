@@ -132,6 +132,7 @@ import { categoriaDe, type ServicoDocumentos } from './documentos-servico.js';
 import { LiberacaoPep } from './liberacao-pep.js';
 import { ESTADO_PRONTUARIO } from './prontuario.controller.js';
 import type { EstadoProntuario } from './sessao-prontuario.js';
+import { PORTA_SUMARIO_SECOES, type PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 
 export const SERVICO_DOCUMENTOS = Symbol('SERVICO_DOCUMENTOS');
 /** M47 (etapa 3): quem lê os estudos de imagem do paciente (a lista de trabalho DICOM do SADT). */
@@ -202,6 +203,9 @@ const TABELA_DO_TIPO: Readonly<Record<TipoDocumentoAberto, string>> = {
 @Controller('pep')
 export class DocumentosPepController {
   private readonly acesso: AcessoPacientePep;
+  // F3.3 (L124): seções configuradas do sumário de alta; as obrigatórias sem conteúdo recusam a finalização.
+  @Optional() @Inject(PORTA_SUMARIO_SECOES) private readonly secoesSumario: PortaSumarioSecoesPropria | null =
+    null;
   private readonly liberacao: LiberacaoPep;
   /** Emissões em PDF desta instância por documento (a 2ª via pede o motivo). */
   private readonly emitidos = new Map<string, string>();
@@ -1101,6 +1105,17 @@ export class DocumentosPepController {
     const e = validar(esquemaSalvarSumario, corpo);
     const paciente = await this.paciente(s, p, 'pep.sumarioAlta.finalizar', false);
     const prof = this.servico.exigirProfissional(await this.prof(s));
+    const pendSecoes = this.secoesSumario
+      ? await this.secoesSumario.pendencias(this.c(s), e.atendimento, e.sumario)
+      : [];
+    if (pendSecoes.length > 0)
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Sumário incompleto',
+        pendSecoes.map((x) => x.motivo).join(' '),
+        { codigo: 'sumario-incompleto', campos: pendSecoes.map((x) => x.campo) },
+      );
     const entrada = await this.servico.montarFinalizacao(this.c(s), paciente, e, prof, s.login, {
       comoSuporte: req.sghComo !== undefined,
     });

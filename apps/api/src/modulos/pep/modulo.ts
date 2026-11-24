@@ -50,6 +50,8 @@ import { ServicoProntuario } from './servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import { EquipePainelController } from './equipe-painel.controller.js';
 import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-propria.js';
+import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
+import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 import { WorklistMedicoController } from './worklist.controller.js';
 import {
   PORTA_WORKLIST,
@@ -150,6 +152,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       DocumentosPepController,
       WorklistMedicoController,
       EquipePainelController,
+      SumarioAltaSecoesController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: cadastro },
@@ -171,6 +174,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaEquipePainelPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.3 (L124): seções configuráveis do sumário de alta; sem núcleo, 503 no cadastro e sem trava na finalização.
+      {
+        provide: PORTA_SUMARIO_SECOES,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaSumarioSecoesPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),

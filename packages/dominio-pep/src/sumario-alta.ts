@@ -63,6 +63,7 @@ export function textoDoSumario(s: SumarioAltaEstruturado): string {
     ...secao('Medicamentos na alta', s.medicamentosAlta),
     ...(s.plano ? ['Plano pós-alta:', s.plano, ''] : []),
     ...secao('Encaminhamentos', s.encaminhamentos),
+    ...(s.secoes ?? []).flatMap((x) => (x.texto.trim() ? [`${x.titulo ?? x.codigo}:`, x.texto, ''] : [])),
     ...(s.condicaoAlta ? ['Condição na alta:', s.condicaoAlta] : []),
   ]
     .join('\n')

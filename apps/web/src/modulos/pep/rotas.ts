@@ -286,6 +286,13 @@ export const rotasPep: RouteRecordRaw[] = [
     component: () => import('./telas/ConfiguracaoSetorProntuarioTela.vue'),
     meta: { permissao: 'pep.admin.ler' },
   },
+  // F3.3 (L124): seções configuráveis do sumário de alta (ordem, obrigatórias, recorte de tempo).
+  {
+    path: '/pep/sumario-alta/secoes',
+    name: 'pep.sumarioAltaSecoes',
+    component: () => import('./telas/SumarioAltaSecoesTela.vue'),
+    meta: { permissao: 'pep.admin.ler' },
+  },
   {
     path: `/pep/equipe/:atendimento${id}`,
     name: 'pep.equipe',
