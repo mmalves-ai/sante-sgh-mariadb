@@ -231,7 +231,7 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
       va,
     }));
     const pagina2 = [{ id: 10, ocorrido_em: new Date(2026, 9, 5, 9, 0, 0), login: 'ANA', va }];
-    const chamadas: { sql: string; p: readonly unknown[]; teto?: number }[] = [];
+    const chamadas: { sql: string; p: readonly unknown[]; teto: number | undefined }[] = [];
     const paginas = [pagina1, pagina2];
     const leitor = {
       consultar: (sql: string, p: readonly unknown[], o?: { teto?: number }) => {
@@ -281,9 +281,9 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
     const antes = { id: 8, versao: 3, relato: 'Relato anterior', recebida_em: new Date(2026, 9, 1, 8, 0, 0) };
     const sqls: { sql: string; p: readonly unknown[] }[] = [];
     const tx = {
-      uma: (sql: string, p: readonly unknown[]) => {
+      consultarParaAtualizar: (sql: string, p: readonly unknown[]) => {
         sqls.push({ sql, p });
-        return Promise.resolve(p[0] === 8 ? antes : null);
+        return Promise.resolve(p[0] === 8 ? [antes] : []);
       },
     };
     const base = {
@@ -303,9 +303,7 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
     expect(await g.corrigirManifestacao({ ...m, tipo: 'reclamacao', area: 'X', relato: 'Novo' })).toEqual({
       versao: 4,
     });
-    expect(sqls[0]?.sql).toMatch(
-      /FROM manifestacao_ouvidoria WHERE id = \? AND estabelecimento_id = \? FOR UPDATE/,
-    );
+    expect(sqls[0]?.sql).toMatch(/FROM manifestacao_ouvidoria WHERE id = \? AND estabelecimento_id = \?$/);
     expect(sqls[0]?.p).toEqual([8, 3]);
     expect(anotacao).toEqual({
       motivo: 'Erro de digitação',
@@ -327,7 +325,7 @@ describe('complemento D da porta própria da gestão (unidade)', () => {
   });
 
   it('o embrulho não anota quando a gravação recusa', async () => {
-    const tx = { uma: () => Promise.resolve({ id: 8, versao: 3 }) };
+    const tx = { consultarParaAtualizar: () => Promise.resolve([{ id: 8, versao: 3 }]) };
     const base = {
       corrigirManifestacao: () => Promise.reject(new Error('recusada')),
     } as unknown as GravadorGestao;

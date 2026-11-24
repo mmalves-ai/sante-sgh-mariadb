@@ -9,7 +9,7 @@
 // - Versões anteriores de um registro corrigido: lidas da trilha_auditoria (dados.versaoAnterior), da mais nova para a
 //   mais antiga, como a CCIH faz; registro sem correção devolve lista vazia. Quem grava a versão anterior é o
 //   `comVersoesAnteriores` abaixo: embrulha o gravador da gestão e, na correção e no cancelamento da manifestação, lê a
-//   linha antes do UPDATE (travada) e a põe na anotação da trilha da mesma operação (histórico só de acréscimo; a
+//   linha antes do UPDATE (travada, SELECT ... FOR UPDATE) e a põe na anotação da trilha da mesma operação (histórico só de acréscimo; a
 //   memória faz o mesmo com `versionar`). A ligação no gravarSgh da porta completa é do integrador.
 // - Protocolos gerenciados: as versões publicadas (do estabelecimento e as da rede) e as inclusões de pacientes do
 //   período (`fim` exclusivo, pela hora da inclusão), com os critérios e os eventos (meta, checklist, encerramento).
@@ -129,8 +129,8 @@ export function comVersoesAnteriores(
       fn: (m: M) => Promise<{ versao: number }>,
     ) =>
     async (m: M): Promise<{ versao: number }> => {
-      const antes = await tx.uma<Linha>(
-        `SELECT * FROM ${tabela} WHERE id = ? AND estabelecimento_id = ? FOR UPDATE`,
+      const [antes] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT * FROM ${tabela} WHERE id = ? AND estabelecimento_id = ?`,
         [m.id, est],
       );
       const feito = await fn(m);

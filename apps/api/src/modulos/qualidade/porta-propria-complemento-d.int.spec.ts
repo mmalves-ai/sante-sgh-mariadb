@@ -44,7 +44,8 @@ const T: TrilhaDaGravacao = {
   entidadeId: null,
   correlacao: 'teste-qualidade-d',
 };
-const P = `qd${randomInt(100_000, 999_999)}`;
+const NUM = randomInt(100_000_000, 999_999_999);
+const P = `qd${NUM}`;
 
 describe.skipIf(SEM_BANCO_QUA)(
   `complemento D da gestão da qualidade no banco próprio (${CLIENTE_QUA})`,
@@ -115,7 +116,7 @@ describe.skipIf(SEM_BANCO_QUA)(
           );
           const paciente = await e.inserir(
             "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
-            [pf, P.toUpperCase(), hoje],
+            [pf, NUM, hoje],
           );
           const categoria = await garantir(
             'SELECT id FROM categoria_atendimento WHERE codigo = ?',
@@ -139,7 +140,7 @@ describe.skipIf(SEM_BANCO_QUA)(
             `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
                carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-            [m.est, P, paciente, categoria, carater, fonte, prof, hoje, hoje],
+            [m.est, String(NUM), paciente, categoria, carater, fonte, prof, hoje, hoje],
           );
           // A agenda de exame com uma marcação do dia 2026-01-15.
           const catAgenda = await garantir(
