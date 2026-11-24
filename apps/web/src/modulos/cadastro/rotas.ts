@@ -57,6 +57,14 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'cadastro.paciente.ler' },
   },
   {
+    // F3.1 (02-CAD linhas 3 e 4): contatos e responsáveis do paciente.
+    path: `/cadastros/pacientes/:id${id}/contatos`,
+    name: 'cadastro.paciente.contatos',
+    component: () => import('./telas/FichaComplementarTela.vue'),
+    props: true,
+    meta: { permissao: 'cadastro.paciente.ler' },
+  },
+  {
     path: `/cadastros/pacientes/:id${id}/historico`,
     name: 'cadastro.paciente.historico',
     component: () => import('./telas/HistoricoPacienteTela.vue'),
