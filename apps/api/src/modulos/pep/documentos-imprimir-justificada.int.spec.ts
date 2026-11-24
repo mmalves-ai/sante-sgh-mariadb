@@ -4,6 +4,7 @@
 // trilha registra a via e onde a justificativa ficou. O que o evento deixa no MariaDB está provado em
 // documentos-porta-propria.int.spec.ts (documento_prontuario_evento com tipo, usuário, justificativa e hora). Portas
 // em memória, serviço de emissão do Compose (Gotenberg em 127.0.0.1); massa SINTÉTICA. Fora do `pnpm verificar`.
+import { createHash } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
@@ -112,4 +113,52 @@ describe('01-ADM L82: impressão justificada de documento do prontuário', () =>
       'impresso:atestado;via:2;justificativa:emissao+evento',
     ]);
   }, 300_000);
+
+  it('exportar o prontuário completo exige justificativa e só entrega depois de gravado (texto, tipo e resumo)', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/sessao',
+      payload: { estabelecimento: 'aa', login: 'SINT.MEDICO', senha: SENHA },
+    });
+    expect(r.statusCode).toBe(201);
+    const set = r.headers['set-cookie'] as string[];
+    const cookie = set.map((c) => c.split(';')[0]).join('; ');
+    const csrf =
+      set
+        .find((c) => c.startsWith('sgh_csrf='))
+        ?.split(';')[0]
+        ?.slice(9) ?? '';
+    let n = 0;
+    const exportar = (payload: object) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/pep/paciente/1001/exportar',
+        headers: { cookie, 'x-csrf': csrf, 'idempotency-key': `teste.l82x.${Date.now()}.${n++}` },
+        payload,
+      });
+    const antes = documentos.exportacoes.length;
+    expect((await exportar({})).statusCode).toBe(400);
+    expect((await exportar({ justificativa: 'curta' })).statusCode).toBe(400);
+    expect(documentos.exportacoes.length).toBe(antes);
+
+    const just = 'Cópia pedida pelo paciente para segunda opinião';
+    const ok = await exportar({ justificativa: just });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers['content-disposition']).toMatch(/prontuario-1001\.txt/);
+    expect(documentos.exportacoes.slice(antes)).toEqual([
+      {
+        hospital: 'aa',
+        paciente: 1001,
+        justificativa: just,
+        tipoJustificativa: null,
+        linhas: ok.body.split('\r\n').length,
+        hash: createHash('sha256').update(ok.body, 'utf8').digest('hex'),
+      },
+    ]);
+    expect(
+      trilha.eventos.some(
+        (e) => e.tabelaAlvo === 'exportacao_documento' && (e.chaveNaturalAlvo ?? '').startsWith('exportado;'),
+      ),
+    ).toBe(true);
+  }, 120_000);
 });
