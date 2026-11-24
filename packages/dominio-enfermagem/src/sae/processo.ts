@@ -438,3 +438,293 @@ export function montarEdicaoTerminologia(carga: {
     ligacoes: [...ligacoes.values()],
   };
 }
+
+// ── A edição vigente e o catálogo de uso (correção da revisão do fecho-1) ──────────────────────────────────────
+
+/** O pacote de uma carga: NNN (NANDA-I, NIC e NOC da mesma versão) ou CIPE. */
+export type PacoteSae = 'NNN' | 'CIPE';
+
+export interface EdicaoCarregadaSae {
+  readonly pacote: PacoteSae;
+  readonly edicao: string;
+  readonly licenca: string;
+}
+
+export interface EdicoesVigentesSae {
+  /** A última edição carregada de cada pacote (NNN antes de CIPE). */
+  readonly vigentes: readonly EdicaoCarregadaSae[];
+  /** O sistema da terminologia em uso: o pacote da primeira vigente. */
+  readonly sistema: PacoteSae;
+  /** A versão em uso: a edição, ou o rótulo das edições de cada pacote quando há mais de um ("NNN x + CIPE y"). */
+  readonly versao: string;
+  readonly licenca: string;
+}
+
+/**
+ * As edições vigentes: a última carregada de CADA pacote (a carga de uma edição CIPE não esconde a NNN, e vice-versa),
+ * nunca só a última linha. `emOrdem` vem na ordem da carga (a mais antiga primeiro). Sem edição, null.
+ */
+export function edicoesVigentesSae(emOrdem: readonly EdicaoCarregadaSae[]): EdicoesVigentesSae | null {
+  const ultima = new Map<PacoteSae, EdicaoCarregadaSae>();
+  for (const e of emOrdem) ultima.set(e.pacote, e);
+  const vigentes = (['NNN', 'CIPE'] as const).flatMap((p) => {
+    const e = ultima.get(p);
+    return e ? [e] : [];
+  });
+  const primeira = vigentes[0];
+  if (!primeira) return null;
+  const um = vigentes.length === 1;
+  return {
+    vigentes,
+    sistema: primeira.pacote,
+    versao: um ? primeira.edicao : vigentes.map((e) => `${e.pacote} ${e.edicao}`).join(' + '),
+    licenca: um ? primeira.licenca : vigentes.map((e) => `${e.pacote}: ${e.licenca}`).join('; '),
+  };
+}
+
+/** Uma linha da terminologia lida (a edição ou o catálogo de uso), no formato que terminologiaDasLinhas monta. */
+export interface LinhaTerminologiaSae {
+  readonly sistema: PacoteSae;
+  readonly versao: string;
+  readonly licenca: string;
+  readonly tipo: string;
+  readonly codigo: string;
+  readonly pai: string | null;
+  readonly descricao: string;
+  readonly risco: boolean;
+}
+
+/** O catálogo de uso de cada tipo de termo (a atividade fica só na edição: é texto da intervenção). */
+export const CATALOGO_DE_USO_SAE: Readonly<Record<string, string>> = {
+  diagnostico: 'diagnostico_enfermagem',
+  caracteristica: 'caracteristica_diagnostico_enfermagem',
+  fator: 'caracteristica_diagnostico_enfermagem',
+  resultado: 'resultado_enfermagem',
+  intervencao: 'intervencao_enfermagem',
+};
+
+/**
+ * A terminologia em uso com edição carregada: os termos das edições vigentes, menos o que o hospital tirou de uso no
+ * catálogo de uso (o item inativo e a ligação diagnóstico-característica excluída: a decisão do hospital prevalece),
+ * mais os itens próprios ativos do catálogo de uso que não estão na edição (importação é continuidade: o item próprio
+ * do hospital segue utilizável). Todas as linhas saem com a versão e a licença das vigentes.
+ */
+export function comporTerminologiaSae(e: {
+  readonly vigentes: EdicoesVigentesSae;
+  readonly edicao: readonly (Omit<LinhaTerminologiaSae, 'versao' | 'licenca' | 'sistema'> & {
+    readonly pacote: PacoteSae;
+  })[];
+  readonly proprios: readonly Omit<LinhaTerminologiaSae, 'versao' | 'licenca' | 'sistema'>[];
+  /** `tabela|codigo` dos itens inativos do catálogo de uso. */
+  readonly inativos: ReadonlySet<string>;
+  /** `diagnóstico|característica` das ligações excluídas do catálogo de uso. */
+  readonly paresExcluidos: ReadonlySet<string>;
+}): LinhaTerminologiaSae[] {
+  const { versao, licenca, sistema } = e.vigentes;
+  const ordem = new Map(e.vigentes.vigentes.map((v, i) => [v.pacote, i]));
+  const fora = (tipo: string, codigo: string, pai: string | null) => {
+    const tabela = CATALOGO_DE_USO_SAE[tipo];
+    if (tabela && e.inativos.has(`${tabela}|${codigo}`)) return true;
+    return (
+      (tipo === 'caracteristica' || tipo === 'fator') &&
+      pai !== null &&
+      e.paresExcluidos.has(`${pai}|${codigo}`)
+    );
+  };
+  const daEdicao = e.edicao
+    .filter((x) => !fora(x.tipo, x.codigo, x.pai))
+    .sort((a, b) => (ordem.get(a.pacote) ?? 0) - (ordem.get(b.pacote) ?? 0))
+    .map(({ pacote, ...x }) => ({ ...x, sistema: pacote, versao, licenca }));
+  const chave = (x: { tipo: string; codigo: string; pai: string | null }) =>
+    `${CATALOGO_DE_USO_SAE[x.tipo] ?? x.tipo}|${x.codigo}|${x.pai ?? ''}`;
+  const naEdicao = new Set(e.edicao.map(chave));
+  const codigoNaEdicao = new Set(e.edicao.map((x) => `${CATALOGO_DE_USO_SAE[x.tipo] ?? x.tipo}|${x.codigo}`));
+  const proprios = e.proprios
+    .filter(
+      (x) =>
+        !naEdicao.has(chave(x)) &&
+        (x.pai !== null || !codigoNaEdicao.has(`${CATALOGO_DE_USO_SAE[x.tipo] ?? x.tipo}|${x.codigo}`)),
+    )
+    .map((x) => ({ ...x, sistema, versao, licenca }));
+  return [...daEdicao, ...proprios];
+}
+
+/** Um item do catálogo de uso já cadastrado com um código da edição. */
+export interface ItemCatalogoUsoSae {
+  readonly tabela: string;
+  readonly codigo: string;
+  readonly id: number;
+  readonly ativo: boolean;
+  /** O tipo do item (diagnóstico: real, risco...; característica: caracteristica_definidora, fator_...); null nos demais. */
+  readonly tipo: string | null;
+}
+
+/** Uma escala de resultado ativa (uma linha por ponto), com os resultados ativos que já usam o mesmo tipo de escala. */
+export interface EscalaResultadoSae {
+  readonly id: number;
+  readonly tipoEscala: string;
+  readonly ponto: number;
+  readonly usos: number;
+}
+
+export interface PlanoCatalogoUsoSae {
+  readonly ok: true;
+  /** O código que falta no catálogo de uso (com o enunciado da edição). */
+  readonly incluir: readonly {
+    readonly tabela: string;
+    readonly codigo: string;
+    readonly descricao: string;
+    readonly tipo: string | null;
+    readonly escala: number | null;
+  }[];
+  /** A ligação diagnóstico-característica (ou fator) que falta, pelos códigos, com o papel. */
+  readonly ligar: readonly {
+    readonly diagnostico: string;
+    readonly caracteristica: string;
+    readonly papel: string;
+  }[];
+  /** Itens inativos no catálogo de uso que a edição traz: ficam inativos (decisão do hospital). */
+  readonly mantidosInativos: number;
+  /** Ligações excluídas no catálogo de uso que a edição traz: ficam excluídas (nunca se incluem de novo). */
+  readonly paresExcluidos: number;
+}
+
+const TIPOS_FATOR = new Set(['fator_relacionado', 'fator_risco', 'condicao_associada', 'populacao_risco']);
+
+/**
+ * A escala do resultado novo (a edição não traz a escala de cada resultado): com um tipo de escala ativo, ele; com
+ * vários, o mais usado pelos resultados ativos do hospital; empate ou nenhum uso recusa escala-ambigua (o hospital
+ * define a escala antes da carga); sem escala ativa, escala-ausente. A linha escolhida é o primeiro ponto da escala.
+ */
+export function escolherEscalaResultadoSae(escalas: readonly EscalaResultadoSae[]): number | RecusaSae {
+  const tipos = new Map<string, { usos: number; id: number; ponto: number }>();
+  for (const e of escalas) {
+    const t = tipos.get(e.tipoEscala);
+    if (!t) tipos.set(e.tipoEscala, { usos: e.usos, id: e.id, ponto: e.ponto });
+    else {
+      t.usos = Math.max(t.usos, e.usos);
+      if (e.ponto < t.ponto) Object.assign(t, { id: e.id, ponto: e.ponto });
+    }
+  }
+  const lista = [...tipos.values()].sort((a, b) => b.usos - a.usos);
+  const [a, b] = lista;
+  if (!a)
+    return recusa(
+      'escala-ausente',
+      'Nenhuma escala de resultado de enfermagem ativa: cadastre a escala antes de carregar a terminologia.',
+    );
+  if (b && b.usos === a.usos)
+    return recusa(
+      'escala-ambigua',
+      'Há mais de uma escala de resultado ativa sem uma predominante: defina a escala dos resultados antes de carregar a terminologia.',
+    );
+  return a.id;
+}
+
+/**
+ * O plano de efeito da edição sobre o catálogo de uso (único pelo código): inclui o código que falta com o enunciado da
+ * edição; nunca altera o enunciado nem o tipo do que já existe; o item inativo fica inativo e a ligação excluída fica
+ * excluída (a decisão do hospital prevalece sobre a edição); o código já cadastrado com outro tipo (diagnóstico real
+ * que a edição diz de risco, característica cadastrada como fator e vice-versa) recusa catalogo-tipo-divergente. O
+ * fator novo é de risco quando algum diagnóstico dele na edição é de risco; o papel da ligação é "definidora" para a
+ * característica e, para o fator, a condição associada ou a população de risco do item, ou senão fator de risco ou
+ * relacionado pelo diagnóstico.
+ */
+export function planejarCatalogoDeUsoSae(
+  m: EdicaoTerminologiaMontada,
+  existentes: readonly ItemCatalogoUsoSae[],
+  pares: readonly {
+    readonly diagnostico: string;
+    readonly caracteristica: string;
+    readonly excluido: boolean;
+  }[],
+  escalas: readonly EscalaResultadoSae[],
+): PlanoCatalogoUsoSae | RecusaSae {
+  const ja = new Map(existentes.map((x) => [`${x.tabela}|${x.codigo}`, x]));
+  const riscoDoDiag = new Map(
+    m.termos.filter((x) => x.tipo === 'diagnostico').map((x) => [x.codigo, x.risco]),
+  );
+  const tipoDoTermo = new Map(m.termos.map((x) => [`${x.sistema}|${x.codigo}`, x.tipo]));
+  const incluir: {
+    tabela: string;
+    codigo: string;
+    descricao: string;
+    tipo: string | null;
+    escala: number | null;
+  }[] = [];
+  const tipoIncluido = new Map<string, string | null>();
+  let mantidosInativos = 0;
+  let escala: number | null = null;
+  for (const x of m.termos) {
+    const tabela = CATALOGO_DE_USO_SAE[x.tipo];
+    if (!tabela) continue;
+    const atual = ja.get(`${tabela}|${x.codigo}`);
+    if (atual) {
+      const divergente =
+        x.tipo === 'diagnostico'
+          ? (atual.tipo === 'risco') !== x.risco
+          : x.tipo === 'caracteristica'
+            ? atual.tipo !== 'caracteristica_definidora'
+            : x.tipo === 'fator'
+              ? !TIPOS_FATOR.has(atual.tipo ?? '')
+              : false;
+      if (divergente)
+        return recusa(
+          'catalogo-tipo-divergente',
+          `O código ${x.codigo} já está no catálogo de uso com outro tipo (${atual.tipo ?? '-'}): a edição o traz como ${x.tipo}${x.risco ? ' de risco' : ''}.`,
+        );
+      if (!atual.ativo) mantidosInativos++;
+      continue;
+    }
+    let tipo: string | null = null;
+    if (x.tipo === 'diagnostico') tipo = x.risco ? 'risco' : 'real';
+    if (x.tipo === 'caracteristica') tipo = 'caracteristica_definidora';
+    if (x.tipo === 'fator')
+      tipo = m.ligacoes.some(
+        (g) => g.sistema === x.sistema && g.codigo === x.codigo && riscoDoDiag.get(g.superior),
+      )
+        ? 'fator_risco'
+        : 'fator_relacionado';
+    if (x.tipo === 'resultado' && escala === null) {
+      const e = escolherEscalaResultadoSae(escalas);
+      if (typeof e !== 'number') return e;
+      escala = e;
+    }
+    incluir.push({
+      tabela,
+      codigo: x.codigo,
+      descricao: x.descricao,
+      tipo,
+      escala: x.tipo === 'resultado' ? escala : null,
+    });
+    tipoIncluido.set(`${tabela}|${x.codigo}`, tipo);
+  }
+  const par = new Map(pares.map((p) => [`${p.diagnostico}|${p.caracteristica}`, p.excluido]));
+  const ligar: { diagnostico: string; caracteristica: string; papel: string }[] = [];
+  const vistos = new Set<string>();
+  let paresExcluidos = 0;
+  for (const g of m.ligacoes) {
+    const tipo = tipoDoTermo.get(`${g.sistema}|${g.codigo}`);
+    if (tipo !== 'caracteristica' && tipo !== 'fator') continue;
+    const k = `${g.superior}|${g.codigo}`;
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    const excluido = par.get(k);
+    if (excluido !== undefined) {
+      if (excluido) paresExcluidos++;
+      continue;
+    }
+    const chaveItem = `caracteristica_diagnostico_enfermagem|${g.codigo}`;
+    const tipoItem = ja.get(chaveItem)?.tipo ?? tipoIncluido.get(chaveItem) ?? null;
+    const papel =
+      tipo === 'caracteristica'
+        ? 'definidora'
+        : tipoItem === 'condicao_associada' || tipoItem === 'populacao_risco'
+          ? tipoItem
+          : riscoDoDiag.get(g.superior)
+            ? 'fator_risco'
+            : 'fator_relacionado';
+    ligar.push({ diagnostico: g.superior, caracteristica: g.codigo, papel });
+  }
+  return { ok: true, incluir, ligar, mantidosInativos, paresExcluidos };
+}

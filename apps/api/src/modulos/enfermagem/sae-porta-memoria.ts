@@ -7,7 +7,12 @@
 // Nada é de pessoa real (marca "SINTETICO M45").
 import type { ChecagemCuidadoLida } from '@sgh/contratos';
 import { type ContextoOperacao, recusa } from '@sgh/nucleo';
-import { doseVigenteDaVacina, montarEdicaoTerminologia } from '@sgh/dominio-enfermagem';
+import {
+  comporTerminologiaSae,
+  doseVigenteDaVacina,
+  edicoesVigentesSae,
+  montarEdicaoTerminologia,
+} from '@sgh/dominio-enfermagem';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import {
   type ConsultaDeEnfermagem,
@@ -547,9 +552,29 @@ export class PortaSaeMemoria implements PortaSae {
   }
 
   async terminologia(c: ContextoSae): Promise<TermoTerminologiaSae[]> {
+    // A mesma regra da porta própria: a última edição de cada pacote (a CIPE não esconde a NNN); a memória não tem
+    // catálogo de uso, então não há item próprio nem item tirado de uso.
     const t = this.e(c).termos;
-    const ult = t.at(-1);
-    return ult ? t.filter((x) => x.sistema === ult.sistema && x.versao === ult.versao) : [];
+    const vigentes = edicoesVigentesSae(
+      t.map((x) => ({ pacote: x.sistema, edicao: x.versao, licenca: x.licenca })),
+    );
+    if (!vigentes) return [];
+    return comporTerminologiaSae({
+      vigentes,
+      edicao: t
+        .filter((x) => vigentes.vigentes.some((v) => v.pacote === x.sistema && v.edicao === x.versao))
+        .map((x) => ({
+          pacote: x.sistema,
+          tipo: x.tipo,
+          codigo: x.codigo,
+          pai: x.pai,
+          descricao: x.descricao,
+          risco: x.risco,
+        })),
+      proprios: [],
+      inativos: new Set(),
+      paresExcluidos: new Set(),
+    });
   }
 
   async sae(c: ContextoSae, atendimento: number) {

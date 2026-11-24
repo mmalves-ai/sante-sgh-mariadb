@@ -22,7 +22,15 @@
 // inteira (espelho da base, ADR 0006); o conteúdo licenciado nunca fica no repositório.
 import { createHash, randomUUID } from 'node:crypto';
 import type { ChecagemCuidadoLida, DoseVacina, SistemaTerminologiaSae } from '@sgh/contratos';
-import { type EdicaoTerminologiaMontada, montarEdicaoTerminologia } from '@sgh/dominio-enfermagem';
+import {
+  CATALOGO_DE_USO_SAE,
+  comporTerminologiaSae,
+  type EdicaoTerminologiaMontada,
+  edicoesVigentesSae,
+  type ItemCatalogoUsoSae,
+  montarEdicaoTerminologia,
+  planejarCatalogoDeUsoSae,
+} from '@sgh/dominio-enfermagem';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -276,6 +284,8 @@ export class PortaSaePropria implements PortaSae {
               versao = await tx.alterar('processo_enfermagem', id, Number(atual.versao), {
                 avaliacao: p.avaliacao,
                 etapa_atual: 'planejamento',
+                pacote_terminologia: p.sistema,
+                edicao_terminologia: p.versaoTerminologia,
               });
               await encerrarDiagnosticos(tx, p.atendimento, est, agora);
             } else {
@@ -288,6 +298,8 @@ export class PortaSaePropria implements PortaSae {
                 etapa_atual: 'planejamento',
                 situacao: 'aberto',
                 avaliacao: p.avaliacao,
+                pacote_terminologia: p.sistema,
+                edicao_terminologia: p.versaoTerminologia,
               });
               versao = 1;
             }
@@ -570,7 +582,7 @@ export class PortaSaePropria implements PortaSae {
       // A prescrição de enfermagem (atividade com os horários, suspensão, checagem e estorno): arquivo próprio.
       ...gravadorCuidadoSae(c, esc),
       // A edição licenciada (NANDA-I, NIC, NOC ou CIPE): chave única sistema + código + edição; os catálogos de uso
-      // recebem o que falta (ou reativam o que estava inativo), sem mudar o enunciado já em uso.
+      // recebem o que falta pelo plano do domínio, sem mudar o enunciado já em uso nem reativar o que o hospital tirou.
       carregarTerminologia: async (t) => {
         const m = montarEdicaoTerminologia({ pacote: t.sistema, termos: t.termos });
         if (!m.ok) throw recusa(m.codigo, m.mensagem);
@@ -605,58 +617,86 @@ export class PortaSaePropria implements PortaSae {
   }
 
   /**
-   * A terminologia em uso: a última edição licenciada carregada (o pacote inteiro: no NNN, NANDA-I, NIC e NOC da mesma
-   * versão), com as ligações ao superior; sem edição carregada, o catálogo de enfermagem da rede (diagnósticos,
-   * características, resultados e intervenções ativos).
+   * A terminologia em uso. Com edição licenciada carregada: a última edição de CADA pacote (NNN e CIPE convivem), menos
+   * o que o hospital tirou de uso no catálogo de uso, mais os itens próprios ativos fora da edição (comporTerminologiaSae);
+   * sem edição, o catálogo de enfermagem da rede (diagnósticos, características e fatores com o diagnóstico ligado,
+   * resultados e intervenções ativos).
    */
   terminologia(c: ContextoSae): Promise<TermoTerminologiaSae[]> {
     return this.ler(c, async (l) => {
-      const ed = await l.uma(
-        `SELECT pacote, edicao, licenca FROM edicao_terminologia_enfermagem ORDER BY id DESC LIMIT 1`,
+      const eds = await l.consultar(
+        `SELECT pacote, edicao, MIN(licenca) AS licenca, MAX(id) AS ultimo FROM edicao_terminologia_enfermagem
+          GROUP BY pacote, edicao ORDER BY ultimo`,
       );
-      if (ed) {
-        const termos = await l.consultar(
-          `SELECT t.tipo, t.codigo, s.codigo AS pai, t.descricao, t.risco
-             FROM edicao_terminologia_enfermagem e
-             JOIN termo_terminologia_enfermagem t ON t.sistema = e.sistema AND t.edicao = e.edicao
-             LEFT JOIN ligacao_termo_enfermagem g ON g.termo_terminologia_enfermagem_id = t.id
-             LEFT JOIN termo_terminologia_enfermagem s ON s.id = g.superior_termo_terminologia_enfermagem_id
-            WHERE e.pacote = ? AND e.edicao = ?
-            ORDER BY t.tipo, t.codigo, s.codigo LIMIT 20000`,
-          [texto(ed['pacote']), texto(ed['edicao'])],
-        );
-        return termos.map((t) => ({
-          sistema: texto(ed['pacote']) === 'CIPE' ? ('CIPE' as const) : ('NNN' as const),
-          versao: texto(ed['edicao']),
-          licenca: texto(ed['licenca']),
-          tipo: texto(t['tipo']),
-          codigo: texto(t['codigo']),
-          pai: textoOuNulo(t['pai']),
-          descricao: texto(t['descricao']),
-          risco: booleano(t['risco']),
-        }));
-      }
-      const linhas = await l.consultar(
-        `SELECT 'diagnostico' AS tipo, codigo, NULL AS pai, descricao, tipo = 'risco' AS risco FROM diagnostico_enfermagem WHERE ativo = TRUE
-         UNION ALL
-         SELECT CASE WHEN tipo = 'caracteristica_definidora' THEN 'caracteristica' ELSE 'fator' END, codigo, NULL, descricao, FALSE
-           FROM caracteristica_diagnostico_enfermagem WHERE ativo = TRUE
-         UNION ALL
-         SELECT 'resultado', codigo, NULL, descricao, FALSE FROM resultado_enfermagem WHERE ativo = TRUE
-         UNION ALL
-         SELECT 'intervencao', codigo, NULL, descricao, FALSE FROM intervencao_enfermagem WHERE ativo = TRUE
-         ORDER BY 1, 2 LIMIT 20000`,
+      const vigentes = edicoesVigentesSae(
+        eds.map((e) => ({
+          pacote: texto(e['pacote']) === 'CIPE' ? ('CIPE' as const) : ('NNN' as const),
+          edicao: texto(e['edicao']),
+          licenca: texto(e['licenca']),
+        })),
       );
-      return linhas.map((t) => ({
-        sistema: 'NNN' as const,
-        versao: '',
-        licenca: '',
+      const proprios = (
+        await l.consultar(
+          `SELECT 'diagnostico' AS tipo, codigo, NULL AS pai, descricao, tipo = 'risco' AS risco FROM diagnostico_enfermagem WHERE ativo = TRUE
+           UNION ALL
+           SELECT CASE WHEN c.tipo = 'caracteristica_definidora' THEN 'caracteristica' ELSE 'fator' END, c.codigo, d.codigo,
+                  c.descricao, FALSE
+             FROM caracteristica_diagnostico_enfermagem c
+             LEFT JOIN diagnostico_enfermagem_caracteristica x
+               ON x.caracteristica_diagnostico_enfermagem_id = c.id AND x.excluido_em IS NULL
+             LEFT JOIN diagnostico_enfermagem d ON d.id = x.diagnostico_enfermagem_id AND d.ativo = TRUE
+            WHERE c.ativo = TRUE
+           UNION ALL
+           SELECT 'resultado', codigo, NULL, descricao, FALSE FROM resultado_enfermagem WHERE ativo = TRUE
+           UNION ALL
+           SELECT 'intervencao', codigo, NULL, descricao, FALSE FROM intervencao_enfermagem WHERE ativo = TRUE
+           ORDER BY 1, 2, 3 LIMIT 40000`,
+        )
+      ).map((t) => ({
         tipo: texto(t['tipo']),
         codigo: texto(t['codigo']),
         pai: textoOuNulo(t['pai']),
         descricao: texto(t['descricao']),
         risco: booleano(t['risco']),
       }));
+      if (!vigentes) return proprios.map((t) => ({ ...t, sistema: 'NNN' as const, versao: '', licenca: '' }));
+      const filtro = vigentes.vigentes.map(() => '(e.pacote = ? AND e.edicao = ?)').join(' OR ');
+      const termos = await l.consultar(
+        `SELECT e.pacote, t.tipo, t.codigo, s.codigo AS pai, t.descricao, t.risco
+           FROM edicao_terminologia_enfermagem e
+           JOIN termo_terminologia_enfermagem t ON t.sistema = e.sistema AND t.edicao = e.edicao
+           LEFT JOIN ligacao_termo_enfermagem g ON g.termo_terminologia_enfermagem_id = t.id
+           LEFT JOIN termo_terminologia_enfermagem s ON s.id = g.superior_termo_terminologia_enfermagem_id
+          WHERE ${filtro}
+          ORDER BY e.pacote DESC, t.tipo, t.codigo, s.codigo LIMIT 40000`,
+        vigentes.vigentes.flatMap((v) => [v.pacote, v.edicao]),
+      );
+      const inativos = await l.consultar(
+        `SELECT 'diagnostico_enfermagem' AS tabela, codigo FROM diagnostico_enfermagem WHERE ativo = FALSE
+         UNION ALL SELECT 'caracteristica_diagnostico_enfermagem', codigo FROM caracteristica_diagnostico_enfermagem WHERE ativo = FALSE
+         UNION ALL SELECT 'resultado_enfermagem', codigo FROM resultado_enfermagem WHERE ativo = FALSE
+         UNION ALL SELECT 'intervencao_enfermagem', codigo FROM intervencao_enfermagem WHERE ativo = FALSE`,
+      );
+      const excluidos = await l.consultar(
+        `SELECT d.codigo AS d, c.codigo AS c FROM diagnostico_enfermagem_caracteristica x
+           JOIN diagnostico_enfermagem d ON d.id = x.diagnostico_enfermagem_id
+           JOIN caracteristica_diagnostico_enfermagem c ON c.id = x.caracteristica_diagnostico_enfermagem_id
+          WHERE x.excluido_em IS NOT NULL`,
+      );
+      return comporTerminologiaSae({
+        vigentes,
+        edicao: termos.map((t) => ({
+          pacote: texto(t['pacote']) === 'CIPE' ? ('CIPE' as const) : ('NNN' as const),
+          tipo: texto(t['tipo']),
+          codigo: texto(t['codigo']),
+          pai: textoOuNulo(t['pai']),
+          descricao: texto(t['descricao']),
+          risco: booleano(t['risco']),
+        })),
+        proprios,
+        inativos: new Set(inativos.map((x) => `${texto(x['tabela'])}|${texto(x['codigo'])}`)),
+        paresExcluidos: new Set(excluidos.map((x) => `${texto(x['d'])}|${texto(x['c'])}`)),
+      });
     });
   }
 
@@ -664,7 +704,8 @@ export class PortaSaePropria implements PortaSae {
     return this.ler(c, async (l, est, fuso) => {
       const p = await l.uma(
         `SELECT pe.id, pe.versao, pe.avaliacao, COALESCE(pe.alterado_em, pe.criado_em) AS em,
-                ${LOGIN_DE('COALESCE(pe.alterado_por, pe.criado_por)')} AS login, pe.registro_assistencial_id
+                ${LOGIN_DE('COALESCE(pe.alterado_por, pe.criado_por)')} AS login, pe.registro_assistencial_id,
+                pe.pacote_terminologia, pe.edicao_terminologia
            FROM processo_enfermagem pe
           WHERE pe.atendimento_id = ? AND pe.estabelecimento_id = ? AND pe.situacao = 'aberto' AND pe.excluido_em IS NULL
           ORDER BY pe.id DESC LIMIT 1`,
@@ -796,7 +837,11 @@ export class PortaSaePropria implements PortaSae {
             });
         }
       }
-      const sistema = SISTEMA_DA_TERMINOLOGIA[texto(diags[0]?.['terminologia']).toLowerCase()] ?? 'SINT';
+      // A terminologia com que o processo foi registrado (gravada no registro); o processo anterior à gravação cai no
+      // sistema pelo termo do diagnóstico, sem versão.
+      const pacote = textoOuNulo(p['pacote_terminologia']) as SistemaTerminologiaSae | null;
+      const sistema =
+        pacote ?? SISTEMA_DA_TERMINOLOGIA[texto(diags[0]?.['terminologia']).toLowerCase()] ?? 'SINT';
       const versao = num(p['versao']);
       // As versões do processo: cada registro grava um lote de diagnósticos com o mesmo início (a versão anterior fica
       // inativada com o fim); a última é a versão atual do processo.
@@ -823,7 +868,7 @@ export class PortaSaePropria implements PortaSae {
           versao,
           avaliacao: texto(p['avaliacao']),
           sistema,
-          versaoTerminologia: '',
+          versaoTerminologia: pacote ? texto(p['edicao_terminologia']) : '',
           usuario: texto(p['login']),
           em: em(p['em']),
           registroProntuario: numOuNulo(p['registro_assistencial_id']),
@@ -1166,15 +1211,6 @@ const TABELAS_CARGA_TERMINOLOGIA = [
   'intervencao_enfermagem',
 ] as const;
 
-/** O catálogo de uso de cada tipo de termo (a atividade fica só na edição: é texto da intervenção). */
-const CATALOGO_DO_TIPO: Readonly<Record<string, string>> = {
-  diagnostico: 'diagnostico_enfermagem',
-  caracteristica: 'caracteristica_diagnostico_enfermagem',
-  fator: 'caracteristica_diagnostico_enfermagem',
-  resultado: 'resultado_enfermagem',
-  intervencao: 'intervencao_enfermagem',
-};
-
 /** A impressão SHA-256 dos termos da carga, em ordem estável (a mesma carga dá a mesma impressão). */
 export function impressaoDaCarga(
   termos: readonly { tipo: string; codigo: string; pai: string | null; descricao: string; risco: boolean }[],
@@ -1188,13 +1224,23 @@ export function impressaoDaCarga(
 /**
  * Contrato de efeito de sae.carregar-terminologia: uma linha em edicao_terminologia_enfermagem por sistema da carga
  * (recusa versao-ja-carregada se o sistema já tem a edição), um termo por sistema + código e uma ligação por superior;
- * nos catálogos de uso, inclui o código que falta e reativa o inativo, sem alterar o enunciado do código já em uso.
+ * nos catálogos de uso, o plano do domínio (planejarCatalogoDeUsoSae): inclui o código que falta e a ligação
+ * diagnóstico-característica que falta; nunca altera o enunciado nem o tipo do código já em uso; o item inativo e a
+ * ligação excluída ficam como estão (decisão do hospital); código cadastrado com outro tipo recusa
+ * catalogo-tipo-divergente; a escala do resultado novo é a escolhida pelo domínio (escala-ausente, escala-ambigua).
  */
 async function gravarEdicaoTerminologia(
   tx: TxOperacao,
   t: Parameters<GravadorSae['carregarTerminologia']>[0],
   m: EdicaoTerminologiaMontada,
-): Promise<{ edicao: number; termos: number; incluidos: number; reativados: number }> {
+): Promise<{
+  edicao: number;
+  termos: number;
+  incluidos: number;
+  ligados: number;
+  mantidosInativos: number;
+  paresExcluidos: number;
+}> {
   const sistemas = m.edicoes.map((e) => e.sistema);
   const ja = await tx.consultarParaAtualizar(
     `SELECT id FROM edicao_terminologia_enfermagem WHERE edicao = ? AND sistema IN (${marcadores(sistemas.length)})`,
@@ -1237,74 +1283,88 @@ async function gravarEdicaoTerminologia(
       superior_termo_terminologia_enfermagem_id: ids.get(`${g.sistema}|${g.superior}`)!,
     });
 
-  // Os catálogos de uso (únicos pelo código): o que falta entra; o inativo volta a valer.
-  let incluidos = 0;
-  let reativados = 0;
-  const riscoDoDiag = new Map(
-    m.termos.filter((x) => x.tipo === 'diagnostico').map((x) => [x.codigo, x.risco]),
+  // Os catálogos de uso (únicos pelo código): o plano do domínio (planejarCatalogoDeUsoSae) sobre o que já existe; a
+  // porta só executa. O par diagnóstico-característica é lido com o excluído (a chave única não olha excluido_em).
+  const codigosDe = (tabela: string) => [
+    ...new Set(m.termos.filter((x) => CATALOGO_DE_USO_SAE[x.tipo] === tabela).map((x) => x.codigo)),
+  ];
+  const existentes: ItemCatalogoUsoSae[] = [];
+  for (const tabela of new Set(Object.values(CATALOGO_DE_USO_SAE))) {
+    const codigos = codigosDe(tabela);
+    if (!codigos.length || !CATALOGOS.has(tabela)) continue;
+    const comTipo = tabela === 'diagnostico_enfermagem' || tabela === 'caracteristica_diagnostico_enfermagem';
+    for (const x of await tx.consultarParaAtualizar<{
+      id: number;
+      codigo: string;
+      ativo: unknown;
+      tipo: unknown;
+    }>(
+      `SELECT id, codigo, ativo, ${comTipo ? 'tipo' : 'NULL'} AS tipo FROM ${tabela}
+        WHERE codigo IN (${marcadores(codigos.length)})`,
+      codigos,
+    ))
+      existentes.push({
+        tabela,
+        codigo: String(x.codigo),
+        id: Number(x.id),
+        ativo: booleano(x.ativo),
+        tipo: x.tipo === null || x.tipo === undefined ? null : String(x.tipo),
+      });
+  }
+  const diagnosticos = codigosDe('diagnostico_enfermagem');
+  const pares = diagnosticos.length
+    ? await tx.consultarParaAtualizar<{ d: string; c: string; excluido: unknown }>(
+        `SELECT d.codigo AS d, c.codigo AS c, x.excluido_em IS NOT NULL AS excluido
+           FROM diagnostico_enfermagem_caracteristica x
+           JOIN diagnostico_enfermagem d ON d.id = x.diagnostico_enfermagem_id
+           JOIN caracteristica_diagnostico_enfermagem c ON c.id = x.caracteristica_diagnostico_enfermagem_id
+          WHERE d.codigo IN (${marcadores(diagnosticos.length)})`,
+        diagnosticos,
+      )
+    : [];
+  const escalas = await tx.consultar<{ id: number; tipo_escala: string; ponto: number; usos: number }>(
+    `SELECT e.id, e.tipo_escala, e.ponto,
+            (SELECT COUNT(*) FROM resultado_enfermagem r JOIN escala_resultado_enfermagem u ON u.id = r.escala_resultado_enfermagem_id
+              WHERE r.ativo = TRUE AND u.tipo_escala = e.tipo_escala) AS usos
+       FROM escala_resultado_enfermagem e WHERE e.ativo = TRUE`,
   );
-  const superiores = (codigo: string, sistema: string) =>
-    m.ligacoes.filter((g) => g.codigo === codigo && g.sistema === sistema).map((g) => g.superior);
-  const escala = await tx.uma<{ id: number }>(
-    'SELECT MIN(id) AS id FROM escala_resultado_enfermagem WHERE ativo = TRUE',
+  const plano = planejarCatalogoDeUsoSae(
+    m,
+    existentes,
+    pares.map((p) => ({
+      diagnostico: String(p.d),
+      caracteristica: String(p.c),
+      excluido: booleano(p.excluido),
+    })),
+    escalas.map((e) => ({
+      id: Number(e.id),
+      tipoEscala: String(e.tipo_escala),
+      ponto: Number(e.ponto),
+      usos: Number(e.usos),
+    })),
   );
-  const catalogoId = new Map<string, number>();
-  for (const x of m.termos) {
-    const tabela = CATALOGO_DO_TIPO[x.tipo];
-    if (!tabela || !CATALOGOS.has(tabela)) continue;
-    const [atual] = await tx.consultarParaAtualizar<{ id: number; ativo: unknown; versao: number }>(
-      `SELECT id, ativo, versao FROM ${tabela} WHERE codigo = ?`,
-      [x.codigo],
-    );
-    if (atual) {
-      if (!booleano(atual.ativo)) {
-        await tx.alterar(tabela, Number(atual.id), Number(atual.versao), { ativo: true });
-        reativados++;
-      }
-      catalogoId.set(`${x.tipo}|${x.codigo}`, Number(atual.id));
-      continue;
-    }
+  if (!plano.ok) throw recusa(plano.codigo, plano.mensagem);
+  const idDe = new Map(existentes.map((x) => [`${x.tabela}|${x.codigo}`, x.id]));
+  for (const x of plano.incluir) {
     const valores: Record<string, unknown> = { codigo: x.codigo, descricao: x.descricao, ativo: true };
-    if (x.tipo === 'diagnostico') valores['tipo'] = x.risco ? 'risco' : 'real';
-    if (x.tipo === 'caracteristica') valores['tipo'] = 'caracteristica_definidora';
-    if (x.tipo === 'fator')
-      valores['tipo'] = superiores(x.codigo, x.sistema).some((d) => riscoDoDiag.get(d))
-        ? 'fator_risco'
-        : 'fator_relacionado';
-    if (x.tipo === 'resultado') {
-      if (!escala?.id)
-        throw recusa(
-          'escala-ausente',
-          'Nenhuma escala de resultado de enfermagem ativa: cadastre a escala antes de carregar a terminologia.',
-        );
-      valores['escala_resultado_enfermagem_id'] = Number(escala.id);
-    }
-    catalogoId.set(`${x.tipo}|${x.codigo}`, await tx.incluir(tabela, valores));
-    incluidos++;
+    if (x.tipo !== null) valores['tipo'] = x.tipo;
+    if (x.escala !== null) valores['escala_resultado_enfermagem_id'] = x.escala;
+    idDe.set(`${x.tabela}|${x.codigo}`, await tx.incluir(x.tabela, valores));
   }
-  // A característica e o fator ligados ao diagnóstico no catálogo de uso (a ligação que falta entra).
-  for (const g of m.ligacoes) {
-    const x = m.termos.find((y) => y.sistema === g.sistema && y.codigo === g.codigo);
-    if (!x || (x.tipo !== 'caracteristica' && x.tipo !== 'fator')) continue;
-    const diag = catalogoId.get(`diagnostico|${g.superior}`);
-    const car = catalogoId.get(`${x.tipo}|${x.codigo}`);
-    if (!diag || !car) continue;
-    const existe = await tx.uma(
-      `SELECT id FROM diagnostico_enfermagem_caracteristica
-        WHERE diagnostico_enfermagem_id = ? AND caracteristica_diagnostico_enfermagem_id = ? AND excluido_em IS NULL`,
-      [diag, car],
-    );
-    if (existe) continue;
+  for (const g of plano.ligar)
     await tx.incluir('diagnostico_enfermagem_caracteristica', {
-      diagnostico_enfermagem_id: diag,
-      caracteristica_diagnostico_enfermagem_id: car,
-      papel:
-        x.tipo === 'caracteristica'
-          ? 'definidora'
-          : riscoDoDiag.get(g.superior)
-            ? 'fator_risco'
-            : 'fator_relacionado',
+      diagnostico_enfermagem_id: idDe.get(`diagnostico_enfermagem|${g.diagnostico}`)!,
+      caracteristica_diagnostico_enfermagem_id: idDe.get(
+        `caracteristica_diagnostico_enfermagem|${g.caracteristica}`,
+      )!,
+      papel: g.papel,
     });
-  }
-  return { edicao, termos: m.termos.length, incluidos, reativados };
+  return {
+    edicao,
+    termos: m.termos.length,
+    incluidos: plano.incluir.length,
+    ligados: plano.ligar.length,
+    mantidosInativos: plano.mantidosInativos,
+    paresExcluidos: plano.paresExcluidos,
+  };
 }
