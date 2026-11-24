@@ -172,7 +172,7 @@ function componenteDe(c: CampoDoModelo): { classe: string; tipo: string; opcoes:
   if (TIPOS_TITULO.has(c.tipo)) return { classe: 'TGroupBoxPep', tipo: '1', opcoes: null };
   if (c.tipo === 'booleano') return { classe: 'TfRespComboBox', tipo: '4', opcoes: ['', 'Não', 'Sim'] };
   if (TIPOS_ESCOLHA.has(c.tipo))
-    return { classe: 'TfRespComboBox', tipo: '4', opcoes: ['', ...c.opcoes.map((o) => o.rotulo)] };
+    return { classe: 'TfRespComboBox', tipo: '13', opcoes: ['', ...c.opcoes.map((o) => o.rotulo)] };
   if (c.tipo === 'multipla')
     return { classe: 'TfRespCheckListBox', tipo: '12', opcoes: c.opcoes.map((o) => o.rotulo) };
   if (c.tipo === 'data') return { classe: 'TfRespData', tipo: '2', opcoes: null };
@@ -193,8 +193,9 @@ export function definicaoDosCampos(
   const respostas: DefinicaoFormularioLida['respostas'][number][] = [];
   const componentes = usados.map((c, i) => {
     const k = componenteDe(c);
-    const ids = c.tipo === 'multipla' ? c.opcoes.map((o) => DESLOCAMENTO_OPCAO + o.id) : [c.id];
-    if (c.tipo === 'multipla')
+    const porOpcao = c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo);
+    const ids = porOpcao ? c.opcoes.map((o) => DESLOCAMENTO_OPCAO + o.id) : [c.id];
+    if (porOpcao)
       c.opcoes.forEach((o, j) =>
         respostas.push({
           id: DESLOCAMENTO_OPCAO + o.id,
@@ -223,7 +224,7 @@ export function definicaoDosCampos(
       linhas.push(
         '  inherited cbxId_Resposta: TComboBox',
         '    Items.Strings = (',
-        `${lista(['0', ...k.opcoes.slice(1).map(() => String(c.id))])})`,
+        `${lista(['0', ...(porOpcao ? ids.map(String) : k.opcoes.slice(1).map(() => String(c.id)))])})`,
         '  end',
         '  inherited cbxResp: TValidadeComboBox',
         '    Items.Strings = (',
@@ -315,8 +316,11 @@ export function respostaDaLinha(l: LinhaGravacao, campos: ReadonlyMap<string, Ca
     autopreenchido: (l as { autopreenchido?: boolean }).autopreenchido === true,
   };
   if (l.cid !== null) return { ...base, tipo_valor: 'cid', codigo_cid10: l.cid.replace('.', '') };
+  const daLista = c.opcoes.find((x) => DESLOCAMENTO_OPCAO + x.id === l.idResposta);
   if (c.tipo === 'multipla') {
-    const o = c.opcoes.find((x) => DESLOCAMENTO_OPCAO + x.id === l.idResposta);
+    // A marcada vem pelo id da resposta da opção; sem ele, pela posição na lista (a partir de 0).
+    const o =
+      daLista ?? (l.idResposta < DESLOCAMENTO_OPCAO && l.indice !== null ? c.opcoes[Number(l.indice)] : undefined);
     if (!o) throw respostaInvalida(`A opção marcada não é do campo de ordem ${l.ordem}.`);
     return { ...base, tipo_valor: 'opcao', modelo_campo_opcao_id: o.id, valor_texto: l.alfa };
   }
@@ -325,7 +329,8 @@ export function respostaDaLinha(l: LinhaGravacao, campos: ReadonlyMap<string, Ca
     return { ...base, tipo_valor: 'booleano', valor_booleano: Number(l.indice) === 2 };
   }
   if (TIPOS_ESCOLHA.has(c.tipo) && l.indice !== null && Number(l.indice) > 0) {
-    const o = c.opcoes[Number(l.indice) - 1];
+    // Pelo id da resposta da opção; sem ele, pela posição na lista (a partir de 1: o 0 é o vazio).
+    const o = l.idResposta >= DESLOCAMENTO_OPCAO ? daLista : c.opcoes[Number(l.indice) - 1];
     if (!o) throw respostaInvalida(`A opção escolhida não é do campo de ordem ${l.ordem}.`);
     return { ...base, tipo_valor: 'opcao', modelo_campo_opcao_id: o.id, valor_texto: l.alfa };
   }
@@ -357,10 +362,13 @@ export function linhasDasRespostas(
     const hora = textoOuNull(x['valor_hora']);
     const data = x['valor_data'];
     const cid = textoOuNull(x['codigo_cid10']);
+    // O complemento da escolha (texto livre) é a linha de sequência 1 do mesmo campo.
+    const complemento = TIPOS_ESCOLHA.has(c.tipo) && tipo !== 'opcao';
     saida.push({
       ordem: c.ordem,
-      seq: c.tipo === 'multipla' ? seq : 0,
-      idResposta: c.tipo === 'multipla' && opcao !== null ? DESLOCAMENTO_OPCAO + opcao : c.id,
+      seq: c.tipo === 'multipla' ? seq : complemento ? 1 : 0,
+      idResposta:
+        (c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo)) && opcao !== null ? DESLOCAMENTO_OPCAO + opcao : c.id,
       data:
         tipo === 'data' && data !== null && data !== undefined
           ? data instanceof Date
@@ -373,12 +381,12 @@ export function linhasDasRespostas(
           ? Number(x['valor_booleano'])
             ? '2'
             : '1'
-          : tipo === 'opcao' && c.tipo !== 'multipla' && pos >= 0
-            ? String(pos + 1)
+          : tipo === 'opcao' && pos >= 0
+            ? String(c.tipo === 'multipla' ? pos : pos + 1)
             : null,
       valor: tipo === 'numero' ? numOuNull(x['valor_numero']) : null,
-      alfa: tipo === 'opcao' ? texto : null,
-      texto: tipo === 'texto' || tipo === 'formatado' ? texto : null,
+      alfa: tipo === 'opcao' || complemento ? texto : null,
+      texto: (tipo === 'texto' || tipo === 'formatado') && !complemento ? texto : null,
       unidade: textoOuNull(x['unidade']),
       cid: cid && cid.length > 3 ? `${cid.slice(0, 3)}.${cid.slice(3)}` : cid,
       procedimento: null,

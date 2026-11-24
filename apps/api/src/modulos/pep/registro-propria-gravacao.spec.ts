@@ -105,6 +105,10 @@ describe('definição do formulário', () => {
     expect(def.versoes).toEqual([{ versao: 3, componentes: CAMPOS.length }]);
     expect(def.vinculos.find((v) => v.id === 11)?.obrigatorio).toBe('T');
     // A escolha múltipla tem uma resposta por opção, com o deslocamento (nunca colide com o id de um campo).
+    expect(def.respostas.filter((r) => r.idPergunta === 12).map((r) => r.id)).toEqual([
+      DESLOCAMENTO_OPCAO + 501,
+      DESLOCAMENTO_OPCAO + 502,
+    ]);
     expect(def.respostas.filter((r) => r.idPergunta === 13).map((r) => r.id)).toEqual([
       DESLOCAMENTO_OPCAO + 601,
       DESLOCAMENTO_OPCAO + 602,
@@ -114,14 +118,17 @@ describe('definição do formulário', () => {
     const r = await converterModelo(def);
     expect(r.itens.length).toBeGreaterThan(0);
     expect(JSON.stringify(r.itens)).toContain('Campo 11');
+    // As escolhas resolvem todas as opções pelo id da resposta (sem pendência de escolha).
+    expect(r.pendencias.filter((x) => x.tipo === 'escolha')).toEqual([]);
   });
 });
 
 describe('linha ↔ resposta tipada (ida e volta)', () => {
   const linhas: LinhaGravacao[] = [
     linha('0101', { idResposta: 11, texto: '{\\rtf1 quadro}' }),
-    linha('0102', { idResposta: 12, indice: '2', alfa: 'complemento' }),
-    linha('0103', { idResposta: DESLOCAMENTO_OPCAO + 602, seq: 0 }),
+    linha('0102', { idResposta: DESLOCAMENTO_OPCAO + 502, indice: '2', alfa: 'complemento' }),
+    linha('0102', { idResposta: 12, seq: 1, alfa: 'texto livre' }),
+    linha('0103', { idResposta: DESLOCAMENTO_OPCAO + 602, indice: '1', alfa: 'Enteral' }),
     linha('0104', { idResposta: 14, valor: 80.5, unidade: 'bpm' }),
     linha('0105', { idResposta: 15, data: '2026-11-20' }),
     linha('0106', { idResposta: 16, hora: '0930' }),
@@ -133,6 +140,7 @@ describe('linha ↔ resposta tipada (ida e volta)', () => {
     expect(tipadas.map((t) => t.tipo_valor)).toEqual([
       'texto',
       'opcao',
+      'texto',
       'opcao',
       'numero',
       'data',
@@ -141,17 +149,20 @@ describe('linha ↔ resposta tipada (ida e volta)', () => {
       'cid',
     ]);
     expect(tipadas[1]?.modelo_campo_opcao_id).toBe(502);
-    expect(tipadas[2]?.modelo_campo_opcao_id).toBe(602);
-    expect(tipadas[5]?.valor_hora).toBe('09:30:00');
-    expect(tipadas[6]?.valor_booleano).toBe(true);
-    expect(tipadas[7]?.codigo_cid10).toBe('J189');
+    expect(tipadas[3]?.modelo_campo_opcao_id).toBe(602);
+    expect(tipadas[6]?.valor_hora).toBe('09:30:00');
+    expect(tipadas[7]?.valor_booleano).toBe(true);
+    expect(tipadas[8]?.codigo_cid10).toBe('J189');
+    // Sem o id da opção, pela posição: escolha a partir de 1, múltipla a partir de 0.
+    expect(respostaDaLinha(linha('0102', { idResposta: 12, indice: '1' }), PELA_ORDEM).modelo_campo_opcao_id).toBe(501);
+    expect(respostaDaLinha(linha('0103', { idResposta: 13, indice: '0' }), PELA_ORDEM).modelo_campo_opcao_id).toBe(601);
   });
   it('a leitura devolve as mesmas linhas', () => {
     const lidas = linhasDasRespostas(
       tipadas.map((t) => ({ ...t, valor_booleano: t.valor_booleano === null ? null : Number(t.valor_booleano) })),
       PELO_ID,
     );
-    const chave = (l: Partial<LinhaGravacao>) => [l.ordem, l.idResposta, l.data, l.hora, l.indice, l.valor, l.alfa, l.texto, l.cid];
+    const chave = (l: Partial<LinhaGravacao>) => [l.ordem, l.seq, l.idResposta, l.data, l.hora, l.indice, l.valor, l.alfa, l.texto, l.cid];
     expect(lidas.map(chave)).toEqual(linhas.map(chave));
   });
   it('recusa a linha fora da versão publicada e a opção de outro campo', () => {
@@ -160,6 +171,9 @@ describe('linha ↔ resposta tipada (ida e volta)', () => {
       /opção marcada/,
     );
     expect(() => respostaDaLinha(linha('0102', { indice: '9' }), PELA_ORDEM)).toThrow(/opção escolhida/);
+    expect(() => respostaDaLinha(linha('0102', { idResposta: DESLOCAMENTO_OPCAO + 601, indice: '1' }), PELA_ORDEM)).toThrow(
+      /opção escolhida/,
+    );
   });
   it('linha de título sem valor não vira resposta', () => {
     expect(temValor(linha('01'))).toBe(false);
