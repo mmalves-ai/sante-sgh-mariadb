@@ -27,7 +27,7 @@ class ConjuntoDaPassada(unittest.TestCase):
 
 class MotorUsaOMesmoConjunto(unittest.TestCase):
     def _chamadas(self):
-        arv = ast.parse(inspect.getsource(motor.executar))
+        arv = ast.parse(inspect.getsource(motor._carregar))  # a carga saiu do executar (obra carga-painel)
         out = {}
         for n in ast.walk(arv):
             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ("executar", "planejar"):

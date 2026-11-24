@@ -5,6 +5,10 @@
 - Retirada: `SELECT ... FOR UPDATE SKIP LOCKED` sobre a fila; a passagem para `abrindo` e o evento vão na mesma
   transação. Durante a execução, o trabalhador segura a trava nomeada da execução.
 - Uma execução por cliente: índice único `uq_conector_execucao_cliente_ativo` (estados ativos), já no enfileirar.
+- Tipos de origem: CONECTOR_ORIGEM_TIPOS (vírgulas; vazio = todos) limita o que este trabalhador retira da fila. O
+  serviço sempre ligado (`conector.sh servico`, sem privilégio nem abridor) retira só `firebird_servidor`; o worker
+  separado (abridor privilegiado) atende as duas.
+- Órfã em `pausando` (o trabalhador caiu depois do pedido de pausa) termina `pausada`, continuável, como a pausa.
 - Órfãs: execução rodando cuja trava ninguém segura (trabalhador caiu) vira `falhou` CONTINUÁVEL: a etapa em que
   parou fica (`interrompida: <etapa>` e `contadores.interrompida`), e a importação continua por
   `enfileirar <cliente> importar --continuar` (continuar.py); snapshot `sscon-e<id>-<ficha>`
@@ -16,6 +20,11 @@ import time
 import uuid
 
 from . import banco, motor, plataforma, servico_abridor
+
+
+def origem_tipos(env=None):
+    env = os.environ if env is None else env
+    return [t.strip() for t in (env.get("CONECTOR_ORIGEM_TIPOS") or "").split(",") if t.strip()]
 
 
 class Trabalhador:
@@ -71,8 +80,11 @@ class Trabalhador:
         self.conn.begin()
         try:
             with self.conn.cursor() as c:
-                c.execute("SELECT id FROM conector_execucao WHERE estado='fila' ORDER BY id LIMIT 1"
-                          " FOR UPDATE SKIP LOCKED")
+                tipos = origem_tipos()
+                c.execute("SELECT id FROM conector_execucao WHERE estado='fila'"
+                          + (" AND cliente_origem_id IN (SELECT id FROM cliente_origem WHERE tipo IN (%s))"
+                             % ",".join(["%s"] * len(tipos)) if tipos else "")
+                          + " ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED", tipos or None)
                 r = c.fetchone()
                 if not r:
                     self.conn.commit()
@@ -100,6 +112,14 @@ class Trabalhador:
                 try:
                     ex = plataforma.consultar(self.conn, eid)
                     cont = dict(ex["contadores"] or {})
+                    if ex["estado"] == "pausando":  # a pausa já fora pedida: tudo commitado até o último commit
+                        cont.update(continuavel=True, pausa={"etapa": ex["etapa"], "percentual": ex["percentual"],
+                                                             "trabalhador_interrompido": True})
+                        plataforma.mudar_estado(self.conn, eid, "pausada",
+                                                etapa=("pausada: %s" % (ex["etapa"] or "").replace(
+                                                    "pausando: ", ""))[:120], contadores=cont)
+                        feitas.append(eid)
+                        continue
                     cont["interrompida"] = {"etapa": ex["etapa"], "percentual": ex["percentual"],
                                             "continuavel": ex["tipo"] == "importar"}
                     motivo = "trabalhador interrompido (sem trava viva)"

@@ -21,6 +21,7 @@ TRANSICOES = {"fila": {"abrindo", "cancelada", "falhou"}, "abrindo": {"lendo", "
               "lendo": {"gravando", "falhou", "pausando"}, "gravando": {"conciliando", "falhou", "pausando"},
               "conciliando": {"concluida", "falhou", "pausando"}, "pausando": {"pausada", "falhou"}}
 EVENTO = {"importar": "conector_carga", "sincronizar": "conector_diferencial"}
+MODOS = ("completa", "diferencial")
 AGORA = "UTC_TIMESTAMP(3)"
 
 
@@ -89,12 +90,16 @@ def vincular_origem(conn, codigo, relativo, admin_id=None, sha256=None):
     return {"cliente_origem_id": oid, "arquivo": v["relativo"], "tamanho_bytes": v["tamanho"], "sha256": sha}
 
 
-def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False, continuar=False):
+def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=False, continuar=False, modo=None,
+               reprocessar=False):
     """Põe uma execução na fila. ExecucaoAtiva (409) se já houver uma ativa para o cliente (índice único).
     `confirmar_exclusao_em_massa` (só Sincronizar): exclui o que o alerta de exclusão em massa reteve; quem pediu
     fica no evento. `continuar` (só Importar): continua a última importação do cliente, interrompida (`falhou`) ou
     pausada (`pausada`, 0093) com a mesma origem vinculada; a execução nova leva `contadores.continuar_de` e o motor
-    pula as tabelas que ela concluiu (continuar.py)."""
+    pula as tabelas que ela concluiu (continuar.py). `modo` (0093: completa ou diferencial, tela de carga) fica na
+    execução; `reprocessar` leva `contadores.reprocessar_recusadas` (o motor tenta de novo as recusadas)."""
+    if modo is not None and modo not in MODOS:
+        raise PlataformaErro("modo inválido: completa ou diferencial")
     if continuar and tipo != "importar":
         raise PlataformaErro("continuar só vale para o Importar")
     if tipo not in EVENTO:
@@ -108,13 +113,13 @@ def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=Fa
             cur.execute("SELECT id FROM cliente_origem WHERE cliente_ativo=%s", (cli["id"],))
             r = cur.fetchone()
             if not r:
-                raise PlataformaErro("cliente sem arquivo de origem vinculado")
+                raise PlataformaErro("cliente sem origem vinculada")
             if tipo == "sincronizar":
                 cur.execute("SELECT COUNT(*) FROM conector_execucao WHERE cliente_id=%s AND tipo='importar'"
                             " AND estado='concluida'", (cli["id"],))
                 if not cur.fetchone()[0]:
                     raise PlataformaErro("sincronizar exige uma importação concluída")
-            contadores = None
+            contadores = {"reprocessar_recusadas": True} if reprocessar else {}
             if continuar:
                 cur.execute("SELECT id, estado, cliente_origem_id FROM conector_execucao WHERE cliente_id=%s"
                             " AND tipo='importar' ORDER BY id DESC LIMIT 1", (cli["id"],))
@@ -124,15 +129,21 @@ def enfileirar(conn, codigo, tipo, admin_id=None, confirmar_exclusao_em_massa=Fa
                                          " (falhou) ou pausada")
                 if u[2] != r[0]:
                     raise PlataformaErro("continuar exige a mesma origem vinculada da importação interrompida")
-                contadores = json.dumps({"continuar_de": u[0]})
+                contadores["continuar_de"] = u[0]
             cur.execute("INSERT INTO conector_execucao (cliente_id, cliente_origem_id, tipo, estado, etapa,"
-                        " confirmar_exclusao_em_massa, contadores, solicitado_em, solicitado_por, criado_em, criado_por)"
-                        " VALUES (%s, %s, %s, 'fila', 'aguardando o motor', %s, %s, " + AGORA + ", %s, " + AGORA
-                        + ", %s)", (cli["id"], r[0], tipo, confirmar, contadores, admin_id, admin_id))
+                        " confirmar_exclusao_em_massa, contadores, modo, solicitado_em, solicitado_por, criado_em,"
+                        " criado_por) VALUES (%s, %s, %s, 'fila', 'aguardando o motor', %s, %s, %s, " + AGORA + ", %s, "
+                        + AGORA + ", %s)", (cli["id"], r[0], tipo, confirmar,
+                                            json.dumps(contadores, sort_keys=True) if contadores else None, modo,
+                                            admin_id, admin_id))
             eid = cur.lastrowid
             det = {"execucao_id": eid, "estado": "fila", "tipo": tipo}
-            if contadores:
-                det["continuar_de"] = json.loads(contadores)["continuar_de"]
+            if contadores.get("continuar_de"):
+                det["continuar_de"] = contadores["continuar_de"]
+            if modo:
+                det["modo"] = modo
+            if reprocessar:
+                det["reprocessar_recusadas"] = True
             if confirmar:
                 det.update(confirmar_exclusao_em_massa=True, confirmado_por=admin_id)
             _evento(cur, cli["id"], EVENTO[tipo], det, admin_id)
@@ -147,7 +158,7 @@ def _ler_execucao(cur, eid, travar=False):
     cur.execute("SELECT e.id, e.cliente_id, e.tipo, e.estado, e.etapa, e.percentual, e.contadores, e.motivo_falha,"
                 " e.trabalhador, e.imagem_sha256, e.versao_schema, e.solicitado_em, e.iniciado_em, e.concluido_em,"
                 " c.codigo, c.banco_nome, c.versao_migracao, o.id, o.caminho_relativo, o.tamanho_bytes, o.sha256,"
-                " e.confirmar_exclusao_em_massa"
+                " e.confirmar_exclusao_em_massa, o.tipo, e.modo, e.arquivo_log, e.pausa_solicitada_em"
                 " FROM conector_execucao e JOIN cliente c ON c.id=e.cliente_id"
                 " JOIN cliente_origem o ON o.id=e.cliente_origem_id WHERE e.id=%s"
                 + (" FOR UPDATE" if travar else ""), (eid,))
@@ -156,7 +167,8 @@ def _ler_execucao(cur, eid, travar=False):
         raise PlataformaErro("execução inexistente")
     k = ("id cliente_id tipo estado etapa percentual contadores motivo_falha trabalhador imagem_sha256 versao_schema"
          " solicitado_em iniciado_em concluido_em codigo banco_nome versao_migracao origem_id origem_caminho"
-         " origem_tamanho origem_sha256 confirmar_exclusao_em_massa").split()
+         " origem_tamanho origem_sha256 confirmar_exclusao_em_massa origem_tipo modo arquivo_log"
+         " pausa_solicitada_em").split()
     d = dict(zip(k, r))
     d["percentual"] = float(d["percentual"])
     d["contadores"] = json.loads(d["contadores"]) if d["contadores"] else {}
@@ -216,7 +228,76 @@ def progresso(conn, eid, percentual, etapa=None, contadores=None):
         sets.append("contadores=%s"); vals.append(json.dumps(contadores, sort_keys=True))
     with conn.cursor() as cur:
         cur.execute("UPDATE conector_execucao SET " + ", ".join(sets) + " WHERE id=%s AND estado IN ('abrindo',"
-                    "'lendo','gravando','conciliando')", vals + [eid])
+                    "'lendo','gravando','conciliando','pausando')", vals + [eid])
+
+
+def gravar_arquivo_log(conn, eid, relativo):
+    """Caminho do log da execução, relativo a CONECTOR_LOG_DIR (registro_log.py); sem evento."""
+    with conn.cursor() as cur:
+        cur.execute("UPDATE conector_execucao SET arquivo_log=%s WHERE id=%s", (relativo[:255], eid))
+
+
+def pausa_solicitada(conn, eid):
+    """True quando a plataforma pediu a pausa da execução (`pausa_solicitada_em`, gravado pela tela ou pela CLI)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT pausa_solicitada_em IS NOT NULL FROM conector_execucao WHERE id=%s", (eid,))
+        r = cur.fetchone()
+    return bool(r and r[0])
+
+
+def gravar_identidade(conn, origem_id, identidade):
+    """Identidade técnica da base lida (origem servidor; sem dado de pessoa) na origem do cliente."""
+    with conn.cursor() as cur:
+        cur.execute("UPDATE cliente_origem SET identidade_base=%s WHERE id=%s",
+                    (json.dumps(identidade, sort_keys=True), origem_id))
+
+
+def _ultima(cur, cliente_id, tipo=None):
+    cur.execute("SELECT id, tipo, estado, cliente_origem_id, modo, contadores FROM conector_execucao"
+                " WHERE cliente_id=%s" + (" AND tipo=%s" if tipo else "") + " ORDER BY id DESC LIMIT 1",
+                (cliente_id, tipo) if tipo else (cliente_id,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    return {"id": r[0], "tipo": r[1], "estado": r[2], "origem_id": r[3], "modo": r[4],
+            "contadores": json.loads(r[5]) if r[5] else {}}
+
+
+def enfileirar_carga(conn, codigo, modo, admin_id=None):
+    """Iniciar carga pela tela (obra carga-painel). `completa`: importação. `diferencial`: com importação concluída,
+    Sincronizar; sem ela, importação que continua a última (pausada ou interrompida) quando é da MESMA origem ativa,
+    senão importação simples (o hash pula as linhas iguais). O diferencial sempre tenta de novo as recusadas."""
+    if modo not in MODOS:
+        raise PlataformaErro("modo inválido: completa ou diferencial")
+    if modo == "completa":
+        return enfileirar(conn, codigo, "importar", admin_id, modo=modo)
+    with conn.cursor() as cur:
+        cli = _cliente(cur, codigo, travar=False)
+        cur.execute("SELECT COUNT(*) FROM conector_execucao WHERE cliente_id=%s AND tipo='importar'"
+                    " AND estado='concluida'", (cli["id"],))
+        concluida = bool(cur.fetchone()[0])
+        cur.execute("SELECT id FROM cliente_origem WHERE cliente_ativo=%s", (cli["id"],))
+        o = cur.fetchone()
+        u = _ultima(cur, cli["id"], "importar")
+    if concluida:
+        return enfileirar(conn, codigo, "sincronizar", admin_id, modo=modo, reprocessar=True)
+    continuar = bool(u and o and u["estado"] in CONTINUAVEIS and u["origem_id"] == o[0])
+    return enfileirar(conn, codigo, "importar", admin_id, continuar=continuar, modo=modo, reprocessar=True)
+
+
+def retomar(conn, codigo, admin_id=None):
+    """Retomar pela tela: a última execução do cliente ficou `pausada` (ou `falhou`). Importação: continuação
+    (`--continuar`, pula as tabelas concluídas); Sincronizar: um Sincronizar novo (o hash pula o que já entrou). O modo
+    e o reprocessamento das recusadas são os da execução retomada."""
+    with conn.cursor() as cur:
+        cli = _cliente(cur, codigo, travar=False)
+        u = _ultima(cur, cli["id"])
+    if not u or u["estado"] not in CONTINUAVEIS:
+        raise PlataformaErro("retomar exige que a última execução do cliente esteja pausada ou interrompida")
+    rep = bool(u["contadores"].get("reprocessar_recusadas"))
+    if u["tipo"] == "sincronizar":
+        return enfileirar(conn, codigo, "sincronizar", admin_id, modo=u["modo"], reprocessar=rep)
+    return enfileirar(conn, codigo, "importar", admin_id, continuar=True, modo=u["modo"], reprocessar=rep)
 
 
 def cancelar(conn, eid, admin_id=None):

@@ -67,7 +67,7 @@ _FORA = frozenset({"lt", "cr", "progresso", "_tab_atual", "mapa_exec", "plano", 
                    "_prox_id", "_bloco", "_atualizar", "_linha", "_grp", "_grupos", "tipos", "seq", "_adiando",
                    "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
                    "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar", "pular", "continuar_de", "memoria",
-                   "_carregar_existente", "_registrar"})
+                   "_carregar_existente", "_registrar", "placar", "_placar_envio", "_pl_base", "_parando"})
 _SO_CACHE = set()  # no gravador: tabelas do plano cujo de-para só foi LIDO do banco (não volta ao coordenador)
 ESTADO_MIN = 20000
 
@@ -582,6 +582,8 @@ def _gravador(cm, con):
             c.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
         cm.lt = LeitorRemoto(cli)
         cm.progresso = lambda *a: None
+        # placar ao vivo (carga.Placar): a diferença de cada commit vai ao coordenador pelo canal, sem resposta
+        cm._placar_envio = lambda d: con.send((0, "placar", (d,)))
         cm._prox_id, cm._fila, cm._buf, cm._diario = {}, [], [], []
         reserva = {}
 
@@ -629,6 +631,11 @@ def _gravador(cm, con):
                 cm._faixas_so, cm._faixa_lim, cm._faixa_dts = None, None, frozenset()
             feito = tarefa if isinstance(tarefa, int) else (i, tarefa[2])
         con.send((0, "fim", (_delta(cm, base),)))
+    except _pausa() as e:  # pausa pedida: parou depois de um commit; o estado em memória não volta (a carga para)
+        try:
+            con.send((0, "pausa", (tabela,)))
+        except BaseException:
+            pass
     except BaseException as e:
         try:  # o resumo (vai ao motivo_falha) e o FIM da pilha (arquivos e linhas, sem a mensagem, que pode ter valores)
             pilha = "".join(traceback.format_list(traceback.extract_tb(e.__traceback__)[-8:]))
@@ -637,6 +644,15 @@ def _gravador(cm, con):
             pass
     finally:
         os._exit(0)
+
+
+def _pausa():
+    from .carga import PausaPedida
+    return PausaPedida
+
+
+def _placar(cm):
+    return getattr(cm, "placar", None)
 
 
 # ----- coordenador -----
@@ -653,10 +669,11 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
     destino da tabela dividida e o resultado."""
     fluxos, vivos, sid, prox = {}, dict(filhos), itertools.count(1), {}
     pulsar, lidas = getattr(getattr(cm, "progresso", None), "pulsar", None), [0]  # batimento da onda (carga.Batimento), só aqui
+    pl, pausados = _placar(cm), []
     while vivos:
         if pulsar is not None:
             pulsar(lidas[0])
-        for con in wait(list(vivos)):
+        for con in wait(list(vivos), 5):  # com tempo: o batimento (e a leitura do pedido de pausa) não para
             pid = vivos[con]
             try:
                 rid, op, a = con.recv()
@@ -687,7 +704,21 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
             elif op == "tabela":
                 if a[0] is not None:
                     ao_feito(a[0])
-                con.send((rid, True, fila.pop(0) if fila else None))
+                # pausa pedida: nenhuma tarefa nova; o gravador devolve o estado e termina
+                prox_t = fila.pop(0) if fila and not (pl is not None and pl.pausa_pedida) else None
+                if prox_t is not None and pl is not None:
+                    pl.inicio(cm.plano[prox_t if isinstance(prox_t, int) else prox_t[0]]["tabela"])
+                con.send((rid, True, prox_t))
+            elif op == "placar":  # diferença de um commit do gravador (sem resposta)
+                if pl is not None:
+                    pl.somar(a[0])
+            elif op == "pausa":  # o gravador parou depois de um commit (pedido de pausa)
+                del vivos[con]
+                try:
+                    os.waitpid(pid, 0)
+                except OSError:
+                    pass
+                pausados.append(a[0] if a else None)
             elif op == "reservar":  # bloco de ids do destino: começa no MAX+1 do início da onda, nunca repete
                 dt, q = a
                 if dt not in prox:
@@ -715,6 +746,23 @@ def _servir(cm, filhos, fila, ao_feito, somar=frozenset()):
                 raise GravadorFalhou(pid, a[0], a[1] if len(a) > 1 else "")
     for g in fluxos.values():
         g.close()
+    return pausados
+
+
+def _parar_na_pausa(cm, k, completas):
+    """Pausa no fim (ou no meio) de uma onda paralela: tudo já commitado; as tabelas que os gravadores terminaram
+    ficam marcadas (base da continuação), a do meio fica sem marca (o hash pula o que já entrou). Levanta a pausa."""
+    from . import continuar
+    from .carga import PausaPedida
+    cm._parando = True
+    if completas and isinstance(getattr(cm, "cr", None), pymysql.connections.Connection) and \
+            not getattr(cm, "_sem_marca", False):
+        try:
+            continuar.marcar(cm, [cm.plano[i]["tabela"] for i in sorted(completas)], k)
+        except pymysql.err.ProgrammingError as e:
+            if not (e.args and e.args[0] == 1146):
+                raise
+    raise PausaPedida()
 
 
 def carregar(cm, contagens):
@@ -725,15 +773,25 @@ def carregar(cm, contagens):
     total = len(cm.plano)
     pular = getattr(cm, "pular", frozenset())
     refs = {}
+    pl = _placar(cm)
+    if pl is not None and hasattr(cm, "_placar_rebase"):
+        cm._placar_rebase()  # o refeito das puladas (continuação) não é linha processada nesta execução
     if n <= 1 or not isinstance(cm.lt, Leitor) or not isinstance(cm.cr, pymysql.connections.Connection):
         ondas(cm.plano, cm.mapa_exec, None, refs)
         uso = ultimo_uso(total, refs, list(range(total)))
         for i, p in enumerate(cm.plano):
             if p["tabela"] in pular:  # continuação: concluída pela execução interrompida
                 continue
+            if pl is not None:
+                pl.onda, pl.ondas = i + 1, total
+                pl.inicio(p["tabela"])
             cm.progresso(i / total, "carregando %s" % p["destinos"][0])
             cm._tabela(p)
             _fim_onda(cm, i, [i], uso, log=isinstance(cm.lt, Leitor))
+            if pl is not None:
+                pl.fim(p["tabela"])
+                if pl.pausa_pedida:  # fim da tabela, commitada e marcada: ponto seguro
+                    _parar_na_pausa(cm, i, ())
         return
     feitos = [sum(1 for p in cm.plano if p["tabela"] in pular)]
     ws = ondas(cm.plano, cm.mapa_exec, fks_banco(cm.cr), refs)
@@ -743,9 +801,17 @@ def carregar(cm, contagens):
             pos[i] = k
     uso = ultimo_uso(total, refs, pos)
 
+    partes_feitas, completas = {}, set()
+
     def ao_feito(f):
         i = f if isinstance(f, int) else f[0]
         feitos[0] += 1 if isinstance(f, int) else 1 / f[1]
+        if not isinstance(f, int):
+            partes_feitas[i] = partes_feitas.get(i, 0) + 1
+        if isinstance(f, int) or partes_feitas[i] >= f[1]:
+            completas.add(i)
+            if pl is not None:
+                pl.fim(cm.plano[i]["tabela"])
         cm.progresso(feitos[0] / total, "carregando %s (onda %d de %d)" % (cm.plano[i]["destinos"][0], k + 1,
                                                                              len(ws)))
     cm.divididas = getattr(cm, "divididas", {})
@@ -770,12 +836,20 @@ def carregar(cm, contagens):
                 cm.divididas[p["tabela"]] = q
             else:
                 tarefas.append((est, i, 0, i))
+        if pl is not None:
+            pl.onda, pl.ondas = k + 1, len(ws)
         if len(tarefas) == 1:
             p = cm.plano[onda[0]]
+            if pl is not None:
+                pl.inicio(p["tabela"])
             cm.progresso(feitos[0] / total, "carregando %s (onda %d de %d)" % (p["destinos"][0], k + 1, len(ws)))
             cm._tabela(p)
             feitos[0] += 1
             _fim_onda(cm, k, onda, uso)
+            if pl is not None:
+                pl.fim(p["tabela"])
+                if pl.pausa_pedida:  # fim da onda, commitada e marcada
+                    _parar_na_pausa(cm, k, ())
             continue
         cm._commit()  # o que a onda anterior gravou fica visível aos gravadores
         _rastrear(cm)
@@ -797,8 +871,9 @@ def carregar(cm, contagens):
                 filhos[pai] = pid
         finally:
             gc.unfreeze()
+        completas.clear()
         try:
-            _servir(cm, filhos, fila, ao_feito, somar)
+            pausados = _servir(cm, filhos, fila, ao_feito, somar)
         except BaseException:
             # qualquer saída com erro (gravador morto sem "erro", falha no coordenador): nenhum gravador fica vivo
             # gravando no cliente depois da execução marcada como falha, nem como zumbi
@@ -815,5 +890,13 @@ def carregar(cm, contagens):
         finally:
             for con in filhos:
                 con.close()
+        if pl is not None:
+            if pausados or pl.pausa_pedida and len(completas) < len(onda):
+                _parar_na_pausa(cm, k, completas)  # no meio da onda: marca só as tabelas terminadas
+            cm._placar_rebase()  # o estado juntado dos gravadores já foi contado pelo canal
+            if pl.pausa_pedida:  # onda inteira terminada: o commit e a marca seguem; a pausa vem depois deles
+                cm._parando = True
         cm._commit()
         _fim_onda(cm, k, onda, uso)
+        if pl is not None and pl.pausa_pedida:  # fim da onda: commitada e marcada
+            _parar_na_pausa(cm, k, ())

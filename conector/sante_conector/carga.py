@@ -414,7 +414,7 @@ class Batimento:
     batimento no início de cada tabela, e a tabela longa ficava dezenas de minutos sem ele (o vigia acusava parada
     falsa). `pulsar` repete a última etapa, com a contagem de linhas processadas da tabela, no máximo a cada
     INTERVALO segundos: custo de uma comparação de relógio por lote e um UPDATE por minuto."""
-    INTERVALO = float(os.environ.get("CONECTOR_BATIMENTO_S", "60"))
+    INTERVALO = float(os.environ.get("CONECTOR_BATIMENTO_S", "15"))  # tela de carga: batimento de no máximo 15 s
 
     def __init__(self, progresso):
         self.fn, self.frac, self.etapa, self.ultimo = progresso, 0.0, None, time.monotonic()
@@ -431,11 +431,126 @@ class Batimento:
         return True
 
 
+class PausaPedida(BaseException):
+    """Pausa pedida pela plataforma (obra carga-painel): levantada SÓ num ponto seguro, depois de um commit (nenhuma
+    linha pela metade) ou antes de uma mudança de estado. BaseException: nenhum `except Exception` da carga a engole."""
+
+
+class Placar:
+    """Contadores ao vivo da carga (`contadores.progresso`, obra carga-painel). Um por execução, no coordenador.
+
+    - Cada commit da carga (Carga._commit) mede a diferença desde o commit anterior: linhas processadas da tabela
+      (chaves vistas), gravadas e recusadas (os registros do conector_origem desse commit, só chave principal),
+      puladas iguais e pendências de aviso, e as recusas por regra. Só entra o que foi commitado.
+    - O gravador (fork, paralelo.py) manda a diferença ao coordenador pelo canal (`_placar_envio`); o coordenador soma.
+    - O pedido de pausa fica em memória compartilhada (`multiprocessing.Value`, criada antes do fork): todo gravador
+      vê o pedido e para no próximo commit.
+    Só contagens e nomes de tabela e de regra (regra 5)."""
+    CAMPOS = ("processadas", "gravadas", "puladas_iguais", "recusadas", "pendencias_aviso")
+
+    def __init__(self, ao_evento=None):
+        import multiprocessing
+        self._pausa = multiprocessing.Value("b", 0, lock=False)
+        self.ao_evento = ao_evento
+        self.contagens, self.nomes, self.por_tabela, self.regras = {}, {}, {}, {}
+        self.feitas, self.em_curso, self._seq = set(), {}, 0
+        self.onda = self.ondas = None
+        self.recusadas_conciliacao = None
+
+    # ----- plano e pausa -----
+    def planejar(self, contagens, nomes):
+        """`contagens`: {tabela da origem: linhas} das tabelas que esta execução carrega; `nomes`: destino de cada."""
+        self.contagens.update({t: int(n or 0) for t, n in contagens.items()})
+        self.nomes.update(nomes)
+
+    def pedir_pausa(self):
+        self._pausa.value = 1
+
+    @property
+    def pausa_pedida(self):
+        return bool(self._pausa.value)
+
+    def _evento(self, tipo, t):
+        if self.ao_evento is not None:
+            try:
+                self.ao_evento(tipo, t)
+            except Exception:  # noqa: BLE001 - o log nunca derruba a carga
+                pass
+
+    def inicio(self, t):
+        if t in self.feitas or t in self.em_curso:
+            return
+        self._seq += 1
+        self.em_curso[t] = self._seq
+        self._evento("inicio", t)
+
+    def fim(self, t, evento=True):
+        if t in self.feitas:
+            return
+        self.em_curso.pop(t, None)
+        self.feitas.add(t)
+        if evento:
+            self._evento("fim", t)
+
+    def somar(self, delta):
+        """Soma a diferença de um commit: {"t": {tabela: [processadas, gravadas, puladas, recusadas, avisos]},
+        "r": {regra: n}}."""
+        for t, v in (delta.get("t") or {}).items():
+            a = self.por_tabela.setdefault(t, [0] * len(self.CAMPOS))
+            for i, x in enumerate(v):
+                a[i] += int(x)
+        for r, n in (delta.get("r") or {}).items():
+            self.regras[r] = self.regras.get(r, 0) + int(n)
+
+    # ----- leitura -----
+    def tabela(self, t):
+        return dict(zip(self.CAMPOS, self.por_tabela.get(t) or [0] * len(self.CAMPOS)))
+
+    def linhas_total(self):
+        return sum(self.contagens.values())
+
+    def linhas_processadas(self):
+        n = 0
+        for t, total in self.contagens.items():
+            n += total if t in self.feitas else min(total, (self.por_tabela.get(t) or [0])[0])
+        return n
+
+    def fracao(self):
+        tot = self.linhas_total()
+        return self.linhas_processadas() / tot if tot else 0.0
+
+    def json(self):
+        tot = [0] * len(self.CAMPOS)
+        for v in self.por_tabela.values():
+            for i, x in enumerate(v):
+                tot[i] += x
+        atual = None
+        if self.em_curso:  # a tabela em curso com mais linhas por processar (em paralelo, a que mais demora)
+            atual = max(self.em_curso, key=lambda t: (self.contagens.get(t, 0) - self.tabela(t)["processadas"],
+                                                      -self.em_curso[t]))
+        rec_tab = sorted(((self.nomes.get(t, t), v[3]) for t, v in self.por_tabela.items() if v[3]),
+                         key=lambda x: (-x[1], x[0]))[:20]
+        recusadas = tot[3] if self.recusadas_conciliacao is None else max(tot[3], self.recusadas_conciliacao)
+        return {
+            "tabela_atual": self.nomes.get(atual, atual) if atual else None,
+            "tabela_origem_linhas": self.contagens.get(atual, 0) if atual else 0,
+            "tabela_processadas": min(self.contagens.get(atual, 0), self.tabela(atual)["processadas"]) if atual else 0,
+            "onda": self.onda, "ondas": self.ondas,
+            "tabelas_feitas": len(self.feitas & set(self.contagens)), "tabelas_total": len(self.contagens),
+            "linhas_total": self.linhas_total(), "linhas_processadas": self.linhas_processadas(),
+            "gravadas": tot[1], "puladas_iguais": tot[2], "recusadas": recusadas, "pendencias_aviso": tot[4],
+            "recusas_por_regra": dict(sorted(self.regras.items())),
+            "recusas_por_tabela": [{"tabela": t, "recusadas": n} for t, n in rec_tab],
+            "atualizado_em": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        }
+
+
 # ---------------- carga ----------------
 class Carga:
     reprocessar = False  # padrão (continuidade) também para a instância montada sem __init__ (testes)
 
-    def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None, pular=None):
+    def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None, pular=None, placar=None):
+        self.placar = placar                # contadores ao vivo e pedido de pausa (Placar; None = sem tela)
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
         self.pular = dict(pular or {})      # continuação: {tabela: execução que a concluiu} (continuar.concluidas_propria)
         self.progresso = Batimento(progresso or (lambda pct, etapa: None))
@@ -478,8 +593,71 @@ class Carga:
                               self._buf)
             self._buf = []
         self.cr.commit()
+        self._placar_commit()
         self._diario = []
         self._pulsar()
+        pl = getattr(self, "placar", None)
+        if pl is not None and pl.pausa_pedida and not getattr(self, "_parando", False):
+            self._parando = True  # depois do commit: nada pela metade; os commits seguintes (marca) não levantam
+            raise PausaPedida()
+
+    def _placar_rebase(self):
+        """Base do placar no estado atual, sem contar: depois de juntar o estado dos gravadores (paralelo._juntar), que
+        já mandaram a diferença deles pelo canal, o próximo commit do coordenador não a conta de novo."""
+        vistas = self.vistas if isinstance(getattr(self, "vistas", None), dict) else {}
+        self._pl_base = {"pend": len(self.pend), "pul": int(self.cont.get("puladas_iguais", 0)),
+                         "vistas": {t: len(v) for t, v in vistas.items() if hasattr(v, "__len__")}}
+
+    def _placar_commit(self):
+        """Diferença do que este commit gravou (Placar): só chave principal (a vista nesta execução), cada chave
+        uma vez pelo estado final; puladas e pendências pela diferença dos contadores desde o commit anterior."""
+        pl = getattr(self, "placar", None)
+        if pl is None:
+            return
+        b = self.__dict__.get("_pl_base") or {"pend": 0, "pul": 0, "vistas": {}}
+        vistas = self.vistas if isinstance(getattr(self, "vistas", None), dict) else {}
+        finais, rec_todas = {}, 0
+        for tab, chave, _ in self._diario:
+            if (tab, chave) in finais:
+                continue
+            r = (self.existente.get(tab) or {}).get(chave) if isinstance(self.existente.get(tab), dict) else None
+            finais[(tab, chave)] = r
+        d, regras = {}, {}
+        for (tab, chave), r in finais.items():
+            if r is None:
+                continue
+            if r[0] is None and r[3]:
+                rec_todas += 1
+            vs = vistas.get(tab)
+            if not isinstance(vs, (set, dict)) or chave not in vs:
+                continue
+            a = d.setdefault(tab, [0, 0, 0, 0, 0])
+            if r[0] is None:
+                a[3] += 1
+                regras[r[3] or "recusada"] = regras.get(r[3] or "recusada", 0) + 1
+            else:
+                a[1] += 1
+        t = getattr(self, "_tab_atual", None)
+        pend, pul = len(self.pend), int(self.cont.get("puladas_iguais", 0))
+        bv = dict(b["vistas"])
+        if t is not None:
+            a = d.setdefault(t, [0, 0, 0, 0, 0])
+            vs = vistas.get(t)
+            n = len(vs) if isinstance(vs, (set, dict)) else bv.get(t, 0)
+            a[0] += max(0, n - bv.get(t, 0))
+            bv[t] = n
+            a[2] += max(0, pul - b["pul"])
+            a[4] += max(0, pend - b["pend"] - rec_todas)
+        self._pl_base = {"pend": pend, "pul": pul, "vistas": bv}
+        d = {k: v for k, v in d.items() if any(v)}
+        if not d and not regras:
+            return
+        delta = {"t": d, "r": regras}
+        envio = getattr(self, "_placar_envio", None)
+        if envio is not None:
+            envio(delta)
+        else:
+            pl.somar(delta)
 
     def _pulsar(self):
         """Batimento dentro da tabela (a cada lote commitado, limitado pelo Batimento.INTERVALO)."""
@@ -1272,14 +1450,22 @@ class Carga:
                 lambda n: self.progresso(0, "pendências herdadas do atendimento já concluído (%d)" % n),
                 excluir_regras=continuar.CONCILIACAO_PROPRIA)
             continuar.marcar(self, pulados, None, "continuada")
+        pl = getattr(self, "placar", None)
         for i, t in enumerate(self.tabelas):
             self._tab_atual = t
             self.progresso(i / len(self.tabelas), "carregando %s" % MAPA[t]["entidade"])
             if t in pulados:
                 self._reconstruir(t)
+                if pl is not None:
+                    self._placar_rebase()  # o refeito do controle não é linha processada nesta execução
+                    pl.fim(t, evento=False)
                 continue
+            if pl is not None:
+                pl.inicio(t)
             fn[t](self._linhas(t))
             self._commit()
+            if pl is not None:
+                pl.fim(t)
             # marca de concluída depois do commit (base da continuação); o grupo do atendimento só junto, quando o
             # atendimento gravou as fichas e as altas lidas antes dele
             if t not in grupo:

@@ -603,8 +603,8 @@ def _truncar(v, precisao):
 class CargaMapa(carga.Carga):
     def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=(),
                  sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False, limite_global=None,
-                 pular=(), continuar_de=None):
-        super().__init__(leitor, cr, ctl, eid, imagem_id, progresso)
+                 pular=(), continuar_de=None, placar=None):
+        super().__init__(leitor, cr, ctl, eid, imagem_id, progresso, placar=placar)
         # L9: Sincronizar (a origem vence; edição do destino guardada; exclusão lógica com reativação)
         self.sinc = bool(sincronizar)
         self.limite_exclusao = limite_exclusao or sincronizar_mod.LIMITE_EXCLUSAO
