@@ -134,10 +134,11 @@ const operacaoGravarGeral = definirOperacao({
       alerta_janela_suspensa: p.alertaJanelaSuspensa,
       tela_inicial_id: telaInicial,
     };
-    const id = atual
-      ? (await tx.alterar('preferencia_usuario', num(atual['id']), num(atual['versao']), valores),
-        num(atual['id']))
-      : await tx.incluir('preferencia_usuario', { usuario_id: usuario, ...valores });
+    let id: number;
+    if (atual) {
+      id = num(atual['id']);
+      await tx.alterar('preferencia_usuario', id, num(atual['versao']), valores);
+    } else id = await tx.incluir('preferencia_usuario', { usuario_id: usuario, ...valores });
     return { id, criada: !atual, ...p, textoAmpliado: textoAmpliado(p.zoomPercentual), telaInicial };
   },
   alvo: (_e, r) => ({ tabela: 'preferencia_usuario', id: r.id }),
