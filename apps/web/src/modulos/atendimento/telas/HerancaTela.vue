@@ -106,12 +106,13 @@ async function gravar(paraMim: boolean): Promise<void> {
             </td>
             <td>
               <SanteSelecao
-                v-model="pessoal[c.campo]"
+                :model-value="pessoal[c.campo] ?? 'segue'"
                 :desabilitado="!podeGravar"
                 ocultar-rotulo
                 :rotulo="`${c.rotulo}: ${t('atendimento.heranca.paraMim')}`"
                 :opcoes="opcoesPessoal"
                 :data-testid="`heranca-pessoal-${c.campo}`"
+                @update:model-value="(v) => (pessoal[c.campo] = v)"
               />
             </td>
             <td :data-testid="`heranca-vigor-${c.campo}`">
