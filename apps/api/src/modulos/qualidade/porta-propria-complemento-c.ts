@@ -153,7 +153,12 @@ export class ComplementoQualidadeC {
   }
 
   /** As contagens de adesão do período [de, fimExclusivo) no estabelecimento da sessão. */
-  painelAdesao(c: ContextoQualidade, de: string, fimExclusivo: string, agora: string): Promise<ContagensAdesaoLidas> {
+  painelAdesao(
+    c: ContextoQualidade,
+    de: string,
+    fimExclusivo: string,
+    agora: string,
+  ): Promise<ContagensAdesaoLidas> {
     const ini = `${de.slice(0, 10)} 00:00:00`;
     const fim = `${fimExclusivo.slice(0, 10)} 00:00:00`;
     const ag = paraBanco(agora);
@@ -234,7 +239,13 @@ export class ComplementoQualidadeC {
     lote: string,
   ): Promise<{
     itemNome: string | null;
-    expostos: { origem: 'consumo-em-sala' | 'estoque'; data: string | null; atendimento: number; paciente: number | null; quantidade: number }[];
+    expostos: {
+      origem: 'consumo-em-sala' | 'estoque';
+      data: string | null;
+      atendimento: number;
+      paciente: number | null;
+      quantidade: number;
+    }[];
     cortada: boolean;
   }> {
     const r = await new PortaOpmePropria(this.nucleo).rastreioReverso(c, {
