@@ -496,7 +496,8 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       [ids['comp1'], 6, 60],
       [ids['comp2'], 3, 0],
     ]);
-    expect(String(itens[1]!['dados'])).toContain('sem_preco_vigente');
+    const dados = itens[1]!['dados'];
+    expect(typeof dados === 'string' ? dados : JSON.stringify(dados)).toContain('sem_preco_vigente');
     await s.gravar('kit.lancar', op(), { contaId: ids['contaA'], kitId: fechado['id'], data: '2026-01-22' });
     const f = await linhas(
       'SELECT item_faturavel_id, valor_total FROM conta_hospitalar_item WHERE kit_cobranca_id = ?',
