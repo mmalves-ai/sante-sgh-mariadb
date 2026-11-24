@@ -117,8 +117,6 @@ const baseMarcacao = {
   retorno: z.boolean(),
   observacao: observacao.optional(),
   canal: esquemaCanal,
-  /** 02-AGE 49: grupo de prioridade legal (id); a regra do domínio pode subir pela idade ou pelo cadastro. */
-  prioridadeLegal: id.nullable().optional(),
 };
 
 export const esquemaAgendarConsulta = z
