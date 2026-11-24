@@ -10,20 +10,20 @@
 //   motivo; o recurso e a glosa mudam de situação quando o último item retorna (situacaoDoRecurso,
 //   situacaoDaGlosaNoRecurso). Nada é apagado: o retorno é gravado uma vez no item do recurso.
 import {
-  conferirBaixa,
-  conferirDesfecho,
   esquemaRegistrarGlosa,
   esquemaRegistrarRecurso,
   esquemaRegistrarRetornoRecurso,
-  MOTIVO_NAO_INFORMADO,
-  prazoRecurso,
   type RegistrarGlosaEntrada,
   type RegistrarRecursoEntrada,
   type RegistrarRetornoRecursoEntrada,
 } from '@sgh/contratos';
 import {
+  conferirBaixa,
+  conferirDesfecho,
   conferirItemDoRecurso,
   lotesDeRecurso,
+  MOTIVO_NAO_INFORMADO,
+  prazoRecurso,
   situacaoDaGlosaNoRecurso,
   situacaoDoRecurso,
   valorPadraoDoRecurso,

@@ -46,11 +46,12 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
       `DELETE FROM recurso_glosa_item WHERE recurso_glosa_id IN (SELECT id FROM recurso_glosa WHERE estabelecimento_id = ?)`,
       est,
     );
-    await e.executar('DELETE FROM recurso_glosa WHERE estabelecimento_id = ?', est);
+    // O item glosado aponta o recurso (fk_glosa_item_recurso_glosa_id): sai antes dele.
     await e.executar(
       'DELETE FROM glosa_item WHERE glosa_id IN (SELECT id FROM glosa WHERE estabelecimento_id = ?)',
       est,
     );
+    await e.executar('DELETE FROM recurso_glosa WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM glosa WHERE estabelecimento_id = ?', est);
     await e.executar(
       `DELETE FROM producao_repasse WHERE conta_hospitalar_item_id IN (SELECT ci.id FROM conta_hospitalar_item ci
