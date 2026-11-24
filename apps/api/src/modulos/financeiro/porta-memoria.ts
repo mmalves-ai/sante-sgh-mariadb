@@ -46,6 +46,7 @@ import {
   regrasDoCredor,
   serieGravada,
   situacaoAprovacao,
+  conferirProrrogacao,
   situacaoTituloPagar,
   type TipoCredor,
   tpPgtoVisto,
@@ -979,6 +980,47 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         s.faixas = [...s.faixas.filter((f) => f.id !== nova.id), nova];
         return { id: nova.id };
       },
+      prorrogarVencimento: async (d) => {
+        const t = s.titulos.get(d.parcela);
+        if (!t) throw recusa('titulo-inexistente', 'A parcela não existe (talvez já excluída).');
+        const m = PortaFinanceiroMemoria.MOTIVOS_PRORROGACAO.find((x) => x.id === d.motivo) ?? null;
+        const pago = t.pago > 0 || !!t.dataPagamento;
+        this.recusar(
+          conferirProrrogacao(
+            {
+              situacao: pago ? 'paga' : 'aberta',
+              saldo: pago ? 0 : t.valor,
+              vencimento: t.vencimento,
+              emLotePendente: false,
+            },
+            d.vencimento,
+            m ? { ativo: m.ativo, aplicaPagar: true, exigeJustificativa: m.exigeJustificativa } : null,
+            d.justificativa,
+          ),
+        );
+        const h = this.prorrogacoesDo(s);
+        const anterior = t.vencimento;
+        if (!h.original.has(t.id)) h.original.set(t.id, anterior);
+        t.vencimento = d.vencimento;
+        t.versao += 1;
+        const id = ++s.seq;
+        h.passos.push({
+          id,
+          parcela: t.id,
+          vencimentoAnterior: anterior,
+          vencimentoNovo: d.vencimento,
+          motivo: m?.descricao ?? '',
+          justificativa: d.justificativa.trim(),
+          usuario: d.usuario,
+          em: new Date().toISOString(),
+        });
+        return {
+          id,
+          vencimentoAnterior: anterior,
+          vencimento: d.vencimento,
+          vencimentoOriginal: h.original.get(t.id) ?? anterior,
+        };
+      },
       aprovarTitulo: async (d) => {
         const t = s.titulos.get(d.titulo);
         if (!t) throw recusa('titulo-inexistente', 'O título não existe (talvez já excluído).');
@@ -1449,6 +1491,44 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         .map((a) => ({ aprovador: a.aprovador, ordem: a.ordem, em: a.em })),
       documentoCredor: '**.***.***/****-55',
     };
+  }
+
+  /** F3.8 (07-FIN linha 63): o histórico de prorrogações por estado (o vencimento original de cada parcela junto). */
+  private readonly prorrogacoesM = new WeakMap<
+    Estado,
+    { original: Map<number, string>; passos: (ProrrogacaoPorta & { parcela: number })[] }
+  >();
+  private prorrogacoesDo(s: Estado) {
+    let x = this.prorrogacoesM.get(s);
+    if (!x) this.prorrogacoesM.set(s, (x = { original: new Map(), passos: [] }));
+    return x;
+  }
+  static readonly MOTIVOS_PRORROGACAO: readonly (MotivoProrrogacaoPorta & { ativo: boolean })[] = [
+    { id: 1, descricao: 'Acordo com o credor', exigeJustificativa: false, ativo: true },
+    { id: 2, descricao: 'Outro motivo', exigeJustificativa: true, ativo: true },
+  ];
+
+  async motivosProrrogacao(): Promise<MotivoProrrogacaoPorta[]> {
+    return PortaFinanceiroMemoria.MOTIVOS_PRORROGACAO.map(({ id, descricao, exigeJustificativa }) => ({
+      id,
+      descricao,
+      exigeJustificativa,
+    }));
+  }
+
+  async prorrogacoes(c: ContextoFinanceiro, parcela: number): Promise<ProrrogacaoPorta[]> {
+    return this.prorrogacoesDo(this.e(c))
+      .passos.filter((x) => x.parcela === parcela)
+      .map((x): ProrrogacaoPorta => ({
+        id: x.id,
+        vencimentoAnterior: x.vencimentoAnterior,
+        vencimentoNovo: x.vencimentoNovo,
+        motivo: x.motivo,
+        justificativa: x.justificativa,
+        usuario: x.usuario,
+        em: x.em,
+      }))
+      .reverse();
   }
 
   async documentoCredor() {

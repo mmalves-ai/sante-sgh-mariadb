@@ -156,7 +156,7 @@ const cadastroIncompleto = (oQue: string) =>
 const naoEncontrado = (detalhe: string) =>
   new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', detalhe);
 const hojeIso = () => new Date().toISOString().slice(0, 10);
-const conferirVersao = (lida: string | null | undefined, atual: unknown) => {
+export const conferirVersao = (lida: string | null | undefined, atual: unknown) => {
   const v = versaoDoTexto(lida ?? null);
   if (lida && (v === null || v !== numero(atual))) throw erroConflitoVersao(['versao']);
 };

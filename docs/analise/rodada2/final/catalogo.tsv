@@ -1076,7 +1076,6 @@ parcela_adiantamento	FIN	item	F7	Parcelamento da devolução ou da compensação
 parcela_apuracao_custo	FIN	item	F7	Custo primário, recebido e repassado por centro e natureza na apuração	MV CUSTO_PRIMARIO, CUSTO_ABSORVIDO, CUSTO_FINAL	07	6
 parcela_contrato_fornecedor	FIN	item	F7	Parcela prevista do contrato, com competência e valor, base do título	MV GCTO_CONTRATO_PARC, GCTO_CONTRATO_PERI	07	4
 parcela_pagar	FIN	item	F3	Parcela do título a pagar com vencimento, valor, saldo em aberto e situação de pagamento	SPDATA MFCONPAG; MV ITCON_PAG, PARCELA_COND_PAGAMENTO	07	5
-prorrogacao_parcela_pagar	FIN	historico	F3	Prorrogação do vencimento da parcela a pagar, com o vencimento anterior, o novo, o motivo, quem e quando	novo (07-FIN linha 63)	07	0
 parcela_previsao_financeira	FIN	item	F8	Ocorrência mensal da previsão, com valor, data esperada e situação (aberta, realizada, cancelada)	MV PREVISAO_MVTO	07	2
 parcela_receber	FIN	item	F3	Parcela do título a receber com vencimento, valor, saldo e situação de cobrança	SPDATA MFCTAREC; MV ITCON_REC	07	3
 parcela_recebivel_cartao	FIN	item	F3	Parcela a receber da administradora, com data prevista, valor líquido, taxa e baixa	MV TEF_MOVIMENTO_PARC, TEF_MOVIMENTO_CNTA	07	2

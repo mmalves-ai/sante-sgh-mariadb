@@ -31,6 +31,7 @@ import type {
   RegistrarGlosaTituloEntrada,
   RegistroFiscalResposta,
   TituloPagarResposta,
+  ProrrogarVencimentoEntrada,
 } from '@sgh/contratos';
 import type { FaixaAlcada } from '@sgh/contratos/regras-financeiro';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
@@ -98,6 +99,21 @@ export interface RetencaoReinfPorta {
   readonly cofins: number;
 }
 
+export interface MotivoProrrogacaoPorta {
+  readonly id: number;
+  readonly descricao: string;
+  readonly exigeJustificativa: boolean;
+}
+export interface ProrrogacaoPorta {
+  readonly id: number;
+  readonly vencimentoAnterior: string;
+  readonly vencimentoNovo: string;
+  readonly motivo: string;
+  readonly justificativa: string;
+  readonly usuario: string;
+  readonly em: string;
+}
+
 /** Gravações diretas da porta, numa transação com a trilha junto (o estabelecimento e o usuário vêm do contexto). */
 export interface GravadorSghFinanceiro {
   salvarFaixa(d: FaixaAlcadaEntrada & { usuario: string }): Promise<{ id: number }>;
@@ -107,6 +123,10 @@ export interface GravadorSghFinanceiro {
     usuario: string;
     temPermissao: (p: string) => boolean;
   }): Promise<{ id: number; ordem: number; aprovado: boolean; faltam: number }>;
+  /** F3.8 (07-FIN linha 63): prorrogar o vencimento da parcela a pagar; o original fica e o passo vai ao histórico. */
+  prorrogarVencimento(
+    d: ProrrogarVencimentoEntrada & { usuario: string },
+  ): Promise<{ id: number; vencimentoAnterior: string; vencimento: string; vencimentoOriginal: string }>;
   registrarGlosaTitulo(
     d: RegistrarGlosaTituloEntrada & { usuario: string; origem: 'tela' | 'evento'; chaveEvento?: string },
   ): Promise<{ id: number; repetida: boolean }>;
@@ -226,6 +246,10 @@ export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro>
     hoje: string,
   ): Promise<Omit<DetalheTituloPagarResposta, 'alcada' | 'legendaStatus'> | null>;
   documentoCredor(c: ContextoFinanceiro, titulo: number): Promise<string | null>;
+  /** Os motivos de prorrogação ativos que valem para contas a pagar (a lista da tela). */
+  motivosProrrogacao(c: ContextoFinanceiro): Promise<MotivoProrrogacaoPorta[]>;
+  /** O histórico de prorrogações da parcela a pagar, do mais recente ao mais antigo. */
+  prorrogacoes(c: ContextoFinanceiro, parcela: number): Promise<ProrrogacaoPorta[]>;
   filaAprovacao(c: ContextoFinanceiro, hoje: string, ate: string): Promise<TituloPagarResposta[]>;
   faixas(c: ContextoFinanceiro): Promise<FaixaAlcada[]>;
   aprovacoesDosTitulos(
@@ -320,6 +344,8 @@ export const METODOS_PORTA_FINANCEIRO: ReadonlySet<string> = new Set([
   'titulosPagar',
   'tituloPagar',
   'documentoCredor',
+  'motivosProrrogacao',
+  'prorrogacoes',
   'filaAprovacao',
   'faixas',
   'aprovacoesDosTitulos',

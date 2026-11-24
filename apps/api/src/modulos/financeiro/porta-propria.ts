@@ -44,6 +44,7 @@ import {
   conferirPagamento,
   conferirPedidoEmAberto,
   conferirSaida,
+  conferirProrrogacao,
   credorDoTitulo,
   parcelaAposCompensacao,
   tipoAlcadaDoAdiantamento,
@@ -76,6 +77,7 @@ import {
   centroDaAlcada,
   conferirItemGlosado,
   conferirLinhaContraMovimento,
+  conferirVersao,
   contasDoEscopo,
   efeitoDaGlosa,
   itemGlosavelDe,
@@ -94,6 +96,8 @@ import {
   type FiltroPagar,
   type FiltroReceber,
   type GravadorSghFinanceiro,
+  type MotivoProrrogacaoPorta,
+  type ProrrogacaoPorta,
   type LancamentoFluxoPorta,
   METODOS_PORTA_FINANCEIRO,
   type PortaFinanceiro,
@@ -135,6 +139,7 @@ const SITUACOES_TITULAVEIS = SITUACOES_CONTA_TITULAVEL.map((s) => `'${s}'`).join
 
 /** Tabelas das gravações diretas (a operação de gravação direta só grava nelas). */
 const TABELAS_GRAVACAO_DIRETA = [
+  'prorrogacao_parcela',
   'arquivo',
   'adiantamento',
   'compensacao_adiantamento',
@@ -624,6 +629,47 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       );
       return r?.['documento'] ? String(r['documento']) : null;
     });
+  }
+
+  motivosProrrogacao(c: ContextoFinanceiro): Promise<MotivoProrrogacaoPorta[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          'SELECT id, descricao, exige_justificativa FROM motivo_prorrogacao WHERE ativo = TRUE AND aplica_pagar = TRUE ORDER BY descricao LIMIT 200',
+          [],
+        )
+      ).map((r) => ({
+        id: numero(r['id']),
+        descricao: texto(r['descricao']),
+        exigeJustificativa: Boolean(numero(r['exige_justificativa'])),
+      })),
+    );
+  }
+
+  prorrogacoes(c: ContextoFinanceiro, parcela: number): Promise<ProrrogacaoPorta[]> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT pp.id, pp.vencimento_anterior, pp.vencimento_novo, m.descricao AS motivo, pp.observacao,
+                  u.login, pp.ocorrido_em
+             FROM prorrogacao_parcela pp JOIN parcela_pagar p ON p.id = pp.parcela_pagar_id
+             JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+             JOIN motivo_prorrogacao m ON m.id = pp.motivo_prorrogacao_id
+             JOIN usuario u ON u.id = pp.usuario_id
+            WHERE pp.parcela_pagar_id = ? AND t.estabelecimento_id = ?
+            ORDER BY pp.ocorrido_em DESC, pp.id DESC LIMIT 200`,
+          [parcela, est],
+        )
+      ).map((r) => ({
+        id: numero(r['id']),
+        vencimentoAnterior: dataIso(r['vencimento_anterior']) ?? '',
+        vencimentoNovo: dataIso(r['vencimento_novo']) ?? '',
+        motivo: texto(r['motivo']),
+        justificativa: texto(r['observacao']),
+        usuario: texto(r['login']),
+        em: r['ocorrido_em'] instanceof Date ? r['ocorrido_em'].toISOString() : texto(r['ocorrido_em']),
+      })),
+    );
   }
 
   filaAprovacao(c: ContextoFinanceiro, hoje: string, ate: string): Promise<TituloPagarResposta[]> {
@@ -1748,6 +1794,65 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
       return { id };
     },
 
+    async prorrogarVencimento(d) {
+      const [p] = await tx.consultarParaAtualizar(
+        `SELECT p.id, p.versao, p.situacao, p.saldo, p.vencimento, p.vencimento_original,
+                EXISTS (SELECT 1 FROM item_bordero ib JOIN bordero_pagamento b ON b.id = ib.bordero_pagamento_id
+                         WHERE ib.parcela_pagar_id = p.id AND ib.excluido_em IS NULL
+                           AND ib.situacao IN ('incluido','enviado','confirmado')
+                           AND b.situacao IN ('aberto','fechado','aprovado','enviado')) AS em_lote
+           FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+          WHERE p.id = ? AND t.estabelecimento_id = ? AND p.excluido_em IS NULL AND t.excluido_em IS NULL
+            AND t.situacao <> 'cancelado'`,
+        [d.parcela, est],
+        { teto: 1 },
+      );
+      if (!p) throw recusa('titulo-inexistente', 'A parcela não existe (talvez já excluída).');
+      conferirVersao(d.versao, p['versao']);
+      const m = await tx.uma(
+        'SELECT id, ativo, aplica_pagar, exige_justificativa FROM motivo_prorrogacao WHERE id = ?',
+        [d.motivo],
+      );
+      const anterior = dataIso(p['vencimento']) ?? '';
+      recusar(
+        conferirProrrogacao(
+          {
+            situacao: texto(p['situacao']),
+            saldo: numero(p['saldo']),
+            vencimento: anterior,
+            emLotePendente: Boolean(numero(p['em_lote'])),
+          },
+          d.vencimento,
+          m
+            ? {
+                ativo: Boolean(numero(m['ativo'])),
+                aplicaPagar: Boolean(numero(m['aplica_pagar'])),
+                exigeJustificativa: Boolean(numero(m['exige_justificativa'])),
+              }
+            : null,
+          d.justificativa,
+        ),
+      );
+      const parcela = numero(p['id']);
+      // O vencimento original não muda; a parcela passa a valer pelo novo e o passo fica no histórico.
+      await tx.alterar('parcela_pagar', parcela, numero(p['versao']), { vencimento: d.vencimento });
+      const id = await tx.incluir('prorrogacao_parcela', {
+        parcela_pagar_id: parcela,
+        operacao: 'alteracao',
+        vencimento_anterior: anterior,
+        vencimento_novo: d.vencimento,
+        motivo_prorrogacao_id: d.motivo,
+        observacao: d.justificativa.trim() || null,
+        ocorrido_em: agora(),
+        usuario_id: usuario,
+      });
+      return {
+        id,
+        vencimentoAnterior: anterior,
+        vencimento: d.vencimento,
+        vencimentoOriginal: dataIso(p['vencimento_original']) ?? anterior,
+      };
+    },
     async aprovarTitulo(d) {
       const [p] = await tx.consultarParaAtualizar(
         `SELECT t.id, t.versao, t.situacao, t.valor_bruto, t.criado_por, t.centro_custo_id, t.numero_documento,

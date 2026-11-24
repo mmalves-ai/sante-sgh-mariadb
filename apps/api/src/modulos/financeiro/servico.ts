@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto';
 import {
   type AprovarTituloEntrada,
+  type ProrrogarVencimentoEntrada,
   type AtribuirCreditoEntrada,
   type AprovarAdiantamentoEntrada,
   type CompensarAdiantamentoEntrada,
@@ -236,6 +237,22 @@ export class ServicoFinanceiro {
         : `Primeira aprovação registrada: falta ${r.faltam} aprovação(ões) de outra pessoa.`,
       false,
       { aprovacao: r.id, ordem: r.ordem },
+    );
+  }
+
+  /** F3.8 (07-FIN linha 63): prorroga o vencimento da parcela a pagar (motivo da lista; o original fica). */
+  async prorrogarVencimento(s: SessaoCadastro, e: ProrrogarVencimentoEntrada): Promise<ResultadoFinanceiro> {
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroVencimentoProrrogado.codigo,
+      'financeiro.contasPagar',
+      () => ({ tabela: 'parcela_pagar', id: String(e.parcela) }),
+      (g) => g.prorrogarVencimento({ ...e, usuario: s.login }),
+    );
+    return resultadoFin(
+      `Vencimento prorrogado de ${r.vencimentoAnterior} para ${r.vencimento} (o original, ${r.vencimentoOriginal}, fica no título).`,
+      false,
+      { prorrogacao: r.id },
     );
   }
 

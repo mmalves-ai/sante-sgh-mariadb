@@ -12,8 +12,15 @@ export interface ParcelaProrrogavel {
   readonly emLotePendente: boolean;
 }
 
-/** O motivo mínimo: 5 letras (o histórico tem de dizer por que, não só "ok"). */
-export const MOTIVO_PRORROGACAO_MINIMO = 5;
+/** O motivo da lista (cadastro de motivos de prorrogação) como lido do banco. */
+export interface MotivoProrrogacao {
+  readonly ativo: boolean;
+  readonly aplicaPagar: boolean;
+  readonly exigeJustificativa: boolean;
+}
+
+/** A justificativa mínima, quando o motivo a exige: 5 letras (o histórico tem de dizer por que, não só "ok"). */
+export const JUSTIFICATIVA_PRORROGACAO_MINIMA = 5;
 /** O teto de uma prorrogação: um ano além do vencimento vigente (além disso é renegociação). */
 export const PRORROGACAO_DIAS_MAXIMO = 366;
 
@@ -22,12 +29,14 @@ const dias = (de: string, ate: string): number =>
 
 /**
  * Confere a prorrogação: só a parcela com saldo em aberto, fora de borderô ou remessa pendente, para uma data posterior
- * ao vencimento vigente (antecipar não é prorrogar) e até um ano depois, com motivo.
+ * ao vencimento vigente (antecipar não é prorrogar) e até um ano depois, com um motivo ativo da lista que valha para
+ * contas a pagar e a justificativa quando o motivo a exige.
  */
 export function conferirProrrogacao(
   p: ParcelaProrrogavel,
   novo: string,
-  motivo: string,
+  motivo: MotivoProrrogacao | null,
+  justificativa: string,
 ): RecusaFinanceiro | null {
   if (!['aberta', 'parcial', 'bloqueada'].includes(p.situacao) || !(p.saldo > 0))
     return recusaFin(
@@ -52,10 +61,14 @@ export function conferirProrrogacao(
     return recusaFin('prorrogacao-longa', 'Prorrogação de mais de um ano: faça a renegociação do título.', [
       'vencimento',
     ]);
-  if (motivo.trim().length < MOTIVO_PRORROGACAO_MINIMO)
-    return recusaFin('motivo-obrigatorio', 'Diga o motivo da prorrogação (vai para o histórico).', [
-      'motivo',
-    ]);
+  if (!motivo || !motivo.ativo || !motivo.aplicaPagar)
+    return recusaFin('motivo-obrigatorio', 'Escolha o motivo da prorrogação na lista.', ['motivo']);
+  if (motivo.exigeJustificativa && justificativa.trim().length < JUSTIFICATIVA_PRORROGACAO_MINIMA)
+    return recusaFin(
+      'justificativa-obrigatoria',
+      'Este motivo pede a justificativa (vai para o histórico).',
+      ['justificativa'],
+    );
   return null;
 }
 

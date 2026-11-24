@@ -29,5 +29,40 @@
       "sentido": "pagar",
       "retem_tributo": true
     }
+  ],
+  "motivo_prorrogacao": [
+    {
+      "codigo": "acordo_credor",
+      "descricao": "Acordo com o credor",
+      "aplica_pagar": true,
+      "aplica_receber": true
+    },
+    {
+      "codigo": "atraso_entrega",
+      "descricao": "Atraso na entrega do produto ou do serviço",
+      "aplica_pagar": true,
+      "aplica_receber": false
+    },
+    {
+      "codigo": "divergencia_documento",
+      "descricao": "Divergência no documento do credor (nota, boleto)",
+      "aplica_pagar": true,
+      "aplica_receber": false,
+      "exige_justificativa": true
+    },
+    {
+      "codigo": "fluxo_caixa",
+      "descricao": "Programação do fluxo de caixa",
+      "aplica_pagar": true,
+      "aplica_receber": false,
+      "exige_justificativa": true
+    },
+    {
+      "codigo": "outro",
+      "descricao": "Outro motivo",
+      "aplica_pagar": true,
+      "aplica_receber": true,
+      "exige_justificativa": true
+    }
   ]
 }

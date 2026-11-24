@@ -3,6 +3,7 @@
 //   GET  /api/financeiro/gravacao | apoio | worklist | indicadores
 //   GET  /api/financeiro/pagar/titulos (auditada) | pagar/titulos/:id ; POST pagar/titulos | pagar/titulos/:id/excluir
 //   GET  /api/financeiro/pagar/aprovacao ; POST pagar/titulos/:id/aprovar ; GET/POST alcadas
+//   GET  pagar/motivos-prorrogacao | pagar/titulos/:id/prorrogacoes ; POST pagar/titulos/:id/prorrogar
 //   GET  /api/financeiro/pagar/borderos ; POST pagar/baixa ; GET/POST pagar/remessas ; GET pagar/adiantamentos
 //   POST /api/financeiro/dados/mostrar (auditada: o documento sem máscara, com a finalidade)
 //   GET  /api/financeiro/receber/titulos (auditada) | receber/titulos/:id | receber/contas-sem-titulo
@@ -26,6 +27,7 @@ import {
   type DreResposta,
   type EscrituracaoResposta,
   esquemaAprovarTitulo,
+  esquemaProrrogarVencimento,
   esquemaAtribuirCredito,
   esquemaAprovarAdiantamento,
   esquemaCompensarAdiantamento,
@@ -84,7 +86,13 @@ import { corpo, inteiroOuNulo } from '../exames/public-api.js';
 import { ApoiosFinanceiro } from './apoios.js';
 import { ARMAZEM_FINANCEIRO } from './simbolos.js';
 import type { ArmazemFinanceiro } from './armazem.js';
-import { type ContextoFinanceiro, PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
+import {
+  type ContextoFinanceiro,
+  type MotivoProrrogacaoPorta,
+  PORTA_FINANCEIRO,
+  type PortaFinanceiro,
+  type ProrrogacaoPorta,
+} from './porta.js';
 import { ServicoFinanceiro } from './servico.js';
 
 const ctx = (s: { porta: ContextoFinanceiro }): ContextoFinanceiro => s.porta;
@@ -289,6 +297,33 @@ export class FinanceiroController {
     return this.servico.aprovar(
       sessaoDe(req),
       corpo(esquemaAprovarTitulo, { ...((b ?? {}) as object), titulo: idDaRota(id) }),
+    );
+  }
+
+  @Get('pagar/motivos-prorrogacao')
+  @Permissao('financeiro.tituloPagar.ler')
+  motivosProrrogacao(@Req() req: RequisicaoAutorizada): Promise<MotivoProrrogacaoPorta[]> {
+    return this.porta.motivosProrrogacao(ctx(sessaoDe(req)));
+  }
+
+  @Get('pagar/titulos/:id/prorrogacoes')
+  @Permissao('financeiro.tituloPagar.ler')
+  prorrogacoes(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ProrrogacaoPorta[]> {
+    return this.porta.prorrogacoes(ctx(sessaoDe(req)), idDaRota(id));
+  }
+
+  @Post('pagar/titulos/:id/prorrogar')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloPagar.criar')
+  @AuditadoNoHandler('prorrogação do vencimento com a trilha na mesma transação')
+  prorrogar(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.servico.prorrogarVencimento(
+      sessaoDe(req),
+      corpo(esquemaProrrogarVencimento, { ...((b ?? {}) as object), parcela: idDaRota(id) }),
     );
   }
 

@@ -3453,6 +3453,11 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Título a pagar aprovado na alçada (primeira ou segunda aprovação)',
     legado: null,
   },
+  financeiroVencimentoProrrogado: {
+    codigo: 'financeiro.titulo_pagar.vencimento_prorrogado',
+    descricao: 'Vencimento da parcela a pagar prorrogado, com motivo (o vencimento original fica)',
+    legado: null,
+  },
   financeiroGlosaTituloRegistrada: {
     codigo: 'financeiro.glosa_titulo.registrada',
     descricao: 'Glosa no título a receber registrada (aceita, recurso deferido ou indeferido)',

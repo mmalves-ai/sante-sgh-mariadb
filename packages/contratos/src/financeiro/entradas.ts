@@ -225,6 +225,20 @@ export const esquemaAprovarTitulo = z
   .strict();
 export type AprovarTituloEntrada = z.infer<typeof esquemaAprovarTitulo>;
 
+/** F3.8 (07-FIN linha 63): prorrogar o vencimento da parcela a pagar, com motivo (o vencimento original fica). */
+export const esquemaProrrogarVencimento = z
+  .object({
+    parcela: id,
+    versao: versao.nullable().default(null),
+    vencimento: data,
+    /** Id do motivo da lista de motivos de prorrogação (ativo e que valha para contas a pagar). */
+    motivo: id,
+    /** Justificativa (obrigatória quando o motivo a exige). */
+    justificativa: z.string().trim().max(2000).default(''),
+  })
+  .strict();
+export type ProrrogarVencimentoEntrada = z.infer<typeof esquemaProrrogarVencimento>;
+
 export const esquemaRegistrarGlosaTitulo = z
   .object({
     tituloReceber: id,
