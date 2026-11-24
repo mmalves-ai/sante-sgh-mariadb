@@ -17,6 +17,7 @@ import {
   errosEndereco,
   errosResponsavel,
   errosTelefone,
+  errosTelefoneNaArea,
   EXIGENCIAS_CAMPO,
   fimDoEncerramento,
   pendenciasRepresentacao,
@@ -318,6 +319,25 @@ const operacaoIncluirTelefone = (trilha: RegistroTrilhaTela) =>
         tipoPermiteMensagem: bool(t['permite_mensagem']),
         tipoRecado: bool(t['recado']),
       });
+      // DDD pela área do plano de numeração (catálogo area_ddd) e número com a forma de fixo ou móvel da área.
+      if (!erros.includes('ddd') && !erros.includes('numero')) {
+        const a = await tx.uma(
+          'SELECT ativo, digitos_fixo, digitos_movel FROM area_ddd WHERE codigo_anatel = ?',
+          [e.ddd],
+        );
+        erros.push(
+          ...errosTelefoneNaArea(
+            e,
+            a
+              ? {
+                  ativa: bool(a['ativo']),
+                  digitosFixo: Number(a['digitos_fixo']),
+                  digitosMovel: Number(a['digitos_movel']),
+                }
+              : null,
+          ),
+        );
+      }
       if (erros.length) throw recusaCampos('telefone-invalido', 'Confira os campos do telefone.', erros);
       const id = await tx.incluir('telefone_pessoa', {
         pessoa_fisica_id: pessoa,

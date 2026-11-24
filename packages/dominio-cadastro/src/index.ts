@@ -16,6 +16,7 @@ export * from './unificacao/desfazer.js';
 export * from './unificacao/referencias-paciente.js';
 export * from './ficha-complementar/regras-campo.js';
 export * from './ficha-complementar/contatos.js';
+export * from './ficha-complementar/ddd.js';
 export * from './ficha-complementar/responsaveis.js';
 export * from './profissional/lotacao.js';
 export * from './especialidade/ligacoes.js';

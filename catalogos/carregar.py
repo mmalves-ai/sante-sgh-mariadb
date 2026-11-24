@@ -2,7 +2,7 @@
 
 uso: python3 -I catalogos/carregar.py <codigo_cliente> [fonte ...]
      python3 -I catalogos/carregar.py --espelho <banco_espelho> [fonte ...]   (ADR 0006: o caminho padrão)
-     fontes, na ordem de dependência: ibge, bcb, cid10, sigtap, cfop, tiss   (sem argumento: todas)
+     fontes, na ordem de dependência: ibge, ddd, bcb, cid10, sigtap, cfop, tiss   (sem argumento: todas)
 
 Cada fonte é um módulo em catalogos/carregadores/<fonte>.py com a função carregar(banco: str) -> dict
 {tabela: linhas}; a lista AVISOS do módulo, se houver, é impressa e gravada no evento. Os carregadores são idempotentes (rodar de novo não duplica). A carga fica registrada
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-ORDEM = ["ibge", "bcb", "cid10", "sigtap", "cfop", "tiss"]
+ORDEM = ["ibge", "ddd", "bcb", "cid10", "sigtap", "cfop", "tiss"]
 
 
 def sql(banco, entrada=None, *args):
