@@ -5,10 +5,10 @@
 //     negócio que o serviço registra (RegistroTrilhaPortal) vai nos dados e no motivo da trilha da operação.
 //   - O contexto do portal traz a rede (o código do cliente na plataforma) e o código do estabelecimento; a porta
 //     resolve o id do estabelecimento uma vez por código.
-//   - O que o modelo ainda não tem (conta com convite, senha e segundo fator; vínculo do responsável com escopos;
-//     troca de e-mail; consentimento pelo portal; pedido do titular ligado à conta; atos da cópia do prontuário;
-//     documentos do portal; relatório de acessos) RECUSA com 503 `recurso-sem-modelo`, nomeando a operação: nada é
-//     lido vazio nem gravado pela metade. O DDL pedido está em docs/obra/fatias/f22/saida/03-12.json.
+//   - As 22 gravações da conta, da troca de e-mail, do vínculo, do consentimento, do pedido do titular e da cópia do
+//     prontuário vêm de porta-propria-gravacao.ts (migração 17_INTG/91). As leituras ainda sem escritor próprio aqui
+//     (conta, vínculo, consentimento, pedidos, cópias, documentos do portal, relatório de acessos) RECUSAM com 503
+//     `recurso-sem-modelo`, nomeando a operação: nada é lido vazio nem gravado pela metade.
 // Melhoria: o paciente vem do cadastro único (paciente + pessoa_fisica), com óbito, unificação e responsável legal
 //   vigente (responsavel_paciente, papéis legais) sem trazer quem; só o primeiro nome sai da porta.
 // Melhoria: os feriados estaduais (UF do município do estabelecimento) entram no prazo em dias úteis.
@@ -38,6 +38,7 @@ import {
   type PortaPortalPaciente,
   type TrilhaDaGravacao,
 } from './porta.js';
+import { erroDeDominio, gravadorGravacaoPropria, TABELAS_GRAVACAO_PORTAL } from './porta-propria-gravacao.js';
 import type { ItemDominioPortal, PacientePortal, RegistroTrilhaPortal } from './tipos.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
@@ -50,7 +51,9 @@ export interface NucleoPortal {
 }
 
 /** Tabelas que a gravação do portal pode tocar (o executor recusa as outras). */
-export const TABELAS_PORTAL = ['manifestacao_ouvidoria', 'sequencia_negocio'] as const;
+export const TABELAS_PORTAL: readonly string[] = [
+  ...new Set(['manifestacao_ouvidoria', 'sequencia_negocio', ...TABELAS_GRAVACAO_PORTAL]),
+];
 
 /** Tipo da sequência do número da manifestação (por estabelecimento). */
 export const SEQUENCIA_MANIFESTACAO = 'manifestacao_ouvidoria';
@@ -181,6 +184,10 @@ export class PortaPortalPropria implements PortaPortalPaciente {
     };
     let resultado!: T;
     let registro: RegistroTrilhaPortal | null = null;
+    // O registro que o pedido do titular e a cópia trazem prontos (vale quando o serviço não informa a trilha).
+    let trilhaDoGravador: RegistroTrilhaPortal | null = null;
+    // O erro de domínio (ErroPortal, ErroPedido) que o executor traduziria em 500 volta ao serviço após o ROLLBACK.
+    let dominio: Error | null = null;
     // A trilha aponta a linha que a transação gravou de fato (nunca o nome de tabela que o serviço informa).
     const escrita: { tabela: string; id: number | null } = { tabela: 'manifestacao_ouvidoria', id: null };
     const op = definirOperacao<{ correlacao: string }, { gravado: boolean }>({
@@ -188,8 +195,17 @@ export class PortaPortalPropria implements PortaPortalPaciente {
       tabelas: [...TABELAS_PORTAL],
       entrada: entradaGravacao,
       gravar: async (tx) => {
-        resultado = await fn(gravadorProprio(tx, estabelecimento, escrita));
-        registro = typeof trilha === 'function' ? trilha(resultado) : trilha;
+        try {
+          resultado = await fn(
+            gravadorProprio(tx, estabelecimento, escrita, (r) => {
+              trilhaDoGravador = r;
+            }),
+          );
+        } catch (e) {
+          dominio = erroDeDominio(e);
+          throw e;
+        }
+        registro = (typeof trilha === 'function' ? trilha(resultado) : trilha) ?? trilhaDoGravador;
         return { gravado: true };
       },
       alvo: () => ({ tabela: escrita.tabela, id: escrita.id }),
@@ -212,7 +228,11 @@ export class PortaPortalPropria implements PortaPortalPaciente {
         };
       },
     });
-    await this.executor.executar(op, c.rede, { correlacao }, contexto);
+    try {
+      await this.executor.executar(op, c.rede, { correlacao }, contexto);
+    } catch (e) {
+      throw dominio ?? e;
+    }
     return resultado;
   }
 
@@ -395,36 +415,15 @@ export class PortaPortalPropria implements PortaPortalPaciente {
   }
 }
 
-/** As gravações sobre a transação da operação: a manifestação na ouvidoria; o resto recusa nomeando a operação. */
+/** As gravações sobre a transação da operação: as 22 do portal (porta-propria-gravacao.ts) e a manifestação. */
 function gravadorProprio(
   tx: TxOperacao,
   estabelecimento: number,
   escrita: { tabela: string; id: number | null },
+  aoTrilhar: (r: RegistroTrilhaPortal) => void,
 ): GravadorPortal {
-  const falta = (op: string) => () => Promise.reject(semModelo(op));
   return {
-    criarConta: falta('criarConta'),
-    reemitirConvite: falta('reemitirConvite'),
-    registrarErroConvite: falta('registrarErroConvite'),
-    ativar: falta('ativar'),
-    registrarEntrada: falta('registrarEntrada'),
-    trocarSenha: falta('trocarSenha'),
-    trocarSegundoFator: falta('trocarSegundoFator'),
-    pedirTrocaEmail: falta('pedirTrocaEmail'),
-    confirmarTrocaEmail: falta('confirmarTrocaEmail'),
-    cancelarTrocaEmail: falta('cancelarTrocaEmail'),
-    bloquear: falta('bloquear'),
-    desbloquear: falta('desbloquear'),
-    encerrar: falta('encerrar'),
-    pedirVinculo: falta('pedirVinculo'),
-    decidirVinculo: falta('decidirVinculo'),
-    encerrarVinculo: falta('encerrarVinculo'),
-    registrarConsentimento: falta('registrarConsentimento'),
-    revogarConsentimento: falta('revogarConsentimento'),
-    registrarPedido: falta('registrarPedido'),
-    cancelarPedido: falta('cancelarPedido'),
-    pedirCopia: falta('pedirCopia'),
-    registrarAtoCopia: falta('registrarAtoCopia'),
+    ...gravadorGravacaoPropria(tx, estabelecimento, escrita, aoTrilhar),
     registrarManifestacao: async (m) => {
       const r = await registrarManifestacao(tx, estabelecimento, m);
       escrita.tabela = 'manifestacao_ouvidoria';

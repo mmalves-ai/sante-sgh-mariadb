@@ -7,7 +7,7 @@
 //     motivo, prazo, situação aberta, versao 1), a trilha na tabela gravada de fato (não na que o serviço informa), o
 //     assunto livre (pelo código, pela descrição ou no relato, nunca recusado) e a recusa do tipo desconhecido;
 //   - o outro estabelecimento não vê a manifestação;
-//   - a operação sem modelo recusa com 503 `recurso-sem-modelo` (nada lido vazio).
+//   - a leitura sem modelo recusa com 503 `recurso-sem-modelo` (nada lido vazio); a gravação da conta está ligada.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -371,7 +371,7 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
     expect(await linha((await registrar('')).id)).toEqual({ motivo: null, relato: 'relato sintético' });
   });
 
-  it('sem modelo: conta, vínculos, consentimentos, pedidos, cópia e a etapa 2 recusam com 503 nomeando a operação', async () => {
+  it('sem modelo: as leituras da conta, vínculos, consentimentos, pedidos e cópia recusam com 503 nomeando a operação', async () => {
     for (const p of [
       porta.conta(),
       porta.contaDoPaciente(),
@@ -381,8 +381,12 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
       porta.filaCopias(),
     ])
       await expect(p).rejects.toMatchObject({ problema: { status: 503, codigo: 'recurso-sem-modelo' } });
-    await expect(porta.gravar(c, (g) => g.criarConta({} as never), null)).rejects.toMatchObject({
-      problema: { codigo: 'recurso-sem-modelo' },
-    });
+  });
+
+  it('a gravação da conta está ligada: o erro de domínio da gravação própria volta ao serviço (não vira 500)', async () => {
+    // Conta inexistente no estabelecimento: a gravação própria recusa com ErroPortal, e a porta o relança após o ROLLBACK.
+    await expect(
+      porta.gravar(c, (g) => g.bloquear(2_000_000_000, 1, { motivo: 'teste', por: 'teste' }), null),
+    ).rejects.toMatchObject({ name: 'ErroPortal', codigo: 'versao-desatualizada' });
   });
 });

@@ -10,6 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { chaveMestra } from '@sgh/dominio-acesso';
+import { criarArmazemLocal, lerRaizArquivos } from '@sgh/nucleo';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import { portaDoAtendimento } from '../atendimento/modulo.js';
@@ -42,7 +43,7 @@ import { PortaCcihMemoria } from './porta-ccih-memoria.js';
 import { PortaCcihPropria } from './porta-ccih-propria.js';
 import { PORTA_GESTAO, type PortaGestao, portaGestaoIndisponivel } from './porta-gestao.js';
 import { PortaGestaoMemoria } from './porta-gestao-memoria.js';
-import { PortaGestaoPropria } from './porta-gestao-propria.js';
+import { PortaGestaoPropriaCompleta } from './gestao-porta-propria-completa.js';
 import { PortaQualidadeMemoria } from './porta-memoria.js';
 import { PortaQualidadePropria } from './porta-propria.js';
 import { RevisaoProntuarioController } from './revisao-prontuario.controller.js';
@@ -76,7 +77,12 @@ export async function portasDaQualidade(ctx: ContextoModulo): Promise<PortasQual
       qualidade: new PortaQualidadePropria(ctx.nucleo),
       ccih: new PortaCcihPropria(ctx.nucleo),
       agravo: new PortaAgravoPropria(ctx.nucleo),
-      gestao: new PortaGestaoPropria(ctx.nucleo),
+      // Os envios regulatórios com o arquivo guardado no disco da instalação (ADR 0004); sem ARQUIVOS_RAIZ, gerar o
+      // envio recusa 409 modelo-pendente.
+      gestao: new PortaGestaoPropriaCompleta(
+        ctx.nucleo,
+        lerRaizArquivos(ctx.env) ? criarArmazemLocal(ctx.nucleo, { env: ctx.env }) : null,
+      ),
     };
   }
   if (!ctx.nucleo && fontesSinteticas(ctx.env))

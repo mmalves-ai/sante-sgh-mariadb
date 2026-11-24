@@ -142,6 +142,8 @@ export interface GravadorGestao {
     readonly hash: string;
     readonly linhas: number;
     readonly resumo: string;
+    /** O conteúdo do arquivo gerado (a porta própria guarda os bytes, imutáveis, pela porta de armazenamento). */
+    readonly conteudo: string;
     readonly agora: string;
     readonly usuario: string;
   }): Promise<{ id: number; revisao: number; arquivo: string }>;
@@ -228,6 +230,14 @@ export interface MudancaGestao {
 }
 
 export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
+  /**
+   * O arquivo do envio pelos bytes guardados na geração (só a porta própria com armazenamento). Sem o método, a rota
+   * do arquivo gera de novo dos mesmos dados e confere pelo resumo.
+   */
+  arquivoEnvio?(
+    c: C,
+    id: number,
+  ): Promise<{ readonly arquivo: string; readonly conteudo: string; readonly hash: string } | null>;
   /** O relógio do banco do estabelecimento (instante local `AAAA-MM-DDTHH:mm:ss`). */
   relogio(c: C): Promise<string>;
   /** Os feriados do calendário do estabelecimento no período (AAAA-MM-DD; o ano 9999 vale todo ano). */

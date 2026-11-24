@@ -348,8 +348,9 @@ describe.skipIf(SEM_BANCO_QUA)(
       expect(await q.painelAcoes(c, '2026-11-21')).toEqual([
         { situacao: 'planejada', eficacia: null, vencida: true, quantidade: 1 },
       ]);
-      expect(await codigo(q.queixas())).toBe('modelo-pendente');
-      expect(await codigo(q.resolvidas())).toBe('modelo-pendente');
+      // A queixa e a sugestão resolvida já têm leitura própria (etapa 2): leem do banco, sem recusar.
+      await expect(q.queixas(c, { pagina: 1, porPagina: 10 })).resolves.toBeDefined();
+      expect(await q.resolvidas(c, ['resumo-sintetico-inexistente'])).toEqual(new Set());
     });
 
     it('a ouvidoria lê as manifestações com a situação, a área encaminhada, a resposta e a busca pelo protocolo', async () => {

@@ -1355,6 +1355,12 @@ export class GestaoQualidadeController {
     const tipo = env.tipo as TipoEnvioRegulatorio;
     if (!(CODIGOS_TIPO_ENVIO_REGULATORIO as readonly string[]).includes(tipo)) throw naoEncontrado('Envio');
     this.exigirTipoEnvio(s, tipo);
+    // A porta própria devolve os bytes guardados na geração (os transmitidos, nunca gerados de novo).
+    if (this.porta.arquivoEnvio) {
+      const g = await this.porta.arquivoEnvio(s.porta, env.id);
+      if (!g) throw naoEncontrado('Envio');
+      return { arquivo: g.arquivo, conteudo: g.conteudo, hash: g.hash, igual: g.hash === env.hash };
+    }
     const a = arquivoDoEnvio(tipo, env.competencia, await this.dadosDoEnvio(s, tipo, env.competencia));
     // O arquivo se gera de novo dos mesmos dados; o resumo diferente diz que os dados mudaram depois da geração.
     return { arquivo: env.arquivo, conteudo: a.conteudo, hash: a.hash, igual: a.hash === env.hash };
@@ -1363,7 +1369,7 @@ export class GestaoQualidadeController {
   @Post('relatorio/envios-regulatorios')
   @Permissao(P.envioGerar)
   @AuditadoNoHandler(
-    'relatorio.gerarEnvioRegulatorio: notificacao_iras_envio (a anterior substituída) e a trilha_auditoria',
+    'relatorio.gerarEnvioRegulatorio: envio_regulatorio_qualidade (a anterior substituída) e a trilha_auditoria',
   )
   async gerar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1386,7 +1392,7 @@ export class GestaoQualidadeController {
       s,
       E.relatorioEnvioGerado.codigo,
       P.envioGerar,
-      (x: { id: number }) => ({ tabela: 'notificacao_iras_envio', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'envio_regulatorio_qualidade', id: String(x.id) }),
       (g) =>
         g.gerarEnvioRegulatorio({
           tipo: e.tipo,
@@ -1395,6 +1401,7 @@ export class GestaoQualidadeController {
           hash: a.hash,
           linhas: a.linhas,
           resumo: JSON.stringify(a.resumo),
+          conteudo: a.conteudo,
           agora,
           usuario: s.login,
         }),
@@ -1405,7 +1412,7 @@ export class GestaoQualidadeController {
   @Post('relatorio/envios-regulatorios/:id/transmissao')
   @Permissao(P.envioGerar)
   @AuditadoNoHandler(
-    'relatorio.registrarTransmissaoEnvio: notificacao_iras_envio com a versão e o resumo, e a trilha_auditoria',
+    'relatorio.registrarTransmissaoEnvio: envio_regulatorio_qualidade com a versão e o resumo, e a trilha_auditoria',
   )
   async transmitir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1426,7 +1433,7 @@ export class GestaoQualidadeController {
       s,
       E.relatorioEnvioTransmitido.codigo,
       P.envioGerar,
-      { tabela: 'notificacao_iras_envio', id: String(env.id) },
+      { tabela: 'envio_regulatorio_qualidade', id: String(env.id) },
       (g) =>
         g.registrarTransmissaoEnvio({
           id: env.id,
