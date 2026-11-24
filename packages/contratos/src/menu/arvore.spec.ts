@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('414 itens: M 195, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 414, M: 195, P: 57, N: 162 });
+  it('415 itens: M 195, P 57, N 163, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 415, M: 195, P: 57, N: 163 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(414);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(415);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -449,6 +449,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/preferencias',
         '/preferencias/dicionario', // M27
         '/qualidade/ccih/antimicrobianos', // M48 (etapa 3)
+        '/qualidade/ccih/culturas', // F7 (09-AREA linha 68)
         '/qualidade/ccih/iras', // M48 (etapa 3)
         '/qualidade/ccih/maos-surtos', // M48 (etapa 3)
         '/qualidade/ccih/precaucoes', // M48 (etapa 3)
