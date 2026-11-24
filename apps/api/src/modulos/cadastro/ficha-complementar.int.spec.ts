@@ -82,7 +82,8 @@ describe.skipIf(SEM_BANCO)('ficha complementar do paciente no banco próprio (f2
   const codigo = async (p: Promise<unknown>): Promise<string> =>
     p.then(
       () => 'gravou',
-      (x: { codigo?: string; tipo?: string }) => x.codigo ?? x.tipo ?? String(x),
+      (x: { problema?: { codigo?: string }; codigo?: string; tipo?: string }) =>
+        x.problema?.codigo ?? x.codigo ?? x.tipo ?? String(x),
     );
 
   beforeAll(async () => {
