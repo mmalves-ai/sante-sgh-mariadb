@@ -270,5 +270,42 @@
       "codigo": "outro",
       "descricao": "Outro referencial"
     }
+  ],
+  "tipo_documento_qualidade": [
+    {
+      "codigo": "pop",
+      "descricao": "Procedimento operacional padrão (POP)",
+      "categoria": "procedimento_operacional"
+    },
+    {
+      "codigo": "protocolo",
+      "descricao": "Protocolo",
+      "categoria": "protocolo"
+    },
+    {
+      "codigo": "manual",
+      "descricao": "Manual",
+      "categoria": "manual"
+    },
+    {
+      "codigo": "politica",
+      "descricao": "Política institucional",
+      "categoria": "politica"
+    },
+    {
+      "codigo": "regimento",
+      "descricao": "Regimento",
+      "categoria": "outro"
+    },
+    {
+      "codigo": "formulario",
+      "descricao": "Formulário",
+      "categoria": "formulario"
+    },
+    {
+      "codigo": "instrucao",
+      "descricao": "Instrução de trabalho",
+      "categoria": "instrucao_trabalho"
+    }
   ]
 }
