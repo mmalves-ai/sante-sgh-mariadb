@@ -165,7 +165,7 @@ def repetir_pendencias(cm, origem, progresso=None):
     (vira um INSERT por linha: ~9.400/s), numa transação só, sem batimento: 50 min depois a carga parada desfez tudo e
     o AUTO_INCREMENT ficou ~23 milhões acima. Agora cada pedaço de até REPETIR_LOTE pendências (por id) é copiado no
     próprio servidor com UM `INSERT ... SELECT`, commitado, e o batimento é atualizado: cada pendência é gravada uma
-    vez. Falha no meio: a marca da tabela só vem depois (marcar), e a próxima continuação herda da execução anterior
+    vez, e o resumo recebe só contagens agregadas (`cm.pend_repetidas`), nunca as linhas. Falha no meio: a marca da tabela só vem depois (marcar), e a próxima continuação herda da execução anterior
     (cadeia), que continua com as pendências."""
     por = {}
     for t, e in origem.items():
@@ -179,21 +179,27 @@ def repetir_pendencias(cm, origem, progresso=None):
         ultimo = 0
         while True:
             with cm._c() as c:
-                c.execute("SELECT id, tabela_origem, chave_original, regra, gravidade, detalhe " + filtro +
-                          " AND id>%s ORDER BY id LIMIT %s", [e] + tabelas + [ultimo, REPETIR_LOTE])
-                linhas = c.fetchall()
-                if not linhas:
+                # só os ids (fronteiras do pedaço): as pendências nunca vêm para a memória do processo
+                c.execute("SELECT id " + filtro + " AND id>%s ORDER BY id LIMIT %s",
+                          [e] + tabelas + [ultimo, REPETIR_LOTE])
+                ids = [x[0] for x in c.fetchall()]
+                if not ids:
                     break
                 c.execute("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
                           " detalhe, criado_em) SELECT %%s, tabela_origem, chave_original, regra, gravidade, detalhe,"
                           " %s " % (cm.ctl, AGORA) + filtro + " AND id BETWEEN %s AND %s ORDER BY id",
-                          [cm.eid, e] + tabelas + [linhas[0][0], linhas[-1][0]])
-            cm.pend.extend(x[1:] for x in linhas)
-            total += len(linhas)
-            ultimo = linhas[-1][0]
+                          [cm.eid, e] + tabelas + [ids[0], ids[-1]])
+            total += len(ids)
+            ultimo = ids[-1]
             cm._commit()
             if progresso:
                 progresso(total)
+        # resumo (total, críticas, por regra e por restrição) por contagem agregada no servidor, sobre o mesmo filtro:
+        # a execução de origem terminou, nada entra nela entre a cópia e a contagem
+        with cm._c() as c:
+            c.execute("SELECT tabela_origem, regra, gravidade, detalhe, COUNT(*) " + filtro +
+                      " GROUP BY tabela_origem, regra, gravidade, detalhe", [e] + tabelas)
+            cm.pend_repetidas.extend(tuple(x[:4]) + (int(x[4]),) for x in c.fetchall())
     cm._commit()
     return total
 

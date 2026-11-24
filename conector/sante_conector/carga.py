@@ -182,6 +182,23 @@ def por_restricao(pend):
     return r
 
 
+def resumo_pendencias(pend, repetidas, entidade):
+    """Resumo das pendências da execução: as gravadas por esta (`pend`, tuplas) mais as repetidas de uma execução
+    anterior (`repetidas`, já agregadas no servidor: (tabela, regra, gravidade, detalhe, n)). As repetidas nunca vêm
+    linha a linha para a memória (46 milhões na execução 11 da ProntoCardio: dezenas de GB)."""
+    linhas = [(tab, regra, grav, det, 1) for tab, _, regra, grav, det in pend] + list(repetidas)
+    por_regra, restr, total, criticas = {}, {}, 0, 0
+    for tab, regra, grav, det, n in linhas:
+        k = "%s:%s:%s" % (entidade(tab), regra, grav)
+        por_regra[k] = por_regra.get(k, 0) + n
+        if det:
+            k = "%s:%s:%s" % (tab, regra, det)
+            restr[k] = restr.get(k, 0) + n
+        total += n
+        criticas += n if grav == "critica" else 0
+    return {"total": total, "criticas": criticas, "por_regra": por_regra, "por_restricao": restr}
+
+
 def detalhe_erro(e):
     """Nome da coluna, da restrição ou da chave do erro de linha (metadado sem valor), ou None."""
     msg = e.args[1] if len(getattr(e, "args", ())) > 1 and isinstance(e.args[1], str) else ""
@@ -422,6 +439,7 @@ class Carga:
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
         self.progresso = Batimento(progresso or (lambda pct, etapa: None))
         self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
+        self.pend_repetidas = []            # (tabela, regra, gravidade, detalhe, n): repetidas na continuação
         self._buf = []                      # pendências ainda não gravadas (vão no próximo commit)
         self._diario = []                   # registros em memória desde o último SAVEPOINT (para desfazer)
         self.origem = {}                    # entidade -> {chave: resumo hex da linha, calculado da origem}
@@ -1372,10 +1390,7 @@ class Carga:
                                    "conferido": len(ks) == lidos and so == sd,
                                    "observacao": "de-para guardado; vira campo do estabelecimento"}
         aplicar_limite_recusa(res)
-        por_regra = {}
-        for tab, _, regra, grav, _ in self.pend:
-            k = "%s:%s:%s" % (ENTIDADE_DA_TABELA.get(tab, "outra"), regra, grav)
-            por_regra[k] = por_regra.get(k, 0) + 1
+        pend = resumo_pendencias(self.pend, self.pend_repetidas, lambda t: ENTIDADE_DA_TABELA.get(t, "outra"))
         with self._c() as c:
             for ent, r in res.items():
                 c.execute("INSERT INTO %s.conciliacao (execucao_id, entidade, registros_origem, registros_destino,"
@@ -1386,6 +1401,4 @@ class Carga:
                           % (self.ctl, AGORA),
                           (self.eid, ent, r["registros_origem"], r["registros_destino"], r["recusados"],
                            r["soma_destino"], r["conferido"]))
-        return {"versao_mapa": VERSAO_MAPA, "entidades": res, "pendencias": {
-            "total": len(self.pend), "criticas": sum(1 for p in self.pend if p[3] == "critica"),
-            "por_regra": por_regra, "por_restricao": por_restricao(self.pend)}, "carga": dict(self.cont)}
+        return {"versao_mapa": VERSAO_MAPA, "entidades": res, "pendencias": pend, "carga": dict(self.cont)}

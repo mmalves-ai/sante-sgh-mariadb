@@ -2942,10 +2942,7 @@ class CargaMapa(carga.Carga):
             self._fechar_estado(p)
         carga.aplicar_limite_recusa(res)
         principal = {p["tabela"]: self._nome_ent(p["tabela"], p["destinos"][0]) for p in self.plano}
-        por_regra = {}
-        for tab, _, regra, grav, _ in self.pend:
-            k = "%s:%s:%s" % (principal.get(tab, "outra"), regra, grav)
-            por_regra[k] = por_regra.get(k, 0) + 1
+        pend = carga.resumo_pendencias(self.pend, self.pend_repetidas, lambda t: principal.get(t, "outra"))
         with self._c() as c:
             for ent, r in res.items():
                 c.execute("INSERT INTO %s.conciliacao (execucao_id, entidade, registros_origem, registros_destino,"
@@ -2956,7 +2953,5 @@ class CargaMapa(carga.Carga):
                           % (self.ctl, AGORA),
                           (self.eid, ent, r["registros_origem"], r["registros_destino"], r["recusados"],
                            r["soma_destino"], r["conferido"]))
-        return {"versao_mapa": VERSAO, "entidades": res, "pendencias": {
-            "total": len(self.pend), "criticas": sum(1 for x in self.pend if x[3] == "critica"),
-            "por_regra": por_regra, "por_restricao": carga.por_restricao(self.pend)},
+        return {"versao_mapa": VERSAO, "entidades": res, "pendencias": pend,
             "carga": dict(self.cont, por_tabela=self.por_tabela)}

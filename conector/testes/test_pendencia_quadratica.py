@@ -184,7 +184,7 @@ class RepetirPendencias(unittest.TestCase):
                 return super().execute(sql, args)
 
         cm = type("CM", (), {})()
-        cm.ctl, cm.eid, cm.pend = "`%s`" % self.ctl, 2, []
+        cm.ctl, cm.eid, cm.pend, cm.pend_repetidas = "`%s`" % self.ctl, 2, [], []
         cm._c = lambda: self.cn.cursor(Contador)
 
         def commit():
@@ -202,9 +202,23 @@ class RepetirPendencias(unittest.TestCase):
         esperado = self.N - 1 + self.N // 2 - 1
         conta, beats = {"insert": 0, "commits": 0}, []
         antes = self._ai()
+        cm = self._cm(conta)
         with unittest.mock.patch.object(continuar, "REPETIR_LOTE", 100):
-            n = continuar.repetir_pendencias(self._cm(conta), {"TAB_A": 1, "TAB_B": 1}, beats.append)
+            n = continuar.repetir_pendencias(cm, {"TAB_A": 1, "TAB_B": 1}, beats.append)
         self.assertEqual(n, esperado)
+        # memória: nenhuma pendência repetida vem linha a linha para o processo (46 milhões na execução 11); o resumo
+        # recebe só a contagem agregada e soma certo
+        self.assertEqual(cm.pend, [])
+        self.assertEqual(sorted(cm.pend_repetidas),
+                         [("TAB_A", "pai_pendente", "alta", None, self.N - 1),
+                          ("TAB_B", "restricao_destino_1048", "critica", "coluna_x", self.N // 2 - 1)])
+        res = carga.resumo_pendencias([("TAB_C", "c1", "valor_presumido", "baixa", None)], cm.pend_repetidas,
+                                      lambda t: t.lower())
+        self.assertEqual(res, {"total": esperado + 1, "criticas": self.N // 2 - 1,
+                               "por_regra": {"tab_a:pai_pendente:alta": self.N - 1,
+                                             "tab_b:restricao_destino_1048:critica": self.N // 2 - 1,
+                                             "tab_c:valor_presumido:baixa": 1},
+                               "por_restricao": {"TAB_B:restricao_destino_1048:coluna_x": self.N // 2 - 1}})
         pedacos = -(-esperado // 100)
         self.assertEqual(conta["insert"], pedacos)       # antes: um INSERT por pendência (esperado = 1.498)
         self.assertEqual(len(beats), pedacos)            # batimento a cada pedaço
