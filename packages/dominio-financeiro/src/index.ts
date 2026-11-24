@@ -15,3 +15,4 @@ export * from './adiantamento.js';
 export * from './indicadores.js';
 export * from './orcamento.js';
 export * from './prorrogacao.js';
+export * from './periodo-financeiro.js';

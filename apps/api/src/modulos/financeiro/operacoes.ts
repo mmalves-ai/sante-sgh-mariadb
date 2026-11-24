@@ -49,6 +49,7 @@ import {
 } from '@sgh/nucleo';
 import type { z } from 'zod';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
+import { exigirPeriodoAberto, OPERACOES_PERIODO } from './periodo-propria.js';
 import {
   CREDOR_DO_TIPO,
   dataIso,
@@ -949,7 +950,13 @@ const baixarTitulo = definirOperacao<BaixarTituloEntrada, ResultadoOperacao>({
     'sequencia_negocio',
   ],
   entrada: ESQUEMAS_OPERACAO_FINANCEIRO['financeiro.baixarTitulo'] as never,
-  gravar: (tx, e, ctx) => (e.cenario === 'pagar' ? pagar(tx, e, ctx) : receber(tx, e, ctx)),
+  async gravar(tx, e, ctx) {
+    // F3.8 (07-FIN linha 85): a baixa com data numa competência fechada é recusada (retroativo travado).
+    if (e.cenario === 'pagar')
+      await exigirPeriodoAberto(tx, estabelecimentoDe(ctx), e.dataPagamento, 'dataPagamento');
+    else await exigirPeriodoAberto(tx, estabelecimentoDe(ctx), e.dataRecebimento, 'dataRecebimento');
+    return e.cenario === 'pagar' ? pagar(tx, e, ctx) : receber(tx, e, ctx);
+  },
   alvo: (e, r) =>
     e.cenario === 'pagar'
       ? { tabela: 'parcela_pagar', id: Number(String(r['ids']).split(',')[0]) || null }
@@ -1114,6 +1121,7 @@ const lancarMovimento = definirOperacao<LancarMovimentoEntrada, ResultadoOperaca
     const est = estabelecimentoDe(ctx);
     const usuario = usuarioDe(ctx);
     recusar(conferirMovimento(e));
+    await exigirPeriodoAberto(tx, est, e.data);
     for (const c of [e.contaCredito, e.contaDebito])
       if (c) await exigirContaDoEscopo(tx, est, usuario, c, 'movimento');
     const natureza = await naturezaDaClassificacao(tx, e.classificacao);
@@ -1156,4 +1164,12 @@ export const OPERACOES_FINANCEIRO: Readonly<Record<string, Operacao<never, Resul
   'financeiro.baixarTitulo': baixarTitulo as unknown as Operacao<never, ResultadoOperacao>,
   'financeiro.criarTituloReceber': criarTituloReceber as unknown as Operacao<never, ResultadoOperacao>,
   'financeiro.lancarMovimento': lancarMovimento as unknown as Operacao<never, ResultadoOperacao>,
+  'financeiro.fecharPeriodo': OPERACOES_PERIODO['financeiro.fecharPeriodo'] as unknown as Operacao<
+    never,
+    ResultadoOperacao
+  >,
+  'financeiro.reabrirPeriodo': OPERACOES_PERIODO['financeiro.reabrirPeriodo'] as unknown as Operacao<
+    never,
+    ResultadoOperacao
+  >,
 };
