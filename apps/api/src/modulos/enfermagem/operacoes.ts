@@ -28,6 +28,7 @@ import {
   recusaEstoqueBaixado,
 } from './checagem.js';
 import { exigirProfissional, fusoDe, instanteDe, profissionalDoLogin } from './banco-apoio.js';
+import { gravarLoteLido } from './lote-lido-propria.js';
 import { iniciarAtoTransfusional, TABELAS_INICIO_ATO } from './transfusao-porta-propria.js';
 
 /** Categoria do cadastro de situações → código do contrato das telas. */
@@ -67,14 +68,21 @@ const ATIVO = 'h.excluido_em IS NULL';
 async function travarHorario(tx: Escritor, est: number, id: number): Promise<HorarioTravado | null> {
   const [h] = await tx.consultarParaAtualizar<Record<string, unknown>>(
     `SELECT h.id, h.versao, h.atendimento_id, h.prescricao_id, h.prescricao_item_id, h.suspenso, h.dispensacao_id,
-            sc.categoria, p.paciente_id
+            sc.categoria, p.paciente_id, f.situacao AS fechamento
        FROM horario_administracao h
        JOIN situacao_checagem sc ON sc.id = h.situacao_checagem_id
        JOIN prescricao p ON p.id = h.prescricao_id
+       LEFT JOIN fechamento_horario_checagem f ON f.id = h.fechamento_horario_checagem_id
       WHERE h.id = ? AND h.estabelecimento_id = ? AND ${ATIVO}`,
     [id, est],
   );
   if (!h) return null;
+  // 03-PEP L113: o horário do turno fechado não muda (checar, estornar, aprazar) até a reabertura com motivo.
+  if (h['fechamento'] === 'fechado')
+    throw recusa(
+      'horario-fechado',
+      'O turno deste horário está fechado: reabra o fechamento com o motivo para corrigir.',
+    );
   return {
     id: Number(h['id']),
     versao: Number(h['versao']),
@@ -162,6 +170,7 @@ const TABELAS_CHECAR = [
     'horario_administracao',
     'horario_administracao_evento',
     'administracao_dupla_checagem',
+    'administracao_lote_lido',
     'afericao',
     'afericao_valor',
     ...TABELAS_INICIO_ATO,
@@ -262,6 +271,18 @@ export const checarAdministracao = definirOperacao<ChecagemAdministracao, SaidaC
         },
       });
       if (m.papel === 'principal') eventoPrincipal = id;
+      // 03-PEP L113: o produto e o lote lidos ligam a dose ao estoque, com o resultado da conferência.
+      if (m.papel === 'principal' && m.situacao === 'A')
+        await gravarLoteLido(tx, est, {
+          horario: h.id,
+          gtin: e.sgh.gtin,
+          lote: e.sgh.lote,
+          validade: e.sgh.validade,
+          quantidade: m.quantidade,
+          observacao: e.sgh.observacao ?? m.justificativa,
+          ocorrido,
+          fuso,
+        });
       if (e.sgh.conferente && m.papel === 'principal') {
         const conf = await tx.uma<{ id: number }>(
           'SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL',

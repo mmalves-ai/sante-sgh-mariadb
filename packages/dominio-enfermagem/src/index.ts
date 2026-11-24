@@ -7,6 +7,7 @@ export * from './checagem/pulseira.js';
 export * from './checagem/motivos.js';
 export * from './checagem/infusao.js';
 export * from './checagem/glicemia.js';
+export * from './checagem/fechamento-turno.js';
 export * from './offline/sincronizacao.js';
 export * from './sinais/validacao.js';
 export * from './plantao/aceite.js';

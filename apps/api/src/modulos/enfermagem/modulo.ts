@@ -21,6 +21,7 @@ import { PortaBalancoPropria } from './balanco-porta-propria.js';
 import { ContencaoController, VIGIA_CONTENCAO } from './contencao.controller.js';
 import { VigiaContencao } from './contencao-servico.js';
 import { EnfermagemController } from './enfermagem.controller.js';
+import { FechamentoChecagemController } from './fechamento-checagem.controller.js';
 import { ClassificacaoPacientesController, EscoresController } from './escores.controller.js';
 import { METODOS_PORTA_ESCORES, PORTA_ESCORES, type PortaEscores } from './escores-porta.js';
 import { PortaEscoresMemoria } from './escores-porta-memoria.js';
@@ -174,6 +175,7 @@ export async function modulo(
       VacinaController,
       TransfusaoController,
       AgenciaController,
+      FechamentoChecagemController,
     ],
     providers: [
       { provide: PORTA_ENFERMAGEM, useValue: p.enfermagem },

@@ -253,6 +253,31 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
     return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
 
+  /**
+   * 03-PEP L113: a gravação direta com a transação do Executor para quem tem a regra em arquivo próprio (o fechamento da
+   * checagem do turno, fechamento-checagem-propria.ts): trilha, versão e idempotência na mesma transação.
+   */
+  gravarNaTransacao<T>(
+    c: ContextoEnfermagem,
+    nome: string,
+    tabelas: readonly string[],
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
+    fn: (tx: TxOperacao, est: number, anotacao: AnotacaoGravacao) => Promise<T>,
+  ): Promise<T> {
+    return gravacaoDireta(this.executor, c, {
+      nome,
+      tabelas,
+      trilha,
+      gravador: (tx, est, anotacao) => ({ tx, est, anotacao }),
+      fn: (g) => fn(g.tx, g.est, g.anotacao),
+    });
+  }
+
+  /** 03-PEP L113: leitura somente do banco do cliente, no estabelecimento da sessão. */
+  lerNoBanco<T>(c: ContextoNucleo, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
+    return this.ler(c, (l, est) => fn(l, est));
+  }
+
   gravarSgh<T>(
     c: ContextoEnfermagem,
     trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
