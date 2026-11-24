@@ -12,3 +12,5 @@ export * from './documentos-internacao.js';
 export * from './registros-internacao.js';
 // F3.4 (04-INT linha 82): gases medicinais por tempo de uso (uso por paciente e regra de cobrança).
 export * from './gas-cobranca.js';
+// F78.04-1 (04-INT linhas 74, 75 e 78): formulários de declaração de óbito, auditoria do isolamento e regulação.
+export * from './controles-assistenciais.js';
