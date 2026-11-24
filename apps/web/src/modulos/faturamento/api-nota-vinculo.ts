@@ -27,6 +27,7 @@ const esquemaDocumentacao = z.object({
       numeroNota: z.string().nullable(),
       rps: z.string(),
       situacaoNota: z.string(),
+      documenta: z.boolean(),
       emitidaEm: z.string().nullable(),
       valorServicos: z.number(),
       valorApropriado: z.number(),
@@ -47,6 +48,20 @@ const esquemaDocumentacao = z.object({
       sugerido: z.number(),
     }),
   ),
+  historico: z.array(
+    z.object({
+      id: z.number(),
+      vinculoId: z.number(),
+      notaServicoId: z.number(),
+      acao: z.enum(['ligado', 'ajustado', 'desligado', 'religado']),
+      valorAnterior: z.number().nullable(),
+      valor: z.number().nullable(),
+      situacaoNota: z.string(),
+      motivo: z.string().nullable(),
+      em: z.string().nullable(),
+      por: z.number().nullable(),
+    }),
+  ),
 });
 export type DocumentacaoFiscal = z.infer<typeof esquemaDocumentacao>;
 export type TipoAlvo = 'fatura' | 'conta';
@@ -57,5 +72,5 @@ export const vincularNota = (
   p: { tipo: TipoAlvo; alvoId: number; notaServicoId: number; valorApropriado: number },
   chave: string,
 ) => enviar(`${F}/notas-fiscais/vinculos`, p, qualquer, chave);
-export const desvincularNota = (id: number, versao: number, chave: string) =>
-  enviar(`${F}/notas-fiscais/vinculos/${id}/desligamento`, { versao }, qualquer, chave);
+export const desvincularNota = (id: number, versao: number, motivo: string, chave: string) =>
+  enviar(`${F}/notas-fiscais/vinculos/${id}/desligamento`, { versao, motivo }, qualquer, chave);

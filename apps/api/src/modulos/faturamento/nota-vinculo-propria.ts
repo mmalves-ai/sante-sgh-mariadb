@@ -1,15 +1,23 @@
 // A nota fiscal de serviço que documenta a fatura do convênio ou a conta do particular, sobre o banco do cliente
 // (F3.7, 06-FAT linha 36). Leitura pelo Leitor, gravação pelo Executor (trilha, autoria e idempotência na mesma
 // transação). A regra é do @sgh/dominio-faturamento (conta/nota-vinculo): aqui só se lê, confere pelo domínio e grava.
-// - Visão do alvo: quanto a fatura ou a conta vale, quanto já está documentado por nota, as notas ligadas e as notas
-//   candidatas (da mesma fonte pagadora, com saldo, primeiro as emitidas para o próprio alvo) com o valor sugerido.
-// - Ligar de novo uma nota já ligada ajusta o valor na mesma linha; desligar marca o vínculo como excluído (autor e
-//   data) e o religamento restaura a mesma linha. Nada se apaga.
+// - Visão do alvo: quanto a fatura ou a conta vale, quanto já está documentado por nota, as notas ligadas (com a
+//   situação da nota: a cancelada segue à vista, marcada como "não documenta mais"), as notas candidatas (só as que
+//   servem ao alvo pelo domínio: mesma fonte pagadora ou tomador que é o paciente, um responsável da conta ou a fonte;
+//   nenhuma emitida para outra fatura ou conta) com o valor sugerido, e o histórico do vínculo.
+// - Ligar de novo uma nota já ligada ajusta o valor na mesma linha; desligar pede motivo e marca o vínculo como
+//   excluído (autor e data); o religamento restaura a mesma linha. Cada ligação, ajuste, desligamento e religamento
+//   grava uma linha em evento_vinculo_nota_faturamento (valor anterior e novo, motivo, situação da nota). Nada se apaga.
 import {
+  type AlvoParaVinculo,
+  type NotaParaVinculo,
+  notaDocumenta,
+  notaServeAoAlvo,
   saldosVinculo,
   SITUACOES_NOTA_VINCULAVEIS,
   situacaoDocumentacao,
   type TipoAlvoNota,
+  validarDesligamentoNota,
   validarVinculoNota,
   valorDocumentavelFatura,
 } from '@sgh/dominio-faturamento';
@@ -52,7 +60,7 @@ async function alvoDo(l: Consulta, est: number, tipo: TipoAlvoNota, id: number, 
           [id, est],
         )
       : await l.uma<Linha>(
-          `SELECT id, numero, situacao, fonte_pagadora_id, valor_total
+          `SELECT id, numero, situacao, fonte_pagadora_id, valor_total, paciente_id
              FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${sufixo}`,
           [id, est],
         );
@@ -74,9 +82,23 @@ async function alvoDo(l: Consulta, est: number, tipo: TipoAlvoNota, id: number, 
       WHERE v.${colunaAlvo(tipo)} = ? AND v.excluido_em IS NULL AND ns.situacao IN ('rascunho','rps_gerado','enviada','autorizada')`,
     [id],
   );
+  // Quem pode ser o tomador da nota emitida sem fonte pagadora: o CNPJ da fonte e, na conta, o CPF do paciente e o
+  // CPF ou CNPJ dos responsáveis financeiros ou legais vigentes.
+  const docs = await l.consultar<Linha>(
+    `SELECT pj.cnpj AS doc FROM fonte_pagadora fp JOIN pessoa_juridica pj ON pj.id = fp.pessoa_juridica_id
+      WHERE fp.id = ?
+     UNION SELECT pf.cpf FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?
+     UNION SELECT COALESCE(rf.cpf, rj.cnpj) FROM responsavel_paciente r
+       LEFT JOIN pessoa_fisica rf ON rf.id = r.pessoa_fisica_id
+       LEFT JOIN pessoa_juridica rj ON rj.id = r.pessoa_juridica_id
+      WHERE r.paciente_id = ? AND r.papel IN ('responsavel_financeiro','responsavel_legal')
+        AND r.vigencia_inicio <= CURDATE() AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURDATE())`,
+    [nn(a['fonte_pagadora_id']) ?? 0, nn(a['paciente_id']) ?? 0, nn(a['paciente_id']) ?? 0],
+  );
   return {
     tipo,
     id,
+    documentosTomador: docs.map((d) => txt(d['doc'])).filter((d): d is string => !!d),
     numero: String(a['numero']),
     situacao: String(a['situacao']),
     fontePagadoraId: nn(a['fonte_pagadora_id']),
@@ -87,13 +109,34 @@ async function alvoDo(l: Consulta, est: number, tipo: TipoAlvoNota, id: number, 
 
 async function notaDa(l: Consulta, est: number, id: number, travar = false) {
   const ns = await l.uma<Linha>(
-    `SELECT id, situacao, valor_servicos, fonte_pagadora_id FROM nota_servico
+    `SELECT id, situacao, valor_servicos, fonte_pagadora_id, conta_hospitalar_id, fatura_fonte_pagadora_id,
+            tomador_documento FROM nota_servico
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${travar ? ' FOR UPDATE' : ''}`,
     [id, est],
   );
   if (!ns) throw recusa('nao-encontrado', 'Nota fiscal não encontrada.', { campos: ['notaServicoId'] });
   return ns;
 }
+const notaParaVinculo = (r: Linha, apropriado: number): NotaParaVinculo => ({
+  situacao: String(r['situacao']),
+  valorServicos: n(r['valor_servicos']),
+  valorJaApropriado: apropriado,
+  fontePagadoraId: nn(r['fonte_pagadora_id']),
+  contaHospitalarId: nn(r['conta_hospitalar_id']),
+  faturaFontePagadoraId: nn(r['fatura_fonte_pagadora_id']),
+  tomadorDocumento: txt(r['tomador_documento']),
+});
+type AlvoLido = Awaited<ReturnType<typeof alvoDo>>;
+const alvoParaVinculo = (a: AlvoLido, jaDocumentado = a.valorDocumentado): AlvoParaVinculo => ({
+  tipo: a.tipo,
+  id: a.id,
+  situacao: a.situacao,
+  valorDocumentavel: a.valorDocumentavel,
+  valorJaDocumentado: jaDocumentado,
+  fontePagadoraId: a.fontePagadoraId,
+  documentosTomador: a.documentosTomador,
+});
+
 async function apropriadoDaNota(l: Consulta, notaId: number, semVinculo: number | null) {
   const r = await l.uma<Linha>(
     `SELECT COALESCE(SUM(valor_apropriado), 0) AS s FROM vinculo_nota_faturamento
@@ -116,21 +159,40 @@ export async function documentacaoFiscalPropria(l: Leitor, est: number, tipo: Ti
   const situacoes = [...SITUACOES_NOTA_VINCULAVEIS];
   const candidatas = await l.consultar<Linha>(
     `SELECT ns.id, ns.numero_nota, ns.numero_rps, ns.serie_rps, ns.situacao, ns.data_emissao, ns.valor_servicos,
-            ns.fonte_pagadora_id, (ns.${colunaAlvo(tipo)} <=> ?) AS do_alvo,
+            ns.fonte_pagadora_id, ns.conta_hospitalar_id, ns.fatura_fonte_pagadora_id, ns.tomador_documento,
+            (ns.${colunaAlvo(tipo)} <=> ?) AS do_alvo,
             (SELECT COALESCE(SUM(v.valor_apropriado), 0) FROM vinculo_nota_faturamento v
               WHERE v.nota_servico_id = ns.id AND v.excluido_em IS NULL) AS apropriado
        FROM nota_servico ns
       WHERE ns.estabelecimento_id = ? AND ns.excluido_em IS NULL AND ns.situacao IN (${situacoes.map(() => '?').join(',')})
         AND (ns.fonte_pagadora_id IS NULL OR ns.fonte_pagadora_id <=> ?)
+        AND ((ns.conta_hospitalar_id IS NULL AND ns.fatura_fonte_pagadora_id IS NULL) OR ns.${colunaAlvo(tipo)} <=> ?)
         AND NOT EXISTS (SELECT 1 FROM vinculo_nota_faturamento x WHERE x.nota_servico_id = ns.id
                          AND x.${colunaAlvo(tipo)} = ? AND x.excluido_em IS NULL)
       ORDER BY do_alvo DESC, ns.data_emissao DESC LIMIT 50`,
-    [id, est, ...situacoes, alvo.fontePagadoraId, id],
+    [id, est, ...situacoes, alvo.fontePagadoraId, id, id],
   );
+  const historico = await l.consultar<Linha>(
+    `SELECT h.id, h.vinculo_nota_faturamento_id, h.acao, h.valor_apropriado_anterior, h.valor_apropriado,
+            h.situacao_nota, h.motivo, h.criado_em, h.criado_por, v.nota_servico_id
+       FROM evento_vinculo_nota_faturamento h JOIN vinculo_nota_faturamento v ON v.id = h.vinculo_nota_faturamento_id
+      WHERE v.${colunaAlvo(tipo)} = ? ORDER BY h.id DESC LIMIT 100`,
+    [id],
+  );
+  // Os documentos do tomador aceitos (CPF e CNPJ) servem só à conferência: não vão para a tela.
+  const alvoVisivel = {
+    tipo: alvo.tipo,
+    id: alvo.id,
+    numero: alvo.numero,
+    situacao: alvo.situacao,
+    fontePagadoraId: alvo.fontePagadoraId,
+    valorDocumentavel: alvo.valorDocumentavel,
+    valorDocumentado: alvo.valorDocumentado,
+  };
   const saldoAlvo = Math.max(0, Math.round((alvo.valorDocumentavel - alvo.valorDocumentado) * 100) / 100);
   return {
     alvo: {
-      ...alvo,
+      ...alvoVisivel,
       saldo: saldoAlvo,
       documentacao: situacaoDocumentacao(alvo.valorDocumentavel, alvo.valorDocumentado),
     },
@@ -141,6 +203,7 @@ export async function documentacaoFiscalPropria(l: Leitor, est: number, tipo: Ti
       numeroNota: txt(r['numero_nota']),
       rps: `${txt(r['serie_rps']) ?? ''}${txt(r['serie_rps']) ? '-' : ''}${n(r['numero_rps'])}`,
       situacaoNota: String(r['situacao_nota']),
+      documenta: notaDocumenta(String(r['situacao_nota'])),
       emitidaEm: dataHora(r['data_emissao']),
       valorServicos: n(r['valor_servicos']),
       valorApropriado: n(r['valor_apropriado']),
@@ -148,20 +211,11 @@ export async function documentacaoFiscalPropria(l: Leitor, est: number, tipo: Ti
       valorAcrescimo: n(r['valor_acrescimo']),
     })),
     candidatas: candidatas
-      .map((r) => {
-        const nota = {
-          situacao: String(r['situacao']),
-          valorServicos: n(r['valor_servicos']),
-          valorJaApropriado: n(r['apropriado']),
-          fontePagadoraId: nn(r['fonte_pagadora_id']),
-        };
-        const { saldoNota, sugerido } = saldosVinculo(nota, {
-          tipo,
-          situacao: alvo.situacao,
-          valorDocumentavel: alvo.valorDocumentavel,
-          valorJaDocumentado: alvo.valorDocumentado,
-          fontePagadoraId: alvo.fontePagadoraId,
-        });
+      .map((r) => ({ r, nota: notaParaVinculo(r, n(r['apropriado'])) }))
+      // Só a nota que serve ao alvo (a regra é do domínio, a mesma da gravação).
+      .filter(({ nota }) => notaServeAoAlvo(nota, alvoParaVinculo(alvo)) === null)
+      .map(({ r, nota }) => {
+        const { saldoNota, sugerido } = saldosVinculo(nota, alvoParaVinculo(alvo));
         return {
           id: n(r['id']),
           numeroNota: txt(r['numero_nota']),
@@ -175,6 +229,18 @@ export async function documentacaoFiscalPropria(l: Leitor, est: number, tipo: Ti
         };
       })
       .filter((c) => c.saldoNota > 0),
+    historico: historico.map((h) => ({
+      id: n(h['id']),
+      vinculoId: n(h['vinculo_nota_faturamento_id']),
+      notaServicoId: n(h['nota_servico_id']),
+      acao: String(h['acao']),
+      valorAnterior: h['valor_apropriado_anterior'] === null ? null : n(h['valor_apropriado_anterior']),
+      valor: h['valor_apropriado'] === null ? null : n(h['valor_apropriado']),
+      situacaoNota: String(h['situacao_nota']),
+      motivo: txt(h['motivo']),
+      em: dataHora(h['criado_em']),
+      por: nn(h['criado_por']),
+    })),
   };
 }
 
@@ -191,7 +257,7 @@ export const esquemaVincularNota = z.object({
 
 export const opVincularNota = definirOperacao({
   nome: 'faturamento.vincular-nota-servico',
-  tabelas: ['vinculo_nota_faturamento'],
+  tabelas: ['vinculo_nota_faturamento', 'evento_vinculo_nota_faturamento'],
   entrada: esquemaVincularNota,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
@@ -207,16 +273,7 @@ export const opVincularNota = definirOperacao({
     const ativo = existente && existente['excluido_em'] === null ? n(existente['id']) : null;
     const jaNaNota = await apropriadoDaNota(tx, e.notaServicoId, ativo);
     const jaNoAlvo = alvo.valorDocumentado - (ativo ? n(existente?.['valor_apropriado']) : 0);
-    const erros = validarVinculoNota(
-      {
-        situacao: String(ns['situacao']),
-        valorServicos: n(ns['valor_servicos']),
-        valorJaApropriado: jaNaNota,
-        fontePagadoraId: nn(ns['fonte_pagadora_id']),
-      },
-      { ...alvo, valorJaDocumentado: jaNoAlvo },
-      e,
-    );
+    const erros = validarVinculoNota(notaParaVinculo(ns, jaNaNota), alvoParaVinculo(alvo, jaNoAlvo), e);
     const campos = Object.keys(erros);
     if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
     const valores = {
@@ -224,6 +281,14 @@ export const opVincularNota = definirOperacao({
       valor_desconto: e.valorDesconto,
       valor_acrescimo: e.valorAcrescimo,
     };
+    const historico = (vid: number, acao: string, anterior: number | null) =>
+      tx.incluir('evento_vinculo_nota_faturamento', {
+        vinculo_nota_faturamento_id: vid,
+        acao,
+        valor_apropriado_anterior: anterior,
+        ...valores,
+        situacao_nota: String(ns['situacao']),
+      });
     if (existente) {
       const vid = n(existente['id']);
       await tx.alterar('vinculo_nota_faturamento', vid, n(existente['versao']), {
@@ -231,28 +296,39 @@ export const opVincularNota = definirOperacao({
         excluido_em: null,
         excluido_por: null,
       });
-      return { id: vid, acao: ativo ? 'ajustado' : 'religado' };
+      const acao = ativo ? 'ajustado' : 'religado';
+      await historico(vid, acao, ativo ? n(existente['valor_apropriado']) : null);
+      return { id: vid, acao };
     }
     const novo = await tx.incluir('vinculo_nota_faturamento', {
       nota_servico_id: e.notaServicoId,
       [col]: e.alvoId,
       ...valores,
     });
+    await historico(novo, 'ligado', null);
     return { id: novo, acao: 'ligado' };
   },
   alvo: (_e, s) => ({ tabela: 'vinculo_nota_faturamento', id: s.id }),
 });
 
-export const esquemaDesvincularNota = z.object({ id, versao: z.number().int().positive() });
+export const esquemaDesvincularNota = z.object({
+  id,
+  versao: z.number().int().positive(),
+  motivo: z.string().default(''),
+});
 
 export const opDesvincularNota = definirOperacao({
   nome: 'faturamento.desvincular-nota-servico',
-  tabelas: ['vinculo_nota_faturamento'],
+  tabelas: ['vinculo_nota_faturamento', 'evento_vinculo_nota_faturamento'],
   entrada: esquemaDesvincularNota,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
+    const erros = validarDesligamentoNota(e.motivo);
+    if (Object.keys(erros).length)
+      throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos: Object.keys(erros), erros });
     const v = await tx.uma<Linha>(
-      `SELECT v.id FROM vinculo_nota_faturamento v JOIN nota_servico ns ON ns.id = v.nota_servico_id
+      `SELECT v.id, v.valor_apropriado, v.valor_desconto, v.valor_acrescimo, ns.situacao AS situacao_nota
+         FROM vinculo_nota_faturamento v JOIN nota_servico ns ON ns.id = v.nota_servico_id
         WHERE v.id = ? AND v.excluido_em IS NULL AND ns.estabelecimento_id = ?`,
       [e.id, est],
     );
@@ -260,6 +336,16 @@ export const opDesvincularNota = definirOperacao({
     await tx.alterar('vinculo_nota_faturamento', e.id, e.versao, {
       excluido_em: agoraBanco(),
       excluido_por: ctx.usuario,
+    });
+    await tx.incluir('evento_vinculo_nota_faturamento', {
+      vinculo_nota_faturamento_id: e.id,
+      acao: 'desligado',
+      valor_apropriado_anterior: n(v['valor_apropriado']),
+      valor_apropriado: null,
+      valor_desconto: n(v['valor_desconto']),
+      valor_acrescimo: n(v['valor_acrescimo']),
+      situacao_nota: String(v['situacao_nota']),
+      motivo: e.motivo.trim(),
     });
     return { id: e.id };
   },

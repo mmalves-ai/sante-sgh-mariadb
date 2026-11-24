@@ -2,7 +2,7 @@
 //   GET  /api/faturamento/faturas/:id/notas-fiscais        faturamento.conta.ler (valores, ligadas e candidatas)
 //   GET  /api/faturamento/contas/:id/notas-fiscais         faturamento.conta.ler
 //   POST /api/faturamento/notas-fiscais/vinculos           financeiro.nfse.emitir (liga ou ajusta o valor)
-//   POST /api/faturamento/notas-fiscais/vinculos/:vid/desligamento  financeiro.nfse.emitir (fica marcado, não some)
+//   POST /api/faturamento/notas-fiscais/vinculos/:vid/desligamento  financeiro.nfse.emitir (motivo obrigatório; fica marcado e no histórico, não some)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // Nota fiscal da fatura ou da conta (F3.7, 06-FAT linha 36): `/faturamento/faturas/:id/notas-fiscais` e
 // `/faturamento/contas/:id/notas-fiscais`. Numa tela só: quanto o alvo vale, quanto já está documentado e quanto falta;
-// as notas ligadas (desligar fica no histórico, marcado); as notas candidatas da mesma fonte pagadora, com as emitidas
-// para este alvo primeiro e o valor já sugerido (o menor entre o saldo da nota e o que falta). Ligar é um clique; o
-// valor pode ser trocado e é conferido enquanto se digita, pela mesma regra do servidor.
-import { validarVinculoNota } from '@sgh/dominio-faturamento';
+// as notas ligadas com a situação da nota (a cancelada fica à vista, marcada como "não documenta mais"); desligar pede
+// o motivo, conferido enquanto se digita; as notas candidatas que servem a este alvo (mesma fonte pagadora ou tomador
+// que é o paciente ou um responsável; nenhuma emitida para outro alvo), com as emitidas para este primeiro e o valor já
+// sugerido (o menor entre o saldo da nota e o que falta). Ligar é um clique; o valor pode ser trocado e é conferido
+// enquanto se digita, pela mesma regra do servidor. Embaixo, o histórico do vínculo (quem ligou, ajustou, desligou e
+// por quê).
+import { validarDesligamentoNota, validarVinculoNota } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -48,6 +51,19 @@ const { t } = useI18n({
       paraEste: 'emitida para este',
       ligar: 'Ligar',
       desligar: 'Desligar',
+      motivo: 'Motivo do desligamento',
+      confirmarDesligar: 'Confirmar desligamento',
+      naoDocumenta: 'não documenta mais',
+      historico: 'Histórico do vínculo',
+      semHistorico: 'Sem eventos.',
+      quando: 'Quando',
+      acao: 'Ação',
+      de: 'De',
+      para: 'Para',
+      ligado: 'Ligada',
+      ajustado: 'Valor ajustado',
+      desligado: 'Desligada',
+      religado: 'Religada',
       gravado: 'Gravado.',
     },
   },
@@ -59,6 +75,9 @@ const consulta = useQuery({
 });
 const dados = computed<DocumentacaoFiscal | undefined>(() => consulta.data.value);
 const valores = reactive<Record<number, number>>({});
+const motivos = reactive<Record<number, string>>({});
+const desligando = ref<number | null>(null);
+const erroMotivo = (id: number) => Object.values(validarDesligamentoNota(motivos[id])).join(' ') || null;
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
@@ -73,7 +92,8 @@ function errosDe(c: DocumentacaoFiscal['candidatas'][number]): string | null {
     situacao: c.situacao,
     valorServicos: c.valorServicos,
     valorJaApropriado: c.valorServicos - c.saldoNota,
-    fontePagadoraId: null,
+    // A candidata já vem filtrada pelo servidor (serve a este alvo); aqui se confere só o valor e a situação.
+    fontePagadoraId: d.alvo.fontePagadoraId,
   };
   const alvo = {
     tipo: d.alvo.tipo,
@@ -108,7 +128,12 @@ const ligar = (c: DocumentacaoFiscal['candidatas'][number]) =>
       chave,
     ),
   );
-const desligar = (id: number, versao: number) => acao(() => desvincularNota(id, versao, chave));
+const desligar = (id: number, versao: number) =>
+  acao(async () => {
+    await desvincularNota(id, versao, (motivos[id] ?? '').trim(), chave);
+    desligando.value = null;
+    delete motivos[id];
+  });
 </script>
 
 <template>
@@ -152,12 +177,42 @@ const desligar = (id: number, versao: number) => acao(() => desvincularNota(id, 
             <td>{{ l.numeroNota ?? '—' }}</td>
             <td>{{ l.rps }}</td>
             <td>{{ l.emitidaEm ? quando(l.emitidaEm) : '—' }}</td>
-            <td>{{ l.situacaoNota }}</td>
-            <td>{{ dinheiro(l.valorApropriado) }}</td>
+            <td :data-testid="`nf-situacao-${l.id}`">
+              {{ l.situacaoNota }}
+              <strong v-if="!l.documenta" class="erro">({{ t('naoDocumenta') }})</strong>
+            </td>
+            <td :class="{ riscado: !l.documenta }">{{ dinheiro(l.valorApropriado) }}</td>
             <td>
-              <button type="button" :disabled="gravando" @click="desligar(l.id, l.versao)">
+              <button
+                v-if="desligando !== l.id"
+                type="button"
+                :disabled="gravando"
+                :data-testid="`nf-desligar-${l.id}`"
+                @click="desligando = l.id"
+              >
                 {{ t('desligar') }}
               </button>
+              <template v-else>
+                <label>
+                  {{ t('motivo') }}
+                  <input
+                    v-model="motivos[l.id]"
+                    type="text"
+                    maxlength="500"
+                    :aria-invalid="erroMotivo(l.id) ? 'true' : 'false'"
+                    :data-testid="`nf-motivo-${l.id}`"
+                  />
+                </label>
+                <small v-if="erroMotivo(l.id)" class="erro">{{ erroMotivo(l.id) }}</small>
+                <button
+                  type="button"
+                  :disabled="gravando || !!erroMotivo(l.id)"
+                  :data-testid="`nf-confirmar-desligar-${l.id}`"
+                  @click="desligar(l.id, l.versao)"
+                >
+                  {{ t('confirmarDesligar') }}
+                </button>
+              </template>
             </td>
           </tr>
         </tbody>
@@ -213,6 +268,31 @@ const desligar = (id: number, versao: number) => acao(() => desvincularNota(id, 
         </tbody>
       </table>
       <p v-else>{{ t('semCandidatas') }}</p>
+
+      <h2>{{ t('historico') }}</h2>
+      <table v-if="dados.historico.length" class="tabela" data-testid="nf-historico">
+        <thead>
+          <tr>
+            <th scope="col">{{ t('quando') }}</th>
+            <th scope="col">{{ t('acao') }}</th>
+            <th scope="col">{{ t('nota') }}</th>
+            <th scope="col">{{ t('de') }}</th>
+            <th scope="col">{{ t('para') }}</th>
+            <th scope="col">{{ t('motivo') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="h in dados.historico" :key="h.id">
+            <td>{{ h.em ? quando(h.em) : '—' }}</td>
+            <td>{{ t(h.acao) }}</td>
+            <td>{{ h.notaServicoId }} ({{ h.situacaoNota }})</td>
+            <td>{{ h.valorAnterior === null ? '—' : dinheiro(h.valorAnterior) }}</td>
+            <td>{{ h.valor === null ? '—' : dinheiro(h.valor) }}</td>
+            <td>{{ h.motivo ?? '' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else>{{ t('semHistorico') }}</p>
     </template>
   </section>
 </template>
