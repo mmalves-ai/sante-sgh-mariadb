@@ -1,0 +1,280 @@
+// Regras dos ajustes de valor na conta (F3.7, 06-FAT linhas 17, 18 e 20).
+import { describe, expect, it } from 'vitest';
+import {
+  acrescimoDoItem,
+  alertasDoPacote,
+  classificarItens,
+  conferirDecisaoAjuste,
+  diaDaSemana,
+  diasDePermanencia,
+  type FaixaHorarioEspecial,
+  faixaDoHorario,
+  totaisDosAjustes,
+  validarAjusteConta,
+  validarFaixaHorario,
+  validarNovaVersao,
+  versaoVigente,
+  vespera,
+} from '../index.js';
+
+const faixa = (x: Partial<FaixaHorarioEspecial>): FaixaHorarioEspecial => ({
+  id: 1,
+  codigo: 'N',
+  tipoHorario: 'noturno',
+  diaSemana: null,
+  aplicaFeriado: false,
+  horaInicio: '19:00',
+  horaFim: '07:00',
+  percentual: 30,
+  percentualHonorario: null,
+  vigenciaInicio: '2026-01-01',
+  vigenciaFim: null,
+  fontePagadoraId: null,
+  ativo: true,
+  ...x,
+});
+
+describe('horário especial (linha 17)', () => {
+  const noturno = faixa({});
+  const fds = faixa({
+    id: 2,
+    codigo: 'F',
+    tipoHorario: 'fim_de_semana',
+    horaInicio: null,
+    horaFim: null,
+    percentual: 20,
+  });
+  const feriado = faixa({
+    id: 3,
+    codigo: 'H',
+    tipoHorario: 'feriado',
+    horaInicio: null,
+    horaFim: null,
+    percentual: 25,
+  });
+  const todas = [noturno, fds, feriado];
+  it('dia da semana sem fuso', () => {
+    expect(diaDaSemana('2026-11-22')).toBe(0); // domingo
+    expect(diaDaSemana('2026-11-24')).toBe(2);
+  });
+  it('noturno vira a meia-noite; dia útil de dia fica normal', () => {
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T23:30', feriado: false, fontePagadoraId: 9 }, todas)?.codigo,
+    ).toBe('N');
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T03:00', feriado: false, fontePagadoraId: 9 }, todas)?.codigo,
+    ).toBe('N');
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T10:00', feriado: false, fontePagadoraId: 9 }, todas),
+    ).toBeNull();
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T07:00', feriado: false, fontePagadoraId: 9 }, todas),
+    ).toBeNull();
+  });
+  it('não acumula: vale o maior percentual; o do acordo vence o geral', () => {
+    // sábado à noite: noturno 30 e fim de semana 20 → 30
+    expect(
+      faixaDoHorario({ quando: '2026-11-28T22:00', feriado: false, fontePagadoraId: 9 }, todas)?.codigo,
+    ).toBe('N');
+    expect(
+      faixaDoHorario({ quando: '2026-11-28T10:00', feriado: false, fontePagadoraId: 9 }, todas)?.codigo,
+    ).toBe('F');
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T10:00', feriado: true, fontePagadoraId: 9 }, todas)?.codigo,
+    ).toBe('H');
+    const doAcordo = faixa({ id: 9, codigo: 'A', fontePagadoraId: 9, percentual: 10 });
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T23:00', feriado: false, fontePagadoraId: 9 }, [...todas, doAcordo])
+        ?.codigo,
+    ).toBe('A');
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T23:00', feriado: false, fontePagadoraId: 8 }, [...todas, doAcordo])
+        ?.codigo,
+    ).toBe('N');
+  });
+  it('fora do expediente da tabela e vigência', () => {
+    const apos = faixa({
+      id: 4,
+      codigo: 'X',
+      tipoHorario: 'apos_horario',
+      horaInicio: null,
+      horaFim: null,
+      percentual: 15,
+    });
+    const exp = [{ diaSemana: 2, horaInicio: '07:00', horaFim: '18:00' }];
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T18:30', feriado: false, fontePagadoraId: 1 }, [apos], exp)?.codigo,
+    ).toBe('X');
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T17:59', feriado: false, fontePagadoraId: 1 }, [apos], exp),
+    ).toBeNull();
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T18:30', feriado: false, fontePagadoraId: 1 }, [apos], []),
+    ).toBeNull();
+    const vencida = faixa({ vigenciaFim: '2026-06-30' });
+    expect(
+      faixaDoHorario({ quando: '2026-11-24T23:00', feriado: false, fontePagadoraId: 1 }, [vencida]),
+    ).toBeNull();
+  });
+  it('acréscimo com percentual próprio do honorário', () => {
+    expect(acrescimoDoItem(200, 0, noturno)).toBe(60);
+    expect(acrescimoDoItem(200, 100, faixa({ percentualHonorario: 50 }))).toBe(80);
+  });
+  it('validação da faixa', () => {
+    const ok = {
+      codigo: 'N',
+      descricao: 'Noturno',
+      tipoHorario: 'noturno',
+      diaSemana: null,
+      aplicaFeriado: false,
+      horaInicio: '19:00',
+      horaFim: '07:00',
+      percentual: 30,
+      percentualHonorario: null,
+      vigenciaInicio: '2026-01-01',
+      vigenciaFim: null,
+    };
+    expect(validarFaixaHorario(ok)).toEqual({});
+    expect(Object.keys(validarFaixaHorario({ ...ok, horaFim: null }))).toContain('horaFim');
+    expect(Object.keys(validarFaixaHorario({ ...ok, percentual: 0, diaSemana: 8 }))).toEqual([
+      'diaSemana',
+      'percentual',
+    ]);
+    expect(Object.keys(validarFaixaHorario({ ...ok, vigenciaFim: '2025-01-01' }))).toEqual(['vigenciaFim']);
+  });
+});
+
+describe('ajuste da conta (linha 18)', () => {
+  const ctx = { valorItens: 1000, descontosEmVigor: 0, acrescimosEmVigor: 0 };
+  const base = {
+    tipo: 'desconto' as const,
+    forma: 'valor' as const,
+    valor: 100,
+    percentual: null,
+    justificativa: 'Acordo comercial firmado',
+  };
+  it('calcula e confere', () => {
+    expect(validarAjusteConta(base, { tipoAjuste: 'desconto', ativo: true }, ctx)).toEqual({
+      erros: {},
+      valor: 100,
+    });
+    expect(
+      validarAjusteConta(
+        { ...base, forma: 'percentual', percentual: 12.5 },
+        { tipoAjuste: 'desconto', ativo: true },
+        ctx,
+      ).valor,
+    ).toBe(125);
+    expect(
+      Object.keys(validarAjusteConta(base, { tipoAjuste: 'acrescimo', ativo: true }, ctx).erros),
+    ).toEqual(['motivoId']);
+    expect(Object.keys(validarAjusteConta({ ...base, justificativa: 'curta' }, null, ctx).erros)).toEqual([
+      'motivoId',
+      'justificativa',
+    ]);
+    expect(
+      validarAjusteConta(
+        { ...base, valor: 950 },
+        { tipoAjuste: 'desconto', ativo: true },
+        { ...ctx, descontosEmVigor: 100 },
+      ).erros['valor'],
+    ).toContain('passa');
+    expect(
+      validarAjusteConta(base, { tipoAjuste: 'desconto', ativo: true }, { ...ctx, valorItens: 0 }).erros[
+        'valor'
+      ],
+    ).toBeTruthy();
+  });
+  it('alçada: quem pede não decide', () => {
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 5, 'aprovar')).toContain('não pode');
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 6, 'aprovar')).toBeNull();
+    expect(conferirDecisaoAjuste('aprovado', 5, 6, 'recusar')).toContain('já foi');
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 6, 'cancelar')).toContain('Só quem');
+    expect(conferirDecisaoAjuste('pendente_aprovacao', 5, 5, 'cancelar')).toBeNull();
+  });
+  it('só aprovado entra no total', () => {
+    expect(
+      totaisDosAjustes([
+        { tipo: 'acrescimo', situacao: 'aprovado', valor: 10 },
+        { tipo: 'desconto', situacao: 'aprovado', valor: 5.5 },
+        { tipo: 'desconto', situacao: 'pendente_aprovacao', valor: 99 },
+        { tipo: 'acrescimo', situacao: 'recusado', valor: 99 },
+      ]),
+    ).toEqual({ acrescimo: 10, desconto: 5.5 });
+  });
+});
+
+describe('pacote na conta (linha 20)', () => {
+  const v = (id: number, numero: number, i: string, f: string | null) => ({
+    id,
+    numero,
+    vigenciaInicio: i,
+    vigenciaFim: f,
+    valor: 1000 * numero,
+  });
+  it('versão vigente e nova versão', () => {
+    const vs = [v(1, 1, '2026-01-01', '2026-06-30'), v(2, 2, '2026-07-01', null)];
+    expect(versaoVigente(vs, '2026-03-10')?.numero).toBe(1);
+    expect(versaoVigente(vs, '2026-08-01')?.numero).toBe(2);
+    expect(versaoVigente(vs, '2025-12-31')).toBeNull();
+    expect(validarNovaVersao(vs, '2026-07-01', 10)['vigenciaInicio']).toContain('depois');
+    expect(validarNovaVersao(vs, '2026-09-01', 10)).toEqual({});
+    expect(vespera('2026-03-01')).toBe('2026-02-28');
+  });
+  const it1 = (id: number, itemId: number, grupoId: number | null, quantidade = 1, valor = 100) => ({
+    id,
+    itemId,
+    grupoId,
+    setorId: null,
+    quantidade,
+    valor,
+  });
+  it('classifica: exceção vence inclusão; limite manda o excedente à parte', () => {
+    const itens = [it1(1, 10, 1), it1(2, 11, 1, 3), it1(3, 12, 2), it1(4, 13, 3), it1(5, 11, 1, 1)];
+    const c = classificarItens(
+      itens,
+      [
+        { itemId: null, grupoId: 1, setorId: null, quantidadeLimite: null },
+        { itemId: 11, grupoId: null, setorId: null, quantidadeLimite: 3 },
+      ],
+      [
+        { itemId: 12, grupoId: null, setorId: null, categoriaAcomodacaoId: null, efeito: 'cobrar_a_parte' },
+        { itemId: null, grupoId: 3, setorId: null, categoriaAcomodacaoId: null, efeito: 'descaracteriza' },
+      ],
+      null,
+    );
+    expect([...c.entries()]).toEqual([
+      [1, 'incluso'],
+      [2, 'incluso'],
+      [3, 'a_parte'],
+      [4, 'descaracteriza'],
+      [5, 'incluso'],
+    ]);
+    const c2 = classificarItens(
+      itens,
+      [{ itemId: 11, grupoId: null, setorId: null, quantidadeLimite: 3 }],
+      [],
+      null,
+    );
+    expect(c2.get(2)).toBe('incluso');
+    expect(c2.get(5)).toBe('a_parte');
+    expect(c2.get(1)).toBe('a_parte');
+    expect(classificarItens(itens, [], [], null).get(4)).toBe('incluso');
+  });
+  it('tetos e diárias geram alerta, sem descaracterizar sozinho', () => {
+    const itens = [it1(1, 10, 1, 2, 300), it1(2, 11, 2, 1, 50)];
+    const cl = classificarItens(itens, [], [], null);
+    const a = alertasDoPacote(
+      itens,
+      cl,
+      [{ id: 1, grupoId: null, diasTeto: 3, quantidadeTeto: null, valorTeto: 200, descaracteriza: true }],
+      5,
+      2,
+    );
+    expect(a.map((x) => x.tipo)).toEqual(['teto', 'teto', 'diarias']);
+    expect(a[0]!.descaracteriza).toBe(true);
+    expect(alertasDoPacote(itens, cl, [], 1, 2)).toEqual([]);
+    expect(diasDePermanencia('2026-01-01', '2026-01-03')).toBe(2);
+    expect(diasDePermanencia('2026-01-01', '2026-01-01')).toBe(1);
+  });
+});
