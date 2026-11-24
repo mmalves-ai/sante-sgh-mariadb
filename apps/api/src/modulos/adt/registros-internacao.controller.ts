@@ -3,9 +3,9 @@
 //   POST /api/internacoes/:reg/diagnosticos                 internacao.registrarDiagnostico
 //   POST /api/internacoes/:reg/acidentes                    internacao.registrarAcidente
 //   GET  /api/cadastros/estrutura/unidades/:id/operadores   quem opera a unidade (admitir, transferir, dar alta)
-//   PUT  /api/cadastros/estrutura/unidades/:id/operadores   internacao.definirOperadoresUnidade (lista inteira)
+//   POST /api/cadastros/estrutura/unidades/:id/operadores   internacao.definirOperadoresUnidade (lista inteira)
 // A guia e a prorrogação continuam pela rota da guia (POST /api/internacoes/:reg/guias), que agora grava o histórico.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -115,7 +115,7 @@ export class RegistrosInternacaoController {
     return r;
   }
 
-  @Put('cadastros/estrutura/unidades/:id/operadores')
+  @Post('cadastros/estrutura/unidades/:id/operadores')
   @HttpCode(200)
   @Permissao('organizacao.leito.editar')
   @AuditadoNoHandler('internacao.definirOperadoresUnidade pelo executor (trilha na mesma transação)')
