@@ -120,6 +120,29 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## ESTADO EM 24/11, 05h10 (sessão e03db3e2, contínua por ordem do dono). COMECE POR AQUI.
+
+- **Prazo do dono: 27/11, sem parar** (memória prazo-27-11). Completude medida, nunca estimada.
+- **API no banco próprio: 337 → cerca de 44 métodos pendentes** (rodadas pep-portas-proprias, pep-gravacao,
+  modulos-proprios-1, -2 e -3; consolidações 1 a 4 até c6ee794e). Sobras conhecidas: SUS montagens restantes,
+  qualidade (parte da gestão), folha (período aquisitivo por vínculo; carregadores oficiais SEFIP, CAGED e RAIS),
+  SAE (terminologias NANDA, NIC e NOC com UNIQUE), cadastro gravarProfissional, pessoas incluirDependente, suporte
+  previa/corrigir (falha fechada), recusa-senha.int.spec (cria cliente na plataforma da VM).
+- **F3 medida (24/11 05h):** 247 funções da lista mínima: 192 feitas no código herdado, 30 parciais, 25 desligadas;
+  0 fichas funcionais; 0 revisões "sem cara de SPDATA"; sem E2E verde no MariaDB. Rodada `f3-motores` em curso
+  (conta na admissão com diárias, estoque na conta, produção do repasse, E2E na VM).
+- **Carga:** execução 15 (continua 14 → 13 → 12 → 11) desde 04h50, 3 gravadores, código sem cópia de pendências
+  (pendencia-cadeia, 2a76ed20; índice ix_pendencia_mesma aplicado na ProntoCardio). Depois da carga: rodar
+  `conector/conector.sh descartar-pendencias-copiadas prontocardio` (contagem) e `--executar` (só duplicatas exatas;
+  as execuções 12 a 14 têm cerca de 43 milhões de cópias); OPTIMIZE da pendencia é decisão à parte.
+- **API reiniciada 04h45** (build de c6ee794e, override ProntoCardio); /api/estabelecimentos 200; plataforma senha
+  errada 401. Migrações de 23-24/11 aplicadas na cliente_prontocardio (36 arquivos), na plataforma (0091, 0092) e em
+  todos os clientes de teste. Mailpit atrás do Caddy: https://<ip>:5325 (MAILPIT_GESTAO_* no .env).
+- **Push:** último no GitHub fd342e53; ci-sim do HEAD (c6ee794e) em curso; push só com VERDE.
+- **Regras aprendidas:** commit sempre `git commit --only -- <caminhos>` (índice compartilhado); `pkill -f`/`pgrep -f`
+  com padrão que aparece na própria linha do comando derrubam o shell (use `padrão[x]`); carga e rodada de testes
+  disputam memória: carga com 3 gravadores exige testes de agentes com MIN_GB=10.
+
 ## ESTADO EM 23/11, 22h55 (sessão e03db3e2 encerrada por tamanho: cerca de 300 turnos). COMECE POR AQUI.
 
 - **Carga: execução 13** (continuação da 12, que continua a 11), iniciada 22h53 do worktree `velocidade` (main até
