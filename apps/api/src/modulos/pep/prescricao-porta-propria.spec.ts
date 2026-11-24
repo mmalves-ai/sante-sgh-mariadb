@@ -436,14 +436,11 @@ describe('PortaPrescricaoPropria (dublê)', () => {
     });
   });
 
-  it('sem cadeia de hash nesta etapa; regra de alerta e ficha de antimicrobiano ainda recusam 501 sem ler', async () => {
+  // A regra de alerta e a ficha de antimicrobiano têm adaptador (prescricao-propria-regras-2.spec.ts).
+  it('sem cadeia de hash nesta etapa, sem ler', async () => {
     const d = duble(() => []);
     const porta = new PortaPrescricaoPropria(d.nucleo, 'x');
     expect(await porta.hashAtual()).toBe('');
-    for (const m of ['gravarRegra', 'registrarFicha'] as const)
-      await expect(porta[m]()).rejects.toMatchObject({
-        problema: { status: 501, codigo: 'pendente-modelo-proprio' },
-      });
     expect(d.chamadas).toEqual([]);
   });
 });

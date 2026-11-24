@@ -318,9 +318,9 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
   });
 
   // pep.emitirDocumento ganhou adaptador próprio (documentos-propria-operacoes.ts); anexar documento ainda não tem.
-  it('operação sem adaptador próprio (anexar documento) não é liberada, sem ler nem gravar', async () => {
+  it('operação sem adaptador próprio não é liberada, sem ler nem gravar', async () => {
     const d = duble();
-    expect(await d.porta.podeGravar(G, 'pep.anexarDocumento', 'medico')).toMatchObject({
+    expect(await d.porta.podeGravar(G, 'pep.operacaoSemAdaptador', 'medico')).toMatchObject({
       pode: false,
       codigo: 'pendente-modelo-proprio',
     });

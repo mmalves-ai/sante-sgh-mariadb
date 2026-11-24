@@ -5,7 +5,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
-import { ErroOperacao } from '@sgh/nucleo';
 import {
   ctxBanco,
   encerrarMassaQualidade,
@@ -136,20 +135,16 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
     ).toEqual({ comPrazo: 0, concluidas: 0, noPrazo: 0, vencidas: 0 });
   });
 
-  it('as leituras de outro módulo ainda sem mapeamento falham fechadas (503 modelo-pendente)', async () => {
+  // Os candidatos, o painel de adesão e os expostos ao lote têm leitura própria (porta-propria-complemento-c.ts, com a
+  // integração dele): aqui só se confere que a porta da segurança responde pelo modelo, sem falha fechada.
+  it('as leituras de outro módulo respondem pelo modelo próprio (sem 503)', async () => {
     const c = ctxBanco(m.est, m.codigoEst, m.usuario);
-    for (const p of [
-      porta.candidatos(c, m.login, '2026-11-01'),
+    const cand = await porta.candidatos(c, m.login, '2026-11-01');
+    expect(Array.isArray(cand.checagens)).toBe(true);
+    await expect(
       porta.painelAdesao(c, '2026-11-01', '2026-12-01', '2026-11-20T10:00:00'),
-      porta.expostos(c, 1, 'L1'),
-    ]) {
-      const e = await p.then(
-        () => null,
-        (x: unknown) => x,
-      );
-      expect(e).toBeInstanceOf(ErroOperacao);
-      expect((e as ErroOperacao).problema).toMatchObject({ status: 503, codigo: 'modelo-pendente' });
-    }
+    ).resolves.toBeDefined();
+    expect(Array.isArray((await porta.expostos(c, 1, 'L1')).expostos)).toBe(true);
   });
 
   // A análise, o plano 5W2H, a queixa técnica e a sugestão resolvida: porta-propria-etapa2.int.spec.ts. Os expostos

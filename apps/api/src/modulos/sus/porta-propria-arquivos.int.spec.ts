@@ -11,26 +11,10 @@ import { versaoSus } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { armazemSusMemoria } from './armazem.js';
 import type { ContextoSus } from './porta.js';
-import { GravacaoSusPropria, PortaSusPropria } from './porta-propria.js';
+import { PortaSusPropria } from './porta-propria.js';
 import { SeloSolicitanteApac } from './selo-solicitante.js';
 import { ServicoSus, type SessaoSus } from './servico.js';
 import type { InstrumentoSusPorta, NovoArquivoSus } from './tipos.js';
-
-// A montagem própria ainda não lê a produção da competência (a porta recusa toda geração). Para provar a remessa, a
-// substituição e a trilha, o teste estende a porta com uma gravação cuja montagem "lê" a produção: as linhas do
-// arquivo continuam vazias, ou seja, o caso "sem movimento" provado.
-class GravacaoComProducao extends GravacaoSusPropria {
-  protected override montagemLeProducao(): boolean {
-    return true;
-  }
-}
-class PortaComProducao extends PortaSusPropria {
-  protected override novaGravacao(
-    ...a: ConstructorParameters<typeof GravacaoSusPropria>
-  ): GravacaoSusPropria {
-    return new GravacaoComProducao(...a);
-  }
-}
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -43,7 +27,6 @@ const sha = (t: string) => createHash('sha256').update(t).digest('hex');
 describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria (cliente f22_o3)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaSusPropria;
-  let real: PortaSusPropria;
   let estA = 0;
   let estB = 0;
   const correlacao = `f2390-${Date.now()}`;
@@ -106,8 +89,7 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
       estB = await est(EST_B, null);
     });
     await limpar();
-    porta = new PortaComProducao(nucleo, CLIENTE);
-    real = new PortaSusPropria(nucleo, CLIENTE);
+    porta = new PortaSusPropria(nucleo, CLIENTE);
     ctxA = { rede: 'rede-teste', hospital: EST_A, estabelecimento: estA, usuario: null, correlacao };
     ctxB = { rede: 'rede-teste', hospital: EST_B, estabelecimento: estB, usuario: null, correlacao };
   });
@@ -139,41 +121,6 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
     chaveObjeto: `sus/${EST_A}/${comp.instrumento}/${comp.competencia}/${id}-${sha(conteudo).slice(0, 16)}.txt`,
     versaoObjeto: null,
     por: 'FATURISTA.SINT',
-  });
-
-  it('sem a leitura própria da produção, nenhum dos quatro arquivos é gravado (nem "sem movimento") e nada muda', async () => {
-    const contar = () =>
-      uma(
-        `SELECT (SELECT COUNT(*) FROM remessa_ciha WHERE estabelecimento_id = ?)
-              + (SELECT COUNT(*) FROM remessa_bpa WHERE estabelecimento_id = ?)
-              + (SELECT COUNT(*) FROM remessa_apac WHERE estabelecimento_id = ?)
-              + (SELECT COUNT(*) FROM remessa_sisaih WHERE estabelecimento_id = ?) AS remessas,
-                (SELECT COUNT(*) FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'arquivo_faturamento_sus') AS arquivos`,
-        [estA, estA, estA, estA, estA],
-      );
-    const antes = await contar();
-    for (const i of ['ciha', 'bpa', 'apac', 'aih'] as InstrumentoSusPorta[]) {
-      const comp = await real.gravar(ctxA, (g) =>
-        g.abrir({ instrumento: i, competencia: '202602', por: 'x' }),
-      );
-      const id = await real.gravar(ctxA, (g) => g.proximoArquivo());
-      const a = novo(id, { id: comp.id, instrumento: i, competencia: '202602' }, `vazio ${i} ${id}`);
-      await expect(
-        real.gravar(ctxA, (g) =>
-          i === 'ciha'
-            ? g.gravarArquivo(a, [])
-            : i === 'bpa'
-              ? g.gravarArquivoBpa(a, [])
-              : i === 'apac'
-                ? g.gravarArquivoApac(a, [])
-                : g.gravarArquivoSisaih(a, []),
-        ),
-      ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-      expect(await real.ler(ctxA, (l) => l.arquivo(id))).toBeNull();
-    }
-    const depois = await contar();
-    expect(Number(depois?.['remessas'])).toBe(Number(antes?.['remessas']));
-    expect(Number(depois?.['arquivos'])).toBe(Number(antes?.['arquivos']));
   });
 
   it('numera, grava as quatro remessas, lê nas quatro e substitui a geração anterior sem apagar', async () => {
@@ -301,8 +248,6 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
   it('o serviço da tela gera, lista e baixa a CIHA sem movimento pela porta própria', async () => {
     const armazem = armazemSusMemoria();
     const servico = new ServicoSus(porta, armazem, () => undefined, new SeloSolicitanteApac(null));
-    const armazemReal = armazemSusMemoria();
-    const servicoReal = new ServicoSus(real, armazemReal, () => undefined, new SeloSolicitanteApac(null));
     const sessao: SessaoSus = {
       rede: 'rede-teste',
       hospital: EST_A,
@@ -348,39 +293,7 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
     await servico.abrir(sessao, { instrumento: 'ciha', competencia: '202606' });
     await servico.criticar(sessao, { instrumento: 'ciha', competencia: '202606' });
     const c = await porta.ler(ctxA, (l) => l.competencia('ciha', '202606'));
-    // Pela porta real (a montagem ainda não lê a produção), a geração recusa e nada muda: nem remessa, nem registro
-    // do núcleo, nem objeto guardado, nem versão da competência.
-    const antesRemessas = await uma('SELECT COUNT(*) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [
-      estA,
-    ]);
-    const antesArquivos = await uma(
-      "SELECT COUNT(*) AS n FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'arquivo_faturamento_sus'",
-      [estA],
-    );
-    await expect(
-      servicoReal.gerarCiha(sessao, { competencia: '202606', versao: versaoSus(c!.versao) }),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    expect(
-      Number(
-        (await uma('SELECT COUNT(*) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [estA]))?.['n'],
-      ),
-    ).toBe(Number(antesRemessas?.['n']));
-    expect(
-      Number(
-        (
-          await uma(
-            "SELECT COUNT(*) AS n FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'arquivo_faturamento_sus'",
-            [estA],
-          )
-        )?.['n'],
-      ),
-    ).toBe(Number(antesArquivos?.['n']));
-    expect(armazemReal.objetos.size).toBe(0);
-    expect(armazemReal.fixados.size).toBe(0);
-    expect((await porta.ler(ctxA, (l) => l.competencia('ciha', '202606')))?.versao).toBe(c!.versao);
-    expect(await servicoReal.listarArquivos(sessao, 'ciha', '202606')).toEqual([]);
-
-    // Com a montagem que lê a produção (extensão do teste), o "sem movimento" provado grava.
+    // A montagem própria lê a produção da competência: o "sem movimento" grava pela porta real.
     const g = await servico.gerarCiha(sessao, { competencia: '202606', versao: versaoSus(c!.versao) });
     expect(g.substituidos).toBe(0);
     const lista = await servico.listarArquivos(sessao, 'ciha', '202606');
