@@ -537,11 +537,11 @@ export class GravacaoPrescricaoPropria {
       const fim = instanteLocal(e.vigencia.fim, est.fuso);
       if (fim.getTime() <= inicio.getTime())
         throw recusar(422, 'vigencia-invalida', 'O fim da vigência tem de ser depois do início.');
-      const ocupada = await tx.uma(
+      const ocupada = await umaTravada(tx, 
         `SELECT p.id FROM prescricao p
           WHERE ${VISIVEL('p')} AND p.atendimento_id = ? AND p.situacao IN ('vigente','futura')
             AND p.suspensa_em IS NULL AND p.vigencia_inicio_em <= ? AND p.vigencia_fim_em >= ?
-          LIMIT 1 FOR UPDATE`,
+          LIMIT 1`,
         [est.id, e.atendimento, fim, inicio],
       );
       if (ocupada)
@@ -640,9 +640,9 @@ export class GravacaoPrescricaoPropria {
     if (e.correcao) conferirItensSuportados([e.correcao]);
     return this.gravar(c, ctx, 'pep.suspenderItem', e.cbo, async (tx, est, prof) => {
       const p = await vigenteDoPaciente(tx, est.id, e.prescricao, e.paciente);
-      const it = await tx.uma(
+      const it = await umaTravada(tx, 
         `SELECT id, versao, situacao, sequencia FROM prescricao_item
-          WHERE id = ? AND prescricao_id = ? AND excluido_em IS NULL FOR UPDATE`,
+          WHERE id = ? AND prescricao_id = ? AND excluido_em IS NULL`,
         [e.item, p.id],
       );
       const pendentes = it ? await horariosPendentes(tx, est.id, p.id, e.item) : [];
@@ -691,9 +691,9 @@ export class GravacaoPrescricaoPropria {
       const agora = new Date();
       const pendentes = await horariosPendentes(tx, est.id, p.id, null);
       const n = await suspenderHorarios(tx, pendentes, agora);
-      const ativos = await tx.consultar(
+      const ativos = await tx.consultarParaAtualizar(
         `SELECT id, versao FROM prescricao_item
-          WHERE prescricao_id = ? AND excluido_em IS NULL AND situacao = 'ativo' FOR UPDATE`,
+          WHERE prescricao_id = ? AND excluido_em IS NULL AND situacao = 'ativo'`,
         [p.id],
       );
       for (const it of ativos)
@@ -722,9 +722,9 @@ export class GravacaoPrescricaoPropria {
   /** Coassinatura do profissional da sessão (login) numa prescrição que a exige; a segunda vez não grava de novo. */
   async coassinar(c: ContextoPrescricao, prescricao: number, usuario: string): Promise<void> {
     await this.gravar(c, contextoDoLogin(c, 'pep.coassinar', usuario), 'pep.coassinar', null, async (tx, est, prof) => {
-      const p = await tx.uma(
+      const p = await umaTravada(tx, 
         `SELECT id, versao, situacao, coassinatura_exigida, coassinada_em FROM prescricao p
-          WHERE p.id = ? AND ${VISIVEL('p')} FOR UPDATE`,
+          WHERE p.id = ? AND ${VISIVEL('p')}`,
         [prescricao, est.id],
       );
       if (!p) throw recusar(404, 'registro-inexistente', 'A prescrição não foi encontrada.');
@@ -786,9 +786,9 @@ export class GravacaoPrescricaoPropria {
   ): Promise<void> {
     await this.gravar(c, contextoDoLogin(c, 'pep.cancelarFutura', usuario), 'pep.cancelarFutura', null,
       async (tx, est) => {
-        const f = await tx.uma(
+        const f = await umaTravada(tx, 
           `SELECT id, versao, situacao FROM planejamento_prescricao
-            WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL FOR UPDATE`,
+            WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL`,
           [id, est.id, paciente],
         );
         if (!f)
@@ -1051,10 +1051,19 @@ export function conferirItensSuportados(itens: readonly ItemGravacao[]): void {
   }
 }
 
+/** SELECT ... FOR UPDATE de uma linha (o núcleo põe a trava; o caminho de leitura recusa FOR UPDATE no texto). */
+async function umaTravada(
+  tx: TxOperacao,
+  sql: string,
+  parametros: readonly unknown[],
+): Promise<Record<string, unknown> | null> {
+  return (await tx.consultarParaAtualizar(sql, parametros))[0] ?? null;
+}
+
 async function travarPrescricao(tx: TxOperacao, est: number, id: number): Promise<PrescricaoTravada | null> {
-  const p = await tx.uma(
+  const p = await umaTravada(tx, 
     `SELECT id, versao, situacao, atendimento_id, paciente_id, vigencia_inicio_em, vigencia_fim_em, suspensa_em
-       FROM prescricao p WHERE p.id = ? AND ${VISIVEL('p')} FOR UPDATE`,
+       FROM prescricao p WHERE p.id = ? AND ${VISIVEL('p')}`,
     [id, est],
   );
   if (!p) return null;
@@ -1091,13 +1100,12 @@ async function horariosPendentes(
   prescricao: number,
   item: number | null,
 ): Promise<{ id: number; versao: number }[]> {
-  const linhas = await tx.consultar(
+  const linhas = await tx.consultarParaAtualizar(
     `SELECT h.id, h.versao FROM horario_administracao h
        JOIN situacao_checagem s ON s.id = h.situacao_checagem_id
       WHERE h.prescricao_id = ? AND h.estabelecimento_id = ? AND h.excluido_em IS NULL AND NOT h.suspenso
         AND s.categoria IN (${CATEGORIAS_PENDENTES.map(() => '?').join(',')})
-        AND (? IS NULL OR h.prescricao_item_id = ?)
-      FOR UPDATE`,
+        AND (? IS NULL OR h.prescricao_item_id = ?)`,
     [prescricao, est, ...CATEGORIAS_PENDENTES, item, item],
   );
   return linhas.map((x) => ({ id: num(x['id']), versao: num(x['versao']) }));
@@ -1115,8 +1123,8 @@ async function suspenderHorarios(
 
 async function idPorSigla(tx: TxOperacao, tabela: 'unidade_prescricao' | 'via_de_uso', sigla: string) {
   const x = await tx.uma(
-    `SELECT id FROM ${tabela} WHERE excluido_em IS NULL AND (UPPER(sigla) = UPPER(?) OR UPPER(codigo) = UPPER(?))
-      ORDER BY (UPPER(sigla) = UPPER(?)) DESC, id LIMIT 1`,
+    `SELECT id FROM ${tabela} WHERE (UPPER(sigla) = UPPER(?) OR UPPER(codigo) = UPPER(?))
+      ORDER BY ativo DESC, (UPPER(sigla) = UPPER(?)) DESC, id LIMIT 1`,
     [sigla, sigla, sigla],
   );
   if (!x) throw recusar(422, 'cadastro-inexistente', `"${sigla}" não está no cadastro (${tabela}).`);
@@ -1141,14 +1149,15 @@ async function inserirItem(
   const categoria = CATEGORIA_DO_PLANO[it.plano];
   const tipo =
     it.plano >= BASE_PLANO_PROPRIO
-      ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ? AND excluido_em IS NULL', [
+      ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ?', [
           it.plano - BASE_PLANO_PROPRIO,
         ])
       : categoria
         ? await tx.uma(
-            `SELECT id FROM tipo_item_prescricao WHERE categoria = ? AND excluido_em IS NULL
-              ORDER BY ativo DESC, id LIMIT 1`,
-            [categoria],
+            `SELECT t.id FROM tipo_item_prescricao t WHERE t.categoria = ?
+              ORDER BY (t.id = (SELECT ip.tipo_item_prescricao_id FROM item_prescritivel ip WHERE ip.id = ?)) DESC,
+                       t.ativo DESC, t.id LIMIT 1`,
+            [categoria, d.produto],
           )
         : null;
   if (!tipo) throw recusar(422, 'tipo-item-sem-cadastro', 'O tipo do item não está no cadastro.');
@@ -1262,9 +1271,9 @@ async function efetivarFutura(
   prescricao: number,
   agora: Date,
 ): Promise<void> {
-  const f = await tx.uma(
+  const f = await umaTravada(tx, 
     `SELECT id, versao, situacao FROM planejamento_prescricao
-      WHERE id = ? AND estabelecimento_id = ? AND atendimento_id = ? AND excluido_em IS NULL FOR UPDATE`,
+      WHERE id = ? AND estabelecimento_id = ? AND atendimento_id = ? AND excluido_em IS NULL`,
     [id, est, atendimento],
   );
   if (!f) throw recusar(404, 'registro-inexistente', 'A prescrição futura não foi encontrada no atendimento.');
