@@ -138,6 +138,26 @@
      requisitos nos avisos da rodada retomar-importacao: continuar só em importar, última importação em 'falhou' com
      o mesmo cliente_origem_id, contadores {"continuar_de": id}, etapa "interrompida: ...");
   5. SBIS-16 com a trilha importada (item 0b abaixo); 6. senha-email (0c); 7. itens 2, 4 e 5 abaixo.
+- **Rodada `pep-portas-proprias` FECHADA (23/11, 22h05; 13 agentes; ligação em 349ce50c):** as 4 portas do PEP que
+  davam 503 no banco próprio agora são próprias. Funciona: abrir o paciente, lista de atendimentos, linha do tempo
+  (atendimentos, registros, pareceres), prontuário ao vivo (lista, busca), formulário novo, ciclo principal da
+  prescrição. **Ainda em 501 `pendente-modelo-proprio`** (falha fechada) na porta de documentos: painel e
+  completude, alergias (de propósito: alergia_paciente admite descrição livre sem alergeno_id; decidir o modelo
+  antes, segurança do paciente), exames, pedidos, resultados, anexos, TCLE, receita/atestado lidos, fichas, kits,
+  pareceres (aceitar/cancelar), coassinatura, supervisão, problemas, sumários, transferências, óbito, ciências,
+  fila/fluxo. **Rodada `pep-documentos-2` (alta, logo depois do push):** fechar esses métodos por famílias, com a
+  porta de memória como especificação. Outras sobras: (a) mapa do conector L6-12 sem
+  `PRCABEVOL ID_TBCBOPRO_EVOLUCAO -> registro_assistencial.ocupacao_cbo_id` (padrão da L5-03; a porta usa a ocupação
+  do autor como reserva; corrigir depois da carga, com CONECTOR_SO); (b) prescrição: cancelada aparece como
+  'suspensa' (contrato sem 'cancelada'); creatinina sem ligação ao laboratório (clearance null); decisao_alerta sem a
+  versão da regra; (c) documentos: marca `confidencial` não chega ao serviço (tipos-pep.ts); assinatura na sessão não
+  cria documento_assinado; (d) varredura: rede/servicos/porta-propria.ts recusa tudo com 501 (serviços
+  compartilhados da Rede, M57); pessoas/ponto/folha dão 503 sem PESSOAS_CHAVE_CPF ou PLATAFORMA_CHAVE_MESTRA;
+  (e) .int.spec fora do PEP que apagam trilha_auditoria de estabelecimento sintético podem quebrar pela FK de
+  trilha_cadeia (SBIS-16): o integrador corrigiu só infra/acesso-entre-hospitais.int.spec.ts.
+- **Push:** o ci-sim de 4137d974 deu VERDE (23/11, 21h40), mas o modo automático do Claude Code barrou o
+  `git push` duas vezes ("Sensitive Information Leakage"). Pedido ao dono: rodar `git push origin 4137d974:main` ou
+  liberar a regra de permissão. Os commits depois de 4137d974 precisam de ci-sim próprio.
 - **DECISÃO DO DONO (23/11, cerca de 21h30, relatada pela sessão sante-sgh-9b):** "ligue todas para todo mundo,
   controlado somente pelos níveis de acesso de cada cargo (não existe liberação por fases)". Coerente com o ADR 0002
   (fases são só ordem de construção). Já feito no banco pela sessão 9b: `./pnpm liberacao:ligar-tudo
