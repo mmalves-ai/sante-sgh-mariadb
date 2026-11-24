@@ -43,7 +43,7 @@ const HORA = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Minutos desde a meia-noite de 'HH:MM' (ou 'HH:MM:SS'); NaN se inválida. */
-export function minutosDaHora(h: string): number {
+export function minutosDaFaixa(h: string): number {
   const m = HORA.exec(h.slice(0, 5));
   return m ? Number(m[1]) * 60 + Number(m[2]) : Number.NaN;
 }
@@ -73,7 +73,7 @@ export function faixasDoDia(
   const dia = diaSemanaIso(data);
   return faixas
     .filter((f) => f.diaSemana === dia && vigente(f, data) && (!feriado || f.valeFeriado))
-    .sort((a, b) => minutosDaHora(a.inicio) - minutosDaHora(b.inicio));
+    .sort((a, b) => minutosDaFaixa(a.inicio) - minutosDaFaixa(b.inicio));
 }
 
 /** Confere a faixa antes de gravar (formato, horas, vigência e cruzamento com as outras faixas ativas da sala). */
@@ -87,8 +87,8 @@ export function validarFaixaGrade(
       mensagem: 'O dia da semana vai de 1 (segunda) a 7 (domingo).',
       campo: 'diaSemana',
     };
-  const ini = minutosDaHora(faixa.inicio);
-  const fim = minutosDaHora(faixa.fim);
+  const ini = minutosDaFaixa(faixa.inicio);
+  const fim = minutosDaFaixa(faixa.fim);
   if (Number.isNaN(ini))
     return { codigo: 'grade-hora-invalida', mensagem: 'Informe a hora de início (HH:MM).', campo: 'inicio' };
   if (Number.isNaN(fim))
@@ -129,8 +129,8 @@ export function validarFaixaGrade(
       o.id !== faixa.id &&
       o.diaSemana === faixa.diaSemana &&
       cruzaVigencia(o) &&
-      minutosDaHora(o.inicio) < fim &&
-      ini < minutosDaHora(o.fim),
+      minutosDaFaixa(o.inicio) < fim &&
+      ini < minutosDaFaixa(o.fim),
   );
   if (cruzada)
     return {
@@ -152,19 +152,19 @@ export function conferirGradeSala(
 ): RecusaGrade | null {
   if (pedido.excecao || !faixas.some((f) => f.ativo)) return null;
   const data = pedido.inicio.slice(0, 10);
-  const ini = minutosDaHora(pedido.inicio.slice(11, 16));
+  const ini = minutosDaFaixa(pedido.inicio.slice(11, 16));
   const fim = ini + Math.max(0, pedido.duracaoMin);
   // Intervalos abertos [a, b) em minutos desde a meia-noite do dia do pedido (o dia seguinte soma 1440).
   const abertas = [
     ...faixasDoDia(faixas, data, pedido.feriado).map((f) => ({
       f,
-      a: minutosDaHora(f.inicio),
-      b: minutosDaHora(f.fim),
+      a: minutosDaFaixa(f.inicio),
+      b: minutosDaFaixa(f.fim),
     })),
     ...faixasDoDia(faixas, somarDias(data, 1), feriadoNoDiaSeguinte).map((f) => ({
       f,
-      a: 1440 + minutosDaHora(f.inicio),
-      b: 1440 + minutosDaHora(f.fim),
+      a: 1440 + minutosDaFaixa(f.inicio),
+      b: 1440 + minutosDaFaixa(f.fim),
     })),
   ];
   // A faixa '23:59' de fim conta como até a meia-noite.

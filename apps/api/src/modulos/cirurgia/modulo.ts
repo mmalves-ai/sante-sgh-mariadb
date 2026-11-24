@@ -39,6 +39,8 @@ import { TRAVA_INCISAO, TravaIncisao } from './trava-incisao.js';
 import { TextoPadraoCirurgiaController } from './texto-padrao.controller.js';
 import { PORTA_TEXTO_PADRAO_CIRURGIA, PortaTextoPadraoCirurgiaPropria } from './texto-padrao-propria.js';
 import { GastoSalaController } from './gasto-sala.controller.js';
+import { GradeSalaController } from './grade-sala.controller.js';
+import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 
 export interface OpcoesModuloCirurgia {
@@ -115,6 +117,7 @@ export async function moduloCirurgia(
       TextoPadraoCirurgiaController,
       DescricaoCirurgicaController,
       GastoSalaController,
+      GradeSalaController,
     ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
@@ -143,6 +146,11 @@ export async function moduloCirurgia(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGastoSalaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
+      },
+      // F3.4 (04-CC linha 92): grade de funcionamento da sala no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_GRADE_SALA,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaGradeSalaPropria(ctx.nucleo) : null,
       },
       { provide: AVISOS_BLOCO, useValue: new AvisosAtendimento(null, 'bloco') },
       // A trava da incisão lê a chave do hospital na fonte de configuração: no banco, a FONTE_CONFIGURACAO global (sem

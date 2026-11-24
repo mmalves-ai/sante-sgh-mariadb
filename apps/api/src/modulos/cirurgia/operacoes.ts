@@ -43,6 +43,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, horaDe, instante, n, nn, texto } from './banco-apoio.js';
+import { conferirGradeNaTx } from './grade-sala-propria.js';
 import type { GravadorSghCirurgia } from './porta.js';
 import { conferirAlteracaoPedido } from './regras.js';
 
@@ -95,7 +96,8 @@ async function fusoDe(tx: TxOperacao): Promise<string> {
 }
 async function agendamentoDe(tx: TxOperacao, id: number): Promise<Linha> {
   const l = await tx.uma(
-    `SELECT id, versao, situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, tempo_limpeza_minutos
+    `SELECT id, versao, situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, tempo_limpeza_minutos,
+            especialidade_medica_id, cirurgiao_profissional_id
        FROM agendamento_cirurgico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est(tx)],
   );
@@ -552,6 +554,15 @@ const agendar = definirOperacao<AgendarCirurgiaEntrada, ResultadoOperacao>({
       anterior: null,
       excecao: !!e.excecao,
     });
+    // 04-CC linha 92: a sala tem de estar aberta na grade (faixa, feriado e reserva) para a cirurgia inteira.
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: e.duracaoMin,
+      especialidade: e.especialidade > 0 ? e.especialidade : null,
+      cirurgiao: e.equipe.cirurgiao.id,
+      excecao: !!e.excecao,
+    });
     const cirurgiao = e.equipe.cirurgiao.id;
     const valores = {
       sala_cirurgica_id: e.sala,
@@ -660,6 +671,14 @@ const remarcar = definirOperacao<RemarcarCirurgiaEntrada, ResultadoOperacao>({
       procedimentos: procs.map((x) => n(x['procedimento_cirurgico_id'])),
       preparoMinimoMin: e.preparoMinimoMin,
       anterior: { sala: n(a['sala_cirurgica_id']), inicio: visto ?? '' },
+      excecao: !!e.excecao,
+    });
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: duracao,
+      especialidade: nn(a['especialidade_medica_id']),
+      cirurgiao: nn(a['cirurgiao_profissional_id']),
       excecao: !!e.excecao,
     });
     await tx.alterar('agendamento_cirurgico', e.agendamento, n(a['versao']), {

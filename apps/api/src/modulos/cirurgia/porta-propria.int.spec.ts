@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { PortaAnestesiaPropria } from './anestesia-porta-propria.js';
 import { PortaBlocoSeguroPropria } from './bloco-seguro-porta-propria.js';
+import { PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PortaCirurgiaPropria } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -120,6 +121,10 @@ async function limpar(e: Escritor, ests: readonly number[]) {
   );
   await e.executar(
     `DELETE ps FROM permissao_sala_usuario ps JOIN sala_cirurgica s ON s.id = ps.sala_cirurgica_id WHERE s.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
+    `DELETE g FROM grade_sala_cirurgica g JOIN sala_cirurgica s ON s.id = g.sala_cirurgica_id WHERE s.estabelecimento_id IN (${em})`,
     ests,
   );
 }
@@ -1232,5 +1237,84 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     expect((await bl.codigos(ctx(m.est), `${amanha()}T20:00`, [agendamento])).get(agendamento)?.codigo).toBe(
       'K7Q2',
     );
+  });
+
+  it('grade da sala (04-CC linha 92): grava a faixa com trilha, a agenda recusa fora da grade e na reserva de outro cirurgião, inativar guarda a linha', async () => {
+    const grade = new PortaGradeSalaPropria(nucleo);
+    const dia = ((new Date(`${amanha()}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+    const faixa = { diaSemana: dia, inicio: '13:00', fim: '18:00', vigenciaInicio: '2020-01-01' };
+    const r = await grade.executar(
+      ctx(m.est),
+      'cirurgia.gravarFaixaGrade',
+      { sala: m.sala, ...faixa },
+      op(m.est),
+    );
+    const id = Number(r.resultado['faixa']);
+    const [linha] = await ler<Record<string, unknown>>(
+      'SELECT dia_semana, ativo, versao FROM grade_sala_cirurgica WHERE id = ?',
+      [id],
+    );
+    expect(linha).toMatchObject({ dia_semana: dia, versao: 1 });
+    expect(
+      await ler(
+        "SELECT id FROM trilha_auditoria WHERE entidade = 'grade_sala_cirurgica' AND entidade_id = ?",
+        [id],
+      ),
+    ).not.toHaveLength(0);
+    // Faixa cruzada no mesmo dia e a mesma sala lida de outro estabelecimento.
+    await expect(
+      grade.executar(
+        ctx(m.est),
+        'cirurgia.gravarFaixaGrade',
+        { sala: m.sala, ...faixa, inicio: '17:00', fim: '20:00' },
+        op(m.est),
+      ),
+    ).rejects.toThrow(/grade-faixa-cruzada/);
+    expect(await grade.grade(ctx(m.outro), m.sala)).toBeNull();
+    expect((await grade.grade(ctx(m.est), m.sala))?.faixas.map((f) => [f.inicio, f.fim, f.ativo])).toEqual([
+      ['13:00', '18:00', true],
+    ]);
+    // A agenda confere a grade: fora dela e passando do fim recusa; dentro grava.
+    await expect(
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('10:00'), op(m.est)),
+    ).rejects.toThrow(/sala-fechada-na-grade/);
+    await expect(
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('17:30'), op(m.est)),
+    ).rejects.toThrow(/sala-fechada-na-grade/);
+    const ag = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('14:00'),
+      op(m.est),
+    );
+    expect(Number(ag.resultado['agendamento'])).toBeGreaterThan(0);
+    // Reservada a outro cirurgião: recusa o cirurgião do pedido.
+    await grade.executar(
+      ctx(m.est),
+      'cirurgia.gravarFaixaGrade',
+      { sala: m.sala, faixa: id, versao: 1, ...faixa, profissional: m.anestesista },
+      op(m.est),
+    );
+    await expect(
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('16:00'), op(m.est)),
+    ).rejects.toThrow(/grade-reservada-cirurgiao/);
+    // Inativar: a linha fica (ativo falso, versão nova), de outro estabelecimento é recusado; sem faixa ativa, não restringe.
+    await expect(
+      grade.executar(ctx(m.outro), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 2 }, op(m.outro)),
+    ).rejects.toThrow(/faixa-inexistente/);
+    await grade.executar(ctx(m.est), 'cirurgia.inativarFaixaGrade', { faixa: id, versao: 2 }, op(m.est));
+    const [depois] = await ler<Record<string, unknown>>(
+      'SELECT ativo, versao FROM grade_sala_cirurgica WHERE id = ?',
+      [id],
+    );
+    expect(Number(depois?.['ativo'])).toBe(0);
+    expect(Number(depois?.['versao'])).toBe(3);
+    const livre = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('20:00'),
+      op(m.est),
+    );
+    expect(Number(livre.resultado['agendamento'])).toBeGreaterThan(0);
   });
 });
