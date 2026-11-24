@@ -15,3 +15,4 @@ export * from './credor.js';
 export * from './estorno.js';
 export * from './dourado.js';
 export * from './particular-integral.js';
+export * from './producao.js';
