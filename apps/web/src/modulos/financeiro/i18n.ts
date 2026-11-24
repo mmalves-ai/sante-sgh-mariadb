@@ -103,6 +103,21 @@ export const mensagensFinanceiro = {
     excluir: 'Excluir título em aberto',
     excluirTexto: 'Só o título em aberto se exclui; o pago se desfaz por estorno, com motivo.',
     legendaStatus: 'Código de situação gravado',
+    prorrogar: {
+      titulo: 'Prorrogar o vencimento',
+      texto:
+        'O vencimento original fica guardado e cada prorrogação vai ao histórico com o motivo. Parcela paga ou em remessa sem retorno não se prorroga.',
+      parcela: 'Parcela',
+      novoVencimento: 'Novo vencimento',
+      motivo: 'Motivo',
+      justificativa: 'Justificativa',
+      justificativaObrigatoria: 'Este motivo exige justificativa.',
+      dataParaTras: 'O novo vencimento tem de ser depois do atual ({atual}).',
+      botao: 'Prorrogar',
+      historico: 'Histórico de prorrogações da parcela',
+      passo: '{de} → {para}: {motivo} — {usuario} ({em})',
+      nenhuma: 'Nenhuma prorrogação.',
+    },
   },
   aprovacao: {
     titulo: 'Aprovação de pagamentos por alçada',

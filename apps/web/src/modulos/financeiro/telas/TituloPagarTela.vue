@@ -2,13 +2,22 @@
 // Título a pagar (ficha do M32, seção 7): `/financeiro/pagar/titulos/:id`. As parcelas do documento, a classificação
 // gerencial (do documento inteiro), as retenções, o rateio, as aprovações e a alçada que vale; o documento do credor
 // mascarado, com o "mostrar" auditado (finalidade escrita); a exclusão só do título em aberto.
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
-import { excluirTituloPagar, lerTituloPagar, mostrarDocumento, novaChave } from '../api-financeiro.js';
+import {
+  excluirTituloPagar,
+  lerMotivosProrrogacao,
+  lerProrrogacoes,
+  lerTituloPagar,
+  mostrarDocumento,
+  novaChave,
+  prorrogarParcela,
+} from '../api-financeiro.js';
 import { data, quando, reais, usarFinanceiro } from '../usar-financeiro.js';
 
 const props = defineProps<{ id: string }>();
@@ -28,6 +37,82 @@ async function mostrar() {
   erro.value = null;
   try {
     documento.value = (await mostrarDocumento(n.value, finalidade.value, novaChave('mostrar'))).valor;
+  } catch (e) {
+    erro.value = e;
+  }
+}
+// Prorrogação (F3.8, 07-FIN linha 63): na própria ficha do título, parcela por parcela, com o histórico ao lado.
+// A data e a justificativa são conferidas na hora (o servidor confere de novo: regra no domínio).
+const abertas = computed(() =>
+  (titulo.data.value?.parcelas ?? []).filter((p) => p.situacao === 'aberto' || p.situacao === 'vencido'),
+);
+const parcelaEscolhida = ref('');
+watch(
+  abertas,
+  (ps) => {
+    if (!ps.some((p) => String(p.id) === parcelaEscolhida.value))
+      parcelaEscolhida.value = ps[0] ? String(ps[0].id) : '';
+  },
+  { immediate: true },
+);
+const opcoesParcelas = computed(() =>
+  abertas.value.map((p) => ({ valor: String(p.id), rotulo: `${p.parcela} — ${data(p.vencimento)}` })),
+);
+const motivos = useQuery({
+  queryKey: ['financeiro', 'pagar', 'motivos-prorrogacao'],
+  queryFn: lerMotivosProrrogacao,
+  enabled: computed(() => tem('financeiro.tituloPagar.prorrogar')),
+});
+const opcoesMotivos = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...(motivos.data.value ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+]);
+const historico = useQuery({
+  queryKey: computed(() => ['financeiro', 'pagar', 'prorrogacoes', parcelaEscolhida.value]),
+  queryFn: () => lerProrrogacoes(Number(parcelaEscolhida.value)),
+  enabled: computed(() => !!parcelaEscolhida.value),
+});
+const prorrogacao = ref({ vencimento: '', motivo: '', justificativa: '' });
+const vencimentoAtual = computed(
+  () => abertas.value.find((p) => String(p.id) === parcelaEscolhida.value)?.vencimento ?? null,
+);
+const exigeJustificativa = computed(
+  () =>
+    motivos.data.value?.find((m) => String(m.id) === prorrogacao.value.motivo)?.exigeJustificativa ?? false,
+);
+const dataParaTras = computed(
+  () =>
+    !!prorrogacao.value.vencimento &&
+    !!vencimentoAtual.value &&
+    prorrogacao.value.vencimento <= vencimentoAtual.value.slice(0, 10),
+);
+const faltaJustificativa = computed(
+  () => exigeJustificativa.value && prorrogacao.value.justificativa.trim().length === 0,
+);
+const podeProrrogar = computed(
+  () =>
+    !!parcelaEscolhida.value &&
+    !!prorrogacao.value.vencimento &&
+    !!prorrogacao.value.motivo &&
+    !dataParaTras.value &&
+    !faltaJustificativa.value &&
+    pode('prorrogarVencimento', 'financeiro.tituloPagar.prorrogar'),
+);
+async function prorrogar() {
+  erro.value = null;
+  try {
+    const r = await prorrogarParcela(
+      Number(parcelaEscolhida.value),
+      {
+        vencimento: prorrogacao.value.vencimento,
+        motivo: Number(prorrogacao.value.motivo),
+        justificativa: prorrogacao.value.justificativa,
+      },
+      novaChave('prorrogar'),
+    );
+    mensagem.value = r.mensagem;
+    prorrogacao.value = { vencimento: '', motivo: '', justificativa: '' };
+    await qc.invalidateQueries({ queryKey: ['financeiro'] });
   } catch (e) {
     erro.value = e;
   }
@@ -163,6 +248,76 @@ async function excluir() {
         </li>
         <li v-if="!titulo.data.value.aprovacoesFeitas.length">{{ t('financeiro.nenhum') }}</li>
       </ul>
+      <template v-if="abertas.length && tem('financeiro.tituloPagar.prorrogar')">
+        <h2>{{ t('financeiro.pagar.prorrogar.titulo') }}</h2>
+        <p class="secundario">{{ t('financeiro.pagar.prorrogar.texto') }}</p>
+        <form class="filtros" data-testid="tpd-prorrogar" @submit.prevent="prorrogar">
+          <span class="campo">
+            <SanteSelecao
+              v-model="parcelaEscolhida"
+              :rotulo="t('financeiro.pagar.prorrogar.parcela')"
+              :opcoes="opcoesParcelas"
+              data-testid="tpd-prorrogar-parcela"
+            />
+          </span>
+          <span class="campo">
+            <label for="tpd-prorrogar-vencimento">{{ t('financeiro.pagar.prorrogar.novoVencimento') }}</label>
+            <input
+              id="tpd-prorrogar-vencimento"
+              v-model="prorrogacao.vencimento"
+              type="date"
+              required
+              :aria-invalid="dataParaTras"
+              data-testid="tpd-prorrogar-vencimento"
+            />
+          </span>
+          <span class="campo">
+            <SanteSelecao
+              v-model="prorrogacao.motivo"
+              :rotulo="t('financeiro.pagar.prorrogar.motivo')"
+              :opcoes="opcoesMotivos"
+              data-testid="tpd-prorrogar-motivo"
+            />
+          </span>
+          <span class="campo">
+            <label for="tpd-prorrogar-justificativa">{{
+              t('financeiro.pagar.prorrogar.justificativa')
+            }}</label>
+            <input
+              id="tpd-prorrogar-justificativa"
+              v-model="prorrogacao.justificativa"
+              maxlength="2000"
+              :required="exigeJustificativa"
+              :aria-invalid="faltaJustificativa"
+              data-testid="tpd-prorrogar-justificativa"
+            />
+          </span>
+          <button type="submit" :disabled="!podeProrrogar" data-testid="tpd-prorrogar-botao">
+            {{ t('financeiro.pagar.prorrogar.botao') }}
+          </button>
+        </form>
+        <p v-if="dataParaTras" role="alert" data-testid="tpd-prorrogar-aviso">
+          {{ t('financeiro.pagar.prorrogar.dataParaTras', { atual: data(vencimentoAtual) }) }}
+        </p>
+        <p v-else-if="faltaJustificativa" role="alert" data-testid="tpd-prorrogar-aviso">
+          {{ t('financeiro.pagar.prorrogar.justificativaObrigatoria') }}
+        </p>
+        <h3>{{ t('financeiro.pagar.prorrogar.historico') }}</h3>
+        <ul data-testid="tpd-prorrogacoes">
+          <li v-for="h in historico.data.value ?? []" :key="h.id">
+            {{
+              t('financeiro.pagar.prorrogar.passo', {
+                de: data(h.vencimentoAnterior),
+                para: data(h.vencimentoNovo),
+                motivo: h.justificativa ? `${h.motivo} (${h.justificativa})` : h.motivo,
+                usuario: h.usuario,
+                em: quando(h.em),
+              })
+            }}
+          </li>
+          <li v-if="!(historico.data.value ?? []).length">{{ t('financeiro.pagar.prorrogar.nenhuma') }}</li>
+        </ul>
+      </template>
       <template v-if="titulo.data.value.situacao === 'aberto' || titulo.data.value.situacao === 'vencido'">
         <p class="secundario">{{ t('financeiro.pagar.excluirTexto') }}</p>
         <button
