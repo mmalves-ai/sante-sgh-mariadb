@@ -22,7 +22,8 @@
 // - cancelarNaoConformidade: a não conformidade aberta vai a 'cancelada' com o motivo, quem e a duplicada (do mesmo
 //   estabelecimento, ativa e diferente dela); a reaberta conta como aberta (a leitura a entrega assim). Recusa
 //   `com-dependentes` quando outra não conformidade não excluída a aponta como duplicada, cancelada ou não (como a
-//   memória): a duplicada só se grava no próprio cancelamento, então toda dependente já está cancelada. O evento da situação não leva 'cancelada' (CHECK do evento): o cancelamento fica na trilha.
+//   memória): a duplicada só se grava no próprio cancelamento, então toda dependente já está cancelada.
+//   A aberta sem responsável nem prazo se cancela pela migração 18_QUA/97 (ck_nao_conformidade_qualidade_tratamento). O evento da situação não leva 'cancelada' (CHECK do evento): o cancelamento fica na trilha.
 // Os cancelamentos guardam a linha anterior em anotacao.dados.versaoAnterior (ação `cancelamento`), que `versoes` lê;
 // o aval não versiona (como na memória): fica na trilha da operação.
 // Ligação (integrador): a porta completa delega as leituras de METODOS_COMPLEMENTO_Q5 a LeiturasGestaoComplementoQ5,
