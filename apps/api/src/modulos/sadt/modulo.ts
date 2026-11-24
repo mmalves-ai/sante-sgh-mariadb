@@ -42,6 +42,7 @@ import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.j
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
+import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -131,6 +132,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       CatalogoSadtController,
       PedidoSadtController,
       MapaTrabalhoController,
+      LaudoRedacaoController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
@@ -155,6 +157,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoPedidoSadt } = await import('./aplicacao/pedido-propria.js');
           return new ServicoPedidoSadt(ctx.nucleo);
+        },
+      },
+      // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_LAUDO_REDACAO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoLaudoRedacao } = await import('./aplicacao/laudo-redacao.js');
+          return new ServicoLaudoRedacao(ctx.nucleo);
         },
       },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.
