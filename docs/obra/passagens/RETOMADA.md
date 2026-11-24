@@ -504,3 +504,21 @@ autorizada; investigar a causa da parada.
    - F5, F7 e F8;
    - etiquetas, 2FA por e-mail e login também por e-mail;
    - API de compatibilidade com os agentes Hal-AI.
+
+## ESTADO EM 24/11 17h50 (orquestrador, sessão e03db3e2)
+
+- **GitHub em 65a1c3c9** (push às 17h40, ci-sim VERDE e verificar:tudo verde). Rodadas fechadas: f3-funcoes (296 M,
+  sem provas por falta de memória) e consolidar-2 (22,8 M; tipagem, testes, combos, auditoria, permissões e
+  convivência zerados).
+- **Carga e conector passaram para a sessão "Painel de Injeção" (sante-sgh-2f)**, a pedido do dono: worktree
+  `../sante-sgh-wt/autor-registro` (branch conector-autor-registro), correção das recusas de registro clínico, tela
+  "Carga e sincronismo" no painel e origem servidor Firebird. Ela religa a execução 17 (`--continuar`). Combinado:
+  não gravar no cliente_prontocardio; merge dela na main a qualquer hora; push combinado por mensagem antes.
+- **API 3310 reiniciada às 17h45** com o build de 16h35 e o override `CLIENTE_PADRAO=prontocardio
+  REDE_PADRAO=prontocardio`. O cliente_prontocardio ainda NÃO tem as migrações de 24/11 (fica com a outra sessão).
+- **Lição:** rodada de agentes e esteira só com a carga parada (memória); `./pnpm`, nunca `pnpm`.
+- **Próximo:** 2ª volta da F3 (162 funções Parciais pelas fichas: provar, contrato de efeito, E2E) com memória livre;
+  pendências herdadas: 8 .int.spec antigos vermelhos (calendario-proprio, texto-padrao-propria,
+  cadastro-estoque-porta-propria, paciente-vinculos-proprio, profissional-complemento-proprio, registros-internacao,
+  usuarios-agenda, fechamento-checagem), E2E f36:76, f37-ajustes:127, f37-complementos:145, decisão de produto da
+  regra item-e-grupo da farmácia (f36:22). Depois F5, F7 e F8 até 27/11.
