@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   apurarLancamentos,
-  competenciaDe,
+  competenciaDaConta,
   type EntradaApuracao,
   escolherTipoConta,
   naturezaDaEntrada,
@@ -78,7 +78,7 @@ describe('conta na entrada: natureza, tipo, competência e número', () => {
       recusa: 'tipo-conta-ambiguo',
     });
     expect(escolherTipoConta([], 'pronto_atendimento')).toMatchObject({ recusa: 'tipo-conta-inexistente' });
-    expect(competenciaDe('2026-11-24')).toBe('2026-11-01');
+    expect(competenciaDaConta('2026-11-24')).toBe('2026-11-01');
     expect(numeroDaConta('000123', 1)).toBe('000123-1');
     expect(() => numeroDaConta('x'.repeat(19), 1)).toThrow();
   });

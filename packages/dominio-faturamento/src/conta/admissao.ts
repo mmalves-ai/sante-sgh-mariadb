@@ -24,10 +24,10 @@
 //   ("troca_acomodacao" ou "regra_alterada") e o novo é lançado; o dia que deixou de ser devido é estornado ("alta"
 //   quando a contagem foi fechada pela alta, "regra_alterada" nos demais casos).
 
-export type NaturezaConta = 'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
+export type NaturezaContaPaciente = 'ambulatorial' | 'pronto_atendimento' | 'externo' | 'internacao' | 'domiciliar';
 
 /** Natureza da conta pelo tipo base da categoria de atendimento; nulo quando a entrada não gera cobrança. */
-export function naturezaDaEntrada(tipoBase: string): NaturezaConta | null {
+export function naturezaDaEntrada(tipoBase: string): NaturezaContaPaciente | null {
   switch (tipoBase) {
     case 'ambulatorio':
     case 'telessaude':
@@ -46,7 +46,7 @@ export function naturezaDaEntrada(tipoBase: string): NaturezaConta | null {
 }
 
 /** Natureza do tipo de conta (cadastro tipo_conta) que serve à natureza da conta. */
-export const NATUREZA_TIPO_CONTA: Readonly<Record<NaturezaConta, string>> = {
+export const NATUREZA_TIPO_CONTA: Readonly<Record<NaturezaContaPaciente, string>> = {
   ambulatorial: 'ambulatorial',
   pronto_atendimento: 'urgencia',
   externo: 'externa',
@@ -61,7 +61,7 @@ export type EscolhaTipoConta =
 /** O tipo de conta: o único ativo da natureza ou o de menor ordem quando só um a tem. */
 export function escolherTipoConta(
   ativos: readonly { readonly id: number; readonly ordem: number }[],
-  natureza: NaturezaConta,
+  natureza: NaturezaContaPaciente,
 ): EscolhaTipoConta {
   if (ativos.length === 0)
     return {
@@ -79,7 +79,7 @@ export function escolherTipoConta(
 }
 
 /** Competência da conta (AAAA-MM-01) pela data local da entrada (AAAA-MM-DD). */
-export function competenciaDe(diaLocal: string): string {
+export function competenciaDaConta(diaLocal: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(diaLocal)) throw new Error(`Data inválida: "${diaLocal}".`);
   return `${diaLocal.slice(0, 7)}-01`;
 }
@@ -167,7 +167,7 @@ export interface LancamentoDesejado {
 export type MotivoEstorno = 'troca_acomodacao' | 'alta' | 'regra_alterada';
 
 export interface EntradaApuracao {
-  readonly natureza: NaturezaConta;
+  readonly natureza: NaturezaContaPaciente;
   /** Entrada local "AAAA-MM-DDTHH:MM". */
   readonly entrada: string;
   /** Até onde contar (alta, ou agora com a internação em curso), local "AAAA-MM-DDTHH:MM". */
@@ -185,7 +185,7 @@ export interface EntradaApuracao {
   readonly vigentes: readonly LancamentoVigente[];
 }
 
-export interface ResultadoApuracao {
+export interface ResultadoApuracaoLancamentos {
   readonly lancar: readonly LancamentoDesejado[];
   readonly estornar: readonly { readonly id: number; readonly motivo: MotivoEstorno }[];
   /** Dias de diária sem regra que se aplique (ou com regras empatadas), para a conferência do faturista. */
@@ -284,7 +284,7 @@ export function regrasDoDia(
   return { principal, adicionais, acompanhante };
 }
 
-const NATUREZA_APLICA: Readonly<Record<NaturezaConta, keyof TaxaAutomatica['aplica']>> = {
+const NATUREZA_APLICA: Readonly<Record<NaturezaContaPaciente, keyof TaxaAutomatica['aplica']>> = {
   internacao: 'internacao',
   ambulatorial: 'ambulatorial',
   externo: 'externo',
@@ -292,7 +292,7 @@ const NATUREZA_APLICA: Readonly<Record<NaturezaConta, keyof TaxaAutomatica['apli
   domiciliar: 'domiciliar',
 };
 
-function taxaServe(t: TaxaAutomatica, natureza: NaturezaConta, dia: string): boolean {
+function taxaServe(t: TaxaAutomatica, natureza: NaturezaContaPaciente, dia: string): boolean {
   return (
     t.acao === 'incluir' &&
     !t.exigeConfirmacao &&
@@ -345,7 +345,7 @@ function desejoDeDiaria(
 /** O que a conta deve ter de lançamentos automáticos até o limite (sem olhar o que já tem). */
 export function lancamentosDevidos(e: EntradaApuracao): {
   readonly devidos: readonly LancamentoDesejado[];
-  readonly pendencias: ResultadoApuracao['pendencias'];
+  readonly pendencias: ResultadoApuracaoLancamentos['pendencias'];
 } {
   exigirLocal(e.entrada, 'Entrada');
   exigirLocal(e.limite, 'Limite');
@@ -405,7 +405,7 @@ export function lancamentosDevidos(e: EntradaApuracao): {
 }
 
 /** A apuração idempotente: o que lançar e o que estornar para a conta ficar com o que é devido. */
-export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracao {
+export function apurarLancamentos(e: EntradaApuracao): ResultadoApuracaoLancamentos {
   const { devidos, pendencias } = lancamentosDevidos(e);
   const chaveDe = (x: { chave: string; dia: string }) => `${x.chave}|${x.dia}`;
   const desejo = new Map(devidos.map((d) => [chaveDe(d), d]));
