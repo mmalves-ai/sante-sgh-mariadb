@@ -37,7 +37,7 @@ export function emailAcessoMemoria(): PortaEmailAcesso & { readonly enviadas: Me
 }
 
 /**
- * O envio pelo ambiente: SMTP_URL (smtp://host:porta) e SMTP_REMETENTE. Fora de produção (AMBIENTE diferente de
+ * O envio pelo ambiente: SMTP_URL (smtp://host:porta) e EMAIL_REMETENTE. Fora de produção (AMBIENTE diferente de
  * `producao`), só loopback; senão lança (a montagem é recusada). Sem SMTP_URL, null.
  */
 export function emailAcessoDoAmbiente(env: NodeJS.ProcessEnv): PortaEmailAcesso | null {
@@ -47,8 +47,8 @@ export function emailAcessoDoAmbiente(env: NodeJS.ProcessEnv): PortaEmailAcesso 
   if (u.protocol !== 'smtp:') throw new Error('SMTP_URL: use smtp://.');
   if ((env['AMBIENTE'] ?? 'dev') !== 'producao' && !LOOPBACK.has(u.hostname))
     throw new Error('SMTP_URL: fora de produção, só a captura local em loopback.');
-  const de = env['SMTP_REMETENTE']?.trim() || REMETENTE_ACESSO_PADRAO;
-  if (!ENDERECO_EMAIL.test(de)) throw new Error('SMTP_REMETENTE inválido.');
+  const de = env['EMAIL_REMETENTE']?.trim() || REMETENTE_ACESSO_PADRAO;
+  if (!ENDERECO_EMAIL.test(de)) throw new Error('EMAIL_REMETENTE inválido.');
   return { destino: 'smtp', enviar: (m) => enviarSmtpAcesso(url, de, m) };
 }
 
