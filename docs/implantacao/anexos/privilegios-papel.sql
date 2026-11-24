@@ -7,7 +7,7 @@
 -- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a
 -- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).
 -- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).
--- 3699 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, sugestao_notificacao_resolvida, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
+-- 3700 tabelas. Só de acréscimo: cliente_evento, conta_plataforma_evento, modelo_documento_evento, sessao_suporte_aviso, sugestao_notificacao_resolvida, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
 
 CREATE ROLE IF NOT EXISTS papel_aplicacao;
 
@@ -862,6 +862,8 @@ GRANT SELECT, INSERT, UPDATE ON ciclo_certificacao TO papel_aplicacao;
 REVOKE DELETE ON ciclo_certificacao FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON ciclo_certificacao_item TO papel_aplicacao;
 REVOKE DELETE ON ciclo_certificacao_item FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON ciclo_competencia_fonte_pagadora TO papel_aplicacao;
+REVOKE DELETE ON ciclo_competencia_fonte_pagadora FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON ciclo_esterilizacao TO papel_aplicacao;
 REVOKE DELETE ON ciclo_esterilizacao FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON ciclo_esterilizacao_item TO papel_aplicacao;

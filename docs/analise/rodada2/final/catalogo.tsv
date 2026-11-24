@@ -595,6 +595,7 @@ fatura_fonte_pagadora	FAT	principal	F3	Fatura enviada à fonte pagadora na compe
 fatura_fonte_pagadora_conta	FAT	item	F3	Contas que compõem a fatura, com valor apresentado	R1#31; MV: ITEM_FATURA	06	0
 favorecido_repasse	FAT	configuracao	F3	Para quem vai o repasse de cada profissional (ele, sua empresa, cooperativa ou terceiro) com vigência	R1#46; SP: TBRPATPREPASSE; MV: REG_REP_SUBCONTRATADA	06	1
 fechamento_competencia_fonte_pagadora	FAT	principal	F3	Fechamento do mês por fonte pagadora, com totais apresentados e data	R1#32; SP: FCFECMES; MV: CONTAS_FORMACAO_FFCV	06	3
+ciclo_competencia_fonte_pagadora	FAT	historico	F3	Cada ciclo de fechamento e reabertura da competência por fonte pagadora, com autor, data, motivo e impacto confirmado (nada é apagado)	R1#32; F3.7 (06-FAT, fechar e reabrir a competência)	06	1
 fluxo_guia_etapa	FAT	configuracao	F7	Etapas do fluxo de guias (centro cirúrgico, internação) por fonte pagadora	R1#24; MV: FSCC_CONFIG_WORKFLOW_GUIAS*	06	4
 fluxo_guia_usuario	FAT	vinculo	F7	Usuários responsáveis por cada etapa do fluxo de guias	R1#24; MV: FSCC_CONFIG_WORKFLOW_GUIA_USU	06	1
 fonte_referencia_matmed	FAT	dominio	F3	Publicações de referência de preço de mat/med (Brasíndice, Simpro, CMED, tabela própria)	R1#6	06	0

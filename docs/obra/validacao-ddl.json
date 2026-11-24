@@ -1,15 +1,15 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3699,
-  "catalogo": 3693,
+  "tabelas_criadas": 3700,
+  "catalogo": 3694,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
   "colunas_id_sem_fk": 76,
-  "fks": 14185,
+  "fks": 14190,
   "gatilhos": 0,
   "plataforma_erros": 0,
   "total_erros": 0
