@@ -522,7 +522,7 @@ tr.suspenso-correcao td {
   padding: 0 var(--sgh-espaco-1);
 }
 .prova.alterado {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
   font-weight: 700;
 }
 .obs {

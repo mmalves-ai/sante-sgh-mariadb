@@ -157,7 +157,7 @@ async function abrir(paciente: number): Promise<void> {
 <style src="../../agenda/componentes/estilo-agenda.css"></style>
 <style scoped>
 .critico {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 .valor {
   display: block;

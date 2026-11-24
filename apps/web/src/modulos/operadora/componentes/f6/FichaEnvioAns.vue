@@ -577,6 +577,6 @@ const opcoesModo = computed(() =>
   min-height: 24px;
 }
 .erro {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 </style>

@@ -280,7 +280,7 @@ async function confirmar(): Promise<void> {
   padding-left: var(--sgh-espaco-3);
 }
 .erro {
-  color: var(--sgh-perigo-texto, var(--sgh-texto));
+  color: var(--sgh-alerta);
   font-weight: 600;
   margin: 0;
 }

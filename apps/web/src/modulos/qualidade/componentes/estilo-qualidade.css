@@ -8,7 +8,7 @@
   white-space: nowrap;
 }
 .prazo--vencido {
-  border-color: var(--sgh-perigo);
+  border-color: var(--sgh-alerta);
   background: var(--sgh-alerta-suave);
   font-weight: 600;
 }
@@ -28,7 +28,7 @@
   font-size: var(--sgh-fonte-pequena);
 }
 .selo--grave {
-  border-color: var(--sgh-perigo);
+  border-color: var(--sgh-alerta);
   font-weight: 600;
 }
 .secundario {

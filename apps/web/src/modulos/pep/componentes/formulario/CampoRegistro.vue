@@ -398,7 +398,7 @@ const naoRespondida = computed(() => !v.value);
   color: var(--sgh-texto-secundario);
 }
 .obrigatorio {
-  color: var(--sgh-perigo);
+  color: var(--sgh-alerta);
 }
 .quantidade {
   display: flex;
