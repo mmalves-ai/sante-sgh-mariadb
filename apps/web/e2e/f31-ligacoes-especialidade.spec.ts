@@ -79,6 +79,6 @@ test.describe('F3.1 ligações da especialidade @F3.1', () => {
     expect(String(pedidos[0]!.corpo['vigenciaInicio'])).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(new Set(lidas)).toEqual(new Set([`/api/cadastros/especialidades/${ESPECIALIDADE}/ligacoes`]));
     await expect(page.getByTestId('ligacoes-erro')).toHaveCount(0);
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'ligações da especialidade');
   });
 });
