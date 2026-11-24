@@ -9,6 +9,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import IndicadorCaptacao from '../componentes/IndicadorCaptacao.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { buscarPacientes } from '../api-cadastro.js';
@@ -314,5 +315,6 @@ watch(situacao, () => void carregar());
         </template>
       </template>
     </section>
+    <IndicadorCaptacao />
   </main>
 </template>

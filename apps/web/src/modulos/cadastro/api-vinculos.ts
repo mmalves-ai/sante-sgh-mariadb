@@ -43,6 +43,11 @@ export interface Captacao {
   campanha: string | null;
   situacao: string;
 }
+export interface IndicadorOrigem {
+  total: number;
+  porCanal: { canal: string; total: number }[];
+  porTipo: { id: number; descricao: string; total: number }[];
+}
 export interface PreCadastro {
   id: number;
   nome: string;
@@ -103,6 +108,8 @@ export const encerrarCobertura = (p: number, id: number, versao: number, motivo:
 export const lerCaptacoes = (p: number) => pedir<{ itens: Captacao[] }>(`${C}/pacientes/${p}/captacoes`);
 export const registrarCaptacao = (p: number, c: Record<string, unknown>) =>
   pedir<{ id: number }>(`${C}/pacientes/${p}/captacoes`, 'POST', c);
+export const lerIndicadorOrigem = (de: string, ate: string) =>
+  pedir<IndicadorOrigem>(`${C}/captacoes/indicador?${new URLSearchParams({ de, ate })}`);
 export const lerPreCadastros = (situacao: string, termo: string) =>
   pedir<{ itens: PreCadastro[] }>(
     `${C}/pre-cadastros?${new URLSearchParams({ ...(situacao ? { situacao } : {}), ...(termo ? { termo } : {}) })}`,

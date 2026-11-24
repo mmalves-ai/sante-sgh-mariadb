@@ -101,7 +101,9 @@ test.describe('@F3.1 pré-cadastro e chegada', () => {
     page,
   }) => {
     const pedidos: Pedido[] = [];
-    await entrar(page, 'SINT.RECEPCAO');
+    // A central de marcação (agenda.marcacao.agendar) grava o pré-cadastro; a recepção (cadastro.paciente.criar)
+    // recebe a chegada. Cada cargo com o seu nível de acesso; as rotas simuladas valem para a página toda.
+    await entrar(page, 'SINT.AGENDA');
     await simular(page, pedidos);
 
     await page.goto('/cadastros/pacientes/pre-cadastros');
@@ -120,7 +122,11 @@ test.describe('@F3.1 pré-cadastro e chegada', () => {
         celular: '(31) 99999-0155',
       });
 
-    // Chegada: um clique mostra o que a ficha nova recebe e leva a ela preenchida.
+    // Chegada, na recepção: um clique mostra o que a ficha nova recebe e leva a ela preenchida.
+    await expect(page.getByTestId('lista-pre-cadastros')).toContainText('PRE SINTETICO CHEGADA');
+    await entrar(page, 'SINT.RECEPCAO');
+    await page.goto('/cadastros/pacientes/pre-cadastros');
+    await expect(page.getByTestId('novo-pre-cadastro')).toHaveCount(0);
     const lista = page.getByTestId('lista-pre-cadastros');
     await expect(lista).toContainText('PRE SINTETICO CHEGADA');
     await lista.getByRole('button', { name: 'Chegou' }).click();

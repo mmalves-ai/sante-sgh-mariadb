@@ -69,6 +69,16 @@ export const mensagensVinculos = {
       campanha: 'Escreva o nome da campanha.',
     },
   },
+  indicador: {
+    titulo: 'Origem dos pacientes no período',
+    de: 'De',
+    ate: 'Até',
+    periodoInvalido: 'A data inicial tem de ser igual ou anterior à final.',
+    total: 'Origens registradas no período: {n}',
+    porCanal: 'Por canal de captação',
+    porTipo: 'Por tipo de indicação',
+    pacientes: 'Registros',
+  },
   pre: {
     titulo: 'Pré-cadastro (marcação sem prontuário)',
     nome: 'Nome completo',
