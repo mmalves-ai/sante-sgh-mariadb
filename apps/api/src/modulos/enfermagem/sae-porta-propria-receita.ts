@@ -3,7 +3,12 @@
 // paciente; a reemissão aponta a receita que substitui; a suspensão ou o cancelamento é um fato novo na própria linha
 // (situação, quando, quem e o motivo: a original fica legível e inativa), com o evento na fila de saída.
 // Mesmo comportamento da porta de memória: as recusas receita-inexistente e receita-ja-inativa; a repetição pela chave
-// do pedido devolve a mesma receita.
+// do pedido devolve a mesma receita (o hash da chave cobre o atendimento e o conteúdo clínico, nunca o relógio: o
+// reenvio um segundo depois é a mesma receita) e a chave usada em outra receita é recusada (chave-reutilizada).
+// O texto assinado vai inteiro para receita_medica.conteudo e a impressão SHA-256 dele para hash_conteudo, conferida
+// antes de gravar (texto e impressão que não batem são recusados); sem o texto, a gravação falha fechada.
+// A reemissão trava a anterior (FOR UPDATE) e confere, na mesma transação, que ela está suspensa ou cancelada e que
+// ainda não foi reemitida: dois pedidos ao mesmo tempo não geram duas receitas ativas da mesma anterior.
 // Tabelas: receita_medica (as colunas do protocolo de enfermagem, o conteúdo emitido e o resumo SHA-256 dele) e
 // receita_medica_item (via e quantidade como saem impressas, migração 06_PEP/94_receita_enfermeiro). O modelo
 // "retenção" é o tipo de receita de antimicrobiano (duas vias); o "simples", o tipo sem controle especial (uma via).
@@ -25,7 +30,14 @@ import {
 } from './banco-apoio.js';
 import type { ContextoSae, GravadorSae } from './sae-porta.js';
 import type { Escrita } from './sae-porta-propria.js';
-import type { ReceitaDoEnfermeiro } from './sae-tipos.js';
+import type { ReceitaDoEnfermeiro, ReceitaEnfermeiroNova } from './sae-tipos.js';
+
+/** A receita nova com o texto assinado (o campo `texto` entra em ReceitaEnfermeiroNova pela ligação do integrador). */
+export type ReceitaEnfermeiroComTexto = ReceitaEnfermeiroNova & {
+  readonly texto?: string | null | undefined;
+};
+/** A receita lida com o texto como foi assinado (nulo nas gravadas sem o texto). */
+export type ReceitaDoEnfermeiroLida = ReceitaDoEnfermeiro & { readonly texto: string | null };
 
 export const OPERACOES_RECEITA_SAE = {
   prescrever: 'sae.prescrever-medicamento',
@@ -68,7 +80,47 @@ export function validadeDe(emissaoCivil: string, dias: number | null): string | 
   return d.toISOString().slice(0, 10);
 }
 
-const sha256 = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex');
+export const sha256 = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex');
+
+/** A parte da receita que o hash da chave do pedido cobre: o atendimento e o conteúdo clínico, sem o relógio. */
+export function entradaDaChave(r: ReceitaEnfermeiroNova): Record<string, unknown> {
+  return {
+    paciente: r.paciente,
+    atendimento: r.atendimento,
+    protocolo: r.protocolo,
+    ano: r.ano,
+    tipoProtocolo: r.tipoProtocolo,
+    modelo: r.modelo,
+    listaVersao: r.listaVersao,
+    segundoIdentificador: r.segundoIdentificador,
+    itens: r.itens.map((i) => ({
+      medicamento: i.medicamento,
+      via: i.via,
+      posologia: i.posologia,
+      quantidade: i.quantidade,
+    })),
+    vinculo: r.vinculo,
+    anterior: r.anterior ?? null,
+  };
+}
+
+/** O texto assinado, conferido contra a impressão SHA-256 que a assinatura cobre. */
+export function textoConferido(r: ReceitaEnfermeiroComTexto): string {
+  const t = r.texto;
+  if (typeof t !== 'string' || t.length === 0)
+    throw new ErroOperacao(
+      409,
+      'receita-sem-texto',
+      'Receita sem o texto assinado',
+      'A receita chegou sem o texto assinado: gere a prévia de novo e assine.',
+    );
+  if (sha256(t) !== r.impressao.toLowerCase())
+    throw recusa(
+      'impressao-divergente',
+      'A impressão da assinatura não confere com o texto da receita: gere a prévia de novo e assine.',
+    );
+  return t;
+}
 
 /** As gravações da receita do enfermeiro (o gravador da SAE as expõe). */
 export function gravadorReceitaSae(
@@ -77,11 +129,12 @@ export function gravadorReceitaSae(
 ): Pick<GravadorSae, 'prescreverMedicamento' | 'inativarReceita'> {
   return {
     prescreverMedicamento: async (r) => {
+      const textoAssinado = textoConferido(r as ReceitaEnfermeiroComTexto);
       const s = await esc({
         nome: OPERACOES_RECEITA_SAE.prescrever,
         tabelas: ['receita_medica', 'receita_medica_item', 'sequencia_negocio'],
         chave: r.chave,
-        entrada: { ...r },
+        entrada: entradaDaChave(r),
         alvo: (x) => ({ tabela: 'receita_medica', id: Number(x['id']) }),
         gravar: async (tx, est, fuso) => {
           const at = await tx.uma(
@@ -94,12 +147,27 @@ export function gravadorReceitaSae(
               'O atendimento não é deste paciente neste estabelecimento.',
             );
           if (r.anterior) {
-            const a = await tx.uma(
-              `SELECT id FROM receita_medica WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ?
+            // Trava a anterior: a conferência e a gravação da reemissão ficam na mesma transação.
+            const [a] = await tx.consultarParaAtualizar<Linha>(
+              `SELECT id, situacao FROM receita_medica WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ?
                   AND protocolo_enfermagem IS NOT NULL AND excluido_em IS NULL`,
               [r.anterior, r.atendimento, est],
+              { teto: 1 },
             );
             if (!a) throw RECEITA_INEXISTENTE();
+            if (!['suspensa', 'cancelada'].includes(texto(a['situacao'])))
+              throw recusa(
+                'receita-ativa',
+                'A receita anterior ainda está ativa: suspenda ou cancele, com o motivo, antes de reemitir.',
+              );
+            // Leitura com trava (a mais recente confirmada, não a foto do início da transação).
+            const [ja] = await tx.consultarParaAtualizar<Linha>(
+              `SELECT id FROM receita_medica WHERE origem_receita_medica_id = ? AND estabelecimento_id = ?
+                  AND excluido_em IS NULL`,
+              [r.anterior, est],
+              { teto: 1 },
+            );
+            if (ja) throw recusa('receita-ja-reemitida', 'A receita anterior já foi reemitida.');
           }
           const t = await tx.uma(
             `SELECT id, validade_dias FROM tipo_receita WHERE ativo = TRUE AND ${filtroDoModelo(r.modelo)}
@@ -135,8 +203,8 @@ export function gravadorReceitaSae(
             ),
             numero_vias: r.modelo === 'retencao' ? 2 : 1,
             situacao: 'emitida',
-            conteudo: r.impressao,
-            hash_conteudo: sha256(r.impressao),
+            conteudo: textoAssinado,
+            hash_conteudo: sha256(textoAssinado),
             protocolo_enfermagem: protocoloGravado(r.protocolo, r.ano),
             tipo_protocolo_enfermagem: r.tipoProtocolo,
             versao_lista_enfermagem: r.listaVersao,
@@ -157,6 +225,14 @@ export function gravadorReceitaSae(
             });
           return { id };
         },
+      }).catch((e: unknown) => {
+        // A mesma chave com outro atendimento ou outro conteúdo: a chave já é de outra receita (como na memória).
+        if (e instanceof ErroOperacao && e.problema['codigo'] === 'idempotencia-divergente')
+          throw recusa(
+            'chave-reutilizada',
+            'A chave deste pedido já foi usada em outra receita: refaça na tela.',
+          );
+        throw e;
       });
       return { id: Number(s.resultado['id']), repetida: s.repetida };
     },
@@ -204,10 +280,10 @@ export async function lerReceitas(
   est: number,
   fuso: string,
   atendimento: number,
-): Promise<ReceitaDoEnfermeiro[]> {
+): Promise<ReceitaDoEnfermeiroLida[]> {
   const linhas = await l.consultar(
     `SELECT r.id, r.protocolo_enfermagem, r.tipo_protocolo_enfermagem, r.versao_lista_enfermagem,
-            r.segundo_identificador, r.numero_vias, r.conteudo, r.emitida_em, r.prescritor_profissional_id,
+            r.segundo_identificador, r.numero_vias, r.conteudo, r.hash_conteudo, r.emitida_em, r.prescritor_profissional_id,
             r.origem_receita_medica_id, r.situacao, r.suspensa_em, r.justificativa_suspensao,
             ${LOGIN_DE('r.criado_por')} AS login, ${LOGIN_DE('r.alterado_por')} AS login_inativacao,
             (SELECT MIN(n.id) FROM receita_medica n WHERE n.origem_receita_medica_id = r.id
@@ -246,7 +322,7 @@ export async function lerReceitas(
   return linhas.map((x) => receitaDe(x, fuso, porReceita.get(num(x['id'])) ?? []));
 }
 
-function receitaDe(x: Linha, fuso: string, itens: ItemReceitaEnfermeiro[]): ReceitaDoEnfermeiro {
+function receitaDe(x: Linha, fuso: string, itens: ItemReceitaEnfermeiro[]): ReceitaDoEnfermeiroLida {
   const { protocolo, ano } = protocoloLido(texto(x['protocolo_enfermagem']));
   const sigla = textoOuNulo(x['sigla']);
   const situacao = texto(x['situacao']);
@@ -262,7 +338,8 @@ function receitaDe(x: Linha, fuso: string, itens: ItemReceitaEnfermeiro[]): Rece
     coren: sigla ? `${sigla}-${texto(x['uf'])} ${texto(x['numero_inscricao'])}` : '',
     categoria: sigla === 'COREN' ? 'Enfermeiro' : sigla === 'CRM' ? 'Médico' : '',
     itens,
-    impressao: texto(x['conteudo']),
+    impressao: texto(x['hash_conteudo']),
+    texto: textoOuNulo(x['conteudo']),
     assinadaEm: (civilDe(x['emitida_em'], fuso) ?? '').slice(0, 16),
     vinculo: num(x['prescritor_profissional_id']),
     usuario: texto(x['login']),

@@ -1,8 +1,11 @@
 // Integração da receita do enfermeiro na porta própria (família sae-cadastro) contra o MariaDB real (cliente f22_o2).
 // Massa SINTÉTICA (nenhuma pessoa real). Contrato de efeito: a receita assinada (número da sequência, protocolo, lista,
-// segundo identificador, conteúdo e resumo SHA-256, itens com via e quantidade impressas), a repetição pela chave do
-// pedido, a leitura (só do estabelecimento da sessão), a suspensão (a original fica legível e inativa, com o evento na
-// fila de saída), a recusa da segunda inativação e da receita de outro atendimento, e a reemissão ligada à anterior.
+// segundo identificador, o texto assinado e a impressão SHA-256 dele, itens com via e quantidade impressas), a recusa
+// do texto que não confere com a impressão e da receita sem o texto, a repetição pela chave do pedido (mesmo com outro
+// horário de assinatura) e a chave reutilizada em outro atendimento, a leitura (só do estabelecimento da sessão), a
+// suspensão com motivo de 300 caracteres (a original fica legível e inativa, com o evento na fila de saída), a recusa
+// da segunda inativação e da receita de outro atendimento, e a reemissão ligada à anterior (recusada com a anterior
+// ativa; dois pedidos ao mesmo tempo geram uma reemissão só).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { createHash } from 'node:crypto';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -19,7 +22,11 @@ import {
   SEM_BANCO,
 } from './massa-enfermagem.spec-util.js';
 import { PortaSaePropria } from './sae-porta-propria.js';
-import { SEQUENCIA_RECEITA_ENFERMEIRO } from './sae-porta-propria-receita.js';
+import {
+  type ReceitaDoEnfermeiroLida,
+  type ReceitaEnfermeiroComTexto,
+  SEQUENCIA_RECEITA_ENFERMEIRO,
+} from './sae-porta-propria-receita.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
 const recusada = async (p: Promise<unknown>) =>
@@ -112,51 +119,78 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
   });
 
   const c = () => contextoDe(m!);
-  const impressao = 'Receita sintética do enfermeiro\nparacetamol 500 mg';
+  const textoAssinado = 'Receita sintética do enfermeiro\nparacetamol 500 mg';
+  const impressao = createHash('sha256').update(textoAssinado, 'utf8').digest('hex');
   const prescrever = (
     chave: string | null,
     anterior: number | null = null,
     modelo: 'simples' | 'retencao' = 'simples',
+    outros: Partial<ReceitaEnfermeiroComTexto> = {},
+  ) => {
+    const r: ReceitaEnfermeiroComTexto = {
+      paciente: m!.paciente,
+      atendimento: m!.atendimento,
+      protocolo: 'PROT-ENF.1',
+      ano: 2026,
+      tipoProtocolo: 'institucional',
+      modelo,
+      listaVersao: 'v3',
+      segundoIdentificador: 'nascimento',
+      coren: 'COREN-SP 000000',
+      categoria: 'Enfermeiro',
+      itens: [
+        {
+          medicamento: 'paracetamol',
+          via: 'oral (comprimido revestido)',
+          posologia: '1 comprimido de 6 em 6 horas',
+          quantidade: '2 caixas com 20 comprimidos revestidos cada',
+        },
+        { medicamento: 'dipirona', via: 'oral', posologia: '1 comprimido se dor', quantidade: '1 caixa' },
+      ],
+      impressao,
+      texto: textoAssinado,
+      assinadaEm: agora,
+      vinculo: m!.profissional,
+      usuario: m!.login,
+      chave,
+      anterior,
+      ...outros,
+    };
+    return porta.gravarSgh(c(), null, (g) => g.prescreverMedicamento(r));
+  };
+  const MOTIVO_300 = 'Motivo sintético da suspensão. '.repeat(10).slice(0, 300);
+  const inativar = (
+    id: number,
+    tipo: 'suspensao' | 'cancelamento',
+    atendimento = m!.atendimento,
+    motivo = 'Motivo sintético',
   ) =>
     porta.gravarSgh(c(), null, (g) =>
-      g.prescreverMedicamento({
-        paciente: m!.paciente,
-        atendimento: m!.atendimento,
-        protocolo: 'PROT-ENF.1',
-        ano: 2026,
-        tipoProtocolo: 'institucional',
-        modelo,
-        listaVersao: 'v3',
-        segundoIdentificador: 'nascimento',
-        coren: 'COREN-SP 000000',
-        categoria: 'Enfermeiro',
-        itens: [
-          {
-            medicamento: 'paracetamol',
-            via: 'oral (comprimido revestido)',
-            posologia: '1 comprimido de 6 em 6 horas',
-            quantidade: '2 caixas com 20 comprimidos revestidos cada',
-          },
-          { medicamento: 'dipirona', via: 'oral', posologia: '1 comprimido se dor', quantidade: '1 caixa' },
-        ],
-        impressao,
-        assinadaEm: agora,
-        vinculo: m!.profissional,
-        usuario: m!.login,
-        chave,
-        anterior,
-      }),
-    );
-  const inativar = (id: number, tipo: 'suspensao' | 'cancelamento', atendimento = m!.atendimento) =>
-    porta.gravarSgh(c(), null, (g) =>
-      g.inativarReceita({ id, atendimento, tipo, motivo: 'Motivo sintético', usuario: m!.login }),
+      g.inativarReceita({ id, atendimento, tipo, motivo, usuario: m!.login }),
     );
 
   it('assina a receita; repetição pela chave; lê com os itens e só no estabelecimento da sessão', async () => {
+    expect(await recusada(prescrever(`rd-${marca}`, null, 'simples', { texto: `${textoAssinado} ` }))).toBe(
+      'impressao-divergente',
+    );
+    expect(await recusada(prescrever(`rs-${marca}`, null, 'simples', { texto: null }))).toBe(
+      'receita-sem-texto',
+    );
     const r = await prescrever(`rc-${marca}`);
     expect(r.repetida).toBe(false);
     receita = r.id;
     expect(await prescrever(`rc-${marca}`)).toEqual({ id: receita, repetida: true });
+    // O reenvio da mesma chave com outro horário de assinatura (o relógio não entra no hash) é a mesma receita.
+    const antes = new Date(Date.parse(`${agora}:00Z`) - 60_000).toISOString().slice(0, 19);
+    expect(await prescrever(`rc-${marca}`, null, 'simples', { assinadaEm: antes })).toEqual({
+      id: receita,
+      repetida: true,
+    });
+    expect(
+      await recusada(prescrever(`rc-${marca}`, null, 'simples', { atendimento: m!.atendimentoOutro })),
+    ).toBe('chave-reutilizada');
+    // A reemissão só sai da anterior suspensa ou cancelada.
+    expect(await recusada(prescrever(`ra-${marca}`, receita))).toBe('receita-ativa');
     const lidas = await porta.receitas(c(), m!.atendimento);
     expect(lidas).toHaveLength(1);
     expect(lidas[0]).toMatchObject({
@@ -168,6 +202,7 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
       listaVersao: 'v3',
       segundoIdentificador: 'nascimento',
       impressao,
+      texto: textoAssinado,
       assinadaEm: agora,
       vinculo: m!.profissional,
       usuario: m!.login,
@@ -188,8 +223,8 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
     expect(
       await contar(
         `SELECT COUNT(*) AS n FROM receita_medica WHERE id = ? AND numero = 'RE1' AND numero_vias = 1
-            AND situacao = 'emitida' AND hash_conteudo = ? AND validade_ate IS NOT NULL`,
-        [receita, createHash('sha256').update(impressao, 'utf8').digest('hex')],
+            AND situacao = 'emitida' AND hash_conteudo = ? AND conteudo = ? AND validade_ate IS NOT NULL`,
+        [receita, impressao, textoAssinado],
       ),
     ).toBe(1);
     expect(
@@ -202,21 +237,35 @@ describe.skipIf(SEM_BANCO)('porta própria da receita do enfermeiro (MariaDB, cl
 
   it('suspende (a original fica legível e inativa), recusa a segunda vez e a receita de outro atendimento', async () => {
     expect(await recusada(inativar(receita, 'suspensao', m!.atendimentoOutro))).toBe('receita-inexistente');
-    const s = await inativar(receita, 'suspensao');
+    const s = await inativar(receita, 'suspensao', m!.atendimento, MOTIVO_300);
     expect(s.id).toBe(receita);
     expect(s.evento).toBeGreaterThan(0);
     expect(await recusada(inativar(receita, 'cancelamento'))).toBe('receita-ja-inativa');
     const [r] = await porta.receitas(c(), m!.atendimento);
-    expect(r!.inativacao).toMatchObject({ tipo: 'suspensao', motivo: 'Motivo sintético', usuario: m!.login });
+    expect(MOTIVO_300).toHaveLength(300);
+    expect(r!.inativacao).toMatchObject({ tipo: 'suspensao', motivo: MOTIVO_300, usuario: m!.login });
     expect(r!.impressao).toBe(impressao);
+    expect((r as ReceitaDoEnfermeiroLida).texto).toBe(textoAssinado);
   });
 
   it('reemite ligada à anterior (modelo de retenção, duas vias); recusa a anterior de outro atendimento', async () => {
-    const n = await prescrever(`rn-${marca}`, receita, 'retencao');
+    // Dois pedidos de reemissão ao mesmo tempo, com chaves diferentes: um grava, o outro é recusado.
+    const ambos = await Promise.allSettled([
+      prescrever(`rn-${marca}`, receita, 'retencao'),
+      prescrever(`rm-${marca}`, receita, 'retencao'),
+    ]);
+    const feitas = ambos.filter((x) => x.status === 'fulfilled');
+    const recusas = ambos.flatMap((x) => (x.status === 'rejected' ? [codigoDe(x.reason)] : []));
+    expect(feitas).toHaveLength(1);
+    expect(recusas).toEqual(['receita-ja-reemitida']);
+    const n = (feitas[0] as PromiseFulfilledResult<{ id: number; repetida: boolean }>).value;
     const lidas = await porta.receitas(c(), m!.atendimento);
     expect(lidas.map((x) => x.id)).toEqual([n.id, receita]);
     expect(lidas[0]).toMatchObject({ modelo: 'retencao', anterior: receita, reemitidaEm: null });
     expect(lidas[1]).toMatchObject({ reemitidaEm: n.id });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM receita_medica WHERE origem_receita_medica_id = ?', [receita]),
+    ).toBe(1);
     expect(await recusada(prescrever(null, 987_654_321))).toBe('receita-inexistente');
     expect(await recusada(inativar(987_654_321, 'cancelamento'))).toBe('receita-inexistente');
   });
