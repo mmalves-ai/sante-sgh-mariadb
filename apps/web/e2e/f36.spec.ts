@@ -70,4 +70,47 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     await semViolacaoAxe(page, '/farmacia/parametros');
     expect(externas).toEqual([]);
   });
+
+  // 05-SUP linha 13: o kit padrão (composição e vínculo à cirurgia), com a recusa na hora e a edição da quantidade.
+  test('kit padrão: recusa na hora, item e cirurgia padrão, gravar e editar a quantidade; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/suprimentos/kits');
+    await expect(page.getByTestId('kit-padrao-cadastro')).toBeVisible();
+    await page.getByTestId('kit-padrao-novo').click();
+    const recusas = page.getByTestId('kit-padrao-recusas');
+    await expect(recusas).toContainText('Informe o código do kit.');
+    await expect(page.getByTestId('kit-padrao-gravar')).toBeDisabled();
+    await page.getByTestId('kit-padrao-codigo').fill('KE2E1');
+    await page.getByTestId('kit-padrao-nome').fill('KIT FICTICIO HERNIA');
+    await expect(recusas).toContainText('pelo menos um item');
+    await page.getByTestId('kit-padrao-busca-termo').fill('LUVA');
+    await page.getByTestId('kit-padrao-busca-buscar').click();
+    await page.getByTestId('kit-padrao-busca-opcao-5001').click();
+    await expect(page.getByTestId('kit-padrao-item-5001')).toBeVisible();
+    await page.getByTestId('kit-padrao-qtd-5001').fill('0');
+    await expect(recusas).toContainText('maior que zero');
+    await page.getByTestId('kit-padrao-qtd-5001').fill('2');
+    await page.getByTestId('kit-padrao-proc-termo').fill('HERNIA');
+    await page.getByTestId('kit-padrao-proc-buscar').click();
+    await page.getByTestId('kit-padrao-proc-CIR-701').click();
+    await page.getByTestId('kit-padrao-padrao-0').check();
+    await expect(recusas).toHaveCount(0);
+    await semViolacaoAxe(page, '/suprimentos/kits');
+    await page.getByTestId('kit-padrao-gravar').click();
+    await expect(page.getByTestId('kit-padrao-mensagem')).toBeVisible();
+    await expect(page.getByTestId('kit-padrao-KE2E1')).toContainText('KIT FICTICIO HERNIA');
+
+    // Editar a quantidade do item e gravar de novo (a versão lida trava a edição concorrente).
+    await page.getByTestId('kit-padrao-editar-KE2E1').click();
+    await expect(page.getByTestId('kit-padrao-qtd-5001')).toHaveValue('2');
+    await page.getByTestId('kit-padrao-qtd-5001').fill('3');
+    await page.getByTestId('kit-padrao-gravar').click();
+    await expect(page.getByTestId('kit-padrao-mensagem')).toBeVisible();
+    await page.getByTestId('kit-padrao-editar-KE2E1').click();
+    await expect(page.getByTestId('kit-padrao-qtd-5001')).toHaveValue('3');
+    expect(externas).toEqual([]);
+  });
 });
