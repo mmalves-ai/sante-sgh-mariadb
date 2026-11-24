@@ -1,6 +1,6 @@
 // F3.8, 07-FIN linha 113: o ciclo da NFS-e depois da emissão simples (nfse.ts). Deduções da base de cálculo com o
 // documento que as comprova; lote de várias faturas num envio só (a tela emite uma ou muitas do mesmo jeito);
-// cancelamento e substituição da nota emitida com motivo da lista, justificativa e o prazo do município. Nada é
+// cancelamento e substituição da nota emitida com motivo do catálogo do cliente, justificativa e o prazo do município. Nada é
 // apagado: a nota fica no banco com a situação "cancelada" ou "substituida" (nota_servico) e cada passo vira um evento
 // (evento_nota_servico). A substituição encerra a original e emite a nova para a mesma fatura (o mesmo tomador), ligadas.
 import { centavos, recusaFin, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
@@ -94,11 +94,26 @@ export function calcularNfseComDeducoes(
 
 export const LIMITE_LOTE_NFSE = 50;
 
-/** O lote (1 a 50 notas): cada nota conferida, com o índice no campo, e nenhuma fatura repetida no mesmo envio. */
-export function conferirLoteNfse(notas: readonly PedidoNfseCompleto[]): RecusaFinanceiro | null {
+/** A fatura (ou a conta) a que a nota serve. */
+export interface AlvoNfse {
+  readonly tituloReceber: number | null;
+  readonly conta: number | null;
+}
+
+const chaveAlvo = (a: AlvoNfse) => (a.tituloReceber !== null ? `t${a.tituloReceber}` : `c${a.conta}`);
+
+/**
+ * O lote (1 a 50 notas): cada nota conferida, com o índice no campo; nenhuma fatura repetida no mesmo envio nem com
+ * nota já ativa (autorizada ou enviada à prefeitura): a nota ativa muda pela substituição, não por outra emissão.
+ */
+export function conferirLoteNfse(
+  notas: readonly PedidoNfseCompleto[],
+  comNotaAtiva: readonly AlvoNfse[],
+): RecusaFinanceiro | null {
   if (notas.length === 0) return recusaFin('lote-vazio', 'Escolha ao menos uma fatura.', ['notas']);
   if (notas.length > LIMITE_LOTE_NFSE)
     return recusaFin('lote-grande', `O lote leva até ${LIMITE_LOTE_NFSE} notas.`, ['notas']);
+  const ativas = new Set(comNotaAtiva.map(chaveAlvo));
   const vistos = new Set<string>();
   for (const [i, n] of notas.entries()) {
     const campo = (c: string) => `notas.${i}.${c}`;
@@ -106,7 +121,13 @@ export function conferirLoteNfse(notas: readonly PedidoNfseCompleto[]): RecusaFi
       return recusaFin('tomador-obrigatorio', `Nota ${i + 1}: informe a fatura ou a conta.`, [
         campo('tituloReceber'),
       ]);
-    const chave = n.tituloReceber !== null ? `t${n.tituloReceber}` : `c${n.conta}`;
+    const chave = chaveAlvo(n);
+    if (ativas.has(chave))
+      return recusaFin(
+        'fatura-com-nota',
+        `Nota ${i + 1}: a fatura já tem nota emitida; para corrigi-la, substitua a nota.`,
+        [campo('tituloReceber')],
+      );
     if (vistos.has(chave))
       return recusaFin('fatura-repetida', `Nota ${i + 1}: a mesma fatura já está no lote.`, [
         campo('tituloReceber'),
@@ -122,15 +143,19 @@ export function conferirLoteNfse(notas: readonly PedidoNfseCompleto[]): RecusaFi
   return null;
 }
 
-export const MOTIVOS_CANCELAMENTO_NFSE = [
-  'erro-emissao',
-  'servico-nao-prestado',
-  'duplicidade',
-  'outro',
-] as const;
-export const MOTIVOS_SUBSTITUICAO_NFSE = ['erro-valor', 'erro-tomador', 'erro-servico', 'outro'] as const;
-export type MotivoCancelamentoNfse = (typeof MOTIVOS_CANCELAMENTO_NFSE)[number];
-export type MotivoSubstituicaoNfse = (typeof MOTIVOS_SUBSTITUICAO_NFSE)[number];
+/** O motivo como está no catálogo do cliente (motivo_cancelamento_documento_fiscal), a única fonte dos motivos. */
+export interface MotivoCatalogoNfse {
+  readonly id: number;
+  readonly codigo: string;
+  readonly ativo: boolean;
+  readonly aplicaNotaServico: boolean;
+}
+
+function conferirMotivo(m: MotivoCatalogoNfse | null, oQue: string): RecusaFinanceiro | null {
+  return m && m.ativo && m.aplicaNotaServico
+    ? null
+    : recusaFin('motivo-invalido', `Escolha um motivo ativo do catálogo para ${oQue}.`, ['motivo']);
+}
 
 /** O prazo usado enquanto a regra do município do estabelecimento não está cadastrada. */
 export const PRAZO_NFSE_PADRAO_DIAS = 30;
@@ -177,27 +202,27 @@ function conferirAlteravel(
 
 export function conferirCancelamentoNfse(
   n: NotaEmitida,
-  motivo: MotivoCancelamentoNfse,
+  motivo: MotivoCatalogoNfse | null,
   justificativa: string,
   hoje: string,
   prazoDias: number,
 ): RecusaFinanceiro | null {
-  if (!MOTIVOS_CANCELAMENTO_NFSE.includes(motivo))
-    return recusaFin('motivo-invalido', 'Escolha o motivo do cancelamento.', ['motivo']);
+  const m = conferirMotivo(motivo, 'o cancelamento');
+  if (m) return m;
   return conferirAlteravel(n, 'cancelar', justificativa, hoje, prazoDias);
 }
 
 /** A substituição: a nova nota é da mesma fatura (o tomador não muda; para outro tomador, cancele e emita). */
 export function conferirSubstituicaoNfse(
   n: NotaEmitida,
-  motivo: MotivoSubstituicaoNfse,
+  motivo: MotivoCatalogoNfse | null,
   justificativa: string,
   hoje: string,
   prazoDias: number,
   nova: PedidoNfseCompleto,
 ): RecusaFinanceiro | null {
-  if (!MOTIVOS_SUBSTITUICAO_NFSE.includes(motivo))
-    return recusaFin('motivo-invalido', 'Escolha o motivo da substituição.', ['motivo']);
+  const m = conferirMotivo(motivo, 'a substituição');
+  if (m) return m;
   const r = conferirAlteravel(n, 'substituir', justificativa, hoje, prazoDias);
   if (r) return r;
   if (nova.tituloReceber !== n.tituloReceber || nova.conta !== n.conta)
@@ -206,7 +231,8 @@ export function conferirSubstituicaoNfse(
       'A nota substituta é da mesma fatura; para outro tomador, cancele e emita outra.',
       ['tituloReceber'],
     );
-  return conferirLoteNfse([nova]);
+  // A única nota ativa da fatura é a que está sendo substituída.
+  return conferirLoteNfse([nova], []);
 }
 
 export function conferirParametroNfse(p: {

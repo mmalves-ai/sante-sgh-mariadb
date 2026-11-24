@@ -9,6 +9,8 @@ import {
   type ProcessoSuspensao,
   processoQueSuspende,
   xmlEventoReinf,
+  xmlExclusaoReinf,
+  type EventoReinfGravado,
 } from './reinf-eventos.js';
 
 const A = '11111111000191';
@@ -90,6 +92,7 @@ describe('EFD-REINF por evento', () => {
   });
   it('transmissão e retorno', () => {
     expect(conferirTransmissaoReinf('gerado')).toBeNull();
+    expect(conferirTransmissaoReinf('validado')).toBeNull();
     expect(codigo(conferirTransmissaoReinf('aceito'))).toBe('evento-nao-transmissivel');
     expect(
       conferirRetornoReinf('enviado', { aceito: true, recibo: '1.2.000123', ocorrencias: null }),
@@ -103,5 +106,76 @@ describe('EFD-REINF por evento', () => {
     expect(codigo(conferirRetornoReinf('gerado', { aceito: false, recibo: null, ocorrencias: 'x' }))).toBe(
       'evento-sem-envio',
     );
+  });
+
+  const C = '12345678909';
+  const gv = (x: Partial<EventoReinfGravado>): EventoReinfGravado => ({
+    id: 1,
+    evento: 'R-2010',
+    beneficiario: A,
+    situacao: 'aceito',
+    recibo: '1.2.000123',
+    hash: 'h1',
+    retificadoId: null,
+    ...x,
+  });
+  it('R-4000: CPF vai pelo R-4010 (cpfBenef) e CNPJ pelo R-4020 (cnpjBenef)', () => {
+    const ev = montarEventosReinf('R-4000', '2026-10', '3', [ret(A), ret(C)], []);
+    expect(ev.map((e) => [e.beneficiario, e.evento])).toEqual([
+      [A, 'R-4020'],
+      [C, 'R-4010'],
+    ]);
+    expect(xmlEventoReinf(ev[1]!, null)).toContain(`<evtRetPF>`);
+    expect(xmlEventoReinf(ev[1]!, null)).toContain(`<cpfBenef>${C}</cpfBenef>`);
+    expect(xmlEventoReinf(ev[0]!, null)).toContain(`<cnpjBenef>${A}</cnpjBenef>`);
+  });
+  it('o cancelado sai da cadeia e o validado ainda não enviado é trocado', () => {
+    const [e] = montarEventosReinf('R-2000', '2026-10', '3', [ret(A)], []);
+    const p = [{ evento: e!, hash: 'h2' }];
+    const r = planejarEnvioReinf(p, [gv({}), gv({ id: 2, situacao: 'cancelado', recibo: null, hash: 'h9' })]);
+    expect(r.novos[0]?.retifica?.id).toBe(1);
+    const v = planejarEnvioReinf(p, [gv({ situacao: 'validado', recibo: null })]);
+    expect(v.novos[0]).toMatchObject({ retifica: null, substitui: { id: 1 } });
+    expect(planejarEnvioReinf([{ evento: e!, hash: 'h1' }], [gv({ situacao: 'validado' })]).iguais).toBe(1);
+  });
+  it('retificador rejeitado: o novo retificador leva o recibo do original aceito', () => {
+    const [e] = montarEventosReinf('R-2000', '2026-10', '3', [ret(A)], []);
+    const grav = [gv({}), gv({ id: 2, situacao: 'rejeitado', recibo: null, hash: 'h2', retificadoId: 1 })];
+    const r = planejarEnvioReinf([{ evento: e!, hash: 'h3' }], grav);
+    expect(r.novos[0]?.substitui?.id).toBe(2);
+    expect(r.novos[0]?.retifica?.recibo).toBe('1.2.000123');
+    // Mesmo sem a ligação gravada, o último aceito do beneficiário é o original.
+    const sem = planejarEnvioReinf(
+      [{ evento: e!, hash: 'h3' }],
+      [grav[0]!, { ...grav[1]!, retificadoId: null }],
+    );
+    expect(sem.novos[0]?.retifica?.id).toBe(1);
+    expect(xmlEventoReinf(e!, r.novos[0]!.retifica!.recibo)).toContain('<indRetif>2</indRetif>');
+  });
+  it('rejeitado igual não conta como em dia: aparece como rejeitado sem correção', () => {
+    const [e] = montarEventosReinf('R-2000', '2026-10', '3', [ret(A)], []);
+    const r = planejarEnvioReinf([{ evento: e!, hash: 'h1' }], [gv({ situacao: 'rejeitado', recibo: null })]);
+    expect(r.iguais).toBe(0);
+    expect(r.novos).toHaveLength(0);
+    expect(r.rejeitadosSemCorrecao.map((g) => g.id)).toEqual([1]);
+  });
+  it('aceito cujo beneficiário saiu da competência vai à exclusão (R-9000) com o recibo', () => {
+    const r = planejarEnvioReinf(
+      [],
+      [gv({}), gv({ id: 2, hash: 'h2', recibo: '1.2.000200', retificadoId: 1 })],
+    );
+    expect(r.exclusoes.map((g) => g.recibo)).toEqual(['1.2.000200']);
+    expect(xmlExclusaoReinf('R-2010', '2026-10', '1.2.000200')).toContain(
+      '<tpEvento>R-2010</tpEvento><nrRecEvt>1.2.000200</nrRecEvt>',
+    );
+    const exc = (situacao: EventoReinfGravado['situacao']) =>
+      gv({ id: 3, evento: 'R-9000', situacao, recibo: null, retificadoId: 1 });
+    expect(planejarEnvioReinf([], [gv({}), exc('aceito')]).exclusoes).toHaveLength(0);
+    expect(planejarEnvioReinf([], [gv({}), exc('enviado')]).aguardando).toEqual([A]);
+    expect(planejarEnvioReinf([], [gv({}), exc('rejeitado')]).exclusoes).toHaveLength(1);
+    // Depois da exclusão aceita, o beneficiário que volta entra como inclusão, sem recibo.
+    const [e] = montarEventosReinf('R-2000', '2026-10', '3', [ret(A)], []);
+    const volta = planejarEnvioReinf([{ evento: e!, hash: 'h5' }], [gv({}), exc('aceito')]);
+    expect(volta.novos[0]).toMatchObject({ retifica: null, substitui: null });
   });
 });

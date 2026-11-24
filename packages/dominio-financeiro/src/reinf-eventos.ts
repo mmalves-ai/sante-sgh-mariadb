@@ -1,8 +1,9 @@
 // F3.8, 07-FIN linha 111: a EFD-REINF por evento, além do arquivo do período (declaracoes.ts). Cada evento é de um
-// estabelecimento e de um beneficiário (R-2010: o prestador com retenção previdenciária; R-4020: a pessoa jurídica
-// com IR e contribuições), com o processo judicial ou administrativo que suspende a retenção, o protocolo do envio,
+// estabelecimento e de um beneficiário (R-2010: o prestador com retenção previdenciária; R-4010: a pessoa física e
+// R-4020: a pessoa jurídica, com IR e contribuições), com o processo judicial ou administrativo que suspende a retenção, o protocolo do envio,
 // o recibo do retorno e a retificação: o evento já aceito que mudou volta como retificador com o recibo do original;
-// o igual não é reenviado; o que espera retorno bloqueia o novo. Nada é apagado: o gerado ou rejeitado trocado fica
+// o igual não é reenviado; o rejeitado sem correção é apontado; o que espera retorno bloqueia o novo; o aceito que saiu da
+// competência vai ao R-9000 (exclusão) com o recibo. Nada é apagado: o gerado, validado ou rejeitado trocado fica
 // "cancelado" e o retificado continua "aceito", com o retificador ligado a ele (evento_reinf.retificado_evento_reinf_id).
 import { centavos, recusaFin, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
 import type { RetencaoServico } from './declaracoes.js';
@@ -62,7 +63,7 @@ export function processoQueSuspende(
 }
 
 export interface EventoReinfPlanejado {
-  readonly evento: 'R-2010' | 'R-4020';
+  readonly evento: 'R-2010' | 'R-4010' | 'R-4020';
   readonly periodo: string;
   readonly estabelecimento: string;
   readonly beneficiario: string;
@@ -114,7 +115,7 @@ export function montarEventosReinf(
     }
     if (retido + suspenso <= 0) continue;
     saida.push({
-      evento: serie === 'R-2000' ? 'R-2010' : 'R-4020',
+      evento: serie === 'R-2000' ? 'R-2010' : benef.length === 11 ? 'R-4010' : 'R-4020',
       periodo,
       estabelecimento: so(estabelecimento),
       beneficiario: benef,
@@ -130,11 +131,11 @@ export function montarEventosReinf(
 
 /** O XML do evento; o retificador leva o recibo do original. */
 export function xmlEventoReinf(e: EventoReinfPlanejado, reciboOriginal: string | null): string {
-  const tag = e.evento === 'R-2010' ? 'ServTom' : 'RetPJ';
+  const tag = e.evento === 'R-2010' ? 'ServTom' : e.evento === 'R-4010' ? 'RetPF' : 'RetPJ';
   const benef =
     e.evento === 'R-2010'
       ? `<idePrestServ><cnpjPrestador>${e.beneficiario}</cnpjPrestador><vlrTotalBruto>${e.valorBruto.toFixed(2)}</vlrTotalBruto><vlrTotalRetPrinc>${e.valorRetido.toFixed(2)}</vlrTotalRetPrinc><vlrTotalNRetPrinc>${e.valorSuspenso.toFixed(2)}</vlrTotalNRetPrinc><nfs>${e.documentos}</nfs>`
-      : `<ideBenef><cnpjBenef>${e.beneficiario}</cnpjBenef><vlrBruto>${e.valorBruto.toFixed(2)}</vlrBruto><vlrRet>${e.valorRetido.toFixed(2)}</vlrRet><vlrSusp>${e.valorSuspenso.toFixed(2)}</vlrSusp>`;
+      : `<ideBenef><${e.evento === 'R-4010' ? 'cpfBenef' : 'cnpjBenef'}>${e.beneficiario}</${e.evento === 'R-4010' ? 'cpfBenef' : 'cnpjBenef'}><vlrBruto>${e.valorBruto.toFixed(2)}</vlrBruto><vlrRet>${e.valorRetido.toFixed(2)}</vlrRet><vlrSusp>${e.valorSuspenso.toFixed(2)}</vlrSusp>`;
   const procs = e.processos
     .map(
       (p) =>
@@ -145,63 +146,132 @@ export function xmlEventoReinf(e: EventoReinfPlanejado, reciboOriginal: string |
   return `<Reinf><evt${tag}><ideEvento><indRetif>${reciboOriginal ? 2 : 1}</indRetif>${reciboOriginal ? `<nrRecibo>${reciboOriginal}</nrRecibo>` : ''}<perApur>${e.periodo}</perApur><tpAmb>2</tpAmb></ideEvento><ideEstab><tpInscEstab>1</tpInscEstab><nrInscEstab>${e.estabelecimento}</nrInscEstab>${benef}${procs}${fecha}</ideEstab></evt${tag}></Reinf>`;
 }
 
-export type SituacaoEventoReinf =
-  'gerado' | 'enviado' | 'aceito' | 'rejeitado' | 'retificado' | 'substituido';
+/** Os estados do evento, os mesmos do banco (evento_reinf, ck_evento_reinf_situacao). */
+export const SITUACOES_EVENTO_REINF = [
+  'gerado',
+  'validado',
+  'enviado',
+  'aceito',
+  'rejeitado',
+  'cancelado',
+] as const;
+export type SituacaoEventoReinf = (typeof SITUACOES_EVENTO_REINF)[number];
 
 export interface EventoReinfGravado {
   readonly id: number;
+  /** Código do evento (R-2010, R-4010, R-4020; R-9000 na exclusão). */
   readonly evento: string;
   readonly beneficiario: string;
   readonly situacao: SituacaoEventoReinf;
   readonly recibo: string | null;
   readonly hash: string;
+  /** O evento que este retifica ou, no R-9000, o que ele exclui (evento_reinf.retificado_evento_reinf_id). */
+  readonly retificadoId?: number | null;
 }
 
 export interface PlanoEnvioReinf {
-  /** Novo evento; `retifica` é o aceito que ele corrige (com o recibo); `substitui` é o gerado ou rejeitado que ele troca. */
+  /**
+   * Novo evento. `retifica` é o aceito que ele corrige (leva o recibo dele), mesmo quando um retificador anterior
+   * foi rejeitado; `substitui` é o gerado, validado ou rejeitado que ele troca (este fica "cancelado").
+   */
   readonly novos: readonly {
     evento: EventoReinfPlanejado;
     hash: string;
     retifica: EventoReinfGravado | null;
     substitui: EventoReinfGravado | null;
   }[];
+  /** Planejados iguais ao vigente gerado, validado ou aceito: nada a enviar. */
   readonly iguais: number;
   /** Beneficiários com evento enviado esperando retorno: não se gera outro antes do retorno. */
   readonly aguardando: readonly string[];
+  /** Rejeitado cujo conteúdo não mudou: a tela pede a correção (o beneficiário segue sem evento aceito). */
+  readonly rejeitadosSemCorrecao: readonly EventoReinfGravado[];
+  /** Aceito cujo beneficiário saiu da competência (estorno, correção do documento): vai o R-9000 com o recibo. */
+  readonly exclusoes: readonly EventoReinfGravado[];
 }
 
-/** Compara o planejado com o vigente de cada beneficiário (o último não cancelado: o retificador sucede o original). */
+const ESPERA: readonly SituacaoEventoReinf[] = ['enviado'];
+
+/**
+ * Compara o planejado com o vigente de cada evento e beneficiário da competência e do estabelecimento (os gravados
+ * são só dessa competência e desse estabelecimento). O vigente é o último não cancelado: o retificador sucede o
+ * original. O R-9000 aceito ou a caminho encerra a cadeia do evento que ele exclui.
+ */
 export function planejarEnvioReinf(
   planejados: readonly { evento: EventoReinfPlanejado; hash: string }[],
   gravados: readonly EventoReinfGravado[],
 ): PlanoEnvioReinf {
   const novos: PlanoEnvioReinf['novos'][number][] = [];
   const aguardando: string[] = [];
+  const rejeitadosSemCorrecao: EventoReinfGravado[] = [];
+  const exclusoes: EventoReinfGravado[] = [];
   let iguais = 0;
-  for (const p of planejados) {
-    const vigente = [...gravados]
-      .filter(
-        (g) =>
-          g.evento === p.evento.evento &&
-          g.beneficiario === p.evento.beneficiario &&
-          g.situacao !== 'retificado' &&
-          g.situacao !== 'substituido',
-      )
+  const exclusaoDe = (id: number) =>
+    gravados
+      .filter((g) => g.evento === 'R-9000' && g.retificadoId === id && g.situacao !== 'cancelado')
       .sort((a, b) => b.id - a.id)[0];
-    if (!vigente) novos.push({ ...p, retifica: null, substitui: null });
-    else if (vigente.situacao === 'enviado' || vigente.situacao === 'validado')
+  const cadeia = (evento: string, beneficiario: string) => {
+    const doBenef = gravados
+      .filter((g) => g.evento === evento && g.beneficiario === beneficiario)
+      .sort((a, b) => b.id - a.id);
+    const vigente = doBenef.find((g) => g.situacao !== 'cancelado');
+    const ultimoAceito = doBenef.find((g) => g.situacao === 'aceito');
+    return { vigente, ultimoAceito };
+  };
+  const planejadosChave = new Set(planejados.map((p) => `${p.evento.evento}|${p.evento.beneficiario}`));
+  for (const p of planejados) {
+    let { vigente, ultimoAceito } = cadeia(p.evento.evento, p.evento.beneficiario);
+    const exc = ultimoAceito ? exclusaoDe(ultimoAceito.id) : undefined;
+    if (exc && ESPERA.includes(exc.situacao)) {
       aguardando.push(p.evento.beneficiario);
+      continue;
+    }
+    // O aceito já excluído (R-9000 aceito, gerado ou validado) não é retificável: o novo entra como inclusão.
+    if (exc && exc.situacao !== 'rejeitado') {
+      if (vigente?.id === ultimoAceito?.id) vigente = undefined;
+      ultimoAceito = undefined;
+    }
+    if (!vigente) novos.push({ ...p, retifica: null, substitui: null });
+    else if (ESPERA.includes(vigente.situacao)) aguardando.push(p.evento.beneficiario);
+    else if (vigente.hash === p.hash && vigente.situacao === 'rejeitado') rejeitadosSemCorrecao.push(vigente);
     else if (vigente.hash === p.hash) iguais += 1;
     else if (vigente.situacao === 'aceito') novos.push({ ...p, retifica: vigente, substitui: null });
-    else novos.push({ ...p, retifica: null, substitui: vigente });
+    else {
+      // Gerado, validado ou rejeitado trocado: se ele retificava um aceito, o novo herda o original (e o recibo).
+      const original =
+        (vigente.retificadoId != null ? gravados.find((g) => g.id === vigente!.retificadoId) : undefined) ??
+        ultimoAceito;
+      novos.push({ ...p, retifica: original?.situacao === 'aceito' ? original : null, substitui: vigente });
+    }
   }
-  return { novos, iguais, aguardando };
+  const vistos = new Set<string>();
+  for (const g of [...gravados].sort((a, b) => b.id - a.id)) {
+    if (g.evento === 'R-9000') continue;
+    const chave = `${g.evento}|${g.beneficiario}`;
+    if (planejadosChave.has(chave) || vistos.has(chave)) continue;
+    vistos.add(chave);
+    const { ultimoAceito } = cadeia(g.evento, g.beneficiario);
+    if (!ultimoAceito) continue;
+    const exc = exclusaoDe(ultimoAceito.id);
+    if (exc && exc.situacao !== 'rejeitado') {
+      if (ESPERA.includes(exc.situacao)) aguardando.push(g.beneficiario);
+      continue;
+    }
+    exclusoes.push(ultimoAceito);
+  }
+  return { novos, iguais, aguardando, rejeitadosSemCorrecao, exclusoes };
 }
 
+/** O R-9000 que exclui o evento aceito, pelo recibo dele. */
+export function xmlExclusaoReinf(evento: string, periodo: string, recibo: string): string {
+  return `<Reinf><evtExclusao><ideEvento><tpAmb>2</tpAmb></ideEvento><infoExclusao><tpEvento>${evento}</tpEvento><nrRecEvt>${recibo}</nrRecEvt><perApur>${periodo}</perApur></infoExclusao></evtExclusao></Reinf>`;
+}
+
+/** Vai ao envio o evento ainda não transmitido: o gerado ou o já validado no leiaute. */
 export function conferirTransmissaoReinf(situacao: string): RecusaFinanceiro | null {
-  return situacao === 'gerado'
+  return situacao === 'gerado' || situacao === 'validado'
     ? null
-    : recusaFin('evento-nao-transmissivel', 'Só o evento gerado vai ao envio.');
+    : recusaFin('evento-nao-transmissivel', 'Só o evento gerado ou validado vai ao envio.');
 }
 
 /** O retorno do envio: aceito com o recibo; rejeitado com as ocorrências. */
