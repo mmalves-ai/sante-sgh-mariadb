@@ -1,4 +1,5 @@
-"""Leitor da origem: Firebird embarcado, transação SNAPSHOT READ ONLY, valores em bytes crus.
+"""Leitor da origem: Firebird embarcado (arquivo) ou servidor remoto (DSN host/porta:banco, ADR 0010), uma
+transação SNAPSHOT READ ONLY, valores em bytes crus.
 
 - Texto (CHAR/VARCHAR, qualquer charset) sai como `bytes` por CAST para CHARACTER SET OCTETS: são os bytes
   gravados, com o preenchimento de CHAR; nada é transliterado.
@@ -32,8 +33,15 @@ def _q(nome):
 
 
 class Leitor:
-    def __init__(self, banco, usuario="SYSDBA"):
-        self.con = connect(banco, user=usuario, charset="UTF8")
+    def __init__(self, banco, usuario="SYSDBA", senha=None, role=None, tempo_conexao=None):
+        """`banco`: caminho local (embarcado, sem senha: o modo de sempre) ou DSN `host/porta:banco` do servidor,
+        com usuário de leitura, senha e role (Firebird 3: sem role padrão). A senha nunca é guardada no objeto."""
+        if senha is None and role is None:
+            self.con = connect(banco, user=usuario, charset="UTF8")
+        else:
+            if tempo_conexao:
+                driver_config.db_defaults.timeout.value = int(tempo_conexao)
+            self.con = connect(banco, user=usuario, password=senha, role=role, charset="UTF8")
         self.tm = self.con.transaction_manager(tpb(Isolation.SNAPSHOT, access_mode=TraAccessMode.READ))
         self.tm.begin()
         self._colunas = {}
