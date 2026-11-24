@@ -154,4 +154,24 @@ export const rotasCadastro: RouteRecordRaw[] = [
       menu: 'Cadastros > Especialidades e procedimentos por especialidade',
     },
   },
+  {
+    // F3.1 (02-CAD linhas 26 e 27): estabelecimento, unidades e setores com ramais (manter, inativar sem apagar).
+    path: '/cadastros/estrutura',
+    name: 'cadastro.estruturaGestao',
+    component: () => import('./telas/EstruturaGestaoTela.vue'),
+    meta: {
+      permissao: 'cadastro.estrutura.editar',
+      menu: 'Cadastros > Estrutura > Estabelecimento, unidades e setores',
+    },
+  },
+  {
+    // F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixas de números de guia.
+    path: '/cadastros/tiss-configuracao',
+    name: 'cadastro.tissConfiguracao',
+    component: () => import('./telas/TissConfiguracaoTela.vue'),
+    meta: {
+      permissao: 'cadastro.tiss.editar',
+      menu: 'Cadastros > Fontes pagadoras > Configuração TISS e numeração de guias',
+    },
+  },
 ];
