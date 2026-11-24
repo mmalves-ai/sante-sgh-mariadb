@@ -196,6 +196,7 @@ describe.skipIf(SEM_BANCO_QUA)(
           ]);
           await run('DELETE FROM paciente WHERE id = ?', [ids['paciente']]);
           await run('DELETE FROM usuario_profissional WHERE id = ?', [ids['vinculo']]);
+          if (ids['colab']) await run('DELETE FROM colaborador WHERE id = ?', [ids['colab']]);
           await run('DELETE FROM profissional WHERE id = ?', [ids['prof']]);
           await run('DELETE FROM pessoa_fisica WHERE id = ?', [ids['pf']]);
         });
@@ -229,7 +230,7 @@ describe.skipIf(SEM_BANCO_QUA)(
         funcao: 'Enfermeiro do CTI',
       });
       // A leitura da comissão mostra a pessoa do cadastro (não o nome digitado) e o login pelo vínculo do profissional.
-      const lida = await new LeiturasGestaoComplementoQ2(m.nucleo).comissao(c, r.id);
+      const lida = await new LeiturasGestaoComplementoQ2(m.nucleo).comissao(c, r.id, AGORA.slice(0, 10));
       const membros = JSON.parse(lida!.membros) as { nome: string; funcao: string; login: string | null }[];
       expect(membros.map((x) => x.nome)).toEqual([nomeProf, 'Ana Externa', 'Bruno Externo']);
       expect(membros[0]!.login).toBe(m.loginGestor.toUpperCase());
@@ -299,7 +300,7 @@ describe.skipIf(SEM_BANCO_QUA)(
             comissao: ids['comissao']!,
             versaoComissao,
             tipo: 'ordinaria',
-            realizadaEm: '2026-11-19T14:00:00',
+            realizadaEm: '2026-11-20T09:00:00',
             pauta: 'Pauta sintética',
             ata: 'Ata sintética da reunião ordinária',
             presentes: JSON.stringify(presentes),
@@ -330,6 +331,9 @@ describe.skipIf(SEM_BANCO_QUA)(
         [r.id],
       );
       expect(p.map((y) => Number(y['presente']))).toEqual([1, 1, 0]);
+      // O retrato da ata leva o nome do cadastro, não o digitado.
+      const [ret] = await consulta('SELECT presentes_registrados FROM reuniao_comissao WHERE id = ?', [r.id]);
+      expect(JSON.parse(String(ret!['presentes_registrados']))).toEqual([nomeProf, 'Ana Externa']);
       expect(
         await consulta('SELECT id FROM reuniao_comissao WHERE comissao_hospitalar_id = ?', [ids['comissao']]),
       ).toHaveLength(1);
@@ -450,6 +454,97 @@ describe.skipIf(SEM_BANCO_QUA)(
         ids['comissao'],
       ]);
       expect(ch).toMatchObject({ situacao: 'ativa', versao: 2 });
+    });
+
+    it('presença por membro (mesma pessoa em dois papéis, homônimo), reunião retroativa na composição da data e conta com colaborador regravada sem mudança', async () => {
+      const nomeR = `${nomeComissao} R`;
+      const conta = { nome: 'Quem tem a conta', login: m.loginGestor };
+      const tela = (terceiro: { nome: string; funcao: string; login: string | null }) =>
+        JSON.stringify([{ ...conta, funcao: 'Presidente' }, { ...conta, funcao: 'Membro' }, terceiro]);
+      // Em 10/11: a mesma pessoa (profissional) presidente e membro, e um externo homônimo dela.
+      const r = await comissao({
+        nome: nomeR,
+        agora: '2026-11-10T10:00:00',
+        membros: tela({ nome: nomeProf, funcao: 'Enfermeiro', login: null }),
+      });
+      // A conta passa a ter colaborador ligado ao mesmo profissional: a regravação não troca a pessoa da composição.
+      await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-teste-k3' }, async (e) => {
+        const sexo = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM sexo', []);
+        ids['colab'] = await e.inserir(
+          `INSERT INTO colaborador (nome, cpf, data_nascimento, sexo_id, grau_instrucao, usuario_id, profissional_id, criado_em)
+           VALUES ('COLABORADOR SINTETICO K3', ?, '1990-01-01', ?, '07', ?, ?, ?)`,
+          [String(NUM).padStart(11, '0'), sexo?.id, m.gestor, ids['prof'], new Date('2026-11-01T10:00:00')],
+        );
+      });
+      // Em 15/11: o homônimo sai e entra a Dora.
+      const alt = await comissao({
+        id: r.id,
+        versao: 1,
+        nome: nomeR,
+        agora: '2026-11-15T10:00:00',
+        membros: tela({ nome: 'Dora Externa', funcao: 'Enfermeira', login: null }),
+        justificativa: 'Troca do membro da enfermagem',
+      });
+      expect(alt.versao).toBe(2);
+      const mb = await consulta(
+        `SELECT id, colaborador_id, profissional_id, nome_externo, papel, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim
+           FROM comissao_membro WHERE comissao_hospitalar_id = ? AND excluido_em IS NULL ORDER BY id`,
+        [r.id],
+      );
+      expect(
+        mb.map((x) => [x['colaborador_id'], x['profissional_id'], x['nome_externo'], x['papel'], x['fim']]),
+      ).toEqual([
+        [null, ids['prof'], null, 'presidente', null],
+        [null, ids['prof'], null, 'membro', null],
+        [null, null, nomeProf, 'membro', '2026-11-14'],
+        [null, null, 'Dora Externa', 'membro', null],
+      ]);
+      // A tela de 15/11 mostra [presidente, membro (a mesma pessoa), Dora]; a reunião é de 12/11.
+      const lida = await new LeiturasGestaoComplementoQ2(m.nucleo).comissao(c, r.id, '2026-11-15');
+      expect((JSON.parse(lida!.membros) as unknown[]).length).toBe(3);
+      const reuniao = (over: Partial<Parameters<GravadorGestao['registrarReuniaoComissao']>[0]>) =>
+        gravar((g) =>
+          g.registrarReuniaoComissao({
+            comissao: r.id,
+            versaoComissao: 2,
+            tipo: 'ordinaria',
+            realizadaEm: '2026-11-12T10:00:00',
+            pauta: 'Pauta sintética',
+            ata: 'Ata sintética retroativa',
+            presentes: '[]',
+            membrosTotal: 3,
+            presentesTotal: 1,
+            convidados: null,
+            deliberacoes: null,
+            agora: '2026-11-15T10:00:00',
+            usuario: m.login,
+            ...over,
+          }),
+        );
+      // A Dora entrou depois da reunião; o nome repetido não diz qual membro esteve presente.
+      expect(await codigoDe(reuniao({ presentesPosicoes: [2] }))).toBe('409:presente-fora-da-data');
+      expect(await codigoDe(reuniao({ presentesPosicoes: [1, 1], presentesTotal: 2 }))).toBe(
+        '409:presente-repetido',
+      );
+      expect(await codigoDe(reuniao({ presentes: JSON.stringify([nomeProf]) }))).toBe('409:presente-ambiguo');
+      // Só o papel de membro da pessoa marcado: o de presidente fica ausente; quem saiu depois (o homônimo) é da data.
+      const x = await reuniao({ presentesPosicoes: [1] });
+      const [ru] = await consulta(
+        'SELECT membros_quantidade, presentes_quantidade, quorum_atingido, presentes_registrados FROM reuniao_comissao WHERE id = ?',
+        [x.id],
+      );
+      expect(ru).toMatchObject({ membros_quantidade: 3, presentes_quantidade: 1 });
+      expect(Number(ru!['quorum_atingido'])).toBe(0);
+      expect(JSON.parse(String(ru!['presentes_registrados']))).toEqual([nomeProf]);
+      const pa = await consulta(
+        'SELECT comissao_membro_id, presente FROM reuniao_comissao_participante WHERE reuniao_comissao_id = ? ORDER BY comissao_membro_id',
+        [x.id],
+      );
+      expect(pa.map((y) => [y['comissao_membro_id'], Number(y['presente'])])).toEqual([
+        [mb[0]!['id'], 0],
+        [mb[1]!['id'], 1],
+        [mb[2]!['id'], 0],
+      ]);
     });
   },
 );

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chaveDaPessoaNaComposicao,
   mudancaDaComposicao,
   nomeComparavel,
   papelDaFuncao,
+  presentesDaReuniao,
   quorumAtingido,
   recusaAmostraSorteio,
 } from './comissao-composicao.js';
@@ -57,5 +59,36 @@ describe('composição da comissão, quórum e amostra do sorteio', () => {
     expect(recusaAmostraSorteio([{ reg: 1 }, { reg: 2 }], 1)).toBe('amostra-maior-que-universo');
     expect(recusaAmostraSorteio([{ reg: 1 }, { reg: 1 }], 5)).toBe('prontuario-repetido');
     expect(recusaAmostraSorteio([{ reg: 1 }, { reg: 2 }], 5)).toBeNull();
+  });
+
+  it('a conta já presente na composição por outra chave mantém a chave gravada (o mesmo papel primeiro)', () => {
+    const atuais = [
+      { pessoa: 'p:7', papel: 'membro' as const },
+      { pessoa: 'p:7', papel: 'presidente' as const },
+    ];
+    expect(chaveDaPessoaNaComposicao('c:3', ['c:3', 'p:7'], 'presidente', atuais)).toBe('p:7');
+    expect(chaveDaPessoaNaComposicao('c:3', ['p:7'], 'secretario', atuais)).toBe('p:7');
+    expect(chaveDaPessoaNaComposicao('c:3', ['c:3'], 'membro', atuais)).toBe('c:3');
+    expect(chaveDaPessoaNaComposicao('c:3', [], 'membro', [])).toBe('c:3');
+  });
+
+  it('presença por membro: posição da tela, sem repetir, vigente na data da reunião', () => {
+    // A mesma pessoa em dois papéis e dois homônimos são linhas distintas: marcar uma não marca a outra.
+    const tela = [
+      { id: 1, nome: 'Ana' },
+      { id: 2, nome: 'Ana' },
+      { id: 3, nome: 'Bia' },
+    ];
+    const r = presentesDaReuniao([1], tela, tela);
+    expect('presentes' in r && r.presentes.map((m) => m.id)).toEqual([2]);
+    const ambos = presentesDaReuniao([0, 1], tela, tela);
+    expect('presentes' in ambos && ambos.presentes.map((m) => m.id)).toEqual([1, 2]);
+    expect(presentesDaReuniao([3], tela, tela)).toEqual({ recusa: 'presente-fora-da-composicao' });
+    expect(presentesDaReuniao([-1], tela, tela)).toEqual({ recusa: 'presente-fora-da-composicao' });
+    expect(presentesDaReuniao([0, 0], tela, tela)).toEqual({ recusa: 'presente-repetido' });
+    // Quem entrou depois da data da reunião não pode estar presente nela.
+    expect(presentesDaReuniao([2], tela, [{ id: 1 }, { id: 2 }])).toEqual({
+      recusa: 'presente-fora-da-data',
+    });
   });
 });

@@ -877,6 +877,7 @@ export class GestaoQualidadeController {
           presentes: JSON.stringify(presentes),
           membrosTotal: membros.length,
           presentesTotal: presentes.length,
+          presentesPosicoes: e.presentes,
           convidados: e.convidados?.trim() || null,
           deliberacoes: e.deliberacoes?.trim() || null,
           agora,

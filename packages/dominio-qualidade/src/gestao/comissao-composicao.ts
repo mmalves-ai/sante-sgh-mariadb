@@ -95,6 +95,44 @@ export function mudancaDaComposicao<A extends MembroParaComparar, N extends Memb
   return { mantidos, funcaoTrocada, encerrados, incluidos };
 }
 
+/**
+ * A chave da pessoa para a conta do membro: quando a composição vigente já tem essa pessoa por outra chave da mesma
+ * conta (o colaborador ou o profissional ligado a ela), vale a chave já gravada (a do mesmo papel primeiro), para a
+ * alteração não encerrar e reincluir a mesma pessoa; senão, a resolvida.
+ */
+export function chaveDaPessoaNaComposicao(
+  resolvida: string,
+  daConta: readonly string[],
+  papel: PapelMembroComissao,
+  atuais: readonly Pick<MembroParaComparar, 'pessoa' | 'papel'>[],
+): string {
+  const conta = new Set([resolvida, ...daConta]);
+  const mesmos = atuais.filter((a) => conta.has(a.pessoa));
+  return (mesmos.find((a) => a.papel === papel) ?? mesmos[0])?.pessoa ?? resolvida;
+}
+
+/** Por que a presença da reunião não pode ser gravada. */
+export type RecusaPresencaReuniao =
+  'presente-fora-da-composicao' | 'presente-repetido' | 'presente-fora-da-data';
+
+/**
+ * Os presentes da reunião como MEMBROS (cada linha da composição, nunca o nome): as posições marcadas valem para a
+ * composição que a tela leu (`daTela`) e cada presente tem de ser membro vigente na data da reunião (`naData`).
+ */
+export function presentesDaReuniao<M extends { readonly id: number }>(
+  posicoes: readonly number[],
+  daTela: readonly M[],
+  naData: readonly { readonly id: number }[],
+): { readonly presentes: readonly M[] } | { readonly recusa: RecusaPresencaReuniao } {
+  if (posicoes.some((i) => !Number.isInteger(i) || i < 0 || i >= daTela.length))
+    return { recusa: 'presente-fora-da-composicao' };
+  if (new Set(posicoes).size !== posicoes.length) return { recusa: 'presente-repetido' };
+  const vigentes = new Set(naData.map((m) => m.id));
+  const presentes = posicoes.map((i) => daTela[i]!);
+  if (presentes.some((m) => !vigentes.has(m.id))) return { recusa: 'presente-fora-da-data' };
+  return { presentes };
+}
+
 /** Por que a amostra do sorteio não pode ser gravada (nulo quando pode). */
 export type RecusaAmostraSorteio = 'amostra-vazia' | 'amostra-maior-que-universo' | 'prontuario-repetido';
 

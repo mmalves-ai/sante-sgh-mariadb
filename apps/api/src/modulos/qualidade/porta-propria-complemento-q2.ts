@@ -37,6 +37,7 @@ import {
   marcas,
   n,
   nn,
+  relogioDoEstabelecimento,
   texto,
   textoN,
   verdadeiro,
@@ -150,7 +151,8 @@ const SQL_COMISSAO = `
     JOIN tipo_comissao tc ON tc.id = ch.tipo_comissao_id
    WHERE ch.estabelecimento_id = ? AND ch.excluido_em IS NULL`;
 
-/** A composição vigente na data (vigência aberta ou ainda não terminada). */
+/** A composição vigente na data (vigência aberta ou ainda não terminada): a data do relógio do estabelecimento, o mesmo
+ *  da gravação da reunião (nunca o relógio do banco), para a tela mostrar a composição que a gravação confere. */
 const SQL_MEMBROS = (k: number) => `
   SELECT m.comissao_hospitalar_id AS comissao, COALESCE(co.nome, pf.nome, m.nome_externo) AS nome,
          COALESCE(m.funcao, REPLACE(m.papel, '_', ' ')) AS funcao, u.login
@@ -165,7 +167,7 @@ const SQL_MEMBROS = (k: number) => `
                                              WHERE up.profissional_id = m.profissional_id AND up.vigencia_fim IS NULL
                                                AND up.excluido_em IS NULL))
    WHERE m.comissao_hospitalar_id IN (${marcas(k)}) AND m.excluido_em IS NULL
-     AND m.vigencia_inicio <= CURRENT_DATE AND (m.vigencia_fim IS NULL OR m.vigencia_fim >= CURRENT_DATE)
+     AND m.vigencia_inicio <= ? AND (m.vigencia_fim IS NULL OR m.vigencia_fim >= ?)
    ORDER BY m.comissao_hospitalar_id, FIELD(m.papel, 'presidente', 'vice_presidente', 'secretario', 'membro_executor',
             'membro', 'consultor'), m.id`;
 
@@ -322,27 +324,30 @@ export class LeiturasGestaoComplementoQ2 {
   }
 
   /** As comissões do estabelecimento (ativas primeiro, pelo nome), com a composição vigente e as últimas reuniões. */
-  comissoes(c: ContextoGestao): Promise<ComissaoRegistrada[]> {
+  comissoes(c: ContextoGestao, hoje?: string): Promise<ComissaoRegistrada[]> {
     return this.ler(c, async (l, est) => {
       const r = await l.consultar(`${SQL_COMISSAO} ORDER BY ch.situacao = 'ativa' DESC, ch.nome, ch.id`, [
         est,
       ]);
-      return this.comMembros(l, r);
+      return this.comMembros(l, r, hoje ?? (await relogioDoEstabelecimento(l, est)).slice(0, 10));
     });
   }
 
-  comissao(c: ContextoGestao, id: number): Promise<ComissaoRegistrada | null> {
+  /** A comissão com a composição vigente em `hoje` (AAAA-MM-DD; sem ele, a data do relógio do estabelecimento). */
+  comissao(c: ContextoGestao, id: number, hoje?: string): Promise<ComissaoRegistrada | null> {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(`${SQL_COMISSAO} AND ch.id = ?`, [est, id]);
-      return r ? ((await this.comMembros(l, [r]))[0] ?? null) : null;
+      if (!r) return null;
+      const dia = hoje ?? (await relogioDoEstabelecimento(l, est)).slice(0, 10);
+      return (await this.comMembros(l, [r], dia))[0] ?? null;
     });
   }
 
-  private async comMembros(l: L, linhas: readonly Linha[]): Promise<ComissaoRegistrada[]> {
+  private async comMembros(l: L, linhas: readonly Linha[], hoje: string): Promise<ComissaoRegistrada[]> {
     const membros = new Map<number, { nome: string; funcao: string; login: string | null }[]>();
     if (linhas.length) {
       const ids = linhas.map((r) => n(r['id']));
-      for (const m of await l.consultar(SQL_MEMBROS(ids.length), ids)) {
+      for (const m of await l.consultar(SQL_MEMBROS(ids.length), [...ids, hoje, hoje])) {
         const k = n(m['comissao']);
         const lista = membros.get(k) ?? [];
         lista.push({

@@ -10,19 +10,22 @@
 //   lógica), quem só troca a função é alterado e quem entra começa hoje; a comissão e a composição anteriores vão à
 //   trilha da mesma operação (dados.versaoAnterior). Inativar ou trocar o tipo confere os dependentes dentro da
 //   transação (checklist vigente e sorteios com prontuário sem aval) e recusa `com-dependentes`.
-// - Reunião: reuniao_comissao realizada, conferida pela versão da comissão (a composição que a tela leu); a presença é
-//   de cada membro vigente em reuniao_comissao_participante (presente ou não), o nome dos presentes fica no retrato da
-//   ata e o quórum é apurado (quorumAtingido: o mínimo da comissão ou a maioria simples).
+// - Reunião: reuniao_comissao realizada, conferida pela versão da comissão (a composição que a tela leu); os presentes
+//   são as POSIÇÕES marcadas nessa composição (presentesDaReuniao: cada membro pela linha, nunca pelo nome), vigentes
+//   na data da reunião; a presença é de cada membro vigente NA DATA em reuniao_comissao_participante (presente ou não),
+//   o nome dos presentes fica só no retrato da ata e o quórum é apurado sobre essa composição (quorumAtingido).
 // - Sorteio: sorteio_revisao_prontuario com a semente e o resumo SHA-256 do universo e a amostra em revisao_prontuario
 //   (o atendimento do estabelecimento, o paciente e a internação dele, a versão do checklist vigente da comissão).
 //   Um sorteio ativo por comissão e competência: sortear de novo exige cancelar o anterior (cancelarSorteioRevisao).
 // Ligação (porta própria completa): espalha gravacoesComissaoSorteio(tx, est, anotacao) no gravador, soma
 // TABELAS_COMISSAO_SORTEIO às tabelas e responde `dependentes` da comissão por dependentesDaComissao.
 import {
+  chaveDaPessoaNaComposicao,
   mudancaDaComposicao,
   nomeComparavel,
   papelDaFuncao,
   type PapelMembroComissao,
+  presentesDaReuniao,
   quorumAtingido,
   recusaAmostraSorteio,
 } from '@sgh/dominio-qualidade';
@@ -88,6 +91,8 @@ interface MembroResolvido {
   readonly colaborador: number | null;
   readonly profissional: number | null;
   readonly nomeExterno: string | null;
+  /** As outras chaves da mesma conta (o colaborador e os profissionais ligados a ela). */
+  readonly daConta: readonly string[];
 }
 
 interface MembroGravado {
@@ -111,6 +116,20 @@ const dataDe = (v: unknown): string =>
   v instanceof Date
     ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
     : texto(v).slice(0, 10);
+
+/**
+ * Sem as posições (chamada antiga, pelos nomes): cada nome tem de casar com UM membro da composição; o homônimo é
+ * recusado, porque o nome não diz qual das pessoas esteve presente.
+ */
+function posicoesPelosNomes(nomes: readonly string[], daTela: readonly MembroGravado[]): number[] {
+  return nomes.map((nome) => {
+    const k = nomeComparavel(nome);
+    const casa = daTela.flatMap((m, i) => (nomeComparavel(m.nome) === k ? [i] : []));
+    if (casa.length > 1)
+      throw recusa('presente-ambiguo', 'Há presente com o nome de mais de um membro: marque-o pela posição.');
+    return casa[0] ?? -1;
+  });
+}
 
 /** A véspera de uma data AAAA-MM-DD (o fim da vigência de quem sai da composição). */
 export function vespera(dia: string): string {
@@ -145,6 +164,7 @@ async function resolverMembro(tx: TxOperacao, m: MembroDaTela): Promise<MembroRe
       colaborador: null,
       profissional: null,
       nomeExterno: nome,
+      daConta: [],
     };
   }
   const usuario = await usuarioPeloLogin(tx, m.login);
@@ -153,6 +173,16 @@ async function resolverMembro(tx: TxOperacao, m: MembroDaTela): Promise<MembroRe
       'usuario-inexistente',
       `A conta informada para o membro ${m.nome.trim()} não existe neste cliente.`,
     );
+  const daConta = (
+    await tx.consultar(
+      `SELECT CONCAT('c:', id) AS k FROM colaborador WHERE usuario_id = ? AND excluido_em IS NULL
+       UNION SELECT CONCAT('p:', profissional_id) FROM colaborador
+              WHERE usuario_id = ? AND excluido_em IS NULL AND profissional_id IS NOT NULL
+       UNION SELECT CONCAT('p:', profissional_id) FROM usuario_profissional WHERE usuario_id = ? AND excluido_em IS NULL`,
+      [usuario, usuario, usuario],
+      { teto: 100 },
+    )
+  ).map((r) => texto(r['k']));
   const co = await tx.uma<{ id: number }>(
     'SELECT id FROM colaborador WHERE usuario_id = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 1',
     [usuario],
@@ -165,6 +195,7 @@ async function resolverMembro(tx: TxOperacao, m: MembroDaTela): Promise<MembroRe
       colaborador: n(co.id),
       profissional: null,
       nomeExterno: null,
+      daConta,
     };
   const pr = await tx.uma<{ profissional_id: number }>(
     `SELECT profissional_id FROM usuario_profissional
@@ -179,6 +210,7 @@ async function resolverMembro(tx: TxOperacao, m: MembroDaTela): Promise<MembroRe
       colaborador: null,
       profissional: n(pr.profissional_id),
       nomeExterno: null,
+      daConta,
     };
   throw recusa(
     'conta-sem-cadastro',
@@ -224,6 +256,18 @@ export async function dependentesDaComissao(l: L, est: number, id: number): Prom
   ];
 }
 
+/** O membro com a chave da pessoa trocada pela já gravada (as colunas da pessoa seguem a chave). */
+function comChave(m: MembroResolvido, pessoa: string): MembroResolvido {
+  if (pessoa === m.pessoa) return m;
+  const id = Number(pessoa.slice(2));
+  return {
+    ...m,
+    pessoa,
+    colaborador: pessoa.startsWith('c:') ? id : null,
+    profissional: pessoa.startsWith('p:') ? id : null,
+  };
+}
+
 function retrato(r: Linha): Record<string, unknown> {
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v instanceof Date ? instante(v) : v]));
 }
@@ -255,11 +299,8 @@ export function gravacoesComissaoSorteio(
       );
       if (repetida) throw recusa('comissao-duplicada', 'Já existe comissão com este nome.');
       const daTela = JSON.parse(c.membros) as MembroDaTela[];
-      const novos: MembroResolvido[] = [];
-      for (const m of daTela) novos.push(await resolverMembro(tx, m));
-      const chaves = new Set(novos.map((m) => `${m.pessoa}|${m.papel}`));
-      if (chaves.size !== novos.length)
-        throw recusa('membro-repetido', 'A mesma pessoa aparece duas vezes com o mesmo papel na composição.');
+      const resolvidos: MembroResolvido[] = [];
+      for (const m of daTela) resolvidos.push(await resolverMembro(tx, m));
       const dados = {
         tipo_comissao_id: n(tipo.id),
         nome: c.nome,
@@ -302,6 +343,13 @@ export function gravacoesComissaoSorteio(
         };
       }
 
+      // A pessoa que já está na composição por outra chave da mesma conta fica com a chave gravada.
+      const novos = resolvidos.map((m) =>
+        comChave(m, chaveDaPessoaNaComposicao(m.pessoa, m.daConta, m.papel, atuais)),
+      );
+      const chaves = new Set(novos.map((m) => `${m.pessoa}|${m.papel}`));
+      if (chaves.size !== novos.length)
+        throw recusa('membro-repetido', 'A mesma pessoa aparece duas vezes com o mesmo papel na composição.');
       const mudanca = mudancaDaComposicao(atuais, novos);
       for (const t of mudanca.funcaoTrocada)
         await tx.alterar('comissao_membro', t.atual.id, t.atual.versao, { funcao: t.nova.funcao });
@@ -362,17 +410,25 @@ export function gravacoesComissaoSorteio(
       );
       if (!c || n(c['versao']) !== r.versaoComissao) throw recusaVersaoGestao('A comissão');
       if (texto(c['situacao']) !== 'ativa') throw recusa('comissao-inativa', 'A comissão está inativa.');
-      const membros = await composicao(tx, r.comissao, r.agora.slice(0, 10));
-      if (membros.length !== r.membrosTotal) throw recusaVersaoGestao('A comissão');
-      const nomes = (JSON.parse(r.presentes) as string[]).map(nomeComparavel);
-      const presentes = new Set(nomes);
-      const casados = membros.filter((m) => presentes.has(nomeComparavel(m.nome)));
-      if (
-        presentes.size !== nomes.length ||
-        casados.length !== presentes.size ||
-        nomes.length !== r.presentesTotal
-      )
-        throw recusa('presente-fora-da-composicao', 'Há presente que não é membro vigente da comissão.');
+      // A tela marcou posições da composição que leu (a de hoje): o total confere a versão que ela viu. A presença e o
+      // quórum são da composição vigente NA DATA da reunião (a retroativa não ganha quem entrou depois).
+      const hoje = r.agora.slice(0, 10);
+      const diaReuniao = r.realizadaEm.slice(0, 10);
+      const daTela = await composicao(tx, r.comissao, hoje);
+      if (daTela.length !== r.membrosTotal) throw recusaVersaoGestao('A comissão');
+      const naData = diaReuniao === hoje ? daTela : await composicao(tx, r.comissao, diaReuniao);
+      const posicoes = r.presentesPosicoes ?? posicoesPelosNomes(JSON.parse(r.presentes) as string[], daTela);
+      const escolha = presentesDaReuniao(posicoes, daTela, naData);
+      if ('recusa' in escolha)
+        throw recusa(
+          escolha.recusa,
+          escolha.recusa === 'presente-fora-da-data'
+            ? 'Há presente que não era membro vigente da comissão na data da reunião.'
+            : 'Há presente que não é membro vigente da comissão (ou marcado duas vezes).',
+        );
+      if (escolha.presentes.length !== r.presentesTotal)
+        throw recusa('presente-fora-da-composicao', 'A contagem dos presentes não confere com os marcados.');
+      const presentes = new Set(escolha.presentes.map((m) => m.id));
       const quorumMinimo = c['quorum_minimo'] === null ? null : n(c['quorum_minimo']);
       const quando = paraBanco(r.realizadaEm);
       const id = await tx.incluir('reuniao_comissao', {
@@ -384,21 +440,22 @@ export function gravacoesComissaoSorteio(
         pauta: r.pauta,
         ata: r.ata,
         deliberacoes: r.deliberacoes,
-        presentes_registrados: r.presentes,
-        membros_quantidade: r.membrosTotal,
-        presentes_quantidade: r.presentesTotal,
+        // O nome fica só no retrato da ata (o do cadastro); a presença é de cada membro, pela linha da composição.
+        presentes_registrados: JSON.stringify(escolha.presentes.map((m) => m.nome)),
+        membros_quantidade: naData.length,
+        presentes_quantidade: presentes.size,
         convidados: r.convidados,
         versao_composicao: r.versaoComissao,
         quorum_minimo: quorumMinimo,
-        quorum_atingido: quorumAtingido(r.presentesTotal, r.membrosTotal, quorumMinimo),
+        quorum_atingido: quorumAtingido(presentes.size, naData.length, quorumMinimo),
         secretario_usuario_id: usuario,
       });
-      for (const m of membros)
+      for (const m of naData)
         await tx.incluir('reuniao_comissao_participante', {
           reuniao_comissao_id: id,
           tipo_participacao: 'membro',
           comissao_membro_id: m.id,
-          presente: presentes.has(nomeComparavel(m.nome)),
+          presente: presentes.has(m.id),
         });
       return { id };
     },

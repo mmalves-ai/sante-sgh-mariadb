@@ -111,6 +111,8 @@ export interface GravadorGestao {
     readonly presentes: string;
     readonly membrosTotal: number;
     readonly presentesTotal: number;
+    /** As posições dos presentes na composição que a tela leu (a presença é do membro, nunca do nome). */
+    readonly presentesPosicoes?: readonly number[];
     readonly convidados: string | null;
     readonly deliberacoes: string | null;
     readonly agora: string;
