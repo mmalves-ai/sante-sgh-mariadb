@@ -81,7 +81,9 @@ export function textoDoJson(v: unknown): string | null {
 export function avisosDoJson(v: unknown): string | null {
   const x = decodificar(v);
   const lista = Array.isArray(x) ? x : x === null || x === undefined ? [] : [x];
-  const textos = lista.filter((y): y is string => typeof y === 'string' && y.trim() !== '').map((y) => y.trim());
+  const textos = lista
+    .filter((y): y is string => typeof y === 'string' && y.trim() !== '')
+    .map((y) => y.trim());
   return textos.length > 0 ? textos.join('; ') : null;
 }
 
@@ -178,8 +180,7 @@ export class ComplementoQualidadeC {
           id: n(x['id']),
           // O evento `nao_administrado` é a situação "não administrado" da checagem (a regra só olha esta).
           situacao: 'N',
-          motivo:
-            textoN(x['motivo_lista']) ?? textoDoJson(x['motivo_dados']) ?? textoN(x['texto_motivo']),
+          motivo: textoN(x['motivo_lista']) ?? textoDoJson(x['motivo_dados']) ?? textoN(x['texto_motivo']),
           avisos: avisosDoJson(x['avisos_dados']),
           horaReal: civil(x['ocorrido_em']),
           atendimento: nn(x['atendimento_id']),

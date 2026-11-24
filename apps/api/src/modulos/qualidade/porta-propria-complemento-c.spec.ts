@@ -15,7 +15,8 @@ import {
 type Linha = Record<string, unknown>;
 function nucleoFalso(linhas: (sql: string, p: readonly unknown[]) => Linha[]) {
   const sqls: { sql: string; p: readonly unknown[] }[] = [];
-  const fuso = (sql: string) => (sql.includes('fuso_horario') ? [{ fuso_horario: 'America/Sao_Paulo' }] : null);
+  const fuso = (sql: string) =>
+    sql.includes('fuso_horario') ? [{ fuso_horario: 'America/Sao_Paulo' }] : null;
   const l = {
     consultar: (sql: string, p: readonly unknown[] = []) => {
       sqls.push({ sql, p });
@@ -109,7 +110,14 @@ describe('complemento qualidade-c: candidatos', () => {
     const r = await new ComplementoQualidadeC(nucleo).candidatos(c, ' sint.enf ', '2026-11-01T00:00:00');
     // O código do motivo vem do catálogo (carga) ou de `dados.motivo` (o gravador); sem os dois, o texto do evento.
     expect(r.checagens).toEqual([
-      { id: 11, situacao: 'N', motivo: 'faltaItem', avisos: null, horaReal: '2026-11-20T08:00:00', atendimento: 5 },
+      {
+        id: 11,
+        situacao: 'N',
+        motivo: 'faltaItem',
+        avisos: null,
+        horaReal: '2026-11-20T08:00:00',
+        atendimento: 5,
+      },
       {
         id: 12,
         situacao: 'N',
@@ -118,7 +126,14 @@ describe('complemento qualidade-c: candidatos', () => {
         horaReal: '2026-11-20T07:00:00',
         atendimento: 5,
       },
-      { id: 13, situacao: 'N', motivo: 'ausente', avisos: null, horaReal: '2026-11-20T06:00:00', atendimento: null },
+      {
+        id: 13,
+        situacao: 'N',
+        motivo: 'ausente',
+        avisos: null,
+        horaReal: '2026-11-20T06:00:00',
+        atendimento: null,
+      },
     ]);
     expect(r.reacoes.map((x) => [x.id, x.grau, x.enviada])).toEqual([
       [21, 2, false],
@@ -146,7 +161,9 @@ describe('complemento qualidade-c: candidatos', () => {
     expect(sql('checklist_cirurgia_segura')).not.toContain('alterado_por');
     // Só a ficha não inativada; a lesão inativada (ou excluída) vai marcada.
     expect(sql('lesao_pele_avaliacao')).toContain("av.tipo_avaliacao = 'ficha' AND av.inativada = FALSE");
-    expect(sql('lesao_pele_avaliacao')).toContain('(lp.inativada = TRUE OR lp.excluido_em IS NOT NULL) AS inativada');
+    expect(sql('lesao_pele_avaliacao')).toContain(
+      '(lp.inativada = TRUE OR lp.excluido_em IS NOT NULL) AS inativada',
+    );
   });
 
   it('login que não existe: nenhum candidato, sem consultar as fontes', async () => {
@@ -195,7 +212,9 @@ describe('complemento qualidade-c: painel de adesão', () => {
     expect(fontes[0]?.sql).not.toContain('canal_registro');
     // O checklist pelo dia da cirurgia (ato ou agendamento) já iniciada; o aberto sem ato entra pelo agendamento.
     expect(fontes[1]?.p).toEqual([7, ini, fim, new Date('2026-11-24T13:00:00Z')]);
-    expect(fontes[1]?.sql).toContain('COALESCE(a.inicio_cirurgia_em, a.entrada_sala_em, g.inicio_previsto_em)');
+    expect(fontes[1]?.sql).toContain(
+      'COALESCE(a.inicio_cirurgia_em, a.entrada_sala_em, g.inicio_previsto_em)',
+    );
     expect(fontes[1]?.sql).not.toContain('k.criado_em');
     expect(fontes[2]?.sql).toContain("r.situacao <> 'dispensada'");
   });
