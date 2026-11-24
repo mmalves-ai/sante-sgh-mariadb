@@ -20,7 +20,7 @@
 // conferência do registro no conselho (conferencia_registro_conselho, sobre inscricao_conselho do profissional da conta);
 // o RH (perfil_cargo_rh, resolucao_tarefa_rh, com vínculos, histórico de cargo, férias e afastamentos lidos do RH).
 // Todas só por inclusão (linha nova), com a trilha na mesma transação. Pedidos de acesso: pedido-acesso-propria.ts
-// (01-ADM L57). Campanhas de recertificação: tabelas existem, adaptador a escrever (respondem "adaptador-pendente").
+// (01-ADM L57). Campanhas de recertificação: recertificacao-propria.ts (01-ADM L57).
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -53,6 +53,7 @@ import {
   type UsuarioGestao,
 } from './gestao-tipos.js';
 import { PedidoAcessoProprio } from './pedido-acesso-propria.js';
+import { RecertificacaoPropria } from './recertificacao-propria.js';
 import type { ValidarResolucaoRhMemoria } from './rh-memoria.js';
 import {
   type AfastamentoRhLido,
@@ -1741,22 +1742,25 @@ class FonteGestaoPropria implements FonteGestao {
     return num(p['id']);
   }
 
-  // ── Tabelas existentes, adaptador a escrever (pedido ao orquestrador) ──────────────────────────
-
-  campanhasRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  // ── Recertificação (01-ADM L57): adaptador em recertificacao-propria.ts ─────────────────────────
+  private readonly recert = new RecertificacaoPropria(
+    (hospital, fn) => this.ler(hospital, fn),
+    (def, hospital, quem, entrada, fn) => this.gravar(def, hospital, quem, entrada, fn),
+  );
+  campanhasRecert(...[, hospital]: Parameters<FonteGestao['campanhasRecert']>) {
+    return this.recert.campanhasRecert(hospital);
   }
-  campanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  campanhaRecert(...[, hospital, id]: Parameters<FonteGestao['campanhaRecert']>) {
+    return this.recert.campanhaRecert(hospital, id);
   }
-  abrirCampanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  abrirCampanhaRecert(...[, hospital, p, t]: Parameters<FonteGestao['abrirCampanhaRecert']>) {
+    return this.recert.abrirCampanhaRecert(hospital, p, t);
   }
-  decidirRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  decidirRecert(...[, hospital, p, t, validar]: Parameters<FonteGestao['decidirRecert']>) {
+    return this.recert.decidirRecert(hospital, p, t, validar);
   }
-  fecharCampanhaRecert(): Promise<never> {
-    return adaptadorPendenteGestao('A campanha de recertificação');
+  fecharCampanhaRecert(...[, hospital, p, t]: Parameters<FonteGestao['fecharCampanhaRecert']>) {
+    return this.recert.fecharCampanhaRecert(hospital, p, t);
   }
   // ── Pedido de acesso (01-ADM L57): adaptador em pedido-acesso-propria.ts ─────────────────────────
   private readonly pedidos = new PedidoAcessoProprio(
