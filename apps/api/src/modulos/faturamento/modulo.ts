@@ -6,6 +6,11 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import {
+  AjustesContaController,
+  SERVICO_AJUSTES_CONTA,
+  ServicoAjustesConta,
+} from './conta-ajustes.controller.js';
+import {
   ComplementosContaController,
   SERVICO_COMPLEMENTOS_CONTA,
   ServicoComplementosConta,
@@ -41,7 +46,12 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
   const porta = opcoes.porta ?? portaDoFaturamento(ctx);
   return {
     module: ModuloFaturamento,
-    controllers: [FaturamentoController, ComplementosContaController, MovimentosContaController],
+    controllers: [
+      FaturamentoController,
+      ComplementosContaController,
+      MovimentosContaController,
+      AjustesContaController,
+    ],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
       // 06-FAT linhas 10 e 12: período da conta parcial, segurado na conta e campo adicional da guia (banco próprio).
@@ -58,6 +68,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoMovimentosConta(ctx.nucleo)
+            : null,
+      },
+      // 06-FAT linhas 17, 18 e 20: horário especial, acréscimo e desconto com alçada e pacote na conta (banco próprio).
+      {
+        provide: SERVICO_AJUSTES_CONTA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoAjustesConta(ctx.nucleo)
             : null,
       },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.
