@@ -92,9 +92,10 @@ Vieram da análise de consumo de 2026-11-20 (`docs/obra/consumo.md`). Medido at�
 - **Subagentes:** 25,5 milhões de tokens no total.
 - **Ferramentas:** cerca de 19 chamadas por agente.
 
-15. **Sessão do orquestrador curta.**
-    - Uma sessão por fase ou bloco de trabalho, começando pela `RETOMADA.md` e pelo `ESTADO.md`.
-    - Acima de cerca de 150 turnos, ou ao fechar um bloco: passagem, commit e sessão nova.
+15. **Sessão contínua do orquestrador** (dono, 2026-11-23; substitui "sessão curta de 150 turnos").
+    - Começa pela `RETOMADA.md` e pelo `ESTADO.md` e segue até o dono mandar recomeçar em outro chat.
+    - A cada bloco fechado: passagem e commit (para o caso de recomeço), sem pedir chat novo.
+    - Medido em 23/11: recomeçar a cada 150 turnos economizava de 5 a 8% do gasto total.
     - **Efeito na qualidade:** nenhum, ou positivo (o contexto enorme dilui a atenção).
 16. **Poucos turnos do orquestrador.**
     - Verificação por script com saída compacta.
@@ -147,8 +148,8 @@ cair, a regra que causou é desfeita.
 4. **Próximas etapas e o que falta:** o que vem em seguida e o que falta para completar o sistema.
 
 **Sem parar até completar o sistema** (dono, 2026-11-20). Fechada uma etapa, a próxima é lançada em seguida.
-Só se para por bloqueio real (decisão do dono, disco abaixo de 100 GB ou pausa pedida). Ao passar de cerca de
-150 turnos, a passagem para uma sessão nova faz parte do fluxo; não é parada.
+Só se para por bloqueio real (decisão do dono, disco abaixo de 100 GB ou pausa pedida). A sessão é contínua: só
+se recomeça em outro chat quando o dono mandar (2026-11-23).
 
 **Termos da área da saúde (dono, 2026-11-20).** Nos relatórios, todo termo técnico ou sigla da área médica
 ou hospitalar vem explicado em poucas palavras no primeiro uso. Exemplos: CID, CBO, SIGTAP, TUSS, TISS, CNES,

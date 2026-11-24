@@ -28,7 +28,8 @@
   - a anterior passou de 1.950 turnos (76 M);
   - durante a carga longa, não fique conversando: vigia em script, relatório só no cron, leitura só por script com
     saída curta;
-  - ao passar de cerca de 150 turnos, grave a passagem e peça ao dono para abrir chat novo.
+  - sessão contínua (dono, 23/11): NÃO peça chat novo por número de turnos; só se recomeça quando o dono mandar.
+    Grave a passagem e faça commit a cada bloco fechado.
 - **Todos os agentes usam o Opus;** a economia vem só da estrutura:
   - fatia pequena, saída em arquivo, revisor só do diff;
   - prova longa (diag-cadeia de 50 min) fica com o ORQUESTRADOR em segundo plano, nunca dentro do agente (estoura o

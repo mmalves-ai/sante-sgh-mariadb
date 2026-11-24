@@ -24,10 +24,12 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
      completude e previsão geral.
    - **Regras padrão de economia sem perda de qualidade** (dono, 2026-11-20; detalhe nas regras 15 a 19 do
      protocolo):
-     1. **Sessão do orquestrador curta, uma por fase ou bloco de trabalho.**
+     1. **Sessão contínua do orquestrador (dono, 2026-11-23, troca a regra dos 150 turnos).**
         - Começa pela `docs/obra/passagens/RETOMADA.md` e pelo `docs/ESTADO.md`.
-        - Ao passar de cerca de 150 turnos, ou ao fechar um bloco: grave a passagem, faça o commit e recomece numa
-          sessão nova.
+        - A sessão segue até o dono mandar recomeçar em outro chat. O orquestrador **não** pede chat novo por número
+          de turnos: o Claude Code resume o contexto sozinho, e o ganho medido de recomeçar a cada 150 turnos era de
+          5 a 8% do gasto total (cerca de 1 M a cada 2 horas), contra o custo de o dono abrir chat de madrugada.
+        - A passagem continua gravada e com commit a cada bloco fechado, para o caso de recomeço.
      2. **Poucos turnos do orquestrador:**
         - uma verificação é um script com saída compacta;
         - status só no relatório de 50 minutos;
