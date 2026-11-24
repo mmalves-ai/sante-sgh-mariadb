@@ -86,24 +86,26 @@ describe.skipIf(SEM_BANCO)(
         const agora = new Date();
         const livres: number[] = [];
         for (let k = 90; k <= 99 && livres.length < 2; k++) {
-          const x = await e.uma('SELECT id FROM especialidade_medica WHERE codigo IN (?, ?)', [String(k), `0${k}`]);
+          const x = await e.uma('SELECT id FROM especialidade_medica WHERE codigo IN (?, ?)', [
+            String(k),
+            `0${k}`,
+          ]);
           if (!x) livres.push(k);
         }
         expect(livres.length).toBe(2);
         const [n, inativa] = livres as [number, number];
         const esp = async (codigo: string, ativo: boolean) =>
-          e.inserir('INSERT INTO especialidade_medica (codigo, descricao, ativo, criado_em) VALUES (?, ?, ?, ?)', [
-            codigo,
-            `${codigo} ${MARCA_ESP}`,
-            ativo,
-            agora,
-          ]);
+          e.inserir(
+            'INSERT INTO especialidade_medica (codigo, descricao, ativo, criado_em) VALUES (?, ?, ?, ?)',
+            [codigo, `${codigo} ${MARCA_ESP}`, ativo, agora],
+          );
         const eN = await esp(String(n), true);
         const eZero = await esp(`0${n}`, true);
         const eInativa = await esp(String(inativa), false);
-        const g = await e.uma<{ g: unknown }>('SELECT grupo_faturamento_id AS g FROM item_faturavel WHERE id = ?', [
-          m!.procedimento,
-        ]);
+        const g = await e.uma<{ g: unknown }>(
+          'SELECT grupo_faturamento_id AS g FROM item_faturavel WHERE id = ?',
+          [m!.procedimento],
+        );
         const grupo = Number(g?.g);
         const item = async (codigo: string, letra: string, situacao = 'ativo', excluido = false) =>
           e.inserir(
@@ -319,9 +321,14 @@ describe.skipIf(SEM_BANCO)(
         });
         expect(await porta.procedimentosDaEspecialidade(c, esp.n, 3, 2)).toEqual({ itens: [], total: 4 });
         const tudo = await porta.procedimentosDaEspecialidade(c, esp.n, 1, 30);
-        expect(tudo.itens.map((x) => x.procedimento)).toEqual([8810201001, 8810201002, 8810201003, 8810201011]);
+        expect(tudo.itens.map((x) => x.procedimento)).toEqual([
+          8810201001, 8810201002, 8810201003, 8810201011,
+        ]);
         // Especialidade inativa não lista nada, mesmo com procedimento vigente.
-        expect(await porta.procedimentosDaEspecialidade(c, esp.inativa, 1, 30)).toEqual({ itens: [], total: 0 });
+        expect(await porta.procedimentosDaEspecialidade(c, esp.inativa, 1, 30)).toEqual({
+          itens: [],
+          total: 0,
+        });
       } finally {
         await limparEspecialidades();
       }
