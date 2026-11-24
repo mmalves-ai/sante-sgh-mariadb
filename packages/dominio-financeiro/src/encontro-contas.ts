@@ -131,14 +131,57 @@ export function conferirAprovacaoEncontro(e: {
   return null;
 }
 
-/** Cancelar: só o que não foi efetivado, com motivo (o efetivado se desfaz por estorno das baixas). */
+/** Cancelar: só o que não foi efetivado, com motivo (o efetivado se desfaz pelo estorno do encontro). */
 export function conferirCancelamentoEncontro(e: {
   readonly situacao: string;
   readonly motivo: string;
 }): RecusaFinanceiro | null {
   if (e.situacao === 'efetivado' || e.situacao === 'cancelado')
-    return recusaFin('encontro-fechado', 'O encontro de contas já foi efetivado ou cancelado.');
+    return recusaFin(
+      'encontro-fechado',
+      e.situacao === 'efetivado'
+        ? 'O encontro de contas já foi efetivado: desfaça-o pelo estorno, com motivo.'
+        : 'O encontro de contas já foi cancelado.',
+    );
   if (e.motivo.trim().length < 5)
     return recusaFin('motivo-obrigatorio', 'Diga o motivo do cancelamento.', ['motivo']);
   return null;
+}
+
+/** Estornar o encontro efetivado: só o efetivado, com motivo; as baixas dos dois lados voltam, nada se apaga. */
+export function conferirEstornoEncontro(e: {
+  readonly situacao: string;
+  readonly motivo: string;
+}): RecusaFinanceiro | null {
+  if (e.situacao !== 'efetivado')
+    return recusaFin('encontro-nao-efetivado', 'Só o encontro de contas efetivado se estorna: releia.');
+  if (e.motivo.trim().length < 5)
+    return recusaFin('motivo-obrigatorio', 'Diga o motivo do estorno.', ['motivo']);
+  return null;
+}
+
+/**
+ * Desfazer a compensação de uma parcela no estorno: devolve o valor compensado ao saldo e tira do acumulado (pago ou
+ * recebido). A parcela volta a "parcial" se ainda houver outra baixa, senão a "aberta". Recusa a parcela que mudou
+ * por outra via (acumulado menor que o compensado, ou já cancelada ou renegociada).
+ */
+export function desfazerCompensacaoParcela(p: {
+  readonly situacao: string;
+  readonly saldo: number;
+  readonly acumulado: number;
+  readonly compensado: number;
+}):
+  | RecusaFinanceiro
+  | { readonly saldo: number; readonly acumulado: number; readonly situacao: 'aberta' | 'parcial' } {
+  if (!['parcial', 'paga', 'recebida'].includes(p.situacao) || centavos(p.acumulado) < centavos(p.compensado))
+    return recusaFin(
+      'parcela-mudou',
+      'Uma parcela do encontro mudou por outra via (estornada, renegociada ou cancelada): confira antes de estornar.',
+    );
+  const acumulado = centavos(p.acumulado - p.compensado);
+  return {
+    saldo: centavos(p.saldo + p.compensado),
+    acumulado,
+    situacao: acumulado > 0 ? 'parcial' : 'aberta',
+  };
 }
