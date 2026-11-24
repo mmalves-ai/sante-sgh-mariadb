@@ -290,7 +290,7 @@ const modalidadeDaClinica = (tx: TxOperacao, clinica: string, informada?: number
 
 async function exigirExiste(
   tx: TxOperacao,
-  tabela: 'fonte_pagadora' | 'especialidade_medica' | 'profissional',
+  tabela: 'fonte_pagadora' | 'especialidade_medica' | 'profissional' | 'clinica_assistencial',
   id: number,
   campo: string,
   nome: string,
@@ -299,6 +299,7 @@ async function exigirExiste(
     fonte_pagadora:
       "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
     especialidade_medica: 'SELECT id FROM especialidade_medica WHERE id = ? AND ativo = TRUE',
+    clinica_assistencial: 'SELECT id FROM clinica_assistencial WHERE id = ? AND ativo = TRUE',
     profissional: "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
   }[tabela];
   if (!(await tx.uma(sql, [id])))
@@ -1018,6 +1019,24 @@ async function previsaoDe(tx: TxOperacao, est: number, data: string | undefined,
   return { previsto: new Date(dataHoraParaInstante(data, hora ?? '07:00', fuso)), situacao: 'solicitado' };
 }
 
+/** O procedimento previsto pelo código: o item faturável do cliente ou, senão, o da tabela do SUS; sem casamento, 422. */
+async function procedimentoPrevisto(tx: TxOperacao, codigo: number) {
+  const item = await tx.uma(
+    'SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL LIMIT 1',
+    [String(codigo)],
+  );
+  if (item) return { item: n(item['id']), sigtap: null };
+  const sus = await tx.uma('SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ? LIMIT 1', [
+    String(codigo).padStart(10, '0'),
+  ]);
+  if (sus) return { item: null, sigtap: n(sus['id']) };
+  throw semCasamento('procedimento-inexistente', 'O procedimento não existe no cadastro.', 'procedimento');
+}
+
+/** Dado informado sem correspondência no cadastro: 422, nunca gravado nulo em silêncio. */
+const semCasamento = (codigo: string, texto: string, campo: string) =>
+  new ErroOperacao(422, codigo, 'Dado sem correspondência', texto, { campos: [campo] });
+
 const SITUACOES_PRE_PENDENTES = [
   'solicitado',
   'aguardando_autorizacao',
@@ -1055,16 +1074,30 @@ const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
       [urgencia],
       `o caráter de admissão ${urgencia ? 'de urgência' : 'eletivo'}`,
     );
+    await exigirExiste(tx, 'clinica_assistencial', e.clinica, 'clinica', 'A clínica');
     const plano = await tx.uma<{ id: unknown }>(
       'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND (codigo = ? OR UPPER(descricao) = ?) AND excluido_em IS NULL LIMIT 1',
       [e.convenio, e.plano, e.plano],
     );
+    if (!plano) throw semCasamento('plano-inexistente', 'O plano não existe neste convênio.', 'plano');
     const cid = e.cid
       ? await tx.uma<{ id: unknown }>(
           "SELECT t.id FROM termo_terminologia t JOIN terminologia tt ON tt.id = t.terminologia_id WHERE REPLACE(t.codigo_termo, '.', '') = ? AND tt.codigo = 'cid10' LIMIT 1",
           [e.cid.replace('.', '').toUpperCase()],
         )
       : null;
+    if (e.cid && !cid) throw semCasamento('cid-inexistente', 'O CID não existe na CID-10.', 'cid');
+    const proc = e.procedimento === undefined ? null : await procedimentoPrevisto(tx, e.procedimento);
+    if (e.cirurgia !== undefined) {
+      const cir = await tx.uma(
+        'SELECT id FROM agendamento_cirurgico WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [e.cirurgia, e.paciente, est],
+      );
+      if (!cir)
+        throw recusa('cirurgia-inexistente', 'A cirurgia agendada não é deste paciente.', {
+          campos: ['cirurgia'],
+        });
+    }
     let unidade: number | null = null;
     let categoria: number | null = null;
     if (e.acomodacao) {
@@ -1094,10 +1127,14 @@ const preInternar = definirOperacao<PreInternarEntrada, ResultadoOperacao>({
       categoria_acomodacao_id: categoria,
       unidade_internacao_id: unidade,
       especialidade_medica_id: e.especialidade,
+      clinica_assistencial_id: e.clinica,
+      item_faturavel_id: proc?.item ?? null,
+      procedimento_sigtap_id: proc?.sigtap ?? null,
+      agendamento_cirurgico_id: e.cirurgia ?? null,
       medico_profissional_id: e.medicoAssistente ?? e.medicoSolicitante,
       solicitante_profissional_id: e.medicoSolicitante,
       fonte_pagadora_id: e.convenio,
-      plano_fonte_pagadora_id: plano ? n(plano.id) : null,
+      plano_fonte_pagadora_id: n(plano.id),
       numero_carteira: e.matricula ?? null,
       carteira_validade: e.validadeCarteira ?? null,
       senha_autorizacao: e.senhaConvenio ?? null,
@@ -1125,21 +1162,22 @@ const corrigirPreInternacao = definirOperacao<CorrigirPreInternacaoEntrada, Resu
     );
     if (!a)
       throw naoEncontrado('Pré-internação não encontrada', 'O paciente não tem pré-internação pendente.');
-    const fuso = await fusoDe(tx, est);
-    const lidaAgora =
-      a['situacao'] === 'em_espera' ? null : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hoje;
-    if (lidaAgora !== e.lida)
+    if (n(a['versao']) !== e.versao)
       throw new ErroOperacao(
         409,
         'conflito-versao',
         'Registro alterado',
         'A pré-internação mudou desde a leitura.',
-        {
-          colunas: ['previsto_para'],
-        },
+        { colunas: ['versao'] },
       );
-    const p = await previsaoDe(tx, est, e.dataPrevista, undefined);
-    await tx.alterar('agendamento_internacao', n(a['id']), n(a['versao']), {
+    // A hora prevista original fica quando só a data muda (sem hora, a da rotina).
+    const fuso = await fusoDe(tx, est);
+    const horaLida =
+      a['previsto_para'] === null
+        ? undefined
+        : relogioNoFuso(fuso, new Date(a['previsto_para'] as Date)).hora;
+    const p = await previsaoDe(tx, est, e.dataPrevista, horaLida);
+    await tx.alterar('agendamento_internacao', n(a['id']), e.versao, {
       previsto_para: p.previsto,
       situacao:
         p.situacao === 'em_espera'

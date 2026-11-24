@@ -214,10 +214,10 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     dataPrevista: string | null;
     convenio: number;
     especialidade: number;
-    /** Clínica da pré-internação (M, C, N); null quando o agendamento não a tem. */
+    /** Clínica da pré-internação no código que a admissão ainda recebe; null quando não tem correspondente. */
     clinica: string | null;
     carater: string;
-    /** Pendente de modelo (pedido do lote 03-01): null até o agendamento guardar o procedimento. */
+    /** O código do procedimento previsto; null quando o agendamento não o tem. */
     procedimento: number | null;
     vinculoSolicitante: number;
     vinculoAssistente: number;

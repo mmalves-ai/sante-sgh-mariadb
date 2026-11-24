@@ -424,7 +424,16 @@ describe('pré-internação e saneamento', () => {
       especialidade: 11,
       medicoSolicitante: 7101,
       procedimento: 303010037,
+      clinica: 2,
     };
+    // Sem clínica (nenhum padrão silencioso) e com data fora do plausível: recusadas na entrada.
+    const semClinica: Partial<typeof corpo> = { ...corpo };
+    delete semClinica.clinica;
+    expect((await post(s, '/internacoes/pre', semClinica)).statusCode).toBe(400);
+    expect((await post(s, '/internacoes/pre', { ...corpo, dataPrevista: '2099-12-31' })).statusCode).toBe(
+      400,
+    );
+    expect((await post(s, '/internacoes/pre', { ...corpo, procedimento: 0 })).statusCode).toBe(400);
     const pr = await post(s, '/internacoes/pre', corpo);
     expect(pr.statusCode, pr.body).toBe(201);
     expect((await post(s, '/internacoes/pre', corpo)).json().codigo).toBe('pre-internacao-existente');
@@ -435,13 +444,22 @@ describe('pré-internação e saneamento', () => {
     expect(p.contagens.semData).toBeGreaterThanOrEqual(1);
     const hoje = new Date().toISOString().slice(0, 10);
     expect(
-      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, lida: '2030-01-01' }))
+      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, versao: item.versao + 1 }))
         .statusCode,
     ).toBe(409);
     expect(
-      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, lida: null })).statusCode,
+      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, versao: item.versao }))
+        .statusCode,
     ).toBe(200);
-    expect((await get(s, '/internacoes/pre/1002')).json().pre.dataPrevista).toBe(hoje);
+    // A versão lida ficou velha: a mesma correção (mesma data) agora conflita.
+    expect(
+      (await post(s, '/internacoes/pre/1002/corrigir', { dataPrevista: hoje, versao: item.versao }))
+        .statusCode,
+    ).toBe(409);
+    const lido = (await get(s, '/internacoes/pre/1002')).json().pre;
+    expect(lido.dataPrevista).toBe(hoje);
+    expect(lido.clinica).toBe('C');
+    expect(lido.procedimento).toBe(303010037);
   });
 });
 

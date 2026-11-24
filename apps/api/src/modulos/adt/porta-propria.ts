@@ -535,8 +535,11 @@ export class PortaAdtPropria implements PortaAdt {
       const linhas = await l.consultar(
         `SELECT a.paciente_id, p.numero_prontuario, COALESCE(p.nome_social, pf.nome) AS nome, a.previsto_para, a.situacao,
                 a.fonte_pagadora_id, fp.nome AS convenio, a.especialidade_medica_id, em.descricao AS especialidade,
-                COALESCE(pm.nome_exibicao, pfm.nome) AS medico, ca.descricao AS acomodacao
+                COALESCE(pm.nome_exibicao, pfm.nome) AS medico, ca.descricao AS acomodacao, a.versao,
+                COALESCE(itf.codigo, ps.codigo_sigtap) AS procedimento
            FROM agendamento_internacao a
+           LEFT JOIN item_faturavel itf ON itf.id = a.item_faturavel_id
+           LEFT JOIN procedimento_sigtap ps ON ps.id = a.procedimento_sigtap_id
            JOIN paciente p ON p.id = a.paciente_id
            JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
            JOIN fonte_pagadora fp ON fp.id = a.fonte_pagadora_id
@@ -565,7 +568,8 @@ export class PortaAdtPropria implements PortaAdt {
           especialidade: { codigo: n(r['especialidade_medica_id']), nome: texto(r['especialidade']) },
           medico: texto(r['medico']),
           acomodacao: r['acomodacao'] === null ? null : texto(r['acomodacao']),
-          procedimento: 0,
+          procedimento: r['procedimento'] === null ? null : Number(texto(r['procedimento'])) || null,
+          versao: n(r['versao']),
         };
       });
       const itens = todos.filter(
@@ -589,8 +593,11 @@ export class PortaAdtPropria implements PortaAdt {
     return this.ler(c, async (l, est, fuso) => {
       const r = await l.uma(
         `SELECT a.previsto_para, a.situacao, a.fonte_pagadora_id, a.especialidade_medica_id, cl.natureza, ca.urgencia,
-                a.solicitante_profissional_id, a.medico_profissional_id, a.numero_carteira, pl.descricao AS plano
+                a.solicitante_profissional_id, a.medico_profissional_id, a.numero_carteira, pl.descricao AS plano,
+                COALESCE(itf.codigo, ps.codigo_sigtap) AS procedimento
            FROM agendamento_internacao a
+           LEFT JOIN item_faturavel itf ON itf.id = a.item_faturavel_id
+           LEFT JOIN procedimento_sigtap ps ON ps.id = a.procedimento_sigtap_id
            JOIN carater_admissao ca ON ca.id = a.carater_admissao_id
            LEFT JOIN plano_fonte_pagadora pl ON pl.id = a.plano_fonte_pagadora_id
            LEFT JOIN clinica_assistencial cl ON cl.id = a.clinica_assistencial_id
@@ -609,8 +616,7 @@ export class PortaAdtPropria implements PortaAdt {
         especialidade: n(r['especialidade_medica_id']),
         clinica: CLINICA_DA_NATUREZA[texto(r['natureza'])] ?? null,
         carater: verdadeiro(r['urgencia']) ? 'urgencia' : 'eletivo',
-        // O agendamento ainda não guarda o procedimento (pedido de DDL do lote 03-01): ausente, nunca 0.
-        procedimento: null,
+        procedimento: r['procedimento'] === null ? null : Number(texto(r['procedimento'])) || null,
         vinculoSolicitante: n(r['solicitante_profissional_id']),
         vinculoAssistente: n(r['medico_profissional_id']),
         matricula: texto(r['numero_carteira']),
@@ -1150,6 +1156,9 @@ export class PortaAdtPropria implements PortaAdt {
   apoio(c: ContextoAdt): Promise<ApoioInternacaoTela> {
     return this.ler(c, async (l, est) => {
       const cn = (rs: Linha[]) => rs.map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
+      const clinicas = await l.consultar(
+        'SELECT id, descricao AS nome FROM clinica_assistencial WHERE ativo = TRUE ORDER BY descricao',
+      );
       const [conv, esp, mot, acom, tipos, prof, set, ops, exc, uni, cc] = await Promise.all([
         l.consultar(
           "SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
@@ -1195,6 +1204,7 @@ export class PortaAdtPropria implements PortaAdt {
       return {
         convenios: cn(conv),
         especialidades: cn(esp),
+        clinicas: cn(clinicas),
         motivosAlta: mot.map((r) => ({
           codigo: n(r['id']),
           nome: texto(r['nome']),

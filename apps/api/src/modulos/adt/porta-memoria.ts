@@ -109,9 +109,10 @@ interface PreM {
   hora: string;
   convenio: number;
   especialidade: number;
-  clinica: string;
+  clinica: number;
   carater: string;
-  procedimento: number;
+  procedimento: number | null;
+  versao: number;
   solicitante: number;
   assistente: number;
   matricula: string;
@@ -191,6 +192,12 @@ const CONVENIOS = [
   { codigo: 901, nome: `CONVENIO ${M} A` },
   { codigo: 902, nome: `CONVENIO ${M} B` },
   { codigo: 10, nome: `PARTICULAR ${M}` },
+];
+/** Clínicas assistenciais sintéticas (id do cadastro) e o código que a admissão ainda recebe. */
+const CLINICAS = [
+  { codigo: 1, nome: `CLINICA MEDICA ${M}`, letra: 'M' },
+  { codigo: 2, nome: `CLINICA CIRURGICA ${M}`, letra: 'C' },
+  { codigo: 3, nome: `CLINICA OBSTETRICA ${M}`, letra: null },
 ];
 const ESPECIALIDADES = [
   { codigo: 11, nome: `CLINICA MEDICA ${M}` },
@@ -684,6 +691,8 @@ export class PortaAdtMemoria implements PortaAdt {
           matricula?: string;
           acomodacao?: { bloco: string; acomodacao: string };
         };
+        if (!CLINICAS.some((k) => k.codigo === x.clinica))
+          throw recusa('clinica-inexistente', 'A clínica não existe ou está inativa.');
         if (s.pre.has(x.paciente))
           throw recusa(
             'pre-internacao-existente',
@@ -707,7 +716,8 @@ export class PortaAdtMemoria implements PortaAdt {
           especialidade: x.especialidade,
           clinica: x.clinica,
           carater: x.carater,
-          procedimento: x.procedimento,
+          procedimento: x.procedimento ?? null,
+          versao: 1,
           solicitante: x.medicoSolicitante,
           assistente: x.medicoAssistente ?? x.medicoSolicitante,
           matricula: x.matricula || '0',
@@ -719,7 +729,7 @@ export class PortaAdtMemoria implements PortaAdt {
         break;
       }
       case 'internacao.corrigirPreInternacao': {
-        const x = e as unknown as { paciente: number; dataPrevista?: string; lida: string | null };
+        const x = e as unknown as { paciente: number; dataPrevista?: string; versao: number };
         const p = s.pre.get(x.paciente);
         if (!p)
           throw new ErroOperacao(
@@ -728,15 +738,16 @@ export class PortaAdtMemoria implements PortaAdt {
             'Pré-internação não encontrada',
             'A pré-internação não existe mais.',
           );
-        if (p.data !== x.lida)
+        if (p.versao !== x.versao)
           throw new ErroOperacao(
             409,
             'conflito-versao',
             'Registro alterado',
             'O registro foi alterado desde a leitura. Releia e confira antes de salvar.',
-            { colunas: ['ENTRADA'] },
+            { colunas: ['versao'] },
           );
         p.data = x.dataPrevista ?? null;
+        p.versao += 1;
         resultado = { paciente: p.paciente, pront: p.prontuario };
         break;
       }
@@ -1306,6 +1317,7 @@ export class PortaAdtMemoria implements PortaAdt {
           medico: MEDICOS.find((m) => m.vinculo === p.solicitante)?.nome ?? '',
           acomodacao: p.acomodacao,
           procedimento: p.procedimento,
+          versao: p.versao,
         };
       });
     const filtrados = o.problema === 'saneamento' ? itens.filter((i) => i.problema === 'impossivel') : itens;
@@ -1327,7 +1339,7 @@ export class PortaAdtMemoria implements PortaAdt {
       dataPrevista: p.data,
       convenio: p.convenio,
       especialidade: p.especialidade,
-      clinica: p.clinica,
+      clinica: CLINICAS.find((k) => k.codigo === p.clinica)?.letra ?? null,
       carater: p.carater === 'urgencia' ? '2' : '1',
       procedimento: p.procedimento,
       vinculoSolicitante: p.solicitante,
@@ -1559,6 +1571,7 @@ export class PortaAdtMemoria implements PortaAdt {
     return {
       convenios: CONVENIOS,
       especialidades: ESPECIALIDADES,
+      clinicas: CLINICAS.map(({ codigo, nome }) => ({ codigo, nome })),
       motivosAlta: MOTIVOS_ALTA.map((m) => ({ ...m, grupo: grupoMotivoAlta(m.codigo) })),
       acomodacoes: p.acomodacoes.map((a) => ({
         bloco: a.bloco,

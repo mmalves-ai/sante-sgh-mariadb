@@ -107,8 +107,14 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
 
 // Uma faixa por marca (A: porta-propria, N: NIR, C: conta-entrada, P: fluxo-paciente): duas marcas na mesma faixa colidem no número de
 // prontuário e na ordem do cadastro quando as massas convivem no mesmo cliente.
-const BASE_PRONTUARIO: Readonly<Record<string, number>> = { A: 930_100, N: 930_200, C: 930_300, P: 930_400 };
-const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030, P: 3040 };
+const BASE_PRONTUARIO: Readonly<Record<string, number>> = {
+  A: 930_100,
+  N: 930_200,
+  C: 930_300,
+  P: 930_400,
+  J: 930_500,
+};
+const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030, P: 3040, J: 3050 };
 
 export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
   const nucleo = new NucleoProprio();

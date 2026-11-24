@@ -3,7 +3,7 @@
 // contagens (sem data = data nula, a fila de espera; as datas impossíveis vão à lista de saneamento) e o
 // agendamento novo (paciente, convênio, plano, especialidade, médico, procedimento, data opcional, acomodação
 // desejada). A correção da data confere a data lida (outro terminal pode ter mudado). A admissão parte daqui.
-import { CARATERES_INTERNACAO, CLINICAS_INTERNACAO } from '@sgh/contratos';
+import { CARATERES_INTERNACAO } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -41,7 +41,7 @@ const novaData = ref<Record<number, string>>({});
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
-async function corrigir(paciente: number, lida: string | null): Promise<void> {
+async function corrigir(paciente: number, versao: number): Promise<void> {
   erro.value = null;
   mensagem.value = null;
   ocupado.value = true;
@@ -49,7 +49,7 @@ async function corrigir(paciente: number, lida: string | null): Promise<void> {
     const d = novaData.value[paciente];
     const r = await corrigirPreInternacao(
       paciente,
-      { lida, ...(d ? { dataPrevista: d } : {}) },
+      { versao, ...(d ? { dataPrevista: d } : {}) },
       novaChave('corrigir-pre'),
     );
     mensagem.value = r.mensagem;
@@ -84,7 +84,7 @@ const plano = ref('');
 const procedimento = ref('');
 const dataPrevista = ref('');
 const horaPrevista = ref('');
-const clinica = ref('C');
+const clinica = ref('');
 const carater = ref('eletivo');
 const acomodacao = ref('');
 const opcoes = computed(() => ({
@@ -110,7 +110,10 @@ const opcoes = computed(() => ({
       rotulo: a.nome,
     })),
   ],
-  clinicas: CLINICAS_INTERNACAO.map((c) => ({ valor: c.codigo as string, rotulo: c.rotulo })),
+  clinicas: [
+    { valor: '', rotulo: t('adt.escolha') },
+    ...(apoio.data.value?.clinicas ?? []).map((c) => ({ valor: String(c.codigo), rotulo: c.nome })),
+  ],
   carateres: CARATERES_INTERNACAO.map((c) => ({ valor: c.codigo as string, rotulo: c.rotulo })),
 }));
 const completo = computed(
@@ -119,8 +122,9 @@ const completo = computed(
     !!convenio.value &&
     !!especialidade.value &&
     !!medico.value &&
+    !!clinica.value &&
     plano.value.trim().length > 0 &&
-    /^\d+$/.test(procedimento.value.trim()),
+    /^\d*$/.test(procedimento.value.trim()),
 );
 const erroAgenda = ref<unknown>(null);
 async function agendar(): Promise<void> {
@@ -138,8 +142,8 @@ async function agendar(): Promise<void> {
         plano: plano.value.trim().toUpperCase(),
         especialidade: Number(especialidade.value),
         medicoSolicitante: Number(medico.value),
-        procedimento: Number(procedimento.value),
-        clinica: clinica.value,
+        ...(procedimento.value.trim() ? { procedimento: Number(procedimento.value) } : {}),
+        clinica: Number(clinica.value),
         carater: carater.value,
         ...(dataPrevista.value ? { dataPrevista: dataPrevista.value } : {}),
         ...(horaPrevista.value ? { horaPrevista: horaPrevista.value } : {}),
@@ -224,7 +228,7 @@ async function agendar(): Promise<void> {
                   :rotulo="t('adt.pre.corrigir')"
                   :desabilitado="ocupado"
                   :data-testid="`pre-corrigir-${p.paciente}`"
-                  @acionar="corrigir(p.paciente, p.dataPrevista)"
+                  @acionar="corrigir(p.paciente, p.versao)"
                 />
               </template>
               <RouterLink

@@ -59,12 +59,12 @@ const esquemaCid = z.array(z.object({ id: z.number(), codigo: z.string(), nome: 
 const esquemaPreDoPaciente = z.object({
   pre: z
     .object({
-      dataPrevista: z.string(),
+      dataPrevista: z.string().nullable(),
       convenio: z.number(),
       especialidade: z.number(),
-      clinica: z.string(),
+      clinica: z.string().nullable(),
       carater: z.string(),
-      procedimento: z.number(),
+      procedimento: z.number().nullable(),
       vinculoSolicitante: z.number(),
       vinculoAssistente: z.number(),
       matricula: z.string(),

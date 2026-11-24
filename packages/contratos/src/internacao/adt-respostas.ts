@@ -155,7 +155,10 @@ export const esquemaPreInternacaoItem = z.object({
   especialidade: codNome,
   medico: z.string(),
   acomodacao: z.string().nullable(),
-  procedimento: z.number(),
+  /** O código do procedimento previsto; null quando não definido. */
+  procedimento: z.number().nullable(),
+  /** A versão do agendamento (controle otimista da correção). */
+  versao: z.number().int(),
 });
 export type PreInternacaoItem = z.infer<typeof esquemaPreInternacaoItem>;
 
@@ -409,6 +412,8 @@ export type DevolucoesAtrasadas = z.infer<typeof esquemaDevolucoesAtrasadas>;
 export const esquemaApoioInternacao = z.object({
   convenios: z.array(codNome),
   especialidades: z.array(codNome),
+  /** Clínicas assistenciais ativas (id e descrição do cadastro). */
+  clinicas: z.array(codNome),
   motivosAlta: z.array(codNome.extend({ grupo: z.string() })),
   acomodacoes: z.array(
     z.object({ bloco: z.string(), acomodacao: z.string(), nome: z.string(), tipo: z.number().int() }),

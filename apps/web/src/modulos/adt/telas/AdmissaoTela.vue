@@ -95,9 +95,9 @@ watch(
     if (!p) return;
     convenio.value = String(p.convenio);
     especialidade.value = String(p.especialidade);
-    clinica.value = p.clinica;
+    if (p.clinica) clinica.value = p.clinica;
     carater.value = p.carater === '2' ? 'urgencia' : 'eletivo';
-    procedimento.value = String(p.procedimento);
+    procedimento.value = p.procedimento === null ? '' : String(p.procedimento);
     solicitante.value = String(p.vinculoSolicitante);
     assistente.value = String(p.vinculoAssistente);
     matricula.value = p.matricula === '0' ? '' : p.matricula;

@@ -349,43 +349,46 @@ export const esquemaCancelarAltaMedica = z
 export const esquemaPreInternar = z
   .object({
     paciente: id,
-    /** Data prevista; sem ela, a pré-internação entra na fila de espera com a data nula. */
+    /** Data prevista (plausível: de 2000 a dois anos à frente); sem ela, a fila de espera com a data nula. */
     dataPrevista: esquemaDataIso.optional(),
     horaPrevista: esquemaHora.optional(),
     convenio: smallint.refine((c) => c > 0, 'Informe o convênio.'),
-    /** O plano da carteirinha, como a pré-internação guarda (texto). */
+    /** O plano do convênio, pelo código ou pela descrição do cadastro; sem casamento, a gravação é recusada (422). */
     plano: maiusculas(40).pipe(z.string().min(1, 'Informe o plano.')),
     matricula: livre(24).optional(),
     validadeCarteira: esquemaDataIso.optional(),
     senhaConvenio: livre(20).optional(),
     especialidade: smallint.refine((e) => e > 0, 'Informe a especialidade.'),
-    clinica: z.enum(CODIGOS_CLINICA_INTERNACAO).default('C'),
+    /** A clínica assistencial (id do cadastro de clínicas), sem valor padrão. */
+    clinica: id,
     carater: z.enum(CODIGOS_CARATER_INTERNACAO).default('eletivo'),
     medicoSolicitante: id,
     medicoAssistente: id.optional(),
-    procedimento: z.number().int().min(0).max(999_999_999),
+    /** O procedimento previsto, pelo código (item faturável ou tabela do SUS); ausente quando ainda não definido. */
+    procedimento: z.number().int().positive().max(9_999_999_999).optional(),
     /** Diárias previstas (0, 1, 2 e 4 vistas). */
     diariasPrevistas: z.number().int().min(0).max(99).default(1),
-    /** O código do CID principal (a pré-internação guarda o código, não o cadastro). */
+    /** O código do CID-10 provável; código fora da terminologia é recusado (422). */
     cid: livre(6).optional(),
-    /** Acomodação desejada (o mapa); sem leito definido. */
+    /** Acomodação desejada (o mapa), pelos códigos do bloco e da acomodação; sem leito definido. */
     acomodacao: z
       .object({
-        bloco: textoCp1252(5).overwrite((t) => t.trim()),
-        acomodacao: textoCp1252(6).overwrite((t) => t.trim()),
+        bloco: z.string().trim().max(30),
+        acomodacao: z.string().trim().min(1).max(30),
       })
       .strict()
       .optional(),
+    /** A cirurgia agendada do mesmo paciente que motiva a internação. */
     cirurgia: id.optional(),
     observacao: livre(400).optional(),
   })
   .strict()
   .superRefine((e, ctx) => {
-    if (e.dataPrevista && e.dataPrevista.startsWith('2099'))
+    if (e.dataPrevista && dataPrevistaPlausivel(e.dataPrevista, hojeIsoUtc()) === 'impossivel')
       ctx.addIssue({
         code: 'custom',
         path: ['dataPrevista'],
-        message: 'Deixe a data em branco para "sem data".',
+        message: 'Data prevista fora do plausível: sem data, deixe em branco.',
       });
   });
 export type PreInternarEntrada = z.infer<typeof esquemaPreInternar>;
@@ -394,13 +397,14 @@ export const esquemaCorrigirPreInternacao = z
   .object({
     paciente: id,
     dataPrevista: esquemaDataIso.optional(),
-    /** A data que a tela leu (controle otimista); null = estava sem data (fila de espera). */
-    lida: esquemaDataIso.nullable(),
+    /** A versão do agendamento que a tela leu (controle otimista). */
+    versao: z.number().int().positive(),
   })
   .strict();
 export type CorrigirPreInternacaoEntrada = z.infer<typeof esquemaCorrigirPreInternacao>;
 
-/** Ano mínimo e máximo plausíveis da data prevista (fora disso vai à lista de saneamento). */
+const hojeIsoUtc = () => new Date().toISOString().slice(0, 10);
+/** Ano mínimo e máximo plausíveis da data prevista: a entrada recusa fora disso; a lista marca o dado antigo. */
 export function dataPrevistaPlausivel(iso: string | null, hojeIso: string): 'ok' | 'sem-data' | 'impossivel' {
   if (iso === null) return 'sem-data';
   const ano = Number(iso.slice(0, 4));
