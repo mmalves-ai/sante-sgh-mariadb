@@ -51,6 +51,7 @@ import type { z } from 'zod';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import { exigirPeriodoAberto, OPERACOES_PERIODO } from './periodo-propria.js';
 import { exigirTipoLancamentoLiberado, OPERACOES_GESTAO } from './gestao-propria.js';
+import { OPERACOES_COMPENSACAO_PREVISAO } from './compensacao-previsao-propria.js';
 import {
   CREDOR_DO_TIPO,
   dataIso,
@@ -1171,4 +1172,6 @@ export const OPERACOES_FINANCEIRO: Readonly<Record<string, Operacao<never, Resul
   ...(OPERACOES_PERIODO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
   // F3.8, 07-FIN linhas 98 e 99 (gestao-propria.ts).
   ...(OPERACOES_GESTAO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
+  // F8, 07-FIN linhas 68 e 69 (compensacao-previsao-propria.ts): encontro de contas, previsão e provisão.
+  ...(OPERACOES_COMPENSACAO_PREVISAO as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
 };

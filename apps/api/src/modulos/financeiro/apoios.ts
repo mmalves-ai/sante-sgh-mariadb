@@ -16,6 +16,16 @@ export const FUNCIONALIDADES_FINANCEIRO = {
     operacoes: {
       'financeiro.criarTituloPagar': 'financeiro.tituloPagar.criar',
       'financeiro.baixarTitulo': 'financeiro.tituloPagar.baixar',
+      // F8 (07-FIN linhas 68 e 69): encontro de contas (propor e cancelar de quem baixa; efetivar de quem aprova) e
+      // previsão e provisão de pagamentos (de quem lança o título; reverter a provisão, de quem aprova).
+      'financeiro.proporEncontroContas': 'financeiro.tituloPagar.baixar',
+      'financeiro.efetivarEncontroContas': 'financeiro.tituloPagar.aprovar',
+      'financeiro.cancelarEncontroContas': 'financeiro.tituloPagar.baixar',
+      'financeiro.criarPrevisaoFinanceira': 'financeiro.tituloPagar.criar',
+      'financeiro.realizarPrevisaoFinanceira': 'financeiro.tituloPagar.criar',
+      'financeiro.provisionarPassivo': 'financeiro.tituloPagar.criar',
+      'financeiro.liquidarProvisaoPassivo': 'financeiro.tituloPagar.criar',
+      'financeiro.reverterProvisaoPassivo': 'financeiro.tituloPagar.aprovar',
     },
     extras: {
       aprovarTitulo: 'financeiro.tituloPagar.aprovar',
