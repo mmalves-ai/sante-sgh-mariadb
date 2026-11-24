@@ -232,9 +232,11 @@ export const esquemaCriarUsuario = z
     login: esquemaLogin,
     nomeCompleto: esquemaNomeCompleto,
     grupo: esquemaNomeGrupo,
+    // Os mesmos dígitos verificadores da alteração: a criação nunca grava CPF inválido nem sequência repetida.
     cpf: z
       .string()
       .regex(/^\d{11}$/, 'CPF com 11 dígitos.')
+      .refine(cpfValido, 'CPF inválido: confira os dígitos (sequência repetida não é CPF).')
       .optional(),
   })
   .strict();

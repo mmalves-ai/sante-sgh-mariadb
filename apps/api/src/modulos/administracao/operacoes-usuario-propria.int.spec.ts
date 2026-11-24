@@ -1,12 +1,20 @@
 // Contrato de efeito do cadastro da conta no banco próprio (01-ADM L57 e L59), no MariaDB real (cliente f22_o2, massa
 // sintética "L57U"): criar a conta (conta + vínculo + perfil principal na mesma transação, com a trilha), alterar o
-// nome e o CPF (justificativa na troca), trocar o grupo (o perfil anterior fica no histórico) e conceder e retirar
-// escopo (unidade e tipo de prontuário), com as recusas. Só contagens, códigos e ids sintéticos; nenhum dado real.
+// nome e o CPF (justificativa na troca), trocar o grupo (corrigir no mesmo dia; fechar a vigência do perfil anterior
+// nos outros), conceder e retirar escopo (unidade, local, convênio e tipo de prontuário, com a retirada lógica que
+// deixa a linha no banco), o primeiro acesso pela senha provisória (credencial_usuario) e as recusas, inclusive as de
+// outro estabelecimento. Só contagens, códigos e ids sintéticos; nenhum dado real.
+// A migração 02_ADM/94 (unicidade do escopo só entre as linhas vigentes) é aplicada no cliente antes (idempotente).
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { cifrarSenha } from '@sgh/dominio-acesso';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../problema.filter.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { portaSenhaDoNucleo } from '../acesso/senha/porta-senha.js';
 import { FonteAdministracaoPropria } from './fonte-propria.js';
 import type { ContextoGestao, Ctx } from './tipos.js';
 
@@ -14,6 +22,13 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L57U';
 const NOVO = `${P}.NOVA`;
+const RAIZ = resolve(import.meta.dirname, '../../../../..');
+const MIGRACAO = 'db/migracoes/02_ADM/94_escopo_usuario_vigente_tabelas.sql';
+const ontemLocal = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 async function codigo(p: Promise<unknown>): Promise<string> {
   try {
@@ -33,6 +48,9 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
   let gestor = 0;
   let unidade = 0;
   let tipoDoc = 0;
+  let local = 0;
+  let convenio = 0;
+  let unidadeOutro = 0;
   const c: Ctx = { rede: 'rede-sint', hospital: P, traceId: 'teste-l57u' };
   const ctx = (): ContextoGestao => ({
     rede: 'rede-sint',
@@ -52,7 +70,11 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
       const alvo = `SELECT id FROM usuario WHERE login LIKE '${P}.N%'`;
       for (const t of [
         'usuario_unidade',
+        'usuario_local_atendimento',
+        'usuario_fonte_pagadora',
         'usuario_tipo_prontuario',
+        'credencial_usuario',
+        'historico_senha',
         'usuario_perfil',
         'usuario_estabelecimento',
       ])
@@ -65,6 +87,11 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
   beforeAll(async () => {
     const banco = (await nucleo.cliente(CLIENTE)).banco;
     if (banco !== `cliente_${CLIENTE}`) throw new Error('Cliente de teste inesperado.');
+    execFileSync('sh', [resolve(RAIZ, 'tools/db/sql.sh'), banco], {
+      input: readFileSync(resolve(RAIZ, MIGRACAO), 'utf8'),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    await limpar();
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l57u' }, async (e) => {
       const agora = new Date();
       const g = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
@@ -112,8 +139,46 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
         "INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES (?, 'TIPO SINTETICO', 'evolucao', ?)",
         [`${P}T`, agora],
       );
+      const ponto = await g(
+        'SELECT id FROM ponto_recepcao WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, `${P}R`],
+        "INSERT INTO ponto_recepcao (estabelecimento_id, codigo, descricao, criado_em) VALUES (?, ?, 'RECEPCAO SINTETICA', ?)",
+        [est, `${P}R`, agora],
+      );
+      local = await g(
+        'SELECT id FROM local_atendimento WHERE estabelecimento_id = ? AND codigo = ?',
+        [est, `${P}L`],
+        "INSERT INTO local_atendimento (estabelecimento_id, ponto_recepcao_id, codigo, descricao, criado_em) VALUES (?, ?, ?, 'LOCAL SINTETICO', ?)",
+        [est, ponto, `${P}L`, agora],
+      );
+      convenio = await g(
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        [`${P}F`],
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, situacao, criado_em) VALUES (?, 'CONVENIO SINTETICO', 'operadora', 'ativa', ?)",
+        [`${P}F`, agora],
+      );
+      // Outro estabelecimento do mesmo cliente, com uma unidade e uma conta só dele.
+      const est2 = await g(
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [`${P}2`],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}2`, `ESTAB ${P}2 SINTETICO`, `ESTAB ${P}2 SINTETICO`, agora],
+      );
+      unidadeOutro = await g(
+        'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
+        [est2, `${P}U2`],
+        "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, ?, 'UNIDADE SINTETICA 2', 'ambulatorio', ?)",
+        [est2, `${P}U2`, agora],
+      );
+      const outra = await e.inserir(
+        "INSERT INTO usuario (login, nome, dispensa_cpf, tipo_conta, criado_em) VALUES (?, 'CONTA SINTETICA OUTRA', TRUE, 'pessoa', ?)",
+        [`${P}.NOUTRO`, agora],
+      );
+      await e.inserir(
+        'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+        [outra, est2, '2020-01-01', agora],
+      );
     });
-    await limpar();
     fonte = new FonteAdministracaoPropria(nucleo, CLIENTE, { rede: 'rede-sint' });
     await fonte.carregar();
   });
@@ -233,31 +298,192 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
     expect(Number(t.n)).toBeGreaterThanOrEqual(1);
   });
 
-  it('escopo: concede e retira unidade e tipo de prontuário; recusa repetição, item de fora e o que não tem', async () => {
+  it('trocar grupo nos outros dias: a vigência do perfil anterior fecha ontem e a linha nova abre hoje', async () => {
+    const id = Number((await um<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [NOVO])).id);
+    // Preparo: o perfil vigente passa a ter começado antes de hoje (como se a conta fosse antiga).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l57u' }, (e) =>
+      e.executar(
+        "UPDATE usuario_perfil SET vigencia_inicio = '2026-01-01' WHERE usuario_id = ? AND excluido_em IS NULL",
+        [id],
+      ),
+    );
+    await exec('acesso.trocarGrupoUsuario', { login: NOVO, grupo: `${P}-A` });
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-l57u' }, (l) =>
+      l.consultar(
+        `SELECT p.codigo, DATE_FORMAT(up.vigencia_inicio, '%Y-%m-%d') AS inicio,
+                DATE_FORMAT(up.vigencia_fim, '%Y-%m-%d') AS fim, up.excluido_em IS NULL AS viva
+           FROM usuario_perfil up JOIN perfil_acesso p ON p.id = up.perfil_acesso_id WHERE up.usuario_id = ? ORDER BY up.id`,
+        [id],
+      ),
+    );
+    expect(linhas.map((x) => [x['codigo'], x['inicio'], x['fim'], Number(x['viva'])])).toEqual([
+      [`${P}-B`, '2026-01-01', ontemLocal(), 1],
+      [`${P}-A`, expect.any(String), null, 1],
+    ]);
+    expect((await fonte.fichaUsuario(c, NOVO, false))?.grupo).toBe(`${P}-A`);
+  });
+
+  it('escopo: concede e retira unidade, local, convênio e tipo de prontuário; a retirada fica no banco; trilha', async () => {
     const id = Number((await um<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [NOVO])).id);
     await exec('acesso.concederUnidadeUsuario', { login: NOVO, valor: String(unidade) });
     await exec('acesso.concederTipoProntuarioUsuario', { login: NOVO, valor: tipoDoc });
+    await exec('acesso.concederLocalUsuario', { login: NOVO, valor: local });
+    await exec('acesso.concederConvenioUsuario', { login: NOVO, valor: convenio });
     let f = await fonte.fichaUsuario(c, NOVO, false);
     expect(f?.escopos['unidade']?.map((x) => x.valor)).toEqual([String(unidade)]);
     expect(f?.escopos['tipoProntuario']?.map((x) => x.valor)).toEqual([String(tipoDoc)]);
+    expect(f?.escopos['local']?.map((x) => x.valor)).toEqual([String(local)]);
+    expect(f?.escopos['convenio']?.map((x) => x.valor)).toEqual([String(convenio)]);
     expect(await codigo(exec('acesso.concederUnidadeUsuario', { login: NOVO, valor: unidade }))).toBe(
+      'ja-concedido',
+    );
+    expect(await codigo(exec('acesso.concederConvenioUsuario', { login: NOVO, valor: convenio }))).toBe(
       'ja-concedido',
     );
     expect(await codigo(exec('acesso.concederUnidadeUsuario', { login: NOVO, valor: 999999999 }))).toBe(
       'valor-inexistente',
     );
-    await exec('acesso.retirarUnidadeUsuario', { login: NOVO, valor: unidade });
+    // A unidade de outro estabelecimento do mesmo cliente não se concede daqui.
+    expect(await codigo(exec('acesso.concederUnidadeUsuario', { login: NOVO, valor: unidadeOutro }))).toBe(
+      'valor-inexistente',
+    );
+    for (const op of [
+      'acesso.retirarUnidadeUsuario',
+      'acesso.retirarLocalUsuario',
+      'acesso.retirarConvenioUsuario',
+      'acesso.retirarTipoProntuarioUsuario',
+    ])
+      await exec(op, {
+        login: NOVO,
+        valor: op.includes('Unidade')
+          ? unidade
+          : op.includes('Local')
+            ? local
+            : op.includes('Convenio')
+              ? convenio
+              : tipoDoc,
+      });
     f = await fonte.fichaUsuario(c, NOVO, false);
-    expect(f?.escopos['unidade']).toEqual([]);
+    expect([
+      f?.escopos['unidade'],
+      f?.escopos['local'],
+      f?.escopos['convenio'],
+      f?.escopos['tipoProntuario'],
+    ]).toEqual([[], [], [], []]);
     expect(await codigo(exec('acesso.retirarUnidadeUsuario', { login: NOVO, valor: unidade }))).toBe(
       'nao-concedido',
     );
-    // Reconceder depois de retirar grava de novo (o par é único só entre as linhas existentes).
+    // Reconceder depois de retirar grava uma linha nova; a retirada continua no banco (exclusão lógica).
     await exec('acesso.concederUnidadeUsuario', { login: NOVO, valor: unidade });
-    const n = await um<{ n: number }>('SELECT COUNT(*) AS n FROM usuario_unidade WHERE usuario_id = ?', [id]);
-    expect(Number(n.n)).toBe(1);
+    const n = await um<Record<string, unknown>>(
+      `SELECT COUNT(*) AS total, SUM(excluido_em IS NOT NULL AND excluido_por = ?) AS retiradas,
+              SUM(excluido_em IS NULL) AS vigentes FROM usuario_unidade WHERE usuario_id = ?`,
+      [gestor, id],
+    );
+    expect([Number(n['total']), Number(n['retiradas']), Number(n['vigentes'])]).toEqual([2, 1, 1]);
+    const ficou = await um<Record<string, unknown>>(
+      `SELECT (SELECT COUNT(*) FROM usuario_local_atendimento WHERE usuario_id = ? AND excluido_em IS NOT NULL) AS l,
+              (SELECT COUNT(*) FROM usuario_fonte_pagadora WHERE usuario_id = ? AND excluido_em IS NOT NULL) AS c,
+              (SELECT COUNT(*) FROM usuario_tipo_prontuario WHERE usuario_id = ? AND excluido_em IS NOT NULL) AS t`,
+      [id, id, id],
+    );
+    expect([Number(ficou['l']), Number(ficou['c']), Number(ficou['t'])]).toEqual([1, 1, 1]);
+    // Trilha: a concessão e a retirada de cada escopo, pela linha do escopo.
+    const t = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-l57u' }, (l) =>
+      l.consultar(
+        `SELECT t.entidade, COUNT(*) AS n FROM trilha_auditoria t
+          WHERE t.estabelecimento_id = ? AND t.entidade IN ('usuario_unidade','usuario_local_atendimento','usuario_fonte_pagadora','usuario_tipo_prontuario')
+            AND t.entidade_id IN (SELECT id FROM usuario_unidade WHERE usuario_id = ? UNION ALL SELECT id FROM usuario_local_atendimento WHERE usuario_id = ?
+              UNION ALL SELECT id FROM usuario_fonte_pagadora WHERE usuario_id = ? UNION ALL SELECT id FROM usuario_tipo_prontuario WHERE usuario_id = ?)
+          GROUP BY t.entidade ORDER BY t.entidade`,
+        [est, id, id, id, id],
+      ),
+    );
+    expect(Object.fromEntries(t.map((x) => [x['entidade'], Number(x['n']) >= 2]))).toEqual({
+      usuario_fonte_pagadora: true,
+      usuario_local_atendimento: true,
+      usuario_tipo_prontuario: true,
+      usuario_unidade: true,
+    });
+  });
+
+  it('nada vaza para outro estabelecimento: conta de lá e conta inexistente recusadas', async () => {
+    for (const login of [`${P}.NOUTRO`, `${P}.GESTOR-NAO`]) {
+      expect(await codigo(exec('acesso.concederUnidadeUsuario', { login, valor: unidade }))).toBe(
+        'usuario-inexistente',
+      );
+      expect(await codigo(exec('acesso.trocarGrupoUsuario', { login, grupo: `${P}-B` }))).toBe(
+        'usuario-inexistente',
+      );
+      expect(
+        await codigo(exec('acesso.alterarUsuario', { login, nomeCompleto: 'X Y', versao: '["1"]' })),
+      ).toBe('usuario-inexistente');
+    }
+    const n = await um<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM usuario_unidade x JOIN usuario u ON u.id = x.usuario_id WHERE u.login = ?`,
+      [`${P}.NOUTRO`],
+    );
+    expect(Number(n.n)).toBe(0);
+  });
+
+  it('criar: CPF de outra conta e CPF inválido recusados, nada gravado', async () => {
     expect(
-      await codigo(exec('acesso.concederUnidadeUsuario', { login: `${P}.GESTOR-NAO`, valor: unidade })),
-    ).toBe('usuario-inexistente');
+      await codigo(
+        exec('acesso.criarUsuario', {
+          login: `${P}.NCPF`,
+          nomeCompleto: 'X Y',
+          grupo: `${P}-A`,
+          cpf: '52998224725',
+        }),
+      ),
+    ).toBe('cpf-em-uso');
+    for (const cpf of ['00000000000', '52998224724'])
+      expect(
+        await codigo(
+          exec('acesso.criarUsuario', { login: `${P}.NCPF`, nomeCompleto: 'X Y', grupo: `${P}-A`, cpf }),
+        ),
+      ).not.toBe('gravou');
+    const n = await um<{ n: number }>('SELECT COUNT(*) AS n FROM usuario WHERE login = ?', [`${P}.NCPF`]);
+    expect(Number(n.n)).toBe(0);
+  });
+
+  it('primeiro acesso: a conta criada recebe a senha provisória (credencial com troca obrigatória e histórico)', async () => {
+    const id = Number((await um<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [NOVO])).id);
+    expect(
+      Number(
+        (await um<{ n: number }>('SELECT COUNT(*) AS n FROM credencial_usuario WHERE usuario_id = ?', [id]))
+          .n,
+      ),
+    ).toBe(0);
+    const porta = portaSenhaDoNucleo(nucleo, () => nucleo.criarExecutor({ log: () => undefined }), CLIENTE);
+    const resumo = await cifrarSenha(`P${randomUUID()}9`, { memoria: 8_192, passes: 1, paralelismo: 1 });
+    const gravou = await porta.gravar(
+      P,
+      NOVO,
+      resumo,
+      {
+        rede: 'rede-sint',
+        estabelecimento: P,
+        autor: `${P}.GESTOR`,
+        correlacao: 'teste-l57u',
+        chaveIdempotencia: `tl57u-${randomUUID()}`,
+        estacao: 'teste',
+        reautenticadoEm: Date.now(),
+      },
+      'redefinicao',
+    );
+    expect(gravou).toBe(id);
+    const cr = await um<Record<string, unknown>>(
+      `SELECT COUNT(*) AS n, MAX(troca_obrigatoria) AS troca, MAX(algoritmo) AS alg,
+              (SELECT COUNT(*) FROM historico_senha WHERE usuario_id = ?) AS hist
+         FROM credencial_usuario WHERE usuario_id = ? AND excluido_em IS NULL`,
+      [id, id],
+    );
+    expect([Number(cr['n']), Number(cr['troca']), cr['alg'], Number(cr['hist'])]).toEqual([
+      1,
+      1,
+      'argon2id',
+      1,
+    ]);
   });
 });

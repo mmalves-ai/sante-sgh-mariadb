@@ -1,7 +1,8 @@
 // Gravações do cadastro da conta no banco próprio (01-ADM L57 e L59), pelo Executor (trilha, saída e idempotência na
 // mesma transação; trava otimista pela versao): criar a conta (conta + vínculo ao estabelecimento + perfil principal
 // numa gravação só), alterar o nome e o CPF, trocar o grupo (perfil principal, com histórico de vigência) e conceder
-// ou retirar escopo (unidade, local de atendimento, convênio e tipo de prontuário). As regras ficam no domínio
+// ou retirar escopo (unidade, local de atendimento, convênio e tipo de prontuário; retirar é exclusão lógica, nunca
+// apagamento). As regras ficam no domínio
 // (`@sgh/dominio-acesso`, cadastro-usuario.ts); aqui só a leitura do fato e a gravação.
 // Nenhum log nem trilha leva login, nome ou CPF: só ids e nomes de coluna (a troca de CPF leva a justificativa).
 import {
@@ -241,7 +242,12 @@ function operacaoEscopo(tipo: TipoEscopo, conceder: boolean) {
         const id = await tx.incluir(d.tabela, { usuario_id: u.id, [d.coluna]: valor });
         return { id, idUsuario: u.id };
       }
-      await tx.excluir(d.tabela, num(atual!['id']), num(atual!['versao']));
+      // Retirar é exclusão lógica: a linha fica no banco (quem teve acesso a quê e até quando); a unicidade do par
+      // vale só entre as vigentes (migração 02_ADM/94), e a reconcessão grava uma linha nova.
+      await tx.alterar(d.tabela, num(atual!['id']), num(atual!['versao']), {
+        excluido_em: new Date(),
+        excluido_por: ctx.usuario,
+      });
       return { id: num(atual!['id']), idUsuario: u.id };
     },
     alvo: (_e, r) => ({ tabela: d.tabela, id: r.id }),
