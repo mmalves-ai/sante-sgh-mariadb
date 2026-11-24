@@ -116,6 +116,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/LaudosEmissaoTela.vue'),
     meta: { permissao: 'sadt.laudo.ler' },
   },
+  // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): ?item=<exame_item>.
+  {
+    path: '/sadt/laudos/redacao',
+    name: 'sadt.laudos.redacao',
+    component: () => import('./telas/LaudoRedacaoTela.vue'),
+    meta: { permissao: 'sadt.laudo.ler' },
+  },
   {
     path: '/sadt/laudos',
     name: 'sadt.laudos',
