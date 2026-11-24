@@ -1402,6 +1402,63 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     return CLASSIFICACOES;
   }
 
+  // F3.8, 07-FIN linha 98: as leituras da reclassificação na sessão sintética (E2E sem núcleo), só do título a pagar
+  // (o que a semeadura tem com classificação); o movimento e o título a receber seguem só no banco.
+  async gestaoLancamentos(c: ContextoFinanceiro, alvo: string, termo: string) {
+    const t = termo.trim();
+    if (alvo !== 'titulo_pagar' || t.length < 2) return [];
+    const s = this.e(c);
+    return [...s.titulos.values()]
+      .filter((x) => String(x.documento) === t || String(x.documento).startsWith(t))
+      .slice(0, 50)
+      .map((x) => ({
+        id: x.id,
+        rotulo: `${x.documento} / ${x.parcela}`,
+        data: x.emissao,
+        valor: x.valorDocumento,
+        natureza: x.classificacao
+          ? `${x.classificacao.grupo}.${x.classificacao.subgrupo}.${x.classificacao.item}`
+          : null,
+      }));
+  }
+
+  async gestaoClassificacao(c: ContextoFinanceiro, alvo: string, id: number) {
+    if (alvo !== 'titulo_pagar') return null;
+    const s = this.e(c);
+    const t = s.titulos.get(id);
+    if (!t) return null;
+    const cl =
+      [...s.titulos.values()].find(
+        (x) => x.credor === t.credor && x.documento === t.documento && x.tipo === t.tipo && x.classificacao,
+      )?.classificacao ?? null;
+    const cad = cl
+      ? CLASSIFICACOES.find((x) => x.grupo === cl.grupo && x.subgrupo === cl.subgrupo && x.item === cl.item)
+      : undefined;
+    return {
+      alvo: 'titulo_pagar' as const,
+      id: t.id,
+      valor: t.valorDocumento,
+      data: t.emissao,
+      natureza: cl
+        ? {
+            codigo: `${cl.grupo}.${cl.subgrupo}.${cl.item}`,
+            descricao: cad?.nome ?? '',
+            tipo: cl.grupo >= 200 ? 'despesa' : 'receita',
+          }
+        : null,
+      rateio: s.rateios
+        .filter((r) => r.documento === t.documento && r.credor === t.credor)
+        .map((r) => ({
+          centroCusto: r.centroCusto,
+          centro: String(r.centroCusto),
+          percentual: r.percentual,
+          valor: r.valor,
+        })),
+      substituidas: 0,
+      reclassificacoes: [],
+    };
+  }
+
   async retencoes() {
     return RETENCOES;
   }

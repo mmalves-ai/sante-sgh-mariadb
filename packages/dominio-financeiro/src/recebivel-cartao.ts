@@ -55,7 +55,7 @@ export function escolherTaxa(
   taxas: readonly TaxaAdministradora[],
   p: PedidoTaxa,
 ): { taxa: TaxaAdministradora } | { recusa: RecusaFinanceiro } {
-  const recusa = conferirParcelas(p.modalidade, p.parcelas);
+  const recusa = conferirParcelasCartao(p.modalidade, p.parcelas);
   if (recusa) return { recusa };
   const servem = taxas.filter(
     (t) =>
@@ -84,7 +84,10 @@ export function escolherTaxa(
 }
 
 /** Débito, pré-pago e voucher são à vista; o crédito aceita de 1 ao teto de parcelas. */
-export function conferirParcelas(modalidade: ModalidadeCartao, parcelas: number): RecusaFinanceiro | null {
+export function conferirParcelasCartao(
+  modalidade: ModalidadeCartao,
+  parcelas: number,
+): RecusaFinanceiro | null {
   if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > PARCELAS_CARTAO_MAXIMO)
     return recusaFin(
       'parcelas-cartao-invalidas',
@@ -131,7 +134,7 @@ export function gerarParcelasRecebivel(p: {
   readonly dataVenda: string;
   readonly taxa: TaxaAdministradora;
 }): { parcelas: ParcelaRecebivel[] } | { recusa: RecusaFinanceiro } {
-  const recusa = conferirParcelas(p.taxa.modalidade, p.parcelas);
+  const recusa = conferirParcelasCartao(p.taxa.modalidade, p.parcelas);
   if (recusa) return { recusa };
   const bruto = emCentavos(p.valor);
   if (bruto <= 0)

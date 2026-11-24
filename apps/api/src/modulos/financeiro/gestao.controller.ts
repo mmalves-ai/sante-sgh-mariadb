@@ -46,7 +46,7 @@ import {
   usuariosDoEstabelecimento,
 } from './gestao-propria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
-import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
+import { type ContextoFinanceiro, PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { resultadoFin } from './servico.js';
 
 const idDe = (v: string | undefined, oQue: string): number => {
@@ -56,12 +56,18 @@ const idDe = (v: string | undefined, oQue: string): number => {
   return n;
 };
 
+/** As leituras da reclassificação que a porta em memória (sessão sintética) oferece. */
+interface LeituraGestaoMemoria {
+  gestaoLancamentos(c: ContextoFinanceiro, alvo: string, termo: string): Promise<unknown[]>;
+  gestaoClassificacao(c: ContextoFinanceiro, alvo: string, id: number): Promise<unknown>;
+}
+
 @Controller('financeiro/gestao')
 export class GestaoFinanceiroController {
   private readonly apoios: ApoiosFinanceiro;
 
   constructor(
-    @Inject(PORTA_FINANCEIRO) porta: PortaFinanceiro,
+    @Inject(PORTA_FINANCEIRO) private readonly porta: PortaFinanceiro,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional() @Inject(NUCLEO_PERIODO_FINANCEIRO) private readonly nucleo: NucleoProprio | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) fonteConfiguracao: FonteConfiguracao | null = null,
@@ -69,6 +75,13 @@ export class GestaoFinanceiroController {
   ) {
     const ambiente = (process.env['AMBIENTE'] ?? 'dev').trim() || 'dev';
     this.apoios = new ApoiosFinanceiro(porta, trilha, fonteConfiguracao, cache, ambiente);
+  }
+
+  /** Sem núcleo, a porta em memória da sessão sintética (E2E) responde às leituras da reclassificação. */
+  private memoria(): LeituraGestaoMemoria | null {
+    if (this.nucleo) return null;
+    const p = this.porta as PortaFinanceiro & Partial<LeituraGestaoMemoria>;
+    return p.gestaoLancamentos && p.gestaoClassificacao ? (p as LeituraGestaoMemoria) : null;
   }
 
   private ler<T>(req: RequisicaoAutorizada, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -102,7 +115,14 @@ export class GestaoFinanceiroController {
     if (!ALVOS_RECLASSIFICACAO.includes(alvo as AlvoReclassificacao))
       throw new ErroProblema('entrada-invalida', 400, 'Lançamento inválido', 'Escolha o tipo do lançamento.');
     const n = idDe(id, 'Lançamento');
-    const r = await this.ler(req, (l, est) => classificacaoAtual(l, est, alvo as AlvoReclassificacao, n));
+    const memoria = this.memoria();
+    const r = memoria
+      ? ((await memoria.gestaoClassificacao(
+          sessaoDe(req).porta,
+          alvo as string,
+          n,
+        )) as ClassificacaoAtualResposta | null)
+      : await this.ler(req, (l, est) => classificacaoAtual(l, est, alvo as AlvoReclassificacao, n));
     if (!r) throw new ErroProblema('nao-encontrado', 404, 'Lançamento não encontrado');
     return r;
   }
@@ -200,6 +220,8 @@ export class GestaoFinanceiroController {
   ) {
     if (!ALVOS_RECLASSIFICACAO.includes(alvo as AlvoReclassificacao))
       throw new ErroProblema('entrada-invalida', 400, 'Lançamento inválido', 'Escolha o tipo do lançamento.');
+    const memoria = this.memoria();
+    if (memoria) return memoria.gestaoLancamentos(sessaoDe(req).porta, alvo as string, termo ?? '');
     return this.ler(req, (l, est) => buscarLancamentos(l, est, alvo as AlvoReclassificacao, termo ?? ''));
   }
 }
