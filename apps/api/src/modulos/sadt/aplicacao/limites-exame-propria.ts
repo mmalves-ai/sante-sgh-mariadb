@@ -279,6 +279,8 @@ export interface LimitesCadastrados {
   readonly cotas: readonly (CotaExame & { ativo: boolean; exameNome: string | null; usoNoPeriodo: number })[];
   readonly intervalos: readonly (IntervaloRepeticao & { ativo: boolean })[];
   readonly bloqueios: readonly (BloqueioPorResultado & { ativo: boolean })[];
+  /** As fontes pagadoras para o filtro da cota e do intervalo (por convênio). */
+  readonly fontes: readonly { id: number; nome: string }[];
 }
 
 function daRegra<T>(fn: () => T): T {
@@ -377,7 +379,13 @@ export class ServicoLimitesExame {
       const bloqueios = (
         await l.consultar('SELECT * FROM bloqueio_exame_resultado ORDER BY ativo DESC, id DESC LIMIT 500', [])
       ).map((r) => ({ ...bloqueioDe(r), ativo: Boolean(Number(r['ativo'] ?? 0)) }));
-      return { cotas, intervalos, bloqueios };
+      const fontes = (
+        await l.consultar(
+          'SELECT id, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome LIMIT 2000',
+          [],
+        )
+      ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']) }));
+      return { cotas, intervalos, bloqueios, fontes };
     });
   }
 

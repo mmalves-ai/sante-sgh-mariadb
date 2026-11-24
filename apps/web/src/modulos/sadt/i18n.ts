@@ -1,6 +1,7 @@
 // Textos das telas do SADT, dos laudos e do portal de resultados (M26). Sem nome de sistema antigo (ADR 0023).
 import { mensagensAgencia } from './i18n-agencia.js';
 import { mensagensPedido } from './i18n-pedido.js';
+import { mensagensLimites } from './i18n-limites.js';
 import { mensagensTransfusao } from './i18n-transfusao.js';
 
 export const mensagensSadt = {
@@ -384,4 +385,5 @@ export const mensagensSadt = {
   agencia: mensagensAgencia,
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
+  limites: mensagensLimites,
 };

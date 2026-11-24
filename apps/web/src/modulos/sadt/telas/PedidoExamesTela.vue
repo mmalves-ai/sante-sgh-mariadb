@@ -138,10 +138,11 @@ watch(
   },
   { deep: true },
 );
-const pedeJustificativa = computed(() =>
-  (avaliacao.value?.restricoes ?? []).some(
-    (r) => r.tipo === 'bloqueio' && r.excecao === null && r.permiteExcecao,
-  ),
+const pedeJustificativa = computed(
+  () =>
+    (avaliacao.value?.restricoes ?? []).some(
+      (r) => r.tipo === 'bloqueio' && r.excecao === null && r.permiteExcecao,
+    ) || (avaliacao.value?.limites ?? []).some((l) => l.acao !== 'alertar'),
 );
 const semPermissaoExcecao = computed(
   () => pedeJustificativa.value && doAtendimento.data.value?.podeAutorizarExcecao === false,
@@ -299,13 +300,29 @@ async function verEventos(item: number): Promise<void> {
 
       <div v-if="avaliacao" class="avisos" data-testid="pedido-avisos" aria-live="polite">
         <h2>{{ t('sadt.pedido.avisos') }}</h2>
-        <p v-if="avaliacao.restricoes.length === 0">{{ t('sadt.pedido.semAvisos') }}</p>
+        <p v-if="avaliacao.restricoes.length === 0 && avaliacao.limites.length === 0">
+          {{ t('sadt.pedido.semAvisos') }}
+        </p>
         <ul>
           <li v-for="r in avaliacao.restricoes" :key="`${r.regra}-${r.exame}`" :class="r.tipo">
             {{ nomeExame(r.exame) }}: {{ r.mensagem }}
           </li>
         </ul>
-        <label v-if="avaliacao.restricoes.some((r) => r.tipo === 'alerta')">
+        <ul v-if="avaliacao.limites.length" data-testid="pedido-limites">
+          <li
+            v-for="l in avaliacao.limites"
+            :key="`${l.tipo}-${l.regra}-${l.exame}`"
+            :class="l.acao === 'alertar' ? 'alerta' : 'bloqueio'"
+          >
+            {{ nomeExame(l.exame) }}: {{ l.mensagem }}
+          </li>
+        </ul>
+        <label
+          v-if="
+            avaliacao.restricoes.some((r) => r.tipo === 'alerta') ||
+            avaliacao.limites.some((l) => l.acao === 'alertar')
+          "
+        >
           <input v-model="confirmado" type="checkbox" data-testid="pedido-confirmar" />
           {{ t('sadt.pedido.confirmar') }}
         </label>

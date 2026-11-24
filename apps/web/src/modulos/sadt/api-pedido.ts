@@ -18,6 +18,18 @@ const esquemaRestricao = z.object({
 export const esquemaAvaliacao = z.object({
   itens: z.array(z.object({ sequencia: n, exame: n, kitVersao: n.nullable() })),
   restricoes: z.array(esquemaRestricao),
+  // Cota, intervalo e último resultado (05-SADT linha 6).
+  limites: z
+    .array(
+      z.object({
+        tipo: z.enum(['cota', 'intervalo', 'ultimo_resultado']),
+        regra: n,
+        exame: n,
+        acao: z.enum(['bloquear', 'alertar', 'exigir_justificativa']),
+        mensagem: txt,
+      }),
+    )
+    .default([]),
   segue: z.boolean(),
   codigo: txt.nullable(),
   motivo: txt.nullable(),
