@@ -15,7 +15,13 @@
 #   - a fonte é a sintética (ACESSO_FONTE_DEV=sintetica, SGH_NUCLEO_SEM_BANCO=1), igual ao ci.yml: o E2E não lê nem
 #     grava o banco 'plataforma' nem um cliente da VM. Valkey (63718), Mailpit (1325) e Gotenberg (3318) são os
 #     serviços de loopback do Compose; as filas levam o prefixo próprio sgh-e2e<porta> (E2E_PORTAS).
-# Execução pesada: pega o pesado.lock (uma de cada vez) e espera MIN_GB livres (padrão 10) antes de subir.
+# Topologia do ci.yml: api, web e o worker COMPLETO (E2E_WORKER=completo; o ci.yml sobe o `pnpm dev`). Na árvore própria
+#   nenhum worker do dono disputa as filas (prefixo próprio) e, sem núcleo, nenhum lê banco. Diferença que resta: o
+#   worker sobe como processo à parte (outro webServer), não dentro do mesmo nx run-many.
+# Execução pesada: pega o pesado.lock (uma de cada vez), espera MIN_GB livres (padrão 10) antes de subir e, durante a
+#   rodada, um vigia encerra o E2E (o grupo de processos dele, nunca a carga) se o livre cair abaixo de PARAR_GB
+#   (padrão 5; o vigia da carga real derruba a carga abaixo de 2,5 GB, e o E2E tem de sair antes). O teto de heap
+#   (NODE_HEAP_MB, padrão 2048) vale para cada processo Node da árvore (nx, api, web, worker, builds, playwright).
 # O que não está commitado não entra (como no CI). Saída: o código do Playwright; log em
 # ../sante-sgh-dados/obra/e2e-vm/ultimo.log.
 set -uo pipefail
@@ -79,18 +85,47 @@ fi
 remover() { git -C "$RAIZ" worktree remove --force "$WT" >/dev/null 2>&1; git -C "$RAIZ" worktree prune; }
 [[ $REMOVER -eq 0 ]] || trap remover EXIT  # padrão: a árvore fica para a próxima rodada (instalação rápida)
 
-# Ambiente mínimo, o mesmo do job do ci.yml (sem .env; nada herdado da sessão).
+# Ambiente mínimo do job do ci.yml (sem .env; nada herdado da sessão). As diferenças para o ci.yml são só as da VM:
+# E2E_PORTAS (portas de teste, filas com prefixo próprio), E2E_WORKER=completo (o mesmo worker do `pnpm dev`) e o teto
+# de heap por processo.
+PARAR_GB="${PARAR_GB:-5}"
+NODE_HEAP_MB="${NODE_HEAP_MB:-2048}"
 E=(env -i PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" CI=true TERM=dumb
    NX_LOAD_DOT_ENV_FILES=false NX_NO_CLOUD=true NX_DAEMON=false SGH_NUCLEO_SEM_BANCO=1
-   GOTENBERG_URL=http://127.0.0.1:3318 AMBIENTE=ci E2E_PORTAS="$PORTAS"
-   NODE_OPTIONS=--max-old-space-size=3072)
+   GOTENBERG_URL=http://127.0.0.1:3318 AMBIENTE=ci E2E_PORTAS="$PORTAS" E2E_WORKER=completo
+   NODE_OPTIONS=--max-old-space-size="$NODE_HEAP_MB")
 LOG="$BASE/ultimo.log"
-{
+MARCA="$BASE/memoria-baixa"
+rm -f "$MARCA"
+rodada() {
   echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, argumentos: $*"
   cd "$WT" && "${E[@]}" ./pnpm install --frozen-lockfile --prefer-offline --store-dir "$RAIZ/.pnpm-store" >"$BASE/instalar.log" 2>&1 \
     || { echo "e2e-vm: instalar falhou (ver $BASE/instalar.log)"; exit 1; }
-  "${E[@]}" nice -n 10 ./node_modules/.bin/playwright test -c apps/web/playwright.config.ts "$@"
-} 2>&1 | tee "$LOG"
-st=${PIPESTATUS[0]}
+  exec "${E[@]}" nice -n 10 ./node_modules/.bin/playwright test -c apps/web/playwright.config.ts "$@"
+}
+# A rodada num grupo de processos próprio (setsid): o vigia encerra o grupo inteiro (playwright, nx, api, web, worker).
+setsid bash -c "$(declare -f rodada); $(declare -p E SHA PORTAS WT BASE RAIZ); rodada \"\$@\"" rodada "$@" > >(tee "$LOG") 2>&1 &
+PID=$!
+vigia() {
+  while kill -0 "$PID" 2>/dev/null; do
+    a=$(awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo)
+    if [[ "$a" -lt "$PARAR_GB" ]]; then
+      echo "e2e-vm: livre=${a}G < ${PARAR_GB}G durante a rodada: encerrando o E2E (a carga segue)" | tee -a "$LOG" >&2
+      : >"$MARCA"
+      kill -TERM -- "-$PID" 2>/dev/null; sleep 10; kill -KILL -- "-$PID" 2>/dev/null
+      return
+    fi
+    sleep 3
+  done
+}
+vigia &
+VIGIA=$!
+wait "$PID"; st=$?
+kill "$VIGIA" 2>/dev/null; wait "$VIGIA" 2>/dev/null
+if [[ -e "$MARCA" ]]; then
+  rm -f "$MARCA"
+  echo "e2e-vm: resultado VERMELHO (encerrado por memória abaixo de ${PARAR_GB}G; nada provado); log $LOG"
+  exit 3
+fi
 echo "e2e-vm: resultado $([[ $st -eq 0 ]] && echo VERDE || echo "VERMELHO (saída $st)"); log $LOG"
 exit "$st"
