@@ -119,6 +119,35 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## ESTADO EM 23/11, 22h55 (sessão e03db3e2 encerrada por tamanho: cerca de 300 turnos). COMECE POR AQUI.
+
+- **Carga: execução 13** (continuação da 12, que continua a 11), iniciada 22h53 do worktree `velocidade` (main até
+  208ae479 juntada), 3 gravadores, trilhas adiadas; log `sante-sgh-dados/obra/logs/worker-e13.log`; vigia
+  `vigia-carga.sh 13` (um só). A 12 foi parada por mim às 22h22: a continuação copiava 46 milhões de pendências da 11
+  uma a uma numa transação única, sem batimento. Rodada `pendencia-quadratica` (052ce146 a 208ae479; suíte do conector
+  1.362 verde): cópia no servidor (INSERT ... SELECT em pedaços com batimento), contagem agregada em vez de linhas na
+  memória, carga antiga do atendimento marcada como concluída (pulada só a partir de continuação de execução que já
+  marcou; a 13 ainda roda a carga própria inteira, agora linear), batimento dentro de tabela longa. **Ao retomar:**
+  conferir o progresso (o batimento agora anda dentro da tabela), o tempo do GROUP BY das pendências da 11 e o pico de
+  memória por onda ("conector memoria onda" no log do worker). Restam cerca de 52 milhões de linhas: fim estimado
+  24/11, 8h a 10h. **Volume a investigar:** a 11 tem 46 milhões de pendências (legítimas por chave, por amostra).
+- **API reiniciada 22h53** com o PEP novo (build de 22h53), `CLIENTE_PADRAO=prontocardio REDE_PADRAO=prontocardio`,
+  log `sante-sgh-dados/obra/logs/api.log`; /api/estabelecimentos 200. **Não testado pelo caminho real:** abrir
+  "Registros do paciente" logado (pedir ao dono ou testar com sessão).
+- **Achado novo (fila, junto do item d da varredura):** `apps/api/src/modulos/suporte/modulo.ts` (servicosSuporte):
+  com o núcleo, `repo` e `fonte` ficam null, então `/api/plataforma/sessao` (login do suporte e "entrar como")
+  responde 503 sempre no banco próprio. Vem de 0e88c230 (F2.2 onda 2). Porta própria do suporte a construir.
+- **verificar:tudo da rodada do PEP:** vermelho só por anexo de migrações e privilégios desatualizados; corrigido
+  (312e5fa2, e4a8c213: modelo_documento_evento só de acréscimo). Os commits depois de 4137d974 ainda não passaram
+  por verificar:tudo inteiro nem por ci-sim: rodar `ci-sim` sobre o HEAD antes do próximo push.
+- **Push:** ci-sim VERDE em 4137d974, push barrado pelo modo automático do Claude Code ("Sensitive Information
+  Leakage") duas vezes; aguardando o dono (`git push origin 4137d974:main` ou regra de permissão).
+- **Relatórios:** o de 23h13 está agendado nesta sessão e morre com ela: agendar de novo na sessão nova.
+- **Consumo da sessão (medido):** ids-bigint 5,56 M (est. 7,2); retomar-importacao 5,27 M (7,2); pep-portas-proprias
+  16,4 M (22,4); pendencia-quadratica cerca de 3 M (3,4); orquestrador 6,6 M+ em cerca de 300 turnos (acima da regra
+  de 150: a investigação da trava foi feita em muitos comandos pequenos; na próxima, um script de diagnóstico único).
+  Registrar em docs/obra/consumo.md.
+
 ## ESTADO EM 23/11, 21h40 (sessão e03db3e2, orquestradora). COMECE POR AQUI.
 
 - **Carga:** a execução 11 foi parada pelo vigia às 20h07 (onda 177 de 218, cerca de 55% das linhas). A rodada
