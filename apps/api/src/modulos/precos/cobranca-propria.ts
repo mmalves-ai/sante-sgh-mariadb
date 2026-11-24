@@ -742,7 +742,9 @@ function opEncerrar(nome: string, tabela: string, porEstabelecimento: boolean, c
     entrada: esquemaEncerrar,
     async gravar(tx, e, ctx) {
       const r = await tx.uma<Linha>(
-        `SELECT vigencia_inicio, vigencia_fim${porEstabelecimento ? ', estabelecimento_id' : ''}${chave.map((c) => `, ${c}`).join('')}
+        // Coluna repetida no SELECT faz o conector do MariaDB recusar o resultado (nome duplicado): a chave pode já
+        // trazer o estabelecimento.
+        `SELECT vigencia_inicio, vigencia_fim${[...new Set([...(porEstabelecimento ? ['estabelecimento_id'] : []), ...chave])].map((c) => `, ${c}`).join('')}
            FROM ${tabela} WHERE id = ?`,
         [e.id],
       );
