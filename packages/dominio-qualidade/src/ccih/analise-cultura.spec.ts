@@ -4,7 +4,10 @@ import {
   type CondutaCultura,
   type CulturaParaAnalise,
   type EntradaAnaliseCultura,
+  laudoRetificadoDepois,
   MENSAGENS_ANALISE_CULTURA,
+  MENSAGENS_PENDENCIA_CULTURA,
+  pendenciasDaAnalise,
 } from './analise-cultura.js';
 
 const cultura = (o: Partial<CulturaParaAnalise> = {}): CulturaParaAnalise => ({
@@ -89,7 +92,6 @@ describe('análise da cultura positiva', () => {
       isolado: 10,
       precaucaoIndicada: true,
       prescritorOrientado: false,
-      laudoRetificado: true,
       pendencias: ['abrir-ficha-iras', 'aplicar-precaucao'],
     });
     const contaminada = avaliarAnaliseCultura(entrada({ classificacao: 'contaminacao' }), mr, conduta());
@@ -100,5 +102,60 @@ describe('análise da cultura positiva', () => {
       conduta({ indicaPrecaucao: true }),
     );
     expect(comCaso.ok && comCaso.analise.pendencias).toEqual(['aplicar-precaucao']);
+  });
+
+  it('o laudo retificado na hora da análise não marca nada; a precaução ativa do paciente fecha a pendência', () => {
+    const r = avaliarAnaliseCultura(
+      entrada({ classificacao: 'colonizacao', precaucaoIndicada: true }),
+      cultura({ situacao: 'retificado' }),
+      conduta(),
+      { precaucaoAtiva: true },
+    );
+    expect(r.ok && r.analise.pendencias).toEqual([]);
+  });
+
+  it('recalcula as pendências na leitura: ficha de IRAS, precaução e laudo retificado depois', () => {
+    const base = {
+      classificacao: 'infeccao' as const,
+      casoInfeccao: null,
+      condutaAbreCaso: null,
+      precaucaoIndicada: true,
+      precaucaoAtiva: false,
+      laudoMudouDepois: true,
+    };
+    expect(pendenciasDaAnalise(base)).toEqual([
+      'abrir-ficha-iras',
+      'aplicar-precaucao',
+      'rever-laudo-retificado',
+    ]);
+    expect(
+      pendenciasDaAnalise({ ...base, condutaAbreCaso: false, precaucaoAtiva: true, laudoMudouDepois: false }),
+    ).toEqual([]);
+    expect(
+      pendenciasDaAnalise({ ...base, casoInfeccao: 3, precaucaoAtiva: true, laudoMudouDepois: false }),
+    ).toEqual([]);
+    expect(
+      pendenciasDaAnalise({
+        ...base,
+        classificacao: 'colonizacao',
+        precaucaoIndicada: false,
+        laudoMudouDepois: false,
+      }),
+    ).toEqual([]);
+    for (const m of Object.values(MENSAGENS_PENDENCIA_CULTURA)) expect(m.length).toBeGreaterThan(10);
+  });
+
+  it('o laudo conta como retificado depois só quando a retificação é posterior à última revisão', () => {
+    const t = '2026-11-24T10:00:00.000Z';
+    expect(laudoRetificadoDepois(t, { situacao: 'retificado', alteradaEm: '2026-11-24T10:00:01.000Z' })).toBe(
+      true,
+    );
+    expect(laudoRetificadoDepois(t, { situacao: 'retificado', alteradaEm: '2026-11-24T09:59:59.000Z' })).toBe(
+      false,
+    );
+    expect(laudoRetificadoDepois(t, { situacao: 'final', alteradaEm: '2026-11-24T11:00:00.000Z' })).toBe(
+      false,
+    );
+    expect(laudoRetificadoDepois(t, { situacao: 'retificado', alteradaEm: null })).toBe(false);
   });
 });

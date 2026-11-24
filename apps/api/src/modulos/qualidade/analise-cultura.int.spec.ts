@@ -244,4 +244,81 @@ describe.skipIf(SEM_BANCO)('análise da cultura positiva (porta própria, MariaD
     expect(c?.pendente).toBe(true);
     expect(c?.germes.find((g) => g.id === germe2)?.analisado).toBe(false);
   });
+
+  it('relê as pendências: a infecção sem ficha de IRAS deixa a cultura na fila mesmo com todos os germes analisados', async () => {
+    const r = await porta.registrar(
+      ctx(),
+      m!.base.login,
+      cultura,
+      {
+        classificacao: 'infeccao',
+        isolado: germe2,
+        conduta: null,
+        condutaDescricao: 'Infecção de corrente sanguínea: discutir com o prescritor',
+        precaucaoIndicada: false,
+        prescritorOrientado: true,
+        casoInfeccao: null,
+      },
+      (x) => trilha(x.id),
+    );
+    expect(r.pendencias).toEqual(['abrir-ficha-iras']);
+    const lidas = await porta.analises(ctx(), { cultura });
+    expect(lidas.find((a) => a.id === r.id)?.pendencias).toEqual(['abrir-ficha-iras']);
+    const c = (await porta.culturas(ctx(), '2000-01-01', m!.base.paciente)).find((x) => x.id === cultura);
+    expect(c).toMatchObject({ faltaAnalisar: false, pendencias: ['abrir-ficha-iras'], pendente: true });
+  });
+
+  it('a retificação do laudo depois da análise pede revisão; a correção grava laudo_retificado e fecha a revisão', async () => {
+    // O laboratório retifica o laudo (simulado na massa: a retificação estruturada é da 05-SADT linha 12).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-acp' }, (e) =>
+      e.executar(
+        "UPDATE resultado_cultura SET situacao = 'retificado', alterado_em = NOW(3), versao = versao + 1 WHERE id = ?",
+        [cultura],
+      ),
+    );
+    const antes = await porta.analises(ctx(), { cultura });
+    expect(antes.length).toBe(2);
+    for (const a of antes) {
+      expect(a.laudoRetificado).toBe(true);
+      expect(a.pendencias).toContain('rever-laudo-retificado');
+    }
+    const daInfeccao = antes.find((a) => a.isolado === germe2)!;
+    const [gravadoAntes] = await ler<{ laudo_retificado: number }>(
+      'SELECT laudo_retificado FROM analise_cultura_positiva WHERE id = ?',
+      [daInfeccao.id],
+    );
+    expect(Number(gravadoAntes!.laudo_retificado)).toBe(0);
+    const r = await porta.corrigir(
+      ctx(),
+      m!.base.login,
+      daInfeccao.id,
+      daInfeccao.versao,
+      {
+        classificacao: 'colonizacao',
+        isolado: null,
+        conduta: null,
+        condutaDescricao: 'Revista após a retificação do laudo: colonização',
+        precaucaoIndicada: false,
+        prescritorOrientado: true,
+        casoInfeccao: null,
+      },
+      'laudo retificado pelo laboratório',
+      (x) => trilha(x.id),
+    );
+    expect(r.pendencias).toEqual([]);
+    const [gravado] = await ler<{ laudo_retificado: number; versao: number }>(
+      'SELECT laudo_retificado, versao FROM analise_cultura_positiva WHERE id = ?',
+      [daInfeccao.id],
+    );
+    expect(Number(gravado!.laudo_retificado)).toBe(1);
+    expect(Number(gravado!.versao)).toBe(daInfeccao.versao + 1);
+    const depois = await porta.analises(ctx(), { cultura });
+    expect(depois.find((a) => a.id === daInfeccao.id)).toMatchObject({
+      laudoRetificado: true,
+      pendencias: [],
+    });
+    expect(depois.find((a) => a.isolado === germeMr)?.pendencias).toEqual(['rever-laudo-retificado']);
+    const c = (await porta.culturas(ctx(), '2000-01-01', m!.base.paciente)).find((x) => x.id === cultura);
+    expect(c).toMatchObject({ faltaAnalisar: false, pendencias: ['rever-laudo-retificado'], pendente: true });
+  });
 });
