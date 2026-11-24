@@ -128,6 +128,31 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     meta: { permissao: 'suprimentos.nota.ler' },
   },
   {
+    // F3.6 (05-SUP linhas 1, 3 e 6): cadastro do item e do local, escopo do usuário e lista de separação.
+    path: '/suprimentos/itens/cadastro/:id(\\d+)?',
+    name: 'suprimentos.itens.cadastro',
+    component: () => import('./telas/ItemCadastroTela.vue'),
+    meta: { permissao: 'suprimentos.item.editar' },
+  },
+  {
+    path: '/suprimentos/locais/cadastro',
+    name: 'suprimentos.locais.cadastro',
+    component: () => import('./telas/LocalCadastroTela.vue'),
+    meta: { permissao: 'suprimentos.local.editar' },
+  },
+  {
+    path: '/suprimentos/usuarios-estoque/escopo',
+    name: 'suprimentos.usuarios-estoque.escopo',
+    component: () => import('./telas/EscopoUsuarioCadastroTela.vue'),
+    meta: { permissao: 'acesso.escopo.editar' },
+  },
+  {
+    path: '/suprimentos/requisicoes/:id(\\d+)/separacao',
+    name: 'suprimentos.requisicoes.separacao',
+    component: () => import('./telas/SeparacaoTela.vue'),
+    meta: { permissao: 'suprimentos.requisicao.ler' },
+  },
+  {
     path: '/suprimentos/requisicoes',
     name: 'suprimentos.requisicoes',
     component: () => import('./telas/RequisicoesTela.vue'),

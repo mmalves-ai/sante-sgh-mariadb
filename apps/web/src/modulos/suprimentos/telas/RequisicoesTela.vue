@@ -202,6 +202,13 @@ const podeAtender = computed(() => gravacao.data.value?.operacoes['atenderRequis
     >
       <h2>{{ t('suprimentos.requisicoes.numero', { n: chaveDoc(r.chave) }) }}</h2>
       <p>
+        <RouterLink
+          :to="`/suprimentos/requisicoes/${r.id}/separacao`"
+          :data-testid="`separacao-${r.chave.doc}`"
+          >{{ t('cadastroEstoque.separacao.abrir') }}</RouterLink
+        >
+      </p>
+      <p>
         {{ data(r.data) }} {{ r.hora }} · {{ r.localNome }} · {{ r.centroCustoNome || r.centroCusto }} ·
         {{ r.usuario }}
         <template v-if="r.paciente"> · {{ r.paciente.nome }}</template>

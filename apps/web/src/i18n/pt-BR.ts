@@ -81,6 +81,7 @@ import {
 } from '../modulos/operadora/i18n-atendimento.js';
 import { mensagensAnestesia } from '../modulos/cirurgia/i18n-anestesia.js';
 import { mensagensBlocoSeguro } from '../modulos/cirurgia/i18n-bloco-seguro.js';
+import { mensagensCadastroEstoque } from '../modulos/suprimentos/i18n-cadastro-estoque.js';
 import { mensagensOpme } from '../modulos/suprimentos/i18n-opme.js';
 import { mensagensConsignado, mensagensManipulacao } from '../modulos/suprimentos/i18n-consignado.js';
 import { mensagensContrato } from '../modulos/suprimentos/i18n-contrato.js';
@@ -2321,6 +2322,8 @@ export const mensagensWeb = {
   blocoSeguro: mensagensBlocoSeguro,
   // M46 (etapa 3): OPME.
   opme: mensagensOpme,
+  // F3.6 (05-SUP linhas 1, 3 e 6): cadastro do item e do local, escopo do usuário e lista de separação.
+  cadastroEstoque: mensagensCadastroEstoque,
   // M46 (etapa 4): consignados e manipulação.
   consignado: mensagensConsignado,
   manipulacao: mensagensManipulacao,
