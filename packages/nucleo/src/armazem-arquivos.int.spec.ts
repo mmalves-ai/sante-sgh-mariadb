@@ -184,6 +184,9 @@ describe.skipIf(SEM_BANCO)(`porta de arquivos no disco local (cliente ${CLIENTE}
       { conteudo: unico('muda'), nomeOriginal: 'm.txt', tipoMime: 'text/plain', finalidade: 'anexo' },
       ctx(),
     );
+    // As listas do vigia têm no máximo 100 ids (o cliente de teste acumula arquivos de rodadas anteriores):
+    // a prova é a situação de cada id e o aumento de 1 em cada total.
+    const antes = await armazem.verificarCliente(leitura());
     await unlink(await armazem.caminho(CLIENTE, some.chave));
     const cm = await armazem.caminho(CLIENTE, muda.chave);
     await chmod(cm, 0o644);
@@ -191,8 +194,12 @@ describe.skipIf(SEM_BANCO)(`porta de arquivos no disco local (cliente ${CLIENTE}
     await expect(armazem.ler(leitura(), some.id)).rejects.toThrow(/arquivo-ausente/);
     await expect(armazem.ler(leitura(), muda.id)).rejects.toThrow(/arquivo-divergente/);
     const v = await armazem.verificarCliente(leitura());
-    expect(v.faltando).toContain(some.id);
-    expect(v.divergentes).toContain(muda.id);
+    expect(await armazem.verificar(leitura(), some.id)).toBe('faltando');
+    expect(await armazem.verificar(leitura(), muda.id)).toBe('divergente');
+    expect(v.totalFaltando).toBe(antes.totalFaltando + 1);
+    expect(v.totalDivergentes).toBe(antes.totalDivergentes + 1);
+    expect(v.faltando.length).toBeLessThanOrEqual(100);
+    expect(v.divergentes.length).toBeLessThanOrEqual(100);
     expect(v.conferidos).toBeGreaterThanOrEqual(v.integros + v.totalFaltando + v.totalDivergentes);
   });
 
