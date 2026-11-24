@@ -59,6 +59,7 @@ const configuracao = {
 
 describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de teste e plataforma de validação)', () => {
   let nucleo: NucleoProprio;
+  let nucleoPlat: NucleoProprio;
   let s: ServicosAcessoEmail;
   const email = emailAcessoMemoria();
   const senhaAdm = `P${randomUUID()}8`;
@@ -108,7 +109,8 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
          SELECT id, SUBSTRING_INDEX(email, '@', 1), '${resumoAdm}', NOW(3), FALSE, NOW(3) FROM administrador_plataforma;`,
     );
 
-    nucleo = new NucleoProprio({ env: { ...ambienteEfetivo().env, SGH_BANCO_PLATAFORMA: PLAT } });
+    nucleo = new NucleoProprio();
+    nucleoPlat = new NucleoProprio({ env: { ...ambienteEfetivo().env, SGH_BANCO_PLATAFORMA: PLAT } });
     const fonte = new FonteAcessoPropria(nucleo, CLIENTE, REDE, () => undefined);
     await fonte.carregar();
     const executor = nucleo.criarExecutor();
@@ -125,6 +127,7 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
       estabelecimento: (h) => (h === HOSPITAL ? idEst : null),
       trilha: new RegistradorTrilhaMemoria(),
       urlPublica: 'http://127.0.0.1:5173/',
+      plataforma: nucleoPlataforma(nucleoPlat),
     });
   }, 120_000);
 
@@ -136,6 +139,7 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     );
     sql(null, `DROP DATABASE IF EXISTS ${PLAT};`);
     await nucleo?.encerrar();
+    await nucleoPlat?.encerrar();
   });
 
   it('usuário: pedido igual para todos, e-mail só para a conta com e-mail, token vira senha provisória uma vez', async () => {
@@ -190,7 +194,7 @@ describe.skipIf(SEM_BANCO)('acesso por e-mail no banco próprio (cliente de test
     const rp = s.recuperacaoPlataforma;
     expect(rp).not.toBe(null);
     if (!rp) return;
-    const np = nucleoPlataforma(nucleo);
+    const np = nucleoPlataforma(nucleoPlat);
     if (!np) throw new Error('núcleo sem plataforma');
     const fonte = new FontePlataformaPropria(np);
     const antes = email.enviadas.length;

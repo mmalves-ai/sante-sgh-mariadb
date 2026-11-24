@@ -229,6 +229,8 @@ export interface DependenciasAcessoEmail {
   readonly trilha: RegistradorTrilha | null;
   /** Origem pública da web (ex.: https://host), para os links dos e-mails. */
   readonly urlPublica: string;
+  /** Núcleo do banco plataforma (padrão: o próprio núcleo, quando lê a plataforma). */
+  readonly plataforma?: NucleoPlataforma | null;
   readonly aviso?: (mensagem: string, campos: Record<string, unknown>) => void;
 }
 
@@ -258,7 +260,7 @@ export function montarAcessoEmailProprio(d: DependenciasAcessoEmail): ServicosAc
     aviso,
   });
   const codigos = d.email ? new ServicoCodigoEmail(d.armazem, d.email) : null;
-  const np = nucleoPlataforma(d.nucleo);
+  const np = d.plataforma !== undefined ? d.plataforma : nucleoPlataforma(d.nucleo);
   return {
     recuperacao,
     trocaRapida,
