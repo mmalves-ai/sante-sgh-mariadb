@@ -155,7 +155,7 @@ function daRegra<T>(fn: () => T): T {
   }
 }
 
-const TABELAS = [
+export const TABELAS_PEDIDO = [
   'requisicao_exame',
   'exame_item',
   'item_exame_evento',
@@ -169,6 +169,7 @@ const TABELAS = [
   'nova_coleta',
   'sequencia_negocio',
 ] as const;
+const TABELAS = TABELAS_PEDIDO;
 
 async function relogio(l: Leitor, est: number) {
   const f = await l.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
@@ -398,80 +399,88 @@ export class ServicoPedidoSadt {
   /** Abre a requisição com os itens (avulsos e de kit), já com as restrições decididas e as exceções registradas. */
   abrirPedido(c: ContextoSadt, entrada: unknown): Promise<PedidoGravado> {
     const p = esquemaPedidoExames.parse(entrada);
-    return this.gravar(c, 'sadt.pedido.aberto', 'requisicao_exame', async (tx, est) => {
-      const a = await this.avaliar(tx, est, p);
-      if (!a.decisao.segue)
-        throw recusa(a.decisao.codigo ?? 'restricao', a.decisao.motivo ?? 'Pedido recusado.');
-      const usuario = tx.contexto.usuario;
-      const agora = new Date();
-      const numero = (await tx.proximoNumero('requisicao_exame')).formatado;
-      const requisicao = await tx.incluir('requisicao_exame', {
-        estabelecimento_id: est,
-        numero,
-        paciente_id: a.paciente,
-        atendimento_id: p.atendimento,
-        setor_diagnostico_id: p.setor,
-        solicitante_profissional_id: p.solicitante ?? n(a.at['profissional_id']),
-        unidade_assistencial_id: nn(a.at['unidade_assistencial_id']),
-        fonte_pagadora_id: n(a.at['fonte_pagadora_id']),
-        tipo_solicitacao: p.tipo,
-        prioridade: p.prioridade,
-        situacao: 'solicitada',
-        solicitado_em: agora,
-        indicacao_clinica: p.indicacaoClinica,
+    return this.gravar(c, 'sadt.pedido.aberto', 'requisicao_exame', (tx, est) =>
+      this.abrirNaTransacao(tx, est, p),
+    );
+  }
+
+  /**
+   * O corpo da abertura do pedido dentro de uma transação já aberta (a conversão do orçamento abre o pedido na mesma
+   * transação que marca o orçamento convertido). As tabelas tocadas são as de TABELAS_PEDIDO.
+   */
+  async abrirNaTransacao(tx: TxOperacao, est: number, p: PedidoExames): Promise<PedidoGravado> {
+    const a = await this.avaliar(tx, est, p);
+    if (!a.decisao.segue)
+      throw recusa(a.decisao.codigo ?? 'restricao', a.decisao.motivo ?? 'Pedido recusado.');
+    const usuario = tx.contexto.usuario;
+    const agora = new Date();
+    const numero = (await tx.proximoNumero('requisicao_exame')).formatado;
+    const requisicao = await tx.incluir('requisicao_exame', {
+      estabelecimento_id: est,
+      numero,
+      paciente_id: a.paciente,
+      atendimento_id: p.atendimento,
+      setor_diagnostico_id: p.setor,
+      solicitante_profissional_id: p.solicitante ?? n(a.at['profissional_id']),
+      unidade_assistencial_id: nn(a.at['unidade_assistencial_id']),
+      fonte_pagadora_id: n(a.at['fonte_pagadora_id']),
+      tipo_solicitacao: p.tipo,
+      prioridade: p.prioridade,
+      situacao: 'solicitada',
+      solicitado_em: agora,
+      indicacao_clinica: p.indicacaoClinica,
+      origem: 'sistema',
+    });
+    const gravados: { id: number; exame: number; sequencia: number }[] = [];
+    let excecoes = 0;
+    for (const i of a.itens) {
+      const item = await tx.incluir('exame_item', {
+        requisicao_exame_id: requisicao,
+        sequencia: i.sequencia,
+        exame_id: i.exame,
+        setor_diagnostico_id: i.setor ?? p.setor,
+        material_biologico_id: i.material,
+        quantidade: i.quantidade,
+        urgente: i.urgente,
+        situacao: 'solicitado',
         origem: 'sistema',
       });
-      const gravados: { id: number; exame: number; sequencia: number }[] = [];
-      let excecoes = 0;
-      for (const i of a.itens) {
-        const item = await tx.incluir('exame_item', {
-          requisicao_exame_id: requisicao,
-          sequencia: i.sequencia,
-          exame_id: i.exame,
-          setor_diagnostico_id: i.setor ?? p.setor,
-          material_biologico_id: i.material,
-          quantidade: i.quantidade,
-          urgente: i.urgente,
-          situacao: 'solicitado',
-          origem: 'sistema',
-        });
-        const doItem = a.acionadas.filter((x) => x.exame === i.exame);
-        await tx.incluir('item_exame_evento', {
+      const doItem = a.acionadas.filter((x) => x.exame === i.exame);
+      await tx.incluir('item_exame_evento', {
+        exame_item_id: item,
+        operacao: 'inclusao',
+        evento: 'solicitado',
+        ocorrido_em: agora,
+        usuario_id: usuario,
+        situacao_nova: 'solicitado',
+        setor_diagnostico_id: i.setor ?? p.setor,
+        dados: JSON.stringify({
+          kitVersao: i.kitVersao,
+          restricoes: doItem.map((x) => ({
+            regra: x.regra,
+            tipo: x.tipo,
+            motivo: x.motivo,
+            excecao: x.excecao,
+          })),
+        }),
+      });
+      for (const regra of a.decisao.excecoesNovas) {
+        if (!doItem.some((x) => x.regra === regra)) continue;
+        await tx.incluir('excecao_restricao_exame', {
+          restricao_exame_id: regra,
+          abrangencia: 'item_exame',
           exame_item_id: item,
-          operacao: 'inclusao',
-          evento: 'solicitado',
-          ocorrido_em: agora,
-          usuario_id: usuario,
-          situacao_nova: 'solicitado',
-          setor_diagnostico_id: i.setor ?? p.setor,
-          dados: JSON.stringify({
-            kitVersao: i.kitVersao,
-            restricoes: doItem.map((x) => ({
-              regra: x.regra,
-              tipo: x.tipo,
-              motivo: x.motivo,
-              excecao: x.excecao,
-            })),
-          }),
+          justificativa: p.justificativa,
+          autorizado_por_usuario_id: usuario,
+          autorizado_em: agora,
+          vigencia_inicio: agora.toISOString().slice(0, 10),
+          ativo: true,
         });
-        for (const regra of a.decisao.excecoesNovas) {
-          if (!doItem.some((x) => x.regra === regra)) continue;
-          await tx.incluir('excecao_restricao_exame', {
-            restricao_exame_id: regra,
-            abrangencia: 'item_exame',
-            exame_item_id: item,
-            justificativa: p.justificativa,
-            autorizado_por_usuario_id: usuario,
-            autorizado_em: agora,
-            vigencia_inicio: agora.toISOString().slice(0, 10),
-            ativo: true,
-          });
-          excecoes += 1;
-        }
-        gravados.push({ id: item, exame: i.exame, sequencia: i.sequencia });
+        excecoes += 1;
       }
-      return { requisicao, numero, itens: gravados, excecoes };
-    });
+      gravados.push({ id: item, exame: i.exame, sequencia: i.sequencia });
+    }
+    return { requisicao, numero, itens: gravados, excecoes };
   }
 
   /** Cancela o item com o motivo do cadastro; a requisição fica cancelada quando o último item cai. */
