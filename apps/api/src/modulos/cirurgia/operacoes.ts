@@ -543,6 +543,15 @@ const agendar = definirOperacao<AgendarCirurgiaEntrada, ResultadoOperacao>({
     const sala = await salaTravada(tx, e.sala);
     const fuso = await fusoDe(tx);
     const inicio = instante(`${e.data} ${horaDe(e.hora)}`, fuso);
+    // 04-CC linha 92: a sala tem de estar aberta na grade (faixa, feriado e reserva) para a cirurgia inteira.
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: e.duracaoMin,
+      especialidade: e.especialidade > 0 ? e.especialidade : null,
+      cirurgiao: e.equipe.cirurgiao.id,
+      excecao: !!e.excecao,
+    });
     await conferirHorario(tx, fuso, sala, {
       id: e.solicitacao ?? 0,
       sala: e.sala,
@@ -552,15 +561,6 @@ const agendar = definirOperacao<AgendarCirurgiaEntrada, ResultadoOperacao>({
       procedimentos: [e.procedimento, ...e.procedimentosAdicionais],
       preparoMinimoMin: e.preparoMinimoMin ?? 0,
       anterior: null,
-      excecao: !!e.excecao,
-    });
-    // 04-CC linha 92: a sala tem de estar aberta na grade (faixa, feriado e reserva) para a cirurgia inteira.
-    await conferirGradeNaTx(tx, fuso, {
-      sala: e.sala,
-      inicio,
-      duracaoMin: e.duracaoMin,
-      especialidade: e.especialidade > 0 ? e.especialidade : null,
-      cirurgiao: e.equipe.cirurgiao.id,
       excecao: !!e.excecao,
     });
     const cirurgiao = e.equipe.cirurgiao.id;
@@ -662,6 +662,14 @@ const remarcar = definirOperacao<RemarcarCirurgiaEntrada, ResultadoOperacao>({
       'SELECT procedimento_cirurgico_id FROM agendamento_cirurgico_procedimento WHERE agendamento_cirurgico_id = ? AND excluido_em IS NULL',
       [e.agendamento],
     );
+    await conferirGradeNaTx(tx, fuso, {
+      sala: e.sala,
+      inicio,
+      duracaoMin: duracao,
+      especialidade: nn(a['especialidade_medica_id']),
+      cirurgiao: nn(a['cirurgiao_profissional_id']),
+      excecao: !!e.excecao,
+    });
     await conferirHorario(tx, fuso, sala, {
       id: e.agendamento,
       sala: e.sala,
@@ -671,14 +679,6 @@ const remarcar = definirOperacao<RemarcarCirurgiaEntrada, ResultadoOperacao>({
       procedimentos: procs.map((x) => n(x['procedimento_cirurgico_id'])),
       preparoMinimoMin: e.preparoMinimoMin,
       anterior: { sala: n(a['sala_cirurgica_id']), inicio: visto ?? '' },
-      excecao: !!e.excecao,
-    });
-    await conferirGradeNaTx(tx, fuso, {
-      sala: e.sala,
-      inicio,
-      duracaoMin: duracao,
-      especialidade: nn(a['especialidade_medica_id']),
-      cirurgiao: nn(a['cirurgiao_profissional_id']),
       excecao: !!e.excecao,
     });
     await tx.alterar('agendamento_cirurgico', e.agendamento, n(a['versao']), {

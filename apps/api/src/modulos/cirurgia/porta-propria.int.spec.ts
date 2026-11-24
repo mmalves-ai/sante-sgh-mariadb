@@ -191,7 +191,7 @@ beforeAll(async () => {
     const paciente = await g(
       'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
       [pfPac],
-      "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, 930301, 'ativo', ?)",
+      "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, 930392, 'ativo', ?)",
       [pfPac, agora],
     );
     const prof = async (nome: string) => {
@@ -1242,7 +1242,10 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
   it('grade da sala (04-CC linha 92): grava a faixa com trilha, a agenda recusa fora da grade e na reserva de outro cirurgião, inativar guarda a linha', async () => {
     const grade = new PortaGradeSalaPropria(nucleo);
     const dia = ((new Date(`${amanha()}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
-    const faixa = { diaSemana: dia, inicio: '13:00', fim: '18:00', vigenciaInicio: '2020-01-01' };
+    const faixa = { diaSemana: dia, inicio: '19:00', fim: '23:00', vigenciaInicio: '2020-01-01' };
+    const trilhaSala = () =>
+      ler("SELECT id FROM trilha_auditoria WHERE entidade = 'sala_cirurgica' AND entidade_id = ?", [m.sala]);
+    const trilhaAntes = (await trilhaSala()).length;
     const r = await grade.executar(
       ctx(m.est),
       'cirurgia.gravarFaixaGrade',
@@ -1255,12 +1258,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
       [id],
     );
     expect(linha).toMatchObject({ dia_semana: dia, versao: 1 });
-    expect(
-      await ler(
-        "SELECT id FROM trilha_auditoria WHERE entidade = 'grade_sala_cirurgica' AND entidade_id = ?",
-        [id],
-      ),
-    ).not.toHaveLength(0);
+    expect((await trilhaSala()).length).toBeGreaterThan(trilhaAntes);
     // Faixa cruzada no mesmo dia e a mesma sala lida de outro estabelecimento.
     await expect(
       grade.executar(
@@ -1272,19 +1270,19 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     ).rejects.toThrow(/grade-faixa-cruzada/);
     expect(await grade.grade(ctx(m.outro), m.sala)).toBeNull();
     expect((await grade.grade(ctx(m.est), m.sala))?.faixas.map((f) => [f.inicio, f.fim, f.ativo])).toEqual([
-      ['13:00', '18:00', true],
+      ['19:00', '23:00', true],
     ]);
     // A agenda confere a grade: fora dela e passando do fim recusa; dentro grava.
     await expect(
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('10:00'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('18:00'), op(m.est)),
     ).rejects.toThrow(/sala-fechada-na-grade/);
     await expect(
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('17:30'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('22:30'), op(m.est)),
     ).rejects.toThrow(/sala-fechada-na-grade/);
     const ag = await porta.executar(
       ctx(m.est),
       'cirurgia.agendarCirurgia',
-      entradaAgendar('14:00'),
+      entradaAgendar('19:30'),
       op(m.est),
     );
     expect(Number(ag.resultado['agendamento'])).toBeGreaterThan(0);
@@ -1296,7 +1294,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
       op(m.est),
     );
     await expect(
-      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('16:00'), op(m.est)),
+      porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('21:00'), op(m.est)),
     ).rejects.toThrow(/grade-reservada-cirurgiao/);
     // Inativar: a linha fica (ativo falso, versão nova), de outro estabelecimento é recusado; sem faixa ativa, não restringe.
     await expect(
@@ -1312,7 +1310,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     const livre = await porta.executar(
       ctx(m.est),
       'cirurgia.agendarCirurgia',
-      entradaAgendar('20:00'),
+      entradaAgendar('18:00'),
       op(m.est),
     );
     expect(Number(livre.resultado['agendamento'])).toBeGreaterThan(0);
