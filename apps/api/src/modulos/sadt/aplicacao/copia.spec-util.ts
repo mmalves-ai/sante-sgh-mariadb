@@ -205,6 +205,14 @@ export async function montarMassaSadt(nucleo: NucleoProprio, prefixo: string): P
         { tipo: 'laudo_exame', estabelecimento: base.est, prefixo: 'L' },
         { agora, usuario: null },
       );
+      // O estabelecimento novo da massa recebe as numerações que tools/db/configurar_numeracoes.py dá a todo
+      // estabelecimento (a requisição de exames e a recoleta), como no "criar novo cliente".
+      for (const tipo of ['requisicao_exame', 'nova_coleta'])
+        await garantirSequencia(
+          e,
+          { tipo, estabelecimento: base.est, prefixo: null },
+          { agora, usuario: null },
+        );
       return {
         base,
         marca,
@@ -290,7 +298,10 @@ export async function limparMassaSadt(nucleo: NucleoProprio, m: MassaSadt | null
     await e.executar('DELETE FROM exame WHERE id IN (?, ?)', [m.exameLab, m.exameImagem]);
     await e.executar('DELETE FROM analito WHERE id = ?', [m.analito]);
     await e.executar(`DELETE FROM setor_diagnostico WHERE ${emEst}`, ests);
-    await e.executar(`DELETE FROM sequencia_negocio WHERE tipo = 'laudo_exame' AND ${emEst}`, ests);
+    await e.executar(
+      `DELETE FROM sequencia_negocio WHERE tipo IN ('laudo_exame', 'requisicao_exame', 'nova_coleta') AND ${emEst}`,
+      ests,
+    );
   });
   await limparMassa(nucleo, m.base);
 }

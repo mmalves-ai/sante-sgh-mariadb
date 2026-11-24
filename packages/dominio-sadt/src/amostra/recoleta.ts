@@ -208,19 +208,19 @@ export function planoDeSubamostras(
   }));
 }
 
-/** A amostra primária só se divide recebida (ou triada) e uma vez só. */
+/** A amostra primária só se divide recebida (ou triada) e uma vez só: a já dividida diz isso, não "não recebida". */
 export function conferirAliquotagem(
   situacao: string,
   jaTemFilhas: boolean,
   plano: readonly SubamostraPlanejada[],
 ) {
+  if (jaTemFilhas || situacao === 'aliquotada')
+    throw new RecusaAmostra('amostra-aliquotada', 'As alíquotas desta amostra já foram geradas.');
   if (!['recebida', 'triada'].includes(situacao))
     throw new RecusaAmostra(
       'amostra-nao-recebida',
       'Receba a amostra no laboratório antes de gerar as alíquotas.',
     );
-  if (jaTemFilhas)
-    throw new RecusaAmostra('amostra-aliquotada', 'As alíquotas desta amostra já foram geradas.');
   if (plano.length === 0)
     throw new RecusaAmostra('sem-regra-subamostra', 'Nenhum exame desta amostra tem regra de alíquota.');
 }
