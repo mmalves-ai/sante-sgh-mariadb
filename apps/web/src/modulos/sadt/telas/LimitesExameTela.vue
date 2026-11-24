@@ -252,7 +252,9 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
           >{{ t('sadt.limites.percentual') }}<input v-model="cota.percentual" inputmode="decimal"
         /></label>
         <label><input v-model="cota.so" type="checkbox" /> {{ t('sadt.limites.permiteExceder') }}</label>
-        <label>{{ t('sadt.limites.inicio') }}<input v-model="cota.inicio" type="date" /></label>
+        <label
+          >{{ t('sadt.limites.inicio') }}<input v-model="cota.inicio" type="date" data-testid="cota-inicio"
+        /></label>
         <label>{{ t('sadt.limites.fim') }}<input v-model="cota.fim" type="date" /></label>
         <SanteBotao
           :rotulo="t('sadt.limites.incluir')"
@@ -364,7 +366,12 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
           {{ nomeExame(b.exame) }} · {{ t(`sadt.limites.operadores.${b.operador}`) }} {{ b.valor }} ·
           {{ t('sadt.limites.diasCurto', { n: b.janelaDias }) }} ·
           {{ t(`sadt.limites.acoes.${b.acao}`) }}
-          <template v-if="b.global"> · {{ t('sadt.limites.globalCurto') }}</template>
+          <template v-if="b.global">
+            ·
+            <span :data-testid="`bloqueio-global-${b.id}`">{{
+              t('sadt.limites.globalCurto')
+            }}</span></template
+          >
           <span v-if="!b.ativo"> · {{ t('sadt.limites.inativa') }}</span>
           <SanteBotao v-else :rotulo="t('sadt.limites.desativar')" @acionar="desativar('resultado', b.id)" />
         </li>
