@@ -29,7 +29,7 @@ import {
   type SituacaoGastoSala,
   transicaoGastoSala,
 } from '@sgh/dominio-cirurgia';
-import { linhasDoKitPadrao } from '@sgh/contratos';
+import { linhasDoKitPadrao } from '@sgh/contratos/regras-suprimentos';
 import { SITUACOES_CONTA_LANCAVEL } from '@sgh/contratos/regras-faturamento';
 import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -200,7 +200,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
       ]);
     return this.gravar(
       c,
-      'cirurgia.gastoSala.lista.incluir',
+      'cirurgia.gasto-sala.lista.incluir',
       ['lista_material_procedimento'],
       async (tx, est) => {
         const pc = await tx.uma('SELECT id FROM procedimento_cirurgico WHERE id = ?', [e.procedimento]);
@@ -282,7 +282,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     );
     return this.gravar(
       c,
-      'cirurgia.gastoSala.lista.alterar',
+      'cirurgia.gasto-sala.lista.alterar',
       ['lista_material_procedimento'],
       async (tx, est) => {
         const a = await tx.uma(
@@ -304,7 +304,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     const sql = `SELECT id, numero, atendimento_id, situacao, tipo_anestesia_id FROM ato_cirurgico
         WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`;
     const a = travar
-      ? (await (l as TxOperacao).consultarParaAtualizar<Linha>(`${sql} FOR UPDATE`, [ato, est]))[0]
+      ? (await (l as TxOperacao).consultarParaAtualizar<Linha>(sql, [ato, est]))[0]
       : await l.uma<Linha>(sql, [ato, est]);
     if (!a) throw naoEncontrado('Ato cirúrgico');
     if (travar && String(a['situacao']) === 'cancelado')
@@ -543,7 +543,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaGravar, entrada);
     return this.gravar(
       c,
-      'cirurgia.gastoSala.gravar',
+      'cirurgia.gasto-sala.gravar',
       ['consumo_cirurgia', 'consumo_cirurgia_item', 'consumo_cirurgia_motivo'],
       async (tx, est, usuario) => {
         const a = await this.atoDo(tx, est.id, ato, true);
@@ -667,7 +667,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
   /** Confere o gasto aberto (nova conferência pelo domínio) e marca quem conferiu. */
   conferir(c: ContextoPortaPropria, ato: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(z.object({ versao }).strict(), entrada);
-    return this.gravar(c, 'cirurgia.gastoSala.conferir', ['consumo_cirurgia'], async (tx, est, usuario) => {
+    return this.gravar(c, 'cirurgia.gasto-sala.conferir', ['consumo_cirurgia'], async (tx, est, usuario) => {
       const a = await this.atoDo(tx, est.id, ato, true);
       const g = await this.gastoDo(tx, ato, true);
       if (!g) throw naoEncontrado('Gasto de sala');
@@ -703,7 +703,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     const x = entradaValida(z.object({ versao, motivo }).strict(), entrada);
     return this.gravar(
       c,
-      `cirurgia.gastoSala.${acao}`,
+      `cirurgia.gasto-sala.${acao}`,
       ['consumo_cirurgia', 'consumo_cirurgia_motivo'],
       async (tx, est, usuario) => {
         await this.atoDo(tx, est.id, ato, true);
@@ -741,7 +741,7 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     entrada: unknown,
   ): Promise<{ id: number; itensConta: number }> {
     const x = entradaValida(z.object({ versao }).strict(), entrada);
-    return this.gravar(c, 'cirurgia.gastoSala.debitar', TABELAS, async (tx, est) => {
+    return this.gravar(c, 'cirurgia.gasto-sala.debitar', TABELAS, async (tx, est) => {
       const a = await this.atoDo(tx, est.id, ato, true);
       const g = await this.gastoDo(tx, ato, true);
       if (!g) throw naoEncontrado('Gasto de sala');
