@@ -14,10 +14,10 @@
 // Melhoria: a linha da trilha da tela (evento auditável, recurso, paciente, estação) vai na trilha da operação, mesmo
 // quando montada pelo resultado; a correção da vacina usa a chave do pedido (o reenvio não cria outra retificação nem
 // outro evento na fila de saída); as versões do processo saem dos lotes de diagnóstico (início e fim de cada versão).
-// Pendências de modelo (pedidos do lote 02-05): a atividade prescrita pelo enfermeiro com os horários e a checagem do
-// cuidado (prescrever, suspender, checar e estornar), a receita do enfermeiro (protocolo, lista e segundo
-// identificador) e a terminologia licenciada carregada por estabelecimento respondem 409 modelo-pendente; as leituras
-// delas devolvem vazio.
+// A prescrição de enfermagem (prescrever, suspender, checar e estornar, com as leituras) fica em
+// sae-porta-propria-cuidado.ts (tabelas 06_PEP/96_cuidado_enfermagem).
+// Pendências de modelo (pedidos do lote 02-05): a receita do enfermeiro (protocolo, lista e segundo identificador) e a
+// terminologia licenciada carregada por estabelecimento respondem 409 modelo-pendente; as leituras delas devolvem vazio.
 import { randomUUID } from 'node:crypto';
 import type { ChecagemCuidadoLida, DoseVacina, SistemaTerminologiaSae } from '@sgh/contratos';
 import {
@@ -52,6 +52,13 @@ import {
   textoOuNulo,
 } from './banco-apoio.js';
 import { type ContextoSae, type GravadorSae, METODOS_PORTA_SAE, type PortaSae } from './sae-porta.js';
+import {
+  gravadorCuidadoSae,
+  lerAtividade,
+  lerAtividadesVigentes,
+  lerChecagem,
+  lerChecagens,
+} from './sae-porta-propria-cuidado.js';
 import { extrasDaTrilha, gravarSoTrilha, resolverTrilha, type TrilhaDaTela } from './trilha-da-tela.js';
 import {
   type AtividadeVigente,
@@ -131,7 +138,7 @@ function envioDaVacina(s: string): { evento: VacinaAplicada['evento']; entrega: 
   }
 }
 
-interface Escrita<R extends ResultadoOperacao> {
+export interface Escrita<R extends ResultadoOperacao> {
   readonly nome: string;
   readonly tabelas: readonly string[];
   readonly chave: string | null;
@@ -564,18 +571,8 @@ export class PortaSaePropria implements PortaSae {
         return { id: v.id, versao: Number(s.resultado['versao']), evento, outbox: evento };
       },
 
-      prescrever: async () => {
-        throw modeloPendente('A prescrição de enfermagem com os horários da atividade');
-      },
-      suspender: async () => {
-        throw modeloPendente('A suspensão da atividade prescrita pelo enfermeiro');
-      },
-      checar: async () => {
-        throw modeloPendente('A checagem do cuidado prescrito pelo enfermeiro');
-      },
-      estornar: async () => {
-        throw modeloPendente('O estorno da checagem do cuidado');
-      },
+      // A prescrição de enfermagem (atividade com os horários, suspensão, checagem e estorno): arquivo próprio.
+      ...gravadorCuidadoSae(c, esc),
       carregarTerminologia: async () => {
         throw modeloPendente('A terminologia licenciada carregada por estabelecimento');
       },
@@ -803,34 +800,30 @@ export class PortaSaePropria implements PortaSae {
     });
   }
 
-  /** Pendência de modelo: a atividade prescrita pelo enfermeiro (com os horários) ainda não tem tabela. */
-  async atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigente[]> {
-    void [c, atendimentos];
-    return [];
+  /** As atividades prescritas pelo enfermeiro, vigentes no plano atual dos atendimentos. */
+  atividadesVigentes(c: ContextoSae, atendimentos: readonly number[]): Promise<AtividadeVigente[]> {
+    return this.ler(c, (l, est, fuso) => lerAtividadesVigentes(l, est, fuso, atendimentos));
   }
 
   async atividade(
     c: ContextoSae,
     id: number,
   ): Promise<(AtividadeVigente & { readonly paciente: number; readonly revisadoEm: string | null }) | null> {
-    void [c, id];
-    return null;
+    return this.ler(c, (l, est, fuso) => lerAtividade(l, est, fuso, id));
   }
 
   async checagens(
     c: ContextoSae,
     o: { readonly atividades: readonly number[]; readonly de: string; readonly ate: string },
   ): Promise<{ itens: (ChecagemCuidadoLida & { atendimento: number })[]; cortada: boolean }> {
-    void [c, o];
-    return { itens: [], cortada: false };
+    return this.ler(c, (l, est, fuso) => lerChecagens(l, est, fuso, o));
   }
 
   async checagem(
     c: ContextoSae,
     id: number,
   ): Promise<(ChecagemCuidadoLida & { atendimento: number }) | null> {
-    void [c, id];
-    return null;
+    return this.ler(c, (l, est, fuso) => lerChecagem(l, est, fuso, id));
   }
 
   consulta(c: ContextoSae, atendimento: number): Promise<ConsultaDeEnfermagem | null> {

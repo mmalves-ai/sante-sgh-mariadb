@@ -2,7 +2,7 @@
 // SINTÉTICA L0205 (nenhuma pessoa real). Contrato de efeito: o processo (versão como trava otimista), os diagnósticos
 // com as características, a avaliação dos resultados e o plano; a evolução; a vacina com o evento na fila de saída, a
 // retificação (registro novo ligado ao original) e o estorno; e as recusas (versão vista velha, código fora do
-// catálogo, dose repetida, estorno repetido, outro estabelecimento, prescrição sem modelo). SGH_NUCLEO_SEM_BANCO=1 pula.
+// catálogo, dose repetida, estorno repetido, outro estabelecimento, receita do enfermeiro sem modelo). SGH_NUCLEO_SEM_BANCO=1 pula.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
@@ -288,7 +288,7 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     expect(await porta.vacinas(contextoDe(m!, m!.outroEst), m!.paciente)).toEqual([]);
   });
 
-  it('a consulta, os externos do dia e o cabeçalho da receita; a prescrição aguarda o modelo', async () => {
+  it('a consulta, os externos do dia e o cabeçalho da receita; a receita do enfermeiro aguarda o modelo', async () => {
     expect(await porta.consulta(c(), m!.atendimento)).toMatchObject({
       tipo: 'I',
       vinculoDoAtendimento: m!.profissional,
@@ -298,7 +298,7 @@ describe.skipIf(SEM_BANCO)('porta própria da SAE e da vacina (MariaDB, cliente 
     expect((await porta.externosDoDia(c(), agora().slice(0, 10))).itens).toEqual([]);
     const cab = await porta.cabecalhoReceita(c(), { paciente: m!.paciente, vinculo: m!.profissional });
     expect(cab).toMatchObject({ paciente: `PACIENTE ${m!.marca} SINTETICO`, nascimento: '1970-05-01' });
-    expect(await recusada(porta.gravarSgh(c(), null, (g) => g.prescrever({} as never)))).toBe(
+    expect(await recusada(porta.gravarSgh(c(), null, (g) => g.prescreverMedicamento({} as never)))).toBe(
       'modelo-pendente',
     );
   });
