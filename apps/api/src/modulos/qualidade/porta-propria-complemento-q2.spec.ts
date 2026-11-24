@@ -68,9 +68,10 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
     const d = await leituras.documento(C, 41);
     expect(chamadas[0]!.p).toEqual([3, 41]);
     expect(chamadas[0]!.sql).toContain(', v.conteudo');
-    // O resumo é o fixado na publicação (arquivo ou retrato da versão), nunca recalculado do conteúdo atual.
+    // O resumo é o fixado na publicação (arquivo, coluna da versão ou retrato da versão), nunca recalculado do conteúdo
+    // atual.
     expect(chamadas[0]!.sql).toContain(
-      "COALESCE(a.hash_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256')))",
+      "COALESCE(a.hash_sha256, v.resumo_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256')))",
     );
     expect(chamadas[0]!.sql).not.toContain('SHA2(');
     expect(d).toMatchObject({
@@ -149,8 +150,9 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
         },
       ],
       'FROM comissao_membro': [
-        { comissao: 8, nome: 'Ana Sint', papel: 'vice_presidente', login: 'ana' },
-        { comissao: 8, nome: 'Bia Sint', papel: 'membro', login: null },
+        // A função vem da consulta: a escrita do membro ou o papel com espaços (COALESCE no SQL).
+        { comissao: 8, nome: 'Ana Sint', funcao: 'vice presidente', login: 'ana' },
+        { comissao: 8, nome: 'Bia Sint', funcao: 'membro', login: null },
       ],
     });
     const [c] = await leituras.comissoes(C);
@@ -165,7 +167,13 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
       { nome: 'Ana Sint', funcao: 'vice presidente', login: 'ANA' },
       { nome: 'Bia Sint', funcao: 'membro', login: null },
     ]);
-    expect(chamadas[1]!.p).toEqual([8]);
+    // A composição é lida pela comissão e vigente na data do relógio do estabelecimento (início e fim do mandato).
+    const cm = chamadas.find((x) => x.sql.includes('FROM comissao_membro'))!;
+    expect(cm.p).toHaveLength(3);
+    expect(cm.p[0]).toBe(8);
+    expect(cm.p[1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(cm.p[2]).toBe(cm.p[1]);
+    expect(cm.sql).toContain("COALESCE(m.funcao, REPLACE(m.papel, '_', ' ')) AS funcao");
     expect(await falso({}).leituras.comissao(C, 99)).toBeNull();
   });
 
