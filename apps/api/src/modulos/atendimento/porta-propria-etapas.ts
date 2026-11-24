@@ -1,8 +1,11 @@
 // Etapas do pronto atendimento no banco próprio (família sae-atendimento, modulos-proprios-2): o quadro do PA registra a
 // etapa manual (em atendimento médico, em exames, aguardando reavaliação) como um fato só de acréscimo, com a hora e a
 // conta responsável, em atendimento_etapa_pa (a migração 04_REC/96_etapa_pa amplia o vocabulário com abertura e exames).
-// A etapa "observação" continua sendo a própria ocupação do leito (a porta devolve o id dela). A ficha lê as etapas na
-// ordem em que ocorreram, como a porta de memória.
+// As etapas que nascem das operações também viram linha, na mesma transação, como a porta de memória: abertura (abrir o
+// PA), chamada e atendimento médico (chamar e atender no consultório), decisão e saída (o desfecho) e observação (a
+// porta continua devolvendo o id da ocupação do leito). A ficha lê as etapas na ordem em que ocorreram.
+// Divergência intencional: o rótulo sai legível (o vocabulário ETAPAS_PA do produto); a memória devolve o código.
+// A 'classificacao', que o CHECK aceita mas o vocabulário do produto ainda não tem, sai com o próprio código.
 import { ETAPAS_PA, type EtapaPa } from '@sgh/contratos';
 import { recusa, type Leitor, type TxOperacao } from '@sgh/nucleo';
 
@@ -37,6 +40,21 @@ export async function gravarEtapaPa(tx: TxOperacao, atendimento: number, etapa: 
     ocorrida_em: new Date(),
     usuario_id: tx.contexto.usuario,
   });
+}
+
+/** Grava as etapas automáticas só quando o atendimento é de pronto atendimento (categoria 'pa'), como a memória. */
+export async function gravarEtapasSePa(
+  tx: TxOperacao,
+  atendimento: number,
+  etapas: readonly EtapaPa[],
+): Promise<void> {
+  const pa = await tx.uma<{ n: unknown }>(
+    `SELECT COUNT(*) AS n FROM atendimento a JOIN categoria_atendimento ca ON ca.id = a.categoria_atendimento_id
+      WHERE a.id = ? AND ca.codigo = 'pa'`,
+    [atendimento],
+  );
+  if (Number(pa?.n ?? 0) === 0) return;
+  for (const e of etapas) await gravarEtapaPa(tx, atendimento, e);
 }
 
 /** As etapas registradas do atendimento, na ordem em que ocorreram. */

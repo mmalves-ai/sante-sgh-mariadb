@@ -74,7 +74,7 @@ import type { GravacaoFeita } from '../exames/public-api.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
-import { gravarEtapaPa, lerEtapasPa } from './porta-propria-etapas.js';
+import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
 import type {
   ContextoAtendimento,
   DadosImpresso,
@@ -287,6 +287,8 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
       if (r.etapa !== 'observacao') return gravarEtapaPa(tx, a.id, r.etapa);
       const o = await ocupacaoAtiva(a.id);
       if (!o) throw recusa('fora-de-observacao', 'O paciente não está em observação.');
+      // A marca de tempo da observação também entra na linha do tempo do PA; o id devolvido segue o da ocupação.
+      await gravarEtapaPa(tx, a.id, 'observacao');
       return Number(o.id);
     },
     async alocarObservacao(r) {
@@ -1151,6 +1153,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
 
 const TABELAS_ATENDIMENTO = [
   'atendimento',
+  'atendimento_etapa_pa',
   'atendimento_situacao_historico',
   'atendimento_procedimento',
   'cobertura_atendimento',
@@ -1291,6 +1294,7 @@ const OPERACAO_CONDUZIR = definirOperacao({
           });
       }
     } else await mudarSituacao(tx, a, 'em_atendimento', {}, { local_atendimento_id: local });
+    await gravarEtapasSePa(tx, a.id, [e.evento === 'chamar' ? 'chamada' : 'atendimentoMedico']);
     return { reg: a.id, cabecalho: a.numero, senha, evento: e.evento };
   },
   alvo: (e) => ({ tabela: 'atendimento', id: e.atendimento }),
@@ -1368,6 +1372,7 @@ const OPERACAO_ENCERRAR = definirOperacao({
         "UPDATE senha_emitida SET situacao = 'atendida', encerrada_em = ?, versao = versao + 1 WHERE id = ? AND situacao NOT IN ('atendida', 'cancelada')",
         [agora, senha],
       );
+    await gravarEtapasSePa(tx, a.id, ['decisao', 'saida']);
     return { reg: a.id, cabecalho: a.numero, senha, desfecho: d.codigo };
   },
   eventos: (e) => [
@@ -1740,6 +1745,7 @@ const OPERACAO_ABRIR = definirOperacao({
       });
     }
     if (tele !== null) await tx.alterar('teleconsulta', tele, teleVersao, { atendimento_id: id });
+    await gravarEtapasSePa(tx, id, ['abertura']);
     const aberto = {
       reg: id,
       cabecalho: numero.formatado,

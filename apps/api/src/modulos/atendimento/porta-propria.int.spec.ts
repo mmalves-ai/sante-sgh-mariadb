@@ -432,6 +432,84 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     expect(d?.etapas[0]?.em).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
   });
 
+  it('etapas automáticas do PA (como a memória): abertura, chamada, atendimento médico, observação, decisão e saída; a consulta não ganha etapa automática', async () => {
+    const mm = m!;
+    const c = contextoPorta(mm);
+    const etapasDe = async (r: number) => (await porta.detalhe(c, r))?.etapas.map((x) => x.etapa);
+    const consulta = Number(
+      (await porta.executar(c, 'atendimento.abrirAtendimento', abertura(mm), contextoGravacao(mm))).resultado[
+        'reg'
+      ],
+    );
+    expect(await etapasDe(consulta)).toEqual([]);
+    const a = await porta.executar(
+      c,
+      'atendimento.abrirAtendimento',
+      { ...abertura(mm), tipo: 'pa' },
+      contextoGravacao(mm),
+    );
+    const r = Number(a.resultado['reg']);
+    const cab = String(a.resultado['cabecalho']);
+    expect(await etapasDe(r)).toEqual(['abertura']);
+    for (const evento of ['chamar', 'atender'] as const)
+      await porta.executar(
+        c,
+        'atendimento.conduzirNoConsultorio',
+        { atendimento: r, local: mm.local, evento },
+        contextoGravacao(mm),
+      );
+    const trilha = {
+      estabelecimento: mm.estabelecimento,
+      usuario: mm.usuario,
+      acao: 'operacao' as const,
+      entidade: 'atendimento',
+      entidadeId: r,
+      correlacao: 'f22-0102-etapa-auto',
+    };
+    const ocupacao = await porta.gravarSgh(c, trilha, async (g) => {
+      const n = await g.alocarObservacao({
+        cabecalho: cab,
+        reg: r,
+        leito: mm.leitos[2] ?? mm.leitos[0]!,
+        usuario: mm.login,
+      });
+      expect(
+        await g.registrarEtapa({
+          cabecalho: cab,
+          reg: r,
+          senha: null,
+          etapa: 'observacao',
+          usuario: mm.login,
+        }),
+      ).toBe(n);
+      return n;
+    });
+    expect(ocupacao).toBeGreaterThan(0);
+    await porta.executar(
+      c,
+      'atendimento.encerrarAtendimento',
+      { atendimento: r, desfecho: 'alta', profissional: mm.profissional },
+      contextoGravacao(mm),
+    );
+    const d = await porta.detalhe(c, r);
+    expect(d?.etapas.map((x) => x.etapa)).toEqual([
+      'abertura',
+      'chamada',
+      'atendimentoMedico',
+      'observacao',
+      'decisao',
+      'saida',
+    ]);
+    // Divergência intencional registrada: o rótulo é o legível do vocabulário do produto (a memória devolve o código).
+    expect(d?.etapas[0]).toMatchObject({ rotulo: 'Ficha aberta' });
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM atendimento_etapa_pa WHERE atendimento_id = ? AND usuario_id = ?',
+        [r, mm.usuario],
+      ),
+    ).toBe(6);
+  });
+
   it('observação pela mesma sequência da rota (alocar + etapa): um leito por paciente, transferência mantém a entrada, saída volta a em atendimento, exclusão fecha o leito', async () => {
     const mm = m!;
     const c = contextoPorta(mm);
