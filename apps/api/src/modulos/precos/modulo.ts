@@ -14,6 +14,8 @@ import { FontePrecosPropria } from './fonte-propria.js';
 import { ImportacoesController } from './importacoes.controller.js';
 import { MotorController } from './motor.controller.js';
 import { PrecosController } from './precos.controller.js';
+import { LeitorRegrasAcordo } from './regras-acordo-propria.js';
+import { LEITOR_REGRAS_ACORDO, RegrasAcordoController } from './regras-acordo.controller.js';
 import { ServicoPrecos } from './servico.js';
 import { SERVICO_PRECOS } from './simbolos.js';
 
@@ -47,9 +49,15 @@ export async function moduloPrecos(
       ImportacoesController,
       MotorController,
       AgendaPrecoController,
+      RegrasAcordoController,
     ],
     providers: [
       { provide: FONTE_PRECOS, useValue: fonte },
+      // 06-FAT linha 1: as regras do acordo (só com o banco próprio; sem ele, 503).
+      {
+        provide: LEITOR_REGRAS_ACORDO,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new LeitorRegrasAcordo(ctx.nucleo) : null,
+      },
       // ADR 0009: regra de preço particular, credenciamento e agenda estruturada (só com o banco próprio; sem ele, 503).
       {
         provide: SERVICO_AGENDA_PRECO,
