@@ -354,22 +354,27 @@ export class CadastroProprioConsentimento {
   ): Promise<{ itens: { procedimento: number; descricao: string | null }[]; total: number }> {
     const tam = Math.max(1, Math.min(Math.trunc(porPagina), 200));
     const inicio = (Math.max(1, Math.trunc(pagina)) - 1) * tam;
+    // Código exato da especialidade (o conector grava o número como texto, sem zero à esquerda): '1' e '01' não se
+    // fundem. Só especialidade ativa e item faturável vivo (não excluído, situação ativa) contam como permitidos.
+    if (!Number.isInteger(especialidade) || especialidade < 0) return { itens: [], total: 0 };
+    const codigo = String(especialidade);
     return this.ler(c, async (l) => {
       const onde = `FROM especialidade_procedimento ep
           JOIN especialidade_medica em ON em.id = ep.especialidade_medica_id
           JOIN item_faturavel i ON i.id = ep.item_faturavel_id
-         WHERE em.codigo REGEXP '^[0-9]{1,9}$' AND CAST(em.codigo AS UNSIGNED) = ?
+         WHERE em.codigo = ? AND em.ativo
            AND ep.ativo AND ep.excluido_em IS NULL
            AND ep.vigencia_inicio <= CURRENT_DATE AND (ep.vigencia_fim IS NULL OR ep.vigencia_fim >= CURRENT_DATE)
+           AND i.excluido_em IS NULL AND i.situacao = 'ativo'
            AND i.codigo REGEXP '^[0-9]{1,15}$'`;
-      const [t] = await l.consultar(`SELECT COUNT(DISTINCT i.id) AS n ${onde}`, [especialidade], { teto: 1 });
+      const [t] = await l.consultar(`SELECT COUNT(DISTINCT i.id) AS n ${onde}`, [codigo], { teto: 1 });
       const total = Number(t?.['n'] ?? 0);
       if (total === 0 || inicio >= total) return { itens: [], total };
       const linhas = await l.consultar(
         `SELECT DISTINCT CAST(i.codigo AS UNSIGNED) AS procedimento, i.descricao, i.id
            ${onde}
           ORDER BY procedimento, i.id LIMIT ${tam} OFFSET ${inicio}`,
-        [especialidade],
+        [codigo],
         { teto: tam },
       );
       return {

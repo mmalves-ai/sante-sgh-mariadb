@@ -32,6 +32,27 @@ async function limparTermos(nucleo: NucleoProprio, m: Massa | null): Promise<voi
   });
 }
 
+const MARCA_ESP = `${MARCA} ESP`;
+const ITENS_ESP = Array.from({ length: 11 }, (_, k) => `88102010${String(k + 1).padStart(2, '0')}`);
+const ITEM_NAO_NUMERICO = `${MARCA}X`;
+
+/** Apaga a massa sintética de especialidades e itens do teste de procedimentos (vínculos primeiro, pela FK). */
+async function limparEspecialidadesDe(nucleo: NucleoProprio): Promise<void> {
+  const cods = [...ITENS_ESP, ITEM_NAO_NUMERICO];
+  const marcas = cods.map(() => '?').join(',');
+  await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-esp-limpa' }, async (e) => {
+    await e.executar(
+      `DELETE ep FROM especialidade_procedimento ep
+         LEFT JOIN especialidade_medica em ON em.id = ep.especialidade_medica_id
+         LEFT JOIN item_faturavel i ON i.id = ep.item_faturavel_id
+        WHERE em.descricao LIKE ? OR i.codigo IN (${marcas})`,
+      [`%${MARCA_ESP}%`, ...cods],
+    );
+    await e.executar(`DELETE FROM item_faturavel WHERE codigo IN (${marcas})`, cods);
+    await e.executar('DELETE FROM especialidade_medica WHERE descricao LIKE ?', [`%${MARCA_ESP}%`]);
+  });
+}
+
 describe.skipIf(SEM_BANCO)(
   'consentimentos e procedimentos da especialidade no banco próprio (f22_o1)',
   () => {
@@ -51,6 +72,98 @@ describe.skipIf(SEM_BANCO)(
       dadosDepois: { evento: 'teste', recurso: 'cadastro.consentimento' },
       correlacao: 'f22-0102-termo',
     });
+
+    const limparEspecialidades = () => limparEspecialidadesDe(nucleo);
+
+    /**
+     * Massa sintética: especialidade de código N (livre entre 90 e 99), a mesma com zero à esquerda ('0N', não pode se
+     * fundir com N) e uma inativa; itens de código numérico fixo cobrindo vigente, duas vigências do mesmo item,
+     * vencido, futuro, vínculo inativo, vínculo excluído, item inativo, item excluído e item de código não numérico.
+     */
+    async function prepararEspecialidades(): Promise<{ n: number; inativa: number }> {
+      await limparEspecialidades();
+      return nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-esp' }, async (e) => {
+        const agora = new Date();
+        const livres: number[] = [];
+        for (let k = 90; k <= 99 && livres.length < 2; k++) {
+          const x = await e.uma('SELECT id FROM especialidade_medica WHERE codigo IN (?, ?)', [String(k), `0${k}`]);
+          if (!x) livres.push(k);
+        }
+        expect(livres.length).toBe(2);
+        const [n, inativa] = livres as [number, number];
+        const esp = async (codigo: string, ativo: boolean) =>
+          e.inserir('INSERT INTO especialidade_medica (codigo, descricao, ativo, criado_em) VALUES (?, ?, ?, ?)', [
+            codigo,
+            `${codigo} ${MARCA_ESP}`,
+            ativo,
+            agora,
+          ]);
+        const eN = await esp(String(n), true);
+        const eZero = await esp(`0${n}`, true);
+        const eInativa = await esp(String(inativa), false);
+        const g = await e.uma<{ g: unknown }>('SELECT grupo_faturamento_id AS g FROM item_faturavel WHERE id = ?', [
+          m!.procedimento,
+        ]);
+        const grupo = Number(g?.g);
+        const item = async (codigo: string, letra: string, situacao = 'ativo', excluido = false) =>
+          e.inserir(
+            `INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, situacao, inativado_em, excluido_em, criado_em)
+             VALUES (?, ?, 'procedimento', ?, ?, ?, ?, ?)`,
+            [
+              codigo,
+              `PROC ${letra} ${MARCA_ESP}`,
+              grupo,
+              situacao,
+              situacao === 'ativo' ? null : '2025-01-01',
+              excluido ? agora : null,
+              agora,
+            ],
+          );
+        const [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11] = ITENS_ESP as unknown as string[];
+        const iB = await item(c1!, 'B');
+        const iC = await item(c2!, 'C');
+        const iA = await item(c3!, 'A');
+        const iD = await item(c4!, 'D');
+        const iE = await item(c5!, 'E');
+        const iF = await item(c6!, 'F');
+        const iG = await item(c7!, 'G');
+        const iH = await item(c8!, 'H', 'inativo');
+        const iI = await item(c9!, 'I', 'ativo', true);
+        const iK = await item(c10!, 'K');
+        const iL = await item(c11!, 'L');
+        const iJ = await item(ITEM_NAO_NUMERICO, 'J');
+        const vinc = async (
+          espId: number,
+          itemId: number,
+          inicio: string,
+          fim: string | null = null,
+          ativo = true,
+          excluido = false,
+        ) =>
+          e.inserir(
+            `INSERT INTO especialidade_procedimento
+               (especialidade_medica_id, item_faturavel_id, vigencia_inicio, vigencia_fim, ativo, excluido_em, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [espId, itemId, inicio, fim, ativo, excluido ? agora : null, agora],
+          );
+        await vinc(eN, iA, '2020-01-01');
+        await vinc(eN, iB, '2020-01-01');
+        await vinc(eN, iC, '2020-01-01');
+        await vinc(eN, iC, '2021-01-01');
+        await vinc(eN, iC, '2018-01-01', '2018-12-31');
+        await vinc(eN, iD, '2019-01-01', '2019-12-31');
+        await vinc(eN, iE, '2099-01-01');
+        await vinc(eN, iF, '2020-01-01', null, false);
+        await vinc(eN, iG, '2020-01-01', null, true, true);
+        await vinc(eN, iH, '2020-01-01');
+        await vinc(eN, iI, '2020-01-01');
+        await vinc(eN, iJ, '2020-01-01');
+        await vinc(eN, iL, '2020-01-01');
+        await vinc(eZero, iK, '2020-01-01');
+        await vinc(eInativa, iA, '2020-01-01');
+        return { n, inativa };
+      });
+    }
 
     beforeAll(async () => {
       nucleo = new NucleoProprio();
@@ -90,6 +203,7 @@ describe.skipIf(SEM_BANCO)(
     }, 120_000);
 
     afterAll(async () => {
+      await limparEspecialidadesDe(nucleo).catch(() => undefined);
       await limparTermos(nucleo, m).catch(() => undefined);
       await limparMassa(nucleo, m).catch(() => undefined);
       await nucleo?.encerrar();
@@ -182,27 +296,35 @@ describe.skipIf(SEM_BANCO)(
       expect((await porta.consentimentos(c, paciente)).length).toBe(2);
     });
 
-    it('procedimentos da especialidade: total igual à contagem do banco, página e ordem por código', async () => {
+    it('procedimentos da especialidade: só vigente, ativo e vivo, código exato, sem repetição, ordem e página fixas', async () => {
       const c = contextoPorta(m!);
-      const x = await um<{ cod: unknown; n: unknown }>(
-        `SELECT CAST(em.codigo AS UNSIGNED) AS cod, COUNT(DISTINCT i.id) AS n
-         FROM especialidade_procedimento ep JOIN especialidade_medica em ON em.id = ep.especialidade_medica_id
-         JOIN item_faturavel i ON i.id = ep.item_faturavel_id
-        WHERE em.codigo REGEXP '^[0-9]{1,2}$' AND ep.ativo AND ep.excluido_em IS NULL AND i.codigo REGEXP '^[0-9]{1,15}$'
-          AND ep.vigencia_inicio <= CURRENT_DATE AND (ep.vigencia_fim IS NULL OR ep.vigencia_fim >= CURRENT_DATE)
-        GROUP BY cod ORDER BY n DESC LIMIT 1`,
-        [],
-      );
-      if (!x) {
-        expect(await porta.procedimentosDaEspecialidade(c, 99, 1, 30)).toEqual({ itens: [], total: 0 });
-        return;
+      const esp = await prepararEspecialidades();
+      try {
+        // Esperado: 001, 002 (duas vigências, uma linha), 003 e 011; os demais casos ficam de fora.
+        const p1 = await porta.procedimentosDaEspecialidade(c, esp.n, 1, 2);
+        expect(p1).toEqual({
+          total: 4,
+          itens: [
+            { procedimento: 8810201001, descricao: `PROC B ${MARCA_ESP}` },
+            { procedimento: 8810201002, descricao: `PROC C ${MARCA_ESP}` },
+          ],
+        });
+        const p2 = await porta.procedimentosDaEspecialidade(c, esp.n, 2, 2);
+        expect(p2).toEqual({
+          total: 4,
+          itens: [
+            { procedimento: 8810201003, descricao: `PROC A ${MARCA_ESP}` },
+            { procedimento: 8810201011, descricao: `PROC L ${MARCA_ESP}` },
+          ],
+        });
+        expect(await porta.procedimentosDaEspecialidade(c, esp.n, 3, 2)).toEqual({ itens: [], total: 4 });
+        const tudo = await porta.procedimentosDaEspecialidade(c, esp.n, 1, 30);
+        expect(tudo.itens.map((x) => x.procedimento)).toEqual([8810201001, 8810201002, 8810201003, 8810201011]);
+        // Especialidade inativa não lista nada, mesmo com procedimento vigente.
+        expect(await porta.procedimentosDaEspecialidade(c, esp.inativa, 1, 30)).toEqual({ itens: [], total: 0 });
+      } finally {
+        await limparEspecialidades();
       }
-      const r = await porta.procedimentosDaEspecialidade(c, Number(x.cod), 1, 30);
-      expect(r.total).toBe(Number(x.n));
-      expect(r.itens.length).toBe(Math.min(30, Number(x.n)));
-      const cods = r.itens.map((i) => i.procedimento);
-      expect([...cods].sort((p, q) => p - q)).toEqual(cods);
-      expect((await porta.procedimentosDaEspecialidade(c, Number(x.cod), 10_000, 30)).itens).toEqual([]);
     });
   },
 );
