@@ -16,6 +16,7 @@
 // vigente ou vínculo do estabelecimento → profissional ativo); gravar exige ainda inscrição em conselho ativa ou
 // provisória dentro da validade. Registro clínico nunca é apagado: suspensão com justificativa, correção por novo
 // registro que aponta o suspenso, rascunho arquivado ou descartado (situação), nunca DELETE.
+import { type CoassinaturaGravavel, pedidoDeCoassinatura, RecusaCoassinatura } from '@sgh/dominio-pep';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -55,6 +56,8 @@ export const TABELAS_REGISTRO = [
   'registro_assistencial',
   'registro_assistencial_resposta',
   'registro_assistencial_rascunho',
+  // O pedido de coassinatura do preceptor nasce com o registro do residente (03-PEP L96).
+  'registro_assistencial_supervisao',
 ] as const;
 
 /** Respostas de escolha múltipla: o id da resposta é este deslocamento + o id da opção (nunca colide com campo). */
@@ -1281,9 +1284,9 @@ export class RegistroPropriaGravacao {
     e: GravacaoEvolucao,
     ctx: ContextoOperacao,
   ): Promise<{ registro: number; trilha: string | null }> {
-    // O pedido e a resposta de parecer, a classificação de risco e a coassinatura gravam em tabelas de outras famílias:
-    // até a ligação delas, recusa fechada (nada gravado pela metade).
-    if (e.fluxo || e.classificacao || e.supervisao)
+    // O pedido e a resposta de parecer e a classificação de risco gravam em tabelas de outras famílias: até a ligação
+    // delas, recusa fechada (nada gravado pela metade). A coassinatura grava aqui, na mesma transação (03-PEP L96).
+    if (e.fluxo || e.classificacao)
       return Promise.reject(
         recusa(
           501,
@@ -1332,6 +1335,32 @@ export class RegistroPropriaGravacao {
       );
       const respostas = e.linhas.filter(temValor).map((l) => respostaDaLinha(l, campos));
       const agora = new Date();
+      let coassinatura: CoassinaturaGravavel | null = null;
+      if (e.supervisao) {
+        const preceptor = e.supervisao.idProfissional;
+        const vig = await tx.uma(
+          // Mesmas ligações da sessão (profissionalDaSessao): vínculo vigente no estabelecimento ou conta ligada vigente.
+          `SELECT 1 AS ok FROM profissional p
+            WHERE p.id = ? AND p.excluido_em IS NULL
+              AND (EXISTS (SELECT 1 FROM usuario_vinculo_profissional v
+                            WHERE v.profissional_id = p.id AND v.estabelecimento_id = ? AND v.excluido_em IS NULL
+                              AND v.vigencia_inicio <= UTC_DATE() AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= UTC_DATE()))
+                OR EXISTS (SELECT 1 FROM usuario_profissional up
+                            WHERE up.profissional_id = p.id AND up.excluido_em IS NULL
+                              AND up.vigencia_inicio <= UTC_DATE() AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= UTC_DATE())))`,
+          [preceptor, est.id],
+        );
+        try {
+          coassinatura = pedidoDeCoassinatura({
+            autor: prof.profissional,
+            preceptor,
+            preceptorVigente: vig !== null && vig !== undefined,
+          });
+        } catch (x) {
+          if (x instanceof RecusaCoassinatura) throw recusa(422, x.codigo, 'Operação recusada', x.message);
+          throw x;
+        }
+      }
       const id = await tx.incluir('registro_assistencial', {
         estabelecimento_id: est.id,
         paciente_id: e.paciente,
@@ -1344,7 +1373,7 @@ export class RegistroPropriaGravacao {
         data_hora_clinica: localParaUtc(e.dataHoraClinica, est.fuso),
         data_hora_lancamento: agora,
         justificativa_retroativo: e.justificativaRetroativo ?? null,
-        situacao: 'finalizado',
+        situacao: coassinatura ? coassinatura.situacaoRegistro : 'finalizado',
         impressao_digital: e.hashConteudo,
         texto_consolidado: textoConsolidado(respostas, campos),
         corrige_registro_assistencial_id: e.corrige ?? null,
@@ -1355,6 +1384,17 @@ export class RegistroPropriaGravacao {
           registro_assistencial_id: id,
           sequencia: i + 1,
           ...r,
+        });
+      if (coassinatura)
+        await tx.incluir('registro_assistencial_supervisao', {
+          registro_assistencial_id: id,
+          sequencia: coassinatura.sequencia,
+          supervisionado_profissional_id: coassinatura.supervisionado,
+          preceptor_profissional_id: coassinatura.preceptor,
+          tipo_vinculo: coassinatura.tipoVinculo,
+          situacao: coassinatura.situacao,
+          solicitado_em: agora,
+          origem: 'sistema',
         });
       const selo = await seloDoConteudo(tx, id);
       if (rascunho)

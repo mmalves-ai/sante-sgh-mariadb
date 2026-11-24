@@ -79,6 +79,11 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     );
     await e.executar(`DELETE FROM registro_assistencial_rascunho WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(
+      `DELETE s FROM registro_assistencial_supervisao s JOIN registro_assistencial r ON r.id = s.registro_assistencial_id
+        WHERE r.estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(
       `UPDATE registro_assistencial SET corrige_registro_assistencial_id = NULL WHERE estabelecimento_id IN ${est}`,
       [P],
     );
@@ -536,6 +541,74 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     const v4 = (await g.lerRascunho(C, r4))!.rascunho.versao;
     await g.descartarRascunho(C, { rascunho: r4, versao: v4, cbo: m.profissional }, ctx());
   });
+
+  it('coassinatura (03-PEP L96): o registro do residente nasce aguardando o preceptor, com o pedido pendente na mesma transação', async () => {
+    const preceptor = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-preceptor` }, async (e) => {
+      const agora = new Date();
+      const login = `${P}.preceptor`;
+      const u =
+        Number((await e.uma('SELECT id FROM usuario WHERE login = ?', [login]))?.['id'] ?? 0) ||
+        (await e.inserir(
+          "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, ?, 'pessoa', TRUE, ?)",
+          [login, `Conta sintética ${login}`, agora],
+        ));
+      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        `Pessoa sintética ${P} preceptor`,
+        agora,
+      ]);
+      const pr = await e.inserir(
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, observacao, criado_em) VALUES (?, 'corpo_clinico', ?, ?)",
+        [pf, `massa ${P}`, agora],
+      );
+      await e.inserir(
+        'INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+        [u, pr, '2020-01-01', agora],
+      );
+      return pr;
+    });
+    const { registro: id } = await g.registrar(
+      C,
+      { ...registro(), supervisao: { preceptor: 'PRECEPTOR', idProfissional: preceptor } } as never,
+      ctx(),
+    );
+    const l = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (x) =>
+      x.uma(
+        `SELECT r.situacao AS sr, s.sequencia, s.situacao, s.tipo_vinculo, s.preceptor_profissional_id,
+                s.supervisionado_profissional_id, s.solicitado_em
+           FROM registro_assistencial r JOIN registro_assistencial_supervisao s ON s.registro_assistencial_id = r.id
+          WHERE r.id = ?`,
+        [id],
+      ),
+    );
+    expect(l).toMatchObject({
+      sr: 'aguardando_coassinatura',
+      situacao: 'pendente',
+      tipo_vinculo: 'residente',
+    });
+    expect(Number(l?.['sequencia'])).toBe(1);
+    expect(Number(l?.['preceptor_profissional_id'])).toBe(preceptor);
+    expect(Number(l?.['supervisionado_profissional_id'])).toBe(m.profissional);
+    expect(l?.['solicitado_em']).not.toBeNull();
+    // O autor como o próprio preceptor é recusado, sem nada gravado pela metade.
+    const antes = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (x) =>
+      x.uma('SELECT COUNT(*) AS n FROM registro_assistencial WHERE estabelecimento_id = ?', [
+        m.estabelecimento,
+      ]),
+    );
+    await expect(
+      g.registrar(
+        C,
+        { ...registro(), supervisao: { preceptor: 'EU', idProfissional: m.profissional } } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'preceptor-e-autor' } });
+    const depois = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (x) =>
+      x.uma('SELECT COUNT(*) AS n FROM registro_assistencial WHERE estabelecimento_id = ?', [
+        m.estabelecimento,
+      ]),
+    );
+    expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
+  }, 60_000);
 
   it('suporte técnico: gravação e suspensão em sessão de suporte voltam como marcas na prova', async () => {
     const { registro: id } = await g.registrar(C, { ...registro(), comoSuporte: true } as never, ctx());
