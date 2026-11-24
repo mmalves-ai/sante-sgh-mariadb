@@ -30,6 +30,8 @@ const { t } = useI18n({
       tituloGuia: 'Campos adicionais da guia {numero}',
       nenhum: 'Esta operadora não exige campos adicionais nesta guia.',
       faltam: 'Obrigatórios sem preenchimento: {campos}.',
+      voltarConta: 'Voltar aos complementos da conta',
+      camposOperadora: 'Campos adicionais da operadora',
       completa: 'Nenhum campo obrigatório pendente.',
       fechada: 'A guia já está em lote ou enviada: os campos não mudam mais.',
       escolha: 'Escolha…',
@@ -223,6 +225,18 @@ const TIPOS_GUIA = [
       <ErroFaturamento v-if="qGuia.error.value" :erro="qGuia.error.value" />
       <template v-else-if="qGuia.data.value">
         <h1 id="ag-titulo">{{ t('tituloGuia', { numero: qGuia.data.value.guia.numero }) }}</h1>
+        <nav class="acoes">
+          <RouterLink
+            :to="`/faturamento/contas/${qGuia.data.value.guia.contaId}/complementos`"
+            data-testid="ag-voltar-conta"
+            >{{ t('voltarConta') }}</RouterLink
+          >
+          <RouterLink
+            :to="`/faturamento/fontes/${qGuia.data.value.guia.fontePagadoraId}/atributos-guia`"
+            data-testid="ag-campos-operadora"
+            >{{ t('camposOperadora') }}</RouterLink
+          >
+        </nav>
         <p v-if="!qGuia.data.value.editavel" role="status">{{ t('fechada') }}</p>
         <p v-if="!qGuia.data.value.campos.length">{{ t('nenhum') }}</p>
         <form v-else class="formulario" data-testid="ag-guia" @submit.prevent="gravarGuia">

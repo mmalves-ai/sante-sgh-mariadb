@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // Complementos da conta (F3.7, 06-FAT linha 12): `/faturamento/contas/:id/complementos`. Duas partes numa tela só:
-// - Períodos da conta parcial: o próximo período já vem sugerido (do fim do último até o fim do mês ou da conta) e entra
+// - Períodos da conta parcial: o próximo período já vem sugerido (do fim do último, ou do 1º dia do mês seguinte quando
+//   o último fechou o mês, até o fim do mês ou da conta) e entra
 //   num clique; a faixa livre é conferida enquanto se digita (mesma regra do servidor). Retirar pede motivo e a faixa
 //   fica no histórico, marcada.
 // - Segurado na conta: preenchido a partir da cobertura do paciente; carteira vencida no início da conta só avisa.
 //   Trocar a carteira preserva a anterior no histórico.
+// - Guias da conta: cada guia TISS com os campos obrigatórios da operadora que faltam, o link para preenchê-los e o
+//   link para o cadastro dos campos da operadora.
 import { sugerirProximoPeriodo, validarPeriodoConta, validarSeguradoConta } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -12,6 +15,7 @@ import { useI18n } from 'vue-i18n';
 import {
   gravarSegurado,
   incluirPeriodo,
+  lerGuiasAtributosConta,
   lerPeriodos,
   lerSegurado,
   retirarPeriodo,
@@ -56,6 +60,15 @@ const { t } = useI18n({
       unidade: 'Unidade administrativa',
       gravar: 'Gravar segurado',
       gravado: 'Gravado.',
+      guias: 'Guias da conta e campos da operadora',
+      semGuias: 'A conta ainda não tem guia TISS montada.',
+      guia: 'Guia',
+      situacaoGuia: 'Situação',
+      pendentes: 'Obrigatórios que faltam',
+      completa: 'Completa',
+      semCampos: 'A operadora não pede campo adicional',
+      preencher: 'Preencher campos',
+      camposOperadora: 'Campos adicionais da operadora',
     },
   },
 });
@@ -63,6 +76,10 @@ const qc = useQueryClient();
 const periodos = useQuery({
   queryKey: ['faturamento', 'periodos', conta],
   queryFn: () => lerPeriodos(conta.value),
+});
+const guias = useQuery({
+  queryKey: ['faturamento', 'guias-atributos', conta],
+  queryFn: () => lerGuiasAtributosConta(conta.value),
 });
 const seg = useQuery({
   queryKey: ['faturamento', 'segurado', conta],
@@ -303,6 +320,41 @@ const gravarSeg = () =>
           {{ t('gravar') }}
         </button>
       </form>
+    </template>
+
+    <h2>{{ t('guias') }}</h2>
+    <ErroFaturamento v-if="guias.error.value" :erro="guias.error.value" />
+    <template v-else-if="guias.data.value">
+      <RouterLink
+        :to="`/faturamento/fontes/${guias.data.value.fontePagadoraId}/atributos-guia`"
+        data-testid="cc-campos-operadora"
+        >{{ t('camposOperadora') }}</RouterLink
+      >
+      <p v-if="!guias.data.value.guias.length">{{ t('semGuias') }}</p>
+      <table v-else class="tabela" data-testid="cc-guias">
+        <thead>
+          <tr>
+            <th>{{ t('guia') }}</th>
+            <th>{{ t('situacaoGuia') }}</th>
+            <th>{{ t('pendentes') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="g in guias.data.value.guias" :key="g.id" :data-testid="`cc-guia-${g.id}`">
+            <td>{{ g.numero }} · {{ g.tipoGuia }}</td>
+            <td>{{ g.situacao }}</td>
+            <td :class="{ erros: g.faltam.length > 0 }" data-testid="cc-guia-faltam">
+              {{ g.faltam.length ? g.faltam.join(', ') : g.campos ? t('completa') : t('semCampos') }}
+            </td>
+            <td>
+              <RouterLink :to="`/faturamento/guias/${g.id}/atributos`" data-testid="cc-guia-preencher">{{
+                t('preencher')
+              }}</RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </template>
   </section>
 </template>

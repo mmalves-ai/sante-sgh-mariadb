@@ -10,6 +10,7 @@ import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoComplementosConta } from './conta-complementos.controller.js';
 import {
   atributosGuiaPropria,
+  guiasAtributosContaPropria,
   periodosContaPropria,
   seguradoContaPropria,
 } from './conta-complementos-propria.js';
@@ -431,6 +432,17 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
     const vazia = await s.ler(ctxL(), (l, est) => atributosGuiaPropria(l, est, ids2.guia));
     expect(vazia.campos.map((c) => c.codigo)).toEqual(['TRAT', 'FASE', 'PESO']);
     expect(vazia.faltam).toEqual(['Tratamento oncológico']);
+    // Visão por conta: a guia aparece com o obrigatório que falta.
+    const porConta = await s.ler(ctxL(), (l, est) => guiasAtributosContaPropria(l, est, ids2.conta));
+    expect(porConta).toMatchObject({ contaId: ids2.conta, fontePagadoraId: ids.fonte });
+    expect(porConta.guias).toEqual([
+      expect.objectContaining({
+        id: ids2.guia,
+        tipoGuia: 'sp_sadt',
+        campos: 3,
+        faltam: ['Tratamento oncológico'],
+      }),
+    ]);
     // Opção que não combina com a escolhida no pai: recusa e nada grava.
     expect(
       await codigoDo(
@@ -452,6 +464,9 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       ],
     });
     expect(g1).toMatchObject({ gravados: 3, retirados: 0, faltam: [] });
+    expect(
+      (await s.ler(ctxL(), (l, est) => guiasAtributosContaPropria(l, est, ids2.conta))).guias[0]?.faltam,
+    ).toEqual([]);
     const vs = await linhas(
       'SELECT sequencia, atributo_guia_fonte_pagadora_id AS a, atributo_guia_opcao_id AS o, valor_texto, excluido_em FROM valor_atributo_guia WHERE guia_tiss_id = ? ORDER BY sequencia',
       [ids2.guia],

@@ -321,6 +321,48 @@ export async function atributosGuiaPropria(l: Leitor, est: number, guia: number)
   return { guia: g, editavel: guiaAceitaAtributos(g.situacao), campos: defs, valores, faltam };
 }
 
+/**
+ * As guias TISS da conta com os obrigatórios da operadora que faltam em cada uma (visão por conta: o faturista vê de
+ * uma vez qual guia ainda não pode ir para o lote e abre a guia num clique).
+ */
+export async function guiasAtributosContaPropria(l: Leitor, est: number, conta: number) {
+  const c = await contaDo(l, est, conta);
+  const gs = await l.consultar<Linha>(
+    `SELECT id, tipo_guia, situacao, fonte_pagadora_id, numero_guia_prestador FROM guia_tiss
+      WHERE conta_hospitalar_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL ORDER BY id`,
+    [c.id, est],
+  );
+  const ids = gs.map((g) => n(g['id']));
+  const vs = ids.length
+    ? await l.consultar<Linha>(
+        `SELECT guia_tiss_id AS guia, atributo_guia_fonte_pagadora_id AS atributo, atributo_guia_opcao_id AS opcao,
+                valor_texto FROM valor_atributo_guia
+          WHERE guia_tiss_id IN (${ids.map(() => '?').join(', ')}) AND excluido_em IS NULL`,
+        ids,
+      )
+    : [];
+  const defsPorFonte = new Map<number, DefinicaoAtributoGuia[]>();
+  const guias = [];
+  for (const g of gs) {
+    const fonte = n(g['fonte_pagadora_id']);
+    if (!defsPorFonte.has(fonte)) defsPorFonte.set(fonte, await atributosFontePropria(l, fonte));
+    const defs = atributosDaGuia(defsPorFonte.get(fonte) ?? [], String(g['tipo_guia']));
+    const valores = vs
+      .filter((v) => n(v['guia']) === n(g['id']))
+      .map((v) => ({ atributoId: n(v['atributo']), opcaoId: nn(v['opcao']), texto: txn(v['valor_texto']) }));
+    guias.push({
+      id: n(g['id']),
+      numero: String(g['numero_guia_prestador']),
+      tipoGuia: String(g['tipo_guia']),
+      situacao: String(g['situacao']),
+      fontePagadoraId: fonte,
+      campos: defs.length,
+      faltam: validarValoresAtributos(defs, valores).faltam,
+    });
+  }
+  return { contaId: c.id, fontePagadoraId: c.fontePagadoraId, guias };
+}
+
 // ── Gravações ──────────────────────────────────────────────────────────────────────────────────────
 
 const id = z.number().int().positive();

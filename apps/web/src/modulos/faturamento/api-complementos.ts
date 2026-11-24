@@ -127,3 +127,23 @@ export const gravarAtributoFonte = (fonte: number, a: Record<string, unknown>, c
 export const lerAtributosGuia = (guia: number) => ler(`${F}/guias/${guia}/atributos`, esquemaGuia);
 export const gravarAtributosGuia = (guia: number, valores: z.infer<typeof valor>[], chave: string) =>
   enviar(`${F}/guias/${guia}/atributos`, { valores }, qualquer, chave);
+
+const esquemaGuiasConta = z.object({
+  contaId: z.number(),
+  fontePagadoraId: z.number(),
+  guias: z.array(
+    z.object({
+      id: z.number(),
+      numero: z.string(),
+      tipoGuia: z.string(),
+      situacao: z.string(),
+      fontePagadoraId: z.number(),
+      campos: z.number(),
+      faltam: z.array(z.string()),
+    }),
+  ),
+});
+export type GuiasAtributosConta = z.infer<typeof esquemaGuiasConta>;
+/** As guias TISS da conta com os obrigatórios da operadora que faltam em cada uma. */
+export const lerGuiasAtributosConta = (conta: number) =>
+  ler(`${F}/contas/${conta}/guias-atributos`, esquemaGuiasConta);

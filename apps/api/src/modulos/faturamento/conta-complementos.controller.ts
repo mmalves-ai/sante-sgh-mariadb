@@ -8,6 +8,7 @@
 //   POST /api/faturamento/fontes/:fonte/atributos-guia        convenio.contrato.editar (campo e opções num pedido)
 //   GET  /api/faturamento/guias/:guia/atributos               faturamento.guia.ler (campos, valores e o que falta)
 //   POST /api/faturamento/guias/:guia/atributos               faturamento.item.conferir
+//   GET  /api/faturamento/contas/:id/guias-atributos          faturamento.guia.ler (guias da conta e o que falta)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
@@ -20,6 +21,7 @@ import {
   atributosFontePropria,
   atributosGuiaPropria,
   gravarComplementos,
+  guiasAtributosContaPropria,
   type NomeOperacaoComplementos,
   periodosContaPropria,
   seguradoContaPropria,
@@ -157,6 +159,15 @@ export class ComplementosContaController {
     const g = inteiro(guia, 'guia');
     return this.rodar(() =>
       this.s().ler(ctxDe(req, 'guia-atributos'), (l, est) => atributosGuiaPropria(l, est, g)),
+    );
+  }
+
+  @Get('faturamento/contas/:id/guias-atributos')
+  @Permissao('faturamento.guia.ler')
+  guiasAtributos(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const c = inteiro(id, 'id');
+    return this.rodar(() =>
+      this.s().ler(ctxDe(req, 'conta-guias-atributos'), (l, est) => guiasAtributosContaPropria(l, est, c)),
     );
   }
 
