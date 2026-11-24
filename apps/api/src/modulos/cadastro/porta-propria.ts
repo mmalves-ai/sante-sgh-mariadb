@@ -707,7 +707,8 @@ export class PortaCadastroPropria implements PortaCadastro {
       await this.contextoNucleo(ctx),
     );
     // A marca de não reversível ficou gravada; a recusa vai ao usuário.
-    if (r.resultado.recusa) throw recusa(r.resultado.recusa.codigo, r.resultado.recusa.mensagem);
+    if (r.resultado.recusaCodigo)
+      throw recusa(String(r.resultado.recusaCodigo), String(r.resultado.recusaMensagem));
     return {
       resultado: {
         idAbsorvido: Number(r.resultado.idAbsorvido),
@@ -1985,7 +1986,8 @@ export const OPERACAO_DESFAZER_UNIFICACAO = definirOperacao({
         idAbsorvido: absorvido,
         idSobrevivente: mantido,
         unificacao: e.idUnificacao,
-        recusa: { codigo: RECUSA_REGISTRO_ALTERADO, mensagem: alterados[0]!.mensagem },
+        recusaCodigo: RECUSA_REGISTRO_ALTERADO,
+        recusaMensagem: alterados[0]!.mensagem,
       };
     }
     // 2ª passada: devolve na ordem inversa.
@@ -2036,7 +2038,13 @@ export const OPERACAO_DESFAZER_UNIFICACAO = definirOperacao({
     );
     // O retrato do desfazer tem motivo próprio (a linha do tempo distingue unificado de unificação desfeita).
     await gravarRetrato(tx, absorvido, 'alteracao', 'unificacao_desfeita');
-    return { idAbsorvido: absorvido, idSobrevivente: mantido, unificacao: e.idUnificacao, recusa: null };
+    return {
+      idAbsorvido: absorvido,
+      idSobrevivente: mantido,
+      unificacao: e.idUnificacao,
+      recusaCodigo: null,
+      recusaMensagem: null,
+    };
   },
   eventos: (e) => [{ tipo: 'cadastro.paciente.unificacao_desfeita', carga: { unificacao: e.idUnificacao } }],
   alvo: (e) => ({ tabela: 'unificacao_cadastro', id: e.idUnificacao }),
