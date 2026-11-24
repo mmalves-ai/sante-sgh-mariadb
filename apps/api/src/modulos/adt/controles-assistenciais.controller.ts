@@ -11,6 +11,8 @@
 //   POST /api/internacao/controles/isolamentos/auditorias         registra a auditoria com as respostas
 //   POST /api/internacao/controles/isolamentos/auditorias/:id/cancelar
 //   GET  /api/internacao/controles/isolamentos/pacientes/:p       visão por paciente
+//   GET  /api/internacao/controles/isolamentos/avisos?todos=      avisos à CCIH dos critérios "alertar"/"bloquear"
+//   POST /api/internacao/controles/isolamentos/avisos/:id/resolver  a CCIH registra a providência e resolve
 // Regulação (04-INT linha 78):
 //   GET  /api/internacao/controles/regulacao/apoio                consciência, suporte de O2, diurese e germes
 //   GET  /api/internacao/controles/regulacao/:id                  linha do tempo (quadros e eventos)
@@ -140,6 +142,24 @@ export class ControlesAssistenciaisController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.cancelarAuditoria(c, id, corpo));
+  }
+
+  @Get('isolamentos/avisos')
+  @Permissao(P.isolamentoLer)
+  avisosIsolamento(@Req() req: RequisicaoAutorizada, @Query('todos') todos?: string) {
+    return this.com(req, (p, c) => p.avisosIsolamento(c, todos === '1' || todos === 'true'));
+  }
+
+  @Post('isolamentos/avisos/:id/resolver')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(200)
+  @Permissao(P.isolamentoAuditar)
+  resolverAvisoIsolamento(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.resolverAvisoIsolamento(c, id, corpo));
   }
 
   @Get('isolamentos/pacientes/:p')

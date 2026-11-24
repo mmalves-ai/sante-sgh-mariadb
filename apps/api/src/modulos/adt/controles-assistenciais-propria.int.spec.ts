@@ -49,6 +49,7 @@ async function limpar(e: Escritor): Promise<void> {
     await e.executar(`DELETE FROM evento_regulacao WHERE solicitacao_regulacao_id IN ${sols}`, [P]);
     await e.executar(`DELETE FROM quadro_clinico_regulacao WHERE solicitacao_regulacao_id IN ${sols}`, [P]);
     for (const t of [
+      'aviso_clinico',
       'solicitacao_regulacao',
       'isolamento_paciente',
       'formulario_declaracao_obito',
@@ -295,6 +296,22 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
     });
     expect(r).toMatchObject({ geral: 'nao_conforme', percentual: 66.6667 });
     expect(r.alertas).toHaveLength(1);
+    // O critério "alertar" não conforme deixa aviso pendente para a CCIH, ligado à auditoria.
+    expect(r.aviso).not.toBeNull();
+    const av = await uma(
+      'SELECT paciente_id, prioridade, situacao, modulo_origem, entidade_origem, entidade_origem_chave, mensagem FROM aviso_clinico WHERE id = ?',
+      [r.aviso],
+    );
+    expect(av).toMatchObject({
+      prioridade: 'alta',
+      situacao: 'pendente',
+      modulo_origem: 'qualidade.ccih',
+      entidade_origem: 'auditoria_isolamento',
+    });
+    expect(Number(av['paciente_id'])).toBe(m.paciente);
+    expect(Number(av['entidade_origem_chave'])).toBe(r.id);
+    expect(String(av['mensagem'])).toContain('Avental');
+    expect((await porta.avisosIsolamento(ctx())).itens.map((x) => x.id)).toEqual([r.aviso]);
     const a = await uma(
       'SELECT situacao, conformidade_geral, percentual_conformidade, auditor_usuario_id, internacao_id FROM auditoria_isolamento WHERE id = ?',
       [r.id],
@@ -324,6 +341,56 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
     expect(cancelada['situacao']).toBe('cancelada');
     expect(String(cancelada['observacao'])).toContain('leito errado');
     expect(cancelada['excluido_em']).toBeNull();
+    // Auditoria cancelada: o aviso dela sai da lista da CCIH, cancelado (não apagado).
+    expect((await uma('SELECT situacao FROM aviso_clinico WHERE id = ?', [r.aviso]))['situacao']).toBe(
+      'cancelado',
+    );
+    expect((await porta.avisosIsolamento(ctx())).itens).toHaveLength(0);
+
+    // Nova auditoria com o critério "bloquear" não conforme: aviso crítico; a CCIH resolve com a providência.
+    const c4 = await porta.incluirCriterio(ctx(), {
+      tipoPrecaucao: m.tipo,
+      descricao: 'Quarto privativo garantido',
+      acao: 'bloquear',
+    });
+    const r2 = await porta.auditar(ctx(), {
+      isolamento: m.isolamento,
+      respostas: [
+        { criterio: c1.id, resposta: 'conforme' },
+        { criterio: c2.id, resposta: 'conforme' },
+        { criterio: c3.id, resposta: 'conforme' },
+        { criterio: c4.id, resposta: 'nao_conforme', naoConformidade: 'Quarto dividido' },
+      ],
+    });
+    const lista = await porta.avisosIsolamento(ctx());
+    expect(lista.itens).toHaveLength(1);
+    expect(lista.itens[0]).toMatchObject({ id: r2.aviso, prioridade: 'critica', auditoria: r2.id });
+    expect(
+      await falha(
+        Promise.resolve().then(() =>
+          porta.resolverAvisoIsolamento(ctx(), r2.aviso!, { providencia: 'ok', versao: 1 }),
+        ),
+      ),
+    ).toContain('providencia');
+    await porta.resolverAvisoIsolamento(ctx(), r2.aviso!, {
+      providencia: 'Paciente remanejado para quarto privativo',
+      versao: 1,
+    });
+    const resolvido = await uma(
+      'SELECT situacao, resolvido_em, resolvido_usuario_id, detalhes FROM aviso_clinico WHERE id = ?',
+      [r2.aviso],
+    );
+    expect(resolvido['situacao']).toBe('resolvido');
+    expect(resolvido['resolvido_em']).not.toBeNull();
+    expect(Number(resolvido['resolvido_usuario_id'])).toBe(m.usuario);
+    expect(String(resolvido['detalhes'])).toContain('quarto privativo');
+    expect((await porta.avisosIsolamento(ctx())).itens).toHaveLength(0);
+    expect((await porta.avisosIsolamento(ctx(), true)).itens).toHaveLength(2);
+    expect(
+      await falha(
+        porta.resolverAvisoIsolamento(ctx(), r2.aviso!, { providencia: 'De novo resolvido', versao: 2 }),
+      ),
+    ).toContain('encerrado');
   });
 
   it('regulação: quadro clínico, eventos com situação, versão velha recusada e encerrada sem quadro novo', async () => {
@@ -352,11 +419,38 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
     );
     expect(Number(sol['saturacao_oxigenio'])).toBe(88);
     expect(Number(sol['versao'])).toBe(2);
+    expect(Number(sol['isolamento_necessario'])).toBe(1);
+
+    // Segundo quadro, parcial (só a frequência cardíaca): os sinais vigentes que ele não traz continuam na solicitação.
+    const q2 = await porta.registrarQuadro(ctx(), m.solicitacao, {
+      quadroClinico: 'Evolução: melhora da dispneia.',
+      condicaoGeral: 'estavel',
+      frequenciaCardiaca: 96,
+      versao: 2,
+    });
+    expect(q2.sequencia).toBe(2);
+    const sol2 = await uma(
+      'SELECT saturacao_oxigenio, suporte_oxigenio_id, fracao_inspirada_oxigenio, frequencia_cardiaca, isolamento_necessario, resumo_clinico, versao FROM solicitacao_regulacao WHERE id = ?',
+      [m.solicitacao],
+    );
+    expect(Number(sol2['saturacao_oxigenio'])).toBe(88);
+    expect(Number(sol2['suporte_oxigenio_id'])).toBe(m.suporte);
+    expect(Number(sol2['fracao_inspirada_oxigenio'])).toBe(60);
+    expect(Number(sol2['frequencia_cardiaca'])).toBe(96);
+    expect(Number(sol2['isolamento_necessario'])).toBe(1);
+    expect(String(sol2['resumo_clinico'])).toContain('melhora');
+    expect(Number(sol2['versao'])).toBe(3);
+    const q2linha = await uma(
+      'SELECT saturacao_oxigenio, frequencia_cardiaca FROM quadro_clinico_regulacao WHERE id = ?',
+      [q2.id],
+    );
+    expect(q2linha['saturacao_oxigenio']).toBeNull();
+    expect(Number(q2linha['frequencia_cardiaca'])).toBe(96);
 
     await porta.registrarEvento(ctx(), m.solicitacao, {
       tipo: 'mudanca_situacao',
       situacaoNova: 'em_analise',
-      versao: 2,
+      versao: 3,
     });
     expect(
       await falha(
@@ -364,7 +458,7 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
           tipo: 'resposta',
           situacaoNova: 'autorizada',
           observacao: 'Vaga liberada',
-          versao: 2,
+          versao: 3,
         }),
       ),
     ).toContain('versao');
@@ -372,7 +466,7 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
       tipo: 'resposta',
       situacaoNova: 'autorizada',
       observacao: 'Vaga liberada no hospital de referência',
-      versao: 3,
+      versao: 4,
     });
     const aut = await uma(
       'SELECT situacao, regulado_em, encerrado_em, mensagem_central FROM solicitacao_regulacao WHERE id = ?',
@@ -384,7 +478,7 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
     await porta.registrarEvento(ctx(), m.solicitacao, {
       tipo: 'cancelamento',
       observacao: 'Paciente transferido por meios próprios',
-      versao: 4,
+      versao: 5,
     });
     const fim = await uma('SELECT situacao, encerrado_em FROM solicitacao_regulacao WHERE id = ?', [
       m.solicitacao,
@@ -396,7 +490,7 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
         porta.registrarQuadro(ctx(), m.solicitacao, {
           quadroClinico: 'Nova evolução depois do cancelamento.',
           condicaoGeral: 'estavel',
-          versao: 5,
+          versao: 6,
         }),
       ),
     ).toContain('encerrada');
@@ -406,6 +500,7 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
     );
     expect(eventos.map((e) => [e['tipo_evento'], e['situacao_anterior'], e['situacao_nova']])).toEqual([
       ['evolucao_clinica', 'solicitada', 'solicitada'],
+      ['evolucao_clinica', 'solicitada', 'solicitada'],
       ['mudanca_situacao', 'solicitada', 'em_analise'],
       ['resposta', 'em_analise', 'autorizada'],
       ['cancelamento', 'autorizada', 'cancelada'],
@@ -414,8 +509,8 @@ describe.skipIf(SEM_BANCO)('PortaControlesAssistenciaisPropria contra o MariaDB 
       true,
     );
     const t = await porta.linhaDoTempoRegulacao(ctx(), m.solicitacao);
-    expect(t.quadros).toHaveLength(1);
-    expect(t.eventos).toHaveLength(4);
+    expect(t.quadros).toHaveLength(2);
+    expect(t.eventos).toHaveLength(5);
     expect(t.solicitacao.situacao).toBe('cancelada');
   });
 });

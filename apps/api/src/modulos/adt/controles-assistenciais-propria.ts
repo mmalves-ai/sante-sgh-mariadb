@@ -55,7 +55,11 @@ const TABELAS = [
   'quadro_clinico_regulacao',
   'evento_regulacao',
   'solicitacao_regulacao',
+  'aviso_clinico',
 ];
+
+/** Origem dos avisos que a auditoria do isolamento gera para a CCIH (comissão de controle de infecção hospitalar). */
+const ORIGEM_AVISO_ISOLAMENTO = { modulo: 'qualidade.ccih', entidade: 'auditoria_isolamento' } as const;
 
 const id = z.number().int().positive();
 const idOuNull = id.nullable().default(null);
@@ -142,6 +146,8 @@ const esquemaQuadro = z
   })
   .strict();
 
+const esquemaResolverAviso = z.object({ providencia: z.string().trim().min(3).max(2000), versao }).strict();
+
 const esquemaEvento = z
   .object({
     tipo: z.enum(['resposta', 'mudanca_situacao', 'contato_central', 'cancelamento']),
@@ -170,6 +176,31 @@ export interface FormularioObitoLido {
 const iso = (v: unknown): string | null => (v ? new Date(v as string).toISOString() : null);
 const dia = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
+
+/** Campos da solicitação que o quadro atualiza: número ou id só quando veio preenchido; marca só quando veio. */
+export function sinaisVigentes(
+  e: z.infer<typeof esquemaQuadro>,
+  veio: (campo: string) => boolean,
+): Record<string, unknown> {
+  const valores: Record<string, unknown> = {
+    suporte_oxigenio_id: e.suporteOxigenio,
+    fluxo_oxigenio_litros_minuto: e.fluxoOxigenio,
+    nivel_consciencia_id: e.nivelConsciencia,
+    faixa_diurese_id: e.faixaDiurese,
+    frequencia_cardiaca: e.frequenciaCardiaca,
+    frequencia_respiratoria: e.frequenciaRespiratoria,
+    temperatura: e.temperatura,
+    saturacao_oxigenio: e.saturacao,
+    pressao_sistolica: e.pressaoSistolica,
+    pressao_diastolica: e.pressaoDiastolica,
+    peep: e.peep,
+    fracao_inspirada_oxigenio: e.fracaoInspirada,
+  };
+  const r: Record<string, unknown> = { resumo_clinico: e.quadroClinico };
+  for (const [k, v] of Object.entries(valores)) if (v !== null && v !== undefined) r[k] = v;
+  if (veio('necessitaIsolamento')) r['isolamento_necessario'] = e.necessitaIsolamento;
+  return r;
+}
 
 function recusou(titulo: string, r: { ok: false; codigo: string; mensagem: string }): never {
   throw recusaRegra(titulo, [{ campo: r.codigo, mensagem: r.mensagem }]);
@@ -470,10 +501,10 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     return this.gravar(
       c,
       'internacao.isolamento.auditar',
-      ['auditoria_isolamento', 'auditoria_isolamento_item'],
+      ['auditoria_isolamento', 'auditoria_isolamento_item', 'aviso_clinico'],
       async (tx, est, usuario) => {
         const i = await tx.uma(
-          `SELECT id, internacao_id, leito_hospitalar_id, tipo_precaucao_id, situacao FROM isolamento_paciente
+          `SELECT id, paciente_id, internacao_id, leito_hospitalar_id, tipo_precaucao_id, situacao FROM isolamento_paciente
             WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [e.isolamento, est.id],
         );
@@ -512,9 +543,38 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
             nao_conformidade: x.resposta === 'nao_conforme' ? x.naoConformidade : null,
             acao_corretiva: x.acaoCorretiva,
           });
+        // Critério não conforme com ação "alertar" ou "bloquear": aviso pendente para a CCIH, ligado à auditoria.
+        let aviso: number | null = null;
+        if (v.alertas.length) {
+          const bloqueia = v.alertas.some((x) => x.acao === 'bloquear');
+          const internacao = await tx.uma('SELECT atendimento_id FROM internacao WHERE id = ?', [
+            num(i['internacao_id']),
+          ]);
+          aviso = await tx.incluir('aviso_clinico', {
+            estabelecimento_id: est.id,
+            paciente_id: numOuNull(i['paciente_id']),
+            atendimento_id: numOuNull(internacao?.['atendimento_id']),
+            titulo: bloqueia
+              ? 'Isolamento: não conformidade que exige bloqueio'
+              : 'Isolamento: não conformidade na auditoria',
+            mensagem: v.alertas
+              .map((x) => `${x.acao === 'bloquear' ? 'Bloquear' : 'Alertar'}: ${x.descricao}`)
+              .join('\n')
+              .slice(0, 20_000),
+            prioridade: bloqueia ? 'critica' : 'alta',
+            canal: 'sistema',
+            exibe_janela: bloqueia,
+            situacao: 'pendente',
+            gerado_em: new Date(),
+            modulo_origem: ORIGEM_AVISO_ISOLAMENTO.modulo,
+            entidade_origem: ORIGEM_AVISO_ISOLAMENTO.entidade,
+            entidade_origem_chave: auditoria,
+          });
+        }
         return {
           tabela: 'auditoria_isolamento',
           id: auditoria,
+          aviso,
           geral: v.geral,
           percentual: v.percentual,
           alertas: v.alertas,
@@ -528,7 +588,7 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
     return this.gravar(
       c,
       'internacao.isolamento.cancelar-auditoria',
-      ['auditoria_isolamento'],
+      ['auditoria_isolamento', 'aviso_clinico'],
       async (tx, est) => {
         const a = await tx.uma(
           `SELECT a.id, a.situacao, a.observacao FROM auditoria_isolamento a
@@ -549,7 +609,78 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           situacao: 'cancelada',
           observacao: obs,
         });
+        // O aviso da auditoria cancelada deixa de valer (fica, cancelado, no histórico).
+        const avisos = await tx.consultarParaAtualizar(
+          `SELECT id, versao FROM aviso_clinico WHERE entidade_origem = ? AND entidade_origem_chave = ?
+              AND modulo_origem = ? AND situacao IN ('pendente','enviado','lido') AND excluido_em IS NULL`,
+          [ORIGEM_AVISO_ISOLAMENTO.entidade, auditoria, ORIGEM_AVISO_ISOLAMENTO.modulo],
+        );
+        for (const x of avisos)
+          await tx.alterar('aviso_clinico', num(x['id']), num(x['versao']), { situacao: 'cancelado' });
         return { tabela: 'auditoria_isolamento', id: auditoria };
+      },
+    );
+  }
+
+  /** Lista da CCIH: avisos das auditorias do isolamento (pendentes por padrão), do mais grave ao mais antigo. */
+  avisosIsolamento(c: ContextoPortaPropria, todos = false) {
+    return this.ler(c, 'avisos-isolamento', async (l, est) => {
+      const rs = await l.consultar(
+        `SELECT v.id, v.paciente_id, v.titulo, v.mensagem, v.prioridade, v.situacao, v.gerado_em, v.resolvido_em,
+                v.entidade_origem_chave AS auditoria, v.versao, a.isolamento_paciente_id, a.leito_hospitalar_id
+           FROM aviso_clinico v JOIN auditoria_isolamento a ON a.id = v.entidade_origem_chave
+          WHERE v.estabelecimento_id = ? AND v.modulo_origem = ? AND v.entidade_origem = ? AND v.excluido_em IS NULL
+            ${todos ? '' : "AND v.situacao IN ('pendente','enviado','lido')"}
+          ORDER BY FIELD(v.prioridade, 'critica', 'alta', 'normal', 'baixa'), v.gerado_em, v.id`,
+        [est.id, ORIGEM_AVISO_ISOLAMENTO.modulo, ORIGEM_AVISO_ISOLAMENTO.entidade],
+      );
+      return {
+        itens: rs.map((r) => ({
+          id: num(r['id']),
+          paciente: numOuNull(r['paciente_id']),
+          auditoria: num(r['auditoria']),
+          isolamento: num(r['isolamento_paciente_id']),
+          titulo: String(r['titulo']),
+          mensagem: String(r['mensagem']),
+          prioridade: String(r['prioridade']),
+          situacao: String(r['situacao']),
+          geradoEm: iso(r['gerado_em']),
+          resolvidoEm: iso(r['resolvido_em']),
+          versao: num(r['versao']),
+        })),
+      };
+    });
+  }
+
+  /** A CCIH dá o aviso por resolvido (a providência vai no texto); o aviso não é apagado. */
+  resolverAvisoIsolamento(c: ContextoPortaPropria, aviso: number, entrada: unknown) {
+    const e = entradaValida(esquemaResolverAviso, entrada);
+    return this.gravar(
+      c,
+      'internacao.isolamento.resolver-aviso',
+      ['aviso_clinico'],
+      async (tx, est, usuario) => {
+        const v = await travada(
+          tx,
+          `SELECT id, situacao, detalhes FROM aviso_clinico WHERE id = ? AND estabelecimento_id = ?
+            AND modulo_origem = ? AND entidade_origem = ? AND excluido_em IS NULL`,
+          [aviso, est.id, ORIGEM_AVISO_ISOLAMENTO.modulo, ORIGEM_AVISO_ISOLAMENTO.entidade],
+        );
+        if (!v) throw naoEncontrado('Aviso do isolamento');
+        if (['resolvido', 'cancelado'].includes(String(v['situacao'])))
+          throw recusaRegra('Aviso já encerrado', [
+            { campo: 'situacao', mensagem: `O aviso já está ${String(v['situacao'])}.` },
+          ]);
+        const detalhes = [txtOuNull(v['detalhes']), `Providência: ${e.providencia}`]
+          .filter(Boolean)
+          .join('\n');
+        await tx.alterar('aviso_clinico', aviso, e.versao, {
+          situacao: 'resolvido',
+          resolvido_em: new Date(),
+          resolvido_usuario_id: usuario,
+          detalhes,
+        });
+        return { tabela: 'aviso_clinico', id: aviso };
       },
     );
   }
@@ -792,23 +923,14 @@ export class PortaControlesAssistenciaisPropria extends PortaEstabelecimentoProp
           ocorrido_em: agora,
           usuario_id: usuario,
         });
-        // Os sinais vigentes ficam na solicitação (a fila e o pedido à central leem o último quadro).
-        await tx.alterar('solicitacao_regulacao', solicitacao, e.versao, {
-          suporte_oxigenio_id: e.suporteOxigenio,
-          fluxo_oxigenio_litros_minuto: e.fluxoOxigenio,
-          nivel_consciencia_id: e.nivelConsciencia,
-          faixa_diurese_id: e.faixaDiurese,
-          frequencia_cardiaca: e.frequenciaCardiaca,
-          frequencia_respiratoria: e.frequenciaRespiratoria,
-          temperatura: e.temperatura,
-          saturacao_oxigenio: e.saturacao,
-          pressao_sistolica: e.pressaoSistolica,
-          pressao_diastolica: e.pressaoDiastolica,
-          peep: e.peep,
-          fracao_inspirada_oxigenio: e.fracaoInspirada,
-          isolamento_necessario: e.necessitaIsolamento,
-          resumo_clinico: e.quadroClinico,
-        });
+        // Os sinais vigentes ficam na solicitação (a fila e o pedido à central leem o último quadro). Só o sinal
+        // informado neste quadro troca o vigente: um quadro parcial não apaga o que o anterior registrou.
+        await tx.alterar(
+          'solicitacao_regulacao',
+          solicitacao,
+          e.versao,
+          sinaisVigentes(e, (k) => Object.prototype.hasOwnProperty.call(entrada ?? {}, k)),
+        );
         return {
           tabela: 'quadro_clinico_regulacao',
           id: quadro,
