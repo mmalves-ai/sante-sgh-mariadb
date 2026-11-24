@@ -49,8 +49,9 @@ const trabalho = useQuery({
 });
 // Retenção na bancada: o motivo na própria linha do exame, sem sair do mapa (um clique para devolver à fila).
 const motivoReter = ref<Record<number, string>>({});
-const retidoDe = (b: { retidos?: { exame: number; motivo: string }[] | undefined }, id: number) =>
-  b.retidos?.find((r) => r.exame === id)?.motivo ?? null;
+// Os retidos vêm à parte (fora da fila e do lote): aparecem depois dos exames a processar, sem o link da digitação.
+const retidoDe = (b: { retidos?: { id: number; motivo: string }[] | undefined }, id: number) =>
+  b.retidos?.find((r) => r.id === id)?.motivo ?? null;
 async function alternarRetencao(id: number, retido: boolean): Promise<void> {
   ocupado.value = true;
   erro.value = null;
@@ -204,8 +205,11 @@ async function coletar(indice: number): Promise<void> {
           >
         </h2>
         <ul>
-          <li v-for="e in b.exames" :key="e.id" data-testid="mapa-exame">
-            <RouterLink :to="`/sadt/resultados/digitacao?exame=${e.id}`">{{ e.exame.nome }}</RouterLink>
+          <li v-for="e in [...b.exames, ...(b.retidos ?? [])]" :key="e.id" data-testid="mapa-exame">
+            <span v-if="retidoDe(b, e.id) !== null">{{ e.exame.nome }}</span>
+            <RouterLink v-else :to="`/sadt/resultados/digitacao?exame=${e.id}`">{{
+              e.exame.nome
+            }}</RouterLink>
             · {{ e.paciente.nome }}<strong v-if="e.urgente"> · {{ t('sadt.urgente') }}</strong>
             <span v-if="e.amostra" class="secundario">
               · {{ e.amostra.codigo }} ({{ e.amostra.rotulo }})</span

@@ -140,9 +140,10 @@ export const esquemaMapaTrabalho = z.object({
       /** Exames por lote no modelo de mapa (nulo: lote único) e os lotes que os não retidos ocupam. */
       limite: nul(n).optional(),
       lotes: n.optional(),
+      /** Os exames a processar, urgentes primeiro (os retidos não entram). */
       exames: z.array(esquemaExameSadt),
-      /** Exames retidos na bancada (fora do lote), com o motivo. */
-      retidos: z.array(z.object({ exame: n, motivo: txt })).optional(),
+      /** Exames retidos na bancada (fora da fila, do lote e dos urgentes), com o motivo. */
+      retidos: z.array(esquemaExameSadt.extend({ motivo: txt })).optional(),
     }),
   ),
   cortada: z.boolean(),

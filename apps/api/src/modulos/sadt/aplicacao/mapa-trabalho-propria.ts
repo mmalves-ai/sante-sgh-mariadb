@@ -4,8 +4,9 @@
 // sequência de negócio) com a situação "retido" e o motivo; soltar devolve o item a "pendente". Nada é apagado: a
 // trilha guarda o antes e o depois de cada passagem. A regra (motivo, situação do exame, bancada) é do domínio.
 import {
-  type BancadaDoExame,
+  type BancadaDoItem,
   conferirRetencao,
+  escolherBancada,
   type ExameNoMapa,
   MENSAGEM_RETENCAO,
   type Retencao,
@@ -40,45 +41,52 @@ export interface RetencaoGravada {
   readonly situacao: 'retido' | 'pendente';
 }
 
-/** A bancada dos exames pelo modelo de mapa e os itens retidos nos lotes do estabelecimento. */
+/**
+ * As bancadas candidatas de cada exame pedido: só modelos de mapa ativos do setor do exame pedido (o do item ou, sem
+ * ele, o da requisição), com a bancada ativa do mesmo setor e o setor do estabelecimento da sessão. A escolha entre
+ * candidatas é do domínio (escolherBancada).
+ */
+function sqlBancadas(k: number): string {
+  return `SELECT ei.id AS item, b.id AS bancada, b.descricao, mb.limite_exames, mb.id AS modelo
+     FROM exame_item ei
+     JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id AND r.excluido_em IS NULL
+     JOIN setor_diagnostico sd ON sd.id = COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id)
+                              AND sd.estabelecimento_id = r.estabelecimento_id
+     JOIN modelo_mapa_bancada mb ON mb.setor_diagnostico_id = sd.id AND mb.ativo = TRUE
+     JOIN modelo_mapa_bancada_exame mbe ON mbe.modelo_mapa_bancada_id = mb.id AND mbe.exame_id = ei.exame_id
+                                       AND mbe.excluido_em IS NULL AND mbe.somente_interesse = FALSE
+     JOIN bancada_analitica b ON b.id = mb.bancada_analitica_id AND b.ativo = TRUE
+                             AND b.setor_diagnostico_id = mb.setor_diagnostico_id
+    WHERE r.estabelecimento_id = ? AND ei.excluido_em IS NULL AND ei.id IN (${lista(k)})`;
+}
+
+const bancadaDe = (r: Record<string, unknown>): BancadaDoItem => ({
+  item: n(r['item']),
+  bancada: n(r['bancada']),
+  nome: String(r['descricao']),
+  limite: r['limite_exames'] === null ? null : n(r['limite_exames']),
+  modelo: n(r['modelo']),
+});
+
+/** As bancadas candidatas dos exames do mapa e os itens retidos nos lotes do estabelecimento. */
 export async function lerBancadasDoMapa(
   l: Leitor,
   est: number,
   itens: readonly ExameNoMapa[],
-): Promise<{ bancadas: BancadaDoExame[]; retencoes: Retencao[] }> {
-  const exames = [...new Set(itens.map((x) => x.exame.id).filter((x): x is number => x !== null))];
+): Promise<{ bancadas: BancadaDoItem[]; retencoes: Retencao[] }> {
   const ids = itens.map((x) => x.id);
-  const bancadas = exames.length
-    ? (
-        await l.consultar(
-          `SELECT mbe.exame_id, b.id AS bancada, b.descricao, mb.limite_exames, mbe.sequencia
-             FROM modelo_mapa_bancada_exame mbe
-             JOIN modelo_mapa_bancada mb ON mb.id = mbe.modelo_mapa_bancada_id AND mb.ativo = TRUE
-             JOIN bancada_analitica b ON b.id = mb.bancada_analitica_id AND b.ativo = TRUE
-            WHERE mbe.excluido_em IS NULL AND mbe.somente_interesse = FALSE AND mbe.exame_id IN (${lista(exames.length)})`,
-          exames,
-          { teto: 5000 },
-        )
-      ).map((r) => ({
-        exame: n(r['exame_id']),
-        bancada: n(r['bancada']),
-        nome: String(r['descricao']),
-        limite: r['limite_exames'] === null ? null : n(r['limite_exames']),
-        ordem: n(r['sequencia']),
-      }))
-    : [];
-  const retencoes = ids.length
-    ? (
-        await l.consultar(
-          `SELECT gi.exame_item_id, gi.motivo FROM grupo_trabalho_bancada_item gi
-             JOIN grupo_trabalho_bancada g ON g.id = gi.grupo_trabalho_bancada_id
-            WHERE g.estabelecimento_id = ? AND g.excluido_em IS NULL AND gi.excluido_em IS NULL
-              AND gi.situacao = 'retido' AND gi.exame_item_id IN (${lista(ids.length)})`,
-          [est, ...ids],
-          { teto: 5000 },
-        )
-      ).map((r) => ({ item: n(r['exame_item_id']), motivo: String(r['motivo'] ?? '') }))
-    : [];
+  if (!ids.length) return { bancadas: [], retencoes: [] };
+  const bancadas = (await l.consultar(sqlBancadas(ids.length), [est, ...ids], { teto: 5000 })).map(bancadaDe);
+  const retencoes = (
+    await l.consultar(
+      `SELECT gi.exame_item_id, gi.motivo FROM grupo_trabalho_bancada_item gi
+         JOIN grupo_trabalho_bancada g ON g.id = gi.grupo_trabalho_bancada_id
+        WHERE g.estabelecimento_id = ? AND g.excluido_em IS NULL AND gi.excluido_em IS NULL
+          AND gi.situacao = 'retido' AND gi.exame_item_id IN (${lista(ids.length)})`,
+      [est, ...ids],
+      { teto: 5000 },
+    )
+  ).map((r) => ({ item: n(r['exame_item_id']), motivo: String(r['motivo'] ?? '') }));
   return { bancadas, retencoes };
 }
 
@@ -146,20 +154,19 @@ export class ServicoMapaTrabalho {
               AND gi.situacao = 'retido' AND gi.exame_item_id = ?`,
           [est, item],
         );
-        const [b] = await tx.consultar(
-          `SELECT b.id, b.setor_diagnostico_id, mb.id AS modelo FROM modelo_mapa_bancada_exame mbe
-             JOIN modelo_mapa_bancada mb ON mb.id = mbe.modelo_mapa_bancada_id AND mb.ativo = TRUE
-             JOIN bancada_analitica b ON b.id = mb.bancada_analitica_id AND b.ativo = TRUE
-            WHERE mbe.excluido_em IS NULL AND mbe.somente_interesse = FALSE AND mbe.exame_id = ?
-            ORDER BY mbe.sequencia, b.id LIMIT 1`,
-          [ei['exame_id']],
-        );
+        // A mesma escolha do mapa: modelo do setor do exame pedido, no estabelecimento da sessão.
+        const escolhida = escolherBancada((await tx.consultar(sqlBancadas(1), [est, item])).map(bancadaDe));
+        const b = escolhida
+          ? await tx.uma('SELECT id, setor_diagnostico_id FROM bancada_analitica WHERE id = ?', [
+              escolhida.bancada,
+            ])
+          : undefined;
         const falha = conferirRetencao({
           reter,
           motivo,
           situacaoExame: String(ei['situacao']),
           retidoAgora: atual !== undefined,
-          temBancada: b !== undefined,
+          temBancada: escolhida !== null && b != null,
         });
         if (falha) throw recusa(falha, MENSAGEM_RETENCAO[falha]);
         if (!reter) {
@@ -191,7 +198,7 @@ export class ServicoMapaTrabalho {
             numero,
             setor_diagnostico_id: b!['setor_diagnostico_id'],
             bancada_analitica_id: b!['id'],
-            modelo_mapa_bancada_id: b!['modelo'],
+            modelo_mapa_bancada_id: escolhida!.modelo,
             data_trabalho: hoje,
             aberto_em: agora,
             aberto_por_usuario_id: usuario,
