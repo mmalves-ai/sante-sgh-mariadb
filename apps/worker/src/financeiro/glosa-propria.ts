@@ -9,10 +9,16 @@
 //   (trava do título antes de qualquer leitura; somas lidas com FOR UPDATE, que enxerga o último valor gravado).
 // Melhoria: o título cancelado ou renegociado, ou de outro estabelecimento, não recebe glosa (fica "sem-titulo").
 // Melhoria: a glosa total do título nunca fica abaixo da aceita (ck_titulo_receber_valores), conferido na regra.
+import { sincronizarProducaoDaConta } from '@sgh/dominio-repasse';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
+import { portaProducaoConta, TABELAS_PRODUCAO_CONTA } from '@sgh/persistencia';
 
 /** As tabelas que a operação da glosa do evento grava. */
-export const TABELAS_GLOSA_EVENTO: readonly string[] = ['glosa_titulo_receber', 'titulo_receber'];
+export const TABELAS_GLOSA_EVENTO: readonly string[] = [
+  'glosa_titulo_receber',
+  'titulo_receber',
+  ...TABELAS_PRODUCAO_CONTA,
+];
 /** Nome da operação na trilha. */
 export const OPERACAO_GLOSA_EVENTO = 'financeiro.glosa.aceita-do-evento';
 
@@ -123,5 +129,20 @@ export async function registrarGlosaAceitaDoEvento(
     valor_glosa: novo.glosa,
     valor_glosa_aceita: novo.glosaAceita,
   });
+  // A produção do repasse acompanha a glosa do item (mudança do item), na mesma transação: a mesma sincronização da
+  // API (@sgh/dominio-repasse + @sgh/persistencia), idempotente se a decisão da glosa já sincronizou.
+  const item = await tx.uma<{ conta: unknown }>(
+    'SELECT conta_hospitalar_id AS conta FROM conta_hospitalar_item WHERE id = ?',
+    [d.item],
+  );
+  if (item && tx.contexto.usuario !== null)
+    await sincronizarProducaoDaConta(
+      portaProducaoConta(tx, { estabelecimento: est, usuario: tx.contexto.usuario }),
+      {
+        conta: Number(item.conta),
+        itens: [d.item],
+        evento: 'mudanca-item',
+      },
+    );
   return { resultado: 'registrada', id };
 }

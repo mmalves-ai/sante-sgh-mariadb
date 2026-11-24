@@ -20,7 +20,7 @@
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
 // produção e o adiantamento ao prestador. Até lá, essas partes respondem zero ou vazio.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
-import { type RegraRepasseParticularIntegral, regraRepasseParticularIntegral } from '@sgh/dominio-repasse';
+import { integraisDoDia } from '@sgh/dominio-repasse';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -33,6 +33,13 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import {
+  codigoProcedimento,
+  lerIntegraisBrutas,
+  PREFIXO_INTEGRAL,
+  regraDe,
+  SQL_REGRAS,
+} from '@sgh/persistencia';
 import { z } from 'zod';
 import { type ContextoPortaM18, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
@@ -97,12 +104,6 @@ const ESTADO_DA_SITUACAO: Readonly<Record<string, string>> = {
   cancelada: 'cancelada',
 };
 const ESCOPO_DA_CONTA = { A: 'todas', E: 'externa', I: 'internacao' } as const;
-const CONTA_DO_ESCOPO: Readonly<Record<string, RegraRepasse['tipoConta']>> = {
-  todas: 'A',
-  externa: 'E',
-  internacao: 'I',
-};
-
 /** Tabelas das gravações do repasse (operações de tela e gravações diretas). */
 const TABELAS = [
   'regra_repasse',
@@ -125,110 +126,17 @@ async function numeroDe(tx: TxOperacao, tipo: string, prefixo: string, est: numb
   return tx.proximoNumero(tipo);
 }
 
-/** Código das regras de repasse integral da consulta particular gravadas pelo conector (ADR 0009). */
-export const PREFIXO_INTEGRAL = 'INTEGRAL-PART-%';
+// O SQL das regras e a leitura das integrais moram em @sgh/persistencia (repasse-producao): a mesma leitura da
+// apuração, do simulador e da sincronização da produção (API e worker).
+export { codigoProcedimento, PREFIXO_INTEGRAL, regraDe, SQL_REGRAS };
 
-export const SQL_REGRAS = `
-  SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.profissional_id, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
-         i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.grupo_ato_id, i.local_atendimento_id,
-         i.unidade_assistencial_id, i.centro_custo_id, i.cooperativa_medica_id, i.tipo_lancamento_id, i.escopo_conta,
-         i.hora_inicio, i.hora_fim, i.percentual, i.valor_fixo, i.percentual_feriado, i.percentual_fim_semana,
-         COALESCE(i.evento_repasse_id, r.evento_repasse_id) AS evento
-    FROM regra_repasse r
-    JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
-   WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.vigencia_inicio <= ?
-     AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND (i.fonte_pagadora_id = ? OR i.fonte_pagadora_id IS NULL)`;
-
-export function regraDe(r: Linha): RegraRepasse {
-  const cod = (v: unknown) =>
-    v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
-  return {
-    id: n(r['id']),
-    vigencia: dataIso(r['vigencia_inicio']) ?? '',
-    beneficiario: texto(r['beneficiario']) === 'prestador' ? 'P' : 'M',
-    // Regra de um profissional (a dimensão mais forte); null: vale para todos.
-    profissional: nn(r['profissional_id']),
-    prestador: null,
-    convenio: nn(r['fonte_pagadora_id']),
-    procedimentoInicial: cod(r['codigo_procedimento_inicial']),
-    procedimentoFinal: cod(r['codigo_procedimento_final']),
-    especialidade: nn(r['especialidade_medica_id']),
-    ato: nn(r['funcao_equipe_cobranca_id']),
-    // O grupo de ato do procedimento (o "ato" da regra da origem); casa com o grupo do item faturável.
-    grupoAto: nn(r['grupo_ato_id']),
-    local: nn(r['local_atendimento_id']),
-    unidade: nn(r['unidade_assistencial_id']),
-    centroCusto: nn(r['centro_custo_id']),
-    cooperativa: nn(r['cooperativa_medica_id']),
-    tipoLancamento: nn(r['tipo_lancamento_id']),
-    tipoConta: CONTA_DO_ESCOPO[texto(r['escopo_conta'])] ?? 'A',
-    // Sem horário na regra: vale o dia todo (o domínio compara a hora do item com a janela).
-    horaInicial: textoN(r['hora_inicio'])?.slice(0, 5) || '00:00',
-    horaFinal: textoN(r['hora_fim'])?.slice(0, 5) || '23:59',
-    percentual: n(r['percentual']),
-    valorFixo: n(r['valor_fixo']),
-    percentualFeriado: n(r['percentual_feriado']),
-    percentualFimDeSemana: n(r['percentual_fim_semana']),
-    base: (textoN(r['base_calculo']) as RegraRepasse['base']) ?? null,
-    evento: nn(r['evento']),
-  };
-}
-
-/**
- * O código de negócio do procedimento (item faturável) como número, para casar com a faixa da regra. Um código que não
- * é só de dígitos fica fora de qualquer faixa (0: as faixas da regra começam em 1); a regra sem faixa vale para ele.
- */
-export function codigoProcedimento(v: unknown): number {
-  const t = texto(v).trim();
-  return /^\d{1,15}$/.test(t) ? Number(t) : 0;
-}
-
-/** ADR 0009: as regras integrais da consulta particular vigentes na data (também na transação da produção da conta). */
-export async function lerIntegraisParticular(l: Leitor, est: number, data: string): Promise<IntegraisParticular> {
-  const rs = await l.consultar(
-    `SELECT i.fonte_pagadora_id, f.tipo AS tipo_fonte, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
-       FROM regra_repasse r
-       JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
-       -- Só a fonte particular: a marca "consulta particular inteira ao médico" nunca vale num convênio.
-       JOIN fonte_pagadora f ON f.id = i.fonte_pagadora_id AND f.tipo = 'particular'
-       LEFT JOIN item_faturavel ifa ON ifa.id = i.item_faturavel_id
-      WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.codigo LIKE ? AND r.vigencia_inicio <= ?
-        AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND i.percentual = 100
-        AND i.fonte_pagadora_id IS NOT NULL AND (i.item_faturavel_id IS NOT NULL OR i.grupo_faturamento_id IS NOT NULL)
-      ORDER BY i.id`,
-    [est, PREFIXO_INTEGRAL, data, data],
-    { teto: 500 },
-  );
-  const integrais: RegraRepasseParticularIntegral[] = [];
-  for (const r of rs) {
-    const item = r['item_codigo'] == null ? null : codigoProcedimento(r['item_codigo']);
-    if (item === 0) continue; // código que não é só de dígitos: nenhum item de produção casa com ele
-    integrais.push(
-      regraRepasseParticularIntegral({
-        fontePagadoraId: n(r['fonte_pagadora_id']),
-        tipoFonte: String(r['tipo_fonte']),
-        profissionalId: nn(r['profissional_id']),
-        itemFaturavelId: item,
-        grupoFaturamentoId: item === null ? nn(r['grupo_faturamento_id']) : null,
-      }),
-    );
-  }
-  const grupos = [
-    ...new Set(integrais.flatMap((x) => (x.grupoFaturamentoId === null ? [] : [x.grupoFaturamentoId]))),
-  ];
-  const grupoDoProcedimento = new Map<number, number>();
-  if (grupos.length > 0)
-    for (const r of await l.consultar(
-      `SELECT codigo, grupo_faturamento_id FROM item_faturavel
-        WHERE grupo_faturamento_id IN (${marcas(grupos)}) AND excluido_em IS NULL`,
-      grupos,
-      { teto: 20000 },
-    )) {
-      const cod = codigoProcedimento(r['codigo']);
-      if (cod !== 0) grupoDoProcedimento.set(cod, n(r['grupo_faturamento_id']));
-    }
-  const fontesParticulares = new Set(integrais.map((x) => x.fontePagadoraId));
-  return { integrais, grupoDoProcedimento, fontesParticulares };
+/** ADR 0009: as regras integrais da consulta particular vigentes na data, conferidas pelo domínio. */
+export async function lerIntegraisParticular(
+  l: Leitor,
+  est: number,
+  data: string,
+): Promise<IntegraisParticular> {
+  return integraisDoDia(await lerIntegraisBrutas(l, est, data));
 }
 
 const SQL_APURACAO = `
@@ -1370,6 +1278,21 @@ export class PortaRepassePropria implements PortaRepasse {
         )
       ).map((r) => n(r['profissional_id'])),
     );
+  }
+
+  debitosDaApuracao(c: ContextoRepasse, apuracao: number): Promise<Map<number, number>> {
+    return this.ler(c, async (l, est) => {
+      const rs = await l.consultar(
+        `SELECT p.profissional_id, SUM(e.valor) AS v
+           FROM estorno_repasse e JOIN producao_repasse p ON p.id = e.producao_repasse_id
+          WHERE e.estabelecimento_id = ? AND e.apuracao_repasse_id = ? AND e.situacao = 'aplicado'
+            AND e.excluido_em IS NULL
+          GROUP BY p.profissional_id`,
+        [est, apuracao],
+        { teto: 20000 },
+      );
+      return new Map(rs.map((r) => [n(r['profissional_id']), n(r['v'])]));
+    });
   }
 
   registroDoPrestador(c: ContextoRepasse, prestador: number): Promise<number | null> {

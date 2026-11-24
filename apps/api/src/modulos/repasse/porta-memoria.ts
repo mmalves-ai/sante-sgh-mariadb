@@ -725,6 +725,11 @@ export class PortaRepasseMemoria implements PortaRepasse {
     return REGISTROS[prestador] ?? null;
   }
 
+  /** A memória não guarda a produção da conta nem os débitos: nada a descontar. */
+  async debitosDaApuracao() {
+    return new Map<number, number>();
+  }
+
   async lancamentosDosPrestadores(
     c: ContextoRepasse,
     ps: readonly number[],

@@ -129,6 +129,8 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
   jaEmRpa(c: ContextoRepasse, lancamentos: readonly number[]): Promise<Set<number>>;
   prestadoresDoUsuario(c: ContextoRepasse, login: string): Promise<number[]>;
   registroDoPrestador(c: ContextoRepasse, prestador: number): Promise<number | null>;
+  /** Débitos (estorno_repasse) descontados na apuração, por profissional (reais). */
+  debitosDaApuracao(c: ContextoRepasse, apuracao: number): Promise<Map<number, number>>;
   lancamentosDosPrestadores(
     c: ContextoRepasse,
     prestadores: readonly number[],
@@ -179,6 +181,7 @@ export const METODOS_PORTA_REPASSE: ReadonlySet<string> = new Set([
   'jaEmRpa',
   'prestadoresDoUsuario',
   'registroDoPrestador',
+  'debitosDaApuracao',
   'lancamentosDosPrestadores',
   'rpasDosPrestadores',
   'adiantamentos',

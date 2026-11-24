@@ -65,6 +65,7 @@ import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil } from '../exames/relogio.js';
 import { versaoTexto } from '../faturamento/esquemas.js';
+import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import type { ArmazemXmlTiss } from './armazem-xml.js';
 import { nomeNaTrilha, OPERACOES_TISS_PENDENTES, operacoesTiss } from './operacoes.js';
 import {
@@ -138,6 +139,8 @@ const pendente = (op: string, motivo: string) =>
 const TABELAS_GRAVACAO_DIRETA = [
   'glosa',
   'glosa_item',
+  'conta_hospitalar_item',
+  ...TABELAS_PRODUCAO_CONTA,
   'endpoint_tiss_fonte_pagadora',
   'integracao_mensagem',
 ];
@@ -1443,6 +1446,20 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghTiss {
             valor_aceito: novo.valorAceito,
           });
       }
+      // O item da conta guarda a glosa aceita (a perda definitiva; a recorrida aguarda o recurso), e a produção do
+      // repasse acompanha (repasse.estornoEmGlosa): mudança do item, na mesma transação, sem gatilho.
+      const conta = n(gi!['conta_hospitalar_id']);
+      const ci = await tx.uma<Linha>('SELECT versao, valor_glosado FROM conta_hospitalar_item WHERE id = ?', [
+        d.item,
+      ]);
+      const aceito = d.decisao === 'aceitar' ? glosa : 0;
+      if (ci && Math.round(n(ci['valor_glosado']) * 100) !== Math.round(aceito * 100))
+        await tx.alterar('conta_hospitalar_item', d.item, n(ci['versao']), { valor_glosado: aceito });
+      await sincronizarProducaoDaConta(
+        tx,
+        { conta, itens: [d.item], evento: 'mudanca-item' },
+        { estabelecimento: est, usuario: tx.contexto.usuario },
+      );
       return {
         id,
         estado: d.decisao === 'aceitar' ? 'aceita' : 'recorrida',

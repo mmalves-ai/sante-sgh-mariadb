@@ -3,3 +3,4 @@
 // operação (TxOperacao do executor, com trilha e idempotência) ou o do teste.
 export * from './agenda-preco/linhas.js';
 export * from './agenda-preco/porta.js';
+export * from './repasse-producao/porta.js';

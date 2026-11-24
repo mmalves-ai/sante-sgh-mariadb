@@ -17,7 +17,13 @@
 // No fim, a massa de negócio é apagada. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { calcularPeriodo, compararDourado, competenciaDoDebito, somarProducao } from '@sgh/dominio-repasse';
+import {
+  calcularPeriodo,
+  compararDourado,
+  competenciaDoDebito,
+  descontoDoDebito,
+  somarProducao,
+} from '@sgh/dominio-repasse';
 import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { civil, FUSO_PADRAO } from '../exames/relogio.js';
@@ -70,6 +76,17 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
   const limpar = (e: Escritor) =>
     (async () => {
       const est = ids.est;
+      await e.executar(
+        'UPDATE lancamento_repasse SET estornado_lancamento_repasse_id = NULL WHERE estabelecimento_id = ? AND tipo_lancamento <> ?',
+        [est, 'estorno'],
+      );
+      await e.executar(
+        "DELETE FROM lancamento_repasse WHERE estabelecimento_id = ? AND tipo_lancamento = 'estorno'",
+        [est],
+      );
+      await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM evento_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM estorno_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar(
         'DELETE x FROM apuracao_repasse_item x JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id WHERE a.estabelecimento_id = ?',
@@ -93,18 +110,24 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
         [est],
       );
       await e.executar('DELETE FROM regra_repasse WHERE estabelecimento_id = ?', [est]);
-      await e.executar("DELETE FROM parametro_valor WHERE nivel = 'estabelecimento' AND estabelecimento_id = ?", [est]);
+      await e.executar(
+        "DELETE FROM parametro_valor WHERE nivel = 'estabelecimento' AND estabelecimento_id = ?",
+        [est],
+      );
     })();
 
   const sincronizar = (evento: 'lancamento' | 'fechamento' | 'mudanca-item', itens?: number[]) =>
-    nucleo.criarExecutor().executar(
-      sincronizarProducaoConta,
-      CLIENTE,
-      { conta: ids.conta, evento, ...(itens ? { itens } : {}) },
-      { ...ctx, chaveIdempotencia: `${P}-${Date.now()}-${++seq}` },
-    );
+    nucleo
+      .criarExecutor()
+      .executar(
+        sincronizarProducaoConta,
+        CLIENTE,
+        { conta: ids.conta, evento, ...(itens ? { itens } : {}) },
+        { ...ctx, chaveIdempotencia: `${P}-${Date.now()}-${++seq}` },
+      );
 
-  const escrever = <T>(fn: (e: Escritor) => Promise<T>) => nucleo.escrever({ cliente: CLIENTE, correlacao: P }, fn);
+  const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: P }, fn);
 
   /** Um item da conta com executor (fixture: o lançamento da conta é de outra família; aqui só o estado do item). */
   const novoItem = (valor: number, quando: string, extra: Record<string, unknown> = {}) =>
@@ -138,9 +161,10 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
 
   const momento = (valor: 'lancamento' | 'fechamento') =>
     escrever(async (e) => {
-      await e.executar("DELETE FROM parametro_valor WHERE nivel = 'estabelecimento' AND estabelecimento_id = ?", [
-        ids.est,
-      ]);
+      await e.executar(
+        "DELETE FROM parametro_valor WHERE nivel = 'estabelecimento' AND estabelecimento_id = ?",
+        [ids.est],
+      );
       await e.inserir(
         `INSERT INTO parametro_valor (parametro_definicao_id, nivel, estabelecimento_id, valor, vigencia_inicio, criado_em)
          VALUES (?, 'estabelecimento', ?, ?, ?, ?)`,
@@ -201,7 +225,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
           e,
           `SELECT id FROM ${tabela} WHERE codigo = ?`,
           [codigo],
-          `INSERT INTO ${tabela} (codigo, ${Object.keys(colunas).join(', ')}, criado_em) VALUES (?, ${Object.keys(colunas)
+          `INSERT INTO ${tabela} (codigo, ${Object.keys(colunas).join(', ')}, criado_em) VALUES (?, ${Object.keys(
+            colunas,
+          )
             .map(() => '?')
             .join(', ')}, ?)`,
           [codigo, ...Object.values(colunas), agora],
@@ -248,7 +274,10 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
            fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [ids.est, `${P}-AT1`, paciente, categoria, tiss, ids.fonte, ids.profissional, agora, agora],
       );
-      const tipoConta = await porCodigo('tipo_conta', `${P}-EXT`, { descricao: 'EXTERNA F3RPC', natureza: 'externa' });
+      const tipoConta = await porCodigo('tipo_conta', `${P}-EXT`, {
+        descricao: 'EXTERNA F3RPC',
+        natureza: 'externa',
+      });
       ids.conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id, natureza,
            competencia, inicio_em, situacao, valor_itens, valor_total, criado_em)
@@ -364,7 +393,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     itemB = await novoItem(300, '2026-10-05T13:00:00Z', { honorario: 200 });
     await sincronizar('lancamento', [itemB]);
     const [pb] = await producoesDo(itemB);
-    expect([Number(pb!['valor_base']), Number(pb!['percentual']), Number(pb!['valor_repasse'])]).toEqual([200, 50, 100]);
+    expect([Number(pb!['valor_base']), Number(pb!['percentual']), Number(pb!['valor_repasse'])]).toEqual([
+      200, 50, 100,
+    ]);
     const deNovo = await sincronizar('lancamento');
     expect(deNovo.resultado).toMatchObject({ geradas: 0 });
     expect(await producoesDo(itemA)).toHaveLength(1);
@@ -383,8 +414,13 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
   it('3. item estornado antes da apuração: produção estornada e fora da produção do período', async () => {
     const itemD = await novoItem(80, '2026-10-21T13:00:00Z');
     await sincronizar('lancamento', [itemD]);
-    await escrever((e) => e.executar("UPDATE conta_hospitalar_item SET situacao = 'estornado' WHERE id = ?", [itemD]));
-    expect((await sincronizar('mudanca-item', [itemD])).resultado).toMatchObject({ estornadas: 1, debitos: 0 });
+    await escrever((e) =>
+      e.executar("UPDATE conta_hospitalar_item SET situacao = 'estornado' WHERE id = ?", [itemD]),
+    );
+    expect((await sincronizar('mudanca-item', [itemD])).resultado).toMatchObject({
+      estornadas: 1,
+      debitos: 0,
+    });
     const [p] = await producoesDo(itemD);
     expect(p!['situacao']).toBe('estornado');
     const { itens } = await porta.producao(ctx, COMP, 0);
@@ -394,7 +430,10 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
 
   it('4. glosa parcial antes da apuração: a base fica com a parte não glosada', async () => {
     await escrever((e) =>
-      e.executar("UPDATE conta_hospitalar_item SET valor_glosado = 250, situacao = 'conferido' WHERE id = ?", [itemC]),
+      e.executar(
+        "UPDATE conta_hospitalar_item SET valor_glosado = 250, situacao = 'conferido' WHERE id = ?",
+        [itemC],
+      ),
     );
     expect((await sincronizar('mudanca-item', [itemC])).resultado).toMatchObject({ reduzidas: 1 });
     expect(Number((await producoesDo(itemC))[0]!['valor_base'])).toBe(750);
@@ -414,7 +453,11 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     // Parcelas: A 500 × 70% = 350; B 200 × 50% = 100; C 750 × 70% = 525 (a base reduzida pela glosa).
     expect(memorias.map((m) => m.valorCentavos).sort((a, b) => a - b)).toEqual([10_000, 35_000, 52_500]);
     const soma = somarProducao(
-      memorias.map((m) => ({ baseCentavos: m.baseCentavos, repasseCentavos: m.valorCentavos, situacao: 'pendente' })),
+      memorias.map((m) => ({
+        baseCentavos: m.baseCentavos,
+        repasseCentavos: m.valorCentavos,
+        situacao: 'pendente',
+      })),
     );
     expect(soma).toEqual({ itens: 3, baseCentavos: 145_000, repasseCentavos: 97_500 });
     // Dourado: a prévia gravada no lançamento contra o recálculo da apuração (C sai da prévia: a glosa a refaz).
@@ -454,7 +497,10 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
       );
       await e.executar("UPDATE conta_hospitalar_item SET situacao = 'estornado' WHERE id = ?", [itemA]);
     });
-    expect((await sincronizar('mudanca-item', [itemA])).resultado).toMatchObject({ debitos: 1, estornadas: 0 });
+    expect((await sincronizar('mudanca-item', [itemA])).resultado).toMatchObject({
+      debitos: 1,
+      estornadas: 0,
+    });
     const [er] = await escrever((e) =>
       e.consultar<Record<string, unknown>>(
         'SELECT motivo, valor, competencia, situacao, conta_hospitalar_id FROM estorno_repasse WHERE producao_repasse_id = ?',
@@ -486,7 +532,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     expect(Number((await apuracaoDe(apuracao))!['valor_descontos'])).toBe(350);
     expect(Number((await apuracaoDe(apuracao))!['valor_liquido'])).toBe(350);
     apuracaoAprovada = Number(
-      (await escrever((e) => e.uma<{ id: number }>('SELECT id FROM apuracao_repasse WHERE numero = ?', [`${P}-AR1`])))!.id,
+      (await escrever((e) =>
+        e.uma<{ id: number }>('SELECT id FROM apuracao_repasse WHERE numero = ?', [`${P}-AR1`]),
+      ))!.id,
     );
   });
 
@@ -505,21 +553,41 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     expect(Number(pp!['valor_base'])).toBe(120);
     const forma = (f: string) =>
       escrever((e) =>
-        e.executar('UPDATE conta_hospitalar_item_participante SET forma_pagamento = ? WHERE id = ?', [f, participante]),
+        e.executar('UPDATE conta_hospitalar_item_participante SET forma_pagamento = ? WHERE id = ?', [
+          f,
+          participante,
+        ]),
       );
     await forma('direto_fonte_pagadora');
-    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({ estornadas: 1, geradas: 0 });
+    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({
+      estornadas: 1,
+      geradas: 0,
+    });
     expect((await producoesDo(itemE))[0]!['situacao']).toBe('estornado');
-    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({ estornadas: 0, reduzidas: 0 });
+    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({
+      estornadas: 0,
+      reduzidas: 0,
+    });
     await forma('via_hospital');
-    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({ reduzidas: 1, geradas: 0 });
+    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({
+      reduzidas: 1,
+      geradas: 0,
+    });
     expect((await producoesDo(itemE))[0]).toMatchObject({ situacao: 'pendente' });
     await escrever((e) =>
-      e.executar('UPDATE conta_hospitalar_item_participante SET excluido_em = ? WHERE id = ?', [new Date(), participante]),
+      e.executar('UPDATE conta_hospitalar_item_participante SET excluido_em = ? WHERE id = ?', [
+        new Date(),
+        participante,
+      ]),
     );
-    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({ estornadas: 1, geradas: 1 });
+    expect((await sincronizar('mudanca-item', [itemE])).resultado).toMatchObject({
+      estornadas: 1,
+      geradas: 1,
+    });
     const depois = await producoesDo(itemE);
-    expect(depois.map((x) => [x['situacao'], Number(x['funcao_equipe_cobranca_id']), Number(x['valor_base'])])).toEqual([
+    expect(
+      depois.map((x) => [x['situacao'], Number(x['funcao_equipe_cobranca_id']), Number(x['valor_base'])]),
+    ).toEqual([
       ['estornado', ids.auxiliar, 120],
       ['pendente', ids.titular, 400],
     ]);
@@ -527,7 +595,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
 
   it('8. glosa revertida: base de volta antes da apuração; débito pendente cancelado depois; competência aberta', async () => {
     // Antes da apuração: C tinha 250 glosados (base 750); o recurso aceito devolve a base de 1.000.
-    await escrever((e) => e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemC]));
+    await escrever((e) =>
+      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemC]),
+    );
     expect((await sincronizar('mudanca-item', [itemC])).resultado).toMatchObject({ reduzidas: 1 });
     expect(Number((await producoesDo(itemC))[0]!['valor_base'])).toBe(1000);
     // Depois da apuração: B (repasse 100) entra na apuração aprovada de 2026-10; o período do débito do teste 6 é
@@ -539,10 +609,10 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
            valor_faturado, percentual_repasse, valor_repasse, criado_em) VALUES (?, 2, ?, ?, ?, 200, 50, 100, ?)`,
         [apuracaoAprovada, ids.profissional, pb!['id'], `${COMP}-01`, new Date()],
       );
-      await e.executar("UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE estabelecimento_id = ? AND competencia = ?", [
-        ids.est,
-        `${competencia6}-01`,
-      ]);
+      await e.executar(
+        "UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE estabelecimento_id = ? AND competencia = ?",
+        [ids.est, `${competencia6}-01`],
+      );
       await e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 150 WHERE id = ?', [itemB]);
     });
     expect((await sincronizar('mudanca-item', [itemB])).resultado).toMatchObject({ debitos: 1 });
@@ -553,7 +623,9 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     expect(esperada > competencia6).toBe(true);
     expect(comp(d1!['competencia'])).toBe(esperada);
     // O recurso aceito: a glosa volta a 0 e o débito pendente é cancelado (nada se desconta do médico).
-    await escrever((e) => e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemB]));
+    await escrever((e) =>
+      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemB]),
+    );
     expect((await sincronizar('mudanca-item', [itemB])).resultado).toMatchObject({ creditos: 1, debitos: 0 });
     expect((await debitosDe(pb!['id'])).map((x) => x['situacao'])).toEqual(['cancelado']);
     expect((await sincronizar('mudanca-item', [itemB])).resultado).toMatchObject({ creditos: 0, debitos: 0 });
@@ -563,5 +635,89 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     const itemF = await novoItem(60, '2026-10-23T13:00:00Z');
     await Promise.all([sincronizar('lancamento', [itemF]), sincronizar('lancamento', [itemF])]);
     expect(await producoesDo(itemF)).toHaveLength(1);
+  });
+  it('10. glosa depois da apuração: produção estornada, débito descontado no lançamento seguinte; revertida: crédito', async () => {
+    // A produção de G (base 1.000) entra na apuração aprovada de 2026-10 com repasse de 400.
+    const itemG = await novoItem(1000, '2026-10-24T13:00:00Z');
+    await sincronizar('lancamento', [itemG]);
+    const [pg] = await producoesDo(itemG);
+    await escrever((e) =>
+      e.inserir(
+        `INSERT INTO apuracao_repasse_item (apuracao_repasse_id, sequencia, profissional_id, producao_repasse_id, competencia_producao,
+           valor_faturado, percentual_repasse, valor_repasse, criado_em) VALUES (?, 3, ?, ?, ?, 1000, 40, 400, ?)`,
+        [apuracaoAprovada, ids.profissional, pg!['id'], `${COMP}-01`, new Date()],
+      ),
+    );
+    // Glosa total aceita: a produção já repassada é estornada e o débito de 400 cai no primeiro período aberto.
+    await escrever((e) =>
+      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 1000 WHERE id = ?', [itemG]),
+    );
+    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({ debitos: 1 });
+    expect((await producoesDo(itemG))[0]!['situacao']).toBe('estornado');
+    const [dg] = await debitosDe(pg!['id']);
+    expect(dg).toMatchObject({ situacao: 'pendente' });
+    expect(Number(dg!['valor'])).toBe(400);
+    const periodo = comp(dg!['competencia']);
+    // A apuração seguinte desconta o débito, e o lançamento do profissional o abate (estorno ligado ao original).
+    const { apuracao } = await apurar(periodo, 1500);
+    const ap = (await apuracaoDe(apuracao))!;
+    expect(Number(ap['valor_descontos'])).toBeGreaterThanOrEqual(400);
+    const debitos = await porta.debitosDaApuracao({ ...ctx }, apuracao);
+    expect(debitos.get(ids.profissional)).toBe(400);
+    const desconto = descontoDoDebito(150000, Math.round(debitos.get(ids.profissional)! * 100));
+    expect(desconto).toEqual({ estornoCentavos: 40000, saldoCentavos: 0 });
+    const agora = new Date();
+    const lancamentos = await escrever(async (e) => {
+      await e.executar("UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE id = ?", [apuracao]);
+      const evento = await e.inserir(
+        "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, ?, 'HONORARIOS', 'rendimento', 'credito', '2026-01-01', ?)",
+        [ids.est, `${P}-HON`, agora],
+      );
+      const fav = await e.inserir(
+        "INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, tipo_favorecido, vigencia_inicio, criado_em) VALUES (?, ?, 'proprio_profissional', '2026-01-01', ?)",
+        [ids.est, ids.profissional, agora],
+      );
+      const base = [ids.est, fav, ids.profissional, evento, `${periodo}-01`, `${periodo}-28`];
+      const original = await e.inserir(
+        `INSERT INTO lancamento_repasse (estabelecimento_id, favorecido_repasse_id, tipo_favorecido, profissional_id, evento_repasse_id,
+           tipo_lancamento, apuracao_repasse_id, competencia, data_lancamento, valor, criado_em)
+         VALUES (?, ?, 'medico', ?, ?, 'apuracao', ?, ?, ?, 1500, ?)`,
+        [...base.slice(0, 4), apuracao, ...base.slice(4), agora],
+      );
+      // O CHECK do estorno exige a ligação ao original e o valor negativo.
+      await e.inserir(
+        `INSERT INTO lancamento_repasse (estabelecimento_id, favorecido_repasse_id, tipo_favorecido, profissional_id, evento_repasse_id,
+           tipo_lancamento, estornado_lancamento_repasse_id, competencia, data_lancamento, valor, criado_em)
+         VALUES (?, ?, 'medico', ?, ?, 'estorno', ?, ?, ?, ?, ?)`,
+        [...base.slice(0, 4), original, ...base.slice(4), -desconto.estornoCentavos / 100, agora],
+      );
+      return e.consultar<Record<string, unknown>>(
+        'SELECT SUM(valor) AS liquido FROM lancamento_repasse WHERE apuracao_repasse_id = ? OR estornado_lancamento_repasse_id = ?',
+        [apuracao, original],
+      );
+    });
+    // O RPA soma os lançamentos do profissional: 1.500 − 400.
+    expect(Number(lancamentos[0]!['liquido'])).toBe(1100);
+    // Glosa revertida no recurso depois do desconto: o débito aplicado numa apuração conferida não se cancela; vira
+    // crédito de 400 ao profissional (lançamento de ajuste ligado à produção). Repetir não lança de novo.
+    await escrever((e) =>
+      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemG]),
+    );
+    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({
+      creditos: 1,
+      debitos: 0,
+      pendencias: 0,
+    });
+    const creditos = await escrever((e) =>
+      e.consultar<Record<string, unknown>>(
+        'SELECT tipo_lancamento, valor, profissional_id FROM lancamento_repasse WHERE producao_repasse_id = ?',
+        [pg!['id']],
+      ),
+    );
+    expect(creditos).toHaveLength(1);
+    expect(creditos[0]).toMatchObject({ tipo_lancamento: 'ajuste' });
+    expect(Number(creditos[0]!['valor'])).toBe(400);
+    expect((await debitosDe(pg!['id'])).map((x) => x['situacao'])).toEqual(['aplicado']);
+    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({ creditos: 0, debitos: 0 });
   });
 });

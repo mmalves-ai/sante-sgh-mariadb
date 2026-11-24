@@ -48,6 +48,7 @@ import {
   podeApurarPeriodo,
   reais,
   centavos,
+  descontoDoDebito,
   totalizar,
   transicaoApuracao,
   transicaoVersaoRegra,
@@ -739,6 +740,10 @@ export class ServicoRepasse {
     const hoje = await this.porta.hoje(ctx(s));
     const data = hoje.startsWith(a.competencia) ? hoje : `${a.competencia}-28`;
     const ids: number[] = [];
+    // O débito do repasse descontado nesta apuração (estornos de produção) abate o lançamento de cada profissional:
+    // um lançamento de estorno ligado ao da apuração (o RPA soma os dois). O saldo acima do bruto fica pendente.
+    const debitos = await this.porta.debitosDaApuracao(ctx(s), a.id);
+    let saldos = 0;
     for (const b of await this.porBeneficiario(s, a)) {
       const r = await this.apoio.executar(
         s,
@@ -759,11 +764,38 @@ export class ServicoRepasse {
         'Lançado.',
         { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}` },
       );
-      ids.push(Number(r.resultado['lancamento']));
+      const original = Number(r.resultado['lancamento']);
+      ids.push(original);
+      const desconto = descontoDoDebito(centavos(b.valor), centavos(debitos.get(b.prestador) ?? 0));
+      if (desconto.saldoCentavos > 0) saldos += 1;
+      if (desconto.estornoCentavos > 0) {
+        const x = await this.apoio.executar(
+          s,
+          'repasse.lancarEvento',
+          {
+            origem: 'estorno',
+            empresa: a.empresa,
+            competencia: a.competencia,
+            data,
+            evento,
+            tipo: 'M',
+            prestador: b.prestador,
+            profissional: await this.registroDoPrestador(s, b.prestador),
+            valor: -reais(desconto.estornoCentavos),
+            justificativa: `Débito do repasse (glosa ou estorno de produção) descontado na apuração ${a.id}`,
+            estornaDe: original,
+          },
+          'Lançado.',
+          { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}-debito` },
+        );
+        ids.push(Number(x.resultado['lancamento']));
+      }
     }
     return {
       ok: true,
-      mensagem: `${ids.length} lançamento(s) da apuração incluído(s).`,
+      mensagem:
+        `${ids.length} lançamento(s) da apuração incluído(s).` +
+        (saldos > 0 ? ` ${saldos} profissional(is) com débito acima do bruto (saldo pendente).` : ''),
       ids: { lancamentos: ids.join(',') },
       repetida: false,
     };

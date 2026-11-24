@@ -23,11 +23,7 @@
 //   pendência), o grupo do catálogo quando a regra não traz o seu, e as exceções da regra de lançamento.
 // - cancelar (internação ou atendimento excluídos): estorna os automáticos com o motivo "cancelamento" e cancela a
 //   conta; conta com lançamento manual vigente ou já em faturamento recusa a exclusão (passa pelo faturamento).
-import {
-  dataHoraParaInstante,
-  FUSO_PADRAO,
-  instanteParaDataHora,
-} from '@sgh/contratos';
+import { dataHoraParaInstante, FUSO_PADRAO, instanteParaDataHora } from '@sgh/contratos';
 import {
   apurarLancamentos,
   competenciaDaConta,
@@ -43,6 +39,7 @@ import {
 } from '@sgh/dominio-faturamento';
 import { definirOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
+import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
 
@@ -54,6 +51,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /** As tabelas que a abertura e a apuração gravam: a operação que as chama as declara junto das suas. */
 export const TABELAS_CONTA_ENTRADA = [
+  ...TABELAS_PRODUCAO_CONTA,
   'conta_hospitalar',
   'atendimento_conta',
   'motivo_cancelamento_conta',
@@ -433,13 +431,26 @@ export async function apurarConta(
   const quando = new Date();
   for (const e of r.estornar) {
     const v = vig.find((x) => n(x['id']) === e.id)!;
-    await tx.alterar('conta_hospitalar_item', n(v['item_id']), n(v['item_versao']), { situacao: 'estornado' });
+    await tx.alterar('conta_hospitalar_item', n(v['item_id']), n(v['item_versao']), {
+      situacao: 'estornado',
+    });
     await tx.alterar('lancamento_automatico_conta', e.id, n(v['versao']), {
       situacao: 'estornado',
       estornado_em: quando,
       motivo_estorno: e.motivo,
     });
   }
+  // A produção do repasse acompanha o estorno do item (mudança do item), na mesma transação e sem gatilho.
+  if (r.estornar.length > 0)
+    await sincronizarProducaoDaConta(
+      tx,
+      {
+        conta: contaId,
+        itens: r.estornar.map((e) => n(vig.find((x) => n(x['id']) === e.id)!['item_id'])),
+        evento: 'mudanca-item',
+      },
+      { estabelecimento: est, usuario: tx.contexto.usuario },
+    );
   const tabelas = await tabelasDePreco(tx, est, fonte, plano, nn(c['tabela_preco_id']));
   const pendencias: { dia: string; motivo: string }[] = [...r.pendencias];
   // O catálogo de itens faturáveis: o item tem de estar ativo (como no lançamento manual) e dá o grupo.
@@ -462,7 +473,8 @@ export async function apurarConta(
       continue;
     }
     // A tabela forçada pelo item da regra vale antes das tabelas da conta.
-    const daRegra = d.tabelaPreco !== null ? [d.tabelaPreco, ...tabelas.filter((t) => t !== d.tabelaPreco)] : tabelas;
+    const daRegra =
+      d.tabelaPreco !== null ? [d.tabelaPreco, ...tabelas.filter((t) => t !== d.tabelaPreco)] : tabelas;
     const preco = d.valorFixo !== null ? null : await precoVigente(tx, daRegra, d.item, d.dia);
     const unitario = d.valorFixo ?? preco?.unitario ?? 0;
     const origemPreco = d.valorFixo !== null ? 'valor_fixo_regra' : preco ? 'tabela' : 'sem_preco_vigente';
@@ -554,7 +566,11 @@ export const MOTIVO_CANCELAMENTO_ENTRADA = 'ENTRADA_EXCLUIDA';
  * "cancelamento" e cancela as contas do atendimento, na transação de quem chama. Conta já em faturamento ou com
  * lançamento que não é automático (lançado por alguém) recusa: a exclusão passa pelo faturamento.
  */
-export async function cancelarContasDaEntrada(tx: TxOperacao, est: number, atendimento: number): Promise<number> {
+export async function cancelarContasDaEntrada(
+  tx: TxOperacao,
+  est: number,
+  atendimento: number,
+): Promise<number> {
   const contas = await contasDoAtendimento(tx, atendimento);
   let canceladas = 0;
   for (const id of contas) {
@@ -565,10 +581,16 @@ export async function cancelarContasDaEntrada(tx: TxOperacao, est: number, atend
       [id],
     );
     if (n(manuais?.['n']) > 0)
-      throw recusa('exclusao-recusada', 'A conta do atendimento tem lançamentos: estorne-os no faturamento antes de excluir.');
+      throw recusa(
+        'exclusao-recusada',
+        'A conta do atendimento tem lançamentos: estorne-os no faturamento antes de excluir.',
+      );
     const r = await apurarConta(tx, est, id, new Date(), { cancelada: true });
     if (!r.apurada)
-      throw recusa('exclusao-recusada', 'A conta do atendimento já está em faturamento: a exclusão passa pelo faturamento.');
+      throw recusa(
+        'exclusao-recusada',
+        'A conta do atendimento já está em faturamento: a exclusão passa pelo faturamento.',
+      );
     let motivo = await tx.uma<Linha>('SELECT id FROM motivo_cancelamento_conta WHERE codigo = ?', [
       MOTIVO_CANCELAMENTO_ENTRADA,
     ]);
@@ -595,28 +617,30 @@ export async function cancelarContasDaEntrada(tx: TxOperacao, est: number, atend
 const esquemaApurar = z.object({ conta: z.number().int().positive() }).strict();
 
 /** A apuração da conta pela rotina diária (uma chamada por conta aberta) ou pelo faturista. */
-export const apurarLancamentosAutomaticos = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>({
-  nome: 'faturamento.apurar-lancamentos-automaticos',
-  tabelas: [...TABELAS_CONTA_ENTRADA],
-  entrada: esquemaApurar,
-  async gravar(tx, e) {
-    const est = tx.contexto.estabelecimento;
-    if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
-    const r = await apurarConta(tx, est, e.conta);
-    return {
-      conta: r.conta,
-      lancados: r.lancados,
-      estornados: r.estornados,
-      pendencias: r.pendencias.length,
-      apurada: r.apurada,
-    };
+export const apurarLancamentosAutomaticos = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>(
+  {
+    nome: 'faturamento.apurar-lancamentos-automaticos',
+    tabelas: [...TABELAS_CONTA_ENTRADA],
+    entrada: esquemaApurar,
+    async gravar(tx, e) {
+      const est = tx.contexto.estabelecimento;
+      if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+      const r = await apurarConta(tx, est, e.conta);
+      return {
+        conta: r.conta,
+        lancados: r.lancados,
+        estornados: r.estornados,
+        pendencias: r.pendencias.length,
+        apurada: r.apurada,
+      };
+    },
+    eventos: (_e, r) =>
+      Number(r['lancados']) || Number(r['estornados'])
+        ? [{ tipo: 'faturamento.conta.apurada', carga: { conta: Number(r['conta']) } }]
+        : [],
+    alvo: (_e, r) => ({ tabela: 'conta_hospitalar', id: Number(r['conta']) }),
   },
-  eventos: (_e, r) =>
-    Number(r['lancados']) || Number(r['estornados'])
-      ? [{ tipo: 'faturamento.conta.apurada', carga: { conta: Number(r['conta']) } }]
-      : [],
-  alvo: (_e, r) => ({ tabela: 'conta_hospitalar', id: Number(r['conta']) }),
-});
+);
 
 const esquemaApurarDia = z.object({}).strict();
 
@@ -649,11 +673,11 @@ export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApur
     }
     const contas = (
       await tx.consultar<Linha>(
-      `SELECT id, situacao FROM conta_hospitalar WHERE estabelecimento_id = ? AND natureza = 'internacao'
+        `SELECT id, situacao FROM conta_hospitalar WHERE estabelecimento_id = ? AND natureza = 'internacao'
           AND situacao <> 'cancelada' AND excluido_em IS NULL ORDER BY id`,
-      [est],
-      { teto: 20000 },
-    )
+        [est],
+        { teto: 20000 },
+      )
     ).filter((c) => contaAceitaLancamento(texto(c['situacao'])));
     let lancados = 0;
     let estornados = 0;
@@ -664,7 +688,15 @@ export const apurarLancamentosDoDia = definirOperacao<z.infer<typeof esquemaApur
       estornados += r.estornados;
       pendencias += r.pendencias.length;
     }
-    return { estabelecimento: est, contas: contas.length, abertas, pendentes, lancados, estornados, pendencias };
+    return {
+      estabelecimento: est,
+      contas: contas.length,
+      abertas,
+      pendentes,
+      lancados,
+      estornados,
+      pendencias,
+    };
   },
   eventos: (_e, r) =>
     Number(r['lancados']) || Number(r['estornados'])
