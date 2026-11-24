@@ -45,6 +45,7 @@ import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.j
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
+import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 
 export interface OpcoesModuloSadt {
@@ -138,6 +139,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       MapaTrabalhoController,
       ResultadoBancoController,
       LaudoRedacaoController,
+      ApoioRemessaController,
       LimitesExameController,
     ],
     providers: [
@@ -181,6 +183,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoOrcamentoSadt } = await import('./aplicacao/orcamento-propria.js');
           return new ServicoOrcamentoSadt(ctx.nucleo);
+        },
+      },
+      // Laboratório de apoio: remessa, etiqueta e de-para (05-SADT linha 14): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_APOIO_REMESSA,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoApoioRemessa } = await import('./aplicacao/apoio-remessa-propria.js');
+          return new ServicoApoioRemessa(ctx.nucleo);
         },
       },
       // Redação do laudo e laudo estruturado (05-SADT linhas 16 e 17): só no banco do cliente (sem ele, 503).
