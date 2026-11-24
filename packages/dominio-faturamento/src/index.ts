@@ -27,3 +27,5 @@ export * from './conta/movimentos.js';
 export * from './conta/ajustes.js';
 // F3.1 (02-CAD linha 25): configuração TISS por fonte pagadora e faixa de numeração de guias.
 export * from './tiss/configuracao.js';
+// F3.7 (06-FAT linhas 21, 22 e 24): parecer do item na auditoria, protocolo entre setores e acompanhamento da guia.
+export * from './conta/auditoria-tramite.js';
