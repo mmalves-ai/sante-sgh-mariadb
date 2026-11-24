@@ -83,6 +83,10 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
   await e.executar(`DELETE FROM ocupacao_leito WHERE estabelecimento_id IN (${em})`, ests);
   // F3.0: a conta aberta na entrada e os lançamentos automáticos (antes da internação e do atendimento, pelas chaves).
   const contas = `SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN (${em})`;
+  // A produção do repasse e as etapas que o fluxo do paciente (fluxo-paciente.int.spec.ts) deixa nas contas da massa.
+  await e.executar(`DELETE FROM estorno_repasse WHERE conta_hospitalar_id IN (${contas})`, ests);
+  await e.executar(`DELETE FROM producao_repasse WHERE conta_hospitalar_id IN (${contas})`, ests);
+  await e.executar(`DELETE FROM conta_hospitalar_etapa WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(`DELETE FROM lancamento_automatico_conta WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(`DELETE FROM atendimento_conta WHERE conta_hospitalar_id IN (${contas})`, ests);
   await e.executar(
