@@ -10,15 +10,17 @@
 import {
   alertasDoPacote,
   classificarItens,
+  composicaoDaVersao,
+  conferirAlcadaDoValor,
   conferirDecisaoAjuste,
   contaEditavel,
-  diasDePermanencia,
+  diasDePermanenciaPacote,
   type FaixaHorarioEspecial,
   faixaDoHorario,
   acrescimoDoItem,
   type ItemParaPacote,
+  type NivelAlcadaAjuste,
   type SituacaoAjuste,
-  totaisDosAjustes,
   validarAjusteConta,
   validarFaixaHorario,
   validarNovaVersao,
@@ -61,7 +63,7 @@ export function noRelogio(v: unknown, fuso: string): string {
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 function estDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -76,6 +78,7 @@ interface ContaLida {
   inicio: unknown;
   fim: unknown;
   fonte: number;
+  contrato: number | null;
   plano: number | null;
   tabela: number | null;
   acomodacao: number | null;
@@ -88,7 +91,8 @@ interface ContaLida {
 
 async function contaDa(l: Consulta, est: number, conta: number): Promise<ContaLida> {
   const r = await l.uma<Linha>(
-    `SELECT c.id, c.versao, c.situacao, c.inicio_em, c.fim_em, c.fonte_pagadora_id, c.plano_fonte_pagadora_id,
+    `SELECT c.id, c.versao, c.situacao, c.inicio_em, c.fim_em, c.fonte_pagadora_id, c.contrato_fonte_pagadora_id,
+            c.plano_fonte_pagadora_id,
             c.tabela_preco_id, c.categoria_acomodacao_id, c.valor_itens, c.valor_acrescimo, c.valor_desconto,
             c.valor_total, e.fuso_horario
        FROM conta_hospitalar c JOIN estabelecimento e ON e.id = c.estabelecimento_id
@@ -104,6 +108,7 @@ async function contaDa(l: Consulta, est: number, conta: number): Promise<ContaLi
     inicio: r['inicio_em'],
     fim: r['fim_em'],
     fonte: n(r['fonte_pagadora_id']),
+    contrato: nn(r['contrato_fonte_pagadora_id']),
     plano: nn(r['plano_fonte_pagadora_id']),
     tabela: nn(r['tabela_preco_id']),
     acomodacao: nn(r['categoria_acomodacao_id']),
@@ -118,23 +123,37 @@ function exigirEditavel(c: ContaLida) {
   if (!contaEditavel(c.situacao))
     throw recusa('conta-fechada', 'A conta não está aberta: reabra-a para mudar os valores.', { campos: [] });
 }
-/** Trava a conta e refaz o total (itens, acréscimos e descontos aprovados) numa alteração só, sem gatilho. */
-async function refazerTotal(tx: TxOperacao, conta: number) {
-  const v = await tx.consultarParaAtualizar('SELECT versao FROM conta_hospitalar WHERE id = ?', [conta]);
-  const aj = await tx.consultar<Linha>(
-    'SELECT tipo, situacao, valor FROM ajuste_conta WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
+/** Trava a conta da sessão (nunca a de outro estabelecimento) antes de ler e gravar. */
+async function travarConta(tx: TxOperacao, est: number, conta: number) {
+  await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ?', [
+    conta,
+    est,
+  ]);
+}
+
+/**
+ * Trava a conta e refaz o total numa alteração só, sem gatilho. O acréscimo e o desconto do cabeçalho mudam só pela
+ * diferença do ajuste que acabou de ser aprovado (delta): o que já estava no cabeçalho sem linha de ajuste (vindo da
+ * importação ou de outro fluxo) fica como está.
+ */
+async function refazerTotal(
+  tx: TxOperacao,
+  conta: number,
+  delta: { acrescimo: number; desconto: number } = { acrescimo: 0, desconto: 0 },
+) {
+  const v = await tx.consultarParaAtualizar(
+    'SELECT versao, valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?',
     [conta],
   );
-  const t = totaisDosAjustes(
-    aj.map((a) => ({ tipo: String(a['tipo']), situacao: String(a['situacao']), valor: n(a['valor']) })),
-  );
+  const acrescimo = r2(n(v[0]?.['valor_acrescimo']) + delta.acrescimo);
+  const desconto = r2(n(v[0]?.['valor_desconto']) + delta.desconto);
   const tot = await totalDosItens(tx, conta);
   const valores = {
     valor_itens: tot.valor_itens,
     valor_filme: tot.valor_filme,
-    valor_acrescimo: t.acrescimo,
-    valor_desconto: t.desconto,
-    valor_total: Math.max(0, r2(tot.valor_itens + t.acrescimo - t.desconto)),
+    valor_acrescimo: acrescimo,
+    valor_desconto: desconto,
+    valor_total: Math.max(0, r2(tot.valor_itens + acrescimo - desconto)),
   };
   await tx.alterar('conta_hospitalar', conta, n(v[0]?.['versao']), valores);
   return valores;
@@ -161,6 +180,10 @@ function faixaDe(r: Linha): FaixaHorarioEspecial & { descricao: string; versao: 
     vigenciaInicio: dataIso(r['vigencia_inicio']) ?? '',
     vigenciaFim: dataIso(r['vigencia_fim']),
     fontePagadoraId: nn(r['fonte_pagadora_id']),
+    contratoId: nn(r['contrato_fonte_pagadora_id']),
+    percentualCustoOperacional: nn(r['percentual_custo_operacional']),
+    percentualFilme: nn(r['percentual_filme']),
+    percentualAnestesia: nn(r['percentual_anestesia']),
     ativo: b(r['ativo']),
     versao: n(r['versao']),
   };
@@ -208,6 +231,7 @@ async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
   const exp = c.tabela === null ? [] : (await horarioEspecialPropria(l, est, c.tabela)).expediente;
   const itens = await l.consultar<Linha>(
     `SELECT i.id, i.versao, i.sequencia, i.realizado_em, i.valor_total, i.valor_acrescimo, i.valor_honorario,
+            i.valor_custo_operacional, i.valor_filme, i.valor_acrescimo_horario,
             i.valor_desconto, i.acrescimo_horario_especial_id, f.codigo, f.descricao
        FROM conta_hospitalar_item i JOIN item_faturavel f ON f.id = i.item_faturavel_id
       WHERE i.conta_hospitalar_id = ? AND i.excluido_em IS NULL AND i.situacao IN ('lancado','conferido')
@@ -217,13 +241,32 @@ async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
   const quando = itens.map((i) => noRelogio(i['realizado_em'], c.fuso));
   const feriados = await feriadosDe(l, est, [...new Set(quando.map((q) => q.slice(0, 10)))]);
   return itens.map((i, k) => {
-    const base = r2(n(i['valor_total']) - n(i['valor_acrescimo']));
+    // O acréscimo de horário fica em coluna própria: o acréscimo manual ou importado do item (o resto de
+    // valor_acrescimo) é preservado, e a base do cálculo é o valor do item sem nenhum acréscimo.
+    const horarioAtual = n(i['valor_acrescimo_horario']);
+    const outros = r2(n(i['valor_acrescimo']) - horarioAtual);
+    const base = r2(n(i['valor_total']) - horarioAtual);
     const f = faixaDoHorario(
-      { quando: quando[k]!, feriado: feriados.has(quando[k]!.slice(0, 10)), fontePagadoraId: c.fonte },
+      {
+        quando: quando[k]!,
+        feriado: feriados.has(quando[k]!.slice(0, 10)),
+        fontePagadoraId: c.fonte,
+        contratoId: c.contrato,
+      },
       faixas,
       exp,
     );
-    const acrescimo = f ? acrescimoDoItem(base + n(i['valor_desconto']), n(i['valor_honorario']), f) : 0;
+    const acrescimo = f
+      ? acrescimoDoItem(
+          r2(base - outros + n(i['valor_desconto'])),
+          {
+            honorario: n(i['valor_honorario']),
+            custoOperacional: n(i['valor_custo_operacional']),
+            filme: n(i['valor_filme']),
+          },
+          f,
+        )
+      : 0;
     return {
       id: n(i['id']),
       versao: n(i['versao']),
@@ -234,12 +277,11 @@ async function horarioDosItens(l: Consulta, est: number, c: ContaLida) {
       feriado: feriados.has(quando[k]!.slice(0, 10)),
       faixaId: f?.id ?? null,
       faixa: f ? `${f.codigo} (${f.percentual}%)` : null,
-      acrescimoAtual: n(i['valor_acrescimo']),
+      acrescimoAtual: horarioAtual,
       acrescimo,
+      outros,
       base,
-      mudou:
-        r2(acrescimo) !== r2(n(i['valor_acrescimo'])) ||
-        (f?.id ?? null) !== nn(i['acrescimo_horario_especial_id']),
+      mudou: r2(acrescimo) !== r2(horarioAtual) || (f?.id ?? null) !== nn(i['acrescimo_horario_especial_id']),
     };
   });
 }
@@ -257,6 +299,10 @@ export const esquemaFaixa = z.object({
   horaFim: z.string().nullable().default(null),
   percentual: z.number(),
   percentualHonorario: z.number().nullable().default(null),
+  percentualCustoOperacional: z.number().nullable().default(null),
+  percentualFilme: z.number().nullable().default(null),
+  percentualAnestesia: z.number().nullable().default(null),
+  contratoId: idN,
   vigenciaInicio: dataZ,
   vigenciaFim: dataZ.nullable().default(null),
   ativo: z.boolean().default(true),
@@ -274,6 +320,15 @@ export const opGravarFaixa = definirOperacao({
       !(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadoraId]))
     )
       throw recusa('referencia-inexistente', 'A fonte pagadora não existe.', { campos: ['fontePagadoraId'] });
+    if (e.contratoId !== null) {
+      const ct = await tx.uma<Linha>('SELECT fonte_pagadora_id FROM contrato_fonte_pagadora WHERE id = ?', [
+        e.contratoId,
+      ]);
+      if (!ct || (e.fontePagadoraId !== null && n(ct['fonte_pagadora_id']) !== e.fontePagadoraId))
+        throw recusa('referencia-inexistente', 'O acordo não existe ou é de outra fonte pagadora.', {
+          campos: ['contratoId'],
+        });
+    }
     const repetido = await tx.uma<Linha>(
       'SELECT id FROM acrescimo_horario_especial WHERE estabelecimento_id = ? AND codigo = ? AND id <> ?',
       [est, e.codigo, e.id ?? 0],
@@ -281,6 +336,7 @@ export const opGravarFaixa = definirOperacao({
     if (repetido) throw recusa('duplicado', 'Já existe faixa com esse código.', { campos: ['codigo'] });
     const v = {
       fonte_pagadora_id: e.fontePagadoraId,
+      contrato_fonte_pagadora_id: e.contratoId,
       codigo: e.codigo,
       descricao: e.descricao,
       tipo_horario: e.tipoHorario,
@@ -290,6 +346,9 @@ export const opGravarFaixa = definirOperacao({
       hora_fim: e.horaFim,
       percentual_acrescimo: e.percentual,
       percentual_honorario: e.percentualHonorario,
+      percentual_custo_operacional: e.percentualCustoOperacional,
+      percentual_filme: e.percentualFilme,
+      percentual_anestesia: e.percentualAnestesia,
       vigencia_inicio: e.vigenciaInicio,
       vigencia_fim: e.vigenciaFim,
       ativo: e.ativo,
@@ -381,7 +440,8 @@ export async function aplicarHorarioEspecialNaConta(tx: TxOperacao, est: number,
       await tx.alterar('conta_hospitalar_item', i.id, i.versao, {
         horario_especial: i.faixaId !== null,
         acrescimo_horario_especial_id: i.faixaId,
-        valor_acrescimo: i.acrescimo,
+        valor_acrescimo_horario: i.acrescimo,
+        valor_acrescimo: r2(i.outros + i.acrescimo),
         valor_total: r2(i.base + i.acrescimo),
       });
       alterados++;
@@ -533,15 +593,61 @@ async function contextoAjuste(tx: Consulta, c: ContaLida, ignorar = 0) {
   };
 }
 
+/** Tipo de documento da alçada dos ajustes da conta (nativo do sistema). */
+export const TIPO_APROVACAO_AJUSTE = 'ajuste_conta';
+
+async function tipoAprovacaoAjuste(tx: TxOperacao): Promise<number> {
+  const t = await tx.uma<Linha>('SELECT id FROM tipo_documento_aprovacao WHERE codigo = ?', [
+    TIPO_APROVACAO_AJUSTE,
+  ]);
+  if (t) return n(t['id']);
+  return tx.incluir('tipo_documento_aprovacao', {
+    codigo: TIPO_APROVACAO_AJUSTE,
+    descricao: 'Acréscimo ou desconto na conta do paciente',
+    entidade: 'ajuste_conta',
+    tipo_limite: 'valor',
+  });
+}
+
+/** Os níveis da alçada vigente dos ajustes da conta no estabelecimento (vazio: sem alçada cadastrada). */
+async function niveisDaAlcada(l: Consulta, est: number, hoje: string) {
+  const r = await l.consultar<Linha>(
+    `SELECT a.id AS alcada_id, nv.id, nv.nivel, nv.perfil_acesso_id, nv.aprovador_usuario_id, nv.valor_unitario_minimo,
+            nv.valor_unitario_maximo
+       FROM alcada_aprovacao a
+       JOIN tipo_documento_aprovacao t ON t.id = a.tipo_documento_aprovacao_id AND t.codigo = ?
+       JOIN alcada_aprovacao_nivel nv ON nv.alcada_aprovacao_id = a.id AND nv.excluido_em IS NULL
+        AND (nv.vigencia_inicio IS NULL OR nv.vigencia_inicio <= ?) AND (nv.vigencia_fim IS NULL OR nv.vigencia_fim >= ?)
+      WHERE a.estabelecimento_id = ? AND a.ativo = 1 AND a.vigencia_inicio <= ?
+        AND (a.vigencia_fim IS NULL OR a.vigencia_fim >= ?)
+      ORDER BY a.vigencia_inicio DESC, nv.nivel, nv.sequencia`,
+    [TIPO_APROVACAO_AJUSTE, hoje, hoje, est, hoje, hoje],
+  );
+  const alcada = r.length ? n(r[0]!['alcada_id']) : null;
+  const niveis: NivelAlcadaAjuste[] = r
+    .filter((x) => n(x['alcada_id']) === alcada)
+    .map((x) => ({
+      id: n(x['id']),
+      nivel: n(x['nivel']),
+      perfilId: nn(x['perfil_acesso_id']),
+      usuarioId: nn(x['aprovador_usuario_id']),
+      valorMinimo: n(x['valor_unitario_minimo']),
+      valorMaximo: nn(x['valor_unitario_maximo']),
+    }));
+  return { alcada, niveis };
+}
+
+const hojeIso = () => new Date().toISOString().slice(0, 10);
+
 export const opPedirAjuste = definirOperacao({
   nome: 'faturamento.pedir-ajuste-conta',
-  tabelas: ['ajuste_conta'],
+  tabelas: ['ajuste_conta', 'pedido_aprovacao', 'tipo_documento_aprovacao'],
   entrada: esquemaPedirAjuste,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
     if (ctx.usuario === null)
       throw recusa('sem-usuario', 'O ajuste exige usuário identificado.', { campos: [] });
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [e.contaId]);
+    await travarConta(tx, est, e.contaId);
     const c = await contaDa(tx, est, e.contaId);
     exigirEditavel(c);
     const m = await tx.uma<Linha>('SELECT tipo_ajuste, ativo FROM motivo_ajuste_conta WHERE id = ?', [
@@ -566,7 +672,22 @@ export const opPedirAjuste = definirOperacao({
       solicitado_em: new Date(),
       solicitado_por_usuario_id: ctx.usuario,
     });
-    return { id: novo, valor, situacao: 'pendente_aprovacao' };
+    // O pedido entra no mecanismo de alçada de aprovação (o mesmo dos outros documentos), com o valor.
+    const { alcada } = await niveisDaAlcada(tx, est, hojeIso());
+    const pedido = await tx.incluir('pedido_aprovacao', {
+      estabelecimento_id: est,
+      tipo_documento_aprovacao_id: await tipoAprovacaoAjuste(tx),
+      alcada_aprovacao_id: alcada,
+      entidade: 'ajuste_conta',
+      entidade_id: novo,
+      descricao: `${e.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} na conta ${c.id}`.slice(0, 500),
+      valor,
+      solicitante_usuario_id: ctx.usuario,
+      solicitado_em: new Date(),
+      situacao: 'pendente',
+    });
+    await tx.alterar('ajuste_conta', novo, 1, { pedido_aprovacao_id: pedido });
+    return { id: novo, valor, situacao: 'pendente_aprovacao', pedidoAprovacaoId: pedido };
   },
   alvo: (_e, s) => ({ tabela: 'ajuste_conta', id: s.id }),
   trilha: (e) => ({ motivo: e.justificativa }),
@@ -581,7 +702,7 @@ export const esquemaDecidirAjuste = z.object({
 
 export const opDecidirAjuste = definirOperacao({
   nome: 'faturamento.decidir-ajuste-conta',
-  tabelas: ['ajuste_conta', 'conta_hospitalar'],
+  tabelas: ['ajuste_conta', 'conta_hospitalar', 'pedido_aprovacao', 'decisao_aprovacao'],
   entrada: esquemaDecidirAjuste,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
@@ -590,9 +711,7 @@ export const opDecidirAjuste = definirOperacao({
       [e.id, est],
     );
     if (!a) throw recusa('nao-encontrado', 'O ajuste não existe neste estabelecimento.', { campos: ['id'] });
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [
-      n(a['conta_hospitalar_id']),
-    ]);
+    await travarConta(tx, est, n(a['conta_hospitalar_id']));
     const motivo = conferirDecisaoAjuste(
       String(a['situacao']) as SituacaoAjuste,
       n(a['solicitado_por_usuario_id']),
@@ -611,13 +730,62 @@ export const opDecidirAjuste = definirOperacao({
           campos: ['decisao'],
         });
     }
+    // Alçada por valor: aprovar exige um nível da alçada vigente que cubra o valor (pelo usuário ou pelo cargo).
+    let nivel: NivelAlcadaAjuste | null = null;
+    if (e.decisao === 'aprovar') {
+      const hoje = hojeIso();
+      const { niveis } = await niveisDaAlcada(tx, est, hoje);
+      const perfis = niveis.length
+        ? (
+            await tx.consultar<Linha>(
+              `SELECT perfil_acesso_id FROM usuario_perfil WHERE usuario_id = ? AND estabelecimento_id = ?
+                  AND excluido_em IS NULL AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+              [ctx.usuario, est, hoje, hoje],
+            )
+          ).map((x) => n(x['perfil_acesso_id']))
+        : [];
+      const al = conferirAlcadaDoValor(n(a['valor']), niveis, ctx.usuario!, perfis);
+      if (al.motivo) throw recusa('alcada', al.motivo, { campos: ['decisao'] });
+      nivel = al.nivel;
+    }
     const situacao =
       e.decisao === 'aprovar' ? 'aprovado' : e.decisao === 'recusar' ? 'recusado' : 'cancelado';
     await tx.alterar('ajuste_conta', e.id, e.versao, {
       situacao,
       ...(e.decisao === 'cancelar' ? {} : { decidido_em: new Date(), decidido_por_usuario_id: ctx.usuario }),
     });
-    const tot = e.decisao === 'aprovar' ? await refazerTotal(tx, c.id) : null;
+    const pedido = nn(a['pedido_aprovacao_id']);
+    if (pedido !== null) {
+      const pv = await tx.consultarParaAtualizar('SELECT versao FROM pedido_aprovacao WHERE id = ?', [
+        pedido,
+      ]);
+      if (e.decisao !== 'cancelar')
+        await tx.incluir('decisao_aprovacao', {
+          pedido_aprovacao_id: pedido,
+          alcada_aprovacao_nivel_id: nivel?.id ?? null,
+          nivel: nivel?.nivel ?? 1,
+          aprovador_usuario_id: ctx.usuario,
+          decisao: e.decisao === 'aprovar' ? 'aprovado' : 'recusado',
+          justificativa: e.observacao,
+          valor_aprovado: e.decisao === 'aprovar' ? n(a['valor']) : null,
+          ocorrido_em: new Date(),
+        });
+      await tx.alterar('pedido_aprovacao', pedido, n(pv[0]?.['versao']), {
+        situacao: e.decisao === 'aprovar' ? 'aprovado' : e.decisao === 'recusar' ? 'reprovado' : 'cancelado',
+        concluido_em: new Date(),
+        motivo_conclusao: e.observacao,
+      });
+    }
+    const tot =
+      e.decisao === 'aprovar'
+        ? await refazerTotal(
+            tx,
+            c.id,
+            a['tipo'] === 'desconto'
+              ? { acrescimo: 0, desconto: n(a['valor']) }
+              : { acrescimo: n(a['valor']), desconto: 0 },
+          )
+        : null;
     return { id: e.id, situacao, total: tot?.valor_total ?? c.valorTotal };
   },
   alvo: (e) => ({ tabela: 'ajuste_conta', id: e.id }),
@@ -629,10 +797,10 @@ export const opDecidirAjuste = definirOperacao({
 async function versoesDo(
   l: Consulta,
   pacote: number,
-): Promise<(VersaoPacote & { quantidadeDiarias: number | null })[]> {
+): Promise<(VersaoPacote & { quantidadeDiarias: number | null; dados: unknown })[]> {
   return (
     await l.consultar<Linha>(
-      'SELECT id, numero_versao, vigencia_inicio, vigencia_fim, valor, quantidade_diarias FROM pacote_versao WHERE pacote_id = ? ORDER BY numero_versao',
+      'SELECT id, numero_versao, vigencia_inicio, vigencia_fim, valor, quantidade_diarias, dados FROM pacote_versao WHERE pacote_id = ? ORDER BY numero_versao',
       [pacote],
     )
   ).map((v) => ({
@@ -642,8 +810,21 @@ async function versoesDo(
     vigenciaFim: dataIso(v['vigencia_fim']),
     valor: nn(v['valor']),
     quantidadeDiarias: nn(v['quantidade_diarias']),
+    dados: v['dados'] ?? null,
   }));
 }
+
+/** A composição que governa a conta: o retrato da versão encerrada ou a composição atual da versão aberta. */
+async function composicaoParaConta(
+  l: Consulta,
+  pacote: number,
+  versao: (VersaoPacote & { dados: unknown }) | null | undefined,
+) {
+  return composicaoDaVersao(versao ?? null, versao?.dados ?? null, await composicaoDo(l, pacote));
+}
+
+const adicionalDe = (d: { diariaItemId: number | null; valorDiariaAdicional: number | null } | undefined) =>
+  d ? { itemId: d.diariaItemId, valor: d.valorDiariaAdicional } : null;
 
 async function composicaoDo(l: Consulta, pacote: number) {
   const inclusoes = (
@@ -737,8 +918,10 @@ export const opVersionarPacote = definirOperacao({
     const ultima = versoes[versoes.length - 1];
     if (ultima && (ultima.vigenciaFim === null || ultima.vigenciaFim >= e.vigenciaInicio)) {
       const vv = await tx.uma<Linha>('SELECT versao FROM pacote_versao WHERE id = ?', [ultima.id]);
+      // Ao encerrar, a versão guarda o retrato da composição em que vigorou: contas da época seguem por ele.
       await tx.alterar('pacote_versao', ultima.id, n(vv?.['versao']), {
         vigencia_fim: vespera(e.vigenciaInicio),
+        dados: JSON.stringify(await composicaoDo(tx, e.pacoteId)),
       });
     }
     const numero = (ultima?.numero ?? 0) + 1;
@@ -968,21 +1151,19 @@ export async function pacotesContaPropria(l: Leitor, est: number, conta: number)
       WHERE cp.conta_hospitalar_id = ? AND cp.excluido_em IS NULL ORDER BY cp.id`,
     [c.id],
   );
-  const dias = diasDePermanencia(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
+  const dias = diasDePermanenciaPacote(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
   const lidos = [];
   for (const a of aplicados) {
     const ativo = a['descaracterizacao_pacote_id'] === null;
-    const comp = await composicaoDo(l, n(a['pacote_id']));
-    const itens = ativo ? await itensParaPacote(l, c.id, n(a['id'])) : [];
-    const classes = classificarItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
     const versao =
       a['pacote_versao_id'] === null
         ? null
         : (await versoesDo(l, n(a['pacote_id']))).find((v) => v.id === n(a['pacote_versao_id']));
-    const diarias =
-      comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao)?.quantidadeDiarias ??
-      versao?.quantidadeDiarias ??
-      null;
+    const comp = await composicaoParaConta(l, n(a['pacote_id']), versao);
+    const itens = ativo ? await itensParaPacote(l, c.id, n(a['id'])) : [];
+    const classes = classificarItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
+    const daAcomodacao = comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao);
+    const diarias = daAcomodacao?.quantidadeDiarias ?? versao?.quantidadeDiarias ?? null;
     lidos.push({
       id: n(a['id']),
       versao: n(a['versao']),
@@ -1000,7 +1181,16 @@ export async function pacotesContaPropria(l: Leitor, est: number, conta: number)
           },
       inclusos: itens.filter((i) => classes.get(i.id) === 'incluso').length,
       aParte: itens.filter((i) => classes.get(i.id) === 'a_parte').length,
-      alertas: ativo ? alertasDoPacote(itens as ItemParaPacote[], classes, comp.tetos, dias, diarias) : [],
+      alertas: ativo
+        ? alertasDoPacote(
+            itens as ItemParaPacote[],
+            classes,
+            comp.tetos,
+            dias,
+            diarias,
+            adicionalDe(daAcomodacao),
+          )
+        : [],
     });
   }
   const candidatos = (
@@ -1042,7 +1232,7 @@ export const opAplicarPacote = definirOperacao({
   entrada: z.object({ contaId: id, pacoteId: id }),
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [e.contaId]);
+    await travarConta(tx, est, e.contaId);
     const c = await contaDa(tx, est, e.contaId);
     exigirEditavel(c);
     const data = dataIso(c.inicio)!;
@@ -1069,7 +1259,9 @@ export const opAplicarPacote = definirOperacao({
         'O pacote já foi descaracterizado nesta conta: a cobrança segue aberta.',
         { campos: ['pacoteId'] },
       );
-    const versao = versaoVigente(await versoesDo(tx, e.pacoteId), data);
+    const versoes = await versoesDo(tx, e.pacoteId);
+    const vigente = versaoVigente(versoes, data);
+    const versao = vigente ? (versoes.find((v) => v.id === vigente.id) ?? null) : null;
     let cpId: number;
     let valor = 0;
     if (!cp) {
@@ -1116,7 +1308,7 @@ export const opAplicarPacote = definirOperacao({
       });
     } else cpId = n(cp['id']);
     // Classifica os itens já lançados: o incluso fica na conta sem cobrança, ligado ao pacote; o resto segue cobrado.
-    const comp = await composicaoDo(tx, e.pacoteId);
+    const comp = await composicaoParaConta(tx, e.pacoteId, versao);
     const itens = await itensParaPacote(tx, c.id, cpId);
     const classes = classificarItens(itens, comp.inclusoes, comp.excecoes, c.acomodacao);
     let inclusos = 0;
@@ -1137,17 +1329,20 @@ export const opAplicarPacote = definirOperacao({
         });
     }
     const tot = await refazerTotal(tx, c.id);
-    const dias = diasDePermanencia(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
+    const dias = diasDePermanenciaPacote(data, dataIso(c.fim) ?? new Date().toISOString().slice(0, 10));
+    const daAcomodacao = comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao);
     const diarias =
-      comp.diarias.find((d) => d.categoriaAcomodacaoId === c.acomodacao)?.quantidadeDiarias ??
-      versao?.quantidadeDiarias ??
-      nn(p['quantidade_diarias']);
+      daAcomodacao?.quantidadeDiarias ?? versao?.quantidadeDiarias ?? nn(p['quantidade_diarias']);
+    // O resultado da operação é plano (vai à trilha): os alertas seguem como texto; a tela lê o detalhe pela leitura.
+    const alertas = alertasDoPacote(itens, classes, comp.tetos, dias, diarias, adicionalDe(daAcomodacao));
     return {
       id: cpId,
-      valor: valor || undefined,
+      valor: valor || null,
       inclusos,
       total: tot.valor_total,
-      alertas: alertasDoPacote(itens, classes, comp.tetos, dias, diarias),
+      alertas: alertas.length,
+      descaracterizaPorAlerta: alertas.some((a) => a.descaracteriza),
+      avisos: alertas.map((a) => a.mensagem).join(' '),
     };
   },
   alvo: (_e, s) => ({ tabela: 'conta_hospitalar_pacote', id: s.id }),
@@ -1197,14 +1392,14 @@ export const opDescaracterizar = definirOperacao({
     const est = estDe(ctx);
     if (ctx.usuario === null)
       throw recusa('sem-usuario', 'A descaracterização exige usuário identificado.', { campos: [] });
+    // Só o pacote de conta do estabelecimento da sessão: a conta alheia nem é travada.
     const cp = await tx.uma<Linha>(
-      'SELECT * FROM conta_hospitalar_pacote WHERE id = ? AND excluido_em IS NULL',
-      [e.id],
+      `SELECT cp.* FROM conta_hospitalar_pacote cp JOIN conta_hospitalar c ON c.id = cp.conta_hospitalar_id
+        WHERE cp.id = ? AND cp.excluido_em IS NULL AND c.estabelecimento_id = ?`,
+      [e.id, est],
     );
     if (!cp) throw recusa('nao-encontrado', 'O pacote não está nesta conta.', { campos: ['id'] });
-    await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [
-      n(cp['conta_hospitalar_id']),
-    ]);
+    await travarConta(tx, est, n(cp['conta_hospitalar_id']));
     const c = await contaDa(tx, est, n(cp['conta_hospitalar_id']));
     exigirEditavel(c);
     if (cp['descaracterizacao_pacote_id'] !== null)

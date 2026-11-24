@@ -95,8 +95,8 @@ async function acao(f: () => Promise<unknown>) {
   mensagem.value = null;
   gravando.value = true;
   try {
-    const r = (await f()) as { alertas?: { mensagem: string }[] };
-    mensagem.value = r.alertas?.length ? r.alertas.map((a) => a.mensagem).join(' ') : t('gravado');
+    const r = (await f()) as { avisos?: string };
+    mensagem.value = r.avisos ? r.avisos : t('gravado');
     chave = novaChave('ajustes');
     await qc.invalidateQueries({ queryKey: ['faturamento'] });
     return true;

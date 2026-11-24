@@ -8,7 +8,7 @@ import {
   conferirAlcadaDoValor,
   conferirDecisaoAjuste,
   diaDaSemana,
-  diasDePermanencia,
+  diasDePermanenciaPacote,
   type FaixaHorarioEspecial,
   faixaDoHorario,
   totaisDosAjustes,
@@ -276,8 +276,8 @@ describe('pacote na conta (linha 20)', () => {
     expect(a.map((x) => x.tipo)).toEqual(['teto', 'teto', 'diarias']);
     expect(a[0]!.descaracteriza).toBe(true);
     expect(alertasDoPacote(itens, cl, [], 1, 2)).toEqual([]);
-    expect(diasDePermanencia('2026-01-01', '2026-01-03')).toBe(2);
-    expect(diasDePermanencia('2026-01-01', '2026-01-01')).toBe(1);
+    expect(diasDePermanenciaPacote('2026-01-01', '2026-01-03')).toBe(2);
+    expect(diasDePermanenciaPacote('2026-01-01', '2026-01-01')).toBe(1);
   });
 });
 

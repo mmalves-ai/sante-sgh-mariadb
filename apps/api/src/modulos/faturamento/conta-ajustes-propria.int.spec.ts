@@ -7,6 +7,9 @@
 // - pacote: versão nova fecha a anterior; exceção e teto gravados; aplicar lança o item do pacote, deixa o incluso sem
 //   cobrança e o da exceção cobrado; descaracterizar grava motivo e autor, devolve o incluso à cobrança e estorna o item
 //   do pacote (nada apagado).
+// - correções da revisão: acréscimo manual do item e desconto do cabeçalho sem linha de ajuste preservados ao aplicar
+//   o horário; alçada por valor (pedido de aprovação gravado, decisor sem alçada suficiente recusado, decisão gravada);
+//   conta de data antiga segue o retrato da versão encerrada do pacote; outro estabelecimento é recusado sem gravar.
 // No fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -27,7 +30,7 @@ async function codigoDo(p: Promise<unknown>): Promise<string> {
   try {
     await p;
   } catch (e) {
-    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema['tipo'] ?? '');
+    if (e instanceof ErroOperacao) return String(e.problema.codigo ?? '');
     throw e;
   }
   throw new Error('esperava recusa');
@@ -46,6 +49,9 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     tipoConta: 0,
     u1: 0,
     u2: 0,
+    u3: 0,
+    estB: 0,
+    tipoAprov: 0,
   };
   const m = {
     grupo: 0,
@@ -57,6 +63,9 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     atendimento: 0,
     conta: 0,
     conta2: 0,
+    conta3: 0,
+    conta4: 0,
+    cp4: 0,
   };
   const op = (usuario: number | null = ids.u1): ContextoOperacao => ({
     cliente: CLIENTE,
@@ -66,6 +75,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     chaveIdempotencia: `f375-${randomUUID()}`,
     reautenticadoEm: Date.now(),
   });
+  const opEm = (est: number, usuario: number): ContextoOperacao => ({ ...op(usuario), estabelecimento: est });
   const ctxL = () => ({
     cliente: CLIENTE,
     estabelecimento: ids.est,
@@ -81,6 +91,15 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       'SELECT id FROM conta_hospitalar WHERE estabelecimento_id = ? AND numero LIKE ?',
       [ids.est, `${P}%`],
     );
+    await e.executar('DELETE FROM ajuste_conta WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar(
+      "DELETE d FROM decisao_aprovacao d JOIN pedido_aprovacao p ON p.id = d.pedido_aprovacao_id WHERE p.estabelecimento_id = ? AND p.entidade = 'ajuste_conta'",
+      [ids.est],
+    );
+    await e.executar(
+      "DELETE FROM pedido_aprovacao WHERE estabelecimento_id = ? AND entidade = 'ajuste_conta'",
+      [ids.est],
+    );
     for (const { id } of contas) {
       await e.executar('DELETE FROM ajuste_conta WHERE conta_hospitalar_id = ?', [id]);
       await e.executar(
@@ -92,6 +111,11 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       await e.executar('DELETE FROM conta_hospitalar_pacote WHERE conta_hospitalar_id = ?', [id]);
       await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [id]);
     }
+    await e.executar(
+      'DELETE n FROM alcada_aprovacao_nivel n JOIN alcada_aprovacao a ON a.id = n.alcada_aprovacao_id WHERE a.estabelecimento_id = ?',
+      [ids.est],
+    );
+    await e.executar('DELETE FROM alcada_aprovacao WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar('DELETE FROM motivo_ajuste_conta WHERE codigo LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM motivo_descaracterizacao_pacote WHERE codigo LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM acrescimo_horario_especial WHERE estabelecimento_id = ?', [ids.est]);
@@ -121,6 +145,20 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
         [`${P}A`],
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
+      );
+      ids.estB = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [`${P}B`],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P} SINTETICO B`, `ESTAB ${P} SINTETICO B`, agora],
+      );
+      ids.tipoAprov = await garantir(
+        e,
+        "SELECT id FROM tipo_documento_aprovacao WHERE codigo = 'ajuste_conta'",
+        [],
+        "INSERT INTO tipo_documento_aprovacao (codigo, descricao, entidade, tipo_limite, criado_em) VALUES ('ajuste_conta', 'Acréscimo ou desconto na conta do paciente', 'ajuste_conta', 'valor', ?)",
+        [agora],
       );
       await limpar(e);
       ids.fonte = await garantir(
@@ -185,6 +223,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
         );
       ids.u1 = await usuario(`${P.toLowerCase()}.pede`);
       ids.u2 = await usuario(`${P.toLowerCase()}.aprova`);
+      ids.u3 = await usuario(`${P.toLowerCase()}.gerente`);
       m.grupo = await garantir(
         e,
         'SELECT id FROM grupo_faturamento WHERE codigo = ?',
@@ -262,6 +301,26 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       await lancar(m.conta, 3, m.itemB, m.grupo2, '2026-01-22 18:00:00', 100);
       await lancar(m.conta2, 1, m.itemA, m.grupo, '2026-01-20 17:00:00', 300);
       await lancar(m.conta2, 2, m.itemB, m.grupo2, '2026-01-20 18:00:00', 50);
+      // Conta 3: desconto de 15 no cabeçalho sem linha de ajuste (importado) e item noturno com acréscimo manual de 10.
+      m.conta3 = await conta(`${P}-C3`);
+      await e.executar(
+        'UPDATE conta_hospitalar SET valor_itens = 110, valor_desconto = 15, valor_total = 95 WHERE id = ?',
+        [m.conta3],
+      );
+      await e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_acrescimo, valor_total, criado_em)
+         VALUES (?, 1, ?, ?, '2026-01-21 02:00:00', 1, 100, 10, 110, ?)`,
+        [m.conta3, m.itemA, m.grupo, agora],
+      );
+      // Conta 4: de 2025, na vigência da versão 1 do pacote; o item B é exceção só na composição atual.
+      m.conta4 = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2025-06-01', '2025-06-10 11:00:00', '2025-06-11 11:00:00', ?)`,
+        [ids.est, `${P}-C4`, m.atendimento, ids.paciente, ids.fonte, ids.tipoConta, agora],
+      );
+      await lancar(m.conta4, 1, m.itemB, m.grupo2, '2025-06-10 15:00:00', 70);
       await e.inserir(
         "INSERT INTO feriado (data, nome, abrangencia, estabelecimento_id, criado_em) VALUES ('2026-01-22', ?, 'estabelecimento', ?, ?)",
         [`FERIADO ${P}`, ids.est, agora],
@@ -274,7 +333,7 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     if (!nucleo) return;
     await escrever(async (e) => {
       await limpar(e);
-      await limparTrilhaDaMassa(e, { ids: [ids.est] });
+      await limparTrilhaDaMassa(e, { ids: [ids.est, ids.estB] });
     });
     await nucleo.encerrar();
   });
@@ -404,12 +463,14 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       valor: 20,
       justificativa: 'Acréscimo sintético pedido',
     })) as { id: number };
+    const [ax] = await linhas('SELECT versao FROM ajuste_conta WHERE id = ?', [x.id]);
+    const vx = Number(ax!['versao']);
     expect(
-      await codigoDo(s.gravar('ajuste.decidir', op(ids.u2), { id: x.id, versao: 1, decisao: 'recusar' })),
+      await codigoDo(s.gravar('ajuste.decidir', op(ids.u2), { id: x.id, versao: vx, decisao: 'recusar' })),
     ).toBe('entrada-invalida');
     await s.gravar('ajuste.decidir', op(ids.u2), {
       id: x.id,
-      versao: 1,
+      versao: vx,
       decisao: 'recusar',
       observacao: 'Sem respaldo no acordo',
     });
@@ -468,14 +529,11 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       id: number;
       inclusos: number;
       total: number;
-      alertas: { tipo: string; descaracteriza: boolean }[];
+      alertas: number;
     };
     expect(ap.inclusos).toBe(1);
     expect(ap.total).toBe(1050);
-    expect(ap.alertas.map((a) => [a.tipo, a.descaracteriza])).toEqual([
-      ['teto', true],
-      ['diarias', false],
-    ]);
+    expect(ap.alertas).toBe(2);
     const itens = await linhas(
       'SELECT item_faturavel_id, situacao, pertence_pacote, tipo_valorizacao, valor_total FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia',
       [m.conta2],
@@ -493,6 +551,10 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
       [m.itemPac, 'lancado', 1, 'pacote'],
     ]);
     const tela = await s.ler(ctxL(), (l, est) => pacotesContaPropria(l, est, m.conta2));
+    expect(tela.aplicados[0]!.alertas.map((a) => [a.tipo, a.descaracteriza])).toEqual([
+      ['teto', true],
+      ['diarias', false],
+    ]);
     expect(tela.aplicados[0]).toMatchObject({
       ativo: true,
       numeroVersao: 2,
@@ -546,5 +608,171 @@ describe.skipIf(SEM_BANCO)('ajustes de valor na conta (MariaDB)', () => {
     expect(await codigoDo(s.gravar('pacote.aplicar', op(), { contaId: m.conta2, pacoteId: m.pacote }))).toBe(
       'pacote-descaracterizado',
     );
+  });
+
+  it('horário preserva o acréscimo manual do item e o desconto do cabeçalho sem linha de ajuste', async () => {
+    const r = await s.gravar('horario.aplicar', op(), { contaId: m.conta3 });
+    expect(r).toMatchObject({ alterados: 1 });
+    const [i] = await linhas(
+      'SELECT valor_acrescimo, valor_acrescimo_horario, valor_total FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+      [m.conta3],
+    );
+    // noturno 30% sobre a base de 100 (sem o acréscimo manual): 30 de horário + 10 manual
+    expect([
+      Number(i!['valor_acrescimo']),
+      Number(i!['valor_acrescimo_horario']),
+      Number(i!['valor_total']),
+    ]).toEqual([40, 30, 140]);
+    const [c] = await linhas(
+      'SELECT valor_itens, valor_desconto, valor_total FROM conta_hospitalar WHERE id = ?',
+      [m.conta3],
+    );
+    expect([Number(c!['valor_itens']), Number(c!['valor_desconto']), Number(c!['valor_total'])]).toEqual([
+      140, 15, 125,
+    ]);
+    expect(await s.gravar('horario.aplicar', op(), { contaId: m.conta3 })).toMatchObject({ alterados: 0 });
+  });
+
+  it('alçada por valor: pedido de aprovação gravado, decisor sem alçada recusado, decisão no mecanismo', async () => {
+    const alc = await escrever(async (e) => {
+      const agora = new Date();
+      const a = await e.inserir(
+        `INSERT INTO alcada_aprovacao (estabelecimento_id, tipo_documento_aprovacao_id, descricao, vigencia_inicio, criado_em)
+         VALUES (?, ?, ?, '2020-01-01', ?)`,
+        [ids.est, ids.tipoAprov, `ALCADA ${P}`, agora],
+      );
+      const nv = (seq: number, usuario: number, max: number | null) =>
+        e.inserir(
+          `INSERT INTO alcada_aprovacao_nivel (alcada_aprovacao_id, sequencia, nivel, aprovador_usuario_id, valor_unitario_maximo, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [a, seq, seq, usuario, max, agora],
+        );
+      return { a, n1: await nv(1, ids.u2, 30), n2: await nv(2, ids.u3, null) };
+    });
+    const [mot] = await linhas('SELECT id FROM motivo_ajuste_conta WHERE codigo = ?', [`${P}D`]);
+    const d = (await s.gravar('ajuste.pedir', op(), {
+      contaId: m.conta,
+      tipo: 'desconto',
+      motivoId: Number(mot!['id']),
+      valor: 40,
+      justificativa: 'Desconto acima da alçada do faturista',
+    })) as { id: number; pedidoAprovacaoId: number };
+    const [pa] = await linhas(
+      'SELECT alcada_aprovacao_id, entidade, entidade_id, valor, situacao, solicitante_usuario_id FROM pedido_aprovacao WHERE id = ?',
+      [d.pedidoAprovacaoId],
+    );
+    expect([
+      Number(pa!['alcada_aprovacao_id']),
+      pa!['entidade'],
+      Number(pa!['entidade_id']),
+      Number(pa!['valor']),
+    ]).toEqual([alc.a, 'ajuste_conta', d.id, 40]);
+    expect(pa!['situacao']).toBe('pendente');
+    const [aj] = await linhas('SELECT pedido_aprovacao_id, versao FROM ajuste_conta WHERE id = ?', [d.id]);
+    expect(Number(aj!['pedido_aprovacao_id'])).toBe(d.pedidoAprovacaoId);
+    const versao = Number(aj!['versao']);
+    expect(
+      await codigoDo(s.gravar('ajuste.decidir', op(ids.u2), { id: d.id, versao, decisao: 'aprovar' })),
+    ).toBe('alcada');
+    const [ainda] = await linhas('SELECT situacao FROM ajuste_conta WHERE id = ?', [d.id]);
+    expect(ainda!['situacao']).toBe('pendente_aprovacao');
+    await s.gravar('ajuste.decidir', op(ids.u3), { id: d.id, versao, decisao: 'aprovar' });
+    const [pd] = await linhas('SELECT situacao, concluido_em FROM pedido_aprovacao WHERE id = ?', [
+      d.pedidoAprovacaoId,
+    ]);
+    expect(pd!['situacao']).toBe('aprovado');
+    expect(pd!['concluido_em']).not.toBeNull();
+    const dec = await linhas(
+      'SELECT aprovador_usuario_id, alcada_aprovacao_nivel_id, nivel, decisao, valor_aprovado FROM decisao_aprovacao WHERE pedido_aprovacao_id = ?',
+      [d.pedidoAprovacaoId],
+    );
+    expect(
+      dec.map((x) => [
+        Number(x['aprovador_usuario_id']),
+        Number(x['alcada_aprovacao_nivel_id']),
+        Number(x['nivel']),
+        x['decisao'],
+        Number(x['valor_aprovado']),
+      ]),
+    ).toEqual([[ids.u3, alc.n2, 2, 'aprovado', 40]]);
+    // O cabeçalho soma só a diferença do aprovado: 50,50 de antes + 40.
+    const [c] = await linhas('SELECT valor_desconto, valor_total FROM conta_hospitalar WHERE id = ?', [
+      m.conta,
+    ]);
+    expect([Number(c!['valor_desconto']), Number(c!['valor_total'])]).toEqual([90.5, 414.5]);
+  });
+
+  it('pacote: conta de data antiga segue o retrato da versão encerrada, não a composição atual', async () => {
+    const ap = (await s.gravar('pacote.aplicar', op(), { contaId: m.conta4, pacoteId: m.pacote })) as {
+      id: number;
+      inclusos: number;
+      total: number;
+    };
+    m.cp4 = ap.id;
+    // versão 1 (2025): retrato sem exceção, pacote fechado, o item B fica incluso; a composição atual o cobraria à parte
+    expect(ap).toMatchObject({ inclusos: 1, total: 800 });
+    const itens = await linhas(
+      'SELECT item_faturavel_id, situacao FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? ORDER BY sequencia',
+      [m.conta4],
+    );
+    expect(itens.map((i) => [Number(i['item_faturavel_id']), i['situacao']])).toEqual([
+      [m.itemB, 'sem_cobranca'],
+      [m.itemPac, 'lancado'],
+    ]);
+    const tela = await s.ler(ctxL(), (l, est) => pacotesContaPropria(l, est, m.conta4));
+    expect(tela.aplicados[0]).toMatchObject({ numeroVersao: 1, inclusos: 1, aParte: 0 });
+  });
+
+  it('outro estabelecimento: decidir, pedir, aplicar e descaracterizar recusados, sem gravar', async () => {
+    const [mot] = await linhas('SELECT id FROM motivo_ajuste_conta WHERE codigo = ?', [`${P}A`]);
+    const x = (await s.gravar('ajuste.pedir', op(), {
+      contaId: m.conta,
+      tipo: 'acrescimo',
+      motivoId: Number(mot!['id']),
+      valor: 5,
+      justificativa: 'Acréscimo para o teste de isolamento',
+    })) as { id: number };
+    const fora = opEm(ids.estB, ids.u3);
+    expect(
+      await codigoDo(s.gravar('ajuste.decidir', fora, { id: x.id, versao: 2, decisao: 'aprovar' })),
+    ).toBe('nao-encontrado');
+    expect(
+      await codigoDo(
+        s.gravar('ajuste.pedir', fora, {
+          contaId: m.conta,
+          tipo: 'acrescimo',
+          motivoId: Number(mot!['id']),
+          valor: 5,
+          justificativa: 'Pedido de outro estabelecimento',
+        }),
+      ),
+    ).toBe('nao-encontrado');
+    expect(await codigoDo(s.gravar('pacote.aplicar', fora, { contaId: m.conta4, pacoteId: m.pacote }))).toBe(
+      'nao-encontrado',
+    );
+    expect(await codigoDo(s.gravar('horario.aplicar', fora, { contaId: m.conta }))).toBe('nao-encontrado');
+    const [mm] = await linhas('SELECT id FROM motivo_descaracterizacao_pacote WHERE codigo = ?', [`${P}M`]);
+    const [cp] = await linhas('SELECT versao FROM conta_hospitalar_pacote WHERE id = ?', [m.cp4]);
+    expect(
+      await codigoDo(
+        s.gravar('pacote.descaracterizar', fora, {
+          id: m.cp4,
+          versao: Number(cp!['versao']),
+          motivoId: Number(mm!['id']),
+          justificativa: 'Tentativa de outro estabelecimento',
+        }),
+      ),
+    ).toBe('nao-encontrado');
+    const [a] = await linhas('SELECT situacao FROM ajuste_conta WHERE id = ?', [x.id]);
+    expect(a!['situacao']).toBe('pendente_aprovacao');
+    const [cpd] = await linhas(
+      'SELECT descaracterizacao_pacote_id FROM conta_hospitalar_pacote WHERE id = ?',
+      [m.cp4],
+    );
+    expect(cpd!['descaracterizacao_pacote_id']).toBeNull();
+    const [n] = await linhas('SELECT COUNT(*) AS n FROM ajuste_conta WHERE estabelecimento_id = ?', [
+      ids.estB,
+    ]);
+    expect(Number(n!['n'])).toBe(0);
   });
 });

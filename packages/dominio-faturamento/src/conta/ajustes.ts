@@ -560,7 +560,7 @@ export function alertasDoPacote(
 }
 
 /** Dias de permanência entre o início e o fim (ou a data de referência), contando o dia de entrada. */
-export function diasDePermanencia(inicio: string, fim: string): number {
+export function diasDePermanenciaPacote(inicio: string, fim: string): number {
   const a = Date.parse(`${inicio.slice(0, 10)}T00:00:00Z`);
   const b = Date.parse(`${fim.slice(0, 10)}T00:00:00Z`);
   return Math.max(1, Math.round((b - a) / 86_400_000) + (b > a ? 0 : 1));
