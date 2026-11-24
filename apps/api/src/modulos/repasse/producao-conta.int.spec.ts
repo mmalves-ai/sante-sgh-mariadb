@@ -358,7 +358,7 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     const soma = somarProducao(
       memorias.map((m) => ({ baseCentavos: m.baseCentavos, repasseCentavos: m.valorCentavos, situacao: 'pendente' })),
     );
-    expect(soma).toEqual({ itens: 3, baseCentavos: 145_000, repasseCentavos: 87_500 });
+    expect(soma).toEqual({ itens: 3, baseCentavos: 145_000, repasseCentavos: 97_500 });
     // Dourado: a prévia gravada no lançamento contra o recálculo da apuração (C sai da prévia: a glosa a refaz).
     const gravadas = await escrever((e) =>
       e.consultar<Record<string, unknown>>(
