@@ -3,7 +3,10 @@
 // isolado ao caso de infecção da comissão de controle de infecção hospitalar (CCIH). A regra mora em
 // @sgh/dominio-sadt (microbiologia/antibiograma.ts); aqui fica a leitura do cadastro e a gravação do que a regra decide.
 // Nada se apaga: o isolado ou o teste que sai da cultura recebe exclusão lógica (volta se for informado de novo), a
-// cultura final só muda por retificação com motivo, e cada gravação vai à trilha na mesma transação (Executor).
+// cultura final só muda por retificação com motivo, e a retificação guarda antes a cultura inteira que vigorava (com o
+// laudo emitido) em resultado_cultura_versao, consultável. Toda gravação depois da primeira exige a versão lida
+// (conflito de edição). O isolado da cultura final que a regra manda notificar entra na fila de busca ativa da CCIH
+// (sinal_vigilancia_iras, uma vez por isolado). Cada gravação vai à trilha na mesma transação (Executor).
 import {
   conferirCultura,
   type Crescimento,
@@ -12,6 +15,7 @@ import {
   type ItemPainel,
   laudoDaCultura,
   multirresistente,
+  notificaControleInfeccao,
   type PontoCorte,
   RecusaMicrobiologia,
 } from '@sgh/dominio-sadt';
@@ -43,6 +47,8 @@ export const TABELAS_MICROBIOLOGIA = [
   'isolado_microbiano',
   'resultado_sensibilidade',
   'caso_infeccao_microrganismo',
+  'resultado_cultura_versao',
+  'sinal_vigilancia_iras',
 ] as const;
 
 const id = z.number().int().positive();
@@ -89,7 +95,7 @@ export const esquemaCultura = z.object({
   final: z.boolean().default(false),
   /** Obrigatório para mudar a cultura já final (retificação). */
   motivoRetificacao: z.string().trim().min(5).max(500).nullable().default(null),
-  /** Versão lida da cultura (conflito de edição): nula na primeira gravação. */
+  /** Versão lida da cultura (conflito de edição): nula só na primeira gravação; depois, obrigatória. */
   versao: z.number().int().min(1).nullable().default(null),
   isolados: z.array(esquemaIsolado).max(10).default([]),
 });
@@ -160,6 +166,7 @@ export class ServicoMicrobiologia {
     tabela: string,
     motivo: string | null,
     fn: (tx: TxOperacao, est: number) => Promise<T & { id: number }>,
+    dadosTrilha: (feito: T & { id: number }) => Record<string, unknown> = () => ({}),
   ): Promise<T & { id: number }> {
     const est = this.est(c);
     let feito: (T & { id: number }) | null = null;
@@ -172,7 +179,7 @@ export class ServicoMicrobiologia {
         return { id: feito.id };
       },
       alvo: () => ({ tabela, id: feito?.id ?? null }),
-      trilha: () => ({ dados: { evento: nome }, motivo }),
+      trilha: () => ({ dados: { evento: nome, ...(feito ? dadosTrilha(feito) : {}) }, motivo }),
     });
     const chave = `sadt-micro:${c.chaveIdempotencia ?? randomUUID()}`;
     await this.executor.executar(
@@ -237,14 +244,14 @@ export class ServicoMicrobiologia {
   /** O resultado do exame no estabelecimento, com o paciente; recusa o de outro estabelecimento. */
   private async resultadoDoEstabelecimento(l: Leitor, resultado: number, est: number) {
     const r = await l.uma(
-      `SELECT re.id, re.paciente_id FROM resultado_exame re
+      `SELECT re.id, re.paciente_id, rq.atendimento_id FROM resultado_exame re
          JOIN exame_item ei ON ei.id = re.exame_item_id
          JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id
         WHERE re.id = ? AND rq.estabelecimento_id = ? AND re.excluido_em IS NULL`,
       [resultado, est],
     );
     if (!r) throw recusa('nao-encontrado', 'O resultado do exame não existe neste estabelecimento.');
-    return { paciente: n(r['paciente_id']) };
+    return { paciente: n(r['paciente_id']), atendimento: n(r['atendimento_id']) };
   }
 
   /** A cultura do resultado com isolados, antibiograma e o texto do laudo; nula quando ainda não foi digitada. */
@@ -252,90 +259,116 @@ export class ServicoMicrobiologia {
     const est = this.est(c);
     return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
       await this.resultadoDoEstabelecimento(l, resultado, est);
-      const rc = await l.uma(
-        `SELECT rc.*, mb.descricao AS material_nome FROM resultado_cultura rc
-           JOIN material_biologico mb ON mb.id = rc.material_biologico_id
-          WHERE rc.resultado_exame_id = ? AND rc.excluido_em IS NULL`,
+      return this.lerCultura(l, resultado);
+    });
+  }
+
+  /** As versões substituídas da cultura (retificações), da mais recente à mais antiga, com o laudo que vigorava. */
+  versoes(c: ContextoSadt, resultado: number) {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
+      await this.resultadoDoEstabelecimento(l, resultado, est);
+      const rs = await l.consultar(
+        `SELECT v.* FROM resultado_cultura_versao v JOIN resultado_cultura rc ON rc.id = v.resultado_cultura_id
+          WHERE rc.resultado_exame_id = ? ORDER BY v.versao_cultura DESC LIMIT 200`,
         [resultado],
       );
-      if (!rc) return null;
-      const isos = await l.consultar(
-        `SELECT im.*, mo.descricao AS microrganismo_nome FROM isolado_microbiano im
+      return rs.map((r) => ({
+        id: n(r['id']),
+        versaoCultura: n(r['versao_cultura']),
+        situacao: String(r['situacao']),
+        motivo: String(r['motivo']),
+        substituidaEm: r['substituida_em'],
+        substituidaPor: nn(r['substituida_por']),
+        conteudo: JSON.parse(String(r['conteudo'])) as unknown,
+      }));
+    });
+  }
+
+  /** A cultura do resultado com isolados, antibiograma e o texto do laudo; nula quando ainda não foi digitada. */
+  private async lerCultura(l: Leitor, resultado: number) {
+    const rc = await l.uma(
+      `SELECT rc.*, mb.descricao AS material_nome FROM resultado_cultura rc
+           JOIN material_biologico mb ON mb.id = rc.material_biologico_id
+          WHERE rc.resultado_exame_id = ? AND rc.excluido_em IS NULL`,
+      [resultado],
+    );
+    if (!rc) return null;
+    const isos = await l.consultar(
+      `SELECT im.*, mo.descricao AS microrganismo_nome FROM isolado_microbiano im
            JOIN microrganismo mo ON mo.id = im.microrganismo_id
           WHERE im.resultado_cultura_id = ? AND im.excluido_em IS NULL ORDER BY im.sequencia`,
-        [rc['id']],
-      );
-      const ts = isos.length
-        ? await l.consultar(
-            `SELECT rs.*, am.descricao AS antimicrobiano_nome FROM resultado_sensibilidade rs
+      [rc['id']],
+    );
+    const ts = isos.length
+      ? await l.consultar(
+          `SELECT rs.*, am.descricao AS antimicrobiano_nome FROM resultado_sensibilidade rs
                JOIN antimicrobiano am ON am.id = rs.antimicrobiano_id
               WHERE rs.excluido_em IS NULL AND rs.isolado_microbiano_id IN (${marcas(isos.length)}) ORDER BY rs.sequencia`,
-            isos.map((i) => i['id']),
-          )
-        : [];
-      const isolados = isos.map((i) => ({
-        id: n(i['id']),
-        sequencia: n(i['sequencia']),
-        microrganismo: n(i['microrganismo_id']),
-        microrganismoNome: String(i['microrganismo_nome'] ?? ''),
-        contagemUfcMl: nn(i['contagem_ufc_ml']),
-        multirresistente: sim(i['multirresistente']),
-        betalactamaseEspectroEstendido: sim(i['produtor_betalactamase_espectro_estendido']),
-        carbapenemase: sim(i['produtor_carbapenemase']),
-        resistenteMeticilina: sim(i['resistente_meticilina']),
-        resistenteVancomicina: sim(i['resistente_vancomicina']),
-        contaminanteProvavel: sim(i['contaminante_provavel']),
-        notificadoControleInfeccao: i['notificado_controle_infeccao_em'] !== null,
-        testes: ts
-          .filter((t) => n(t['isolado_microbiano_id']) === n(i['id']))
-          .map((t) => ({
-            antimicrobiano: n(t['antimicrobiano_id']),
-            antimicrobianoNome: String(t['antimicrobiano_nome'] ?? ''),
-            metodo: tx_(t['metodo']),
-            cim: nn(t['concentracao_inibitoria_minima']),
-            halo: nn(t['halo_mm']),
-            valorTexto: tx_(t['valor_medido_texto']),
-            interpretacao: String(t['interpretacao']) as z.infer<typeof interpretacao>,
-            pontoCorte: nn(t['ponto_corte_antimicrobiano_id']),
-            exibeNoLaudo: sim(t['exibe_no_laudo']),
-          })),
-      }));
-      const base = {
-        id: n(rc['id']),
-        versao: n(rc['versao']),
-        material: n(rc['material_biologico_id']),
-        materialNome: String(rc['material_nome'] ?? ''),
-        crescimento: String(rc['crescimento']) as Crescimento,
-        contagemColonias: tx_(rc['contagem_colonias']),
-        conclusao: tx_(rc['conclusao']),
-        observacao: tx_(rc['observacao']),
-        notificaControleInfeccao: sim(rc['notifica_controle_infeccao']),
-        situacao: String(rc['situacao']),
-        isolados,
-      };
-      const laudo = laudoDaCultura({
-        material: base.materialNome,
-        crescimento: base.crescimento,
-        contagemColonias: base.contagemColonias,
-        conclusao: base.conclusao,
-        situacao: base.situacao,
-        isolados: isolados.map((i) => ({
-          sequencia: i.sequencia,
-          microrganismo: i.microrganismoNome,
-          contagem: i.contagemUfcMl === null ? null : `${i.contagemUfcMl} UFC/mL`,
-          multirresistente: i.multirresistente,
-          testes: i.testes.map((t) => ({
-            antimicrobiano: t.antimicrobianoNome,
-            medida:
-              t.valorTexto ??
-              (t.cim !== null ? `CIM ${t.cim}` : t.halo !== null ? `halo ${t.halo} mm` : null),
-            interpretacao: t.interpretacao,
-            exibeNoLaudo: t.exibeNoLaudo,
-          })),
+          isos.map((i) => i['id']),
+        )
+      : [];
+    const isolados = isos.map((i) => ({
+      id: n(i['id']),
+      sequencia: n(i['sequencia']),
+      microrganismo: n(i['microrganismo_id']),
+      microrganismoNome: String(i['microrganismo_nome'] ?? ''),
+      contagemUfcMl: nn(i['contagem_ufc_ml']),
+      multirresistente: sim(i['multirresistente']),
+      betalactamaseEspectroEstendido: sim(i['produtor_betalactamase_espectro_estendido']),
+      carbapenemase: sim(i['produtor_carbapenemase']),
+      resistenteMeticilina: sim(i['resistente_meticilina']),
+      resistenteVancomicina: sim(i['resistente_vancomicina']),
+      contaminanteProvavel: sim(i['contaminante_provavel']),
+      notificadoControleInfeccao: i['notificado_controle_infeccao_em'] !== null,
+      testes: ts
+        .filter((t) => n(t['isolado_microbiano_id']) === n(i['id']))
+        .map((t) => ({
+          antimicrobiano: n(t['antimicrobiano_id']),
+          antimicrobianoNome: String(t['antimicrobiano_nome'] ?? ''),
+          metodo: tx_(t['metodo']),
+          cim: nn(t['concentracao_inibitoria_minima']),
+          halo: nn(t['halo_mm']),
+          valorTexto: tx_(t['valor_medido_texto']),
+          interpretacao: String(t['interpretacao']) as z.infer<typeof interpretacao>,
+          pontoCorte: nn(t['ponto_corte_antimicrobiano_id']),
+          exibeNoLaudo: sim(t['exibe_no_laudo']),
         })),
-      });
-      return { ...base, laudo };
+    }));
+    const base = {
+      id: n(rc['id']),
+      versao: n(rc['versao']),
+      material: n(rc['material_biologico_id']),
+      materialNome: String(rc['material_nome'] ?? ''),
+      crescimento: String(rc['crescimento']) as Crescimento,
+      contagemColonias: tx_(rc['contagem_colonias']),
+      conclusao: tx_(rc['conclusao']),
+      observacao: tx_(rc['observacao']),
+      notificaControleInfeccao: sim(rc['notifica_controle_infeccao']),
+      situacao: String(rc['situacao']),
+      isolados,
+    };
+    const laudo = laudoDaCultura({
+      material: base.materialNome,
+      crescimento: base.crescimento,
+      contagemColonias: base.contagemColonias,
+      conclusao: base.conclusao,
+      situacao: base.situacao,
+      isolados: isolados.map((i) => ({
+        sequencia: i.sequencia,
+        microrganismo: i.microrganismoNome,
+        contagem: i.contagemUfcMl === null ? null : `${i.contagemUfcMl} UFC/mL`,
+        multirresistente: i.multirresistente,
+        testes: i.testes.map((t) => ({
+          antimicrobiano: t.antimicrobianoNome,
+          medida:
+            t.valorTexto ?? (t.cim !== null ? `CIM ${t.cim}` : t.halo !== null ? `halo ${t.halo} mm` : null),
+          interpretacao: t.interpretacao,
+          exibeNoLaudo: t.exibeNoLaudo,
+        })),
+      })),
     });
+    return { ...base, laudo };
   }
 
   /** Grava a cultura inteira do resultado (cabeçalho, isolados e antibiograma) numa transação. */
@@ -362,7 +395,7 @@ export class ServicoMicrobiologia {
       'resultado_cultura',
       e.motivoRetificacao,
       async (tx, est) => {
-        await this.resultadoDoEstabelecimento(tx, resultado, est);
+        const doResultado = await this.resultadoDoEstabelecimento(tx, resultado, est);
         const f = await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
         const hoje = relogioNoFuso(String(f?.['fuso_horario'] ?? '') || FUSO_PADRAO).hoje;
         const agora = new Date();
@@ -375,8 +408,25 @@ export class ServicoMicrobiologia {
         const jaFinal = atual && ['final', 'retificado'].includes(String(atual['situacao']));
         if (jaFinal && (!o.retificacao || !e.motivoRetificacao))
           throw recusa('cultura-final', 'A cultura já é final: só a retificação, com motivo, a altera.');
-        if (atual && e.versao !== null && e.versao !== n(atual['versao']))
-          throw recusa('conflito-versao', 'A cultura mudou desde a leitura; abra de novo.');
+        if (atual && (e.versao === null || e.versao !== n(atual['versao'])))
+          throw recusa(
+            'conflito-versao',
+            e.versao === null
+              ? 'Informe a versão lida da cultura para gravar por cima dela.'
+              : 'A cultura mudou desde a leitura; abra de novo.',
+          );
+        // Retificação: a cultura que vigorava (com o laudo emitido) fica guardada inteira antes da mudança.
+        const versaoSubstituida = jaFinal
+          ? await tx.incluir('resultado_cultura_versao', {
+              resultado_cultura_id: n(atual['id']),
+              versao_cultura: n(atual['versao']),
+              situacao: String(atual['situacao']),
+              conteudo: JSON.stringify(await this.lerCultura(tx, resultado)),
+              motivo: e.motivoRetificacao,
+              substituida_em: agora,
+              substituida_por: usuario,
+            })
+          : null;
         const situacao = jaFinal ? 'retificado' : e.final ? 'final' : 'parcial';
         const cab = {
           material_biologico_id: e.material,
@@ -423,8 +473,14 @@ export class ServicoMicrobiologia {
         const porSeq = new Map(isoAntigos.map((r) => [n(r['sequencia']), r]));
         let testesGravados = 0;
         let multirresistentes = 0;
+        let notificados = 0;
         for (const i of e.isolados) {
           const painelId = i.painel ?? painelPadrao.get(i.microrganismo) ?? null;
+          const cabPainel = painelId
+            ? await tx.uma('SELECT id, norma_referencia FROM painel_antibiograma WHERE id = ?', [painelId])
+            : null;
+          if (painelId && !cabPainel)
+            throw recusa('painel-inexistente', 'O painel de antibiograma não existe.');
           const painel = painelId
             ? (
                 await tx.consultar(
@@ -438,12 +494,18 @@ export class ServicoMicrobiologia {
               microrganismo: i.microrganismo,
               material: e.material,
               data: hoje,
+              norma: cabPainel ? String(cabPainel['norma_referencia']) : null,
             }),
           );
           const mr = multirresistente(testes, painel, i);
           if (mr) multirresistentes++;
           const exibidos = exibidosNoLaudo(testes, painel);
-          const notificar = situacao !== 'parcial' && e.notificaControleInfeccao && !i.contaminanteProvavel;
+          const notificar = notificaControleInfeccao({
+            culturaFinal: situacao !== 'parcial',
+            multirresistente: mr,
+            marcadoManual: e.notificaControleInfeccao,
+            contaminanteProvavel: i.contaminanteProvavel,
+          });
           const antigo = porSeq.get(i.sequencia);
           porSeq.delete(i.sequencia);
           const valores = {
@@ -471,6 +533,31 @@ export class ServicoMicrobiologia {
                 sequencia: i.sequencia,
                 ...valores,
               });
+          if (notificar) {
+            // Fila de busca ativa da CCIH: um sinal por isolado (a chave única do fato garante); quem decide é a CCIH.
+            const ja = await tx.uma(
+              `SELECT id FROM sinal_vigilancia_iras
+                WHERE tipo_sinal = 'cultura_positiva' AND fato_entidade = 'isolado_microbiano' AND fato_id = ?`,
+              [isolado],
+            );
+            if (!ja) {
+              await tx.incluir('sinal_vigilancia_iras', {
+                estabelecimento_id: est,
+                paciente_id: doResultado.paciente,
+                atendimento_id: doResultado.atendimento,
+                tipo_sinal: 'cultura_positiva',
+                detectado_em: agora,
+                fato_entidade: 'isolado_microbiano',
+                fato_id: isolado,
+                resultado_exame_id: resultado,
+                descricao: mr
+                  ? `Cultura final com isolado ${i.sequencia} multirresistente: avaliar precaução de contato e caso de infecção.`
+                  : `Cultura final com isolado ${i.sequencia} marcado para o controle de infecção.`,
+                situacao: 'pendente',
+              });
+              notificados++;
+            }
+          }
           const tAntigos = await tx.consultar(
             'SELECT * FROM resultado_sensibilidade WHERE isolado_microbiano_id = ?',
             [isolado],
@@ -528,8 +615,11 @@ export class ServicoMicrobiologia {
           isolados: e.isolados.length,
           testes: testesGravados,
           multirresistentes,
+          notificados,
+          versaoSubstituida,
         };
       },
+      (r) => ({ situacao: r.situacao, versaoSubstituida: r.versaoSubstituida }),
     );
   }
 

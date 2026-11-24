@@ -3,6 +3,7 @@
 // (comissão de controle de infecção hospitalar). Sem o banco do cliente, 503.
 //   GET  /api/sadt/microbiologia/cadastro                         materiais, microrganismos, antimicrobianos e painéis
 //   GET  /api/sadt/microbiologia/culturas/:resultado              a cultura do resultado, com o texto do laudo
+//   GET  /api/sadt/microbiologia/culturas/:resultado/versoes      versões substituídas pelas retificações, com o laudo
 //   POST /api/sadt/microbiologia/culturas/:resultado              grava a cultura (parcial ou final)
 //   POST /api/sadt/microbiologia/culturas/:resultado/retificar    retifica a cultura final (com motivo)
 //   POST /api/sadt/microbiologia/isolados/:isolado/caso           liga o isolado ao caso de infecção do paciente
@@ -35,6 +36,12 @@ export class MicrobiologiaController {
   @Permissao('sadt.resultado.ler')
   cultura(@Param('resultado') resultado: string, @Req() req: RequisicaoAutorizada) {
     return this.s.cultura(sessaoDe(req).porta, idDaRota(resultado));
+  }
+
+  @Get('culturas/:resultado/versoes')
+  @Permissao('sadt.resultado.ler')
+  versoes(@Param('resultado') resultado: string, @Req() req: RequisicaoAutorizada) {
+    return this.s.versoes(sessaoDe(req).porta, idDaRota(resultado));
   }
 
   @Post('culturas/:resultado')

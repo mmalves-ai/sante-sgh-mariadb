@@ -4,6 +4,10 @@
 //   "sensível aumentando a exposição" (aqui: sensivel_dose_dependente) e CLSI diz "intermediário". No disco-difusão, o
 //   halo a partir do mínimo de sensível é "sensível" e até o máximo de resistente é "resistente".
 // - O ponto de corte específico do material (ex.: liquor) vence o geral; fora da vigência não vale.
+// - Só vale o ponto da norma do painel do isolado (BrCAST e CLSI convivem no cadastro com limites e faixa média
+//   diferentes). Sem norma conhecida e com mais de uma norma vigente para o par, recusa: o painel decide.
+// - Notificação à CCIH por regra: na cultura final, o isolado multirresistente (ou marcado por quem digita) entra na
+//   fila de busca ativa sozinho; o contaminante provável não.
 // - Liberação seletiva (cascata): o antimicrobiano de liberação restrita só aparece no laudo quando o isolado resiste a
 //   algum de primeira linha do mesmo painel.
 // - Multirresistência: resistência a um antimicrobiano marcado no painel, ou um marcador de resistência informado
@@ -46,7 +50,12 @@ export interface PontoCorte {
 export const metodoDoPonto = (m: MetodoSensibilidade): PontoCorte['metodo'] =>
   m === 'disco_difusao' ? 'disco_difusao' : 'concentracao_inibitoria';
 
-/** O ponto de corte vigente na data: o do material vence o geral; entre iguais, o de vigência mais recente. */
+const mesmaNorma = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * O ponto de corte vigente na data, na norma do painel: o do material vence o geral; entre iguais, o de vigência mais
+ * recente (a versão vigente da norma). Sem norma e com duas normas vigentes para o par, recusa.
+ */
 export function pontoDeCorteVigente(
   pontos: readonly PontoCorte[],
   alvo: {
@@ -55,9 +64,12 @@ export function pontoDeCorteVigente(
     readonly material: number | null;
     readonly metodo: MetodoSensibilidade;
     readonly data: string;
+    /** Norma do painel do isolado (BrCAST, CLSI, EUCAST); nula quando o isolado não tem painel. */
+    readonly norma?: string | null;
   },
 ): PontoCorte | null {
   const metodo = metodoDoPonto(alvo.metodo);
+  const norma = alvo.norma?.trim() || null;
   const validos = pontos.filter(
     (p) =>
       p.ativo &&
@@ -66,8 +78,14 @@ export function pontoDeCorteVigente(
       p.metodo === metodo &&
       (p.material === null || p.material === alvo.material) &&
       p.vigenciaInicio <= alvo.data &&
-      (p.vigenciaFim === null || p.vigenciaFim >= alvo.data),
+      (p.vigenciaFim === null || p.vigenciaFim >= alvo.data) &&
+      (norma === null || mesmaNorma(p.norma, norma)),
   );
+  if (norma === null && new Set(validos.map((p) => p.norma.trim().toLowerCase())).size > 1)
+    throw new RecusaMicrobiologia(
+      'norma-indefinida',
+      'Há pontos de corte de mais de uma norma para o antimicrobiano: informe o painel do isolado.',
+    );
   validos.sort(
     (a, b) =>
       Number(b.material !== null) - Number(a.material !== null) ||
@@ -120,7 +138,12 @@ export interface TesteInterpretado extends TesteInformado {
 export function interpretarAntibiograma(
   testes: readonly TesteInformado[],
   pontos: readonly PontoCorte[],
-  alvo: { readonly microrganismo: number; readonly material: number | null; readonly data: string },
+  alvo: {
+    readonly microrganismo: number;
+    readonly material: number | null;
+    readonly data: string;
+    readonly norma?: string | null;
+  },
 ): TesteInterpretado[] {
   const vistos = new Set<number>();
   return testes.map((t) => {
@@ -202,6 +225,19 @@ export function multirresistente(
     return true;
   const marcados = new Set(painel.filter((i) => i.indicaMultirresistencia).map((i) => i.antimicrobiano));
   return testes.some((t) => t.interpretacao === 'resistente' && marcados.has(t.antimicrobiano));
+}
+
+/**
+ * O isolado vai à CCIH (fila de busca ativa) quando a cultura é final e ele é multirresistente ou marcado por quem
+ * digita; o contaminante provável nunca vai.
+ */
+export function notificaControleInfeccao(i: {
+  readonly culturaFinal: boolean;
+  readonly multirresistente: boolean;
+  readonly marcadoManual: boolean;
+  readonly contaminanteProvavel: boolean;
+}): boolean {
+  return i.culturaFinal && !i.contaminanteProvavel && (i.multirresistente || i.marcadoManual);
 }
 
 /** Confere a cultura antes de gravar: crescimento coerente com os isolados e a cultura final com conclusão. */

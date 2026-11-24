@@ -6,6 +6,7 @@ import {
   interpretarAntibiograma,
   laudoDaCultura,
   multirresistente,
+  notificaControleInfeccao,
   type PontoCorte,
   pontoDeCorteVigente,
 } from './antibiograma.js';
@@ -59,6 +60,55 @@ describe('interpretação pelo ponto de corte', () => {
       pontoDeCorteVigente([velho, ponto({ id: 4, ativo: false })], { ...alvo, material: null }),
     ).toBeNull();
     expect(pontoDeCorteVigente([geral], { ...alvo, material: null, metodo: 'disco_difusao' })).toBeNull();
+  });
+
+  it('BrCAST e CLSI vigentes juntos: vale a norma do painel, na versão mais recente; sem painel, recusa', () => {
+    const brcast = ponto({
+      id: 1,
+      norma: 'BrCAST',
+      sensivelAte: 1,
+      resistenteAcima: 4,
+      vigenciaInicio: '2024-01-01',
+    });
+    const brcastNovo = ponto({
+      id: 5,
+      norma: 'BrCAST',
+      sensivelAte: 0.5,
+      resistenteAcima: 2,
+      vigenciaInicio: '2026-01-01',
+    });
+    const clsi = ponto({
+      id: 2,
+      norma: 'CLSI',
+      sensivelAte: 2,
+      resistenteAcima: 8,
+      vigenciaInicio: '2026-06-01',
+    });
+    const todos = [brcast, brcastNovo, clsi];
+    const alvo = {
+      microrganismo: 10,
+      antimicrobiano: 20,
+      metodo: 'cim' as const,
+      data: '2026-11-24',
+      material: null,
+    };
+    expect(pontoDeCorteVigente(todos, { ...alvo, norma: 'brcast' })?.id).toBe(5);
+    expect(pontoDeCorteVigente(todos, { ...alvo, norma: 'CLSI' })?.id).toBe(2);
+    expect(pontoDeCorteVigente(todos, { ...alvo, norma: 'EUCAST' })).toBeNull();
+    expect(() => pontoDeCorteVigente(todos, alvo)).toThrowError(/painel/);
+    expect(pontoDeCorteVigente([brcast, brcastNovo], alvo)?.id).toBe(5);
+    // A mesma CIM 1 no painel BrCAST: acima do novo limite de sensível (0,5) e até 2 = sensível aumentando a exposição;
+    // no painel CLSI: sensível (até 2).
+    const teste = [{ antimicrobiano: 20, metodo: 'cim' as const, cim: 1, halo: null, interpretacao: null }];
+    const base = { microrganismo: 10, material: null, data: '2026-11-24' };
+    expect(interpretarAntibiograma(teste, todos, { ...base, norma: 'BrCAST' })[0]).toMatchObject({
+      interpretacao: 'sensivel_dose_dependente',
+      ponto: 5,
+    });
+    expect(interpretarAntibiograma(teste, todos, { ...base, norma: 'CLSI' })[0]).toMatchObject({
+      interpretacao: 'sensivel',
+      ponto: 2,
+    });
   });
 });
 
@@ -157,5 +207,21 @@ describe('cultura', () => {
     expect(t).not.toContain('Droga 2');
     expect(t).toContain('multirresistente');
     expect(t).not.toContain('parcial');
+  });
+});
+
+describe('notificação à CCIH', () => {
+  it('cultura final com multirresistente notifica sozinha; contaminante e cultura parcial não', () => {
+    const b = {
+      culturaFinal: true,
+      multirresistente: true,
+      marcadoManual: false,
+      contaminanteProvavel: false,
+    };
+    expect(notificaControleInfeccao(b)).toBe(true);
+    expect(notificaControleInfeccao({ ...b, multirresistente: false })).toBe(false);
+    expect(notificaControleInfeccao({ ...b, multirresistente: false, marcadoManual: true })).toBe(true);
+    expect(notificaControleInfeccao({ ...b, contaminanteProvavel: true })).toBe(false);
+    expect(notificaControleInfeccao({ ...b, culturaFinal: false })).toBe(false);
   });
 });
