@@ -162,7 +162,10 @@ describe('linha ↔ resposta tipada (ida e volta)', () => {
       tipadas.map((t) => ({ ...t, valor_booleano: t.valor_booleano === null ? null : Number(t.valor_booleano) })),
       PELO_ID,
     );
-    const chave = (l: Partial<LinhaGravacao>) => [l.ordem, l.seq, l.idResposta, l.data, l.hora, l.indice, l.valor, l.alfa, l.texto, l.cid];
+    const chave = (l: object) => {
+      const x = l as Record<string, unknown>;
+      return ['ordem', 'seq', 'idResposta', 'data', 'hora', 'indice', 'valor', 'alfa', 'texto', 'cid'].map((k) => x[k]);
+    };
     expect(lidas.map(chave)).toEqual(linhas.map(chave));
   });
   it('recusa a linha fora da versão publicada e a opção de outro campo', () => {
