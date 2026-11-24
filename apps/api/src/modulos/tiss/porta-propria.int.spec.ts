@@ -727,6 +727,42 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     expect(atual.find((x) => x.fechada === false)).toMatchObject({ contas: 1, emLote: 1, valor: 300 });
   });
 
+  it('competência: reabrir grava quem, quando e o motivo, guarda o retrato e o fechamento; a aberta recusa; fecha de novo', async () => {
+    const comp = { convenio: ids.fonte, ano: anoAnt, mes: mesAnt };
+    const antes = await lerUma(
+      'SELECT id, quantidade_contas, valor_apresentado, fechado_em FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ?',
+      [ids.est, ids.fonte, `${anoAnt}-${String(mesAnt).padStart(2, '0')}-01`],
+    );
+    const r = await porta.executar(
+      c,
+      'faturamento.reabrirCompetencia',
+      { ...comp, motivo: 'conta esquecida' },
+      op(),
+    );
+    expect(r.resultado['fechamento']).toBe(antes!['id']);
+    const f = await lerUma(
+      `SELECT situacao, reaberto_por_usuario_id, motivo_reabertura, reaberto_em IS NOT NULL AS quando,
+              quantidade_contas, valor_apresentado, fechado_em FROM fechamento_competencia_fonte_pagadora WHERE id = ?`,
+      [antes!['id']],
+    );
+    expect(f).toMatchObject({
+      situacao: 'reaberta',
+      reaberto_por_usuario_id: ids.usuario,
+      motivo_reabertura: 'conta esquecida',
+      quantidade_contas: antes!['quantidade_contas'],
+      valor_apresentado: antes!['valor_apresentado'],
+    });
+    expect(Number(f!['quando'])).toBe(1);
+    expect(f!['fechado_em']).toEqual(antes!['fechado_em']);
+    expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(false);
+    const e = await erroDe(
+      porta.executar(c, 'faturamento.reabrirCompetencia', { ...comp, motivo: 'segunda vez' }, op()),
+    );
+    expect(codigo(e)).toBe('competencia-aberta');
+    await porta.executar(c, 'faturamento.fecharCompetencia', comp, op());
+    expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(true);
+  });
+
   it('glosa: a decisão de aceitar grava no item, a grade e o painel somam; decidir de novo recusa', async () => {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-16' }, async (e) => {
       const agora = new Date();

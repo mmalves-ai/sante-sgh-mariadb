@@ -155,6 +155,41 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     expect(l[0]).toMatchObject({ convenio: 92, ano, mes, fechada: true, fechadaPor: 'SINT.TISS' });
   });
 
+  it('competência: reabre com motivo (curto recusa na entrada), reabrir a aberta recusa, fecha de novo', async () => {
+    const s = await entrar('SINT.TISS');
+    const hoje = (await get(s, '/tiss/apoio')).json().hoje as string;
+    const [ano, mes] = [Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7))];
+    await post(s, '/tiss/competencias', { convenio: 92, ano, mes });
+    expect(
+      (await post(s, '/tiss/competencias/reabrir', { convenio: 92, ano, mes, motivo: 'x' })).statusCode,
+    ).toBe(400);
+    const r = await post(s, '/tiss/competencias/reabrir', {
+      convenio: 92,
+      ano,
+      mes,
+      motivo: 'conta esquecida',
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().mensagem).toContain('reaberta');
+    expect(
+      (
+        await post(s, '/tiss/competencias/reabrir', { convenio: 92, ano, mes, motivo: 'de novo, sem fechar' })
+      ).json().codigo,
+    ).toBe('competencia-aberta');
+    expect((await post(s, '/tiss/competencias', { convenio: 92, ano, mes })).statusCode).toBe(200);
+    const leitor = await entrar('SINT.TISS.LEITOR');
+    expect(
+      (
+        await post(leitor, '/tiss/competencias/reabrir', {
+          convenio: 92,
+          ano,
+          mes,
+          motivo: 'sem a permissão',
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+
   it('glosa: demonstrativo (XML e digitação, idempotente), baixa, decisão, recurso com alerta e desfecho parcial', async () => {
     const s = await entrar('SINT.TISS');
     const hoje = (await get(s, '/tiss/apoio')).json().hoje as string;

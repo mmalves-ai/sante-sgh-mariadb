@@ -127,6 +127,8 @@ export const mensagensTiss = {
     fechar: 'Fechar a competência',
     fechadas: 'Competências fechadas',
     fechadaQuando: 'Fechada em',
+    reabrir: 'Reabrir a competência',
+    motivoReabrir: 'Motivo da reabertura (mínimo 5 letras)',
   },
   demonstrativos: {
     titulo: 'Demonstrativos e conciliação item a item',

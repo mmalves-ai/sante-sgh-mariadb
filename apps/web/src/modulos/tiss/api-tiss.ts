@@ -104,6 +104,10 @@ export const resumoCompetencia = (f: { convenio: string; competencia: string }) 
   ler(`${T}/competencias/resumo${qs(f)}`, confiar<CompetenciaLida>());
 export const fecharCompetencia = (corpo: { convenio: number; ano: number; mes: number }, chave: string) =>
   gravar(`${T}/competencias`, corpo, chave);
+export const reabrirCompetencia = (
+  corpo: { convenio: number; ano: number; mes: number; motivo: string },
+  chave: string,
+) => gravar(`${T}/competencias/reabrir`, corpo, chave);
 
 export const listarDemonstrativos = (f: { lote?: string }) =>
   ler(`${T}/demonstrativos${qs(f)}`, z.array(confiar<DemonstrativoLido>()));

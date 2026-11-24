@@ -34,6 +34,7 @@ import {
   conferirDecisaoGlosa,
   conferirDesfecho,
   conferirFechamentoCompetencia,
+  conferirReaberturaCompetencia,
   conferirRecurso,
   conferirRegistroProtocolo,
   conferirValorRecurso,
@@ -784,6 +785,15 @@ export class PortaTissMemoria implements PortaTiss {
         });
         if (r) throw recusa(r.codigo, r.mensagem);
         s.competencias.unshift({ convenio: e.convenio, ano: e.ano, mes: e.mes, em: agora(), por: usuario });
+        return { convenio: e.convenio, ano: e.ano, mes: e.mes };
+      }
+      case 'faturamento.reabrirCompetencia': {
+        const i = s.competencias.findIndex(
+          (x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes,
+        );
+        const r = conferirReaberturaCompetencia({ fechada: i >= 0, supervisor: true, motivo: e.motivo });
+        if (r) throw recusa(r.codigo, r.mensagem);
+        s.competencias.splice(i, 1);
         return { convenio: e.convenio, ano: e.ano, mes: e.mes };
       }
       default:

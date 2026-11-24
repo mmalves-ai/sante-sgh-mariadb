@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Fechamento de competência por convênio (ficha do M31, seção 7): `/faturamento/competencias`. Os totais da competência
 // (contas, em lote e valor) e o fechamento como o cadastro de origem grava; a competência fechada não recebe conta nova
-// nas telas do novo; reabrir é do supervisor, com motivo (a etapa seguinte do roteiro).
+// nas telas do novo; reabrir é do supervisor, com motivo (validado na hora: o botão só liga com 5 letras ou mais).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -9,7 +9,13 @@ import { useI18n } from 'vue-i18n';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
-import { fecharCompetencia, listarCompetencias, novaChave, resumoCompetencia } from '../api-tiss.js';
+import {
+  fecharCompetencia,
+  listarCompetencias,
+  novaChave,
+  reabrirCompetencia,
+  resumoCompetencia,
+} from '../api-tiss.js';
 import { competenciaAtual, opcoesConvenio, quando, reais, usarTiss } from '../usar-tiss.js';
 
 const { t } = useI18n();
@@ -21,6 +27,8 @@ const pedido = ref<{ convenio: string; competencia: string } | null>(null);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
+const motivoReabrir = ref('');
+const motivoValido = computed(() => motivoReabrir.value.trim().length >= 5);
 const convenios = computed(() => opcoesConvenio(apoio.data.value?.convenios));
 const resumo = useQuery({
   queryKey: computed(() => ['tiss', 'competencia', pedido.value]),
@@ -47,6 +55,26 @@ async function fechar() {
       novaChave('competencia'),
     );
     mensagem.value = r.mensagem;
+    await qc.invalidateQueries({ queryKey: ['tiss'] });
+  } catch (e) {
+    erro.value = e;
+  } finally {
+    gravando.value = false;
+  }
+}
+async function reabrir() {
+  if (!pedido.value || !motivoValido.value) return;
+  erro.value = null;
+  mensagem.value = null;
+  gravando.value = true;
+  try {
+    const [ano, mes] = pedido.value.competencia.split('-').map(Number);
+    const r = await reabrirCompetencia(
+      { convenio: Number(pedido.value.convenio), ano: ano!, mes: mes!, motivo: motivoReabrir.value.trim() },
+      novaChave('competencia-reabrir'),
+    );
+    mensagem.value = r.mensagem;
+    motivoReabrir.value = '';
     await qc.invalidateQueries({ queryKey: ['tiss'] });
   } catch (e) {
     erro.value = e;
@@ -115,6 +143,20 @@ async function fechar() {
       >
         {{ t('tiss.competencias.fechar') }}
       </button>
+      <form
+        v-if="resumo.data.value.fechada && pode('faturamento.reabrirCompetencia')"
+        class="filtros"
+        data-testid="cp-reabrir-form"
+        @submit.prevent="reabrir"
+      >
+        <span class="campo">
+          <label for="cp-motivo">{{ t('tiss.competencias.motivoReabrir') }}</label>
+          <input id="cp-motivo" v-model="motivoReabrir" maxlength="250" data-testid="cp-motivo" />
+        </span>
+        <button type="submit" :disabled="gravando || !motivoValido" data-testid="cp-reabrir">
+          {{ t('tiss.competencias.reabrir') }}
+        </button>
+      </form>
     </template>
     <ErroFaturamento v-if="erro" :erro="erro" />
     <MensagemFaturamento :texto="mensagem" testid="cp-mensagem" />

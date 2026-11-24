@@ -2,6 +2,7 @@
 // banco (a porta própria declara as operações com estes esquemas; a memória valida com eles antes de aplicar).
 import {
   esquemaFecharCompetencia,
+  esquemaReabrirCompetencia,
   esquemaGerarLote,
   esquemaRegistrarGlosa,
   esquemaRegistrarProtocolo,
@@ -17,4 +18,5 @@ export const ENTRADAS_TISS: Readonly<Record<string, ZodType>> = {
   'faturamento.registrarRecurso': esquemaRegistrarRecurso,
   'faturamento.registrarRetornoRecurso': esquemaRegistrarRetornoRecurso,
   'faturamento.fecharCompetencia': esquemaFecharCompetencia,
+  'faturamento.reabrirCompetencia': esquemaReabrirCompetencia,
 };

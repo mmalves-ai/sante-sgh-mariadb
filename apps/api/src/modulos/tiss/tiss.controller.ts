@@ -40,6 +40,7 @@ import {
   esquemaDecidirGlosa,
   esquemaEditarEndpointTiss,
   esquemaFecharCompetencia,
+  esquemaReabrirCompetencia,
   esquemaGerarLote,
   esquemaImportarDemonstrativo,
   esquemaRegistrarGlosa,
@@ -367,6 +368,14 @@ export class TissController {
   @AuditadoNoHandler('faturamento.fecharCompetencia pelo executor (trilha na mesma transação)')
   fecharCompetencia(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTiss> {
     return this.servico.fecharCompetencia(sessaoDe(req), corpo(esquemaFecharCompetencia, b));
+  }
+
+  @Post('competencias/reabrir')
+  @HttpCode(200)
+  @Permissao('faturamento.competencia.reabrir')
+  @AuditadoNoHandler('faturamento.reabrirCompetencia pelo executor (trilha na mesma transação)')
+  reabrirCompetencia(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTiss> {
+    return this.servico.reabrirCompetencia(sessaoDe(req), corpo(esquemaReabrirCompetencia, b));
   }
 
   // ── Demonstrativos ───────────────────────────────────────────────────────────────────────────────────

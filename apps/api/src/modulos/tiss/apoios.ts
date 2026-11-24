@@ -39,7 +39,10 @@ export const FUNCIONALIDADES_TISS = {
   competencia: {
     chave: 'faturamento.competencia',
     nome: 'o fechamento de competência',
-    operacoes: { 'faturamento.fecharCompetencia': 'faturamento.competencia.fechar' },
+    operacoes: {
+      'faturamento.fecharCompetencia': 'faturamento.competencia.fechar',
+      'faturamento.reabrirCompetencia': 'faturamento.competencia.reabrir',
+    },
     extras: {},
   },
   integracaoTiss: {

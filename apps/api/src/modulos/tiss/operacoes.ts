@@ -18,16 +18,19 @@
 // recurso aguardam o modelo do pagamento por item: até lá, a liberação diz "operação pendente" e a gravação recusa.
 import {
   esquemaFecharCompetencia,
+  esquemaReabrirCompetencia,
   esquemaGerarLote,
   esquemaRegistrarProtocolo,
   type ContaTiss,
   type FecharCompetenciaEntrada,
+  type ReabrirCompetenciaEntrada,
   type GerarLoteEntrada,
   type MontadorLoteTiss,
   type RegistrarProtocoloEntrada,
 } from '@sgh/contratos';
 import {
   conferirFechamentoCompetencia,
+  conferirReaberturaCompetencia,
   conferirRegistroProtocolo,
   faltasDoPrestador,
   normalizarProtocolo,
@@ -698,6 +701,40 @@ const fecharCompetencia = definirOperacao<FecharCompetenciaEntrada, ResultadoOpe
   alvo: (_e, r) => ({ tabela: 'fechamento_competencia_fonte_pagadora', id: n(r['fechamento']) }),
 });
 
+/**
+ * Reabre a competência fechada do convênio (supervisor, com motivo): a linha do fechamento passa a `reaberta` com
+ * quando, quem e o motivo; o retrato do fechamento (contas e valores) e quem fechou ficam gravados. A alçada é a
+ * permissão `faturamento.competencia.reabrir`, conferida pelo executor antes da gravação.
+ */
+const reabrirCompetencia = definirOperacao<ReabrirCompetenciaEntrada, ResultadoOperacao>({
+  nome: 'faturamento.reabrir-competencia',
+  tabelas: ['fechamento_competencia_fonte_pagadora'],
+  entrada: esquemaReabrirCompetencia,
+  async gravar(tx, e, ctx) {
+    const est = estabelecimentoDe(ctx);
+    const [atual] = await tx.consultarParaAtualizar<Linha>(
+      `SELECT id, versao, situacao FROM fechamento_competencia_fonte_pagadora
+        WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ? AND excluido_em IS NULL`,
+      [est, e.convenio, diaDaCompetencia(e.ano, e.mes)],
+    );
+    const r = conferirReaberturaCompetencia({
+      fechada: atual?.['situacao'] === 'fechada',
+      supervisor: true,
+      motivo: e.motivo,
+    });
+    if (r) throw recusa(r.codigo, r.mensagem);
+    await tx.alterar('fechamento_competencia_fonte_pagadora', n(atual!['id']), n(atual!['versao']), {
+      situacao: 'reaberta',
+      reaberto_em: new Date(),
+      reaberto_por_usuario_id: ctx.usuario,
+      motivo_reabertura: e.motivo.trim().slice(0, 250),
+    });
+    return { convenio: e.convenio, ano: e.ano, mes: e.mes, fechamento: n(atual!['id']) };
+  },
+  alvo: (_e, r) => ({ tabela: 'fechamento_competencia_fonte_pagadora', id: n(r['fechamento']) }),
+  trilha: (e) => ({ dados: { motivo: e.motivo } }),
+});
+
 /** Nome da operação na trilha do núcleo (minúsculas com hífen): 'faturamento.gerarLote' → 'faturamento.gerar-lote'. */
 export const nomeNaTrilha = (op: string): string => op.replace(/([A-Z])/g, '-$1').toLowerCase();
 
@@ -709,5 +746,6 @@ export function operacoesTiss(
     'faturamento.gerarLote': gerarLote(montador) as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.registrarProtocolo': registrarProtocolo as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.fecharCompetencia': fecharCompetencia as unknown as Operacao<never, ResultadoOperacao>,
+    'faturamento.reabrirCompetencia': reabrirCompetencia as unknown as Operacao<never, ResultadoOperacao>,
   };
 }

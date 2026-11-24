@@ -8,6 +8,7 @@ import {
   type EditarEndpointTissEntrada,
   EVENTOS_AUDITAVEIS,
   type FecharCompetenciaEntrada,
+  type ReabrirCompetenciaEntrada,
   type GerarLoteEntrada,
   type ImportarDemonstrativoEntrada,
   type PainelGlosa,
@@ -44,6 +45,7 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   'faturamento.registrarRecurso': 'Recurso registrado.',
   'faturamento.registrarRetornoRecurso': 'Desfecho do recurso registrado.',
   'faturamento.fecharCompetencia': 'Competência fechada.',
+  'faturamento.reabrirCompetencia': 'Competência reaberta.',
 };
 
 export const resultadoTiss = (
@@ -183,6 +185,17 @@ export class ServicoTiss {
       'faturamento.fecharCompetencia',
       e,
       `Competência ${String(e.mes).padStart(2, '0')}/${e.ano} fechada.`,
+    );
+  }
+
+  /** Reabre a competência fechada (supervisor, com motivo): a conta da competência volta a receber lançamento e lote. */
+  async reabrirCompetencia(s: SessaoCadastro, e: ReabrirCompetenciaEntrada): Promise<ResultadoTiss> {
+    this.exigirEscopoConvenio(s, e.convenio);
+    return this.executar(
+      s,
+      'faturamento.reabrirCompetencia',
+      e,
+      `Competência ${String(e.mes).padStart(2, '0')}/${e.ano} reaberta.`,
     );
   }
 
