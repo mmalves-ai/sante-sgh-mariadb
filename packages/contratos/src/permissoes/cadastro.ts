@@ -240,6 +240,39 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F8 (02-CAD linha 11, corretor): a inscrição em programa revela diagnóstico (hipertensão, gestação, oncologia, saúde
+  // mental), dado sensível pela LGPD art. 11. Por isso o programa tem permissões próprias, por perfil assistencial, e
+  // não as da recepção; a lista nominal dos inscritos fica só com quem coordena o programa.
+  {
+    codigo: 'cadastro.linhaCuidado.ler',
+    descricao:
+      'Ver os programas de saúde e as linhas de cuidado do paciente (inscrições, estado e linha do tempo) e o painel do programa por estado',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'coordenador-medico', 'gestao-qualidade'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.linhaCuidado.inscrever',
+    descricao:
+      'Inscrever o paciente em programa de saúde ou linha de cuidado, mudar o estado (suspender e encerrar com motivo) e trocar o profissional de referência',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['assistencial-com-conselho', 'coordenador-medico'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.linhaCuidado.coordenar',
+    descricao:
+      'Ver a lista nominal dos inscritos de um programa de saúde (o paciente com acesso restrito sai pelo pseudônimo)',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['coordenador-medico', 'gestao-qualidade', 'diretoria-clinica'],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 export type PermissaoCadastro = (typeof PERMISSOES_CADASTRO_M11)[number]['codigo'];

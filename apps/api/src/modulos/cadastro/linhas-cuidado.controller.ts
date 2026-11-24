@@ -8,7 +8,10 @@
 //   POST /api/cadastros/pacientes/:id/linhas-cuidado                 inscreve o paciente
 //   POST /api/cadastros/pacientes/:id/linhas-cuidado/:iid/estado     muda o estado (encerra no final, com motivo)
 //   PUT  /api/cadastros/pacientes/:id/linhas-cuidado/:iid/referencia troca o profissional de referência
-// Acesso pelos níveis de cada cargo: leitura e inscrição com as do paciente; o catálogo com cadastro.linhaCuidado.editar.
+// Acesso pelos níveis de cada cargo. A inscrição revela diagnóstico (dado sensível, LGPD art. 11): leitura com
+// cadastro.linhaCuidado.ler, inscrição e mudança de estado com cadastro.linhaCuidado.inscrever (perfis assistenciais, não a
+// recepção), lista nominal dos inscritos com cadastro.linhaCuidado.coordenar (quem coordena o programa; o paciente com
+// acesso restrito sai pelo pseudônimo) e o catálogo com cadastro.linhaCuidado.editar.
 // Gravações pelo executor, com a trilha na mesma transação e a Idempotency-Key do pedido.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
@@ -32,8 +35,6 @@ import {
   type LinhasCuidadoPropria,
   type OpcoesLinhas,
 } from './linhas-cuidado-proprio.js';
-
-export const PERMISSAO_LINHA_CUIDADO_EDITAR = 'cadastro.linhaCuidado.editar';
 
 const EVENTO = EVENTOS_AUDITAVEIS.pacienteGravadoMemoria.codigo;
 const ID = z.number().int().positive();
@@ -66,7 +67,7 @@ export class LinhasCuidadoController {
   }
 
   @Get('linhas-cuidado')
-  @Permissao('cadastro.paciente.ler')
+  @Permissao('cadastro.linhaCuidado.ler')
   async opcoes(@Req() req: RequisicaoAutorizada): Promise<OpcoesLinhas> {
     const s = sessaoDe(req);
     try {
@@ -78,7 +79,7 @@ export class LinhasCuidadoController {
 
   @Post('linhas-cuidado')
   @HttpCode(201)
-  @Permissao(PERMISSAO_LINHA_CUIDADO_EDITAR)
+  @Permissao('cadastro.linhaCuidado.editar')
   @AuditadoNoHandler('trilha na mesma transação do programa')
   async incluirLinha(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<{ id: number }> {
     const s = sessaoDe(req);
@@ -93,7 +94,7 @@ export class LinhasCuidadoController {
   }
 
   @Put('linhas-cuidado/:id')
-  @Permissao(PERMISSAO_LINHA_CUIDADO_EDITAR)
+  @Permissao('cadastro.linhaCuidado.editar')
   @AuditadoNoHandler('trilha na mesma transação do programa')
   async alterarLinha(
     @Param('id') id: string,
@@ -121,7 +122,7 @@ export class LinhasCuidadoController {
   }
 
   @Get('linhas-cuidado/:id/inscritos')
-  @Permissao('cadastro.paciente.ler')
+  @Permissao('cadastro.linhaCuidado.coordenar')
   async inscritos(
     @Param('id') id: string,
     @Query('todos') todos: string | undefined,
@@ -138,7 +139,7 @@ export class LinhasCuidadoController {
   }
 
   @Get('pacientes/:id/linhas-cuidado')
-  @Permissao('cadastro.paciente.ler')
+  @Permissao('cadastro.linhaCuidado.ler')
   async doPaciente(
     @Param('id') id: string,
     @Req() req: RequisicaoAutorizada,
@@ -153,7 +154,7 @@ export class LinhasCuidadoController {
 
   @Post('pacientes/:id/linhas-cuidado')
   @HttpCode(201)
-  @Permissao('cadastro.paciente.editar')
+  @Permissao('cadastro.linhaCuidado.inscrever')
   @AuditadoNoHandler('trilha na mesma transação da inscrição e do histórico')
   async inscrever(
     @Param('id') id: string,
@@ -184,7 +185,7 @@ export class LinhasCuidadoController {
 
   @Post('pacientes/:id/linhas-cuidado/:iid/estado')
   @HttpCode(200)
-  @Permissao('cadastro.paciente.editar')
+  @Permissao('cadastro.linhaCuidado.inscrever')
   @AuditadoNoHandler('trilha na mesma transação da mudança e do histórico, com o motivo')
   async mudarEstado(
     @Param('id') id: string,
@@ -227,7 +228,7 @@ export class LinhasCuidadoController {
   }
 
   @Put('pacientes/:id/linhas-cuidado/:iid/referencia')
-  @Permissao('cadastro.paciente.editar')
+  @Permissao('cadastro.linhaCuidado.inscrever')
   @AuditadoNoHandler('trilha na mesma transação da troca e do histórico')
   async referencia(
     @Param('id') id: string,

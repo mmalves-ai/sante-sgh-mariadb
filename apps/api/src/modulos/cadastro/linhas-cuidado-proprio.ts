@@ -19,6 +19,8 @@ import {
   type TipoEstadoLinha,
   totaisPorEstado,
   TRANSICOES_LINHA,
+  UNIDADES_IDADE,
+  type UnidadeIdade,
 } from '@sgh/dominio-cadastro';
 import {
   type ContextoOperacao,
@@ -226,7 +228,8 @@ const opInscrever = (t: RegistroTrilhaTela, estabelecimento: number) =>
       );
       if (!p) throw recusa('paciente-inexistente', 'O paciente não existe.', { campos: ['paciente'] });
       const l = await tx.uma(
-        `SELECT l.id, l.ativo, l.exige_profissional_referencia, f.idade_inicial, f.idade_final, u.codigo AS unidade
+        `SELECT l.id, l.ativo, l.exige_profissional_referencia, f.idade_inicial, f.idade_final,
+                u.unidade_calculo AS unidade
            FROM linha_cuidado l
            LEFT JOIN faixa_etaria f ON f.id = l.faixa_etaria_id
            LEFT JOIN unidade_idade u ON u.id = f.unidade_idade_id
@@ -239,8 +242,13 @@ const opInscrever = (t: RegistroTrilhaTela, estabelecimento: number) =>
             AND inscricao_viva = 1`,
         [e.paciente, e.linha, estabelecimento],
       );
-      // A faixa etária só se aplica em anos (a unidade da faixa pode ser dia ou mês, para outros usos do catálogo).
-      const emAnos = /^a/i.test(String(l['unidade'] ?? ''));
+      // A faixa etária vale na unidade dela (ano, mês, semana, dia ou hora; sem unidade, em anos): nunca é descartada.
+      const unidade = txt(l['unidade']);
+      if (unidade !== null && !(UNIDADES_IDADE as readonly string[]).includes(unidade))
+        throw recusa('faixa-unidade-invalida', 'A unidade da faixa etária do programa não é reconhecida.', {
+          campos: ['linha'],
+        });
+      const temFaixa = l['idade_inicial'] !== null || l['idade_final'] !== null;
       recusar(
         conferirInscricao({
           linhaAtiva: bool(l['ativo']),
@@ -250,10 +258,13 @@ const opInscrever = (t: RegistroTrilhaTela, estabelecimento: number) =>
           hoje: await hojeDo(tx),
           nascimento: txt(p['nasc']),
           inscricaoViva: !!viva,
-          faixa:
-            emAnos && l['idade_inicial'] !== null
-              ? { minima: num(l['idade_inicial']), maxima: num(l['idade_final']) }
-              : null,
+          faixa: temFaixa
+            ? {
+                minima: num(l['idade_inicial']),
+                maxima: num(l['idade_final']),
+                unidade: (unidade ?? 'ano') as UnidadeIdade,
+              }
+            : null,
           pacienteFalecido: bool(p['falecido']),
         }),
       );
@@ -453,7 +464,9 @@ export interface InscricaoDoPaciente {
 export interface InscritoDoPrograma {
   readonly inscricao: number;
   readonly paciente: number;
+  /** Nome do paciente; o de acesso restrito (confidencial ou VIP) sai pelo pseudônimo, nunca pelo nome. */
   readonly nome: string;
+  readonly restrito: boolean;
   readonly estado: string;
   readonly tipo: TipoEstadoLinha;
   readonly estadoDesde: string;
@@ -665,6 +678,11 @@ export class LinhasCuidadoPropria {
       (
         await l.consultar(
           `SELECT pl.id, pl.paciente_id, pf.nome, e.descricao AS estado, e.tipo_estado,
+                  (SELECT COALESCE(MAX(ar.pseudonimo), '') FROM paciente_acesso_restrito ar
+                    WHERE ar.paciente_id = pl.paciente_id AND ar.situacao = 'ativa' AND ar.excluido_em IS NULL
+                      AND ar.vigencia_inicio <= NOW(3) AND (ar.vigencia_fim IS NULL OR ar.vigencia_fim > NOW(3))
+                      AND (ar.estabelecimento_id IS NULL OR ar.estabelecimento_id = pl.estabelecimento_id)
+                   HAVING COUNT(*) > 0) AS restrito,
                   DATE_FORMAT(pl.estado_desde, '%Y-%m-%d') AS desde, DATE_FORMAT(pl.vigencia_inicio, '%Y-%m-%d') AS inicio,
                   COALESCE(pr.nome_exibicao, rf.nome) AS ref_nome
              FROM paciente_linha_cuidado pl
@@ -683,7 +701,12 @@ export class LinhasCuidadoPropria {
       ).map((x) => ({
         inscricao: Number(x['id']),
         paciente: Number(x['paciente_id']),
-        nome: String(x['nome']),
+        // Lista nominal: paciente com marca de acesso restrito viva sai pelo pseudônimo (02-CAD linha 10).
+        nome:
+          x['restrito'] === null || x['restrito'] === undefined
+            ? String(x['nome'])
+            : String(x['restrito']) || 'Paciente com acesso restrito',
+        restrito: x['restrito'] !== null && x['restrito'] !== undefined,
         estado: String(x['estado']),
         tipo: String(x['tipo_estado']) as TipoEstadoLinha,
         estadoDesde: String(x['desde']),

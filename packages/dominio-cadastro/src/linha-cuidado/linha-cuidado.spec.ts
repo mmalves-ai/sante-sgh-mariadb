@@ -8,6 +8,7 @@ import {
   type EstadoLinha,
   estadoDeEntrada,
   idadeNaData,
+  idadeNaUnidade,
   totaisPorEstado,
 } from './linha-cuidado.js';
 
@@ -82,6 +83,31 @@ describe('inscrição', () => {
   it('idade em anos completos', () => {
     expect(idadeNaData('1960-05-10', '2026-05-09')).toBe(65);
     expect(idadeNaData('1960-05-10', '2026-05-10')).toBe(66);
+  });
+  it('idade completa em meses, semanas, dias e horas', () => {
+    expect(idadeNaUnidade('2024-11-25', '2026-11-24', 'mes')).toBe(23);
+    expect(idadeNaUnidade('2024-11-24', '2026-11-24', 'mes')).toBe(24);
+    expect(idadeNaUnidade('2026-11-10', '2026-11-24', 'semana')).toBe(2);
+    expect(idadeNaUnidade('2026-02-27', '2026-03-02', 'dia')).toBe(3);
+    expect(idadeNaUnidade('2026-11-22', '2026-11-24', 'hora')).toBe(48);
+    expect(idadeNaUnidade('1960-05-10', '2026-05-09', 'ano')).toBe(65);
+  });
+  it('a faixa em meses vale em meses (puericultura de 0 a 24 meses), nunca é descartada', () => {
+    const bebe = { ...base, nascimento: '2025-01-15' };
+    expect(conferirInscricao({ ...bebe, faixa: { minima: 0, maxima: 24, unidade: 'mes' } })).toEqual([]);
+    // Em anos a mesma faixa aceitaria o adulto de 24 anos; em meses, não.
+    expect(codigos(conferirInscricao({ ...base, faixa: { minima: 0, maxima: 24, unidade: 'mes' } }))).toEqual(
+      ['fora-da-faixa-etaria'],
+    );
+    expect(
+      codigos(
+        conferirInscricao({
+          ...bebe,
+          vigenciaInicio: '2026-11-20',
+          faixa: { minima: 0, maxima: 28, unidade: 'dia' },
+        }),
+      ),
+    ).toEqual(['fora-da-faixa-etaria']);
   });
 });
 

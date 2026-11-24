@@ -56,7 +56,9 @@ export interface Inscricao {
 export interface Inscrito {
   inscricao: number;
   paciente: number;
+  /** Paciente com acesso restrito (confidencial ou VIP) vem pelo pseudônimo. */
   nome: string;
+  restrito: boolean;
   estado: string;
   tipo: TipoEstado;
   estadoDesde: string;

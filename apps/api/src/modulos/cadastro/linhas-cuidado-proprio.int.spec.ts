@@ -87,6 +87,9 @@ describe.skipIf(SEM_BANCO)('programas de saúde e linhas de cuidado no banco pr�
         [`${COD}%`],
       );
       await e.executar('DELETE FROM linha_cuidado WHERE codigo LIKE ?', [`${COD}%`]);
+      await e.executar('DELETE FROM faixa_etaria WHERE codigo LIKE ?', [`${COD}%`]);
+      await e.executar('DELETE FROM unidade_idade WHERE codigo LIKE ?', [`${COD}%`]);
+      await e.executar('DELETE FROM paciente_acesso_restrito WHERE motivo LIKE ?', [`${MARCA}%`]);
     });
   }
 
@@ -187,21 +190,27 @@ describe.skipIf(SEM_BANCO)('programas de saúde e linhas de cuidado no banco pr�
         s.inscrever(c(), { paciente, linha: programa, referencia: null, vigenciaInicio: hoje() }, t()),
       ),
     ).toBe('inscricao-viva');
-    // O índice único da migração 03_CAD/95 segura a segunda viva mesmo fora da regra.
+    // O índice único da migração 03_CAD/95 segura a segunda viva mesmo fora da regra. O início é outro dia (11 dias
+    // atrás, a primeira começou 10 dias atrás), para que o índice antigo de (paciente, programa, unidade, início) não
+    // responda no lugar dele: a recusa tem de citar o índice da inscrição viva.
     const ativo = await estado('ativo');
     const direto = await nucleo
       .escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
         e.executar(
           `INSERT INTO paciente_linha_cuidado (paciente_id, linha_cuidado_id, estabelecimento_id, estado_linha_cuidado_id,
              estado_desde, vigencia_inicio, ativo, criado_em) VALUES (?, ?, ?, ?, NOW(3), ?, TRUE, NOW(3))`,
-          [paciente, programa, m!.estabelecimento, ativo, hoje()],
+          [paciente, programa, m!.estabelecimento, ativo, diasAtras(11)],
         ),
       )
       .then(
         () => 'gravou',
-        (e: unknown) => String((e as { code?: string }).code ?? e),
+        (e: unknown) => {
+          const x = e as { code?: string; message?: string; cause?: { message?: string } };
+          return `${x.code ?? ''} ${x.message ?? ''} ${x.cause?.message ?? ''}`;
+        },
       );
     expect(direto).toMatch(/DUP|Duplicate|1062/);
+    expect(direto).toContain('uq_paciente_linha_cuidado_viva');
     // Programa que exige o profissional de referência.
     expect(
       await codigo(
@@ -293,7 +302,9 @@ describe.skipIf(SEM_BANCO)('programas de saúde e linhas de cuidado no banco pr�
         ),
       ),
     ).toBe('inscricao-encerrada');
-    // A volta ao programa é inscrição nova; a encerrada continua no banco, com o histórico.
+    // A volta ao programa é inscrição nova; a encerrada continua no banco, com o histórico, e sai do índice da viva
+    // (inscricao_viva nula), por isso não bloqueia a nova.
+    expect((await linha(id))!['inscricao_viva']).toBeNull();
     const nova = await s.inscrever(
       c(),
       { paciente, linha: programa, referencia: null, vigenciaInicio: hoje() },
@@ -336,5 +347,45 @@ describe.skipIf(SEM_BANCO)('programas de saúde e linhas de cuidado no banco pr�
         ),
       ),
     ).toBe('linha-inativa');
+  });
+  it('a faixa etária vale na unidade dela (meses) e o inscrito com acesso restrito sai pelo pseudônimo', async () => {
+    // Puericultura de 0 a 24 meses: o paciente adulto é recusado; a faixa nunca é descartada por não ser em anos.
+    const faixa = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
+      const sigla = `Z${Date.now().toString(36).slice(-4)}`.toUpperCase();
+      const u = await e.inserir(
+        `INSERT INTO unidade_idade (codigo, descricao, ativo, sigla, unidade_calculo, criado_em, versao)
+           VALUES (?, 'Meses (teste)', TRUE, ?, 'mes', NOW(3), 1)`,
+        [`${COD}UM`, sigla],
+      );
+      return e.inserir(
+        `INSERT INTO faixa_etaria (codigo, descricao, ativo, finalidade, unidade_idade_id, idade_inicial, idade_final,
+           criado_em, versao) VALUES (?, 'Puericultura 0 a 24 meses (teste)', TRUE, 'regra', ?, 0, 24, NOW(3), 1)`,
+        [`${COD}FM`, u],
+      );
+    });
+    expect(faixa).toBeGreaterThan(0);
+    const puericultura = await s.incluirLinha(
+      c(),
+      { ...programaBase(`${COD}PU`, false), faixaEtaria: faixa },
+      t(),
+    );
+    expect(
+      await codigo(
+        s.inscrever(c(), { paciente, linha: puericultura, referencia: null, vigenciaInicio: hoje() }, t()),
+      ),
+    ).toBe('fora-da-faixa-etaria');
+    // Marca de acesso restrito viva: a lista nominal do programa não mostra o nome, só o pseudônimo.
+    const [viva] = await s.inscritos(c(), programa, false);
+    expect(viva).toMatchObject({ restrito: false });
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar(
+        `INSERT INTO paciente_acesso_restrito (paciente_id, tipo_marca, motivo, vigencia_inicio, exibicao_nome, pseudonimo,
+           solicitante_usuario_id, situacao, criado_em) VALUES (?, 'vip', ?, NOW(3) - INTERVAL 1 DAY, 'pseudonimo', 'PACIENTE RESERVADO', ?, 'ativa', NOW(3))`,
+        [paciente, `${MARCA} restrito`, m!.usuario],
+      ),
+    );
+    const [oculto] = await s.inscritos(c(), programa, false);
+    expect(oculto).toMatchObject({ inscricao: viva!.inscricao, restrito: true, nome: 'PACIENTE RESERVADO' });
+    expect(oculto!.nome).not.toBe(viva!.nome);
   });
 });

@@ -68,8 +68,15 @@ export interface EntradaInscricao {
   readonly nascimento: string | null;
   /** Inscrição viva (não encerrada) do paciente na mesma linha e no mesmo estabelecimento. */
   readonly inscricaoViva: boolean;
-  /** Faixa etária da linha em anos inteiros, quando a linha restringe; null sem restrição. */
-  readonly faixa: { readonly minima: number | null; readonly maxima: number | null } | null;
+  /**
+   * Faixa etária da linha na unidade da faixa (ano, mês, semana, dia ou hora), quando a linha restringe; null sem
+   * restrição. Sem unidade declarada, vale em anos.
+   */
+  readonly faixa: {
+    readonly minima: number | null;
+    readonly maxima: number | null;
+    readonly unidade?: UnidadeIdade | null;
+  } | null;
   readonly pacienteFalecido: boolean;
 }
 
@@ -78,6 +85,22 @@ export function idadeNaData(nascimento: string, data: string): number {
   const [an, mn, dn] = nascimento.split('-').map(Number) as [number, number, number];
   const [ad, md, dd] = data.split('-').map(Number) as [number, number, number];
   return ad - an - (md < mn || (md === mn && dd < dn) ? 1 : 0);
+}
+
+/** Unidades de cálculo da idade aceitas pela faixa etária (as do CHECK de `unidade_idade.unidade_calculo`). */
+export const UNIDADES_IDADE = ['ano', 'mes', 'semana', 'dia', 'hora'] as const;
+export type UnidadeIdade = (typeof UNIDADES_IDADE)[number];
+
+/** Idade completa na data, na unidade pedida (puericultura em meses, recém-nascido em dias ou horas). */
+export function idadeNaUnidade(nascimento: string, data: string, unidade: UnidadeIdade): number {
+  const [an, mn, dn] = nascimento.split('-').map(Number) as [number, number, number];
+  const [ad, md, dd] = data.split('-').map(Number) as [number, number, number];
+  if (unidade === 'ano') return idadeNaData(nascimento, data);
+  if (unidade === 'mes') return (ad - an) * 12 + (md - mn) - (dd < dn ? 1 : 0);
+  const dias = Math.round((Date.UTC(ad, md - 1, dd) - Date.UTC(an, mn - 1, dn)) / 86_400_000);
+  if (unidade === 'semana') return Math.floor(dias / 7);
+  if (unidade === 'dia') return dias;
+  return dias * 24;
 }
 
 export function conferirInscricao(e: EntradaInscricao): RecusaLinha[] {
@@ -119,7 +142,7 @@ export function conferirInscricao(e: EntradaInscricao): RecusaLinha[] {
       mensagem: 'A inscrição não começa antes do nascimento.',
     });
   if (e.faixa && e.nascimento) {
-    const idade = idadeNaData(e.nascimento, e.vigenciaInicio);
+    const idade = idadeNaUnidade(e.nascimento, e.vigenciaInicio, e.faixa.unidade ?? 'ano');
     if (
       (e.faixa.minima !== null && idade < e.faixa.minima) ||
       (e.faixa.maxima !== null && idade > e.faixa.maxima)
