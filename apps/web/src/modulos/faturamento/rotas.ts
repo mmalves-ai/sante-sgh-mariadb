@@ -40,6 +40,14 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     props: true,
     meta: { permissao: 'faturamento.conta.ler' },
   },
+  // F3.7 (06-FAT linhas 17, 18 e 20): horário especial, acréscimo e desconto com alçada e pacote na conta.
+  {
+    path: '/faturamento/contas/:id(\\d+)/ajustes',
+    name: 'faturamento.contaAjustes',
+    component: () => import('./telas/AjustesContaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
   {
     path: '/faturamento/fontes/:fonte(\\d+)/atributos-guia',
     name: 'faturamento.atributosFonte',
