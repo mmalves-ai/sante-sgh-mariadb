@@ -1,8 +1,8 @@
 // E2E @M47.3 (ficha do M47, seção 10, etapa 3): o médico pede o raio X no prontuário; o exame de imagem aparece na lista
-// de trabalho DICOM "a enviar"; desligada (POL-3), a tela diz o motivo e não envia; o administrador liga a chave e o
-// endereço do visualizador; o técnico de imagem envia o exame (número de acesso, entregue ao simulador), reenvia com o
+// de trabalho DICOM "a enviar" e o técnico já pode enviar: sem chave de liberação (05-SADT linha 20; tudo ligado, só a
+// permissão do cargo e o destino configurado); o administrador configura o endereço do visualizador; o técnico de imagem envia o exame (número de acesso, entregue ao simulador), reenvia com o
 // mesmo número, e o simulador de modalidade manda "em andamento" e "concluído"; o link das imagens aparece na lista e no
-// prontuário do paciente; o item do menu leva à tela; recolher volta à consulta. axe sem violação séria em cada estado.
+// prontuário do paciente; o item do menu leva à tela; uma chave antiga recolhida não desliga a função. axe sem violação séria em cada estado.
 // Sessão real sobre a fonte sintética e as portas em MEMÓRIA (dados SINTÉTICOS; nada vai à cópia).
 import { expect, type Page, test } from '@playwright/test';
 import { abrirMenuInteiro, menuPrincipal, semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -42,21 +42,6 @@ async function chave(page: Page, ligar: boolean): Promise<void> {
   expect(r.status(), await r.text()).toBe(200);
 }
 
-async function prerequisito(page: Page, tipo: string): Promise<void> {
-  const r = await page.request.put('/api/administracao/liberacao/prerequisitos', {
-    headers: await cabecalhos(page, `pre-${tipo}`),
-    data: {
-      recurso: 'imagem.worklist',
-      tipo,
-      situacao: 'cumprido',
-      validade: '2099-12-31',
-      evidencia: 'pré-requisito sintético do E2E',
-      senha: SENHA,
-    },
-  });
-  expect(r.status(), await r.text()).toBe(200);
-}
-
 test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
   test.setTimeout(300_000);
 
@@ -72,11 +57,11 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
     await page.getByTestId('enviar-pedido').click();
     await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
 
-    // Desligada (POL-3): o técnico vê o exame "a enviar" e o motivo; não há como enviar.
+    // Sem chave de liberação: o técnico vê o exame "a enviar" e já pode selecioná-lo para enviar.
     await entrar(page, 'SINT.TEC.IMAGEM');
     await page.goto('/sadt/imagem/worklist');
     await expect(page.getByRole('heading', { level: 1, name: 'Lista de trabalho DICOM' })).toBeVisible();
-    await expect(page.getByTestId('worklist-motivo')).toContainText('ainda não foi liberada');
+    await expect(page.getByTestId('worklist-motivo')).toHaveCount(0);
     const linhaRx = page
       .locator('[data-testid^="worklist-exame-"]')
       .filter({ hasText: 'RAIO X DE TÓRAX' })
@@ -84,15 +69,11 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
       .first();
     await expect(linhaRx).toBeVisible();
     const exame = Number((await linhaRx.getAttribute('data-testid'))!.replace('worklist-exame-', ''));
-    await expect(page.getByTestId(`worklist-selecionar-${exame}`)).toHaveCount(0);
-    await expect(page.getByTestId('worklist-enviar')).toHaveCount(0);
-    await semViolacaoAxe(page, '/sadt/imagem/worklist (desligada)');
+    await expect(page.getByTestId(`worklist-selecionar-${exame}`)).toBeVisible();
+    await semViolacaoAxe(page, '/sadt/imagem/worklist (a enviar)');
 
-    // O administrador registra os pré-requisitos, liga a chave para as pessoas do teste e configura o visualizador.
+    // O administrador configura o visualizador (nenhuma chave de liberação a ligar).
     await entrar(page, 'SINT.ADMIN');
-    await prerequisito(page, 'contrato');
-    await prerequisito(page, 'aprovacao');
-    await chave(page, true);
     const p = await page.request.put('/api/administracao/parametros/pacs.visualizadorUrl', {
       headers: await cabecalhos(page, 'visualizador'),
       data: {
@@ -105,8 +86,8 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
     });
     expect(p.status(), await p.text()).toBe(200);
 
-    try {
-      // Ligada: o técnico envia o exame; o item nasce com o número de acesso e é entregue ao simulador.
+    {
+      // O técnico envia o exame; o item nasce com o número de acesso e é entregue ao simulador.
       await entrar(page, 'SINT.TEC.IMAGEM');
       await page.goto('/sadt/imagem/worklist');
       await expect(page.getByTestId('worklist-destino')).toContainText('simulados');
@@ -169,15 +150,14 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
         /^https:\/\/visualizador\.exemplo\//,
       );
       await semViolacaoAxe(page, '/pep/paciente/1001/resultados (imagens)');
-    } finally {
-      // Recolher: a lista volta à consulta.
-      await entrar(page, 'SINT.ADMIN');
-      await chave(page, false);
     }
+    // Uma chave antiga recolhida para as pessoas não desliga a função: só a permissão do cargo e o destino valem.
+    await entrar(page, 'SINT.ADMIN');
+    await chave(page, false);
     await entrar(page, 'SINT.TEC.IMAGEM');
     await page.goto('/sadt/imagem/worklist');
-    await expect(page.getByTestId('worklist-motivo')).toContainText('ainda não foi liberada');
-    await expect(page.getByTestId('worklist-simulador')).toHaveCount(0);
+    await expect(page.getByTestId('worklist-motivo')).toHaveCount(0);
+    await expect(page.getByTestId(`worklist-reenviar-${exame}`)).toBeVisible();
     expect(externas).toEqual([]);
   });
 });

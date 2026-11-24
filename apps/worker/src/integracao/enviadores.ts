@@ -27,7 +27,6 @@ import {
 import { itemMwlDicom } from '@sgh/dominio-sadt';
 import type { Leitor } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
-import { worklistLigadaNoEstabelecimento } from './liberacao-worklist.js';
 import {
   type EnvioEntrega,
   examePedido,
@@ -168,12 +167,10 @@ export async function conteudoMwl(
   if (!Number.isInteger(exame) || exame <= 0)
     throw new ErroEntrega('evento da lista de trabalho sem o exame');
   const lido = await c.ler(hospital, async (l) => ({
-    ligada: await worklistLigadaNoEstabelecimento(l, hospital, c.agora()),
     item: await itemListaTrabalho(l, hospital, exame),
     exame: await examePedido(l, hospital, exame),
   }));
-  // Recolhida a chave, o pendente e o reprocessado não vão ao PACS (o motivo fica no monitor; religada, reprocessa).
-  if (!lido.ligada) throw new ErroEntrega('lista de trabalho desligada no estabelecimento: nada enviado');
+  // Sem chave de liberação (05-SADT linha 20): o envio existe porque o parceiro do destino assina o evento.
   if (!lido.item || !lido.exame) throw new ErroEntrega('item da lista de trabalho não encontrado');
   // O exame cancelado ou recusado depois de virar item não volta à modalidade como procedimento agendado.
   if (lido.exame.cancelado) throw new ErroEntrega('exame cancelado no prontuário: nada enviado');

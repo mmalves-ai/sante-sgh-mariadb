@@ -1,7 +1,9 @@
 // Serviço da lista de trabalho DICOM (M47, etapa 3; ficha, seções 4 a 8, regras 8, 9 e 11): monta a tela (os exames de
 // imagem do dia com a modalidade, o item da MWL, a entrega e o status vigente), envia e reenvia pela fila de integração,
 // recebe o status do PACS ou do simulador de forma idempotente e entrega ao prontuário e ao portal o link do
-// visualizador. As gravações passam pelo apoio comum (a chave `imagem.worklist` e a trilha na mesma transação); a
+// visualizador. As gravações passam pelo apoio comum (a trilha na mesma transação), sem chave de liberação: tudo ligado
+// para todos, só a permissão do cargo (05-SADT linha 20); o que liga o envio é o destino configurado (o modo do
+// ambiente e o parceiro do PACS com o evento da lista, em Integrações); a
 // entrada do PACS, sem sessão, grava a trilha com o usuário do parceiro.
 import {
   CHAVE_LIBERACAO_WORKLIST,
@@ -109,7 +111,12 @@ export class ServicoPacs {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {
     this.apoio = new ApoioGravacao<GravadorPacs>(
-      { chave: CHAVE_LIBERACAO_WORKLIST, nome: 'a lista de trabalho DICOM', operacoes: {} },
+      {
+        chave: CHAVE_LIBERACAO_WORKLIST,
+        nome: 'a lista de trabalho DICOM',
+        operacoes: {},
+        semLiberacao: true,
+      },
       porta,
       trilha,
       configuracao,

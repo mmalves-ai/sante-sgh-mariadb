@@ -1,6 +1,6 @@
 // Geração automática da lista de trabalho de imagem no `worker` (M47, etapa 3; ficha, regra 8: "todo exame de imagem
-// lançado gera um item da lista de trabalho"; lote F2.2 05-16): a cada minuto, por cliente e estabelecimento com a
-// chave `imagem.worklist` valendo para o estabelecimento inteiro, lê os exames de imagem pedidos na janela do parâmetro
+// lançado gera um item da lista de trabalho"; lote F2.2 05-16): a cada minuto, por cliente e estabelecimento, com o
+// destino da lista configurado (parceiro ativo com o evento; sem chave de liberação: 05-SADT linha 20), lê os exames de imagem pedidos na janela do parâmetro
 // `pacs.janelaDias` que ainda não têm item e cria cada item numa operação própria (Executor): o item com o número de
 // acesso, o evento da fila comum (`imagem.mwl`, entregue pelas integrações do M34) e a trilha, juntos. Dois
 // consumidores: a chave de idempotência do exame e a trava do exame fazem o segundo desistir sem duplicar. Ligado fora
@@ -29,7 +29,7 @@ export function geracaoPacsLigada(env: NodeJS.ProcessEnv): boolean {
 }
 
 export interface ResultadoCicloPacs {
-  readonly situacao: 'desligado' | 'feito';
+  readonly situacao: 'sem-destino' | 'feito';
   readonly pendentes: number;
   readonly criados: number;
   readonly semModalidade: number;
@@ -50,14 +50,14 @@ export function modalidadeDoItem(x: ExameSemItem): { id: number; sigla: string }
   return m && m.id !== null ? { id: m.id, sigla: m.sigla } : null;
 }
 
-/** Um ciclo num estabelecimento: com a chave valendo no estabelecimento, cria os itens que faltam na janela. */
+/** Um ciclo num estabelecimento: com o destino da lista configurado, cria os itens que faltam na janela. */
 export async function cicloWorklist(
   porta: PortaWorklist,
   cod: string,
   agora: Date = new Date(),
 ): Promise<ResultadoCicloPacs> {
   const nada = { pendentes: 0, criados: 0, semModalidade: 0, falhas: 0, cortada: false };
-  if (!(await porta.ligada(cod, agora))) return { situacao: 'desligado', ...nada };
+  if (!(await porta.destinoConfigurado())) return { situacao: 'sem-destino', ...nada };
   const janela = janelaPacs(await porta.janelaDias(cod, agora));
   const desde = new Date(agora.getTime() - janela * 86_400_000);
   const lidos = await porta.examesSemItem(cod, desde, agora, TETO_CICLO_PACS);

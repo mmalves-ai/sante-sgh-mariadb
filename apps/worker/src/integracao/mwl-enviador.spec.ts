@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { SimuladorModalidade } from '@sgh/dominio-sadt';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const estado = { ligada: true, suspenso: false, fuso: 'America/Sao_Paulo' };
+const estado = { ligada: false, suspenso: false, fuso: 'America/Sao_Paulo' };
 
 vi.mock('./porta-propria.js', async (original) => ({
   ...(await original<typeof import('./porta-propria.js')>()),
@@ -142,11 +142,8 @@ describe('envio do item da lista de trabalho DICOM (M47.3)', () => {
     falhar = false;
   });
 
-  it('recolhida a chave imagem.worklist ou cancelado o exame: erro de entrega com o motivo, nada chega ao PACS', async () => {
+  it('cancelado o exame: erro de entrega com o motivo, nada chega ao PACS (sem chave de liberação: a chave recolhida não segura o envio)', async () => {
     const antes = recebidos.length;
-    estado.ligada = false;
-    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('lista de trabalho desligada');
-    estado.ligada = true;
     estado.suspenso = true;
     await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('exame cancelado');
     estado.suspenso = false;

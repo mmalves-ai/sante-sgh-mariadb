@@ -1,12 +1,14 @@
 // Integração da porta própria da lista de trabalho de imagem sobre o MariaDB real (cliente f22_o5; lote F2.2 05-16).
 // Contrato de efeito: o item nasce com o número de acesso da regra do domínio, a situação a enviar e a versão 1; o exame
 // ganha o mesmo número; o evento `imagem.mwl` vai à fila comum de saída na mesma transação; o segundo pedido do mesmo
-// exame não cria outro item; o exame de outro estabelecimento não é visto; sem a chave, a geração fica desligada; o
+// exame não cria outro item; o exame de outro estabelecimento não é visto; sem chave de liberação, a geração segue o destino configurado (parceiro ativo
+// com o evento da lista: ativo gera, inativo ou sem o evento não gera); o
 // exame sem modalidade ativa vira item 'sem_modalidade' sem evento e é promovido quando o cadastro ganha a modalidade; o item
 // cancelado não trava o exame (novo item, nova geração, o número do exame acompanha o item vigente); o número de acesso
 // que o exame já tem é reaproveitado no item. Massa
 // sintética (estabelecimentos fo516 e fo516b, modalidade Z516; ids de paciente e atendimento fictícios com as chaves
 // estrangeiras desligadas só na montagem). SGH_NUCLEO_SEM_BANCO=1 pula.
+import { EVENTO_OUTBOX_MWL } from '@sgh/contratos';
 import { accessionDoItem } from '@sgh/dominio-sadt';
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -58,6 +60,7 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
       await e.executar('DELETE FROM requisicao_exame WHERE estabelecimento_id IN (?, ?)', ests);
       await e.executar("DELETE FROM exame WHERE codigo IN ('F516X', 'F516Y')");
       await e.executar("DELETE FROM modalidade_imagem WHERE codigo IN ('F516', 'F516I')");
+      await e.executar("DELETE FROM parceiro_dados WHERE codigo = 'F516PACS'");
       if (m.setor) await e.executar('DELETE FROM setor_diagnostico WHERE id = ?', [m.setor]);
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
     });
@@ -289,8 +292,32 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     expect(exame).toMatchObject({ numero_acesso: 'F516MIG0001', versao: 1 });
   });
 
-  it('sem a chave imagem.worklist no estabelecimento, a geração fica desligada; sem valor, a janela é a do padrão', async () => {
-    expect(await porta.ligada(H2, new Date())).toBe(false);
+  it('sem chave de liberação: a geração segue o destino (parceiro ativo com o evento da lista); sem valor, a janela é a do padrão', async () => {
+    const outros = await escrever(nucleo, (e) =>
+      e.uma(
+        `SELECT COUNT(*) AS n FROM parceiro_dados
+          WHERE ativo = TRUE AND excluido_em IS NULL AND JSON_VALID(eventos) AND JSON_CONTAINS(eventos, JSON_QUOTE(?))`,
+        [EVENTO_OUTBOX_MWL],
+      ),
+    );
+    // Nenhum outro destino no cliente de teste: sem parceiro, nada é gerado.
+    if (Number(outros?.['n'] ?? 0) === 0) expect(await porta.destinoConfigurado()).toBe(false);
+    await escrever(nucleo, (e) =>
+      e.executar(
+        `INSERT INTO parceiro_dados (codigo, nome, tipo, escopos, eventos, limite_tentativas, finalidade, base_legal, ativo,
+           criado_em) VALUES ('F516PACS', 'PACS sintético do teste', 'api', '[]', ?, 2, 'lista de trabalho de imagem',
+           'tutela-da-saude', FALSE, NOW())`,
+        [JSON.stringify([EVENTO_OUTBOX_MWL])],
+      ),
+    );
+    // Inativo: não é destino.
+    if (Number(outros?.['n'] ?? 0) === 0) expect(await porta.destinoConfigurado()).toBe(false);
+    await escrever(nucleo, (e) =>
+      e.executar("UPDATE parceiro_dados SET ativo = TRUE WHERE codigo = 'F516PACS'"),
+    );
+    // Ativo com o evento: a geração vale em qualquer estabelecimento, mesmo sem nenhuma chave gravada.
+    expect(await porta.destinoConfigurado()).toBe(true);
+    await escrever(nucleo, (e) => e.executar("DELETE FROM parceiro_dados WHERE codigo = 'F516PACS'"));
     // Sem valor gravado, vale o padrão da definição do parâmetro.
     expect(await porta.janelaDias(H2, new Date())).toBe(2);
   });

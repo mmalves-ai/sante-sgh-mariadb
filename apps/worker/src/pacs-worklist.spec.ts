@@ -1,7 +1,9 @@
 // M47 (etapa 3), regra 8, no `worker` (lote F2.2 05-16): a geração automática da lista de trabalho de imagem só com a
-// chave valendo no estabelecimento, um item por exame de imagem sem item na janela (sem modalidade ativa: item
+// destino configurado (parceiro ativo com o evento; sem chave de liberação), um item por exame de imagem sem item na janela (sem modalidade ativa: item
 // 'sem_modalidade', nunca some), a falha de um exame isolada dos demais, a chave por geração do pedido, o segundo consumidor que desiste sem duplicar, a janela do parâmetro e a liga/desliga por ambiente. A porta é um
 // dublê (nada conecta a banco); a prova sobre o banco é a pacs-worklist-propria.int.spec.ts.
+import { EVENTO_OUTBOX_MWL } from '@sgh/contratos';
+import { worklistComDestino } from './integracao/destino-worklist.js';
 import { accessionDoItem } from '@sgh/dominio-sadt';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -31,7 +33,7 @@ const estado = {
 };
 
 const porta: PortaWorklist = {
-  ligada: async () => estado.ligada,
+  destinoConfigurado: async () => estado.ligada,
   janelaDias: async () => estado.janela,
   examesSemItem: async (_cod, desde, ate) => {
     estado.janelaPedida = `${desde.toISOString().slice(0, 10)}..${ate.toISOString().slice(0, 10)}`;
@@ -72,9 +74,9 @@ beforeEach(() => {
 });
 
 describe('geração automática da lista de trabalho de imagem (regra 8)', () => {
-  it('desligada no estabelecimento: nada lido nem gravado', async () => {
+  it('sem destino configurado (nenhum parceiro ativo recebe a lista): nada lido nem gravado', async () => {
     estado.ligada = false;
-    expect(await cicloWorklist(porta, 'pc')).toMatchObject({ situacao: 'desligado', criados: 0 });
+    expect(await cicloWorklist(porta, 'pc')).toMatchObject({ situacao: 'sem-destino', criados: 0 });
     expect(estado.criados).toHaveLength(0);
   });
 
@@ -153,5 +155,19 @@ describe('geração automática da lista de trabalho de imagem (regra 8)', () =>
       expect(geracaoPacsLigada({ AMBIENTE: 'homolog', PACS_WORKLIST: 'desligado' })).toBe(false);
       await s.onApplicationShutdown();
     });
+  });
+});
+
+describe('destino da lista de trabalho (05-SADT linha 20: sem chave de liberação)', () => {
+  it('só o parceiro ativo que recebe o evento da lista é destino; nenhum parceiro, nenhum destino', () => {
+    expect(worklistComDestino([])).toBe(false);
+    expect(worklistComDestino([{ ativo: false, eventos: [EVENTO_OUTBOX_MWL] }])).toBe(false);
+    expect(worklistComDestino([{ ativo: true, eventos: ['fato.resultado.liberado'] }])).toBe(false);
+    expect(
+      worklistComDestino([
+        { ativo: true, eventos: ['fato.resultado.liberado'] },
+        { ativo: true, eventos: [EVENTO_OUTBOX_MWL] },
+      ]),
+    ).toBe(true);
   });
 });
