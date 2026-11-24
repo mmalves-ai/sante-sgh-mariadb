@@ -206,7 +206,12 @@ describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
     // O conteúdo de origem nas linhas do contrato (o que a leitura do importado devolve): de um rascunho descartado.
     const molde = await m.ctrl.salvarRascunho(
       '1003',
-      { modelo: 61, atendimento: 10031, dataHoraClinica: agora(), respostas: [texto(6102, 'Exame IMPORTADO')] },
+      {
+        modelo: 61,
+        atendimento: 10031,
+        dataHoraClinica: agora(),
+        respostas: [texto(6102, 'Exame IMPORTADO')],
+      },
       m.req(),
     );
     const linhasDeOrigem = (await m.porta.lerRascunho(C, molde.rascunho))!.linhas.map(
@@ -220,9 +225,11 @@ describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
       { linhas: linhasDeOrigem, lancadoEm: '2025-03-10T09:15:00.000' },
     );
     const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
-    expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: false, deOutroSistema: true });
+    expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: false, importado: true });
     // O autor vê o que escreveu na origem e o lançamento original (nunca o formulário vazio nem a data da carga).
-    expect(JSON.stringify(f.rascunho?.respostas.filter((r) => r.vinculo === 6102))).toContain('Exame IMPORTADO');
+    expect(JSON.stringify(f.rascunho?.respostas.filter((r) => r.vinculo === 6102))).toContain(
+      'Exame IMPORTADO',
+    );
     expect(f.rascunho?.resumo.atualizadoEm).toMatch(/^2025-03-10/);
     expect(f.rascunhos.find((r) => r.id === id)).toMatchObject({ somenteLeitura: false });
     expect(f.avisos.join(' ')).not.toMatch(/só leitura/);
@@ -239,7 +246,7 @@ describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
     );
     // A nova versão é desta casa; a importada fica arquivada (nunca apagada) e sai da lista.
     const f2 = await m.ctrl.formulario('1003', '61', { rascunho: String(salvo.rascunho) }, m.req());
-    expect(f2.rascunho?.resumo).toMatchObject({ somenteLeitura: false, deOutroSistema: false });
+    expect(f2.rascunho?.resumo).toMatchObject({ somenteLeitura: false, importado: false });
     expect(f2.rascunhos.map((r) => r.id)).not.toContain(id);
     const registro = await finalizarEvam(m, { rascunho: { id: salvo.rascunho, versao: salvo.versao } });
     expect(registro).toBeGreaterThan(0);
@@ -270,7 +277,7 @@ describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
       cbo: prof.cbo + 999,
     });
     const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
-    expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: true, deOutroSistema: true });
+    expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: true, importado: true });
     expect(f.avisos.join(' ')).toMatch(/outro profissional/);
     const versao = f.rascunho!.resumo.versao;
     const salvar = await erro(

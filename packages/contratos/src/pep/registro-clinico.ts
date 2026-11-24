@@ -259,10 +259,10 @@ export const esquemaRascunhoResumo = z.object({
   dataHoraClinica: z.string().nullable(),
   atualizadoEm: z.string().nullable(),
   versao: z.string(),
-  /** Rascunho de outro profissional ou do outro sistema: no novo, só leitura (ficha, seção 5). */
+  /** Rascunho de outro profissional: só leitura. O importado é rascunho normal do autor (ADR 0006). */
   somenteLeitura: z.boolean(),
-  /** Começado no outro sistema (sem a marca de origem do novo): só leitura até o cenário controlado da Fase 4. */
-  deOutroSistema: z.boolean(),
+  /** Importado (sem a marca de origem desta casa): informativo; não trava o autor (ADR 0006). */
+  importado: z.boolean(),
   /** Rascunho de correção: o registro suspenso que ele vai corrigir. */
   corrige: z.number().int().nullable(),
   respostas: z.number().int(),

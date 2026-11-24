@@ -36,16 +36,8 @@ import {
 import { numeroAih } from '@sgh/dominio-faturamento';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
-import type {
-  AtendimentoLido,
-  ContextoSus,
-  DadosBpaLidos,
-  DadosCihaLidos,
-  GravacaoSus,
-  LeituraSus,
-  PortaSus,
-} from './porta.js';
-import type { DadosAihLidos } from './porta-aih.js';
+import type { ContextoSus, DadosBpaLidos, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
+import { MontagensSusPropria } from './porta-propria-montagens.js';
 import {
   GravacoesAihPropria,
   LeiturasAihPropria,
@@ -644,74 +636,32 @@ export class LeituraSusPropria implements LeituraSus {
     }));
   }
 
-  // ── Montagem: a produção da competência (a conta própria é do lote da conta; hoje vazia) ──
+  // ── Montagem: a produção da competência, os arquivos e a AIH (porta-propria-montagens.ts) ──
 
-  async dadosCiha(
-    _intervalo: { readonly inicio: string; readonly fim: string },
-    _conveniosSus: readonly number[],
-    sigtapExtra: readonly number[],
-  ): Promise<DadosCihaLidos> {
-    const atendimentos: AtendimentoLido[] = [];
-    const s = await this.sigtapDosIds(sigtapExtra);
-    return {
-      atendimentos,
-      procedimentos: s.procedimentos,
-      historico: [],
-      registros: s.registros,
-      cids: new Set<string>(),
-      cnesCadastrados: await this.cnesCadastrados(),
-    };
+  private montL?: MontagensSusPropria;
+  protected mont(): MontagensSusPropria {
+    return (this.montL ??= new MontagensSusPropria(this.l, this.est, {
+      sigtapDosIds: (ids) => this.sigtapDosIds(ids),
+      cnesCadastrados: () => this.cnesCadastrados(),
+      leitosUti: () => this.leitosUti(),
+      sigtapPorCodigo: (c) => this.sigtapPorCodigo(c),
+    }));
   }
 
-  async dadosBpa(
-    _intervalo: { readonly inicio: string; readonly fim: string },
-    _conveniosSus: readonly number[],
-    sigtapExtra: readonly number[],
-  ): Promise<DadosBpaLidos> {
-    const s = await this.sigtapDosIds(sigtapExtra);
-    return {
-      atendimentos: [],
-      procedimentos: s.procedimentos,
-      historico: [],
-      registros: s.registros,
-      compatibilidades: s.compatibilidades,
-      cids: new Set<string>(),
-      cnesCadastrados: await this.cnesCadastrados(),
-    };
+  dadosCiha(...a: Parameters<MontagensSusPropria['dadosCiha']>) {
+    return this.mont().dadosCiha(...a);
   }
 
-  async dadosAih(
-    _registros: readonly number[],
-    codigos: readonly string[],
-    sigtapExtra: readonly number[],
-  ): Promise<DadosAihLidos> {
-    const porCodigo: { id: number; codigo: string; nome: string }[] = [];
-    for (const c of [...new Set(codigos)]) {
-      const x = await this.sigtapPorCodigo(c);
-      if (x) porCodigo.push(x);
-    }
-    const s = await this.sigtapDosIds([...sigtapExtra, ...porCodigo.map((p) => p.id)]);
-    return {
-      internacoes: [],
-      itens: [],
-      passagens: [],
-      procedimentos: s.procedimentos,
-      historico: [],
-      registros: s.registros,
-      compatibilidades: s.compatibilidades,
-      porCodigo,
-      cids: new Set<string>(),
-      leitosUti: await this.leitosUti(),
-      cnesCadastrados: await this.cnesCadastrados(),
-    };
+  dadosBpa(...a: Parameters<MontagensSusPropria['dadosBpa']>) {
+    return this.mont().dadosBpa(...a);
   }
 
-  async linhasBpa(): Promise<{
-    itens: never[];
-    total: number;
-    porTipo: Record<string, { linhas: number; quantidade: number }>;
-  }> {
-    return { itens: [], total: 0, porTipo: {} };
+  dadosAih(...a: Parameters<MontagensSusPropria['dadosAih']>) {
+    return this.mont().dadosAih(...a);
+  }
+
+  linhasBpa(...a: Parameters<MontagensSusPropria['linhasBpa']>) {
+    return this.mont().linhasBpa(...a);
   }
 
   async buscarSolicitantes(): Promise<never[]> {
@@ -741,34 +691,24 @@ export class LeituraSusPropria implements LeituraSus {
     return this.apacR().apacsDaCompetencia(...a);
   }
 
-  async atendimentoLaudoApac(): Promise<null> {
-    return null;
+  atendimentoLaudoApac(...a: Parameters<MontagensSusPropria['atendimentoLaudoApac']>) {
+    return this.mont().atendimentoLaudoApac(...a);
   }
 
-  async dominiosApac(): Promise<{
-    caracteristicaTratamento: never[];
-    contraindicacaoTransplante: never[];
-    situacaoTransplante: never[];
-    acessoVascular: never[];
-  }> {
-    return {
-      caracteristicaTratamento: [],
-      contraindicacaoTransplante: [],
-      situacaoTransplante: [],
-      acessoVascular: [],
-    };
+  dominiosApac(...a: Parameters<MontagensSusPropria['dominiosApac']>) {
+    return this.mont().dominiosApac(...a);
   }
 
-  async buscarSolicitantesApac(): Promise<never[]> {
-    return [];
+  buscarSolicitantesApac(...a: Parameters<MontagensSusPropria['buscarSolicitantesApac']>) {
+    return this.mont().buscarSolicitantesApac(...a);
   }
 
-  async solicitantesApacPorChave(): Promise<never[]> {
-    return [];
+  solicitantesApacPorChave(...a: Parameters<MontagensSusPropria['solicitantesApacPorChave']>) {
+    return this.mont().solicitantesApacPorChave(...a);
   }
 
-  async linhasApac(): Promise<{ itens: never[]; total: number; apacs: number; quantidade: number }> {
-    return { itens: [], total: 0, apacs: 0, quantidade: 0 };
+  linhasApac(...a: Parameters<MontagensSusPropria['linhasApac']>) {
+    return this.mont().linhasApac(...a);
   }
 
   // ── AIH: leitos de UTI habilitados (o restante do ciclo é pendente de modelo) ──
@@ -794,16 +734,16 @@ export class LeituraSusPropria implements LeituraSus {
       .filter((x) => Number.isFinite(x.tipo));
   }
 
-  async internacaoAih(): Promise<null> {
-    return null;
+  internacaoAih(...a: Parameters<MontagensSusPropria['internacaoAih']>) {
+    return this.mont().internacaoAih(...a);
   }
 
-  async internacoesSus(): Promise<never[]> {
-    return [];
+  internacoesSus(...a: Parameters<MontagensSusPropria['internacoesSus']>) {
+    return this.mont().internacoesSus(...a);
   }
 
-  async lotesSaida(): Promise<never[]> {
-    return [];
+  lotesSaida(...a: Parameters<MontagensSusPropria['lotesSaida']>) {
+    return this.mont().lotesSaida(...a);
   }
 
   // ── AIH pela tela (porta-propria-aih.ts) ──
@@ -880,8 +820,8 @@ export class LeituraSusPropria implements LeituraSus {
     return this.aihs().itensAih(...a);
   }
 
-  async linhaBpaDaCompetencia(): Promise<null> {
-    return null;
+  linhaBpaDaCompetencia(...a: Parameters<MontagensSusPropria['linhaBpaDaCompetencia']>) {
+    return this.mont().linhaBpaDaCompetencia(...a);
   }
 
   paginaRetornos(...a: Parameters<LeituraApacRetorno['paginaRetornos']>) {
@@ -919,13 +859,9 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     return (this.apacRetGr ??= new GravacaoApacRetorno(this.tx, this.est, new PonteAihPropria()));
   }
 
-  /**
-   * A montagem própria lê a produção da competência? Hoje não (dadosCiha, dadosBpa e as montagens da APAC e da AIH
-   * saem vazias): a geração do arquivo, mesmo "sem movimento", recusa com "modelo-pendente". Passa a true quando o
-   * lote da conta e da internação escrever essa leitura.
-   */
+  /** A montagem própria lê a produção da competência (porta-propria-montagens.ts). */
   protected montagemLeProducao(): boolean {
-    return false;
+    return true;
   }
 
   private async competenciaPorId(id: number): Promise<CompetenciaSusRegistro> {

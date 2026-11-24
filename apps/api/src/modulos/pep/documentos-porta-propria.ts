@@ -38,6 +38,11 @@ import * as Alergias from './alergias-propria.js';
 import * as Painel from './documentos-propria-painel.js';
 import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
 import { OPERACOES_PEP_RESTO, operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
+import {
+  OPERACOES_PEP_RESTO_2,
+  operacoesDocumentosPropria2,
+  type GravadorArquivos,
+} from './documentos-propria-operacoes-2.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type {
@@ -232,13 +237,16 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     /** Cliente desta API (configuração; um banco por cliente), quando o contexto da sessão não o traz. */
     private readonly cliente: string,
     executor?: Executor,
-    /** Porta de armazenamento de arquivos (ADR 0004); sem ela, abrir o conteúdo do anexo recusa com 503. */
-    arquivos: LeitorArquivos | null = null,
+    /** Porta de armazenamento de arquivos (ADR 0004); sem ela, abrir e anexar recusam com 503. */
+    arquivos: (LeitorArquivos & Partial<GravadorArquivos>) | null = null,
   ) {
     this.executor = executor ?? nucleo.criarExecutor();
     this.exames = new DocumentosPropriaExames(nucleo, cliente, arquivos, this.executor);
     this.pareceres = new DocumentosPropriaPareceres(nucleo, cliente, this.executor);
-    this.opsResto = operacoesDocumentosPropria(nucleo, cliente, this.executor);
+    this.opsResto = {
+      ...operacoesDocumentosPropria(nucleo, cliente, this.executor),
+      ...operacoesDocumentosPropria2(nucleo, cliente, arquivos, this.executor),
+    };
   }
 
   private clienteDe(c: ContextoDocs): string {
@@ -470,6 +478,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     return Painel.podeGravar(this.nucleo, this.cliente, ...a, [
       ...Painel.OPERACOES_PAINEL,
       ...OPERACOES_PEP_RESTO,
+      ...OPERACOES_PEP_RESTO_2,
     ]);
   }
 

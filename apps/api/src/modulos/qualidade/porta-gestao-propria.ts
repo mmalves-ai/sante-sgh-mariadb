@@ -1137,45 +1137,69 @@ export class PortaGestaoPropria implements PortaGestao {
     return Promise.reject(leituraPendente(o));
   }
 
-  documentos(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  documentos(..._a: Parameters<PortaGestao['documentos']>): ReturnType<PortaGestao['documentos']> {
     return this.pendente(PENDENTE.documentos);
   }
-  documento(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  documento(..._a: Parameters<PortaGestao['documento']>): ReturnType<PortaGestao['documento']> {
     return this.pendente(PENDENTE.documentos);
   }
-  documentosDoCodigo(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  documentosDoCodigo(
+    ..._a: Parameters<PortaGestao['documentosDoCodigo']>
+  ): ReturnType<PortaGestao['documentosDoCodigo']> {
     return this.pendente(PENDENTE.documentos);
   }
-  ciencias(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  ciencias(..._a: Parameters<PortaGestao['ciencias']>): ReturnType<PortaGestao['ciencias']> {
     return this.pendente(PENDENTE.documentos);
   }
-  cientes(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  cientes(..._a: Parameters<PortaGestao['cientes']>): ReturnType<PortaGestao['cientes']> {
     return this.pendente(PENDENTE.documentos);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   analises(): Promise<never> {
     return this.pendente(PENDENTE.indicadores);
   }
-  historicoAnalises(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  historicoAnalises(
+    ..._a: Parameters<PortaGestao['historicoAnalises']>
+  ): ReturnType<PortaGestao['historicoAnalises']> {
     return this.pendente(PENDENTE.indicadores);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   auditorias(): Promise<never> {
     return this.pendente(PENDENTE.auditorias);
   }
   auditoria(): Promise<never> {
     return this.pendente(PENDENTE.auditorias);
   }
-  comissoes(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  comissoes(..._a: Parameters<PortaGestao['comissoes']>): ReturnType<PortaGestao['comissoes']> {
     return this.pendente(PENDENTE.comissoes);
   }
-  comissao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  comissao(..._a: Parameters<PortaGestao['comissao']>): ReturnType<PortaGestao['comissao']> {
     return this.pendente(PENDENTE.comissoes);
   }
-  reunioes(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  reunioes(..._a: Parameters<PortaGestao['reunioes']>): ReturnType<PortaGestao['reunioes']> {
     return this.pendente(PENDENTE.comissoes);
   }
-  reuniao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  reuniao(..._a: Parameters<PortaGestao['reuniao']>): ReturnType<PortaGestao['reuniao']> {
     return this.pendente(PENDENTE.comissoes);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   // A assinatura do contrato (a porta completa sobrescreve com a leitura).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   pesquisas(_c: ContextoGestao, _de: string, _ate: string): ReturnType<PortaGestao['pesquisas']> {
@@ -1185,9 +1209,11 @@ export class PortaGestaoPropria implements PortaGestao {
   pesquisa(_c: ContextoGestao, _id: number): ReturnType<PortaGestao['pesquisa']> {
     return this.pendente(PENDENTE.pesquisas);
   }
-  contagem(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  contagem(..._a: Parameters<PortaGestao['contagem']>): ReturnType<PortaGestao['contagem']> {
     return this.pendente(PENDENTE.contagem);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   // A assinatura do contrato (a porta completa sobrescreve com a leitura).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   envios(_c: ContextoGestao, _desde: string): Promise<EnvioRegulatorioRegistrado[]> {
@@ -1211,15 +1237,27 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.protocolos);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  checklistsRevisao(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  checklistsRevisao(
+    ..._a: Parameters<PortaGestao['checklistsRevisao']>
+  ): ReturnType<PortaGestao['checklistsRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
-  checklistRevisao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  checklistRevisao(
+    ..._a: Parameters<PortaGestao['checklistRevisao']>
+  ): ReturnType<PortaGestao['checklistRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
-  altasParaRevisao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  altasParaRevisao(
+    ..._a: Parameters<PortaGestao['altasParaRevisao']>
+  ): ReturnType<PortaGestao['altasParaRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   loginsDosMedicos(): Promise<never> {
     return this.pendente(PENDENTE.revisao);
   }
@@ -1229,21 +1267,41 @@ export class PortaGestaoPropria implements PortaGestao {
   sorteioRevisao(): Promise<never> {
     return this.pendente(PENDENTE.revisao);
   }
-  prontuariosDoSorteio(): Promise<never> {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  prontuariosDoSorteio(
+    ..._a: Parameters<PortaGestao['prontuariosDoSorteio']>
+  ): ReturnType<PortaGestao['prontuariosDoSorteio']> {
     return this.pendente(PENDENTE.revisao);
   }
-  prontuarioRevisao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  prontuarioRevisao(
+    ..._a: Parameters<PortaGestao['prontuarioRevisao']>
+  ): ReturnType<PortaGestao['prontuarioRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
-  pendenciasDosProntuarios(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pendenciasDosProntuarios(
+    ..._a: Parameters<PortaGestao['pendenciasDosProntuarios']>
+  ): ReturnType<PortaGestao['pendenciasDosProntuarios']> {
     return this.pendente(PENDENTE.revisao);
   }
-  pendenciaRevisao(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pendenciaRevisao(
+    ..._a: Parameters<PortaGestao['pendenciaRevisao']>
+  ): ReturnType<PortaGestao['pendenciaRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
-  pendenciasDoLogin(): Promise<never> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pendenciasDoLogin(
+    ..._a: Parameters<PortaGestao['pendenciasDoLogin']>
+  ): ReturnType<PortaGestao['pendenciasDoLogin']> {
     return this.pendente(PENDENTE.revisao);
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   revisoesDaCompetencia(): Promise<never> {
     return this.pendente(PENDENTE.revisao);
   }

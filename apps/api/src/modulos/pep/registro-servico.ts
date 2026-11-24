@@ -273,7 +273,7 @@ export class ServicoRegistro {
       atualizadoEm: iso(r.lancadoEm),
       versao: r.versao,
       somenteLeitura: !prof || !prof.cbos.includes(r.cbo),
-      deOutroSistema: importado,
+      importado,
       corrige: r.corrige,
       respostas: r.respostas,
     };

@@ -31,10 +31,39 @@ import {
 import type { ContextoGestao, GravadorGestao } from './porta-gestao.js';
 import { PortaGestaoPropria, TABELAS_GESTAO } from './porta-gestao-propria.js';
 import { comVersoesAnteriores, LeiturasGestaoComplementoD } from './porta-propria-complemento-d.js';
-import { type EnvioRegulatorioRegistrado, recusaVersaoGestao, type TabelaCorrigivel } from './tipos.js';
+import {
+  gravacoesComplementoQ1,
+  LeiturasGestaoComplementoQ1,
+  TABELAS_COMPLEMENTO_Q1,
+} from './porta-propria-complemento-q1.js';
+import { LeiturasGestaoComplementoQ2 } from './porta-propria-complemento-q2.js';
+import {
+  gravacoesComplementoQ3,
+  LeiturasRevisaoComplementoQ3,
+  TABELAS_COMPLEMENTO_Q3,
+} from './porta-propria-complemento-q3.js';
+import {
+  gravadorComplementoQ4,
+  LeiturasGestaoComplementoQ4,
+  TABELAS_COMPLEMENTO_Q4,
+} from './porta-propria-complemento-q4.js';
+import {
+  type EnvioRegulatorioRegistrado,
+  type FiltroDocumentos,
+  recusaVersaoGestao,
+  type TabelaCorrigivel,
+} from './tipos.js';
 
 /** As tabelas que a gestão completa grava (as da base e as dos assuntos novos). */
-export const TABELAS_GESTAO_COMPLETA = [...TABELAS_GESTAO, 'envio_regulatorio_qualidade'] as const;
+export const TABELAS_GESTAO_COMPLETA = [
+  ...new Set([
+    ...TABELAS_GESTAO,
+    'envio_regulatorio_qualidade',
+    ...TABELAS_COMPLEMENTO_Q1,
+    ...TABELAS_COMPLEMENTO_Q3,
+    ...TABELAS_COMPLEMENTO_Q4,
+  ]),
+] as const;
 
 // ── Envios regulatórios ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -98,6 +127,14 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   private readonly nucleoCompleta: NucleoQualidade;
   /** Pesquisas da agenda, versões anteriores e protocolos gerenciados (porta-propria-complemento-d.ts). */
   private readonly complementoD: LeiturasGestaoComplementoD;
+  /** Altas para a revisão de prontuários (porta-propria-complemento-q1.ts). */
+  private readonly complementoQ1: LeiturasGestaoComplementoQ1;
+  /** Documentos, ciências, histórico de análises, comissões e contagens (porta-propria-complemento-q2.ts). */
+  private readonly complementoQ2: LeiturasGestaoComplementoQ2;
+  /** Checklists, prontuários e pendências da revisão (porta-propria-complemento-q3.ts). */
+  private readonly complementoQ3: LeiturasRevisaoComplementoQ3;
+  /** Reuniões de comissão (porta-propria-complemento-q4.ts). */
+  private readonly complementoQ4: LeiturasGestaoComplementoQ4;
 
   /**
    * @param armazem O armazenamento de arquivos da instalação (ADR 0004: disco local, metadado na tabela `arquivo`).
@@ -111,6 +148,10 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     super(nucleo, executorPronto);
     this.nucleoCompleta = nucleo;
     this.complementoD = new LeiturasGestaoComplementoD(nucleo);
+    this.complementoQ1 = new LeiturasGestaoComplementoQ1(nucleo);
+    this.complementoQ2 = new LeiturasGestaoComplementoQ2(nucleo);
+    this.complementoQ3 = new LeiturasRevisaoComplementoQ3(nucleo);
+    this.complementoQ4 = new LeiturasGestaoComplementoQ4(nucleo);
   }
 
   override gravarSgh<T>(
@@ -136,6 +177,9 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     return comVersoesAnteriores(
       {
         ...super.gravador(tx, est, anotacao),
+        ...gravacoesComplementoQ1(tx, est, anotacao),
+        ...gravacoesComplementoQ3(tx, est),
+        ...gravadorComplementoQ4(tx, est, anotacao),
         gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
         registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
       },
@@ -143,6 +187,84 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
       est,
       anotacao,
     );
+  }
+
+  // ── Complementos Q1 a Q4 (modulos-proprios-3): leituras delegadas ──
+
+  override altasParaRevisao(c: ContextoGestao, de: string, ate: string) {
+    return this.complementoQ1.altasParaRevisao(c, de, ate);
+  }
+
+  override documentos(c: ContextoGestao, f: FiltroDocumentos) {
+    return this.complementoQ2.documentos(c, f);
+  }
+
+  override documento(c: ContextoGestao, id: number) {
+    return this.complementoQ2.documento(c, id);
+  }
+
+  override documentosDoCodigo(c: ContextoGestao, codigo: string) {
+    return this.complementoQ2.documentosDoCodigo(c, codigo);
+  }
+
+  override ciencias(c: ContextoGestao, documentos: readonly number[], usuario: string) {
+    return this.complementoQ2.ciencias(c, documentos, usuario);
+  }
+
+  override cientes(c: ContextoGestao, documento: number) {
+    return this.complementoQ2.cientes(c, documento);
+  }
+
+  override historicoAnalises(c: ContextoGestao, indicador: string) {
+    return this.complementoQ2.historicoAnalises(c, indicador);
+  }
+
+  override comissoes(c: ContextoGestao) {
+    return this.complementoQ2.comissoes(c);
+  }
+
+  override comissao(c: ContextoGestao, id: number) {
+    return this.complementoQ2.comissao(c, id);
+  }
+
+  override contagem(c: ContextoGestao, agora: string, usuario: string) {
+    return this.complementoQ2.contagem(c, agora, usuario);
+  }
+
+  override checklistsRevisao(c: ContextoGestao, comissao: number) {
+    return this.complementoQ3.checklistsRevisao(c, comissao);
+  }
+
+  override checklistRevisao(c: ContextoGestao, id: number) {
+    return this.complementoQ3.checklistRevisao(c, id);
+  }
+
+  override prontuariosDoSorteio(c: ContextoGestao, sorteio: number) {
+    return this.complementoQ3.prontuariosDoSorteio(c, sorteio);
+  }
+
+  override prontuarioRevisao(c: ContextoGestao, id: number) {
+    return this.complementoQ3.prontuarioRevisao(c, id);
+  }
+
+  override pendenciasDosProntuarios(c: ContextoGestao, ids: readonly number[]) {
+    return this.complementoQ3.pendenciasDosProntuarios(c, ids);
+  }
+
+  override pendenciaRevisao(c: ContextoGestao, id: number) {
+    return this.complementoQ3.pendenciaRevisao(c, id);
+  }
+
+  override pendenciasDoLogin(c: ContextoGestao, login: string) {
+    return this.complementoQ3.pendenciasDoLogin(c, login);
+  }
+
+  override reunioes(c: ContextoGestao, comissao: number) {
+    return this.complementoQ4.reunioes(c, comissao);
+  }
+
+  override reuniao(c: ContextoGestao, id: number) {
+    return this.complementoQ4.reuniao(c, id);
   }
 
   override pesquisas(c: ContextoGestao, de: string, ate: string) {

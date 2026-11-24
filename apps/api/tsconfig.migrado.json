@@ -1592,6 +1592,27 @@
     "src/sessao/recuperacao-plataforma.ts",
     "src/sessao/recuperacao-plataforma.spec.ts",
     "src/sessao/acesso-email-proprio.ts",
-    "src/sessao/acesso-email.int.spec.ts"
+    "src/sessao/acesso-email.int.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q1.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q1.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q1.int.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q2.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q2.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q2.int.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q3.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q3.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q3.int.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q4.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q4.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q4.int.spec.ts",
+    "src/modulos/sus/porta-propria-montagens.ts",
+    "src/modulos/sus/porta-propria-montagens.spec.ts",
+    "src/modulos/sus/porta-propria-montagens.int.spec.ts",
+    "src/modulos/pep/documentos-propria-operacoes-2.ts",
+    "src/modulos/pep/documentos-propria-operacoes-2.spec.ts",
+    "src/modulos/pep/documentos-propria-operacoes-2.int.spec.ts",
+    "src/modulos/pep/prescricao-propria-regras-2.ts",
+    "src/modulos/pep/prescricao-propria-regras-2.spec.ts",
+    "src/modulos/pep/prescricao-propria-regras-2.int.spec.ts"
   ]
 }

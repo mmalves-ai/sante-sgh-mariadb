@@ -96,6 +96,6 @@ describe('porta própria completa da gestão (unidade)', () => {
 
   it('o que segue sem modelo continua falhando fechado (503 modelo-pendente), nunca vazio', async () => {
     const { porta } = falso();
-    await expect(porta.documentos()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    await expect(porta.auditorias()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
   });
 });

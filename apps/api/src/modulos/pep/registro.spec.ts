@@ -163,7 +163,7 @@ describe('registro clínico nos modelos do formulário (M22)', () => {
         .rascunho.respostas.map((x: RespostaRegistro) => x.vinculo)
         .sort(),
     ).toEqual([6101, 6102]);
-    expect(aberto.json().rascunho.resumo).toMatchObject({ somenteLeitura: false, deOutroSistema: false });
+    expect(aberto.json().rascunho.resumo).toMatchObject({ somenteLeitura: false, importado: false });
     const d = await post(medico, `/api/pep/rascunhos/${novo}/descartar`, { versao: r2.json().versao });
     expect(d.statusCode).toBe(200);
     expect((await get(medico, '/api/pep/rascunhos')).json().some((x: { id: number }) => x.id === novo)).toBe(

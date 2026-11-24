@@ -24,6 +24,7 @@ import { dataHora, fusoValido, PortaRegistroPropria } from './registro-porta-pro
 import { alergiasDaPrescricao } from './alergias-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
 import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
   type AtendimentoDaPrescricao,
@@ -94,7 +95,6 @@ export function recusaPendentePrescricao(metodo: string): ErroOperacao {
     `A leitura ou gravação "${metodo}" da prescrição ainda não tem adaptador no banco próprio.`,
   );
 }
-const pendente = (metodo: string): Promise<never> => Promise.reject(recusaPendentePrescricao(metodo));
 
 /** Login do usuário ligado ao profissional (o vínculo vigente primeiro); sem vínculo, o nome de exibição. */
 const loginDoProfissional = (coluna: string) => `COALESCE(
@@ -140,6 +140,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
 
   private readonly catalogo: CatalogoPrescricaoPropria;
   private readonly gravacao: GravacaoPrescricaoPropria;
+  /** Regra de alerta e ficha de antimicrobiano (prescricao-propria-regras-2.ts). */
+  private readonly regras2: RegrasPrescricaoPropria2;
 
   constructor(
     private readonly nucleo: NucleoRegistroGravacao,
@@ -149,6 +151,7 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     this.registro = new PortaRegistroPropria(nucleo, cliente);
     this.catalogo = new CatalogoPrescricaoPropria(nucleo, cliente);
     this.gravacao = new GravacaoPrescricaoPropria(nucleo, cliente);
+    this.regras2 = new RegrasPrescricaoPropria2(nucleo, cliente);
   }
 
   private ler<T>(
@@ -550,8 +553,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   coassinar(...a: Parameters<PortaPrescricao['coassinar']>) {
     return this.gravacao.coassinar(...a);
   }
-  gravarRegra(): Promise<never> {
-    return pendente('gravarRegra');
+  gravarRegra(...a: Parameters<PortaPrescricao['gravarRegra']>) {
+    return this.regras2.gravarRegra(...a);
   }
   programarFutura(...a: Parameters<PortaPrescricao['programarFutura']>) {
     return this.gravacao.programarFutura(...a);
@@ -562,8 +565,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   registrarReconciliacao(...a: Parameters<PortaPrescricao['registrarReconciliacao']>) {
     return this.gravacao.registrarReconciliacao(...a);
   }
-  registrarFicha(): Promise<never> {
-    return pendente('registrarFicha');
+  registrarFicha(...a: Parameters<PortaPrescricao['registrarFicha']>) {
+    return this.regras2.registrarFicha(...a);
   }
   gravarGrade(...a: Parameters<PortaPrescricao['gravarGrade']>) {
     return this.gravacao.gravarGrade(...a);
