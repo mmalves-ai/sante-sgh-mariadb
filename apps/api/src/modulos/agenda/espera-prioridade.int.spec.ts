@@ -141,13 +141,28 @@ describe.skipIf(SEM_BANCO)('02-AGE 48: lista de espera pelo grupo de prioridade 
         "INSERT INTO categoria_agenda (codigo, descricao, natureza, criado_em) VALUES ('f324e', 'Consultas f324e', 'consulta', ?)",
         [agora],
       );
+      // A agenda tem dono (ck_agenda_servico_dono): um profissional sintético.
+      const pfProf = await garantir(
+        e,
+        'SELECT id FROM pessoa_fisica WHERE nome = ?',
+        ['PROFISSIONAL SINTETICO F324E'],
+        'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+        ['PROFISSIONAL SINTETICO F324E', agora],
+      );
+      const profissional = await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pfProf],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pfProf, agora],
+      );
       const agenda = (nome: string) =>
         garantir(
           e,
           'SELECT id FROM agenda_servico WHERE estabelecimento_id = ? AND nome = ?',
           [ids.est, nome],
-          'INSERT INTO agenda_servico (estabelecimento_id, nome, categoria_agenda_id, duracao_horario_minutos, criado_em) VALUES (?, ?, ?, 30, ?)',
-          [ids.est, nome, cat, agora],
+          'INSERT INTO agenda_servico (estabelecimento_id, nome, categoria_agenda_id, profissional_id, duracao_horario_minutos, criado_em) VALUES (?, ?, ?, ?, 30, ?)',
+          [ids.est, nome, cat, profissional, agora],
         );
       ids.ag97 = await agenda('AGENDA F324E 97');
       ids.ag95 = await agenda('AGENDA F324E SEM 97');
