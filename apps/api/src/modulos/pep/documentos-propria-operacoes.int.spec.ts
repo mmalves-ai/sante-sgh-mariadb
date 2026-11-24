@@ -373,6 +373,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   it('atestado: exige os dias; emite com a versão "emissao" e o vínculo ao documento', async () => {
     const at = { ...baseDoc(), familia: 'atestado', tipo: 'atestado', modeloNome: 'Atestado médico', conteudoXml: '<atestado>sintetico</atestado>' };
     expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe('dias-afastamento-obrigatorio');
+    // Ordem da memória: sessão e médico, depois o CID sem autorização (antes dos dias).
+    expect(await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09' }, ctx('at1')))).toBe('cid-sem-autorizacao');
     const r = await ops()['pep.emitirDocumento']!(C(), { ...at, diasAfastamento: 2 }, ctx('at'));
     const l = await uma(
       `SELECT d.dias_afastamento, d.documento_prontuario_id, d.situacao,
@@ -384,6 +386,45 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(Number(l?.['documento_prontuario_id'])).toBe(Number(r['documento']));
     expect(l?.['situacao']).toBe('valido');
     expect(Number(l?.['v'])).toBe(1);
+  });
+
+  it('idempotência: mesma chave e mesma entrada devolve o mesmo resultado sem segunda linha; outra entrada recusa', async () => {
+    const c = ctx('idem');
+    const ex = {
+      ...baseDoc(),
+      realizadoEm: agoraLocal(-30),
+      nomeExame: 'Glicemia sintética',
+      rtf: '{\\rtf1 idem sintetico}',
+      itens: [],
+    };
+    const r1 = await ops()['pep.lancarExameExterno']!(C(), ex, c);
+    const r2 = await ops()['pep.lancarExameExterno']!(C(), ex, c);
+    expect(r2).toEqual(r1);
+    const n = await uma(
+      `SELECT COUNT(*) AS n FROM exame_lancado_prontuario WHERE paciente_id = ? AND nome_exame = 'Glicemia sintética'`,
+      [ids.paciente],
+    );
+    expect(Number(n?.['n'])).toBe(1);
+    expect(await codigo(ops()['pep.lancarExameExterno']!(C(), { ...ex, nomeExame: 'Outro exame sintético' }, c))).toBe(
+      'idempotencia-divergente',
+    );
+  });
+
+  it('validade da receita: data local da emissão + validade_dias do tipo', async () => {
+    const r = await ops()['pep.emitirDocumento']!(
+      C(),
+      { ...baseDoc(), familia: 'receita', tipo: 'receita', tpPadrao: 1, rtf: '{\\rtf1 validade sintetica}' },
+      ctx('rxv'),
+    );
+    const l = await uma(
+      `SELECT DATE_FORMAT(r.validade_ate, '%Y-%m-%d') AS v, t.validade_dias AS d, r.emitida_em AS e
+         FROM receita_medica r JOIN tipo_receita t ON t.id = r.tipo_receita_id WHERE r.id = ?`,
+      [r['origem']],
+    );
+    const local = (dataHora(new Date(l?.['e'] as Date), fuso) ?? '').slice(0, 10);
+    const [a, m, d] = local.split('-').map(Number);
+    const esperado = new Date(Date.UTC(a!, m! - 1, d! + Number(l?.['d']))).toISOString().slice(0, 10);
+    expect(l?.['v']).toBe(esperado);
   });
 
   it('exame externo: lança com o resultado; feito no futuro recusa', async () => {

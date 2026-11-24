@@ -27,7 +27,7 @@ import type { ContextoDocs } from './documentos-porta.js';
 import type { NucleoDocumentosPep } from './documentos-porta-propria.js';
 import type { GravacaoDocumentos } from './documentos-propria-painel.js';
 import { instanteLocal } from './prescricao-propria-gravacao.js';
-import { fusoValido } from './registro-porta-propria.js';
+import { dataHora, fusoValido } from './registro-porta-propria.js';
 import {
   esquemaEmissaoDocumento,
   esquemaExameExterno,
@@ -51,6 +51,8 @@ export const SEQUENCIA_RECEITA = 'receita_medica';
 const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const textoOuNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
+/** Resultado gravado na idempotência: só ids, códigos e nulos (ResultadoOperacao do núcleo). */
+type Resultado = Readonly<Record<string, number | string | boolean | null>>;
 const marcadores = (n: number): string => Array.from({ length: n }, () => '?').join(', ');
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
   new ErroOperacao(status, codigo, 'Operação recusada', detalhe);
@@ -89,6 +91,22 @@ export const esquemaEmissaoPropria = z.union([
     .extend({ diasAfastamento: z.number().int().min(0).max(365).optional() })
     .strict(),
 ]);
+
+/**
+ * Inativação da alergia: o esquema comum aceita 500 caracteres no motivo, mas a coluna guarda 250. Acima disso a entrada
+ * é recusada com 400 (o registro clínico nunca é truncado em silêncio; divergência intencional registrada).
+ */
+export const esquemaInativacaoPropria = esquemaInativacaoAlergia.refine((x) => x.motivo.length <= 250, {
+  path: ['motivo'],
+  message: 'motivo',
+});
+
+/** Validade da receita: a data LOCAL da emissão (fuso do estabelecimento) somada dos dias de validade. */
+export function validadeLocal(emitida: Date, fuso: string, dias: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dataHora(emitida, fuso) ?? '');
+  if (!m) throw new Error('Data local da emissão indisponível.');
+  return new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]! + dias)).toISOString().slice(0, 10);
+}
 
 function entradaValida<T>(esq: z.ZodType<T>, entrada: unknown): T {
   const r = esq.safeParse(entrada);
@@ -222,7 +240,7 @@ async function documentoProntuario(
     situacao_documento_prontuario_id: num(sit['id']),
     entidade_origem: d.tabela,
     entidade_origem_id: d.id,
-    titulo: d.titulo.slice(0, 150),
+    titulo: d.titulo,
     profissional_id: s.profissional,
     referencia_em: d.referencia,
     lancado_em: agora,
@@ -266,14 +284,20 @@ export function operacoesDocumentosPropria(
   cliente: string,
   executor: Executor = nucleo.criarExecutor(),
 ): Readonly<Record<string, GravacaoDocumentos>> {
-  async function gravar<T extends Record<string, unknown>>(
+  /**
+   * Grava pela operação do executor com a ENTRADA VALIDADA (o hash da idempotência é o dela): a repetição com a mesma
+   * chave e a mesma entrada devolve o resultado gravado (sem segunda linha) e a mesma chave com outra entrada recusa
+   * com 422 `idempotencia-divergente`. O resultado (só ids, códigos e nulos) vem do retorno do executor.
+   */
+  async function gravar(
     c: ContextoDocs,
     ctx: ContextoOperacao,
     nome: string,
+    entrada: Record<string, unknown>,
     tabelas: readonly string[],
-    fn: (tx: TxOperacao, est: { id: number; fuso: string }) => Promise<T & { tabela: string; id: number }>,
-    trilha: (r: T) => Record<string, unknown>,
-  ): Promise<T> {
+    fn: (tx: TxOperacao, est: { id: number; fuso: string }) => Promise<Resultado & { tabela: string; id: number }>,
+    trilha: (r: Resultado) => Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     const banco = c.cliente || cliente;
     const est = await nucleo.lerSomente({ cliente: banco, correlacao: `pep.documentos.${nome}` }, async (l) => {
       const e = await l.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
@@ -283,25 +307,19 @@ export function operacoesDocumentosPropria(
         throw new ErroOperacao(404, 'estabelecimento-inexistente', 'Estabelecimento não encontrado', 'O estabelecimento da sessão não existe neste cliente.');
       return { id: num(e['id']), fuso: fusoValido(e['fuso_horario']) };
     });
-    let feito: { r: T } | null = null;
     const op = definirOperacao({
       nome,
       tabelas: [...tabelas, ...TABELAS_DOCUMENTO],
       entrada: z.object({}).passthrough(),
-      gravar: async (tx: TxOperacao) => {
-        const r = await fn(tx, est);
-        feito = { r };
-        return { tabela: r.tabela, id: r.id };
-      },
+      gravar: (tx: TxOperacao) => fn(tx, est),
       alvo: (_e, x) => ({ tabela: String(x['tabela']), id: Number(x['id']) }),
-      trilha: () => ({ dados: feito ? trilha((feito as { r: T }).r) : {} }),
+      trilha: (_e, x) => ({ dados: trilha(x) }),
     });
-    await executor.executar(op, banco, {}, { ...ctx, cliente: banco, estabelecimento: est.id });
-    if (!feito) throw new Error(`A operação ${nome} terminou sem resultado.`);
-    const resto: Record<string, unknown> = { ...(feito as { r: T }).r };
+    const saida = await executor.executar(op, banco, entrada, { ...ctx, cliente: banco, estabelecimento: est.id });
+    const resto: Record<string, unknown> = { ...saida.resultado };
     delete resto['tabela'];
     delete resto['id'];
-    return resto as T;
+    return resto;
   }
 
   const registrarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
@@ -310,6 +328,7 @@ export function operacoesDocumentosPropria(
       c,
       ctx,
       'pep.alergia.registrar',
+      x,
       ['alergia_paciente', 'alergia_paciente_principio'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
@@ -406,11 +425,12 @@ export function operacoesDocumentosPropria(
   };
 
   const inativarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
-    const x = entradaValida(esquemaInativacaoAlergia, entrada);
+    const x = entradaValida(esquemaInativacaoPropria, entrada);
     return gravar(
       c,
       ctx,
       'pep.alergia.inativar',
+      x,
       ['alergia_paciente'],
       async (tx, est) => {
         const s = await sessao(tx, est, null, false);
@@ -426,7 +446,7 @@ export function operacoesDocumentosPropria(
           inativado_em: new Date(),
           inativado_por_usuario_id: s.usuario,
           inativado_profissional_id: s.profissional,
-          motivo_inativacao: x.motivo.slice(0, 250),
+          motivo_inativacao: x.motivo,
         });
         return { tabela: 'alergia_paciente', id: num(a['id']), alergia: num(a['id']), trilha: null };
       },
@@ -436,19 +456,23 @@ export function operacoesDocumentosPropria(
 
   const emitirDocumento: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaEmissaoPropria, entrada);
-    if (x.familia === 'atestado' && x.cid && !x.autorizacaoCid)
-      return Promise.reject(recusar(422, 'cid-sem-autorizacao', 'O CID exige a autorização do paciente.'));
-    if (x.familia === 'atestado' && x.tipo === 'atestado' && x.diasAfastamento === undefined)
-      return Promise.reject(recusar(422, 'dias-afastamento-obrigatorio', 'O atestado exige os dias de afastamento.'));
     const receita = x.familia === 'receita';
     return gravar(
       c,
       ctx,
       receita ? 'pep.receita.emitir' : 'pep.atestado.emitir',
+      x,
       receita ? ['receita_medica', 'sequencia_negocio'] : ['documento_emitido', 'documento_emitido_versao'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
+        // Mesma ordem da memória: profissional e inscrição da sessão, médico (atestado), depois o CID sem autorização.
         if (x.familia === 'atestado' && x.tipo === 'atestado') conferirMedico(s);
+        if (x.familia === 'atestado' && x.cid && !x.autorizacaoCid)
+          throw recusar(422, 'cid-sem-autorizacao', 'O CID exige a autorização do paciente.');
+        // Divergência intencional (registrada): o CHECK ck_documento_emitido_dias_afastamento exige os dias no atestado;
+        // a memória não tem o campo. Recusa depois das conferências da memória, nunca inventa o número de dias.
+        if (x.familia === 'atestado' && x.tipo === 'atestado' && x.diasAfastamento === undefined)
+          throw recusar(422, 'dias-afastamento-obrigatorio', 'O atestado exige os dias de afastamento.');
         await conferirAtendimento(tx, s, x.atendimento, x.paciente);
         const agora = new Date();
         const clinico = horarioClinico(s, x.dataHoraClinica, x.justificativaRetroativo, agora);
@@ -468,8 +492,7 @@ export function operacoesDocumentosPropria(
           if (!t) throw recusar(409, 'tipo-receita-sem-cadastro', `O cliente não tem tipo de receita ativo para "${x.tipo}".`);
           const numero = await tx.proximoNumero(SEQUENCIA_RECEITA);
           const validade = numOuNull(t['validade_dias']);
-          const validadeAte =
-            validade === null ? null : new Date(clinico.getTime() + validade * 86_400_000).toISOString().slice(0, 10);
+          const validadeAte = validade === null ? null : validadeLocal(clinico, s.fuso, validade);
           origem = await tx.incluir('receita_medica', {
             estabelecimento_id: s.est,
             numero: numero.formatado,
@@ -575,6 +598,7 @@ export function operacoesDocumentosPropria(
       c,
       ctx,
       'pep.exame.externo',
+      x,
       ['exame_lancado_prontuario'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
@@ -620,6 +644,7 @@ export function operacoesDocumentosPropria(
       c,
       ctx,
       'pep.sumario.finalizar',
+      x,
       ['sumario_alta'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);

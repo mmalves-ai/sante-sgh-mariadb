@@ -8,9 +8,11 @@ import {
   descricaoNormalizada,
   esquemaAlergiaPropria,
   esquemaEmissaoPropria,
+  esquemaInativacaoPropria,
   fonteDaOrigem,
   OPERACOES_PEP_RESTO,
   operacoesDocumentosPropria,
+  validadeLocal,
 } from './documentos-propria-operacoes.js';
 
 const HASH = 'a'.repeat(64);
@@ -84,13 +86,26 @@ describe('documentos-propria-operacoes (unidade)', () => {
     expect(esquemaEmissaoPropria.safeParse({ ...atestado, diasAfastamento: 400 }).success).toBe(false);
   });
 
-  it('recusas antes do banco: entrada inválida, CID sem autorização, atestado sem dias, exame no futuro', async () => {
+  it('inativação: motivo acima da coluna (250) recusa com entrada inválida, nunca truncado', async () => {
+    const base = { paciente: 1, alergia: 2, versao: '2' };
+    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(250) }).success).toBe(true);
+    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(251) }).success).toBe(false);
+    expect(await codigo(ops['pep.inativarAlergia']!(C, { ...base, motivo: 'm'.repeat(300) }, CTX))).toBe('entrada-invalida');
+  });
+
+  it('validade da receita pela data LOCAL da emissão (perto da meia-noite no fuso do estabelecimento)', () => {
+    // 23h30 de 24/11 em São Paulo (UTC-3) = 02h30 de 25/11 em UTC: a validade conta a partir de 24/11.
+    const emitida = new Date('2026-11-25T02:30:00Z');
+    expect(validadeLocal(emitida, 'America/Sao_Paulo', 30)).toBe('2026-12-24');
+    expect(validadeLocal(emitida, 'UTC', 30)).toBe('2026-12-25');
+    expect(validadeLocal(new Date('2026-12-31T12:00:00Z'), 'America/Sao_Paulo', 1)).toBe('2027-01-01');
+  });
+
+  it('recusas antes do banco: entrada inválida e exame no futuro (CID e dias vêm depois da sessão, como a memória)', async () => {
     expect(await codigo(ops['pep.registrarAlergia']!(C, alergia, CTX))).toBe('entrada-invalida');
     expect(await codigo(ops['pep.inativarAlergia']!(C, { paciente: 1 }, CTX))).toBe('entrada-invalida');
-    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, cid: 'A09' }, CTX))).toBe(
-      'cid-sem-autorizacao',
-    );
-    expect(await codigo(ops['pep.emitirDocumento']!(C, atestado, CTX))).toBe('dias-afastamento-obrigatorio');
+    // CID sem autorização e atestado sem dias já não recusam antes da sessão: o núcleo intocável é alcançado.
+    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, cid: 'A09' }, CTX))).toContain('não podia ser tocado');
     expect(
       await codigo(
         ops['pep.lancarExameExterno']!(
