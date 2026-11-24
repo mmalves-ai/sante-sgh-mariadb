@@ -257,9 +257,14 @@ function gravador(
   c: ContextoAutoatendimento,
 ): GravadorAutoatendimento {
   const agora = async () => paraBanco(await relogioDoEstabelecimento(tx, est));
+  // A ligação do ajuste à solicitação (ligarAjuste) grava a solicitação pela versão e a sobe; a decisão que vem depois,
+  // na MESMA transação, traz a versão lida antes da operação (como na memória, onde a ligação não muda a versão). As
+  // subidas feitas por esta transação contam; a gravação de outra pessoa continua recusando com `desatualizado`.
+  const subidas = new Map<number, number>();
   const travada = async (id: number, versao: number) => {
     const r = await travarSolicitacao(tx, est, id);
-    if (!r || n(r['versao']) !== versao || r['situacao'] !== 'pendente') throw desatualizado();
+    if (!r || n(r['versao']) !== versao + (subidas.get(id) ?? 0) || r['situacao'] !== 'pendente')
+      throw desatualizado();
     return r;
   };
   const e = efeitos?.gravadores(tx, est, c) ?? {
@@ -366,7 +371,7 @@ function gravador(
         throw recusa('ferias-obrigatoria', 'A aprovação das férias exige a programação.');
       const d = json<DetalheSolicitacao>(r['dados'], {});
       if (x.motivo) anotacao.motivo = x.motivo;
-      await tx.alterar('solicitacao_colaborador', x.id, x.versao, {
+      await tx.alterar('solicitacao_colaborador', x.id, n(r['versao']), {
         situacao: x.situacao,
         decidido_por_usuario_id: await exigirUsuario(tx, x.por),
         decidido_em: await agora(),
@@ -381,10 +386,10 @@ function gravador(
           'solicitacao-desistencia-so-do-solicitante',
           'Só quem pediu pode desistir da solicitação. O gestor aprova ou recusa, com o motivo.',
         );
-      await travada(x.id, x.versao);
+      const r = await travada(x.id, x.versao);
       const em = await agora();
       anotacao.motivo = x.motivo;
-      await tx.alterar('solicitacao_colaborador', x.id, x.versao, {
+      await tx.alterar('solicitacao_colaborador', x.id, n(r['versao']), {
         situacao: 'desistida',
         desistido_em: em,
         decidido_por_usuario_id: await exigirUsuario(tx, x.por),
@@ -403,6 +408,7 @@ function gravador(
       await tx.alterar('solicitacao_colaborador', x.solicitacao, n(r['versao']), {
         dados: JSON.stringify({ ...d, ajustes: [...(d.ajustes ?? []), x.ajuste] }),
       });
+      subidas.set(x.solicitacao, (subidas.get(x.solicitacao) ?? 0) + 1);
     },
     ajustesDaSolicitacao: (id) => ajustesDe(tx, est, id),
     async atestado(x) {

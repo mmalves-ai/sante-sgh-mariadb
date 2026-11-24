@@ -90,15 +90,20 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
             );
       },
     );
-    movimento = await m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-efeitos' }, async (e) => {
-      const t = await e.uma<{ id: number }>('SELECT id FROM tipo_movimento_ponto WHERE codigo = ?', ['L0302EM']);
-      return t
-        ? Number(t.id)
-        : e.inserir(
-            "INSERT INTO tipo_movimento_ponto (codigo, descricao, natureza, criado_em) VALUES ('L0302EM', 'ABONO SINTETICO', 'abono', ?)",
-            [new Date()],
-          );
-    });
+    movimento = await m.nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-efeitos' },
+      async (e) => {
+        const t = await e.uma<{ id: number }>('SELECT id FROM tipo_movimento_ponto WHERE codigo = ?', [
+          'L0302EM',
+        ]);
+        return t
+          ? Number(t.id)
+          : e.inserir(
+              "INSERT INTO tipo_movimento_ponto (codigo, descricao, natureza, criado_em) VALUES ('L0302EM', 'ABONO SINTETICO', 'abono', ?)",
+              [new Date()],
+            );
+      },
+    );
     await limparAjustes();
     cifra = new CifraCpf(randomBytes(32));
     const efeitos = efeitosAutoatendimentoProprios({
@@ -218,7 +223,9 @@ describe.skipIf(SEM_BANCO_O3)('efeitos da aprovação do autoatendimento contra 
         const atual = await g.solicitacao(id);
         expect(atual?.situacao).toBe('pendente');
         await g.ponto.travarPessoa(m.colaborador);
-        expect((await g.ponto.eventosPeriodo(m.vinculo)).filter((y) => y.competencia === '2026-10')).toEqual([]);
+        expect((await g.ponto.eventosPeriodo(m.vinculo)).filter((y) => y.competencia === '2026-10')).toEqual(
+          [],
+        );
         expect(await g.ponto.ajustes(m.vinculo, '2026-10-01', '2026-10-31')).toBeInstanceOf(Array);
         const ajuste = await g.ponto.incluirAjuste({
           vinculo: m.vinculo,
