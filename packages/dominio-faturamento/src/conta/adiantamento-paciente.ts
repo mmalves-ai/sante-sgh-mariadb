@@ -63,11 +63,15 @@ export function validarAdiantamento(e: EntradaAdiantamento): Record<string, stri
   return erros;
 }
 
-/** A situação do adiantamento pelo saldo (cancelado e devolvido vêm da operação, não do saldo). */
+/**
+ * A situação do adiantamento pelo saldo (cancelado vem da operação, não do saldo). A devolução parcial não encerra o
+ * adiantamento: o que sobra continua crédito do paciente, usável na conta ou devolvido depois; só o saldo zerado com
+ * alguma devolução fica "devolvido".
+ */
 export function situacaoPeloSaldo(valor: number, saldo: number, devolvido: boolean): SituacaoAdiantamento {
   if (saldo <= 0) return devolvido ? 'devolvido' : 'aplicado';
   if (saldo >= valor) return 'ativo';
-  return devolvido ? 'devolvido' : 'aplicado_parcial';
+  return 'aplicado_parcial';
 }
 
 export interface SaldoAdiantamento {
