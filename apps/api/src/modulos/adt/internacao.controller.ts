@@ -797,7 +797,7 @@ function valoresDoDocumento(d: DadosImpressoInternacao): Record<string, string |
   }
   return {
     paciente: d.nome,
-    nome_social: d.nomeSocial,
+    nome_social: d.nomeSocial ?? null,
     prontuario: String(d.prontuario),
     nascimento: d.nascimento ? dataBr(d.nascimento) : null,
     idade,

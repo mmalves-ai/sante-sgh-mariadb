@@ -307,11 +307,12 @@ const opMoveis = (t: RegistroTrilhaTela, sessao: number) =>
           await tx.incluir('dia_nao_util', { ...colunasDe(entrada), ativo: true, origem: 'sistema' }),
         );
       }
-      return { id: incluidos[0] ?? 0, incluidos, pulados };
+      // O resultado da operação guarda só escalares: os ids incluídos vão em texto, separados por vírgula.
+      return { id: incluidos[0] ?? 0, incluidos: incluidos.join(','), quantidade: incluidos.length, pulados };
     },
     alvo: (_e, r) => ({ tabela: 'dia_nao_util', id: Number(r.id) || null }),
     trilha: (_e, r) => ({
-      dados: { ...(t.dadosDepois ?? {}), incluidos: r.incluidos.length, pulados: r.pulados },
+      dados: { ...(t.dadosDepois ?? {}), incluidos: r.quantidade, pulados: r.pulados },
       motivo: null,
     }),
   });
@@ -505,6 +506,7 @@ export class CalendarioProprio {
     t: RegistroTrilhaTela,
   ): Promise<{ incluidos: number[]; pulados: number }> {
     const r = await this.executar(c, opMoveis(t, await this.estabelecimento(c)), e, t);
-    return { incluidos: (r['incluidos'] as number[]) ?? [], pulados: Number(r['pulados'] ?? 0) };
+    const ids = String(r['incluidos'] ?? '');
+    return { incluidos: ids ? ids.split(',').map(Number) : [], pulados: Number(r['pulados'] ?? 0) };
   }
 }

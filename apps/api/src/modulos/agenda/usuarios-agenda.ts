@@ -226,10 +226,7 @@ export class UsuariosAgendaPropria {
   }
 
   /** Usuários ativos do cliente para a escolha na tela (por nome ou login; até 20). */
-  async candidatos(
-    c: ContextoUsuariosAgenda,
-    termo: string,
-  ): Promise<{ usuario: number; login: string; nome: string }[]> {
+  async candidatos(termo: string): Promise<{ usuario: number; login: string; nome: string }[]> {
     const t = `%${termo.replace(/[%_\\]/g, '').slice(0, 60)}%`;
     return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'agenda-usuarios' }, async (l) =>
       (

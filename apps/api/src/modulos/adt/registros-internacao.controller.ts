@@ -38,12 +38,9 @@ import {
 } from './registros-internacao.js';
 
 const naoEncontrado = (o: string) =>
-  new ErroProblema(
-    'registro-inexistente',
-    404,
-    `${o} não encontrada`,
-    `${o} não existe neste estabelecimento.`,
-  );
+  new ErroProblema('nao-encontrado', 404, `${o} não encontrada`, `${o} não existe neste estabelecimento.`, {
+    codigo: 'registro-inexistente',
+  });
 
 @Controller()
 export class RegistrosInternacaoController {

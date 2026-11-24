@@ -30,6 +30,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
 import { PORTA_CADASTRO_ESTOQUE, type PortaCadastroEstoque } from './cadastro-estoque-porta.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 const id = z.number().int().positive();
 const idOpc = id.nullable().optional();
@@ -215,7 +216,12 @@ export class CadastroEstoqueController {
     if (tipo !== 'principios' && tipo !== 'fabricantes' && tipo !== 'usuarios')
       throw naoEncontrado('Tipo de busca');
     if (tipo === 'usuarios' && !sessaoDe(req).pode('acesso.escopo.ler'))
-      throw new ErroProblema('proibido', 403, 'Sem permissão', 'Consultar usuários exige acesso.escopo.ler.');
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Sem permissão',
+        'Consultar usuários exige acesso.escopo.ler.',
+      );
     return this.porta.buscar(sessaoDe(req).porta, tipo, (termo ?? '').trim().slice(0, 60));
   }
 
@@ -232,7 +238,7 @@ export class CadastroEstoqueController {
   @Permissao('suprimentos.item.editar')
   @AuditadoNoHandler('suprimentos.cadastro.incluirItem pelo executor (trilha na mesma transação)')
   incluirItem(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.porta.incluirItem(sessaoDe(req).porta, corpo(esquemaItem, b));
+    return this.porta.incluirItem(sessaoDe(req).porta, semIndefinidos(corpo(esquemaItem, b)));
   }
 
   @Put('itens/:id')
@@ -240,7 +246,7 @@ export class CadastroEstoqueController {
   @AuditadoNoHandler('suprimentos.cadastro.alterarItem pelo executor (trilha na mesma transação)')
   alterarItem(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const { versao, ...e } = corpo(comVersao(esquemaItem), b);
-    return this.porta.alterarItem(sessaoDe(req).porta, idDaRota(v), versao, e);
+    return this.porta.alterarItem(sessaoDe(req).porta, idDaRota(v), versao, semIndefinidos(e));
   }
 
   @Post('itens/:id/situacao')
@@ -271,7 +277,7 @@ export class CadastroEstoqueController {
   @Permissao('suprimentos.local.editar')
   @AuditadoNoHandler('suprimentos.cadastro.incluirLocal pelo executor')
   incluirLocal(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.porta.incluirLocal(sessaoDe(req).porta, corpo(esquemaLocal, b));
+    return this.porta.incluirLocal(sessaoDe(req).porta, semIndefinidos(corpo(esquemaLocal, b)));
   }
 
   @Put('locais/:id')
@@ -279,7 +285,7 @@ export class CadastroEstoqueController {
   @AuditadoNoHandler('suprimentos.cadastro.alterarLocal pelo executor')
   alterarLocal(@Param('id') v: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const { versao, ...e } = corpo(comVersao(esquemaLocal), b);
-    return this.porta.alterarLocal(sessaoDe(req).porta, idDaRota(v), versao, e);
+    return this.porta.alterarLocal(sessaoDe(req).porta, idDaRota(v), versao, semIndefinidos(e));
   }
 
   @Post('locais/:id/situacao')
@@ -312,7 +318,7 @@ export class CadastroEstoqueController {
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
       idDaRota(l, 'local'),
-      corpo(esquemaEscopoLocal, b),
+      semIndefinidos(corpo(esquemaEscopoLocal, b)),
     );
   }
 
@@ -336,7 +342,7 @@ export class CadastroEstoqueController {
     return this.porta.concederClassificacao(
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
-      corpo(esquemaClassificacao, b),
+      semIndefinidos(corpo(esquemaClassificacao, b)),
     );
   }
 
@@ -348,7 +354,7 @@ export class CadastroEstoqueController {
     return this.porta.concederCentroCusto(
       sessaoDe(req).porta,
       idDaRota(u, 'usuario'),
-      corpo(esquemaCentro, b),
+      semIndefinidos(corpo(esquemaCentro, b)),
     );
   }
 

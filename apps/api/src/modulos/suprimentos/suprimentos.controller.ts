@@ -864,9 +864,11 @@ export class SuprimentosController {
   previaRecalculo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<PreviaRecalculo> {
     if (!this.porta.previaRecalculo)
       throw new ErroProblema(
-        'recalculo-sem-banco',
+        'indisponivel',
         503,
         'O recálculo pelo razão só existe com o banco do cliente.',
+        undefined,
+        { codigo: 'recalculo-sem-banco' },
       );
     return this.porta.previaRecalculo(ctx(sessaoDe(req)), corpo(esquemaRecalcularSaldos, b));
   }

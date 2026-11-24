@@ -68,10 +68,10 @@ export class UsuariosAgendaController {
 
   @Get('usuarios-candidatos')
   @Permissao('agenda.cobertura.editar')
-  candidatos(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+  candidatos(@Query('termo') termo: string | undefined) {
     const t = (termo ?? '').trim();
     if (t.length < 2) return Promise.resolve([]);
-    return this.exigirBanco().candidatos(this.ctx(sessaoDe(req)), t);
+    return this.exigirBanco().candidatos(t);
   }
 
   @Post('agendas/:id/usuarios')

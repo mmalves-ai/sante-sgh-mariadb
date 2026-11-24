@@ -468,13 +468,7 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
       const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [ufSigla]);
       if (!uf) throw recusaCampo('uf-inexistente', 'UF não encontrada.', 'uf');
       // Colisão pela chave do domínio (conselho, UF e número normalizados), não pela comparação exata do texto.
-      const chave = chaveSolicitante({
-        id: e.id,
-        conselho: sigla,
-        uf: ufSigla,
-        numero: Number(numero),
-        cbo: null,
-      });
+      const chave = chaveSolicitante({ conselho: sigla, uf: ufSigla, numero: Number(numero) });
       const outros = (
         await tx.consultar(`${SQL_SOLICITANTES} AND uf.sigla = ? AND s.id <> ?`, [ufSigla, e.id])
       ).map(comparavel);

@@ -32,6 +32,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 
 export const PORTA_TEXTO_PADRAO_CIRURGIA = Symbol('PORTA_TEXTO_PADRAO_CIRURGIA');
 
@@ -156,7 +157,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   private async conferir(tx: Leitor, e: z.infer<typeof esquemaTexto>, id: number | null): Promise<void> {
-    const p = validarTextoPadrao(e);
+    const p = validarTextoPadrao(semIndefinidos(e));
     if (p.length) throw recusaRegra('Texto padrão recusado', p);
     if (e.procedimento !== null) {
       const pc = await tx.uma('SELECT id FROM procedimento_cirurgico WHERE id = ?', [e.procedimento]);

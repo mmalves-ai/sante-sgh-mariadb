@@ -10,7 +10,7 @@
 //   POST /api/cadastros/profissionais/:id/financeiro/:tipo/:rid/encerrar  dado fiscal e conta (cargo do repasse)
 //   GET  /api/cadastros/profissionais-complemento/opcoes?empresa=      bancos, tipos de conta, especialidades, empresas
 // Acesso só pelos níveis de cada cargo: RQE e assinatura com cadastro.profissional.ler/editar; o dado fiscal e o
-// bancário com cadastro.profissional.financeiro.ler/editar (cargo do repasse). Gravações pelo executor, com a trilha.
+// bancário com cadastro.profissionalFinanceiro.ler/editar (cargo do repasse). Gravações pelo executor, com a trilha.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -24,8 +24,8 @@ import {
 } from './profissional-complemento-proprio.js';
 
 const EVENTO = 'cadastro.profissional.gravado';
-export const PERMISSAO_FINANCEIRO_LER = 'cadastro.profissional.financeiro.ler';
-export const PERMISSAO_FINANCEIRO_EDITAR = 'cadastro.profissional.financeiro.editar';
+export const PERMISSAO_FINANCEIRO_LER = 'cadastro.profissionalFinanceiro.ler';
+export const PERMISSAO_FINANCEIRO_EDITAR = 'cadastro.profissionalFinanceiro.editar';
 
 type Corpo = Record<string, unknown>;
 const corpoDe = (c: unknown): Corpo => (c && typeof c === 'object' && !Array.isArray(c) ? (c as Corpo) : {});
@@ -81,7 +81,10 @@ export class ProfissionalComplementoController {
   }
 
   private trilha(s: SessaoCadastro, op: string, tabela: string, profissional: number) {
-    return linhaTrilha(s, EVENTO, 'cadastro.profissional-complemento', op, { tabela, profissional });
+    return linhaTrilha(s, EVENTO, 'cadastro.profissional-complemento', op, {
+      tabela,
+      chave: `profissional:${profissional}`,
+    });
   }
 
   private alvo(req: RequisicaoAutorizada, n: number) {
@@ -267,10 +270,11 @@ export class ProfissionalComplementoController {
     const base64 = typeof b['conteudo'] === 'string' ? b['conteudo'].replace(/^data:[^,]*,/, '') : '';
     if (!base64 || base64.length > 800_000 || !/^[A-Za-z0-9+/=\s]+$/.test(base64))
       throw new ErroProblema(
-        'arquivo-nao-imagem',
+        'entrada-invalida',
         422,
         'Imagem inválida',
         'Envie a imagem PNG ou JPEG, com até 512 KB.',
+        { codigo: 'arquivo-nao-imagem', campos: ['conteudo'] },
       );
     const e = {
       profissional: n,
@@ -281,7 +285,10 @@ export class ProfissionalComplementoController {
       vigenciaFim: txt(b['vigenciaFim']),
     };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(e.vigenciaInicio))
-      throw new ErroProblema('vigencia-invalida', 422, 'Vigência inválida', 'Informe o início da vigência.');
+      throw new ErroProblema('entrada-invalida', 422, 'Vigência inválida', 'Informe o início da vigência.', {
+        codigo: 'vigencia-invalida',
+        campos: ['vigenciaInicio'],
+      });
     const r = await this.rodar(() =>
       this.servico().enviarImagemAssinatura(
         s.porta,
