@@ -5,6 +5,7 @@ export * from './tempo.js';
 export * from './estado-horario.js';
 export * from './grade.js';
 export * from './dias-sem-expediente.js';
+export * from './calendario-dias-nao-uteis.js';
 export * from './prioridade-marcacao.js';
 export * from './prioridade-idade.js';
 export * from './fila-espera.js';
