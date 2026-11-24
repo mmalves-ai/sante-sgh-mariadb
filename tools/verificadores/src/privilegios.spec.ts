@@ -94,6 +94,59 @@ describe('privilégio mínimo por módulo: regras (puro)', () => {
     });
   });
 
+  it('constante de tabelas não resolvida é ERRO, mesmo com catálogo (nunca cai no catálogo em silêncio)', () => {
+    const texto = `const op = definirOperacao({ nome: 'x', tabelas: ['leito', ...TABELAS_DE_FORA] });
+const outra = definirOperacao({ nome: 'y', tabelas: TABELAS_OUTRAS });`;
+    const r = analisarTexto(texto, modelo, new Map(), 'm/x.ts');
+    expect(r.dinamicos.map((d) => d.expressao)).toEqual([
+      '...TABELAS_DE_FORA',
+      '...TABELAS_DE_FORA',
+      'TABELAS_OUTRAS',
+      'TABELAS_OUTRAS',
+    ]);
+    const comum = { trilha_auditoria: ['SELECT', 'INSERT'] as ('SELECT' | 'INSERT')[] };
+    let erro: unknown;
+    try {
+      calcularAlcances({
+        modelo,
+        comum,
+        modulos: { m: { uso: r.uso, dinamicos: r.dinamicos, catalogo: ['leito', 'paciente'] } },
+      });
+    } catch (e) {
+      erro = e;
+    }
+    expect(erro).toBeInstanceOf(PlanoPrivilegioRecusado);
+    expect((erro as PlanoPrivilegioRecusado).motivos).toEqual([
+      'm: constante de tabelas não resolvida (INSERT em ...TABELAS_DE_FORA em m/x.ts:1); siga o import até a definição ou declare a lista literal',
+      'm: constante de tabelas não resolvida (UPDATE em ...TABELAS_DE_FORA em m/x.ts:1); siga o import até a definição ou declare a lista literal',
+      'm: constante de tabelas não resolvida (INSERT em TABELAS_OUTRAS em m/x.ts:2); siga o import até a definição ou declare a lista literal',
+      'm: constante de tabelas não resolvida (UPDATE em TABELAS_OUTRAS em m/x.ts:2); siga o import até a definição ou declare a lista literal',
+    ]);
+  });
+
+  it('resolve lista filtrada pela diferença exata e objeto de listas; filtro de outra forma não se resolve', () => {
+    const c = lerConstantes([
+      `const A = ['leito', 'paciente', 'vinculo'] as const;
+const B = ['vinculo'];
+const C = [...A.filter((t) => t !== 'leito'), 'evolucao'];
+const D = [
+  ...A.filter(
+    (t) => !B.includes(t as never) && t !== 'paciente',
+  ),
+];
+const E = [...A.filter((t) => t.startsWith('l'))];
+export const POR_RECURSO: Readonly<Record<string, readonly string[]>> = {
+  ciclos: ['leito', 'vinculo'],
+  vazio: [],
+};`,
+    ]);
+    expect(c.get('C')).toEqual(['paciente', 'vinculo', 'evolucao']);
+    expect(c.get('D')).toEqual(['leito']);
+    expect(c.has('E')).toBe(false);
+    expect(c.get('POR_RECURSO.ciclos')).toEqual(['leito', 'vinculo']);
+    expect(c.get('POR_RECURSO.vazio')).toEqual([]);
+  });
+
   it('trilha só com SELECT e INSERT; DELETE em exclusão lógica vira descarte; módulo sem uso vira aviso', () => {
     const { alcances, descartes, avisos } = calcularAlcances({
       modelo,
@@ -185,6 +238,15 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
     expect(porModulo.get('portal-medico')?.['conta_portal_profissional_externo']).toEqual(
       expect.arrayContaining(['UPDATE']),
     );
+  });
+
+  it('constante de tabelas importada de outro módulo segue o import até a definição (repasse no faturamento)', () => {
+    // faturamento/operacoes.ts declara `...TABELAS_PRODUCAO_CONTA`, definida em repasse/producao-conta.ts.
+    expect(ler('apps/api/src/modulos/faturamento/operacoes.ts')).toMatch(
+      /import \{[^}]*\bTABELAS_PRODUCAO_CONTA\b[^}]*\} from '\.\.\/repasse\/producao-conta\.js'/,
+    );
+    for (const t of ['producao_repasse', 'estorno_repasse'])
+      expect(porModulo.get('faturamento')?.[t]).toEqual(['SELECT', 'INSERT', 'UPDATE']);
   });
 
   it('toda tabela declarada a uma operação (tabelas: [...]) tem INSERT e UPDATE no papel do módulo', () => {

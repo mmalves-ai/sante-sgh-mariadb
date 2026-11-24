@@ -21,7 +21,7 @@
 //   muda o que a API pode.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 export const RAIZ = resolve(import.meta.dirname, '../../..');
 export const PASTA_MODULOS = 'apps/api/src/modulos';
@@ -129,6 +129,46 @@ export type Constantes = ReadonlyMap<string, ValorConstante>;
 const ELEMENTO =
   /\.\.\.\s*new\s+Set\(\[|\.\.\.\s*([A-Za-z_$][\w$]*)|(['"`])([^'"`\n]*)\2|([A-Za-z_$][\w$]*)/g;
 
+// `...LISTA.filter((t) => <condição>)`, com um nível de parênteses dentro da condição (`!B.includes(t as never)`).
+const FILTRO =
+  /\.\.\.\s*([A-Za-z_$][\w$]*)\.filter\(\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*((?:[^()]|\([^()]*\))*)\)/g;
+
+/**
+ * A lista filtrada, quando a condição é uma conjunção que o gerador lê com exatidão: `t !== 'x'` (tira o nome) e
+ * `!OUTRA.includes(t)` (tira os nomes de outra lista resolvida). Outra forma devolve undefined (não resolvida).
+ */
+function filtrarLista(
+  origem: ValorConstante | undefined,
+  param: string,
+  cond: string,
+  resolver: (nome: string) => ValorConstante | undefined,
+): readonly string[] | undefined {
+  if (!Array.isArray(origem)) return undefined;
+  const fora = new Set<string>();
+  for (const termo of cond
+    .trim()
+    .replace(/,$/, '')
+    .split('&&')
+    .map((x) => x.trim())) {
+    const dif = /^([A-Za-z_$][\w$]*)\s*!==?\s*(['"])([^'"]*)\2$/.exec(termo);
+    if (dif && dif[1] === param) {
+      fora.add(dif[3]!);
+      continue;
+    }
+    const inc = /^!\s*([A-Za-z_$][\w$]*)\.includes\(\s*([A-Za-z_$][\w$]*)(?:\s+as\s+[\w$]+)?\s*\)$/.exec(
+      termo,
+    );
+    if (inc && inc[2] === param) {
+      const outra = resolver(inc[1]!);
+      if (!Array.isArray(outra)) return undefined;
+      for (const x of outra as string[]) fora.add(x);
+      continue;
+    }
+    return undefined;
+  }
+  return (origem as string[]).filter((x) => !fora.has(x));
+}
+
 /** As constantes de nível de arquivo (string, template sem expressão não resolvida e lista de nomes). */
 export function lerConstantes(
   textos: readonly string[],
@@ -147,6 +187,10 @@ export function lerConstantes(
     for (const m of t.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=;\n]+)?=\s*\{([^{}]*)\}/g))
       for (const p of m[2]!.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*(['"])([a-z][a-z0-9_]*)\2/g))
         brutos.set(`${m[1]}.${p[1]}`, { tipo: 'texto', corpo: p[3]! });
+    // Objeto de listas (`const TABELAS_X = { ciclos: ['a', 'b'], backup: [] }`): cada propriedade vira `TABELAS_X.ciclos`.
+    for (const m of t.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=;\n]+)?=\s*\{([^{}]*)\}/g))
+      for (const p of m[2]!.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*\[([^\]]*)\]/g))
+        brutos.set(`${m[1]}.${p[1]}`, { tipo: 'lista', corpo: p[2]! });
   }
   const saida = new Map<string, ValorConstante>(base);
   const resolvendo = new Set<string>();
@@ -168,8 +212,20 @@ export function lerConstantes(
         return falhou ? undefined : v;
       }
       const lista: string[] = [];
-      for (const e of b.corpo.matchAll(ELEMENTO)) {
-        if (e[1]) {
+      // `...LISTA.filter((t) => ...)`: resolvido só quando o filtro é a diferença exata que o gerador lê.
+      const filtradas = new Map<string, readonly string[]>();
+      let falhouFiltro = false;
+      const corpo = b.corpo.replace(FILTRO, (_x, origem: string, param: string, cond: string) => {
+        const r = filtrarLista(resolver(origem), param, cond, resolver);
+        if (r === undefined) falhouFiltro = true;
+        const marca = `__filtro_${filtradas.size}`;
+        filtradas.set(marca, r ?? []);
+        return `...${marca}`;
+      });
+      if (falhouFiltro) return undefined;
+      for (const e of corpo.matchAll(ELEMENTO)) {
+        if (e[1] && filtradas.has(e[1])) lista.push(...filtradas.get(e[1])!);
+        else if (e[1]) {
           const r = resolver(e[1]);
           if (!Array.isArray(r)) return undefined;
           lista.push(...(r as string[]));
@@ -406,6 +462,13 @@ export class PlanoPrivilegioRecusado extends Error {
 
 export const papelDoModulo = (m: string) => `sgh_mod_${m.replace(/[^a-z0-9]+/g, '_')}`;
 
+/**
+ * Expressão que é nome de constante (`TABELAS`, `...TABELAS_X`, `DE_CONTA`, `TABELAS.ciclos`, `conferirNome(TABELA)`):
+ * maiúsculas por convenção do repositório. Nome em minúsculas (`tabela`, `d.tabela`) é dado de tempo de execução.
+ */
+export const ehNomeDeConstante = (expressao: string): boolean =>
+  /^(?:\.\.\.\s*)?(?:conferirNome\(\s*)?[A-Z][A-Z0-9_]*(?:\.[A-Za-z_$][\w$]*)?\s*\)?$/.test(expressao.trim());
+
 const ehUsoModulo = (x: UsoObjetos | UsoModulo): x is UsoModulo =>
   'uso' in x && 'dinamicos' in x && !Array.isArray((x as Record<string, unknown>)['uso']);
 
@@ -436,14 +499,23 @@ export function calcularAlcances(e: EntradaAlcance): {
     papeis.set(papel, modulo);
     const uso: UsoObjetos = {};
     for (const [t, a] of Object.entries(m.uso)) uso[t] = [...a];
-    if (m.dinamicos.length > 0) {
+    // Constante de tabelas (nome em maiúsculas) que não se resolveu: ERRO, nunca o catálogo do módulo. O catálogo vale
+    // só para o nome que de fato só se conhece em tempo de execução; a constante que não se resolve (importada de
+    // arquivo que o gerador não seguiu, montada de forma que ele não lê) daria ao papel as tabelas erradas.
+    const constantesNaoResolvidas = m.dinamicos.filter((d) => ehNomeDeConstante(d.expressao));
+    for (const d of constantesNaoResolvidas)
+      motivos.push(
+        `${modulo}: constante de tabelas não resolvida (${d.acao} em ${d.expressao} em ${d.onde}); siga o import até a definição ou declare a lista literal`,
+      );
+    const dinamicosDeFato = m.dinamicos.filter((d) => !ehNomeDeConstante(d.expressao));
+    if (dinamicosDeFato.length > 0) {
       if (m.catalogo.length === 0)
-        for (const d of m.dinamicos)
+        for (const d of dinamicosDeFato)
           motivos.push(
             `${modulo}: nome de tabela dinâmico sem catálogo (${d.acao} em \${${d.expressao}} em ${d.onde})`,
           );
       else
-        for (const d of m.dinamicos)
+        for (const d of dinamicosDeFato)
           for (const t of m.catalogo) {
             if (SO_INCLUSAO.includes(t) && d.acao !== 'SELECT' && d.acao !== 'INSERT') {
               descartes.push(
@@ -512,6 +584,76 @@ function constantesDosPacotes(raiz: string): Map<string, ValorConstante> {
   return new Map([...todas].filter(([, v]) => Array.isArray(v) || IDENT_TABELA.test(v as string)));
 }
 
+const EXTENSOES_IMPORT = ['', '.ts', '/index.ts'];
+
+/** O arquivo .ts de um import relativo (`./x.js`, `../y/z.js`, `./w`), ou null quando não existe. */
+function arquivoDoImport(de: string, especificador: string): string | null {
+  const base = resolve(dirname(de), especificador.replace(/\.js$/, '.ts'));
+  for (const ext of EXTENSOES_IMPORT) {
+    const p = `${base}${ext}`;
+    if (existsSync(p) && statSync(p).isFile() && /\.ts$/.test(p)) return p;
+  }
+  return null;
+}
+
+/** Os nomes trazidos por import ou reexportação relativa de um texto: [nome local, nome na origem, arquivo]. */
+function importsRelativos(arquivo: string, texto: string): [string, string, string][] {
+  const saida: [string, string, string][] = [];
+  const t = semComentarios(texto);
+  for (const m of t.matchAll(
+    /\b(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"](\.{1,2}\/[^'"]+)['"]/g,
+  )) {
+    const alvo = arquivoDoImport(arquivo, m[2]!);
+    if (!alvo) continue;
+    for (const item of m[1]!.split(',')) {
+      const x = /^\s*(?:type\s+)?([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(item);
+      if (x && !/^\s*type\s/.test(item)) saida.push([x[2] ?? x[1]!, x[1]!, alvo]);
+    }
+  }
+  return saida;
+}
+
+/**
+ * As constantes de um arquivo seguindo os imports relativos até a definição (inclusive em outro módulo: a lista de
+ * tabelas da produção do repasse usada pelo faturamento). Memoizado por arquivo; import circular fica sem o nome.
+ */
+function constantesSeguindoImports(
+  arquivo: string,
+  pacotes: Constantes,
+  memo: Map<string, Map<string, ValorConstante>>,
+  pilha: Set<string> = new Set(),
+): Map<string, ValorConstante> {
+  const pronto = memo.get(arquivo);
+  if (pronto) return pronto;
+  if (pilha.has(arquivo)) return new Map();
+  pilha.add(arquivo);
+  const texto = readFileSync(arquivo, 'utf8');
+  const base = new Map<string, ValorConstante>(pacotes);
+  for (const [local, origem, alvo] of importsRelativos(arquivo, texto)) {
+    const v = constantesSeguindoImports(alvo, pacotes, memo, pilha).get(origem);
+    if (v !== undefined) base.set(local, v);
+  }
+  pilha.delete(arquivo);
+  const saida = lerConstantes([texto], base);
+  memo.set(arquivo, saida);
+  return saida;
+}
+
+/** Só os nomes importados (resolvidos na origem) de um arquivo. */
+function constantesImportadas(
+  arquivo: string,
+  texto: string,
+  pacotes: Constantes,
+  memo: Map<string, Map<string, ValorConstante>>,
+): Map<string, ValorConstante> {
+  const saida = new Map<string, ValorConstante>();
+  for (const [local, origem, alvo] of importsRelativos(arquivo, texto)) {
+    const v = constantesSeguindoImports(alvo, pacotes, memo).get(origem);
+    if (v !== undefined) saida.set(local, v);
+  }
+  return saida;
+}
+
 /** A entrada do cálculo, lida do repositório. */
 export function entradaDoRepositorio(raiz = RAIZ): EntradaAlcance {
   const modelo = lerModelo(raiz);
@@ -520,19 +662,27 @@ export function entradaDoRepositorio(raiz = RAIZ): EntradaAlcance {
   const comum = analisarTexto(textosExecutor.join('\n'), modelo, lerConstantes(textosExecutor)).uso;
   const pacotes = constantesDosPacotes(raiz);
   const modulos: Record<string, UsoModulo> = {};
+  const memo = new Map<string, Map<string, ValorConstante>>();
   const pasta = resolve(raiz, PASTA_MODULOS);
   for (const m of readdirSync(pasta).sort()) {
     const p = join(pasta, m);
     if (!statSync(p).isDirectory()) continue;
     const fs = arquivos(p, /\.ts$/);
     const textos = fs.map((f) => readFileSync(f, 'utf8'));
-    const constantes = lerConstantes(textos, pacotes);
+    // O import relativo é seguido até a definição (de outro arquivo do módulo ou de outro módulo).
+    const importadas = fs.map((f, i) => constantesImportadas(f, textos[i]!, pacotes, memo));
+    const constantes = lerConstantes(textos, new Map([...pacotes, ...importadas.flatMap((x) => [...x])]));
     const uso: UsoObjetos = {};
     const dinamicos: UsoDinamico[] = [];
     const fora = new Set<string>();
     fs.forEach((f, i) => {
       // A constante do próprio arquivo vale sobre a de outro arquivo do módulo com o mesmo nome.
-      const r = analisarTexto(textos[i]!, modelo, lerConstantes([textos[i]!], constantes), relative(raiz, f));
+      const r = analisarTexto(
+        textos[i]!,
+        modelo,
+        lerConstantes([textos[i]!], new Map([...constantes, ...importadas[i]!])),
+        relative(raiz, f),
+      );
       for (const [t, a] of Object.entries(r.uso))
         for (const x of a) if (!(uso[t] ??= []).includes(x)) uso[t]!.push(x);
       dinamicos.push(...r.dinamicos);
