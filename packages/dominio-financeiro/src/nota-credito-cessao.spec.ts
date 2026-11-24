@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  lancamentosCessao,
   conferirCancelamentoNota,
   conferirDesfechoItem,
   desagio,
@@ -157,5 +158,38 @@ describe('portador, desconto e cessão (07-FIN linha 79)', () => {
     expect(conferirDesfechoItem({ ...base, situacaoItem: 'recomprada', acao: 'liquidar' })).toMatchObject({
       codigo: 'item-encerrado',
     });
+  });
+
+  it('nota sobre parcela cedida é recusada (emitir e cancelar a aplicada); livre passa', () => {
+    expect(planejarNota(nota({ parcelaCedida: true }))).toMatchObject({ codigo: 'parcela-cedida' });
+    expect(planejarNota(nota({ parcelaCedida: false }))).toMatchObject({ efeito: 'abate' });
+    expect(
+      conferirCancelamentoNota({
+        situacao: 'aplicada',
+        efeito: 'abate',
+        valorAjuste: 10,
+        saldoTitulo: 50,
+        parcelaCedida: true,
+      }),
+    ).toMatchObject({ codigo: 'parcela-cedida' });
+    expect(
+      conferirCancelamentoNota({
+        situacao: 'emitida',
+        efeito: 'abate',
+        valorAjuste: 10,
+        saldoTitulo: 50,
+        parcelaCedida: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('lançamentos da cessão: crédito da face e débitos das despesas somam o líquido', () => {
+    const l = lancamentosCessao({ valorFace: 1000, valorDesagio: 30, valorTarifas: 10, valorIof: 0 });
+    expect(l).toEqual([
+      { papel: 'face', natureza: 'credito', valor: 1000 },
+      { papel: 'desagio', natureza: 'debito', valor: 30 },
+      { papel: 'tarifas', natureza: 'debito', valor: 10 },
+    ]);
+    expect(l.reduce((s, x) => s + (x.natureza === 'credito' ? x.valor : -x.valor), 0)).toBe(960);
   });
 });

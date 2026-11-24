@@ -52,6 +52,8 @@ export interface EntradaNota {
   /** O título ajustado: situação e saldo em aberto. */
   readonly situacaoTitulo: string;
   readonly saldoTitulo: number;
+  /** A parcela está com um portador (desconto ou cessão): o valor dela já é do portador. */
+  readonly parcelaCedida?: boolean;
 }
 
 export interface TributoCalculado extends TributoNota {
@@ -95,6 +97,8 @@ export function planejarNota(e: EntradaNota): PlanoNota | RecusaFinanceiro {
     return recusaFin('titulo-encerrado', 'O título já está encerrado: a nota não pode ajustá-lo.', [
       'titulo',
     ]);
+  const cedida = conferirParcelaLivreDeCessao(e.parcelaCedida ?? false);
+  if (cedida) return cedida;
   const vistos = new Set<number>();
   const tributos: TributoCalculado[] = [];
   for (const [i, t] of e.tributos.entries()) {
@@ -123,14 +127,33 @@ export function planejarNota(e: EntradaNota): PlanoNota | RecusaFinanceiro {
   return { efeito, tributos, valorImpostos, valorRetido, valorTotal, valorAjuste };
 }
 
+/**
+ * A nota não mexe em parcela que está com um portador: a face cedida ficaria maior que o saldo e o desfecho da cessão
+ * (liquidação pelo sacado, recompra) não fecharia. O hospital recompra a parcela antes e depois emite a nota.
+ */
+export function conferirParcelaLivreDeCessao(parcelaCedida: boolean): RecusaFinanceiro | null {
+  return parcelaCedida
+    ? recusaFin(
+        'parcela-cedida',
+        'A parcela está com o portador (desconto ou cessão): recompre-a antes de ajustá-la por nota.',
+        ['parcela'],
+      )
+    : null;
+}
+
 /** A nota se cancela com motivo; a aplicada só enquanto o título ainda comporta desfazer o ajuste. */
 export function conferirCancelamentoNota(n: {
   readonly situacao: string;
   readonly efeito: EfeitoNota;
   readonly valorAjuste: number;
   readonly saldoTitulo: number;
+  readonly parcelaCedida?: boolean;
 }): RecusaFinanceiro | null {
   if (n.situacao === 'cancelada') return recusaFin('nota-cancelada', 'A nota já está cancelada.');
+  if (n.situacao === 'aplicada') {
+    const cedida = conferirParcelaLivreDeCessao(n.parcelaCedida ?? false);
+    if (cedida) return cedida;
+  }
   if (
     n.situacao === 'aplicada' &&
     n.efeito === 'acresce' &&
@@ -263,4 +286,35 @@ export function conferirDesfechoItem(i: {
       return recusaFin('valor-invalido', 'Informe o valor da recompra.', ['valorRecompra']);
   }
   return null;
+}
+
+// ── Lançamentos da cessão na conta ───────────────────────────────────────────────────────────────────────────────
+
+export type PapelLancamentoCessao = 'face' | 'desagio' | 'tarifas' | 'iof';
+
+export interface LancamentoCessao {
+  readonly papel: PapelLancamentoCessao;
+  readonly natureza: 'credito' | 'debito';
+  readonly valor: number;
+}
+
+/**
+ * O que a operação deixa na conta do portador: o crédito da face e, em débito, o deságio, as tarifas e o IOF (cada um
+ * a sua despesa financeira). A soma assinada é o líquido creditado; linha de valor zero não existe.
+ */
+export function lancamentosCessao(o: {
+  readonly valorFace: number;
+  readonly valorDesagio: number;
+  readonly valorTarifas: number;
+  readonly valorIof: number;
+}): readonly LancamentoCessao[] {
+  const linhas: LancamentoCessao[] = [{ papel: 'face', natureza: 'credito', valor: centavos(o.valorFace) }];
+  const despesas: [PapelLancamentoCessao, number][] = [
+    ['desagio', o.valorDesagio],
+    ['tarifas', o.valorTarifas],
+    ['iof', o.valorIof],
+  ];
+  for (const [papel, v] of despesas)
+    if (centavos(v) > 0) linhas.push({ papel, natureza: 'debito', valor: centavos(v) });
+  return linhas;
 }
