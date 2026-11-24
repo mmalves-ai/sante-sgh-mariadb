@@ -138,6 +138,79 @@ describe('PortaPrescricaoPropria (dublê)', () => {
     expect(await new PortaPrescricaoPropria(vazio.nucleo, 'x').cabecalho(C, 51)).toBeNull();
   });
 
+  it('cancelada chega encerrada (evento de cancelamento: quando, quem, motivo); rascunho fica fora do SQL', async () => {
+    const cancelada = cab({
+      situacao: 'cancelada',
+      cancelada_em: new Date('2026-11-23T16:00:00Z'),
+      cancelada_por: 'medica3',
+      motivo_cancelamento: 'Paciente errado',
+    });
+    const d = duble((sql) => (sql.includes('FROM estabelecimento') ? [EST] : [cancelada]));
+    const c = await new PortaPrescricaoPropria(d.nucleo, 'x').cabecalho(C, 50);
+    expect(c).toMatchObject({
+      suspensaoEm: '2026-11-23T13:00:00',
+      suspensaoPor: 'medica3',
+      suspensaoJustificativa: 'Prescrição cancelada: Paciente errado',
+    });
+    expect(d.chamadas[1]?.sql).toContain("p.situacao <> 'rascunho'");
+    const semEvento = duble((sql) =>
+      sql.includes('FROM estabelecimento')
+        ? [EST]
+        : [cab({ situacao: 'cancelada', alterado_em: new Date('2026-11-23T17:00:00Z') })],
+    );
+    expect(await new PortaPrescricaoPropria(semEvento.nucleo, 'x').cabecalho(C, 50)).toMatchObject({
+      suspensaoEm: '2026-11-23T14:00:00',
+      suspensaoPor: null,
+      suspensaoJustificativa: 'Prescrição cancelada',
+    });
+  });
+
+  it('prescritores pelo vínculo vigente do login (principal primeiro); dados clínicos pela aferição e pela pessoa', async () => {
+    const d = duble((sql) => {
+      if (sql.includes('FROM estabelecimento')) return [EST];
+      if (sql.includes('FROM usuario u'))
+        return [
+          { codigo_cbo: '225125', nome_exibicao: 'Dra. Sintética' },
+          { codigo_cbo: '223115', nome_exibicao: 'Dra. Sintética' },
+        ];
+      if (sql.includes('FROM afericao a'))
+        return [{ valor_numerico: '72.500', aferido_em: new Date('2026-11-20T13:00:00Z') }];
+      if (sql.includes('FROM paciente pc')) return [{ nascimento: '1958-03-14', sigla: 'M' }];
+      return [];
+    });
+    const porta = new PortaPrescricaoPropria(d.nucleo, 'x');
+    expect(await porta.prescritores(C, 'medica1')).toEqual([
+      { cbo: 225125, ocupacao: '225125', nome: 'Dra. Sintética' },
+      { cbo: 223115, ocupacao: '223115', nome: 'Dra. Sintética' },
+    ]);
+    expect(d.chamadas[1]?.parametros).toEqual(['medica1']);
+    expect(await porta.dadosClinicos(C, 9)).toEqual({
+      pesoKg: 72.5,
+      alturaCm: 72.5,
+      dataPeso: '2026-11-20',
+      sexo: 'M',
+      nascimento: '1958-03-14',
+      creatinina: null,
+      dataCreatinina: null,
+    });
+    expect(d.chamadas.filter((x) => x.sql.includes('FROM afericao a')).map((x) => x.parametros)).toEqual([
+      [9, 7, 'peso'],
+      [9, 7, 'altura'],
+    ]);
+    const vazio = duble((sql) => (sql.includes('FROM estabelecimento') ? [EST] : []));
+    const p2 = new PortaPrescricaoPropria(vazio.nucleo, 'x');
+    expect(await p2.prescritores(C, 'ninguem')).toEqual([]);
+    expect(await p2.dadosClinicos(C, 9)).toEqual({
+      pesoKg: null,
+      alturaCm: null,
+      dataPeso: null,
+      sexo: null,
+      nascimento: null,
+      creatinina: null,
+      dataCreatinina: null,
+    });
+  });
+
   it('itens: medicamento com dose e princípio, outro tipo sem detalhe; horários pela situação da checagem', async () => {
     const d = duble((sql) => {
       if (sql.includes('FROM estabelecimento')) return [EST];
@@ -317,7 +390,15 @@ describe('PortaPrescricaoPropria (dublê)', () => {
             decisao: 'justificou',
             justificativa: 'Benefício',
             regra_alerta_id: 5,
-            versao: 1,
+            numero_versao_vigente: 3,
+          },
+          {
+            prescricao_item_id: 2,
+            processo: 'dose',
+            decisao: 'cancelou_item',
+            justificativa: null,
+            regra_alerta_id: null,
+            numero_versao_vigente: null,
           },
         ];
       return [
@@ -330,17 +411,20 @@ describe('PortaPrescricaoPropria (dublê)', () => {
     expect(m.get(50)).toEqual({ feitaNoNovo: true, coassinaturaPendente: false });
     expect(m.get(51)).toEqual({ feitaNoNovo: false, coassinaturaPendente: false });
     expect(d.chamadas[1]?.parametros).toEqual([7, 50, 51]);
+    // Forma da porta de memória: decisão no vocabulário do contrato (mantido/retirado), versão da regra.
     expect(await porta.decisoes(C, 50)).toEqual([
       {
         item: 1,
-        chave: '1:2',
+        chave: '1',
         tipo: 'interacao',
-        decisao: 'justificou',
+        decisao: 'mantido',
         justificativa: 'Benefício',
         regra: '5',
-        versao: 1,
+        versao: 3,
       },
+      { item: 2, chave: '2', tipo: 'dose', decisao: 'retirado', justificativa: null, regra: '', versao: 0 },
     ]);
+    expect(d.chamadas.at(-1)?.sql).toContain("situacao <> 'rascunho'");
     const n = d.chamadas.length;
     expect((await porta.marcas(C, [])).size).toBe(0);
     expect(d.chamadas.length).toBe(n);

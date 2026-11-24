@@ -6,6 +6,7 @@
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BASE_PLANO_PROPRIO, PortaPrescricaoPropria } from './prescricao-porta-propria.js';
+import { ServicoPrescricao } from './prescricao-servico.js';
 import { dataHora } from './registro-porta-propria.js';
 import { CLIENTE_F22_O4 } from './worklist-massa.spec-util.js';
 
@@ -44,6 +45,12 @@ interface Massa {
   h3: number;
   liberada: Date;
   suspensaEm: Date;
+  p5: number;
+  p6: number;
+  i4: number;
+  i5: number;
+  canceladaEm: Date;
+  cboOcup: string;
 }
 
 /** Apaga a massa do prefixo (só linhas com os códigos e os estabelecimentos do teste). */
@@ -53,6 +60,12 @@ async function limpar(e: Escritor): Promise<void> {
   const dasPrescricoes = `(SELECT id FROM prescricao WHERE estabelecimento_id IN ${est})`;
   const dosItens = `(SELECT i.id FROM prescricao_item i WHERE i.prescricao_id IN ${dasPrescricoes})`;
   await e.executar(`DELETE FROM decisao_alerta WHERE prescricao_item_id IN ${dosItens}`, cods);
+  await e.executar(`DELETE FROM prescricao_evento WHERE prescricao_id IN ${dasPrescricoes}`, cods);
+  await e.executar(
+    `DELETE FROM afericao_valor WHERE afericao_id IN (SELECT id FROM afericao WHERE estabelecimento_id IN ${est})`,
+    cods,
+  );
+  await e.executar(`DELETE FROM afericao WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM horario_administracao WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM prescricao_item_medicamento WHERE prescricao_item_id IN ${dosItens}`, cods);
   await e.executar(`DELETE FROM prescricao_item WHERE prescricao_id IN ${dasPrescricoes}`, cods);
@@ -65,6 +78,10 @@ async function limpar(e: Escritor): Promise<void> {
     [`${P}med`],
   );
   await e.executar('DELETE FROM usuario WHERE login = ?', [`${P}med`]);
+  await e.executar(
+    'DELETE po FROM profissional_ocupacao po JOIN profissional pf ON pf.id = po.profissional_id WHERE pf.nome_exibicao LIKE ?',
+    [`${P} %`],
+  );
   await e.executar('DELETE FROM profissional WHERE nome_exibicao LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
   for (const t of [
@@ -77,6 +94,8 @@ async function limpar(e: Escritor): Promise<void> {
   ])
     await e.executar(`DELETE FROM ${t} WHERE codigo LIKE ?`, [`${P}%`]);
 }
+
+const num = (v: unknown): number => Number(v);
 
 async function montar(nucleo: NucleoProprio): Promise<Massa> {
   return nucleo.escrever({ cliente: CLIENTE_F22_O4, correlacao: `preparo-${P}` }, async (e) => {
@@ -135,6 +154,11 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
          VALUES (?, ?, '2026-01-01', ?)`,
         [usuario, prof1],
       );
+      if (ocup)
+        await cad(
+          `INSERT INTO profissional_ocupacao (profissional_id, ocupacao_cbo_id, principal, criado_em) VALUES (?, ?, TRUE, ?)`,
+          [prof1, ocup.id],
+        );
       const tipoMed = await cad(
         `INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, 'Medicamento sintético', 'medicamento', ?)`,
         [`${P}m`],
@@ -176,7 +200,7 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         estab: number,
         atd: number,
         prescrito: Date,
-        o: { suspensa?: boolean; excluida?: boolean; liberada?: Date | null } = {},
+        o: { suspensa?: boolean; excluida?: boolean; liberada?: Date | null; situacao?: string } = {},
       ) =>
         e.inserir(
           `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id,
@@ -190,7 +214,7 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
             atd,
             prof1,
             ocup ? ocup.id : null,
-            o.suspensa ? 'suspensa' : 'vigente',
+            o.situacao ?? (o.suspensa ? 'suspensa' : 'vigente'),
             prescrito,
             prescrito,
             new Date(prescrito.getTime() + 24 * HORA),
@@ -206,6 +230,33 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       const p2 = await prescricao(estA, atdInt, em(-10 * HORA), { suspensa: true });
       const p3 = await prescricao(estA, atdInt, em(-5 * HORA), { excluida: true });
       const p4 = await prescricao(estB, atdB, em(-5 * HORA));
+      // Rascunho ainda não liberado (não aparece para ninguém) e cancelada com o evento de cancelamento.
+      const p5 = await prescricao(estA, atdInt, em(-1 * HORA), { situacao: 'rascunho', liberada: null });
+      const p6 = await prescricao(estA, atdInt, em(-3 * HORA), { situacao: 'cancelada' });
+      const canceladaEm = em(-150 * 60_000);
+      await e.inserir(
+        `INSERT INTO prescricao_evento (prescricao_id, operacao, evento, situacao_anterior, situacao_nova, motivo,
+           profissional_id, ocorrido_em, usuario_id, criado_em)
+         VALUES (?, 'alteracao', 'cancelamento', 'vigente', 'cancelada', 'Paciente errado (sintético)', ?, ?, ?, ?)`,
+        [p6, prof2, canceladaEm, usuario, agora],
+      );
+      // Peso e altura aferidos (o mais recente vale) para os dados clínicos do cálculo de dose.
+      const parametro = async (codigo: string) =>
+        num((await e.uma<{ id: unknown }>('SELECT id FROM parametro_vital WHERE codigo = ?', [codigo]))?.id);
+      const afericao = async (quando: Date, codigo: string, valor: number) => {
+        const a = await e.inserir(
+          'INSERT INTO afericao (estabelecimento_id, paciente_id, atendimento_id, aferido_em, criado_em) VALUES (?, ?, ?, ?, ?)',
+          [estA, pac, atdInt, quando, agora],
+        );
+        await e.inserir(
+          `INSERT INTO afericao_valor (afericao_id, sequencia, parametro_vital_id, valor_numerico, criado_em)
+           VALUES (?, 1, ?, ?, ?)`,
+          [a, await parametro(codigo), valor, agora],
+        );
+      };
+      await afericao(em(-30 * HORA), 'peso', 70.5);
+      await afericao(em(-6 * HORA), 'peso', 72);
+      await afericao(em(-6 * HORA), 'altura', 170);
       const item = (prescricaoId: number, seq: number, tipo: number, o: Record<string, unknown> = {}) =>
         e.inserir(
           `INSERT INTO prescricao_item (prescricao_id, sequencia, tipo_item_prescricao_id, item_prescritivel_id,
@@ -236,6 +287,9 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       });
       await item(p1, 3, tipoCuidado, { excluido: true });
       await item(p2, 1, tipoCuidado);
+      // Suspenso e cancelado pela situação do item, sem horários.
+      const i4 = await item(p2, 2, tipoCuidado, { situacao: 'suspenso', suspensoEm: em(-3 * HORA) });
+      const i5 = await item(p2, 3, tipoCuidado, { situacao: 'cancelado' });
       const med = await e.inserir(
         `INSERT INTO prescricao_item_medicamento (prescricao_item_id, item_prescritivel_id, dose, unidade_prescricao_id,
            iniciar_agora, criado_em) VALUES (?, ?, 500, ?, TRUE, ?)`,
@@ -290,6 +344,12 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         h3,
         liberada,
         suspensaEm,
+        p5,
+        p6,
+        i4,
+        i5,
+        canceladaEm,
+        cboOcup: ocup ? String(ocup.codigo_cbo).trim() : '',
       };
     } finally {
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -317,8 +377,14 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
 
   it('lista do atendimento: só as do estabelecimento e não excluídas, mais recente primeiro, com o cabeçalho', async () => {
     const r = await porta.prescricoes(ctx(P), m.atdInt);
-    expect(r.map((x) => x.id)).toEqual([m.p2, m.p1]);
-    const [p2, p1] = r;
+    // O rascunho (p5) fica fora; a cancelada (p6) aparece encerrada.
+    expect(r.map((x) => x.id)).toEqual([m.p6, m.p2, m.p1]);
+    const [p6, p2, p1] = r;
+    expect(p6).toMatchObject({
+      suspensaoEm: dataHora(m.canceladaEm, FUSO),
+      suspensaoPor: `${P} Suspensor sintético`,
+      suspensaoJustificativa: 'Prescrição cancelada: Paciente errado (sintético)',
+    });
     expect(p1).toEqual({
       id: m.p1,
       atendimento: m.atdInt,
@@ -340,7 +406,7 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
       suspensaoEm: dataHora(m.suspensaEm, FUSO),
       suspensaoPor: `${P} Suspensor sintético`,
       suspensaoJustificativa: 'Troca de conduta (sintético)',
-      itens: 1,
+      itens: 3,
     });
     expect(await porta.prescricoes(ctx(`${P}b`), m.atdB)).toHaveLength(1);
     expect(await porta.prescricoes(ctx(`${P}b`), m.atdInt)).toEqual([]);
@@ -350,6 +416,9 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
     expect((await porta.cabecalho(ctx(P), m.p1))?.id).toBe(m.p1);
     expect(await porta.cabecalho(ctx(P), m.p3)).toBeNull();
     expect(await porta.cabecalho(ctx(P), m.p4)).toBeNull();
+    expect(await porta.cabecalho(ctx(P), m.p5)).toBeNull();
+    expect(await porta.itens(ctx(P), m.p5)).toEqual([]);
+    expect((await porta.marcas(ctx(P), [m.p5, m.p6])).has(m.p5)).toBe(false);
   });
 
   it('itens: medicamento com dose, via e frequência; adendo e correção; horários pela checagem; sem excluídos', async () => {
@@ -412,12 +481,12 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
     expect(await porta.decisoes(ctx(P), m.p1)).toEqual([
       {
         item: m.i1,
-        chave: `${m.i1}:1`,
+        chave: String(m.i1),
         tipo: 'interacao',
-        decisao: 'justificou',
+        decisao: 'mantido',
         justificativa: 'Benefício maior (sintético)',
         regra: '33',
-        versao: 1,
+        versao: expect.any(Number),
       },
     ]);
     expect(await porta.decisoes(ctx(`${P}b`), m.p1)).toEqual([]);
@@ -429,5 +498,49 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
     });
     expect((await porta.podeGravar()).pode).toBe(false);
     await expect(porta.suspenderPrescricao()).rejects.toMatchObject({ problema: { status: 501 } });
+  });
+
+  it('item suspenso e item cancelado pela situação, sem horários: a porta marca e o domínio lê suspenso', async () => {
+    const itens = await porta.itens(ctx(P), m.p2);
+    expect(itens.filter((i) => i.suspenso).map((i) => i.id)).toEqual([m.i4, m.i5]);
+    expect(itens.find((i) => i.id === m.i4)?.horarios).toEqual([]);
+  });
+
+  it('prescritor pelo vínculo do login e dados clínicos pela aferição mais recente', async () => {
+    expect(await porta.prescritores(ctx(P), `${P}med`)).toEqual(
+      m.cboOcup ? [{ cbo: Number(m.cboOcup), ocupacao: m.cboOcup, nome: `${P} Prescritor sintético` }] : [],
+    );
+    expect(await porta.prescritores(ctx(P), `${P}ninguem`)).toEqual([]);
+    expect(await porta.dadosClinicos(ctx(P), m.pac)).toMatchObject({
+      pesoKg: 72,
+      alturaCm: 170,
+      dataPeso: dataHora(new Date(m.agora.getTime() - 6 * HORA), FUSO)!.slice(0, 10),
+      creatinina: null,
+    });
+    expect((await porta.dadosClinicos(ctx(`${P}b`), m.pac)).pesoKg).toBeNull();
+  });
+
+  it('serviço sobre a porta própria: o contexto abre, a lista e a leitura seguem a situação gravada', async () => {
+    const servico = new ServicoPrescricao(porta);
+    const agora = await porta.agora(ctx(P));
+    const contexto = await servico.contexto(ctx(P), m.pac, `${P}med`, agora);
+    expect(contexto.dadosClinicos).toMatchObject({ pesoKg: 72, alturaCm: 170 });
+    expect(contexto.prescritor === null).toBe(m.cboOcup === '');
+    const lista = await servico.prescricoes(ctx(P), m.pac, m.atdInt);
+    expect(lista.map((x) => [x.id, x.situacao])).toEqual([
+      [m.p6, 'suspensa'],
+      [m.p2, 'suspensa'],
+      [m.p1, 'vigente'],
+    ]);
+    const lida = await servico.lerPrescricao(ctx(P), m.pac, m.p2);
+    expect(lida.itensLidos.map((i) => i.situacao)).toEqual(['ativo', 'suspenso', 'suspenso']);
+    expect(lida.prova).toBe('sem-prova');
+    const p1 = await servico.lerPrescricao(ctx(P), m.pac, m.p1);
+    expect(p1.alertasDecididos).toEqual([
+      { item: m.i1, tipo: 'interacao', decisao: 'mantido', justificativa: 'Benefício maior (sintético)' },
+    ]);
+    await expect(servico.lerPrescricao(ctx(P), m.pac, m.p5)).rejects.toMatchObject({
+      tipo: 'nao-encontrado',
+    });
   });
 });

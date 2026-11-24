@@ -1,9 +1,12 @@
 // Porta da prescrição eletrônica sobre o banco PRÓPRIO do cliente (MariaDB, pelo @sgh/nucleo), só leitura nesta etapa:
 // o ciclo de consulta da tela (atendimentos do paciente, atendimento, lista de prescrições do atendimento, cabeçalho,
-// itens com os horários, marcas, decisões de alerta e o relógio do banco). Tabelas: prescricao, prescricao_item,
+// itens com os horários, marcas, decisões de alerta, prescritor da sessão, dados clínicos e o relógio do banco). O
+// rascunho não liberado fica fora de toda leitura; a cancelada chega encerrada (como suspensa, com o evento de
+// cancelamento); o item suspenso ou cancelado leva a marca `suspenso`. Tabelas: prescricao, prescricao_item,
 // prescricao_item_medicamento, tipo_item_prescricao, item_prescritivel, frequencia_administracao, via_de_uso,
 // unidade_prescricao, horario_administracao, situacao_checagem, decisao_alerta, ocupacao_cbo, profissional,
-// usuario_profissional e usuario; atendimento e estabelecimento pela porta própria do registro.
+// usuario_profissional, usuario, profissional_ocupacao, prescricao_evento, regra_alerta, afericao, afericao_valor,
+// parametro_vital, paciente, pessoa_fisica e sexo; atendimento e estabelecimento pela porta própria do registro.
 //
 // O que ainda não tem adaptador próprio recusa com 501 `pendente-modelo-proprio` (falha fechada, nada lido nem gravado),
 // e a gravação fica desligada em `podeGravar` (a tela abre em consulta, com o motivo):
@@ -27,12 +30,14 @@ import {
   type AtendimentoDaPrescricao,
   type AtendimentoLido,
   atendimentoEmCurso,
+  type DadosClinicosLidos,
   type DecisaoLida,
   type DetalheLido,
   type HorarioPadraoLido,
   type ItemPrescricaoLido,
   type LiberacaoConsultada,
   type PrescricaoCabecalhoLida,
+  type PrescritorLido,
   type ProvaPrescricaoLida,
   type RetratosAtuais,
 } from './tipos-pep.js';
@@ -74,6 +79,11 @@ const cboDe = (v: unknown): number => {
   const t = textoOuNull(v)?.replace(/\D/g, '') ?? '';
   return t ? Number(t) : 0;
 };
+/** Data civil formatada no SQL (DATE_FORMAT, AAAA-MM-DD), sem passar por fuso. */
+const dataDe = (v: unknown): string | null => {
+  const t = textoOuNull(v);
+  return t !== null && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
+};
 const instanteDe = (v: unknown): number | null => {
   if (v === null || v === undefined) return null;
   const d = v instanceof Date ? v : new Date(String(v));
@@ -97,14 +107,39 @@ const loginDoProfissional = (coluna: string) => `COALESCE(
     ORDER BY up.vigencia_fim IS NULL DESC, up.vigencia_inicio DESC, up.id DESC LIMIT 1),
   (SELECT pf.nome_exibicao FROM profissional pf WHERE pf.id = ${coluna}))`;
 
+/**
+ * Prescrição visível na consulta: do estabelecimento, não excluída e já fora do rascunho (o rascunho ainda não foi
+ * liberado: não aparece na lista nem abre, para ninguém, até a liberação).
+ */
+const VISIVEL = (a: string) =>
+  `${a}.estabelecimento_id = ? AND ${a}.excluido_em IS NULL AND ${a}.situacao <> 'rascunho'`;
+
 const SQL_CABECALHO = `SELECT p.id, p.atendimento_id, p.paciente_id, p.prescrito_em, p.vigencia_inicio_em,
-        p.vigencia_fim_em, p.criado_em, p.suspensa_em, p.motivo_suspensao, o.codigo_cbo,
+        p.vigencia_fim_em, p.criado_em, p.alterado_em, p.situacao, p.suspensa_em, p.motivo_suspensao, o.codigo_cbo,
         ${loginDoProfissional('p.prescritor_profissional_id')} AS prescritor,
         ${loginDoProfissional('p.suspensao_profissional_id')} AS suspensao_por,
+        ev.ocorrido_em AS cancelada_em, ev.motivo AS motivo_cancelamento,
+        ${loginDoProfissional('ev.profissional_id')} AS cancelada_por,
         (SELECT COUNT(*) FROM prescricao_item i WHERE i.prescricao_id = p.id AND i.excluido_em IS NULL) AS itens
    FROM prescricao p
    LEFT JOIN ocupacao_cbo o ON o.id = p.ocupacao_cbo_id
-  WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
+   LEFT JOIN prescricao_evento ev ON ev.id = (
+        SELECT e2.id FROM prescricao_evento e2
+         WHERE e2.prescricao_id = p.id AND e2.prescricao_item_id IS NULL AND e2.evento = 'cancelamento'
+         ORDER BY e2.ocorrido_em DESC, e2.id DESC LIMIT 1)
+  WHERE ${VISIVEL('p')}`;
+
+/** Decisão gravada (CHECK de decisao_alerta) → vocabulário do contrato: o item ficou (mantido) ou saiu (retirado). */
+const DECISAO_DO_CONTRATO: Readonly<Record<string, 'mantido' | 'retirado'>> = {
+  aceitou: 'mantido',
+  ajustou: 'mantido',
+  justificou: 'mantido',
+  cancelou_item: 'retirado',
+};
+
+/** Parâmetros de afericao_valor lidos para o cálculo de dose (códigos do cadastro parametro_vital; kg e cm). */
+const PARAMETRO_PESO = 'peso';
+const PARAMETRO_ALTURA = 'altura';
 
 interface Estabelecimento {
   readonly id: number;
@@ -191,6 +226,21 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
 
   // ── Prescrições do atendimento, cabeçalho e itens ─────────────────────────────────────────────────
   private cabecalhoDe(x: Record<string, unknown>, fuso: string): PrescricaoCabecalhoLida {
+    // A cancelada nunca sai como vigente nem conta entre as ativas: chega ao serviço como encerrada (suspensão) no
+    // instante do evento de cancelamento (sem evento, a última alteração), com quem cancelou e o motivo.
+    if (x['situacao'] === 'cancelada') {
+      const motivo = textoOuNull(x['motivo_cancelamento']);
+      return {
+        ...this.cabecalhoBase(x, fuso),
+        suspensaoEm: dataHora(x['cancelada_em'] ?? x['alterado_em'] ?? x['criado_em'], fuso),
+        suspensaoPor: textoOuNull(x['cancelada_por']),
+        suspensaoJustificativa: motivo ? `Prescrição cancelada: ${motivo}` : 'Prescrição cancelada',
+      };
+    }
+    return this.cabecalhoBase(x, fuso);
+  }
+
+  private cabecalhoBase(x: Record<string, unknown>, fuso: string): PrescricaoCabecalhoLida {
     return {
       id: num(x['id']),
       atendimento: num(x['atendimento_id']),
@@ -247,8 +297,7 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
            LEFT JOIN prescricao_item_medicamento m ON m.prescricao_item_id = i.id AND m.excluido_em IS NULL
            LEFT JOIN item_prescritivel ip ON ip.id = COALESCE(m.item_prescritivel_id, i.item_prescritivel_id)
            LEFT JOIN unidade_prescricao up ON up.id = m.unidade_prescricao_id
-          WHERE i.prescricao_id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
-            AND i.excluido_em IS NULL
+          WHERE i.prescricao_id = ? AND ${VISIVEL('p')} AND i.excluido_em IS NULL
           ORDER BY i.sequencia, i.id`,
         [prescricao, est.id],
       );
@@ -315,6 +364,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
               ? dataHora(x['criado_em'], est.fuso)
               : null,
           corrigidoEm: x['situacao'] === 'suspenso_correcao' ? dataHora(x['suspenso_em'], est.fuso) : null,
+          // Suspenso ou cancelado pela situação do item, com ou sem horários marcados (o domínio decide a situação).
+          suspenso: x['situacao'] === 'suspenso' || x['situacao'] === 'cancelado',
           gravacao: dataHora(x['alterado_em'] ?? x['criado_em'], est.fuso),
           detalhe,
           horarios: porItem.get(id) ?? [],
@@ -331,8 +382,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     if (ids.length === 0) return Promise.resolve(new Map());
     return this.ler(c, 'marcas', async (l, est) => {
       const linhas = await l.consultar(
-        `SELECT id, origem FROM prescricao
-          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+        `SELECT p.id, p.origem FROM prescricao p
+          WHERE ${VISIVEL('p')} AND p.id IN (${ids.map(() => '?').join(',')})`,
         [est.id, ...ids],
       );
       // Sem coassinatura no modelo próprio desta etapa: nenhuma pendente.
@@ -348,24 +399,98 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   decisoes(c: ContextoPrescricao, prescricao: number): Promise<DecisaoLida[]> {
     return this.ler(c, 'decisoes', async (l, est) => {
       const linhas = await l.consultar(
-        `SELECT d.prescricao_item_id, d.sequencia, d.processo, d.decisao, d.justificativa, d.regra_alerta_id, d.versao
+        `SELECT d.prescricao_item_id, d.processo, d.decisao, d.justificativa, d.regra_alerta_id,
+                r.numero_versao_vigente
            FROM decisao_alerta d
            JOIN prescricao_item i ON i.id = d.prescricao_item_id
            JOIN prescricao p ON p.id = i.prescricao_id
-          WHERE i.prescricao_id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
+           LEFT JOIN regra_alerta r ON r.id = d.regra_alerta_id
+          WHERE i.prescricao_id = ? AND ${VISIVEL('p')}
             AND d.excluido_em IS NULL AND d.decisao <> 'pendente'
           ORDER BY d.prescricao_item_id, d.sequencia`,
         [prescricao, est.id],
       );
+      // Mesma forma da porta de memória: chave do item a que o alerta pertence, decisão no vocabulário do contrato
+      // (mantido/retirado) e a versão da regra (não a versão de concorrência da linha). O banco não guarda a versão
+      // da regra no momento da decisão: vai a versão vigente da regra; sem regra, 0.
       return linhas.map((x) => ({
         item: num(x['prescricao_item_id']),
-        chave: `${num(x['prescricao_item_id'])}:${num(x['sequencia'])}`,
+        chave: String(num(x['prescricao_item_id'])),
         tipo: String(x['processo']),
-        decisao: String(x['decisao']),
+        decisao: DECISAO_DO_CONTRATO[String(x['decisao'])] ?? String(x['decisao']),
         justificativa: textoOuNull(x['justificativa']),
         regra: x['regra_alerta_id'] === null ? '' : String(x['regra_alerta_id']),
-        versao: num(x['versao']),
+        versao: x['numero_versao_vigente'] === null ? 0 : num(x['numero_versao_vigente']),
       }));
+    });
+  }
+
+  // ── Prescritor da sessão e dados clínicos para o cálculo de dose ──────────────────────────────────
+  /**
+   * Ocupações ativas do profissional que a conta de acesso representa (vínculo vigente em usuario_profissional), a
+   * principal primeiro. A categoria (médico, residente...) é decidida no serviço pelo código CBO. Sem vínculo ou sem
+   * ocupação, lista vazia (o serviço trata como "sem prescritor").
+   */
+  prescritores(c: ContextoPrescricao, login: string): Promise<PrescritorLido[]> {
+    return this.ler(c, 'prescritores', async (l) => {
+      const linhas = await l.consultar(
+        `SELECT o.codigo_cbo, pf.nome_exibicao
+           FROM usuario u
+           JOIN usuario_profissional up ON up.usuario_id = u.id AND up.excluido_em IS NULL
+             AND up.vigencia_inicio <= CURRENT_DATE AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= CURRENT_DATE)
+           JOIN profissional pf ON pf.id = up.profissional_id AND pf.excluido_em IS NULL
+           JOIN profissional_ocupacao po ON po.profissional_id = pf.id AND po.ativo AND po.excluido_em IS NULL
+           JOIN ocupacao_cbo o ON o.id = po.ocupacao_cbo_id AND o.ativo
+          WHERE u.login = ? AND u.excluido_em IS NULL
+          ORDER BY po.principal DESC, po.id`,
+        [login],
+      );
+      return linhas.map((x) => ({
+        cbo: cboDe(x['codigo_cbo']),
+        ocupacao: textoOuNull(x['codigo_cbo'])?.trim() ?? null,
+        nome: textoOuNull(x['nome_exibicao']),
+      }));
+    });
+  }
+
+  /**
+   * Peso e altura da aferição mais recente (afericao_valor dos parâmetros peso e altura, do estabelecimento), sexo e
+   * nascimento da pessoa do paciente. A creatinina sai null: o cadastro próprio ainda não liga um exame do
+   * laboratório à creatinina (sem o dado, o cálculo de dose pede, como na porta de memória).
+   */
+  dadosClinicos(c: ContextoPrescricao, paciente: number): Promise<DadosClinicosLidos> {
+    return this.ler(c, 'dadosClinicos', async (l, est) => {
+      const medida = (codigo: string) =>
+        l.uma(
+          `SELECT v.valor_numerico, a.aferido_em
+             FROM afericao a
+             JOIN afericao_valor v ON v.afericao_id = a.id AND v.excluido_em IS NULL AND NOT v.nao_aferido
+             JOIN parametro_vital pv ON pv.id = v.parametro_vital_id
+            WHERE a.paciente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
+              AND pv.codigo = ? AND v.valor_numerico IS NOT NULL
+            ORDER BY a.aferido_em DESC, a.id DESC LIMIT 1`,
+          [paciente, est.id, codigo],
+        );
+      const peso = await medida(PARAMETRO_PESO);
+      const altura = await medida(PARAMETRO_ALTURA);
+      const pessoa = await l.uma(
+        `SELECT DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nascimento, s.sigla
+           FROM paciente pc
+           JOIN pessoa_fisica pf ON pf.id = pc.pessoa_fisica_id
+           LEFT JOIN sexo s ON s.id = pf.sexo_id
+          WHERE pc.id = ? AND pc.excluido_em IS NULL`,
+        [paciente],
+      );
+      const sigla = pessoa ? textoOuNull(pessoa['sigla']) : null;
+      return {
+        pesoKg: peso ? numOuNull(peso['valor_numerico']) : null,
+        alturaCm: altura ? numOuNull(altura['valor_numerico']) : null,
+        dataPeso: peso ? (dataHora(peso['aferido_em'], est.fuso)?.slice(0, 10) ?? null) : null,
+        sexo: sigla === 'F' || sigla === 'M' ? sigla : null,
+        nascimento: pessoa ? dataDe(pessoa['nascimento']) : null,
+        creatinina: null,
+        dataCreatinina: null,
+      };
     });
   }
 
@@ -383,9 +508,6 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   }
 
   // ── Pendentes: recusa 501, nada lido nem gravado ──────────────────────────────────────────────────
-  prescritores(): Promise<never> {
-    return pendente('prescritores');
-  }
   regras(): Promise<never> {
     return pendente('regras');
   }
@@ -421,9 +543,6 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   }
   alergias(): Promise<never> {
     return pendente('alergias');
-  }
-  dadosClinicos(): Promise<never> {
-    return pendente('dadosClinicos');
   }
   produtosAtivos(): Promise<never> {
     return pendente('produtosAtivos');

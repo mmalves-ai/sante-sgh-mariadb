@@ -58,6 +58,10 @@ describe('estados', () => {
     const O = { id: 3, dataHora: 'x', situacao: 'O' };
     expect(situacaoDoItem([P], true, false)).toBe('suspenso-correcao');
     expect(situacaoDoItem([S, S], false, false)).toBe('suspenso');
+    // Suspensão gravada no próprio item: suspenso mesmo sem horários ou com horários não marcados.
+    expect(situacaoDoItem([], false, false, true)).toBe('suspenso');
+    expect(situacaoDoItem([P], false, false, true)).toBe('suspenso');
+    expect(situacaoDoItem([], false, false)).toBe('ativo');
     expect(situacaoDoItem([S, O], false, false)).toBe('suspenso');
     expect(situacaoDoItem([P, S], false, true)).toBe('vencido');
     expect(situacaoDoItem([P], false, false)).toBe('ativo');

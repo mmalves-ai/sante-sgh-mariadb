@@ -1479,6 +1479,11 @@ export interface ItemPrescricaoLido {
   readonly cboLancamento: number;
   readonly incluidoEm: string | null;
   readonly corrigidoEm: string | null;
+  /**
+   * Item suspenso ou cancelado pela situação gravada no próprio item (banco próprio), mesmo sem horários marcados.
+   * Ausente na origem que marca a suspensão só nos horários (o domínio decide pelos horários, como antes).
+   */
+  readonly suspenso?: boolean;
   readonly gravacao: string | null;
   readonly detalhe: DetalheLido;
   readonly horarios: readonly HorarioPadraoLido[];

@@ -1249,7 +1249,7 @@ function itemLido(i: ItemPrescricaoLido, vencida: boolean, todos: readonly ItemP
     via: i.via,
     frequencia: i.frequenciaNome,
     observacaoEnfermagem: i.observacaoEnfermagem,
-    situacao: situacaoDoItem(principais, i.corrigidoEm !== null, vencida),
+    situacao: situacaoDoItem(principais, i.corrigidoEm !== null, vencida, i.suspenso === true),
     incluidoDepois: i.incluidoEm !== null,
     produto: d.produto,
     principiosAtivos: d.principios,

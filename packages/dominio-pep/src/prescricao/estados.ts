@@ -67,8 +67,11 @@ export function situacaoDoItem(
   horarios: readonly HorarioLido[],
   corrigido: boolean,
   vigenciaVencida: boolean,
+  /** Suspensão (ou cancelamento) gravada no próprio item, com ou sem horários marcados. */
+  suspenso = false,
 ): SituacaoItemLida {
   if (corrigido) return 'suspenso-correcao';
+  if (suspenso) return 'suspenso';
   if (horarios.length > 0 && horarios.every((h) => h.situacao === SITUACAO_SUSPENSO)) return 'suspenso';
   if (
     horarios.some((h) => h.situacao === SITUACAO_SUSPENSO) &&
