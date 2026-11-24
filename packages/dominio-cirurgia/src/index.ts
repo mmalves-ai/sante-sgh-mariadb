@@ -20,3 +20,5 @@ export * from './checklist/index.js';
 export * from './rastreio/index.js';
 // F3.4 (04-CC linha 91): texto padrão da descrição cirúrgica por procedimento e cirurgião.
 export * from './texto-padrao.js';
+// F3.4 (04-CC linha 96): descrição cirúrgica assinada (adendo) e intercorrências do ato.
+export * from './descricao/index.js';
