@@ -168,12 +168,10 @@ describe('PortaAgendaOnlinePropria (unidade)', () => {
     ]);
   });
 
-  it('estabelecimento inexistente: 404; confirmação do pagamento: 503 recurso-sem-modelo', async () => {
+  // A confirmação do pagamento grava de fato (porta-propria-pagamento.ts): o contrato de efeito dela está em
+  // porta-propria-pagamento.int.spec.ts, contra o banco real.
+  it('estabelecimento inexistente: 404', async () => {
     const vazio = new PortaAgendaOnlinePropria(nucleoFalso(() => []));
     await expect(vazio.configs(c)).rejects.toMatchObject({ problema: { status: 404 } });
-    const porta = new PortaAgendaOnlinePropria(nucleoFalso((sql) => (estab(sql) ? [{ id: 1 }] : [])));
-    await expect(
-      porta.gravar(c, (g) => g.confirmarPagamento({ transacao: 't', resultado: 'aprovado', comprovante: 'x', por: 'retorno' }), null),
-    ).rejects.toMatchObject({ problema: { status: 503, codigo: 'recurso-sem-modelo' } });
   });
 });

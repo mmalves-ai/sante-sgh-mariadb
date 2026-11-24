@@ -371,16 +371,14 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
     expect(await linha((await registrar('')).id)).toEqual({ motivo: null, relato: 'relato sintético' });
   });
 
-  it('sem modelo: as leituras da conta, vínculos, consentimentos, pedidos e cópia recusam com 503 nomeando a operação', async () => {
-    for (const p of [
-      porta.conta(),
-      porta.contaDoPaciente(),
-      porta.vinculosDoTitular(),
-      porta.consentimentos(),
-      porta.pedidos(),
-      porta.filaCopias(),
-    ])
-      await expect(p).rejects.toMatchObject({ problema: { status: 503, codigo: 'recurso-sem-modelo' } });
+  it('as leituras da conta, vínculos, consentimentos, pedidos e cópia leem o banco (nada para quem não existe)', async () => {
+    const ninguem = 2_000_000_000;
+    expect(await porta.conta(c, ninguem)).toBeNull();
+    expect(await porta.contaDoPaciente(c, ninguem)).toBeNull();
+    expect(await porta.vinculosDoTitular(c, ninguem)).toEqual([]);
+    expect(await porta.consentimentos(c, ninguem)).toEqual([]);
+    expect(await porta.pedidos(c, ninguem, ninguem)).toEqual([]);
+    expect(await porta.filaCopias(c, { pendentes: false, protocolo: 'PROTOCOLO-INEXISTENTE' })).toEqual([]);
   });
 
   it('a gravação da conta está ligada: o erro de domínio da gravação própria volta ao serviço (não vira 500)', async () => {

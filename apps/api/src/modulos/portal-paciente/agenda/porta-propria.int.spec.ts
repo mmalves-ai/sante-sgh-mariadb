@@ -379,7 +379,7 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     expect(await porta.gravar(c, (g) => g.cancelarPreCheckin('consulta', m.marcacao), null)).toBe(0);
   });
 
-  it('pagamento: inicia, recusa o duplo e a transação repetida, lê; a confirmação recusa sem modelo', async () => {
+  it('pagamento: inicia, recusa o duplo e a transação repetida, lê; a confirmação sem o caixa do portal recusa e nada grava', async () => {
     const nova = {
       conta: m.conta,
       paciente: m.paciente,
@@ -417,7 +417,14 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
         (g) => g.confirmarPagamento({ transacao: nova.transacao, resultado: 'aprovado', comprovante: 'x', por: 'retorno' }),
         null,
       ),
-    ).rejects.toMatchObject({ problema: { status: 503, codigo: 'recurso-sem-modelo' } });
+    ).rejects.toMatchObject({ problema: { status: 503, codigo: 'catalogo-incompleto' } });
+    // O ROLLBACK desfaz tudo: a intenção segue como estava, sem recebimento.
+    expect(await porta.pagamentoPorId(c, r.id)).toMatchObject({
+      situacao: 'pendente',
+      pagamentoCaixa: null,
+      confirmadoEm: null,
+      confirmadoPor: null,
+    });
   });
 
   it('pesquisa: responde uma vez por marcação e lê do paciente', async () => {
