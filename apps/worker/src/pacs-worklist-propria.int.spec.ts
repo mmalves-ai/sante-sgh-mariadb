@@ -1,8 +1,10 @@
 // Integração da porta própria da lista de trabalho de imagem sobre o MariaDB real (cliente f22_o5; lote F2.2 05-16).
 // Contrato de efeito: o item nasce com o número de acesso da regra do domínio, a situação a enviar e a versão 1; o exame
 // ganha o mesmo número; o evento `imagem.mwl` vai à fila comum de saída na mesma transação; o segundo pedido do mesmo
-// exame não cria outro item; o exame de outro estabelecimento não é visto; sem chave de liberação, a geração segue o destino configurado (parceiro ativo
-// com o evento da lista: ativo gera, inativo ou sem o evento não gera); o
+// exame não cria outro item; o exame de outro estabelecimento não é visto; sem chave de liberação, a geração segue o
+// destino do ESTABELECIMENTO (parâmetro pacs.parceiroWorklist com o parceiro ativo e com o evento): o ciclo grava o item,
+// o número de acesso e o evento só no estabelecimento com destino; sem parâmetro ou com o parceiro inativo, nada é
+// gravado, e o outro estabelecimento do mesmo cliente nunca recebe nada pelo destino do primeiro; o
 // exame sem modalidade ativa vira item 'sem_modalidade' sem evento e é promovido quando o cadastro ganha a modalidade; o item
 // cancelado não trava o exame (novo item, nova geração, o número do exame acompanha o item vigente); o número de acesso
 // que o exame já tem é reaproveitado no item. Massa
@@ -21,6 +23,7 @@ import {
   SEM_BANCO,
 } from './importadores/integracao.spec-util.js';
 import { PortaWorklistPropria } from './pacs-worklist-propria.js';
+import { cicloWorklist } from './pacs-worklist.service.js';
 
 const H = 'fo516';
 const H2 = 'fo516b';
@@ -42,6 +45,9 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     item2: 0,
     itemSem: 0,
     itemNum: 0,
+    req3: 0,
+    item3: 0,
+    definicao: 0,
   };
 
   async function limpar(): Promise<void> {
@@ -53,6 +59,11 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
         ests,
       );
       await e.executar('DELETE FROM item_lista_trabalho_imagem WHERE estabelecimento_id IN (?, ?)', ests);
+      await e.executar(
+        `DELETE pv FROM parametro_valor pv JOIN parametro_definicao d ON d.id = pv.parametro_definicao_id
+          WHERE d.chave = 'pacs.parceiroWorklist' AND pv.estabelecimento_id IN (?, ?)`,
+        ests,
+      );
       await e.executar(
         'DELETE ei FROM exame_item ei JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id WHERE q.estabelecimento_id IN (?, ?)',
         ests,
@@ -292,33 +303,107 @@ describe.skipIf(SEM_BANCO)('lista de trabalho de imagem sobre o banco próprio (
     expect(exame).toMatchObject({ numero_acesso: 'F516MIG0001', versao: 1 });
   });
 
-  it('sem chave de liberação: a geração segue o destino (parceiro ativo com o evento da lista); sem valor, a janela é a do padrão', async () => {
-    const outros = await escrever(nucleo, (e) =>
-      e.uma(
-        `SELECT COUNT(*) AS n FROM parceiro_dados
-          WHERE ativo = TRUE AND excluido_em IS NULL AND JSON_VALID(eventos) AND JSON_CONTAINS(eventos, JSON_QUOTE(?))`,
-        [EVENTO_OUTBOX_MWL],
-      ),
-    );
-    // Nenhum outro destino no cliente de teste: sem parceiro, nada é gerado.
-    if (Number(outros?.['n'] ?? 0) === 0) expect(await porta.destinoConfigurado()).toBe(false);
-    await escrever(nucleo, (e) =>
-      e.executar(
+  it('sem chave de liberação, o destino é do estabelecimento: o ciclo grava só onde o parceiro configurado está ativo', async () => {
+    const agora = new Date();
+    // Massa do caso: um exame novo no fo516 (os anteriores já viraram item) e o do fo516b, ainda sem item.
+    await escrever(nucleo, async (e) => {
+      await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+      m.req3 = await inserirSintetico(e, 'requisicao_exame', {
+        estabelecimento_id: m.est,
+        numero: 'F516-3',
+        paciente_id: 9_905_161,
+        atendimento_id: 9_905_161,
+        setor_diagnostico_id: m.setor,
+        solicitante_profissional_id: 9_905_161,
+        fonte_pagadora_id: 9_905_161,
+        prioridade: 'rotina',
+        solicitado_em: agora,
+        criado_em: agora,
+      });
+      m.item3 = await inserirSintetico(e, 'exame_item', {
+        requisicao_exame_id: m.req3,
+        sequencia: 1,
+        exame_id: m.exame,
+        situacao: 'solicitado',
+        criado_em: agora,
+      });
+      // O parceiro sintético nasce inativo, com o evento da lista.
+      await e.executar(
         `INSERT INTO parceiro_dados (codigo, nome, tipo, escopos, eventos, limite_tentativas, finalidade, base_legal, ativo,
            criado_em) VALUES ('F516PACS', 'PACS sintético do teste', 'api', '[]', ?, 2, 'lista de trabalho de imagem',
            'tutela-da-saude', FALSE, NOW())`,
         [JSON.stringify([EVENTO_OUTBOX_MWL])],
+      );
+      // A definição do parâmetro (o catálogo de parâmetros a carrega no cliente; aqui garantida para o teste).
+      const d = await e.uma("SELECT id FROM parametro_definicao WHERE chave = 'pacs.parceiroWorklist'", []);
+      if (d) m.definicao = Number(d['id']);
+      else {
+        const mod =
+          (await e.uma("SELECT id FROM modulo_sistema WHERE codigo = 'sadt'", [])) ??
+          (await e.uma('SELECT MIN(id) AS id FROM modulo_sistema', []));
+        m.definicao = await e.inserir(
+          `INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, valor_padrao, permite_rede,
+             permite_estabelecimento, criado_em)
+           VALUES ('pacs.parceiroWorklist', ?, 'Parceiro que recebe a lista de trabalho do estabelecimento', 'texto', '',
+             FALSE, TRUE, ?)`,
+          [Number(mod!['id']), agora],
+        );
+      }
+      await e.executar('SET FOREIGN_KEY_CHECKS = 1');
+    });
+    const efeito = (exame: number, est: number) =>
+      escrever(nucleo, async (e) => ({
+        itens: await e.consultar(
+          'SELECT numero_acesso, situacao FROM item_lista_trabalho_imagem WHERE exame_item_id = ? AND estabelecimento_id = ?',
+          [exame, est],
+        ),
+        exame: await e.uma('SELECT numero_acesso FROM exame_item WHERE id = ?', [exame]),
+        eventos: await e.consultar(
+          `SELECT conteudo FROM integracao_mensagem WHERE estabelecimento_id = ? AND ponto = 'imagem.mwl'
+            AND JSON_VALUE(conteudo, '$.exame') = ?`,
+          [est, exame],
+        ),
+      }));
+    const vazio = { itens: [], exame: { numero_acesso: null }, eventos: [] };
+
+    // 1. Sem parâmetro no estabelecimento: nenhum destino, mesmo que o cliente tenha outro PACS ativo; nada gravado.
+    expect(await porta.destinoConfigurado(H, agora)).toBeNull();
+    expect(await cicloWorklist(porta, H, agora)).toMatchObject({ situacao: 'sem-destino', criados: 0 });
+    expect(await efeito(m.item3, m.est)).toMatchObject(vazio);
+
+    // 2. O fo516 aponta o parceiro sintético, ainda inativo: não é destino, nada gravado.
+    await escrever(nucleo, (e) =>
+      e.inserir(
+        `INSERT INTO parametro_valor (parametro_definicao_id, nivel, estabelecimento_id, valor, vigencia_inicio, motivo, criado_em)
+         VALUES (?, 'estabelecimento', ?, 'F516PACS', ?, 'teste do destino da lista de trabalho', ?)`,
+        [m.definicao, m.est, new Date(agora.getTime() - 60_000), agora],
       ),
     );
-    // Inativo: não é destino.
-    if (Number(outros?.['n'] ?? 0) === 0) expect(await porta.destinoConfigurado()).toBe(false);
+    expect(await porta.destinoConfigurado(H, agora)).toBeNull();
+    expect(await cicloWorklist(porta, H, agora)).toMatchObject({ situacao: 'sem-destino', criados: 0 });
+    expect(await efeito(m.item3, m.est)).toMatchObject(vazio);
+
+    // 3. Ativo: o fo516 gera o item, o número de acesso no exame e o evento na fila, sem nenhuma chave gravada.
     await escrever(nucleo, (e) =>
       e.executar("UPDATE parceiro_dados SET ativo = TRUE WHERE codigo = 'F516PACS'"),
     );
-    // Ativo com o evento: a geração vale em qualquer estabelecimento, mesmo sem nenhuma chave gravada.
-    expect(await porta.destinoConfigurado()).toBe(true);
-    await escrever(nucleo, (e) => e.executar("DELETE FROM parceiro_dados WHERE codigo = 'F516PACS'"));
-    // Sem valor gravado, vale o padrão da definição do parâmetro.
+    expect(await porta.destinoConfigurado(H, agora)).toBe('F516PACS');
+    const r = await cicloWorklist(porta, H, agora);
+    expect(r.situacao).toBe('feito');
+    expect(r.criados).toBeGreaterThanOrEqual(1);
+    const gerado = await efeito(m.item3, m.est);
+    expect(gerado.itens).toHaveLength(1);
+    expect(gerado.itens[0]).toMatchObject({ situacao: 'a_enviar' });
+    expect(gerado.exame).toMatchObject({ numero_acesso: gerado.itens[0]!['numero_acesso'] });
+    expect(gerado.eventos).toHaveLength(1);
+    expect(JSON.parse(String(gerado.eventos[0]!['conteudo']))).toMatchObject({ hospital: H, exame: m.item3 });
+
+    // 4. O fo516b, do mesmo cliente, não tem destino: o PACS do fo516 não recebe o paciente dele.
+    expect(await porta.destinoConfigurado(H2, agora)).toBeNull();
+    expect(await cicloWorklist(porta, H2, agora)).toMatchObject({ situacao: 'sem-destino', criados: 0 });
+    expect(await efeito(m.item2, m.est2)).toMatchObject(vazio);
+
+    // Sem valor gravado, a janela é a do padrão da definição do parâmetro.
     expect(await porta.janelaDias(H2, new Date())).toBe(2);
   });
 });

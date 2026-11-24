@@ -8,8 +8,13 @@
 import { z } from 'zod';
 import { idBanco } from '../validacao/id-banco.js';
 
-/** Chave de liberação (POL-3: desligada até o PACS real configurado e a autorização do dono). */
-export const CHAVE_LIBERACAO_WORKLIST = 'imagem.worklist';
+/**
+ * Nome do recurso na trilha das gravações da lista de trabalho. NÃO é chave de liberação (05-SADT linha 20): a função vale
+ * para todos, só pela permissão do cargo; o envio segue o destino configurado em cada estabelecimento.
+ */
+export const RECURSO_TRILHA_WORKLIST = 'imagem.worklist';
+/** Parâmetro do estabelecimento com o código do parceiro de integração que recebe a lista de trabalho dele. */
+export const PARAMETRO_PARCEIRO_WORKLIST = 'pacs.parceiroWorklist';
 /** Tipo do evento da outbox (e das integrações novas) que leva o item ao PACS. */
 export const EVENTO_OUTBOX_MWL = 'imagem.mwl';
 /** O escopo que o parceiro precisa para devolver o status do exame. */
@@ -172,7 +177,6 @@ export const esquemaTelaWorklist = z.object({
   itens: z.array(esquemaItemWorklist),
   cortada: z.boolean(),
   contagens: z.record(z.string(), n),
-  liberacao: z.object({ ligada: z.boolean(), motivo: txt.nullable() }),
   /** O destino: o simulador fora de produção; o PACS configurado em produção; ou nenhum parceiro ativo. */
   destino: z.object({
     modo: z.enum(['simulador', 'pacs', 'desligado']),

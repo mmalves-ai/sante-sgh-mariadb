@@ -66,4 +66,21 @@ export const PARAMETROS_PACS: readonly DefinicaoParametro[] = [
     dono: DONO,
     origem: 'ficha do M47, seções 4 e 6 (o visualizador do cadastro de visualizadores da imagem)',
   },
+  {
+    chave: 'pacs.parceiroWorklist',
+    modulo: 'sadt',
+    descricao:
+      'Código do parceiro de integração (o PACS; fora de produção, o simulador) que recebe a lista de trabalho DICOM deste estabelecimento; vazio, nenhum exame do estabelecimento vai à lista de trabalho',
+    tipo: 'texto',
+    padrao: '',
+    // Só por estabelecimento: o destino de um hospital nunca vale para outro (dado de paciente).
+    niveis: ['estabelecimento'],
+    critico: true,
+    formato: {
+      expressao: '^$|^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$',
+      mensagem: 'Use o código do parceiro cadastrado em Integrações › Parceiros (letras, números, hífen).',
+    },
+    dono: DONO,
+    origem: '05-SADT linha 20 (o destino da lista de trabalho por estabelecimento, sem chave de liberação)',
+  },
 ];

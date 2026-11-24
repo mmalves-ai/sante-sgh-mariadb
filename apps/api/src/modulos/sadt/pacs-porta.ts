@@ -143,8 +143,8 @@ export interface PortaPacs extends PortaGravacaoM18<GravadorPacs> {
   item(c: ContextoPacs, chave: { id: number } | { accession: string }): Promise<ItemMwlBanco | null>;
   itensDoPaciente(c: ContextoPacs, paciente: number): Promise<ItemMwlBanco[]>;
   status(c: ContextoPacs, exames: readonly number[]): Promise<StatusEstudoBanco[]>;
-  /** O parceiro de integração ativo que assina o evento da lista de trabalho (null: nenhum). */
-  parceiroDaWorklist(c: ContextoPacs): Promise<{ codigo: string; nome: string } | null>;
+  /** O parceiro do código dado (o do parâmetro do estabelecimento), se ativo e com o evento da lista (null: não serve). */
+  parceiroDaWorklist(c: ContextoPacs, codigo: string): Promise<{ codigo: string; nome: string } | null>;
 }
 
 export const METODOS_PORTA_PACS: ReadonlySet<string> = new Set([

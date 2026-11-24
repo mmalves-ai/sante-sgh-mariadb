@@ -345,14 +345,15 @@ export class PortaPacsPropria implements PortaPacs {
     );
   }
 
-  parceiroDaWorklist(c: ContextoPacs) {
-    // Parceiros de integração são do cliente inteiro (parceiro_dados não tem estabelecimento).
+  parceiroDaWorklist(c: ContextoPacs, codigo: string) {
+    // O parceiro é do cliente inteiro; o destino é o do parâmetro do estabelecimento (o código vem dele): só esse
+    // parceiro, ativo e com o evento da lista, serve. Nenhum outro parceiro do cliente vira destino por acaso.
     return this.ler(c, async (l) => {
       const r = await l.uma(
         `SELECT codigo, nome FROM parceiro_dados
-          WHERE ativo = TRUE AND excluido_em IS NULL AND JSON_VALID(eventos) AND JSON_CONTAINS(eventos, JSON_QUOTE(?))
-          ORDER BY id LIMIT 1`,
-        [EVENTO_OUTBOX_MWL],
+          WHERE codigo = ? AND ativo = TRUE AND excluido_em IS NULL AND JSON_VALID(eventos)
+            AND JSON_CONTAINS(eventos, JSON_QUOTE(?))`,
+        [codigo, EVENTO_OUTBOX_MWL],
       );
       return r ? { codigo: texto(r['codigo']), nome: texto(r['nome']) } : null;
     });

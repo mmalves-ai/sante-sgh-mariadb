@@ -33,7 +33,6 @@ describe('liberação full: listas de exceção versionadas (ADR 0034)', () => {
         'faturamento.susCiha',
         'suprimentos.ambulatorial',
         'integracao.apoio',
-        'imagem.worklist',
         'catalogo.brasindice.responsavel',
         'catalogo.simpro.responsavel',
         'contabil.sped',

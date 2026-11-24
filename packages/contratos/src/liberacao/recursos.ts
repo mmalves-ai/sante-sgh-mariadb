@@ -2707,32 +2707,6 @@ export const RECURSOS_DESLIGADOS: readonly RecursoDesligado[] = [
       },
     ],
   },
-  // Ficha do M47, seção 12 (etapa 3): a lista de trabalho DICOM. Desligada, a modalidade continua sem worklist (o
-  // processo atual); ligada, todo exame de imagem lançado de setor com modalidade DICOM vira item da MWL pela outbox
-  // (fora de produção, só ao simulador: a trava de saídas recusa endereço real) e o status do exame volta ao prontuário.
-  // Recolher: a outbox para de enviar à MWL; os itens e os estudos já recebidos continuam em consulta.
-  {
-    chave: 'imagem.worklist',
-    titulo: 'Lista de trabalho DICOM e integração com o PACS',
-    descricao:
-      'O exame de imagem lançado vira item da lista de trabalho da modalidade (número de acesso único, reenvio sem duplicar), o status do exame volta da modalidade e o link do visualizador aparece no prontuário e, com o laudo liberado, no portal.',
-    decisao: 'POL-3 e ficha do M47 (seção 12, regra 8)',
-    marco: 'M47',
-    prerequisitos: [
-      {
-        tipo: 'contrato',
-        descricao:
-          'PACS/RIS real configurado como parceiro de integração (endereço do intermediário da lista de trabalho, AE title das modalidades e a credencial do retorno do status), com a autorização do dono para a integração.',
-        responsavel: 'TI e coordenação da imagem',
-      },
-      {
-        tipo: 'aprovacao',
-        descricao:
-          'Worklist testada com o PACS real em produção: um exame lançado chega à modalidade com o número de acesso, o status volta e o link abre o estudo.',
-        responsavel: 'técnico de imagem, radiologista e responsável técnico',
-      },
-    ],
-  },
   // Ficha do M46, seção 12 (etapa 2): o checklist de cirurgia segura (OMS) em três momentos, primeiro sem trava
   // (DP-31b: pode ser liberado antes do resto do bloco); o registro no prontuário entra com o formulário publicado.
   {

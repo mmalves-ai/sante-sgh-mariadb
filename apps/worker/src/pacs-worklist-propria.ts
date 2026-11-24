@@ -1,6 +1,6 @@
 // Porta própria da geração automática da lista de trabalho de imagem (M47, etapa 3; lote F2.2 05-16) sobre o banco do
 // cliente, pelo @sgh/nucleo. Tabelas: exame_item, requisicao_exame, exame, modalidade_imagem, estabelecimento (leitura),
-// item_lista_trabalho_imagem e exame_item (gravação), parceiro_dados (o destino), parametro_valor.
+// item_lista_trabalho_imagem e exame_item (gravação), parceiro_dados e parametro_valor (o destino do estabelecimento).
 // Leituras somente leitura, filtradas pelo estabelecimento do código; gravação pelo Executor (trilha, evento da fila
 // comum e idempotência na mesma transação).
 // Melhoria: o número de acesso é um só por exame. O exame que já tem número (migração, lançamento manual) o reaproveita
@@ -29,7 +29,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { idDoEstabelecimento, valorDoParametro } from './clientes-worker.js';
-import { destinoDaWorklistConfigurado } from './integracao/destino-worklist.js';
+import { destinoDaWorklistNoEstabelecimento } from './integracao/destino-worklist.js';
 
 export interface ModalidadeDoExame {
   readonly id: number;
@@ -59,8 +59,11 @@ export interface ItemRegistrado {
 }
 
 export interface PortaWorklist {
-  /** Há destino configurado para a lista de trabalho (parceiro ativo com o evento; sem chave de liberação). */
-  destinoConfigurado(): Promise<boolean>;
+  /**
+   * O destino da lista de trabalho do estabelecimento (sem chave de liberação): o parceiro do parâmetro
+   * `pacs.parceiroWorklist` dele, ativo e com o evento; null sem destino (nada é gerado).
+   */
+  destinoConfigurado(cod: string, agora: Date): Promise<string | null>;
   /** O parâmetro `pacs.janelaDias` vigente no estabelecimento (null: sem valor). */
   janelaDias(cod: string, agora: Date): Promise<number | null>;
   /**
@@ -253,8 +256,8 @@ export class PortaWorklistPropria implements PortaWorklist {
     return id;
   }
 
-  destinoConfigurado(): Promise<boolean> {
-    return this.ler((l) => destinoDaWorklistConfigurado(l));
+  destinoConfigurado(cod: string, agora: Date): Promise<string | null> {
+    return this.ler((l) => destinoDaWorklistNoEstabelecimento(l, cod, agora));
   }
 
   async janelaDias(cod: string, agora: Date): Promise<number | null> {

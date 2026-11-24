@@ -8,17 +8,20 @@ import type { AddressInfo } from 'node:net';
 import { SimuladorModalidade } from '@sgh/dominio-sadt';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const estado = { ligada: false, suspenso: false, fuso: 'America/Sao_Paulo' };
+const estado = {
+  suspenso: false,
+  fuso: 'America/Sao_Paulo',
+  // O destino da lista de trabalho por estabelecimento (parâmetro pacs.parceiroWorklist, parceiro ativo com o evento).
+  destino: { pc: 'pacs', pd: 'pacs-d' } as Record<string, string | null>,
+};
+
+vi.mock('./destino-worklist.js', async (original) => ({
+  ...(await original<typeof import('./destino-worklist.js')>()),
+  destinoDaWorklistNoEstabelecimento: async (_l: unknown, h: string) => estado.destino[h] ?? null,
+}));
 
 vi.mock('./porta-propria.js', async (original) => ({
   ...(await original<typeof import('./porta-propria.js')>()),
-  lerChavesLiberacao: async () => [
-    { chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: estado.ligada },
-  ],
-  lerPrerequisitos: async () => [
-    { recurso: 'imagem.worklist', tipo: 'contrato', situacao: 'cumprido', validade: '2099-12-31' },
-    { recurso: 'imagem.worklist', tipo: 'aprovacao', situacao: 'cumprido', validade: '2099-12-31' },
-  ],
   itemListaTrabalho: async (_l: unknown, _h: string, id: number) =>
     id === 501 ? { accession: 'PC000000007', modalidade: 'CT' } : null,
   examePedido: async (_l: unknown, _h: string, id: number) =>
@@ -142,7 +145,18 @@ describe('envio do item da lista de trabalho DICOM (M47.3)', () => {
     falhar = false;
   });
 
-  it('cancelado o exame: erro de entrega com o motivo, nada chega ao PACS (sem chave de liberação: a chave recolhida não segura o envio)', async () => {
+  it('o parceiro que não é o destino do estabelecimento da mensagem não recebe nada (o PACS de outro hospital)', async () => {
+    const antes = recebidos.length;
+    // A mensagem do hospital pd tem destino pacs-d: o parceiro pacs não recebe o paciente dele.
+    await expect(enviador(base)(parceiro, envio('501'), 'pd')).rejects.toThrow('não é o destino');
+    // Sem destino no estabelecimento (parâmetro vazio ou parceiro desativado): nada sai.
+    estado.destino['pc'] = null;
+    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('não é o destino');
+    estado.destino['pc'] = 'pacs';
+    expect(recebidos).toHaveLength(antes);
+  });
+
+  it('cancelado o exame: erro de entrega com o motivo, nada chega ao PACS (sem chave de liberação: só o destino e o exame decidem)', async () => {
     const antes = recebidos.length;
     estado.suspenso = true;
     await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('exame cancelado');

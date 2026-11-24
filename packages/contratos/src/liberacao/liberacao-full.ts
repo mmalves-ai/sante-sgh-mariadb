@@ -96,10 +96,6 @@ export const DECISAO_DO_DONO_EM_PRODUCAO: readonly ExcecaoLiberacaoFull[] = [
     chave: 'integracao.apoio',
     motivo: 'com parceiro configurado, ficam duas interfaces ativas para o mesmo laboratório de apoio',
   },
-  {
-    chave: 'imagem.worklist',
-    motivo: 'com parceiro configurado, dado de paciente (nome, nascimento) vai ao PACS',
-  },
   ...RESPONSAVEIS_CATALOGO,
   {
     chave: 'contabil.sped',

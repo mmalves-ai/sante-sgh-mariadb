@@ -25,6 +25,7 @@ import {
   reciboDaRnds,
 } from '@sgh/dominio-integracao';
 import { itemMwlDicom } from '@sgh/dominio-sadt';
+import { destinoDaWorklistNoEstabelecimento } from './destino-worklist.js';
 import type { Leitor } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
 import {
@@ -162,6 +163,7 @@ export async function conteudoMwl(
   c: ConfiguracaoEnviadores,
   e: EnvioEntrega,
   hospital: string,
+  parceiro: string,
 ): Promise<{ conteudo: string; accession: string }> {
   const exame = Number(e.objeto);
   if (!Number.isInteger(exame) || exame <= 0)
@@ -169,8 +171,14 @@ export async function conteudoMwl(
   const lido = await c.ler(hospital, async (l) => ({
     item: await itemListaTrabalho(l, hospital, exame),
     exame: await examePedido(l, hospital, exame),
+    destino: await destinoDaWorklistNoEstabelecimento(l, hospital, c.agora()),
   }));
-  // Sem chave de liberação (05-SADT linha 20): o envio existe porque o parceiro do destino assina o evento.
+  // Sem chave de liberação (05-SADT linha 20): o envio existe porque o parceiro é o destino configurado no
+  // estabelecimento da mensagem (ativo e com o evento). Outro parceiro, ou o destino retirado, nada envia.
+  if (lido.destino !== parceiro)
+    throw new ErroEntrega(
+      'o parceiro não é o destino da lista de trabalho deste estabelecimento: nada enviado',
+    );
   if (!lido.item || !lido.exame) throw new ErroEntrega('item da lista de trabalho não encontrado');
   // O exame cancelado ou recusado depois de virar item não volta à modalidade como procedimento agendado.
   if (lido.exame.cancelado) throw new ErroEntrega('exame cancelado no prontuário: nada enviado');
@@ -304,7 +312,7 @@ export function criarEnviador(c: ConfiguracaoEnviadores): Enviador {
     if (!destinoPermitido(c.ambiente, u.hostname))
       throw new ErroEntrega('destino fora do loopback fora de produção');
     // M47 (etapa 3): o item da lista de trabalho vai como JSON do DICOM, com o número de acesso como chave de idempotência.
-    const mwl = e.tipoEvento === EVENTO_OUTBOX_MWL ? await conteudoMwl(c, e, hospital) : null;
+    const mwl = e.tipoEvento === EVENTO_OUTBOX_MWL ? await conteudoMwl(c, e, hospital, p.codigo) : null;
     const conteudo =
       mwl?.conteudo ??
       JSON.stringify({

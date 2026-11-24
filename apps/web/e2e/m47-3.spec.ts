@@ -1,8 +1,11 @@
 // E2E @M47.3 (ficha do M47, seção 10, etapa 3): o médico pede o raio X no prontuário; o exame de imagem aparece na lista
 // de trabalho DICOM "a enviar" e o técnico já pode enviar: sem chave de liberação (05-SADT linha 20; tudo ligado, só a
-// permissão do cargo e o destino configurado); o administrador configura o endereço do visualizador; o técnico de imagem envia o exame (número de acesso, entregue ao simulador), reenvia com o
+// permissão do cargo e o destino do estabelecimento); sem o destino configurado no estabelecimento a tela diz o porquê e
+// não oferece o envio; o administrador configura o destino (parâmetro pacs.parceiroWorklist do estabelecimento) e o
+// endereço do visualizador; o técnico de imagem envia o exame (número de acesso, entregue ao simulador), reenvia com o
 // mesmo número, e o simulador de modalidade manda "em andamento" e "concluído"; o link das imagens aparece na lista e no
-// prontuário do paciente; o item do menu leva à tela; uma chave antiga recolhida não desliga a função. axe sem violação séria em cada estado.
+// prontuário do paciente; o item do menu leva à tela; a tela de liberação não oferece mais a chave da lista de trabalho
+// (nem aceita ligá-la). axe sem violação séria em cada estado.
 // Sessão real sobre a fonte sintética e as portas em MEMÓRIA (dados SINTÉTICOS; nada vai à cópia).
 import { expect, type Page, test } from '@playwright/test';
 import { abrirMenuInteiro, menuPrincipal, semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -26,7 +29,8 @@ const cabecalhos = async (page: Page, k: string) => ({
   'idempotency-key': `e2e-m47-3-${k}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 });
 
-async function chave(page: Page, ligar: boolean): Promise<void> {
+/** A antiga chave da lista de trabalho não é mais recurso de liberação: a API recusa e a lista não a oferece. */
+async function chaveNaoOferecida(page: Page, ligar: boolean): Promise<void> {
   const r = await page.request.post('/api/administracao/liberacao', {
     headers: await cabecalhos(page, `chave-${ligar}`),
     data: {
@@ -39,7 +43,25 @@ async function chave(page: Page, ligar: boolean): Promise<void> {
       senha: SENHA,
     },
   });
-  expect(r.status(), await r.text()).toBe(200);
+  expect(r.status(), await r.text()).toBe(404);
+  const l = await page.request.get('/api/administracao/liberacao');
+  expect(l.status(), await l.text()).toBe(200);
+  const { funcionalidades } = (await l.json()) as { funcionalidades: { chave: string }[] };
+  expect(funcionalidades.map((f) => f.chave)).not.toContain('imagem.worklist');
+}
+
+async function parametro(page: Page, chave: string, valor: string): Promise<void> {
+  const p = await page.request.put(`/api/administracao/parametros/${chave}`, {
+    headers: await cabecalhos(page, chave),
+    data: {
+      nivel: 'estabelecimento',
+      alvo: 'pc',
+      valor,
+      justificativa: 'Lista de trabalho DICOM sintética (E2E da etapa 3)',
+      senha: SENHA,
+    },
+  });
+  expect(p.status(), await p.text()).toBe(200);
 }
 
 test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
@@ -57,11 +79,11 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
     await page.getByTestId('enviar-pedido').click();
     await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
 
-    // Sem chave de liberação: o técnico vê o exame "a enviar" e já pode selecioná-lo para enviar.
+    // Sem chave de liberação: o técnico vê o exame "a enviar"; sem destino no estabelecimento, a tela diz o porquê.
     await entrar(page, 'SINT.TEC.IMAGEM');
     await page.goto('/sadt/imagem/worklist');
     await expect(page.getByRole('heading', { level: 1, name: 'Lista de trabalho DICOM' })).toBeVisible();
-    await expect(page.getByTestId('worklist-motivo')).toHaveCount(0);
+    await expect(page.getByTestId('worklist-motivo')).toContainText('pacs.parceiroWorklist');
     const linhaRx = page
       .locator('[data-testid^="worklist-exame-"]')
       .filter({ hasText: 'RAIO X DE TÓRAX' })
@@ -69,28 +91,20 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
       .first();
     await expect(linhaRx).toBeVisible();
     const exame = Number((await linhaRx.getAttribute('data-testid'))!.replace('worklist-exame-', ''));
-    await expect(page.getByTestId(`worklist-selecionar-${exame}`)).toBeVisible();
-    await semViolacaoAxe(page, '/sadt/imagem/worklist (a enviar)');
+    await semViolacaoAxe(page, '/sadt/imagem/worklist (sem destino)');
 
-    // O administrador configura o visualizador (nenhuma chave de liberação a ligar).
+    // O administrador configura o destino do estabelecimento e o visualizador (nenhuma chave de liberação a ligar).
     await entrar(page, 'SINT.ADMIN');
-    const p = await page.request.put('/api/administracao/parametros/pacs.visualizadorUrl', {
-      headers: await cabecalhos(page, 'visualizador'),
-      data: {
-        nivel: 'estabelecimento',
-        alvo: 'pc',
-        valor: VISUALIZADOR,
-        justificativa: 'Visualizador sintético do E2E da etapa 3',
-        senha: SENHA,
-      },
-    });
-    expect(p.status(), await p.text()).toBe(200);
+    await parametro(page, 'pacs.parceiroWorklist', 'pacs-simulador');
+    await parametro(page, 'pacs.visualizadorUrl', VISUALIZADOR);
 
     {
       // O técnico envia o exame; o item nasce com o número de acesso e é entregue ao simulador.
       await entrar(page, 'SINT.TEC.IMAGEM');
       await page.goto('/sadt/imagem/worklist');
+      await expect(page.getByTestId('worklist-motivo')).toHaveCount(0);
       await expect(page.getByTestId('worklist-destino')).toContainText('simulados');
+      await semViolacaoAxe(page, '/sadt/imagem/worklist (a enviar)');
       await page.getByTestId(`worklist-selecionar-${exame}`).check();
       await page.getByTestId('worklist-enviar').click();
       await expect(page.getByTestId('worklist-mensagem')).toContainText('enviado(s) à lista de trabalho');
@@ -151,9 +165,10 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
       );
       await semViolacaoAxe(page, '/pep/paciente/1001/resultados (imagens)');
     }
-    // Uma chave antiga recolhida para as pessoas não desliga a função: só a permissão do cargo e o destino valem.
+    // A tela de liberação não oferece mais a chave (nem a liga nem a recolhe): só a permissão do cargo e o destino valem.
     await entrar(page, 'SINT.ADMIN');
-    await chave(page, false);
+    await chaveNaoOferecida(page, true);
+    await chaveNaoOferecida(page, false);
     await entrar(page, 'SINT.TEC.IMAGEM');
     await page.goto('/sadt/imagem/worklist');
     await expect(page.getByTestId('worklist-motivo')).toHaveCount(0);

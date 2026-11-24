@@ -8,6 +8,8 @@
 import { EVENTOS_INTEGRACAO, esquemaCodigoEstabelecimento } from '@sgh/contratos';
 import { assinaturaDoEvento, chaveDeOrdem } from '@sgh/dominio-integracao';
 import type { AcessoIntegracao } from './acesso.js';
+import { EVENTO_OUTBOX_MWL } from '@sgh/contratos';
+import { parceiroConfiguradoNoEstabelecimento } from './destino-worklist.js';
 import { idDaOutbox, lerParceiros, registrarEnvio } from './porta-propria.js';
 
 export interface EventoRecebido {
@@ -61,15 +63,24 @@ export async function distribuirEvento(acesso: AcessoIntegracao, ev: EventoReceb
   if (!(EVENTOS_INTEGRACAO as readonly string[]).includes(assinatura)) return NADA;
   const hospital = String(ev.dados['hospital'] ?? '');
   if (!esquemaCodigoEstabelecimento.safeParse(hospital).success) return NADA;
-  const [parceiros, idOutbox] = await acesso.ler(
+  // A lista de trabalho DICOM vai só ao destino do estabelecimento do evento (05-SADT linha 20): o PACS de outro
+  // hospital do mesmo cliente nunca recebe o paciente.
+  const mwl = assinatura === EVENTO_OUTBOX_MWL;
+  const [parceiros, idOutbox, destinoMwl] = await acesso.ler(
     hospital,
-    async (l) => [await lerParceiros(l), await idDaOutbox(l, hospital, ev.chave)] as const,
+    async (l) =>
+      [
+        await lerParceiros(l),
+        await idDaOutbox(l, hospital, ev.chave),
+        mwl ? await parceiroConfiguradoNoEstabelecimento(l, hospital, new Date()) : null,
+      ] as const,
   );
   if (!idOutbox) return NADA;
   const alvo = parceiros.filter(
     (p) =>
       p.ativo &&
       p.eventos.includes(assinatura) &&
+      (!mwl || p.codigo === destinoMwl) &&
       // O teste vai só ao parceiro pedido.
       (ev.tipo !== 'integracao.teste' || p.codigo === ev.dados['parceiro']),
   );

@@ -57,7 +57,7 @@ export async function cicloWorklist(
   agora: Date = new Date(),
 ): Promise<ResultadoCicloPacs> {
   const nada = { pendentes: 0, criados: 0, semModalidade: 0, falhas: 0, cortada: false };
-  if (!(await porta.destinoConfigurado())) return { situacao: 'sem-destino', ...nada };
+  if (!(await porta.destinoConfigurado(cod, agora))) return { situacao: 'sem-destino', ...nada };
   const janela = janelaPacs(await porta.janelaDias(cod, agora));
   const desde = new Date(agora.getTime() - janela * 86_400_000);
   const lidos = await porta.examesSemItem(cod, desde, agora, TETO_CICLO_PACS);

@@ -3,11 +3,13 @@
 // recebe o status do PACS ou do simulador de forma idempotente e entrega ao prontuário e ao portal o link do
 // visualizador. As gravações passam pelo apoio comum (a trilha na mesma transação), sem chave de liberação: tudo ligado
 // para todos, só a permissão do cargo (05-SADT linha 20); o que liga o envio é o destino configurado (o modo do
-// ambiente e o parceiro do PACS com o evento da lista, em Integrações); a
+// ambiente e, em cada estabelecimento, o parceiro do parâmetro `pacs.parceiroWorklist`, ativo e com o evento da lista,
+// em Integrações): o destino de um hospital nunca recebe exame de outro. A
 // entrada do PACS, sem sessão, grava a trilha com o usuário do parceiro.
 import {
-  CHAVE_LIBERACAO_WORKLIST,
   definicaoParametro,
+  PARAMETRO_PARCEIRO_WORKLIST,
+  RECURSO_TRILHA_WORKLIST,
   type EstudoLido,
   type EstudosDoPaciente,
   EVENTOS_AUDITAVEIS,
@@ -112,7 +114,7 @@ export class ServicoPacs {
   ) {
     this.apoio = new ApoioGravacao<GravadorPacs>(
       {
-        chave: CHAVE_LIBERACAO_WORKLIST,
+        chave: RECURSO_TRILHA_WORKLIST,
         nome: 'a lista de trabalho DICOM',
         operacoes: {},
         semLiberacao: true,
@@ -131,6 +133,7 @@ export class ServicoPacs {
       url: String(r('pacs.visualizadorUrl', null) ?? ''),
       visualizador: String(r('pacs.visualizador', null) ?? 'OVIYAM'),
       janela: Number(r('pacs.janelaDias', null) ?? 2) || 2,
+      parceiro: String(r(PARAMETRO_PARCEIRO_WORKLIST, null) ?? '').trim(),
     };
   }
 
@@ -148,28 +151,36 @@ export class ServicoPacs {
     };
   }
 
-  private async destino(c: ContextoPacs): Promise<TelaWorklist['destino']> {
+  /** O destino do estabelecimento da sessão: o parceiro do parâmetro dele, ativo e com o evento da lista. */
+  private async destino(s: SessaoCadastro): Promise<TelaWorklist['destino']> {
     const modo = modoPacs(this.env);
     if (modo === 'desligado')
       return { modo, parceiro: null, motivo: 'O envio ao PACS está desligado neste ambiente.' };
-    const p = await this.porta.parceiroDaWorklist(c).catch(() => null);
+    const { parceiro } = await this.parametros(s);
+    if (!parceiro)
+      return {
+        modo: 'desligado',
+        parceiro: null,
+        motivo:
+          'Este estabelecimento não tem destino para a lista de trabalho: informe o código do PACS (fora de produção, o simulador) no parâmetro "pacs.parceiroWorklist" do estabelecimento.',
+      };
+    const p = await this.porta.parceiroDaWorklist(s.porta, parceiro).catch(() => null);
     if (!p)
       return {
         modo: 'desligado',
         parceiro: null,
         motivo:
-          'Nenhuma integração ativa recebe a lista de trabalho: cadastre o PACS (fora de produção, o simulador) em Integrações › Parceiros, com o evento da lista de trabalho DICOM.',
+          'O parceiro configurado para a lista de trabalho deste estabelecimento não está ativo ou não recebe o evento da lista de trabalho DICOM (Integrações › Parceiros).',
       };
     return { modo, parceiro: p.nome, motivo: null };
   }
 
   async tela(s: SessaoCadastro, f: FiltroWorklist): Promise<TelaWorklist> {
     const c = s.porta;
-    const [{ hoje, agora }, prm, liberacao, destino] = await Promise.all([
+    const [{ hoje, agora }, prm, destino] = await Promise.all([
       this.porta.relogio(c),
       this.parametros(s),
-      this.apoio.liberacao(s),
-      this.destino(c),
+      this.destino(s),
     ]);
     const data = f.data ?? hoje;
     // O termo: o número de acesso (o que a modalidade e o PACS mostram) acha o item; senão, o paciente (nome,
@@ -235,7 +246,7 @@ export class ServicoPacs {
     const contagens: Record<string, number> = {};
     for (const l of linhas) contagens[l.situacao] = (contagens[l.situacao] ?? 0) + 1;
     const podeReenviar = s.pode(P.reenviar);
-    const vale = liberacao.ligada && destino.modo !== 'desligado';
+    const vale = destino.modo !== 'desligado';
     const nomeVisualizador =
       visualizadores.find((v) => v.nome.toUpperCase() === prm.visualizador.toUpperCase())?.nome ??
       prm.visualizador;
@@ -253,26 +264,21 @@ export class ServicoPacs {
       itens: filtradas,
       cortada: cortada || exames.length > TETO_WORKLIST,
       contagens,
-      liberacao,
       destino,
       visualizador: { nome: nomeVisualizador, configurado: /\{(estudo|acesso)\}/.test(prm.url) },
       acoes: {
         enviar: podeReenviar && vale,
         reenviar: podeReenviar && vale,
-        simular: podeReenviar && liberacao.ligada && destino.modo === 'simulador',
-        motivo: !podeReenviar
-          ? 'Seu perfil só consulta a lista de trabalho.'
-          : !liberacao.ligada
-            ? liberacao.motivo
-            : destino.motivo,
+        simular: podeReenviar && destino.modo === 'simulador',
+        motivo: !podeReenviar ? 'Seu perfil só consulta a lista de trabalho.' : destino.motivo,
       },
       lidoEm: agora,
     };
   }
 
-  /** O destino vale para gravar (a chave já é conferida pelo apoio). */
-  private async exigirDestino(c: ContextoPacs): Promise<void> {
-    const d = await this.destino(c);
+  /** O destino do estabelecimento vale para gravar (sem chave de liberação: só a permissão e o destino). */
+  private async exigirDestino(s: SessaoCadastro): Promise<void> {
+    const d = await this.destino(s);
     if (d.modo === 'desligado')
       throw new ErroProblema(
         'recusa-de-negocio',
@@ -295,7 +301,7 @@ export class ServicoPacs {
     origem: 'manual' | 'automatico' = 'manual',
   ): Promise<ResultadoWorklist> {
     await this.apoio.exigirLiberacao(s);
-    await this.exigirDestino(s.porta);
+    await this.exigirDestino(s);
     const c = s.porta;
     const prm = await this.parametros(s);
     const [lidos, modalidades, cadastro, ja] = await Promise.all([
@@ -378,7 +384,7 @@ export class ServicoPacs {
   /** O reenvio do item com o mesmo número de acesso (o PACS atualiza, não duplica). */
   async reenviar(s: SessaoCadastro, id: number, envios: number | null): Promise<ResultadoWorklist> {
     await this.apoio.exigirLiberacao(s);
-    await this.exigirDestino(s.porta);
+    await this.exigirDestino(s);
     const i = await this.porta.item(s.porta, { id });
     if (!i)
       throw new ErroProblema(

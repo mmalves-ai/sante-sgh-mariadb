@@ -3,7 +3,7 @@
 // 'sem_modalidade', nunca some), a falha de um exame isolada dos demais, a chave por geração do pedido, o segundo consumidor que desiste sem duplicar, a janela do parâmetro e a liga/desliga por ambiente. A porta é um
 // dublê (nada conecta a banco); a prova sobre o banco é a pacs-worklist-propria.int.spec.ts.
 import { EVENTO_OUTBOX_MWL } from '@sgh/contratos';
-import { worklistComDestino } from './integracao/destino-worklist.js';
+import { destinoDaWorklist } from './integracao/destino-worklist.js';
 import { accessionDoItem } from '@sgh/dominio-sadt';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -33,7 +33,7 @@ const estado = {
 };
 
 const porta: PortaWorklist = {
-  destinoConfigurado: async () => estado.ligada,
+  destinoConfigurado: async () => (estado.ligada ? 'pacs' : null),
   janelaDias: async () => estado.janela,
   examesSemItem: async (_cod, desde, ate) => {
     estado.janelaPedida = `${desde.toISOString().slice(0, 10)}..${ate.toISOString().slice(0, 10)}`;
@@ -158,16 +158,22 @@ describe('geração automática da lista de trabalho de imagem (regra 8)', () =>
   });
 });
 
-describe('destino da lista de trabalho (05-SADT linha 20: sem chave de liberação)', () => {
-  it('só o parceiro ativo que recebe o evento da lista é destino; nenhum parceiro, nenhum destino', () => {
-    expect(worklistComDestino([])).toBe(false);
-    expect(worklistComDestino([{ ativo: false, eventos: [EVENTO_OUTBOX_MWL] }])).toBe(false);
-    expect(worklistComDestino([{ ativo: true, eventos: ['fato.resultado.liberado'] }])).toBe(false);
+describe('destino da lista de trabalho (05-SADT linha 20: por estabelecimento, sem chave de liberação)', () => {
+  const pacsA = { codigo: 'pacs-a', ativo: true, eventos: [EVENTO_OUTBOX_MWL] };
+  const pacsB = { codigo: 'pacs-b', ativo: true, eventos: [EVENTO_OUTBOX_MWL] };
+  it('sem parceiro configurado no estabelecimento, nenhum destino, mesmo com PACS ativo no cliente', () => {
+    expect(destinoDaWorklist([pacsA, pacsB], null)).toBeNull();
+    expect(destinoDaWorklist([pacsA, pacsB], '  ')).toBeNull();
+  });
+  it('só o parceiro configurado no estabelecimento é destino; o PACS de outro hospital não', () => {
+    expect(destinoDaWorklist([pacsA, pacsB], 'pacs-a')).toBe('pacs-a');
+    expect(destinoDaWorklist([pacsA, pacsB], 'pacs-b')).toBe('pacs-b');
+    expect(destinoDaWorklist([pacsA], 'pacs-b')).toBeNull();
+  });
+  it('o configurado inativo ou sem o evento da lista não serve, e nenhum outro o substitui', () => {
+    expect(destinoDaWorklist([{ ...pacsA, ativo: false }, pacsB], 'pacs-a')).toBeNull();
     expect(
-      worklistComDestino([
-        { ativo: true, eventos: ['fato.resultado.liberado'] },
-        { ativo: true, eventos: [EVENTO_OUTBOX_MWL] },
-      ]),
-    ).toBe(true);
+      destinoDaWorklist([{ ...pacsA, eventos: ['fato.resultado.liberado'] }, pacsB], 'pacs-a'),
+    ).toBeNull();
   });
 });
