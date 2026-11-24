@@ -1,11 +1,13 @@
 // Vínculo do item do estoque com a referência de preço de material e medicamento (F3.6, 05-SUP linha 28), sobre o
 // MariaDB do cliente pelo Executor do núcleo (trilha na mesma transação, versão conferida). A regra pura mora em
 // `@sgh/contratos/regras-suprimentos` (vinculo-referencia-preco); aqui ficam a conferência das referências no banco, a
-// escrita e a leitura da ficha. Nada é apagado: o vínculo novo fecha a vigência do anterior na véspera, e o encerramento
-// só preenche o fim. A conta (conta-estoque.ts) lê o vínculo vigente na data do lançamento, com o fator.
-import { randomUUID } from 'node:crypto';
+// escrita e a leitura da ficha. A linha do tempo é por item e por publicação: o item fica ligado ao mesmo tempo a uma
+// referência de cada publicação. Nada é apagado: o vínculo novo fecha o anterior da mesma publicação na véspera, e o
+// encerramento só preenche o fim. A gravação honra a Idempotency-Key do pedido (repetição devolve o mesmo id). A conta
+// (conta-estoque.ts) escolhe o vínculo por `vinculoReferenciaDaConta`, com o fator.
 import {
   conferirEncerramentoVinculoReferencia,
+  escolherVinculoDaConta,
   fatorSugeridoReferencia,
   planejarVinculoReferenciaPreco,
   type RecusaSuprimentos,
@@ -21,7 +23,6 @@ import {
   type Linha,
   type NucleoProprio,
   recusa,
-  type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -62,7 +63,8 @@ export interface FichaVinculoReferencia {
     readonly nome: string;
     readonly unidade: string | null;
   };
-  readonly vigente: VinculoReferenciaPreco | null;
+  /** Os vigentes hoje, um por publicação (o item pode estar em mais de uma tabela de referência ao mesmo tempo). */
+  readonly vigentes: readonly VinculoReferenciaPreco[];
   /** Todos os vínculos do item, do mais novo ao mais antigo (o histórico nunca some). */
   readonly historico: readonly VinculoReferenciaPreco[];
 }
@@ -76,8 +78,19 @@ export interface PortaVinculoReferencia {
   readonly destino: 'banco' | 'indisponivel';
   ficha(c: ContextoPortaM18, insumo: number): Promise<FichaVinculoReferencia | null>;
   buscar(c: ContextoPortaM18, insumo: number, termo: string): Promise<OpcaoReferenciaPreco[]>;
-  vincular(c: ContextoPortaM18, insumo: number, e: VincularReferenciaPrecoEntrada): Promise<{ id: number }>;
-  encerrar(c: ContextoPortaM18, insumo: number, vinculo: number, fim: string): Promise<{ id: number }>;
+  vincular(
+    c: ContextoPortaM18,
+    insumo: number,
+    e: VincularReferenciaPrecoEntrada,
+    chave: string,
+  ): Promise<{ id: number }>;
+  encerrar(
+    c: ContextoPortaM18,
+    insumo: number,
+    vinculo: number,
+    fim: string,
+    chave: string,
+  ): Promise<{ id: number }>;
 }
 
 export function portaVinculoReferenciaIndisponivel(): PortaVinculoReferencia {
@@ -134,6 +147,46 @@ async function edicaoVigente(
   return r ? { id: n(r['id']), numero: t(r['numero_edicao']) } : null;
 }
 
+/** A data de hoje do servidor do banco (a mesma da ficha e da conta). */
+async function hojeDo(l: Pick<Leitor, 'uma'>): Promise<string> {
+  return dataIso((await l.uma<Linha>('SELECT CURRENT_DATE() AS d', []))?.['d']);
+}
+
+/**
+ * O vínculo de referência que a conta usa para o insumo na data do lançamento: entre os vigentes (um por publicação,
+ * nunca os excluídos), o da referência do item faturável, senão o da publicação da tabela de preço da conta, senão o
+ * mais recente (`escolherVinculoDaConta`). Nulo quando o insumo não tem vínculo vigente.
+ */
+export async function vinculoReferenciaDaConta(
+  l: Pick<Leitor, 'consultar'>,
+  insumo: number,
+  data: string,
+  criterio: { readonly referenciaDoFaturavel: number | null; readonly fonteDaTabela: string | null },
+): Promise<{
+  readonly id: number;
+  readonly referencia: number;
+  readonly fonte: string;
+  readonly fator: number;
+} | null> {
+  const rs = await l.consultar<Linha>(
+    `SELECT v.id, v.item_referencia_matmed_id, r.fonte_referencia, v.fator_conversao, v.vigencia_inicio
+       FROM insumo_referencia_preco v JOIN item_referencia_matmed r ON r.id = v.item_referencia_matmed_id
+      WHERE v.insumo_id = ? AND v.excluido_em IS NULL AND v.vigencia_inicio <= ?
+        AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= ?)`,
+    [insumo, data, data],
+  );
+  return escolherVinculoDaConta(
+    rs.map((r) => ({
+      id: n(r['id']),
+      referencia: n(r['item_referencia_matmed_id']),
+      fonte: t(r['fonte_referencia']),
+      fator: n(r['fator_conversao']),
+      inicio: dataIso(r['vigencia_inicio']),
+    })),
+    criterio,
+  );
+}
+
 export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -165,8 +218,7 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
         [insumo],
       );
       if (!item) return null;
-      const hojeL = await l.uma<Linha>('SELECT CURRENT_DATE() AS d', []);
-      const hoje = dataIso(hojeL?.['d']);
+      const hoje = await hojeDo(l);
       const linhas = await l.consultar<Linha>(
         `SELECT v.id, v.versao, v.fator_conversao, v.vigencia_inicio, v.vigencia_fim,
                 e.id AS edicao_id, e.numero_edicao, ${COLUNAS_REFERENCIA}
@@ -200,7 +252,7 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
           nome: t(item['nome']),
           unidade: tn(item['sigla']),
         },
-        vigente: historico.find((v) => v.vigente) ?? null,
+        vigentes: historico.filter((v) => v.vigente),
         historico,
       };
     });
@@ -227,7 +279,7 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
           ORDER BY r.codigo_referencia = ? DESC, r.descricao LIMIT 30`,
         [busca, busca, busca, `%${busca.replace(/[%_\\]/g, '\\$&')}%`, busca],
       );
-      const hoje = dataIso((await l.uma<Linha>('SELECT CURRENT_DATE() AS d', []))?.['d']);
+      const hoje = await hojeDo(l);
       const edicoes = new Map<string, { id: number; numero: string } | null>();
       const saida: OpcaoReferenciaPreco[] = [];
       for (const r of linhas) {
@@ -250,50 +302,60 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
   private async gravar(
     c: ContextoPortaM18,
     nome: string,
-    resumo: Record<string, unknown>,
+    chave: string,
+    entrada: Record<string, string | number | null>,
     fn: (tx: TxOperacao) => Promise<number>,
   ): Promise<{ id: number }> {
     const ctxN = this.contexto(c);
-    let id: number | null = null;
     const op = definirOperacao({
       nome: `suprimentos.cadastro.${nome}`,
       tabelas: [...TABELAS_VINCULO_REFERENCIA],
-      entrada: z.object({ chave: z.string() }),
-      async gravar(tx) {
-        id = await fn(tx);
-        return {} as ResultadoOperacao;
+      entrada: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
+      async gravar(tx): Promise<{ id: number }> {
+        return { id: await fn(tx) };
       },
-      alvo: () => ({ tabela: 'insumo_referencia_preco', id }),
-      trilha: () => ({ dados: resumo, motivo: null }),
+      alvo: (_e, r) => ({ tabela: 'insumo_referencia_preco', id: r.id }),
+      trilha: () => ({ dados: entrada, motivo: null }),
     });
-    const chave = `vinculo-referencia:${randomUUID()}`;
     const ctx: ContextoOperacao = { ...ctxN, chaveIdempotencia: chave };
-    await this.executor.executar(op, c.cliente, { chave }, ctx);
-    if (id === null) throw new Error('Gravação do vínculo com a referência sem resultado.');
-    return { id };
+    // A mesma chave com a mesma entrada devolve o id da primeira gravação, sem gravar de novo.
+    const { resultado } = await this.executor.executar(op, c.cliente, entrada, ctx);
+    return { id: Number(resultado.id) };
   }
 
   /** A linha do tempo do item, travada para a gravação (dois vínculos simultâneos não se cruzam). */
-  private async linhaDoTempo(tx: TxOperacao, insumo: number): Promise<VinculoReferenciaPrecoVigencia[]> {
+  private async linhaDoTempo(
+    tx: TxOperacao,
+    insumo: number,
+  ): Promise<(VinculoReferenciaPrecoVigencia & { readonly versao: number })[]> {
     const rs = await tx.consultarParaAtualizar<Linha>(
-      `SELECT id, versao, item_referencia_matmed_id, fator_conversao, vigencia_inicio, vigencia_fim
-         FROM insumo_referencia_preco WHERE insumo_id = ? AND excluido_em IS NULL`,
+      `SELECT v.id, v.versao, v.item_referencia_matmed_id, r.fonte_referencia, v.fator_conversao, v.vigencia_inicio,
+              v.vigencia_fim
+         FROM insumo_referencia_preco v JOIN item_referencia_matmed r ON r.id = v.item_referencia_matmed_id
+        WHERE v.insumo_id = ? AND v.excluido_em IS NULL`,
       [insumo],
     );
     return rs.map((r) => ({
       id: n(r['id']),
       versao: n(r['versao']),
       referencia: n(r['item_referencia_matmed_id']),
+      fonte: t(r['fonte_referencia']),
       fator: n(r['fator_conversao']),
       inicio: dataIso(r['vigencia_inicio']),
       fim: r['vigencia_fim'] ? dataIso(r['vigencia_fim']) : null,
     }));
   }
 
-  vincular(c: ContextoPortaM18, insumo: number, e: VincularReferenciaPrecoEntrada): Promise<{ id: number }> {
+  vincular(
+    c: ContextoPortaM18,
+    insumo: number,
+    e: VincularReferenciaPrecoEntrada,
+    chave: string,
+  ): Promise<{ id: number }> {
     return this.gravar(
       c,
       'vincularReferenciaPreco',
+      chave,
       { insumo, referencia: e.referencia, edicao: e.edicao, fator: e.fator, inicio: e.inicio },
       async (tx) => {
         const item = await tx.uma<Linha>('SELECT id FROM insumo WHERE id = ? AND excluido_em IS NULL', [
@@ -316,7 +378,10 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
             { campos: ['referencia'] },
           );
         const linha = await this.linhaDoTempo(tx, insumo);
-        const plano = planejarVinculoReferenciaPreco(e, linha);
+        const plano = planejarVinculoReferenciaPreco(e, linha, {
+          fonte: t(ref['fonte_referencia']),
+          hoje: await hojeDo(tx),
+        });
         recusarTodas(plano.recusas);
         let edicao = e.edicao;
         if (edicao !== null) {
@@ -349,13 +414,19 @@ export class PortaVinculoReferenciaPropria implements PortaVinculoReferencia {
     );
   }
 
-  encerrar(c: ContextoPortaM18, insumo: number, vinculo: number, fim: string): Promise<{ id: number }> {
-    return this.gravar(c, 'encerrarVinculoReferenciaPreco', { insumo, vinculo, fim }, async (tx) => {
+  encerrar(
+    c: ContextoPortaM18,
+    insumo: number,
+    vinculo: number,
+    fim: string,
+    chave: string,
+  ): Promise<{ id: number }> {
+    return this.gravar(c, 'encerrarVinculoReferenciaPreco', chave, { insumo, vinculo, fim }, async (tx) => {
       const linha = await this.linhaDoTempo(tx, insumo);
       const v = linha.find((x) => x.id === vinculo) as
         (VinculoReferenciaPrecoVigencia & { versao: number }) | undefined;
       if (!v) throw recusa('vinculo-inexistente', 'O vínculo não é deste item.', { campos: ['vinculo'] });
-      recusarTodas(conferirEncerramentoVinculoReferencia(v, fim));
+      recusarTodas(conferirEncerramentoVinculoReferencia(v, fim, await hojeDo(tx)));
       await tx.alterar('insumo_referencia_preco', v.id, v.versao, { vigencia_fim: fim });
       return v.id;
     });

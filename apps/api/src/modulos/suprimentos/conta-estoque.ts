@@ -19,6 +19,7 @@ import {
   type BasePrecoReferencia,
 } from '@sgh/contratos/regras-faturamento';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
+import { vinculoReferenciaDaConta } from './vinculo-referencia-preco.js';
 
 /** As tabelas que o lançamento na conta grava (somar às da operação que movimenta o estoque). */
 export const TABELAS_CONTA_ESTOQUE = [
@@ -77,7 +78,7 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
   const contaAberta = async (atendimento: number): Promise<Linha | null> => {
     const [c] = await tx.consultarParaAtualizar<Linha>(
       `SELECT c.id, c.versao, c.situacao, c.calculada, c.fonte_pagadora_id, c.plano_fonte_pagadora_id, c.tipo_conta_id,
-              c.tabela_preco_id, tp.preco_referencia
+              c.tabela_preco_id, tp.preco_referencia, tp.referencia AS tabela_referencia
          FROM conta_hospitalar c LEFT JOIN tabela_preco tp ON tp.id = c.tabela_preco_id
         WHERE c.atendimento_id = ? AND c.estabelecimento_id = ? AND c.excluido_em IS NULL
           AND c.situacao IN (${SITUACOES_CONTA_LANCAVEL.map(() => '?').join(', ')})
@@ -107,16 +108,14 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
     const fat = await itemFaturavelDo(s.insumo);
     if (!fat) return null;
     const data = s.dataBase.slice(0, 10);
-    // A referência de mercado: a do item faturável, senão o vínculo vigente do insumo (com o fator de conversão).
-    const vinculo = await tx.uma<Linha>(
-      `SELECT item_referencia_matmed_id, fator_conversao FROM insumo_referencia_preco
-        WHERE insumo_id = ? AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
-        ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
-      [s.insumo, data, data],
-    );
-    const refId = idOuNulo(fat['item_referencia_matmed_id']) ?? idOuNulo(vinculo?.['item_referencia_matmed_id']);
-    const fatorConversao =
-      vinculo && idOuNulo(vinculo['item_referencia_matmed_id']) === refId ? numOuNulo(vinculo['fator_conversao']) : null;
+    // A referência de mercado: o vínculo vigente do insumo (um por publicação; o da referência do item faturável, senão o
+    // da publicação da tabela de preço da conta), com o fator; a referência do item faturável só sem vínculo vigente.
+    const vinculo = await vinculoReferenciaDaConta(tx, s.insumo, data, {
+      referenciaDoFaturavel: idOuNulo(fat['item_referencia_matmed_id']),
+      fonteDaTabela: conta['tabela_referencia'] == null ? null : String(conta['tabela_referencia']),
+    });
+    const refId = vinculo?.referencia ?? idOuNulo(fat['item_referencia_matmed_id']);
+    const fatorConversao = vinculo?.fator ?? null;
     const negociados = await tx.consultar<Linha>(
       `SELECT id, plano_fonte_pagadora_id, contrato_fonte_pagadora_id, tipo_conta_id, tabela_preco_id, unidade_medida_id,
               vigencia_inicio, vigencia_fim, valor_unitario, percentual_ajuste, quantidade_fixa

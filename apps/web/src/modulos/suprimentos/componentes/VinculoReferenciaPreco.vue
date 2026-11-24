@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// Vínculo do item com a referência de preço (F3.6, 05-SUP linha 28), na própria ficha do item: o vigente em destaque,
-// a busca com o fator sugerido pela unidade e a edição vigente já escolhida (um clique em "Escolher" e outro em
-// "Vincular"), a conferência na hora pela mesma regra do servidor (fator, início depois do último, nada a mudar) e o
-// histórico completo, que nunca some. Quem não pode editar o item recebe a recusa do servidor.
+// Vínculo do item com a referência de preço (F3.6, 05-SUP linha 28), na própria ficha do item: os vigentes em
+// destaque, um por publicação (cada um com o seu encerramento), a busca com o fator sugerido pela unidade e a edição
+// vigente já escolhida (um clique em "Escolher" e outro em "Vincular"), a conferência na hora pela mesma regra do
+// servidor (fator, nada antes de hoje nem do último da publicação, nada a mudar) e o histórico completo, que nunca some.
+// Cada pedido guarda a sua Idempotency-Key até o sucesso: o reenvio depois de uma resposta perdida não grava de novo.
+// Quem não pode editar o item recebe a recusa do servidor.
 import {
   planejarVinculoReferenciaPreco,
   type VinculoReferenciaPrecoVigencia,
@@ -10,6 +12,7 @@ import {
 import { computed, ref, watch } from 'vue';
 import {
   buscarReferenciaPreco,
+  chaveVinculoReferencia,
   encerrarVinculoReferencia,
   type FichaVinculoReferencia,
   lerVinculoReferencia,
@@ -31,6 +34,9 @@ const fator = ref<number | null>(null);
 const inicio = ref('');
 const fim = ref('');
 const gravando = ref(false);
+/** A chave do pedido em curso (guardada até o sucesso; nova a cada escolha ou vínculo encerrado). */
+let chaveVincular = chaveVinculoReferencia();
+const chavesEncerrar = new Map<number, string>();
 
 async function carregar(): Promise<void> {
   erro.value = null;
@@ -60,6 +66,7 @@ watch(termo, (v) => {
 
 function escolher(o: OpcaoReferencia): void {
   escolhida.value = o;
+  chaveVincular = chaveVinculoReferencia();
   fator.value = o.fatorSugerido;
   opcoes.value = null;
   termo.value = '';
@@ -69,6 +76,7 @@ const linhaDoTempo = computed<VinculoReferenciaPrecoVigencia[]>(() =>
   (ficha.value?.historico ?? []).map((v) => ({
     id: v.id,
     referencia: v.referencia.id,
+    fonte: v.referencia.fonte,
     fator: v.fator,
     inicio: v.inicio,
     fim: v.fim,
@@ -85,6 +93,7 @@ const recusas = computed(() =>
           inicio: inicio.value,
         },
         linhaDoTempo.value,
+        { fonte: escolhida.value.fonte, hoje: ficha.value?.hoje ?? '' },
       ).recusas
     : [],
 );
@@ -95,12 +104,17 @@ async function vincular(): Promise<void> {
   erro.value = null;
   aviso.value = '';
   try {
-    await vincularReferenciaPreco(props.item, {
-      referencia: escolhida.value.id,
-      edicao: escolhida.value.edicaoVigente?.id ?? null,
-      fator: Number(fator.value),
-      inicio: inicio.value,
-    });
+    await vincularReferenciaPreco(
+      props.item,
+      {
+        referencia: escolhida.value.id,
+        edicao: escolhida.value.edicaoVigente?.id ?? null,
+        fator: Number(fator.value),
+        inicio: inicio.value,
+      },
+      chaveVincular,
+    );
+    chaveVincular = chaveVinculoReferencia();
     escolhida.value = null;
     fator.value = null;
     await carregar();
@@ -112,14 +126,16 @@ async function vincular(): Promise<void> {
   }
 }
 
-async function encerrar(): Promise<void> {
-  const v = ficha.value?.historico.find((x) => x.fim === null);
-  if (!v || gravando.value) return;
+async function encerrar(v: FichaVinculoReferencia['historico'][number]): Promise<void> {
+  if (gravando.value) return;
   gravando.value = true;
   erro.value = null;
   aviso.value = '';
   try {
-    await encerrarVinculoReferencia(props.item, v.id, fim.value);
+    const chave = chavesEncerrar.get(v.id) ?? chaveVinculoReferencia();
+    chavesEncerrar.set(v.id, chave);
+    await encerrarVinculoReferencia(props.item, v.id, fim.value, chave);
+    chavesEncerrar.delete(v.id);
     await carregar();
     aviso.value = M.encerrado;
   } catch (e) {
@@ -129,7 +145,7 @@ async function encerrar(): Promise<void> {
   }
 }
 
-const aberto = computed(() => ficha.value?.historico.find((x) => x.fim === null) ?? null);
+const abertos = computed(() => ficha.value?.historico.filter((x) => x.fim === null) ?? []);
 const descricao = (r: OpcaoReferencia | FichaVinculoReferencia['historico'][number]['referencia']) =>
   `${r.fonte} ${r.codigo} · ${r.descricao}${r.apresentacao ? ` (${r.apresentacao})` : ''}${r.unidade ? ` · ${r.unidade}` : ''}`;
 </script>
@@ -141,14 +157,21 @@ const descricao = (r: OpcaoReferencia | FichaVinculoReferencia['historico'][numb
     <ErroSuprimentos v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status" data-testid="vinculo-referencia-ok">{{ aviso }}</p>
     <template v-if="ficha">
-      <p data-testid="vinculo-referencia-vigente">
+      <div data-testid="vinculo-referencia-vigente">
         <strong>{{ M.vigente }}:</strong>
-        <template v-if="ficha.vigente">
-          {{ descricao(ficha.vigente.referencia) }} · {{ M.fator }} {{ ficha.vigente.fator }}
-          <template v-if="ficha.vigente.edicao"> · {{ M.edicao }} {{ ficha.vigente.edicao.numero }}</template>
-        </template>
-        <template v-else>{{ M.nenhum }}</template>
-      </p>
+        <ul v-if="ficha.vigentes.length">
+          <li
+            v-for="v in ficha.vigentes"
+            :key="v.id"
+            :data-testid="`vinculo-referencia-vigente-${v.referencia.fonte}`"
+          >
+            {{ M.publicacao }} {{ v.referencia.fonte }}: {{ descricao(v.referencia) }} · {{ M.fator }}
+            {{ v.fator }}
+            <template v-if="v.edicao"> · {{ M.edicao }} {{ v.edicao.numero }}</template>
+          </li>
+        </ul>
+        <p v-else>{{ M.nenhum }}</p>
+      </div>
 
       <fieldset>
         <label class="campo"
@@ -189,7 +212,8 @@ const descricao = (r: OpcaoReferencia | FichaVinculoReferencia['historico'][numb
             M.fatorSugerido.replace('{f}', String(escolhida.fatorSugerido))
           }}</small>
           <label class="campo"
-            >{{ M.inicio }} <input v-model="inicio" type="date" data-testid="vinculo-referencia-inicio"
+            >{{ M.inicio }}
+            <input v-model="inicio" type="date" :min="ficha.hoje" data-testid="vinculo-referencia-inicio"
           /></label>
           <small
             v-for="r in recusas"
@@ -210,18 +234,21 @@ const descricao = (r: OpcaoReferencia | FichaVinculoReferencia['historico'][numb
         </template>
       </fieldset>
 
-      <fieldset v-if="aberto">
+      <fieldset v-if="abertos.length">
         <label class="campo"
-          >{{ M.encerrar }} <input v-model="fim" type="date" data-testid="vinculo-referencia-fim"
+          >{{ M.encerrar }}
+          <input v-model="fim" type="date" :min="ficha.hoje" data-testid="vinculo-referencia-fim"
         /></label>
         <button
+          v-for="v in abertos"
+          :key="v.id"
           type="button"
           class="botao"
           :disabled="gravando"
-          data-testid="vinculo-referencia-encerrar"
-          @click="encerrar"
+          :data-testid="`vinculo-referencia-encerrar-${v.id}`"
+          @click="encerrar(v)"
         >
-          {{ M.encerrarBotao }}
+          {{ M.encerrarBotao }} · {{ v.referencia.fonte }} {{ v.referencia.codigo }}
         </button>
       </fieldset>
 

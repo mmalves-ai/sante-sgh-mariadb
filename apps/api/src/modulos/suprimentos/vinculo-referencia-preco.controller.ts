@@ -4,6 +4,7 @@
 //   POST /api/suprimentos/cadastro/itens/:id/referencias-preco                  vincular (fecha o anterior na véspera)
 //   POST /api/suprimentos/cadastro/itens/:id/referencias-preco/:v/encerrar      encerrar o vigente numa data
 // Quem pode: ler o item (consulta) e editar o item (gravação). Tudo ligado para todos; só o cargo controla.
+// As gravações exigem a Idempotency-Key: a repetição do mesmo pedido devolve o resultado da primeira, sem gravar de novo.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -28,6 +29,21 @@ const esquemaVincular = z
   })
   .strict();
 const esquemaEncerrar = z.object({ fim: data }).strict();
+const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
+
+/** A Idempotency-Key do pedido (obrigatória nas gravações). */
+function chaveDe(req: RequisicaoAutorizada): string {
+  const bruto = req.headers['idempotency-key'];
+  const k = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (typeof k !== 'string' || !CHAVE.test(k))
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Pedido incompleto',
+      'A Idempotency-Key do pedido falta ou é inválida.',
+    );
+  return k;
+}
 
 @Controller('suprimentos/cadastro/itens/:id/referencias-preco')
 export class VinculoReferenciaPrecoController {
@@ -57,7 +73,12 @@ export class VinculoReferenciaPrecoController {
   @AuditadoNoHandler('suprimentos.cadastro.vincularReferenciaPreco pelo executor (trilha na mesma transação)')
   vincular(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaVincular, b);
-    return this.porta.vincular(sessaoDe(req).porta, idDaRota(id), { ...e, edicao: e.edicao ?? null });
+    return this.porta.vincular(
+      sessaoDe(req).porta,
+      idDaRota(id),
+      { ...e, edicao: e.edicao ?? null },
+      chaveDe(req),
+    );
   }
 
   @Post(':vinculo/encerrar')
@@ -72,6 +93,12 @@ export class VinculoReferenciaPrecoController {
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
   ) {
-    return this.porta.encerrar(sessaoDe(req).porta, idDaRota(id), idDaRota(v), corpo(esquemaEncerrar, b).fim);
+    return this.porta.encerrar(
+      sessaoDe(req).porta,
+      idDaRota(id),
+      idDaRota(v),
+      corpo(esquemaEncerrar, b).fim,
+      chaveDe(req),
+    );
   }
 }

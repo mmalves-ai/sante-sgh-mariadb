@@ -2,8 +2,9 @@
 export const mensagensVinculoReferencia = {
   titulo: 'Referência de preço (material e medicamento)',
   texto:
-    'A conta usa a referência vigente na data do lançamento, convertida pelo fator. Trocar a referência fecha a anterior na véspera; o histórico fica.',
-  vigente: 'Vigente',
+    'O item pode estar ligado a uma referência de cada publicação ao mesmo tempo. A conta usa a vigente na data do lançamento: a da referência do item faturável, senão a da publicação da tabela de preço da operadora, convertida pelo fator. Trocar a referência numa publicação fecha a anterior dela na véspera; o histórico fica. Nada começa nem termina antes de hoje.',
+  vigente: 'Vigentes hoje',
+  publicacao: 'Publicação',
   nenhum: 'Sem referência vigente: a conta usa só a referência do item faturável, quando houver.',
   buscar: 'Buscar a referência (código, código de barras, TUSS ou descrição)',
   semResultado: 'Nenhuma referência ativa encontrada.',
@@ -16,7 +17,6 @@ export const mensagensVinculoReferencia = {
   fatorSugerido: 'Sugerido pela unidade: {f}',
   fatorInvalido: 'O fator precisa ser maior que zero, com até 8 casas.',
   inicio: 'Vale a partir de',
-  inicioRetroativo: 'O início precisa ser depois de {d}, o início do último vínculo.',
   mesmo: 'Esta já é a referência vigente com o mesmo fator.',
   vincular: 'Vincular',
   vinculado: 'Vínculo gravado.',

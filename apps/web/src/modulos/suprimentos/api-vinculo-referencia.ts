@@ -1,5 +1,5 @@
 // Cliente do vínculo do item com a referência de preço de material e medicamento (F3.6, 05-SUP linha 28), na ficha
-// do item: o vigente e o histórico, a busca da referência (com o fator sugerido pela unidade), vincular e encerrar.
+// do item: os vigentes (um por publicação) e o histórico, a busca da referência (com o fator sugerido pela unidade), vincular e encerrar.
 import { z } from 'zod';
 import { enviar, ler, novaChave } from '../exames/api-exames.js';
 
@@ -28,7 +28,7 @@ const vinculo = z.object({
 export const esquemaFichaVinculoReferencia = z.object({
   hoje: z.string(),
   item: z.object({ id: z.number(), codigo: z.string(), nome: z.string(), unidade: z.string().nullable() }),
-  vigente: vinculo.nullable(),
+  vigentes: z.array(vinculo),
   historico: z.array(vinculo),
 });
 export const esquemaOpcaoReferencia = referencia.extend({
@@ -45,9 +45,12 @@ export const lerVinculoReferencia = (item: number): Promise<FichaVinculoReferenc
   ler(P(item), esquemaFichaVinculoReferencia);
 export const buscarReferenciaPreco = (item: number, termo: string): Promise<OpcaoReferencia[]> =>
   ler(`${P(item)}/buscar?termo=${encodeURIComponent(termo)}`, z.array(esquemaOpcaoReferencia));
+/** A chave de um pedido: a tela a guarda até o sucesso, para que o reenvio (resposta perdida) não grave de novo. */
+export const chaveVinculoReferencia = (): string => novaChave('vinculo-referencia');
 export const vincularReferenciaPreco = (
   item: number,
   e: { referencia: number; edicao: number | null; fator: number; inicio: string },
-) => enviar(P(item), e, comId, novaChave('vinculo-referencia'));
-export const encerrarVinculoReferencia = (item: number, vinculo: number, fim: string) =>
-  enviar(`${P(item)}/${vinculo}/encerrar`, { fim }, comId, novaChave('vinculo-referencia-fim'));
+  chave: string,
+) => enviar(P(item), e, comId, chave);
+export const encerrarVinculoReferencia = (item: number, vinculo: number, fim: string, chave: string) =>
+  enviar(`${P(item)}/${vinculo}/encerrar`, { fim }, comId, chave);
