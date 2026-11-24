@@ -12,10 +12,16 @@
 //   leva o tipo da revisão da comissão (semente `revisao_comissao`), o atendimento e o paciente da revisão, o médico
 //   responsável, a descrição, o prazo (fim do dia) e quem apontou; a reaberta volta a 'aberta' sem a resolução; a do
 //   item que deixou de ser não conforme vai a 'cancelada' com o motivo em `resolucao` (convenção do Q3 e do Q5).
+// - O item do checklist é casado pelo código efetivo (o próprio ou `item<sequência>` quando o item não tem código), o
+//   mesmo da leitura que monta a tela e do controlador; o peso e o "aceita não se aplica" do item vão ao plano.
 // - Correção (revisão já gravada): exige a justificativa; a revisão, os itens e as pendências como estavam vão à
 //   trilha (dados.versaoAnterior, lida pelas versões do registro).
 import { esquemaRespostaItemRevisao, type RespostaItemRevisao } from '@sgh/contratos';
-import { motivoCancelamentoPorCorrecao, planoRevisaoProntuario } from '@sgh/dominio-qualidade';
+import {
+  codigoItemChecklist,
+  motivoCancelamentoPorCorrecao,
+  planoRevisaoProntuario,
+} from '@sgh/dominio-qualidade';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { AnotacaoGravacao } from '../enfermagem/gravacao-direta.js';
@@ -96,12 +102,14 @@ async function revisarProntuario(
     throw recusa('resposta-invalida', 'As respostas da revisão não vieram no formato do contrato.');
   const respostas = lidas.data;
   const itensChecklist = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, sequencia, codigo FROM modelo_checklist_qualidade_item
+    `SELECT id, sequencia, codigo, peso, aceita_nao_aplicavel FROM modelo_checklist_qualidade_item
       WHERE modelo_checklist_qualidade_versao_id = ? ORDER BY sequencia`,
     [antes['modelo_checklist_qualidade_versao_id']],
     { teto: 500 },
   );
-  const doChecklist = new Map(itensChecklist.map((i) => [texto(i['codigo']), i]));
+  const codigoDe = (i: Linha): string =>
+    codigoItemChecklist(i['codigo'] === null ? null : texto(i['codigo']), n(i['sequencia']));
+  const doChecklist = new Map(itensChecklist.map((i) => [codigoDe(i), i]));
   const vistos = new Set(respostas.map((x) => x.item));
   if (respostas.some((x) => !doChecklist.has(x.item)))
     throw recusa('item-fora-do-checklist', 'Há resposta a item que não é do checklist desta revisão.');
@@ -110,7 +118,7 @@ async function revisarProntuario(
 
   // Os itens já gravados e as pendências deles, travados.
   const itensAntes = await tx.consultarParaAtualizar<Linha>(
-    `SELECT ri.*, mi.codigo AS item_codigo FROM revisao_prontuario_item ri
+    `SELECT ri.*, mi.codigo AS item_codigo, mi.sequencia AS item_sequencia FROM revisao_prontuario_item ri
        JOIN modelo_checklist_qualidade_item mi ON mi.id = ri.modelo_checklist_qualidade_item_id
       WHERE ri.revisao_prontuario_id = ? AND ri.excluido_em IS NULL`,
     [r.id],
@@ -130,21 +138,32 @@ async function revisarProntuario(
           { teto: idsPend.length },
         );
   const pendPorId = new Map(pendAntes.map((p) => [n(p['id']), p]));
-  const itemPorCodigo = new Map(itensAntes.map((i) => [texto(i['item_codigo']), i]));
+  const codigoAntes = (i: Linha): string =>
+    codigoItemChecklist(i['item_codigo'] === null ? null : texto(i['item_codigo']), n(i['item_sequencia']));
+  const itemPorCodigo = new Map(itensAntes.map((i) => [codigoAntes(i), i]));
   const existentes = itensAntes.flatMap((i) => {
     const p =
       i['pendencia_prontuario_id'] === null ? undefined : pendPorId.get(n(i['pendencia_prontuario_id']));
-    return p
-      ? [{ id: n(p['id']), item: texto(i['item_codigo']), situacao: situacaoPlano(texto(p['situacao'])) }]
-      : [];
+    return p ? [{ id: n(p['id']), item: codigoAntes(i), situacao: situacaoPlano(texto(p['situacao'])) }] : [];
   });
 
   const responsavel = r.profissional.registro;
-  const plano = planoRevisaoProntuario(respostas, existentes, responsavel !== null);
+  const plano = planoRevisaoProntuario(
+    respostas,
+    existentes,
+    responsavel !== null,
+    itensChecklist.map((i) => ({
+      codigo: codigoDe(i),
+      peso: Number(i['peso'] ?? 1),
+      aceitaNaoAplicavel: Boolean(n(i['aceita_nao_aplicavel'] ?? 1)),
+    })),
+  );
   if (!plano.ok)
     throw recusa(
       plano.motivo,
-      'A internação não tem médico assistente: a pendência do item não conforme não teria a quem ser cobrada.',
+      plano.motivo === 'nao-aplicavel-nao-aceito'
+        ? 'Há item respondido como "não se aplica" que o checklist não aceita assim.'
+        : 'A internação não tem médico assistente: a pendência do item não conforme não teria a quem ser cobrada.',
     );
   const p = plano.plano;
   if (p.resultado !== r.situacao)

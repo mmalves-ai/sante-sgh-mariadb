@@ -1,16 +1,21 @@
 // Contrato de efeito de qualidade.revisarProntuario (F3.9-Q4) contra o MariaDB do cliente de teste do lote
 // (SGH_CLIENTE_TESTE). Só dados sintéticos, nos estabelecimentos da massa 'RP': uma comissão com o checklist de três
 // itens, um sorteio ativo com dois prontuários (um com médico responsável e outro sem) e um sorteio cancelado.
-// Prova, pelo gravador real dentro da gravação direta: a primeira revisão grava os itens, o resultado, o percentual e
+// Prova, pelo gravador real da porta própria completa da gestão (PortaGestaoPropriaCompleta.gravarSgh, com as versões
+// anteriores e as tabelas dela; o tipo de pendência vem da migração 18_QUA/93_pendencia_revisao_comissao, não do
+// preparo): a primeira revisão grava os itens, o resultado, o percentual e
 // a pendência ao médico (tipo da semente, prazo, quem apontou); a correção exige a justificativa, altera os itens sem
 // apagar, cancela a pendência do item que ficou conforme, cria a do novo não conforme e põe a versão anterior (com os
 // itens e as pendências) na trilha; a pendência cancelada reabre quando o item volta a não conforme; e as recusas sem
-// gravar (versão, sorteio cancelado, resposta incompleta, item fora do checklist, sem médico responsável).
+// gravar (versão, sorteio cancelado, resposta incompleta, item fora do checklist, sem médico responsável, revisão de
+// outro estabelecimento). Num segundo checklist com itens sem código (casados por `item<sequência>`, como a tela), com
+// peso e item que não aceita "não se aplica": o percentual ponderado, a recusa do "não se aplica" e a pendência
+// resolvida pelo médico que reabre quando a correção mantém o item não conforme.
 import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroOperacao } from '@sgh/nucleo';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
-import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
+import { PortaGestaoPropriaCompleta } from './gestao-porta-propria-completa.js';
 import type { GravadorGestao } from './porta-gestao.js';
 import {
   CLIENTE_QUA,
@@ -22,11 +27,7 @@ import {
 } from './massa.spec-util.js';
 import { LeiturasGestaoComplementoD } from './porta-propria-complemento-d.js';
 import { LeiturasRevisaoComplementoQ3 } from './porta-propria-complemento-q3.js';
-import {
-  gravacaoRevisarProntuario,
-  TABELAS_REVISAR_PRONTUARIO,
-  TIPO_PENDENCIA_REVISAO,
-} from './porta-propria-revisar-prontuario.js';
+import { TIPO_PENDENCIA_REVISAO } from './porta-propria-revisar-prontuario.js';
 import type { RevisaoNova } from './tipos.js';
 
 const T: TrilhaDaGravacao = {
@@ -55,16 +56,9 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
   let m: MassaQualidade;
   let c: ReturnType<typeof ctxBanco>;
   let ids: Record<string, number> = {};
+  let porta: PortaGestaoPropriaCompleta;
 
-  const gravar = <R>(fn: (g: GravadorGestao) => Promise<R>) =>
-    gravacaoDireta(m.nucleo.criarExecutor(), c, {
-      nome: 'qualidade.gestao',
-      tabelas: TABELAS_REVISAR_PRONTUARIO,
-      trilha: T,
-      gravador: (tx, est, anotacao = { motivo: null, dados: null }) =>
-        gravacaoRevisarProntuario(tx, est, anotacao) as unknown as GravadorGestao,
-      fn,
-    });
+  const gravar = <R>(fn: (g: GravadorGestao) => Promise<R>) => porta.gravarSgh(c, T, fn);
   const linhas = (sql: string, p: unknown[]) =>
     m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'conferencia-revisar' }, (e) =>
       e.consultarParaAtualizar<Record<string, unknown>>(sql, p, { teto: 100 }),
@@ -107,6 +101,7 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
 
   beforeAll(async () => {
     m = await prepararMassaQualidade('RP');
+    porta = new PortaGestaoPropriaCompleta(m.nucleo);
     c = ctxBanco(m.est, m.codigoEst, m.usuario);
     await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-revisar-prontuario' }, async (e) => {
       const hoje = new Date('2026-11-01T10:00:00');
@@ -117,14 +112,6 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         ['sintrp_rev'],
         "INSERT INTO tipo_comissao (codigo, descricao, criado_em) VALUES ('sintrp_rev', 'Revisão sintética', ?)",
         [hoje],
-      );
-      // O tipo de pendência da semente da qualidade (a carga das sementes o inclui; o teste garante o mesmo código).
-      await garantir(
-        'SELECT id FROM tipo_pendencia_prontuario WHERE codigo = ?',
-        [TIPO_PENDENCIA_REVISAO],
-        `INSERT INTO tipo_pendencia_prontuario (codigo, descricao, categoria, responsavel, resolucao_manual, criado_em)
-         VALUES (?, 'Item não conforme na revisão do prontuário pela comissão', 'documento', 'medico', TRUE, ?)`,
-        [TIPO_PENDENCIA_REVISAO, hoje],
       );
       const comissao = await e.inserir(
         'INSERT INTO comissao_hospitalar (estabelecimento_id, tipo_comissao_id, nome, criado_em) VALUES (?, ?, ?, ?)',
@@ -169,6 +156,7 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         );
       const at1 = await atendimento('1');
       const at2 = await atendimento('2');
+      const at3 = await atendimento('3');
       const modelo = await e.inserir(
         `INSERT INTO modelo_checklist_qualidade (codigo, nome, finalidade, comissao_hospitalar_id, situacao, criado_em)
          VALUES (?, 'Checklist sintético RP', 'revisao_prontuario', ?, 'publicado', ?)`,
@@ -190,6 +178,29 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
            VALUES (?, ?, ?, ?, ?)`,
           [checklist, seq, cod, `Item sintético ${cod}`, hoje],
         );
+      // Segundo checklist: itens sem código (a tela os mostra como item1 e item2), o primeiro com peso 3 e sem aceitar
+      // "não se aplica"; o segundo com o peso padrão.
+      const modelo2 = await e.inserir(
+        `INSERT INTO modelo_checklist_qualidade (codigo, nome, finalidade, comissao_hospitalar_id, situacao, criado_em)
+         VALUES (?, 'Checklist sintético RP sem código', 'revisao_prontuario', ?, 'publicado', ?)`,
+        [`SRQ${NUM}`, comissao, hoje],
+      );
+      const checklist2 = await e.inserir(
+        `INSERT INTO modelo_checklist_qualidade_versao (modelo_checklist_qualidade_id, operacao, ocorrido_em, numero_versao,
+         situacao, vigencia_inicio, motivo_publicacao, publicado_em, publicador_usuario_id, criado_em)
+         VALUES (?, 'inclusao', ?, 1, 'vigente', '2026-01-01', 'Publicação sintética', ?, ?, ?)`,
+        [modelo2, hoje, hoje, m.usuario, hoje],
+      );
+      await e.inserir(
+        `INSERT INTO modelo_checklist_qualidade_item (modelo_checklist_qualidade_versao_id, sequencia, codigo, enunciado,
+         peso, aceita_nao_aplicavel, criado_em) VALUES (?, 1, NULL, 'Item sintético crítico', 3, FALSE, ?)`,
+        [checklist2, hoje],
+      );
+      await e.inserir(
+        `INSERT INTO modelo_checklist_qualidade_item (modelo_checklist_qualidade_versao_id, sequencia, codigo, enunciado,
+         criado_em) VALUES (?, 2, NULL, 'Item sintético simples', ?)`,
+        [checklist2, hoje],
+      );
       const sorteio = (competencia: string, cancelado: boolean) =>
         e.inserir(
           `INSERT INTO sorteio_revisao_prontuario (estabelecimento_id, comissao_hospitalar_id, competencia,
@@ -210,12 +221,12 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         );
       const ativo = await sorteio('2026-10-01', false);
       const cancelado = await sorteio('2026-09-01', true);
-      const rev = (s: number, at: number) =>
+      const rev = (s: number, at: number, ck = checklist, est = m.est) =>
         e.inserir(
           `INSERT INTO revisao_prontuario (estabelecimento_id, comissao_hospitalar_id, sorteio_revisao_prontuario_id,
            paciente_id, atendimento_id, modelo_checklist_qualidade_versao_id, revisor_usuario_id, situacao, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'em_andamento', ?)`,
-          [m.est, comissao, s, paciente, at, checklist, m.usuario, hoje],
+          [est, comissao, s, paciente, at, ck, m.usuario, hoje],
         );
       ids = {
         comissao,
@@ -224,12 +235,17 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         paciente,
         at1,
         at2,
+        at3,
         modelo,
         checklist,
+        modelo2,
+        checklist2,
         ativo,
         p1: await rev(ativo, at1),
         p2: await rev(ativo, at2),
         pCancelado: await rev(cancelado, at1),
+        p3: await rev(ativo, at3, checklist2),
+        pOutro: await rev(ativo, at2, checklist, m.outro),
       };
     });
   });
@@ -243,21 +259,27 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
             'DELETE ri FROM revisao_prontuario_item ri JOIN revisao_prontuario r ON r.id = ri.revisao_prontuario_id WHERE r.comissao_hospitalar_id = ?',
             [ids['comissao']],
           );
-          await run('DELETE FROM pendencia_prontuario WHERE atendimento_id IN (?, ?)', [
+          await run('DELETE FROM pendencia_prontuario WHERE atendimento_id IN (?, ?, ?)', [
             ids['at1'],
             ids['at2'],
+            ids['at3'],
           ]);
           await run('DELETE FROM revisao_prontuario WHERE comissao_hospitalar_id = ?', [ids['comissao']]);
           await run('DELETE FROM sorteio_revisao_prontuario WHERE comissao_hospitalar_id = ?', [
             ids['comissao'],
           ]);
-          await run(
-            'DELETE FROM modelo_checklist_qualidade_item WHERE modelo_checklist_qualidade_versao_id = ?',
-            [ids['checklist']],
-          );
-          await run('DELETE FROM modelo_checklist_qualidade_versao WHERE id = ?', [ids['checklist']]);
-          await run('DELETE FROM modelo_checklist_qualidade WHERE id = ?', [ids['modelo']]);
-          await run('DELETE FROM atendimento WHERE id IN (?, ?)', [ids['at1'], ids['at2']]);
+          for (const [ck, mo] of [
+            [ids['checklist'], ids['modelo']],
+            [ids['checklist2'], ids['modelo2']],
+          ]) {
+            await run(
+              'DELETE FROM modelo_checklist_qualidade_item WHERE modelo_checklist_qualidade_versao_id = ?',
+              [ck],
+            );
+            await run('DELETE FROM modelo_checklist_qualidade_versao WHERE id = ?', [ck]);
+            await run('DELETE FROM modelo_checklist_qualidade WHERE id = ?', [mo]);
+          }
+          await run('DELETE FROM atendimento WHERE id IN (?, ?, ?)', [ids['at1'], ids['at2'], ids['at3']]);
           await run('DELETE FROM paciente WHERE id = ?', [ids['paciente']]);
           await run('DELETE FROM comissao_hospitalar WHERE id = ?', [ids['comissao']]);
           await run('DELETE FROM profissional WHERE id = ?', [ids['prof']]);
@@ -310,6 +332,16 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
     expect(await codigoDe(revisao(ids['p1']!, 1, tudo, { situacao: 'naoConforme' }))).toMatch(
       /:resultado-divergente$/,
     );
+    // A revisão de outro estabelecimento, pedida a partir deste, não é achada: recusa sem gravar.
+    expect(await codigoDe(revisao(ids['pOutro']!, 1, { ...tudo, assinatura: 'naoConforme' }))).toBe(
+      '409:versao-desatualizada',
+    );
+    expect(await itens(ids['pOutro']!)).toEqual([]);
+    expect(await cabeca(ids['pOutro']!)).toMatchObject({
+      situacao: 'em_andamento',
+      resultado: null,
+      versao: 1,
+    });
     // Nada gravado.
     expect(await itens(ids['p1']!)).toEqual([]);
     expect(await pendencias(ids['at2']!)).toEqual([]);
@@ -462,5 +494,59 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
       geradas: 0,
     });
     expect(await pendencias(ids['at2']!)).toEqual([]);
+  });
+
+  it('checklist com itens sem código: casa por item<sequência>, pondera o peso e recusa o "não se aplica" não aceito', async () => {
+    expect(await codigoDe(revisao(ids['p3']!, 1, { item1: 'naoAplicavel', item2: 'conforme' }))).toMatch(
+      /:nao-aplicavel-nao-aceito$/,
+    );
+    expect(await itens(ids['p3']!)).toEqual([]);
+    // Crítico (peso 3) conforme e simples (peso 1) não conforme: 3 ÷ 4 = 75%.
+    expect(await revisao(ids['p3']!, 1, { item1: 'conforme', item2: 'naoConforme' })).toEqual({ versao: 2 });
+    expect(await cabeca(ids['p3']!)).toMatchObject({
+      resultado: 'nao_conforme',
+      percentual: '75.0000',
+      geradas: 1,
+    });
+    const pend = await pendencias(ids['at3']!);
+    expect(pend.map((p) => [p['descricao'], p['situacao']])).toEqual([
+      ['Item não conforme: item2.', 'aberta'],
+    ]);
+    expect((await itens(ids['p3']!)).map((x) => [x['item'], x['resultado'], x['pend']])).toEqual([
+      [null, 'conforme', null],
+      [null, 'nao_conforme', pend[0]!['id']],
+    ]);
+  });
+
+  it('a pendência resolvida pelo médico reabre quando a correção mantém o item não conforme', async () => {
+    const [p0] = await pendencias(ids['at3']!);
+    await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'resolver-pendencia-revisar' }, (e) =>
+      e.executar(
+        `UPDATE pendencia_prontuario SET situacao = 'resolvida', resolucao = 'Evolução complementada.',
+                resolvida_em = '2026-11-21 08:00:00', resolvida_por_usuario_id = ?, versao = versao + 1 WHERE id = ?`,
+        [m.usuario, p0!['id']],
+      ),
+    );
+    expect(
+      await revisao(
+        ids['p3']!,
+        2,
+        { item1: 'naoConforme', item2: 'naoConforme' },
+        { justificativa: 'Evolução complementada continua sem assinatura.' },
+      ),
+    ).toEqual({ versao: 3 });
+    const pend = await pendencias(ids['at3']!);
+    // A mesma pendência volta a aberta (sem a resolução); o item crítico ganha a sua.
+    expect(pend.map((p) => [p['descricao'], p['situacao'], p['resolucao']])).toEqual([
+      ['Item não conforme: item2.', 'aberta', null],
+      ['Item não conforme: item1.', 'aberta', null],
+    ]);
+    expect(await cabeca(ids['p3']!)).toMatchObject({ percentual: '0.0000', geradas: 2, versao: 3 });
+    // A resolução anterior fica na trilha, na versão anterior da revisão.
+    const vs = await new LeiturasGestaoComplementoD(m.nucleo).versoes(c, 'revisao_prontuario', ids['p3']!);
+    expect(vs[0]).toMatchObject({ versao: 2, acao: 'correcao' });
+    expect(
+      (vs[0]?.dados['pendencias'] as Record<string, unknown>[]).map((x) => [x['situacao'], x['resolucao']]),
+    ).toEqual([['resolvida', 'Evolução complementada.']]);
   });
 });
