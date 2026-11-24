@@ -100,7 +100,7 @@ describe('de-para contábil (linha 100)', () => {
     const { f, enviados } = api({ '/de-para': dePara, '/sem-de-para': [], '/fornecedores': FORNECEDORES });
     const w = montar(DeParaContabilPainel, { periodo: '2026-10', regua: 'competencia', podeEditar: true });
     await flushPromises();
-    expect(w.get('[data-testid="dp-completo"]').exists()).toBe(true);
+    expect(w.find('[data-testid="dp-completo"]').exists()).toBe(true);
     await digitar(w, 'dp-debito-fin_despesa_apropriada-geral', '4.1.1', 'change');
     expect(enviados.at(-1)?.corpo).toMatchObject({
       tipo: 'conta',
