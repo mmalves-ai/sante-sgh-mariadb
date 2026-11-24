@@ -123,6 +123,15 @@ const montar = () =>
 const chamadas = (f: ReturnType<typeof servidor>, chave: string) =>
   f.mock.calls.filter(([u, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${u}` === chave);
 
+/** Responde "Sim" no diálogo de confirmação do SanteBotao destrutivo ("Confirmar", último botão do rodapé). */
+async function confirmar() {
+  const bs = document.querySelectorAll<HTMLElement>('[data-testid="confirmacao"] button');
+  expect(bs.length).toBeGreaterThan(0);
+  bs[bs.length - 1]!.click();
+  await flushPromises();
+  await flushPromises();
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -301,7 +310,11 @@ describe('tela Carga e sincronismo', () => {
     await flushPromises();
     await w.find('[data-testid="carga-pausar"]').trigger('click');
     await flushPromises();
-    await flushPromises();
+    expect(chamadas(f, `POST ${B}/clientes/prontocardio/carga/pausar`)).toHaveLength(0);
+    expect(document.querySelector('[data-testid="confirmacao"]')?.textContent).toContain(
+      'Pausar a carga do cliente prontocardio?',
+    );
+    await confirmar();
     const [, init] = chamadas(f, `POST ${B}/clientes/prontocardio/carga/pausar`)[0] as unknown as [
       string,
       RequestInit,
@@ -359,6 +372,79 @@ describe('tela Carga e sincronismo', () => {
     await w.find('[data-testid="carga-testar"]').trigger('click');
     await flushPromises();
     expect(w.find('[data-testid="carga-teste"]').text()).toContain('3.824 tabelas');
+    w.unmount();
+  });
+
+  it('iniciar pede confirmação: o primeiro clique não faz o POST; o POST sai só depois de Confirmar', async () => {
+    const parada = () =>
+      cargaAtivaResp({
+        execucao: execucao({ estado: 'concluida', concluidoEm: '2026-11-24T11:00:00.000Z', percentual: 100 }),
+        acoes: { iniciar: true, pausar: false, retomar: false },
+      });
+    const f = servidor({
+      [`GET ${B}/conectores`]: () => conectores,
+      [`GET ${B}/clientes/prontocardio/carga`]: parada,
+      [`POST ${B}/clientes/prontocardio/carga`]: () => ({ execucao: 22 }),
+    });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    await w.find('[data-testid="carga-iniciar"]').trigger('click');
+    await flushPromises();
+    expect(chamadas(f, `POST ${B}/clientes/prontocardio/carga`)).toHaveLength(0);
+    expect(document.querySelector('[data-testid="confirmacao"]')?.textContent).toContain(
+      'Iniciar a carga completa do cliente prontocardio?',
+    );
+    await confirmar();
+    const posts = chamadas(f, `POST ${B}/clientes/prontocardio/carga`);
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(String((posts[0] as unknown as [string, RequestInit])[1].body))).toEqual({
+      modo: 'completa',
+    });
+    w.unmount();
+  });
+
+  it('leitura que falha com a carga ativa não para o acompanhamento; a seguinte volta e limpa o alerta', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let n = 0;
+    const f = servidor({
+      [`GET ${B}/conectores`]: () => conectores,
+      [`GET ${B}/clientes/prontocardio/carga`]: () => {
+        n++;
+        if (n === 2) throw new TypeError('falha de rede');
+        return cargaAtivaResp(
+          n >= 3 ? { progresso: { ...progresso, linhasProcessadas: 900, tabelaAtual: 'internacao' } } : {},
+        );
+      },
+    });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    vi.advanceTimersByTime(2000);
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-testid="carga-erro"]').exists()).toBe(true);
+    vi.advanceTimersByTime(2000);
+    await flushPromises();
+    await flushPromises();
+    expect(chamadas(f, `GET ${B}/clientes/prontocardio/carga`)).toHaveLength(3);
+    expect(w.find('[data-testid="carga-erro"]').exists()).toBe(false);
+    expect(w.find('[data-testid="carga-tabela-atual"]').text()).toContain('internacao');
+    w.unmount();
+  });
+
+  it('sessão que não é da plataforma (403) recebe o aviso claro, não o erro cru da API', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ title: 'Proibido', status: 403 }), { status: 403 })),
+    );
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-testid="carga-erro"]').text()).toContain(
+      'Esta tela é do administrador da plataforma',
+    );
+    expect(w.find('[data-testid="carga-erro"]').text()).not.toContain('Proibido');
     w.unmount();
   });
 });

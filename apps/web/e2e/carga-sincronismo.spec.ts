@@ -113,6 +113,7 @@ test.describe('Carga e sincronismo @PLATAFORMA', () => {
     );
     await semViolacaoAxe(page, 'carga-sincronismo');
     await page.getByTestId('carga-pausar').click();
+    await page.getByTestId('confirmacao').getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByTestId('carga-pausada')).toBeVisible();
     await expect(page.getByTestId('carga-retomar')).toBeEnabled();
   });

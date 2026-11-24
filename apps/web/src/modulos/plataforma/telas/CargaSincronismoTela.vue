@@ -14,6 +14,7 @@ import {
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
   cargaAtiva,
   gravarOrigemServidor,
@@ -33,6 +34,9 @@ const conectores = ref<ConectorCarga[] | null>(null);
 const selecionado = ref<string>('');
 const carga = ref<CargaCliente | null>(null);
 const erro = ref<string | null>(null);
+/** Falha da leitura periódica do andamento: some sozinha quando uma leitura volta a dar certo. */
+const erroLeitura = ref<string | null>(null);
+const alerta = computed(() => erro.value ?? erroLeitura.value);
 const aviso = ref<string | null>(null);
 const ocupado = ref(false);
 const modo = ref<ModoCarga>('completa');
@@ -42,7 +46,10 @@ const form = ref({ nomeExibicao: '', host: '', porta: 3050, banco: '', usuario: 
 let relogio: ReturnType<typeof setInterval> | null = null;
 let sequencia = 0;
 
-const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const statusDe = (e: unknown) => (e instanceof ErroApi ? e.status : 0);
+/** A API da carga só atende a sessão da plataforma: 401/403 vira o aviso claro, nunca o erro cru. */
+const mensagem = (e: unknown) =>
+  [401, 403].includes(statusDe(e)) ? t('carga.soPlataforma') : e instanceof Error ? e.message : String(e);
 const n = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR');
 
 const conector = computed(() => conectores.value?.find((c) => c.codigo === selecionado.value) ?? null);
@@ -103,6 +110,7 @@ async function acompanhar(codigo: string): Promise<void> {
       if (minha !== sequencia) return;
       const estavaAtiva = cargaAtiva(carga.value?.execucao?.estado);
       carga.value = c;
+      erroLeitura.value = null;
       if (!cargaAtiva(c.execucao?.estado)) {
         parar();
         if (estavaAtiva) await carregarConectores();
@@ -111,8 +119,11 @@ async function acompanhar(codigo: string): Promise<void> {
       }
     } catch (e) {
       if (minha !== sequencia) return;
-      erro.value = mensagem(e);
-      parar();
+      erroLeitura.value = mensagem(e);
+      // Falha passageira (rede, 502/503 num reinício da API): a carga segue no serviço, então a tela continua
+      // lendo enquanto a última execução conhecida estava ativa. Só para de vez sem acesso ou sem o cliente.
+      if ([401, 403, 404].includes(statusDe(e)) || !cargaAtiva(carga.value?.execucao?.estado)) parar();
+      else if (!relogio) relogio = setInterval(passo, 2000);
     }
   };
   await passo();
@@ -135,6 +146,7 @@ function preencherForm(c: ConectorCarga | null): void {
 watch(selecionado, async (cod) => {
   carga.value = null;
   aviso.value = null;
+  erroLeitura.value = null;
   configurando.value = false;
   preencherForm(conector.value);
   if (cod) await acompanhar(cod);
@@ -224,10 +236,10 @@ onBeforeUnmount(() => {
   <section class="carga" aria-labelledby="carga-titulo" data-testid="tela-carga">
     <h1 id="carga-titulo">{{ t('carga.titulo') }}</h1>
     <p>{{ t('carga.texto') }}</p>
-    <SanteAlerta v-if="erro" :texto="erro" variante="alerta" anunciar data-testid="carga-erro" />
+    <SanteAlerta v-if="alerta" :texto="alerta" variante="alerta" anunciar data-testid="carga-erro" />
     <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="carga-aviso" />
 
-    <p v-if="conectores === null && !erro" role="status">{{ t('carga.carregando') }}</p>
+    <p v-if="conectores === null && !alerta" role="status">{{ t('carga.carregando') }}</p>
     <p v-else-if="conectores && !conectores.length" data-testid="carga-sem-conectores">
       {{ t('carga.semConectores') }}
     </p>
@@ -375,6 +387,7 @@ onBeforeUnmount(() => {
           data-testid="carga-modo"
         />
         <SanteBotao
+          variante="destrutivo"
           :rotulo="t('carga.acoes.iniciar')"
           :desabilitado="ocupado || !acoes.iniciar || !conector.origem"
           :confirmacao="
@@ -387,7 +400,7 @@ onBeforeUnmount(() => {
           @acionar="iniciar"
         />
         <SanteBotao
-          variante="secundario"
+          variante="destrutivo"
           :rotulo="t('carga.acoes.pausar')"
           :desabilitado="ocupado || !acoes.pausar"
           :confirmacao="t('carga.acoes.confirmaPausar', { codigo: conector.codigo })"

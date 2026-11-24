@@ -3,6 +3,8 @@
 // tecnologia do banco do hospital.
 export const mensagensCarga = {
   titulo: 'Carga e sincronismo',
+  soPlataforma:
+    'Esta tela é do administrador da plataforma: entre com a conta da plataforma para ver e conduzir a carga.',
   texto:
     'Escolha o conector do cliente, confira a origem e inicie a carga. A carga roda num serviço próprio: fechar esta tela não a interrompe, e ao voltar o andamento aparece aqui.',
   linkInicio: 'Carga e sincronismo dos clientes',
