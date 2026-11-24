@@ -27,6 +27,8 @@ import {
   type GeradorPdfTiss,
   TissController,
 } from './tiss.controller.js';
+import { ElegibilidadeController } from './elegibilidade.controller.js';
+import { PORTA_ELEGIBILIDADE, PortaElegibilidadePropria } from './elegibilidade-propria.js';
 
 export interface OpcoesModuloTiss {
   /** Testes: a porta já montada. */
@@ -75,9 +77,17 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
         : null;
   return {
     module: ModuloTiss,
-    controllers: [TissController],
+    controllers: [TissController, ElegibilidadeController],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
+      // F3.9 (08-INTG L128): consulta de elegibilidade e resposta da operadora; sem núcleo, 503.
+      {
+        provide: PORTA_ELEGIBILIDADE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaElegibilidadePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },
       { provide: GERADOR_PDF_TISS, useValue: geradorPdf },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),

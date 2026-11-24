@@ -4,3 +4,4 @@ export * from './same.js';
 export * from './rouparia.js';
 export * from './indicadores-giro.js';
 export * from './same-guarda.js';
+export * from './same-tramite.js';

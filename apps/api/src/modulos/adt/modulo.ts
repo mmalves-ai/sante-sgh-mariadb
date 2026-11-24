@@ -43,6 +43,8 @@ import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { SameGuardaController } from './same-guarda.controller.js';
 import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria.js';
+import { SameTramiteController } from './same-tramite.controller.js';
+import { PORTA_SAME_TRAMITE, PortaSameTramitePropria } from './same-tramite-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
 
 export interface OpcoesModuloAdt {
@@ -107,6 +109,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       DocumentosInternacaoController,
       GasMedicinalController,
       SameGuardaController,
+      SameTramiteController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
@@ -125,6 +128,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaSameGuardaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.9 (04-HOT L127 e L128): protocolo em lote, solicitação e empréstimo de prontuário; sem núcleo, 503.
+      {
+        provide: PORTA_SAME_TRAMITE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaSameTramitePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {
