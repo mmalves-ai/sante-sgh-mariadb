@@ -37,6 +37,7 @@ import { portaPacsIndisponivel, PortaPacsPropria } from './pacs-porta-propria.js
 import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
+import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
@@ -129,6 +130,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       PacsController,
       CatalogoSadtController,
       PedidoSadtController,
+      MapaTrabalhoController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
@@ -138,6 +140,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       { provide: PORTA_PACS, useValue: pacs },
       { provide: AVISOS_SADT, useValue: avisos },
       // Pedido, cancelamento do item, kit com versão, recoleta e sub-amostras: só no banco do cliente (sem ele, 503).
+      // Retenção do exame na bancada (mapa de trabalho): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_MAPA_TRABALHO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoMapaTrabalho } = await import('./aplicacao/mapa-trabalho-propria.js');
+          return new ServicoMapaTrabalho(ctx.nucleo);
+        },
+      },
       {
         provide: SERVICO_PEDIDO_SADT,
         useFactory: async () => {

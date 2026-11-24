@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { reterExame, soltarExame } from '../api-mapa-trabalho.js';
 import { coletarAmostra, lerColeta, lerMapaTrabalho, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
@@ -46,6 +47,30 @@ const trabalho = useQuery({
   queryFn: () => lerMapaTrabalho('laboratorio', data.value),
   enabled: mapa,
 });
+// Retenção na bancada: o motivo na própria linha do exame, sem sair do mapa (um clique para devolver à fila).
+const motivoReter = ref<Record<number, string>>({});
+const retidoDe = (b: { retidos?: { exame: number; motivo: string }[] | undefined }, id: number) =>
+  b.retidos?.find((r) => r.exame === id)?.motivo ?? null;
+async function alternarRetencao(id: number, retido: boolean): Promise<void> {
+  ocupado.value = true;
+  erro.value = null;
+  mensagem.value = null;
+  try {
+    if (retido) {
+      await soltarExame(id, novaChave('soltar'));
+      mensagem.value = t('sadt.coleta.soltoOk');
+    } else {
+      const r = await reterExame(id, (motivoReter.value[id] ?? '').trim(), novaChave('reter'));
+      mensagem.value = t('sadt.coleta.retidoOk', { lote: r.lote });
+      motivoReter.value[id] = '';
+    }
+    await cliente.invalidateQueries({ queryKey: ['sadt', 'mapa'] });
+  } catch (e) {
+    erro.value = e;
+  } finally {
+    ocupado.value = false;
+  }
+}
 const motivoRastreio = computed(() =>
   gravacao.data.value && !gravacao.data.value.rastreio.ligada ? gravacao.data.value.rastreio.motivo : null,
 );
@@ -168,14 +193,45 @@ async function coletar(indice: number): Promise<void> {
         <h2>
           {{ t('sadt.coleta.bancada') }}: {{ b.nome }}
           <span class="secundario">· {{ t('sadt.coleta.urgentes', { n: b.urgentes }) }}</span>
+          <span v-if="b.lotes !== undefined" class="secundario" data-testid="mapa-lotes">
+            ·
+            {{
+              b.limite ? t('sadt.coleta.lotes', { n: b.lotes, limite: b.limite }) : t('sadt.coleta.loteUnico')
+            }}
+          </span>
+          <span v-if="b.retidos?.length" class="secundario">
+            · {{ t('sadt.coleta.retidos', { n: b.retidos.length }) }}</span
+          >
         </h2>
         <ul>
-          <li v-for="e in b.exames" :key="e.id">
+          <li v-for="e in b.exames" :key="e.id" data-testid="mapa-exame">
             <RouterLink :to="`/sadt/resultados/digitacao?exame=${e.id}`">{{ e.exame.nome }}</RouterLink>
             · {{ e.paciente.nome }}<strong v-if="e.urgente"> · {{ t('sadt.urgente') }}</strong>
             <span v-if="e.amostra" class="secundario">
               · {{ e.amostra.codigo }} ({{ e.amostra.rotulo }})</span
             >
+            <template v-if="b.codigo !== null">
+              <strong v-if="retidoDe(b, e.id) !== null" data-testid="mapa-retido">
+                · {{ t('sadt.coleta.retido', { motivo: retidoDe(b, e.id) }) }}
+              </strong>
+              <input
+                v-else
+                v-model="motivoReter[e.id]"
+                :aria-label="t('sadt.coleta.motivoRetencao')"
+                :placeholder="t('sadt.coleta.motivoRetencao')"
+                maxlength="500"
+                data-testid="mapa-motivo"
+              />
+              <SanteBotao
+                :disabled="
+                  ocupado || (retidoDe(b, e.id) === null && (motivoReter[e.id] ?? '').trim().length < 5)
+                "
+                data-testid="mapa-reter"
+                @click="alternarRetencao(e.id, retidoDe(b, e.id) !== null)"
+              >
+                {{ retidoDe(b, e.id) !== null ? t('sadt.coleta.soltar') : t('sadt.coleta.reter') }}
+              </SanteBotao>
+            </template>
           </li>
         </ul>
       </div>

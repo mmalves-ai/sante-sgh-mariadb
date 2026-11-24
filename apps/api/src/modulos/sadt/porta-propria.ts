@@ -22,6 +22,7 @@
 // O portal de resultados lê e grava o protocolo do paciente (protocolo_acesso_portal) e a credencial do médico externo
 // (pedido e conta do portal). Pendência (a tela recebe o motivo, nada em silêncio): as operações do executor
 // (OPERACOES_SADT_PENDENTES: contrato novo da tela, pedido p-sadt).
+import { lerBancadasDoMapa } from './aplicacao/mapa-trabalho-propria.js';
 import {
   type AmostraDetalhe,
   type AvisoCritico,
@@ -59,6 +60,7 @@ import {
   alvosDoAviso,
   avisoDoAlvo,
   dataDaReferencia,
+  distribuirPorBancada,
   numeroDoLaudo,
   type RegraCriticoCandidata,
   SEQUENCIA_NUMERO_LAUDO,
@@ -910,18 +912,14 @@ export class PortaSadtPropria implements PortaSadt {
 
   mapa(c: ContextoSadt, f: { setor: SetorSadt; inicio: string; fim: string }) {
     return this.examesDoSetor(c, { setor: f.setor, inicio: f.inicio, fim: f.fim, situacao: 'aDigitar' }).then(
-      (r) => ({
-        // A bancada do exame (exame_setor_executante) entra com o pedido de leitura da bancada; até lá, uma só.
-        bancadas: [
-          {
-            codigo: null,
-            nome: 'Sem bancada',
-            urgentes: r.itens.filter((x) => x.urgente).length,
-            exames: r.itens,
-          },
-        ],
-        cortada: r.cortada,
-      }),
+      async (r) => {
+        // A bancada de cada exame pelo modelo de mapa do setor e os retidos nos lotes do estabelecimento (F3.5, linha 8).
+        const lidos = await this.ler(c, (l, est) => lerBancadasDoMapa(l, est, r.itens));
+        return {
+          bancadas: distribuirPorBancada(r.itens, lidos.bancadas, lidos.retencoes),
+          cortada: r.cortada,
+        };
+      },
     );
   }
 

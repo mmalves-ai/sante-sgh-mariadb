@@ -19,3 +19,4 @@ export * from './portal/acesso.js';
 export * from './pacs/index.js';
 export * from './transfusao/index.js';
 export * from './catalogo/regras.js';
+export * from './mapa/distribuir.js';
