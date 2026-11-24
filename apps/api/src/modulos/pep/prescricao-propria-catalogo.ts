@@ -9,11 +9,7 @@
 // datas no fuso do estabelecimento. A especificação é a porta de memória (mesma forma de retorno). O integrador liga
 // cada método da PortaPrescricaoPropria a `new CatalogoPrescricaoPropria(nucleo, cliente).<metodo>(...)`.
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
-import {
-  PLANO_DO_TIPO,
-  TIPOS_ALERTA,
-  type SecaoCadastroPrescricao,
-} from '@sgh/contratos';
+import { PLANO_DO_TIPO, TIPOS_ALERTA, type SecaoCadastroPrescricao } from '@sgh/contratos';
 import type { ContextoPrescricao, ParametrosPrescricao } from './prescricao-porta.js';
 import { BASE_PLANO_PROPRIO } from './prescricao-porta-propria.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
@@ -76,7 +72,12 @@ const lista = (ids: readonly number[]) => ids.map(() => '?').join(',');
 export function instanteDoCivil(civil: string, fuso: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(civil);
   if (!m)
-    throw new ErroOperacao(400, 'data-invalida', 'Data inválida', 'A data e hora do período não está no formato.');
+    throw new ErroOperacao(
+      400,
+      'data-invalida',
+      'Data inválida',
+      'A data e hora do período não está no formato.',
+    );
   const alvo = Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +(m[6] ?? 0));
   let t = alvo;
   for (let i = 0; i < 2; i++) {
@@ -193,7 +194,8 @@ export class CatalogoPrescricaoPropria {
       );
       const grades = new Map<string, Map<number, string[]>>();
       for (const h of hs) {
-        const chave = h['grade_horario_unidade_id'] === null ? 'geral' : String(num(h['grade_horario_unidade_id']));
+        const chave =
+          h['grade_horario_unidade_id'] === null ? 'geral' : String(num(h['grade_horario_unidade_id']));
         const g = grades.get(chave) ?? new Map<number, string[]>();
         const n = num(h['doses_por_dia']);
         g.set(n, [...(g.get(n) ?? []), hhmm(h['horario'])]);
@@ -229,7 +231,11 @@ export class CatalogoPrescricaoPropria {
           WHERE r.ativo AND r.excluido_em IS NULL
           ORDER BY r.horario_referencia, r.sequencia, r.id`,
       );
-      return ls.map((x) => ({ id: num(x['id']), nome: String(x['descricao']), horario: hhmm(x['horario_referencia']) }));
+      return ls.map((x) => ({
+        id: num(x['id']),
+        nome: String(x['descricao']),
+        horario: hhmm(x['horario_referencia']),
+      }));
     });
   }
 
@@ -293,7 +299,9 @@ export class CatalogoPrescricaoPropria {
           `SELECT id, descricao AS nome, classe AS grupo FROM modalidade_dieta WHERE ativo
             ORDER BY ordem IS NULL, ordem, descricao, id`,
         ),
-        viasDieta: await ops(`SELECT id, descricao AS nome FROM via_dieta WHERE ativo ORDER BY descricao, id`),
+        viasDieta: await ops(
+          `SELECT id, descricao AS nome FROM via_dieta WHERE ativo ORDER BY descricao, id`,
+        ),
         procedimentos: await ops(
           `SELECT ip.id, ip.descricao AS nome FROM item_prescritivel ip
              JOIN tipo_item_prescricao t ON t.id = ip.tipo_item_prescricao_id
@@ -303,11 +311,15 @@ export class CatalogoPrescricaoPropria {
         caracteristicas: await ops(
           `SELECT id, descricao AS nome FROM caracteristica_dieta WHERE ativo ORDER BY descricao, id`,
         ),
-        tiposInfusao: await ops(`SELECT id, descricao AS nome FROM tipo_infusao WHERE ativo ORDER BY descricao, id`),
+        tiposInfusao: await ops(
+          `SELECT id, descricao AS nome FROM tipo_infusao WHERE ativo ORDER BY descricao, id`,
+        ),
         unidadesInfusao: await ops(
           `SELECT id, COALESCE(sigla, descricao) AS nome FROM unidade_infusao WHERE ativo ORDER BY descricao, id`,
         ),
-        viasAereas: await ops(`SELECT id, descricao AS nome FROM via_aerea WHERE ativo ORDER BY descricao, id`),
+        viasAereas: await ops(
+          `SELECT id, descricao AS nome FROM via_aerea WHERE ativo ORDER BY descricao, id`,
+        ),
         modos: await ops(
           `SELECT id, descricao AS nome, IF(ventilacao_controlada, 'controlada', 'assistida') AS grupo
              FROM modo_ventilatorio WHERE ativo ORDER BY descricao, id`,
@@ -321,7 +333,12 @@ export class CatalogoPrescricaoPropria {
   }
 
   // ── Produtos ─────────────────────────────────────────────────────────────────────────────────────
-  private async produtosDe(l: Leitor, est: Estabelecimento, filtro: string, p: unknown[]): Promise<ProdutoLido[]> {
+  private async produtosDe(
+    l: Leitor,
+    est: Estabelecimento,
+    filtro: string,
+    p: unknown[],
+  ): Promise<ProdutoLido[]> {
     const ls = await l.consultar(
       `SELECT ip.id, ip.descricao, up.sigla AS unidade, ip.padronizado, ip.controlado, ip.antimicrobiano,
               ip.alta_vigilancia, ip.validade_horas, ip.principio_ativo_id, ip.insumo_id,
@@ -384,7 +401,11 @@ export class CatalogoPrescricaoPropria {
       for (const x of rows) m.set(num(x['item']), [...(m.get(num(x['item'])) ?? []), f(x)]);
       return m;
     };
-    const pr = agrupa(princ, (x) => ({ id: num(x['id']), nome: String(x['descricao']), lista: textoOuNull(x['codigo_lista']) }));
+    const pr = agrupa(princ, (x) => ({
+      id: num(x['id']),
+      nome: String(x['descricao']),
+      lista: textoOuNull(x['codigo_lista']),
+    }));
     const vs = agrupa(vias, (x) => String(x['via']));
     const fx = agrupa(faixas, (x) => ({
       unidade: String(x['unidade']),
@@ -394,7 +415,9 @@ export class CatalogoPrescricaoPropria {
     return ls.map((x) => {
       const id = num(x['id']);
       const ps = pr.get(id) ?? [];
-      const viasDoItem = [...new Set([...(vs.get(id) ?? []), ...(x['via_padrao'] === null ? [] : [String(x['via_padrao'])])])];
+      const viasDoItem = [
+        ...new Set([...(vs.get(id) ?? []), ...(x['via_padrao'] === null ? [] : [String(x['via_padrao'])])]),
+      ];
       const portaria = ps.find((p) => p.lista !== null)?.lista ?? null;
       return {
         produto: id,
@@ -417,7 +440,9 @@ export class CatalogoPrescricaoPropria {
   produtos(c: ContextoPrescricao, ids: readonly number[]): Promise<ProdutoLido[]> {
     const validos = [...new Set(ids)].filter((x) => Number.isSafeInteger(x) && x > 0);
     if (validos.length === 0) return Promise.resolve([]);
-    return this.ler(c, 'produtos', (l, est) => this.produtosDe(l, est, `ip.id IN (${lista(validos)})`, validos));
+    return this.ler(c, 'produtos', (l, est) =>
+      this.produtosDe(l, est, `ip.id IN (${lista(validos)})`, validos),
+    );
   }
 
   /** O índice de busca: os itens prescritíveis por produto, ativos e não bloqueados (materiais e cuidados fora). */
@@ -429,7 +454,18 @@ export class CatalogoPrescricaoPropria {
         `ip.ativo AND NOT ip.bloqueado AND t.categoria IN (${lista([...CATEGORIAS_DE_PRODUTO])})`,
         [...CATEGORIAS_DE_PRODUTO],
       );
-      return ps.map(({ vias: _v, periodoMinimoHoras: _p, ...i }) => i);
+      return ps.map((p): ItemDoIndice => ({
+        produto: p.produto,
+        nome: p.nome,
+        unidade: p.unidade,
+        padronizado: p.padronizado,
+        psicotropico: p.psicotropico,
+        portaria: p.portaria,
+        antimicrobiano: p.antimicrobiano,
+        potencialmentePerigoso: p.potencialmentePerigoso,
+        principios: p.principios,
+        faixasDose: p.faixasDose,
+      }));
     });
   }
 
@@ -604,7 +640,11 @@ export class CatalogoPrescricaoPropria {
               id: String(num(x['id'])),
               nome: String(x['nome']),
               ativo: verdadeiro(x['ativo']),
-              campos: { geral: verdadeiro(x['uso_geral']), vigenteDesde: dataDe(x['inicio']), vigenteAte: dataDe(x['fim']) },
+              campos: {
+                geral: verdadeiro(x['uso_geral']),
+                vigenteDesde: dataDe(x['inicio']),
+                vigenteAte: dataDe(x['fim']),
+              },
               filhos: [],
             })),
           };
@@ -644,7 +684,10 @@ export class CatalogoPrescricaoPropria {
               nome: String(x['nome']),
               ativo: verdadeiro(x['ativo']),
               campos: { unidade: textoOuNull(x['unidade']), plano: textoOuNull(x['plano']) },
-              filhos: doDono(fs, num(x['id'])).map((f) => ({ nome: String(f['nome']), campos: { tipo: String(f['tipo']) } })),
+              filhos: doDono(fs, num(x['id'])).map((f) => ({
+                nome: String(f['nome']),
+                campos: { tipo: String(f['tipo']) },
+              })),
             })),
           };
         }
@@ -926,7 +969,11 @@ export class CatalogoPrescricaoPropria {
       );
       const valor = (k: keyof ParametrosPrescricao): boolean => {
         const x = ls.find((r) => r['chave'] === CHAVES_PARAMETROS_PRESCRICAO[k]);
-        const t = x ? textoOuNull(x['valor'] ?? x['valor_padrao'])?.trim().toLowerCase() : undefined;
+        const t = x
+          ? textoOuNull(x['valor'] ?? x['valor_padrao'])
+              ?.trim()
+              .toLowerCase()
+          : undefined;
         if (t === 'true' || t === '1' || t === 'sim') return true;
         if (t === 'false' || t === '0' || t === 'nao' || t === 'não') return false;
         return PARAMETROS_PRESCRICAO_PADRAO[k];
@@ -968,7 +1015,11 @@ export class CatalogoPrescricaoPropria {
         id: num(x['id']),
         codigo: String(x['codigo']),
         tipo: String(x['tipo']),
-        nivel: verdadeiro(x['bloqueante']) ? 'bloqueio' : verdadeiro(x['exige_justificativa']) ? 'justificar' : 'aviso',
+        nivel: verdadeiro(x['bloqueante'])
+          ? 'bloqueio'
+          : verdadeiro(x['exige_justificativa'])
+            ? 'justificar'
+            : 'aviso',
         versao: num(x['numero_versao_vigente']),
         vigenteDesde: dataDe(x['vigente_desde']) ?? '',
         ativa: verdadeiro(x['ativa']),
@@ -1005,10 +1056,9 @@ export class CatalogoPrescricaoPropria {
       const versaoBase = textoOuNull(base['versao']) ?? '';
       return ls.map((x) => {
         const codigo = String(x['codigo']).toLowerCase();
-        const gravidade =
-          (GRAVIDADES as readonly string[]).includes(codigo)
-            ? (codigo as InteracaoLida['gravidade'])
-            : GRAVIDADES[Math.min(Math.max(num(x['nivel']), 1), 4) - 1]!;
+        const gravidade = (GRAVIDADES as readonly string[]).includes(codigo)
+          ? (codigo as InteracaoLida['gravidade'])
+          : GRAVIDADES[Math.min(Math.max(num(x['nivel']), 1), 4) - 1]!;
         return {
           a: num(x['a']),
           b: num(x['b']),
