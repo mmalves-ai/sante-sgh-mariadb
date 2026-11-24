@@ -22,6 +22,13 @@ import {
   type Executor,
   type TxOperacao,
 } from '@sgh/nucleo';
+import {
+  type EstadoAlergia,
+  eventoDaAlergia,
+  type EventoAlergia,
+  manifestacoesDoPedido,
+  RecusaHistoricoAlergia,
+} from '@sgh/dominio-pep';
 import { z } from 'zod';
 import type { ContextoDocs } from './documentos-porta.js';
 import type { NucleoDocumentosPep } from './documentos-porta-propria.js';
@@ -72,7 +79,12 @@ export const fonteDaOrigem = (o: string | undefined): string | null => (o ? o.re
  * livre é obrigatória (exceto "nega alergias"). Mesmos campos e recusas do esquema comum.
  */
 export const esquemaAlergiaPropria = z
-  .object({ ...esquemaGravacaoAlergia.shape, descricaoLivre: z.string().trim().min(2).max(250).optional() })
+  .object({
+    ...esquemaGravacaoAlergia.shape,
+    descricaoLivre: z.string().trim().min(2).max(250).optional(),
+    /** Manifestações do catálogo (urticária, broncoespasmo...), gravadas com a alergia (03-PEP L100). */
+    manifestacoes: z.array(z.number().int().positive()).max(10).optional(),
+  })
   .strict()
   .refine((x) => x.nega || x.agente !== undefined || x.descricaoLivre !== undefined, {
     path: ['agente'],
@@ -277,6 +289,45 @@ export const TABELAS_DOCUMENTO = ['documento_prontuario', 'documento_prontuario_
 /** Linhas de alergia que valem para a lista e a versão (as mesmas de alergias-propria.ts). */
 const SQL_E_ALERGIA = `excluido_em IS NULL AND tipo_registro IN ('alergia','intolerancia') AND situacao_registro = 'confirmado'`;
 
+/** Tabelas do histórico e das manifestações da alergia (03-PEP L100). */
+export const TABELAS_HISTORICO_ALERGIA = [
+  'alergia_paciente_evento',
+  'alergia_paciente_manifestacao',
+] as const;
+
+/** Recusa da regra do domínio → 422 com o código dela. */
+function regraAlergia<T>(f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof RecusaHistoricoAlergia) throw recusar(422, e.codigo, e.message);
+    throw e;
+  }
+}
+
+/** Grava o evento da mudança da alergia (quem, quando, motivo e o estado depois dela). Nunca apagado. */
+async function gravarEventoAlergia(
+  tx: TxOperacao,
+  s: { usuario: number; profissional: number | null },
+  alergia: number,
+  evento: EventoAlergia,
+  estado: EstadoAlergia,
+  extra: { motivo?: string | null; registro?: number | null; em: Date },
+): Promise<number> {
+  const e = regraAlergia(() => eventoDaAlergia(evento, estado, extra.motivo));
+  return tx.incluir('alergia_paciente_evento', {
+    alergia_paciente_id: alergia,
+    operacao: e.operacao,
+    evento: e.evento,
+    dados: e.dados,
+    motivo: e.motivo,
+    ocorrido_em: extra.em,
+    usuario_id: s.usuario,
+    profissional_id: s.profissional,
+    registro_assistencial_id: extra.registro ?? null,
+  });
+}
+
 /** Versão da lista (ids ativos em ordem, todos os estabelecimentos do cliente), com as linhas travadas. */
 async function versaoTravada(
   tx: TxOperacao,
@@ -357,10 +408,27 @@ export function operacoesDocumentosPropria(
       ctx,
       'pep.alergia.registrar',
       x,
-      ['alergia_paciente', 'alergia_paciente_principio'],
+      ['alergia_paciente', 'alergia_paciente_principio', ...TABELAS_HISTORICO_ALERGIA],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
         await conferirAtendimento(tx, s, x.atendimento, x.paciente);
+        const manifestacoes = regraAlergia(() => manifestacoesDoPedido(x.nega, x.manifestacoes));
+        if (manifestacoes.length) {
+          const ok = await tx.consultar(
+            `SELECT id FROM manifestacao_alergica WHERE ativo = TRUE AND id IN (${marcadores(manifestacoes.length)})`,
+            manifestacoes,
+          );
+          if (ok.length !== manifestacoes.length)
+            throw new ErroOperacao(
+              400,
+              'entrada-invalida',
+              'Entrada inválida',
+              'Confira os campos indicados.',
+              {
+                campos: ['manifestacoes'],
+              },
+            );
+        }
         const { versao, linhas } = await versaoTravada(tx, x.paciente);
         if (versao !== x.versao) throw conflitoAlergias();
         const agora = new Date();
@@ -403,6 +471,24 @@ export function operacoesDocumentosPropria(
             tipo_registro: 'nega_alergias',
             observacao: x.observacao ?? null,
           });
+          await gravarEventoAlergia(
+            tx,
+            s,
+            id,
+            'inclusao',
+            {
+              tipoRegistro: 'nega_alergias',
+              alergeno: null,
+              descricaoLivre: false,
+              gravidade: null,
+              certeza: null,
+              fonte: null,
+              ativa: true,
+              principios: [],
+              manifestacoes: [],
+            },
+            { registro: comum.registro_assistencial_id, em: agora },
+          );
           alergia = 0;
         } else {
           if (x.agente !== undefined) {
@@ -469,6 +555,29 @@ export function operacoesDocumentosPropria(
               alergia_paciente_id: id,
               principio_ativo_id: p,
             });
+          for (const m of manifestacoes)
+            await tx.incluir('alergia_paciente_manifestacao', {
+              alergia_paciente_id: id,
+              manifestacao_alergica_id: m,
+            });
+          await gravarEventoAlergia(
+            tx,
+            s,
+            id,
+            'inclusao',
+            {
+              tipoRegistro: 'alergia',
+              alergeno: x.agente ?? null,
+              descricaoLivre: x.agente === undefined,
+              gravidade: x.gravidade ?? null,
+              certeza: null,
+              fonte: fonteDaOrigem(x.origem),
+              ativa: true,
+              principios,
+              manifestacoes,
+            },
+            { registro: comum.registro_assistencial_id, em: agora },
+          );
           alergia = id;
         }
         const documento = await documentoProntuario(tx, s, {
@@ -495,11 +604,12 @@ export function operacoesDocumentosPropria(
       ctx,
       'pep.alergia.inativar',
       x,
-      ['alergia_paciente'],
+      ['alergia_paciente', 'alergia_paciente_evento'],
       async (tx, est) => {
         const s = await sessao(tx, est, null, false);
         const [a] = await tx.consultarParaAtualizar(
-          `SELECT id, ativa, versao FROM alergia_paciente WHERE id = ? AND paciente_id = ? AND ${SQL_E_ALERGIA}`,
+          `SELECT id, ativa, versao, tipo_registro, alergeno_id, descricao_livre, gravidade, certeza, fonte_informacao,
+                  registro_assistencial_id FROM alergia_paciente WHERE id = ? AND paciente_id = ? AND ${SQL_E_ALERGIA}`,
           [x.alergia, x.paciente],
         );
         if (!a)
@@ -511,13 +621,40 @@ export function operacoesDocumentosPropria(
           );
         const { versao } = await versaoTravada(tx, x.paciente);
         if (!Number(a['ativa']) || versao !== x.versao) throw conflitoAlergias();
+        const em = new Date();
         await tx.alterar('alergia_paciente', num(a['id']), num(a['versao']), {
           ativa: false,
-          inativado_em: new Date(),
+          inativado_em: em,
           inativado_por_usuario_id: s.usuario,
           inativado_profissional_id: s.profissional,
           motivo_inativacao: x.motivo,
         });
+        const filhos = await tx.consultar(
+          `SELECT 'p' AS t, principio_ativo_id AS id FROM alergia_paciente_principio
+            WHERE alergia_paciente_id = ? AND excluido_em IS NULL
+           UNION ALL
+           SELECT 'm' AS t, manifestacao_alergica_id AS id FROM alergia_paciente_manifestacao
+            WHERE alergia_paciente_id = ? AND excluido_em IS NULL`,
+          [a['id'], a['id']],
+        );
+        await gravarEventoAlergia(
+          tx,
+          s,
+          num(a['id']),
+          'inativacao',
+          {
+            tipoRegistro: String(a['tipo_registro']) === 'intolerancia' ? 'intolerancia' : 'alergia',
+            alergeno: numOuNull(a['alergeno_id']),
+            descricaoLivre: a['descricao_livre'] !== null && a['descricao_livre'] !== undefined,
+            gravidade: textoOuNull(a['gravidade']),
+            certeza: textoOuNull(a['certeza']),
+            fonte: textoOuNull(a['fonte_informacao']),
+            ativa: false,
+            principios: filhos.filter((f) => f['t'] === 'p' && f['id'] !== null).map((f) => num(f['id'])),
+            manifestacoes: filhos.filter((f) => f['t'] === 'm').map((f) => num(f['id'])),
+          },
+          { motivo: x.motivo, registro: numOuNull(a['registro_assistencial_id']), em },
+        );
         return { tabela: 'alergia_paciente', id: num(a['id']), alergia: num(a['id']), trilha: null };
       },
       () => ({ evento: 'pep.alergia.inativada', paciente: x.paciente, motivo: x.motivo }),

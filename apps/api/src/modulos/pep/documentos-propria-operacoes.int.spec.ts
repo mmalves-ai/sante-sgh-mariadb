@@ -43,6 +43,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     atendimento: 0,
     alergeno: 0,
     principio: 0,
+    manifestacao: 0,
   };
   let fuso = 'America/Sao_Paulo';
   const C = () => ({
@@ -92,6 +93,11 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         [P],
       );
       await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+      for (const t of ['alergia_paciente_evento', 'alergia_paciente_manifestacao'])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN alergia_paciente a ON a.id = x.alergia_paciente_id WHERE a.estabelecimento_id IN ${est}`,
+          [P],
+        );
       await e.executar(
         `DELETE pp FROM alergia_paciente_principio pp JOIN alergia_paciente a ON a.id = pp.alergia_paciente_id
           WHERE a.estabelecimento_id IN ${est}`,
@@ -285,6 +291,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         "INSERT INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES (?, 'Princípio sintético', 'teste', ?)",
         [`${P}pa`, agora],
       );
+      ids.manifestacao = await garantir(
+        e,
+        'SELECT id FROM manifestacao_alergica WHERE codigo = ?',
+        [`${P}mf`],
+        "INSERT INTO manifestacao_alergica (codigo, descricao, criado_em) VALUES (?, 'Manifestação sintética', ?)",
+        [`${P}mf`, agora],
+      );
     });
   }, 60_000);
 
@@ -312,6 +325,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         ...baseAlergia(),
         agente: ids.alergeno,
         principios: [ids.principio],
+        manifestacoes: [ids.manifestacao, ids.manifestacao],
         gravidade: 'grave',
         origem: 'relato-paciente',
         versao: await versao(),
@@ -328,6 +342,35 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(l?.['fonte_informacao']).toBe('relato_paciente');
     expect(Number(l?.['registrado_profissional_id'])).toBe(ids.prof);
     expect(Number(l?.['princ'])).toBe(1);
+    // 03-PEP L100: a manifestação e o evento de inclusão ficam no banco, na mesma transação.
+    const h = await uma(
+      `SELECT (SELECT COUNT(*) FROM alergia_paciente_manifestacao m WHERE m.alergia_paciente_id = ?
+                 AND m.manifestacao_alergica_id = ?) AS manif,
+              ev.operacao, ev.evento, ev.usuario_id, ev.profissional_id, ev.motivo,
+              JSON_EXTRACT(ev.dados, '$.manifestacoes[0]') AS dm, JSON_EXTRACT(ev.dados, '$.ativa') AS da
+         FROM alergia_paciente_evento ev WHERE ev.alergia_paciente_id = ?`,
+      [r['alergia'], ids.manifestacao, r['alergia']],
+    );
+    expect(Number(h?.['manif'])).toBe(1);
+    expect([h?.['operacao'], h?.['evento'], h?.['motivo']]).toEqual(['inclusao', 'inclusao', null]);
+    expect(Number(h?.['usuario_id'])).toBe(ids.usuario);
+    expect(Number(h?.['profissional_id'])).toBe(ids.prof);
+    expect(Number(h?.['dm'])).toBe(ids.manifestacao);
+    expect(String(h?.['da'])).toBe('true');
+    expect(
+      await codigo(
+        ops()['pep.registrarAlergia']!(
+          C(),
+          {
+            ...baseAlergia(),
+            descricaoLivre: 'Agente manifesto',
+            manifestacoes: [999_999_999],
+            versao: await versao(),
+          },
+          ctx('mfx'),
+        ),
+      ),
+    ).toBe('entrada-invalida');
     expect(
       await codigo(
         ops()['pep.registrarAlergia']!(
@@ -385,6 +428,14 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(Number(l?.['ativa'])).toBe(0);
     expect(Number(l?.['inativado_por_usuario_id'])).toBe(ids.usuario);
     expect(Number(l?.['versao'])).toBe(2);
+    const ev = await uma(
+      `SELECT operacao, evento, motivo, usuario_id, JSON_EXTRACT(dados, '$.ativa') AS da
+         FROM alergia_paciente_evento WHERE alergia_paciente_id = ? AND evento = 'inativacao'`,
+      [alvo],
+    );
+    expect([ev?.['operacao'], ev?.['motivo']]).toEqual(['alteracao', 'Informação corrigida pelo paciente']);
+    expect(Number(ev?.['usuario_id'])).toBe(ids.usuario);
+    expect(String(ev?.['da'])).toBe('false');
     expect(
       await codigo(
         ops()['pep.inativarAlergia']!(
@@ -408,6 +459,21 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       ctx('ng'),
     );
     expect(r['alergia']).toBe(0);
+    const ng = await uma(
+      `SELECT COUNT(*) AS n FROM alergia_paciente_evento ev JOIN alergia_paciente a ON a.id = ev.alergia_paciente_id
+        WHERE a.paciente_id = ? AND a.tipo_registro = 'nega_alergias' AND ev.evento = 'inclusao'`,
+      [ids.paciente],
+    );
+    expect(Number(ng?.['n'])).toBe(1);
+    expect(
+      await codigo(
+        ops()['pep.registrarAlergia']!(
+          C(),
+          { ...baseAlergia(), nega: true, manifestacoes: [ids.manifestacao], versao: await versao() },
+          ctx('ngm'),
+        ),
+      ),
+    ).toBe('manifestacao-em-declaracao');
     expect(
       await codigo(
         ops()['pep.registrarAlergia']!(
