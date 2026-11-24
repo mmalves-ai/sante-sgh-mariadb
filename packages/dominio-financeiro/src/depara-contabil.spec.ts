@@ -5,6 +5,8 @@ import {
   dePararFatos,
   eventosSemDePara,
   type FatoContabil,
+  fatoDoPagamento,
+  fatosDaApropriacao,
   type RegraDeParaConta,
 } from './depara-contabil.js';
 import { conferirLote, montarLoteContabil } from './lote-contabil.js';
@@ -69,6 +71,74 @@ describe('de-para contábil por evento (07-FIN linha 100)', () => {
     expect(eventosSemDePara(fatos, regras)).toEqual([
       { evento: 'fin_despesa_reconhecida', natureza: 5, lado: 'debito', fatos: 1 },
       { evento: 'fin_despesa_reconhecida', natureza: 5, lado: 'credito', fatos: 1 },
+    ]);
+  });
+
+  it('emissão com retenção em partidas: despesa pelo documento, fornecedor pelo líquido, tributo pelo retido', () => {
+    const regras = [
+      r({ id: 1, evento: 'fin_despesa_reconhecida', lado: 'debito', conta: 'DESP' }),
+      r({ id: 2, evento: 'fin_despesa_reconhecida', lado: 'credito', conta: 'FORN' }),
+      r({ id: 3, evento: 'fin_retencao_apropriada', lado: 'credito', conta: 'IR-REC', natureza: 77 }),
+      r({ id: 4, evento: 'fin_retencao_apropriada', lado: 'credito', conta: 'TRIB-REC' }),
+      r({ id: 5, evento: 'fin_pagamento_titulo', lado: 'credito', conta: 'BANCO' }),
+      r({ id: 6, evento: 'fin_recolhimento_retencao', lado: 'credito', conta: 'BANCO' }),
+    ];
+    const titulo = {
+      data: '2026-10-05',
+      valorDespesa: 1000,
+      historico: 'SERVICO',
+      documento: 'NF1',
+      natureza: 5,
+      centro: null,
+      credor: 9,
+      retencoes: [
+        { tributo: 'IRRF', natureza: 77, valor: 15 },
+        { tributo: 'CSRF', natureza: null, valor: 46.5 },
+        { tributo: 'ISS', natureza: null, valor: 0 },
+      ],
+    };
+    const fatos = [
+      ...fatosDaApropriacao(titulo, 'competencia'),
+      fatoDoPagamento({ ...titulo, valor: 938.5, data: '2026-10-30', recolhimento: null }),
+      fatoDoPagamento({ ...titulo, valor: 15, data: '2026-11-20', recolhimento: { naturezaTributo: 77 } }),
+    ];
+    const { eventos, depara } = dePararFatos(fatos, regras, new Map(), new Map());
+    const lote = montarLoteContabil(eventos, depara);
+    expect(lote.linhas.map((l) => l.split(';').slice(0, 4).join(';'))).toEqual([
+      '2026-10-05;DESP;FORN;938.50',
+      '2026-10-05;DESP;IR-REC;15.00',
+      '2026-10-05;DESP;TRIB-REC;46.50',
+      '2026-10-30;FORN;BANCO;938.50',
+      '2026-11-20;IR-REC;BANCO;15.00',
+    ]);
+    // A emissão soma o valor do documento; o fornecedor credita e debita o mesmo líquido.
+    expect(fatosDaApropriacao(titulo, 'competencia').reduce((s, f) => s + f.valor, 0)).toBe(1000);
+    expect(eventosSemDePara(fatos, regras)).toEqual([]);
+    // Sem a conta do fornecedor, a falta aponta a regra de origem (crédito da emissão) para a emissão e o pagamento.
+    expect(
+      eventosSemDePara(
+        fatos,
+        regras.filter((x) => x.id !== 2),
+      ),
+    ).toEqual([{ evento: 'fin_despesa_reconhecida', natureza: 5, lado: 'credito', fatos: 2 }]);
+  });
+  it('caixa: a despesa entra no pagamento (débito despesa, crédito banco) e o retido da parcela na mesma data', () => {
+    const f = fatosDaApropriacao(
+      {
+        data: '2026-10-30',
+        valorDespesa: 1000,
+        historico: 'SERVICO',
+        documento: 'NF1',
+        natureza: 5,
+        centro: null,
+        credor: 9,
+        retencoes: [{ tributo: 'IRRF', natureza: 77, valor: 15 }],
+      },
+      'caixa',
+    );
+    expect(f.map((x) => [x.evento, x.valor, x.debitoDe?.evento ?? null])).toEqual([
+      ['fin_despesa_paga', 985, null],
+      ['fin_retencao_apropriada', 15, 'fin_despesa_paga'],
     ]);
   });
 });

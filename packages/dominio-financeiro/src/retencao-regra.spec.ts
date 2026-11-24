@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conferirEncerramento,
   conferirRecolhimento,
   conferirRegraRetencao,
   type RegraRetencao,
@@ -38,13 +39,40 @@ describe('retenção sugerida pela regra vigente (07-FIN linha 109)', () => {
   it('calcula base, valor e dispensa pelo mínimo', () => {
     const s = sugerirRetencoes([regra({}), regra({ id: 2, tributo: 'CSLL', aliquota: 1 })], fato);
     expect(s).toEqual([
-      { tributo: 'CSLL', regra: 2, base: 1000, aliquota: 1, valor: 10, dispensada: false },
+      // R$ 10,00 é dispensado: a lei dispensa o valor igual ou inferior ao mínimo.
+      { tributo: 'CSLL', regra: 2, base: 1000, aliquota: 1, valor: 10, dispensada: true },
       { tributo: 'IRRF', regra: 1, base: 1000, aliquota: 1.5, valor: 15, dispensada: false },
     ]);
     expect(sugerirRetencoes([regra({})], { ...fato, valorBruto: 500 })[0]).toMatchObject({
       valor: 7.5,
       dispensada: true,
     });
+    expect(sugerirRetencoes([regra({})], { ...fato, valorBruto: 1000.67 })[0]).toMatchObject({
+      valor: 15.01,
+      dispensada: false,
+    });
+  });
+  it('PIS, COFINS e CSLL da mesma guia (5952) são dispensados pela soma, não por tributo', () => {
+    const guia = [
+      regra({ id: 1, tributo: 'PIS', aliquota: 0.65, codigoReceita: '5952' }),
+      regra({ id: 2, tributo: 'COFINS', aliquota: 3, codigoReceita: '5952' }),
+      regra({ id: 3, tributo: 'CSLL', aliquota: 1, codigoReceita: '5952' }),
+    ];
+    // 4,65% de 300 = 13,95 na guia: retém os três, embora cada um isolado fique abaixo de 10.
+    expect(sugerirRetencoes(guia, { ...fato, valorBruto: 300 }).map((s) => [s.valor, s.dispensada])).toEqual([
+      [9, false],
+      [3, false],
+      [1.95, false],
+    ]);
+    // 4,65% de 200 = 9,30 na guia: os três dispensados.
+    expect(sugerirRetencoes(guia, { ...fato, valorBruto: 200 }).every((s) => s.dispensada)).toBe(true);
+    // Sem código de receita comum, cada tributo é a sua própria guia.
+    expect(
+      sugerirRetencoes(
+        guia.map((g) => ({ ...g, codigoReceita: null })),
+        { ...fato, valorBruto: 300 },
+      ).map((s) => s.dispensada),
+    ).toEqual([true, true, true]);
   });
   it('respeita vigência, momento e prefere a regra mais específica', () => {
     const regras = [
@@ -87,6 +115,29 @@ describe('retenção sugerida pela regra vigente (07-FIN linha 109)', () => {
     expect(
       conferirRegraRetencao(base, [regra({ vigenciaInicio: '2025-01-01', vigenciaFim: '2025-12-31' })]),
     ).toBeNull();
+    // Faixas que se cruzam com início diferente (0-1000 e 500-2000) sobrepõem; faixas disjuntas convivem.
+    expect(
+      conferirRegraRetencao({ ...base, faixaInicio: 500, faixaFim: 2000 }, [
+        regra({ faixaInicio: 0, faixaFim: 1000 }),
+      ])?.codigo,
+    ).toBe('vigencia-sobreposta');
+    expect(
+      conferirRegraRetencao({ ...base, faixaInicio: 1000.01, faixaFim: 2000 }, [
+        regra({ faixaInicio: 0, faixaFim: 1000 }),
+      ]),
+    ).toBeNull();
+  });
+  it('encerrar só antecipa o fim, não volta antes do início e não cruza outra vigência', () => {
+    const aberta = regra({ id: 1, vigenciaInicio: '2026-01-01' });
+    const encerrada = regra({ id: 2, vigenciaInicio: '2025-01-01', vigenciaFim: '2025-06-30' });
+    expect(conferirEncerramento(aberta, '2026-12-31', [aberta])).toBeNull();
+    expect(conferirEncerramento(aberta, '2025-12-31', [aberta])?.codigo).toBe('vigencia-invalida');
+    expect(conferirEncerramento(encerrada, '2025-12-31', [encerrada, aberta])?.codigo).toBe('so-antecipar');
+    expect(conferirEncerramento(encerrada, '2025-03-31', [encerrada, aberta])).toBeNull();
+    // Uma regra legada aberta sobreposta a outra: o encerramento que ainda cruza a outra é recusado.
+    const outra = regra({ id: 3, vigenciaInicio: '2026-06-01' });
+    expect(conferirEncerramento(aberta, '2026-09-30', [aberta, outra])?.codigo).toBe('vigencia-sobreposta');
+    expect(conferirEncerramento(aberta, '2026-05-31', [aberta, outra])).toBeNull();
   });
   it('vencimento no mês seguinte e conferência do recolhimento', () => {
     expect(vencimentoRecolhimento('2026-01', 31)).toBe('2026-02-28');

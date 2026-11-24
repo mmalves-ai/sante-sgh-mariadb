@@ -34,6 +34,8 @@ export interface RegraRetencao {
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
   readonly ativo: boolean;
+  /** Código de receita da guia: os tributos da mesma guia (PIS, COFINS e CSLL na 5952) somam para a dispensa. */
+  readonly codigoReceita?: string | null;
 }
 
 export interface FatoRetencao {
@@ -51,7 +53,10 @@ export interface SugestaoRetencao {
   readonly base: number;
   readonly aliquota: number;
   readonly valor: number;
-  /** Abaixo do mínimo: a retenção é dispensada (valor calculado mostrado, nada retido). */
+  /**
+   * Igual ou abaixo do mínimo (Lei 9.430, art. 67; Lei 10.833, art. 31): a retenção é dispensada (valor calculado
+   * mostrado, nada retido). Os tributos da mesma guia (mesmo código de receita) são dispensados pela soma.
+   */
   readonly dispensada: boolean;
 }
 
@@ -62,6 +67,11 @@ const rec = (codigo: string, mensagem: string, campos: string[]): RecusaFinancei
 });
 const vigente = (r: RegraRetencao, data: string) =>
   r.ativo && r.vigenciaInicio <= data && (r.vigenciaFim === null || r.vigenciaFim >= data);
+const FIM = 9_999_999_999;
+const faixasCruzam = (
+  a: { faixaInicio: number | null; faixaFim: number | null },
+  b: { faixaInicio: number | null; faixaFim: number | null },
+) => (a.faixaInicio ?? 0) <= (b.faixaFim ?? FIM) && (b.faixaInicio ?? 0) <= (a.faixaFim ?? FIM);
 const naFaixa = (r: RegraRetencao, base: number) =>
   (r.faixaInicio === null || base >= r.faixaInicio) && (r.faixaFim === null || base <= r.faixaFim);
 const ehIss = (tributo: string) => tributo.toUpperCase() === 'ISS';
@@ -89,16 +99,26 @@ export function regraVigente(
 /** A sugestão de cada tributo com regra vigente: base, alíquota, valor (com dedução e teto) e dispensa pelo mínimo. */
 export function sugerirRetencoes(regras: readonly RegraRetencao[], f: FatoRetencao): SugestaoRetencao[] {
   const tributos = [...new Set(regras.map((r) => r.tributo))].sort();
-  const saida: SugestaoRetencao[] = [];
+  const calculadas: { r: RegraRetencao; base: number; valor: number; guia: string }[] = [];
   for (const t of tributos) {
     const r = regraVigente(regras, t, f);
     if (!r) continue;
     const base = centavos((f.valorBruto * r.percentualBase) / 100);
     let valor = Math.max(0, centavos((base * r.aliquota) / 100 - r.deducao));
     if (r.maximo !== null && valor > r.maximo) valor = r.maximo;
-    saida.push({ tributo: t, regra: r.id, base, aliquota: r.aliquota, valor, dispensada: valor < r.minimo });
+    calculadas.push({ r, base, valor, guia: r.codigoReceita?.trim() || `tributo:${t}` });
   }
-  return saida;
+  // A dispensa é da guia: a soma dos tributos com o mesmo código de receita igual ou abaixo do menor mínimo deles.
+  const guias = new Map<string, { soma: number; minimo: number }>();
+  for (const c of calculadas) {
+    const g = guias.get(c.guia) ?? { soma: 0, minimo: Number.POSITIVE_INFINITY };
+    guias.set(c.guia, { soma: centavos(g.soma + c.valor), minimo: Math.min(g.minimo, c.r.minimo) });
+  }
+  return calculadas.map(({ r, base, valor, guia }) => {
+    const g = guias.get(guia);
+    const dispensada = g ? g.soma <= g.minimo : false;
+    return { tributo: r.tributo, regra: r.id, base, aliquota: r.aliquota, valor, dispensada };
+  });
 }
 
 /** Confere a regra nova: alíquota e base entre 0 e 100, vigência, município no ISS, sem sobrepor a vigência de outra. */
@@ -124,7 +144,7 @@ export function conferirRegraRetencao(
       r.momento === e.momento &&
       r.participante === e.participante &&
       r.municipio === e.municipio &&
-      (r.faixaInicio ?? 0) === (e.faixaInicio ?? 0) &&
+      faixasCruzam(r, e) &&
       r.vigenciaInicio <= fim &&
       (r.vigenciaFim ?? '9999-12-31') >= e.vigenciaInicio,
   );
@@ -135,6 +155,30 @@ export function conferirRegraRetencao(
       ['vigenciaInicio'],
     );
   return null;
+}
+
+/**
+ * Confere o encerramento da vigência: só antecipa o fim (nunca estende uma regra já encerrada nem reabre), o fim não
+ * vem antes do início e a vigência que fica não cruza a de outra regra do mesmo tributo, momento, participante,
+ * município e faixa.
+ */
+export function conferirEncerramento(
+  regra: RegraRetencao,
+  novoFim: string,
+  existentes: readonly RegraRetencao[],
+): RecusaFinanceiro | null {
+  if (novoFim < regra.vigenciaInicio)
+    return rec('vigencia-invalida', 'O fim da vigência vem antes do início.', ['vigenciaFim']);
+  if (regra.vigenciaFim !== null && novoFim >= regra.vigenciaFim)
+    return rec(
+      'so-antecipar',
+      `A regra já termina em ${regra.vigenciaFim}: o encerramento só antecipa o fim. Para estender, inclua uma regra nova.`,
+      ['vigenciaFim'],
+    );
+  return conferirRegraRetencao(
+    { ...regra, vigenciaFim: novoFim },
+    existentes.filter((r) => r.id !== regra.id),
+  );
 }
 
 /** Vencimento do recolhimento: o dia do tributo no mês seguinte à competência (último dia, quando o mês é curto). */

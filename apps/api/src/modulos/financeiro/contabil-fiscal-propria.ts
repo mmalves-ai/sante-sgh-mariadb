@@ -9,8 +9,11 @@ import {
   conferirRecolhimento,
   conferirRegraDePara,
   conferirRegraRetencao,
+  conferirEncerramento,
   EVENTOS_CONTABEIS_FINANCEIRO,
   type FatoContabil,
+  fatoDoPagamento,
+  fatosDaApropriacao,
   type FatoRetencao,
   type LadoDePara,
   MOMENTOS_RETENCAO,
@@ -267,7 +270,12 @@ const manterDeParaContabil = definirOperacao<DeParaContabilEntrada, ResultadoOpe
   alvo: (_e, r) => ({ tabela: texto(r['tabela']), id: numero(r['linha']) || null }),
 });
 
-/** Os fatos do período para o lote: a despesa na emissão (competência) ou o pagamento da parcela (caixa). */
+/**
+ * Os fatos do período para o lote, em partidas (depara-contabil.ts). Competência: a emissão (despesa, fornecedor pelo
+ * líquido e o tributo a recolher pelo retido) e os pagamentos (ao fornecedor e da guia do retido). Caixa: o pagamento
+ * da parcela como despesa paga, com o retido dela, e o pagamento da guia. A guia do retido nunca é despesa: ela baixa o
+ * tributo a recolher. Título cancelado ou excluído, parcela excluída e retenção dispensada ou excluída ficam fora.
+ */
 export async function fatosContabeis(
   l: Leitor,
   est: number,
@@ -275,39 +283,99 @@ export async function fatosContabeis(
   ate: string,
   regua: 'competencia' | 'caixa',
 ): Promise<FatoContabil[]> {
-  const recolhe = `EXISTS (SELECT 1 FROM retencao_titulo rr WHERE rr.recolhimento_titulo_pagar_id = t.id AND rr.excluido_em IS NULL)`;
-  const linhas =
-    regua === 'competencia'
-      ? await l.consultar(
-          `SELECT t.data_emissao AS data, t.valor_bruto AS valor, t.numero_documento, t.referente, t.natureza_financeira_id,
-                  t.centro_custo_id, t.empresa_fornecedora_id, ${recolhe} AS recolhimento
-             FROM titulo_pagar t
-            WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'
-              AND t.data_emissao BETWEEN ? AND ? ORDER BY t.data_emissao, t.id LIMIT 20000`,
-          [est, de, ate],
-        )
-      : await l.consultar(
-          `SELECT DATE(p.quitada_em) AS data, p.valor_pago AS valor, t.numero_documento, t.referente, t.natureza_financeira_id,
-                  t.centro_custo_id, t.empresa_fornecedora_id, ${recolhe} AS recolhimento
-             FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
-            WHERE t.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.quitada_em IS NOT NULL AND p.valor_pago > 0
-              AND DATE(p.quitada_em) BETWEEN ? AND ? ORDER BY p.quitada_em, p.id LIMIT 20000`,
-          [est, de, ate],
-        );
-  return linhas.map((r) => ({
-    evento: Number(r['recolhimento'])
-      ? 'fin_recolhimento_retencao'
-      : regua === 'competencia'
-        ? 'fin_despesa_reconhecida'
-        : 'fin_pagamento_titulo',
-    data: dataIso(r['data']) ?? de,
-    valor: numero(r['valor']),
+  const guia = `EXISTS (SELECT 1 FROM retencao_titulo rr WHERE rr.recolhimento_titulo_pagar_id = t.id AND rr.excluido_em IS NULL)`;
+  const valido = `t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'`;
+  const retidoVivo = `r.excluido_em IS NULL AND r.retencao_dispensada = FALSE AND r.valor_retido > 0`;
+  const descricao = (r: Record<string, unknown>) => ({
     historico: texto(r['referente']) || `TITULO ${texto(r['numero_documento'])}`,
     documento: texto(r['numero_documento']),
     natureza: nulo(r['natureza_financeira_id']),
     centro: nulo(r['centro_custo_id']),
     credor: nulo(r['empresa_fornecedora_id']),
-  }));
+  });
+  /** O retido (não dispensado) por chave (título ou parcela) e tributo, com a natureza do tributo. */
+  const retidosPor = async (chave: 'p.titulo_pagar_id' | 'p.id', filtro: string, p: unknown[]) => {
+    const mapa = new Map<number, { tributo: string; natureza: number | null; valor: number }[]>();
+    for (const r of await l.consultar(
+      `SELECT ${chave} AS chave, tr.codigo, tr.natureza_financeira_id, SUM(r.valor_retido) AS valor
+         FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
+         JOIN titulo_pagar t ON t.id = p.titulo_pagar_id JOIN tributo tr ON tr.id = r.tributo_id
+        WHERE ${valido} AND p.excluido_em IS NULL AND ${retidoVivo} AND ${filtro}
+        GROUP BY ${chave}, tr.codigo, tr.natureza_financeira_id ORDER BY tr.codigo`,
+      [est, ...p],
+    )) {
+      const k = numero(r['chave']);
+      mapa.set(k, [
+        ...(mapa.get(k) ?? []),
+        {
+          tributo: texto(r['codigo']),
+          natureza: nulo(r['natureza_financeira_id']),
+          valor: numero(r['valor']),
+        },
+      ]);
+    }
+    return mapa;
+  };
+  const pagas = await l.consultar(
+    `SELECT p.id, DATE(p.quitada_em) AS data, p.valor_pago, t.numero_documento, t.referente, t.natureza_financeira_id,
+            t.centro_custo_id, t.empresa_fornecedora_id, ${guia} AS guia,
+            (SELECT tr.natureza_financeira_id FROM retencao_titulo rr JOIN tributo tr ON tr.id = rr.tributo_id
+              WHERE rr.recolhimento_titulo_pagar_id = t.id AND rr.excluido_em IS NULL ORDER BY rr.id LIMIT 1) AS natureza_tributo
+       FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+      WHERE ${valido} AND p.excluido_em IS NULL AND p.quitada_em IS NOT NULL AND p.valor_pago > 0
+        AND DATE(p.quitada_em) BETWEEN ? AND ? ORDER BY p.quitada_em, p.id LIMIT 20000`,
+    [est, de, ate],
+  );
+  const pagamento = (r: Record<string, unknown>) => ({
+    ...descricao(r),
+    data: dataIso(r['data']) ?? de,
+    valor: numero(r['valor_pago']),
+  });
+  if (regua === 'caixa') {
+    const daParcela = await retidosPor('p.id', `DATE(p.quitada_em) BETWEEN ? AND ?`, [de, ate]);
+    return pagas.flatMap((r) => {
+      const f = pagamento(r);
+      if (Number(r['guia']))
+        return [fatoDoPagamento({ ...f, recolhimento: { naturezaTributo: nulo(r['natureza_tributo']) } })];
+      const retencoes = daParcela.get(numero(r['id'])) ?? [];
+      return fatosDaApropriacao(
+        { ...f, valorDespesa: centavos(f.valor + retencoes.reduce((s, x) => s + x.valor, 0)), retencoes },
+        'caixa',
+      );
+    });
+  }
+  const emitidos = await l.consultar(
+    `SELECT t.id, t.data_emissao AS data, t.valor_bruto - t.valor_desconto + t.valor_acrescimo AS valor_despesa,
+            t.numero_documento, t.referente, t.natureza_financeira_id, t.centro_custo_id, t.empresa_fornecedora_id
+       FROM titulo_pagar t
+      WHERE ${valido} AND NOT ${guia} AND t.data_emissao BETWEEN ? AND ? ORDER BY t.data_emissao, t.id LIMIT 20000`,
+    [est, de, ate],
+  );
+  const doTitulo = await retidosPor('p.titulo_pagar_id', `t.data_emissao BETWEEN ? AND ?`, [de, ate]);
+  const fatos = [
+    ...emitidos.flatMap((r) =>
+      fatosDaApropriacao(
+        {
+          ...descricao(r),
+          data: dataIso(r['data']) ?? de,
+          valorDespesa: numero(r['valor_despesa']),
+          retencoes: doTitulo.get(numero(r['id'])) ?? [],
+        },
+        'competencia',
+      ),
+    ),
+    ...pagas.map((r) =>
+      fatoDoPagamento({
+        ...pagamento(r),
+        recolhimento: Number(r['guia']) ? { naturezaTributo: nulo(r['natureza_tributo']) } : null,
+      }),
+    ),
+  ];
+  // Ordem do lote: pela data do fato (a emissão antes do pagamento no mesmo dia, pela ordem acima).
+  return fatos
+    .map((f, i) => ({ f, i }))
+    .sort((x, y) => x.f.data.localeCompare(y.f.data) || x.i - y.i)
+    .map((x) => x.f);
 }
 
 // ── Regras de retenção ─────────────────────────────────────────────────────────────────────────────────────────
@@ -379,14 +447,27 @@ const manterRegraRetencao = definirOperacao<RegraRetencaoEntrada, ResultadoOpera
   entrada: esquemaRegraRetencao as never,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
+    // A trava: a linha do tributo serializa a inclusão e o encerramento das regras dele (duas inclusões simultâneas
+    // não gravam vigências sobrepostas), e as regras do estabelecimento são relidas sob a trava.
+    const tributoId =
+      e.acao === 'encerrar'
+        ? nulo(
+            (
+              await tx.consultarParaAtualizar(
+                'SELECT tributo_id FROM regra_retencao WHERE id = ? AND estabelecimento_id = ?',
+                [e.id, est],
+              )
+            )[0]?.['tributo_id'],
+          )
+        : e.tributo;
+    if (tributoId === null)
+      throw recusa('nao-encontrado', 'A regra não é deste estabelecimento.', { campos: ['id'] });
+    await tx.consultarParaAtualizar('SELECT id FROM tributo WHERE id = ?', [tributoId]);
     const existentes = await regrasRetencao(tx, est);
     if (e.acao === 'encerrar') {
       const r = existentes.find((x) => x.id === e.id);
       if (!r) throw recusa('nao-encontrado', 'A regra não é deste estabelecimento.', { campos: ['id'] });
-      if (e.vigenciaFim < r.vigenciaInicio)
-        throw recusa('vigencia-invalida', 'O fim da vigência vem antes do início.', {
-          campos: ['vigenciaFim'],
-        });
+      recusar(conferirEncerramento(r, e.vigenciaFim, existentes));
       await tx.alterar('regra_retencao', r.id, r.versao, { vigencia_fim: e.vigenciaFim });
       return { regra: r.id, acao: 'encerrar' };
     }
@@ -396,7 +477,7 @@ const manterRegraRetencao = definirOperacao<RegraRetencaoEntrada, ResultadoOpera
     if (!t) throw recusa('tributo-inexistente', 'O tributo não existe.', { campos: ['tributo'] });
     if (t.codigo.toUpperCase() === 'ISS' && e.municipio === null)
       throw recusa('sem-municipio', 'A regra do ISS é do município do serviço.', { campos: ['municipio'] });
-    recusar(conferirRegraRetencao({ ...e, tributo: String(t.codigo) }, existentes));
+    recusar(conferirRegraRetencao({ ...e, tributo: String(t.codigo), codigoReceita: null }, existentes));
     const regra = await tx.incluir('regra_retencao', {
       estabelecimento_id: est,
       tributo_id: e.tributo,
@@ -447,7 +528,7 @@ export async function retidoEmAberto(l: Leitor, est: number, competencia: string
        FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
        JOIN titulo_pagar t ON t.id = p.titulo_pagar_id JOIN tributo tr ON tr.id = r.tributo_id
       WHERE t.estabelecimento_id = ? AND r.competencia = ? AND r.excluido_em IS NULL AND t.excluido_em IS NULL
-        AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
+        AND t.situacao <> 'cancelado' AND p.excluido_em IS NULL AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
       GROUP BY tr.id, tr.codigo, tr.codigo_receita ORDER BY tr.codigo`,
     [est, `${competencia}-01`],
   );
@@ -481,7 +562,8 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
       `SELECT r.id, r.versao, r.valor_retido FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
          JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
         WHERE t.estabelecimento_id = ? AND r.tributo_id = ? AND r.competencia = ? AND r.excluido_em IS NULL
-          AND t.excluido_em IS NULL AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
+          AND t.excluido_em IS NULL AND t.situacao <> 'cancelado' AND p.excluido_em IS NULL
+          AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
         ORDER BY r.id`,
       [est, e.tributo, `${e.competencia}-01`],
       { teto: 5000 },

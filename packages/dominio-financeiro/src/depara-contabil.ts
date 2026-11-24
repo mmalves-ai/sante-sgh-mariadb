@@ -1,16 +1,25 @@
 // F3.8, 07-FIN linha 100: o de-para contábil por evento, mantido pela tela. Cada fato do financeiro (a despesa
-// reconhecida na emissão, o pagamento do título, o recolhimento do retido) vira uma partida; a conta externa de cada
+// reconhecida na emissão, o retido apropriado, o pagamento do título, o pagamento da guia) vira uma partida; a conta externa de cada
 // lado vem da regra mais específica: evento + natureza vence evento sozinho, e o lado exato vence a regra "ambos". O
 // centro de custo e o credor saem com o código do escritório contábil, quando mapeados. Sem conta num dos lados, o fato
 // não entra no lote e fica na lista "sem de-para" (montarLoteContabil).
-import { type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
+import { centavos, type RecusaFinanceiro } from '@sgh/contratos/regras-financeiro';
 import type { DePara, EventoFinanceiro } from './lote-contabil.js';
 
 /** Os eventos que o financeiro publica para a contabilização (catálogo nativo, código estável). */
+// Partidas por fato (prática de mercado, regime de competência): a emissão debita a despesa pelo valor do documento e
+// credita o fornecedor pelo líquido e o tributo a recolher pelo retido; o pagamento debita o fornecedor e credita o
+// banco; o pagamento da guia debita o tributo a recolher e credita o banco. No regime de caixa a despesa entra no
+// pagamento da parcela (débito despesa, crédito banco) e o retido da parcela vai ao tributo a recolher na mesma data.
+// O débito do pagamento e o da guia herdam a conta do crédito da emissão e da retenção (`debitoDe`): o passivo que
+// nasce numa partida é o mesmo que a outra baixa, sem cadastrar a mesma conta duas vezes.
 export const EVENTOS_CONTABEIS_FINANCEIRO = {
-  fin_despesa_reconhecida: 'Despesa reconhecida na emissão do título a pagar',
-  fin_pagamento_titulo: 'Pagamento do título a pagar',
-  fin_recolhimento_retencao: 'Recolhimento do tributo retido na fonte',
+  fin_despesa_reconhecida: 'Despesa reconhecida na emissão (débito despesa; crédito fornecedor pelo líquido)',
+  fin_retencao_apropriada:
+    'Tributo retido a recolher (débito: a despesa do título; crédito: tributo a recolher, pela natureza do tributo)',
+  fin_pagamento_titulo: 'Pagamento ao fornecedor (débito: o fornecedor da emissão; crédito: banco)',
+  fin_despesa_paga: 'Despesa paga, regime de caixa (débito despesa; crédito banco)',
+  fin_recolhimento_retencao: 'Pagamento da guia do retido (débito: o tributo a recolher; crédito: banco)',
 } as const;
 export type EventoContabilFinanceiro = keyof typeof EVENTOS_CONTABEIS_FINANCEIRO;
 export type LadoDePara = 'debito' | 'credito' | 'ambos';
@@ -34,6 +43,96 @@ export interface FatoContabil {
   readonly natureza: number | null;
   readonly centro: number | null;
   readonly credor: number | null;
+  /** O débito herdado de outra regra (a conta do passivo que este fato baixa, ou a despesa do título na retenção). */
+  readonly debitoDe?: {
+    readonly evento: string;
+    readonly lado: 'debito' | 'credito';
+    readonly natureza: number | null;
+  };
+}
+
+/** A regra que dá a conta de cada lado do fato (o débito pode vir de outra regra, `debitoDe`). */
+function origemDoLado(f: FatoContabil, lado: 'debito' | 'credito') {
+  return lado === 'debito' && f.debitoDe ? f.debitoDe : { evento: f.evento, lado, natureza: f.natureza };
+}
+function contaDoLado(regras: readonly RegraDeParaConta[], f: FatoContabil, lado: 'debito' | 'credito') {
+  const o = origemDoLado(f, lado);
+  return contaExterna(regras, o.evento, o.lado, o.natureza);
+}
+
+export interface TituloParaContabil {
+  readonly data: string;
+  /** O valor do documento (bruto menos desconto mais acréscimo): a despesa reconhecida. */
+  readonly valorDespesa: number;
+  readonly historico: string;
+  readonly documento: string;
+  readonly natureza: number | null;
+  readonly centro: number | null;
+  readonly credor: number | null;
+  /** O retido de cada tributo (não dispensado), com a natureza do tributo (a conta do tributo a recolher). */
+  readonly retencoes: readonly {
+    readonly tributo: string;
+    readonly natureza: number | null;
+    readonly valor: number;
+  }[];
+}
+
+/**
+ * A apropriação da despesa em partidas: competência na emissão (débito despesa, crédito fornecedor pelo líquido) ou
+ * caixa no pagamento (débito despesa, crédito banco pelo pago), mais uma partida por tributo retido (débito a mesma
+ * despesa, crédito o tributo a recolher). A soma das partidas é o valor da despesa.
+ */
+export function fatosDaApropriacao(t: TituloParaContabil, regua: 'competencia' | 'caixa'): FatoContabil[] {
+  const principal = regua === 'competencia' ? 'fin_despesa_reconhecida' : 'fin_despesa_paga';
+  const base = { data: t.data, documento: t.documento, centro: t.centro, credor: t.credor };
+  const retidos = t.retencoes.filter((r) => r.valor > 0);
+  const liquido = centavos(t.valorDespesa - retidos.reduce((s, r) => s + r.valor, 0));
+  const fatos: FatoContabil[] = [];
+  if (liquido > 0)
+    fatos.push({ ...base, evento: principal, valor: liquido, historico: t.historico, natureza: t.natureza });
+  for (const r of retidos)
+    fatos.push({
+      ...base,
+      evento: 'fin_retencao_apropriada',
+      valor: centavos(r.valor),
+      historico: `${t.historico} RETIDO ${r.tributo}`,
+      natureza: r.natureza,
+      debitoDe: { evento: principal, lado: 'debito', natureza: t.natureza },
+    });
+  return fatos;
+}
+
+/**
+ * O pagamento de uma parcela que baixa um passivo: ao fornecedor (débito a conta do fornecedor da emissão) ou a guia do
+ * retido (débito a conta do tributo a recolher, pela natureza do tributo); crédito o banco, pelo evento do fato.
+ */
+export function fatoDoPagamento(p: {
+  readonly data: string;
+  readonly valor: number;
+  readonly historico: string;
+  readonly documento: string;
+  readonly natureza: number | null;
+  readonly centro: number | null;
+  readonly credor: number | null;
+  /** A guia do retido: a natureza do tributo recolhido; nulo: pagamento ao fornecedor. */
+  readonly recolhimento: { readonly naturezaTributo: number | null } | null;
+}): FatoContabil {
+  const { recolhimento, ...f } = p;
+  return recolhimento
+    ? {
+        ...f,
+        evento: 'fin_recolhimento_retencao',
+        debitoDe: {
+          evento: 'fin_retencao_apropriada',
+          lado: 'credito',
+          natureza: recolhimento.naturezaTributo,
+        },
+      }
+    : {
+        ...f,
+        evento: 'fin_pagamento_titulo',
+        debitoDe: { evento: 'fin_despesa_reconhecida', lado: 'credito', natureza: p.natureza },
+      };
 }
 
 const CONTA_EXTERNA = /^[0-9A-Za-z][0-9A-Za-z.-]{0,49}$/;
@@ -119,8 +218,8 @@ export function dePararFatos(
     });
     depara.push({
       evento: chave,
-      contaDebito: contaExterna(regras, f.evento, 'debito', f.natureza) ?? '',
-      contaCredito: contaExterna(regras, f.evento, 'credito', f.natureza) ?? '',
+      contaDebito: contaDoLado(regras, f, 'debito') ?? '',
+      contaCredito: contaDoLado(regras, f, 'credito') ?? '',
     });
   });
   return { eventos, depara };
@@ -142,9 +241,11 @@ export function eventosSemDePara(
   >();
   for (const f of fatos)
     for (const lado of ['debito', 'credito'] as const)
-      if (!contaExterna(regras, f.evento, lado, f.natureza)) {
-        const k = `${f.evento}|${f.natureza}|${lado}`;
-        const x = mapa.get(k) ?? { evento: f.evento, natureza: f.natureza, lado, fatos: 0 };
+      if (!contaDoLado(regras, f, lado)) {
+        // A falta aponta a regra que dá a conta (no débito herdado, a regra de origem).
+        const o = origemDoLado(f, lado);
+        const k = `${o.evento}|${o.natureza}|${o.lado}`;
+        const x = mapa.get(k) ?? { evento: o.evento, natureza: o.natureza, lado: o.lado, fatos: 0 };
         x.fatos += 1;
         mapa.set(k, x);
       }

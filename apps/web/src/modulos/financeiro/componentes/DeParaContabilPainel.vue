@@ -24,6 +24,10 @@ const { t } = useI18n({
       debito: 'Conta de débito',
       credito: 'Conta de crédito',
       adicionar: 'Adicionar exceção por natureza',
+      contaExcecao: 'Conta da exceção',
+      ladoExcecao: 'Lado da exceção',
+      herda: 'herda {conta} da regra geral',
+      semGeral: 'sem conta: o lançamento fica fora do lote',
       desligar: 'Desligar',
       faltam: 'Falta conta no período: {n} lançamento(s) ficariam fora do lote',
       nadaFalta: 'Todos os lançamentos do período têm conta nos dois lados.',
@@ -43,6 +47,12 @@ const faltas = useQuery({
 const erro = ref<unknown>(null);
 const ok = ref('');
 const novaNatureza = ref<Record<string, number | null>>({});
+const novaConta = ref<Record<string, string>>({});
+const novoLado = ref<Record<string, 'debito' | 'credito'>>({});
+const CONTA = /^[0-9A-Za-z][0-9A-Za-z.-]{0,49}$/;
+/** A exceção só grava com natureza e conta válida digitadas na linha (sem conta de reserva). */
+const excecaoPronta = (evento: string) =>
+  !!novaNatureza.value[evento] && CONTA.test((novaConta.value[evento] ?? '').trim());
 
 /** As linhas da grade: a regra geral de cada evento e as exceções por natureza já gravadas. */
 const linhas = computed(() => {
@@ -63,6 +73,15 @@ const linhas = computed(() => {
     credito: d.regras.find(
       (r) => r.ativo && r.evento === k.evento && r.natureza === k.natureza && r.lado !== 'debito',
     ),
+    /** Na exceção, a conta que o lado vazio herda da regra geral do evento (texto de apoio). */
+    herdada: {
+      debito: d.regras.find(
+        (r) => r.ativo && r.evento === k.evento && r.natureza === null && r.lado !== 'credito',
+      )?.conta,
+      credito: d.regras.find(
+        (r) => r.ativo && r.evento === k.evento && r.natureza === null && r.lado !== 'debito',
+      )?.conta,
+    },
   }));
 });
 const totalFaltas = computed(() => (faltas.data.value ?? []).reduce((s, f) => s + f.fatos, 0));
@@ -105,22 +124,28 @@ function contaAlterada(l: (typeof linhas.value)[number], lado: 'debito' | 'credi
     ativo: true,
   });
 }
-function adicionarExcecao(evento: string) {
-  const n = novaNatureza.value[evento];
-  if (!n) return;
-  const d = dados.data.value;
-  const geral = d?.regras.find(
-    (r) => r.ativo && r.evento === evento && r.natureza === null && r.lado !== 'credito',
-  );
-  return salvar({
+async function adicionarExcecao(evento: string) {
+  if (!excecaoPronta(evento)) return;
+  await salvar({
     tipo: 'conta',
     id: null,
     evento,
-    lado: 'debito',
-    natureza: n,
-    conta: geral?.conta ?? '0',
+    lado: novoLado.value[evento] ?? 'debito',
+    natureza: novaNatureza.value[evento],
+    conta: (novaConta.value[evento] ?? '').trim(),
     ativo: true,
   });
+  if (!erro.value) {
+    novaNatureza.value[evento] = null;
+    novaConta.value[evento] = '';
+  }
+}
+/** O código externo do centro: vazio desliga a regra atual (mandando o código que ela tem), nunca um marcador. */
+function centroAlterado(c: { id: number; externo: string | null }, valor: string) {
+  const v = valor.trim();
+  if (v === (c.externo ?? '')) return;
+  if (v) return salvar({ tipo: 'centro', centro: c.id, codigo: v, ativo: true });
+  if (c.externo) return salvar({ tipo: 'centro', centro: c.id, codigo: c.externo, ativo: false });
 }
 </script>
 
@@ -168,7 +193,28 @@ function adicionarExcecao(evento: string) {
                   {{ n.codigo }} {{ n.descricao }}
                 </option>
               </select>
-              <button type="button" :disabled="!novaNatureza[l.evento]" @click="adicionarExcecao(l.evento)">
+              <select
+                v-model="novoLado[l.evento]"
+                :aria-label="t('ladoExcecao')"
+                :data-testid="`dp-nat-lado-${l.evento}`"
+              >
+                <option value="debito">{{ t('lados.debito') }}</option>
+                <option value="credito">{{ t('lados.credito') }}</option>
+              </select>
+              <input
+                v-model="novaConta[l.evento]"
+                maxlength="50"
+                required
+                pattern="[0-9A-Za-z][0-9A-Za-z.\-]*"
+                :aria-label="t('contaExcecao')"
+                :data-testid="`dp-nat-conta-${l.evento}`"
+              />
+              <button
+                type="button"
+                :disabled="!excecaoPronta(l.evento)"
+                :data-testid="`dp-nat-adicionar-${l.evento}`"
+                @click="adicionarExcecao(l.evento)"
+              >
                 {{ t('adicionar') }}
               </button>
             </span>
@@ -183,6 +229,13 @@ function adicionarExcecao(evento: string) {
               :data-testid="`dp-${lado}-${l.evento}-${l.natureza ?? 'geral'}`"
               @change="contaAlterada(l, lado, ($event.target as HTMLInputElement).value)"
             />
+            <small
+              v-if="l.natureza !== null && !l[lado]"
+              class="secundario"
+              :data-testid="`dp-herda-${lado}-${l.evento}-${l.natureza}`"
+            >
+              {{ l.herdada[lado] ? t('herda', { conta: l.herdada[lado] }) : t('semGeral') }}
+            </small>
           </td>
         </tr>
       </tbody>
@@ -197,13 +250,7 @@ function adicionarExcecao(evento: string) {
           :disabled="!podeEditar"
           maxlength="40"
           :data-testid="`dp-cc-${c.id}`"
-          @change="
-            (ev) => {
-              const v = (ev.target as HTMLInputElement).value.trim();
-              if (v !== (c.externo ?? ''))
-                salvar({ tipo: 'centro', centro: c.id, codigo: v || c.externo || '-', ativo: v !== '' });
-            }
-          "
+          @change="centroAlterado(c, ($event.target as HTMLInputElement).value)"
         />
       </li>
     </ul>
