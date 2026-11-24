@@ -190,9 +190,9 @@ const opGravarConfiguracao = (t: RegistroTrilhaTela) =>
           'Versão do padrão não encontrada ou inativa.',
           'versaoPadrao',
         );
-      const atuais = await tx.consultar(
+      const atuais = await tx.consultarParaAtualizar(
         `SELECT id, vigencia_inicio, vigencia_fim, versao FROM configuracao_tiss_fonte_pagadora
-          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo FOR UPDATE`,
+          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND ativo`,
         [est, e.fontePagadora],
       );
       const lidas = atuais.map((a) => ({
@@ -268,9 +268,9 @@ const opIncluirFaixa = (t: RegistroTrilhaTela) =>
     async gravar(tx, e, ctx) {
       if (!(await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ?', [e.fontePagadora])))
         throw naoAchado('Fonte pagadora');
-      const existentes = await tx.consultar(
+      const existentes = await tx.consultarParaAtualizar(
         `SELECT id, numero_inicial, numero_final, proximo_numero, situacao FROM faixa_numeracao_guia
-          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? FOR UPDATE`,
+          WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ?`,
         [ctx.estabelecimento, e.fontePagadora, e.tipoGuia],
       );
       recusarErros(
@@ -355,11 +355,11 @@ export async function reservarNumeroGuia(
   dia?: string,
 ): Promise<NumeroReservado> {
   const hoje = dia ?? data((await tx.uma<{ d: unknown }>('SELECT CURRENT_DATE AS d', []))?.d)!;
-  const linhas = await tx.consultar(
+  const linhas = await tx.consultarParaAtualizar(
     `SELECT id, prefixo, tamanho_fixo, numero_inicial, numero_final, proximo_numero, vigencia_inicio, vigencia_fim,
             situacao, versao
        FROM faixa_numeracao_guia
-      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? AND situacao = 'ativa' FOR UPDATE`,
+      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND tipo_guia = ? AND situacao = 'ativa'`,
     [estabelecimento, fontePagadora, tipoFaixaDaGuia(tipoGuia)],
   );
   const faixas = linhas.map((r) => ({
