@@ -326,7 +326,7 @@ describe.skipIf(SEM_BANCO)('PortaFormularioNovoPropria contra o MariaDB (cliente
     expect((await porta.especialidades(C)).some((e) => e.codigo === especialidade)).toBe(true);
     const perguntas = await porta.buscarPerguntas(C, 'zz-termo-sintetico-sem-par', []);
     expect(perguntas).toEqual([]);
-    const plano = await porta.dadosDoPlano(C, `${COD}A`, [], []);
+    const plano = await porta.dadosDoPlano(C, `${COD}A`, []);
     expect(plano.codigosExistentes.has(`${COD}A`)).toBe(false);
     expect(plano.respostasCadastradas).toEqual([]);
     expect(await porta.podeGravar(C, 'pep.publicarFormularioNovo')).toMatchObject({ pode: false });
