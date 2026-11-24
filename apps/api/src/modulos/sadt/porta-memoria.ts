@@ -1013,6 +1013,7 @@ export class PortaSadtMemoria implements PortaSadt {
         const impressao = s.proximo++;
         s.laudos.push({
           impressao,
+          numero: String(impressao),
           codigo: x['codigo'] as string,
           exames: ids,
           em: agora,
