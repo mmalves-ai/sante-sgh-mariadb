@@ -26,9 +26,21 @@
 // portas próprias irmãs (ans-bases-proprias.ts), com a regra da porta de memória.
 import { MOTIVOS_IMPUGNACAO_SUS, type MotivoImpugnacaoSus } from '@sgh/contratos';
 import { createHash, randomUUID } from 'node:crypto';
-import { type ArmazemArquivos, type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  type ArmazemArquivos,
+  definirOperacao,
+  type Escritor,
+  type Leitor,
+  type Linha,
+  type NucleoProprio,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
+import { z } from 'zod';
 import { BasesAnsProprias, type FontesAnsProprias } from './ans-bases-proprias.js';
 import type { ArquivoGravado, ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
+import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
+import type { ContextoGravacaoOperadora } from './contexto-gravacao.js';
 import {
   BasePortaOperadoraPropria,
   bool,
@@ -210,12 +222,32 @@ const SELECT_ENVIO = `
     LEFT JOIN arquivo a ON a.id = e.arquivo_id
     LEFT JOIN cobranca_ressarcimento_sus cr ON cr.id = e.cobranca_ressarcimento_sus_id`;
 
+/** Liga o arquivo guardado ao envio (alteração auditada: versão, alterado_em/por e trilha da operação). */
+const LIGAR_ARQUIVO = definirOperacao({
+  nome: 'operadora.ans.arquivo-ligado',
+  tabelas: ['envio_ans'],
+  entrada: z.object({
+    envio: z.number().int().positive(),
+    arquivo: z.number().int().positive(),
+    estabelecimento: z.number().int().nonnegative(),
+  }),
+  gravar: async (tx, x) => {
+    const e = await versaoDe(tx, 'envio_ans', x.envio, 'O envio');
+    if (num(e['estabelecimento_id']) !== x.estabelecimento) throw inexistente('O envio');
+    return {
+      id: x.envio,
+      versao: await tx.alterar('envio_ans', x.envio, num(e['versao']), { arquivo_id: x.arquivo }),
+    };
+  },
+  alvo: (x) => ({ tabela: 'envio_ans', id: x.envio }),
+});
+
 export class PortaAnsOperadoraPropria
   extends BasePortaOperadoraPropria<GravadorAns>
   implements PortaAnsOperadora
 {
   constructor(
-    nucleo: NucleoOperadora,
+    nucleo: NucleoOperadora & Pick<NucleoProprio, 'escrever'>,
     cliente: string,
     private readonly f1: Pick<PortaOperadora, 'gruposSip'>,
     /** O destino dos envios deste ambiente (o do serviço: simulador fora de produção). */
@@ -229,10 +261,78 @@ export class PortaAnsOperadoraPropria
     private readonly armazem: ArmazemArquivos | null = null,
   ) {
     super(nucleo, cliente, 'operadora.ans', TABELAS_ANS);
+    this.escrever = (ctx, fn) => nucleo.escrever(ctx, fn);
     this.bases = fontes ? new BasesAnsProprias(fontes, (c, b) => this.complementoSib(c, b)) : null;
   }
 
   private readonly bases: BasesAnsProprias | null;
+  private readonly escrever: (
+    ctx: { readonly cliente: string; readonly correlacao: string },
+    fn: (e: Escritor) => Promise<unknown>,
+  ) => Promise<unknown>;
+  /**
+   * Os arquivos que a gravação em curso pediu para guardar, pela chave de idempotência do pedido. O registro do arquivo
+   * é ele mesmo uma operação do Executor (trilha, idempotência), que não roda DENTRO de outra operação (o ponto de
+   * salvamento é um só por nível e a transação da operação só grava nas tabelas dela): por isso o gravador confere o
+   * arquivo e o anota aqui, e `gravar` guarda e liga ao envio logo DEPOIS da operação, na MESMA transação.
+   */
+  private readonly arquivosPedidos = new Map<string, { envio: number; arquivo: ArquivoGravado }[]>();
+
+  /**
+   * Com o armazenamento ligado, a gravação da tela, a guarda do arquivo (disco + registro) e a ligação do arquivo ao
+   * envio (`envio_ans.arquivo_id`, alteração auditada com versão e trilha) ficam numa transação só: tudo ou nada.
+   */
+  override async gravar<T>(
+    c: ContextoGravacaoOperadora,
+    trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
+    fn: (g: GravadorAns) => Promise<T>,
+  ): Promise<T> {
+    const armazem = this.armazem;
+    const chave = c.chaveIdempotencia;
+    if (!armazem || !chave) return super.gravar(c, trilha, fn);
+    const correlacao = (c.correlacao || 'operadora.ans').slice(0, 64);
+    return (await this.escrever({ cliente: this.cliente, correlacao }, async (e) => {
+      this.arquivosPedidos.set(chave, []);
+      try {
+        let r = await super.gravar(c, trilha, fn, { escritor: e });
+        for (const [i, p] of (this.arquivosPedidos.get(chave) ?? []).entries()) {
+          const ctxOp = {
+            cliente: this.cliente,
+            estabelecimento: c.estabelecimento,
+            usuario: c.usuario,
+            correlacao,
+            chaveIdempotencia: `${chave}:arquivo:${i}`.slice(0, 128),
+          };
+          const g = await armazem.guardar(
+            {
+              conteudo: Buffer.from(p.arquivo.base64, 'base64'),
+              nomeOriginal: p.arquivo.nome.slice(0, 255),
+              tipoMime: 'application/xml',
+              finalidade: 'envio_ans',
+              entidade: 'envio_ans',
+              entidadeId: p.envio,
+              imutavel: true,
+            },
+            { ...ctxOp, chaveIdempotencia: `ans-arquivo:${p.envio}:${randomUUID()}` },
+            { escritor: e },
+          );
+          const ligado = await this.executor.executar(
+            LIGAR_ARQUIVO,
+            this.cliente,
+            { envio: p.envio, arquivo: g.id, estabelecimento: c.estabelecimento ?? 0 },
+            ctxOp,
+            { escritor: e },
+          );
+          // O resultado da tela leva a versão do envio depois da ligação (a que a próxima gravação espera).
+          if (r && typeof r === 'object' && (r as { id?: unknown }).id === p.envio && 'versao' in r)
+            r = { ...r, versao: ligado.resultado.versao };
+        }
+        return r;
+      } finally {
+        this.arquivosPedidos.delete(chave);
+      }
+    })) as T;
+  }
 
   /** As bases das obrigações; sem as portas irmãs (montagem parcial), 501 com o nome do recurso. */
   private base(recurso: string): BasesAnsProprias {
@@ -425,30 +525,17 @@ export class PortaAnsOperadoraPropria
    * Guarda o arquivo do envio no armazenamento (imutável, ligado ao envio) e devolve o id do metadado. O conteúdo é
    * conferido pelo hash que a geração calculou: divergência recusa (nunca guarda arquivo diferente do declarado).
    */
-  private async guardarArquivo(tx: TxOperacao, envio: number, a: ArquivoGravado): Promise<number | null> {
-    if (!this.armazem) return null;
+  private pedirArquivo(tx: TxOperacao, envio: number, a: ArquivoGravado): void {
+    const pedidos = this.arquivosPedidos.get(tx.contexto.chaveIdempotencia);
+    if (!this.armazem || !pedidos) return;
     const conteudo = Buffer.from(a.base64, 'base64');
-    // Confere antes de guardar: o arquivo divergente nunca chega ao disco.
+    // Confere antes de guardar: o arquivo divergente nunca chega ao disco (e a operação inteira volta).
     if (createHash('sha256').update(conteudo).digest('hex') !== a.sha256.toLowerCase())
       throw recusa(
         'arquivo-divergente',
         'O conteúdo do arquivo não confere com o resumo calculado na geração.',
       );
-    const g = await this.armazem.guardar(
-      {
-        conteudo,
-        nomeOriginal: a.nome.slice(0, 255),
-        tipoMime: 'application/xml',
-        finalidade: 'envio_ans',
-        entidade: 'envio_ans',
-        entidadeId: envio,
-        imutavel: true,
-      },
-      { ...tx.contexto, chaveIdempotencia: `ans-arquivo:${envio}:${randomUUID()}` },
-      // Na transação do envio (ponto de salvamento): o registro do arquivo e o envio gravam juntos ou nada grava.
-      { escritor: tx },
-    );
-    return g.id;
+    pedidos.push({ envio, arquivo: a });
   }
 
   itens(c: ContextoAns, id: number): Promise<DadosItemEnvioAns[]> {
@@ -743,21 +830,19 @@ export class PortaAnsOperadoraPropria
     return {
       gerar: async (g) => {
         const r = await gerarEnvio(tx, est, g);
-        const arq = g.arquivo ? await this.guardarArquivo(tx, r.id, g.arquivo) : null;
-        if (arq === null) return r;
-        return { id: r.id, versao: await tx.alterar('envio_ans', r.id, r.versao, { arquivo_id: arq }) };
+        if (g.arquivo) this.pedirArquivo(tx, r.id, g.arquivo);
+        return r;
       },
       transmitir: async (a) => {
         const e = await envio(a.id);
         if (txt(e['situacao']) !== 'gerado')
           throw recusa('envio-transmitido', 'Só o envio gerado pode ser transmitido.');
         // O arquivo do protocolo da transmissão, quando houver, passa a ser o arquivo do envio.
-        const arq = a.arquivo ? await this.guardarArquivo(tx, a.id, a.arquivo) : null;
+        if (a.arquivo) this.pedirArquivo(tx, a.id, a.arquivo);
         const versao = await tx.alterar('envio_ans', a.id, a.versao, {
           situacao: 'enviado',
           enviado_em: new Date(),
           numero_recibo: a.recibo,
-          ...(arq === null ? {} : { arquivo_id: arq }),
         });
         // Cada item pendente passa a enviado pela alteração auditada (versão, alterado_em/por, trilha).
         const pendentes = await tx.consultarParaAtualizar(

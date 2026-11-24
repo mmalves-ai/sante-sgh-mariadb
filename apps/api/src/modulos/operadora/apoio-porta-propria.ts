@@ -23,6 +23,7 @@ import {
   type Leitor,
   type Linha,
   type NucleoProprio,
+  type OpcoesExecucao,
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -200,6 +201,8 @@ export abstract class BasePortaOperadoraPropria<G> {
     c: ContextoGravacaoOperadora,
     trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
     fn: (g: G) => Promise<T>,
+    /** Opções do Executor (ex.: `escritor` de quem já abriu a transação, para gravar junto, sob SAVEPOINT). */
+    opcoes: OpcoesExecucao = {},
   ): Promise<T> {
     if (!c.chaveIdempotencia)
       throw new ErroOperacao(
@@ -248,7 +251,7 @@ export abstract class BasePortaOperadoraPropria<G> {
       correlacao: (c.correlacao || this.prefixo).slice(0, 64),
       chaveIdempotencia: c.chaveIdempotencia,
     };
-    const saida = await this.executor.executar(op, this.cliente, { chave: c.chaveIdempotencia }, ctx);
+    const saida = await this.executor.executar(op, this.cliente, { chave: c.chaveIdempotencia }, ctx, opcoes);
     if (saida.repetida) return JSON.parse(String(saida.resultado['resultado'] ?? 'null')) as T;
     return resultado as T;
   }

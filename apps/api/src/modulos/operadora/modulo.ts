@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { chaveMestra } from '@sgh/dominio-acesso';
-import { ambienteDe, ErroOperacao } from '@sgh/nucleo';
+import { ambienteDe, criarArmazemLocal, ErroOperacao, lerRaizArquivos } from '@sgh/nucleo';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import {
@@ -145,6 +145,8 @@ export async function portasDaOperadora(
           operadora,
           ambienteDe(ctx.env) === 'producao' ? 'ans' : 'simulador',
           { operadora, cobranca, contas },
+          // O arquivo do envio no disco da instalação (ADR 0004); sem ARQUIVOS_RAIZ, abrir o arquivo responde 501.
+          lerRaizArquivos(ctx.env) ? criarArmazemLocal(n, { env: ctx.env }) : null,
         ),
       atendimento: o.atendimento ?? new PortaAtendimentoOperadoraPropria(n, cliente, operadora, rede),
     };

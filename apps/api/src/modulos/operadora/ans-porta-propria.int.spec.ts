@@ -3,7 +3,11 @@
 // retorno (envio_ans_retorno) com o CCO no beneficiário, o retificador que substitui o original, a versão, a trilha e o
 // outbox; e as recusas (retorno sem transmissão, conflito de versão, outro estabelecimento, retificador sem original).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
-import { NucleoProprio } from '@sgh/nucleo';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { criarArmazemLocal, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaAnsOperadoraPropria, periodoDaCompetencia } from './ans-porta-propria.js';
 import {
@@ -39,6 +43,7 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
   let nucleo: NucleoProprio;
   let porta: PortaAnsOperadoraPropria;
   let m: MassaOperadora;
+  let raiz: string | null = null;
   const ler = (sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't0209' }, (l) => l.consultar(sql, p));
 
@@ -54,7 +59,15 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
     if (m) {
       await limparNegocio(nucleo, m);
       await limparRessarcimento();
+      // O arquivo dos envios (depois dos envios, pela chave envio_ans.arquivo_id).
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-arquivo-ans' }, (e) =>
+        e.executar("DELETE FROM arquivo WHERE finalidade = 'envio_ans' AND estabelecimento_id IN (?, ?)", [
+          m.est,
+          m.outroEst,
+        ]),
+      );
     }
+    if (raiz) rmSync(raiz, { recursive: true, force: true });
     await nucleo?.encerrar();
   });
 
@@ -517,5 +530,75 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
       contas: [],
       pagamentos: [],
     });
+  });
+
+  it('arquivo do envio: guardado no armazenamento (imutável, ligado ao envio), lido pelo hash; outro estabelecimento não', async () => {
+    raiz = mkdtempSync(join(tmpdir(), 'ans-arquivo-'));
+    const comArmazem = new PortaAnsOperadoraPropria(
+      nucleo,
+      CLIENTE,
+      { gruposSip: async () => [] },
+      'simulador',
+      null,
+      criarArmazemLocal(nucleo, { raiz, executor: nucleo.criarExecutor() }),
+    );
+    const xml = '<?xml version="1.0"?><mensagemSIB><sintetico>L0209</sintetico></mensagemSIB>';
+    const base64 = Buffer.from(xml).toString('base64');
+    const sha256 = createHash('sha256').update(xml).digest('hex');
+    const entrada = {
+      operadora: m.operadora,
+      obrigacao: 'SIB' as const,
+      competencia: '2026-08',
+      sequencial: 1,
+      retificador: false,
+      destino: 'simulador' as const,
+      leiaute: 'SIB-XML-1.1',
+      registros: 0,
+      valorTotal: null,
+      quadros: '{}',
+      substituir: [],
+      itens: [],
+      usuario: 'l0209.teste',
+    };
+    const T = trilhaTela(m, 'envio_ans', 'operadora.ans.gerado');
+    const r = await comArmazem.gravar(contexto(m), T, (g) =>
+      g.gerar({ ...entrada, arquivo: { nome: 'SIB_L0209.xml', bytes: xml.length, sha256, base64 } }),
+    );
+    expect(r.versao).toBe(2);
+    const [e] = await ler(
+      'SELECT a.nome_original, a.hash_sha256, a.imutavel, a.entidade_id FROM envio_ans e JOIN arquivo a ON a.id = e.arquivo_id WHERE e.id = ?',
+      [r.id],
+    );
+    expect(e).toEqual({
+      nome_original: 'SIB_L0209.xml',
+      hash_sha256: sha256,
+      imutavel: 1,
+      entidade_id: r.id,
+    });
+    expect(await comArmazem.arquivo(contexto(m), r.id)).toEqual({ nome: 'SIB_L0209.xml', base64, sha256 });
+    expect(await comArmazem.arquivo(contexto(m, m.outroEst), r.id)).toBeNull();
+    // A leitura do envio mostra o arquivo (nome, bytes e resumo).
+    expect(await comArmazem.envio(contexto(m), r.id)).toMatchObject({
+      arquivoNome: 'SIB_L0209.xml',
+      hash: sha256,
+    });
+    // Sem o armazenamento (sem raiz), o arquivo guardado responde 501 em vez de conteúdo vazio.
+    expect(await porta.arquivo(contexto(m), r.id).catch((x: unknown) => codigoDe(x))).toBe('modelo-pendente');
+    // Resumo divergente do conteúdo: recusa e nada fica gravado (competência que nenhum outro caso usa).
+    const errado = await comArmazem
+      .gravar(contexto(m), T, (g) =>
+        g.gerar({
+          ...entrada,
+          competencia: '2026-06',
+          arquivo: { nome: 'SIB_L0209.xml', bytes: xml.length, sha256: '0'.repeat(64), base64 },
+        }),
+      )
+      .catch((x: unknown) => codigoDe(x));
+    expect(errado).toBe('arquivo-divergente');
+    expect(
+      await ler("SELECT id FROM envio_ans WHERE estabelecimento_id = ? AND competencia = '2026-06-01'", [
+        m.est,
+      ]),
+    ).toEqual([]);
   });
 });
