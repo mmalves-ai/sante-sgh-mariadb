@@ -603,7 +603,16 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
     });
   }
 
+  /** Quem trata a linha fica registrado (o banco exige): sem usuário na sessão, nada é gravado. */
+  private usuarioQueTrata(): number {
+    const u = this.tx.contexto.usuario;
+    if (u === null || u === undefined)
+      throw recusa('usuario-obrigatorio', 'O tratamento do retorno precisa do usuário da sessão: nada foi gravado.');
+    return u;
+  }
+
   async inserirRetornoSus(r: RetornoSusParaGravar): Promise<number | null> {
+    const tratador = r.situacao === 'aprovada' ? this.usuarioQueTrata() : null;
     const cab = await this.cabecalhoDoRetorno(r);
     const ja = await this.tx.uma('SELECT id FROM retorno_sus_item WHERE retorno_sus_id = ? AND identificacao = ?', [
       cab,
@@ -646,7 +655,7 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
         ? {
             justificativa: 'Aprovada no retorno do gestor.',
             tratado_em: agora,
-            tratado_por_usuario_id: this.tx.contexto.usuario,
+            tratado_por_usuario_id: tratador,
           }
         : {}),
     });
@@ -691,7 +700,7 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
       tratamento: p.decisao,
       justificativa: p.justificativa.slice(0, 1000),
       tratado_em: new Date(),
-      tratado_por_usuario_id: this.tx.contexto.usuario,
+      tratado_por_usuario_id: this.usuarioQueTrata(),
     });
     if (p.decisao === 'reapresentar' && p.aih !== null) {
       if (!this.ponteAih) throw erroSemPonteAih();

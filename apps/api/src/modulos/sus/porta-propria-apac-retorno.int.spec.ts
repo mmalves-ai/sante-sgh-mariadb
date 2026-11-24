@@ -43,6 +43,8 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
   let paciente = 0;
   let atendimento = 0;
   let sigtap = 0;
+  let usuario = 0;
+  let dom: number[] = [];
   const massa: { tabela: string; id: number }[] = [];
 
   async function ler<T>(fn: (l: LeituraApacRetorno) => Promise<T>): Promise<T> {
@@ -76,7 +78,7 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
         .executar(op, CLIENTE, { chave }, {
           cliente: CLIENTE,
           estabelecimento: est,
-          usuario: null,
+          usuario,
           correlacao: 'sapac-gravar',
           chaveIdempotencia: chave,
         });
@@ -195,8 +197,27 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
            aberta_em, criado_em) VALUES (?, 'bpa', '202509', '2025-09-01', '2025-09-30', 'aberta', ?, ?)`,
         [est, agora, agora],
       );
+      dom = [];
+      for (const lista of [
+        'caracteristica_tratamento_dialitico',
+        'contraindicacao_transplante',
+        'situacao_transplante',
+        'acesso_vascular',
+      ])
+        dom.push(
+          await garantir(
+            'dominio_sus',
+            'SELECT id FROM dominio_sus WHERE lista = ? AND codigo = ?',
+            [lista, 'SAPAC'],
+            'INSERT INTO dominio_sus (lista, codigo, descricao, criado_em) VALUES (?, ?, ?, ?)',
+            [lista, 'SAPAC', `Valor fictício ${lista}`, agora],
+          ),
+        );
+      const u = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM usuario', []);
+      usuario = Number(u?.id ?? 0);
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
     });
+    expect(usuario).toBeGreaterThan(0);
   });
 
   afterAll(async () => {
@@ -225,10 +246,10 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     dataSolicitacao: '2025-09-02',
     justificativa: 'Justificativa fictícia do laudo.',
     nefrologia: {
-      caracteristicaTratamento: 1,
-      contraindicacaoTransplante: 2,
-      situacaoTransplante: 3,
-      acessoVascular: 4,
+      caracteristicaTratamento: dom[0]!,
+      contraindicacaoTransplante: dom[1]!,
+      situacaoTransplante: dom[2]!,
+      acessoVascular: dom[3]!,
       inicioTratamento: '2025-08-01',
     },
     por: 'teste',
