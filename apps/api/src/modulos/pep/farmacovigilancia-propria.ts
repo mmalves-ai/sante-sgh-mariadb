@@ -308,6 +308,28 @@ export class FarmacovigilanciaPropria {
     );
   }
 
+  /**
+   * O paciente dono da reação ou do uso contínuo (o vínculo assistencial é conferido antes de gravar; o paciente de
+   * uma reação ou de um uso nunca muda); null quando o registro não existe.
+   */
+  pacienteDe(alvo: 'reacao' | 'uso', id: number): Promise<number | null> {
+    const tabela = alvo === 'reacao' ? 'reacao_adversa_paciente' : 'medicamento_uso_previo';
+    return this.nucleo.lerSomente(
+      { cliente: this.cliente, correlacao: 'pep.farmacovigilancia' },
+      async (l) => {
+        const x = await l.uma(`SELECT paciente_id FROM ${tabela} WHERE id = ? AND excluido_em IS NULL`, [id]);
+        return x ? num(x['paciente_id']) : null;
+      },
+    );
+  }
+
+  /** O paciente existe no cliente (a leitura de paciente inexistente é 404). */
+  pacienteExiste(paciente: number): Promise<boolean> {
+    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'pep.farmacovigilancia' }, async (l) =>
+      Boolean(await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [paciente])),
+    );
+  }
+
   /** Tudo de farmacovigilância do paciente numa leitura: reações com a evolução, uso contínuo e apoio da tela. */
   async doPaciente(c: ContextoFarmacovigilancia, paciente: number): Promise<FarmacovigilanciaDoPaciente> {
     const q = await this.quem(c);
@@ -446,7 +468,9 @@ export class FarmacovigilanciaPropria {
       async (l) => {
         const linhas = await l.consultar(
           `SELECT r.id, COALESCE(ip.descricao, ipi.descricao, r.medicamento_descricao) AS medicamento,
-                COALESCE(ip.principio_ativo_id, ipi.principio_ativo_id) AS principio, g.descricao AS gravidade
+                COALESCE(ip.principio_ativo_id, ipi.principio_ativo_id) AS principio, g.descricao AS gravidade,
+                COALESCE(r.item_prescritivel_id, pi.item_prescritivel_id) AS item,
+                r.medicamento_descricao AS nome_informado
            FROM reacao_adversa_paciente r
            JOIN gravidade_reacao_adversa g ON g.id = r.gravidade_reacao_adversa_id
            LEFT JOIN item_prescritivel ip ON ip.id = r.item_prescritivel_id
@@ -461,6 +485,9 @@ export class FarmacovigilanciaPropria {
           alergia: -num(x['id']),
           nome: `Reação adversa prévia: ${txt(x['medicamento']) ?? 'medicamento'} (${String(x['gravidade'])})`,
           principios: x['principio'] === null || x['principio'] === undefined ? [] : [num(x['principio'])],
+          // Sem princípio no cadastro: cruza pelo item; informado só pelo nome: pelo nome (dominio-pep/alertas).
+          produtos: x['item'] === null || x['item'] === undefined ? [] : [num(x['item'])],
+          nomesInformados: x['nome_informado'] ? [String(x['nome_informado'])] : [],
         }));
       },
     );
@@ -663,13 +690,8 @@ export class FarmacovigilanciaPropria {
       return { reacao: e.reacao, situacao: atual };
     }
     const etapa = ETAPA_DA_ACAO[e.acao]!;
-    // Notificar ou encerrar pede a avaliação da farmácia antes (o CHECK do banco exige quem avaliou): sem ela, a
-    // recusa vem primeiro, antes das outras regras do passo.
-    if (['notificacao', 'encerramento'].includes(etapa) && !r['avaliado_em'])
-      throw recusa(
-        'avaliacao-pendente',
-        'A farmácia clínica avalia a reação (causalidade) antes deste passo.',
-      );
+    // A avaliação da farmácia antes de notificar (não grave) e de encerrar é regra do domínio (passoReacao); a
+    // reação grave notificada antes da avaliação mantém a situação pendente, como o CHECK do banco pede.
     const desfecho = e.desfecho ?? txt(r['desfecho']);
     const p = passoReacao({
       etapa,
@@ -677,6 +699,7 @@ export class FarmacovigilanciaPropria {
       nivelGravidade: num(r['nivel']),
       nivelGrave: await nivelGrave(tx),
       jaNotificada: r['notificado_em'] !== null && r['notificado_em'] !== undefined,
+      jaAvaliada: r['avaliado_em'] !== null && r['avaliado_em'] !== undefined,
       causalidade: e.causalidade ?? null,
       desfecho,
       justificativa: e.justificativa ?? null,

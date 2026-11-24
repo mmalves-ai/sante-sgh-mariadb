@@ -11,7 +11,15 @@ import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
+import { achados, type ItemAvaliado, type ProdutoAlerta, REGRAS_PADRAO } from '@sgh/dominio-pep';
+import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
+import { FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
+import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
+import { EstadoProntuario } from './sessao-prontuario.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -454,5 +462,210 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
       [ub, true, 'suspender'],
     ]);
     expect(tela.itensPrescritos.map((x) => x.id)).toContain(ids.item);
+  });
+
+  it('reação grave notifica já, antes da avaliação da farmácia; a não grave espera a avaliação', async () => {
+    const inicio = new Date(Date.now() - 3_600_000).toISOString();
+    const leve = (
+      await reacao({
+        acao: 'registrar',
+        paciente: ids.paciente,
+        itemPrescritivel: ids.produto,
+        descricao: 'Prurido leve',
+        inicio,
+        gravidade: ids.leve,
+      })
+    ).resultado.reacao;
+    await expect(
+      reacao({ acao: 'notificar', reacao: leve, versao: await versao(leve) }),
+    ).rejects.toMatchObject(recusada('avaliacao-pendente'));
+    const grave = (
+      await reacao({
+        acao: 'registrar',
+        paciente: ids.paciente,
+        itemPrescritivel: ids.produto,
+        descricao: 'Anafilaxia após a dose',
+        inicio,
+        gravidade: ids.grave,
+      })
+    ).resultado.reacao;
+    await reacao({ acao: 'notificar', reacao: grave, versao: await versao(grave), observacao: 'Notivisa' });
+    const [n] = await ler(
+      'SELECT situacao, notificado_em, avaliado_em FROM reacao_adversa_paciente WHERE id = ?',
+      [grave],
+    );
+    expect(n).toMatchObject({ situacao: 'registrada', avaliado_em: null });
+    expect(n!['notificado_em']).not.toBeNull();
+    await expect(
+      reacao({ acao: 'notificar', reacao: grave, versao: await versao(grave) }),
+    ).rejects.toMatchObject(recusada('ja-notificada'));
+    await expect(
+      reacao({ acao: 'encerrar', reacao: grave, versao: await versao(grave), desfecho: 'recuperado' }),
+    ).rejects.toMatchObject(recusada('avaliacao-pendente'));
+    await reacao({
+      acao: 'avaliar',
+      reacao: grave,
+      versao: await versao(grave),
+      causalidade: ids.causalidade,
+    });
+    await reacao({ acao: 'encerrar', reacao: grave, versao: await versao(grave), desfecho: 'recuperado' });
+    const ev = await ler<{ etapa: string; situacao_anterior: string | null; situacao_nova: string }>(
+      'SELECT etapa, situacao_anterior, situacao_nova FROM reacao_adversa_evento WHERE reacao_adversa_paciente_id = ? ORDER BY id',
+      [grave],
+    );
+    expect(ev.map((e) => [e.etapa, e.situacao_anterior, e.situacao_nova])).toEqual([
+      ['registro', null, 'registrada'],
+      ['notificacao', 'registrada', 'registrada'],
+      ['avaliacao_farmacia', 'registrada', 'notificada'],
+      ['encerramento', 'notificada', 'encerrada'],
+    ]);
+  });
+
+  it('a prescrição seguinte: o motor de alertas avisa pela reação com princípio e pela informada só pelo nome', async () => {
+    const porNome = (
+      await reacao({
+        acao: 'registrar',
+        paciente: ids.paciente,
+        medicamentoDescricao: 'Cetoprofeno de uso domiciliar',
+        descricao: 'Urticária',
+        inicio: new Date(Date.now() - 86_400_000).toISOString(),
+        gravidade: ids.leve,
+      })
+    ).resultado.reacao;
+    // Pela porta da prescrição (alergias do paciente + reações), como o serviço monta o contexto do motor.
+    const porta = new PortaPrescricaoPropria(nucleo as never, CLIENTE);
+    const alergias = await porta.alergias({ hospital: EST } as never, ids.paciente);
+    const produto = (id: number, nome: string, principios: number[]): ProdutoAlerta => ({
+      produto: id,
+      nome,
+      principiosAtivos: principios,
+      padronizado: true,
+      altoAlerta: false,
+      controlado: null,
+      antimicrobiano: false,
+      doseMinima: null,
+      doseMaxima: null,
+      viasPermitidas: [],
+    });
+    const item = (chave: string, p: ProdutoAlerta): ItemAvaliado => ({
+      chave,
+      tipo: 'medicamento',
+      produtos: [{ produto: p, dose: 1, unidade: 'MG' }],
+      via: 'VO',
+      dosesNoPeriodo: 1,
+      intervaloHoras: 24,
+      aCriterio: false,
+      seNecessario: null,
+      fichaAntimicrobiano: false,
+    });
+    const gerados = achados({
+      itens: [
+        item('mesmo-principio', produto(ids.produto + 900_000, 'OUTRA MARCA SINTETICA', [ids.principio])),
+        item('pelo-nome', produto(ids.produto + 900_001, 'CETOPROFENO 100MG COMPRIMIDO', [])),
+        item('sem-relacao', produto(ids.produto + 900_002, 'PRODUTO SEM RELACAO', [])),
+      ],
+      ctx: {
+        alergias,
+        ativos: [],
+        paciente: { clearance: null, pesoKg: null },
+        tipoAtendimento: 'I',
+        alta: false,
+        regras: REGRAS_PADRAO,
+        interacoes: [],
+        duplicidade: { porMedicamento: true, porPrincipio: true, consistir: true },
+        altaVigilancia: new Set(),
+        dietaDeOutro: null,
+        hoje: new Date().toISOString().slice(0, 10),
+      },
+      foraDaCategoria: [],
+      dietas: [],
+      decisoes: new Map(),
+    }).filter((a) => a.tipo === 'alergia');
+    expect(gerados.some((a) => a.item === 'mesmo-principio')).toBe(true);
+    expect(gerados.filter((a) => a.item === 'pelo-nome').map((a) => a.id)).toContain(
+      `alergia:${ids.produto + 900_001}:${-porNome}`,
+    );
+    expect(gerados.some((a) => a.item === 'sem-relacao')).toBe(false);
+  });
+
+  it('as rotas exigem o vínculo assistencial com o paciente e a leitura vai à trilha', async () => {
+    const PERMS = ['pep.reconciliacao.ler', 'pep.evolucao.criar', 'pep.reconciliacao.registrar'];
+    const montar = (vinculo: boolean) => {
+      const trilha = new RegistradorTrilhaMemoria();
+      const ctrl = new FarmacovigilanciaController(
+        new EstadoProntuario(),
+        trilha,
+        fv,
+        null,
+        null,
+        new VinculoSintetico(
+          vinculo ? [{ login: LOGIN, idPaciente: ids.paciente, forma: 'atendimento-em-curso' }] : [],
+        ),
+        null,
+      );
+      const req = () =>
+        ({
+          headers: { 'idempotency-key': `f78fv-ctrl-${randomUUID()}`, 'x-correlation-id': 'f78fv-ctrl' },
+          ip: '127.0.0.1',
+          sgh: {
+            real: false,
+            ability: criarAbility(regrasDeAcesso(PERMS, null)),
+            sessao: {
+              usuario: { id: String(ids.usuario), nome: 'Conta sintética', login: LOGIN },
+              rede: 'rede-f78fv',
+              estabelecimentos: [],
+              estabelecimentoAtivo: EST,
+              unidadeAtiva: null,
+              permissoes: PERMS,
+              restricaoVinculo: true,
+              sintetica: true,
+              bloqueioInatividadeSegundos: 0,
+              expiraEm: '',
+            },
+          },
+        }) as unknown as RequisicaoAutorizada;
+      return { trilha, ctrl, req };
+    };
+    const sem = montar(false);
+    await expect(sem.ctrl.doPaciente(ids.paciente, sem.req())).rejects.toMatchObject({ status: 403 });
+    expect(
+      sem.trilha.eventos.some(
+        (e) => e.evento === EVENTOS_AUDITAVEIS.permissaoNegada.codigo && e.paciente === ids.paciente,
+      ),
+    ).toBe(true);
+    const [qualquer] = await ler<{ id: number }>(
+      'SELECT id FROM reacao_adversa_paciente WHERE paciente_id = ? ORDER BY id LIMIT 1',
+      [ids.paciente],
+    );
+    // Gravação pelo id da reação: o paciente sai do registro e o vínculo é conferido antes de gravar.
+    await expect(
+      sem.ctrl.reacao(
+        { acao: 'avaliar', reacao: Number(qualquer!.id), versao: 1, causalidade: ids.causalidade },
+        sem.req(),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      sem.ctrl.usoContinuo(
+        { acao: 'incluir', paciente: ids.paciente, descricaoLivre: 'Losartana', fonte: 'paciente' },
+        sem.req(),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      sem.ctrl.reacao({ acao: 'avaliar', reacao: 999_999_999, versao: 1 }, sem.req()),
+    ).rejects.toMatchObject({
+      status: 404,
+    });
+    const com = montar(true);
+    const tela = await com.ctrl.doPaciente(ids.paciente, com.req());
+    expect(tela.reacoes.length).toBeGreaterThan(0);
+    expect(
+      com.trilha.eventos.filter(
+        (e) =>
+          e.evento === EVENTOS_AUDITAVEIS.consultaRes.codigo &&
+          e.paciente === ids.paciente &&
+          e.recurso === 'pep.prontuario',
+      ),
+    ).toHaveLength(1);
+    await expect(com.ctrl.doPaciente(999_999_999, com.req())).rejects.toMatchObject({ status: 404 });
   });
 });
