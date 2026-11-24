@@ -38,6 +38,8 @@ import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
+import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
+import { CatalogoSadtController } from './catalogo.controller.js';
 
 export interface OpcoesModuloSadt {
   /** Testes: as portas já montadas. */
@@ -120,8 +122,10 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
     module: ModuloSadt,
     // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
     global: true,
-    controllers: [SadtController, PortalController, PacsController],
+    controllers: [SadtController, PortalController, PacsController, CatalogoSadtController],
     providers: [
+      // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
+      { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
       { provide: PORTA_SADT, useValue: sadt },
       { provide: PORTA_PACS, useValue: pacs },

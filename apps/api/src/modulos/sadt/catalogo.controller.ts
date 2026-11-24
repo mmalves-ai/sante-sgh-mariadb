@@ -1,0 +1,119 @@
+// Manutenção do catálogo de exames do diagnóstico (F3.5, análise 05-SADT linhas 1 a 3): uma ficha por exame.
+//   GET  /api/sadt/catalogo/exames?termo&tipo                    lista (código, sigla, nome, tipo, situação)
+//   GET  /api/sadt/catalogo/exames/:id                           a ficha inteira (vínculos, faixas e fórmulas)
+//   POST /api/sadt/catalogo/exames                               inclui o exame
+//   POST /api/sadt/catalogo/exames/:id                           altera o exame (versão vista; desativa sem apagar)
+//   POST /api/sadt/catalogo/exames/:id/:tipo                     inclui ou altera o vínculo (setor, material,
+//                                                                preparo, lateralidade, ligado, analito)
+//   POST /api/sadt/catalogo/analitos-exame/:id/faixas            nova versão da faixa de referência
+//   POST /api/sadt/catalogo/analitos-exame/:id/formulas          nova versão da fórmula de cálculo
+// Ler: `sadt.catalogo.ler`; gravar: `sadt.catalogo.editar` (o cargo dá o nível de acesso; o administrador pode tudo).
+// Toda gravação exige a Idempotency-Key e vai à trilha na mesma transação (Executor).
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
+import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import { ErroProblema } from '../../problema.filter.js';
+import { contextoOperacao, idDaRota, sessaoDe } from '../cadastro/comum.js';
+import { corpo } from '../exames/public-api.js';
+import {
+  CATALOGO_SADT,
+  ESQUEMAS_VINCULO,
+  esquemaExameCatalogo,
+  esquemaFaixaCatalogo,
+  esquemaFormulaCatalogo,
+  type PortaCatalogoSadtPropria,
+  type TipoVinculo,
+} from './catalogo-porta-propria.js';
+
+const TIPOS = Object.keys(ESQUEMAS_VINCULO) as TipoVinculo[];
+
+@Controller('api/sadt/catalogo')
+export class CatalogoSadtController {
+  constructor(@Optional() @Inject(CATALOGO_SADT) private readonly porta: PortaCatalogoSadtPropria | null) {}
+
+  private p(): PortaCatalogoSadtPropria {
+    if (!this.porta)
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'Catálogo indisponível',
+        'O catálogo de exames só existe com o banco do cliente.',
+      );
+    return this.porta;
+  }
+
+  @Get('exames')
+  @Permissao('sadt.catalogo.ler')
+  listar(
+    @Query('termo') termo: string | undefined,
+    @Query('tipo') tipo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.p().listar(sessaoDe(req).porta, String(termo ?? '').slice(0, 80), tipo ? String(tipo) : null);
+  }
+
+  @Get('exames/:id')
+  @Permissao('sadt.catalogo.ler')
+  ficha(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    return this.p().ficha(sessaoDe(req).porta, idDaRota(id));
+  }
+
+  @Post('exames')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('o exame com a trilha_auditoria na mesma transação (Executor)')
+  incluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarExame(c, null, corpo(esquemaExameCatalogo, b));
+  }
+
+  @Post('exames/:id')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('o exame com a trilha_auditoria na mesma transação (Executor)')
+  alterar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = corpo(esquemaExameCatalogo, b);
+    if (!e.versao)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarExame(c, idDaRota(id), e);
+  }
+
+  @Post('exames/:id/:tipo')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('o vínculo do exame com a trilha_auditoria na mesma transação (Executor)')
+  vinculo(
+    @Param('id') id: string,
+    @Param('tipo') tipo: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    if (!(TIPOS as string[]).includes(tipo))
+      throw new ErroProblema('nao-encontrado', 404, 'Vínculo desconhecido', `Use: ${TIPOS.join(', ')}.`);
+    const t = tipo as TipoVinculo;
+    const e = corpo(ESQUEMAS_VINCULO[t], b) as Record<string, unknown>;
+    if (e['id'] && !e['versao'])
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().salvarVinculo(c, t, idDaRota(id), e);
+  }
+
+  @Post('analitos-exame/:id/faixas')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('a faixa de referência e a versão com a trilha_auditoria na mesma transação (Executor)')
+  faixa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().novaFaixa(c, idDaRota(id), corpo(esquemaFaixaCatalogo, b));
+  }
+
+  @Post('analitos-exame/:id/formulas')
+  @HttpCode(200)
+  @Permissao('sadt.catalogo.editar')
+  @AuditadoNoHandler('a fórmula e as variáveis com a trilha_auditoria na mesma transação (Executor)')
+  formula(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
+    return this.p().novaFormula(c, idDaRota(id), corpo(esquemaFormulaCatalogo, b));
+  }
+}

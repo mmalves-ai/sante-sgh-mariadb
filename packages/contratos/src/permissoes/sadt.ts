@@ -34,6 +34,8 @@ export const PERMISSOES_SADT_CODIGOS = {
   solicitanteWebAprovar: 'sadt.solicitanteWeb.aprovar',
   indicadorLer: 'sadt.indicador.ler',
   parametroLer: 'sadt.parametro.ler',
+  catalogoLer: 'sadt.catalogo.ler',
+  catalogoEditar: 'sadt.catalogo.editar',
 } as const;
 
 const p = (
@@ -115,6 +117,15 @@ export const PERMISSOES_SADT_M26: readonly DeclaracaoPermissao[] = [
     'sadt.valorCritico.editar',
     'Manter a lista de valores críticos aprovada pela diretoria clínica (faixa e prazo por elemento)',
 
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'sadt.catalogo.ler',
+    'Consultar o catálogo de exames: setores, materiais, preparo, analitos, faixas e fórmulas',
+  ),
+  p(
+    'sadt.catalogo.editar',
+    'Manter o catálogo de exames (exame, setor, material, preparo, lateralidade, exames ligados, analitos, faixa de referência com versão e fórmula)',
     { criticidade: 'sensivel' },
   ),
   p('sadt.laudo.ler', 'Consultar os laudos emitidos, a autenticação e as entregas'),

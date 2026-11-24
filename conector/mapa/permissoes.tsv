@@ -3979,6 +3979,8 @@ opcao_menu	2677	sadt.variavelFormula.editar
 opcao_menu	2677	sadt.variavelFormula.exportar
 opcao_menu	2677	sadt.variavelFormula.inativar
 opcao_menu	2677	sadt.variavelFormula.ler
+opcao_menu	2677	sadt.catalogo.editar
+opcao_menu	2677	sadt.catalogo.ler
 opcao_menu	2678	sadt.parametro.ler
 opcao_menu	2678	sadt.tabelas.parametros
 opcao_menu	2678	sadt.valorCritico.editar
