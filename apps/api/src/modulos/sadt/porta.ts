@@ -220,8 +220,19 @@ export interface GravadorSghSadt {
   /** A primeira abertura do resultado do exame pedido (exame_item) pelo usuário; a repetida não grava de novo. */
   registrarLeitura(r: { exameItem: number; origem: 'pep' | 'portal'; usuario: string }): Promise<void>;
   marcarOrcamentoConvertido(r: { orcamento: number; atendimento: number; usuario: string }): Promise<void>;
+  /**
+   * O número do laudo (F3.5): o próximo da numeração do estabelecimento, travada na transação da emissão (desfeita a
+   * emissão, o número volta). Reservado antes do PDF, para sair impresso nele e coberto pelo hash.
+   */
+  reservarNumeroLaudo(): Promise<string>;
+  /**
+   * A emissão do laudo. A 1ª via grava o número reservado; a via seguinte (`original`, com o motivo) é outra emissão do
+   * MESMO laudo: o mesmo número e o mesmo código, com o número da via, ligada à emissão original.
+   */
   registrarLaudoEmitido(r: {
     impressao: number;
+    numero: string;
+    original: number | null;
     codigo: string;
     via: number;
     exames: number;
@@ -330,15 +341,18 @@ export interface PortaSadt extends PortaGravacaoM18<GravadorSghSadt> {
   laudosDoExame(
     c: ContextoSadt,
     id: number,
-  ): Promise<{ codigo: string; emitidoEm: string; emitidoPor: string; segundasVias: number }[]>;
+  ): Promise<
+    { numero: string; codigo: string; emitidoEm: string; emitidoPor: string; segundasVias: number }[]
+  >;
+  /** A emissão original do laudo destes exames: o id, o número, o código e quantas vias já saíram (a original conta). */
   impressaoDosExames(
     c: ContextoSadt,
     ids: readonly number[],
-  ): Promise<{ impressao: number; codigo: string } | null>;
+  ): Promise<{ impressao: number; numero: string; codigo: string; vias: number } | null>;
   validarLaudo(
     c: ContextoSadt,
     codigo: string,
-  ): Promise<{ valido: boolean; emitidoEm: string | null; exames: number }>;
+  ): Promise<{ valido: boolean; numero: string | null; emitidoEm: string | null; exames: number }>;
   laudoParaEmitir(c: ContextoSadt, ids: readonly number[]): Promise<LaudoParaEmitir | null>;
   requisicoes(
     c: ContextoSadt,

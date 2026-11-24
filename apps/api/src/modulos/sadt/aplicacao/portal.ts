@@ -478,6 +478,7 @@ export class ServicoPortal {
     const r = await this.porta.validarLaudo(this.c(hospital), codigo);
     return {
       valido: r.valido,
+      numero: r.numero,
       emitidoEm: r.emitidoEm,
       estabelecimento: r.valido ? hospital : null,
       exames: r.exames,

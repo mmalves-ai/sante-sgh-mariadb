@@ -83,7 +83,13 @@ const esquemaSolicitantes = z.array(
   z.object({ id: z.number(), nome: z.string(), registro: z.string(), ativo: z.boolean() }),
 );
 const esquemaLaudos = z.array(
-  z.object({ codigo: z.string(), emitidoEm: z.string(), emitidoPor: z.string(), segundasVias: z.number() }),
+  z.object({
+    numero: z.string(),
+    codigo: z.string(),
+    emitidoEm: z.string(),
+    emitidoPor: z.string(),
+    segundasVias: z.number(),
+  }),
 );
 const esquemaElementos = z.array(
   z.object({ codigo: z.number(), nome: z.string(), unidade: z.string().nullable() }),
@@ -145,7 +151,12 @@ export const listarLaudosDoExame = (exame: number) => ler(`${S}/laudos${qs({ exa
 export const conferirCodigoLaudo = (codigo: string) =>
   ler(
     `${S}/laudos/codigo/${encodeURIComponent(codigo.trim())}`,
-    z.object({ valido: z.boolean(), emitidoEm: z.string().nullable(), exames: z.number() }),
+    z.object({
+      valido: z.boolean(),
+      numero: z.string().nullable(),
+      emitidoEm: z.string().nullable(),
+      exames: z.number(),
+    }),
   );
 export const lerParametrosSadt = (setor: string): Promise<ParametrosSadt> =>
   ler(`${S}/parametros${qs({ setor })}`, esquemaParametrosSadt);

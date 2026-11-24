@@ -253,7 +253,8 @@ export async function limparMassaSadt(nucleo: NucleoProprio, m: MassaSadt | null
       `DELETE ex FROM emissao_laudo_exame ex JOIN emissao_laudo el ON el.id = ex.emissao_laudo_id WHERE el.${emEst}`,
       ests,
     );
-    await e.executar(`DELETE FROM emissao_laudo WHERE ${emEst}`, ests);
+    // As vias seguintes antes da original (chave da via para a emissão original).
+    await e.executar(`DELETE FROM emissao_laudo WHERE ${emEst} ORDER BY id DESC`, ests);
     await e.executar(`DELETE FROM visualizacao_resultado_exame WHERE ${emEst}`, ests);
     await e.executar(
       `DELETE t FROM aviso_valor_critico_tentativa t JOIN aviso_valor_critico a ON a.id = t.aviso_valor_critico_id WHERE a.${emEst}`,

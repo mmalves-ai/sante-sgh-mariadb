@@ -321,7 +321,15 @@ interface Estado {
   valores: ValorCriticoM[];
   orcamentos: OrcamentoM[];
   acessos: AcessoM[];
-  laudos: { impressao: number; codigo: string; exames: number[]; em: string; por: string; vias: number }[];
+  laudos: {
+    impressao: number;
+    numero: string;
+    codigo: string;
+    exames: number[];
+    em: string;
+    por: string;
+    vias: number;
+  }[];
   contas: Map<number, { id: number; numero: number }>;
   solicitantes: { id: number; nome: string; registro: string; ativo: boolean }[];
   idem: Map<string, { hash: string; resultado: Record<string, number | string> }>;
@@ -1195,20 +1203,25 @@ export class PortaSadtMemoria implements PortaSadt {
         if (!o || o.convertido) throw recusa('orcamento-convertido', 'O orçamento já foi convertido.');
         o.convertido = { atendimento: r.atendimento, em: agora() };
       },
+      reservarNumeroLaudo: async () => String(s.proximo++),
       registrarLaudoEmitido: async (r) => {
         const l = s.laudos.find((x) => x.codigo === r.codigo);
-        if (l) l.vias = Math.max(l.vias, r.via);
-        else
-          s.laudos.push({
-            impressao: r.impressao,
-            codigo: r.codigo,
-            exames: [...(r.idsExames ?? [])],
-            em: agora(),
-            por: r.usuario,
-            vias: r.via,
-          });
+        if (l) {
+          // A via seguinte é do mesmo laudo: o número dele e a via seguinte.
+          l.vias += 1;
+          return { id: s.proximo++, numero: l.numero };
+        }
         const id = s.proximo++;
-        return { id, numero: `LAU-${id}` };
+        s.laudos.push({
+          impressao: id,
+          numero: r.numero,
+          codigo: r.codigo,
+          exames: [...(r.idsExames ?? [])],
+          em: agora(),
+          por: r.usuario,
+          vias: 1,
+        });
+        return { id, numero: r.numero };
       },
       criarProtocoloPortal: async (r) => {
         for (const a of s.acessos)
@@ -1658,21 +1671,27 @@ export class PortaSadtMemoria implements PortaSadt {
   async laudosDoExame(c: ContextoSadt, id: number) {
     return this.e(c)
       .laudos.filter((l) => l.exames.includes(id))
-      .map((l) => ({ codigo: l.codigo, emitidoEm: l.em, emitidoPor: l.por, segundasVias: l.vias - 1 }));
+      .map((l) => ({
+        numero: l.numero,
+        codigo: l.codigo,
+        emitidoEm: l.em,
+        emitidoPor: l.por,
+        segundasVias: l.vias - 1,
+      }));
   }
 
   async impressaoDosExames(c: ContextoSadt, ids: readonly number[]) {
     const l = this.e(c).laudos.find(
       (x) => x.exames.length === ids.length && ids.every((i) => x.exames.includes(i)),
     );
-    return l ? { impressao: l.impressao, codigo: l.codigo } : null;
+    return l ? { impressao: l.impressao, numero: l.numero, codigo: l.codigo, vias: l.vias } : null;
   }
 
   async validarLaudo(c: ContextoSadt, codigo: string) {
     const l = this.e(c).laudos.find((x) => x.codigo === codigo.trim().toLowerCase());
     return l
-      ? { valido: true, emitidoEm: l.em, exames: l.exames.length }
-      : { valido: false, emitidoEm: null, exames: 0 };
+      ? { valido: true, numero: l.numero, emitidoEm: l.em, exames: l.exames.length }
+      : { valido: false, numero: null, emitidoEm: null, exames: 0 };
   }
 
   async laudoParaEmitir(c: ContextoSadt, ids: readonly number[]): Promise<LaudoParaEmitir | null> {

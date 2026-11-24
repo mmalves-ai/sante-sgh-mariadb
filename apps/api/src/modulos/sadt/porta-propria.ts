@@ -47,7 +47,6 @@ import {
   type ContextoOperacao,
   definirOperacao,
   ErroOperacao,
-  garantirSequencia,
   erroConflitoVersao,
   type Executor,
   type Leitor,
@@ -61,7 +60,6 @@ import {
   avisoDoAlvo,
   dataDaReferencia,
   numeroDoLaudo,
-  prefixoDoNumeroLaudo,
   type RegraCriticoCandidata,
   SEQUENCIA_NUMERO_LAUDO,
 } from '@sgh/dominio-sadt';
@@ -1502,22 +1500,23 @@ export class PortaSadtPropria implements PortaSadt {
   laudosDoExame(c: ContextoSadt, id: number) {
     return this.ler(c, async (l, est) => {
       const ls = await l.consultar(
-        `SELECT el.numero, el.codigo_autenticacao, el.emitida_em, el.tipo_emissao, COALESCE(u.login, '') AS por
+        `SELECT el.numero, el.codigo_autenticacao, el.emitida_em, COALESCE(u.login, '') AS por,
+                (SELECT COUNT(*) FROM emissao_laudo v WHERE v.emissao_original_id = el.id AND v.excluido_em IS NULL) AS vias
            FROM emissao_laudo_exame ex JOIN emissao_laudo el ON el.id = ex.emissao_laudo_id
            LEFT JOIN usuario u ON u.id = el.emitido_por_usuario_id
           WHERE ex.exame_item_id = ? AND el.estabelecimento_id = ? AND el.excluido_em IS NULL AND ex.excluido_em IS NULL
+            AND el.emissao_original_id IS NULL AND el.tipo_emissao <> 'reimpressao'
           ORDER BY el.emitida_em, el.id`,
         [id, est],
       );
-      const vias = ls.filter((r) => texto(r['tipo_emissao']) === 'reimpressao').length;
-      return ls
-        .filter((r) => texto(r['tipo_emissao']) !== 'reimpressao')
-        .map((r) => ({
-          codigo: texto(r['codigo_autenticacao']),
-          emitidoEm: instante(r['emitida_em']),
-          emitidoPor: texto(r['por']),
-          segundasVias: vias,
-        }));
+      // Cada laudo com as suas vias seguintes (as reimpressões ligadas à emissão original dele).
+      return ls.map((r) => ({
+        numero: texto(r['numero']),
+        codigo: texto(r['codigo_autenticacao']),
+        emitidoEm: instante(r['emitida_em']),
+        emitidoPor: texto(r['por']),
+        segundasVias: n(r['vias']),
+      }));
     });
   }
 
@@ -1525,30 +1524,45 @@ export class PortaSadtPropria implements PortaSadt {
     if (ids.length === 0) return Promise.resolve(null);
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
-        `SELECT el.id, el.codigo_autenticacao, COUNT(DISTINCT ex.exame_item_id) AS exames
+        `SELECT el.id, el.numero, el.codigo_autenticacao, COUNT(DISTINCT ex.exame_item_id) AS exames,
+                (SELECT COALESCE(MAX(v.numero_via), 1) FROM emissao_laudo v
+                  WHERE v.emissao_original_id = el.id OR v.id = el.id) AS vias
            FROM emissao_laudo el JOIN emissao_laudo_exame ex ON ex.emissao_laudo_id = el.id AND ex.excluido_em IS NULL
           WHERE el.estabelecimento_id = ? AND el.excluido_em IS NULL AND el.tipo_emissao <> 'reimpressao'
-            AND ex.exame_item_id IN (${lista(ids.length)})
-          GROUP BY el.id, el.codigo_autenticacao HAVING COUNT(DISTINCT ex.exame_item_id) = ?
+            AND el.emissao_original_id IS NULL AND ex.exame_item_id IN (${lista(ids.length)})
+          GROUP BY el.id, el.numero, el.codigo_autenticacao HAVING COUNT(DISTINCT ex.exame_item_id) = ?
           ORDER BY el.id DESC LIMIT 1`,
         [est, ...ids, new Set(ids).size],
       );
-      return r ? { impressao: n(r['id']), codigo: texto(r['codigo_autenticacao']) } : null;
+      return r
+        ? {
+            impressao: n(r['id']),
+            numero: texto(r['numero']),
+            codigo: texto(r['codigo_autenticacao']),
+            vias: n(r['vias']),
+          }
+        : null;
     });
   }
 
   validarLaudo(c: ContextoSadt, codigo: string) {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
-        `SELECT el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
+        `SELECT el.numero, el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
                                    AND ex.excluido_em IS NULL) AS exames
            FROM emissao_laudo el WHERE el.estabelecimento_id = ? AND el.codigo_autenticacao = ? AND el.excluido_em IS NULL
-          ORDER BY el.id LIMIT 1`,
+          ORDER BY el.numero_via, el.id LIMIT 1`,
         [est, codigo],
       );
+      // A validação pública devolve o número do laudo (impresso no PDF ao lado do código), nunca dado clínico.
       return r
-        ? { valido: true, emitidoEm: instante(r['emitida_em']), exames: n(r['exames']) }
-        : { valido: false, emitidoEm: null, exames: 0 };
+        ? {
+            valido: true,
+            numero: texto(r['numero']),
+            emitidoEm: instante(r['emitida_em']),
+            exames: n(r['exames']),
+          }
+        : { valido: false, numero: null, emitidoEm: null, exames: 0 };
     });
   }
 
@@ -2626,6 +2640,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       });
     },
 
+    /** O número do laudo (F3.5): a numeração do estabelecimento (semeada na migração e no "criar novo cliente"). */
+    async reservarNumeroLaudo() {
+      return numeroDoLaudo(await tx.proximoNumero(SEQUENCIA_NUMERO_LAUDO));
+    },
+
     async registrarLaudoEmitido(r) {
       const ids = r.idsExames ?? [];
       if (ids.length === 0) throw recusa('sem-exames', 'O laudo emitido precisa dos exames.');
@@ -2652,17 +2671,33 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         motivo = n(mr['id']);
       }
       const quando = agora();
-      // O número do laudo (F3.5): a numeração do estabelecimento, criada na primeira emissão quando ainda não existe.
-      await garantirSequencia(
-        tx,
-        { tipo: SEQUENCIA_NUMERO_LAUDO, estabelecimento: est, prefixo: prefixoDoNumeroLaudo(est) },
-        { usuario, agora: quando },
-      );
-      const numero = numeroDoLaudo(await tx.proximoNumero(SEQUENCIA_NUMERO_LAUDO));
+      // A via seguinte é do MESMO laudo: a emissão original travada (vias em fila), o número e o código dela, e a via
+      // seguinte à maior já gravada. A 1ª via leva o número reservado antes do PDF (reservarNumeroLaudo).
+      let numero = r.numero;
+      let via = 1;
+      if (r.via > 1) {
+        if (r.original === null) throw recusa('sem-primeira-via', 'A 2ª via é de um laudo já emitido.');
+        const [o] = await tx.consultarParaAtualizar(
+          `SELECT id, numero, codigo_autenticacao FROM emissao_laudo
+            WHERE id = ? AND estabelecimento_id = ? AND emissao_original_id IS NULL AND excluido_em IS NULL`,
+          [r.original, est],
+          { teto: 1 },
+        );
+        if (!o || texto(o['codigo_autenticacao']) !== r.codigo || texto(o['numero']) !== r.numero)
+          throw recusa('sem-primeira-via', 'A 2ª via é do mesmo laudo da 1ª: número e código dela.');
+        numero = texto(o['numero']);
+        const ult = await tx.uma(
+          'SELECT MAX(numero_via) AS v FROM emissao_laudo WHERE id = ? OR emissao_original_id = ?',
+          [r.original, r.original],
+        );
+        via = n(ult?.['v']) + 1;
+      }
       const id = await tx.incluir('emissao_laudo', {
         estabelecimento_id: est,
         numero,
         codigo_autenticacao: r.codigo,
+        numero_via: via,
+        emissao_original_id: via > 1 ? r.original : null,
         paciente_id: n(itens[0]!['paciente_id']),
         requisicao_exame_id: n(itens[0]!['requisicao']),
         tipo_emissao: r.via > 1 ? 'reimpressao' : 'pdf',

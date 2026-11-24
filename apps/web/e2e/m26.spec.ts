@@ -142,34 +142,26 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
       .filter({ hasText: 'POTÁSSIO' })
       .first();
     const at = (await atendimento.getAttribute('data-testid'))!.replace('laudo-atendimento-', '');
-    // O conversor de PDF do servidor não roda no E2E (sem serviço externo; o PDF/A e o veraPDF são provados na integração
-    // da API): a resposta da emissão é um laudo SINTÉTICO no formato do contrato; aqui se prova a tela baixar o arquivo
-    // pelo endereço blob:.
-    await page.route('**/api/sadt/laudos', async (rota) => {
-      if (rota.request().method() !== 'POST') return rota.fallback();
-      await rota.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          impressao: 0,
-          numero: 'LAU1-1',
-          codigo: '0b1c2d3e-4f50-4617-8899-aabbccddeeff',
-          exames: 1,
-          segundaVia: false,
-          pdf: Buffer.from('%PDF-1.4\n% SINTETICO\n%%EOF\n').toString('base64'),
-          hash: 'a'.repeat(64),
-          mensagem: 'Laudo emitido: número LAU1-1 (autenticação 0b1c2d3e-4f50-4617-8899-aabbccddeeff).',
-        }),
-      });
-    });
+    // A emissão real, sem interceptar: o número do laudo reservado na emissão, o PDF/A pelo conversor do E2E (Gotenberg de
+    // loopback, tools/obra/e2e-vm.sh), o código de autenticação e a conferência pública. O número sai na tela, na
+    // validação pelo código e no histórico do exame; a 2ª via, com o motivo, repete o número e o código do mesmo laudo.
     const download = page.waitForEvent('download');
     await page.getByTestId(`laudo-emitir-${at}`).click();
-    await expect(page.getByTestId('laudos-mensagem')).toContainText('Laudo emitido: número LAU1-1');
-    // O código impresso se confere no balcão (o código interceptado acima não existe na memória: "não encontrado").
-    await page.getByTestId('laudos-codigo').fill('0b1c2d3e-4f50-4617-8899-aabbccddeeff');
+    const msg = page.getByTestId('laudos-mensagem');
+    await expect(msg).toContainText(/Laudo emitido: número \S+ \(autenticação [0-9a-f-]{36}\)/);
+    const [, numero, codigo] = /número (\S+) \(autenticação ([0-9a-f-]{36})\)/.exec(
+      (await msg.textContent()) ?? '',
+    )!;
+    expect((await download).suggestedFilename()).toBe(`laudo-${codigo}.pdf`);
+    await page.getByTestId('laudos-codigo').fill(codigo!);
     await page.getByTestId('laudos-codigo').press('Enter');
-    await expect(page.getByTestId('laudos-codigo-resultado')).toContainText('Código não encontrado');
-    expect((await download).suggestedFilename()).toMatch(/^laudo-[0-9a-f-]{36}\.pdf$/);
+    await expect(page.getByTestId('laudos-codigo-resultado')).toContainText(`Laudo número ${numero} válido`);
+    // A 2ª via: o motivo do cadastro, o mesmo número e o mesmo código.
+    await page.getByTestId(`laudo-motivo-${at}`).fill('Paciente perdeu a primeira via');
+    const download2 = page.waitForEvent('download');
+    await page.getByTestId(`laudo-via-${at}`).click();
+    await expect(msg).toContainText(`2ª via do laudo número ${numero} emitida (autenticação ${codigo})`);
+    expect((await download2).suggestedFilename()).toBe(`laudo-${codigo}.pdf`);
     await semViolacaoAxe(page, '/sadt/laudos/emissao');
     await sair(page);
 

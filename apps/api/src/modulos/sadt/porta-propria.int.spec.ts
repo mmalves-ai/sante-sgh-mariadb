@@ -121,33 +121,50 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
 
   it('laudo emitido, validação pública, segunda via com motivo e leitura do resultado', async () => {
     const c = contexto(m!);
-    // Cada emissão (a segunda via também) tem o seu código de autenticação (único no banco).
+    // Os mesmos passos e argumentos do ServicoSadt.emitirLaudo, numa transação: o número reservado antes do PDF (a 1ª
+    // via) ou o da 1ª (a via seguinte), com o MESMO código de autenticação e a emissão original.
     const cod1 = `${m!.marca}A1B2C3D4E5`.slice(0, 16);
-    const cod2 = `${m!.marca}Z9Y8X7W6V5`.slice(0, 16);
-    const emitir = (via: number, motivo: string | null) =>
-      porta.gravarSgh(
+    const emitir = async (motivo: string | null, falharDepois = false) => {
+      const anterior = await porta.impressaoDosExames(c, [m!.itemLiberado]);
+      return porta.gravarSgh(
         c,
         (r: { id: number }) => linhaTela(m!, 'sadt.laudo.emitido', 'emissao_laudo', r.id),
-        (g) =>
-          g.registrarLaudoEmitido({
-            impressao: 0,
-            codigo: via > 1 ? cod2 : cod1,
-            via,
+        async (g) => {
+          const numero = anterior?.numero ?? (await g.reservarNumeroLaudo());
+          // A falha do PDF (ou de outra gravação) depois da reserva desfaz tudo, inclusive o número.
+          if (falharDepois) throw new Error('pdf-falhou');
+          return g.registrarLaudoEmitido({
+            impressao: anterior?.impressao ?? 0,
+            numero,
+            original: anterior?.impressao ?? null,
+            codigo: anterior?.codigo ?? cod1,
+            via: anterior ? anterior.vias + 1 : 1,
             exames: 1,
             hashPdf: null,
             motivo,
             usuario: m!.base.login,
             idsExames: [m!.itemLiberado],
-          }),
+          });
+        },
       );
-    const { id, numero } = await emitir(1, null);
+    };
+    const valor = (t: string) => Number(/(\d+)$/.exec(t)?.[1]);
+    // Sem lacuna: a emissão desfeita depois da reserva devolve o número, e a seguinte usa o mesmo valor.
+    const espiado = await escrever(async (e) =>
+      e.uma(
+        "SELECT proximo_valor FROM sequencia_negocio WHERE tipo = 'laudo_exame' AND estabelecimento_id = ?",
+        [m!.base.est],
+      ),
+    );
+    expect(await emitir(null, true).catch((x: unknown) => (x as Error).message)).toBe('pdf-falhou');
+    const { id, numero } = await emitir(null);
+    expect(valor(numero)).toBe(Number(espiado?.['proximo_valor']));
     expect(
-      await um('SELECT numero, tipo_emissao, versao FROM emissao_laudo WHERE id = ?', [id]),
-    ).toMatchObject({
-      numero,
-      tipo_emissao: 'pdf',
-      versao: 1,
-    });
+      await um(
+        'SELECT numero, tipo_emissao, numero_via, emissao_original_id, versao FROM emissao_laudo WHERE id = ?',
+        [id],
+      ),
+    ).toMatchObject({ numero, tipo_emissao: 'pdf', numero_via: 1, emissao_original_id: null, versao: 1 });
     expect(
       await um('SELECT emitido_em IS NOT NULL AS e, versao FROM exame_item WHERE id = ?', [m!.itemLiberado]),
     ).toMatchObject({
@@ -164,18 +181,41 @@ describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})
         )?.['n'],
       ),
     ).toBe(1);
-    expect(await porta.validarLaudo(c, cod1)).toMatchObject({ valido: true, exames: 1 });
-    expect(await porta.validarLaudo(c, 'NAOEXISTE')).toMatchObject({ valido: false });
-    expect(await porta.impressaoDosExames(c, [m!.itemLiberado])).toMatchObject({ impressao: id });
-    expect(codigoDe(await emitir(2, null).catch((e: unknown) => e))).toBe('motivo-obrigatorio');
-    expect(codigoDe(await emitir(2, 'motivo livre qualquer').catch((e: unknown) => e))).toBe(
+    expect(await porta.validarLaudo(c, cod1)).toMatchObject({ valido: true, numero, exames: 1 });
+    expect(await porta.validarLaudo(c, 'NAOEXISTE')).toMatchObject({ valido: false, numero: null });
+    expect(await porta.impressaoDosExames(c, [m!.itemLiberado])).toMatchObject({
+      impressao: id,
+      numero,
+      codigo: cod1,
+      vias: 1,
+    });
+    expect(codigoDe(await emitir(null).catch((e: unknown) => e))).toBe('motivo-obrigatorio');
+    expect(codigoDe(await emitir('motivo livre qualquer').catch((e: unknown) => e))).toBe(
       'motivo-nao-cadastrado',
     );
-    const via2 = await emitir(2, 'Paciente perdeu a primeira via');
-    // O número do laudo: sequencial no estabelecimento, um por emissão (a 2ª via tem o seu, logo depois).
-    const valor = (t: string) => Number(/(\d+)$/.exec(t)?.[1]);
-    expect(valor(via2.numero)).toBe(valor(numero) + 1);
-    expect(await porta.laudosDoExame(c, m!.itemLiberado)).toMatchObject([{ codigo: cod1, segundasVias: 1 }]);
+    // A 2ª e a 3ª via: o MESMO laudo (número e código da 1ª), com a via e a emissão original; nenhum número novo.
+    const via2 = await emitir('Paciente perdeu a primeira via');
+    const via3 = await emitir('Paciente perdeu a primeira via');
+    expect([via2.numero, via3.numero]).toEqual([numero, numero]);
+    expect(
+      await um(
+        `SELECT COUNT(*) AS n, MAX(numero_via) AS v, SUM(codigo_autenticacao = ?) AS mesmo,
+                SUM(tipo_emissao = 'reimpressao' AND motivo_reimpressao_id IS NOT NULL) AS motivadas
+           FROM emissao_laudo WHERE emissao_original_id = ?`,
+        [cod1, id],
+      ),
+    ).toMatchObject({ n: 2, v: 3, mesmo: 2, motivadas: 2 });
+    const depois = await escrever(async (e) =>
+      e.uma(
+        "SELECT proximo_valor FROM sequencia_negocio WHERE tipo = 'laudo_exame' AND estabelecimento_id = ?",
+        [m!.base.est],
+      ),
+    );
+    expect(Number(depois?.['proximo_valor'])).toBe(valor(numero) + 1);
+    expect(await porta.validarLaudo(c, cod1)).toMatchObject({ valido: true, numero });
+    expect(await porta.laudosDoExame(c, m!.itemLiberado)).toMatchObject([
+      { numero, codigo: cod1, segundasVias: 2 },
+    ]);
     expect((await porta.exame(c, m!.itemLiberado))?.estado).toBe('emitido');
 
     const ler = (origem: 'pep' | 'portal') =>

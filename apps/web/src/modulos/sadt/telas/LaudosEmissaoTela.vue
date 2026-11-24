@@ -60,7 +60,12 @@ const historico = useQuery({
 // A conferência do código de autenticação impresso no laudo.
 const codigo = ref('');
 const conferindo = ref(false);
-const conferido = ref<{ valido: boolean; emitidoEm: string | null; exames: number } | null>(null);
+const conferido = ref<{
+  valido: boolean;
+  numero: string | null;
+  emitidoEm: string | null;
+  exames: number;
+} | null>(null);
 const erroCodigo = ref<unknown>(null);
 async function conferirCodigo(): Promise<void> {
   conferido.value = null;
@@ -130,7 +135,11 @@ async function emitir(atendimento: string, exames: readonly ExameSadt[], segunda
     <p v-else-if="conferido" role="status" data-testid="laudos-codigo-resultado">
       {{
         conferido.valido
-          ? t('sadt.portal.valido', { em: quando(conferido.emitidoEm), n: conferido.exames })
+          ? t('sadt.laudos.validoNumero', {
+              numero: conferido.numero ?? '',
+              em: quando(conferido.emitidoEm),
+              n: conferido.exames,
+            })
           : t('sadt.portal.invalido')
       }}
     </p>
@@ -163,6 +172,7 @@ async function emitir(atendimento: string, exames: readonly ExameSadt[], segunda
               <li v-for="l in historico.data.value" :key="l.codigo">
                 {{
                   t('sadt.laudos.emissao', {
+                    numero: l.numero,
                     codigo: l.codigo,
                     em: quando(l.emitidoEm),
                     por: l.emitidoPor,

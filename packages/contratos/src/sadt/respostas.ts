@@ -301,7 +301,7 @@ export type ColetaRegistrada = z.infer<typeof esquemaColetaRegistrada>;
 
 export const esquemaLaudoEmitido = z.object({
   impressao: n,
-  /** O número do laudo: sequencial, único por estabelecimento, gerado na emissão (F3.5). */
+  /** O número do laudo: sequencial e único por estabelecimento na 1ª via; a 2ª via repete o da 1ª (F3.5). */
   numero: txt,
   codigo: txt,
   exames: n,
@@ -314,6 +314,8 @@ export const esquemaLaudoEmitido = z.object({
 export type LaudoEmitido = z.infer<typeof esquemaLaudoEmitido>;
 
 export const esquemaLaudoLido = z.object({
+  /** O número do laudo (o mesmo em todas as vias). */
+  numero: txt,
   codigo: txt,
   emitidoEm: txt,
   emitidoPor: txt,
@@ -325,6 +327,8 @@ export type LaudoLido = z.infer<typeof esquemaLaudoLido>;
 /** Validação pública do laudo (sem conteúdo clínico; regra 11). */
 export const esquemaValidacaoLaudo = z.object({
   valido: z.boolean(),
+  /** O número do laudo, impresso no PDF ao lado do código. */
+  numero: nul(txt),
   emitidoEm: nul(txt),
   estabelecimento: nul(txt),
   exames: n,

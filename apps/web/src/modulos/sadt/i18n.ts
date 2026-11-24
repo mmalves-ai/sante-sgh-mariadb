@@ -226,7 +226,8 @@ export const mensagensSadt = {
     emitidos: 'Laudos emitidos',
     conferir: 'Conferir o código',
     nenhumaEmissao: 'Nenhuma emissão deste exame.',
-    emissao: '{codigo} · {em} · {por} · {vias} 2ª(s) via(s)',
+    emissao: 'Laudo número {numero} · {codigo} · {em} · {por} · {vias} via(s) seguinte(s)',
+    validoNumero: 'Laudo número {numero} válido: emitido em {em}, {n} exame(s).',
     editor: 'Laudo de imagem e métodos gráficos',
     editorTexto:
       'Os exames de imagem, endoscopia e métodos gráficos recebidos a laudar. O laudo é privativo de médico; assinar libera o laudo.',

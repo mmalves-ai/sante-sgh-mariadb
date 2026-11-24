@@ -559,14 +559,61 @@ export class ServicoSadt {
     if (!e.segundaVia && anterior)
       recusa('Laudo já emitido', 'Este laudo já foi emitido: peça a 2ª via, com o motivo.', 'laudo-emitido');
     const codigo = anterior?.codigo ?? codigoDeAutenticacao(randomUUID());
+    const via = anterior ? anterior.vias + 1 : 1;
     const origem = { tipo: 'sadt-laudo', idLegado: Math.trunc(e.exames[0]!) };
-    const campos = camposDoLaudo(conteudo, codigo, rotuloDaVia(e.segundaVia, e.segundaVia ? 1 : 0));
-    let emitido: Awaited<ReturnType<FonteDocumento['emissao']['emitir']>>;
+    // Uma transação só: o número reservado (a 1ª via) ou o da 1ª (a via seguinte), o PDF com o número impresso (e por
+    // isso coberto pelo hash) e a gravação da emissão. Falhou o PDF ou a gravação, tudo volta, inclusive o número.
+    const gravado = await apoio.sgh(
+      s,
+      EVENTOS_AUDITAVEIS.sadtLaudoEmitido.codigo,
+      'sadt.laudo.imprimir',
+      { tabela: TABELA_LAUDO, id: codigo, paciente: at!.paciente },
+      async (g) => {
+        const numero = anterior?.numero ?? (await g.reservarNumeroLaudo());
+        const campos = camposDoLaudo(conteudo, codigo, rotuloDaVia(e.segundaVia, via - 1), numero);
+        const emitido = await this.gerarPdfDoLaudo(fonte, s, origem, campos, e);
+        const r = await g.registrarLaudoEmitido({
+          impressao: anterior?.impressao ?? 0,
+          numero,
+          original: anterior?.impressao ?? null,
+          codigo,
+          via,
+          exames: e.exames.length,
+          hashPdf: emitido.emissao.sha256,
+          motivo: e.segundaVia ? (e.motivoSegundaVia ?? null) : null,
+          usuario: s.login,
+          idsExames: e.exames,
+        });
+        return { ...r, emitido };
+      },
+    );
+    this.notificador?.avisar(s.hospital);
+    const hash = gravado.emitido.emissao.sha256;
+    return {
+      impressao: anterior?.impressao ?? gravado.id,
+      numero: gravado.numero,
+      codigo,
+      exames: e.exames.length,
+      segundaVia: e.segundaVia,
+      pdf: Buffer.from(gravado.emitido.pdf).toString('base64'),
+      hash,
+      mensagem: fraseDaEmissao({ numero: gravado.numero, via, codigo }),
+    };
+  }
+
+  /** O PDF/A do laudo pelo serviço de documento (a 1ª via, ou a via seguinte da emissão original com o motivo). */
+  private async gerarPdfDoLaudo(
+    fonte: FonteDocumento,
+    s: SessaoCadastro,
+    origem: { tipo: string; idLegado: number },
+    campos: { rotulo: string; valor: string }[],
+    e: { segundaVia: boolean; motivoSegundaVia?: string | undefined },
+  ): Promise<Awaited<ReturnType<FonteDocumento['emissao']['emitir']>>> {
     try {
       const original = e.segundaVia
         ? await fonte.emissao.originalDaOrigem(s.hospital, 'sadt-laudo', origem)
         : null;
-      emitido = original
+      return original
         ? await fonte.emissao.segundaVia(original.id, e.motivoSegundaVia ?? '', {
             titulo: 'Laudo de exames',
             campos,
@@ -590,36 +637,6 @@ export class ServicoSadt {
         'Não foi possível gerar o PDF do laudo agora: tente de novo.',
       );
     }
-    const hash = emitido.emissao.sha256;
-    const impressao = anterior?.impressao ?? 0;
-    const gravado = await apoio.sgh(
-      s,
-      EVENTOS_AUDITAVEIS.sadtLaudoEmitido.codigo,
-      'sadt.laudo.imprimir',
-      { tabela: TABELA_LAUDO, id: codigo, paciente: at!.paciente },
-      (g) =>
-        g.registrarLaudoEmitido({
-          impressao,
-          codigo,
-          via: emitido.emissao.via,
-          exames: e.exames.length,
-          hashPdf: hash,
-          motivo: e.segundaVia ? (e.motivoSegundaVia ?? null) : null,
-          usuario: s.login,
-          idsExames: e.exames,
-        }),
-    );
-    this.notificador?.avisar(s.hospital);
-    return {
-      impressao,
-      numero: gravado.numero,
-      codigo,
-      exames: e.exames.length,
-      segundaVia: e.segundaVia,
-      pdf: Buffer.from(emitido.pdf).toString('base64'),
-      hash,
-      mensagem: fraseDaEmissao({ numero: gravado.numero, segundaVia: e.segundaVia, codigo }),
-    };
   }
 
   // ── Orçamento e requisição ───────────────────────────────────────────────────────────────────────
@@ -822,10 +839,13 @@ export function camposDoLaudo(
   },
   codigo: string,
   via: string,
+  /** O número do laudo (o mesmo em todas as vias), impresso no PDF e coberto pelo hash. */
+  numero?: string,
 ): { rotulo: string; valor: string }[] {
   const data = (iso: string | null) =>
     iso ? iso.slice(0, 10).split('-').reverse().join('/') : 'Não informado';
   const campos = [
+    ...(numero ? [{ rotulo: 'Número do laudo', valor: numero }] : []),
     { rotulo: 'Paciente', valor: c.paciente.nome || 'Não informado' },
     { rotulo: 'Prontuário', valor: String(c.paciente.prontuario) },
     { rotulo: 'Atendimento', valor: c.atendimento || 'Não informado' },
