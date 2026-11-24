@@ -69,6 +69,7 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM prescricao_item_solucao_etapa WHERE prescricao_item_solucao_id IN ${sol}`,
     `DELETE FROM prescricao_item_solucao_componente WHERE prescricao_item_solucao_id IN ${sol}`,
     `DELETE FROM prescricao_item_solucao WHERE prescricao_item_id IN ${itens}`,
+    `DELETE FROM prescricao_dieta_refeicao_item WHERE prescricao_item_dieta_id IN ${die}`,
     `DELETE FROM prescricao_item_dieta_caracteristica WHERE prescricao_item_dieta_id IN ${die}`,
     `DELETE FROM prescricao_item_dieta WHERE prescricao_item_id IN ${itens}`,
     `DELETE FROM prescricao_item_ventilacao WHERE prescricao_item_id IN ${itens}`,
@@ -78,6 +79,7 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM prescricao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM unidade_assistencial WHERE estabelecimento_id IN ${est}`,
+    `DELETE FROM horario_refeicao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM idempotencia_operacao WHERE estabelecimento_id IN ${est}`,
     'DELETE FROM estabelecimento WHERE codigo = ?',
@@ -98,6 +100,8 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
   for (const t of CATALOGOS) await e.executar(`DELETE FROM ${t} WHERE codigo LIKE ?`, [`${P}%`]);
+  await e.executar('DELETE FROM alimento_referencia WHERE codigo_tbca LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM refeicao_do_dia WHERE codigo LIKE ?', [`${P}%`]);
 }
 
 async function montar(nucleo: NucleoProprio): Promise<Massa> {
@@ -193,6 +197,21 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         `INSERT INTO via_dieta (codigo, descricao, modalidade, criado_em) VALUES (?, 'Sonda sintética', 'enteral', ?)`,
         [`${P}vd`],
       );
+      // Composição por refeição (03-PEP L112): refeição do dia, o horário dela no hospital e dois alimentos.
+      const refeicao = await ins(
+        `INSERT INTO refeicao_do_dia (codigo, descricao, ordem, criado_em) VALUES (?, 'Desjejum sintético', 1, ?)`,
+        [`${P}rf`],
+      );
+      cat['refeicao'] = await ins(
+        `INSERT INTO horario_refeicao (estabelecimento_id, refeicao_do_dia_id, horario_inicio, horario_fim,
+           horario_corte_mapa, criado_em) VALUES (?, ?, '07:00', '08:00', '05:00', ?)`,
+        [est, refeicao],
+      );
+      for (const a of ['a1', 'a2'])
+        cat[a] = await ins(
+          `INSERT INTO alimento_referencia (codigo_tbca, descricao, versao_fonte, vigencia_inicio, criado_em) VALUES (?, 'Alimento sintético', 'sintetica', '2026-01-01', ?)`,
+          [`${P}${a}`],
+        );
       cat['caract'] = await ins(
         `INSERT INTO caracteristica_dieta (codigo, descricao, categoria, tipo_resposta, criado_em) VALUES (?, 'Restrição sintética', 'restricao', 'texto', ?)`,
         [`${P}c`],
@@ -683,5 +702,72 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
         dur: 120,
       },
     ]);
+  });
+
+  it('dieta por refeição (L112): alimento, medida e substituto gravados; jejum com refeição recusa sem gravar', async () => {
+    const refeicoes = [
+      {
+        refeicao: m.cat['refeicao']!,
+        alimento: m.cat['a1']!,
+        quantidade: 200,
+        unidade: null,
+        medidaCaseira: null,
+        quantidadeMedidaCaseira: null,
+        substitui: null,
+        percentualDiario: 25,
+        calorias: 180,
+      },
+      {
+        refeicao: m.cat['refeicao']!,
+        alimento: m.cat['a2']!,
+        quantidade: 150,
+        unidade: null,
+        medidaCaseira: null,
+        quantidadeMedidaCaseira: null,
+        substitui: 1,
+        percentualDiario: null,
+        calorias: null,
+      },
+    ];
+    const comRefeicao = (chave: string, classe: 'jejum' | 'livre') => {
+      const it = semDieta(chave, classe);
+      return { ...it, detalhe: { ...it.detalhe, refeicoes } } as ItemGravacao;
+    };
+    const antes = await contarPrescricoes();
+    await expect(
+      Promise.resolve().then(() =>
+        porta.prescrever(c, 'pep.prescrever', gravacao([comRefeicao('rjj', 'jejum')]), ctx()),
+      ),
+    ).rejects.toMatchObject({ problema: { status: 422, codigo: 'dieta-refeicao-indevida' } });
+    expect(await contarPrescricoes()).toBe(antes);
+    const r = await porta.prescrever(
+      c,
+      'pep.prescrever',
+      // Período seguinte ao da prescrição do teste anterior (uma ativa por período).
+      {
+        ...gravacao([comRefeicao('rlv', 'livre')]),
+        vigencia: { inicio: local(48 * HORA), fim: local(72 * HORA) },
+      },
+      ctx(),
+    );
+    const linhas = await ler(
+      `SELECT ri.id, ri.sequencia, ri.horario_refeicao_id AS hr, ri.alimento_referencia_id AS al, ri.quantidade,
+              ri.substituto_prescricao_dieta_refeicao_item_id AS subst, ri.percentual_diario AS pct, ri.calorias_kcal AS kcal
+         FROM prescricao_dieta_refeicao_item ri
+         JOIN prescricao_item_dieta d ON d.id = ri.prescricao_item_dieta_id
+         JOIN prescricao_item pi ON pi.id = d.prescricao_item_id
+        WHERE pi.prescricao_id = ? ORDER BY ri.sequencia`,
+      [r.prescricao],
+    );
+    expect(
+      linhas.map((x) => [x['sequencia'], x['hr'], x['al'], Number(x['quantidade'])].map(Number)),
+    ).toEqual([
+      [1, m.cat['refeicao'], m.cat['a1'], 200],
+      [2, m.cat['refeicao'], m.cat['a2'], 150],
+    ]);
+    expect(linhas[0]!['subst']).toBeNull();
+    expect(Number(linhas[1]!['subst'])).toBe(Number(linhas[0]!['id']));
+    expect([Number(linhas[0]!['pct']), Number(linhas[0]!['kcal'])]).toEqual([25, 180]);
+    expect([linhas[1]!['pct'], linhas[1]!['kcal']]).toEqual([null, null]);
   });
 });

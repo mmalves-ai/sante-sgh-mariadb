@@ -80,6 +80,7 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'prescricao_item_se_necessario',
   'prescricao_item_dieta',
   'prescricao_item_dieta_caracteristica',
+  'prescricao_dieta_refeicao_item',
   'prescricao_item_solucao',
   'prescricao_item_solucao_etapa',
   'prescricao_item_solucao_componente',

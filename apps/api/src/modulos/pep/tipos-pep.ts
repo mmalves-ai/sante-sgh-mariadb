@@ -457,6 +457,25 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
       velocidade: QTDE.nullable(),
       unidadeInfusao: ID.nullable(),
       caracteristicas: z.array(z.object({ caracteristica: ID, resposta: textoCp1252(100) }).strict()).max(20),
+      /** Composição por refeição do dia (03-PEP L112): alimento, quantidade, medida caseira e substituto. */
+      refeicoes: z
+        .array(
+          z
+            .object({
+              refeicao: ID,
+              alimento: ID,
+              quantidade: QTDE,
+              unidade: ID.nullable(),
+              medidaCaseira: ID.nullable(),
+              quantidadeMedidaCaseira: QTDE.nullable(),
+              substitui: z.number().int().min(1).max(60).nullable(),
+              percentualDiario: z.number().min(0).max(100).nullable(),
+              calorias: z.number().min(0).max(20_000).nullable(),
+            })
+            .strict(),
+        )
+        .max(60)
+        .optional(),
     })
     .strict(),
   z

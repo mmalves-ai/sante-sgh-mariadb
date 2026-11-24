@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   conferirCategoriaDoDetalhe,
   conferirItemGravavel,
+  conferirRefeicoesDieta,
   conferirVentilacaoNoCadastro,
   MENSAGENS_ITEM_GRAVAVEL,
   mlPorHoraDaSigla,
+  type RefeicaoDietaGravavel,
 } from './itens-gravaveis.js';
 
 const sol = (over: Record<string, unknown> = {}) => ({
@@ -97,6 +99,79 @@ describe('conferência do item antes de gravar (03-PEP L105)', () => {
         ],
       }),
     ).toBe('dieta-caracteristica-repetida');
+  });
+
+  it('dieta por refeição: só oral e livre, sem alimento repetido, substituto anterior e calorias até 100% (L112)', () => {
+    const base = {
+      tipo: 'dieta' as const,
+      classe: 'oral' as const,
+      quantidade: 1,
+      velocidade: null,
+      unidadeInfusao: null,
+      caracteristicas: [],
+    };
+    const r = (refeicao: number, alimento: number, extra: Partial<RefeicaoDietaGravavel> = {}) => ({
+      refeicao,
+      alimento,
+      quantidade: 100,
+      medidaCaseira: null,
+      quantidadeMedidaCaseira: null,
+      substitui: null,
+      percentualDiario: null,
+      ...extra,
+    });
+    const cafe = [
+      r(1, 10, { percentualDiario: 25 }),
+      r(1, 11, { substitui: 1 }),
+      r(2, 10, { percentualDiario: 40 }),
+    ];
+    expect(conferirItemGravavel({ ...base, refeicoes: cafe })).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'livre', quantidade: null, refeicoes: cafe })).toBeNull();
+    expect(conferirItemGravavel({ ...base, refeicoes: [] })).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'jejum', quantidade: null, refeicoes: cafe })).toBe(
+      'dieta-refeicao-indevida',
+    );
+    expect(conferirItemGravavel({ ...base, classe: 'enteral', refeicoes: cafe })).toBe(
+      'dieta-refeicao-indevida',
+    );
+    expect(conferirRefeicoesDieta('oral', [r(1, 10), r(1, 10)])).toBe('dieta-refeicao-repetida');
+    expect(conferirRefeicoesDieta('oral', [r(1, 10, { quantidade: 0 })])).toBe('dieta-quantidade-invalida');
+    expect(conferirRefeicoesDieta('oral', [r(1, 10, { medidaCaseira: 3 })])).toBe(
+      'dieta-refeicao-medida-caseira',
+    );
+    expect(conferirRefeicoesDieta('oral', [r(1, 10, { medidaCaseira: 3, quantidadeMedidaCaseira: 0 })])).toBe(
+      'dieta-refeicao-medida-caseira',
+    );
+    expect(
+      conferirRefeicoesDieta('oral', [r(1, 10, { medidaCaseira: 3, quantidadeMedidaCaseira: 2 })]),
+    ).toBeNull();
+    // Substituto: aponta um titular anterior da mesma refeição, com outro alimento.
+    expect(conferirRefeicoesDieta('oral', [r(1, 11, { substitui: 1 })])).toBe(
+      'dieta-refeicao-substituto-invalido',
+    );
+    expect(conferirRefeicoesDieta('oral', [r(1, 10), r(2, 11, { substitui: 1 })])).toBe(
+      'dieta-refeicao-substituto-invalido',
+    );
+    expect(conferirRefeicoesDieta('oral', [r(1, 10), r(1, 10, { substitui: 1 })])).toBe(
+      'dieta-refeicao-substituto-invalido',
+    );
+    expect(
+      conferirRefeicoesDieta('oral', [r(1, 10), r(1, 11, { substitui: 1 }), r(1, 12, { substitui: 2 })]),
+    ).toBe('dieta-refeicao-substituto-invalido');
+    // A parte das calorias do dia soma só os titulares, até 100%.
+    expect(
+      conferirRefeicoesDieta('oral', [
+        r(1, 10, { percentualDiario: 60 }),
+        r(1, 11, { substitui: 1, percentualDiario: 60 }),
+        r(2, 10, { percentualDiario: 40 }),
+      ]),
+    ).toBeNull();
+    expect(
+      conferirRefeicoesDieta('oral', [
+        r(1, 10, { percentualDiario: 60 }),
+        r(2, 10, { percentualDiario: 41 }),
+      ]),
+    ).toBe('dieta-refeicao-percentual-acima');
   });
 
   it('solução em etapas: principal, etapas únicas, cada componente na sua etapa e fim depois do início', () => {
