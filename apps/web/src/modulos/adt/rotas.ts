@@ -123,6 +123,12 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'hotelaria.limpeza.executar' },
   },
   {
+    path: '/same/guarda',
+    name: 'adt.same.guarda',
+    component: () => import('./telas/SameGuardaTela.vue'),
+    meta: { permissao: 'same.movimento.ler' },
+  },
+  {
     path: '/same/movimentos',
     name: 'adt.same',
     component: () => import('./telas/SameTela.vue'),

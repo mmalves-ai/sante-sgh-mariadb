@@ -41,6 +41,8 @@ import { GasMedicinalController } from './gas-medicinal.controller.js';
 import { PORTA_GAS_MEDICINAL, PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
+import { SameGuardaController } from './same-guarda.controller.js';
+import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
 
 export interface OpcoesModuloAdt {
@@ -104,6 +106,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       SameController,
       DocumentosInternacaoController,
       GasMedicinalController,
+      SameGuardaController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
@@ -114,6 +117,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGasMedicinalPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.
+      {
+        provide: PORTA_SAME_GUARDA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaSameGuardaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {
