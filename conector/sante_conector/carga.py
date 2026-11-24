@@ -435,8 +435,9 @@ class Batimento:
 class Carga:
     reprocessar = False  # padrão (continuidade) também para a instância montada sem __init__ (testes)
 
-    def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None):
+    def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None, pular=None):
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
+        self.pular = dict(pular or {})      # continuação: {tabela: execução que a concluiu} (continuar.concluidas_propria)
         self.progresso = Batimento(progresso or (lambda pct, etapa: None))
         self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
         self.pend_repetidas = []            # (tabela, regra, gravidade, detalhe, n): repetidas na continuação
@@ -1262,14 +1263,45 @@ class Carga:
               "REALTA": lambda ls: self._pre("REALTA", ls), "RECADATE": lambda ls: self._pre("RECADATE", ls)}
         if "ATCABECATEND" in self.tabelas and "RICADPAC" not in self.tabelas:
             raise ErroCarga("atendimento sem a tabela de pacientes na origem")
+        from . import continuar
+        grupo = {t for t in continuar.GRUPO_PROPRIA if t in self.tabelas}
+        pulados = grupo if grupo and grupo <= set(getattr(self, "pular", None) or {}) and not self.reprocessar else set()
+        if pulados:  # continuação: pendências antes da marca (sem a marca, a próxima herda da anterior pela cadeia)
+            self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
+                self, {t: self.pular[t] for t in pulados},
+                lambda n: self.progresso(0, "repetindo as pendências do atendimento já concluído (%d)" % n),
+                excluir_regras=continuar.CONCILIACAO_PROPRIA)
+            continuar.marcar(self, pulados, None, "continuada")
         for i, t in enumerate(self.tabelas):
             self._tab_atual = t
             self.progresso(i / len(self.tabelas), "carregando %s" % MAPA[t]["entidade"])
+            if t in pulados:
+                self._reconstruir(t)
+                continue
             fn[t](self._linhas(t))
+            self._commit()
+            # marca de concluída depois do commit (base da continuação); o grupo do atendimento só junto, quando o
+            # atendimento gravou as fichas e as altas lidas antes dele
+            if t not in grupo:
+                continuar.marcar(self, [t])
+            elif t == "ATCABECATEND":
+                continuar.marcar(self, grupo)
         self._commit()
         res = self.conciliar(contagens)
         self._commit()
         return res
+
+    def _reconstruir(self, t):
+        """Tabela do grupo do atendimento pulada na continuação: chaves vistas e soma da origem refeitas do
+        conector_origem pelo mesmo caminho da linha "igual" de uma reexecução (concluidas_propria garante o mesmo
+        arquivo, a contagem exata de chaves e nenhuma alterada); a origem não é lida."""
+        ent = "atendimento" if t == "ATCABECATEND" else ENT_FILHA[t]
+        vistas = self.vistas.setdefault(t, set())
+        for k, ant in self.existente.get(t, {}).items():
+            vistas.add(k)
+            if ant[0] is not None:
+                self._ja_carregada(ent, k, "igual", ant)
+        self.cont["puladas_continuacao"] = self.cont.get("puladas_continuacao", 0) + len(vistas)
 
     # ----- conciliação (destino relido do banco) -----
     # (entidade, tabela de origem, SELECT chave, campos do resumo (mesma ordem do lado da origem), editado)

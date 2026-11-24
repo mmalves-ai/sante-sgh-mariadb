@@ -438,10 +438,14 @@ class ContinuacaoPontaAPonta(unittest.TestCase):
             return {t: um("SELECT COUNT(*) FROM `%s`.`%s`" % (cli, t))[0][0]
                     for (t,) in um("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s", (cli,))}
 
-        def regras(pend):
+        def regras(cm):
+            # as repetidas da interrompida vêm agregadas (pend_repetidas: tabela, regra, gravidade, detalhe, n), nunca
+            # linha a linha na memória: a soma por (tabela, regra) tem de ser a mesma da importação inteira
             r = {}
-            for t, _, regra, _, _ in pend:
+            for t, _, regra, _, _ in cm.pend:
                 r[(t, regra)] = r.get((t, regra), 0) + 1
+            for t, regra, _, _, n in getattr(cm, "pend_repetidas", ()):
+                r[(t, regra)] = r.get((t, regra), 0) + n
             return r
         try:
             preparar("f4rc_ref")
@@ -473,7 +477,7 @@ class ContinuacaoPontaAPonta(unittest.TestCase):
                 self.assertEqual(destino(cli), destino("cliente_f4rc_ref"))
                 if extra:
                     extra(um, cli, res_r, res_c)
-                self.assertEqual(regras(cm_c.pend), regras(cm_r.pend))
+                self.assertEqual(regras(cm_c), regras(cm_r))
                 versao_depois = dict(um("SELECT tabela_origem, SUM(versao) FROM `%s`.conector_origem GROUP BY 1"
                                         % ctl))
                 for t in cm_c.pular:  # nunca regravar linha já vista

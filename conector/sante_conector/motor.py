@@ -207,7 +207,14 @@ def executar(trab, eid):
 
                         def prog_mapa(frac, etapa):
                             plataforma.progresso(conn, eid, 79 + 14 * frac, etapa)
-                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(carregar, contagens) or {
+                        # continuação: o grupo do atendimento da carga própria concluído na cadeia é pulado
+                        pular_p = continuar.concluidas_propria(
+                            conn, ctl, int(de), carregar, contagens, sha_antes,
+                            lambda e: (plataforma.consultar(conn, e) or {}).get("contadores")) if de else {}
+                        if de:
+                            rel["continuacao"]["carga_propria_pulada"] = sorted(pular_p)
+                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog, pular=pular_p).executar(
+                            carregar, contagens) or {
                             "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
                             "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
                         if plano:

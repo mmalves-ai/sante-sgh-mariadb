@@ -6,7 +6,9 @@ uma execução nova que aponta para a interrompida (`contadores.continuar_de`). 
 
 - confere que o arquivo é o MESMO da interrompida (sha256 da imagem gravada no controle); outro arquivo recusa;
 - conta as tabelas, confronta com o gstat e grava a imagem como sempre (a prova de não alterar a origem continua);
-- refaz a carga própria do L3 (pula pelo hash o que já entrou);
+- refaz a carga própria do L3 (pula pelo hash o que já entrou), menos o grupo do atendimento (atendimento, fichas e
+  altas) que uma execução da cadeia marcou como concluído (`concluidas_propria`, rodada pendencia-quadratica): esse é
+  pulado sem ler a origem, com o estado refeito do controle e as pendências repetidas; o paciente roda sempre;
 - na carga pelo mapa, PULA as tabelas que a interrompida concluiu (regra abaixo), sem reler a origem delas; a tabela
   pela metade e as seguintes rodam normalmente: a linha já vista é pulada pelo hash (nunca regravada), a nova entra;
 - respeita CONECTOR_ADIAR e CONECTOR_SO (o plano é o mesmo da execução normal; só tira as concluídas);
@@ -40,7 +42,7 @@ Regra das tabelas concluídas da execução interrompida Y (tabela de controle `
    marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são repetidas da
    execução que a concluiu.
 """
-from .carga import AGORA
+from .carga import AGORA, ORDEM
 
 
 class NaoContinuavel(RuntimeError):
@@ -87,7 +89,8 @@ def _uma(conn, ctl, anterior, plano, contagens, sha256):
         if not sha or sha != sha256:
             raise NaoContinuavel("o arquivo mudou desde a execução %d (sha256 diferente): importe de novo" % anterior)
         c.execute("SELECT tabela_origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=%%s" % ctl, (anterior,))
-        marcadas = {x[0] for x in c.fetchall()}
+        # a marca da carga própria (concluidas_propria) não entra aqui: só a da carga pelo mapa decide marca × dedução
+        marcadas = {x[0] for x in c.fetchall()} - set(ORDEM)
         c.execute("SELECT tabela_origem, registros FROM `%s`.imagem_tabela WHERE imagem_id=%%s" % ctl, (img,))
         lidas = {t: int(n) for t, n in c.fetchall()}
         saida = set()
@@ -155,7 +158,54 @@ def marcar(cm, tabelas, onda=None, origem="carregada"):
 REPETIR_LOTE = 50000
 
 
-def repetir_pendencias(cm, origem, progresso=None):
+# Carga própria (carga.py): só o grupo do atendimento (a tabela longa e as duas que ele consome) pode ser pulado, e
+# só inteiro. O paciente não: as subentidades e o endereço que aguarda a evidência do CEP dependem da linha da origem.
+GRUPO_PROPRIA = ("REALTA", "RECADATE", "ATCABECATEND")
+# pendências que a conciliação da carga própria gera de novo nesta execução (não são repetidas, senão contariam 2×)
+CONCILIACAO_PROPRIA = ("apagada_aguarda_sincronizar", "edicao_no_destino")
+
+
+def concluidas_propria(conn, ctl, anterior, presentes, contagens, sha256, contadores_de=None):
+    """Grupo do atendimento da carga própria concluído por uma execução da cadeia (`anterior`, e as que ela
+    continuava): {tabela: execução} ou {} (roda de novo). Exige, na execução E que o concluiu:
+    1. marca de TODAS as tabelas do grupo presentes (carga.Carga.executar marca o grupo depois do commit do
+       atendimento e das fichas e altas; execução anterior à marca, como a 11 da ProntoCardio, nunca é pulada);
+    2. a imagem de E é o mesmo arquivo (sha256);
+    3. o conector_origem tem EXATAMENTE a contagem desta execução de chaves de cada tabela (toda linha lida é
+       registrada, gravada ou recusada; chave a mais = linha que sumiu do arquivo; a menos = não concluída);
+    4. nenhuma linha alterada à espera do Sincronizar (`alteracao_aguarda_sincronizar` em E): a reexecução a poria
+       fora da soma, e o estado guardado não distingue. Na dúvida, não pula."""
+    grupo = [t for t in GRUPO_PROPRIA if t in presentes]
+    if "ATCABECATEND" not in grupo:
+        return {}
+    e, vistos = int(anterior), set()
+    with conn.cursor() as c:
+        while e and e not in vistos:
+            vistos.add(e)
+            c.execute("SELECT tabela_origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=%%s" % ctl, (e,))
+            if set(grupo) <= {x[0] for x in c.fetchall()}:
+                break
+            de = (contadores_de(e) or {}).get("continuar_de") if contadores_de else None
+            e = int(de) if de else None
+        if not e or e not in vistos:
+            return {}
+        c.execute("SELECT sha256 FROM `%s`.imagem WHERE execucao_id=%%s" % ctl, (e,))
+        r = c.fetchone()
+        if not r or not r[0] or r[0] != sha256:
+            return {}
+        for t in grupo:
+            c.execute("SELECT COUNT(*) FROM `%s`.conector_origem WHERE tabela_origem=%%s" % ctl, (t,))
+            if int(c.fetchone()[0]) != int(contagens.get(t, -1)):
+                return {}
+        marcas = ",".join(["%s"] * len(grupo))
+        c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=%%s AND regra='alteracao_aguarda_sincronizar'"
+                  " AND tabela_origem IN (%s)" % (ctl, marcas), [e] + grupo)
+        if int(c.fetchone()[0]):
+            return {}
+    return {t: e for t in grupo}
+
+
+def repetir_pendencias(cm, origem, progresso=None, excluir_regras=()):
     """Pendências abertas nas tabelas puladas, da execução que as concluiu (`origem` {tabela: execução}; a cadeia de
     continuações aponta para a que de fato carregou): repetidas nesta execução (só metadados: tabela, chave, regra,
     gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo.
@@ -176,6 +226,8 @@ def repetir_pendencias(cm, origem, progresso=None):
         marcas = ",".join(["%s"] * len(tabelas))
         filtro = ("FROM %s.pendencia WHERE execucao_id=%%s AND situacao='aberta' AND tabela_origem IN (%s)"
                   % (cm.ctl, marcas))
+        if excluir_regras:
+            filtro += " AND regra NOT IN (%s)" % ",".join("'%s'" % r for r in excluir_regras if r.isidentifier())
         ultimo = 0
         while True:
             with cm._c() as c:

@@ -250,6 +250,136 @@ class RepetirPendencias(unittest.TestCase):
         self.assertEqual(conta["insert"], len(linhas))
 
 
+@unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
+class ContinuacaoCargaPropria(unittest.TestCase):
+    """(b) Continuação: o grupo do atendimento da carga própria concluído (marcado) pela execução anterior é pulado sem
+    ler a origem; sem marca, com contagem diferente, com linha alterada ou com outro arquivo, roda de novo."""
+    COD = "pq_propria"
+    SHA = "a" * 64
+    CONT = {"ATCABECATEND": 3, "RECADATE": 2, "REALTA": 1}
+
+    def setUp(self):
+        from sante_conector import banco, controle
+        self.root = banco.conectar(None, multi=True)
+        self.cli, self.ctl = "cliente_" + self.COD, controle.nome_ctl(self.COD)
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+            c.execute("CREATE DATABASE `%s`" % self.cli)
+        controle.preparar(self.root, self.COD, self.cli)
+        self.cn = banco.conectar(self.cli, autocommit=False)
+        h = b"\x01" * 16
+        orig = [("ATCABECATEND", "1", "atendimento", 11, h, b"\x0a" * 16, None, None),
+                ("ATCABECATEND", "2", "atendimento", 12, h, b"\x0b" * 16, None, None),
+                ("ATCABECATEND", "3", "atendimento", None, h, None, "numero_duplicado", "critica"),
+                ("RECADATE", "f1", "atendimento", 11, h, b"\x0c" * 16, None, None),
+                ("RECADATE", "f2", "atendimento", 12, h, b"\x0d" * 16, None, None),
+                ("REALTA", "a1", "atendimento", 11, h, b"\x0e" * 16, None, None)]
+        pend = [(1, "ATCABECATEND", "1", "carater_estimado", "baixa"),
+                (1, "ATCABECATEND", "2", "carater_estimado", "baixa"),
+                (1, "ATCABECATEND", "3", "numero_duplicado", "critica"),
+                (1, "ATCABECATEND", "2", "edicao_no_destino", "media"),   # da conciliação: refeita, não repetida
+                (1, "RICADPAC", "p1", "cpf_invalido", "media")]           # fora do grupo: não repetida
+        with self.cn.cursor() as c:
+            c.executemany("INSERT INTO `%s`.conector_origem (tabela_origem, chave_original, entidade_destino,"
+                          " id_destino, hash_linha, hash_destino, regra_recusa, gravidade_recusa, imagem_id, criado_em)"
+                          " VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,1,NOW())" % self.ctl, orig)
+            c.executemany("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                          " criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,NOW())" % self.ctl, pend)
+            for e in (1, 2):
+                c.execute("INSERT INTO `%s`.imagem (execucao_id, arquivo, tamanho_bytes, sha256, corte_em, ods_versao,"
+                          " pagina_bytes, tabelas, registros_total, generators, somente_leitura, criado_em) VALUES"
+                          " (%%s,'x',1,%%s,NOW(),13,8192,1,1,0,1,NOW())" % self.ctl, (e, self.SHA))
+        self.cn.commit()
+
+    def tearDown(self):
+        self.cn.close()
+        with self.root.cursor() as c:
+            for b in (self.cli, self.ctl):
+                c.execute("DROP DATABASE IF EXISTS `%s`" % b)
+        self.root.close()
+
+    def _marcar(self, eid, tabelas):
+        cm = type("CM", (), {})()
+        cm.ctl, cm.eid, cm.img, cm._c, cm._commit = "`%s`" % self.ctl, eid, eid, self.cn.cursor, self.cn.commit
+        continuar.marcar(cm, tabelas)
+
+    def _concluidas(self, anterior=1, cont=None, sha=SHA, cadeia=None):
+        return continuar.concluidas_propria(self.cn, self.ctl, anterior, list(carga.ORDEM), cont or self.CONT, sha,
+                                            (lambda e: (cadeia or {}).get(e)) if cadeia is not None else None)
+
+    def test_nao_pula_sem_marca_e_na_duvida(self):
+        self.assertEqual(self._concluidas(), {})                     # execução anterior à marca (como a 11)
+        self._marcar(1, ["REALTA", "RECADATE"])
+        self.assertEqual(self._concluidas(), {})                     # grupo pela metade
+        self._marcar(1, ["ATCABECATEND"])
+        self.assertEqual(self._concluidas(sha="b" * 64), {})         # outro arquivo
+        self.assertEqual(self._concluidas(cont=dict(self.CONT, ATCABECATEND=4)), {})  # linha que não entrou
+        with self.cn.cursor() as c:
+            c.execute("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                      " criado_em) VALUES (1,'ATCABECATEND','2','alteracao_aguarda_sincronizar','baixa',NOW())"
+                      % self.ctl)
+        self.cn.commit()
+        self.assertEqual(self._concluidas(), {})                     # alterada: reexecução a tira da soma
+
+    def test_pula_o_grupo_concluido_com_a_cadeia(self):
+        self._marcar(1, ["REALTA", "RECADATE", "ATCABECATEND"])
+        self.assertEqual(self._concluidas(), {"REALTA": 1, "RECADATE": 1, "ATCABECATEND": 1})
+        # a 2 continuou a 1 e caiu antes de marcar: herda da 1 pela cadeia
+        self.assertEqual(self._concluidas(2, cadeia={2: {"continuar_de": 1}}),
+                         {"REALTA": 1, "RECADATE": 1, "ATCABECATEND": 1})
+        self.assertEqual(self._concluidas(2), {})                    # sem a cadeia, a 2 não tem marca
+
+    def test_carga_pula_sem_ler_a_origem_e_refaz_o_estado(self):
+        self._marcar(1, ["REALTA", "RECADATE", "ATCABECATEND"])
+        pular = self._concluidas()
+
+        lidas = []
+        c = carga.Carga(None, self.cn, self.ctl, 3, 2, pular=pular)
+        with unittest.mock.patch.object(carga.Carga, "_preparar_catalogos"), \
+                unittest.mock.patch.object(carga.Carga, "conciliar", return_value={}), \
+                unittest.mock.patch.object(carga.Carga, "_linhas", lambda s, t: lidas.append(t) or iter(())), \
+                unittest.mock.patch.object(carga.Carga, "_pacientes", lambda s, ls: list(ls)):
+            c.executar(["RICADPAC", "REALTA", "RECADATE", "ATCABECATEND"], self.CONT)
+        self.assertEqual(lidas, ["RICADPAC"])   # o paciente sempre roda; o grupo do atendimento não lê a origem
+        self.assertEqual(c.vistas, {"ATCABECATEND": {"1", "2", "3"}, "RECADATE": {"f1", "f2"}, "REALTA": {"a1"}})
+        hx = {e: {k: v.rstrip("0") for k, v in d.items()} for e, d in c.origem.items()}  # BINARY completa com zeros
+        self.assertEqual(hx["atendimento"], {"1": "0a" * 16, "2": "0b" * 16})   # a recusada fica fora da soma
+        self.assertEqual(hx["atendimento_ficha"], {"f1": "0c" * 16, "f2": "0d" * 16})
+        self.assertEqual(hx["atendimento_alta"], {"a1": "0e" * 16})
+        self.assertEqual(c.cont["puladas_continuacao"], 6)
+        self.assertEqual(c.cont["pendencias_repetidas"], 3)
+        self.assertEqual(c.pend, [])
+        with self.cn.cursor() as cur:
+            cur.execute("SELECT regra, COUNT(*) FROM `%s`.pendencia WHERE execucao_id=3 GROUP BY regra" % self.ctl)
+            self.assertEqual(dict(cur.fetchall()), {"carater_estimado": 2, "numero_duplicado": 1})
+            cur.execute("SELECT tabela_origem, origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=3"
+                        % self.ctl)
+            self.assertEqual(sorted(cur.fetchall()), [("ATCABECATEND", "continuada"), ("REALTA", "continuada"),
+                                                      ("RECADATE", "continuada"), ("RICADPAC", "carregada")])
+        # a CargaMapa não confunde a marca da carga própria com a sua (marca × dedução)
+        with self.cn.cursor() as cur:
+            cur.execute("SELECT tabela_origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=1" % self.ctl)
+            self.assertTrue({x[0] for x in cur.fetchall()} <= set(carga.ORDEM))
+
+    def test_carga_sem_pulo_le_a_origem(self):
+        c = carga.Carga(None, self.cn, self.ctl, 3, 2, pular={"ATCABECATEND": 1})   # grupo incompleto: não pula
+        lidas = []
+        with unittest.mock.patch.object(carga.Carga, "_preparar_catalogos"), \
+                unittest.mock.patch.object(carga.Carga, "conciliar", return_value={}), \
+                unittest.mock.patch.object(carga.Carga, "_linhas", lambda s, t: lidas.append(t) or iter(())), \
+                unittest.mock.patch.object(carga.Carga, "_pacientes", lambda s, ls: list(ls)), \
+                unittest.mock.patch.object(carga.Carga, "_atendimentos", lambda s, ls: list(ls)):
+            c.executar(["RICADPAC", "REALTA", "RECADATE", "ATCABECATEND"], self.CONT)
+        self.assertEqual(lidas, ["RICADPAC", "REALTA", "RECADATE", "ATCABECATEND"])
+        self.assertNotIn("pendencias_repetidas", c.cont)
+        with self.cn.cursor() as cur:   # a execução que carregou marca o grupo (base da próxima continuação)
+            cur.execute("SELECT tabela_origem, origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=3"
+                        % self.ctl)
+            self.assertEqual(sorted(cur.fetchall()), [("ATCABECATEND", "carregada"), ("REALTA", "carregada"),
+                                                      ("RECADATE", "carregada"), ("RICADPAC", "carregada")])
+
+
 if __name__ == "__main__":
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     unittest.main()
