@@ -130,6 +130,23 @@ export interface HistoricoSigtap {
   readonly procedimento: string;
   readonly nome: string | null;
   readonly competencias: CompetenciaSigtap[];
+  /** 06-SUS L50 (banco próprio): competência da tabela em uso, competências carregadas e pares vigentes nela. */
+  readonly competenciaEmUso?: string | null;
+  readonly competenciasCarregadas?: {
+    codigo: string;
+    situacao: string;
+    vigente: boolean;
+    publicacao: string | null;
+    procedimentos: number | null;
+  }[];
+  readonly compatibilidades?: {
+    secundario: string;
+    descricao: string | null;
+    tipo: 'compativel' | 'incompativel' | 'concomitante';
+    quantidadeMaxima: number | null;
+    vigenciaInicio: string;
+    vigenciaFim: string | null;
+  }[];
 }
 
 export type LinhaDaCarga = LinhaCargaCatalogo & { lote: number | null };

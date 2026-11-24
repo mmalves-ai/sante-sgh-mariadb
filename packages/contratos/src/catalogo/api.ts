@@ -186,5 +186,31 @@ export const esquemaHistoricoSigtap = z.object({
       atributos: z.record(z.string(), valor),
     }),
   ),
+  /** 06-SUS L50: a competência da tabela em uso e as competências carregadas (mais nova primeiro). */
+  competenciaEmUso: z.string().nullable().optional(),
+  competenciasCarregadas: z
+    .array(
+      z.object({
+        codigo: z.string(),
+        situacao: z.string(),
+        vigente: z.boolean(),
+        publicacao: z.string().nullable(),
+        procedimentos: z.number().nullable(),
+      }),
+    )
+    .optional(),
+  /** Os pares com este procedimento como principal vigentes na competência em uso. */
+  compatibilidades: z
+    .array(
+      z.object({
+        secundario: z.string(),
+        descricao: z.string().nullable(),
+        tipo: z.enum(['compativel', 'incompativel', 'concomitante']),
+        quantidadeMaxima: z.number().nullable(),
+        vigenciaInicio: z.string(),
+        vigenciaFim: z.string().nullable(),
+      }),
+    )
+    .optional(),
 });
 export type HistoricoSigtap = z.infer<typeof esquemaHistoricoSigtap>;

@@ -11,6 +11,7 @@ import { type CodigoCatalogo, entidadeConsultaCatalogo } from '@sgh/contratos';
 import { LEIAUTE_CEP_PADRAO } from '@sgh/dominio-catalogo';
 import type { Leitor, Linha } from '@sgh/nucleo';
 import type { CamposCatalogo, ConsultaCatalogo, HistoricoSigtap } from './fonte.js';
+import { tabelaSigtapDoProcedimento } from './sigtap-tabela-propria.js';
 
 interface Coluna {
   readonly campo: string;
@@ -296,5 +297,10 @@ export async function historicoProprio(l: Leitor, procedimento: string): Promise
     valorSp: n(v['valor_servico_profissional']),
     atributos: i === 0 ? { ...atuais } : {},
   }));
-  return { procedimento, nome: valorDe(p['descricao']) as string | null, competencias };
+  return {
+    procedimento,
+    nome: valorDe(p['descricao']) as string | null,
+    competencias,
+    ...(await tabelaSigtapDoProcedimento(l, Number(p['id']))),
+  };
 }
