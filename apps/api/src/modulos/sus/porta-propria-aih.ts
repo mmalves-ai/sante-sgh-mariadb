@@ -12,6 +12,7 @@
 // O "registro" da tela é o id da internação; o prontuário é o número do prontuário do paciente; o solicitante é o CPF
 // do profissional da casa ou do solicitante externo (o banco guarda a chave, nunca o CPF de novo).
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { ErroProblema } from '../../problema.filter.js';
 import type { SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
@@ -652,6 +653,23 @@ export class GravacoesAihPropria {
         versaoAlterada();
       const c = await this.contaAtual(ref.id);
       if (!c) versaoAlterada();
+      // A reapresentação (conta nova da AIH rejeitada) não volta à competência em que a AIH já foi apresentada: o número
+      // da AIH é único por competência no estabelecimento. A recusa é de negócio (409), antes da gravação.
+      const jaApresentada = await this.tx.uma(
+        `SELECT o.id FROM conta_aih o JOIN conta_aih c ON c.id = ?
+          WHERE o.estabelecimento_id = ? AND o.numero_aih = c.numero_aih AND o.competencia_sus_id = ?
+            AND o.id <> c.id AND o.excluido_em IS NULL LIMIT 1`,
+        [c.id, this.est, competencia.id],
+      );
+      if (jaApresentada)
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          'AIH já apresentada nesta competência',
+          `A AIH reapresentada já foi apresentada na competência ${competencia.competencia}: reapresente-a numa ` +
+            'competência seguinte. Nada foi gravado.',
+          { codigo: 'aih-reapresentada-mesma-competencia' },
+        );
       await this.tx.alterar('conta_aih', c.id, c.versao, {
         situacao: 'apresentada',
         competencia_sus_id: competencia.id,
