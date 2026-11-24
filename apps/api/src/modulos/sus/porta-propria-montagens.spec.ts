@@ -3,7 +3,11 @@
 // SIH da acomodação (nunca o id interno).
 import type { Leitor } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { type ApoioMontagemSus, codigoAcomodacaoSih, MontagensSusPropria } from './porta-propria-montagens.js';
+import {
+  type ApoioMontagemSus,
+  codigoAcomodacaoSih,
+  MontagensSusPropria,
+} from './porta-propria-montagens.js';
 
 type Linha = Record<string, unknown>;
 

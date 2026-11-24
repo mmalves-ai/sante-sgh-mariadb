@@ -260,7 +260,8 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
       // O CRM do médico sintético e um segundo profissional sem CRM (não aparece na busca de solicitantes da APAC).
       const crm = await e.uma<{ id: number }>("SELECT id FROM conselho_classe WHERE sigla = 'CRM'", []);
       const uf = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM unidade_federativa', []);
-      if (!crm || !uf?.id) throw new Error('massa: o catálogo do CRM ou das UFs está vazio no cliente de teste');
+      if (!crm || !uf?.id)
+        throw new Error('massa: o catálogo do CRM ou das UFs está vazio no cliente de teste');
       await garantir(
         e,
         'SELECT id FROM inscricao_conselho WHERE profissional_id = ? AND sequencia = 1',
@@ -278,7 +279,8 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
         [pSem, agora],
       );
       // As remessas do BPA e da APAC da competência, com linhas, nos dois estabelecimentos (o mesmo número de arquivo).
-      const cboLinha = cbo?.id ?? (await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM ocupacao_cbo', []))?.id;
+      const cboLinha =
+        cbo?.id ?? (await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM ocupacao_cbo', []))?.id;
       if (!cboLinha) throw new Error('massa: o catálogo de ocupações (CBO) está vazio no cliente de teste');
       const competencia = (estId: number, instrumento: string) =>
         garantir(
@@ -488,7 +490,9 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     const p1 = await ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, pagina: 1, porPagina: 2 }));
     expect([p1.total, p1.itens.map((x) => x.tipo)]).toEqual([3, ['i']]);
     // Filtros: tipo e começo do procedimento.
-    const c = await ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, tipo: 'c', pagina: 0, porPagina: 10 }));
+    const c = await ler(ids.est, (m) =>
+      m.linhasBpa({ arquivo: ARQ_BPA, tipo: 'c', pagina: 0, porPagina: 10 }),
+    );
     expect([c.total, c.itens.every((x) => x.tipo === 'c')]).toEqual([2, true]);
     const proc = (procedimento: string) =>
       ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, procedimento, pagina: 0, porPagina: 10 }));
@@ -528,7 +532,9 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
   it('linhas da APAC: os procedimentos da remessa, totais, paginação e isolamento por estabelecimento', async () => {
     const a = await ler(ids.est, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 0, porPagina: 10 }));
     expect([a.total, a.apacs, a.quantidade]).toEqual([2, 1, 4]);
-    expect(a.itens.map((x) => [x.apac, x.numero, x.tipoNoArquivo, x.procedimento, x.principal, x.quantidade])).toEqual([
+    expect(
+      a.itens.map((x) => [x.apac, x.numero, x.tipoNoArquivo, x.procedimento, x.principal, x.quantidade]),
+    ).toEqual([
       [ids.laudo, NUM_APAC, '1', SIG, true, 1],
       [ids.laudo, NUM_APAC, '1', SIG, false, 3],
     ]);
@@ -536,12 +542,14 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     const p1 = await ler(ids.est, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 1, porPagina: 1 }));
     expect([p1.total, p1.itens.map((x) => x.principal)]).toEqual([2, [false]]);
     // O B tem a remessa com o mesmo número, sem APAC: não vê as linhas do A.
-    expect(await ler(ids.estB, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 0, porPagina: 10 }))).toEqual({
-      itens: [],
-      total: 0,
-      apacs: 0,
-      quantidade: 0,
-    });
+    expect(await ler(ids.estB, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 0, porPagina: 10 }))).toEqual(
+      {
+        itens: [],
+        total: 0,
+        apacs: 0,
+        quantidade: 0,
+      },
+    );
   });
 
   it('AIH: a internação SUS com alta na competência, a conta, os itens e os lotes', async () => {
