@@ -16,8 +16,11 @@ import {
   conferirCaptacao,
   conferirCobertura,
   conferirPreCadastro,
+  conferirSemelhanca,
   coberturaProposta,
   decidirConversao,
+  fimAoEncerrar,
+  type PacienteEscolhido,
   situacaoDaCarteira,
   somenteDigitos,
   totaisPorCanal,
@@ -170,13 +173,17 @@ async function conferirEGravarDuplicata(
   if (!carteira) return;
   const d = await tx.uma(
     `SELECT id FROM cobertura_paciente WHERE paciente_id = ? AND fonte_pagadora_id = ? AND numero_carteira = ?
-        AND excluido_em IS NULL AND id <> ?`,
+        AND situacao <> 'cancelada' AND excluido_em IS NULL AND id <> ?`,
     [paciente, fonte, carteira, id ?? 0],
   );
   if (d)
-    throw recusa('carteira-repetida', 'O paciente já tem esta carteira nesta fonte pagadora.', {
-      campos: ['numeroCarteira'],
-    });
+    throw recusa(
+      'carteira-repetida',
+      'O paciente já tem esta carteira, não encerrada, nesta fonte pagadora.',
+      {
+        campos: ['numeroCarteira'],
+      },
+    );
 }
 
 const operacaoIncluirCobertura = (trilha: RegistroTrilhaTela) =>
@@ -325,7 +332,8 @@ const operacaoEncerrarCobertura = (trilha: RegistroTrilhaTela) =>
     acao: 'alteracao',
     async gravar(tx, e) {
       const [k] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio, observacao
+        `SELECT id, versao, situacao, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio,
+                DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim, observacao
            FROM cobertura_paciente WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL`,
         [e.id, e.paciente],
         { teto: 1 },
@@ -340,11 +348,13 @@ const operacaoEncerrarCobertura = (trilha: RegistroTrilhaTela) =>
         );
       if (k['situacao'] === 'cancelada') throw recusa('cobertura-encerrada', 'A carteira já está encerrada.');
       const hoje = await hojeDo(tx);
-      const inicio = String(k['inicio']);
       const obs = [tx_(k['observacao']), `Encerrada em ${hoje}: ${e.motivo}`].filter(Boolean).join(' | ');
       await tx.alterar('cobertura_paciente', e.id, e.versao, {
         situacao: 'cancelada',
-        vigencia_fim: inicio > hoje ? inicio : hoje,
+        vigencia_fim: fimAoEncerrar(
+          { vigenciaInicio: String(k['inicio']), vigenciaFim: tx_(k['fim']) },
+          hoje,
+        ),
         principal: false,
         observacao: obs.slice(-500),
       });
@@ -370,10 +380,21 @@ export const esquemaPreCadastro = z
     numeroCarteira: texto(30).nullable().optional(),
     validadeCarteira: DATA.nullable().optional(),
     observacao: texto(2000).nullable().optional(),
+    /** Quem marca confirma que é outra pessoa quando um paciente tem o mesmo nome e nascimento (homônimo). */
+    confirmadoOutraPessoa: z.boolean().optional(),
   })
   .strict();
 export const esquemaConverterPreCadastro = z
-  .object({ estabelecimento: ID, id: ID, paciente: ID.nullable().optional() })
+  .object({
+    estabelecimento: ID,
+    id: ID,
+    paciente: ID.nullable().optional(),
+    /** Confirmação da recepção quando o paciente escolhido diverge do pré-cadastro (vai para a trilha). */
+    motivoDivergencia: texto(400).nullable().optional(),
+  })
+  .strict();
+export const esquemaCancelarPreCadastro = z
+  .object({ estabelecimento: ID, id: ID, motivo: texto(400).min(3) })
   .strict();
 
 export interface PreCadastroResumo {
@@ -409,6 +430,15 @@ const operacaoRegistrarPreCadastro = (trilha: RegistroTrilhaTela) =>
           throw recusa('plano-invalido', 'Escolha um plano ativo da fonte pagadora.', { campos: ['plano'] });
       }
       const dig = (v: string | null | undefined) => somenteDigitos(v ?? '') || null;
+      // Quem já é paciente é marcado no paciente: o pré-cadastro só existe para quem não tem prontuário.
+      const semelhante = conferirSemelhanca(
+        {
+          porCpf: (await pacientesDoCpf(tx, dig(e.cpf))).map((p) => p.id),
+          porNomeNascimento: await pacientesDoNomeNascimento(tx, e.nome, e.nascimento),
+        },
+        e.confirmadoOutraPessoa === true,
+      );
+      if (semelhante) throw recusa(semelhante.codigo, semelhante.mensagem, { campos: [semelhante.campo] });
       const id = await tx.incluir('pre_cadastro', {
         estabelecimento_id: e.estabelecimento,
         nome: e.nome.trim().toUpperCase(),
@@ -430,6 +460,33 @@ const operacaoRegistrarPreCadastro = (trilha: RegistroTrilhaTela) =>
     trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
   });
 
+/** Pacientes com o mesmo nome (sem caixa) e nascimento: o pré-cadastro que repete um paciente. */
+async function pacientesDoNomeNascimento(
+  l: Leitor | TxOperacao,
+  nome: string,
+  nascimento: string,
+): Promise<number[]> {
+  const r = await l.consultar(
+    `SELECT p.id FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+      WHERE pf.nome = ? AND pf.data_nascimento = ? AND p.excluido_em IS NULL AND pf.excluido_em IS NULL
+      ORDER BY p.id LIMIT 5`,
+    [nome.trim().replace(/\s+/g, ' ').toUpperCase(), nascimento],
+  );
+  return r.map((x) => n(x['id']));
+}
+
+/** O paciente escolhido na chegada, com o que a conversão confere (nome, nascimento e CPF). */
+async function pacienteEscolhido(l: Leitor | TxOperacao, id: number): Promise<PacienteEscolhido> {
+  const p = await l.uma(
+    `SELECT p.id, pf.nome, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nascimento, pf.cpf
+       FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+      WHERE p.id = ? AND p.excluido_em IS NULL`,
+    [id],
+  );
+  if (!p) throw recusa('paciente-inexistente', 'O paciente não existe.', { campos: ['paciente'] });
+  return { id: n(p['id']), nome: String(p['nome']), nascimento: tx_(p['nascimento']), cpf: tx_(p['cpf']) };
+}
+
 /** Pacientes com o CPF (para o reaproveitamento na chegada). */
 async function pacientesDoCpf(l: Leitor | TxOperacao, cpf: string | null) {
   if (!cpf) return [];
@@ -450,7 +507,7 @@ const operacaoConverterPreCadastro = (trilha: RegistroTrilhaTela) =>
     acao: 'alteracao',
     async gravar(tx, e) {
       const [k] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao, cpf, DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS nascimento,
+        `SELECT id, versao, situacao, nome, cpf, DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS nascimento,
                 fonte_pagadora_id, plano_fonte_pagadora_id, numero_carteira,
                 DATE_FORMAT(validade_carteira, '%Y-%m-%d') AS validade
            FROM pre_cadastro WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
@@ -461,11 +518,15 @@ const operacaoConverterPreCadastro = (trilha: RegistroTrilhaTela) =>
       if (k['situacao'] !== 'pendente')
         throw recusa('pre-cadastro-fechado', 'O pré-cadastro já foi convertido ou cancelado.');
       const d = decidirConversao(
-        { nascimento: String(k['nascimento']) },
+        { nascimento: String(k['nascimento']), nome: String(k['nome']), cpf: tx_(k['cpf']) },
         await pacientesDoCpf(tx, tx_(k['cpf'])),
-        e.paciente ?? null,
+        e.paciente ? await pacienteEscolhido(tx, e.paciente) : null,
+        e.motivoDivergencia ?? null,
       );
-      if (d.acao === 'recusar') throw recusa(d.codigo, d.mensagem, { campos: ['paciente'] });
+      if (d.acao === 'recusar')
+        throw recusa(d.codigo, d.mensagem, {
+          campos: d.codigo === 'dados-divergentes' ? ['motivoDivergencia'] : ['paciente'],
+        });
       if (d.acao === 'cadastrar')
         throw recusa(
           'paciente-a-cadastrar',
@@ -488,8 +549,9 @@ const operacaoConverterPreCadastro = (trilha: RegistroTrilhaTela) =>
       for (const m of marcacoes)
         await tx.alterar('marcacao_horario', n(m['id']), n(m['versao']), { paciente_id: d.paciente });
       const captacoes = await tx.consultarParaAtualizar(
-        'SELECT id, versao FROM captacao_paciente WHERE pre_cadastro_id = ? AND paciente_id IS NULL AND excluido_em IS NULL',
-        [e.id],
+        `SELECT id, versao FROM captacao_paciente
+          WHERE pre_cadastro_id = ? AND estabelecimento_id = ? AND paciente_id IS NULL AND excluido_em IS NULL`,
+        [e.id, e.estabelecimento],
         { teto: 100 },
       );
       for (const c of captacoes)
@@ -501,7 +563,7 @@ const operacaoConverterPreCadastro = (trilha: RegistroTrilhaTela) =>
         const carteira = tx_(k['numero_carteira']);
         const ja = await tx.uma(
           `SELECT id FROM cobertura_paciente WHERE paciente_id = ? AND fonte_pagadora_id = ?
-              AND (numero_carteira <=> ?) AND excluido_em IS NULL`,
+              AND (numero_carteira <=> ?) AND situacao <> 'cancelada' AND excluido_em IS NULL`,
           [d.paciente, fonte, carteira],
         );
         const f = await regraFonte(tx, fonte);
@@ -526,7 +588,43 @@ const operacaoConverterPreCadastro = (trilha: RegistroTrilhaTela) =>
       return { id: e.id, paciente: d.paciente, marcacoes: marcacoes.length, cobertura };
     },
     alvo: (e) => ({ tabela: 'pre_cadastro', id: e.id }),
-    trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
+    trilha: (e) => ({
+      dados: trilha.dadosDepois ?? null,
+      motivo: e.motivoDivergencia?.trim()
+        ? `Dados divergentes confirmados: ${e.motivoDivergencia.trim()}`
+        : null,
+    }),
+  });
+
+/** Cancela o pré-cadastro pendente (desistência, marcação desfeita): nada é apagado, o motivo fica na observação e na
+ * trilha. As marcações seguem ligadas ao pré-cadastro, como histórico. */
+const operacaoCancelarPreCadastro = (trilha: RegistroTrilhaTela) =>
+  definirOperacao({
+    nome: 'cadastro.cancelar-pre-cadastro',
+    tabelas: ['pre_cadastro'],
+    entrada: esquemaCancelarPreCadastro,
+    acao: 'alteracao',
+    async gravar(tx, e) {
+      const [k] = await tx.consultarParaAtualizar(
+        `SELECT id, versao, situacao, observacao FROM pre_cadastro
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [e.id, e.estabelecimento],
+        { teto: 1 },
+      );
+      if (!k) throw recusa('pre-cadastro-inexistente', 'O pré-cadastro não existe neste estabelecimento.');
+      if (k['situacao'] !== 'pendente')
+        throw recusa('pre-cadastro-fechado', 'O pré-cadastro já foi convertido ou cancelado.');
+      const hoje = await hojeDo(tx);
+      await tx.alterar('pre_cadastro', e.id, n(k['versao']), {
+        situacao: 'cancelado',
+        observacao: [tx_(k['observacao']), `Cancelado em ${hoje}: ${e.motivo.trim()}`]
+          .filter(Boolean)
+          .join(' | '),
+      });
+      return { id: e.id };
+    },
+    alvo: (e) => ({ tabela: 'pre_cadastro', id: e.id }),
+    trilha: (e) => ({ dados: trilha.dadosDepois ?? null, motivo: e.motivo }),
   });
 
 // ───────────────────────────── Captação ─────────────────────────────
@@ -576,6 +674,25 @@ const operacaoRegistrarCaptacao = (trilha: RegistroTrilhaTela) =>
         }),
       );
       if (e.paciente) await pacienteExiste(tx, e.paciente);
+      if (e.preCadastro) {
+        // O pré-cadastro tem de ser deste estabelecimento; com o paciente junto, só o pré-cadastro já ligado a ele.
+        const pc = await tx.uma(
+          'SELECT situacao, paciente_id FROM pre_cadastro WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [e.preCadastro, e.estabelecimento],
+        );
+        if (!pc)
+          throw recusa('pre-cadastro-inexistente', 'O pré-cadastro não existe neste estabelecimento.', {
+            campos: ['preCadastro'],
+          });
+        const ligadoAoPaciente =
+          pc['situacao'] === 'convertido' && !!e.paciente && nn(pc['paciente_id']) === e.paciente;
+        if (pc['situacao'] !== 'pendente' && !ligadoAoPaciente)
+          throw recusa(
+            'pre-cadastro-de-outro-paciente',
+            'O pré-cadastro já foi fechado ou é de outro paciente: registre a captação no paciente.',
+            { campos: ['preCadastro'] },
+          );
+      }
       const id = await tx.incluir('captacao_paciente', {
         estabelecimento_id: e.estabelecimento,
         paciente_id: e.paciente ?? null,
@@ -827,15 +944,20 @@ export class CadastroVinculosProprio {
     });
   }
 
-  /** O que a conversão faria agora (prévia da tela de chegada): reaproveitar, cadastrar ou conferir. */
+  /**
+   * O que a conversão faria agora (prévia da tela de chegada): reaproveitar, cadastrar ou conferir. Com `paciente` (o
+   * escolhido na busca), mostra antes de ligar o que diverge entre ele e o pré-cadastro.
+   */
   async previaConversao(
     c: ContextoPorta,
     id: number,
+    paciente?: number | null,
   ): Promise<{
     acao: string;
     paciente: number | null;
     codigo: string | null;
     mensagem: string | null;
+    divergencias: string[];
     rascunho: Linha | null;
   }> {
     const est = this.estabelecimento(c);
@@ -853,14 +975,16 @@ export class CadastroVinculosProprio {
           'Confira o pré-cadastro.',
         );
       const d = decidirConversao(
-        { nascimento: String(k['nascimento']) },
+        { nascimento: String(k['nascimento']), nome: String(k['nome']), cpf: tx_(k['cpf']) },
         await pacientesDoCpf(l, tx_(k['cpf'])),
+        paciente ? await pacienteEscolhido(l, paciente) : null,
       );
       return {
         acao: d.acao,
         paciente: d.acao === 'vincular' ? d.paciente : null,
         codigo: d.acao === 'recusar' ? d.codigo : null,
         mensagem: d.acao === 'recusar' ? d.mensagem : null,
+        divergencias: d.acao === 'cadastrar' ? [] : [...(d.divergencias ?? [])],
         // Os dados que a ficha nova já recebe preenchidos (menos digitação na chegada).
         rascunho:
           d.acao === 'cadastrar'
@@ -879,7 +1003,7 @@ export class CadastroVinculosProprio {
 
   async converterPreCadastro(
     c: ContextoPorta,
-    e: { id: number; paciente?: number | null },
+    e: { id: number; paciente?: number | null; motivoDivergencia?: string | null },
     trilha: RegistroTrilhaTela,
     chave?: string,
   ): Promise<{ paciente: number; marcacoes: number; cobertura: number | null }> {
@@ -891,6 +1015,20 @@ export class CadastroVinculosProprio {
     );
     const r = x.resultado as { paciente: number; marcacoes: number; cobertura: number | null };
     return { paciente: n(r.paciente), marcacoes: n(r.marcacoes), cobertura: nn(r.cobertura) };
+  }
+
+  async cancelarPreCadastro(
+    c: ContextoPorta,
+    e: { id: number; motivo: string },
+    trilha: RegistroTrilhaTela,
+    chave?: string,
+  ): Promise<void> {
+    await this.executor.executar(
+      operacaoCancelarPreCadastro(trilha),
+      this.cliente,
+      { ...e, estabelecimento: this.estabelecimento(c) },
+      this.contexto(c, trilha, chave),
+    );
   }
 
   async registrarCaptacao(

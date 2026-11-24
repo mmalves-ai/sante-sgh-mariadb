@@ -1,6 +1,6 @@
 // Cobertura permanente do paciente (F3.1, 02-CAD linha 9): as carteiras do paciente por fonte pagadora e plano, com
 // validade, vigência, titular e parentesco, e a carteira principal. A carteira nunca é apagada: o fim é o encerramento
-// (vigência fim e situação "cancelada"). A situação que a tela mostra (vigente, a vencer, vencida, encerrada) sai das
+// (vigência fim e situação "cancelada"). A situação que a tela mostra (vigente, a vencer, vencida, encerrada, futura) sai das
 // datas no dia; o atendimento propõe a cobertura vigente do paciente (a principal primeiro), nunca uma vencida.
 // Vocabulário neutro: ids, booleanos, datas AAAA-MM-DD e texto.
 
@@ -110,7 +110,8 @@ export function conferirCobertura(c: CoberturaProposta): RecusaCobertura[] {
   return r;
 }
 
-export type SituacaoCarteira = 'vigente' | 'a_vencer' | 'vencida' | 'encerrada';
+/** `futura`: a vigência ainda não começou (não é proposta ao atendimento, nem avisa vencida). */
+export type SituacaoCarteira = 'vigente' | 'a_vencer' | 'vencida' | 'encerrada' | 'futura';
 
 export interface CarteiraNoDia {
   readonly situacao: string;
@@ -132,7 +133,7 @@ function somarDias(data: string, dias: number): string {
 export function situacaoDaCarteira(c: CarteiraNoDia, hoje: string): SituacaoCarteira {
   if (c.situacao === 'cancelada' || c.situacao === 'suspensa') return 'encerrada';
   if (c.vigenciaFim && c.vigenciaFim < hoje) return 'encerrada';
-  if (c.vigenciaInicio > hoje) return 'encerrada';
+  if (c.vigenciaInicio > hoje) return 'futura';
   if (c.situacao === 'vencida' || (c.validade && c.validade < hoje)) return 'vencida';
   if (c.validade && c.validade <= somarDias(hoje, DIAS_AVISO_VALIDADE)) return 'a_vencer';
   return 'vigente';
@@ -157,4 +158,18 @@ export function coberturaProposta<
       b.id - a.id,
   );
   return ordenadas[0] ?? null;
+}
+
+/**
+ * O fim da vigência ao encerrar no dia `hoje`: o fim que já passou fica como está (o encerramento não estende a
+ * vigência); a carteira que ainda não começou fica com o fim que tinha (a situação "cancelada" já a tira de uso); nos
+ * demais casos, o fim é hoje.
+ */
+export function fimAoEncerrar(
+  c: { readonly vigenciaInicio: string; readonly vigenciaFim: string | null },
+  hoje: string,
+): string | null {
+  if (c.vigenciaFim && c.vigenciaFim < hoje) return c.vigenciaFim;
+  if (c.vigenciaInicio > hoje) return c.vigenciaFim;
+  return hoje;
 }

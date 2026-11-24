@@ -64,22 +64,76 @@ export interface CandidatoConversao {
   readonly nascimento: string | null;
 }
 
+/** O paciente que a recepção escolheu na busca, com os dados que a conversão confere. */
+export interface PacienteEscolhido extends CandidatoConversao {
+  readonly nome: string;
+  readonly cpf: string | null;
+}
+
 export type DecisaoConversao =
-  | { readonly acao: 'vincular'; readonly paciente: number }
+  | {
+      readonly acao: 'vincular';
+      readonly paciente: number;
+      /** Dados que divergem entre o pré-cadastro e o paciente escolhido, ligados com o motivo informado. */
+      readonly divergencias: readonly string[];
+    }
   | { readonly acao: 'cadastrar' }
-  | { readonly acao: 'recusar'; readonly codigo: string; readonly mensagem: string };
+  | {
+      readonly acao: 'recusar';
+      readonly codigo: string;
+      readonly mensagem: string;
+      readonly divergencias?: readonly string[];
+    };
+
+/** Primeiro nome sem acento e sem caixa, para conferir se o escolhido é a mesma pessoa. */
+function primeiroNome(nome: string): string {
+  return (
+    nome
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim()
+      .split(/\s+/)[0] ?? ''
+  );
+}
+
+/** Tamanho mínimo do motivo que confirma a ligação com dados divergentes. */
+export const MOTIVO_DIVERGENCIA_MINIMO = 10;
 
 /**
- * O que fazer com o pré-cadastro na chegada. `escolhido`: o paciente que a recepção escolheu (ou acabou de cadastrar);
- * `porCpf`: os pacientes com o mesmo CPF. Um só pelo CPF, com o mesmo nascimento: reaproveita. CPF de paciente com
- * outro nascimento: recusa (confira antes de ligar). Nenhum: cadastrar com os dados do pré-cadastro.
+ * O que fazer com o pré-cadastro na chegada. `porCpf`: os pacientes com o CPF do pré-cadastro. `escolhido`: o paciente
+ * que a recepção escolheu na busca. A escolha nunca passa sem conferência: o CPF do pré-cadastro de outro paciente
+ * recusa sempre (a agenda e a cobertura iriam para outra pessoa); CPF, nascimento ou primeiro nome divergentes recusam
+ * até a recepção confirmar com o motivo, que fica na trilha. Sem escolha: um só pelo CPF, com o mesmo nascimento,
+ * reaproveita; CPF de paciente com outro nascimento recusa; nenhum, cadastrar com os dados do pré-cadastro.
  */
 export function decidirConversao(
-  pre: { readonly nascimento: string },
+  pre: { readonly nascimento: string; readonly nome?: string | null; readonly cpf?: string | null },
   porCpf: readonly CandidatoConversao[],
-  escolhido?: number | null,
+  escolhido?: PacienteEscolhido | null,
+  motivoDivergencia?: string | null,
 ): DecisaoConversao {
-  if (escolhido) return { acao: 'vincular', paciente: escolhido };
+  if (escolhido) {
+    if (porCpf.some((p) => p.id !== escolhido.id))
+      return {
+        acao: 'recusar',
+        codigo: 'cpf-de-outro-paciente',
+        mensagem: 'O CPF do pré-cadastro é de outro paciente: confira quem chegou antes de ligar.',
+      };
+    const divergencias: string[] = [];
+    const cpfPre = somenteDigitos(pre.cpf ?? '');
+    if (cpfPre && escolhido.cpf && somenteDigitos(escolhido.cpf) !== cpfPre) divergencias.push('cpf');
+    if (escolhido.nascimento && escolhido.nascimento !== pre.nascimento) divergencias.push('nascimento');
+    if (pre.nome && primeiroNome(pre.nome) !== primeiroNome(escolhido.nome)) divergencias.push('nome');
+    if (divergencias.length > 0 && (motivoDivergencia ?? '').trim().length < MOTIVO_DIVERGENCIA_MINIMO)
+      return {
+        acao: 'recusar',
+        codigo: 'dados-divergentes',
+        mensagem: `O paciente escolhido diverge do pré-cadastro (${divergencias.join(', ')}): confira e, se for a mesma pessoa, informe o motivo.`,
+        divergencias,
+      };
+    return { acao: 'vincular', paciente: escolhido.id, divergencias };
+  }
   if (porCpf.length > 1)
     return {
       acao: 'recusar',
@@ -94,5 +148,34 @@ export function decidirConversao(
       codigo: 'cpf-com-outro-nascimento',
       mensagem: 'O CPF é de um paciente com outra data de nascimento: confira antes de ligar.',
     };
-  return { acao: 'vincular', paciente: u.id };
+  return { acao: 'vincular', paciente: u.id, divergencias: [] };
+}
+
+/** Pacientes já cadastrados que o pré-cadastro parece repetir (pelo CPF, ou pelo nome com o nascimento). */
+export interface SemelhancaPreCadastro {
+  readonly porCpf: readonly number[];
+  readonly porNomeNascimento: readonly number[];
+}
+
+/**
+ * Antes de gravar o pré-cadastro: quem marca deve marcar no paciente que já existe. CPF de paciente cadastrado recusa
+ * sempre; nome e nascimento iguais aos de um paciente recusam até quem marca confirmar que é outra pessoa (homônimo).
+ */
+export function conferirSemelhanca(
+  s: SemelhancaPreCadastro,
+  confirmadoOutraPessoa: boolean,
+): RecusaPreCadastro | null {
+  if (s.porCpf.length > 0)
+    return {
+      codigo: 'paciente-ja-cadastrado',
+      campo: 'cpf',
+      mensagem: `O CPF já é do paciente ${s.porCpf.join(', ')}: marque direto no paciente.`,
+    };
+  if (s.porNomeNascimento.length > 0 && !confirmadoOutraPessoa)
+    return {
+      codigo: 'paciente-semelhante',
+      campo: 'nome',
+      mensagem: `Já existe paciente com este nome e nascimento (${s.porNomeNascimento.join(', ')}): marque nele ou confirme que é outra pessoa.`,
+    };
+  return null;
 }

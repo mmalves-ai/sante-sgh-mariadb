@@ -2,13 +2,17 @@
 // Pré-cadastro de quem marca sem prontuário (F3.1, 02-CAD linha 6). Em cima, a central de marcação grava o mínimo
 // (nome, nascimento, telefone; CPF e convênio se houver) com a validação na hora. Embaixo, a recepção vê os pendentes e,
 // na chegada, converte com um clique: o sistema reaproveita o paciente do mesmo CPF; sem ele, mostra os dados para a
-// ficha nova e liga ao paciente cadastrado. Nada é apagado.
+// ficha nova e liga ao paciente achado na busca, que mostra nome e nascimento e confere a divergência antes de ligar
+// (dados divergentes só com motivo). Quem já é paciente é avisado na gravação. Cancelar guarda o motivo; nada é apagado.
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
+import { buscarPacientes } from '../api-cadastro.js';
 import {
+  cancelarPreCadastro,
   converterPreCadastro,
   lerOpcoes,
   lerPreCadastros,
@@ -29,7 +33,14 @@ const termo = ref('');
 const erro = ref<unknown>(null);
 const mensagem = ref('');
 const previa = ref<{ id: number; p: PreviaConversao } | null>(null);
-const pacienteEscolhido = ref(0);
+type Achado = Awaited<ReturnType<typeof buscarPacientes>>['itens'][number];
+const termoPaciente = ref('');
+const achados = ref<Achado[] | null>(null);
+const escolhido = ref<Achado | null>(null);
+const motivoDivergencia = ref('');
+const outraPessoa = ref(false);
+const cancelando = ref<{ id: number; motivo: string } | null>(null);
+const codigoErro = computed(() => (erro.value instanceof ErroApi ? erro.value.problema?.codigo : undefined));
 const digitos = (s: string) => s.replace(/\D/g, '');
 
 const pendencias = computed(() => {
@@ -60,7 +71,9 @@ async function gravar(): Promise<void> {
       cpf: f.value.cpf || null,
       fontePagadora: f.value.fontePagadora || null,
       numeroCarteira: f.value.numeroCarteira || null,
+      ...(outraPessoa.value ? { confirmadoOutraPessoa: true } : {}),
     });
+    outraPessoa.value = false;
     mensagem.value = t('vinculos.pre.gravado');
     f.value = { nome: '', nascimento: '', celular: '', cpf: '', fontePagadora: 0, numeroCarteira: '' };
     await carregar();
@@ -70,8 +83,42 @@ async function gravar(): Promise<void> {
 }
 async function verChegada(id: number): Promise<void> {
   erro.value = null;
+  escolhido.value = null;
+  achados.value = null;
+  motivoDivergencia.value = '';
   try {
     previa.value = { id, p: await previaConversao(id) };
+  } catch (e) {
+    erro.value = e;
+  }
+}
+async function buscarPaciente(): Promise<void> {
+  erro.value = null;
+  try {
+    achados.value = (await buscarPacientes(termoPaciente.value)).itens;
+  } catch (e) {
+    erro.value = e;
+  }
+}
+/** Escolher na busca já mostra, antes de ligar, o que diverge entre o paciente e o pré-cadastro. */
+async function escolher(p: Achado): Promise<void> {
+  if (!previa.value) return;
+  erro.value = null;
+  escolhido.value = p;
+  try {
+    previa.value = { id: previa.value.id, p: await previaConversao(previa.value.id, p.id) };
+  } catch (e) {
+    erro.value = e;
+  }
+}
+async function cancelar(): Promise<void> {
+  if (!cancelando.value) return;
+  erro.value = null;
+  try {
+    await cancelarPreCadastro(cancelando.value.id, cancelando.value.motivo);
+    mensagem.value = t('vinculos.pre.cancelado');
+    cancelando.value = null;
+    await carregar();
   } catch (e) {
     erro.value = e;
   }
@@ -79,7 +126,7 @@ async function verChegada(id: number): Promise<void> {
 async function converter(id: number, paciente?: number): Promise<void> {
   erro.value = null;
   try {
-    const r = await converterPreCadastro(id, paciente);
+    const r = await converterPreCadastro(id, paciente, motivoDivergencia.value.trim() || undefined);
     mensagem.value = t('vinculos.pre.convertido', { paciente: r.paciente, marcacoes: r.marcacoes });
     previa.value = null;
     await carregar();
@@ -122,6 +169,10 @@ void carregar();
       <label v-if="f.fontePagadora"
         >{{ t('vinculos.pre.carteira') }} <input v-model="f.numeroCarteira" maxlength="30"
       /></label>
+      <label v-if="codigoErro === 'paciente-semelhante' || outraPessoa"
+        ><input v-model="outraPessoa" type="checkbox" name="outraPessoa" />
+        {{ t('vinculos.pre.confirmarOutraPessoa') }}</label
+      >
       <ul v-if="pendencias.length && f.nome" class="pendencias">
         <li v-for="p in pendencias" :key="p">{{ t('vinculos.pre.falta', { item: p }) }}</li>
       </ul>
@@ -133,6 +184,7 @@ void carregar();
       <select v-model="situacao" :aria-label="t('vinculos.pre.situacao')" @change="carregar">
         <option value="pendente">{{ t('vinculos.pre.pendentes') }}</option>
         <option value="convertido">{{ t('vinculos.pre.convertidos') }}</option>
+        <option value="cancelado">{{ t('vinculos.pre.cancelados') }}</option>
         <option value="">{{ t('vinculos.pre.todos') }}</option>
       </select>
       <input v-model="termo" :placeholder="t('vinculos.pre.nome')" :aria-label="t('vinculos.pre.nome')" />
@@ -171,11 +223,28 @@ void carregar();
             >
               {{ t('vinculos.pre.chegou') }}
             </button>
+            <button
+              v-if="x.situacao === 'pendente' && pode('agenda.marcacao.agendar')"
+              type="button"
+              @click="cancelando = { id: x.id, motivo: '' }"
+            >
+              {{ t('vinculos.pre.cancelar') }}
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
     <p v-else>{{ t('vinculos.pre.nenhum') }}</p>
+
+    <form v-if="cancelando" data-testid="cancelar-pre-cadastro" @submit.prevent="cancelar">
+      <label
+        >{{ t('vinculos.pre.motivoCancelamento') }}
+        <input v-model="cancelando.motivo" name="motivoCancelamento" minlength="3" maxlength="400" required
+      /></label>
+      <button type="submit" :disabled="cancelando.motivo.trim().length < 3">
+        {{ t('vinculos.pre.cancelar') }}
+      </button>
+    </form>
 
     <section v-if="previa" data-testid="chegada" :aria-label="t('vinculos.pre.chegada')">
       <template v-if="previa.p.acao === 'vincular'">
@@ -192,13 +261,44 @@ void carregar();
           </template>
         </dl>
         <RouterLink to="/cadastros/pacientes/novo">{{ t('vinculos.pre.cadastrar') }}</RouterLink>
-        <label
-          >{{ t('vinculos.pre.codigoPaciente') }}
-          <input v-model.number="pacienteEscolhido" type="number" min="1"
-        /></label>
-        <button type="button" :disabled="!pacienteEscolhido" @click="converter(previa.id, pacienteEscolhido)">
-          {{ t('vinculos.pre.ligarEscolhido') }}
-        </button>
+        <form data-testid="busca-paciente-chegada" @submit.prevent="buscarPaciente">
+          <label
+            >{{ t('vinculos.pre.buscaPaciente') }}
+            <input v-model="termoPaciente" name="termoPaciente" minlength="2" maxlength="60" required
+          /></label>
+          <button type="submit">{{ t('vinculos.pre.buscarPaciente') }}</button>
+        </form>
+        <ul v-if="achados" data-testid="achados-chegada">
+          <li v-for="p in achados" :key="p.id">
+            {{ p.nome }} · {{ p.nascimento ?? '—' }} · {{ p.cpfMascarado ?? '—' }}
+            <button type="button" @click="escolher(p)">{{ t('vinculos.pre.escolher') }}</button>
+          </li>
+          <li v-if="achados.length === 0">{{ t('vinculos.pre.nenhumPaciente') }}</li>
+        </ul>
+        <template v-if="escolhido">
+          <p>
+            {{
+              t('vinculos.pre.escolhido', { nome: escolhido.nome, nascimento: escolhido.nascimento ?? '—' })
+            }}
+          </p>
+          <p v-if="previa.p.divergencias.length" role="alert">
+            {{ t('vinculos.pre.divergencias', { itens: previa.p.divergencias.join(', ') }) }}
+          </p>
+          <label v-if="previa.p.divergencias.length"
+            >{{ t('vinculos.pre.motivoDivergencia') }}
+            <input v-model="motivoDivergencia" name="motivoDivergencia" maxlength="400"
+          /></label>
+          <button
+            type="button"
+            :disabled="
+              previa.p.codigo === 'cpf-de-outro-paciente' ||
+              (previa.p.divergencias.length > 0 && motivoDivergencia.trim().length < 10)
+            "
+            @click="converter(previa.id, escolhido.id)"
+          >
+            {{ t('vinculos.pre.ligarEscolhido') }}
+          </button>
+        </template>
       </template>
     </section>
   </main>

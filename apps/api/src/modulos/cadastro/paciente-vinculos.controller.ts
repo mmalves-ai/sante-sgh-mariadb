@@ -8,7 +8,8 @@
 //   GET  /api/cadastros/captacoes/indicador?de&ate               indicador por canal e por tipo de indicação
 //   GET|POST /api/cadastros/pre-cadastros                        pré-cadastros do estabelecimento; gravar na marcação
 //   GET  /api/cadastros/pre-cadastros/:id/conversao              prévia da chegada (reaproveitar, cadastrar, conferir)
-//   POST /api/cadastros/pre-cadastros/:id/converter              converter em paciente
+//   POST /api/cadastros/pre-cadastros/:id/converter              converter em paciente (escolhido conferido)
+//   POST /api/cadastros/pre-cadastros/:id/cancelar               cancelar o pendente, com motivo (nada é apagado)
 // Permissões pelos níveis de acesso de cada cargo (as mesmas do cadastro e da marcação); gravações pelo executor, com a
 // trilha na mesma transação e a Idempotency-Key do pedido.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
@@ -289,10 +290,18 @@ export class PacienteVinculosController {
 
   @Get('pre-cadastros/:id/conversao')
   @Permissao('cadastro.paciente.ler')
-  async conversao(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+  async conversao(
+    @Param('id') id: string,
+    @Query('paciente') paciente: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     const s = sessaoDe(req);
     try {
-      return await this.servico().previaConversao(s.porta, idDaRota(id));
+      return await this.servico().previaConversao(
+        s.porta,
+        idDaRota(id),
+        paciente ? idDaRota(paciente) : null,
+      );
     } catch (e) {
       throw problemaDoCadastro(e);
     }
@@ -309,7 +318,12 @@ export class PacienteVinculosController {
   ): Promise<{ paciente: number; marcacoes: number; cobertura: number | null }> {
     const s = sessaoDe(req);
     const b = validar(
-      z.object({ paciente: z.number().int().positive().nullable().optional() }).strict(),
+      z
+        .object({
+          paciente: z.number().int().positive().nullable().optional(),
+          motivoDivergencia: z.string().trim().max(400).nullable().optional(),
+        })
+        .strict(),
       corpo ?? {},
     );
     const ctx = contextoOperacao(s, 'cadastro.converterPreCadastro');
@@ -323,10 +337,36 @@ export class PacienteVinculosController {
     try {
       return await this.servico().converterPreCadastro(
         s.porta,
-        { id: idDaRota(id), paciente: b.paciente },
+        { id: idDaRota(id), paciente: b.paciente, motivoDivergencia: b.motivoDivergencia },
         t,
         ctx.chaveIdempotencia,
       );
+    } catch (x) {
+      throw problemaDoCadastro(x);
+    }
+  }
+
+  @Post('pre-cadastros/:id/cancelar')
+  @HttpCode(200)
+  @Permissao('agenda.marcacao.agendar')
+  @AuditadoNoHandler('trilha na mesma transação do cancelamento')
+  async cancelar(
+    @Param('id') id: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ id: number }> {
+    const s = sessaoDe(req);
+    const b = validar(z.object({ motivo: z.string().trim().min(3).max(400) }).strict(), corpo ?? {});
+    const ctx = contextoOperacao(s, 'cadastro.cancelarPreCadastro');
+    const t = this.trilha(s, 'cadastro.pre-cadastro', 'cadastro.cancelarPreCadastro', 'pre_cadastro', null);
+    try {
+      await this.servico().cancelarPreCadastro(
+        s.porta,
+        { id: idDaRota(id), motivo: b.motivo },
+        t,
+        ctx.chaveIdempotencia,
+      );
+      return { id: idDaRota(id) };
     } catch (x) {
       throw problemaDoCadastro(x);
     }

@@ -3,6 +3,7 @@ import {
   type CoberturaProposta,
   coberturaProposta,
   conferirCobertura,
+  fimAoEncerrar,
   type FontePagadoraRegra,
   situacaoDaCarteira,
 } from './cobertura.js';
@@ -80,5 +81,26 @@ describe('cobertura do paciente: situação no dia e proposta ao atendimento', (
     expect(coberturaProposta(lista, '2026-06-01')?.id).toBe(1);
     expect(coberturaProposta([{ ...lista[1]!, validade: null }, lista[0]!], '2026-06-01')?.id).toBe(2);
     expect(coberturaProposta([lista[1]!], '2026-06-01')).toBeNull();
+  });
+  it('carteira que ainda não começou é futura: não é proposta nem avisa vencida', () => {
+    const futura = { ...c, id: 9, principal: true, vigenciaInicio: '2026-07-01', validade: '2026-01-31' };
+    expect(situacaoDaCarteira(futura, '2026-06-01')).toBe('futura');
+    expect(coberturaProposta([futura], '2026-06-01')).toBeNull();
+    expect(situacaoDaCarteira(futura, '2026-07-01')).toBe('vencida');
+  });
+  it('encerrar não estende o fim já passado nem mexe no fim da carteira futura', () => {
+    expect(fimAoEncerrar({ vigenciaInicio: '2026-01-01', vigenciaFim: '2026-03-31' }, '2026-06-01')).toBe(
+      '2026-03-31',
+    );
+    expect(fimAoEncerrar({ vigenciaInicio: '2026-07-01', vigenciaFim: null }, '2026-06-01')).toBeNull();
+    expect(fimAoEncerrar({ vigenciaInicio: '2026-07-01', vigenciaFim: '2026-12-31' }, '2026-06-01')).toBe(
+      '2026-12-31',
+    );
+    expect(fimAoEncerrar({ vigenciaInicio: '2026-01-01', vigenciaFim: '2026-12-31' }, '2026-06-01')).toBe(
+      '2026-06-01',
+    );
+    expect(fimAoEncerrar({ vigenciaInicio: '2026-01-01', vigenciaFim: null }, '2026-06-01')).toBe(
+      '2026-06-01',
+    );
   });
 });

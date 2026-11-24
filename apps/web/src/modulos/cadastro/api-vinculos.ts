@@ -25,7 +25,7 @@ export interface Carteira {
   titular: boolean;
   titularNome: string | null;
   principal: boolean;
-  situacaoNoDia: 'vigente' | 'a_vencer' | 'vencida' | 'encerrada';
+  situacaoNoDia: 'vigente' | 'a_vencer' | 'vencida' | 'encerrada' | 'futura';
   versao: number;
 }
 export interface Coberturas {
@@ -58,6 +58,8 @@ export interface PreviaConversao {
   paciente: number | null;
   codigo: string | null;
   mensagem: string | null;
+  /** O que diverge entre o paciente escolhido e o pré-cadastro (cpf, nascimento, nome). */
+  divergencias: string[];
   rascunho: Record<string, unknown> | null;
 }
 
@@ -107,10 +109,13 @@ export const lerPreCadastros = (situacao: string, termo: string) =>
   );
 export const registrarPreCadastro = (c: Record<string, unknown>) =>
   pedir<{ id: number }>(`${C}/pre-cadastros`, 'POST', c);
-export const previaConversao = (id: number) => pedir<PreviaConversao>(`${C}/pre-cadastros/${id}/conversao`);
-export const converterPreCadastro = (id: number, paciente?: number) =>
+export const previaConversao = (id: number, paciente?: number) =>
+  pedir<PreviaConversao>(`${C}/pre-cadastros/${id}/conversao${paciente ? `?paciente=${paciente}` : ''}`);
+export const converterPreCadastro = (id: number, paciente?: number, motivoDivergencia?: string) =>
   pedir<{ paciente: number; marcacoes: number; cobertura: number | null }>(
     `${C}/pre-cadastros/${id}/converter`,
     'POST',
-    paciente ? { paciente } : {},
+    { ...(paciente ? { paciente } : {}), ...(motivoDivergencia ? { motivoDivergencia } : {}) },
   );
+export const cancelarPreCadastro = (id: number, motivo: string) =>
+  pedir<{ id: number }>(`${C}/pre-cadastros/${id}/cancelar`, 'POST', { motivo });
