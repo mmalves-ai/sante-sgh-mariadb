@@ -5,6 +5,11 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
+import {
+  ComplementosContaController,
+  SERVICO_COMPLEMENTOS_CONTA,
+  ServicoComplementosConta,
+} from './conta-complementos.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
@@ -31,9 +36,17 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
   const porta = opcoes.porta ?? portaDoFaturamento(ctx);
   return {
     module: ModuloFaturamento,
-    controllers: [FaturamentoController],
+    controllers: [FaturamentoController, ComplementosContaController],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
+      // 06-FAT linhas 10 e 12: período da conta parcial, segurado na conta e campo adicional da guia (banco próprio).
+      {
+        provide: SERVICO_COMPLEMENTOS_CONTA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoComplementosConta(ctx.nucleo)
+            : null,
+      },
       // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.
       {
         provide: RotinaDiariaContas,
