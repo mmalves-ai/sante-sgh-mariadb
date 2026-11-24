@@ -59,6 +59,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
   const limpar = (e: Escritor) =>
     (async () => {
       const a = [ids.agenda];
+      await e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', a);
       await e.executar('DELETE FROM agenda_servico_exame WHERE agenda_servico_id = ?', a);
       await e.executar(
         "DELETE FROM dia_nao_util WHERE estabelecimento_id = ? AND descricao LIKE 'FERIADO SINTETICO 20%'",
@@ -327,6 +328,83 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     expect(ext.get(id)).toMatchObject({ idExame: ids.exame, canal: 'telefone', retorno: false });
     const erro = await porta.executar(ctx, 'agenda.agendarExame', entrada, opCtx()).catch((e) => e);
     expect(codigoDe(erro)).toBe('horario-ocupado');
+  });
+
+  it('02-AGE 40: agenda de exame restrita a uma lista nominal recusa marcar e cancelar de quem está fora ou só consulta (nada gravado)', async () => {
+    const outro = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-01-05-nominal' },
+      async (e) => {
+        const u = await e.uma<{ id: number }>('SELECT id FROM usuario WHERE login = ?', ['l0105.lista']);
+        const id = u
+          ? Number(u.id)
+          : await e.inserir(
+              "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+              ['l0105.lista', 'USUARIO SINTETICO L0105 LISTA', new Date()],
+            );
+        await e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', [ids.agenda]);
+        await e.executar(
+          'INSERT INTO agenda_usuario (agenda_servico_id, usuario_id, pode_marcar, criado_em) VALUES (?, ?, TRUE, ?), (?, ?, FALSE, ?)',
+          [ids.agenda, id, new Date(), ids.agenda, ids.usuario, new Date()],
+        );
+        return id;
+      },
+    );
+    expect(outro).toBeGreaterThan(0);
+    const contar = async () =>
+      Number(
+        (
+          await ler<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id WHERE h.agenda_servico_id = ?',
+            [ids.agenda],
+          )
+        )[0]?.n,
+      );
+    const antes = await contar();
+    const entrada = {
+      agenda: ids.agenda,
+      data: dia,
+      hora: '08:30',
+      paciente: ids.paciente,
+      convenio: ids.fonte,
+      exame: ids.exame,
+      solicitante: null,
+      retorno: false,
+      canal: 'telefone',
+    };
+    // Quem só consulta (na lista sem "pode marcar") não marca.
+    const e1 = await porta.executar(ctx, 'agenda.agendarExame', entrada, opCtx()).catch((e) => e);
+    expect(codigoDe(e1)).toBe('agenda-restrita');
+    const [m] = await ler<{ id: number }>(
+      `SELECT m.id FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
+        WHERE h.agenda_servico_id = ? AND m.excluido_em IS NULL ORDER BY m.id LIMIT 1`,
+      [ids.agenda],
+    );
+    const e2 = await porta
+      .executar(
+        ctx,
+        'agenda.cancelarExame',
+        { marcacao: Number(m?.id), motivo: 'PAC-DESISTIU', solicitante: 'paciente' },
+        opCtx(),
+      )
+      .catch((e) => e);
+    expect(codigoDe(e2)).toBe('agenda-restrita');
+    // Fora da lista: também recusa.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-01-05-nominal' }, (e) =>
+      e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ? AND usuario_id = ?', [
+        ids.agenda,
+        ids.usuario,
+      ]),
+    );
+    const e3 = await porta.executar(ctx, 'agenda.agendarExame', entrada, opCtx()).catch((e) => e);
+    expect(codigoDe(e3)).toBe('agenda-restrita');
+    expect(await contar()).toBe(antes);
+    expect(
+      await ler('SELECT 1 FROM cancelamento_marcacao WHERE marcacao_horario_id = ?', [Number(m?.id)]),
+    ).toEqual([]);
+    // Lista retirada: a agenda volta a valer só pelo escopo do cargo.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-01-05-nominal' }, (e) =>
+      e.executar('DELETE FROM agenda_usuario WHERE agenda_servico_id = ?', [ids.agenda]),
+    );
   });
 
   it('02-AGE 44: marca o exame sem prontuário com o pré-cadastro na mesma transação e devolve a vaga ao cancelar', async () => {

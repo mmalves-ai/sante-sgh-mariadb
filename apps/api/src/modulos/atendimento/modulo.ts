@@ -7,6 +7,8 @@ import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
 import { AtendimentoController } from './atendimento.controller.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from './avisos.js';
+import { LocaisAtendimentoPropria } from './locais-atendimento.js';
+import { LOCAIS_ATENDIMENTO, LocaisAtendimentoController } from './locais-atendimento.controller.js';
 import { PaController } from './pa.controller.js';
 import { PORTA_ATENDIMENTO, type PortaAtendimento, portaAtendimentoIndisponivel } from './porta.js';
 import { PortaAtendimentoMemoria } from './porta-memoria.js';
@@ -38,9 +40,17 @@ export async function modulo(
   const porta = opcoes.porta ?? (await portaDoAtendimento(ctx));
   return {
     module: ModuloAtendimento,
-    controllers: [AtendimentoController, PaController],
+    controllers: [AtendimentoController, PaController, LocaisAtendimentoController],
     providers: [
       { provide: PORTA_ATENDIMENTO, useValue: porta },
+      // Manutenção dos locais de atendimento (02-REC linha 34): só no banco próprio (sem ele, as rotas dão 503).
+      {
+        provide: LOCAIS_ATENDIMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new LocaisAtendimentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // Os avisos ao vivo do atendimento (sem o vigia do sistema de origem: os eventos vêm das gravações).
       { provide: AVISOS_ATENDIMENTO, useValue: new AvisosAtendimento(null) },
     ],
