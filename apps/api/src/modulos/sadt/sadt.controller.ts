@@ -11,7 +11,7 @@
 //   GET  /api/sadt/requisicoes?data&termo            atendimentos externos do dia e a requisição
 //   POST /api/sadt/requisicoes                       sadt.abrirRequisicao
 //   POST /api/sadt/requisicoes/:reg/protocolo        o protocolo do portal do paciente (o código sai uma vez)
-//   GET  /api/sadt/orcamentos?inicio&fim&termo       orçamentos; POST criar; POST :id/converter
+//   GET  /api/sadt/orcamentos?inicio&fim&termo       orçamentos (gravar e converter: só por /api/sadt/orcamentos-exames)
 //   GET  /api/sadt/coleta?data&unidade&de&ate        lista de coleta por paciente e tubo (unidade e janela)
 //   POST /api/sadt/coleta                            a amostra coletada e a etiqueta ZPL na fila da estação
 //   GET  /api/sadt/mapa-trabalho?setor&data          mapa de trabalho por bancada
@@ -57,8 +57,6 @@ import {
   esquemaCadastrarSolicitante,
   esquemaColetarAmostra,
   esquemaComunicarAviso,
-  esquemaConverterOrcamento,
-  esquemaCriarOrcamento,
   esquemaDecidirAutocadastro,
   esquemaFiltroExamesSadt,
   esquemaFiltroPeriodoSadt,
@@ -375,27 +373,6 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
       validadeDias,
       ...(q['termo']?.trim() ? { termo: q['termo'].slice(0, 60) } : {}),
     });
-  }
-
-  @Post('orcamentos')
-  @HttpCode(200)
-  @Permissao('sadt.orcamento.criar')
-  @AuditadoNoHandler('sadt.criarOrcamento pelo executor (trilha e orcamento_particular na mesma transação)')
-  criarOrcamento(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSadt> {
-    return this.servico.criarOrcamento(sessaoDe(req), corpo(esquemaCriarOrcamento, b));
-  }
-
-  @Post('orcamentos/:id/converter')
-  @HttpCode(200)
-  @Permissao('sadt.orcamento.converter')
-  @AuditadoNoHandler('sadt.lancarExame pelo executor e a conversão com a trilha_auditoria')
-  converter(
-    @Param('id') id: string,
-    @Body() b: unknown,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<ResultadoSadt> {
-    const e = corpo(esquemaConverterOrcamento, { ...((b ?? {}) as object), orcamento: idDaRota(id) });
-    return this.servico.converterOrcamento(sessaoDe(req), e.orcamento, e);
   }
 
   // ── Coleta, mapa de trabalho e rastreio ──────────────────────────────────────────────────────────

@@ -28,13 +28,45 @@ export type PreviaOrcamento = z.infer<typeof esquemaPrevia>;
 
 const esquemaCriado = z.object({ id: n, numero: txt, total: n, validade: txt });
 const esquemaAtendimentos = z.object({
-  itens: z.array(z.object({ id: n, numero: txt, entradaEm: txt, situacao: txt, fonte: txt })),
+  itens: z.array(
+    z.object({
+      id: n,
+      paciente: n,
+      pacienteNome: txt,
+      numero: txt,
+      entradaEm: txt,
+      situacao: txt,
+      fonte: txt,
+    }),
+  ),
 });
+export type AtendimentoConversao = z.infer<typeof esquemaAtendimentos>['itens'][number];
 const esquemaConvertido = z.object({
   id: n,
   atendimento: n,
+  conta: n,
   requisicoes: z.array(z.object({ requisicao: n, numero: txt })),
 });
+const esquemaApoio = z.object({
+  exames: z.array(z.object({ id: n, codigo: txt, nome: txt, tipo: txt })),
+  fontes: z.array(z.object({ id: n, nome: txt })),
+});
+const esquemaAvaliacao = z.object({
+  paciente: z.object({ id: n, nome: txt }),
+  confirmarPaciente: z.boolean(),
+  restricoes: z.array(z.object({ exame: n, tipo: txt, mensagem: txt, permiteExcecao: z.boolean() })),
+  segue: z.boolean(),
+  codigo: txt.nullable(),
+  motivo: txt.nullable(),
+});
+export type AvaliacaoConversao = z.infer<typeof esquemaAvaliacao>;
+
+export interface CorpoConversao {
+  atendimento: number;
+  confirmaPaciente: number | null;
+  confirmado: boolean;
+  justificativa: string | null;
+}
 
 export interface CorpoOrcamento {
   paciente: number | null;
@@ -50,6 +82,10 @@ export interface CorpoOrcamento {
 export const previaOrcamento = (c: CorpoOrcamento, chave: string) =>
   enviar(`${S}/previa`, c, esquemaPrevia, chave);
 export const gravarOrcamento = (c: CorpoOrcamento, chave: string) => enviar(S, c, esquemaCriado, chave);
-export const atendimentosDoOrcamento = (id: number) => ler(`${S}/${id}/atendimentos`, esquemaAtendimentos);
-export const converterOrcamentoExames = (id: number, atendimento: number, chave: string) =>
-  enviar(`${S}/${id}/converter`, { atendimento }, esquemaConvertido, chave);
+export const lerApoioOrcamento = () => ler(`${S}/apoio`, esquemaApoio);
+export const atendimentosDoOrcamento = (id: number, paciente: number | null = null) =>
+  ler(`${S}/${id}/atendimentos${paciente ? `?paciente=${paciente}` : ''}`, esquemaAtendimentos);
+export const avaliarConversao = (id: number, c: CorpoConversao, chave: string) =>
+  enviar(`${S}/${id}/avaliar`, c, esquemaAvaliacao, chave);
+export const converterOrcamentoExames = (id: number, c: CorpoConversao, chave: string) =>
+  enviar(`${S}/${id}/converter`, c, esquemaConvertido, chave);

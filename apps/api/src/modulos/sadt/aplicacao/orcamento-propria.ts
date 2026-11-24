@@ -4,9 +4,12 @@
 // trilha na mesma transação. A conversão abre o pedido de exames (uma requisição por setor executante) e marca o
 // orçamento realizado na MESMA transação: ou tudo fica, ou nada. Nada se apaga: o orçamento convertido fica com o
 // atendimento, a data e o aceite, e a requisição aponta para ele.
+import { SITUACOES_CONTA_LANCAVEL } from '@sgh/contratos/regras-faturamento';
 import {
+  conferirAtendimentoDaConversao,
   conferirConversao,
   conferirDestinoDaConversao,
+  conferirFonteParticular,
   conferirInteressado,
   type ExameOrcado,
   montarOrcamentoExames,
@@ -26,12 +29,15 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
+import { abrirContaDaEntrada, TABELAS_CONTA_ENTRADA } from '../../faturamento/conta-entrada.js';
+import { totalDosItens } from '../../faturamento/operacoes.js';
 import { precoVigente, tabelasDePreco } from '../../faturamento/public-api.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 import {
   esquemaPedidoExames,
   type PedidoGravado,
+  type PedidoExames,
   ServicoPedidoSadt,
   TABELAS_PEDIDO,
 } from './pedido-propria.js';
@@ -87,8 +93,18 @@ export const esquemaOrcamentoExames = z
 export type OrcamentoExamesEntrada = z.infer<typeof esquemaOrcamentoExames>;
 
 export const esquemaConversaoOrcamento = z
-  .object({ atendimento: id, solicitante: id.nullable().default(null) })
+  .object({
+    atendimento: id,
+    solicitante: id.nullable().default(null),
+    /** Interessado sem cadastro e sem CPF para conferir: o id do paciente do atendimento, confirmado com o nome à vista. */
+    confirmaPaciente: id.nullable().default(null),
+    /** Os avisos das restrições do exame foram vistos e confirmados por quem converte. */
+    confirmado: z.boolean().default(false),
+    /** A justificativa da exceção ao bloqueio que a admite (10 caracteres ou mais). */
+    justificativa: z.string().trim().max(500).nullable().default(null),
+  })
   .strict();
+export type ConversaoOrcamentoEntrada = z.infer<typeof esquemaConversaoOrcamento>;
 
 export interface PreviaOrcamento {
   readonly itens: readonly {
@@ -109,13 +125,49 @@ export interface PreviaOrcamento {
 
 export interface AtendimentoParaConversao {
   readonly id: number;
+  readonly paciente: number;
+  readonly pacienteNome: string;
   readonly numero: string;
   readonly entradaEm: string;
   readonly situacao: string;
   readonly fonte: string;
 }
 
-const TABELAS = [...TABELAS_PEDIDO, 'orcamento_particular', 'orcamento_particular_item'] as const;
+const TABELAS = [
+  ...new Set([
+    ...TABELAS_PEDIDO,
+    ...TABELAS_CONTA_ENTRADA,
+    'orcamento_particular',
+    'orcamento_particular_item',
+  ]),
+];
+
+/** A avaliação da conversão antes do clique final: o paciente à vista e os avisos das restrições de cada exame. */
+export interface AvaliacaoDaConversao {
+  readonly paciente: { readonly id: number; readonly nome: string };
+  /** O vínculo do interessado sem cadastro precisa da confirmação explícita (faltou CPF para conferir). */
+  readonly confirmarPaciente: boolean;
+  readonly restricoes: readonly {
+    exame: number;
+    tipo: string;
+    mensagem: string;
+    permiteExcecao: boolean;
+  }[];
+  readonly segue: boolean;
+  readonly codigo: string | null;
+  readonly motivo: string | null;
+}
+
+interface ConversaoPreparada {
+  readonly numero: string;
+  readonly fonte: number;
+  readonly desconto: number;
+  readonly itens: readonly Linha[];
+  readonly hoje: string;
+  readonly at: Linha;
+  readonly destino: { readonly vinculaPaciente: boolean };
+  readonly grupos: ReadonlyMap<number, readonly { exame: number; quantidade: number }[]>;
+}
 
 function daRegra<T>(fn: () => T): T {
   try {
@@ -200,11 +252,12 @@ export class ServicoOrcamentoSadt {
       const p = await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
       if (!p) throw recusa('paciente-inexistente', 'O paciente não existe.', { campos: ['paciente'] });
     }
-    const fonte = await l.uma('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [
+    const fonte = await l.uma('SELECT id, tipo FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [
       e.fontePagadora,
     ]);
     if (!fonte)
       throw recusa('fonte-inexistente', 'A fonte pagadora não existe.', { campos: ['fontePagadora'] });
+    daRegra(() => conferirFonteParticular(fonte['tipo'] === null ? null : texto(fonte['tipo'])));
     const ids = [...new Set(e.exames.map((x) => x.exame))];
     const linhas = ids.length
       ? await l.consultar(
@@ -306,28 +359,73 @@ export class ServicoOrcamentoSadt {
     });
   }
 
-  /** Os atendimentos do paciente do orçamento (abertos primeiro), para a conversão num clique. */
-  atendimentos(c: ContextoSadt, orcamento: number): Promise<AtendimentoParaConversao[]> {
+  /**
+   * O apoio da tela do orçamento: o catálogo de TODOS os exames do diagnóstico (laboratório, imagem e métodos
+   * gráficos) e só as fontes pagadoras particulares ativas.
+   */
+  apoio(c: ContextoSadt): Promise<{
+    exames: { id: number; codigo: string; nome: string; tipo: string }[];
+    fontes: { id: number; nome: string }[];
+  }> {
+    return this.ler(c, async (l) => {
+      const exames = await l.consultar(
+        `SELECT id, codigo, nome, tipo_servico FROM exame WHERE ativo = TRUE AND excluido_em IS NULL
+          ORDER BY nome, id LIMIT 5000`,
+        [],
+        { teto: 5000 },
+      );
+      const fontes = await l.consultar(
+        `SELECT id, nome FROM fonte_pagadora
+          WHERE tipo = 'particular' AND situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome, id`,
+        [],
+      );
+      return {
+        exames: exames.map((r: Linha) => ({
+          id: n(r['id']),
+          codigo: texto(r['codigo']),
+          nome: texto(r['nome']),
+          tipo: texto(r['tipo_servico']),
+        })),
+        fontes: fontes.map((r: Linha) => ({ id: n(r['id']), nome: texto(r['nome']) })),
+      };
+    });
+  }
+
+  /**
+   * Os atendimentos para a conversão, da mesma fonte particular do orçamento e não cancelados (abertos primeiro): do
+   * paciente do orçamento; sem paciente, do CPF do interessado ou do paciente escolhido na busca da tela.
+   */
+  atendimentos(
+    c: ContextoSadt,
+    orcamento: number,
+    pacienteEscolhido: number | null = null,
+  ): Promise<AtendimentoParaConversao[]> {
     return this.ler(c, async (l, est) => {
       const o = await l.uma(
-        'SELECT paciente_id, cpf_interessado FROM orcamento_particular WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        'SELECT paciente_id, cpf_interessado, fonte_pagadora_id FROM orcamento_particular WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [orcamento, est],
       );
       if (!o) throw recusa('orcamento-inexistente', 'O orçamento não existe neste estabelecimento.');
-      if (o['paciente_id'] === null && o['cpf_interessado'] === null) return [];
-      const filtro = o['paciente_id'] !== null ? 'a.paciente_id = ?' : 'pf.cpf = ?';
-      const valor = o['paciente_id'] !== null ? n(o['paciente_id']) : texto(o['cpf_interessado']);
+      let filtro: string;
+      let valor: unknown;
+      if (o['paciente_id'] !== null) [filtro, valor] = ['a.paciente_id = ?', n(o['paciente_id'])];
+      else if (pacienteEscolhido !== null) [filtro, valor] = ['a.paciente_id = ?', pacienteEscolhido];
+      else if (o['cpf_interessado'] !== null) [filtro, valor] = ['pf.cpf = ?', texto(o['cpf_interessado'])];
+      else return [];
       const ls = await l.consultar(
-        `SELECT a.id, a.numero, a.entrada_em, a.situacao, fp.nome AS fonte
+        `SELECT a.id, a.numero, a.entrada_em, a.situacao, a.paciente_id, pf.nome AS paciente_nome, fp.nome AS fonte
            FROM atendimento a JOIN paciente p ON p.id = a.paciente_id
            JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
            LEFT JOIN fonte_pagadora fp ON fp.id = a.fonte_pagadora_id
-          WHERE a.estabelecimento_id = ? AND ${filtro} AND a.excluido_em IS NULL
+          WHERE a.estabelecimento_id = ? AND ${filtro} AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'
+            AND a.fonte_pagadora_id = ?
           ORDER BY a.saida_em IS NULL DESC, a.entrada_em DESC LIMIT 20`,
-        [est, valor],
+        [est, valor, n(o['fonte_pagadora_id'])],
       );
       return ls.map((r: Linha) => ({
         id: n(r['id']),
+        paciente: n(r['paciente_id']),
+        pacienteNome: texto(r['paciente_nome']),
         numero: texto(r['numero']),
         entradaEm: r['entrada_em'] instanceof Date ? r['entrada_em'].toISOString() : texto(r['entrada_em']),
         situacao: texto(r['situacao']),
@@ -337,106 +435,214 @@ export class ServicoOrcamentoSadt {
   }
 
   /**
-   * A conversão: confere a situação e o paciente pela regra, abre uma requisição por setor executante no atendimento
-   * (com as restrições do pedido) e marca o orçamento realizado, com o aceite e o atendimento, na mesma transação.
+   * O que a conversão confere antes de gravar, igual na avaliação e na gravação: a situação e a validade, o
+   * atendimento (não cancelado, da mesma fonte particular), o paciente (ou o vínculo confirmado do interessado) e o
+   * setor executante de cada exame.
+   */
+  private async preparar(
+    l: Leitor,
+    est: number,
+    o: Linha,
+    e: ConversaoOrcamentoEntrada,
+    pacienteConfirmado: number | null,
+  ): Promise<ConversaoPreparada> {
+    const orcamento = n(o['id']);
+    const situacao = texto(o['situacao']);
+    if (!['rascunho', 'emitido', 'aceito', 'realizado'].includes(situacao))
+      throw recusa('orcamento-indisponivel', 'O orçamento recusado, expirado ou cancelado não se converte.');
+    const itens = await l.consultar(
+      `SELECT oi.exame_id, oi.item_faturavel_id, oi.quantidade, oi.valor_unitario, oi.valor_total, e.nome
+         FROM orcamento_particular_item oi JOIN exame e ON e.id = oi.exame_id
+        WHERE oi.orcamento_particular_id = ? AND oi.tipo_item = 'exame' AND oi.excluido_em IS NULL
+        ORDER BY oi.sequencia`,
+      [orcamento],
+    );
+    const hoje = await hojeDo(l, est);
+    const conf = conferirConversao(
+      {
+        validade: dataIso(o['validade_ate']) ?? '',
+        convertido: situacao === 'realizado',
+        itens: itens.map((i) => ({ exame: String(n(i['exame_id'])), valor: n(i['valor_total']) })),
+      },
+      hoje,
+    );
+    if (!conf.pode)
+      throw recusa(
+        situacao === 'realizado' ? 'orcamento-convertido' : 'orcamento-nao-converte',
+        conf.motivo ?? 'O orçamento não se converte.',
+      );
+    const at = await l.uma(
+      `SELECT a.id, a.paciente_id, a.situacao, a.fonte_pagadora_id, pf.cpf, pf.nome
+         FROM atendimento a JOIN paciente p ON p.id = a.paciente_id
+         JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+        WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+      [e.atendimento, est],
+    );
+    if (!at)
+      throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.', {
+        campos: ['atendimento'],
+      });
+    const fonte = n(o['fonte_pagadora_id']);
+    daRegra(() =>
+      conferirAtendimentoDaConversao(
+        { fonte },
+        { situacao: texto(at['situacao']), fonte: nn(at['fonte_pagadora_id']) },
+      ),
+    );
+    const destino = daRegra(() =>
+      conferirDestinoDaConversao(
+        {
+          paciente: nn(o['paciente_id']),
+          cpfInteressado: o['cpf_interessado'] === null ? null : texto(o['cpf_interessado']),
+        },
+        { paciente: n(at['paciente_id']), cpfPaciente: at['cpf'] === null ? null : texto(at['cpf']) },
+        pacienteConfirmado,
+      ),
+    );
+    const ids = itens.map((i) => n(i['exame_id']));
+    const setores = await l.consultar(
+      `SELECT ese.exame_id, ese.setor_diagnostico_id, ese.padrao FROM exame_setor_executante ese
+         JOIN setor_diagnostico sd ON sd.id = ese.setor_diagnostico_id
+        WHERE ese.ativo = TRUE AND ese.excluido_em IS NULL AND sd.estabelecimento_id = ? AND sd.excluido_em IS NULL
+          AND ese.exame_id IN (${lista(ids.length)})`,
+      [est, ...ids],
+    );
+    const grupos = daRegra(() =>
+      setoresDaConversao(
+        itens.map((i) => ({
+          exame: n(i['exame_id']),
+          nome: texto(i['nome']),
+          quantidade: Math.max(1, Math.round(n(i['quantidade']))),
+          setores: setores
+            .filter((s) => n(s['exame_id']) === n(i['exame_id']))
+            .map((s) => ({ setor: n(s['setor_diagnostico_id']), padrao: Boolean(s['padrao']) })),
+        })),
+      ),
+    );
+    return {
+      numero: texto(o['numero']),
+      fonte,
+      desconto: n(o['valor_desconto']),
+      itens,
+      hoje,
+      at,
+      destino,
+      grupos,
+    };
+  }
+
+  private pedidoDoSetor(
+    o: Linha,
+    e: ConversaoOrcamentoEntrada,
+    setor: number,
+    exames: readonly { exame: number; quantidade: number }[],
+  ): PedidoExames {
+    return esquemaPedidoExames.parse({
+      atendimento: e.atendimento,
+      setor,
+      solicitante: e.solicitante ?? nn(o['solicitante_profissional_id']),
+      tipo: 'lancado_no_setor',
+      prioridade: 'rotina',
+      exames: exames.map((x) => ({ ...x, setor, material: null, urgente: false })),
+      kits: [],
+      indicacaoClinica: null,
+      // A confirmação dos avisos e a justificativa da exceção vêm de quem converte (nunca presumidas).
+      confirmado: e.confirmado,
+      justificativa: e.justificativa,
+    });
+  }
+
+  private static readonly COLUNAS_ORCAMENTO = `id, versao, numero, situacao, paciente_id, cpf_interessado, fonte_pagadora_id,
+    validade_ate, aceito_em, solicitante_profissional_id, valor_desconto`;
+
+  /**
+   * A avaliação antes do clique final (nada gravado): o paciente do atendimento com o nome à vista, se o vínculo do
+   * interessado pede confirmação, e os avisos e bloqueios das restrições de cada exame, como no pedido.
+   */
+  avaliarConversao(
+    c: ContextoSadt,
+    orcamento: number,
+    entrada: unknown,
+    podeAutorizarExcecao = false,
+  ): Promise<AvaliacaoDaConversao> {
+    const e = esquemaConversaoOrcamento.parse(entrada);
+    return this.ler(c, async (l, est) => {
+      const o = await l.uma(
+        `SELECT ${ServicoOrcamentoSadt.COLUNAS_ORCAMENTO} FROM orcamento_particular
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [orcamento, est],
+      );
+      if (!o) throw recusa('orcamento-inexistente', 'O orçamento não existe neste estabelecimento.');
+      const semCpf = o['paciente_id'] === null;
+      // Na avaliação, o vínculo ainda não foi confirmado: confere só o que recusa de vez (CPFs diferentes, outro paciente).
+      const atPaciente = await l.uma('SELECT paciente_id FROM atendimento WHERE id = ?', [e.atendimento]);
+      const p = await this.preparar(l, est, o, e, nn(atPaciente?.['paciente_id']));
+      const confirmarPaciente = semCpf && (o['cpf_interessado'] === null || p.at['cpf'] === null);
+      const restricoes: AvaliacaoDaConversao['restricoes'][number][] = [];
+      let decisao: { segue: boolean; codigo: string | null; motivo: string | null } = {
+        segue: true,
+        codigo: null,
+        motivo: null,
+      };
+      for (const [setor, exames] of p.grupos) {
+        const a = await this.pedido.avaliarPedido(
+          c,
+          this.pedidoDoSetor(o, e, setor, exames),
+          podeAutorizarExcecao,
+        );
+        restricoes.push(
+          ...a.restricoes.map((r) => ({
+            exame: r.exame,
+            tipo: r.tipo,
+            mensagem: r.mensagem,
+            permiteExcecao: r.permiteExcecao,
+          })),
+        );
+        if (decisao.segue && !a.segue) decisao = { segue: false, codigo: a.codigo, motivo: a.motivo };
+      }
+      return {
+        paciente: { id: n(p.at['paciente_id']), nome: texto(p.at['nome']) },
+        confirmarPaciente,
+        restricoes,
+        ...decisao,
+      };
+    });
+  }
+
+  /**
+   * A conversão: confere a situação, o atendimento e o paciente pela regra; abre uma requisição por setor executante
+   * (com as restrições do pedido decididas por quem converte); lança os exames na conta do atendimento com os valores
+   * APROVADOS no orçamento (unitário de cada item e o desconto) e confere que o lançado é o aprovado; marca o
+   * orçamento realizado, com o aceite e o atendimento. Tudo na mesma transação.
    */
   converter(
     c: ContextoSadt,
     orcamento: number,
     entrada: unknown,
-  ): Promise<{ id: number; atendimento: number; requisicoes: readonly PedidoGravado[] }> {
+    podeAutorizarExcecao = false,
+  ): Promise<{
+    id: number;
+    atendimento: number;
+    conta: number;
+    requisicoes: readonly PedidoGravado[];
+  }> {
     const e = esquemaConversaoOrcamento.parse(entrada);
     return this.gravar(c, 'sadt.orcamento.convertido', async (tx, est) => {
       const [o] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao, paciente_id, cpf_interessado, validade_ate, aceito_em, solicitante_profissional_id
-           FROM orcamento_particular WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        `SELECT ${ServicoOrcamentoSadt.COLUNAS_ORCAMENTO} FROM orcamento_particular
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [orcamento, est],
         { teto: 1 },
       );
       if (!o) throw recusa('orcamento-inexistente', 'O orçamento não existe neste estabelecimento.');
-      const situacao = texto(o['situacao']);
-      if (!['rascunho', 'emitido', 'aceito', 'realizado'].includes(situacao))
-        throw recusa(
-          'orcamento-indisponivel',
-          'O orçamento recusado, expirado ou cancelado não se converte.',
-        );
-      const itens = await tx.consultar(
-        `SELECT oi.exame_id, oi.quantidade, oi.valor_total, e.nome
-           FROM orcamento_particular_item oi JOIN exame e ON e.id = oi.exame_id
-          WHERE oi.orcamento_particular_id = ? AND oi.tipo_item = 'exame' AND oi.excluido_em IS NULL
-          ORDER BY oi.sequencia`,
-        [orcamento],
-      );
-      const hoje = await hojeDo(tx, est);
-      const conf = conferirConversao(
-        {
-          validade: dataIso(o['validade_ate']) ?? '',
-          convertido: situacao === 'realizado',
-          itens: itens.map((i) => ({ exame: String(n(i['exame_id'])), valor: n(i['valor_total']) })),
-        },
-        hoje,
-      );
-      if (!conf.pode)
-        throw recusa(
-          situacao === 'realizado' ? 'orcamento-convertido' : 'orcamento-nao-converte',
-          conf.motivo ?? 'O orçamento não se converte.',
-        );
-      const at = await tx.uma(
-        `SELECT a.id, a.paciente_id, pf.cpf FROM atendimento a JOIN paciente p ON p.id = a.paciente_id
-           JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-          WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
-        [e.atendimento, est],
-      );
-      if (!at)
-        throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.', {
-          campos: ['atendimento'],
-        });
-      const destino = daRegra(() =>
-        conferirDestinoDaConversao(
-          {
-            paciente: nn(o['paciente_id']),
-            cpfInteressado: o['cpf_interessado'] === null ? null : texto(o['cpf_interessado']),
-          },
-          { paciente: n(at['paciente_id']), cpfPaciente: at['cpf'] === null ? null : texto(at['cpf']) },
-        ),
-      );
-      const ids = itens.map((i) => n(i['exame_id']));
-      const setores = await tx.consultar(
-        `SELECT ese.exame_id, ese.setor_diagnostico_id, ese.padrao FROM exame_setor_executante ese
-           JOIN setor_diagnostico sd ON sd.id = ese.setor_diagnostico_id
-          WHERE ese.ativo = TRUE AND ese.excluido_em IS NULL AND sd.estabelecimento_id = ? AND sd.excluido_em IS NULL
-            AND ese.exame_id IN (${lista(ids.length)})`,
-        [est, ...ids],
-      );
-      const grupos = daRegra(() =>
-        setoresDaConversao(
-          itens.map((i) => ({
-            exame: n(i['exame_id']),
-            nome: texto(i['nome']),
-            quantidade: Math.max(1, Math.round(n(i['quantidade']))),
-            setores: setores
-              .filter((s) => n(s['exame_id']) === n(i['exame_id']))
-              .map((s) => ({ setor: n(s['setor_diagnostico_id']), padrao: Boolean(s['padrao']) })),
-          })),
-        ),
-      );
+      const p = await this.preparar(tx, est, o, e, e.confirmaPaciente);
       const requisicoes: PedidoGravado[] = [];
-      for (const [setor, exames] of grupos) {
+      for (const [setor, exames] of p.grupos) {
         const r = await this.pedido.abrirNaTransacao(
           tx,
           est,
-          esquemaPedidoExames.parse({
-            atendimento: e.atendimento,
-            setor,
-            solicitante: e.solicitante ?? nn(o['solicitante_profissional_id']),
-            tipo: 'lancado_no_setor',
-            prioridade: 'rotina',
-            exames: exames.map((x) => ({ ...x, setor, material: null, urgente: false })),
-            kits: [],
-            indicacaoClinica: null,
-            confirmado: true,
-            justificativa: null,
-          }),
+          this.pedidoDoSetor(o, e, setor, exames),
+          podeAutorizarExcecao,
         );
         const [req] = await tx.consultar('SELECT versao FROM requisicao_exame WHERE id = ?', [r.requisicao]);
         await tx.alterar('requisicao_exame', r.requisicao, n(req?.['versao']), {
@@ -444,15 +650,125 @@ export class ServicoOrcamentoSadt {
         });
         requisicoes.push(r);
       }
+      const conta = await this.lancarNaConta(tx, est, e.atendimento, orcamento, p);
       const agora = new Date();
       await tx.alterar('orcamento_particular', orcamento, n(o['versao']), {
         situacao: 'realizado',
         atendimento_id: e.atendimento,
-        realizado_em: hoje,
+        realizado_em: p.hoje,
         aceito_em: o['aceito_em'] ?? agora,
-        ...(destino.vinculaPaciente ? { paciente_id: n(at['paciente_id']) } : {}),
+        ...(p.destino.vinculaPaciente ? { paciente_id: n(p.at['paciente_id']) } : {}),
       });
-      return { id: orcamento, atendimento: e.atendimento, requisicoes };
+      return { id: orcamento, atendimento: e.atendimento, conta, requisicoes };
     });
+  }
+
+  /**
+   * Lança os exames do orçamento na conta aberta do atendimento (abre a conta da fonte do atendimento quando falta),
+   * com o valor unitário aprovado de cada item e o desconto do orçamento somado ao desconto da conta; a memória de
+   * cada item aponta o orçamento. Depois confere, pela regra, que o lançado é o aprovado (mesmos exames, mesmos valores).
+   */
+  private async lancarNaConta(
+    tx: TxOperacao,
+    est: number,
+    atendimento: number,
+    orcamento: number,
+    p: ConversaoPreparada,
+  ): Promise<number> {
+    const aberta = await abrirContaDaEntrada(tx, est, atendimento);
+    if (aberta.conta === null)
+      throw recusa(
+        'conta-indisponivel',
+        aberta.pendencia?.mensagem ?? 'O atendimento não tem conta para lançar os exames do orçamento.',
+        { campos: ['atendimento'] },
+      );
+    const [conta] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, situacao, fonte_pagadora_id, valor_acrescimo, valor_desconto FROM conta_hospitalar
+        WHERE id = ?`,
+      [aberta.conta],
+      { teto: 1 },
+    );
+    if (!conta || !(SITUACOES_CONTA_LANCAVEL as readonly string[]).includes(texto(conta['situacao'])))
+      throw recusa(
+        'conta-fechada',
+        'A conta do atendimento não está aberta para lançamento: reabra a conta ou escolha outro atendimento.',
+        { campos: ['atendimento'] },
+      );
+    if (n(conta['fonte_pagadora_id']) !== p.fonte)
+      throw recusa('fonte-diferente', 'A conta do atendimento é de outra fonte pagadora.', {
+        campos: ['atendimento'],
+      });
+    const contaId = n(conta['id']);
+    const usuario = tx.contexto.usuario;
+    const agora = new Date();
+    const lancados: { exame: string; valor: number }[] = [];
+    for (const i of p.itens) {
+      const itemFat = nn(i['item_faturavel_id']);
+      if (itemFat === null)
+        throw recusa(
+          'exame-sem-item-faturavel',
+          `O exame ${texto(i['nome'])} não tem item faturável no catálogo: ligue o item antes de converter.`,
+        );
+      const fat = await tx.uma('SELECT grupo_faturamento_id FROM item_faturavel WHERE id = ?', [itemFat]);
+      const seq = await tx.uma(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+        [contaId],
+      );
+      const unitario = n(i['valor_unitario']);
+      const total = n(i['valor_total']);
+      const item = await tx.incluir('conta_hospitalar_item', {
+        conta_hospitalar_id: contaId,
+        sequencia: n(seq?.['s']),
+        item_faturavel_id: itemFat,
+        grupo_faturamento_id: nn(fat?.['grupo_faturamento_id']),
+        realizado_em: agora,
+        quantidade: n(i['quantidade']),
+        valor_unitario: unitario,
+        percentual_cobranca: 100,
+        valor_total: total,
+        tipo_valorizacao: 'manual',
+        situacao: 'lancado',
+        observacao: `Valor aprovado no orçamento particular ${p.numero}.`.slice(0, 2000),
+      });
+      await tx.incluir('conta_hospitalar_item_memoria', {
+        conta_hospitalar_item_id: item,
+        operacao: 'inclusao',
+        valor_unitario_calculado: unitario,
+        valor_total_calculado: total,
+        preco_manual: 1,
+        percentual_aplicado: 100,
+        dados: JSON.stringify({ origemPreco: 'orcamento_particular', orcamento, numero: p.numero }),
+        ocorrido_em: agora,
+        usuario_id: usuario,
+      });
+      const [gravado] = await tx.consultar('SELECT valor_total FROM conta_hospitalar_item WHERE id = ?', [
+        item,
+      ]);
+      lancados.push({ exame: String(n(i['exame_id'])), valor: n(gravado?.['valor_total']) });
+    }
+    const conf = conferirConversao(
+      {
+        validade: '9999-12-31',
+        convertido: false,
+        itens: p.itens.map((i) => ({ exame: String(n(i['exame_id'])), valor: n(i['valor_total']) })),
+      },
+      p.hoje,
+      lancados,
+    );
+    if (!conf.pode) throw recusa('lancamento-divergente', conf.motivo ?? 'O lançado difere do aprovado.');
+    // O desconto aprovado no orçamento entra no desconto da conta; o total da conta sai dos itens (sem gatilho).
+    const desconto = Math.round((n(conta['valor_desconto']) + p.desconto) * 100) / 100;
+    const t = await totalDosItens(tx, contaId);
+    await tx.alterar('conta_hospitalar', contaId, n(conta['versao']), {
+      valor_itens: t.valor_itens,
+      valor_filme: t.valor_filme,
+      valor_desconto: desconto,
+      valor_total: Math.max(
+        0,
+        Math.round((t.valor_itens + n(conta['valor_acrescimo']) - desconto) * 100) / 100,
+      ),
+      calculada: false,
+    });
+    return contaId;
   }
 }

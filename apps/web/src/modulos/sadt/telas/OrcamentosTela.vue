@@ -7,23 +7,31 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
+import type { ResultadoBuscaPaciente } from '@sgh/contratos';
+import { buscarPacientes } from '../../cadastro/api-cadastro.js';
 import {
+  type AtendimentoConversao,
+  type AvaliacaoConversao,
   atendimentosDoOrcamento,
+  avaliarConversao,
   converterOrcamentoExames,
+  type CorpoConversao,
   type CorpoOrcamento,
+  lerApoioOrcamento,
   gravarOrcamento,
   type PreviaOrcamento,
   previaOrcamento,
 } from '../api-orcamento.js';
 import { listarOrcamentos, novaChave } from '../api-sadt.js';
 import ErroSadt from '../componentes/ErroSadt.vue';
-import { usarSadt } from '../usar-sadt.js';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
 const termo = ref('');
 const buscado = ref('');
-const { apoio } = usarSadt(ref('laboratorio'));
+// O catálogo de todos os exames do diagnóstico (laboratório, imagem, métodos gráficos) e só as fontes particulares.
+const apoio = useQuery({ queryKey: ['sadt', 'orcamentos-exames', 'apoio'], queryFn: lerApoioOrcamento });
 const lista = useQuery({
   queryKey: computed(() => ['sadt', 'orcamentos', buscado.value]),
   queryFn: () => listarOrcamentos(buscado.value || null),
@@ -34,6 +42,16 @@ const linhaItem = (p: PreviaOrcamento['itens'][number]) =>
 const parcelas = (p: PreviaOrcamento) =>
   `= ${p.itens.map((i) => dinheiro(i.total)).join(' + ')} − ${dinheiro(p.desconto)} ·`;
 const numero = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
+
+// ── Paciente (busca no cadastro; sem cadastro, o nome de quem pede) ─────────────────────────────────────────
+const termoPac = ref('');
+const pedidoPac = ref('');
+const pacientes = useQuery({
+  queryKey: computed(() => ['sadt', 'orcamentos', 'pacientes', pedidoPac.value]),
+  queryFn: (): Promise<ResultadoBuscaPaciente> => buscarPacientes(pedidoPac.value),
+  enabled: computed(() => pedidoPac.value.length >= 2),
+});
+const paciente = ref<{ id: number; nome: string } | null>(null);
 
 // ── Novo orçamento ──────────────────────────────────────────────────────────────────────────────────────────
 const nome = ref('');
@@ -47,19 +65,19 @@ const itens = ref<{ exame: string; quantidade: string; valor: string }[]>([
 ]);
 const fontes = computed(() => [
   { valor: '', rotulo: t('sadt.escolha') },
-  ...(apoio.data.value?.convenios ?? []).map((c) => ({ valor: String(c.codigo), rotulo: c.nome })),
+  ...(apoio.data.value?.fontes ?? []).map((c) => ({ valor: String(c.id), rotulo: c.nome })),
 ]);
 const exames = computed(() => [
   { valor: '', rotulo: t('sadt.escolha') },
   ...(apoio.data.value?.exames ?? []).map((e) => ({
     valor: String(e.id),
-    rotulo: `${e.nome} (${e.codigo})`,
+    rotulo: `${e.nome} (${e.codigo}) · ${e.tipo}`,
   })),
 ]);
 const corpo = computed<CorpoOrcamento>(() => ({
-  paciente: null,
-  nome: nome.value.trim() || null,
-  cpf: cpf.value.trim() || null,
+  paciente: paciente.value?.id ?? null,
+  nome: paciente.value ? null : nome.value.trim() || null,
+  cpf: paciente.value ? null : cpf.value.trim() || null,
   telefone: telefone.value.trim() || null,
   fontePagadora: Number(fonte.value),
   exames: itens.value
@@ -99,6 +117,7 @@ async function gravar(): Promise<void> {
     const r = await gravarOrcamento(corpo.value, novaChave('orcamento'));
     mensagem.value = t('sadt.orcamentos.gravadoNumero', { numero: r.numero, total: dinheiro(r.total) });
     nome.value = '';
+    paciente.value = null;
     cpf.value = '';
     telefone.value = '';
     desconto.value = '';
@@ -112,25 +131,67 @@ async function gravar(): Promise<void> {
 }
 
 // ── Conversão ───────────────────────────────────────────────────────────────────────────────────────────────
-const atendimentos = ref<Record<number, { id: number; numero: string; entradaEm: string; fonte: string }[]>>(
-  {},
-);
-const manual = ref<Record<number, string>>({});
-async function verAtendimentos(id: number): Promise<void> {
+// Ver os atendimentos (do paciente, do CPF ou do paciente buscado) → conferir (paciente à vista e avisos dos exames)
+// → converter com a confirmação de quem converte. Nunca um id digitado.
+const atendimentos = ref<Record<number, AtendimentoConversao[]>>({});
+const termoConv = ref<Record<number, string>>({});
+const pedidoConv = ref<{ orcamento: number; termo: string } | null>(null);
+const pacientesConv = useQuery({
+  queryKey: computed(() => ['sadt', 'orcamentos', 'conv-pac', pedidoConv.value?.termo ?? '']),
+  queryFn: (): Promise<ResultadoBuscaPaciente> => buscarPacientes(pedidoConv.value?.termo ?? ''),
+  enabled: computed(() => (pedidoConv.value?.termo.length ?? 0) >= 2),
+});
+const avaliacao = ref<Record<number, { atendimento: number; a: AvaliacaoConversao }>>({});
+const vinculo = ref<Record<number, boolean>>({});
+const avisos = ref<Record<number, boolean>>({});
+const justificativa = ref<Record<number, string>>({});
+async function verAtendimentos(id: number, pac: number | null = null): Promise<void> {
   erro.value = null;
   try {
-    atendimentos.value = { ...atendimentos.value, [id]: (await atendimentosDoOrcamento(id)).itens };
+    atendimentos.value = { ...atendimentos.value, [id]: (await atendimentosDoOrcamento(id, pac)).itens };
   } catch (x) {
     erro.value = x;
   }
 }
-async function converter(id: number, atendimento: number): Promise<void> {
+const corpoConversao = (id: number, atendimento: number): CorpoConversao => {
+  const av = avaliacao.value[id];
+  return {
+    atendimento,
+    confirmaPaciente: av && av.a.confirmarPaciente && vinculo.value[id] ? av.a.paciente.id : null,
+    confirmado: !!avisos.value[id],
+    justificativa: (justificativa.value[id] ?? '').trim() || null,
+  };
+};
+async function avaliar(id: number, atendimento: number): Promise<void> {
+  erro.value = null;
+  vinculo.value = { ...vinculo.value, [id]: false };
+  avisos.value = { ...avisos.value, [id]: false };
+  try {
+    const a = await avaliarConversao(id, corpoConversao(id, atendimento), novaChave('avaliar'));
+    avaliacao.value = { ...avaliacao.value, [id]: { atendimento, a } };
+  } catch (x) {
+    erro.value = x;
+  }
+}
+const podeConverter = (id: number) => {
+  const av = avaliacao.value[id];
+  if (!av) return false;
+  if (av.a.confirmarPaciente && !vinculo.value[id]) return false;
+  if (av.a.restricoes.length > 0 && !avisos.value[id]) return false;
+  return true;
+};
+async function converter(id: number): Promise<void> {
+  const av = avaliacao.value[id];
+  if (!av) return;
   erro.value = null;
   mensagem.value = null;
   ocupado.value = true;
   try {
-    const r = await converterOrcamentoExames(id, atendimento, novaChave('converter'));
+    const r = await converterOrcamentoExames(id, corpoConversao(id, av.atendimento), novaChave('converter'));
     mensagem.value = t('sadt.orcamentos.convertido', { n: r.requisicoes.length });
+    const resto = { ...avaliacao.value };
+    delete resto[id];
+    avaliacao.value = resto;
     await cliente.invalidateQueries({ queryKey: ['sadt'] });
   } catch (x) {
     erro.value = x;
@@ -147,15 +208,56 @@ async function converter(id: number, atendimento: number): Promise<void> {
 
     <section class="painel" aria-labelledby="orc-novo-titulo">
       <h2 id="orc-novo-titulo">{{ t('sadt.orcamentos.novo') }}</h2>
+      <p v-if="paciente" data-testid="orcamento-paciente-escolhido">
+        {{ t('sadt.orcamentos.pacienteDoOrcamento', { nome: paciente.nome }) }}
+        <SanteBotao
+          variante="secundario"
+          :rotulo="t('sadt.orcamentos.trocarPaciente')"
+          @acionar="paciente = null"
+        />
+      </p>
+      <template v-else>
+        <form class="filtros" role="search" @submit.prevent="pedidoPac = termoPac.trim()">
+          <span class="campo">
+            <label for="orc-pac">{{ t('sadt.orcamentos.buscarPaciente') }}</label>
+            <input id="orc-pac" v-model="termoPac" type="search" data-testid="orcamento-paciente-termo" />
+          </span>
+          <SanteBotao tipo="submit" variante="secundario" :rotulo="t('sadt.buscar')" />
+          <RouterLink to="/cadastros/pacientes/novo" target="_blank">{{
+            t('sadt.orcamentos.cadastroRapido')
+          }}</RouterLink>
+        </form>
+        <ul v-if="pacientes.data.value">
+          <li v-for="p in pacientes.data.value.itens" :key="p.id">
+            {{ p.nome }}
+            <span class="secundario">{{ p.nascimento?.split('-').reverse().join('/') ?? '' }}</span>
+            <SanteBotao
+              variante="secundario"
+              :rotulo="t('sadt.orcamentos.escolherPaciente')"
+              :data-testid="`orcamento-paciente-${p.id}`"
+              @acionar="paciente = { id: p.id, nome: p.nome }"
+            />
+          </li>
+        </ul>
+        <p class="secundario">{{ t('sadt.orcamentos.semCadastro') }}</p>
+      </template>
       <div class="filtros">
-        <span class="campo">
-          <label for="orc-nome">{{ t('sadt.orcamentos.nome') }}</label>
-          <input id="orc-nome" v-model="nome" maxlength="150" data-testid="orcamento-nome" />
-        </span>
-        <span class="campo">
-          <label for="orc-cpf">{{ t('sadt.orcamentos.cpf') }}</label>
-          <input id="orc-cpf" v-model="cpf" maxlength="14" inputmode="numeric" data-testid="orcamento-cpf" />
-        </span>
+        <template v-if="!paciente">
+          <span class="campo">
+            <label for="orc-nome">{{ t('sadt.orcamentos.nome') }}</label>
+            <input id="orc-nome" v-model="nome" maxlength="150" data-testid="orcamento-nome" />
+          </span>
+          <span class="campo">
+            <label for="orc-cpf">{{ t('sadt.orcamentos.cpf') }}</label>
+            <input
+              id="orc-cpf"
+              v-model="cpf"
+              maxlength="14"
+              inputmode="numeric"
+              data-testid="orcamento-cpf"
+            />
+          </span>
+        </template>
         <span class="campo">
           <label for="orc-tel">{{ t('sadt.orcamentos.telefone') }}</label>
           <input id="orc-tel" v-model="telefone" maxlength="20" inputmode="tel" />
@@ -233,7 +335,7 @@ async function converter(id: number, atendimento: number): Promise<void> {
         />
         <SanteBotao
           :rotulo="t('sadt.gravar')"
-          :desabilitado="ocupado || !previa || nome.trim().length < 3"
+          :desabilitado="ocupado || !previa || (!paciente && nome.trim().length < 3)"
           data-testid="orcamento-gravar"
           @acionar="gravar"
         />
@@ -284,31 +386,73 @@ async function converter(id: number, atendimento: number): Promise<void> {
           <SanteBotao
             v-for="a in atendimentos[o.id]"
             :key="a.id"
-            :rotulo="`${t('sadt.orcamentos.converterAqui')}: ${a.numero} · ${a.entradaEm.slice(0, 10).split('-').reverse().join('/')} · ${a.fonte}`"
+            :rotulo="`${t('sadt.orcamentos.avaliar')}: ${a.pacienteNome} · ${a.numero} · ${a.entradaEm.slice(0, 10).split('-').reverse().join('/')} · ${a.fonte}`"
             :desabilitado="ocupado"
             :data-testid="`orcamento-converter-${o.id}-${a.id}`"
-            @acionar="converter(o.id, a.id)"
+            @acionar="avaliar(o.id, a.id)"
           />
           <template v-if="atendimentos[o.id]?.length === 0">
             <p>{{ t('sadt.orcamentos.semAtendimentos') }}</p>
-            <span class="campo">
-              <label :for="`orc-atd-${o.id}`">{{ t('sadt.orcamentos.atendimentoConversao') }}</label>
-              <input
-                :id="`orc-atd-${o.id}`"
-                v-model="manual[o.id]"
-                type="number"
-                min="1"
-                :data-testid="`orcamento-atendimento-${o.id}`"
-              />
-            </span>
-            <SanteBotao
-              :rotulo="t('sadt.orcamentos.converter')"
-              :desabilitado="ocupado || !manual[o.id]"
-              :data-testid="`orcamento-converter-${o.id}`"
-              @acionar="converter(o.id, Number(manual[o.id]))"
-            />
+            <form
+              class="filtros"
+              role="search"
+              @submit.prevent="pedidoConv = { orcamento: o.id, termo: (termoConv[o.id] ?? '').trim() }"
+            >
+              <span class="campo">
+                <label :for="`orc-conv-pac-${o.id}`">{{ t('sadt.orcamentos.buscarPaciente') }}</label>
+                <input
+                  :id="`orc-conv-pac-${o.id}`"
+                  v-model="termoConv[o.id]"
+                  type="search"
+                  :data-testid="`orcamento-conv-termo-${o.id}`"
+                />
+              </span>
+              <SanteBotao tipo="submit" variante="secundario" :rotulo="t('sadt.buscar')" />
+            </form>
+            <ul v-if="pedidoConv?.orcamento === o.id && pacientesConv.data.value">
+              <li v-for="p in pacientesConv.data.value.itens" :key="p.id">
+                {{ p.nome }}
+                <SanteBotao
+                  variante="secundario"
+                  :rotulo="t('sadt.orcamentos.escolherPaciente')"
+                  :data-testid="`orcamento-conv-paciente-${o.id}-${p.id}`"
+                  @acionar="verAtendimentos(o.id, p.id)"
+                />
+              </li>
+            </ul>
           </template>
         </template>
+      </div>
+      <div v-if="avaliacao[o.id]" class="painel" :data-testid="`orcamento-avaliacao-${o.id}`">
+        <p>{{ t('sadt.orcamentos.pacienteDoAtendimento', { nome: avaliacao[o.id]!.a.paciente.nome }) }}</p>
+        <label v-if="avaliacao[o.id]!.a.confirmarPaciente">
+          <input v-model="vinculo[o.id]" type="checkbox" :data-testid="`orcamento-vinculo-${o.id}`" />
+          {{ t('sadt.orcamentos.confirmarVinculo', { nome: avaliacao[o.id]!.a.paciente.nome }) }}
+        </label>
+        <template v-if="avaliacao[o.id]!.a.restricoes.length">
+          <h3>{{ t('sadt.orcamentos.avisos') }}</h3>
+          <ul>
+            <li v-for="(r, k) in avaliacao[o.id]!.a.restricoes" :key="k">{{ r.mensagem }}</li>
+          </ul>
+          <label>
+            <input v-model="avisos[o.id]" type="checkbox" :data-testid="`orcamento-avisos-${o.id}`" />
+            {{ t('sadt.orcamentos.confirmarAvisos') }}
+          </label>
+          <span
+            v-if="avaliacao[o.id]!.a.restricoes.some((r) => r.tipo === 'bloqueio' && r.permiteExcecao)"
+            class="campo"
+          >
+            <label :for="`orc-just-${o.id}`">{{ t('sadt.orcamentos.justificativa') }}</label>
+            <input :id="`orc-just-${o.id}`" v-model="justificativa[o.id]" maxlength="500" />
+          </span>
+        </template>
+        <p v-else class="secundario">{{ t('sadt.orcamentos.semAvisos') }}</p>
+        <SanteBotao
+          :rotulo="t('sadt.orcamentos.converter')"
+          :desabilitado="ocupado || !podeConverter(o.id)"
+          :data-testid="`orcamento-converter-${o.id}`"
+          @acionar="converter(o.id)"
+        />
       </div>
     </div>
   </section>

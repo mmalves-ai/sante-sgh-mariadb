@@ -295,23 +295,22 @@ describe('laudo de imagem, parâmetros, orçamento e autocadastro', () => {
     expect(JSON.stringify(p)).not.toMatch(/SENHAGERENCIAL|SENHAALTRES|TOKEN/);
   });
 
-  it('orçamento com o total e as parcelas; convertido, lança os mesmos exames no atendimento', async () => {
+  it('lista de orçamentos com o total; gravar e converter só pelo caminho único de /sadt/orcamentos-exames', async () => {
     const s = await entrar('SINT.RECEPCAO.SADT');
     const lista = (await get(s, '/sadt/orcamentos')).json();
     const o = lista.itens[0];
     expect(o.total).toBe(72);
     // A lista traz nomes e exames de pacientes: deixa a trilha de leitura.
     expect(trilha.eventos.at(-1)?.tabelaAlvo).toBe('orcamento_particular');
-    const novo = await post(s, '/sadt/orcamentos', {
+    // As rotas antigas (gravar sem o domínio e converter sem abrir o pedido) foram aposentadas.
+    const antigo = {
       nome: 'Paciente particular dois',
       convenio: 1,
       ato: 15,
       itens: [{ exame: 'NA', valor: 18.5 }],
-    });
-    expect(novo.statusCode).toBe(200);
-    expect(
-      (await post(s, '/sadt/orcamentos', { nome: 'X', convenio: 1, ato: 15, itens: [] })).statusCode,
-    ).toBe(400);
+    };
+    expect((await post(s, '/sadt/orcamentos', antigo)).statusCode).toBe(404);
+    expect((await post(s, '/sadt/orcamentos/1/converter', { atendimento: 1 })).statusCode).toBe(404);
   });
 });
 
