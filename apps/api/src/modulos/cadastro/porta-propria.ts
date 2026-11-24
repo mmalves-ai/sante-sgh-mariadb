@@ -16,8 +16,8 @@
 // não coberta ou registro repetido no que fica recusa (nada some da ficha do paciente).
 // Melhoria: a pessoa já existente (profissional, carga) ganha o papel de paciente sem duplicar a pessoa; e-mail de volta
 // a um valor antigo reativa a linha (sem violar a unicidade).
-// Pendente (pedido ao orquestrador): busca fonética (índice de chaves de busca), consentimentos, edição do profissional
-// e procedimentos da especialidade respondem 501 até o modelo e a regra chegarem.
+// Pendente (pedido ao orquestrador): busca fonética (índice de chaves de busca), consentimentos, a lotação e o vínculo
+// do login do profissional e procedimentos da especialidade respondem 501 até o modelo e a regra chegarem.
 import { createHash, randomUUID } from 'node:crypto';
 import {
   type AlterarPacienteEntrada,
@@ -50,6 +50,8 @@ import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPorta, GravacaoFeita, PortaCadastro } from './porta.js';
 import { CadastroProprioConsentimento } from './porta-propria-consentimento.js';
+import type { OperacaoProfissionalTela } from './profissionais-memoria.js';
+import { operacaoProfissionalPropria } from './profissionais-proprio.js';
 import type {
   ContextoGravacao,
   CriterioBuscaDireta,
@@ -1119,8 +1121,22 @@ export class PortaCadastroPropria implements PortaCadastro {
     });
   }
 
-  gravarProfissional(): Promise<GravacaoFeita<Record<string, number>>> {
-    return pendente('Edição do profissional');
+  /** D-PROF-39 (fecho-1): as gravações do profissional pelo Executor (profissionais-proprio.ts). */
+  async gravarProfissional(
+    _c: ContextoPorta,
+    operacao: OperacaoProfissionalTela,
+    entrada: unknown,
+    ctx: ContextoGravacao,
+  ): Promise<GravacaoFeita<Record<string, number>>> {
+    const op = operacaoProfissionalPropria(operacao);
+    if (!op)
+      return pendente(
+        operacao === 'cadastro.lotarProfissional'
+          ? 'A lotação do profissional numa unidade'
+          : 'O vínculo do login com o profissional',
+      );
+    const r = await this.executor.executar(op, this.cliente, entrada, await this.contextoNucleo(ctx));
+    return { resultado: r.resultado, trilha: r.trilha };
   }
 
   /** As contas de pessoa ativas e o profissional a que cada uma está ligada no estabelecimento. */
