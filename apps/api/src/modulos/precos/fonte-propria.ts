@@ -19,7 +19,7 @@
 // o mesmo arquivo entra uma vez por tabela; a publicação aponta o lote do reajuste e a rejeição exige o motivo.
 // Melhoria: os contatos do convênio por área ficam em contato_fonte_pagadora; o CNPJ, o endereço e a nota fiscal são
 // os da pessoa jurídica (a do convênio ou a tomadora) e se editam no cadastro dela.
-// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores, o credenciamento, o de-para e as
+// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores e as
 // referências de terceiros ainda não são lidos do modelo (a tela mostra vazio e as gravações ficam não liberadas).
 import { randomUUID } from 'node:crypto';
 import type {
@@ -43,6 +43,14 @@ import {
 import { z } from 'zod';
 import { civil, FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { mesmoValor, valorParaGravar } from './campos-contrato.js';
+import {
+  credenciamentoPropria,
+  deParaPropria,
+  excecoesCredenciamentoPropria,
+  itemMatmedPropria,
+  itensMatmedPropria,
+  vigenciasMatmedPropria,
+} from './cobranca-propria.js';
 import {
   indicesConvenioPropria,
   indicesNaDataPropria,
@@ -919,12 +927,12 @@ export class FontePrecosPropria implements FontePrecos {
     });
   }
 
-  itensMatmed() {
-    return naoLido({ itens: [], total: 0 });
+  itensMatmed(c: CtxPrecos, tab: number, f: FiltroPagina) {
+    return this.ler(c, (l, est) => itensMatmedPropria(l, est, tab, f));
   }
 
-  itemMatmed() {
-    return naoLido(null);
+  itemMatmed(c: CtxPrecos, tab: number, cod: number, data: string) {
+    return this.ler(c, (l, est) => itemMatmedPropria(l, est, tab, cod, data));
   }
 
   vigenciasDiaria(c: CtxPrecos, tab: number, ope: number): Promise<VigenciaValor[]> {
@@ -942,8 +950,8 @@ export class FontePrecosPropria implements FontePrecos {
     );
   }
 
-  vigenciasMatmed() {
-    return naoLido([]);
+  vigenciasMatmed(c: CtxPrecos, tab: number, cod: number) {
+    return this.ler(c, (l, est) => vigenciasMatmedPropria(l, est, tab, cod));
   }
 
   edicoes(c: CtxPrecos) {
@@ -967,12 +975,20 @@ export class FontePrecosPropria implements FontePrecos {
     return this.ler(c, (l, est) => porteNaDataPropria(l, est, conv, porte, data));
   }
 
-  credenciamento() {
-    return naoLido(paginaVazia());
+  credenciamento(
+    c: CtxPrecos,
+    conv: FiltroConvenio,
+    pagina: number,
+    porPagina: number,
+    _bancario: boolean,
+    profissional?: string | null,
+  ) {
+    return this.ler(c, (l, est) => credenciamentoPropria(l, est, conv, pagina, porPagina, profissional));
   }
 
-  credenciamentoAtos() {
-    return naoLido(paginaVazia());
+  /** Os atos do credenciamento: as exceções por procedimento, equipe ou plano. */
+  credenciamentoAtos(c: CtxPrecos, conv: FiltroConvenio) {
+    return this.ler(c, (l, est) => excecoesCredenciamentoPropria(l, est, conv));
   }
 
   credenciamentoComplementar() {
@@ -1012,8 +1028,8 @@ export class FontePrecosPropria implements FontePrecos {
     });
   }
 
-  dePara() {
-    return naoLido(paginaVazia());
+  dePara(c: CtxPrecos, conv: FiltroConvenio, exame: string | null, pagina: number, porPagina: number) {
+    return this.ler(c, (l) => deParaPropria(l, conv, exame, pagina, porPagina));
   }
 
   portes(c: CtxPrecos, tab: number | null, pagina: number, porPagina: number) {

@@ -11,3 +11,4 @@ export * from './busca.js';
 export * from './saneamento.js';
 export * from './preco-particular.js';
 export * from './credenciamento.js';
+export * from './cobranca-fonte.js';

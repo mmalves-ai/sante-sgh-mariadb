@@ -7,6 +7,7 @@ import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
 import { AgendaPrecoController, SERVICO_AGENDA_PRECO } from './agenda-preco.controller.js';
 import { ServicoAgendaPreco } from './agenda-preco.servico.js';
+import { CobrancaController, SERVICO_COBRANCA, ServicoCobranca } from './cobranca.controller.js';
 import { ConveniosController } from './convenios.controller.js';
 import { FONTE_PRECOS, type FontePrecos, fontePrecosIndisponivel } from './fonte.js';
 import { FontePrecosMemoria } from './fonte-memoria.js';
@@ -50,6 +51,7 @@ export async function moduloPrecos(
       MotorController,
       AgendaPrecoController,
       RegrasAcordoController,
+      CobrancaController,
     ],
     providers: [
       { provide: FONTE_PRECOS, useValue: fonte },
@@ -62,6 +64,11 @@ export async function moduloPrecos(
       {
         provide: SERVICO_AGENDA_PRECO,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoAgendaPreco(ctx.nucleo) : null,
+      },
+      // 06-FAT linhas 6, 8 e 9: de-para, credenciamento de cobrança e equivalências de mat/med (só com o banco próprio).
+      {
+        provide: SERVICO_COBRANCA,
+        useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoCobranca(ctx.nucleo) : null,
       },
       // O cache da lista de convênios fica de fora até o armazém compartilhado chegar ao boot mínimo.
       { provide: SERVICO_PRECOS, useValue: new ServicoPrecos(fonte, null) },
