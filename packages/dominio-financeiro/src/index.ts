@@ -16,6 +16,7 @@ export * from './depara-contabil.js';
 export * from './retencao-regra.js';
 export * from './remessa.js';
 export * from './retorno-pagamento.js';
+export * from './chave-pix.js';
 export * from './adiantamento.js';
 export * from './indicadores.js';
 export * from './orcamento.js';
