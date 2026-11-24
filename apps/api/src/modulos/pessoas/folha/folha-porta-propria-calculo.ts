@@ -13,9 +13,21 @@
 //   - programacao_ferias: situação do banco `programada`/`aprovada` = programada, `calculada`/`em_gozo`/`gozada` =
 //     calculada; o processamento é o do recibo_ferias vigente (não cancelado) da programação;
 //   - rescisao: só as que têm processamento (as do cálculo); modalidade e aviso com sublinhado no banco e hífen no contrato;
-//     `conferida`, `paga` e `homologada` (vindas de outra origem) leem como `calculada`;
-//   - parametro_obrigacao: a vigência é o primeiro dia da competência; `dados` é o JSON do contrato sem empresa e início.
-import type { ParametrosObrigacoesLidos, SituacaoFerias, SituacaoRescisao } from '@sgh/contratos';
+//     `conferida`, `paga` e `homologada` (vindas de outra origem) leem como `calculada` (a que vale no vínculo), com a
+//     situação por/em de quem as levou a esse estado;
+//   - ENCERRADAS: a rescisão conferida, paga ou homologada e as férias em gozo ou gozadas não se cancelam nem se
+//     recalculam. A leitura as mostra como `calculada`, e o gravador chama `exigirRescisaoAlteravel` e
+//     `exigirFeriasAlteravel` (na mesma transação, com trava) antes de trocar a situação;
+//   - rubrica.codigo: o contrato leva o código numérico da rubrica; código com letra ou zero à esquerda recusa a leitura
+//     (409 `rubrica-codigo-invalido`), nunca some em silêncio;
+//   - parametro_obrigacao: a vigência é o primeiro dia da competência; `dados` é o JSON do contrato sem empresa e início,
+//     validado pelo esquema do contrato na leitura (inválido: 409 `parametros-obrigacoes-invalidos`).
+import {
+  esquemaParametrosObrigacoes,
+  type ParametrosObrigacoesLidos,
+  type SituacaoFerias,
+  type SituacaoRescisao,
+} from '@sgh/contratos';
 import { type ContextoNucleo, type Leitor, type NucleoProprio, recusa } from '@sgh/nucleo';
 import type { ContextoCalculoFolha } from './porta-calculo.js';
 import {
@@ -56,13 +68,15 @@ const instante = (v: unknown): string => (v instanceof Date ? v.toISOString() : 
 const instanteOuNulo = (v: unknown): string | null => (v === null || v === undefined ? null : instante(v));
 /** Competência AAAA-MM do contrato no primeiro dia do mês do banco. */
 export const competenciaNoBanco = (competencia: string): string => `${competencia}-01`;
-const json = <T>(v: unknown, padrao: T): T => {
-  if (v === null || v === undefined) return padrao;
-  if (typeof v === 'object') return v as T;
+/** JSON do banco (o driver entrega objeto ou texto); `undefined` quando não é JSON de objeto. */
+const objetoJson = (v: unknown): Record<string, unknown> | undefined => {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === 'object') return v as Record<string, unknown>;
   try {
-    return JSON.parse(String(v)) as T;
+    const x: unknown = JSON.parse(String(v));
+    return x !== null && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : undefined;
   } catch {
-    return padrao;
+    return undefined;
   }
 };
 const marcas = (xs: readonly unknown[]) => xs.map(() => '?').join(', ');
@@ -169,12 +183,12 @@ export async function lerLinhas(
     vinculo === null ? [est, processo] : [est, processo, vinculo],
   );
   return rs.map((r) => {
-    const codigo = texto(r['codigo_rubrica']);
+    const rubrica = numOuNulo(r['rubrica_id']);
     return {
       papel: texto(r['papel']) as LinhaCalculoDoVinculo['papel'],
       tipo: texto(r['tipo']) as LinhaCalculoDoVinculo['tipo'],
-      rubrica: numOuNulo(r['rubrica_id']),
-      codigoRubrica: /^\d+$/.test(codigo) ? Number(codigo) : null,
+      rubrica,
+      codigoRubrica: codigoRubricaDe(rubrica, r['codigo_rubrica']),
       quantidade: n(r['quantidade']),
       unidade: texto(r['unidade']) as LinhaCalculoDoVinculo['unidade'],
       valor: n(r['valor']),
@@ -184,6 +198,23 @@ export async function lerLinhas(
       diasPagos: n(r['dias_pagos']),
     };
   });
+}
+
+/**
+ * O código numérico da rubrica no contrato (o mesmo que o cálculo usa). A linha sem rubrica não tem código; a rubrica
+ * com código fora do formato (letra, zero à esquerda, vazio) recusa: descartá-la tiraria proventos e descontos dos itens
+ * por rubrica, e `0010` virar `10` trocaria a identidade da rubrica.
+ */
+export function codigoRubricaDe(rubrica: number | null, codigo: unknown): number | null {
+  if (rubrica === null) return null;
+  const t = texto(codigo);
+  if (!/^(0|[1-9]\d{0,8})$/.test(t))
+    throw recusa(
+      'rubrica-codigo-invalido',
+      `A rubrica ${rubrica} tem código fora do formato do cálculo (só dígitos, sem zero à esquerda): corrija o cadastro da rubrica antes de ler o processamento.`,
+      { campos: ['codigoRubrica'] },
+    );
+  return Number(t);
 }
 
 /** Os papéis somados no resumo por vínculo (os mesmos da porta de memória). */
@@ -237,6 +268,8 @@ const FERIAS_NO_BANCO: Readonly<Record<SituacaoFerias, readonly string[]>> = {
   calculada: ['calculada', 'em_gozo', 'gozada'],
   cancelada: ['cancelada'],
 };
+/** Férias em gozo ou gozadas: leem como `calculada`, mas não se cancelam nem se recalculam. */
+export const FERIAS_ENCERRADAS = ['em_gozo', 'gozada'] as const;
 const situacaoFerias = (v: unknown): SituacaoFerias =>
   (Object.keys(FERIAS_NO_BANCO) as SituacaoFerias[]).find((k) => FERIAS_NO_BANCO[k].includes(texto(v))) ??
   'programada';
@@ -316,6 +349,22 @@ export async function lerFeriasPorId(l: LeitorFolha, est: number, id: number): P
   return r ? feriasDe(r) : null;
 }
 
+/**
+ * Recusa (409 `ferias-encerradas`) trocar a situação de férias em gozo ou gozadas. O gravador chama antes de cancelar ou
+ * recalcular, com o leitor da transação (trava): a leitura mostra essas férias como `calculada`.
+ */
+export async function exigirFeriasAlteravel(l: LeitorFolha, est: number, id: number): Promise<void> {
+  const r = await l.uma(
+    'SELECT situacao FROM programacao_ferias WHERE estabelecimento_id = ? AND id = ? AND excluido_em IS NULL',
+    [est, id],
+  );
+  if (r && (FERIAS_ENCERRADAS as readonly string[]).includes(texto(r['situacao'])))
+    throw recusa(
+      'ferias-encerradas',
+      'Estas férias já estão em gozo ou gozadas: não podem ser canceladas nem recalculadas.',
+    );
+}
+
 // ── Rescisão ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 const RESCISAO_NO_BANCO: Readonly<Record<SituacaoRescisao, readonly string[]>> = {
@@ -323,6 +372,8 @@ const RESCISAO_NO_BANCO: Readonly<Record<SituacaoRescisao, readonly string[]>> =
   substituida: ['substituida'],
   cancelada: ['cancelada'],
 };
+/** Rescisão conferida, paga ou homologada: lê como `calculada` (a que vale), mas não se cancela nem se recalcula. */
+export const RESCISAO_ENCERRADA = ['conferida', 'paga', 'homologada'] as const;
 const situacaoRescisao = (v: unknown): SituacaoRescisao =>
   (Object.keys(RESCISAO_NO_BANCO) as SituacaoRescisao[]).find((k) => RESCISAO_NO_BANCO[k].includes(texto(v))) ??
   'calculada';
@@ -343,7 +394,8 @@ const SQL_RESCISOES = `
 
 function rescisaoDe(r: Linha): RescisaoDaFolha {
   const situacao = situacaoRescisao(r['situacao']);
-  const trocada = situacao !== 'calculada';
+  // A conferida, a paga e a homologada mostram quem as levou a esse estado.
+  const trocada = texto(r['situacao']) !== 'calculada';
   const desligamento = diaObrigatorio(r['data_desligamento']);
   return {
     id: n(r['id']),
@@ -410,6 +462,45 @@ export async function lerRescisoes(
 export async function lerRescisaoPorId(l: LeitorFolha, est: number, id: number): Promise<RescisaoDaFolha | null> {
   const r = await l.uma(`${SQL_RESCISOES} AND r.id = ?`, [est, id]);
   return r ? rescisaoDe(r) : null;
+}
+
+/**
+ * Recusa (409 `rescisao-encerrada`) trocar a situação da rescisão conferida, paga ou homologada (cancelar ou substituir
+ * por um recálculo). O gravador chama antes de trocar a situação, com o leitor da transação (trava).
+ */
+export async function exigirRescisaoAlteravel(l: LeitorFolha, est: number, id: number): Promise<void> {
+  const r = await l.uma(
+    'SELECT situacao FROM rescisao WHERE estabelecimento_id = ? AND id = ? AND excluido_em IS NULL',
+    [est, id],
+  );
+  if (r && (RESCISAO_ENCERRADA as readonly string[]).includes(texto(r['situacao'])))
+    throw recusa(
+      'rescisao-encerrada',
+      'Esta rescisão já foi conferida, paga ou homologada: não pode ser cancelada nem recalculada.',
+    );
+}
+
+// ── Parâmetros das obrigações ────────────────────────────────────────────────────────────────────────────────
+
+/** Uma linha de parametro_obrigacao no contrato, validada pelo esquema (com os padrões dele). */
+export function parametrosObrigacoesDe(r: Linha): ParametrosObrigacoesLidos {
+  const id = n(r['id']);
+  const dados = objetoJson(r['dados']);
+  const lido =
+    dados === undefined
+      ? undefined
+      : esquemaParametrosObrigacoes.safeParse({
+          ...dados,
+          empresa: n(r['estabelecimento_id']),
+          inicio: competenciaDe(r['vigencia_inicio']),
+        });
+  if (!lido?.success)
+    throw recusa(
+      'parametros-obrigacoes-invalidos',
+      `Os parâmetros das obrigações ${id} estão gravados fora do formato do contrato: grave uma vigência nova corrigida.`,
+      { campos: lido ? [...new Set(lido.error.issues.map((x) => x.path.join('.')))] : ['dados'] },
+    );
+  return { ...lido.data, id, criadoPor: texto(r['login']), criadoEm: instante(r['criado_em']) };
 }
 
 // ── A porta ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -586,8 +677,12 @@ export class LeiturasCalculoFolhaPropria {
   }
 
   /**
-   * Parâmetros das obrigações do estabelecimento da sessão (os da rede inteira, sem estabelecimento, não são da empresa),
-   * da vigência mais recente primeiro. `empresa` null: as da sessão; outra empresa: nenhuma.
+   * Parâmetros das obrigações do estabelecimento da sessão, da vigência mais recente primeiro. `empresa` null: as da
+   * sessão; outra empresa: nenhuma. Cada linha passa pelo esquema do contrato (os padrões dele valem; JSON inválido
+   * recusa com 409 `parametros-obrigacoes-invalidos`, nunca vira objeto vazio).
+   * DECISÃO (linhas da rede inteira, estabelecimento_id nulo): ficam de fora. Os parâmetros são a identidade do
+   * empregador nos arquivos (razão social, endereço, natureza jurídica, contato e regimes de cada CNPJ), que não se
+   * herda da rede; o gravador só grava com o estabelecimento da sessão, como a porta de memória (uma por empresa).
    */
   parametrosObrigacoes(c: ContextoCalculoFolha, empresa: number | null): Promise<ParametrosObrigacoesLidos[]> {
     return this.ler(c, async (l, est) => {
@@ -599,17 +694,7 @@ export class LeiturasCalculoFolhaPropria {
           ORDER BY p.vigencia_inicio DESC, p.id DESC`,
         [est],
       );
-      return rs.map(
-        (r) =>
-          ({
-            ...json<Record<string, unknown>>(r['dados'], {}),
-            empresa: n(r['estabelecimento_id']),
-            inicio: competenciaDe(r['vigencia_inicio']),
-            id: n(r['id']),
-            criadoPor: texto(r['login']),
-            criadoEm: instante(r['criado_em']),
-          }) as unknown as ParametrosObrigacoesLidos,
-      );
+      return rs.map((r) => parametrosObrigacoesDe(r));
     });
   }
 }

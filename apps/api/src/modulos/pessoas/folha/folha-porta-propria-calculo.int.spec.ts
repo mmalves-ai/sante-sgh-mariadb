@@ -12,9 +12,29 @@ import {
   prepararMassaO3,
   SEM_BANCO_O3,
 } from '../avaliacao/massa.spec-util.js';
-import { LeiturasCalculoFolhaPropria } from './folha-porta-propria-calculo.js';
+import {
+  exigirFeriasAlteravel,
+  exigirRescisaoAlteravel,
+  LeiturasCalculoFolhaPropria,
+} from './folha-porta-propria-calculo.js';
 
 const T = 'F24LSINT';
+/** Parâmetros das obrigações válidos pelo esquema do contrato (sem empresa e início, que são colunas). */
+const dadosObrigacoes = (razaoSocial: string, codigoPagamentoGps: string) => ({
+  razaoSocial,
+  endereco: { logradouro: 'Rua Um', bairro: 'Centro', cep: '01001000', cidade: 'Cidade', uf: 'SP', municipio: '3550308' },
+  contato: { nome: 'Contato', telefone: '1130000000', email: 'contato@exemplo.test' },
+  naturezaJuridica: '3999',
+  codigoRecolhimentoSefip: '115',
+  codigoPagamentoGps,
+  regimes: {
+    'fgts-digital': { exigidaDe: '2024-03', exigidaAte: null, leiaute: '1.0', leiauteConferido: true },
+    sefip: { exigidaDe: null, exigidaAte: '2024-02', leiaute: '8.4', leiauteConferido: true },
+    caged: { exigidaDe: null, exigidaAte: '2019-12', leiaute: '1.0', leiauteConferido: false },
+    rais: { exigidaDe: null, exigidaAte: null, leiaute: '2024', leiauteConferido: false },
+  },
+});
+const REDE = `${T} rede`;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -40,6 +60,10 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
     );
     await e.executar('DELETE FROM processamento_folha WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM parametro_obrigacao WHERE estabelecimento_id = ?', est);
+    await e.executar(
+      "DELETE FROM parametro_obrigacao WHERE estabelecimento_id IS NULL AND JSON_VALUE(dados, '$.razaoSocial') = ?",
+      [REDE],
+    );
     await e.executar('DELETE FROM rubrica WHERE estabelecimento_id = ?', est);
   }
 
@@ -74,6 +98,8 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
         );
       ids['r101'] = await rubrica('101');
       ids['r201'] = await rubrica('201');
+      ids['r0010'] = await rubrica('0010');
+      ids['rAlfa'] = await rubrica('A1X');
       const proc = (comp: string, tipo: string, numero: number, situacao: string, extra: unknown[] = []) =>
         e.inserir(
           `INSERT INTO processamento_folha (estabelecimento_id, competencia, tipo, numero, situacao, pagamento_em, totais,
@@ -162,8 +188,10 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
       ids['tipoRescisao'] = tipoRescisao;
 
       await e.executar(
-        'INSERT INTO parametro_obrigacao (estabelecimento_id, vigencia_inicio, dados, criado_em, criado_por) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)',
-        [m.est, '2026-01-01', '{"codigoGps":"2100"}', agora, u, m.est, '2026-06-01', '{"codigoGps":"2200"}', agora, u],
+        'INSERT INTO parametro_obrigacao (estabelecimento_id, vigencia_inicio, dados, criado_em, criado_por) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (NULL, ?, ?, ?, ?)',
+        [m.est, '2026-01-01', JSON.stringify(dadosObrigacoes('Empresa sintética', '2100')), agora, u,
+          m.est, '2026-06-01', JSON.stringify(dadosObrigacoes('Empresa sintética', '2200')), agora, u,
+          '2026-09-01', JSON.stringify(dadosObrigacoes(REDE, '2300')), agora, u],
       );
     });
   });
@@ -318,12 +346,97 @@ describe.skipIf(SEM_BANCO_O3)(`leituras próprias do cálculo da folha (cliente 
     expect(await porta.rescisaoPorId(c(m.outro), ids['res']!)).toBeNull();
   });
 
-  it('parâmetros das obrigações: da vigência mais recente, com o JSON aberto; outra empresa não vê', async () => {
+  it('parâmetros das obrigações: da vigência mais recente, pelo esquema do contrato; a rede inteira e outra empresa não entram', async () => {
     const ps = await porta.parametrosObrigacoes(c(), null);
     expect(ps.map((p) => p.inicio)).toEqual(['2026-06', '2026-01']);
-    expect(ps[0]).toMatchObject({ empresa: m.est, codigoGps: '2200', criadoPor: m.login });
+    expect(ps[0]).toEqual({
+      ...dadosObrigacoes('Empresa sintética', '2200'),
+      empresa: m.est,
+      inicio: '2026-06',
+      id: expect.any(Number),
+      criadoPor: m.login,
+      criadoEm: expect.any(String),
+    });
+    expect(ps.some((p) => p.razaoSocial === REDE)).toBe(false);
     expect(await porta.parametrosObrigacoes(c(), m.est)).toHaveLength(2);
     expect(await porta.parametrosObrigacoes(c(), m.outro)).toEqual([]);
+  });
+
+  it('parâmetros das obrigações fora do esquema recusam (nunca objeto vazio)', async () => {
+    const id = await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'f24l-param' }, (e) =>
+      e.inserir(
+        'INSERT INTO parametro_obrigacao (estabelecimento_id, vigencia_inicio, dados, criado_em, criado_por) VALUES (?, ?, ?, ?, ?)',
+        [m.est, '2026-03-01', '{"codigoGps":"2100"}', new Date(), m.usuario],
+      ),
+    );
+    try {
+      await expect(porta.parametrosObrigacoes(c(), null)).rejects.toMatchObject({
+        problema: { codigo: 'parametros-obrigacoes-invalidos' },
+      });
+    } finally {
+      await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'f24l-param' }, (e) =>
+        e.executar('DELETE FROM parametro_obrigacao WHERE id = ?', [id]),
+      );
+    }
+  });
+
+  it('rubrica com zero à esquerda ou alfanumérica recusa a leitura das linhas (não some dos itens por rubrica)', async () => {
+    for (const rub of [ids['r0010']!, ids['rAlfa']!]) {
+      await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'f24l-rub' }, (e) =>
+        e.executar(
+          `INSERT INTO processamento_folha_linha (processamento_folha_id, vinculo_trabalho_id, papel, tipo, rubrica_id,
+             quantidade, unidade, valor, memoria_calculo, centro_custo_id, dias_pagos, criado_em, criado_por)
+           VALUES (?, ?, 'salario', 'provento', ?, 0, 'valor', 10, 'memória', NULL, 30, ?, ?)`,
+          [ids['p5'], m.vinculo, rub, new Date(), m.usuario],
+        ),
+      );
+      try {
+        await expect(porta.itensRubricaDoProcesso(c(), ids['p5']!)).rejects.toMatchObject({
+          problema: { codigo: 'rubrica-codigo-invalido' },
+        });
+        await expect(porta.linhasDoVinculo(c(), ids['p5']!, m.vinculo)).rejects.toMatchObject({
+          problema: { codigo: 'rubrica-codigo-invalido' },
+        });
+      } finally {
+        await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'f24l-rub' }, (e) =>
+          e.executar('DELETE FROM processamento_folha_linha WHERE processamento_folha_id = ?', [ids['p5']]),
+        );
+      }
+    }
+    expect(await porta.itensRubricaDoProcesso(c(), ids['p5']!)).toEqual([]);
+  });
+
+  it('rescisão paga e férias gozadas: leem como calculada com quem as encerrou, e recusam cancelar e recalcular', async () => {
+    const ctx = { cliente: CLIENTE_O3, estabelecimento: m.est, usuario: m.usuario, correlacao: 't-f24l' };
+    const alteravel = () =>
+      m.nucleo.lerSomente(ctx, async (l) => {
+        await exigirRescisaoAlteravel(l, m.est, ids['res']!);
+        await exigirFeriasAlteravel(l, m.est, ids['f1']!);
+      });
+    await expect(alteravel()).resolves.toBeUndefined();
+    const situar = (rescisao: string, ferias: string) =>
+      m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'f24l-enc' }, async (e) => {
+        await e.executar('UPDATE rescisao SET situacao = ?, alterado_em = ?, alterado_por = ? WHERE id = ?', [
+          rescisao,
+          new Date(),
+          m.usuario,
+          ids['res'],
+        ]);
+        await e.executar('UPDATE programacao_ferias SET situacao = ? WHERE id = ?', [ferias, ids['f1']]);
+      });
+    await situar('paga', 'gozada');
+    try {
+      expect(await porta.rescisaoPorId(c(), ids['res']!)).toMatchObject({ situacao: 'calculada', situacaoPor: m.login });
+      expect(await porta.feriasPorId(c(), ids['f1']!)).toMatchObject({ situacao: 'calculada', situacaoPor: m.login });
+      await expect(
+        m.nucleo.lerSomente(ctx, (l) => exigirRescisaoAlteravel(l, m.est, ids['res']!)),
+      ).rejects.toMatchObject({ problema: { codigo: 'rescisao-encerrada' } });
+      await expect(m.nucleo.lerSomente(ctx, (l) => exigirFeriasAlteravel(l, m.est, ids['f1']!))).rejects.toMatchObject({
+        problema: { codigo: 'ferias-encerradas' },
+      });
+    } finally {
+      await situar('calculada', 'calculada');
+    }
   });
 
   it('sem estabelecimento na sessão: recusa', async () => {
