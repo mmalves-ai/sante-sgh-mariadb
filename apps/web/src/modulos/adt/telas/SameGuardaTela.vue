@@ -3,7 +3,8 @@
 // pela etiqueta do volume (o leitor manda a matrícula e o Enter); cada volume mostra onde está (local e posição no
 // arquivo, ou o setor), a situação, o retorno atrasado e a linha do tempo. O formulário de movimento se monta pelo tipo
 // e pelas exigências da operação do cadastro, e a regra do domínio confere na hora (o botão diz o que falta). A
-// abertura do volume já o registra no local; o último movimento se desfaz com o motivo; o extravio fica registrado.
+// abertura do volume já o registra no local; o último movimento se desfaz com o motivo; o extravio fica registrado. O
+// descarte vai pela rota própria, com a deliberação da comissão escolhida e o prazo de guarda conferido na hora.
 import { conferirMovimentoGuarda, type VolumeGuarda } from '@sgh/dominio-hotelaria';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -12,9 +13,11 @@ import { useI18n } from 'vue-i18n';
 import {
   abrirVolume,
   buscarGuarda,
+  descartarVolume,
   desfazerUltimo,
   incluirLocal,
   lerApoioGuarda,
+  lerDeliberacoesDescarte,
   lerOperacoesGuarda,
   lerVolumes,
   movimentarVolume,
@@ -33,6 +36,14 @@ const aviso = ref('');
 
 const operacoes = useQuery({ queryKey: ['same', 'guarda', 'operacoes'], queryFn: lerOperacoesGuarda });
 const apoio = useQuery({ queryKey: ['same', 'guarda', 'apoio'], queryFn: lerApoioGuarda });
+const deliberacoes = useQuery({
+  queryKey: ['same', 'guarda', 'deliberacoes'],
+  queryFn: lerDeliberacoesDescarte,
+});
+const opDeliberacoes = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...(deliberacoes.data.value ?? []).map((d) => ({ valor: String(d.id), rotulo: d.texto })),
+]);
 const volumes = useQuery({
   queryKey: computed(() => ['same', 'guarda', 'volumes', paciente.value]),
   queryFn: () => lerVolumes(paciente.value!),
@@ -133,7 +144,7 @@ const doVolume = (v: VolumeTela) =>
     localDestino: '',
     previsao: '',
     responsavel: '',
-    aval: '',
+    deliberacao: '',
     observacao: '',
     motivo: '',
   });
@@ -154,14 +165,26 @@ function problemas(v: VolumeTela): string[] {
   const o = operacaoDe(v);
   if (!o) return [];
   const f = doVolume(v);
+  const localDestino = f['localDestino'] ? Number(f['localDestino']) : null;
+  // A ocupação do local onde o volume vai ficar (o pedido ou o dele), como o servidor confere.
+  const alvo = apoio.data.value?.locais.find((l) => l.id === (localDestino ?? v.local?.id ?? -1));
   return conferirMovimentoGuarda(estado(v), {
     operacao: o,
     setorDestino: f['setorDestino'] ? Number(f['setorDestino']) : null,
-    localDestino: f['localDestino'] ? Number(f['localDestino']) : null,
+    localDestino,
     previsaoRetorno: f['previsao'] ? new Date(`${f['previsao']}T23:59:00`) : null,
-    avalComissao: f['aval'] || null,
+    avalComissao: null,
     responsavel: f['responsavel'] || null,
     agora: new Date(),
+    ocupacaoDestino: alvo ? { volumes: alvo.volumes, capacidade: alvo.capacidade } : null,
+    // As deliberações listadas já são da comissão de revisão de prontuários, em reunião realizada e não canceladas.
+    descarte: {
+      guardaDesde: v.guardaDesde ? new Date(v.guardaDesde) : null,
+      prazoAnos: v.prazoGuardaAnos,
+      deliberacao: f['deliberacao']
+        ? { comissaoDeProntuario: true, reuniaoRealizada: true, cancelada: false }
+        : null,
+    },
   })
     .filter((p) => !(p.campo === 'setorDestino' && o.tipo === 'recebimento'))
     .map((p) => p.mensagem);
@@ -180,15 +203,16 @@ const pedeSetor = (v: VolumeTela) => {
 };
 const movimentar = (v: VolumeTela) => {
   const f = doVolume(v);
+  const enviarMovimento = operacaoDe(v)?.encerraGuarda ? descartarVolume : movimentarVolume;
   return tentar(
     () =>
-      movimentarVolume(v.id, {
+      enviarMovimento(v.id, {
         operacao: f['operacao'],
         setorDestino: f['setorDestino'] ? Number(f['setorDestino']) : null,
         localDestino: f['localDestino'] ? Number(f['localDestino']) : null,
         previsaoRetorno: f['previsao'] || null,
         responsavel: f['responsavel'] || null,
-        avalComissao: f['aval'] || null,
+        deliberacao: f['deliberacao'] ? Number(f['deliberacao']) : null,
         observacao: f['observacao'] || null,
         versao: v.versao,
       }),
@@ -276,11 +300,12 @@ const quando = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : 
             :rotulo="k('responsavel')"
             data-testid="guarda-responsavel"
           />
-          <SanteCampoTexto
+          <SanteSelecao
             v-if="operacaoDe(v)?.encerraGuarda"
-            v-model="doVolume(v).aval"
-            :rotulo="k('aval')"
-            data-testid="guarda-aval"
+            v-model="doVolume(v).deliberacao"
+            :rotulo="k('deliberacao')"
+            :opcoes="opDeliberacoes"
+            data-testid="guarda-deliberacao"
           />
           <SanteCampoTexto v-model="doVolume(v).observacao" :rotulo="k('observacao')" />
           <SanteBotao

@@ -59,6 +59,8 @@ const esquemaVolume = z.object({
   previsaoRetorno: z.string().nullable(),
   retornoAtrasado: z.boolean(),
   extraviadoEm: z.string().nullable(),
+  guardaDesde: z.string().nullable(),
+  prazoGuardaAnos: z.number().nullable(),
   versao: z.number(),
   movimentos: z.array(esquemaMovimento),
 });
@@ -79,6 +81,15 @@ export const abrirVolume = (corpo: unknown) =>
   enviar(`${G}/volumes`, corpo, qualquer, novaChave('same-volume'));
 export const movimentarVolume = (volume: number, corpo: unknown) =>
   enviar(`${G}/volumes/${volume}/movimentos`, corpo, qualquer, novaChave('same-mov'));
+export const lerDeliberacoesDescarte = async () =>
+  (
+    await ler(
+      `${G}/deliberacoes`,
+      z.object({ itens: z.array(z.object({ id: z.number(), texto: z.string() })) }),
+    )
+  ).itens;
+export const descartarVolume = (volume: number, corpo: unknown) =>
+  enviar(`${G}/volumes/${volume}/descarte`, corpo, qualquer, novaChave('same-descarte'));
 export const desfazerUltimo = (volume: number, corpo: unknown) =>
   enviar(`${G}/volumes/${volume}/desfazer`, corpo, qualquer, novaChave('same-desfazer'));
 export const registrarExtravio = (volume: number, corpo: unknown) =>

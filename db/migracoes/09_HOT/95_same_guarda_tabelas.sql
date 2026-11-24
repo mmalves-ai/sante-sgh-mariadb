@@ -1,9 +1,13 @@
 -- SAME pelo volume (F3.9, fatia F3.9-4, 04-HOT L126, 24/11/2026): só para frente e idempotente (ADR 0002, parte 2).
 -- Sem gatilho; as regras ficam no domínio (@sgh/dominio-hotelaria, same-guarda) e na porta (adt/same-guarda-propria).
 --   - operacao_movimento_prontuario: as operações padrão do produto, com códigos de negócio, tipo, sentido e
---     exigências. Todo cliente novo nasce com elas; o de-para dos códigos da origem fica no conector.
+--     exigências. Todo cliente novo nasce com elas; as da origem entram pelo conector (abaixo).
 --   - ocorrencia_arquivo_prontuario: passa a aceitar o volume como alvo (extravio, descarte e guarda externa do volume
 --     sem atendimento). Continua exigindo um alvo: o atendimento ou o volume. Novo tipo 'extravio'.
+--   - o descarte liga a ocorrência à deliberação da comissão de revisão de prontuários (deliberacao_reuniao_id); o
+--     domínio exige a deliberação em reunião realizada e o prazo de guarda do tipo de documento cumprido.
+--   - as operações importadas de outro sistema entram com tipo e sentido presumidos ('registro', 'neutro') até o
+--     de-para do conector (pendência na ficha da F3.9, 04-HOT L126).
 
 INSERT INTO operacao_movimento_prontuario
   (codigo, descricao, ativo, tipo, sentido, exige_destino, exige_previsao_retorno, encerra_guarda, criado_em) VALUES
@@ -26,3 +30,6 @@ ALTER TABLE ocorrencia_arquivo_prontuario DROP CONSTRAINT IF EXISTS ck_ocorrenci
 ALTER TABLE ocorrencia_arquivo_prontuario ADD CONSTRAINT ck_ocorrencia_arquivo_prontuario_tipo CHECK (tipo IN ('exclusao','remessa','aceite','cobranca','ocorrencia','descarte','extravio','guarda_externa'));
 ALTER TABLE ocorrencia_arquivo_prontuario DROP CONSTRAINT IF EXISTS ck_ocorrencia_arquivo_prontuario_motivo;
 ALTER TABLE ocorrencia_arquivo_prontuario ADD CONSTRAINT ck_ocorrencia_arquivo_prontuario_motivo CHECK (tipo NOT IN ('exclusao','descarte','ocorrencia','extravio') OR motivo IS NOT NULL);
+ALTER TABLE ocorrencia_arquivo_prontuario
+  ADD COLUMN IF NOT EXISTS deliberacao_reuniao_id BIGINT UNSIGNED NULL COMMENT 'Deliberação da comissão que autorizou o descarte' AFTER volume_prontuario_id;
+ALTER TABLE ocorrencia_arquivo_prontuario ADD INDEX IF NOT EXISTS ix_ocorrencia_arquivo_prontuario_deliberacao (deliberacao_reuniao_id);

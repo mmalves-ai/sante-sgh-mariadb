@@ -6,9 +6,12 @@
 //   GET  /api/same/guarda/pacientes/:paciente/volumes    visão por paciente: volumes, onde está cada um e a linha do tempo
 //   POST /api/same/guarda/volumes                        abre o volume com o local e a posição (já registrado no arquivo)
 //   POST /api/same/guarda/volumes/:id/movimentos         movimenta pela operação do cadastro (decide pelo tipo e sentido)
+//   GET  /api/same/guarda/deliberacoes                   deliberações da comissão de revisão de prontuários (descarte)
+//   POST /api/same/guarda/volumes/:id/descarte           elimina o volume: prazo de guarda cumprido e deliberação
 //   POST /api/same/guarda/volumes/:id/desfazer           desfaz o último movimento (exclusão lógica com motivo)
 //   POST /api/same/guarda/volumes/:id/extravio           registra o extravio com o motivo
-// Níveis de acesso: os do SAME (same.movimento.ler/criar/excluir), para todo cargo que os tiver.
+// Níveis de acesso: os do SAME (same.movimento.ler/criar/excluir), para todo cargo que os tiver. A eliminação do volume
+// (irreversível) fica no nível de excluir, não no de movimentar.
 import {
   Body,
   Controller,
@@ -32,6 +35,7 @@ export const PERMISSOES_SAME_GUARDA = {
   ler: 'same.movimento.ler',
   movimentar: 'same.movimento.criar',
   desfazer: 'same.movimento.excluir',
+  descartar: 'same.movimento.excluir',
 } as const;
 
 @Controller('same/guarda')
@@ -118,6 +122,19 @@ export class SameGuardaController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.movimentar(c, id, corpo));
+  }
+
+  @Get('deliberacoes')
+  @Permissao(PERMISSOES_SAME_GUARDA.ler)
+  deliberacoes(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, async (p, c) => ({ itens: await p.deliberacoesDescarte(c) }));
+  }
+
+  @Post('volumes/:id/descarte')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_SAME_GUARDA.descartar)
+  descartar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.descartar(c, id, corpo));
   }
 
   @Post('volumes/:id/desfazer')

@@ -24,6 +24,7 @@ export const mensagensSameGuarda = {
   localDestino: 'Local de destino',
   responsavel: 'Quem retira ou recebe',
   aval: 'Aval da comissão de revisão de prontuários',
+  deliberacao: 'Deliberação da comissão de revisão de prontuários',
   observacao: 'Observação',
   movimentar: 'Registrar movimento',
   desfazer: 'Desfazer o último',

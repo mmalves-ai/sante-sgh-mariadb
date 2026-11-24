@@ -24,14 +24,23 @@ interface Massa {
   sala: number;
   setorSame: number;
   setorUti: number;
+  deliberacao: number;
+  deliberacaoCancelada: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
   const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
+    const comissoes = `(SELECT id FROM comissao_hospitalar WHERE estabelecimento_id IN ${est})`;
+    await e.executar(
+      `DELETE FROM deliberacao_reuniao WHERE reuniao_comissao_id IN (SELECT id FROM reuniao_comissao WHERE comissao_hospitalar_id IN ${comissoes})`,
+      [P],
+    );
+    await e.executar(`DELETE FROM reuniao_comissao WHERE comissao_hospitalar_id IN ${comissoes}`, [P]);
     for (const t of [
       'ocorrencia_arquivo_prontuario',
+      'comissao_hospitalar',
       'movimento_prontuario',
       'volume_prontuario',
       'local_arquivo',
@@ -43,6 +52,9 @@ async function limpar(e: Escritor): Promise<void> {
   }
   await limparTrilhaDaMassa(e, { codigos: [P] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await e.executar("DELETE FROM tipo_comissao WHERE codigo = 'prontuario' AND descricao = ?", [
+    `Sintético ${P}`,
+  ]);
 }
 
 describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de efeito)', () => {
@@ -83,8 +95,33 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
           'INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, ?, ?)',
           [est, `${P}-${codigo}`, `Setor ${codigo} sintético`, tipoSetor, agora],
         );
+      // A comissão de revisão de prontuários, uma reunião realizada e as deliberações (uma cancelada).
+      const tc = await e.uma("SELECT id FROM tipo_comissao WHERE codigo = 'prontuario'");
+      const tipoComissao = tc?.['id']
+        ? Number(tc['id'])
+        : await e.inserir(
+            "INSERT INTO tipo_comissao (codigo, descricao, criado_em) VALUES ('prontuario', ?, ?)",
+            [`Sintético ${P}`, agora],
+          );
+      const comissao = await e.inserir(
+        'INSERT INTO comissao_hospitalar (estabelecimento_id, tipo_comissao_id, nome, criado_em) VALUES (?, ?, ?, ?)',
+        [est, tipoComissao, `Comissão sintética ${P}`, agora],
+      );
+      const reuniao = await e.inserir(
+        `INSERT INTO reuniao_comissao (comissao_hospitalar_id, situacao, agendada_para, realizada_em, pauta, criado_em)
+         VALUES (?, 'realizada', ?, ?, 'Pauta sintética', ?)`,
+        [comissao, agora, agora, agora],
+      );
+      const deliberar = (seq: number, situacao: string) =>
+        e.inserir(
+          `INSERT INTO deliberacao_reuniao (reuniao_comissao_id, sequencia, descricao, situacao, criado_em)
+           VALUES (?, ?, 'Eliminação de volumes com prazo cumprido', ?, ?)`,
+          [reuniao, seq, situacao, agora],
+        );
       return {
         est,
+        deliberacao: await deliberar(1, 'concluida'),
+        deliberacaoCancelada: await deliberar(2, 'cancelada'),
         usuario: Number(usuario['id']),
         paciente: Number(paciente['id']),
         tipo: Number(tipo['id']),
@@ -241,6 +278,25 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
     const [dev] = await ler('SELECT devolvido_em FROM movimento_prontuario WHERE id = ?', [saida.id]);
     expect(dev!['devolvido_em']).not.toBeNull();
 
+    // Desfeita a devolução, a saída volta a aberta e o volume a emprestado; a nova devolução a fecha de novo.
+    await porta.desfazerUltimo(ctx(), aberto.id, {
+      motivo: 'devolução lançada antes da hora',
+      versao: Number(v['versao']),
+    });
+    v = await volume(aberto.id);
+    expect(v).toMatchObject({ situacao: 'emprestado', no_local: 0 });
+    const [reaberta] = await ler('SELECT devolvido_em FROM movimento_prontuario WHERE id = ?', [saida.id]);
+    expect(reaberta!['devolvido_em']).toBeNull();
+    await porta.movimentar(ctx(), aberto.id, {
+      operacao: 'devolucao',
+      setorOrigem: m.setorUti,
+      versao: Number(v['versao']),
+    });
+    v = await volume(aberto.id);
+    expect(v).toMatchObject({ situacao: 'arquivado', no_local: 1 });
+    const [fechada] = await ler('SELECT devolvido_em FROM movimento_prontuario WHERE id = ?', [saida.id]);
+    expect(fechada!['devolvido_em']).not.toBeNull();
+
     // Transferência de local no arquivo e o desfazer com motivo (exclusão lógica, estado refeito).
     const tr = await porta.movimentar(ctx(), aberto.id, {
       operacao: 'transferencia',
@@ -263,7 +319,15 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
     );
     expect(Number(oc!['n'])).toBe(1);
 
-    // Descarte sem aval recusa; com aval, eliminado e a ocorrência com o aval.
+    // O descarte tem rota própria; sem deliberação, com a cancelada ou antes do prazo de guarda recusa.
+    const descartar = (x: Record<string, unknown> = {}) =>
+      porta.descartar(ctx(), aberto.id, {
+        operacao: 'descarte',
+        responsavel: 'COMISSAO',
+        observacao: 'prazo de guarda cumprido',
+        versao: Number(v['versao']),
+        ...x,
+      });
     expect(
       await falha(
         porta.movimentar(ctx(), aberto.id, {
@@ -272,26 +336,30 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
           versao: Number(v['versao']),
         }),
       ),
-    ).toMatch(/aval/);
-    await porta.movimentar(ctx(), aberto.id, {
-      operacao: 'descarte',
-      responsavel: 'COMISSAO',
-      avalComissao: 'ATA SINTÉTICA 1',
-      observacao: 'prazo de guarda cumprido',
-      versao: Number(v['versao']),
-    });
+    ).toMatch(/rota e nível de acesso próprios/);
+    expect(await falha(descartar())).toMatch(/deliberação da comissão/);
+    expect(await falha(descartar({ deliberacao: m.deliberacaoCancelada }))).toMatch(/cancelada/);
+    expect(await falha(descartar({ deliberacao: m.deliberacao }))).toMatch(/prazo de guarda de 20 anos/);
+    // O último documento do volume é de 2001: o prazo de 20 anos se cumpriu.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `prazo-${P}` }, (e) =>
+      e.executar("UPDATE volume_prontuario SET periodo_fim = '2001-03-01' WHERE id = ?", [aberto.id]),
+    );
+    v = await volume(aberto.id);
+    await descartar({ deliberacao: m.deliberacao });
     v = await volume(aberto.id);
     expect(v['situacao']).toBe('eliminado');
     expect(v['encerrado_em']).not.toBeNull();
     const [desc] = await ler(
-      "SELECT aval_comissao, volume_prontuario_id FROM ocorrencia_arquivo_prontuario WHERE volume_prontuario_id = ? AND tipo = 'descarte'",
+      "SELECT aval_comissao, volume_prontuario_id, deliberacao_reuniao_id FROM ocorrencia_arquivo_prontuario WHERE volume_prontuario_id = ? AND tipo = 'descarte'",
       [aberto.id],
     );
-    expect(desc).toMatchObject({ aval_comissao: 'ATA SINTÉTICA 1', volume_prontuario_id: aberto.id });
+    expect(desc).toMatchObject({ volume_prontuario_id: aberto.id, deliberacao_reuniao_id: m.deliberacao });
+    expect(String(desc!['aval_comissao'])).toMatch(/deliberação 1/);
+    expect((await porta.deliberacoesDescarte(ctx())).map((d) => d.id)).toEqual([m.deliberacao]);
     const movs = await ler('SELECT COUNT(*) AS n FROM movimento_prontuario WHERE volume_prontuario_id = ?', [
       aberto.id,
     ]);
-    expect(Number(movs[0]!['n'])).toBe(6);
+    expect(Number(movs[0]!['n'])).toBe(7);
   });
 
   it('o segundo volume ganha o número seguinte; o extravio fica registrado; o local cheio recusa', async () => {
@@ -311,6 +379,38 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
         porta.abrirVolume(ctx(), { paciente: m.paciente, tipoDocumento: m.tipo, localArquivo: m.sala }),
       ),
     ).toMatch(/cheio/);
+    // Saída só com o local de destino recusa (fora do arquivo o volume fica num setor). Com o armário cheio (v2 e v3),
+    // o v2 emprestado volta ao seu próprio local: ele já ocupa a vaga.
+    let y = await volume(v2.id);
+    expect(
+      await falha(
+        porta.movimentar(ctx(), v2.id, {
+          operacao: 'saida',
+          localDestino: m.arquivo,
+          previsaoRetorno: amanha,
+          responsavel: 'ENF',
+          versao: Number(y['versao']),
+        }),
+      ),
+    ).toMatch(/setor de destino/);
+    await porta.movimentar(ctx(), v2.id, {
+      operacao: 'saida',
+      setorDestino: m.setorUti,
+      previsaoRetorno: amanha,
+      responsavel: 'ENF',
+      versao: Number(y['versao']),
+    });
+    y = await volume(v2.id);
+    await porta.movimentar(ctx(), v2.id, {
+      operacao: 'devolucao',
+      localDestino: m.sala,
+      versao: Number(y['versao']),
+    });
+    expect(await volume(v2.id)).toMatchObject({
+      situacao: 'arquivado',
+      no_local: 1,
+      local_arquivo_id: m.sala,
+    });
     const x = await volume(v3.id);
     await porta.registrarExtravio(ctx(), v3.id, {
       motivo: 'não localizado na conferência',
@@ -326,6 +426,20 @@ describe.skipIf(SEM_BANCO)('PortaSameGuardaPropria contra o MariaDB (contrato de
       [v3.id],
     );
     expect(Number(oc!['n'])).toBe(1);
+    // Reencontrado (volta ao seu local, que tem vaga) e a devolução desfeita: o extravio volta, com o instante e quem.
+    const antes = await volume(v3.id);
+    await porta.movimentar(ctx(), v3.id, { operacao: 'devolucao', versao: Number(antes['versao']) });
+    expect(await volume(v3.id)).toMatchObject({ situacao: 'arquivado', no_local: 1, extraviado_em: null });
+    await porta.desfazerUltimo(ctx(), v3.id, {
+      motivo: 'era outro volume parecido',
+      versao: Number((await volume(v3.id))['versao']),
+    });
+    expect(await volume(v3.id)).toMatchObject({
+      situacao: 'extraviado',
+      no_local: 0,
+      extraviado_em: antes['extraviado_em'],
+      extravio_usuario_id: m.usuario,
+    });
     const lidos = await porta.volumesDoPaciente(ctx(), m.paciente);
     expect(lidos.map((l) => l.situacao).sort()).toEqual(['arquivado', 'eliminado', 'extraviado']);
     expect(lidos.find((l) => l.id === v2.id)?.ondeEsta).toBe('Sala 1 > Armário 3');

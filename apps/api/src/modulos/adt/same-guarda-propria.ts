@@ -6,14 +6,18 @@
 //     local e posição, situação 'arquivado', no local) e, na mesma transação, o `movimento_prontuario` de registro com o
 //     local de destino. O local cheio recusa;
 //   - movimentar: o `movimento_prontuario` (operação, setores, locais, responsável, previsão de retorno) e o efeito no
-//     volume (situação, no local, local de guarda) com a versão lida; o descarte grava também a ocorrência 'descarte'
-//     com o aval da comissão e o volume fica 'eliminado';
+//     volume (situação, no local, local de guarda) com a versão lida; a ocupação do local conta o volume uma vez só;
+//   - descartar (rota e nível de acesso próprios, o de excluir): só com o prazo de guarda do tipo de documento cumprido
+//     e a deliberação da comissão de revisão de prontuários em reunião realizada; grava a ocorrência 'descarte' ligada à
+//     deliberação (deliberacao_reuniao_id) com o aval, e o volume fica 'eliminado';
 //   - desfazer o último movimento: exclusão lógica (nunca apagado) com a ocorrência 'exclusao' e o motivo; o estado do
-//     volume é refeito pelos movimentos que restam;
+//     volume é refeito pelos movimentos que restam; desfeita a entrada, a saída que ela fechou volta a aberta
+//     (devolvido_em nulo) e, se o volume estava extraviado antes dela, o extravio volta com o instante e quem registrou;
 //   - extravio: `volume_prontuario` 'extraviado' com o instante e quem registrou, e a ocorrência 'extravio' com o motivo.
 import {
   conferirExtravio,
   conferirMovimentoGuarda,
+  type DadosDescarte,
   efeitoNoVolume,
   lerMatriculaVolume,
   matriculaVolume,
@@ -91,6 +95,7 @@ const esquemaMovimentar = z
     previsaoRetorno: dataIso.nullable().default(null),
     responsavel: z.string().trim().max(150).nullable().default(null),
     avalComissao: z.string().trim().max(200).nullable().default(null),
+    deliberacao: id.nullable().default(null),
     finalidadeCientifica: z.boolean().default(false),
     observacao: z.string().trim().max(2000).nullable().default(null),
     versao: z.number().int().positive(),
@@ -128,6 +133,9 @@ export interface VolumeLido {
   readonly previsaoRetorno: string | null;
   readonly retornoAtrasado: boolean;
   readonly extraviadoEm: string | null;
+  /** Desde quando corre o prazo de guarda (último documento ou abertura) e o prazo do tipo, em anos (null: permanente). */
+  readonly guardaDesde: string | null;
+  readonly prazoGuardaAnos: number | null;
   readonly versao: number;
   readonly movimentos: MovimentoGuardaLido[];
 }
@@ -168,6 +176,20 @@ async function estadoDoVolume(l: Pick<Leitor, 'uma'>, v: Record<string, unknown>
     temMovimento: !!u,
     ultimoTipo: u ? (String(u['tipo']) as TipoOperacaoGuarda) : null,
   };
+}
+
+const SQL_DELIBERACAO = `
+  SELECT d.id, d.sequencia, d.situacao, d.descricao, r.situacao AS reuniao_situacao, r.realizada_em,
+         c.estabelecimento_id, c.nome AS comissao_nome, tc.codigo AS tipo_codigo
+    FROM deliberacao_reuniao d JOIN reuniao_comissao r ON r.id = d.reuniao_comissao_id
+    JOIN comissao_hospitalar c ON c.id = r.comissao_hospitalar_id JOIN tipo_comissao tc ON tc.id = c.tipo_comissao_id`;
+
+/** O aval gravado na ocorrência: a comissão, a reunião e a deliberação. */
+function textoDeliberacao(d: Record<string, unknown>): string {
+  const em = iso(d['realizada_em'])?.slice(0, 10) ?? 'sem data';
+  return `${String(d['comissao_nome'])}, reunião de ${em}, deliberação ${num(d['sequencia'])}: ${String(
+    d['descricao'],
+  )}`.slice(0, 200);
 }
 
 async function ocupacao(l: Pick<Leitor, 'uma'>, local: number) {
@@ -300,7 +322,7 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
   volumesDoPaciente(c: ContextoPortaPropria, paciente: number): Promise<VolumeLido[]> {
     return this.ler(c, 'volumes', async (l, est) => {
       const vs = await l.consultar(
-        `SELECT v.*, t.descricao AS tipo_descricao, la.caminho, la.descricao AS local_descricao
+        `SELECT v.*, t.descricao AS tipo_descricao, t.prazo_guarda_anos, la.caminho, la.descricao AS local_descricao
            FROM volume_prontuario v JOIN tipo_documento_arquivo t ON t.id = v.tipo_documento_arquivo_id
            LEFT JOIN local_arquivo la ON la.id = v.local_arquivo_id
           WHERE v.estabelecimento_id = ? AND v.paciente_id = ? AND v.excluido_em IS NULL
@@ -353,6 +375,8 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
             agora,
           ),
           extraviadoEm: iso(v['extraviado_em']),
+          guardaDesde: iso(v['periodo_fim'] ?? v['aberto_em']),
+          prazoGuardaAnos: numOuNull(v['prazo_guarda_anos']),
           versao: num(v['versao']),
           movimentos: movs.map((m) => ({
             id: num(m['id']),
@@ -470,15 +494,48 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
     );
   }
 
+  /** Movimenta pela operação do cadastro; a operação que encerra a guarda (descarte) só pela rota do descarte. */
   movimentar(
     c: ContextoPortaPropria,
     volume: number,
     entrada: unknown,
   ): Promise<{ id: number; situacao: string }> {
+    return this.movimentarCom(c, volume, entrada, false);
+  }
+
+  /** O descarte (eliminação irreversível): prazo de guarda cumprido e deliberação da comissão. */
+  descartar(
+    c: ContextoPortaPropria,
+    volume: number,
+    entrada: unknown,
+  ): Promise<{ id: number; situacao: string }> {
+    return this.movimentarCom(c, volume, entrada, true);
+  }
+
+  /** As deliberações que podem autorizar o descarte: da comissão de revisão de prontuários, em reunião realizada. */
+  deliberacoesDescarte(c: ContextoPortaPropria) {
+    return this.ler(c, 'deliberacoes', async (l, est) =>
+      (
+        await l.consultar(
+          `${SQL_DELIBERACAO} WHERE c.estabelecimento_id = ? AND tc.codigo = 'prontuario' AND r.situacao = 'realizada'
+              AND d.situacao <> 'cancelada' AND d.excluido_em IS NULL AND r.excluido_em IS NULL
+            ORDER BY r.realizada_em DESC, d.sequencia LIMIT 200`,
+          [est.id],
+        )
+      ).map((d) => ({ id: num(d['id']), texto: textoDeliberacao(d) })),
+    );
+  }
+
+  private movimentarCom(
+    c: ContextoPortaPropria,
+    volume: number,
+    entrada: unknown,
+    descarte: boolean,
+  ): Promise<{ id: number; situacao: string }> {
     const e = entradaValida(esquemaMovimentar, entrada);
     return this.gravar(
       c,
-      'same.guarda.movimentar',
+      descarte ? 'same.guarda.descartar' : 'same.guarda.movimentar',
       ['movimento_prontuario', 'volume_prontuario', 'ocorrencia_arquivo_prontuario'],
       async (tx, est, usuario) => {
         const v = await this.volumeTravado(tx, est.id, volume);
@@ -489,21 +546,33 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
         );
         if (!o) throw naoEncontrado('Operação do arquivo');
         const operacao = operacaoLida(o);
+        if (operacao.encerraGuarda !== descarte)
+          throw recusaRegra('Movimento recusado', [
+            {
+              campo: 'operacao',
+              mensagem: descarte
+                ? 'A operação não é de descarte.'
+                : 'O descarte tem rota e nível de acesso próprios.',
+            },
+          ]);
         await this.conferirSetor(tx, est.id, e.setorOrigem);
         await this.conferirSetor(tx, est.id, e.setorDestino);
         const local =
           e.localDestino === null ? null : await this.localDoEstabelecimento(tx, est.id, e.localDestino);
         const estado = await estadoDoVolume(tx, v);
         const agora = new Date();
+        const alvoLocal = local ?? estado.localArquivo;
+        const del = descarte ? await this.dadosDescarte(tx, est.id, v, e.deliberacao) : null;
         const pedido: PedidoGuarda = {
           operacao,
           setorDestino: e.setorDestino,
           localDestino: local,
           previsaoRetorno: e.previsaoRetorno ? instanteCivil(e.previsaoRetorno, '2359', est.fuso) : null,
-          avalComissao: e.avalComissao || null,
+          avalComissao: e.avalComissao || (del?.texto ?? null),
           responsavel: e.responsavel || null,
           agora,
-          ocupacaoDestino: local === null ? null : await ocupacao(tx, local),
+          ocupacaoDestino: alvoLocal === null ? null : await ocupacao(tx, alvoLocal),
+          descarte: del?.dados ?? null,
         };
         const problemas = conferirMovimentoGuarda(estado, pedido);
         if (num(v['versao']) !== e.versao)
@@ -547,9 +616,10 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
             atendimento_id: numOuNull(v['atendimento_id']),
             volume_prontuario_id: volume,
             movimento_prontuario_id: movimento,
+            deliberacao_reuniao_id: e.deliberacao,
             tipo: 'descarte',
             motivo: e.observacao || operacao.descricao,
-            aval_comissao: pedido.avalComissao,
+            aval_comissao: (pedido.avalComissao ?? '').slice(0, 200),
             registrado_em: agora,
             usuario_id: usuario,
           });
@@ -587,7 +657,7 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
             { campo: 'volume', mensagem: 'O volume eliminado ou extraviado não se desfaz.' },
           ]);
         const movs = await tx.consultarParaAtualizar<Record<string, unknown>>(
-          `SELECT m.id, m.versao, m.destino_local_arquivo_id, m.destino_setor_funcional_id, m.saida_setor_funcional_id,
+          `SELECT m.id, m.versao, m.movimentado_em, m.destino_local_arquivo_id, m.destino_setor_funcional_id, m.saida_setor_funcional_id,
                   op.codigo, op.descricao, op.tipo, op.sentido, op.exige_destino, op.exige_previsao_retorno, op.encerra_guarda
              FROM movimento_prontuario m JOIN operacao_movimento_prontuario op ON op.id = m.operacao_movimento_prontuario_id
             WHERE m.volume_prontuario_id = ? AND m.excluido_em IS NULL ORDER BY m.movimentado_em, m.id`,
@@ -598,7 +668,35 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
           throw recusaRegra('Desfazer recusado', [
             { campo: 'volume', mensagem: 'O volume não tem movimento.' },
           ]);
+        const anterior = movs.at(-2) ?? null;
+        const desfeitaEntrada = String(ultimo['sentido']) === 'entrada';
+        // A saída que a entrada desfeita fechou (devolvido_em gravado no mesmo instante) e o extravio que ela encerrou.
+        const fechada = desfeitaEntrada
+          ? await tx.uma(
+              `SELECT s.id, s.versao FROM movimento_prontuario s
+                 JOIN operacao_movimento_prontuario op ON op.id = s.operacao_movimento_prontuario_id
+                 JOIN movimento_prontuario d ON d.id = ?
+                WHERE s.volume_prontuario_id = ? AND s.excluido_em IS NULL AND op.sentido = 'saida'
+                  AND s.devolvido_em = d.movimentado_em ORDER BY s.movimentado_em DESC, s.id DESC LIMIT 1`,
+              [ultimo['id'], volume],
+            )
+          : null;
+        const extravio = desfeitaEntrada
+          ? await tx.uma(
+              `SELECT o.registrado_em, o.usuario_id FROM ocorrencia_arquivo_prontuario o
+                 JOIN movimento_prontuario d ON d.id = ?
+                 LEFT JOIN movimento_prontuario a ON a.id = ?
+                WHERE o.volume_prontuario_id = ? AND o.tipo = 'extravio' AND o.registrado_em <= d.movimentado_em
+                  AND (a.id IS NULL OR o.registrado_em >= a.movimentado_em)
+                ORDER BY o.registrado_em DESC, o.id DESC LIMIT 1`,
+              [ultimo['id'], anterior?.['id'] ?? null, volume],
+            )
+          : null;
         await tx.excluir('movimento_prontuario', num(ultimo['id']), num(ultimo['versao']));
+        if (fechada)
+          await tx.alterar('movimento_prontuario', num(fechada['id']), num(fechada['versao']), {
+            devolvido_em: null,
+          });
         await tx.incluir('ocorrencia_arquivo_prontuario', {
           estabelecimento_id: est.id,
           atendimento_id: numOuNull(v['atendimento_id']),
@@ -635,9 +733,15 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
           };
         }
         await tx.alterar('volume_prontuario', volume, num(v['versao']), {
-          situacao: estado.situacao,
-          no_local: estado.noLocal,
+          situacao: extravio ? 'extraviado' : estado.situacao,
+          no_local: extravio ? false : estado.noLocal,
           local_arquivo_id: estado.localArquivo ?? numOuNull(v['local_arquivo_id']),
+          ...(extravio
+            ? {
+                extraviado_em: extravio['registrado_em'],
+                extravio_usuario_id: numOuNull(extravio['usuario_id']),
+              }
+            : {}),
         });
         return { tabela: 'movimento_prontuario', id: num(ultimo['id']) };
       },
@@ -676,6 +780,42 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
         return { tabela: 'ocorrencia_arquivo_prontuario', id: oc };
       },
     );
+  }
+
+  /** O prazo de guarda do tipo de documento do volume e a deliberação que autoriza o descarte. */
+  private async dadosDescarte(
+    tx: TxOperacao,
+    est: number,
+    v: Record<string, unknown>,
+    deliberacao: number | null,
+  ): Promise<{ dados: DadosDescarte; texto: string | null }> {
+    const t = await tx.uma('SELECT prazo_guarda_anos FROM tipo_documento_arquivo WHERE id = ?', [
+      v['tipo_documento_arquivo_id'],
+    ]);
+    const desde = v['periodo_fim'] ?? v['aberto_em'];
+    let d: Record<string, unknown> | null = null;
+    if (deliberacao !== null) {
+      d = await tx.uma(
+        `${SQL_DELIBERACAO} WHERE d.id = ? AND d.excluido_em IS NULL AND r.excluido_em IS NULL`,
+        [deliberacao],
+      );
+      if (!d) throw naoEncontrado('Deliberação da comissão');
+    }
+    return {
+      dados: {
+        guardaDesde: desde === null || desde === undefined ? null : new Date(desde as string | Date),
+        prazoAnos: numOuNull(t?.['prazo_guarda_anos']),
+        deliberacao: d
+          ? {
+              comissaoDeProntuario:
+                String(d['tipo_codigo']) === 'prontuario' && num(d['estabelecimento_id']) === est,
+              reuniaoRealizada: String(d['reuniao_situacao']) === 'realizada',
+              cancelada: String(d['situacao']) === 'cancelada',
+            }
+          : null,
+      },
+      texto: d ? textoDeliberacao(d) : null,
+    };
   }
 
   private async volumeTravado(tx: TxOperacao, est: number, volume: number) {
