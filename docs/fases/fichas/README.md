@@ -13,9 +13,9 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 | [F3.4 Internação e centro cirúrgico](F3.4-internacao-cc.md) | 22 | 9 | 13 | 0 | @M18 e pré-internação não terminaram (fila da trava pesada) | Sim: equipe cirúrgica por função (04-CC 95) e clínica por letra nos contratos | Não |
 | [F3.5 SADT](F3.5-sadt.md) | 17 | 0 | 16 | 1 | @M26 esgotou o tempo (rc 124), não provado | Não: o alto da 2ª via foi corrigido (migração 10_SADT/40) | Não |
 | [F3.6 Suprimentos](F3.6-suprimentos.md) | 19 | 6 | 13 | 0 | @F3.6 não rodado | Sim: os dois altos da linha 7 (regra de integração ligada à prescrição; horários padrão unificados) | Não |
-| [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 7 | 28 | 5 | @F3.7 não escrito; tiss.spec 10/10 verde | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
-| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 5 | 14 | 0 | @F3.8 não rodado | Não: altos corrigidos em a6241f4e, prova pendente | Não |
-| [F3.9 Apoio](F3.9-apoio.md) | 67 | 39 | 18 | 10 | @M53.8 não rodado nesta rodada (o log verde anterior foi sobrescrito) | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
+| [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 7 | 33 | 0 | @F3.7 e @M31 escritos, não rodados; tsc do marco limpo; 10 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
+| [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 5 | 14 | 0 | @F3.8 não rodado; tsc do marco limpo; 3 contratos de efeito verdes, 2 vermelhos (integrador C, 24/11) | Não: altos corrigidos em a6241f4e, prova pendente | Não |
+| [F3.9 Apoio](F3.9-apoio.md) | 67 | 39 | 28 | 0 | @M53.8 não rodado; tsc do marco limpo; 6 contratos de efeito verdes, 6 vermelhos (integrador C, 24/11) | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
 | **Total** | **255** | **92** | **146** | **17** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
 
 ## Integração (24/11)

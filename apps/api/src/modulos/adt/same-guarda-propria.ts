@@ -258,7 +258,7 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
 
   incluirLocal(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaLocal, entrada);
-    return this.gravar(c, 'same.guarda.incluirLocal', ['local_arquivo'], async (tx, est) => {
+    return this.gravar(c, 'same.guarda.incluir-local', ['local_arquivo'], async (tx, est) => {
       let caminho = e.descricao;
       if (e.pai !== null) {
         const p = await tx.uma(
@@ -408,7 +408,7 @@ export class PortaSameGuardaPropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaAbrir, entrada);
     return this.gravar(
       c,
-      'same.guarda.abrirVolume',
+      'same.guarda.abrir-volume',
       ['volume_prontuario', 'movimento_prontuario'],
       async (tx, est, usuario) => {
         const p = await tx.uma(
