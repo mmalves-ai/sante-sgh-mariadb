@@ -4647,6 +4647,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
       const a = await apurarRecalculo(l, est, e, await hojeNoEstabelecimento(l, est));
       return {
         abertura: a.abertura,
+        inicio: a.inicio,
         saldos: a.saldos,
         diferencas: a.diferencas,
         diferencaQuantidadeTotal: a.diferencaQuantidadeTotal,

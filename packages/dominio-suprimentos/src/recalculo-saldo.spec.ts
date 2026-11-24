@@ -1,5 +1,11 @@
 // F3.6 (05-SUP linha 16): recálculo auditado do saldo e do custo médio pelo razão.
-import { conferirRecalculo, diferencaRecalculo, projetarRazao } from '@sgh/contratos';
+import {
+  conferirLotesRecalculo,
+  conferirRecalculo,
+  diferencaRecalculo,
+  passosRazao,
+  projetarRazao,
+} from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 
 const zero = { quantidade: 0, custo: 0 };
@@ -96,5 +102,75 @@ describe('conferirRecalculo', () => {
   it('recusa mês futuro e motivo curto', () => {
     const rs = conferirRecalculo({ competencia: { ano: 2026, mes: 12 }, motivo: 'curto' }, [], corrente);
     expect(rs.map((r) => r.codigo)).toEqual(['competencia-futura', 'motivo-obrigatorio']);
+  });
+});
+
+describe('passosRazao (a posição depois de cada movimento, para o histórico do item)', () => {
+  it('dá o saldo e o custo depois de cada movimento; o último é a projeção', () => {
+    const movs = [
+      { natureza: 'entrada' as const, quantidade: 10, valor: 100 },
+      { natureza: 'entrada' as const, quantidade: 10, valor: 300 },
+      { natureza: 'saida' as const, quantidade: 5, valor: 100 },
+    ];
+    expect(passosRazao(zero, movs)).toEqual({
+      passos: [
+        { quantidade: 10, custo: 10 },
+        { quantidade: 20, custo: 20 },
+        { quantidade: 15, custo: 20 },
+      ],
+      negativoNoMovimento: null,
+    });
+    expect(projetarRazao(zero, movs, true, 0).quantidade).toBe(15);
+  });
+
+  it('sem movimento, a projeção é a abertura', () => {
+    expect(passosRazao({ quantidade: 4, custo: 5 }, []).passos).toEqual([]);
+    expect(projetarRazao({ quantidade: 4, custo: 5 }, [], true, 9)).toEqual({
+      quantidade: 4,
+      custo: 5,
+      negativoNoMovimento: null,
+    });
+  });
+});
+
+describe('conferirLotesRecalculo', () => {
+  it('item sem lote: nada a ajustar', () => {
+    expect(conferirLotesRecalculo(6, [], [])).toEqual({ divergente: false, ajustes: [] });
+  });
+
+  it('refaz o saldo de cada lote pelo razão quando a soma confere (o lote só gravado vai a zero)', () => {
+    expect(
+      conferirLotesRecalculo(
+        6,
+        [
+          { lote: 1, quantidade: 6 },
+          { lote: 3, quantidade: 0 },
+        ],
+        [
+          { lote: 1, quantidade: 3 },
+          { lote: 2, quantidade: 1 },
+        ],
+      ),
+    ).toEqual({
+      divergente: false,
+      ajustes: [
+        { lote: 1, de: 3, para: 6 },
+        { lote: 2, de: 1, para: 0 },
+      ],
+    });
+  });
+
+  it('fica pendente quando a soma dos lotes do razão não é o refeito ou um lote fica negativo', () => {
+    expect(conferirLotesRecalculo(5, [], [{ lote: 1, quantidade: 2 }]).divergente).toBe(true);
+    expect(
+      conferirLotesRecalculo(
+        1,
+        [
+          { lote: 1, quantidade: 3 },
+          { lote: 2, quantidade: -2 },
+        ],
+        [],
+      ).divergente,
+    ).toBe(true);
   });
 });

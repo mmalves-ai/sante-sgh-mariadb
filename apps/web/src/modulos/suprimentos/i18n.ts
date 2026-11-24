@@ -419,12 +419,11 @@ export const mensagensSuprimentos = {
   recalculos: {
     titulo: 'Recálculo de saldos',
     texto:
-      'Refaz o saldo e o custo médio pelo razão (os movimentos, que nunca são editados), a partir do último mês fechado. Veja a prévia antes de aplicar.',
+      'Refaz pelo razão (os movimentos, que nunca são editados) o saldo, o custo médio, o saldo de cada lote e a posição depois de cada movimento, a partir do último mês fechado de cada item. Veja a prévia antes de aplicar.',
     lista: 'Recálculos feitos',
     inicio: 'Início',
     fim: 'Fim',
     terminado: 'Terminado',
-    mesInicio: 'A partir do mês',
     local: 'Local',
     item: 'Item',
     todos: 'Todos os locais',
@@ -434,7 +433,7 @@ export const mensagensSuprimentos = {
     verPrevia: 'Ver a prévia',
     previa: 'Prévia pelo razão',
     resumo:
-      '{saldos} saldo(s) conferido(s), {diferentes} com diferença, {pendentes} pendente(s). Abertura: {abertura}.',
+      '{saldos} saldo(s) conferido(s), {diferentes} com diferença, {pendentes} pendente(s). Período refeito: desde {inicio} até hoje. Abertura: {abertura}.',
     semAbertura: 'sem mês fechado (desde o primeiro movimento)',
     totalValor: 'Diferença em valor',
     diferencas: 'Saldos com diferença',
@@ -443,6 +442,8 @@ export const mensagensSuprimentos = {
     custo: 'Custo médio',
     diferenca: 'Diferença',
     pendente: 'pendente: o razão fica negativo no movimento {movimento}; corrija o lançamento antes',
+    pendenteLote: 'pendente: a soma dos lotes no razão não confere com o refeito; corrija os lotes antes',
+    pendenteSemRazao: 'pendente: sem movimento nem mês fechado que expliquem o saldo; não é zerado',
     semDiferenca: 'O saldo gravado confere com o razão.',
     aplicar: 'Aplicar o recálculo',
     corrigidos: 'Itens corrigidos',

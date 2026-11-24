@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Recálculo de saldos (F3.6, 05-SUP linha 16): `/suprimentos/recalculos`. Em uma tela: escolhe o escopo (local e item,
-// ou todos), o mês de partida e se refaz também o custo médio, escreve o motivo, vê a prévia pelo razão (o gravado, o
-// refeito e a diferença de cada saldo, os pendentes com razão negativo) e aplica com um clique. O razão nunca é
-// editado; cada aplicação fica registrada com o motivo e as diferenças, listada abaixo.
+// ou todos) e se refaz também o custo médio, escreve o motivo, vê a prévia pelo razão (o período de fato refeito, que
+// começa depois do último mês fechado de cada item; o gravado, o refeito e a diferença de cada saldo; os pendentes e
+// o porquê) e aplica com um clique. O razão nunca é editado; cada aplicação fica registrada com o motivo e todas as
+// diferenças, listada abaixo.
 import { conferirRecalculo, type ItemBusca, type PreviaRecalculo } from '@sgh/contratos';
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -22,7 +23,6 @@ const { pode, motivo: motivoOp, locais } = usarSuprimentos();
 const r = useQuery({ queryKey: ['suprimentos', 'recalculos'], queryFn: () => lerRecalculos() });
 
 const hoje = new Date();
-const mesInicio = ref(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
 const local = ref<number | null>(null);
 const item = ref<ItemBusca | null>(null);
 const recalculaCusto = ref(true);
@@ -35,20 +35,23 @@ const ocupado = ref(false);
 const entrada = computed(() => ({
   local: local.value,
   insumo: item.value?.codigo ?? null,
-  ano: Number(mesInicio.value.slice(0, 4)),
-  mes: Number(mesInicio.value.slice(5, 7)),
   recalculaCusto: recalculaCusto.value,
   motivo: motivo.value.replace(/\s+/g, ' ').trim(),
 }));
 /** Validação na hora com a mesma regra da API (o mês fechado é conferido no servidor, que conhece os fechamentos). */
+const corrente = { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 };
 const recusas = computed(() =>
-  conferirRecalculo(
-    { competencia: { ano: entrada.value.ano, mes: entrada.value.mes }, motivo: entrada.value.motivo },
-    [],
-    { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 },
-  ),
+  conferirRecalculo({ competencia: corrente, motivo: entrada.value.motivo }, [], corrente),
 );
-const valido = computed(() => /^\d{4}-\d{2}$/.test(mesInicio.value) && recusas.value.length === 0);
+const valido = computed(() => recusas.value.length === 0);
+const pendencia = (d: PreviaRecalculo['diferencas'][number]): string | null =>
+  d.pendencia === 'razao-negativo'
+    ? t('suprimentos.recalculos.pendente', { movimento: d.negativoNoMovimento ?? 0 })
+    : d.pendencia === 'lote-divergente'
+      ? t('suprimentos.recalculos.pendenteLote')
+      : d.pendencia === 'sem-razao'
+        ? t('suprimentos.recalculos.pendenteSemRazao')
+        : null;
 const qtd = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -90,10 +93,6 @@ async function aplicar(): Promise<void> {
     <p>{{ t('suprimentos.recalculos.texto') }}</p>
     <AvisoSuprimentos :motivo="pode(OP) ? null : motivoOp(OP)" />
     <form v-if="pode(OP)" class="formulario" data-testid="rec-form" @submit.prevent="verPrevia">
-      <label class="campo">
-        {{ t('suprimentos.recalculos.mesInicio') }}
-        <input v-model="mesInicio" type="month" required data-testid="rec-mes" @change="mudou" />
-      </label>
       <label class="campo">
         {{ t('suprimentos.recalculos.local') }}
         <select v-model="local" data-testid="rec-local" @change="mudou">
@@ -141,6 +140,7 @@ async function aplicar(): Promise<void> {
             saldos: previa.saldos,
             diferentes: previa.diferencas.length,
             pendentes: previa.pendentes,
+            inicio: previa.inicio,
             abertura: previa.abertura ?? t('suprimentos.recalculos.semAbertura'),
           })
         }}
@@ -163,15 +163,13 @@ async function aplicar(): Promise<void> {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="d in previa.diferencas" :key="d.saldo" :data-pendente="d.negativoNoMovimento !== null">
+          <tr v-for="d in previa.diferencas" :key="d.saldo" :data-pendente="d.pendencia !== null">
             <td>{{ d.localNome }}</td>
             <td>{{ d.insumoNome }}</td>
             <td>{{ qtd(d.quantidadeGravada) }}</td>
             <td>
               {{ qtd(d.quantidadeRefeita) }}
-              <em v-if="d.negativoNoMovimento !== null">
-                {{ t('suprimentos.recalculos.pendente', { movimento: d.negativoNoMovimento }) }}
-              </em>
+              <em v-if="d.pendencia !== null" data-testid="rec-pendencia">{{ pendencia(d) }}</em>
             </td>
             <td>
               {{ reais(d.custoGravado) }} {{ t('suprimentos.recalculos.para') }} {{ reais(d.custoRefeito) }}

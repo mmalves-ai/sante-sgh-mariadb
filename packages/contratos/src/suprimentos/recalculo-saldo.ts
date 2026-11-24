@@ -6,9 +6,13 @@ import { esquemaMotivoSuprimentos } from './entradas.js';
 
 export {
   type AberturaRecalculo,
+  conferirLotesRecalculo,
   conferirRecalculo,
   diferencaRecalculo,
+  type LoteRecalculo,
   type MovimentoRecalculo,
+  type PassoRecalculo,
+  passosRazao,
   type ProjecaoRecalculo,
   projetarRazao,
 } from './regras/recalculo-saldo.js';
@@ -19,9 +23,13 @@ export const esquemaRecalcularSaldos = z
     local: idBanco.nullable(),
     /** Nulo: todos os itens. */
     insumo: idBanco.nullable(),
-    /** O primeiro mês do período (o recálculo vai dele até hoje). */
-    ano: z.number().int().min(2000).max(2100),
-    mes: z.number().int().min(1).max(12),
+    /**
+     * Opcional: o mês que o pedido quer alcançar (recusado quando ele ou algum depois dele está fechado; sem ele, o mês
+     * corrente). O período refeito é sempre o do razão: do mês seguinte ao último fechado de cada saldo (ou do primeiro
+     * movimento) até hoje, e é esse que a prévia mostra e o registro grava.
+     */
+    ano: z.number().int().min(2000).max(2100).optional(),
+    mes: z.number().int().min(1).max(12).optional(),
     recalculaCusto: z.boolean(),
     motivo: esquemaMotivoSuprimentos,
   })
@@ -45,11 +53,18 @@ export const esquemaDiferencaRecalculo = z.object({
   diferencaValor: n,
   /** O razão deixaria o saldo negativo neste movimento (posição no período): o saldo não é aplicado, fica pendente. */
   negativoNoMovimento: n.nullable(),
+  /**
+   * Por que o saldo não é aplicado (nulo: é aplicado): o razão fica negativo; a soma dos lotes do razão não bate com o
+   * refeito; ou não há razão nem mês fechado que expliquem o saldo gravado (nunca se zera um saldo sem movimento).
+   */
+  pendencia: z.enum(['razao-negativo', 'lote-divergente', 'sem-razao']).nullable(),
 });
 export type DiferencaRecalculo = z.infer<typeof esquemaDiferencaRecalculo>;
 
 export const esquemaPreviaRecalculo = z.object({
   abertura: z.string().nullable(),
+  /** O primeiro mês de fato refeito (MM/AAAA): o seguinte à menor abertura, ou o do primeiro movimento. */
+  inicio: z.string(),
   saldos: n,
   diferencas: z.array(esquemaDiferencaRecalculo),
   diferencaQuantidadeTotal: n,
