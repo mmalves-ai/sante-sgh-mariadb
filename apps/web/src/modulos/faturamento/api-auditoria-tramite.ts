@@ -117,6 +117,12 @@ const esquemaProtocolos = z.object({
 export type Protocolos = z.infer<typeof esquemaProtocolos>;
 export const lerProtocolos = (setor: number | null) =>
   ler(`${F}/protocolos-tramite${setor ? `?setor=${setor}` : ''}`, esquemaProtocolos);
+const esquemaAlvos = z.object({
+  itens: z.array(z.object({ id: z.number(), tipo: z.string(), rotulo: z.string() })),
+});
+/** O item do lote pelo número de negócio: conta, atendimento, prontuário (volumes) ou atendimento (documentos). */
+export const buscarAlvosProtocolo = (tipo: string, numero: string) =>
+  ler(`${F}/protocolos-tramite/alvos?${new URLSearchParams({ tipo, numero }).toString()}`, esquemaAlvos);
 export const emitirProtocolo = (corpo: Record<string, unknown>, chave: string) =>
   enviar(`${F}/protocolos-tramite`, corpo, qualquer, chave);
 export const enviarProtocolo = (id: number, chave: string) =>

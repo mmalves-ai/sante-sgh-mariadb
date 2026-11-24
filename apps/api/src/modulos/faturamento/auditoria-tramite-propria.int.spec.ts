@@ -12,6 +12,7 @@ import {
   guiasConvenioPropria,
   protocolosPropria,
 } from './auditoria-tramite-propria.js';
+import { alvosProtocoloPropria, entradaBuscaAlvo } from './protocolo-alvos-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -426,6 +427,21 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     ]);
     expect(i4).toMatchObject({ situacao: 'lancado' });
     expect(Number(i4!['valor_total'])).toBe(40);
+  });
+
+  it('protocolo: o item é achado pelo número de negócio, só no estabelecimento da sessão', async () => {
+    const conta = await ler((l, est) => alvosProtocoloPropria(l, est, 'conta', `${P}-C1`));
+    expect(conta.itens).toEqual([expect.objectContaining({ id: ids['conta'], tipo: 'conta' })]);
+    const at = await ler((l, est) => alvosProtocoloPropria(l, est, 'atendimento', `${P}-AT`));
+    expect(at.itens.map((i) => i.id)).toEqual([ids['atendimento']]);
+    expect((await ler((l, est) => alvosProtocoloPropria(l, est, 'conta', `${P}-NADA`))).itens).toEqual([]);
+    const [pac] = await linhas('SELECT numero_prontuario FROM paciente WHERE id = ?', [ids['paciente']]);
+    const volumes = await ler((l, est) =>
+      alvosProtocoloPropria(l, est, 'volume_prontuario', String(pac!['numero_prontuario'])),
+    );
+    expect(volumes.itens.map((i) => i.id)).not.toContain(ids['volumeB']);
+    expect(() => entradaBuscaAlvo('conta', "1' OR '1")).toThrow();
+    expect(() => entradaBuscaAlvo('outro', '1')).toThrow();
   });
 
   it('protocolo: emitido e enviado com número, conferido em parte, depois recebido; aberto cancelado', async () => {

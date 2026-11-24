@@ -6,9 +6,10 @@ import { SanteSelecao } from '@sgh/ui';
 // com motivo) e a situação do lote sai sozinha (recebido, em parte ou recusado).
 import { type ItemProtocoloEntrada, TIPOS_ITEM_PROTOCOLO, validarProtocolo } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  buscarAlvosProtocolo,
   cancelarProtocolo,
   conferirProtocolo,
   emitirProtocolo,
@@ -58,7 +59,39 @@ async function emitir() {
   const ok = await rodar(() =>
     emitirProtocolo({ ...novo, remetenteId: novo.remetenteId || setor.value }, chave()),
   );
-  if (ok) novo.itens = [];
+  if (ok) {
+    novo.itens = [];
+    buscas.value = {};
+  }
+}
+
+// ── Item pelo número de negócio (conta, atendimento, prontuário do volume, atendimento do documento) ──
+type Opcao = { id: number; rotulo: string };
+const buscas = ref<Record<number, { numero: string; opcoes: Opcao[] | null; erro: unknown }>>({});
+const busca = (k: number) => (buscas.value[k] ??= { numero: '', opcoes: null, erro: null });
+async function buscarAlvo(k: number) {
+  const item = novo.itens[k] as { tipo: string; alvoId: number | null };
+  const b = busca(k);
+  b.erro = null;
+  b.opcoes = null;
+  item.alvoId = null;
+  if (!b.numero.trim()) return;
+  try {
+    b.opcoes = (await buscarAlvosProtocolo(item.tipo, b.numero.trim())).itens;
+    if (b.opcoes.length === 1) item.alvoId = b.opcoes[0]!.id;
+  } catch (e) {
+    b.erro = e;
+  }
+}
+function incluirItem() {
+  novo.itens.push({ tipo: 'conta', alvoId: null, descricao: null });
+  buscas.value[novo.itens.length - 1] = { numero: '', opcoes: null, erro: null };
+}
+function tirarItem(k: number) {
+  novo.itens.splice(k, 1);
+  const r: typeof buscas.value = {};
+  novo.itens.forEach((_, j) => (r[j] = buscas.value[j < k ? j : j + 1] ?? busca(j)));
+  buscas.value = r;
 }
 
 // ── Conferência ──
@@ -134,6 +167,8 @@ const motivoCancelamento = ref('');
             v-model="i.tipo"
             :rotulo="t('auditoriaTramite.protocolo.tipoItem')"
             ocultar-rotulo
+            :data-testid="`prot-item-${k}-tipo`"
+            @update:model-value="() => nextTick(() => buscarAlvo(k))"
             :opcoes="[
               ...TIPOS_ITEM_PROTOCOLO.map((x) => ({
                 valor: x,
@@ -142,25 +177,42 @@ const motivoCancelamento = ref('');
             ]"
           />
           <input
-            v-if="i.tipo !== 'documento'"
-            v-model.number="(i as { alvoId: number | null }).alvoId"
-            inputmode="numeric"
-            :placeholder="t('auditoriaTramite.protocolo.alvo')"
+            v-model="busca(k).numero"
+            maxlength="20"
+            :aria-label="t(`auditoriaTramite.protocolo.numeroDe.${i.tipo}`)"
+            :placeholder="t(`auditoriaTramite.protocolo.numeroDe.${i.tipo}`)"
+            :data-testid="`prot-item-${k}-numero`"
+            @change="buscarAlvo(k)"
+            @keydown.enter.prevent="buscarAlvo(k)"
           />
+          <SanteSelecao
+            v-if="busca(k).opcoes?.length"
+            v-model="(i as { alvoId: number | null }).alvoId"
+            :rotulo="t('auditoriaTramite.protocolo.alvo')"
+            ocultar-rotulo
+            :opcoes="[
+              { valor: null, rotulo: t('auditoriaTramite.protocolo.escolha') },
+              ...busca(k).opcoes!.map((o) => ({ valor: o.id, rotulo: o.rotulo })),
+            ]"
+            :data-testid="`prot-item-${k}-alvo`"
+          />
+          <span v-else-if="busca(k).opcoes" role="alert">{{
+            t('auditoriaTramite.protocolo.naoAchado')
+          }}</span>
+          <ErroFaturamento v-if="busca(k).erro" :erro="busca(k).erro" />
           <input
-            v-else
+            v-if="i.tipo === 'documento'"
             v-model="(i as { descricao: string | null }).descricao"
             maxlength="200"
             :placeholder="t('auditoriaTramite.protocolo.descricao')"
+            :data-testid="`prot-item-${k}-descricao`"
           />
           <span v-if="erros[`itens.${k}`]" role="alert">{{ erros[`itens.${k}`] }}</span>
-          <button type="button" @click="novo.itens.splice(k, 1)">{{ '×' }}</button>
+          <button type="button" :aria-label="t('auditoriaTramite.protocolo.tirarItem')" @click="tirarItem(k)">
+            {{ '×' }}
+          </button>
         </fieldset>
-        <button
-          type="button"
-          data-testid="prot-incluir"
-          @click="novo.itens.push({ tipo: 'conta', alvoId: null, descricao: null })"
-        >
+        <button type="button" data-testid="prot-incluir" @click="incluirItem">
           {{ t('auditoriaTramite.protocolo.incluirItem') }}
         </button>
         <span v-if="erros['destinatarioId']" role="alert">{{ erros['destinatarioId'] }}</span>

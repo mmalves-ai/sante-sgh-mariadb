@@ -9,6 +9,7 @@
 //   POST /api/faturamento/empresas-auditoria                   faturamento.regra.editar
 //   POST /api/faturamento/empresas-auditoria/:id/ativo         faturamento.regra.editar
 //   GET  /api/faturamento/protocolos-tramite?setor=            faturamento.conta.ler
+//   GET  /api/faturamento/protocolos-tramite/alvos?tipo=&numero= faturamento.conta.ler (item pelo número de negócio)
 //   POST /api/faturamento/protocolos-tramite                   faturamento.protocolo.registrar (emitir)
 //   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.protocolo.registrar
@@ -52,6 +53,7 @@ import {
   type NomeOperacaoAuditoriaTramite,
   protocolosPropria,
 } from './auditoria-tramite-propria.js';
+import { alvosProtocoloPropria, entradaBuscaAlvo } from './protocolo-alvos-propria.js';
 
 export const SERVICO_AUDITORIA_TRAMITE = Symbol('SERVICO_AUDITORIA_TRAMITE');
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
@@ -204,6 +206,20 @@ export class AuditoriaTramiteController implements OnModuleInit {
   protocolos(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
     const st = setor ? inteiro(setor, 'setor') : null;
     return this.rodar(() => this.s().ler(ctxDe(req, ORIGEM), (l, est) => protocolosPropria(l, est, st)));
+  }
+
+  /** O item do lote pelo número de negócio (conta, atendimento, prontuário do volume, atendimento do documento). */
+  @Get('faturamento/protocolos-tramite/alvos')
+  @Permissao('faturamento.conta.ler')
+  alvosProtocolo(
+    @Query('tipo') tipo: string | undefined,
+    @Query('numero') numero: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.rodar(async () => {
+      const e = entradaBuscaAlvo(tipo, numero);
+      return this.s().ler(ctxDe(req, ORIGEM), (l, est) => alvosProtocoloPropria(l, est, e.tipo, e.numero));
+    });
   }
 
   @Post('faturamento/protocolos-tramite')
