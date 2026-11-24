@@ -24,6 +24,10 @@ export interface Favorecido {
   inicio: string;
   fim: string | null;
   versao: number;
+  retencoes: {
+    situacao: 'pessoa_fisica' | 'sem_fornecedor' | 'sem_enquadramento' | 'enquadrado';
+    vigentes: { tributo: number | null; regime: string; retem: boolean; aliquotaIss: number | null }[];
+  };
 }
 
 export interface PrestadorTerceiro {
@@ -57,10 +61,13 @@ export interface ContaCredito {
 
 export const lerFavorecidos = (profissional: number) =>
   ler(`${R}/favorecidos${qs({ profissional })}`, itens<Favorecido>());
-export const lerAlvos = (tipo: Exclude<TipoFavorecido, 'proprio_profissional'>, busca: string) =>
-  ler(`${R}/favorecidos/alvos${qs({ tipo, busca })}`, itens<AlvoFavorecido>());
-export const lerContas = (profissional: number) =>
-  ler(`${R}/favorecidos/contas${qs({ profissional })}`, itens<ContaCredito>());
+export const lerAlvos = (
+  tipo: Exclude<TipoFavorecido, 'proprio_profissional'> | 'fonte_pagadora',
+  busca: string,
+) => ler(`${R}/favorecidos/alvos${qs({ tipo, busca })}`, itens<AlvoFavorecido>());
+/** As contas do credor do tipo (o profissional, o terceiro, o fornecedor da empresa ou da cooperativa). */
+export const lerContas = (tipo: TipoFavorecido, id: number) =>
+  ler(`${R}/favorecidos/contas${qs({ tipo, id })}`, itens<ContaCredito>());
 export const incluirFavorecido = (corpo: unknown) =>
   enviar(`${R}/favorecidos`, corpo, confiar<{ id: number; encerrados: number[] }>(), novaChave('favorecido'));
 export const encerrarFavorecido = (id: number, versao: number, fim: string) =>

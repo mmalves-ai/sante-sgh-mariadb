@@ -20,7 +20,7 @@
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
 // produção. Até lá, essas partes respondem zero ou vazio. O adiantamento ao profissional é o saldo a compensar.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
-import { debitosNaApuracao, integraisDoDia } from '@sgh/dominio-repasse';
+import { debitosNaApuracao, dividirRepasse, integraisDoDia, type TipoFavorecido } from '@sgh/dominio-repasse';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -575,12 +575,30 @@ async function aplicarOperacao(
         if (!ap) throw recusa('apuracao-inexistente', 'A apuração não existe neste estabelecimento.');
       }
       const tipoMedico = e['tipo'] === 'M';
-      const fav = await tx.uma(
-        `SELECT id FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ? AND ativo = TRUE
-            AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?) ORDER BY vigencia_inicio DESC LIMIT 1`,
+      // F3.7-11 (06-FAT linha 46): o valor se divide pelos favorecidos vigentes na data (dividirRepasse, do domínio);
+      // o estorno fica com o favorecido do lançamento original.
+      const favs = await tx.consultar(
+        `SELECT id, fonte_pagadora_id, tipo_favorecido, percentual, vigencia_inicio, vigencia_fim, conta_bancaria_credor_id
+           FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ? AND ativo = TRUE
+            AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
         [est, prestador, e['data'], e['data']],
       );
-      if (!fav) throw recusa('sem-favorecido', 'O profissional não tem favorecido de repasse vigente.');
+      const dia = String(e['data']);
+      const divisao = dividirRepasse(
+        centavos(n(e['valor'])),
+        favs.map((f) => ({
+          id: n(f['id']),
+          fontePagadora: f['fonte_pagadora_id'] === null ? null : n(f['fonte_pagadora_id']),
+          tipo: String(f['tipo_favorecido']) as TipoFavorecido,
+          percentual: n(f['percentual']),
+          inicio: dia,
+          fim: null,
+          contaBancaria: f['conta_bancaria_credor_id'] === null ? null : n(f['conta_bancaria_credor_id']),
+        })),
+        null,
+        dia,
+      );
+      if (!divisao.ok) throw recusa(divisao.codigo, divisao.mensagem);
       const valor = n(e['valor']);
       if (e['origem'] === 'estorno') {
         const o = await tx.consultarParaAtualizar(
@@ -596,23 +614,42 @@ async function aplicarOperacao(
         if (centavos(n(orig['estornado']) - valor) > centavos(n(orig['valor'])))
           throw recusa('estorno-excede', 'O estorno passa do valor do lançamento original.');
       }
-      const id = await tx.incluir('lancamento_repasse', {
-        estabelecimento_id: est,
-        favorecido_repasse_id: n(fav['id']),
-        tipo_favorecido: tipoMedico ? 'medico' : 'empresa',
-        profissional_id: prestador,
-        evento_repasse_id: n(e['evento']),
-        tipo_lancamento: e['origem'],
-        apuracao_repasse_id: e['apuracao'] ?? null,
-        estornado_lancamento_repasse_id: e['origem'] === 'estorno' ? e['estornaDe'] : null,
-        competencia: `${String(e['competencia'])}-01`,
-        data_lancamento: e['data'],
-        data_previsao_pagamento: e['previsao'] ?? null,
-        valor,
-        referente: textoN(e['referente']),
-        justificativa: textoN(e['justificativa']),
-      });
-      return { lancamento: id };
+      const linha = (favorecido: number, tipoFav: TipoFavorecido, v: number, pct: number | null) =>
+        tx.incluir('lancamento_repasse', {
+          estabelecimento_id: est,
+          favorecido_repasse_id: favorecido,
+          tipo_favorecido:
+            tipoFav === 'pessoa_juridica' || tipoFav === 'cooperativa'
+              ? 'empresa'
+              : tipoMedico
+                ? 'medico'
+                : 'empresa',
+          profissional_id: prestador,
+          evento_repasse_id: n(e['evento']),
+          tipo_lancamento: e['origem'],
+          apuracao_repasse_id: e['apuracao'] ?? null,
+          estornado_lancamento_repasse_id: e['origem'] === 'estorno' ? e['estornaDe'] : null,
+          competencia: `${String(e['competencia'])}-01`,
+          data_lancamento: e['data'],
+          data_previsao_pagamento: e['previsao'] ?? null,
+          valor: v,
+          percentual: pct,
+          referente: textoN(e['referente']),
+          justificativa: textoN(e['justificativa']),
+        });
+      if (e['origem'] === 'estorno') {
+        const o = await tx.uma(
+          `SELECT l.favorecido_repasse_id AS f, l.percentual AS p, fr.tipo_favorecido AS t
+             FROM lancamento_repasse l JOIN favorecido_repasse fr ON fr.id = l.favorecido_repasse_id WHERE l.id = ?`,
+          [e['estornaDe']],
+        );
+        const pct = o?.['p'] === null || o?.['p'] === undefined ? null : n(o['p']);
+        return { lancamento: await linha(n(o?.['f']), String(o?.['t']) as TipoFavorecido, valor, pct) };
+      }
+      const ids: number[] = [];
+      for (const p of divisao.partes)
+        if (p.centavos !== 0) ids.push(await linha(p.favorecido, p.tipo, p.centavos / 100, p.percentual));
+      return { lancamento: ids[0]!, lancamentos: ids };
     }
     case 'repasse.emitirRpa': {
       const ids = (e['lancamentos'] as number[]).map(Number);
@@ -1401,17 +1438,29 @@ export class PortaRepassePropria implements PortaRepasse {
   }
 
   /**
-   * O saldo a compensar dos adiantamentos ao profissional (F3.7, 06-FAT linha 46): os aprovados, pagos ou compensados
-   * em parte, no estabelecimento da sessão; o cancelado, o compensado e o excluído não contam.
+   * O saldo a compensar ATUAL (não o da competência consultada: o saldo não guarda histórico) dos adiantamentos ao
+   * profissional e aos fornecedores que recebem por ele (F3.7, 06-FAT linha 46): o fornecedor do prestador terceiro
+   * ligado ao profissional e o fornecedor da empresa do médico que é favorecida dele; a cooperativa, de muitos médicos,
+   * fica fora. Contam os aprovados, pagos ou compensados em parte; o cancelado, o compensado e o excluído não.
    */
   adiantamentos(c: ContextoRepasse, prestadores: readonly number[]): Promise<number> {
     if (prestadores.length === 0) return Promise.resolve(0);
+    const m = marcas(prestadores);
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
-        `SELECT COALESCE(SUM(saldo_compensar), 0) AS saldo FROM adiantamento
-          WHERE estabelecimento_id = ? AND tipo_credor = 'profissional' AND profissional_id IN (${marcas(prestadores)})
-            AND excluido_em IS NULL AND situacao IN ('aprovado', 'pago', 'compensado_parcial')`,
-        [est, ...prestadores],
+        `SELECT COALESCE(SUM(a.saldo_compensar), 0) AS saldo FROM adiantamento a
+          WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao IN ('aprovado', 'pago', 'compensado_parcial')
+            AND ((a.tipo_credor = 'profissional' AND a.profissional_id IN (${m}))
+              OR (a.tipo_credor = 'fornecedor' AND a.empresa_fornecedora_id IN (
+                    SELECT pt.empresa_fornecedora_id FROM prestador_terceiro pt
+                     WHERE pt.estabelecimento_id = ? AND pt.excluido_em IS NULL AND pt.profissional_id IN (${m})
+                       AND pt.empresa_fornecedora_id IS NOT NULL
+                    UNION
+                    SELECT ef.id FROM favorecido_repasse fr JOIN empresa_fornecedora ef
+                        ON ef.pessoa_juridica_id = fr.favorecido_pessoa_juridica_id AND ef.excluido_em IS NULL
+                     WHERE fr.estabelecimento_id = ? AND fr.ativo AND fr.tipo_favorecido = 'pessoa_juridica'
+                       AND fr.profissional_id IN (${m}))))`,
+        [est, ...prestadores, est, ...prestadores, est, ...prestadores],
       );
       return n(r?.['saldo']);
     });

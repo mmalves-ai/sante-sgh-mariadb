@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46): `/repasse/favorecidos`. Visão por médico: a
 // busca escolhe o médico e a tela mostra, de uma vez, o histórico dos favorecidos (vigentes primeiro), a soma das
-// partes vigentes e o formulário de inclusão no mesmo lugar (tipo, favorecido pela busca, conta de crédito do médico,
+// partes vigentes e o formulário de inclusão no mesmo lugar (tipo, favorecido pela busca, conta do credor do tipo,
+// fonte pagadora ou todas, retenções pelo enquadramento do fornecedor, fim opcional;
 // parte e início), com a soma conferida na hora. Incluir do mesmo tipo encerra o anterior no dia de antes (o servidor
 // grava as duas coisas na mesma transação). Abaixo, os prestadores terceiros com a inclusão em linha (CPF/CNPJ e CNES
 // conferidos ao digitar) e a inativação sem apagar. As ações aparecem só com a permissão de manter cooperativas.
@@ -43,11 +44,6 @@ const favorecidos = useQuery({
   queryFn: () => lerFavorecidos(profissional.value),
   enabled: computed(() => profissional.value > 0),
 });
-const contas = useQuery({
-  queryKey: computed(() => ['repasse', 'favorecidos-contas', profissional.value]),
-  queryFn: () => lerContas(profissional.value),
-  enabled: computed(() => profissional.value > 0),
-});
 const vigenteEm = (f: { inicio: string; fim: string | null }, dia: string) =>
   f.inicio <= dia && (f.fim === null || f.fim >= dia);
 const ordenados = computed(() =>
@@ -62,19 +58,50 @@ const form = reactive({
   conta: '',
   percentual: 100,
   inicio: '',
+  fim: '',
+  fonte: 0,
 });
+// A conta de crédito é do credor do tipo escolhido (o servidor recusa a de outro credor): do médico no tipo próprio,
+// do alvo nos demais (o fornecedor da empresa ou da cooperativa, o outro profissional).
+const credorConta = computed(() =>
+  form.tipo === 'proprio_profissional' ? profissional.value : Number(form.alvo) || 0,
+);
+const contas = useQuery({
+  queryKey: computed(() => ['repasse', 'favorecidos-contas', form.tipo, credorConta.value]),
+  queryFn: () => lerContas(form.tipo, credorConta.value),
+  enabled: computed(() => credorConta.value > 0),
+});
+const termoFonte = ref('');
+const fontes = ref<AlvoFavorecido[]>([]);
+async function buscarFonte() {
+  erro.value = null;
+  try {
+    fontes.value = await lerAlvos('fonte_pagadora', termoFonte.value.trim());
+  } catch (e) {
+    erro.value = e;
+  }
+}
+const fimEncerrar = reactive<Record<number, string>>({});
 watch(hoje, (h) => (form.inicio ||= h), { immediate: true });
 watch(
   () => form.tipo,
   () => {
     form.alvo = 0;
+    form.conta = '';
     alvos.value = [];
   },
 );
-// A soma das partes que valerão no início escolhido, já sem o anterior do mesmo tipo (que o novo encerra).
+watch(
+  () => form.alvo,
+  () => (form.conta = ''),
+);
+// A soma das partes que valerão no início escolhido, pela regra do domínio: soma só os da mesma fonte do novo (os da
+// fonte escolhida, ou os gerais, que valem nas fontes sem favorecido próprio), já sem o anterior do mesmo tipo e
+// fonte (que o novo encerra).
+const fonteForm = computed(() => Number(form.fonte) || null);
 const somaNoInicio = computed(() =>
   (favorecidos.data.value ?? [])
-    .filter((f) => vigenteEm(f, form.inicio) && !(f.tipo === form.tipo && f.fontePagadora === null))
+    .filter((f) => vigenteEm(f, form.inicio) && f.fontePagadora === fonteForm.value && f.tipo !== form.tipo)
     .reduce((s, f) => s + f.percentual, 0),
 );
 const somaComNovo = computed(() => somaNoInicio.value + Number(form.percentual || 0));
@@ -82,6 +109,7 @@ const formValido = computed(
   () =>
     profissional.value > 0 &&
     form.inicio !== '' &&
+    (form.fim === '' || form.fim >= form.inicio) &&
     form.percentual > 0 &&
     somaComNovo.value <= 100 &&
     (form.tipo === 'proprio_profissional' || form.alvo > 0),
@@ -111,6 +139,8 @@ async function incluir() {
       contaBancaria: Number(form.conta) || null,
       percentual: Number(form.percentual),
       inicio: form.inicio,
+      fim: form.fim || null,
+      fontePagadora: fonteForm.value,
     });
     mensagem.value = r.encerrados.length
       ? t('repasse.favorecidos.incluidoEncerrou')
@@ -124,7 +154,7 @@ async function encerrar(id: number, versao: number) {
   erro.value = null;
   mensagem.value = null;
   try {
-    await encerrarFavorecido(id, versao, hoje.value);
+    await encerrarFavorecido(id, versao, fimEncerrar[id] || hoje.value);
     mensagem.value = t('repasse.favorecidos.encerradoOk');
     await qc.invalidateQueries({ queryKey: ['repasse', 'favorecidos'] });
   } catch (e) {
@@ -212,6 +242,7 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
             <th scope="col">{{ t('repasse.favorecidos.parte') }}</th>
             <th scope="col">{{ t('repasse.favorecidos.inicio') }}</th>
             <th scope="col">{{ t('repasse.favorecidos.fim') }}</th>
+            <th scope="col">{{ t('repasse.favorecidos.retencoes') }}</th>
             <th scope="col">{{ t('repasse.acoes') }}</th>
           </tr>
         </thead>
@@ -228,9 +259,26 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
             <td>{{ f.percentual }}</td>
             <td>{{ data(f.inicio) }}</td>
             <td>{{ f.fim ? data(f.fim) : t('repasse.favorecidos.vigente') }}</td>
+            <td :data-testid="`fv-retencoes-${f.id}`">
+              {{ t(`repasse.favorecidos.fiscal.${f.retencoes.situacao}`) }}
+              <template v-for="(r, i) in f.retencoes.vigentes" :key="i">
+                · {{ t(`repasse.favorecidos.regimes.${r.regime}`, r.regime) }}
+                {{ r.retem ? t('repasse.favorecidos.retem') : t('repasse.favorecidos.naoRetem') }}
+                {{ r.aliquotaIss !== null ? `ISS ${r.aliquotaIss}%` : '' }}
+              </template>
+            </td>
             <td>
+              <input
+                v-if="podeEditar && (f.fim === null || f.fim >= hoje)"
+                v-model="fimEncerrar[f.id]"
+                type="date"
+                :min="f.inicio"
+                :max="f.fim ?? undefined"
+                :aria-label="t('repasse.favorecidos.dataEncerrar')"
+                :data-testid="`fv-fim-encerrar-${f.id}`"
+              />
               <button
-                v-if="podeEditar && f.fim === null"
+                v-if="podeEditar && (f.fim === null || f.fim >= hoje)"
                 type="button"
                 :data-testid="`fv-encerrar-${f.id}`"
                 @click="encerrar(f.id, f.versao)"
@@ -314,8 +362,31 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
             />
           </span>
           <span class="campo">
+            <label for="fv-busca-fonte">{{ t('repasse.favorecidos.buscarFonte') }}</label>
+            <input
+              id="fv-busca-fonte"
+              v-model="termoFonte"
+              data-testid="fv-busca-fonte"
+              @keyup.enter="buscarFonte"
+            />
+          </span>
+          <button type="button" data-testid="fv-buscar-fonte" @click="buscarFonte">
+            {{ t('repasse.buscar') }}
+          </button>
+          <span class="campo">
+            <label for="fv-fonte">{{ t('repasse.favorecidos.fonte') }}</label>
+            <select id="fv-fonte" v-model.number="form.fonte" data-testid="fv-fonte">
+              <option :value="0">{{ t('repasse.favorecidos.todasFontes') }}</option>
+              <option v-for="a in fontes" :key="a.id" :value="a.id">{{ a.nome }}</option>
+            </select>
+          </span>
+          <span class="campo">
             <label for="fv-inicio">{{ t('repasse.favorecidos.inicio') }}</label>
             <input id="fv-inicio" v-model="form.inicio" type="date" data-testid="fv-inicio" />
+          </span>
+          <span class="campo">
+            <label for="fv-fim">{{ t('repasse.favorecidos.fimOpcional') }}</label>
+            <input id="fv-fim" v-model="form.fim" type="date" :min="form.inicio" data-testid="fv-fim" />
           </span>
           <button type="button" :disabled="!formValido" data-testid="fv-incluir" @click="incluir">
             {{ t('repasse.favorecidos.incluir') }}

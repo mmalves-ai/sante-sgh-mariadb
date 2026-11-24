@@ -1,13 +1,15 @@
 // Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46). Rotas (porta própria; sem banco do
 // cliente, 503):
 //   GET  /api/repasse/favorecidos?profissional=        favorecidos (vigentes e encerrados) do profissional ou de todos
-//   GET  /api/repasse/favorecidos/alvos?tipo=&busca=   empresas, cooperativas ou profissionais para apontar
-//   GET  /api/repasse/favorecidos/contas?profissional= contas de crédito ativas (documento só com o final)
+//   GET  /api/repasse/favorecidos/alvos?tipo=&busca=   empresas, cooperativas, profissionais ou fontes pagadoras
+//   GET  /api/repasse/favorecidos/contas?tipo=&id=     contas ativas do credor do tipo (documento só com o final)
 //   POST /api/repasse/favorecidos                      inclui; o anterior do mesmo tipo e fonte termina no dia de antes
 //   POST /api/repasse/favorecidos/:id/encerrar         { versao, fim } encerra a vigência (nada apagado)
 //   GET  /api/repasse/prestadores-terceiros?busca=     prestadores terceiros (ativos primeiro)
 //   POST /api/repasse/prestadores-terceiros            inclui o prestador (documento, CNES, percentual, base)
 //   POST /api/repasse/prestadores-terceiros/:id        { versao, ativo?, percentualRepasse?, baseRepasse?, ... }
+//   GET  /api/repasse/prestadores-terceiros/:id/contas contas de crédito do prestador
+//   POST /api/repasse/prestadores-terceiros/:id/contas inclui a conta (titular: o próprio prestador)
 // O acesso é o do cargo que mantém cooperativas e credenciamentos do repasse; nada depende de chave de liberação.
 import {
   Body,
@@ -32,6 +34,14 @@ export const PERMISSOES_FAVORECIDOS_REPASSE = {
   ler: 'repasse.cooperativa.ler',
   editar: 'repasse.cooperativa.editar',
 } as const;
+
+const TIPOS_CREDOR = [
+  'proprio_profissional',
+  'pessoa_juridica',
+  'cooperativa',
+  'terceiro_profissional',
+  'prestador_terceiro',
+] as const;
 
 const idOuNulo = (v: string | undefined): number | null => {
   if (v === undefined || v === '') return null;
@@ -68,17 +78,32 @@ export class FavorecidosRepasseController {
   @Get('favorecidos/alvos')
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
   alvos(@Req() req: RequisicaoAutorizada, @Query('tipo') tipo?: string, @Query('busca') busca?: string) {
-    if (tipo !== 'pessoa_juridica' && tipo !== 'cooperativa' && tipo !== 'terceiro_profissional')
+    if (
+      tipo !== 'pessoa_juridica' &&
+      tipo !== 'cooperativa' &&
+      tipo !== 'terceiro_profissional' &&
+      tipo !== 'fonte_pagadora'
+    )
       throw new ErroProblema('entrada-invalida', 400, 'Tipo de favorecido inválido');
     return this.com(req, async (p, c) => ({ itens: await p.listarAlvos(c, tipo, busca ?? '') }));
   }
 
   @Get('favorecidos/contas')
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
-  contas(@Req() req: RequisicaoAutorizada, @Query('profissional') profissional?: string) {
-    const id = idOuNulo(profissional);
-    if (id === null) throw new ErroProblema('entrada-invalida', 400, 'Informe o profissional');
-    return this.com(req, async (p, c) => ({ itens: await p.listarContas(c, id) }));
+  contas(
+    @Req() req: RequisicaoAutorizada,
+    @Query('tipo') tipo?: string,
+    @Query('id') credor?: string,
+    @Query('profissional') profissional?: string,
+  ) {
+    const t = tipo ?? 'proprio_profissional';
+    if (!TIPOS_CREDOR.includes(t as never))
+      throw new ErroProblema('entrada-invalida', 400, 'Tipo de credor inválido');
+    const id = idOuNulo(credor ?? profissional);
+    if (id === null) throw new ErroProblema('entrada-invalida', 400, 'Informe o credor');
+    return this.com(req, async (p, c) => ({
+      itens: await p.listarContas(c, { tipo: t as (typeof TIPOS_CREDOR)[number], id }),
+    }));
   }
 
   @Post('favorecidos')
@@ -121,5 +146,24 @@ export class FavorecidosRepasseController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.alterarPrestador(c, id, corpo));
+  }
+
+  @Get('prestadores-terceiros/:id/contas')
+  @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
+  contasPrestador(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    return this.com(req, async (p, c) => ({
+      itens: await p.listarContas(c, { tipo: 'prestador_terceiro', id }),
+    }));
+  }
+
+  @Post('prestadores-terceiros/:id/contas')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.editar)
+  incluirContaPrestador(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.incluirContaPrestador(c, id, corpo));
   }
 }

@@ -182,7 +182,7 @@ export const mensagensRepasse = {
     producao: 'Produção',
     repassado: 'Repassado',
     aReceber: 'A receber',
-    adiantamentos: 'Adiantamentos em aberto',
+    adiantamentos: 'Adiantamentos a compensar (saldo atual)',
     ultimos: 'Últimos 12 meses',
     conta: 'A conta de cada valor',
     contaDe: 'Apuração da competência {competencia}',

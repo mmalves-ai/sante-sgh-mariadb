@@ -3,18 +3,27 @@
 //   - favorecido: `favorecido_repasse` com o tipo, o alvo (empresa, cooperativa ou outro profissional), a conta de
 //     crédito, a parte e a vigência; o anterior aberto do mesmo tipo e fonte termina no dia de antes (`vigencia_fim`,
 //     nada apagado); soma das partes acima de 100%, alvo de outro tipo, conta inativa ou de outro credor: 422 sem gravar;
-//   - encerrar o favorecido: `vigencia_fim` (com a versão lida), nunca apagado;
+//   - a conta de crédito é do credor do tipo (donoDaConta): a do profissional, a do terceiro, a do fornecedor da empresa
+//     ou da cooperativa; de outro credor, 422;
+//   - as retenções da empresa, da cooperativa e do prestador vêm do enquadramento do fornecedor (retencoesDoFavorecido);
+//   - encerrar o favorecido só antecipa o fim (validarEncerramento): `vigencia_fim` com a versão lida, nunca apagado;
+//   - a conta do prestador terceiro: `conta_bancaria_credor` com `prestador_terceiro_id` e o documento do prestador;
 //   - prestador terceiro: `prestador_terceiro` com documento, CNES, percentual e base do repasse; código, CPF ou CNPJ
 //     repetidos no estabelecimento: 409; inativar grava `ativo` e `inativado_em` (nada apagado).
 import {
+  donoDaConta,
+  type EnquadramentoDoFornecedor,
   type FavorecidoVigente,
   planejarFavorecido,
+  retencoesDoFavorecido,
+  validarEncerramento,
   TIPOS_FAVORECIDO,
   type TipoFavorecido,
   validarPrestadorTerceiro,
 } from '@sgh/dominio-repasse';
 import { ErroOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
+import { civil } from '../exames/relogio.js';
 import {
   bool,
   type ContextoPortaPropria,
@@ -102,6 +111,7 @@ function favorecidoDe(x: Linha) {
     fim: dataTexto(x['vigencia_fim']),
     ativo: bool(x['ativo']),
     versao: num(x['versao']),
+    fornecedor: numOuNull(x['fornecedor_id']),
   };
 }
 
@@ -127,15 +137,48 @@ function prestadorDe(x: Linha) {
     ativo: bool(x['ativo']),
     inativadoEm: dataTexto(x['inativado_em']),
     versao: num(x['versao']),
+    fornecedor: numOuNull(x['empresa_fornecedora_id']),
   };
 }
 
-export type FavorecidoRepasse = ReturnType<typeof favorecidoDe>;
+export type FavorecidoRepasse = ReturnType<typeof favorecidoDe> & {
+  retencoes: ReturnType<typeof retencoesDoFavorecido>;
+};
 export type PrestadorTerceiro = ReturnType<typeof prestadorDe>;
+
+/** A conta pertence ao credor (um parâmetro: o id do alvo do tipo). */
+const CONTA_DO_CREDOR: Record<TipoFavorecido | 'prestador_terceiro', string> = {
+  proprio_profissional: 'cb.profissional_id = ?',
+  terceiro_profissional: 'cb.profissional_id = ?',
+  pessoa_juridica: `cb.empresa_fornecedora_id IN
+      (SELECT ef.id FROM empresa_fornecedora ef WHERE ef.pessoa_juridica_id = ? AND ef.excluido_em IS NULL)`,
+  cooperativa: `cb.empresa_fornecedora_id IN
+      (SELECT ef.id FROM empresa_fornecedora ef JOIN cooperativa_medica cm ON cm.pessoa_juridica_id = ef.pessoa_juridica_id
+        WHERE cm.id = ? AND ef.excluido_em IS NULL)`,
+  prestador_terceiro: 'cb.prestador_terceiro_id = ?',
+};
+
+/** O id do credor dono da conta, pelo tipo do favorecido. */
+const credorDoFavorecido = (e: {
+  tipo: TipoFavorecido;
+  profissional: number;
+  pessoaJuridica: number | null;
+  cooperativa: number | null;
+  terceiroProfissional: number | null;
+}): number =>
+  ({
+    profissional: e.profissional,
+    terceiro_profissional: e.terceiroProfissional ?? 0,
+    fornecedor_da_empresa: e.pessoaJuridica ?? 0,
+    fornecedor_da_cooperativa: e.cooperativa ?? 0,
+  })[donoDaConta(e.tipo)];
 
 const SQL_FAVORECIDOS = `
   SELECT f.*, CONCAT_WS(' ', pf.nome) AS profissional_nome, fp.nome AS fonte_nome,
-         COALESCE(pj.razao_social, cm.nome, pft.nome) AS alvo_nome
+         COALESCE(pj.razao_social, cm.nome, pft.nome) AS alvo_nome,
+         (SELECT ef.id FROM empresa_fornecedora ef
+           WHERE ef.excluido_em IS NULL AND ef.pessoa_juridica_id = COALESCE(f.favorecido_pessoa_juridica_id, cm.pessoa_juridica_id)
+           ORDER BY ef.id LIMIT 1) AS fornecedor_id
     FROM favorecido_repasse f
     JOIN profissional p ON p.id = f.profissional_id
     JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
@@ -148,28 +191,74 @@ const SQL_FAVORECIDOS = `
 
 export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
-    super(nucleo, cliente, ['favorecido_repasse', 'prestador_terceiro'], 'repasse.favorecidos');
+    super(
+      nucleo,
+      cliente,
+      ['favorecido_repasse', 'prestador_terceiro', 'conta_bancaria_credor'],
+      'repasse.favorecidos',
+    );
   }
 
   // ── Favorecidos ────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Todos os favorecidos (vigentes e encerrados) do profissional, ou do estabelecimento. */
+  /** Todos os favorecidos (vigentes e encerrados) do profissional, ou do estabelecimento, com as retenções de hoje. */
   listarFavorecidos(c: ContextoPortaPropria, profissional: number | null): Promise<FavorecidoRepasse[]> {
-    return this.ler(c, 'favorecidos', async (l, est) =>
-      (
+    return this.ler(c, 'favorecidos', async (l, est) => {
+      const fs = (
         await l.consultar<Linha>(
           `${SQL_FAVORECIDOS} AND (? IS NULL OR f.profissional_id = ?)
             ORDER BY pf.nome, f.profissional_id, f.vigencia_inicio DESC, f.id DESC LIMIT 2000`,
           [est.id, profissional, profissional],
         )
-      ).map(favorecidoDe),
+      ).map(favorecidoDe);
+      const enq = await this.enquadramentos(
+        l,
+        est.id,
+        fs.map((f) => f.fornecedor),
+      );
+      const hoje = civil(new Date(), est.fuso).data;
+      return fs.map((f) => ({
+        ...f,
+        retencoes: retencoesDoFavorecido(f.tipo, f.fornecedor, enq.get(f.fornecedor ?? 0) ?? [], hoje),
+      }));
+    });
+  }
+
+  /** Os enquadramentos tributários (o cadastro fiscal do contas a pagar) dos fornecedores, por fornecedor. */
+  private async enquadramentos(
+    l: { consultar<T>(sql: string, p: unknown[]): Promise<T[]> },
+    est: number,
+    fornecedores: readonly (number | null)[],
+  ): Promise<Map<number, EnquadramentoDoFornecedor[]>> {
+    const ids = [...new Set(fornecedores.filter((x): x is number => x !== null))];
+    const m = new Map<number, EnquadramentoDoFornecedor[]>();
+    if (!ids.length) return m;
+    const linhas = await l.consultar<Linha>(
+      `SELECT empresa_fornecedora_id AS f, tributo_id, regime, retem_tributo, aliquota_iss, vigencia_inicio, vigencia_fim
+         FROM enquadramento_tributario_participante
+        WHERE ativo AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+          AND empresa_fornecedora_id IN (${ids.map(() => '?').join(',')})`,
+      [est, ...ids],
     );
+    for (const x of linhas) {
+      const lista = m.get(num(x['f'])) ?? [];
+      lista.push({
+        tributo: numOuNull(x['tributo_id']),
+        regime: String(x['regime']),
+        retem: bool(x['retem_tributo']),
+        aliquotaIss: x['aliquota_iss'] === null ? null : num(x['aliquota_iss']),
+        inicio: dataTexto(x['vigencia_inicio'])!,
+        fim: dataTexto(x['vigencia_fim']),
+      });
+      m.set(num(x['f']), lista);
+    }
+    return m;
   }
 
   /** Os alvos que o favorecido pode apontar (empresa, cooperativa ativa ou profissional), pelo nome ou CNPJ. */
   listarAlvos(
     c: ContextoPortaPropria,
-    tipo: 'pessoa_juridica' | 'cooperativa' | 'terceiro_profissional',
+    tipo: 'pessoa_juridica' | 'cooperativa' | 'terceiro_profissional' | 'fonte_pagadora',
     busca: string,
   ): Promise<{ id: number; nome: string; documento: string | null }[]> {
     const b = `%${busca.trim()}%`;
@@ -182,6 +271,8 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
       terceiro_profissional: `SELECT p.id, pf.nome, NULL AS documento FROM profissional p
           JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
          WHERE p.excluido_em IS NULL AND (pf.nome LIKE ? OR p.id = ?) ORDER BY pf.nome LIMIT 30`,
+      fonte_pagadora:
+        'SELECT id, nome, NULL AS documento FROM fonte_pagadora WHERE nome LIKE ? OR codigo LIKE ? ORDER BY nome LIMIT 30',
     }[tipo];
     return this.ler(c, 'alvos', async (l) =>
       (await l.consultar<Linha>(sql, [b, tipo === 'terceiro_profissional' ? Number(busca) || 0 : b])).map(
@@ -194,15 +285,20 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
     );
   }
 
-  /** As contas de crédito ativas do profissional (o documento do titular só com os 4 últimos dígitos). */
-  listarContas(c: ContextoPortaPropria, profissional: number) {
+  /**
+   * As contas de crédito ativas do credor do favorecido (donoDaConta): do profissional, do terceiro, do fornecedor da
+   * empresa ou da cooperativa, ou do prestador terceiro. O documento do titular só com os 4 últimos dígitos.
+   */
+  listarContas(c: ContextoPortaPropria, credor: { tipo: TipoFavorecido | 'prestador_terceiro'; id: number }) {
     return this.ler(c, 'contas', async (l) =>
       (
         await l.consultar<Linha>(
-          `SELECT id, banco_id, numero_agencia, numero_conta, tipo_chave_pix, titular_nome, titular_documento, preferencial
-             FROM conta_bancaria_credor
-            WHERE profissional_id = ? AND ativo AND excluido_em IS NULL ORDER BY preferencial DESC, id`,
-          [profissional],
+          `SELECT cb.id, cb.numero_agencia, cb.numero_conta, cb.tipo_chave_pix, cb.titular_nome, cb.titular_documento,
+                  cb.preferencial
+             FROM conta_bancaria_credor cb
+            WHERE ${CONTA_DO_CREDOR[credor.tipo]} AND cb.ativo AND cb.excluido_em IS NULL
+            ORDER BY cb.preferencial DESC, cb.id`,
+          [credor.id],
         )
       ).map((x) => ({
         id: num(x['id']),
@@ -244,20 +340,19 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
         if (v !== null && !(await tx.uma(sql, [v]))) throw naoEncontrado(nome);
       if (e.contaBancaria !== null) {
         const conta = await tx.uma<Linha>(
-          'SELECT profissional_id, ativo, excluido_em FROM conta_bancaria_credor WHERE id = ?',
+          'SELECT ativo, excluido_em FROM conta_bancaria_credor WHERE id = ?',
           [e.contaBancaria],
         );
         if (!conta) throw naoEncontrado('Conta de crédito');
-        const dono = e.tipo === 'terceiro_profissional' ? e.terceiroProfissional : e.profissional;
-        const contaDoProfissional = numOuNull(conta['profissional_id']);
         if (!bool(conta['ativo']) || conta['excluido_em'] !== null)
           throw recusaRegra('Favorecido recusado', [
             { campo: 'contaBancaria', mensagem: 'A conta de crédito está inativa.' },
           ]);
-        if (
-          (e.tipo === 'proprio_profissional' || e.tipo === 'terceiro_profissional') &&
-          contaDoProfissional !== dono
-        )
+        const doCredor = await tx.uma(
+          `SELECT cb.id FROM conta_bancaria_credor cb WHERE cb.id = ? AND ${CONTA_DO_CREDOR[e.tipo]}`,
+          [e.contaBancaria, credorDoFavorecido(e)],
+        );
+        if (!doCredor)
           throw recusaRegra('Favorecido recusado', [
             { campo: 'contaBancaria', mensagem: 'A conta de crédito não é do favorecido.' },
           ]);
@@ -309,11 +404,11 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
         [favorecido, est.id],
       );
       if (!f) throw naoEncontrado('Favorecido');
-      const inicio = dataTexto(f['vigencia_inicio'])!;
-      if (x.fim < inicio)
-        throw recusaRegra('Encerramento recusado', [
-          { campo: 'fim', mensagem: 'O fim da vigência não pode ser antes do início.' },
-        ]);
+      const problemas = validarEncerramento(
+        { inicio: dataTexto(f['vigencia_inicio'])!, fim: dataTexto(f['vigencia_fim']) },
+        x.fim,
+      );
+      if (problemas.length) throw recusaRegra('Encerramento recusado', problemas);
       await tx.alterar('favorecido_repasse', favorecido, x.versao, { vigencia_fim: x.fim });
       return { tabela: 'favorecido_repasse', id: favorecido };
     });
@@ -422,7 +517,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
       const mud: Record<string, unknown> = {};
       if (x.ativo !== undefined) {
         mud['ativo'] = x.ativo;
-        mud['inativado_em'] = x.ativo ? null : new Date().toISOString().slice(0, 10);
+        mud['inativado_em'] = x.ativo ? null : civil(new Date(), est.fuso).data;
       }
       if (x.percentualRepasse !== undefined) mud['percentual_repasse'] = x.percentualRepasse;
       if (x.baseRepasse !== undefined) mud['base_repasse'] = x.baseRepasse;
@@ -430,6 +525,56 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
       if (x.telefone !== undefined) mud['telefone'] = x.telefone;
       await tx.alterar('prestador_terceiro', prestador, x.versao, mud as never);
       return { tabela: 'prestador_terceiro', id: prestador };
+    });
+  }
+
+  /** Inclui a conta de crédito do prestador terceiro: o titular é o próprio prestador (nome e documento dele). */
+  incluirContaPrestador(
+    c: ContextoPortaPropria,
+    prestador: number,
+    entrada: unknown,
+  ): Promise<{ id: number }> {
+    const x = entradaValida(
+      z
+        .object({
+          banco: id.nullable().default(null),
+          agencia: z.string().trim().max(10).nullable().default(null),
+          conta: z.string().trim().max(20).nullable().default(null),
+          tipoConta: z.enum(['corrente', 'poupanca', 'pagamento', 'salario']).default('corrente'),
+          tipoChavePix: z.enum(['cpf', 'cnpj', 'email', 'telefone', 'aleatoria']).nullable().default(null),
+          chavePix: z.string().trim().min(1).max(77).nullable().default(null),
+          preferencial: z.boolean().default(false),
+        })
+        .strict(),
+      entrada,
+    );
+    const problemas = [];
+    if (!((x.banco !== null && x.conta) || x.chavePix))
+      problemas.push({ campo: 'conta', mensagem: 'Informe o banco e a conta, ou a chave PIX.' });
+    if ((x.chavePix === null) !== (x.tipoChavePix === null))
+      problemas.push({ campo: 'tipoChavePix', mensagem: 'Informe o tipo e a chave PIX juntos.' });
+    if (problemas.length) throw recusaRegra('Conta recusada', problemas);
+    return this.gravar(c, 'repasse.prestador.conta', ['conta_bancaria_credor'], async (tx, est) => {
+      const p = await tx.uma<Linha>(
+        `SELECT nome, cpf, cnpj FROM prestador_terceiro
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND ativo`,
+        [prestador, est.id],
+      );
+      if (!p) throw naoEncontrado('Prestador');
+      const novo = await tx.incluir('conta_bancaria_credor', {
+        prestador_terceiro_id: prestador,
+        banco_id: x.banco,
+        tipo_conta: x.tipoConta,
+        numero_agencia: x.agencia,
+        numero_conta: x.conta,
+        tipo_chave_pix: x.tipoChavePix,
+        chave_pix: x.chavePix,
+        titular_nome: String(p['nome']),
+        titular_documento: String(p['cnpj'] ?? p['cpf']),
+        preferencial: x.preferencial,
+        ativo: true,
+      });
+      return { tabela: 'conta_bancaria_credor', id: novo };
     });
   }
 }

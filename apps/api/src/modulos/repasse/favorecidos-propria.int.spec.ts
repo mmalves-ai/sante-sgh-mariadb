@@ -5,12 +5,16 @@
 //     de outro credor são recusados sem gravar; encerrar grava `vigencia_fim` e nada é apagado;
 //   - o prestador terceiro fica em `prestador_terceiro` com documento, CNES, percentual e base; código e documento
 //     repetidos são recusados; inativar grava `ativo` e `inativado_em`;
-//   - o extrato do profissional mostra o saldo a compensar dos adiantamentos (aprovado, pago, compensado em parte);
-//     o cancelado não conta.
+//   - o extrato do profissional mostra o saldo a compensar dos adiantamentos (aprovado, pago, compensado em parte) ao
+//     profissional e ao fornecedor da empresa favorecida dele; o cancelado não conta;
+//   - (correção F3.7-11) a conta da empresa é a do fornecedor dela, a pessoal do médico é recusada; encerrar não estende
+//     o fim; o lançamento se divide pelos favorecidos vigentes (60/40: duas linhas em `lancamento_repasse`, cada uma
+//     com o seu favorecido, a sua parte e o centavo que sobra na maior); a conta do prestador fica com o documento dele.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { PortaRepassePropria } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -35,14 +39,31 @@ async function recusa(p: Promise<unknown>): Promise<string> {
 describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (MariaDB)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaFavorecidosRepassePropria;
-  const ids = { est: 0, usuario: 0, prof: 0, outroProf: 0, pj: 0, contaOutro: 0 };
+  const ids = {
+    est: 0,
+    usuario: 0,
+    prof: 0,
+    outroProf: 0,
+    pj: 0,
+    contaOutro: 0,
+    contaProf: 0,
+    fornecedor: 0,
+    contaPj: 0,
+    evento: 0,
+  };
   const c = () => ({ cliente: CLIENTE, hospital: P, usuario: ids.usuario, correlacao: 't-f3711' });
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f3711' }, (l) => l.uma(sql, p));
   const limpar = (e: Escritor) =>
     (async () => {
       await e.executar('DELETE FROM adiantamento WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [ids.est]);
+      await limparTrilhaDaMassa(e, { ids: [ids.est] });
       await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE FROM conta_bancaria_credor WHERE prestador_terceiro_id IN (SELECT id FROM prestador_terceiro WHERE estabelecimento_id = ?)',
+        [ids.est],
+      );
       await e.executar('DELETE FROM prestador_terceiro WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM conta_bancaria_credor WHERE titular_nome = ?', [`CONTA ${P}`]);
     })();
@@ -92,6 +113,31 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
         [`EMPRESA SINTETICA ${P}`, agora],
       );
       await limpar(e);
+      ids.fornecedor = await garantir(
+        e,
+        'SELECT id FROM empresa_fornecedora WHERE pessoa_juridica_id = ?',
+        [ids.pj],
+        `INSERT INTO empresa_fornecedora (tipo_pessoa, cnpj, pessoa_juridica_id, razao_social, criado_em)
+         VALUES ('juridica', '37110492000188', ?, ?, ?)`,
+        [ids.pj, `EMPRESA SINTETICA ${P}`, agora],
+      );
+      ids.evento = await garantir(
+        e,
+        'SELECT id FROM evento_repasse WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, 3711],
+        "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, 3711, 'HONORARIOS F3711', 'rendimento', 'credito', '2026-01-01', ?)",
+        [ids.est, agora],
+      );
+      ids.contaProf = await e.inserir(
+        `INSERT INTO conta_bancaria_credor (profissional_id, chave_pix, tipo_chave_pix, titular_nome, titular_documento, criado_em)
+         VALUES (?, 'f3711a@exemplo.invalid', 'email', ?, '00000000191', ?)`,
+        [ids.prof, `CONTA ${P}`, agora],
+      );
+      ids.contaPj = await e.inserir(
+        `INSERT INTO conta_bancaria_credor (empresa_fornecedora_id, chave_pix, tipo_chave_pix, titular_nome, titular_documento, criado_em)
+         VALUES (?, '37110492000188', 'cnpj', ?, '37110492000188', ?)`,
+        [ids.fornecedor, `CONTA ${P}`, agora],
+      );
       ids.contaOutro = await e.inserir(
         `INSERT INTO conta_bancaria_credor (profissional_id, chave_pix, tipo_chave_pix, titular_nome, titular_documento, criado_em)
          VALUES (?, 'f3711@exemplo.invalid', 'email', ?, '00000000191', ?)`,
@@ -121,10 +167,27 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
     const ant = await um('SELECT vigencia_fim AS f, ativo FROM favorecido_repasse WHERE id = ?', [a.id]);
     expect(String((ant!['f'] as Date).toISOString?.() ?? ant!['f']).slice(0, 10)).toBe('2026-10-31');
     // empresa do médico com 40%: cabe; mais 1% não cabe (soma 101%)
+    // a conta pessoal do médico não serve à empresa dele; a do fornecedor da empresa serve
+    expect(
+      await recusa(
+        porta.incluirFavorecido(c(), {
+          profissional: ids.prof,
+          tipo: 'pessoa_juridica',
+          pessoaJuridica: ids.pj,
+          contaBancaria: ids.contaProf,
+          percentual: 40,
+          inicio: '2026-11-01',
+        }),
+      ),
+    ).toBe('regra-violada');
+    expect((await porta.listarContas(c(), { tipo: 'pessoa_juridica', id: ids.pj })).map((x) => x.id)).toEqual(
+      [ids.contaPj],
+    );
     const pj = await porta.incluirFavorecido(c(), {
       profissional: ids.prof,
       tipo: 'pessoa_juridica',
       pessoaJuridica: ids.pj,
+      contaBancaria: ids.contaPj,
       percentual: 40,
       inicio: '2026-11-01',
     });
@@ -163,7 +226,12 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
     const lista = await porta.listarFavorecidos(c(), ids.prof);
     expect(lista.map((f) => f.id).sort()).toEqual([a.id, b.id, pj.id].sort());
     const v = lista.find((f) => f.id === pj.id)!;
+    expect(v.retencoes.situacao).toBe('sem_enquadramento');
     await porta.encerrarFavorecido(c(), pj.id, { versao: v.versao, fim: '2026-12-31' });
+    // encerrar não estende o fim (nem reabre): 422
+    expect(
+      await recusa(porta.encerrarFavorecido(c(), pj.id, { versao: v.versao + 1, fim: '2027-03-31' })),
+    ).toBe('regra-violada');
     const fim = await um(
       "SELECT COUNT(*) AS q, SUM(vigencia_fim = '2026-12-31') AS enc FROM favorecido_repasse WHERE estabelecimento_id = ?",
       [ids.est],
@@ -237,5 +305,75 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
     const ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 't-f3711' };
     expect(await repasse.adiantamentos(ctx, [ids.prof])).toBe(500);
     expect(await repasse.adiantamentos(ctx, [ids.outroProf])).toBe(0);
+    // o fornecedor da empresa favorecida do médico também conta
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f3711' }, (e) =>
+      e.inserir(
+        `INSERT INTO adiantamento (estabelecimento_id, numero, tipo_credor, empresa_fornecedora_id, data_emissao, valor,
+           saldo_compensar, situacao, criado_em) VALUES (?, ?, 'fornecedor', ?, '2026-11-01', 80, 80, 'pago', ?)`,
+        [ids.est, `${P}F1`, ids.fornecedor, new Date()],
+      ),
+    );
+    expect(await repasse.adiantamentos(ctx, [ids.prof])).toBe(580);
+    expect(await repasse.adiantamentos(ctx, [ids.outroProf])).toBe(0);
+  });
+
+  it('lançamento dividido pelos favorecidos vigentes: 60% ao próprio e 40% à empresa', async () => {
+    const repasse = new PortaRepassePropria(nucleo);
+    const ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 't-f3711' };
+    const r = await repasse.executar(
+      ctx,
+      'repasse.lancarEvento',
+      {
+        origem: 'ajuste',
+        empresa: 1,
+        competencia: '2026-11',
+        data: '2026-11-10',
+        evento: ids.evento,
+        tipo: 'M',
+        prestador: ids.prof,
+        profissional: ids.prof,
+        valor: 1000.01,
+        justificativa: 'Ajuste F3711',
+      },
+      { ...ctx, chaveIdempotencia: `${P}-div-${Date.now()}`, reautenticadoEm: Date.now() },
+    );
+    expect((r.resultado['lancamentos'] as number[]).length).toBe(2);
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f3711' }, (l) =>
+      l.consultar<Record<string, unknown>>(
+        `SELECT fr.tipo_favorecido AS t, l.tipo_favorecido AS tl, l.valor AS v, l.percentual AS p
+           FROM lancamento_repasse l JOIN favorecido_repasse fr ON fr.id = l.favorecido_repasse_id
+          WHERE l.estabelecimento_id = ? AND l.data_lancamento = '2026-11-10' ORDER BY l.valor DESC`,
+        [ids.est],
+      ),
+    );
+    expect(linhas.map((x) => [x['t'], x['tl'], Number(x['v']), Number(x['p'])])).toEqual([
+      ['proprio_profissional', 'medico', 600.01, 60],
+      ['pessoa_juridica', 'empresa', 400, 40],
+    ]);
+  });
+
+  it('conta do prestador terceiro: titular é o próprio prestador; sem destino, recusa', async () => {
+    const p = await porta.incluirPrestador(c(), {
+      codigo: `${P}CLI`,
+      nome: 'CLINICA SINTETICA',
+      tipoPessoa: 'juridica',
+      cnpj: '37110492000188',
+    });
+    expect(await recusa(porta.incluirContaPrestador(c(), p.id, { banco: null }))).toBe('regra-violada');
+    const conta = await porta.incluirContaPrestador(c(), p.id, {
+      tipoChavePix: 'cnpj',
+      chavePix: '37110492000188',
+    });
+    const g = await um(
+      'SELECT prestador_terceiro_id AS p, titular_documento AS d FROM conta_bancaria_credor WHERE id = ?',
+      [conta.id],
+    );
+    expect([Number(g!['p']), g!['d']]).toEqual([p.id, '37110492000188']);
+    expect(
+      (await porta.listarContas(c(), { tipo: 'prestador_terceiro', id: p.id })).map((x) => x.id),
+    ).toEqual([conta.id]);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f3711' }, (e) =>
+      e.executar('DELETE FROM conta_bancaria_credor WHERE prestador_terceiro_id = ?', [p.id]),
+    );
   });
 });
