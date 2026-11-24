@@ -59,6 +59,7 @@ import {
   esquemaRegistrarEntradaNF,
   esquemaRegistrarSaida,
   esquemaReporKit,
+  esquemaGravarKitPadrao,
   esquemaRequisitarMaterial,
   esquemaTransferir,
   esquemaXmlNota,
@@ -903,6 +904,31 @@ export class SuprimentosController {
     const s = sessaoDe(req);
     const r = await this.porta.relogio(ctx(s));
     return this.porta.kits(ctx(s), r.hoje, await comAlerta(this.apoios, s));
+  }
+
+  // F3.6 (05-SUP linha 13): o cadastro do kit padrão (composição e vínculo ao procedimento) pelo Executor.
+  @Get('kits-padrao/cadastro')
+  @Permissao('suprimentos.kit.ler')
+  kitsPadraoCadastro(@Req() req: RequisicaoAutorizada) {
+    return this.porta.kitsPadraoCadastro(ctx(sessaoDe(req)));
+  }
+
+  @Get('kits-padrao/procedimentos')
+  @Permissao('suprimentos.kit.editar')
+  procedimentosKit(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.porta.procedimentosKit(ctx(sessaoDe(req)), String(termo ?? '').slice(0, 100));
+  }
+
+  @Post('kits-padrao')
+  @HttpCode(200)
+  @Permissao('suprimentos.kit.editar')
+  @AuditadoNoHandler('suprimentos.gravarKitPadrao pelo executor (trilha na mesma transação)')
+  gravarKitPadrao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSuprimentos> {
+    return this.servico.executar(
+      sessaoDe(req),
+      'suprimentos.gravarKitPadrao',
+      corpo(esquemaGravarKitPadrao, b),
+    );
   }
 
   @Get('kits-padrao')

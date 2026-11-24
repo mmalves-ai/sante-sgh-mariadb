@@ -9,6 +9,7 @@ import {
   esquemaDefinirVencedor,
   esquemaDesconsolidar,
   esquemaFecharMes,
+  esquemaGravarKitPadrao,
   esquemaMovimentoDireto,
   esquemaReabrirMes,
   esquemaRegistrarBalanco,
@@ -47,6 +48,7 @@ export const ENTRADAS_SUPRIMENTOS: Readonly<Record<string, ZodTypeAny>> = {
   'suprimentos.reporKitRastreavel': esquemaReporKit,
   'suprimentos.desconsolidarDocumento': esquemaDesconsolidar,
   'suprimentos.corrigirValidadeLote': esquemaCorrigirValidade,
+  'suprimentos.gravarKitPadrao': esquemaGravarKitPadrao,
 };
 
 /** A operação do estoque pelo nome (a entrada valida a requisição); desconhecida: recusa. */

@@ -138,6 +138,13 @@ import {
   METODOS_PORTA_SUPRIMENTOS,
   type PortaSuprimentos,
 } from './porta.js';
+import {
+  buscarProcedimentosKit,
+  gravarKitPadrao,
+  lerKitsPadraoCadastro,
+  OPERACAO_KIT_PADRAO,
+  TABELAS_KIT_PADRAO,
+} from './kit-padrao.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoSuprimentos = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -3253,6 +3260,7 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
   'suprimentos.reporKitRastreavel': reporKitRastreavel as Manipulador,
   'suprimentos.desconsolidarDocumento': desconsolidarDocumento as Manipulador,
   'suprimentos.corrigirValidadeLote': corrigirValidadeLote as Manipulador,
+  [OPERACAO_KIT_PADRAO]: gravarKitPadrao as Manipulador,
 };
 
 /** As tabelas que as operações do estoque gravam. */
@@ -3286,6 +3294,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'ordem_manipulacao_insumo',
   // Motor estoque → conta: a saída ao paciente lança o item na conta; a devolução o estorna.
   ...TABELAS_CONTA_ESTOQUE.filter((t) => t !== 'movimento_estoque'),
+  // F3.6 (05-SUP linha 13): o cadastro do kit padrão.
+  ...TABELAS_KIT_PADRAO,
 ] as const;
 
 /** O nome da operação no núcleo (minúsculas com sublinhado: suprimentos.registrar_saida). */
@@ -3363,9 +3373,11 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
       },
       alvo: (_e, r) => ({
         tabela:
-          op.endsWith('Pedido') || op.endsWith('Cotacao') || op.endsWith('Proposta')
-            ? 'pedido_compra'
-            : 'documento_estoque',
+          op === OPERACAO_KIT_PADRAO
+            ? 'kit_material'
+            : op.endsWith('Pedido') || op.endsWith('Cotacao') || op.endsWith('Proposta')
+              ? 'pedido_compra'
+              : 'documento_estoque',
         id: typeof r['id'] === 'number' && r['id'] > 0 ? r['id'] : null,
       }),
       eventos: (_e, r) => [{ tipo: nomeNoNucleo(o.nome), carga: { id: r['id'] ?? null } }],
@@ -4574,6 +4586,15 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
 
   kit(c: ContextoSuprimentos, id: number, hoje: string, alertaDias: number) {
     return this.ler(c, async (l, est) => (await lerKits(l, est, id, hoje, alertaDias))[0] ?? null);
+  }
+
+  /** F3.6 (05-SUP linha 13): o cadastro dos kits padrão (ativos e inativos) e a busca do procedimento do vínculo. */
+  kitsPadraoCadastro(c: ContextoSuprimentos) {
+    return this.ler(c, (l, est) => lerKitsPadraoCadastro(l, est));
+  }
+
+  procedimentosKit(c: ContextoSuprimentos, termo: string) {
+    return this.ler(c, (l) => buscarProcedimentosKit(l, termo));
   }
 
   /** Os kits padrão (kit_material ativo do estabelecimento) com os itens e as quantidades. */

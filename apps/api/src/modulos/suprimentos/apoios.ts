@@ -58,7 +58,10 @@ const FUNCIONALIDADES = {
   kits: {
     chave: 'suprimentos.kits',
     nome: 'os kits e carrinhos rastreáveis',
-    operacoes: { 'suprimentos.reporKitRastreavel': 'suprimentos.kit.repor' },
+    operacoes: {
+      'suprimentos.reporKitRastreavel': 'suprimentos.kit.repor',
+      'suprimentos.gravarKitPadrao': 'suprimentos.kit.editar',
+    },
     extras: { conferirCarrinho: 'suprimentos.kit.repor' },
   },
   fechamento: {

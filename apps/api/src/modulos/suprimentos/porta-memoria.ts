@@ -2206,6 +2206,13 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     const k = s.kits.find((x) => x.id === id);
     return k ? this.kitLido(s, k, hoje, alertaDias) : null;
   }
+  // F3.6 (05-SUP linha 13): o cadastro do kit padrão só existe no banco próprio (a memória de dev/ci fica em consulta).
+  async kitsPadraoCadastro() {
+    return [];
+  }
+  async procedimentosKit() {
+    return [];
+  }
   async kitsPadrao(c: ContextoSuprimentos) {
     const s = this.e(c);
     return [

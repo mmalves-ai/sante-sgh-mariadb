@@ -51,6 +51,7 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   'suprimentos.reporKitRastreavel': 'Reposição do kit registrada.',
   'suprimentos.desconsolidarDocumento': 'Documento desconsolidado.',
   'suprimentos.corrigirValidadeLote': 'Validade do lote corrigida.',
+  'suprimentos.gravarKitPadrao': 'Kit padrão gravado.',
 };
 
 const resultado = (

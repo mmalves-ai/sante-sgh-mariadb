@@ -39,6 +39,7 @@ import type {
 } from '@sgh/contratos';
 import type { FaixaAlcada } from '@sgh/dominio-suprimentos';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import type { KitPadraoCadastro, ProcedimentoKitBusca } from '@sgh/contratos';
 
 export const PORTA_SUPRIMENTOS = Symbol('PORTA_SUPRIMENTOS');
 
@@ -196,6 +197,8 @@ export interface PortaSuprimentos extends PortaGravacaoM18<GravadorSghSuprimento
   ): Promise<{ usuario: string; nome: string; locais: number }[]>;
   kits(c: ContextoSuprimentos, hoje: string, alertaDias: number): Promise<KitRastreavel[]>;
   kit(c: ContextoSuprimentos, id: number, hoje: string, alertaDias: number): Promise<KitRastreavel | null>;
+  kitsPadraoCadastro(c: ContextoSuprimentos): Promise<KitPadraoCadastro[]>;
+  procedimentosKit(c: ContextoSuprimentos, termo: string): Promise<ProcedimentoKitBusca[]>;
   kitsPadrao(
     c: ContextoSuprimentos,
   ): Promise<{ codigo: number; nome: string; itens: { item: number; nome: string; quantidade: number }[] }[]>;
