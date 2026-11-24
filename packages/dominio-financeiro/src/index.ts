@@ -8,6 +8,8 @@ export * from './fluxo-caixa.js';
 export * from './conciliacao.js';
 export * from './extrato.js';
 export * from './nfse.js';
+export * from './nfse-ciclo.js';
+export * from './reinf-eventos.js';
 export * from './declaracoes.js';
 export * from './lote-contabil.js';
 export * from './depara-contabil.js';
