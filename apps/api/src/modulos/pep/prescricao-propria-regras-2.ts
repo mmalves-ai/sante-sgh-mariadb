@@ -12,7 +12,14 @@
 //     (empírico, dirigido, profilático), o sítio de infecção do catálogo e a duração (a informada ou a sugerida).
 // Trilha, versão e idempotência pelo executor, na mesma transação. Nada é apagado: a regra muda por nova versão.
 import { createHash, randomUUID } from 'node:crypto';
-import { type ContextoOperacao, definirOperacao, ErroOperacao, type Executor, type Leitor, type TxOperacao } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  ErroOperacao,
+  type Executor,
+  type Leitor,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoPrescricao } from './prescricao-porta.js';
 import {
@@ -26,11 +33,7 @@ import {
 import { fusoValido } from './registro-porta-propria.js';
 import type { FichaAvulsa, NovaVersaoRegra } from './tipos-pep.js';
 
-export const TABELAS_REGRAS_2 = [
-  'regra_alerta',
-  'regra_alerta_versao',
-  'ficha_antimicrobiano',
-] as const;
+export const TABELAS_REGRAS_2 = ['regra_alerta', 'regra_alerta_versao', 'ficha_antimicrobiano'] as const;
 
 /** Tipo da ficha (tela) → código da finalidade terapêutica do catálogo. */
 export const FINALIDADE_DO_TIPO: Readonly<Record<FichaAvulsa['tipo'], string>> = {
@@ -58,13 +61,20 @@ export function somarDias(data: string, dias: number): string {
 
 /** Hoje no fuso do estabelecimento (AAAA-MM-DD). */
 export function hojeLocal(fuso: string, agora = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    agora,
-  );
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: fuso,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(agora);
 }
 
 /** Início e fim previstos da ficha: o dia de tratamento informado conta a partir de hoje (dia 1 = hoje). */
-export function periodoDaFicha(hoje: string, diaTratamento: number, dias: number): { inicio: string; fim: string } {
+export function periodoDaFicha(
+  hoje: string,
+  diaTratamento: number,
+  dias: number,
+): { inicio: string; fim: string } {
   const inicio = somarDias(hoje, -(diaTratamento - 1));
   return { inicio, fim: somarDias(inicio, dias - 1) };
 }
@@ -75,7 +85,10 @@ export function periodoDaFicha(hoje: string, diaTratamento: number, dias: number
  */
 export function chaveDaGravacao(operacao: string, chaveRequisicao: unknown): string {
   if (typeof chaveRequisicao === 'string' && chaveRequisicao.trim().length >= 8)
-    return `${operacao}:${createHash('sha256').update(chaveRequisicao).digest('hex').slice(0, 48)}`.slice(0, 80);
+    return `${operacao}:${createHash('sha256').update(chaveRequisicao).digest('hex').slice(0, 48)}`.slice(
+      0,
+      80,
+    );
   return `${operacao}:${randomUUID()}`.slice(0, 80);
 }
 
@@ -109,11 +122,19 @@ export class RegrasPrescricaoPropria2 {
   }
 
   /** Nova versão da regra de alerta pelo código (ou a regra nova, versão 1). */
-  gravarRegra(c: ContextoPrescricao, autor: string, r: NovaVersaoRegra): Promise<{ id: number; versao: number }> {
+  gravarRegra(
+    c: ContextoPrescricao,
+    autor: string,
+    r: NovaVersaoRegra,
+  ): Promise<{ id: number; versao: number }> {
     return this.gravar(c, autor, 'pep.gravarRegra', false, r, async (tx, est) => {
       const cen = await tx.uma('SELECT id FROM cenario_alerta WHERE codigo = ? AND ativo = TRUE', [r.tipo]);
       if (!cen)
-        throw recusar(409, 'cenario-sem-cadastro', `O cliente não tem o cenário de alerta "${r.tipo}" ativo.`);
+        throw recusar(
+          409,
+          'cenario-sem-cadastro',
+          `O cliente não tem o cenário de alerta "${r.tipo}" ativo.`,
+        );
       const nivel = colunasDoNivel(r.nivel);
       const agora = new Date();
       const vigente = instanteLocal(`${r.vigenteDesde}T00:00`, est.fuso);
@@ -149,7 +170,11 @@ export class RegrasPrescricaoPropria2 {
             'A regra vale para todos os estabelecimentos do cliente; um estabelecimento não a altera sozinho.',
           );
         if (dono !== est.id)
-          throw recusar(409, 'regra-de-outro-estabelecimento', 'O código já é de uma regra de outro estabelecimento.');
+          throw recusar(
+            409,
+            'regra-de-outro-estabelecimento',
+            'O código já é de uma regra de outro estabelecimento.',
+          );
         const muda =
           num(atual['cenario_alerta_id']) !== num(cen['id']) ||
           String(atual['descricao'] ?? '') !== r.descricao ||
@@ -174,7 +199,13 @@ export class RegrasPrescricaoPropria2 {
       await tx.incluir('regra_alerta_versao', {
         regra_alerta_id: id,
         operacao: atual ? 'alteracao' : 'inclusao',
-        dados: JSON.stringify({ codigo: r.codigo, tipo: r.tipo, nivel: r.nivel, ativa: r.ativa, descricao: r.descricao }),
+        dados: JSON.stringify({
+          codigo: r.codigo,
+          tipo: r.tipo,
+          nivel: r.nivel,
+          ativa: r.ativa,
+          descricao: r.descricao,
+        }),
         ocorrido_em: agora,
         usuario_id: tx.contexto.usuario,
         numero_versao: versao,
@@ -212,7 +243,11 @@ export class RegrasPrescricaoPropria2 {
       if (!item) {
         if (f.item !== null)
           throw recusar(404, 'registro-inexistente', 'O item não é de uma prescrição deste atendimento.');
-        throw recusar(422, 'ficha-sem-item', 'A ficha justifica um item prescrito: o produto não está prescrito.');
+        throw recusar(
+          422,
+          'ficha-sem-item',
+          'A ficha justifica um item prescrito: o produto não está prescrito.',
+        );
       }
       if (num(item['item_prescritivel_id']) !== f.produto)
         throw recusar(422, 'produto-diferente-do-item', 'O produto da ficha não é o do item prescrito.');
@@ -222,20 +257,26 @@ export class RegrasPrescricaoPropria2 {
           WHERE ip.id = ? AND a.ativo = TRUE ORDER BY a.id LIMIT 1`,
         [f.produto],
       );
-      if (!am) throw recusar(422, 'produto-nao-antimicrobiano', 'O produto não é um antimicrobiano do cadastro.');
+      if (!am)
+        throw recusar(422, 'produto-nao-antimicrobiano', 'O produto não é um antimicrobiano do cadastro.');
       const fin = await tx.uma(
         'SELECT id, dias_maximo_sugerido FROM finalidade_terapeutica WHERE codigo = ? AND ativo = TRUE',
         [FINALIDADE_DO_TIPO[f.tipo]],
       );
       if (!fin)
-        throw recusar(409, 'finalidade-sem-cadastro', `O cliente não tem a finalidade terapêutica do tipo "${f.tipo}".`);
+        throw recusar(
+          409,
+          'finalidade-sem-cadastro',
+          `O cliente não tem a finalidade terapêutica do tipo "${f.tipo}".`,
+        );
       const sitio = await tx.uma(
         `SELECT id FROM sitio_infeccao WHERE ativo = TRUE
             AND (LOWER(codigo) = LOWER(?) OR LOWER(sigla) = LOWER(?) OR LOWER(descricao) = LOWER(?))
           ORDER BY id LIMIT 1`,
         [f.sitio, f.sitio, f.sitio],
       );
-      if (!sitio) throw recusar(422, 'sitio-sem-cadastro', 'O sítio de infecção não está no catálogo do cliente.');
+      if (!sitio)
+        throw recusar(422, 'sitio-sem-cadastro', 'O sítio de infecção não está no catálogo do cliente.');
       const dias = f.duracaoDias ?? numOuNull(fin['dias_maximo_sugerido']) ?? numOuNull(am['dias_liberados']);
       if (dias === null || dias < 1)
         throw recusar(422, 'duracao-obrigatoria', 'Informe a duração prevista do tratamento (dias).');
@@ -271,15 +312,20 @@ export class RegrasPrescricaoPropria2 {
     operacao: string,
     exigeProfissional: boolean,
     pedido: unknown,
-    fn: (tx: TxOperacao, est: Estabelecimento, profissional: number) => Promise<{ tabela: string; id: number; resultado: T }>,
+    fn: (
+      tx: TxOperacao,
+      est: Estabelecimento,
+      profissional: number,
+    ) => Promise<{ tabela: string; id: number; resultado: T }>,
   ): Promise<T> {
     const cliente = c.cliente || this.cliente;
     const ident = await this.nucleo.lerSomente(
       { cliente, correlacao: `pep.prescricao.${operacao}` },
       async (l: Leitor) => {
-        const e = await l.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-          c.hospital,
-        ]);
+        const e = await l.uma(
+          'SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+          [c.hospital],
+        );
         if (!e)
           throw new ErroOperacao(
             404,
@@ -300,7 +346,9 @@ export class RegrasPrescricaoPropria2 {
       throw recusar(
         409,
         'profissional-sem-cbo',
-        exigeProfissional ? 'Só o profissional da sessão registra a ficha.' : 'O usuário da sessão não existe neste cliente.',
+        exigeProfissional
+          ? 'Só o profissional da sessão registra a ficha.'
+          : 'O usuário da sessão não existe neste cliente.',
       );
     const profissional = ident.profissional;
     let feito: { r: T } | null = null;
@@ -320,7 +368,10 @@ export class RegrasPrescricaoPropria2 {
       estabelecimento: ident.est.id,
       usuario: ident.usuario,
       correlacao: (c.correlacao || operacao).slice(0, 64),
-      chaveIdempotencia: chaveDaGravacao(operacao, (c as Partial<Record<'chaveIdempotencia', unknown>>).chaveIdempotencia),
+      chaveIdempotencia: chaveDaGravacao(
+        operacao,
+        (c as Partial<Record<'chaveIdempotencia', unknown>>).chaveIdempotencia,
+      ),
     };
     const r = await this.executor.executar(op, cliente, { pedido: impressaoDoPedido(pedido) }, ctx);
     if (!feito) {

@@ -14,9 +14,21 @@ import {
 
 describe('prescricao-propria-regras-2 (funções puras)', () => {
   it('colunasDoNivel: aviso informa, justificar pede justificativa, bloqueio impede', () => {
-    expect(colunasDoNivel('aviso')).toEqual({ bloqueante: false, exige_justificativa: false, gravidade: 'informativo' });
-    expect(colunasDoNivel('justificar')).toEqual({ bloqueante: false, exige_justificativa: true, gravidade: 'atencao' });
-    expect(colunasDoNivel('bloqueio')).toEqual({ bloqueante: true, exige_justificativa: true, gravidade: 'critico' });
+    expect(colunasDoNivel('aviso')).toEqual({
+      bloqueante: false,
+      exige_justificativa: false,
+      gravidade: 'informativo',
+    });
+    expect(colunasDoNivel('justificar')).toEqual({
+      bloqueante: false,
+      exige_justificativa: true,
+      gravidade: 'atencao',
+    });
+    expect(colunasDoNivel('bloqueio')).toEqual({
+      bloqueante: true,
+      exige_justificativa: true,
+      gravidade: 'critico',
+    });
   });
 
   it('somarDias atravessa mês, ano e fevereiro bissexto, para frente e para trás', () => {
@@ -41,7 +53,11 @@ describe('prescricao-propria-regras-2 (funções puras)', () => {
   });
 
   it('FINALIDADE_DO_TIPO liga o tipo da ficha à finalidade terapêutica do catálogo', () => {
-    expect(FINALIDADE_DO_TIPO).toEqual({ empirico: 'empirica', dirigido: 'terapeutica', profilatico: 'profilatica' });
+    expect(FINALIDADE_DO_TIPO).toEqual({
+      empirico: 'empirica',
+      dirigido: 'terapeutica',
+      profilatico: 'profilatica',
+    });
     expect([...TABELAS_REGRAS_2]).toEqual(['regra_alerta', 'regra_alerta_versao', 'ficha_antimicrobiano']);
   });
 

@@ -92,11 +92,26 @@ describe('documentos-propria-operacoes-2 (funções puras)', () => {
       conteudo: Buffer.from('%PDF-1.4 sintetico').toString('base64'),
     };
     const erro = await ops['pep.anexarDocumento']!(
-      { rede: 'r', hospital: 'h', cliente: 'teste', estabelecimento: null, usuario: 1, correlacao: 'c' } as never,
+      {
+        rede: 'r',
+        hospital: 'h',
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: 1,
+        correlacao: 'c',
+      } as never,
       entrada,
-      { cliente: 'teste', estabelecimento: null, usuario: 1, correlacao: 'c', chaveIdempotencia: 'chave-sintetica' },
+      {
+        cliente: 'teste',
+        estabelecimento: null,
+        usuario: 1,
+        correlacao: 'c',
+        chaveIdempotencia: 'chave-sintetica',
+      },
     ).catch((e: unknown) => e);
-    expect(erro instanceof ErroOperacao ? erro.problema.codigo : String(erro)).toBe('armazenamento-indisponivel');
+    expect(erro instanceof ErroOperacao ? erro.problema.codigo : String(erro)).toBe(
+      'armazenamento-indisponivel',
+    );
     expect(leu).toBe(false);
   });
 });

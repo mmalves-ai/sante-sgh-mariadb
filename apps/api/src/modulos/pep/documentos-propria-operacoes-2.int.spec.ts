@@ -268,7 +268,16 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
          VALUES (?, 'L93-2', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-        [ids.est, ids.paciente2, categoriaAt, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+        [
+          ids.est,
+          ids.paciente2,
+          categoriaAt,
+          carater,
+          fonte,
+          ids.prof,
+          new Date('2026-11-20T10:00:00Z'),
+          agora,
+        ],
       );
       await garantir(
         e,
@@ -336,7 +345,15 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
           'SELECT id FROM exame WHERE codigo = ?',
           [`${P}${s}`],
           'INSERT INTO exame (codigo, sigla, nome, tipo_servico, ativo, desativado_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [`${P}${s}`, s.toUpperCase().slice(0, 10), `Exame sintético ${s}`, servico, ativo, ativo ? null : agora, agora],
+          [
+            `${P}${s}`,
+            s.toUpperCase().slice(0, 10),
+            `Exame sintético ${s}`,
+            servico,
+            ativo,
+            ativo ? null : agora,
+            agora,
+          ],
         );
       ex.exA = await exame('hb', 'laboratorio', true);
       ex.exB = await exame('ecg', 'metodo_grafico', true);
@@ -387,7 +404,8 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     documento: DOC,
     hashConteudo: HASH,
   });
-  const PDF = (marca: string) => Buffer.from(`%PDF-1.4\n% sintetico ${marca} ${randomUUID()}\n%%EOF`).toString('base64');
+  const PDF = (marca: string) =>
+    Buffer.from(`%PDF-1.4\n% sintetico ${marca} ${randomUUID()}\n%%EOF`).toString('base64');
   // O anexo não leva o documento formatado (esquema da memória): só o resumo.
   const anexo = (marca: string, extra: Record<string, unknown> = {}) => ({
     ...Object.fromEntries(Object.entries(baseDoc()).filter(([k]) => k !== 'documento')),
@@ -423,7 +441,10 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     expect(Number(l?.['guarda'])).toBe(1);
     expect(Number(l?.['doc'])).toBe(r['documento']);
     const arq = await uma('SELECT arquivo_id FROM anexo_prontuario WHERE id = ?', [r['anexo']]);
-    const lido = await armazem.ler({ cliente: CLIENTE, correlacao: `${P}-ler` }, Number(arq?.['arquivo_id']));
+    const lido = await armazem.ler(
+      { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: `${P}-ler` },
+      Number(arq?.['arquivo_id']),
+    );
     expect(lido.conteudo.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
@@ -432,14 +453,24 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     expect(Number(r['anexo'])).toBeGreaterThan(0);
     expect(
       await codigo(
-        ops()['pep.anexarDocumento']!(C(), anexo('a3', { conteudo: Buffer.from('texto sintetico').toString('base64') }), ctx('an3')),
+        ops()['pep.anexarDocumento']!(
+          C(),
+          anexo('a3', { conteudo: Buffer.from('texto sintetico').toString('base64') }),
+          ctx('an3'),
+        ),
       ),
     ).toBe('arquivo-invalido');
     expect(
       await codigo(ops()['pep.anexarDocumento']!(C(), anexo('a4', { tipoAnexo: 999_999_999 }), ctx('an4'))),
     ).toBe('entrada-invalida');
     expect(
-      await codigo(operacoesDocumentosPropria2(nucleo, CLIENTE, null)['pep.anexarDocumento']!(C(), anexo('a7'), ctx('an7'))),
+      await codigo(
+        operacoesDocumentosPropria2(nucleo, CLIENTE, null)['pep.anexarDocumento']!(
+          C(),
+          anexo('a7'),
+          ctx('an7'),
+        ),
+      ),
     ).toBe('armazenamento-indisponivel');
   });
 
@@ -459,11 +490,10 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
     const r3 = await ops()['pep.anexarDocumento']!(C(), mesmo, ctx('an6b'));
     expect(new Set([r1['anexo'], r2['anexo'], r3['anexo']]).size).toBe(3);
     const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) =>
-      l.consultar('SELECT id, paciente_id, arquivo_id FROM anexo_prontuario WHERE id IN (?, ?, ?) ORDER BY id', [
-        r1['anexo'],
-        r2['anexo'],
-        r3['anexo'],
-      ]),
+      l.consultar(
+        'SELECT id, paciente_id, arquivo_id FROM anexo_prontuario WHERE id IN (?, ?, ?) ORDER BY id',
+        [r1['anexo'], r2['anexo'], r3['anexo']],
+      ),
     );
     expect(linhas.map((x) => Number(x['paciente_id']))).toEqual([ids.paciente, ids.paciente2, ids.paciente]);
     expect(new Set(linhas.map((x) => Number(x['arquivo_id']))).size).toBe(1);
@@ -472,7 +502,10 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
   it('anexar: chave da requisição de 80 caracteres (o máximo do formato) grava o arquivo e o anexo', async () => {
     const chave = `${P}:${randomUUID()}:${'k'.repeat(80)}`.slice(0, 80);
     expect(chave).toHaveLength(80);
-    const r = await ops()['pep.anexarDocumento']!(C(), anexo('a8'), { ...ctx('an8'), chaveIdempotencia: chave });
+    const r = await ops()['pep.anexarDocumento']!(C(), anexo('a8'), {
+      ...ctx('an8'),
+      chaveIdempotencia: chave,
+    });
     expect(Number(r['anexo'])).toBeGreaterThan(0);
   });
 
@@ -500,10 +533,12 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
         [ids.paciente, ids.est, r['agrupamento']],
       ),
     );
-    expect(reqs.map((x) => [Number(x['setor_diagnostico_id']), x['prioridade'], Number(x['itens'])])).toEqual([
-      [ex.setorA, 'rotina', 1],
-      [ex.setorB, 'urgente', 1],
-    ]);
+    expect(reqs.map((x) => [Number(x['setor_diagnostico_id']), x['prioridade'], Number(x['itens'])])).toEqual(
+      [
+        [ex.setorA, 'rotina', 1],
+        [ex.setorB, 'urgente', 1],
+      ],
+    );
     expect(reqs.every((x) => x['situacao'] === 'solicitada' && x['sit_item'] === 'solicitado')).toBe(true);
     expect(reqs.every((x) => Number(x['solicitante_profissional_id']) === ids.prof)).toBe(true);
     expect(String(reqs[0]?.['numero'])).toMatch(/^RQ-/);
@@ -515,17 +550,27 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes-2 contra o MariaDB (cli
   });
 
   it('pedir exames: exame inativo recusa e nada é gravado', async () => {
-    const antes = await uma('SELECT COUNT(*) AS n FROM requisicao_exame WHERE estabelecimento_id = ?', [ids.est]);
+    const antes = await uma('SELECT COUNT(*) AS n FROM requisicao_exame WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
     expect(
       await codigo(
         ops()['pep.solicitarExame']!(
           C(),
-          { ...baseDoc(), itens: [{ exame: ex.exA, urgente: false }, { exame: ex.exInativo, urgente: false }] },
+          {
+            ...baseDoc(),
+            itens: [
+              { exame: ex.exA, urgente: false },
+              { exame: ex.exInativo, urgente: false },
+            ],
+          },
           ctx('ex2'),
         ),
       ),
     ).toBe('exame-inativo');
-    const depois = await uma('SELECT COUNT(*) AS n FROM requisicao_exame WHERE estabelecimento_id = ?', [ids.est]);
+    const depois = await uma('SELECT COUNT(*) AS n FROM requisicao_exame WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
   });
 });

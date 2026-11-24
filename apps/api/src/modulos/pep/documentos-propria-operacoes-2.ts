@@ -138,7 +138,10 @@ export function operacoesDocumentosPropria2(
     nome: string,
     entrada: Record<string, unknown>,
     tabelas: readonly string[],
-    fn: (tx: TxOperacao, est: { id: number; fuso: string }) => Promise<Resultado & { tabela: string; id: number }>,
+    fn: (
+      tx: TxOperacao,
+      est: { id: number; fuso: string },
+    ) => Promise<Resultado & { tabela: string; id: number }>,
     trilha: (r: Resultado) => Record<string, unknown>,
     antes?: (est: { id: number; fuso: string }, banco: string) => Promise<void>,
   ): Promise<Record<string, unknown>> {
@@ -193,9 +196,15 @@ export function operacoesDocumentosPropria2(
         );
         if (!tipo) {
           if (x.tipoAnexo !== undefined)
-            throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', {
-              campos: ['tipoAnexo'],
-            });
+            throw new ErroOperacao(
+              400,
+              'entrada-invalida',
+              'Entrada inválida',
+              'Confira os campos indicados.',
+              {
+                campos: ['tipoAnexo'],
+              },
+            );
           throw recusar(409, 'tipo-anexo-sem-cadastro', 'O cliente não tem tipo de anexo ativo.');
         }
         const agora = new Date();
@@ -301,7 +310,9 @@ export function operacoesDocumentosPropria2(
         const requisicoes: number[] = [];
         for (const [setor, itens] of grupos) {
           const numero = await tx.proximoNumero(SEQUENCIA_REQUISICAO_EXAME);
-          const indicacoes = [...new Set(itens.map((i) => i.indicacao?.trim()).filter((i): i is string => !!i))];
+          const indicacoes = [
+            ...new Set(itens.map((i) => i.indicacao?.trim()).filter((i): i is string => !!i)),
+          ];
           const requisicao = await tx.incluir('requisicao_exame', {
             estabelecimento_id: s.est,
             numero: numero.formatado,

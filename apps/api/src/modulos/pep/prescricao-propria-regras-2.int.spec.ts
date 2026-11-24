@@ -210,7 +210,16 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
          VALUES (?, 'L93RG-1', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-        [ids.est, ids.paciente, categoriaAt, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+        [
+          ids.est,
+          ids.paciente,
+          categoriaAt,
+          carater,
+          fonte,
+          ids.prof,
+          new Date('2026-11-20T10:00:00Z'),
+          agora,
+        ],
       );
       const cenario = (cod: string) =>
         garantir(
@@ -266,15 +275,25 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
         e,
         'SELECT id FROM sitio_infeccao WHERE codigo = ?',
         [`${P}pulm`],
-        'INSERT INTO sitio_infeccao (codigo, descricao, sigla, criado_em) VALUES (?, ?, ?, ?)',
-        [`${P}pulm`, 'Sítio sintético l93rg', 'L93RGP', agora],
+        'INSERT INTO sitio_infeccao (codigo, descricao, sigla, versao_criterio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [`${P}pulm`, 'Sítio sintético l93rg', 'L93RGP', 'teste', agora],
       );
       const inicio = new Date(Date.now() - 2 * 3_600_000);
       ids.prescricao = await e.inserir(
         `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id,
            tipo, situacao, prescrito_em, vigencia_inicio_em, vigencia_fim_em, criado_em)
          VALUES (?, ?, ?, ?, ?, 'medica', 'vigente', ?, ?, ?, ?)`,
-        [ids.est, 932_001, ids.paciente, ids.atendimento, ids.prof, inicio, inicio, new Date(Date.now() + 22 * 3_600_000), agora],
+        [
+          ids.est,
+          932_001,
+          ids.paciente,
+          ids.atendimento,
+          ids.prof,
+          inicio,
+          inicio,
+          new Date(Date.now() + 22 * 3_600_000),
+          agora,
+        ],
       );
       const item = (seq: number, prod: number) =>
         e.inserir(
@@ -290,7 +309,16 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
         e.inserir(
           `INSERT INTO regra_alerta (estabelecimento_id, codigo, nome, cenario_alerta_id, descricao, mensagem, editavel,
              numero_versao_vigente, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, 1, '2026-01-01', ?)`,
-          [est, cod, `Regra sintética ${cod}`, ids.cenA, 'Regra sintética', 'Regra sintética', editavel, agora],
+          [
+            est,
+            cod,
+            `Regra sintética ${cod}`,
+            ids.cenA,
+            'Regra sintética',
+            'Regra sintética',
+            editavel,
+            agora,
+          ],
         );
       await regra(`${R}CLI`, null, true);
       await regra(`${R}PROD`, ids.est, false);
@@ -336,7 +364,12 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
     const r2 = await regras.gravarRegra(
       C(),
       LOGIN_SEM_PROF,
-      novaRegra('N1', { nivel: 'aviso', tipo: `${P}inter`, ativa: false, descricao: 'Nova descrição sintética' }),
+      novaRegra('N1', {
+        nivel: 'aviso',
+        tipo: `${P}inter`,
+        ativa: false,
+        descricao: 'Nova descrição sintética',
+      }),
     );
     expect(r2).toEqual({ id: r1.id, versao: 2 });
     const l = await uma(
@@ -344,17 +377,21 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
               numero_versao_vigente FROM regra_alerta WHERE id = ?`,
       [r1.id],
     );
-    expect({ ...l, bloqueante: Number(l?.['bloqueante']), exige: Number(l?.['exige_justificativa']), ativo: Number(l?.['ativo']) })
-      .toMatchObject({
-        estabelecimento_id: ids.est,
-        cenario_alerta_id: ids.cenB,
-        descricao: 'Nova descrição sintética',
-        bloqueante: 0,
-        exige: 0,
-        gravidade: 'informativo',
-        ativo: 0,
-        numero_versao_vigente: 2,
-      });
+    expect({
+      ...l,
+      bloqueante: Number(l?.['bloqueante']),
+      exige: Number(l?.['exige_justificativa']),
+      ativo: Number(l?.['ativo']),
+    }).toMatchObject({
+      estabelecimento_id: ids.est,
+      cenario_alerta_id: ids.cenB,
+      descricao: 'Nova descrição sintética',
+      bloqueante: 0,
+      exige: 0,
+      gravidade: 'informativo',
+      ativo: 0,
+      numero_versao_vigente: 2,
+    });
     const v = await todas(
       'SELECT numero_versao, operacao, motivo_alteracao, usuario_id FROM regra_alerta_versao WHERE regra_alerta_id = ? ORDER BY numero_versao',
       [r1.id],
@@ -368,7 +405,7 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
 
   it('gravarRegra: a regra do cliente (vale para todos) e a de outro estabelecimento recusam 409, nada gravado', async () => {
     const antes = await uma(
-      "SELECT COUNT(*) AS n FROM regra_alerta_versao v JOIN regra_alerta r ON r.id = v.regra_alerta_id WHERE r.codigo LIKE ?",
+      'SELECT COUNT(*) AS n FROM regra_alerta_versao v JOIN regra_alerta r ON r.id = v.regra_alerta_id WHERE r.codigo LIKE ?',
       [`${R}%`],
     );
     expect(await codigo(regras.gravarRegra(C(), LOGIN_SEM_PROF, novaRegra('CLI', { ativa: false })))).toBe(
@@ -377,10 +414,12 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
     expect(await codigo(regras.gravarRegra(C(), LOGIN_SEM_PROF, novaRegra('OUT')))).toBe(
       'regra-de-outro-estabelecimento',
     );
-    const cli = await uma('SELECT ativo, numero_versao_vigente FROM regra_alerta WHERE codigo = ?', [`${R}CLI`]);
+    const cli = await uma('SELECT ativo, numero_versao_vigente FROM regra_alerta WHERE codigo = ?', [
+      `${R}CLI`,
+    ]);
     expect([Number(cli?.['ativo']), Number(cli?.['numero_versao_vigente'])]).toEqual([1, 1]);
     const depois = await uma(
-      "SELECT COUNT(*) AS n FROM regra_alerta_versao v JOIN regra_alerta r ON r.id = v.regra_alerta_id WHERE r.codigo LIKE ?",
+      'SELECT COUNT(*) AS n FROM regra_alerta_versao v JOIN regra_alerta r ON r.id = v.regra_alerta_id WHERE r.codigo LIKE ?',
       [`${R}%`],
     );
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
@@ -391,16 +430,25 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
     const r = await regras.gravarRegra(
       C(),
       LOGIN_SEM_PROF,
-      novaRegra('PROD', { nivel: 'aviso', descricao: String(atual?.['descricao']), ativa: false, vigenteDesde: '2026-11-20' }),
+      novaRegra('PROD', {
+        nivel: 'aviso',
+        descricao: String(atual?.['descricao']),
+        ativa: false,
+        vigenteDesde: '2026-11-20',
+      }),
     );
     expect(r.versao).toBe(2);
     expect(
-      await codigo(regras.gravarRegra(C(), LOGIN_SEM_PROF, novaRegra('PROD', { nivel: 'aviso', descricao: 'Outra' }))),
+      await codigo(
+        regras.gravarRegra(C(), LOGIN_SEM_PROF, novaRegra('PROD', { nivel: 'aviso', descricao: 'Outra' })),
+      ),
     ).toBe('regra-do-produto');
     expect(await codigo(regras.gravarRegra(C(), LOGIN_SEM_PROF, novaRegra('N2', { tipo: `${P}nada` })))).toBe(
       'cenario-sem-cadastro',
     );
-    expect(await codigo(regras.gravarRegra(C(), `${P}.ninguem`, novaRegra('N3')))).toBe('profissional-sem-cbo');
+    expect(await codigo(regras.gravarRegra(C(), `${P}.ninguem`, novaRegra('N3')))).toBe(
+      'profissional-sem-cbo',
+    );
   });
 
   it('registrarFicha: pelo produto, o último item prescrito; período pelo dia de tratamento; trilha e situação pendente', async () => {
@@ -433,31 +481,55 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
     const id = await regras.registrarFicha(
       C(),
       LOGIN,
-      ficha({ item: ids.itemA, prescricao: ids.prescricao, duracaoDias: null, tipo: 'profilatico', diaTratamento: 1 }),
+      ficha({
+        item: ids.itemA,
+        prescricao: ids.prescricao,
+        duracaoDias: null,
+        tipo: 'profilatico',
+        diaTratamento: 1,
+      }),
     );
     const l = await uma(
       `SELECT dias_previstos, origem_infeccao, (SELECT codigo FROM finalidade_terapeutica f WHERE f.id = finalidade_terapeutica_id) AS fin
          FROM ficha_antimicrobiano WHERE id = ?`,
       [id],
     );
-    expect(l).toMatchObject({ dias_previstos: 10, origem_infeccao: 'profilaxia_clinica', fin: 'profilatica' });
+    expect(l).toMatchObject({
+      dias_previstos: 10,
+      origem_infeccao: 'profilaxia_clinica',
+      fin: 'profilatica',
+    });
   });
 
   it('registrarFicha: recusas sem gravar (sem item, produto diferente, não antimicrobiano, sítio, duração, não profissional)', async () => {
-    const antes = await uma('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ?', [ids.est]);
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ produto: ids.prodD })))).toBe('ficha-sem-item');
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ item: ids.itemB })))).toBe('produto-diferente-do-item');
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ item: 999_999_999 })))).toBe('registro-inexistente');
+    const antes = await uma('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
+    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ produto: ids.prodD })))).toBe(
+      'ficha-sem-item',
+    );
+    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ item: ids.itemB })))).toBe(
+      'produto-diferente-do-item',
+    );
+    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ item: 999_999_999 })))).toBe(
+      'registro-inexistente',
+    );
     expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ produto: ids.prodC })))).toBe(
       'produto-nao-antimicrobiano',
     );
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ sitio: 'nada-sintetico' })))).toBe('sitio-sem-cadastro');
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ produto: ids.prodB, duracaoDias: null })))).toBe(
-      'duracao-obrigatoria',
+    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ sitio: 'nada-sintetico' })))).toBe(
+      'sitio-sem-cadastro',
     );
-    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ paciente: 999_999_999 })))).toBe('registro-inexistente');
+    expect(
+      await codigo(regras.registrarFicha(C(), LOGIN, ficha({ produto: ids.prodB, duracaoDias: null }))),
+    ).toBe('duracao-obrigatoria');
+    expect(await codigo(regras.registrarFicha(C(), LOGIN, ficha({ paciente: 999_999_999 })))).toBe(
+      'registro-inexistente',
+    );
     expect(await codigo(regras.registrarFicha(C(), LOGIN_SEM_PROF, ficha()))).toBe('profissional-sem-cbo');
-    const depois = await uma('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ?', [ids.est]);
+    const depois = await uma('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
     expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
   });
 
@@ -466,7 +538,10 @@ describe.skipIf(SEM_BANCO)('prescricao-propria-regras-2 contra o MariaDB (client
     const a = await regras.registrarFicha(c, LOGIN, ficha({ duracaoDias: 5 }));
     const b = await regras.registrarFicha(c, LOGIN, ficha({ duracaoDias: 5 }));
     expect(b).toBe(a);
-    const n = await uma('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ? AND dias_previstos = 5', [ids.est]);
+    const n = await uma(
+      'SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ? AND dias_previstos = 5',
+      [ids.est],
+    );
     expect(Number(n?.['n'])).toBe(1);
   });
 });
