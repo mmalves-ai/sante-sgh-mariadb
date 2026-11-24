@@ -496,8 +496,8 @@ describe.skipIf(SEM_BANCO)('PortaPrescricaoPropria contra o MariaDB (cliente f22
     await expect(porta.prescricoes(ctx('l2403zz'), m.atdInt)).rejects.toMatchObject({
       problema: { status: 404 },
     });
-    expect((await porta.podeGravar()).pode).toBe(false);
-    await expect(porta.suspenderPrescricao()).rejects.toMatchObject({ problema: { status: 501 } });
+    expect((await porta.podeGravar(ctx(P), 'pep.prescrever', `${P}.inexistente`)).pode).toBe(false);
+    await expect(porta.gravarRegra()).rejects.toMatchObject({ problema: { status: 501 } });
   });
 
   it('item suspenso e item cancelado pela situação, sem horários: a porta marca e o domínio lê suspenso', async () => {

@@ -8,7 +8,8 @@ import type { GravidadeAlergia, OrigemAlergia, SituacaoAlergias } from '@sgh/con
 
 export interface AlergiaLida {
   readonly id: number;
-  readonly agenteId: number;
+  /** Alérgeno do catálogo; null na alergia de descrição livre (nunca igual a um agente pedido). */
+  readonly agenteId: number | null;
   readonly agente: string;
   readonly ativa: boolean;
   /** Registro clínico (data do lançamento, ISO) em que a alergia foi informada. */
@@ -107,7 +108,8 @@ export function conferirNovaAlergia(
 
 /** Agentes das alergias ativas, para a prescrição (M24: alergia ativa bloqueia o item). */
 export function agentesAtivos(alergias: readonly AlergiaLida[]): number[] {
-  return [...new Set(alergias.filter((a) => a.ativa).map((a) => a.agenteId))].sort((a, b) => a - b);
+  const ids = alergias.filter((a) => a.ativa).flatMap((a) => (a.agenteId === null ? [] : [a.agenteId]));
+  return [...new Set(ids)].sort((a, b) => a - b);
 }
 
 /** Hash do conteúdo da alergia registrada pelo novo (prova em SGH_PEP_DOCUMENTO). */

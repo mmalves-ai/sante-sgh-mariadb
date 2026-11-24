@@ -3,11 +3,11 @@
 import type { Leitor, Linha } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import {
-  type NucleoLeituraPep,
   PortaRegistroPropria,
   dataHora,
   fusoValido,
 } from './registro-porta-propria.js';
+import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import type { PortaRegistro } from './registro-porta.js';
 import { ServicoRegistro, situacaoAdmin } from './registro-servico.js';
 import { type AtendimentoLido, type ModeloDoRegistro, atendimentoEmCurso } from './tipos-pep.js';
@@ -31,10 +31,13 @@ function duble(respostas: (sql: string) => Linha[]) {
       return (respostas(sql)[0] as T | undefined) ?? null;
     },
   };
-  const nucleo: NucleoLeituraPep = {
+  const nucleo: NucleoRegistroGravacao = {
     lerSomente: async (contexto, fn) => {
       contextos.push({ ...contexto });
       return fn(leitor);
+    },
+    criarExecutor: () => {
+      throw new Error('o dublê de leitura não grava');
     },
   };
   return { nucleo, chamadas, contextos };
@@ -198,13 +201,14 @@ describe('PortaRegistroPropria (dublê)', () => {
     expect(d.chamadas).toHaveLength(1);
   });
 
-  it('pendentes recusam com 501 sem abrir leitura', async () => {
+  it('liberação e definição vêm da família registro (leitura no estabelecimento da sessão, sem gravar)', async () => {
     const d = duble(() => []);
     const p = new PortaRegistroPropria(d.nucleo, 'c');
-    await expect(p.salvarRascunho()).rejects.toMatchObject({ problema: { status: 501 } });
-    await expect(p.definicao()).rejects.toMatchObject({ problema: { codigo: 'pendente-modelo-proprio' } });
-    expect(d.contextos).toHaveLength(0);
-    expect((await p.podeGravar()).pode).toBe(false);
+    await expect(p.podeGravar(C, 'pep.evolucao', 'medico')).rejects.toMatchObject({
+      problema: { status: 404, codigo: 'estabelecimento-inexistente' },
+    });
+    await expect(p.definicao(C, 1)).rejects.toMatchObject({ problema: { status: 404 } });
+    expect(d.contextos.map((x) => x.correlacao)).toEqual(['pep.registro.podeGravar', 'pep.registro.definicao']);
   });
 
   it('serviço: publicado sem uso continua liberável; só o aposentado é descontinuado', () => {

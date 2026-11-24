@@ -19,26 +19,26 @@
 // do estabelecimento (o banco guarda instantes em UTC) e cliente vindo da configuração.
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import { PLANO_DO_TIPO } from '@sgh/contratos';
-import type { ContextoPrescricao, ParametrosPrescricao, PortaPrescricao } from './prescricao-porta.js';
+import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 import {
   dataHora,
   fusoValido,
-  type NucleoLeituraPep,
   PortaRegistroPropria,
 } from './registro-porta-propria.js';
+import { alergiasDaPrescricao } from './alergias-propria.js';
+import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
+import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import {
   type AtendimentoDaPrescricao,
   type AtendimentoLido,
   atendimentoEmCurso,
   type DadosClinicosLidos,
-  type DecisaoLida,
   type DetalheLido,
   type HorarioPadraoLido,
   type ItemPrescricaoLido,
-  type LiberacaoConsultada,
   type PrescricaoCabecalhoLida,
   type PrescritorLido,
-  type ProvaPrescricaoLida,
   type RetratosAtuais,
 } from './tipos-pep.js';
 
@@ -129,14 +129,6 @@ const SQL_CABECALHO = `SELECT p.id, p.atendimento_id, p.paciente_id, p.prescrito
          ORDER BY e2.ocorrido_em DESC, e2.id DESC LIMIT 1)
   WHERE ${VISIVEL('p')}`;
 
-/** Decisão gravada (CHECK de decisao_alerta) → vocabulário do contrato: o item ficou (mantido) ou saiu (retirado). */
-const DECISAO_DO_CONTRATO: Readonly<Record<string, 'mantido' | 'retirado'>> = {
-  aceitou: 'mantido',
-  ajustou: 'mantido',
-  justificou: 'mantido',
-  cancelou_item: 'retirado',
-};
-
 /** Parâmetros de afericao_valor lidos para o cálculo de dose (códigos do cadastro parametro_vital; kg e cm). */
 const PARAMETRO_PESO = 'peso';
 const PARAMETRO_ALTURA = 'altura';
@@ -150,12 +142,17 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   readonly destino = 'proprio' as const;
   private readonly registro: PortaRegistroPropria;
 
+  private readonly catalogo: CatalogoPrescricaoPropria;
+  private readonly gravacao: GravacaoPrescricaoPropria;
+
   constructor(
-    private readonly nucleo: NucleoLeituraPep,
+    private readonly nucleo: NucleoRegistroGravacao,
     /** Cliente desta API (configuração; um banco por cliente), quando o contexto da sessão não o traz. */
     private readonly cliente: string,
   ) {
     this.registro = new PortaRegistroPropria(nucleo, cliente);
+    this.catalogo = new CatalogoPrescricaoPropria(nucleo, cliente);
+    this.gravacao = new GravacaoPrescricaoPropria(nucleo, cliente);
   }
 
   private ler<T>(
@@ -374,55 +371,14 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     });
   }
 
-  marcas(
-    c: ContextoPrescricao,
-    prescricoes: readonly number[],
-  ): Promise<Map<number, { feitaNoNovo: boolean; coassinaturaPendente: boolean }>> {
-    const ids = [...new Set(prescricoes)].filter((x) => Number.isSafeInteger(x) && x > 0);
-    if (ids.length === 0) return Promise.resolve(new Map());
-    return this.ler(c, 'marcas', async (l, est) => {
-      const linhas = await l.consultar(
-        `SELECT p.id, p.origem FROM prescricao p
-          WHERE ${VISIVEL('p')} AND p.id IN (${ids.map(() => '?').join(',')})`,
-        [est.id, ...ids],
-      );
-      // Sem coassinatura no modelo próprio desta etapa: nenhuma pendente.
-      return new Map(
-        linhas.map((x) => [
-          num(x['id']),
-          { feitaNoNovo: x['origem'] === 'sistema', coassinaturaPendente: false },
-        ]),
-      );
-    });
+  /** Marcas da prescrição (coassinatura pendente = exigida e não coassinada), pelas colunas da gravação. */
+  marcas(...a: Parameters<PortaPrescricao['marcas']>) {
+    return this.gravacao.marcas(...a);
   }
 
-  decisoes(c: ContextoPrescricao, prescricao: number): Promise<DecisaoLida[]> {
-    return this.ler(c, 'decisoes', async (l, est) => {
-      const linhas = await l.consultar(
-        `SELECT d.prescricao_item_id, d.processo, d.decisao, d.justificativa, d.regra_alerta_id,
-                r.numero_versao_vigente
-           FROM decisao_alerta d
-           JOIN prescricao_item i ON i.id = d.prescricao_item_id
-           JOIN prescricao p ON p.id = i.prescricao_id
-           LEFT JOIN regra_alerta r ON r.id = d.regra_alerta_id
-          WHERE i.prescricao_id = ? AND ${VISIVEL('p')}
-            AND d.excluido_em IS NULL AND d.decisao <> 'pendente'
-          ORDER BY d.prescricao_item_id, d.sequencia`,
-        [prescricao, est.id],
-      );
-      // Mesma forma da porta de memória: chave do item a que o alerta pertence, decisão no vocabulário do contrato
-      // (mantido/retirado) e a versão da regra (não a versão de concorrência da linha). O banco não guarda a versão
-      // da regra no momento da decisão: vai a versão vigente da regra; sem regra, 0.
-      return linhas.map((x) => ({
-        item: num(x['prescricao_item_id']),
-        chave: String(num(x['prescricao_item_id'])),
-        tipo: String(x['processo']),
-        decisao: DECISAO_DO_CONTRATO[String(x['decisao'])] ?? String(x['decisao']),
-        justificativa: textoOuNull(x['justificativa']),
-        regra: x['regra_alerta_id'] === null ? '' : String(x['regra_alerta_id']),
-        versao: x['numero_versao_vigente'] === null ? 0 : num(x['numero_versao_vigente']),
-      }));
-    });
+  /** Decisões de alerta (com as sem item, pela chave da tela) e a versão da regra no momento da decisão. */
+  decisoes(...a: Parameters<PortaPrescricao['decisoes']>) {
+    return this.gravacao.decisoes(...a);
   }
 
   // ── Prescritor da sessão e dados clínicos para o cálculo de dose ──────────────────────────────────
@@ -494,126 +450,126 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
     });
   }
 
-  /** Sem a cadeia de hash do documento no modelo próprio desta etapa: a tela mostra "sem prova", nunca "confere". */
-  async prova(): Promise<ProvaPrescricaoLida> {
-    return { eventos: [], coassinaturaExigida: false, coassinada: false };
+  /** Coassinatura exigida/feita pelas colunas da prescrição e os eventos de coassinatura. */
+  prova(...a: Parameters<PortaPrescricao['prova']>) {
+    return this.gravacao.prova(...a);
   }
   async hashAtual(): Promise<string> {
     return '';
   }
 
-  /** A gravação fica desligada até o adaptador de gravação (a tela abre em consulta, com o motivo). */
-  async podeGravar(): Promise<LiberacaoConsultada> {
-    return { pode: false, codigo: 'pendente-modelo-proprio', motivo: MOTIVO_PRESCRICAO_PENDENTE };
+  /** Prescritor da sessão (profissional com inscrição ativa) e a liberação do executor para a operação. */
+  podeGravar(...a: Parameters<PortaPrescricao['podeGravar']>) {
+    return this.gravacao.podeGravar(...a);
   }
 
-  // ── Pendentes: recusa 501, nada lido nem gravado ──────────────────────────────────────────────────
-  regras(): Promise<never> {
-    return pendente('regras');
+  // ── Catálogo (família prescrição-catálogo), alergias e gravação (família prescrição-gravação) ──────────────────────────────────────────────────
+  regras(...a: Parameters<PortaPrescricao['regras']>) {
+    return this.catalogo.regras(...a);
   }
-  relativos(): Promise<never> {
-    return pendente('relativos');
+  relativos(...a: Parameters<PortaPrescricao['relativos']>) {
+    return this.catalogo.relativos(...a);
   }
-  horariosDieta(): Promise<never> {
-    return pendente('horariosDieta');
+  horariosDieta(...a: Parameters<PortaPrescricao['horariosDieta']>) {
+    return this.catalogo.horariosDieta(...a);
   }
-  dominios(): Promise<never> {
-    return pendente('dominios');
+  dominios(...a: Parameters<PortaPrescricao['dominios']>) {
+    return this.catalogo.dominios(...a);
   }
-  produtos(): Promise<never> {
-    return pendente('produtos');
+  produtos(...a: Parameters<PortaPrescricao['produtos']>) {
+    return this.catalogo.produtos(...a);
   }
-  itensParaIndice(): Promise<never> {
-    return pendente('itensParaIndice');
+  itensParaIndice(...a: Parameters<PortaPrescricao['itensParaIndice']>) {
+    return this.catalogo.itensParaIndice(...a);
   }
-  kits(): Promise<never> {
-    return pendente('kits');
+  kits(...a: Parameters<PortaPrescricao['kits']>) {
+    return this.catalogo.kits(...a);
   }
-  cadastro(): Promise<never> {
-    return pendente('cadastro');
+  cadastro(...a: Parameters<PortaPrescricao['cadastro']>) {
+    return this.catalogo.cadastro(...a);
   }
-  protocolos(): Promise<never> {
-    return pendente('protocolos');
+  protocolos(...a: Parameters<PortaPrescricao['protocolos']>) {
+    return this.catalogo.protocolos(...a);
   }
-  especialidadesDoPrescritor(): Promise<never> {
-    return pendente('especialidadesDoPrescritor');
+  especialidadesDoPrescritor(...a: Parameters<PortaPrescricao['especialidadesDoPrescritor']>) {
+    return this.catalogo.especialidadesDoPrescritor(...a);
   }
-  itensDoProtocolo(): Promise<never> {
-    return pendente('itensDoProtocolo');
+  itensDoProtocolo(...a: Parameters<PortaPrescricao['itensDoProtocolo']>) {
+    return this.catalogo.itensDoProtocolo(...a);
   }
-  alergias(): Promise<never> {
-    return pendente('alergias');
+  alergias(...a: Parameters<PortaPrescricao['alergias']>) {
+    return alergiasDaPrescricao(this.nucleo, this.cliente, ...a);
   }
-  produtosAtivos(): Promise<never> {
-    return pendente('produtosAtivos');
+  produtosAtivos(...a: Parameters<PortaPrescricao['produtosAtivos']>) {
+    return this.catalogo.produtosAtivos(...a);
   }
-  dietaDeOutro(): Promise<never> {
-    return pendente('dietaDeOutro');
+  dietaDeOutro(...a: Parameters<PortaPrescricao['dietaDeOutro']>) {
+    return this.catalogo.dietaDeOutro(...a);
   }
-  parametrosPrescricao(): Promise<ParametrosPrescricao> {
-    return pendente('parametrosPrescricao');
+  parametrosPrescricao(...a: Parameters<PortaPrescricao['parametrosPrescricao']>) {
+    return this.catalogo.parametrosPrescricao(...a);
   }
-  regrasAlerta(): Promise<never> {
-    return pendente('regrasAlerta');
+  regrasAlerta(...a: Parameters<PortaPrescricao['regrasAlerta']>) {
+    return this.catalogo.regrasAlerta(...a);
   }
-  interacoes(): Promise<never> {
-    return pendente('interacoes');
+  interacoes(...a: Parameters<PortaPrescricao['interacoes']>) {
+    return this.catalogo.interacoes(...a);
   }
-  futuras(): Promise<never> {
-    return pendente('futuras');
+  futuras(...a: Parameters<PortaPrescricao['futuras']>) {
+    return this.gravacao.futuras(...a);
   }
-  reconciliacoes(): Promise<never> {
-    return pendente('reconciliacoes');
+  reconciliacoes(...a: Parameters<PortaPrescricao['reconciliacoes']>) {
+    return this.gravacao.reconciliacoes(...a);
   }
-  fichas(): Promise<never> {
-    return pendente('fichas');
+  fichas(...a: Parameters<PortaPrescricao['fichas']>) {
+    return this.gravacao.fichas(...a);
   }
-  fichasAntigas(): Promise<never> {
-    return pendente('fichasAntigas');
+  fichasAntigas(...a: Parameters<PortaPrescricao['fichasAntigas']>) {
+    return this.gravacao.fichasAntigas(...a);
   }
-  planejamentosAntigos(): Promise<never> {
-    return pendente('planejamentosAntigos');
+  planejamentosAntigos(...a: Parameters<PortaPrescricao['planejamentosAntigos']>) {
+    return this.gravacao.planejamentosAntigos(...a);
   }
-  grades(): Promise<never> {
-    return pendente('grades');
+  grades(...a: Parameters<PortaPrescricao['grades']>) {
+    return this.gravacao.grades(...a);
   }
-  vencemAte(): Promise<never> {
-    return pendente('vencemAte');
+  vencemAte(...a: Parameters<PortaPrescricao['vencemAte']>) {
+    return this.gravacao.vencemAte(...a);
   }
-  cabecalhoDocumento(): Promise<never> {
-    return pendente('cabecalhoDocumento');
+  cabecalhoDocumento(...a: Parameters<PortaPrescricao['cabecalhoDocumento']>) {
+    return this.gravacao.cabecalhoDocumento(...a);
   }
-  prescrever(): Promise<never> {
-    return pendente('prescrever');
+  prescrever(...a: Parameters<PortaPrescricao['prescrever']>) {
+    return this.gravacao.prescrever(...a);
   }
-  incluirItem(): Promise<never> {
-    return pendente('incluirItem');
+  incluirItem(...a: Parameters<PortaPrescricao['incluirItem']>) {
+    return this.gravacao.incluirItem(...a);
   }
-  suspenderItem(): Promise<never> {
-    return pendente('suspenderItem');
+  suspenderItem(...a: Parameters<PortaPrescricao['suspenderItem']>) {
+    return this.gravacao.suspenderItem(...a);
   }
-  suspenderPrescricao(): Promise<never> {
-    return pendente('suspenderPrescricao');
+  suspenderPrescricao(...a: Parameters<PortaPrescricao['suspenderPrescricao']>) {
+    return this.gravacao.suspenderPrescricao(...a);
   }
-  coassinar(): Promise<never> {
-    return pendente('coassinar');
+  coassinar(...a: Parameters<PortaPrescricao['coassinar']>) {
+    return this.gravacao.coassinar(...a);
   }
   gravarRegra(): Promise<never> {
     return pendente('gravarRegra');
   }
-  programarFutura(): Promise<never> {
-    return pendente('programarFutura');
+  programarFutura(...a: Parameters<PortaPrescricao['programarFutura']>) {
+    return this.gravacao.programarFutura(...a);
   }
-  cancelarFutura(): Promise<never> {
-    return pendente('cancelarFutura');
+  cancelarFutura(...a: Parameters<PortaPrescricao['cancelarFutura']>) {
+    return this.gravacao.cancelarFutura(...a);
   }
-  registrarReconciliacao(): Promise<never> {
-    return pendente('registrarReconciliacao');
+  registrarReconciliacao(...a: Parameters<PortaPrescricao['registrarReconciliacao']>) {
+    return this.gravacao.registrarReconciliacao(...a);
   }
   registrarFicha(): Promise<never> {
     return pendente('registrarFicha');
   }
-  gravarGrade(): Promise<never> {
-    return pendente('gravarGrade');
+  gravarGrade(...a: Parameters<PortaPrescricao['gravarGrade']>) {
+    return this.gravacao.gravarGrade(...a);
   }
 }

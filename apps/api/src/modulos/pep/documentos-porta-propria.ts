@@ -34,13 +34,16 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
+import * as Alergias from './alergias-propria.js';
+import * as Painel from './documentos-propria-painel.js';
+import { DocumentosPropriaExames, type LeitorArquivos } from './documentos-propria-exames.js';
+import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type {
   AtendimentoPepLido,
   ContextoGravacaoPep,
   DocumentoProprioLido,
   EventoLido,
-  LiberacaoConsultada,
   PacientePepLido,
   RetratosAtuais,
 } from './tipos-pep.js';
@@ -157,6 +160,8 @@ const TIPO_DA_ORIGEM: Readonly<Record<string, string>> = {
   exame_lancado_prontuario: 'exame-externo',
   anexo_prontuario: 'anexo',
   alergia_paciente: 'alergia',
+  relatorio_transferencia: 'rel-transferencia',
+  declaracao_obito: 'declaracao-obito',
 };
 /** Sem origem conhecida: pela categoria do tipo de documento clínico do cliente. */
 const TIPO_DA_CATEGORIA: Readonly<Record<string, string>> = {
@@ -216,14 +221,20 @@ export function documentoLido(x: Record<string, unknown>, fuso: string): Documen
 export class PortaDocumentosPropria implements PortaDocumentos {
   readonly destino = 'proprio' as const;
   private readonly executor: Executor;
+  private readonly exames: DocumentosPropriaExames;
+  private readonly pareceres: DocumentosPropriaPareceres;
 
   constructor(
     private readonly nucleo: NucleoDocumentosPep,
     /** Cliente desta API (configuração; um banco por cliente), quando o contexto da sessão não o traz. */
     private readonly cliente: string,
     executor?: Executor,
+    /** Porta de armazenamento de arquivos (ADR 0004); sem ela, abrir o conteúdo do anexo recusa com 503. */
+    arquivos: LeitorArquivos | null = null,
   ) {
     this.executor = executor ?? nucleo.criarExecutor();
+    this.exames = new DocumentosPropriaExames(nucleo, cliente, arquivos, this.executor);
+    this.pareceres = new DocumentosPropriaPareceres(nucleo, cliente, this.executor);
   }
 
   private clienteDe(c: ContextoDocs): string {
@@ -447,9 +458,12 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     });
   }
 
-  /** A gravação pelo executor do estabelecimento fica desligada até o adaptador (a tela abre em consulta). */
-  async podeGravar(): Promise<LiberacaoConsultada> {
-    return { pode: false, codigo: 'pendente-modelo-proprio', motivo: MOTIVO_GRAVACAO_PENDENTE };
+  /**
+   * Passo 0 do executor: a operação com adaptador próprio (Painel.OPERACOES_PAINEL) pede o profissional da sessão com
+   * inscrição ativa no conselho; a sem adaptador recusa com `pendente-modelo-proprio` (falha fechada).
+   */
+  podeGravar(...a: Parameters<PortaDocumentos['podeGravar']>) {
+    return Painel.podeGravar(this.nucleo, this.cliente, ...a);
   }
 
   /** No banco próprio não há outro sistema de onde trazer pedidos de parecer: nada a trazer. */
@@ -902,164 +916,165 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     });
   }
 
-  // ── Pendentes (sem adaptador próprio nesta etapa): recusa 501, nada lido nem gravado ─────────────
-  painel(): Promise<never> {
-    return Promise.reject(recusaPendente('painel'));
+  // ── Famílias painel, exames, pareceres e alergias (arquivos *-propria-*.ts) ─────────────
+  painel(...a: Parameters<PortaDocumentos['painel']>) {
+    return Painel.painel(this.nucleo, this.cliente, ...a);
   }
-  episodio(): Promise<never> {
-    return Promise.reject(recusaPendente('episodio'));
+  episodio(...a: Parameters<PortaDocumentos['episodio']>) {
+    return Painel.episodio(this.nucleo, this.cliente, ...a);
   }
-  completudePainel(): Promise<never> {
-    return Promise.reject(recusaPendente('completudePainel'));
+  completudePainel(...a: Parameters<PortaDocumentos['completudePainel']>) {
+    return Painel.completudePainel(this.nucleo, this.cliente, ...a);
   }
-  preferenciasPainel(): Promise<never> {
-    return Promise.reject(recusaPendente('preferenciasPainel'));
+  preferenciasPainel(...a: Parameters<PortaDocumentos['preferenciasPainel']>) {
+    return Painel.preferenciasPainel(this.nucleo, this.cliente, ...a);
   }
-  lerReceita(): Promise<never> {
-    return Promise.reject(recusaPendente('lerReceita'));
+  lerReceita(...a: Parameters<PortaDocumentos['lerReceita']>) {
+    return Painel.lerReceita(this.nucleo, this.cliente, ...a);
   }
-  lerAtestado(): Promise<never> {
-    return Promise.reject(recusaPendente('lerAtestado'));
+  lerAtestado(...a: Parameters<PortaDocumentos['lerAtestado']>) {
+    return Painel.lerAtestado(this.nucleo, this.cliente, ...a);
   }
-  lerExameExterno(): Promise<never> {
-    return Promise.reject(recusaPendente('lerExameExterno'));
+  lerExameExterno(...a: Parameters<PortaDocumentos['lerExameExterno']>) {
+    return Painel.lerExameExterno(this.nucleo, this.cliente, ...a);
   }
-  documentoDaTrilha(): Promise<never> {
-    return Promise.reject(recusaPendente('documentoDaTrilha'));
+  documentoDaTrilha() {
+    return Painel.documentoDaTrilha();
   }
-  documentos(): Promise<never> {
-    return Promise.reject(recusaPendente('documentos'));
+  documentos(...a: Parameters<PortaDocumentos['documentos']>) {
+    return Painel.documentos(this.nucleo, this.cliente, ...a);
   }
-  fichas(): Promise<never> {
-    return Promise.reject(recusaPendente('fichas'));
+  fichas(...a: Parameters<PortaDocumentos['fichas']>) {
+    return Painel.fichas(this.nucleo, this.cliente, ...a);
   }
-  modelosEmUso(): Promise<never> {
-    return Promise.reject(recusaPendente('modelosEmUso'));
+  modelosEmUso(...a: Parameters<PortaDocumentos['modelosEmUso']>) {
+    return Painel.modelosEmUso(this.nucleo, this.cliente, ...a);
   }
-  cabecalhoDocumento(): Promise<never> {
-    return Promise.reject(recusaPendente('cabecalhoDocumento'));
+  cabecalhoDocumento(...a: Parameters<PortaDocumentos['cabecalhoDocumento']>) {
+    return Painel.cabecalhoDocumento(this.nucleo, this.cliente, ...a);
   }
-  alergias(): Promise<never> {
-    return Promise.reject(recusaPendente('alergias'));
+  alergias(...a: Parameters<PortaDocumentos['alergias']>) {
+    return Alergias.alergias(this.nucleo, this.cliente, ...a);
   }
-  catalogoAlergias(): Promise<never> {
-    return Promise.reject(recusaPendente('catalogoAlergias'));
+  catalogoAlergias(...a: Parameters<PortaDocumentos['catalogoAlergias']>) {
+    return Alergias.catalogoAlergias(this.nucleo, this.cliente, ...a);
   }
-  registrosParaAlergia(): Promise<never> {
-    return Promise.reject(recusaPendente('registrosParaAlergia'));
+  registrosParaAlergia(...a: Parameters<PortaDocumentos['registrosParaAlergia']>) {
+    return Alergias.registrosParaAlergia(this.nucleo, this.cliente, ...a);
   }
-  versaoAlergias(): Promise<never> {
-    return Promise.reject(recusaPendente('versaoAlergias'));
+  versaoAlergias(...a: Parameters<PortaDocumentos['versaoAlergias']>) {
+    return Alergias.versaoAlergias(this.nucleo, this.cliente, ...a);
   }
-  catalogoExames(): Promise<never> {
-    return Promise.reject(recusaPendente('catalogoExames'));
+  catalogoExames(...a: Parameters<PortaDocumentos['catalogoExames']>) {
+    return this.exames.catalogoExames(...a);
   }
-  examesPorId(): Promise<never> {
-    return Promise.reject(recusaPendente('examesPorId'));
+  examesPorId(...a: Parameters<PortaDocumentos['examesPorId']>) {
+    return this.exames.examesPorId(...a);
   }
-  kits(): Promise<never> {
-    return Promise.reject(recusaPendente('kits'));
+  kits(...a: Parameters<PortaDocumentos['kits']>) {
+    return this.exames.kits(...a);
   }
-  pedidos(): Promise<never> {
-    return Promise.reject(recusaPendente('pedidos'));
+  pedidos(...a: Parameters<PortaDocumentos['pedidos']>) {
+    return this.exames.pedidos(...a);
   }
-  resultados(): Promise<never> {
-    return Promise.reject(recusaPendente('resultados'));
+  resultados(...a: Parameters<PortaDocumentos['resultados']>) {
+    return this.exames.resultados(...a);
   }
-  examesExternos(): Promise<never> {
-    return Promise.reject(recusaPendente('examesExternos'));
+  examesExternos(...a: Parameters<PortaDocumentos['examesExternos']>) {
+    return this.exames.examesExternos(...a);
   }
-  anexos(): Promise<never> {
-    return Promise.reject(recusaPendente('anexos'));
+  anexos(...a: Parameters<PortaDocumentos['anexos']>) {
+    return this.exames.anexos(...a);
   }
-  arquivoAnexo(): Promise<never> {
-    return Promise.reject(recusaPendente('arquivoAnexo'));
+  arquivoAnexo(...a: Parameters<PortaDocumentos['arquivoAnexo']>) {
+    return this.exames.arquivoAnexo(...a);
   }
-  tiposTermo(): Promise<never> {
-    return Promise.reject(recusaPendente('tiposTermo'));
+  tiposTermo(...a: Parameters<PortaDocumentos['tiposTermo']>) {
+    return this.exames.tiposTermo(...a);
   }
-  tiposAnexo(): Promise<never> {
-    return Promise.reject(recusaPendente('tiposAnexo'));
+  tiposAnexo(...a: Parameters<PortaDocumentos['tiposAnexo']>) {
+    return this.exames.tiposAnexo(...a);
   }
-  tcleHerdado(): Promise<never> {
-    return Promise.reject(recusaPendente('tcleHerdado'));
+  tcleHerdado(...a: Parameters<PortaDocumentos['tcleHerdado']>) {
+    return this.exames.tcleHerdado(...a);
   }
-  tempos(): Promise<never> {
-    return Promise.reject(recusaPendente('tempos'));
+  tempos(...a: Parameters<PortaDocumentos['tempos']>) {
+    return Painel.tempos(this.nucleo, this.cliente, ...a);
   }
-  historicoPareceres(): Promise<never> {
-    return Promise.reject(recusaPendente('historicoPareceres'));
+  historicoPareceres(...a: Parameters<PortaDocumentos['historicoPareceres']>) {
+    return this.pareceres.historicoPareceres(...a);
   }
-  especialidades(): Promise<never> {
-    return Promise.reject(recusaPendente('especialidades'));
+  especialidades(...a: Parameters<PortaDocumentos['especialidades']>) {
+    return this.pareceres.especialidades(...a);
   }
-  especialidadesDoCbo(): Promise<never> {
-    return Promise.reject(recusaPendente('especialidadesDoCbo'));
+  especialidadesDoCbo(...a: Parameters<PortaDocumentos['especialidadesDoCbo']>) {
+    return this.pareceres.especialidadesDoCbo(...a);
   }
-  coassinaturas(): Promise<never> {
-    return Promise.reject(recusaPendente('coassinaturas'));
+  coassinaturas(...a: Parameters<PortaDocumentos['coassinaturas']>) {
+    return this.pareceres.coassinaturas(...a);
   }
-  supervisao(): Promise<never> {
-    return Promise.reject(recusaPendente('supervisao'));
+  supervisao(...a: Parameters<PortaDocumentos['supervisao']>) {
+    return this.pareceres.supervisao(...a);
   }
-  coassinarNoNovo(): Promise<never> {
-    return Promise.reject(recusaPendente('coassinarNoNovo'));
+  coassinarNoNovo(...a: Parameters<PortaDocumentos['coassinarNoNovo']>) {
+    return this.pareceres.coassinarNoNovo(...a);
   }
-  registrosSemAssinatura(): Promise<never> {
-    return Promise.reject(recusaPendente('registrosSemAssinatura'));
+  registrosSemAssinatura(...a: Parameters<PortaDocumentos['registrosSemAssinatura']>) {
+    return this.pareceres.registrosSemAssinatura(...a);
   }
-  problemas(): Promise<never> {
-    return Promise.reject(recusaPendente('problemas'));
+  problemas(...a: Parameters<PortaDocumentos['problemas']>) {
+    return this.pareceres.problemas(...a);
   }
-  tcles(): Promise<never> {
-    return Promise.reject(recusaPendente('tcles'));
+  tcles(...a: Parameters<PortaDocumentos['tcles']>) {
+    return this.exames.tcles(...a);
   }
-  sumarios(): Promise<never> {
-    return Promise.reject(recusaPendente('sumarios'));
+  sumarios(...a: Parameters<PortaDocumentos['sumarios']>) {
+    return this.pareceres.sumarios(...a);
   }
-  transferencias(): Promise<never> {
-    return Promise.reject(recusaPendente('transferencias'));
+  transferencias(...a: Parameters<PortaDocumentos['transferencias']>) {
+    return this.pareceres.transferencias(...a);
   }
-  obito(): Promise<never> {
-    return Promise.reject(recusaPendente('obito'));
+  obito(...a: Parameters<PortaDocumentos['obito']>) {
+    return this.pareceres.obito(...a);
   }
-  ciencias(): Promise<never> {
-    return Promise.reject(recusaPendente('ciencias'));
+  ciencias(...a: Parameters<PortaDocumentos['ciencias']>) {
+    return this.pareceres.ciencias(...a);
   }
-  fila(): Promise<never> {
-    return Promise.reject(recusaPendente('fila'));
+  fila(...a: Parameters<PortaDocumentos['fila']>) {
+    return Painel.fila(this.nucleo, this.cliente, ...a);
   }
-  fluxo(): Promise<never> {
-    return Promise.reject(recusaPendente('fluxo'));
+  fluxo(...a: Parameters<PortaDocumentos['fluxo']>) {
+    return Painel.fluxo(this.nucleo, this.cliente, ...a);
   }
-  executar(): Promise<never> {
-    return Promise.reject(recusaPendente('executar'));
+  /** Gravações pelo executor: a suspensão de receita/atestado; as demais operações ainda recusam (pendente). */
+  executar(...a: Parameters<PortaDocumentos['executar']>) {
+    return Painel.executar(this.nucleo, this.cliente, this.executor, ...a);
   }
-  gravarProblema(): Promise<never> {
-    return Promise.reject(recusaPendente('gravarProblema'));
+  gravarProblema(...a: Parameters<PortaDocumentos['gravarProblema']>) {
+    return this.pareceres.gravarProblema(...a);
   }
-  registrarCiencia(): Promise<never> {
-    return Promise.reject(recusaPendente('registrarCiencia'));
+  registrarCiencia(...a: Parameters<PortaDocumentos['registrarCiencia']>) {
+    return this.pareceres.registrarCiencia(...a);
   }
-  aceitarParecer(): Promise<never> {
-    return Promise.reject(recusaPendente('aceitarParecer'));
+  aceitarParecer(...a: Parameters<PortaDocumentos['aceitarParecer']>) {
+    return this.pareceres.aceitarParecer(...a);
   }
-  cancelarParecer(): Promise<never> {
-    return Promise.reject(recusaPendente('cancelarParecer'));
+  cancelarParecer(...a: Parameters<PortaDocumentos['cancelarParecer']>) {
+    return this.pareceres.cancelarParecer(...a);
   }
-  emitirTcle(): Promise<never> {
-    return Promise.reject(recusaPendente('emitirTcle'));
+  emitirTcle(...a: Parameters<PortaDocumentos['emitirTcle']>) {
+    return this.exames.emitirTcle(...a);
   }
-  mudarSituacaoTcle(): Promise<never> {
-    return Promise.reject(recusaPendente('mudarSituacaoTcle'));
+  mudarSituacaoTcle(...a: Parameters<PortaDocumentos['mudarSituacaoTcle']>) {
+    return this.exames.mudarSituacaoTcle(...a);
   }
-  salvarRascunhoSumario(): Promise<never> {
-    return Promise.reject(recusaPendente('salvarRascunhoSumario'));
+  salvarRascunhoSumario(...a: Parameters<PortaDocumentos['salvarRascunhoSumario']>) {
+    return this.pareceres.salvarRascunhoSumario(...a);
   }
-  registrarTransferencia(): Promise<never> {
-    return Promise.reject(recusaPendente('registrarTransferencia'));
+  registrarTransferencia(...a: Parameters<PortaDocumentos['registrarTransferencia']>) {
+    return this.pareceres.registrarTransferencia(...a);
   }
-  registrarObito(): Promise<never> {
-    return Promise.reject(recusaPendente('registrarObito'));
+  registrarObito(...a: Parameters<PortaDocumentos['registrarObito']>) {
+    return this.pareceres.registrarObito(...a);
   }
 }

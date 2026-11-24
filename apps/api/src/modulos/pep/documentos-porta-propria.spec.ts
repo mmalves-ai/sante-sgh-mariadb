@@ -317,13 +317,12 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
     expect(d.trilhas[1]).toMatchObject({ extras: { acao: 'consulta' } });
   });
 
-  it('o que não tem adaptador recusa com 501 sem ler nem gravar', async () => {
+  it('operação sem adaptador próprio (emitir documento) não é liberada, sem ler nem gravar', async () => {
     const d = duble();
-    await expect(d.porta.painel()).rejects.toMatchObject({
-      problema: { status: 501, codigo: 'pendente-modelo-proprio' },
+    expect(await d.porta.podeGravar(G, 'pep.emitirDocumento', 'medico')).toMatchObject({
+      pode: false,
+      codigo: 'pendente-modelo-proprio',
     });
-    await expect(d.porta.emitirTcle()).rejects.toMatchObject({ problema: { status: 501 } });
     expect(d.sqls).toEqual([]);
-    expect(await d.porta.podeGravar()).toMatchObject({ pode: false, codigo: 'pendente-modelo-proprio' });
   });
 });

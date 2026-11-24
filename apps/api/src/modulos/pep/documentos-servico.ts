@@ -6,6 +6,10 @@
 // texto, o RTF, o XML do documento emitido com o cabeçalho lido dos retratos) e vão ao executor; nada aqui conhece
 // tabela: os dados vêm da porta, as regras do domínio.
 import {
+  GRAVIDADES_ALERGIA,
+  type GravidadeAlergia,
+  ORIGENS_ALERGIA,
+  type OrigemAlergia,
   type AcaoLiberada,
   type AlergiaPep,
   type AlergiasPaciente,
@@ -228,6 +232,12 @@ function limpar(ls: string[]): string[] {
   while (r.length > 0 && r[r.length - 1] === '') r.pop();
   return r;
 }
+
+/** Gravidade e origem lidas no vocabulário do contrato; valor fora dele vira null (nunca inventado). */
+const gravidadeDe = (v: string | null): GravidadeAlergia | null =>
+  (GRAVIDADES_ALERGIA as readonly string[]).includes(v ?? '') ? (v as GravidadeAlergia) : null;
+const origemDe = (v: string | null): OrigemAlergia | null =>
+  (ORIGENS_ALERGIA as readonly string[]).includes(v ?? '') ? (v as OrigemAlergia) : null;
 
 const liberada = (pode: boolean, motivo: string | null): AcaoLiberada => ({
   pode,
@@ -899,14 +909,14 @@ export class ServicoDocumentos {
       tipo: a.tipo,
       principios: a.principios,
       observacao: a.observacao,
-      reacao: null,
-      gravidade: null,
-      origem: null,
+      reacao: a.reacao,
+      gravidade: gravidadeDe(a.gravidade),
+      origem: origemDe(a.origemInformacao),
       ativa: a.ativa,
       registradaEm: a.registradaEm,
       profissional: a.profissional,
       registro: a.registro,
-      inativacao: a.ativa ? null : { em: null, motivo: null, usuario: null },
+      inativacao: a.ativa ? null : { em: a.inativadaEm, motivo: a.motivoInativacao, usuario: null },
       doNovo: doNovo.has(a.id),
     });
     return {

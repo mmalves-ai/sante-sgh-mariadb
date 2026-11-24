@@ -7,10 +7,9 @@ import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
 import type { PortaPrescricao } from './prescricao-porta.js';
 import {
   BASE_PLANO_PROPRIO,
-  MOTIVO_PRESCRICAO_PENDENTE,
   PortaPrescricaoPropria,
 } from './prescricao-porta-propria.js';
-import type { NucleoLeituraPep } from './registro-porta-propria.js';
+import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 
 interface Chamada {
   readonly sql: string;
@@ -31,7 +30,10 @@ function duble(respostas: (sql: string) => Linha[]) {
       return (respostas(sql)[0] as T | undefined) ?? null;
     },
   };
-  const nucleo: NucleoLeituraPep = {
+  const nucleo: NucleoRegistroGravacao = {
+    criarExecutor: () => {
+      throw new Error('o dublê de leitura não grava');
+    },
     lerSomente: async (contexto, fn) => {
       contextos.push({ ...contexto });
       return fn(leitor);
@@ -390,7 +392,7 @@ describe('PortaPrescricaoPropria (dublê)', () => {
             decisao: 'justificou',
             justificativa: 'Benefício',
             regra_alerta_id: 5,
-            numero_versao_vigente: 3,
+            versao_regra: 3,
           },
           {
             prescricao_item_id: 2,
@@ -398,7 +400,7 @@ describe('PortaPrescricaoPropria (dublê)', () => {
             decisao: 'cancelou_item',
             justificativa: null,
             regra_alerta_id: null,
-            numero_versao_vigente: null,
+            versao_regra: null,
           },
         ];
       return [
@@ -437,24 +439,11 @@ describe('PortaPrescricaoPropria (dublê)', () => {
     });
   });
 
-  it('gravação desligada com o motivo; prova sem eventos (sem prova, nunca "confere"); pendentes recusam 501 sem ler', async () => {
+  it('sem cadeia de hash nesta etapa; regra de alerta e ficha de antimicrobiano ainda recusam 501 sem ler', async () => {
     const d = duble(() => []);
     const porta = new PortaPrescricaoPropria(d.nucleo, 'x');
-    expect(await porta.podeGravar()).toEqual({
-      pode: false,
-      codigo: 'pendente-modelo-proprio',
-      motivo: MOTIVO_PRESCRICAO_PENDENTE,
-    });
-    expect(await porta.prova()).toEqual({ eventos: [], coassinaturaExigida: false, coassinada: false });
     expect(await porta.hashAtual()).toBe('');
-    for (const m of [
-      'prescrever',
-      'suspenderPrescricao',
-      'suspenderItem',
-      'incluirItem',
-      'regras',
-      'dominios',
-    ] as const)
+    for (const m of ['gravarRegra', 'registrarFicha'] as const)
       await expect(porta[m]()).rejects.toMatchObject({
         problema: { status: 501, codigo: 'pendente-modelo-proprio' },
       });

@@ -506,9 +506,10 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     ).toBe(1);
   });
 
-  it('o que não tem adaptador recusa com 501', async () => {
-    await expect(porta.painel()).rejects.toMatchObject({
-      problema: { status: 501, codigo: 'pendente-modelo-proprio' },
+  it('operação sem adaptador próprio (emitir documento) não é liberada', async () => {
+    expect(await porta.podeGravar(C(), 'pep.emitirDocumento', LOGIN)).toMatchObject({
+      pode: false,
+      codigo: 'pendente-modelo-proprio',
     });
   });
 });

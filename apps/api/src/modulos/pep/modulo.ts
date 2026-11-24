@@ -5,6 +5,7 @@
 // indisponíveis (503, falha fechada) — nunca a memória fora de dev/ci. Sem o núcleo, a memória sintética só em dev/ci;
 // fora disso, todas indisponíveis. O cadastro e o MPI da rede vêm pelas regras dos módulos deles.
 import { type DynamicModule, Module } from '@nestjs/common';
+import { criarArmazemLocal, lerRaizArquivos } from '@sgh/nucleo';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { portaDoCadastro } from '../cadastro/modulo.js';
@@ -89,7 +90,15 @@ export function portasDoPep(ctx: ContextoModulo, o: OpcoesModuloPep = {}): Porta
       registro: o.registro ?? new PortaRegistroPropria(nucleo, cliente),
       formularioNovo: o.formularioNovo ?? new PortaFormularioNovoPropria(nucleo, cliente),
       prescricao: o.prescricao ?? new PortaPrescricaoPropria(nucleo, cliente),
-      documentos: o.documentos ?? new PortaDocumentosPropria(nucleo, cliente),
+      // O conteúdo do anexo no disco da instalação (ADR 0004); sem ARQUIVOS_RAIZ, abrir o anexo responde 503.
+      documentos:
+        o.documentos ??
+        new PortaDocumentosPropria(
+          nucleo,
+          cliente,
+          undefined,
+          lerRaizArquivos(ctx.env) ? criarArmazemLocal(nucleo, { env: ctx.env }) : null,
+        ),
       worklist: o.worklist ?? new PortaWorklistPropria(nucleo, cliente),
     };
   }

@@ -20,9 +20,9 @@
 // janela de dias desde a entrada).
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import type { ContextoRegistro, PortaRegistro } from './registro-porta.js';
+import { type NucleoRegistroGravacao, RegistroPropriaGravacao } from './registro-propria-gravacao.js';
 import {
   type AtendimentoLido,
-  type LiberacaoConsultada,
   type ModeloDoRegistro,
   type RetratosAtuais,
   type SituacaoAtendimento,
@@ -141,11 +141,16 @@ interface Estabelecimento {
 export class PortaRegistroPropria implements PortaRegistro {
   readonly destino = 'proprio' as const;
 
+  /** Gravação e leituras do registro clínico (família registro). */
+  private readonly gravacao: RegistroPropriaGravacao;
+
   constructor(
-    private readonly nucleo: NucleoLeituraPep,
+    private readonly nucleo: NucleoRegistroGravacao,
     /** Cliente desta API (configuração; um banco por cliente), quando o contexto da sessão não o traz. */
     private readonly cliente: string,
-  ) {}
+  ) {
+    this.gravacao = new RegistroPropriaGravacao(nucleo, cliente);
+  }
 
   private ler<T>(
     c: ContextoRegistro,
@@ -287,58 +292,58 @@ export class PortaRegistroPropria implements PortaRegistro {
     });
   }
 
-  /** A gravação fica desligada até o adaptador de gravação (a tela abre em consulta, com o motivo). */
-  async podeGravar(): Promise<LiberacaoConsultada> {
-    return { pode: false, codigo: 'pendente-modelo-proprio', motivo: MOTIVO_GRAVACAO_PENDENTE };
+  /** Profissional da sessão com inscrição ativa no conselho (como a memória); a liberação do executor vem depois. */
+  podeGravar(...a: Parameters<PortaRegistro['podeGravar']>) {
+    return this.gravacao.podeGravar(...a);
   }
 
-  // ── Pendentes (pedidos do lote 01-06): recusa 501, nada lido nem gravado ──────────────────────────────
-  profissional(): Promise<never> {
-    return Promise.reject(recusaPendente('profissional'));
+  // ── Família registro (RegistroPropriaGravacao): leituras da gravação e gravações pelo executor ──────────────────────────────
+  profissional(...a: Parameters<PortaRegistro['profissional']>) {
+    return this.gravacao.profissional(...a);
   }
-  definicao(): Promise<never> {
-    return Promise.reject(recusaPendente('definicao'));
+  definicao(...a: Parameters<PortaRegistro['definicao']>) {
+    return this.gravacao.definicao(...a);
   }
-  rascunhosDoProfissional(): Promise<never> {
-    return Promise.reject(recusaPendente('rascunhosDoProfissional'));
+  rascunhosDoProfissional(...a: Parameters<PortaRegistro['rascunhosDoProfissional']>) {
+    return this.gravacao.rascunhosDoProfissional(...a);
   }
-  rascunhosDoPaciente(): Promise<never> {
-    return Promise.reject(recusaPendente('rascunhosDoPaciente'));
+  rascunhosDoPaciente(...a: Parameters<PortaRegistro['rascunhosDoPaciente']>) {
+    return this.gravacao.rascunhosDoPaciente(...a);
   }
-  lerRascunho(): Promise<never> {
-    return Promise.reject(recusaPendente('lerRascunho'));
+  lerRascunho(...a: Parameters<PortaRegistro['lerRascunho']>) {
+    return this.gravacao.lerRascunho(...a);
   }
-  ultimoRegistro(): Promise<never> {
-    return Promise.reject(recusaPendente('ultimoRegistro'));
+  ultimoRegistro(...a: Parameters<PortaRegistro['ultimoRegistro']>) {
+    return this.gravacao.ultimoRegistro(...a);
   }
-  historico(): Promise<never> {
-    return Promise.reject(recusaPendente('historico'));
+  historico(...a: Parameters<PortaRegistro['historico']>) {
+    return this.gravacao.historico(...a);
   }
-  cabecalhoRegistro(): Promise<never> {
-    return Promise.reject(recusaPendente('cabecalhoRegistro'));
+  cabecalhoRegistro(...a: Parameters<PortaRegistro['cabecalhoRegistro']>) {
+    return this.gravacao.cabecalhoRegistro(...a);
   }
-  respostasRegistro(): Promise<never> {
-    return Promise.reject(recusaPendente('respostasRegistro'));
+  respostasRegistro(...a: Parameters<PortaRegistro['respostasRegistro']>) {
+    return this.gravacao.respostasRegistro(...a);
   }
-  prova(): Promise<never> {
-    return Promise.reject(recusaPendente('prova'));
+  prova(...a: Parameters<PortaRegistro['prova']>) {
+    return this.gravacao.prova(...a);
   }
-  cabecalhoDocumento(): Promise<never> {
-    return Promise.reject(recusaPendente('cabecalhoDocumento'));
+  cabecalhoDocumento(...a: Parameters<PortaRegistro['cabecalhoDocumento']>) {
+    return this.gravacao.cabecalhoDocumento(...a);
   }
-  modelosImpressao(): Promise<never> {
-    return Promise.reject(recusaPendente('modelosImpressao'));
+  modelosImpressao(...a: Parameters<PortaRegistro['modelosImpressao']>) {
+    return this.gravacao.modelosImpressao(...a);
   }
-  registrar(): Promise<never> {
-    return Promise.reject(recusaPendente('registrar'));
+  registrar(...a: Parameters<PortaRegistro['registrar']>) {
+    return this.gravacao.registrar(...a);
   }
-  salvarRascunho(): Promise<never> {
-    return Promise.reject(recusaPendente('salvarRascunho'));
+  salvarRascunho(...a: Parameters<PortaRegistro['salvarRascunho']>) {
+    return this.gravacao.salvarRascunho(...a);
   }
-  descartarRascunho(): Promise<never> {
-    return Promise.reject(recusaPendente('descartarRascunho'));
+  descartarRascunho(...a: Parameters<PortaRegistro['descartarRascunho']>) {
+    return this.gravacao.descartarRascunho(...a);
   }
-  suspender(): Promise<never> {
-    return Promise.reject(recusaPendente('suspender'));
+  suspender(...a: Parameters<PortaRegistro['suspender']>) {
+    return this.gravacao.suspender(...a);
   }
 }

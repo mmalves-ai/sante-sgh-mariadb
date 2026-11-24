@@ -3,7 +3,7 @@
 // de pessoa real. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MOTIVO_GRAVACAO_PENDENTE, PortaRegistroPropria } from './registro-porta-propria.js';
+import { PortaRegistroPropria } from './registro-porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -387,15 +387,11 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
     expect(Math.abs(Date.parse(`${agora}Z`) - Date.parse(`${esperado}Z`))).toBeLessThan(60_000);
   });
 
-  it('gravação desligada (consulta) e pendentes recusam com 501, sem gravar', async () => {
-    expect(await porta.podeGravar()).toEqual({
+  it('liberação pela família registro: conta sem profissional não grava; profissional inexistente é null', async () => {
+    expect(await porta.podeGravar(C, 'pep.evolucao', `${P}.inexistente`)).toMatchObject({
       pode: false,
-      codigo: 'pendente-modelo-proprio',
-      motivo: MOTIVO_GRAVACAO_PENDENTE,
+      codigo: 'sem-profissional',
     });
-    await expect(porta.registrar()).rejects.toMatchObject({ problema: { status: 501 } });
-    await expect(porta.profissional()).rejects.toMatchObject({
-      problema: { codigo: 'pendente-modelo-proprio' },
-    });
+    expect(await porta.profissional(C, `${P}.inexistente`)).toBeNull();
   });
 });

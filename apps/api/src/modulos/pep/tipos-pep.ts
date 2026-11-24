@@ -1080,15 +1080,28 @@ export interface FichaImpressao {
 
 export interface AlergiaDoProntuarioLida {
   readonly id: number;
-  readonly agenteId: number;
+  /** Alérgeno do catálogo; null na alergia de descrição livre. */
+  readonly agenteId: number | null;
   readonly agente: string;
   readonly tipo: string | null;
   readonly observacao: string | null;
   readonly ativa: boolean;
-  readonly registro: number;
+  /** Registro clínico em que foi informada; null na alergia sem registro clínico (classificação de risco ou importada). */
+  readonly registro: number | null;
   readonly registradaEm: string | null;
   readonly profissional: string | null;
   readonly principios: string[];
+  /** Agente descrito em texto (não cadastrado), quando houver. */
+  readonly descricaoLivre: string | null;
+  readonly tipoRegistro: 'alergia' | 'intolerancia';
+  readonly reacao: string | null;
+  readonly gravidade: string | null;
+  readonly certeza: string | null;
+  readonly origemInformacao: string | null;
+  readonly inativadaEm: string | null;
+  readonly motivoInativacao: string | null;
+  /** Estabelecimento (do mesmo cliente) em que a alergia foi registrada. */
+  readonly estabelecimentoId: number;
 }
 
 export interface ExameCatalogoLido {

@@ -306,7 +306,8 @@ export type OrigemAlergia = (typeof ORIGENS_ALERGIA)[number];
 export interface AlergiaPep {
   readonly id: number;
   readonly agente: string;
-  readonly agenteId: number;
+  /** Alérgeno do catálogo; null na alergia de descrição livre. */
+  readonly agenteId: number | null;
   readonly tipo: string | null;
   readonly principios: readonly string[];
   readonly observacao: string | null;
@@ -316,8 +317,8 @@ export interface AlergiaPep {
   readonly ativa: boolean;
   readonly registradaEm: string | null;
   readonly profissional: string | null;
-  /** Registro clínico em que foi informada (abre no prontuário). */
-  readonly registro: number;
+  /** Registro clínico em que foi informada (abre no prontuário); null na alergia sem registro clínico. */
+  readonly registro: number | null;
   readonly inativacao: { em: string | null; motivo: string | null; usuario: string | null } | null;
   /** Registrada pelo novo (com o detalhe guardado no novo). */
   readonly doNovo: boolean;

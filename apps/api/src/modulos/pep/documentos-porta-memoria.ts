@@ -173,8 +173,21 @@ const PRINCIPIOS = [
   { id: 2, nome: `BENZILPENICILINA ${M}` },
 ];
 
+/** Campos do dado completo da alergia que a memória não guarda (preenchidos vazios na leitura). */
+type CampoAlergiaCompleta =
+  | 'descricaoLivre'
+  | 'tipoRegistro'
+  | 'reacao'
+  | 'gravidade'
+  | 'certeza'
+  | 'origemInformacao'
+  | 'inativadaEm'
+  | 'motivoInativacao'
+  | 'estabelecimentoId';
+
 interface Estado {
-  alergias: (AlergiaDoProntuarioLida & { paciente: number })[];
+  alergias: (Omit<AlergiaDoProntuarioLida, CampoAlergiaCompleta> &
+    Partial<Pick<AlergiaDoProntuarioLida, CampoAlergiaCompleta>> & { paciente: number })[];
   documentos: (DocumentoProprioLido & { eventos: { tipo: string; em: string }[] })[];
   legados: (DocumentoHistoricoLido & {
     familia: 'receita' | 'atestado' | 'externo';
@@ -935,8 +948,22 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     };
   }
 
-  async alergias(c: ContextoDocs, paciente: number) {
-    return this.est(c.hospital).alergias.filter((a) => a.paciente === paciente);
+  async alergias(c: ContextoDocs, paciente: number): Promise<(AlergiaDoProntuarioLida & { paciente: number })[]> {
+    // O dado completo (como a porta própria): o que a memória não guarda vai vazio; a origem é o hospital da sessão.
+    return this.est(c.hospital)
+      .alergias.filter((a) => a.paciente === paciente)
+      .map((a) => ({
+        descricaoLivre: null,
+        tipoRegistro: 'alergia' as const,
+        reacao: null,
+        gravidade: null,
+        certeza: null,
+        origemInformacao: null,
+        inativadaEm: null,
+        motivoInativacao: null,
+        estabelecimentoId: Number(c.hospital) || 0,
+        ...a,
+      }));
   }
   async catalogoAlergias() {
     return { agentes: AGENTES, principios: PRINCIPIOS };
