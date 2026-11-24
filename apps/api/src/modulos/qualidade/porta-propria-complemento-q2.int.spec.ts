@@ -84,7 +84,13 @@ describe.skipIf(SEM_BANCO_QUA)(
           '{"motivoRetirada":"Retirada sintetica"}',
           '2027-01-01',
         );
-        ids.v3 = await versao('3', 'vigente', 'texto três', null, '2020-01-01');
+        ids.v3 = await versao(
+          '3',
+          'vigente',
+          'texto três',
+          JSON.stringify({ resumoSha256: sha256('texto três') }),
+          '2020-01-01',
+        );
         await e.executar('UPDATE documento_qualidade SET documento_qualidade_versao_id = ? WHERE id = ?', [
           ids.v3,
           ids.doc,
@@ -168,10 +174,28 @@ describe.skipIf(SEM_BANCO_QUA)(
       expect(await leituras.documentosDoCodigo(cOutro, codigo)).toEqual([]);
     });
 
-    it('a revisão pelo id traz o conteúdo e o SHA-256 do texto; no outro estabelecimento é nula', async () => {
+    it('a revisão pelo id traz o conteúdo e o SHA-256 da publicação; no outro estabelecimento é nula', async () => {
       const d = await leituras.documento(c, ids.v3);
       expect(d).toMatchObject({ conteudo: 'texto três', hash: sha256('texto três') });
       expect(await leituras.documento(cOutro, ids.v3)).toBeNull();
+      // Sem resumo guardado na publicação, o resumo sai vazio: nunca é recalculado do texto.
+      expect((await leituras.documento(c, ids.v1))?.hash).toBe('');
+    });
+
+    it('o texto alterado depois de publicado mantém o resumo da publicação (a divergência prova a alteração)', async () => {
+      const alterar = (t: string) =>
+        m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'altera-q2' }, (e) =>
+          e.executar('UPDATE documento_qualidade_versao SET conteudo = ? WHERE id = ?', [t, ids.v3]),
+        );
+      await alterar('texto adulterado');
+      try {
+        const d = await leituras.documento(c, ids.v3);
+        expect(d?.conteudo).toBe('texto adulterado');
+        expect(d?.hash).toBe(sha256('texto três'));
+        expect(d?.hash).not.toBe(sha256('texto adulterado'));
+      } finally {
+        await alterar('texto três');
+      }
     });
 
     it('a lista filtra pela situação, tipo e busca, com o total e a página', async () => {

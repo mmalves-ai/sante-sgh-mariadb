@@ -6,17 +6,21 @@
 //   o título, o tipo (tipo_documento_qualidade.codigo), a área (setor do documento) e a exigência de ciência do
 //   documento_qualidade. Só entram as versões publicadas (vigente, obsoleta e cancelada); rascunho e fluxo de aprovação
 //   não são documento publicado. Situação: vigente → 'vigente', obsoleta → 'obsoleto' (substituída por revisão nova),
-//   cancelada → 'retirado'. O resumo SHA-256 é o do arquivo (arquivo.hash_sha256) ou, no formato texto, o SHA-256 do
-//   conteúdo guardado (o mesmo resumo que a publicação calcula do texto). O motivo da retirada é o da anotação da versão
-//   (dados.motivoRetirada); o encerramento é o instante da última alteração da versão já não vigente.
+//   cancelada → 'retirado'. O resumo SHA-256 é o do arquivo (arquivo.hash_sha256, imutável no armazenamento) ou, no
+//   formato texto, o resumo FIXADO NA PUBLICAÇÃO no retrato da versão (dados.resumoSha256, gravado pela publicação com
+//   o resumo do texto em UTF-8). Nunca é recalculado do conteúdo atual: um texto alterado depois de publicado continua
+//   com o resumo da publicação, e a divergência prova a alteração. Sem resumo guardado, o resumo sai vazio (sem prova).
+//   O motivo da retirada é o da anotação da versão (dados.motivoRetirada); o encerramento é o instante da última
+//   alteração da versão já não vigente.
 // - Ciências: documento_qualidade_ciencia da revisão, pelo login da conta que registrou (a do colaborador, quando a
 //   conta não está na linha), em maiúsculas como o contrato.
 // - Comissões: comissao_hospitalar do estabelecimento, com o tipo (tipo_comissao.codigo), a periodicidade, a composição
 //   vigente (comissao_membro: nome do colaborador ou do profissional, papel como função e o login quando há conta) no
 //   JSON do contrato e as datas da última reunião realizada (ordinária e qualquer).
 // - Histórico da análise crítica de um indicador: analise_critica_indicador pela apuração (competência, numerador,
-//   denominador, valor, meta copiada e situação da meta), as 24 competências mais recentes; o responsável e o prazo
-//   são os do plano de ação ligado à análise (nulos sem plano).
+//   denominador, valor e meta copiada da apuração; a situação da meta é o resultado do período registrado na própria
+//   análise), uma análise por competência (a de maior sequência; empate, a mais nova), as 24 competências mais recentes; o responsável e o
+//   prazo são os do plano de ação ligado à análise (nulos sem plano).
 // - Contagem do painel: documentos vigentes, revisão vencida, ciências pendentes da sessão, riscos críticos
 //   (pontuação ≥ 64 ainda identificados ou em tratamento), não conformidades e manifestações abertas e vencidas.
 // - historicoRiscos (porta da segurança do paciente) segue 503 `modelo-pendente`: pede a decisão do marcador do modelo
@@ -78,7 +82,7 @@ const SQL_DOCUMENTO = (comConteudo: boolean) => `
   SELECT v.id, v.versao, d.codigo, v.numero_versao, td.codigo AS tipo, d.titulo, sf.nome AS area, v.motivo_alteracao,
          ue.login AS elaborado_por, ur.login AS revisado_por, COALESCE(ua.login, uu.login) AS aprovado_por,
          v.publicado_em, COALESCE(v.proxima_revisao, d.proxima_revisao, v.vigencia_fim) AS vigencia_ate,
-         d.exige_ciencia, COALESCE(a.hash_sha256, SHA2(v.conteudo, 256)) AS hash, v.situacao,
+         d.exige_ciencia, COALESCE(a.hash_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256'))) AS hash, v.situacao,
          JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.motivoRetirada')) AS motivo_retirada,
          CASE WHEN v.situacao <> 'vigente' THEN COALESCE(v.alterado_em, v.ocorrido_em) END AS encerrado_em
          ${comConteudo ? ', v.conteudo' : ''}
@@ -162,7 +166,7 @@ const SQL_MEMBROS = (k: number) => `
 
 const SQL_ANALISE = `
   SELECT a.id, a.versao, i.codigo AS indicador, ap.competencia, ap.numerador, ap.denominador, ap.valor, ap.valor_meta,
-         ap.situacao_meta, a.analise, a.causa, a.acao_proposta, ur.login AS responsavel, pa.prazo,
+         a.resultado_periodo, a.analise, a.causa, a.acao_proposta, ur.login AS responsavel, pa.prazo,
          ug.login AS registrada_por, a.analisado_em, uu.login AS atualizada_por, a.alterado_em
     FROM analise_critica_indicador a
     JOIN apuracao_indicador ap ON ap.id = a.apuracao_indicador_id
@@ -171,7 +175,19 @@ const SQL_ANALISE = `
     LEFT JOIN usuario ur ON ur.id = pa.responsavel_usuario_id
     LEFT JOIN usuario ug ON ug.id = a.responsavel_usuario_id
     LEFT JOIN usuario uu ON uu.id = a.alterado_por
-   WHERE ap.estabelecimento_id = ? AND a.excluido_em IS NULL AND ap.excluido_em IS NULL`;
+   WHERE ap.estabelecimento_id = ? AND a.excluido_em IS NULL AND ap.excluido_em IS NULL
+     AND NOT EXISTS (SELECT 1 FROM analise_critica_indicador a2
+                       JOIN apuracao_indicador ap2 ON ap2.id = a2.apuracao_indicador_id
+                      WHERE ap2.estabelecimento_id = ap.estabelecimento_id AND ap2.indicador_id = ap.indicador_id
+                        AND ap2.competencia = ap.competencia AND ap2.excluido_em IS NULL AND a2.excluido_em IS NULL
+                        AND (a2.sequencia > a.sequencia OR (a2.sequencia = a.sequencia AND a2.id > a.id)))`;
+
+/** O resultado do período da análise (CHECK: na_meta, fora_da_meta, sem_meta) na união do contrato. */
+const SITUACAO_META: Readonly<Record<string, AnaliseIndicadorRegistrada['situacaoMeta']>> = {
+  na_meta: 'na-meta',
+  fora_da_meta: 'fora-da-meta',
+  sem_meta: 'sem-meta',
+};
 
 function analise(r: Linha): AnaliseIndicadorRegistrada {
   return {
@@ -183,7 +199,7 @@ function analise(r: Linha): AnaliseIndicadorRegistrada {
     denominador: nn(r['denominador']),
     valor: nn(r['valor']),
     meta: nn(r['valor_meta']),
-    situacaoMeta: texto(r['situacao_meta']).replace(/_/g, '-'),
+    situacaoMeta: SITUACAO_META[texto(r['resultado_periodo'])] ?? 'sem-meta',
     texto: texto(r['analise']),
     causas: textoN(r['causa']),
     plano: textoN(r['acao_proposta']),

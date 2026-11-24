@@ -68,6 +68,11 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
     const d = await leituras.documento(C, 41);
     expect(chamadas[0]!.p).toEqual([3, 41]);
     expect(chamadas[0]!.sql).toContain(', v.conteudo');
+    // O resumo é o fixado na publicação (arquivo ou retrato da versão), nunca recalculado do conteúdo atual.
+    expect(chamadas[0]!.sql).toContain(
+      "COALESCE(a.hash_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256')))",
+    );
+    expect(chamadas[0]!.sql).not.toContain('SHA2(');
     expect(d).toMatchObject({
       id: 41,
       revisao: 3,
@@ -176,7 +181,7 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
           denominador: '10.0000',
           valor: '30.0000',
           valor_meta: null,
-          situacao_meta: 'fora_da_meta',
+          resultado_periodo: 'fora_da_meta',
           analise: 'Queda',
           causa: null,
           acao_proposta: 'Treinar',
@@ -203,6 +208,10 @@ describe('complemento Q2 da porta própria da gestão (unidade)', () => {
       atualizadaEm: null,
     });
     expect(chamadas[0]!.sql).toContain(`LIMIT ${TETO_HISTORICO_ANALISES}`);
+    // Uma análise por competência (a de maior sequência) ANTES do teto: o teto vale para 24 competências.
+    expect(chamadas[0]!.sql).toMatch(/NOT EXISTS[\s\S]*a2\.sequencia > a\.sequencia[\s\S]*LIMIT/);
+    expect(chamadas[0]!.sql).toContain('a.resultado_periodo');
+    expect(chamadas[0]!.sql).not.toContain('situacao_meta');
     expect(chamadas[0]!.p).toEqual([3, 'IND-1']);
   });
 
