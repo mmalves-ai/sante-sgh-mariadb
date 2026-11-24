@@ -45,6 +45,12 @@ import {
 import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js';
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
+import { CadastroComplementarOperadoraController } from './cadastro-complementar.controller.js';
+import {
+  METODOS_CADASTRO_COMPLEMENTAR,
+  PORTA_CADASTRO_COMPLEMENTAR,
+  PortaCadastroComplementarPropria,
+} from './cadastro-complementar-porta-propria.js';
 import { CobrancaOperadoraController } from './cobranca.controller.js';
 import {
   METODOS_PORTA_COBRANCA,
@@ -232,6 +238,7 @@ export async function moduloOperadora(
       AnsOperadoraController,
       AtendimentoOperadoraController,
       PortalPrestadorController,
+      CadastroComplementarOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -242,6 +249,14 @@ export async function moduloOperadora(
       { provide: PORTA_CONTAS_OPERADORA, useValue: p.contas },
       { provide: PORTA_ANS_OPERADORA, useValue: p.ans },
       { provide: PORTA_ATENDIMENTO_OPERADORA, useValue: p.atendimento },
+      // F78.08-1: o cadastro complementar só existe no banco do cliente (sem núcleo, 503: nada só em memória).
+      {
+        provide: PORTA_CADASTRO_COMPLEMENTAR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCadastroComplementarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaCadastroComplementarPropria>(METODOS_CADASTRO_COMPLEMENTAR),
+      },
       {
         provide: SERVICO_PORTAL_PRESTADOR,
         // A situação das chaves pela configuração do estabelecimento (a local na memória, senão a do módulo config).
