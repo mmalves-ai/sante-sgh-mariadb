@@ -79,7 +79,9 @@ export function anosDeDias(dias: unknown): number | null {
 /** Sexo do catálogo pela sigla/código ('F'/'M'); outro valor ou nenhum: sem restrição. */
 export function sexoDe(sigla: unknown, codigo: unknown): 'F' | 'M' | null {
   for (const v of [sigla, codigo]) {
-    const t = String(v ?? '').trim().toUpperCase();
+    const t = String(v ?? '')
+      .trim()
+      .toUpperCase();
     if (t === 'F' || t === 'M') return t;
   }
   return null;
@@ -372,7 +374,8 @@ export class DocumentosPropriaExames {
         ids,
       );
       const elementos = new Map<number, string[]>();
-      for (const v of vs) elementos.set(num(v['id']), [...(elementos.get(num(v['id'])) ?? []), String(v['elemento'])]);
+      for (const v of vs)
+        elementos.set(num(v['id']), [...(elementos.get(num(v['id'])) ?? []), String(v['elemento'])]);
       return ls.map((x) => ({
         id: num(x['id']),
         nome: String(x['nome']),
@@ -445,7 +448,9 @@ export class DocumentosPropriaExames {
 
   tiposAnexo(c: ContextoDocs): Promise<{ id: number; nome: string }[]> {
     return this.ler(c, 'anexos.tipos', async (l) => {
-      const ls = await l.consultar('SELECT id, descricao FROM tipo_anexo WHERE ativo = TRUE ORDER BY descricao, id');
+      const ls = await l.consultar(
+        'SELECT id, descricao FROM tipo_anexo WHERE ativo = TRUE ORDER BY descricao, id',
+      );
       return ls.map((x) => ({ id: num(x['id']), nome: String(x['descricao']) }));
     });
   }
@@ -621,7 +626,11 @@ export class DocumentosPropriaExames {
   async emitirTcle(c: ContextoGravacaoPep, t: EmissaoTcle): Promise<{ id: number; documento: number }> {
     const procedimento = t.procedimento.trim();
     if (procedimento.length < 3)
-      throw recusar(422, 'procedimento-obrigatorio', 'Informe o procedimento do termo (ao menos 3 caracteres).');
+      throw recusar(
+        422,
+        'procedimento-obrigatorio',
+        'Informe o procedimento do termo (ao menos 3 caracteres).',
+      );
     return this.gravar(
       c,
       'pep.tcle.emitir',
@@ -631,7 +640,8 @@ export class DocumentosPropriaExames {
           `SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [t.atendimento, s.est],
         );
-        if (!at) throw recusar(404, 'atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
+        if (!at)
+          throw recusar(404, 'atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
         if (num(at['paciente_id']) !== t.paciente)
           throw recusar(409, 'atendimento-de-outro-paciente', 'O atendimento não é deste paciente.');
         let modelo: Record<string, unknown> | null = null;
@@ -686,7 +696,10 @@ export class DocumentosPropriaExames {
           situacao_documento_prontuario_id: situacaoDoc,
           entidade_origem: 'termo_consentimento_paciente',
           entidade_origem_id: id,
-          titulo: (textoOuNull(modelo?.['titulo']) ?? 'Termo de consentimento livre e esclarecido').slice(0, 150),
+          titulo: (textoOuNull(modelo?.['titulo']) ?? 'Termo de consentimento livre e esclarecido').slice(
+            0,
+            150,
+          ),
           profissional_id: s.profissional,
           referencia_em: agora,
           lancado_em: agora,
@@ -786,7 +799,13 @@ export class DocumentosPropriaExames {
       },
       (id) => ({ tabela: 'termo_consentimento_paciente', id }),
       (id) => ({
-        dados: { evento: 'pep.tcle.gravado', paciente: m.paciente, anterior: m.versao, situacao: m.situacao, id },
+        dados: {
+          evento: 'pep.tcle.gravado',
+          paciente: m.paciente,
+          anterior: m.versao,
+          situacao: m.situacao,
+          id,
+        },
       }),
     );
   }
