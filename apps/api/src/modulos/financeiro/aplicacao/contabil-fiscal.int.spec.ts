@@ -76,8 +76,8 @@ describe.skipIf(SEM_BANCO)('de-para contábil, regras de retenção e recolhimen
           const t = await e.inserir(
             `INSERT INTO titulo_pagar (estabelecimento_id, numero, tipo_credor_id, empresa_fornecedora_id, tipo_documento_financeiro_id,
                numero_documento, data_emissao, data_lancamento, valor_bruto, valor_retencoes, valor_liquido, natureza_financeira_id,
-               centro_custo_id, referente, situacao, cancelado_em, criado_em)
-             VALUES (?, ?, ?, ?, ?, ?, '2026-10-05', '2026-10-05', ?, ?, ?, ?, ?, 'SERVICO SINTETICO', ?, ?, ?)`,
+               centro_custo_id, referente, situacao, cancelado_em, motivo_cancelamento, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, '2026-10-05', '2026-10-05', ?, ?, ?, ?, ?, 'SERVICO SINTETICO', ?, ?, ?, ?)`,
             [
               est,
               `L0207-${doc}`,
@@ -92,6 +92,7 @@ describe.skipIf(SEM_BANCO)('de-para contábil, regras de retenção e recolhimen
               est === m.est ? m.centro : null,
               situacao,
               situacao === 'cancelado' ? agora : null,
+              situacao === 'cancelado' ? 'CANCELAMENTO SINTETICO' : null,
               agora,
             ],
           );
