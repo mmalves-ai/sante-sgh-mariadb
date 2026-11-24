@@ -75,6 +75,7 @@ export * from './sumario-alta-secoes.js';
 export * from './alertas-completude.js';
 export * from './sigilo-categoria.js';
 export * from './resultados.js';
+export * from './grupos-resultado.js';
 export * from './problemas.js';
 // M27: fila do médico (sem evolução em 24 h, resultado novo e crítico não visto, ordem por prioridade e prazo).
 export * from './worklist/sem-evolucao.js';
