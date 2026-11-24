@@ -25,6 +25,7 @@
 //   GET  /api/pep/assinaturas[/:id/previa], POST /api/pep/assinaturas   pendências e assinatura em lote
 // Toda leitura de dado do paciente passa pelo vínculo assistencial (AcessoPacientePep) e vai à trilha; as gravações
 // vão à trilha na mesma transação (executor ou transação SGH_). Cada ação depende da sua chave de liberação (POL-3).
+import { createHash } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -569,14 +570,26 @@ export class DocumentosPepController {
       if (!t.temMais || pagina >= 20) break;
       pagina++;
     }
+    const texto = linhas.join('\r\n');
+    // 01-ADM L82: a exportação só sai depois de gravada com a justificativa (texto e tipo) e o resumo do conteúdo.
+    const reg = await this.servico.porta.registrarExportacaoProntuario(
+      this.sgh(s, 'pep.prontuario.exportado'),
+      {
+        paciente,
+        justificativa: e.justificativa,
+        tipoJustificativa: e.tipoJustificativa ?? null,
+        linhas: linhas.length,
+        hash: createHash('sha256').update(texto, 'utf8').digest('hex'),
+      },
+    );
     req.sghAlvo = {
       paciente,
-      tabelaAlvo: 'paciente',
-      idAlvo: String(paciente),
+      tabelaAlvo: 'exportacao_documento',
+      idAlvo: String(reg.id),
       chaveNaturalAlvo: `exportado;linhas:${linhas.length};justificativa:${e.tipoJustificativa ?? 'texto'}`,
     };
     res.header('content-disposition', `attachment; filename="prontuario-${paciente}.txt"`);
-    return linhas.join('\r\n');
+    return texto;
   }
 
   // ── Alergias ─────────────────────────────────────────────────────────────────────────────────────

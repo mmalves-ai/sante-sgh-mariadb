@@ -2021,6 +2021,30 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       });
   }
 
+  /** As exportações do prontuário gravadas (como exportacao_documento no banco; 01-ADM L82). */
+  readonly exportacoes: {
+    hospital: string;
+    paciente: number;
+    justificativa: string;
+    tipoJustificativa: number | null;
+    linhas: number;
+    hash: string;
+  }[] = [];
+
+  async registrarExportacaoProntuario(
+    c: ContextoGravacaoPep,
+    e: {
+      paciente: number;
+      justificativa: string;
+      tipoJustificativa?: number | null;
+      linhas: number;
+      hash: string;
+    },
+  ) {
+    this.exportacoes.push({ hospital: c.hospital, ...e, tipoJustificativa: e.tipoJustificativa ?? null });
+    return { id: this.exportacoes.length };
+  }
+
   async trazerPedidosAnteriores() {
     return 0;
   }

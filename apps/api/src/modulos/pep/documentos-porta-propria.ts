@@ -73,6 +73,7 @@ const TABELAS_DOCUMENTOS = [
   'documento_prontuario',
   'documento_prontuario_evento',
   'registro_assistencial',
+  'exportacao_documento',
 ] as const;
 
 const num = (v: unknown): number => Number(v);
@@ -728,7 +729,8 @@ export class PortaDocumentosPropria implements PortaDocumentos {
       'pep.documento.evento',
       async (tx, est, usuario) => {
         const [d] = await tx.consultarParaAtualizar(
-          `SELECT id, versao, situacao_documento_prontuario_id, vias_impressas FROM documento_prontuario
+          `SELECT id, versao, situacao_documento_prontuario_id, vias_impressas, paciente_id, atendimento_id
+             FROM documento_prontuario
             WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [ev.documento, est],
         );
@@ -754,6 +756,20 @@ export class PortaDocumentosPropria implements PortaDocumentos {
           ocorrido_em: agora,
           usuario_id: usuario,
         });
+        // Um registro só de toda impressão e exportação (01-ADM L82): quem, quando, a via e a justificativa.
+        await tx.incluir('exportacao_documento', {
+          estabelecimento_id: est,
+          documento_prontuario_id: ev.documento,
+          paciente_id: num(d['paciente_id']),
+          atendimento_id: numOuNull(d['atendimento_id']),
+          tipo_operacao:
+            ev.tipo === 'impresso' ? 'impressao' : ev.tipo === 'segunda-via' ? 'reimpressao' : 'exportacao',
+          formato: 'pdf',
+          destino: 'download',
+          justificativa: textoOuNull(ev.justificativa ?? null)?.slice(0, 500) ?? null,
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
         return { documento: ev.documento as number | null, gravado: true };
       },
       (x) => ({ tabela: 'documento_prontuario', id: x.documento }),
@@ -762,6 +778,56 @@ export class PortaDocumentosPropria implements PortaDocumentos {
         motivo: ev.justificativa ?? null,
         dados: { evento: `documento.${ev.tipo}` },
       }),
+    );
+  }
+
+  async registrarExportacaoProntuario(
+    c: ContextoGravacaoPep,
+    e: {
+      paciente: number;
+      justificativa: string;
+      tipoJustificativa?: number | null;
+      linhas: number;
+      hash: string;
+    },
+  ): Promise<{ id: number }> {
+    return this.gravar(
+      c,
+      'pep.prontuario.exportacao',
+      async (tx, est, usuario) => {
+        const p = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
+        if (!p) throw recusar(404, 'paciente-inexistente', 'Paciente não encontrado.');
+        if (e.tipoJustificativa != null) {
+          const t = await tx.uma('SELECT id FROM tipo_justificativa_exportacao WHERE id = ? AND ativo', [
+            e.tipoJustificativa,
+          ]);
+          if (!t)
+            throw recusar(
+              400,
+              'tipo-justificativa-invalido',
+              'O tipo de justificativa não existe ou está inativo.',
+            );
+        }
+        const agora = new Date();
+        const id = await tx.incluir('exportacao_documento', {
+          estabelecimento_id: est,
+          entidade: 'paciente',
+          entidade_id: e.paciente,
+          paciente_id: e.paciente,
+          tipo_operacao: 'exportacao',
+          formato: 'texto',
+          destino: 'download',
+          tipo_justificativa_exportacao_id: e.tipoJustificativa ?? null,
+          justificativa: e.justificativa.slice(0, 500),
+          hash_sha256: e.hash,
+          dados: JSON.stringify({ linhas: e.linhas }),
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
+        return { id: Number(id) };
+      },
+      (x) => ({ tabela: 'exportacao_documento', id: x.id }),
+      () => ({ acao: 'exportacao', motivo: e.justificativa, dados: { evento: 'prontuario.exportado' } }),
     );
   }
 

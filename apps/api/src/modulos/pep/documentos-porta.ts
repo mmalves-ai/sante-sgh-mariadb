@@ -295,6 +295,20 @@ export interface PortaDocumentos {
       justificativa?: string | null;
     },
   ): Promise<void>;
+  /**
+   * A exportação do prontuário completo (01-ADM L82): grava em exportacao_documento quem exportou, quando, a
+   * justificativa (texto e tipo padronizado ativo) e o resumo do conteúdo entregue, antes de entregar.
+   */
+  registrarExportacaoProntuario(
+    c: ContextoGravacaoPep,
+    e: {
+      paciente: number;
+      justificativa: string;
+      tipoJustificativa?: number | null;
+      linhas: number;
+      hash: string;
+    },
+  ): Promise<{ id: number }>;
   /** A leitura incremental do parecer do outro sistema (o ciclo da vigia), com a marca e a trilha. */
   trazerPedidosAnteriores(c: ContextoDocs): Promise<number>;
 }
