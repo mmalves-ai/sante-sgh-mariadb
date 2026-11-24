@@ -19,7 +19,7 @@ import {
   planoTrocaGrupo,
   type RecusaCadastroUsuario,
 } from '@sgh/dominio-acesso';
-import { definirOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
+import { definirOperacao, erroConflitoVersao, recusa, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 
 const num = (v: unknown): number => Number(v);
@@ -116,8 +116,7 @@ const operacaoAlterarUsuario = definirOperacao({
   async gravar(tx, e) {
     const u = await contaDoEstabelecimento(tx, e.login);
     const versao = num(/\d+/.exec(e.versao)?.[0] ?? NaN);
-    if (!Number.isInteger(versao) || versao !== u.versao)
-      throw recusa('conflito-versao', 'A conta mudou desde que a tela abriu: recarregue a ficha.');
+    if (!Number.isInteger(versao) || versao !== u.versao) throw erroConflitoVersao(['versao']);
     const outro =
       e.cpf !== undefined
         ? await tx.uma('SELECT id FROM usuario WHERE cpf = ? AND id <> ?', [e.cpf, u.id])
