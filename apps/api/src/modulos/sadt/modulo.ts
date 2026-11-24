@@ -37,6 +37,7 @@ import { portaPacsIndisponivel, PortaPacsPropria } from './pacs-porta-propria.js
 import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
+import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
@@ -122,7 +123,13 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
     module: ModuloSadt,
     // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
     global: true,
-    controllers: [SadtController, PortalController, PacsController, CatalogoSadtController],
+    controllers: [
+      SadtController,
+      PortalController,
+      PacsController,
+      CatalogoSadtController,
+      PedidoSadtController,
+    ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
       { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
@@ -130,6 +137,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       { provide: PORTA_SADT, useValue: sadt },
       { provide: PORTA_PACS, useValue: pacs },
       { provide: AVISOS_SADT, useValue: avisos },
+      // Pedido, cancelamento do item, kit com versão, recoleta e sub-amostras: só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_PEDIDO_SADT,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoPedidoSadt } = await import('./aplicacao/pedido-propria.js');
+          return new ServicoPedidoSadt(ctx.nucleo);
+        },
+      },
       // A central de avisos (o sino) é a comunicação do módulo acesso: sem ele, o aviso do crítico fica no painel do SADT.
       {
         provide: CENTRAL_AVISOS_SADT,
