@@ -22,5 +22,6 @@ export * from './portal/acesso.js';
 export * from './pacs/index.js';
 export * from './transfusao/index.js';
 export * from './catalogo/regras.js';
+export * from './catalogo/analito-pop.js';
 export * from './mapa/distribuir.js';
 export * from './escala/index.js';
