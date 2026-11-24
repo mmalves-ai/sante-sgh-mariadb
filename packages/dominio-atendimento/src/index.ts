@@ -16,3 +16,5 @@ export * from './teleconsulta/index.js';
 export * from './fluxo-atendimento.js';
 // F3.2 (02-REC linha 30): correção da ficha aberta e do procedimento extra (versão, estorno, correção).
 export * from './correcao-ficha.js';
+// F3.2 (02-REC linha 34): locais de atendimento (horário, encaminhamento, visibilidade, usuários do local).
+export * from './locais-atendimento.js';
