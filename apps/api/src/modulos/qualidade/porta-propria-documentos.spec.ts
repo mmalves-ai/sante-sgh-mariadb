@@ -1,7 +1,7 @@
 // Regra pura da publicação de revisão no banco próprio (porta-propria-documentos.ts): a substituição só da revisão
 // vigente do mesmo código na versão lida, nada de segunda vigente e nada de número de revisão repetido.
 import { describe, expect, it } from 'vitest';
-import { conferirSubstituicao, type RevisaoTravada } from './porta-propria-documentos.js';
+import { conferirSubstituicao, escolherSetor, type RevisaoTravada } from './porta-propria-documentos.js';
 
 const vigente: RevisaoTravada = { id: 7, versao: 2, documento: 3, codigo: 'POP-1', situacao: 'vigente' };
 const base = {
@@ -53,5 +53,34 @@ describe('conferirSubstituicao', () => {
         revisoesDoCodigo: ['2'],
       }),
     ).toBe('revisao-repetida');
+  });
+});
+
+describe('escolherSetor', () => {
+  it('o setor único pelo código vence os que casam pelo nome', () => {
+    expect(
+      escolherSetor([
+        { id: 4, peloCodigo: false },
+        { id: 9, peloCodigo: true },
+      ]),
+    ).toBe(9);
+  });
+  it('o nome único no estabelecimento escolhe o setor', () => {
+    expect(escolherSetor([{ id: 4, peloCodigo: false }])).toBe(4);
+  });
+  it('recusa o nome repetido (nunca escolhe por acaso) e a área que não é setor', () => {
+    expect(
+      escolherSetor([
+        { id: 4, peloCodigo: false },
+        { id: 5, peloCodigo: false },
+      ]),
+    ).toBe('ambigua');
+    expect(
+      escolherSetor([
+        { id: 4, peloCodigo: true },
+        { id: 5, peloCodigo: true },
+      ]),
+    ).toBe('ambigua');
+    expect(escolherSetor([])).toBe('inexistente');
   });
 });

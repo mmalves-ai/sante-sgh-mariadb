@@ -64,6 +64,20 @@ export function conferirSubstituicao(e: {
   return null;
 }
 
+/**
+ * Escolhe o setor da área entre os que casam pelo código ou pelo nome: um só pelo código vence; sem código, o nome
+ * tem de ser único no estabelecimento. Devolve o id, 'inexistente' ou 'ambigua'.
+ */
+export function escolherSetor(
+  c: readonly { readonly id: number; readonly peloCodigo: boolean }[],
+): number | 'inexistente' | 'ambigua' {
+  const codigo = c.filter((x) => x.peloCodigo);
+  if (codigo.length === 1) return codigo[0]!.id;
+  if (codigo.length > 1) return 'ambigua';
+  if (c.length === 0) return 'inexistente';
+  return c.length === 1 ? c[0]!.id : 'ambigua';
+}
+
 const SQL_REVISAO = `
   SELECT v.id, v.versao, v.situacao, v.documento_qualidade_id AS documento, d.codigo, d.versao AS versao_documento
     FROM documento_qualidade_versao v
@@ -81,13 +95,21 @@ export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocum
     );
     if (!t)
       throw recusa('tipo-documento-inexistente', 'O tipo de documento informado não existe ou está inativo.');
-    const s = await tx.uma<Linha>(
-      `SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL
-          AND (UPPER(nome) = UPPER(?) OR UPPER(codigo) = UPPER(?)) ORDER BY id LIMIT 1`,
-      [est, area.trim(), area.trim()],
+    // O código do setor vence o nome; nome repetido no estabelecimento recusa (nunca escolhe um setor por acaso).
+    const candidatos = await tx.consultar<Linha>(
+      `SELECT id, UPPER(codigo) = UPPER(?) AS pelo_codigo FROM setor_funcional
+        WHERE estabelecimento_id = ? AND excluido_em IS NULL
+          AND (UPPER(nome) = UPPER(?) OR UPPER(codigo) = UPPER(?))`,
+      [area.trim(), est, area.trim(), area.trim()],
     );
-    if (!s) throw recusa('area-inexistente', 'A área informada não é um setor deste estabelecimento.');
-    return { tipo: n(t['id']), setor: n(s['id']) };
+    const setor = escolherSetor(
+      candidatos.map((c) => ({ id: n(c['id']), peloCodigo: n(c['pelo_codigo']) === 1 })),
+    );
+    if (setor === 'inexistente')
+      throw recusa('area-inexistente', 'A área informada não é um setor deste estabelecimento.');
+    if (setor === 'ambigua')
+      throw recusa('area-ambigua', 'Há mais de um setor com esse nome: informe o código do setor.');
+    return { tipo: n(t['id']), setor };
   }
 
   return {
