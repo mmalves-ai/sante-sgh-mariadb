@@ -9,6 +9,9 @@
 import type {
   AdiantamentoResposta,
   AtribuirCreditoEntrada,
+  CompensarAdiantamentoEntrada,
+  ConcederAdiantamentoEntrada,
+  DevolverAdiantamentoEntrada,
   BorderoResposta,
   ConciliarEntrada,
   ContaBancariaResposta,
@@ -118,6 +121,16 @@ export interface GravadorSghFinanceiro {
   atribuirCredito(
     d: AtribuirCreditoEntrada & { usuario: string; contasEscopo: readonly number[] },
   ): Promise<{ id: number }>;
+  /** F3.8 (07-FIN linha 67): o adiantamento sai da conta do escopo; compensa só título do mesmo credor. */
+  concederAdiantamento(
+    d: ConcederAdiantamentoEntrada & { usuario: string; contasEscopo: readonly number[] },
+  ): Promise<{ id: number; numero: string; movimento: number }>;
+  compensarAdiantamento(
+    d: CompensarAdiantamentoEntrada & { usuario: string },
+  ): Promise<{ id: number; baixa: number; saldo: number }>;
+  devolverAdiantamento(
+    d: DevolverAdiantamentoEntrada & { usuario: string; contasEscopo: readonly number[] },
+  ): Promise<{ id: number; movimento: number; saldo: number }>;
   registrarRemessa(d: {
     usuario: string;
     conta: number;

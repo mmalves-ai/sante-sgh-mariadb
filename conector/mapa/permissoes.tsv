@@ -437,9 +437,11 @@ opcao_menu	196	financeiro.adiantamento.ler
 opcao_menu	196	financeiro.lancamentosAdiantamentosFornecedor.acessar
 opcao_menu	196	financeiro.modulo.ler
 opcao_menu	197	financeiro.adiantamento.ler
+opcao_menu	197	financeiro.adiantamento.conceder
 opcao_menu	197	financeiro.lancamentosAdiantamentosFornecedor.manutencao
 opcao_menu	197	financeiro.modulo.ler
 opcao_menu	198	financeiro.adiantamento.ler
+opcao_menu	198	financeiro.adiantamento.conceder
 opcao_menu	198	financeiro.lancamentosAdiantamentosFornecedor.compensacao
 opcao_menu	198	financeiro.modulo.ler
 opcao_menu	199	financeiro.indicador.ler

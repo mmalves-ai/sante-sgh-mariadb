@@ -27,6 +27,9 @@ import {
   type EscrituracaoResposta,
   esquemaAprovarTitulo,
   esquemaAtribuirCredito,
+  esquemaCompensarAdiantamento,
+  esquemaConcederAdiantamento,
+  esquemaDevolverAdiantamento,
   esquemaBaixarTitulo,
   esquemaConciliar,
   esquemaCriarTituloPagar,
@@ -350,6 +353,44 @@ export class FinanceiroController {
   @Permissao('financeiro.adiantamento.ler')
   adiantamentos(@Req() req: RequisicaoAutorizada): Promise<AdiantamentoResposta[]> {
     return this.porta.adiantamentos(ctx(sessaoDe(req)));
+  }
+
+  @Post('pagar/adiantamentos')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.conceder')
+  @AuditadoNoHandler('concessão do adiantamento com a trilha na mesma transação')
+  conceder(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.servico.concederAdiantamento(sessaoDe(req), corpo(esquemaConcederAdiantamento, b));
+  }
+
+  @Post('pagar/adiantamentos/:id/compensar')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.conceder')
+  @AuditadoNoHandler('compensação do adiantamento com a trilha na mesma transação')
+  compensar(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.servico.compensarAdiantamento(
+      sessaoDe(req),
+      corpo(esquemaCompensarAdiantamento, { ...((b ?? {}) as object), adiantamento: Number(id) }),
+    );
+  }
+
+  @Post('pagar/adiantamentos/:id/devolver')
+  @HttpCode(200)
+  @Permissao('financeiro.adiantamento.conceder')
+  @AuditadoNoHandler('devolução do saldo do adiantamento com a trilha na mesma transação')
+  devolver(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.servico.devolverAdiantamento(
+      sessaoDe(req),
+      corpo(esquemaDevolverAdiantamento, { ...((b ?? {}) as object), adiantamento: Number(id) }),
+    );
   }
 
   @Post('dados/mostrar')

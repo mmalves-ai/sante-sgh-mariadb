@@ -275,6 +275,30 @@ export const esquemaAtribuirCredito = z
   .strict();
 export type AtribuirCreditoEntrada = z.infer<typeof esquemaAtribuirCredito>;
 
+// F3.8, 07-FIN linha 67: adiantamento a fornecedor e a médico (conceder, compensar no título, devolver o saldo).
+export const esquemaConcederAdiantamento = z
+  .object({
+    tipoCredor: z.enum(['fornecedor', 'profissional']),
+    credor: id,
+    conta: id,
+    valor: dinheiro,
+    data,
+    prazo: data.nullable().default(null),
+    referente: z.string().trim().min(1).max(250),
+  })
+  .strict();
+export type ConcederAdiantamentoEntrada = z.infer<typeof esquemaConcederAdiantamento>;
+
+export const esquemaCompensarAdiantamento = z
+  .object({ adiantamento: id, parcela: id, valor: dinheiro, data })
+  .strict();
+export type CompensarAdiantamentoEntrada = z.infer<typeof esquemaCompensarAdiantamento>;
+
+export const esquemaDevolverAdiantamento = z
+  .object({ adiantamento: id, conta: id, valor: dinheiro, data, motivo: z.string().trim().min(1).max(250) })
+  .strict();
+export type DevolverAdiantamentoEntrada = z.infer<typeof esquemaDevolverAdiantamento>;
+
 export const esquemaGerarRemessa = z
   .object({ conta: id, titulos: z.array(id).min(1).max(500), leiaute: z.enum(['cnab240', 'api']) })
   .strict();

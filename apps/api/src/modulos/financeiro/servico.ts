@@ -7,6 +7,9 @@ import { createHash } from 'node:crypto';
 import {
   type AprovarTituloEntrada,
   type AtribuirCreditoEntrada,
+  type CompensarAdiantamentoEntrada,
+  type ConcederAdiantamentoEntrada,
+  type DevolverAdiantamentoEntrada,
   type BaixarTituloEntrada,
   type ConciliacaoResposta,
   type CreditoPendenteResposta,
@@ -569,6 +572,52 @@ export class ServicoFinanceiro {
       (g) => g.atribuirCredito({ ...e, usuario: s.login, contasEscopo }),
     );
     return resultadoFin('Crédito atribuído ao título a receber.', false, { credito: r.id });
+  }
+
+  // ── Adiantamento (F3.8, 07-FIN linha 67) ──────────────────────────────────────────────────────────────────────
+
+  async concederAdiantamento(
+    s: SessaoCadastro,
+    e: ConcederAdiantamentoEntrada,
+  ): Promise<ResultadoFinanceiro> {
+    const contasEscopo = await this.idsDoEscopo(s);
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroAdiantamentoConcedido.codigo,
+      'financeiro.contasPagar',
+      (x: { id: number }) => ({ tabela: 'adiantamento', id: String(x.id) }),
+      (g) => g.concederAdiantamento({ ...e, usuario: s.login, contasEscopo }),
+    );
+    return resultadoFin(`Adiantamento ${r.numero} concedido.`, false, { adiantamento: r.id });
+  }
+
+  async compensarAdiantamento(
+    s: SessaoCadastro,
+    e: CompensarAdiantamentoEntrada,
+  ): Promise<ResultadoFinanceiro> {
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroAdiantamentoCompensado.codigo,
+      'financeiro.contasPagar',
+      (x: { id: number }) => ({ tabela: 'compensacao_adiantamento', id: String(x.id) }),
+      (g) => g.compensarAdiantamento({ ...e, usuario: s.login }),
+    );
+    return resultadoFin('Adiantamento compensado no título.', false, { compensacao: r.id, saldo: r.saldo });
+  }
+
+  async devolverAdiantamento(
+    s: SessaoCadastro,
+    e: DevolverAdiantamentoEntrada,
+  ): Promise<ResultadoFinanceiro> {
+    const contasEscopo = await this.idsDoEscopo(s);
+    const r = await this.apoios.apoios.contasPagar.sgh(
+      comChave(s),
+      E.financeiroAdiantamentoDevolvido.codigo,
+      'financeiro.contasPagar',
+      () => ({ tabela: 'adiantamento', id: String(e.adiantamento) }),
+      (g) => g.devolverAdiantamento({ ...e, usuario: s.login, contasEscopo }),
+    );
+    return resultadoFin('Devolução do saldo registrada.', false, { adiantamento: r.id, saldo: r.saldo });
   }
 
   async fluxoCaixa(

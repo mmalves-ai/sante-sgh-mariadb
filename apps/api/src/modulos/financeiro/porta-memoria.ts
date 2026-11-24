@@ -7,6 +7,7 @@
 // convênio 9001 (convênio 91, com 3 itens baixados e 1 glosado) e as contas 9301 e 9302 da competência fechada do
 // convênio 92, sem título (o evento da competência).
 import type {
+  AdiantamentoResposta,
   ContaBancariaResposta,
   ContaSemTituloResposta,
   CreditoPendenteResposta,
@@ -19,11 +20,15 @@ import type {
 } from '@sgh/contratos';
 import {
   alcadaAplicavel,
+  aposUso,
   type AprovacaoRegistrada,
   calcularRateio,
   centavos,
   conferirAprovacao,
   conferirBaixaManual,
+  conferirCompensacao,
+  conferirConcessao,
+  conferirDevolucao,
   conferirContaParaTitulo,
   conferirCredor,
   conferirExclusao,
@@ -171,6 +176,7 @@ interface Estado {
     por: string;
   }[];
   creditos: CreditoPendenteResposta[];
+  adiantamentos: AdiantamentoResposta[];
   rateios: { documento: number; credor: number; centroCusto: number; percentual: number; valor: number }[];
   fiscais: Record<'nfse' | 'declaracao' | 'lote' | 'remessa', RegistroFiscalResposta[]>;
   pagosPeloNovo: Set<number>;
@@ -330,6 +336,22 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       linhas: [],
       conciliacoes: [],
       creditos: [],
+      adiantamentos: [
+        {
+          id: 1,
+          credor: 5001,
+          tipoCredor: 'fornecedor',
+          numero: 'AD-1',
+          documento: 1,
+          emissao: '2026-01-10',
+          prazo: null,
+          referente: 'Compra emergencial',
+          situacao: 'compensado_parcial',
+          valor: 1_000,
+          compensado: 400,
+          saldo: 600,
+        },
+      ],
       rateios: [],
       fiscais: { nfse: [], declaracao: [], lote: [], remessa: [] },
       pagosPeloNovo: new Set(),
@@ -1069,6 +1091,67 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           });
         return { id };
       },
+      concederAdiantamento: async (d) => {
+        this.recusar(
+          conferirConcessao({ valor: d.valor, referente: d.referente, data: d.data, prazo: d.prazo }),
+        );
+        if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
+        const id = ++s.seq;
+        const numero = `AD-${id}`;
+        s.adiantamentos.push({
+          id,
+          credor: d.credor,
+          tipoCredor: d.tipoCredor,
+          numero,
+          documento: id,
+          emissao: d.data,
+          prazo: d.prazo,
+          referente: d.referente,
+          situacao: 'pago',
+          valor: d.valor,
+          compensado: 0,
+          saldo: d.valor,
+        });
+        return { id, numero, movimento: ++s.seq };
+      },
+      compensarAdiantamento: async (d) => {
+        const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
+        const a = s.adiantamentos[i];
+        if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+        const t = s.titulos.get(d.parcela);
+        if (!t) throw recusa('titulo-inexistente', 'O título não existe ou não está em aberto.');
+        const saldoTitulo = centavos(t.valor - t.pago);
+        this.recusar(
+          conferirCompensacao(
+            { credor: { tipo: a.tipoCredor, id: a.credor }, saldo: a.saldo, situacao: a.situacao },
+            {
+              credor: { tipo: t.tipo === 'M' ? 'profissional' : 'fornecedor', id: t.credor },
+              saldo: saldoTitulo,
+            },
+            d.valor,
+          ),
+        );
+        s.titulos.set(d.parcela, { ...t, pago: centavos(t.pago + d.valor) });
+        const novo = aposUso(a.valor, a.saldo, d.valor);
+        s.adiantamentos[i] = { ...a, ...novo, compensado: centavos(a.valor - novo.saldo) };
+        return { id: ++s.seq, baixa: ++s.seq, saldo: novo.saldo };
+      },
+      devolverAdiantamento: async (d) => {
+        const i = s.adiantamentos.findIndex((x) => x.id === d.adiantamento);
+        const a = s.adiantamentos[i];
+        if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+        if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
+        this.recusar(
+          conferirDevolucao(
+            { credor: { tipo: a.tipoCredor, id: a.credor }, saldo: a.saldo, situacao: a.situacao },
+            d.valor,
+            d.motivo,
+          ),
+        );
+        const novo = aposUso(a.valor, a.saldo, d.valor);
+        s.adiantamentos[i] = { ...a, ...novo };
+        return { id: a.id, movimento: ++s.seq, saldo: novo.saldo };
+      },
       atribuirCredito: async (d) => {
         const cr = s.creditos.find((x) => x.id === d.credito);
         if (!cr) throw recusa('credito-inexistente', 'O crédito não existe.');
@@ -1307,19 +1390,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     return [...this.e(c).borderos].reverse();
   }
 
-  async adiantamentos() {
-    return [
-      {
-        id: 1,
-        credor: 5001,
-        tipoCredor: 'F',
-        documento: 7001,
-        emissao: '2026-01-10',
-        valor: 1_000,
-        compensado: 400,
-        saldo: 600,
-      },
-    ];
+  async adiantamentos(c: ContextoFinanceiro) {
+    return [...this.e(c).adiantamentos].reverse();
   }
 
   private receberDe(s: Estado, t: TituloReceberM): TituloReceberResposta {

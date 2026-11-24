@@ -127,9 +127,14 @@ export interface BorderoResposta {
 export interface AdiantamentoResposta {
   readonly id: number;
   readonly credor: number;
-  readonly tipoCredor: string;
+  readonly tipoCredor: 'fornecedor' | 'profissional';
+  /** Número de negócio do adiantamento (AD-...). */
+  readonly numero: string;
   readonly documento: number;
   readonly emissao: string | null;
+  readonly prazo: string | null;
+  readonly referente: string;
+  readonly situacao: string;
   readonly valor: number;
   readonly compensado: number;
   readonly saldo: number;

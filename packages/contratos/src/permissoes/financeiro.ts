@@ -66,6 +66,12 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
   ),
   p('financeiro.adiantamento.ler', 'Consultar adiantamentos a fornecedores e médicos e as compensações'),
   p(
+    'financeiro.adiantamento.conceder',
+    'Conceder o adiantamento a fornecedor ou médico, compensá-lo no título e devolver o saldo',
+
+    { criticidade: 'sensivel', ...CONTA },
+  ),
+  p(
     'financeiro.tituloReceber.ler',
     'Consultar os títulos a receber, a glosa no título e as contas sem título',
   ),

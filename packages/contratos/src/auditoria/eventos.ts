@@ -3473,6 +3473,21 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Crédito não identificado atribuído a um título a receber',
     legado: null,
   },
+  financeiroAdiantamentoConcedido: {
+    codigo: 'financeiro.adiantamento.concedido',
+    descricao: 'Adiantamento concedido a fornecedor ou médico, com a saída na conta bancária',
+    legado: null,
+  },
+  financeiroAdiantamentoCompensado: {
+    codigo: 'financeiro.adiantamento.compensado',
+    descricao: 'Saldo do adiantamento compensado na baixa de título a pagar do mesmo credor',
+    legado: null,
+  },
+  financeiroAdiantamentoDevolvido: {
+    codigo: 'financeiro.adiantamento.devolvido',
+    descricao: 'Saldo do adiantamento devolvido pelo credor, com a entrada na conta bancária',
+    legado: null,
+  },
   financeiroRemessaGerada: {
     codigo: 'financeiro.remessa.gerada',
     descricao: 'Remessa bancária gerada (simulador fora de produção)',
@@ -4486,6 +4501,13 @@ export const EVENTOS_AUDITAVEIS = {
     codigo: 'cadastro.paciente.unificado',
     descricao:
       'Dois prontuários duplicados do mesmo estabelecimento unificados (o absorvido inativo e apontado para o que fica)',
+    legado: null,
+  },
+  // F3.1 (02-CAD linha 7): desfazer a unificação, com motivo (os registros voltam ao cadastro absorvido).
+  pacienteUnificacaoDesfeita: {
+    codigo: 'cadastro.paciente.unificacao-desfeita',
+    descricao:
+      'Unificação de prontuários desfeita com motivo: os registros transferidos voltam ao cadastro absorvido, que é reativado',
     legado: null,
   },
   // M56 (etapa 4, F3): a rede credenciada da operadora própria (SGH_OPE_PRESTADOR e o movimento do RPS na mesma

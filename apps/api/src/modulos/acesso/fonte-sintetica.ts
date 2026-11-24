@@ -1556,6 +1556,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesFinanceiro(
         'financeiro.tituloPagar.ler',
         'financeiro.tituloPagar.baixar',
+        'financeiro.adiantamento.*',
         'financeiro.bordero.ler',
         'financeiro.remessa.*',
         'financeiro.movimento.*',

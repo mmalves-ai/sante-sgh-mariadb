@@ -36,7 +36,12 @@ import type {
 } from '@sgh/contratos';
 import {
   alcadaAplicavel,
+  aposUso,
   centavos,
+  conferirCompensacao,
+  conferirConcessao,
+  conferirDevolucao,
+  parcelaAposCompensacao,
   conferirAprovacao,
   conferirFaixas,
   conferirSegregacao,
@@ -97,6 +102,8 @@ import {
   FORMAS_PAGAMENTO,
   inicioDoMes,
   instanteIso,
+  LANCAMENTO_PAGAMENTO,
+  LANCAMENTO_RECEBIMENTO,
   numero,
   numeroOuNulo,
   statusDaParcela,
@@ -123,12 +130,17 @@ const SITUACOES_TITULAVEIS = SITUACOES_CONTA_TITULAVEL.map((s) => `'${s}'`).join
 /** Tabelas das gravações diretas (a operação de gravação direta só grava nelas). */
 const TABELAS_GRAVACAO_DIRETA = [
   'arquivo',
+  'adiantamento',
+  'compensacao_adiantamento',
+  'grupo_lancamento_financeiro',
   'tipo_documento_aprovacao',
   'fluxo_aprovacao',
   'etapa_fluxo_aprovacao',
   'pedido_aprovacao',
   'decisao_aprovacao',
   'titulo_pagar',
+  'parcela_pagar',
+  'baixa_titulo',
   'titulo_receber',
   'parcela_receber',
   'extrato_bancario',
@@ -661,7 +673,8 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
-          `SELECT id, numero, tipo_credor, empresa_fornecedora_id, profissional_id, data_emissao, valor, saldo_compensar
+          `SELECT id, numero, tipo_credor, empresa_fornecedora_id, profissional_id, data_emissao, data_vencimento, valor,
+                  saldo_compensar, referente, situacao
              FROM adiantamento WHERE estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'
             ORDER BY data_emissao DESC, id DESC LIMIT 500`,
           [est],
@@ -669,9 +682,13 @@ export class PortaFinanceiroPropria implements PortaFinanceiro {
       ).map((r) => ({
         id: numero(r['id']),
         credor: numero(r['empresa_fornecedora_id'] ?? r['profissional_id']),
-        tipoCredor: texto(r['tipo_credor']) === 'profissional' ? 'M' : 'F',
+        tipoCredor: texto(r['tipo_credor']) === 'profissional' ? 'profissional' : 'fornecedor',
+        numero: texto(r['numero']),
         documento: documentoNumerico(r['numero']),
         emissao: dataIso(r['data_emissao']),
+        prazo: r['data_vencimento'] ? dataIso(r['data_vencimento']) : null,
+        referente: texto(r['referente']),
+        situacao: texto(r['situacao']),
         valor: numero(r['valor']),
         compensado: centavos(Math.max(0, numero(r['valor']) - numero(r['saldo_compensar']))),
         saldo: numero(r['saldo_compensar']),
@@ -1488,6 +1505,43 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         })
       : Promise.resolve(null);
 
+  async function tipoLancamentoBancario(codigo: string): Promise<number> {
+    const r = await tx.uma('SELECT id FROM tipo_lancamento_bancario WHERE codigo = ? AND ativo = TRUE', [
+      codigo,
+    ]);
+    if (!r)
+      throw recusa(
+        'cadastro-incompleto',
+        `Falta no cadastro do financeiro: o tipo de lançamento bancário "${codigo}". Peça ao administrador para cadastrar.`,
+      );
+    return numero(r['id']);
+  }
+
+  async function grupoAdiantamento(
+    descricao: string,
+    data: string,
+    valor: number,
+    credor: number,
+    tipo: 'fornecedor' | 'profissional',
+  ): Promise<number> {
+    await garantirSequencia(
+      tx,
+      { tipo: 'grupo_lancamento_financeiro', estabelecimento: est, prefixo: null },
+      { usuario, agora: agora() },
+    );
+    const n = await tx.proximoNumero('grupo_lancamento_financeiro');
+    return tx.incluir('grupo_lancamento_financeiro', {
+      estabelecimento_id: est,
+      numero: n.valor,
+      tipo_operacao: 'adiantamento',
+      descricao: descricao.slice(0, 200),
+      data_operacao: data,
+      usuario_id: usuario,
+      empresa_fornecedora_id: tipo === 'fornecedor' ? credor : null,
+      valor_pagar: valor,
+    });
+  }
+
   async function tipoAprovacao(): Promise<number> {
     const r = await tx.uma('SELECT id FROM tipo_documento_aprovacao WHERE codigo = ?', [
       TIPO_APROVACAO_TITULO,
@@ -1932,6 +1986,185 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         observacao: d.observacao.trim() || null,
       });
       return { id: d.credito };
+    },
+
+    // ── Adiantamento (F3.8, 07-FIN linha 67): a regra no domínio; aqui o registro, o movimento e o grupo. ──
+    async concederAdiantamento(d) {
+      recusar(conferirConcessao({ valor: d.valor, referente: d.referente, data: d.data, prazo: d.prazo }));
+      if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
+      if (!(await contasDoEscopo(tx, est, usuario, 'movimentar')).includes(d.conta)) throw foraDoEscopo();
+      const tabelaCredor = d.tipoCredor === 'profissional' ? 'profissional' : 'empresa_fornecedora';
+      if (!(await tx.uma(`SELECT id FROM ${tabelaCredor} WHERE id = ? AND excluido_em IS NULL`, [d.credor])))
+        throw recusa('credor-inexistente', 'O credor não existe no cadastro.', { campos: ['credor'] });
+      const conta = await tx.uma(
+        'SELECT id FROM conta_bancaria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [d.conta, est],
+      );
+      if (!conta) throw foraDoEscopo();
+      const grupo = await grupoAdiantamento(
+        `Adiantamento: ${d.referente}`,
+        d.data,
+        d.valor,
+        d.credor,
+        d.tipoCredor,
+      );
+      await garantirSequencia(
+        tx,
+        { tipo: 'adiantamento', estabelecimento: est, prefixo: 'AD-' },
+        { usuario, agora: agora() },
+      );
+      const num = await tx.proximoNumero('adiantamento');
+      const id = await tx.incluir('adiantamento', {
+        estabelecimento_id: est,
+        numero: num.formatado,
+        tipo_credor: d.tipoCredor,
+        empresa_fornecedora_id: d.tipoCredor === 'fornecedor' ? d.credor : null,
+        profissional_id: d.tipoCredor === 'profissional' ? d.credor : null,
+        data_emissao: d.data,
+        data_vencimento: d.prazo,
+        data_pagamento: d.data,
+        valor: d.valor,
+        valor_pago: d.valor,
+        saldo_compensar: d.valor,
+        referente: d.referente.trim(),
+        conta_bancaria_id: d.conta,
+        situacao: 'pago',
+        grupo_lancamento_financeiro_id: grupo,
+      });
+      const movimento = await tx.incluir('movimento_bancario', {
+        estabelecimento_id: est,
+        conta_bancaria_id: d.conta,
+        tipo_lancamento_bancario_id: await tipoLancamentoBancario(LANCAMENTO_PAGAMENTO),
+        natureza: 'debito',
+        tipo_origem: 'manual',
+        data_movimento: d.data,
+        numero_documento: num.formatado.slice(0, 30),
+        historico: `Adiantamento ${num.formatado}: ${d.referente.trim()}`.slice(0, 300),
+        valor: d.valor,
+        grupo_lancamento_financeiro_id: grupo,
+      });
+      return { id, numero: num.formatado, movimento };
+    },
+
+    async compensarAdiantamento(d) {
+      const [a] = await tx.consultarParaAtualizar(
+        `SELECT id, versao, valor, saldo_compensar, situacao, tipo_credor, empresa_fornecedora_id, profissional_id
+           FROM adiantamento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [d.adiantamento, est],
+        { teto: 1 },
+      );
+      if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+      const [p] = await tx.consultarParaAtualizar(
+        `SELECT p.id, p.versao, p.saldo, p.valor_pago, p.situacao, p.titulo_pagar_id, t.empresa_fornecedora_id,
+                t.profissional_id
+           FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+          WHERE p.id = ? AND t.estabelecimento_id = ? AND p.excluido_em IS NULL AND t.excluido_em IS NULL
+            AND t.situacao <> 'cancelado' AND p.situacao IN ('aberta','parcial')`,
+        [d.parcela, est],
+        { teto: 1 },
+      );
+      if (!p)
+        throw recusa('titulo-inexistente', 'O título não existe ou não está em aberto.', {
+          campos: ['parcela'],
+        });
+      const credorDe = (r: Linha) =>
+        r['profissional_id']
+          ? { tipo: 'profissional' as const, id: numero(r['profissional_id']) }
+          : { tipo: 'fornecedor' as const, id: numero(r['empresa_fornecedora_id']) };
+      const saldoAd = numero(a['saldo_compensar']);
+      recusar(
+        conferirCompensacao(
+          { credor: credorDe(a), saldo: saldoAd, situacao: texto(a['situacao']) },
+          { credor: credorDe(p), saldo: numero(p['saldo']) },
+          d.valor,
+        ),
+      );
+      const baixa = await tx.incluir('baixa_titulo', {
+        estabelecimento_id: est,
+        parcela_pagar_id: p['id'],
+        data_pagamento: d.data,
+        conta_bancaria_id: null,
+        forma_pagamento: 'compensacao',
+        valor_principal: d.valor,
+        valor_pago: d.valor,
+      });
+      const id = await tx.incluir('compensacao_adiantamento', {
+        adiantamento_id: d.adiantamento,
+        parcela_pagar_id: p['id'],
+        baixa_titulo_id: baixa,
+        valor_compensado: d.valor,
+        data_compensacao: d.data,
+      });
+      const parc = parcelaAposCompensacao(numero(p['saldo']), d.valor);
+      await tx.alterar('parcela_pagar', numero(p['id']), numero(p['versao']), {
+        valor_pago: centavos(numero(p['valor_pago']) + d.valor),
+        saldo: parc.saldo,
+        situacao: parc.situacao,
+        quitada_em: parc.situacao === 'paga' ? d.data : null,
+      });
+      const titulo = numero(p['titulo_pagar_id']);
+      const [t] = await tx.consultarParaAtualizar(
+        `SELECT t.versao, SUM(p.saldo > 0) AS abertas FROM titulo_pagar t
+           JOIN parcela_pagar p ON p.titulo_pagar_id = t.id AND p.excluido_em IS NULL
+          WHERE t.id = ? GROUP BY t.id, t.versao`,
+        [titulo],
+        { teto: 1 },
+      );
+      if (t)
+        await tx.alterar('titulo_pagar', titulo, numero(t['versao']), {
+          situacao: numero(t['abertas']) > 0 ? 'pago_parcial' : 'pago',
+        });
+      const novo = aposUso(numero(a['valor']), saldoAd, d.valor);
+      await tx.alterar('adiantamento', d.adiantamento, numero(a['versao']), {
+        saldo_compensar: novo.saldo,
+        situacao: novo.situacao,
+        encerrado_em: novo.saldo === 0 ? agora() : null,
+      });
+      return { id, baixa, saldo: novo.saldo };
+    },
+
+    async devolverAdiantamento(d) {
+      const [a] = await tx.consultarParaAtualizar(
+        `SELECT id, versao, numero, valor, saldo_compensar, situacao, tipo_credor, empresa_fornecedora_id, profissional_id,
+                grupo_lancamento_financeiro_id
+           FROM adiantamento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [d.adiantamento, est],
+        { teto: 1 },
+      );
+      if (!a) throw recusa('adiantamento-inexistente', 'O adiantamento não existe.');
+      if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
+      if (!(await contasDoEscopo(tx, est, usuario, 'movimentar')).includes(d.conta)) throw foraDoEscopo();
+      const saldoAd = numero(a['saldo_compensar']);
+      recusar(
+        conferirDevolucao(
+          {
+            credor: { tipo: 'fornecedor', id: 0 },
+            saldo: saldoAd,
+            situacao: texto(a['situacao']),
+          },
+          d.valor,
+          d.motivo,
+        ),
+      );
+      const movimento = await tx.incluir('movimento_bancario', {
+        estabelecimento_id: est,
+        conta_bancaria_id: d.conta,
+        tipo_lancamento_bancario_id: await tipoLancamentoBancario(LANCAMENTO_RECEBIMENTO),
+        natureza: 'credito',
+        tipo_origem: 'manual',
+        data_movimento: d.data,
+        numero_documento: texto(a['numero']).slice(0, 30),
+        historico: `Devolução do adiantamento ${texto(a['numero'])}: ${d.motivo.trim()}`.slice(0, 300),
+        valor: d.valor,
+        grupo_lancamento_financeiro_id: a['grupo_lancamento_financeiro_id'] ?? null,
+      });
+      const novo = aposUso(numero(a['valor']), saldoAd, d.valor);
+      await tx.alterar('adiantamento', d.adiantamento, numero(a['versao']), {
+        saldo_compensar: novo.saldo,
+        situacao: novo.situacao,
+        encerrado_em: novo.saldo === 0 ? agora() : null,
+      });
+      return { id: d.adiantamento, movimento, saldo: novo.saldo };
     },
 
     async registrarRemessa(d) {

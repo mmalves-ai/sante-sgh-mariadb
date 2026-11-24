@@ -11,5 +11,6 @@ export * from './nfse.js';
 export * from './declaracoes.js';
 export * from './lote-contabil.js';
 export * from './remessa.js';
+export * from './adiantamento.js';
 export * from './indicadores.js';
 export * from './orcamento.js';

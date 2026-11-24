@@ -21,6 +21,9 @@ export const FUNCIONALIDADES_FINANCEIRO = {
       aprovarTitulo: 'financeiro.tituloPagar.aprovar',
       editarAlcada: 'financeiro.parametro.editar',
       gerarRemessa: 'financeiro.remessa.gerar',
+      concederAdiantamento: 'financeiro.adiantamento.conceder',
+      compensarAdiantamento: 'financeiro.adiantamento.conceder',
+      devolverAdiantamento: 'financeiro.adiantamento.conceder',
     },
   },
   contasReceber: {
