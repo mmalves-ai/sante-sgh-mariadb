@@ -179,6 +179,47 @@ describe('credenciamento de cobrança com exceção', () => {
     expect(conferirCobranca([cred({})], [exc({ fonteId: 2, itemId: 10 })], pc).permitido).toBe(true);
   });
 
+  it('a permissão do próprio profissional abre exceção dentro da proibição da equipe para o mesmo item', () => {
+    const equipeProibe = exc({ id: 1, profissionalId: null, equipeId: 70, itemId: 10 });
+    const profPermite = exc({ id: 2, efeito: 'permite', motivo: null, itemId: 10 });
+    expect(conferirCobranca([cred({})], [equipeProibe, profPermite], pc)).toMatchObject({
+      permitido: true,
+      excecaoId: 2,
+    });
+    // Sem a permissão individual, a proibição da equipe vale para o profissional da equipe.
+    expect(conferirCobranca([cred({})], [equipeProibe], pc)).toMatchObject({
+      permitido: false,
+      excecaoId: 1,
+    });
+    // Mas a proibição da equipe para o item vence a permissão individual de todo o grupo (procedimento primeiro).
+    expect(
+      conferirCobranca([cred({})], [equipeProibe, exc({ id: 3, efeito: 'permite', grupoId: 3 })], pc)
+        .permitido,
+    ).toBe(false);
+  });
+
+  it('a exceção presa ao credenciamento geral vale mesmo com um credenciamento do plano mais específico', () => {
+    const geral = cred({ id: 1 });
+    const doPlano = cred({ id: 2, planoId: 7 });
+    const x = exc({ credenciamentoId: 1, profissionalId: null, itemId: 10 });
+    expect(conferirCobranca([geral, doPlano], [x], pc)).toMatchObject({
+      permitido: false,
+      credenciamentoId: 2,
+      excecaoId: 100,
+    });
+    // Exceção de um credenciamento que não serve ao pedido (de outro profissional ou vencido) não entra.
+    expect(
+      conferirCobranca([geral, doPlano], [exc({ credenciamentoId: 99, profissionalId: null })], pc),
+    ).toMatchObject({ permitido: true, origem: 'credenciamento' });
+    expect(
+      conferirCobranca(
+        [cred({ id: 1, vigenciaFim: '2026-01-01' }), doPlano],
+        [exc({ credenciamentoId: 1, profissionalId: null })],
+        pc,
+      ).permitido,
+    ).toBe(true);
+  });
+
   it('validações', () => {
     expect(
       validarCredenciamentoCobranca({

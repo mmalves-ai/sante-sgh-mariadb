@@ -212,19 +212,33 @@ function credenciamentoServe(c: CredenciamentoCobranca, p: PedidoCobranca): numb
   return pl * 100 + (c.tipoContaId !== null ? 10 : 0) + (c.grupoAtoId !== null ? 10 : 0);
 }
 
-function excecaoServe(x: ExcecaoCredenciamento, p: PedidoCobranca, credenciamentoId: number | null): number {
+/**
+ * Pontua a exceção para o pedido (0: não serve). Ordem: procedimento (item > grupo > todos), depois o sujeito
+ * (credenciamento, profissional ou prestador > equipe), depois o plano (do paciente > superior > todos), o tipo de
+ * atendimento e a fonte. Assim a permissão individual abre exceção dentro da proibição da equipe. A exceção presa a um
+ * credenciamento vale quando esse credenciamento serve ao pedido, mesmo que outro mais específico também sirva.
+ */
+function excecaoServe(
+  x: ExcecaoCredenciamento,
+  p: PedidoCobranca,
+  credenciamentosQueServem: ReadonlySet<number>,
+): number {
   if (!vigente(x.vigenciaInicio, x.vigenciaFim, p.data)) return 0;
   if (x.fonteId !== null && x.fonteId !== p.fonteId) return 0;
-  const sujeito =
-    (x.credenciamentoId !== null && x.credenciamentoId === credenciamentoId) ||
+  const individual =
+    (x.credenciamentoId !== null && credenciamentosQueServem.has(x.credenciamentoId)) ||
     (x.profissionalId !== null && x.profissionalId === p.profissionalId) ||
-    (x.prestadorId !== null && x.prestadorId === p.prestadorId) ||
-    (x.equipeId !== null && p.equipeIds.includes(x.equipeId));
-  if (!sujeito) return 0;
+    (x.prestadorId !== null && x.prestadorId === p.prestadorId);
+  const equipe = x.equipeId !== null && p.equipeIds.includes(x.equipeId);
+  if (!individual && !equipe) return 0;
   const pl = pontosPlano(x.planoId, p);
   if (!pl) return 0;
   if (x.tipoAtendimento !== 'todos' && x.tipoAtendimento !== p.tipoAtendimento) return 0;
-  let pts = pl * 10 + (x.tipoAtendimento !== 'todos' ? 5 : 0) + (x.fonteId !== null ? 2 : 0);
+  let pts =
+    (individual ? 200 : 100) +
+    pl * 10 +
+    (x.tipoAtendimento !== 'todos' ? 5 : 0) +
+    (x.fonteId !== null ? 2 : 0);
   if (x.itemId !== null) {
     if (x.itemId !== p.itemId) return 0;
     pts += 1000;
@@ -237,7 +251,7 @@ function excecaoServe(x: ExcecaoCredenciamento, p: PedidoCobranca, credenciament
 
 /**
  * Confere se o profissional (ou prestador) pode cobrar o item na fonte pagadora na data. A exceção mais específica
- * decide (proibição vence permissão empatada); sem exceção, o credenciamento vigente mais específico. Particular e
+ * decide (o sujeito individual vence a equipe; proibição vence permissão empatada); sem exceção, o credenciamento vigente mais específico. Particular e
  * item sem quem cobre não pedem credenciamento.
  */
 export function conferirCobranca(
@@ -249,8 +263,10 @@ export function conferirCobranca(
     return { permitido: true, origem: 'particular', credenciamentoId: null, excecaoId: null, motivo: null };
   let cred: CredenciamentoCobranca | null = null;
   let cp = 0;
+  const servem = new Set<number>();
   for (const c of credenciamentos) {
     const pts = credenciamentoServe(c, p);
+    if (pts > 0) servem.add(c.id);
     if (pts > cp || (pts === cp && pts > 0 && cred && c.id > cred.id)) {
       cred = c;
       cp = pts;
@@ -259,7 +275,7 @@ export function conferirCobranca(
   let exc: ExcecaoCredenciamento | null = null;
   let ep = 0;
   for (const x of excecoes) {
-    const pts = excecaoServe(x, p, cred?.id ?? null);
+    const pts = excecaoServe(x, p, servem);
     if (pts > ep || (pts === ep && pts > 0 && exc && x.efeito === 'proibe' && exc.efeito === 'permite')) {
       exc = x;
       ep = pts;

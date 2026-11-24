@@ -37,6 +37,17 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
     edB: 0,
     tab: 0,
     termo: 0,
+    prof2: 0,
+    grupo2: 0,
+    equipe: 0,
+    planoSup: 0,
+    planoSub: 0,
+  };
+  let hoje = '';
+  const mais = (d: string, dias: number) => {
+    const x = new Date(`${d}T00:00:00Z`);
+    x.setUTCDate(x.getUTCDate() + dias);
+    return x.toISOString().slice(0, 10);
   };
   let c: CtxPrecos;
   const op = (): ContextoOperacao => ({
@@ -95,9 +106,48 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       ids.item = Number(its[0]?.['id']);
       ids.item2 = Number(its[1]?.['id']);
       ids.grupo = Number(its[0]?.['grupo_faturamento_id']);
-      ids.prof = Number((await e.uma<{ id: number }>('SELECT id FROM profissional ORDER BY id LIMIT 1'))?.id);
-      ids.termo = Number(
-        (await e.uma<{ id: number }>('SELECT id FROM termo_terminologia ORDER BY id LIMIT 1'))?.id ?? 0,
+      ids.grupo2 = Number(its[1]?.['grupo_faturamento_id']);
+      const profs = await e.consultar('SELECT id FROM profissional ORDER BY id LIMIT 2');
+      ids.prof = Number(profs[0]?.['id']);
+      ids.prof2 = Number(profs[1]?.['id']);
+      hoje = String((await e.uma<{ h: string }>("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS h"))?.h);
+      // Termo TUSS sintético (o caminho da TUSS é sempre exercido, com ou sem carga oficial no cliente).
+      const term = await garantir(
+        e,
+        'SELECT id FROM terminologia WHERE codigo = ?',
+        [`${P}-TUSS`],
+        "INSERT INTO terminologia (codigo, nome, tipo, criado_em) VALUES (?, 'TERMINOLOGIA F372', 'material_medicamento', ?)",
+        [`${P}-TUSS`, agora],
+      );
+      ids.termo = await garantir(
+        e,
+        'SELECT id FROM termo_terminologia WHERE terminologia_id = ? AND codigo_termo = ?',
+        [term, `${P}-1`],
+        "INSERT INTO termo_terminologia (terminologia_id, codigo_termo, descricao, criado_em) VALUES (?, ?, 'TERMO F372', ?)",
+        [term, `${P}-1`, agora],
+      );
+      ids.equipe = await garantir(
+        e,
+        'SELECT id FROM equipe_profissional WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-EQ`],
+        `INSERT INTO equipe_profissional (estabelecimento_id, codigo, nome, tipo, vigencia_inicio, criado_em)
+           VALUES (?, ?, 'EQUIPE F372', 'cirurgica', '2025-01-01', ?)`,
+        [ids.est, `${P}-EQ`, agora],
+      );
+      ids.planoSup = await garantir(
+        e,
+        'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
+        [ids.fonte, `${P}-SUP`],
+        "INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, ?, 'PLANO F372', ?)",
+        [ids.fonte, `${P}-SUP`, agora],
+      );
+      ids.planoSub = await garantir(
+        e,
+        'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
+        [ids.fonte, `${P}-SUB`],
+        `INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, plano_superior_id, criado_em)
+           VALUES (?, ?, 'SUBPLANO F372', ?, ?)`,
+        [ids.fonte, `${P}-SUB`, ids.planoSup, agora],
       );
       const fr = await garantir(
         e,
@@ -117,6 +167,7 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
         );
       ids.edA = await edicao('901', '2025-01-01');
       ids.edB = await edicao('902', '2026-01-01');
+      const edC = await edicao('903', '2026-08-01');
       ids.ref = await garantir(
         e,
         "SELECT id FROM item_referencia_matmed WHERE fonte_referencia = 'simpro' AND codigo_referencia = ?",
@@ -143,6 +194,12 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
              vigencia_inicio, preco_fabrica, preco_maximo_consumidor, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [ids.ref, agora, ed, ini, pf, pmc, agora],
         );
+      // A edição 903 retira o item (linha de exclusão): sem preço a partir dela.
+      await e.inserir(
+        `INSERT INTO preco_referencia_matmed (item_referencia_matmed_id, operacao, ocorrido_em,
+           edicao_referencia_matmed_id, vigencia_inicio, criado_em) VALUES (?, 'exclusao', ?, ?, '2026-08-01', ?)`,
+        [ids.ref, agora, edC, agora],
+      );
     });
     c = {
       cliente: CLIENTE,
@@ -194,6 +251,8 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       fontePagadoraId: ids.fonte,
       itemId: ids.item,
       codigo: `${P}-NEW`,
+      unidade: 'CX',
+      percentual: 80,
       fatorMultiplicacao: 10,
       fatorDivisao: 4,
       vigenciaInicio: '2026-03-01',
@@ -211,7 +270,13 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       [b['id'], `${P}-NEW`, null, null],
     ]);
     const r = await conferir();
-    expect(r).toMatchObject({ codigo: `${P}-NEW`, quantidade: 7.5, equivalenciaId: b['id'] });
+    expect(r).toMatchObject({
+      codigo: `${P}-NEW`,
+      quantidade: 7.5,
+      equivalenciaId: b['id'],
+      unidade: 'CX',
+      percentualCobranca: 80,
+    });
     expect((await conferir({ data: '2025-06-01' })).codigo).toBe(`${P}-OLD`);
     // Mesmo início: recusa (nada é sobrescrito).
     await expect(
@@ -234,6 +299,60 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
     ).rejects.toThrow(/item ou o grupo/);
     const pg = await fonte.dePara(c, ids.fonte, null, 0, 50);
     expect(pg.total).toBe(2);
+    // Encerramento sem reescrever o passado.
+    const versaoDe = async (tabela: string, idReg: unknown) =>
+      Number(
+        (
+          await escrever((e) =>
+            e.uma<{ versao: number }>(`SELECT versao FROM ${tabela} WHERE id = ?`, [idReg]),
+          )
+        )?.versao,
+      );
+    const T = 'equivalencia_item_fonte_pagadora';
+    // (a) registro já encerrado no passado não muda (nem para estender por cima do sucessor).
+    await expect(
+      s.gravar('equivalencia-item.encerrar', op(), {
+        id: a['id'],
+        versao: await versaoDe(T, a['id']),
+        vigenciaFim: mais(hoje, 400),
+      }),
+    ).rejects.toThrow(/já foi encerrado/);
+    // (b) o fim não recua para antes de hoje.
+    await expect(
+      s.gravar('equivalencia-item.encerrar', op(), {
+        id: b['id'],
+        versao: await versaoDe(T, b['id']),
+        vigenciaFim: '2026-04-30',
+      }),
+    ).rejects.toThrow(/antes de hoje/);
+    // (c) com o sucessor já gravado para o futuro, o fim não avança por cima dele.
+    const fut = await s.gravar('equivalencia-item', op(), {
+      fontePagadoraId: ids.fonte,
+      itemId: ids.item,
+      codigo: `${P}-FUT`,
+      vigenciaInicio: mais(hoje, 20),
+    });
+    expect(fut['encerradas']).toBe(1);
+    await expect(
+      s.gravar('equivalencia-item.encerrar', op(), {
+        id: b['id'],
+        versao: await versaoDe(T, b['id']),
+        vigenciaFim: mais(hoje, 25),
+      }),
+    ).rejects.toThrow(/sobrepostas/);
+    // Antecipar o fim (de hoje em diante) vale, com o motivo na trilha.
+    await s.gravar('equivalencia-item.encerrar', op(), {
+      id: b['id'],
+      versao: await versaoDe(T, b['id']),
+      vigenciaFim: mais(hoje, 10),
+      motivo: 'CONTRATO F372 REVISTO',
+    });
+    const fim = await escrever((e) =>
+      e.uma<{ f: string }>(`SELECT DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS f FROM ${T} WHERE id = ?`, [
+        b['id'],
+      ]),
+    );
+    expect(fim?.f).toBe(mais(hoje, 10));
   });
 
   it('linha 8: credenciamento de cobrança, exceção que proíbe o procedimento e conferência', async () => {
@@ -247,10 +366,30 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       codigoNaFonte: `${P}9`,
       vigenciaInicio: '2025-01-01',
     });
-    expect((await conferir()).credenciamento).toMatchObject({
+    const rc = await conferir();
+    expect(rc.credenciamento).toMatchObject({
       permitido: true,
       origem: 'credenciamento',
       credenciamentoId: cr['id'],
+    });
+    expect(rc.codigoPrestadorNaFonte).toBe(`${P}9`);
+    // A exceção presa ao credenciamento de OUTRO profissional não entra na conferência deste.
+    const cr2 = await s.gravar('credenciamento', op(), {
+      fontePagadoraId: ids.fonte,
+      profissionalId: ids.prof2,
+      vigenciaInicio: '2025-01-01',
+    });
+    await s.gravar('excecao', op(), {
+      credenciamentoId: cr2['id'],
+      itemId: ids.item,
+      efeito: 'proibe',
+      motivo: 'OUTRO PROFISSIONAL F372',
+      vigenciaInicio: '2025-01-01',
+    });
+    expect((await conferir()).credenciamento.permitido).toBe(true);
+    expect((await conferir({ profissionalId: ids.prof2 })).credenciamento).toMatchObject({
+      permitido: false,
+      origem: 'excecao',
     });
     await expect(
       s.gravar('excecao', op(), {
@@ -281,12 +420,71 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
         )
       )?.versao,
     );
-    await s.gravar('excecao.encerrar', op(), { id: ex['id'], versao, vigenciaFim: '2026-04-30' });
-    expect((await conferir()).credenciamento.permitido).toBe(true);
+    // Recuar o fim para o passado é recusado (contas já lançadas usaram a exceção).
+    await expect(
+      s.gravar('excecao.encerrar', op(), { id: ex['id'], versao, vigenciaFim: '2026-04-30' }),
+    ).rejects.toThrow(/antes de hoje/);
+    await s.gravar('excecao.encerrar', op(), { id: ex['id'], versao, vigenciaFim: mais(hoje, 30) });
+    expect((await conferir()).credenciamento.permitido).toBe(false);
+    expect((await conferir({ data: mais(hoje, 31) })).credenciamento.permitido).toBe(true);
     const lista = await fonte.credenciamento(c, ids.fonte, 0, 50, false, null);
-    expect(lista.total).toBe(1);
+    expect(lista.total).toBe(2);
+    // Exceção por grupo e tipo de atendimento: proíbe o grupo do segundo item só na urgência.
+    await s.gravar('excecao', op(), {
+      profissionalId: ids.prof,
+      grupoId: ids.grupo2,
+      tipoAtendimento: 'urgencia',
+      efeito: 'proibe',
+      motivo: 'GRUPO F372',
+      vigenciaInicio: '2025-01-01',
+    });
+    expect((await conferir({ itemId: ids.item2, tipoAtendimento: 'urgencia' })).credenciamento).toMatchObject(
+      {
+        permitido: false,
+        origem: 'excecao',
+      },
+    );
+    expect((await conferir({ itemId: ids.item2 })).credenciamento.permitido).toBe(true);
+    // Exceção pelo plano superior: vale para o paciente do subplano, não para quem não tem plano.
+    await s.gravar('excecao', op(), {
+      profissionalId: ids.prof,
+      planoId: ids.planoSup,
+      tipoAtendimento: 'externo',
+      efeito: 'proibe',
+      motivo: 'PLANO F372',
+      vigenciaInicio: '2025-01-01',
+    });
+    expect(
+      (await conferir({ itemId: ids.item2, tipoAtendimento: 'externo', planoId: ids.planoSub }))
+        .credenciamento.permitido,
+    ).toBe(false);
+    expect((await conferir({ itemId: ids.item2, tipoAtendimento: 'externo' })).credenciamento.permitido).toBe(
+      true,
+    );
+    // Exceção por equipe: a equipe proíbe o segundo item; a permissão do próprio profissional abre a exceção.
+    await s.gravar('excecao', op(), {
+      equipeId: ids.equipe,
+      itemId: ids.item2,
+      efeito: 'proibe',
+      motivo: 'EQUIPE F372',
+      vigenciaInicio: '2025-01-01',
+    });
+    expect((await conferir({ itemId: ids.item2, equipeIds: [ids.equipe] })).credenciamento.permitido).toBe(
+      false,
+    );
+    expect((await conferir({ itemId: ids.item2 })).credenciamento.permitido).toBe(true);
+    await s.gravar('excecao', op(), {
+      profissionalId: ids.prof,
+      itemId: ids.item2,
+      efeito: 'permite',
+      vigenciaInicio: '2025-01-01',
+    });
+    expect((await conferir({ itemId: ids.item2, equipeIds: [ids.equipe] })).credenciamento).toMatchObject({
+      permitido: true,
+      origem: 'excecao',
+    });
     const excs = await fonte.credenciamentoAtos(c, ids.fonte, false);
-    expect(excs.itens.map((x) => [x['efeito'], x['fim']])).toEqual([['Proíbe', '2026-04-30']]);
+    expect(excs.itens.find((x) => x['fim'] === mais(hoje, 30))?.['efeito']).toBe('Proíbe');
   });
 
   it('linha 6: item da referência com o preço da edição na data e equivalência com a operadora', async () => {
@@ -301,6 +499,7 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
     expect((await fonte.itemMatmed(c, ids.tab, ids.ref, '2025-06-01'))?.valor).toBe(10);
     const vig = await fonte.vigenciasMatmed(c, ids.tab, ids.ref);
     expect(vig.map((v) => [v.data, v.valor])).toEqual([
+      ['2026-08-01', null],
       ['2026-01-01', 11],
       ['2025-01-01', 10],
     ]);
@@ -309,11 +508,12 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       fontePagadoraId: ids.fonte,
       codigoNaFonte: `${P}77`,
       fatorConversao: 2,
-      termoTussId: ids.termo || null,
-      tipoEquivalenciaTuss: ids.termo ? 'exata' : null,
+      termoTussId: ids.termo,
+      tipoEquivalenciaTuss: 'exata',
       vigenciaInicio: '2026-01-01',
     });
     expect(g['operadora']).toBeGreaterThan(0);
+    expect(g['tuss']).toBeGreaterThan(0);
     const eqs = await escrever((e) =>
       e.consultar(
         'SELECT codigo_na_fonte, fator_conversao FROM equivalencia_matmed_fonte_pagadora WHERE fonte_pagadora_id = ?',
@@ -324,6 +524,35 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
     const tela = await s.ler(c, async (l) =>
       (await import('./cobranca-propria.js')).equivalenciasMatmedPropria(l, ids.ref),
     );
-    expect(tela.total).toBe(ids.termo ? 2 : 1);
+    expect(tela.total).toBe(2);
+    // A edição 903 retira o item: sem preço a partir dela.
+    expect((await fonte.itemMatmed(c, ids.tab, ids.ref, '2026-09-01'))?.valor ?? null).toBeNull();
+    // Nova equivalência posterior: as duas anteriores (operadora e TUSS) se encerram na véspera, nada apagado.
+    const g2 = await s.gravar('equivalencia-matmed', op(), {
+      itemReferenciaId: ids.ref,
+      fontePagadoraId: ids.fonte,
+      codigoNaFonte: `${P}78`,
+      termoTussId: ids.termo,
+      tipoEquivalenciaTuss: 'aproximada',
+      vigenciaInicio: '2026-06-01',
+    });
+    const fins = await escrever(async (e) => [
+      ...(await e.consultar(
+        `SELECT 'op' AS t, id, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim FROM equivalencia_matmed_fonte_pagadora
+          WHERE fonte_pagadora_id = ? ORDER BY id`,
+        [ids.fonte],
+      )),
+      ...(await e.consultar(
+        `SELECT 'tuss' AS t, id, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim FROM equivalencia_matmed_tuss
+          WHERE item_referencia_matmed_id = ? ORDER BY id`,
+        [ids.ref],
+      )),
+    ]);
+    expect(fins.map((r) => [r['t'], Number(r['id']), r['fim']])).toEqual([
+      ['op', g['operadora'], '2026-05-31'],
+      ['op', g2['operadora'], null],
+      ['tuss', g['tuss'], '2026-05-31'],
+      ['tuss', g2['tuss'], null],
+    ]);
   });
 });

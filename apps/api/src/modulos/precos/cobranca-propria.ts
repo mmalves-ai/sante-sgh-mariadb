@@ -453,7 +453,12 @@ export interface ResultadoConferenciaCobranca {
   readonly descricao: string | null;
   readonly quantidade: number;
   readonly equivalenciaId: number | null;
+  /** Unidade da fonte pagadora e percentual de cobrança do de-para (nulos: sem de-para ou sem ajuste). */
+  readonly unidade: string | null;
+  readonly percentualCobranca: number | null;
   readonly credenciamento: ConferenciaCobranca;
+  /** Código do prestador (ou do profissional) na fonte pagadora, do credenciamento escolhido: vai na guia. */
+  readonly codigoPrestadorNaFonte: string | null;
   readonly avisos: readonly string[];
 }
 
@@ -497,16 +502,14 @@ export async function conferirCobrancaPropria(
       ? null
       : await l.uma<Linha>('SELECT plano_superior_id FROM plano_fonte_pagadora WHERE id = ?', [p.planoId]);
   const grupoId = nn(item['grupo_faturamento_id']);
-  const eqs = (
-    await l.consultar(
-      `SELECT * FROM equivalencia_item_fonte_pagadora
+  const eqLinhas = await l.consultar(
+    `SELECT * FROM equivalencia_item_fonte_pagadora
         WHERE fonte_pagadora_id = ? AND excluido_em IS NULL AND vigencia_inicio <= ?
           AND (vigencia_fim IS NULL OR vigencia_fim >= ?) AND (item_faturavel_id = ? OR grupo_faturamento_id = ?)`,
-      [p.fontePagadoraId, p.data, p.data, p.itemId, grupoId ?? 0],
-      { teto: 200 },
-    )
-  ).map(equivalenciaDe);
-  const eq = escolherEquivalencia(eqs, {
+    [p.fontePagadoraId, p.data, p.data, p.itemId, grupoId ?? 0],
+    { teto: 200 },
+  );
+  const eq = escolherEquivalencia(eqLinhas.map(equivalenciaDe), {
     itemId: p.itemId,
     grupoId,
     planoId: p.planoId,
@@ -515,15 +518,16 @@ export async function conferirCobrancaPropria(
     tipoAtendimento: p.tipoAtendimento as TipoAtendimentoCobranca | null,
     data: p.data,
   });
-  const creds: CredenciamentoCobranca[] = (
-    await l.consultar(
-      `SELECT * FROM credenciamento_cobranca
-        WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL
-          AND (profissional_id = ? OR prestador_terceiro_id = ?)`,
-      [est, p.fontePagadoraId, p.profissionalId ?? 0, p.prestadorId ?? 0],
-      { teto: 500 },
-    )
-  ).map((r) => ({
+  // Só o recorte da data e de quem cobra: o histórico cresce (nada se apaga) e não pode pesar na conferência.
+  const credLinhas = await l.consultar(
+    `SELECT * FROM credenciamento_cobranca
+      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL
+        AND (profissional_id = ? OR prestador_terceiro_id = ?)
+        AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+    [est, p.fontePagadoraId, p.profissionalId ?? 0, p.prestadorId ?? 0, p.data, p.data],
+    { teto: 500 },
+  );
+  const creds: CredenciamentoCobranca[] = credLinhas.map((r) => ({
     id: n(r['id']),
     profissionalId: nn(r['profissional_id']),
     prestadorId: nn(r['prestador_terceiro_id']),
@@ -534,13 +538,25 @@ export async function conferirCobrancaPropria(
     vigenciaFim: dataIso(r['vigencia_fim']),
   }));
   const equipes = p.equipeIds.length ? p.equipeIds : [0];
+  const credIds = creds.length ? creds.map((c) => c.id) : [0];
   const excs: ExcecaoCredenciamento[] = (
     await l.consultar(
       `SELECT * FROM excecao_credenciamento
         WHERE estabelecimento_id = ? AND (fonte_pagadora_id IS NULL OR fonte_pagadora_id = ?)
-          AND (profissional_id = ? OR prestador_terceiro_id = ? OR credenciamento_cobranca_id IS NOT NULL
+          AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+          AND (profissional_id = ? OR prestador_terceiro_id = ?
+               OR credenciamento_cobranca_id IN (${credIds.map(() => '?').join(', ')})
                OR equipe_profissional_id IN (${equipes.map(() => '?').join(', ')}))`,
-      [est, p.fontePagadoraId, p.profissionalId ?? 0, p.prestadorId ?? 0, ...equipes],
+      [
+        est,
+        p.fontePagadoraId,
+        p.data,
+        p.data,
+        p.profissionalId ?? 0,
+        p.prestadorId ?? 0,
+        ...credIds,
+        ...equipes,
+      ],
       { teto: 1_000 },
     )
   ).map((r) => ({
@@ -574,6 +590,9 @@ export async function conferirCobrancaPropria(
     grupoAtoId: nn(item['grupo_ato_id']),
     data: p.data,
   });
+  const eqLinha = eq ? eqLinhas.find((r) => n(r['id']) === eq.id) : undefined;
+  const credLinha =
+    cred.credenciamentoId === null ? undefined : credLinhas.find((r) => n(r['id']) === cred.credenciamentoId);
   const avisos: string[] = [];
   if (!eq) avisos.push('Sem de-para vigente nesta fonte pagadora: vai o código do hospital.');
   if (!cred.permitido && cred.motivo) avisos.push(cred.motivo);
@@ -582,7 +601,10 @@ export async function conferirCobrancaPropria(
     descricao: eq ? (eq.descricao ?? tx_(item['descricao'])) : tx_(item['descricao']),
     quantidade: eq ? quantidadeNaFonte(p.quantidade, eq) : p.quantidade,
     equivalenciaId: eq?.id ?? null,
+    unidade: txn(eqLinha?.['unidade_cobranca']),
+    percentualCobranca: eq?.percentual ?? null,
     credenciamento: cred,
+    codigoPrestadorNaFonte: txn(credLinha?.['codigo_na_fonte']),
     avisos,
   };
 }
@@ -703,28 +725,71 @@ export const opGravarEquivalenciaItem = definirOperacao({
   alvo: (_e, s) => ({ tabela: 'equivalencia_item_fonte_pagadora', id: s.id }),
 });
 
-const esquemaEncerrar = z.object({ id, versao: z.number().int().positive(), vigenciaFim: data });
+const esquemaEncerrar = z.object({
+  id,
+  versao: z.number().int().positive(),
+  vigenciaFim: data,
+  motivo: z.string().max(500).nullable().default(null),
+});
 
-function opEncerrar(nome: string, tabela: string, porEstabelecimento: boolean) {
+/**
+ * Encerra a vigência sem reescrever o passado: o fim não recua para antes de hoje (contas já lançadas usaram o
+ * registro), registro encerrado no passado não muda, e o fim não avança por cima do sucessor da mesma chave.
+ */
+function opEncerrar(nome: string, tabela: string, porEstabelecimento: boolean, chave: readonly string[]) {
   return definirOperacao({
     nome,
     tabelas: [tabela],
     entrada: esquemaEncerrar,
     async gravar(tx, e, ctx) {
       const r = await tx.uma<Linha>(
-        `SELECT vigencia_inicio, vigencia_fim${porEstabelecimento ? ', estabelecimento_id' : ''} FROM ${tabela} WHERE id = ?`,
+        `SELECT vigencia_inicio, vigencia_fim${porEstabelecimento ? ', estabelecimento_id' : ''}${chave.map((c) => `, ${c}`).join('')}
+           FROM ${tabela} WHERE id = ?`,
         [e.id],
       );
       if (!r || (porEstabelecimento && n(r['estabelecimento_id']) !== estDe(ctx)))
         throw recusa('nao-encontrado', 'O registro não existe neste estabelecimento.', { campos: ['id'] });
-      if (e.vigenciaFim < (dataIso(r['vigencia_inicio']) ?? ''))
+      const inicio = dataIso(r['vigencia_inicio']) ?? '';
+      const fimAtual = dataIso(r['vigencia_fim']);
+      if (e.vigenciaFim < inicio)
         throw recusa('vigencia-invalida', 'O fim da vigência não pode ser antes do início.', {
           campos: ['vigenciaFim'],
         });
+      const hoje =
+        txn((await tx.uma<Linha>("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje", []))?.['hoje']) ??
+        new Date().toISOString().slice(0, 10);
+      if (fimAtual !== null && fimAtual < hoje)
+        throw recusa(
+          'vigencia-encerrada',
+          'O registro já foi encerrado no passado: o histórico não se reescreve. Grave um novo registro a partir de hoje.',
+          { campos: ['id'] },
+        );
+      if (e.vigenciaFim < hoje)
+        throw recusa(
+          'vigencia-retroativa',
+          'O fim da vigência não pode ser antes de hoje: contas já lançadas usaram este registro. Para corrigir, grave um novo registro a partir de hoje.',
+          { campos: ['vigenciaFim'] },
+        );
+      if (chave.length) {
+        const sucessor = await tx.uma<Linha>(
+          `SELECT id FROM ${tabela}
+            WHERE id <> ? AND ${chave.map(nulo).join(' AND ')}
+              AND vigencia_inicio > ? AND vigencia_inicio <= ?${tabela === 'excecao_credenciamento' ? '' : ' AND excluido_em IS NULL'}
+            LIMIT 1`,
+          [e.id, ...chave.map((c) => r[c] ?? null), inicio, e.vigenciaFim],
+        );
+        if (sucessor)
+          throw recusa(
+            'vigencia-conflitante',
+            'Já existe registro com a mesma chave começando antes desse fim: as vigências ficariam sobrepostas.',
+            { campos: ['vigenciaFim'] },
+          );
+      }
       const versao = await tx.alterar(tabela, e.id, e.versao, { vigencia_fim: e.vigenciaFim });
       return { id: e.id, versao };
     },
     alvo: (e) => ({ tabela, id: e.id }),
+    trilha: (e) => ({ motivo: e.motivo?.trim() || undefined }),
   });
 }
 
@@ -732,16 +797,46 @@ export const opEncerrarEquivalenciaItem = opEncerrar(
   'preco.encerrar-equivalencia-item',
   'equivalencia_item_fonte_pagadora',
   false,
+  [
+    'fonte_pagadora_id',
+    'item_faturavel_id',
+    'grupo_faturamento_id',
+    'plano_fonte_pagadora_id',
+    'tipo_conta_id',
+    'tipo_atendimento',
+  ],
 );
 export const opEncerrarCredenciamentoCobranca = opEncerrar(
   'convenio.encerrar-credenciamento-cobranca',
   'credenciamento_cobranca',
   true,
+  [
+    'estabelecimento_id',
+    'fonte_pagadora_id',
+    'profissional_id',
+    'prestador_terceiro_id',
+    'plano_fonte_pagadora_id',
+    'tipo_conta_id',
+    'grupo_ato_id',
+  ],
 );
 export const opEncerrarExcecaoCredenciamento = opEncerrar(
   'convenio.encerrar-excecao-credenciamento',
   'excecao_credenciamento',
   true,
+  [
+    'estabelecimento_id',
+    'credenciamento_cobranca_id',
+    'profissional_id',
+    'prestador_terceiro_id',
+    'equipe_profissional_id',
+    'fonte_pagadora_id',
+    'plano_fonte_pagadora_id',
+    'tipo_atendimento',
+    'grupo_faturamento_id',
+    'item_faturavel_id',
+    'efeito',
+  ],
 );
 
 export const esquemaEquivalenciaMatmed = z.object({
