@@ -15,6 +15,7 @@ import { pode } from '../../../casca/sessao/pode.js';
 import CuidadosDoTurno from '../componentes/CuidadosDoTurno.vue';
 import TransfusoesDoTurno from '../componentes/TransfusoesDoTurno.vue';
 import ErroEnfermagem from '../componentes/ErroEnfermagem.vue';
+import FechamentoChecagemTurno from '../componentes/FechamentoChecagemTurno.vue';
 import EstadoHorario from '../componentes/EstadoHorario.vue';
 import SeletorUnidade from '../componentes/SeletorUnidade.vue';
 import { usarAvisosEnfermagem, usarEnfermagem } from '../usar-enfermagem.js';
@@ -291,6 +292,17 @@ function sinais(paciente: number): void {
           t('enfermagem.turno.contencao.abrir')
         }}</RouterLink>
       </section>
+      <FechamentoChecagemTurno
+        v-if="unidade"
+        :unidade="unidade"
+        :janela="turno.data.value.turno"
+        :pendentes="
+          (turno.data.value.resumo['pendente'] ?? 0) +
+          (turno.data.value.resumo['atrasada'] ?? 0) +
+          (turno.data.value.resumo['omitida'] ?? 0)
+        "
+        @fechado="turno.refetch()"
+      />
       <CuidadosDoTurno v-if="verCuidados && unidade" :unidade="unidade" />
       <TransfusoesDoTurno v-if="verTransfusoes && unidade" :unidade="unidade" />
     </template>
