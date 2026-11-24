@@ -16,7 +16,7 @@
 // sessão e os registros excluídos; só as receitas com protocolo de enfermagem são do enfermeiro.
 import { createHash } from 'node:crypto';
 import type { ItemReceitaEnfermeiro } from '@sgh/contratos';
-import { ErroOperacao, type Leitor, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import { ehTravaOcupada, ErroOperacao, type Leitor, recusa, type ResultadoOperacao } from '@sgh/nucleo';
 import {
   civilDe,
   exigirProfissional,
@@ -44,7 +44,8 @@ export const OPERACOES_RECEITA_SAE = {
   inativar: 'sae.inativar-receita',
 } as const;
 
-export const EVENTO_RECEITA_ENFERMEIRO_INATIVADA = 'fato.receita-enfermeiro.inativada';
+/** O ponto do evento na fila de saída (o formato do ponto aceita letras, dígitos, "_" e ".", sem hífen). */
+export const EVENTO_RECEITA_ENFERMEIRO_INATIVADA = 'fato.receita_enfermeiro.inativada';
 /** A numeração da receita (a mesma da receita médica do estabelecimento). */
 export const SEQUENCIA_RECEITA_ENFERMEIRO = 'receita_medica';
 /** O teto de receitas lidas de um atendimento. */
@@ -65,6 +66,13 @@ export function protocoloLido(v: string): { protocolo: string; ano: number } {
   const i = v.lastIndexOf('/');
   return i < 0 ? { protocolo: v, ano: 0 } : { protocolo: v.slice(0, i), ano: Number(v.slice(i + 1)) || 0 };
 }
+
+/** Leitura travada de linha mudada depois do instantâneo da transação (isolamento por instantâneo do MariaDB). */
+const ERRNO_LINHA_MUDOU = 1020;
+const GRAVACAO_CONCORRENTE = 'gravacao-concorrente';
+const TENTATIVAS = 3;
+const concorrencia = (e: unknown): boolean =>
+  (e as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU || ehTravaOcupada(e);
 
 /** O filtro do tipo de receita pelo modelo: retenção é a de antimicrobiano; simples, a sem controle. */
 export const filtroDoModelo = (modelo: 'simples' | 'retencao'): string =>
@@ -130,110 +138,139 @@ export function gravadorReceitaSae(
   return {
     prescreverMedicamento: async (r) => {
       const textoAssinado = textoConferido(r as ReceitaEnfermeiroComTexto);
-      const s = await esc({
-        nome: OPERACOES_RECEITA_SAE.prescrever,
-        tabelas: ['receita_medica', 'receita_medica_item', 'sequencia_negocio'],
-        chave: r.chave,
-        entrada: entradaDaChave(r),
-        alvo: (x) => ({ tabela: 'receita_medica', id: Number(x['id']) }),
-        gravar: async (tx, est, fuso) => {
-          const at = await tx.uma(
-            `SELECT id FROM atendimento WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-            [r.atendimento, r.paciente, est],
-          );
-          if (!at)
-            throw recusa(
-              'atendimento-inexistente',
-              'O atendimento não é deste paciente neste estabelecimento.',
-            );
-          if (r.anterior) {
-            // Trava a anterior: a conferência e a gravação da reemissão ficam na mesma transação.
-            const [a] = await tx.consultarParaAtualizar<Linha>(
-              `SELECT id, situacao FROM receita_medica WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ?
-                  AND protocolo_enfermagem IS NOT NULL AND excluido_em IS NULL`,
-              [r.anterior, r.atendimento, est],
-              { teto: 1 },
-            );
-            if (!a) throw RECEITA_INEXISTENTE();
-            if (!['suspensa', 'cancelada'].includes(texto(a['situacao'])))
-              throw recusa(
-                'receita-ativa',
-                'A receita anterior ainda está ativa: suspenda ou cancele, com o motivo, antes de reemitir.',
+      // A reemissão simultânea da mesma anterior: a segunda espera a trava e, como a primeira mudou o que ela lê depois
+      // do instantâneo (erro 1020), a gravação inteira é desfeita e refeita (até 3 vezes) e então sai a recusa certa.
+      const tentar = async (
+        tentativa: number,
+      ): Promise<{ resultado: Readonly<Record<string, unknown>>; repetida: boolean }> => {
+        try {
+          return await gravar();
+        } catch (e) {
+          if (
+            tentativa < TENTATIVAS &&
+            e instanceof ErroOperacao &&
+            e.problema['codigo'] === GRAVACAO_CONCORRENTE
+          )
+            return tentar(tentativa + 1);
+          throw e;
+        }
+      };
+      const gravar = () =>
+        esc({
+          nome: OPERACOES_RECEITA_SAE.prescrever,
+          tabelas: ['receita_medica', 'receita_medica_item', 'sequencia_negocio'],
+          chave: r.chave,
+          entrada: entradaDaChave(r),
+          alvo: (x) => ({ tabela: 'receita_medica', id: Number(x['id']) }),
+          gravar: async (tx, est, fuso) => {
+            try {
+              const at = await tx.uma(
+                `SELECT id FROM atendimento WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+                [r.atendimento, r.paciente, est],
               );
-            // Leitura com trava (a mais recente confirmada, não a foto do início da transação).
-            const [ja] = await tx.consultarParaAtualizar<Linha>(
-              `SELECT id FROM receita_medica WHERE origem_receita_medica_id = ? AND estabelecimento_id = ?
+              if (!at)
+                throw recusa(
+                  'atendimento-inexistente',
+                  'O atendimento não é deste paciente neste estabelecimento.',
+                );
+              if (r.anterior) {
+                // Trava a anterior: a conferência e a gravação da reemissão ficam na mesma transação.
+                const [a] = await tx.consultarParaAtualizar<Linha>(
+                  `SELECT id, situacao FROM receita_medica WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ?
+                  AND protocolo_enfermagem IS NOT NULL AND excluido_em IS NULL`,
+                  [r.anterior, r.atendimento, est],
+                  { teto: 1 },
+                );
+                if (!a) throw RECEITA_INEXISTENTE();
+                if (!['suspensa', 'cancelada'].includes(texto(a['situacao'])))
+                  throw recusa(
+                    'receita-ativa',
+                    'A receita anterior ainda está ativa: suspenda ou cancele, com o motivo, antes de reemitir.',
+                  );
+                // Leitura com trava (a mais recente confirmada, não a foto do início da transação).
+                const [ja] = await tx.consultarParaAtualizar<Linha>(
+                  `SELECT id FROM receita_medica WHERE origem_receita_medica_id = ? AND estabelecimento_id = ?
                   AND excluido_em IS NULL`,
-              [r.anterior, est],
-              { teto: 1 },
-            );
-            if (ja) throw recusa('receita-ja-reemitida', 'A receita anterior já foi reemitida.');
-          }
-          const t = await tx.uma(
-            `SELECT id, validade_dias FROM tipo_receita WHERE ativo = TRUE AND ${filtroDoModelo(r.modelo)}
+                  [r.anterior, est],
+                  { teto: 1 },
+                );
+                if (ja) throw recusa('receita-ja-reemitida', 'A receita anterior já foi reemitida.');
+              }
+              const t = await tx.uma(
+                `SELECT id, validade_dias FROM tipo_receita WHERE ativo = TRUE AND ${filtroDoModelo(r.modelo)}
               ORDER BY padrao DESC, exige_notificacao, id LIMIT 1`,
-          );
-          if (!t)
-            throw new ErroOperacao(
-              409,
-              'tipo-receita-sem-cadastro',
-              'Tipo de receita sem cadastro',
-              `O cliente não tem tipo de receita ativo para o modelo "${r.modelo}".`,
-            );
-          const agora = new Date();
-          const emitida = instanteDe(r.assinadaEm, fuso);
-          if (emitida.getTime() < agora.getTime() - TOLERANCIA_MS)
+              );
+              if (!t)
+                throw new ErroOperacao(
+                  409,
+                  'tipo-receita-sem-cadastro',
+                  'Tipo de receita sem cadastro',
+                  `O cliente não tem tipo de receita ativo para o modelo "${r.modelo}".`,
+                );
+              const agora = new Date();
+              const emitida = instanteDe(r.assinadaEm, fuso);
+              if (emitida.getTime() < agora.getTime() - TOLERANCIA_MS)
+                throw recusa(
+                  'assinatura-retroativa',
+                  'O horário da assinatura é anterior à gravação: assine a receita de novo.',
+                );
+              const numero = await tx.proximoNumero(SEQUENCIA_RECEITA_ENFERMEIRO);
+              const id = await tx.incluir('receita_medica', {
+                estabelecimento_id: est,
+                numero: numero.formatado,
+                paciente_id: r.paciente,
+                atendimento_id: r.atendimento,
+                prescritor_profissional_id: r.vinculo,
+                tipo_receita_id: num(t['id']),
+                emitida_em: emitida,
+                registrada_em: agora,
+                validade_ate: validadeDe(
+                  r.assinadaEm,
+                  t['validade_dias'] == null ? null : num(t['validade_dias']),
+                ),
+                numero_vias: r.modelo === 'retencao' ? 2 : 1,
+                situacao: 'emitida',
+                conteudo: textoAssinado,
+                hash_conteudo: sha256(textoAssinado),
+                protocolo_enfermagem: protocoloGravado(r.protocolo, r.ano),
+                tipo_protocolo_enfermagem: r.tipoProtocolo,
+                versao_lista_enfermagem: r.listaVersao,
+                segundo_identificador: r.segundoIdentificador,
+                origem_receita_medica_id: r.anterior ?? null,
+                origem: 'sistema',
+              });
+              let sequencia = 0;
+              for (const i of r.itens)
+                await tx.incluir('receita_medica_item', {
+                  receita_medica_id: id,
+                  sequencia: ++sequencia,
+                  medicamento: i.medicamento,
+                  via_descricao: i.via,
+                  posologia: i.posologia,
+                  quantidade_descricao: i.quantidade,
+                  origem: 'sistema',
+                });
+              return { id };
+            } catch (e) {
+              if (!concorrencia(e)) throw e;
+              throw new ErroOperacao(
+                409,
+                GRAVACAO_CONCORRENTE,
+                'Gravação simultânea',
+                'Outra gravação mexeu na mesma receita ao mesmo tempo: tente de novo.',
+              );
+            }
+          },
+        }).catch((e: unknown) => {
+          // A mesma chave com outro atendimento ou outro conteúdo: a chave já é de outra receita (como na memória).
+          if (e instanceof ErroOperacao && e.problema['codigo'] === 'idempotencia-divergente')
             throw recusa(
-              'assinatura-retroativa',
-              'O horário da assinatura é anterior à gravação: assine a receita de novo.',
+              'chave-reutilizada',
+              'A chave deste pedido já foi usada em outra receita: refaça na tela.',
             );
-          const numero = await tx.proximoNumero(SEQUENCIA_RECEITA_ENFERMEIRO);
-          const id = await tx.incluir('receita_medica', {
-            estabelecimento_id: est,
-            numero: numero.formatado,
-            paciente_id: r.paciente,
-            atendimento_id: r.atendimento,
-            prescritor_profissional_id: r.vinculo,
-            tipo_receita_id: num(t['id']),
-            emitida_em: emitida,
-            registrada_em: agora,
-            validade_ate: validadeDe(
-              r.assinadaEm,
-              t['validade_dias'] == null ? null : num(t['validade_dias']),
-            ),
-            numero_vias: r.modelo === 'retencao' ? 2 : 1,
-            situacao: 'emitida',
-            conteudo: textoAssinado,
-            hash_conteudo: sha256(textoAssinado),
-            protocolo_enfermagem: protocoloGravado(r.protocolo, r.ano),
-            tipo_protocolo_enfermagem: r.tipoProtocolo,
-            versao_lista_enfermagem: r.listaVersao,
-            segundo_identificador: r.segundoIdentificador,
-            origem_receita_medica_id: r.anterior ?? null,
-            origem: 'sistema',
-          });
-          let sequencia = 0;
-          for (const i of r.itens)
-            await tx.incluir('receita_medica_item', {
-              receita_medica_id: id,
-              sequencia: ++sequencia,
-              medicamento: i.medicamento,
-              via_descricao: i.via,
-              posologia: i.posologia,
-              quantidade_descricao: i.quantidade,
-              origem: 'sistema',
-            });
-          return { id };
-        },
-      }).catch((e: unknown) => {
-        // A mesma chave com outro atendimento ou outro conteúdo: a chave já é de outra receita (como na memória).
-        if (e instanceof ErroOperacao && e.problema['codigo'] === 'idempotencia-divergente')
-          throw recusa(
-            'chave-reutilizada',
-            'A chave deste pedido já foi usada em outra receita: refaça na tela.',
-          );
-        throw e;
-      });
+          throw e;
+        });
+      const s = await tentar(1);
       return { id: Number(s.resultado['id']), repetida: s.repetida };
     },
 

@@ -1,8 +1,9 @@
 // Regras puras da receita do enfermeiro na porta própria: o protocolo gravado e lido, o tipo de receita pelo modelo e a
 // validade pela data civil da emissão.
 import { describe, expect, it } from 'vitest';
-import { ErroOperacao } from '@sgh/nucleo';
+import { ErroOperacao, FORMATO_PONTO } from '@sgh/nucleo';
 import {
+  EVENTO_RECEITA_ENFERMEIRO_INATIVADA,
   entradaDaChave,
   filtroDoModelo,
   protocoloGravado,
@@ -74,5 +75,9 @@ describe('receita do enfermeiro (porta própria, regras puras)', () => {
     expect(entradaDaChave({ ...base, atendimento: 9 })).not.toEqual(entradaDaChave(base));
     expect(entradaDaChave({ ...base, modelo: 'retencao' })).not.toEqual(entradaDaChave(base));
     expect(entradaDaChave(base)).not.toHaveProperty('texto');
+  });
+
+  it('o evento da inativação tem o formato de ponto da fila de saída', () => {
+    expect(FORMATO_PONTO.test(EVENTO_RECEITA_ENFERMEIRO_INATIVADA)).toBe(true);
   });
 });
