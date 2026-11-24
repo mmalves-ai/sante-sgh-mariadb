@@ -16,8 +16,9 @@
 // outro evento na fila de saída); as versões do processo saem dos lotes de diagnóstico (início e fim de cada versão).
 // A prescrição de enfermagem (prescrever, suspender, checar e estornar, com as leituras) fica em
 // sae-porta-propria-cuidado.ts (tabelas 06_PEP/96_cuidado_enfermagem).
-// Pendências de modelo (pedidos do lote 02-05): a receita do enfermeiro (protocolo, lista e segundo identificador) e a
-// terminologia licenciada carregada por estabelecimento respondem 409 modelo-pendente; as leituras delas devolvem vazio.
+// A receita do enfermeiro (protocolo, lista e segundo identificador) fica em sae-porta-propria-receita.ts.
+// Pendência de modelo (pedido do lote 02-05): a terminologia licenciada carregada por estabelecimento responde 409
+// modelo-pendente.
 import { randomUUID } from 'node:crypto';
 import type { ChecagemCuidadoLida, DoseVacina, SistemaTerminologiaSae } from '@sgh/contratos';
 import {
@@ -59,6 +60,7 @@ import {
   lerChecagem,
   lerChecagens,
 } from './sae-porta-propria-cuidado.js';
+import { gravadorReceitaSae, lerReceitas } from './sae-porta-propria-receita.js';
 import { extrasDaTrilha, gravarSoTrilha, resolverTrilha, type TrilhaDaTela } from './trilha-da-tela.js';
 import {
   type AtividadeVigente,
@@ -576,12 +578,8 @@ export class PortaSaePropria implements PortaSae {
       carregarTerminologia: async () => {
         throw modeloPendente('A terminologia licenciada carregada por estabelecimento');
       },
-      prescreverMedicamento: async () => {
-        throw modeloPendente('A receita do enfermeiro (protocolo, lista e segundo identificador)');
-      },
-      inativarReceita: async () => {
-        throw modeloPendente('A suspensão ou o cancelamento da receita do enfermeiro');
-      },
+      // A receita do enfermeiro (prescrever, reemitir, suspender e cancelar): arquivo próprio.
+      ...gravadorReceitaSae(c, esc),
     };
   }
 
@@ -901,10 +899,9 @@ export class PortaSaePropria implements PortaSae {
     });
   }
 
-  /** Pendência de modelo: a receita do enfermeiro ainda não tem os campos dela. */
-  async receitas(c: ContextoSae, atendimento: number): Promise<ReceitaDoEnfermeiro[]> {
-    void [c, atendimento];
-    return [];
+  /** As receitas do enfermeiro no atendimento (arquivo próprio da receita). */
+  receitas(c: ContextoSae, atendimento: number): Promise<ReceitaDoEnfermeiro[]> {
+    return this.ler(c, (l, est, fuso) => lerReceitas(l, est, fuso, atendimento));
   }
 
   vacinas(c: ContextoSae, paciente: number): Promise<VacinaAplicada[]> {
