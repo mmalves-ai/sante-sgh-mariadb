@@ -6,7 +6,8 @@
 //   geração nova da competência guarda as folhas novas sem apagar as da remessa substituída (chave única por remessa);
 // - APAC (autorização de procedimento de alta complexidade): a apac apresentada com o número da autorização e os
 //   procedimentos (principal e secundário); a geração nova também guarda a sua;
-// - recusa (fonte fora da lista): nada fica, nem a remessa;
+// - recusas (nada fica, nem a remessa, o arquivo ou as linhas): a fonte fora da lista; o atendimento informado que não
+//   é o da conta (CIHA e BPA); a APAC sem autorização vigente, fora da validade ou com a conta de outro paciente;
 // - leituras: o médico solicitante pelo CRM e os parâmetros ambulatoriais.
 // Massa SINTÉTICA: o cadastro fica (idempotente); remessas, linhas e competências são limpas no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
@@ -37,6 +38,7 @@ const P = 'F24SR';
 const SIG = '0301019340';
 const CRM = '924031';
 const NUM_APAC = '2624024000099';
+const NUM_APAC_SOLICITADA = '2624024000100';
 const COMP = '202603';
 
 const sha = (t: string) => createHash('sha256').update(t).digest('hex');
@@ -48,7 +50,19 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 
 describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própria (cliente f22_o3)', () => {
   let nucleo: NucleoProprio;
-  const ids = { est: 0, conta: 0, paciente: 0, laudo: 0, cbo: '', ciha: 0, bpa: 0, apac: 0 };
+  const ids = {
+    est: 0,
+    conta: 0,
+    contaOutro: 0,
+    atendimento: 0,
+    paciente: 0,
+    laudo: 0,
+    laudoSolicitado: 0,
+    cbo: '',
+    ciha: 0,
+    bpa: 0,
+    apac: 0,
+  };
 
   const uma = (sql: string, p: readonly unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conta` }, (l) =>
@@ -71,20 +85,18 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       trilha: () => ({ dados: { teste: P } }),
     });
     const chave = `sus:${randomUUID()}`;
-    await nucleo
-      .criarExecutor()
-      .executar(
-        op,
-        CLIENTE,
-        { chave },
-        {
-          cliente: CLIENTE,
-          estabelecimento: ids.est,
-          usuario: null,
-          correlacao: `${P}-grava`,
-          chaveIdempotencia: chave,
-        },
-      );
+    await nucleo.criarExecutor().executar(
+      op,
+      CLIENTE,
+      { chave },
+      {
+        cliente: CLIENTE,
+        estabelecimento: ids.est,
+        usuario: null,
+        correlacao: `${P}-grava`,
+        chaveIdempotencia: chave,
+      },
+    );
     if (!saida) throw new Error('sem resultado');
     return (saida as { v: T }).v;
   }
@@ -200,6 +212,14 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
         );
       const pp = await pessoa(`PACIENTE SINTETICO ${P}`, null, '700000000240031');
       const pm = await pessoa(`MEDICO SINTETICO ${P}`, '24024024031', null);
+      const po = await pessoa(`PACIENTE SINTETICO ${P} OUTRO`, null, null);
+      const pacienteOutro = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [po],
+        "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+        [po, 240_024_032, agora],
+      );
       ids.paciente = await garantir(
         e,
         'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
@@ -273,14 +293,36 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
           agora,
         ],
       );
-      ids.conta = await garantir(
+      ids.atendimento = at;
+      const conta = (numero: string, atendimento: number, paciente: number) =>
+        garantir(
+          e,
+          'SELECT id FROM conta_hospitalar WHERE estabelecimento_id = ? AND numero = ?',
+          [ids.est, numero],
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
+             natureza, competencia, inicio_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'ambulatorial', '2026-03-01', ?, ?)`,
+          [ids.est, numero, atendimento, paciente, fonte, tipoConta, new Date('2026-03-10T10:00:00Z'), agora],
+        );
+      ids.conta = await conta(`${P}-C1`, at, ids.paciente);
+      const atOutro = await garantir(
         e,
-        'SELECT id FROM conta_hospitalar WHERE estabelecimento_id = ? AND numero = ?',
-        [ids.est, `${P}-C1`],
-        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id,
-           natureza, competencia, inicio_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'ambulatorial', '2026-03-01', ?, ?)`,
-        [ids.est, `${P}-C1`, at, ids.paciente, fonte, tipoConta, new Date('2026-03-10T10:00:00Z'), agora],
+        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+        [ids.est, `${P}-AT2`],
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+           fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          `${P}-AT2`,
+          pacienteOutro,
+          catAt,
+          tiss,
+          fonte,
+          prof,
+          new Date('2026-03-11T10:00:00Z'),
+          agora,
+        ],
       );
+      ids.contaOutro = await conta(`${P}-C2`, atOutro, pacienteOutro);
       const tipoLaudo = await garantir(
         e,
         'SELECT id FROM tipo_laudo_apac WHERE codigo = ?',
@@ -291,22 +333,40 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       const sigId = (
         await e.uma<{ id: number }>('SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ?', [SIG])
       )?.id;
-      ids.laudo = await garantir(
-        e,
-        'SELECT id FROM laudo_apac WHERE estabelecimento_id = ? AND numero_laudo = ?',
-        [ids.est, `${P}-L1`],
-        `INSERT INTO laudo_apac (estabelecimento_id, numero_laudo, paciente_id, atendimento_id, tipo_laudo_apac_id, data_laudo,
-           solicitado_procedimento_sigtap_id, codigo_cid10_principal, solicitante_profissional_id, justificativa, criado_em)
-         VALUES (?, ?, ?, ?, ?, '2026-03-12', ?, 'N180', ?, 'JUSTIFICATIVA FICTICIA', ?)`,
-        [ids.est, `${P}-L1`, ids.paciente, at, tipoLaudo, sigId, prof, agora],
+      const laudo = (numero: string) =>
+        garantir(
+          e,
+          'SELECT id FROM laudo_apac WHERE estabelecimento_id = ? AND numero_laudo = ?',
+          [ids.est, numero],
+          `INSERT INTO laudo_apac (estabelecimento_id, numero_laudo, paciente_id, atendimento_id, tipo_laudo_apac_id, data_laudo,
+             solicitado_procedimento_sigtap_id, codigo_cid10_principal, solicitante_profissional_id, justificativa, criado_em)
+           VALUES (?, ?, ?, ?, ?, '2026-03-12', ?, 'N180', ?, 'JUSTIFICATIVA FICTICIA', ?)`,
+          [ids.est, numero, ids.paciente, at, tipoLaudo, sigId, prof, agora],
+        );
+      const autorizacao = (laudoId: number, numero: string) =>
+        garantir(
+          e,
+          'SELECT id FROM autorizacao_apac WHERE laudo_apac_id = ?',
+          [laudoId],
+          `INSERT INTO autorizacao_apac (estabelecimento_id, laudo_apac_id, data_solicitacao, numero_apac, tipo_apac, criado_em)
+           VALUES (?, ?, '2026-03-12', ?, 'inicial', ?)`,
+          [ids.est, laudoId, numero, agora],
+        );
+      ids.laudo = await laudo(`${P}-L1`);
+      // A autorização do gestor: autorizada, validade de 10/03 a 09/06 (competências 202603 a 202606).
+      const aut = await autorizacao(ids.laudo, NUM_APAC);
+      await e.executar(
+        `UPDATE autorizacao_apac SET situacao = 'autorizada', data_autorizacao = '2026-03-12', validade_inicio = '2026-03-10',
+           validade_fim = '2026-06-09', ultima_competencia = '202606' WHERE id = ?`,
+        [aut],
       );
-      await garantir(
-        e,
-        'SELECT id FROM autorizacao_apac WHERE laudo_apac_id = ?',
-        [ids.laudo],
-        `INSERT INTO autorizacao_apac (estabelecimento_id, laudo_apac_id, data_solicitacao, numero_apac, tipo_apac, criado_em)
-         VALUES (?, ?, '2026-03-12', ?, 'inicial', ?)`,
-        [ids.est, ids.laudo, NUM_APAC, agora],
+      // Um laudo com a autorização só solicitada (tem número, mas o gestor não autorizou).
+      ids.laudoSolicitado = await laudo(`${P}-L2`);
+      const sol = await autorizacao(ids.laudoSolicitado, NUM_APAC_SOLICITADA);
+      await e.executar(
+        `UPDATE autorizacao_apac SET situacao = 'solicitada', data_autorizacao = NULL, validade_inicio = NULL,
+           validade_fim = NULL, ultima_competencia = NULL WHERE id = ?`,
+        [sol],
       );
     });
     await limpar();
@@ -378,20 +438,53 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
     expect(Number(x?.['qtd'])).toBe(2);
   });
 
-  it('CIHA: a fonte fora da lista recusa e nada fica (nem a remessa)', async () => {
-    const antes = await n('SELECT COUNT(*) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [ids.est]);
+  /** As contagens que uma recusa não pode mudar: remessas, arquivos e linhas do estabelecimento. */
+  const contagens = async () =>
+    Promise.all([
+      n('SELECT COUNT(*) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [ids.est]),
+      n(
+        'SELECT COUNT(*) AS n FROM registro_ciha r JOIN remessa_ciha m ON m.id = r.remessa_ciha_id WHERE m.estabelecimento_id = ?',
+        [ids.est],
+      ),
+      n('SELECT COUNT(*) AS n FROM remessa_bpa WHERE estabelecimento_id = ?', [ids.est]),
+      n('SELECT COUNT(*) AS n FROM producao_ambulatorial_sus WHERE estabelecimento_id = ?', [ids.est]),
+      n('SELECT COUNT(*) AS n FROM remessa_apac WHERE estabelecimento_id = ?', [ids.est]),
+      n('SELECT COUNT(*) AS n FROM apac WHERE estabelecimento_id = ?', [ids.est]),
+      n(
+        "SELECT COUNT(*) AS n FROM arquivo WHERE estabelecimento_id = ? AND finalidade = 'arquivo_faturamento_sus'",
+        [ids.est],
+      ),
+    ]);
+
+  /** A CIHA gravada na operação, com as mesmas colunas próprias da remessa do caso feliz. */
+  const gravarCiha = (regs: readonly RegistroCihaComItens[]) =>
+    gravar(async (tx) => {
+      const id = await proximoNumeroArquivo(tx);
+      const { remessa } = await gravarRemessa(
+        tx,
+        ids.est,
+        novo(id, ids.ciha, 'ciha', regs.length),
+        'ciha',
+        contagemCiha(regs),
+      );
+      return new GravacoesLinhasSusPropria(tx, ids.est).registrosCiha(remessa, regs);
+    });
+
+  it('CIHA: a fonte fora da lista recusa (fonte-inexistente) e nada fica (remessa, registro e arquivo)', async () => {
+    const antes = await contagens();
+    expect(antes.every((x) => x >= 0)).toBe(true);
+    await expect(gravarCiha([registro('fonte-inventada')])).rejects.toMatchObject({
+      problema: { codigo: 'fonte-inexistente' },
+    });
+    expect(await contagens()).toEqual(antes);
+  });
+
+  it('CIHA: o atendimento informado que não é o da conta recusa (atendimento-divergente) e nada fica', async () => {
+    const antes = await contagens();
     await expect(
-      gravar(async (tx) => {
-        const id = await proximoNumeroArquivo(tx);
-        const { remessa } = await gravarRemessa(tx, ids.est, novo(id, ids.ciha, 'ciha', 1), 'ciha', {});
-        return new GravacoesLinhasSusPropria(tx, ids.est).registrosCiha(remessa, [
-          registro('fonte-inventada'),
-        ]);
-      }),
-    ).rejects.toThrow();
-    expect(await n('SELECT COUNT(*) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [ids.est])).toBe(
-      antes,
-    );
+      gravarCiha([{ ...registro('plano-privado'), atendimento: ids.atendimento + 1_000_000 }]),
+    ).rejects.toMatchObject({ problema: { codigo: 'atendimento-divergente' } });
+    expect(await contagens()).toEqual(antes);
   });
 
   it('BPA: uma folha por tipo e número, com as linhas; a geração nova guarda as suas e a anterior fica', async () => {
@@ -442,6 +535,74 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
     expect(sit?.['situacao']).toBe('substituida');
   });
 
+  it('BPA: o atendimento informado que não é o da conta recusa (atendimento-divergente) e nada fica', async () => {
+    const antes = await contagens();
+    await expect(
+      gravar(async (tx) => {
+        const id = await proximoNumeroArquivo(tx);
+        const { remessa } = await gravarRemessa(tx, ids.est, novo(id, ids.bpa, 'bpa', 1), 'bpa', {
+          tipo_bpa: 'misto',
+          quantidade_registros: 1,
+        });
+        return new GravacoesLinhasSusPropria(tx, ids.est).folhasBpa(remessa, ids.bpa, [
+          {
+            tipo: 'i',
+            folha: 1,
+            sequencia: 1,
+            idade: null,
+            data: '2026-03-10',
+            procedimento: SIG,
+            cbo: ids.cbo,
+            quantidade: 1,
+            conta: ids.conta,
+            atendimento: ids.atendimento + 1_000_000,
+            registro: null,
+          },
+        ]);
+      }),
+    ).rejects.toMatchObject({ problema: { codigo: 'atendimento-divergente' } });
+    expect(await contagens()).toEqual(antes);
+  });
+
+  /** A APAC gravada na operação: a remessa e as linhas do laudo na competência dada. */
+  const gravarApac = (laudo: number, competencia: string, conta: number) =>
+    gravar(async (tx) => {
+      const id = await proximoNumeroArquivo(tx);
+      const { remessa } = await gravarRemessa(tx, ids.est, novo(id, ids.apac, 'apac', 1), 'apac', {
+        competencia_apresentacao: '2026-03-01',
+        quantidade_apac: 1,
+      });
+      return new GravacoesLinhasSusPropria(tx, ids.est).apacsDaRemessa(
+        remessa,
+        { id: ids.apac, competencia },
+        [
+          {
+            apac: laudo,
+            tipoNoArquivo: '1',
+            procedimento: SIG,
+            principal: true,
+            cbo: ids.cbo,
+            quantidade: 1,
+            conta,
+          },
+        ],
+      );
+    });
+
+  it('APAC: recusa a autorização só solicitada, a validade que não alcança a competência e a conta de outro paciente', async () => {
+    const antes = await contagens();
+    await expect(gravarApac(ids.laudoSolicitado, COMP, ids.conta)).rejects.toMatchObject({
+      problema: { codigo: 'apac-nao-autorizada' },
+    });
+    await expect(gravarApac(ids.laudo, '202608', ids.conta)).rejects.toMatchObject({
+      problema: { codigo: 'apac-fora-da-validade' },
+    });
+    await expect(gravarApac(ids.laudo, COMP, ids.contaOutro)).rejects.toMatchObject({
+      problema: { codigo: 'conta-de-outro-paciente' },
+    });
+    expect(await contagens()).toEqual(antes);
+  });
+
   it('APAC: a apac apresentada com o número da autorização e os procedimentos; a geração nova guarda a sua', async () => {
     const linhas = [
       { principal: true, quantidade: 1 },
@@ -485,7 +646,7 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
         tipo_apac: 'inicial',
         situacao: 'apresentada',
         codigo_cid10_principal: 'N180',
-        inicio: '2026-03-01',
+        inicio: '2026-03-10',
         fim: '2026-03-31',
       });
       expect([Number(x?.['principais']), Number(x?.['qtd'])]).toEqual([1, 5]);

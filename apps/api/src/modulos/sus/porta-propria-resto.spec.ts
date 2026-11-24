@@ -2,7 +2,13 @@
 // numerada, o tipo e o período da APAC (autorização de procedimento de alta complexidade) e as contagens da CIHA
 // (comunicação de internação hospitalar) por modalidade.
 import { describe, expect, it } from 'vitest';
-import { contagemCiha, folhasDoBpa, periodoApac, tipoApacDoArquivo } from './porta-propria-resto.js';
+import {
+  atendimentoDaConta,
+  contagemCiha,
+  folhasDoBpa,
+  periodoApac,
+  tipoApacDoArquivo,
+} from './porta-propria-resto.js';
 import type { LinhaBpaParaGravar, RegistroCihaParaGravar } from './tipos.js';
 
 const linha = (tipo: 'c' | 'i', folha: number, sequencia: number): LinhaBpaParaGravar => ({
@@ -50,11 +56,21 @@ describe('regras das linhas guardadas dos arquivos do SUS', () => {
       inicio: '2026-06-01',
       fim: '2026-06-09',
     });
-    // Validade fora da competência: fica a competência inteira (a crítica prévia aponta a validade).
-    expect(periodoApac('202608', { inicio: '2026-03-10', fim: '2026-06-09' })).toEqual({
-      inicio: '2026-08-01',
-      fim: '2026-08-31',
-    });
+    // Validade que não alcança a competência: sem período (a gravação recusa, nunca cai na competência inteira).
+    expect(periodoApac('202608', { inicio: '2026-03-10', fim: '2026-06-09' })).toBeNull();
+    expect(periodoApac('202602', { inicio: '2026-03-10', fim: '2026-06-09' })).toBeNull();
+  });
+
+  it('aceita o atendimento informado só quando é o da conta', () => {
+    expect(atendimentoDaConta(null, 7, 'da CIHA')).toBe(7);
+    expect(atendimentoDaConta(undefined, null, 'do BPA')).toBeNull();
+    expect(atendimentoDaConta(7, 7, 'da CIHA')).toBe(7);
+    expect(() => atendimentoDaConta(8, 7, 'da CIHA')).toThrow(
+      expect.objectContaining({ problema: expect.objectContaining({ codigo: 'atendimento-divergente' }) }),
+    );
+    expect(() => atendimentoDaConta(8, null, 'do BPA')).toThrow(
+      expect.objectContaining({ problema: expect.objectContaining({ codigo: 'atendimento-divergente' }) }),
+    );
   });
 
   it('conta os registros da CIHA por modalidade', () => {

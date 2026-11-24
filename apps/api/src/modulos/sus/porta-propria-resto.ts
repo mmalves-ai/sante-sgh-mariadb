@@ -75,15 +75,37 @@ export function tipoApacDoArquivo(t: '1' | '2' | '3'): 'inicial' | 'continuidade
   return t === '2' ? 'continuidade' : t === '3' ? 'unica' : 'inicial';
 }
 
-/** O período da APAC na competência: a interseção da competência com a validade da autorização. */
+/**
+ * O período da APAC na competência: a interseção da competência com a validade da autorização. Sem interseção (a
+ * validade não alcança a competência) devolve null: quem grava recusa (`apac-fora-da-validade`), nunca cai na
+ * competência inteira.
+ */
 export function periodoApac(
   competencia: string,
   validade: { inicio: string | null; fim: string | null },
-): { inicio: string; fim: string } {
+): { inicio: string; fim: string } | null {
   const c = periodoDaCompetencia(competencia);
   const inicio = validade.inicio && validade.inicio > c.inicio ? validade.inicio : c.inicio;
   const fim = validade.fim && validade.fim < c.fim ? validade.fim : c.fim;
-  return fim >= inicio ? { inicio, fim } : c;
+  return fim >= inicio ? { inicio, fim } : null;
+}
+
+/**
+ * O atendimento da linha: o da conta conferida no banco. O atendimento informado por quem chama só é aceito se for o
+ * mesmo da conta (senão recusa `atendimento-divergente`); sem conta, não há como conferir e a linha não leva
+ * atendimento informado.
+ */
+export function atendimentoDaConta(
+  informado: number | null | undefined,
+  daConta: number | null,
+  instrumento: string,
+): number | null {
+  if (informado !== null && informado !== undefined && informado !== daConta)
+    throw recusa(
+      'atendimento-divergente',
+      `Uma linha ${instrumento} aponta um atendimento que não é o da conta neste estabelecimento.`,
+    );
+  return daConta;
 }
 
 /** As folhas do BPA pela linha numerada: tipo e número da folha, na ordem do arquivo. */
@@ -224,7 +246,7 @@ export class GravacoesLinhasSusPropria {
         paciente_id: num(c['paciente_id']),
         cns: cnsOk,
         cpf: cnsOk ? null : cpfOk,
-        atendimento_id: r.atendimento ?? numOuNulo(c['atendimento_id']),
+        atendimento_id: atendimentoDaConta(r.atendimento, numOuNulo(c['atendimento_id']), 'da CIHA'),
         internacao_id: internacao,
         conta_hospitalar_id: r.conta,
         data_atendimento: entrada,
@@ -319,7 +341,11 @@ export class GravacoesLinhasSusPropria {
             'A ocupação (CBO) de uma linha do BPA não está no catálogo.',
           ),
           paciente_id: paciente,
-          atendimento_id: x.atendimento ?? (c ? numOuNulo(c['atendimento_id']) : null),
+          atendimento_id: atendimentoDaConta(
+            x.atendimento,
+            c ? numOuNulo(c['atendimento_id']) : null,
+            'do BPA',
+          ),
           conta_hospitalar_id: x.conta,
           data_atendimento: x.tipo === 'i' ? x.data : null,
           idade_anos: x.idade,
@@ -332,8 +358,12 @@ export class GravacoesLinhasSusPropria {
   }
 
   /**
-   * As APACs apresentadas na remessa nova: uma por laudo, com os procedimentos na ordem do arquivo. Recusa o laudo
-   * sem autorização numerada no estabelecimento, sem procedimento principal ou com procedimento fora da tabela.
+   * As APACs apresentadas na remessa nova: uma por laudo, com os procedimentos na ordem do arquivo. Só a autorização
+   * 'autorizada' ou 'encerrada' cuja validade alcança a competência é apresentada (o mesmo critério da leitura
+   * apacsDaCompetencia); havendo várias no laudo, a mais recente (maior id). Recusa o laudo fora do estabelecimento
+   * ou sem autorização ('nao-encontrado'), a autorização não autorizada ('apac-nao-autorizada'), a validade que não
+   * alcança a competência ('apac-fora-da-validade'), a conta da linha fora do estabelecimento ('conta-inexistente')
+   * ou de outro paciente ('conta-de-outro-paciente'), e o procedimento fora da tabela unificada.
    */
   async apacsDaRemessa(
     remessa: number,
@@ -346,15 +376,19 @@ export class GravacoesLinhasSusPropria {
     const laudos = [...porLaudo.keys()];
     const autorizacoes = new Map<number, Linha>();
     for (const x of await this.tx.consultar(
-      `SELECT la.id AS laudo, aa.id AS autorizacao, aa.numero_apac, la.atendimento_id,
-              la.codigo_cid10_principal, la.codigo_cid10_secundario, la.codigo_cid10_causa_associada,
-              DATE_FORMAT(aa.validade_inicio, '%Y-%m-%d') AS validade_inicio,
-              DATE_FORMAT(aa.validade_fim, '%Y-%m-%d') AS validade_fim
-         FROM laudo_apac la
-         JOIN autorizacao_apac aa ON aa.laudo_apac_id = la.id AND aa.excluido_em IS NULL
-        WHERE la.estabelecimento_id = ? AND la.excluido_em IS NULL AND la.id IN (${marcadores(laudos.length)})`,
-      [this.est, ...laudos],
-      { teto: laudos.length * 2 },
+      `SELECT q.* FROM (
+         SELECT la.id AS laudo, aa.id AS autorizacao, aa.numero_apac, la.atendimento_id, la.paciente_id,
+                la.codigo_cid10_principal, la.codigo_cid10_secundario, la.codigo_cid10_causa_associada,
+                DATE_FORMAT(aa.validade_inicio, '%Y-%m-%d') AS validade_inicio,
+                DATE_FORMAT(aa.validade_fim, '%Y-%m-%d') AS validade_fim,
+                aa.situacao IN ('autorizada','encerrada') AS autorizada,
+                COALESCE(DATE_FORMAT(aa.validade_inicio, '%Y%m') <= ? AND aa.ultima_competencia >= ?, FALSE) AS na_validade
+           FROM laudo_apac la
+           JOIN autorizacao_apac aa ON aa.laudo_apac_id = la.id AND aa.excluido_em IS NULL
+          WHERE la.estabelecimento_id = ? AND la.excluido_em IS NULL AND la.id IN (${marcadores(laudos.length)})) q
+        ORDER BY q.laudo, q.autorizada DESC, (q.autorizada AND q.na_validade) DESC, q.autorizacao DESC`,
+      [competencia.competencia, competencia.competencia, this.est, ...laudos],
+      { teto: laudos.length * 20 },
     ))
       if (!autorizacoes.has(num(x['laudo']))) autorizacoes.set(num(x['laudo']), x);
     const sigtap = await idsPorCodigo(
@@ -366,6 +400,11 @@ export class GravacoesLinhasSusPropria {
       this.tx,
       'ocupacao_cbo',
       linhas.map((x) => x.cbo),
+    );
+    const contas = await contasDoEstabelecimento(
+      this.tx,
+      this.est,
+      linhas.map((x) => x.conta ?? 0),
     );
     const sig = (codigo: string) =>
       exigir(
@@ -379,6 +418,24 @@ export class GravacoesLinhasSusPropria {
         'nao-encontrado',
         'A APAC não foi encontrada neste estabelecimento.',
       );
+      if (num(a['autorizada']) !== 1)
+        throw recusa('apac-nao-autorizada', 'A APAC apresentada não tem autorização vigente do gestor.');
+      if (num(a['na_validade']) !== 1)
+        throw recusa(
+          'apac-fora-da-validade',
+          'A validade da autorização da APAC não alcança a competência apresentada.',
+        );
+      const paciente = num(a['paciente_id']);
+      for (const x of ls) {
+        if (x.conta === null) continue;
+        const c = exigir(
+          contas.get(x.conta),
+          'conta-inexistente',
+          'Uma conta da APAC não foi encontrada neste estabelecimento.',
+        );
+        if (num(c['paciente_id']) !== paciente)
+          throw recusa('conta-de-outro-paciente', 'Uma conta da APAC não é do paciente do laudo.');
+      }
       const numero = txt(a['numero_apac']);
       if (!/^\d{13}$/.test(numero))
         throw recusa('apac-sem-numero', 'A APAC apresentada está sem o número da autorização.');
@@ -387,10 +444,14 @@ export class GravacoesLinhasSusPropria {
       const principal = ls.find((x) => x.principal) ?? ls[0];
       if (!principal) continue;
       const tipo = tipoApacDoArquivo(principal.tipoNoArquivo);
-      const periodo = periodoApac(competencia.competencia, {
-        inicio: txtOuNulo(a['validade_inicio']),
-        fim: txtOuNulo(a['validade_fim']),
-      });
+      const periodo = exigir(
+        periodoApac(competencia.competencia, {
+          inicio: txtOuNulo(a['validade_inicio']),
+          fim: txtOuNulo(a['validade_fim']),
+        }),
+        'apac-fora-da-validade',
+        'A validade da autorização da APAC não alcança a competência apresentada.',
+      );
       const autorizacao = num(a['autorizacao']);
       const anterior =
         tipo === 'continuidade'
