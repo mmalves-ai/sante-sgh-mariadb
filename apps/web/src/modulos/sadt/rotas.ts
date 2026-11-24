@@ -43,6 +43,12 @@ export const rotasSadt: RouteRecordRaw[] = [
     meta: { permissao: 'sadt.lancamento.ler' },
   },
   {
+    path: '/sadt/catalogo',
+    name: 'sadt.catalogo',
+    component: () => import('./telas/CatalogoExamesTela.vue'),
+    meta: { permissao: 'sadt.catalogo.ler' },
+  },
+  {
     path: '/sadt/orcamentos',
     name: 'sadt.orcamentos',
     component: () => import('./telas/OrcamentosTela.vue'),
