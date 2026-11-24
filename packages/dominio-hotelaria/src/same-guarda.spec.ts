@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   conferirExtravio,
   conferirMovimentoGuarda,
+  type DadosDescarte,
   efeitoNoVolume,
+  fimDoPrazoGuarda,
   lerMatriculaVolume,
   matriculaVolume,
   OPERACOES_GUARDA_PADRAO,
@@ -83,6 +85,23 @@ describe('SAME pelo volume', () => {
     ).toEqual(['localDestino']);
   });
 
+  it('o próprio volume não ocupa duas vagas; o extraviado reencontrado confere a vaga do seu local', () => {
+    const cheio = { volumes: 10, capacidade: 10 };
+    // Emprestado, já contado no local 7: a devolução ao mesmo local (pedida ou não) passa.
+    expect(campos(fora, pedido('devolucao', { localDestino: 7, ocupacaoDestino: cheio }))).toEqual([]);
+    expect(campos(fora, pedido('devolucao', { ocupacaoDestino: cheio }))).toEqual([]);
+    // Para outro local cheio, recusa.
+    expect(campos(fora, pedido('devolucao', { localDestino: 8, ocupacaoDestino: cheio }))).toEqual([
+      'localDestino',
+    ]);
+    // O extraviado não está na contagem: volta ao local dele só se houver vaga, mesmo sem local pedido.
+    const extraviado: VolumeGuarda = { ...fora, situacao: 'extraviado' };
+    expect(campos(extraviado, pedido('devolucao', { ocupacaoDestino: cheio }))).toEqual(['localDestino']);
+    expect(
+      campos(extraviado, pedido('devolucao', { ocupacaoDestino: { volumes: 9, capacidade: 10 } })),
+    ).toEqual([]);
+  });
+
   it('a saída pede destino, previsão futura e responsável, e só sai o que está no arquivo', () => {
     expect(campos(noArquivo, pedido('saida')).sort()).toEqual([
       'previsaoRetorno',
@@ -95,6 +114,13 @@ describe('SAME pelo volume', () => {
     const ok = pedido('saida', { setorDestino: 3, previsaoRetorno: amanha, responsavel: 'ANA' });
     expect(campos(noArquivo, ok)).toEqual([]);
     expect(campos(fora, ok)).toEqual(['operacao']);
+    // Só o local de destino não basta: fora do arquivo o volume fica num setor.
+    expect(
+      campos(
+        noArquivo,
+        pedido('emprestimo', { localDestino: 8, previsaoRetorno: amanha, responsavel: 'ANA' }),
+      ),
+    ).toEqual(['setorDestino']);
     expect(efeitoNoVolume(noArquivo, ok)).toEqual({
       situacao: 'emprestado',
       noLocal: false,
@@ -131,9 +157,42 @@ describe('SAME pelo volume', () => {
     expect(campos(fora, pedido('transferencia', { setorDestino: 4 }))).toEqual([]);
   });
 
-  it('o descarte exige o aval, só do arquivo, e encerra a guarda', () => {
-    expect(campos(noArquivo, pedido('descarte', { responsavel: 'COMISSAO' }))).toEqual(['avalComissao']);
-    const ok = pedido('descarte', { responsavel: 'COMISSAO', avalComissao: 'ATA 12/2026' });
+  it('o descarte exige a deliberação da comissão e o prazo de guarda cumprido, só do arquivo, e encerra a guarda', () => {
+    const deliberacao = { comissaoDeProntuario: true, reuniaoRealizada: true, cancelada: false };
+    const cumprido: DadosDescarte = {
+      guardaDesde: new Date('2005-01-10T00:00:00Z'),
+      prazoAnos: 20,
+      deliberacao,
+    };
+    const msg = (d: DadosDescarte | null) =>
+      conferirMovimentoGuarda(noArquivo, pedido('descarte', { responsavel: 'COMISSAO', descarte: d })).map(
+        (e) => e.mensagem,
+      );
+    expect(campos(noArquivo, pedido('descarte', { responsavel: 'COMISSAO' })).sort()).toEqual([
+      'deliberacao',
+      'operacao',
+    ]);
+    expect(msg({ ...cumprido, deliberacao: null })).toEqual([
+      expect.stringMatching(/deliberação da comissão/),
+    ]);
+    expect(msg({ ...cumprido, deliberacao: { ...deliberacao, comissaoDeProntuario: false } })).toEqual([
+      expect.stringMatching(/não é da comissão/),
+    ]);
+    expect(msg({ ...cumprido, deliberacao: { ...deliberacao, reuniaoRealizada: false } })).toEqual([
+      expect.stringMatching(/não foi realizada/),
+    ]);
+    expect(msg({ ...cumprido, deliberacao: { ...deliberacao, cancelada: true } })).toEqual([
+      expect.stringMatching(/cancelada/),
+    ]);
+    // Antes do prazo (20 anos desde 2010-03-01: 2030-03-01) recusa; sem prazo, guarda permanente.
+    expect(msg({ ...cumprido, guardaDesde: new Date('2010-03-01T00:00:00Z') })).toEqual([
+      expect.stringMatching(/2030-03-01/),
+    ]);
+    expect(msg({ ...cumprido, prazoAnos: null })).toEqual([expect.stringMatching(/permanente/)]);
+    expect(fimDoPrazoGuarda(new Date('2006-11-24T00:00:00Z'), 20)?.toISOString().slice(0, 10)).toBe(
+      '2026-11-24',
+    );
+    const ok = pedido('descarte', { responsavel: 'COMISSAO', descarte: cumprido });
     expect(campos(noArquivo, ok)).toEqual([]);
     expect(campos(fora, ok)).toEqual(['operacao']);
     expect(efeitoNoVolume(noArquivo, ok).situacao).toBe('eliminado');

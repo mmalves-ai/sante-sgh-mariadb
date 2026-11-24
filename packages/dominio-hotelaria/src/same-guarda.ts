@@ -35,7 +35,8 @@ export interface OperacaoGuarda {
   readonly encerraGuarda: boolean;
 }
 
-/** As operações padrão do produto (semeadas em todo cliente; o de-para da origem fica no conector). */
+/** As operações padrão do produto (semeadas em todo cliente). As operações importadas de outro sistema entram com tipo
+ * e sentido presumidos até o de-para do conector (pendência registrada na ficha da F3.9, 04-HOT L126). */
 export const OPERACOES_GUARDA_PADRAO: readonly OperacaoGuarda[] = [
   op('registro', 'Registro no arquivo', 'registro', 'entrada', false, false, false),
   op('saida', 'Saída para setor', 'saida', 'saida', true, true, false),
@@ -80,8 +81,36 @@ export interface PedidoGuarda {
   readonly avalComissao: string | null;
   readonly responsavel: string | null;
   readonly agora: Date;
-  /** Volumes já guardados no local de destino e a capacidade dele (null: sem limite). */
+  /** Volumes contados no local onde o volume vai ficar (o de destino ou, sem ele, o de guarda do volume) e a
+   * capacidade dele (null: sem limite). A contagem é a do banco: inclui o próprio volume quando ele já é do local e não
+   * está extraviado nem eliminado; a regra o desconta. */
   readonly ocupacaoDestino?: { readonly volumes: number; readonly capacidade: number | null } | null;
+  /** O que o descarte confere: o prazo de guarda do tipo de documento e a deliberação da comissão. */
+  readonly descarte?: DadosDescarte | null;
+}
+
+/** A deliberação registrada em reunião que autoriza o descarte. */
+export interface DeliberacaoDescarte {
+  /** A comissão é de revisão de prontuários e do mesmo estabelecimento do volume. */
+  readonly comissaoDeProntuario: boolean;
+  readonly reuniaoRealizada: boolean;
+  readonly cancelada: boolean;
+}
+
+export interface DadosDescarte {
+  /** Desde quando corre o prazo: a data do último documento do volume ou, sem ela, a abertura. */
+  readonly guardaDesde: Date | null;
+  /** O prazo de guarda do tipo de documento, em anos (null: guarda permanente). */
+  readonly prazoAnos: number | null;
+  readonly deliberacao: DeliberacaoDescarte | null;
+}
+
+/** O dia em que o prazo de guarda se cumpre (null: sem prazo, guarda permanente). */
+export function fimDoPrazoGuarda(desde: Date | null, anos: number | null): Date | null {
+  if (desde === null || anos === null) return null;
+  const f = new Date(desde.getTime());
+  f.setUTCFullYear(f.getUTCFullYear() + anos);
+  return f;
 }
 
 export interface ProblemaGuarda {
@@ -102,7 +131,12 @@ export function conferirMovimentoGuarda(v: VolumeGuarda, p: PedidoGuarda): Probl
         mensagem: 'O volume está extraviado: só a devolução ao arquivo (reencontrado) é aceita.',
       },
     ];
-  if (o.exigeDestino && p.setorDestino === null && p.localDestino === null)
+  // Fora do arquivo o volume está sempre num setor: a saída e o empréstimo pedem o setor (o local de destino só vale
+  // para quem entra no arquivo e seria descartado, perdendo onde o volume está).
+  if (o.sentido === 'saida' && !o.encerraGuarda) {
+    if (p.setorDestino === null)
+      recusa('setorDestino', 'Informe o setor de destino: fora do arquivo o volume fica num setor.');
+  } else if (o.exigeDestino && p.setorDestino === null && p.localDestino === null)
     recusa('setorDestino', 'Informe o setor ou o local de destino.');
   if (o.exigePrevisaoRetorno) {
     if (!p.previsaoRetorno) recusa('previsaoRetorno', 'Informe a previsão de retorno.');
@@ -111,8 +145,8 @@ export function conferirMovimentoGuarda(v: VolumeGuarda, p: PedidoGuarda): Probl
   }
   if ((o.sentido === 'saida' || o.tipo === 'recebimento') && !p.responsavel?.trim())
     recusa('responsavel', 'Informe quem retira ou recebe o volume.');
-  if (o.encerraGuarda && !p.avalComissao?.trim())
-    recusa('avalComissao', 'O descarte exige o aval da comissão de revisão de prontuários.');
+  if (o.encerraGuarda)
+    for (const e of conferirDescarte(p.descarte ?? null, p.agora)) recusa(e.campo, e.mensagem);
   if (o.tipo === 'registro') {
     if (v.temMovimento) recusa('operacao', 'O volume já está registrado no arquivo.');
     if (p.localDestino === null) recusa('localDestino', 'Informe o local de guarda do volume.');
@@ -138,15 +172,53 @@ export function conferirMovimentoGuarda(v: VolumeGuarda, p: PedidoGuarda): Probl
     if (!v.noLocal && (p.setorDestino === null || p.setorDestino === v.setorAtual))
       recusa('setorDestino', 'Fora do arquivo, a transferência é para outro setor.');
   }
-  const entraNoLocal =
-    p.localDestino !== null &&
+  const entra =
+    !o.encerraGuarda &&
     (o.tipo === 'registro' || o.sentido === 'entrada' || (o.tipo === 'transferencia' && v.noLocal));
-  if (
-    entraNoLocal &&
-    p.ocupacaoDestino?.capacidade != null &&
-    p.ocupacaoDestino.volumes >= p.ocupacaoDestino.capacidade
-  )
-    recusa('localDestino', 'O local de guarda está cheio.');
+  const alvo = entra ? (p.localDestino ?? v.localArquivo) : null;
+  if (alvo !== null && p.ocupacaoDestino?.capacidade != null) {
+    // O próprio volume já conta no local de guarda dele (emprestado inclusive): não ocupa duas vagas.
+    const jaContado =
+      alvo === v.localArquivo && v.situacao !== 'extraviado' && v.situacao !== 'eliminado' ? 1 : 0;
+    if (p.ocupacaoDestino.volumes - jaContado >= p.ocupacaoDestino.capacidade)
+      recusa('localDestino', 'O local de guarda está cheio.');
+  }
+  return erros;
+}
+
+/** O descarte: deliberação da comissão de revisão de prontuários, em reunião realizada, e o prazo de guarda cumprido. */
+export function conferirDescarte(d: DadosDescarte | null, agora: Date): ProblemaGuarda[] {
+  const erros: ProblemaGuarda[] = [];
+  const del = d?.deliberacao ?? null;
+  if (!del)
+    erros.push({
+      campo: 'deliberacao',
+      mensagem: 'O descarte exige a deliberação da comissão de revisão de prontuários registrada em reunião.',
+    });
+  else if (!del.comissaoDeProntuario)
+    erros.push({
+      campo: 'deliberacao',
+      mensagem: 'A deliberação não é da comissão de revisão de prontuários deste estabelecimento.',
+    });
+  else if (!del.reuniaoRealizada)
+    erros.push({ campo: 'deliberacao', mensagem: 'A reunião da deliberação ainda não foi realizada.' });
+  else if (del.cancelada) erros.push({ campo: 'deliberacao', mensagem: 'A deliberação foi cancelada.' });
+  if (!d || d.prazoAnos === null)
+    erros.push({
+      campo: 'operacao',
+      mensagem:
+        'O tipo de documento não tem prazo de guarda: a guarda é permanente e o volume não se elimina.',
+    });
+  else {
+    const fim = fimDoPrazoGuarda(d.guardaDesde, d.prazoAnos);
+    if (fim === null || fim.getTime() > agora.getTime())
+      erros.push({
+        campo: 'operacao',
+        mensagem: `O prazo de guarda de ${d.prazoAnos} anos ainda não se cumpriu${
+          fim ? ` (cumpre-se em ${fim.toISOString().slice(0, 10)})` : ''
+        }.`,
+      });
+  }
   return erros;
 }
 
