@@ -29,6 +29,7 @@ import {
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import type { AnotacaoGravacao } from '../enfermagem/gravacao-direta.js';
 import {
+  cobra,
   exigirUsuario,
   instante,
   type L,
@@ -241,7 +242,7 @@ export function gravacoesComissaoSorteio(
       const hoje = c.agora.slice(0, 10);
       const tipo = await tx.uma<{ id: number }>(
         'SELECT id FROM tipo_comissao WHERE codigo = ? AND ativo = TRUE',
-        [c.tipo],
+        [cobra(c.tipo)],
       );
       if (!tipo)
         throw recusa(

@@ -29,6 +29,7 @@
 //   inativação (quem, quando, motivo); pedem migração (ver relatório da família).
 import type { L, Linha, NucleoQualidade } from './apoio-propria.js';
 import {
+  camelo,
   dataIso,
   instante,
   instanteN,
@@ -355,7 +356,7 @@ export class LeiturasGestaoComplementoQ2 {
     return linhas.map((r) => ({
       id: n(r['id']),
       versao: n(r['versao']),
-      tipo: texto(r['tipo']),
+      tipo: camelo(r['tipo']),
       nome: texto(r['nome']),
       periodicidade: texto(r['periodicidade_reuniao']),
       membros: JSON.stringify(membros.get(n(r['id'])) ?? []),

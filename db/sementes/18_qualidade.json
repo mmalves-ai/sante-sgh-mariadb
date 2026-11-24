@@ -316,5 +316,71 @@
       "responsavel": "medico",
       "resolucao_manual": true
     }
+  ],
+  "tipo_comissao": [
+    {
+      "codigo": "ccih",
+      "descricao": "Controle de infecção hospitalar",
+      "obrigatoria": true,
+      "base_normativa": "Portaria 2.616/1998"
+    },
+    {
+      "codigo": "nsp",
+      "descricao": "Núcleo de segurança do paciente",
+      "obrigatoria": true,
+      "base_normativa": "RDC 36/2013"
+    },
+    {
+      "codigo": "prontuario",
+      "descricao": "Revisão de prontuários",
+      "obrigatoria": true,
+      "base_normativa": "CFM 1.638/2002"
+    },
+    {
+      "codigo": "obitos",
+      "descricao": "Revisão de óbitos",
+      "obrigatoria": true,
+      "base_normativa": "CFM 2.171/2017"
+    },
+    {
+      "codigo": "etica_medica",
+      "descricao": "Ética médica",
+      "obrigatoria": true,
+      "base_normativa": "CFM 2.152/2016"
+    },
+    {
+      "codigo": "etica_enfermagem",
+      "descricao": "Ética de enfermagem",
+      "obrigatoria": true,
+      "base_normativa": "Cofen 593/2018"
+    },
+    {
+      "codigo": "farmacia",
+      "descricao": "Farmácia e terapêutica",
+      "obrigatoria": false
+    },
+    {
+      "codigo": "transfusional",
+      "descricao": "Transfusional",
+      "obrigatoria": true,
+      "base_normativa": "RDC 34/2014"
+    },
+    {
+      "codigo": "residuos",
+      "descricao": "Gerenciamento de resíduos",
+      "obrigatoria": true,
+      "base_normativa": "RDC 222/2018"
+    },
+    {
+      "codigo": "cipa",
+      "descricao": "Prevenção de acidentes (CIPA)",
+      "obrigatoria": true,
+      "base_normativa": "NR-5"
+    },
+    {
+      "codigo": "outra",
+      "descricao": "Outra comissão do estabelecimento",
+      "obrigatoria": false
+    }
   ]
 }
