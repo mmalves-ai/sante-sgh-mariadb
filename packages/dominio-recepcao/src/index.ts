@@ -1,6 +1,8 @@
 // @sgh/dominio-recepcao (M19): regras puras da recepção, sem banco. Usadas pela API (fila, painel, supervisor), pela
 // tela (eventos possíveis, texto da senha).
 export * from './prioridade.js';
+// 02-AGE 49: o grupo da marcação na senha da chegada.
+export * from './prioridade-chegada.js';
 export * from './fluxo.js';
 export * from './painel.js';
 export * from './identificacao.js';
