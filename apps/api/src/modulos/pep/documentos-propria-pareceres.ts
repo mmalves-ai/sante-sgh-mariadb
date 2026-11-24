@@ -9,12 +9,9 @@
 // Registro clínico nunca é apagado (SBIS-26): nenhuma exclusão física; problema muda por nova versão
 // (problema_paciente_versao), sumário por nova versão (sumario_alta.numero_versao), parecer por cancelamento com motivo.
 // Tabelas novas ou colunas: migração 06_PEP/98_pareceres (relatorio_transferencia; rascunho do sumário; número da
-// declaração de óbito opcional só no rascunho; conta que deu a ciência).
-import {
-  validarCancelamentoObito,
-  type LinhaCausaObito,
-  type SituacaoDeclaracaoObito,
-} from '@sgh/dominio-pep';
+// declaração de óbito opcional só no rascunho; conta que deu a ciência) e 06_PEP/99_obito_rascunho (rascunho cancelado
+// sem data de emissão).
+import { statusDaRecusaObito, validarCancelamentoObito, type LinhaCausaObito } from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -1028,9 +1025,12 @@ export class DocumentosPropriaPareceres {
   }
 
   /**
-   * Cancela a declaração vigente do paciente no estabelecimento (03-PEP L126): situação, data e motivo na declaração e
-   * o evento de cancelamento, na mesma transação. A declaração e o documento ficam (registro nunca apagado); o
-   * paciente pode receber uma nova declaração.
+   * Cancela a declaração vigente do paciente no estabelecimento (03-PEP L126), na mesma transação:
+   *   - na declaração, a situação, a data e o motivo (o rascunho cancelado segue sem data de emissão: não houve emissão);
+   *   - o evento de cancelamento da declaração;
+   *   - o documento do prontuário sai de vigência (situação de categoria "cancelado") com o evento "cancelamento" e o
+   *     motivo na cadeia de eventos do documento; a fila de assinatura e a validação deixam de tratá-lo como vigente.
+   * Só o médico que emitiu cancela. Nada é apagado; o paciente pode receber uma nova declaração.
    */
   async cancelarObito(
     c: ContextoGravacaoPep,
@@ -1039,27 +1039,27 @@ export class DocumentosPropriaPareceres {
     return this.gravar(
       c,
       'pep.obito.cancelar',
-      ['declaracao_obito', 'declaracao_obito_evento'],
+      ['declaracao_obito', 'declaracao_obito_evento', 'documento_prontuario', 'documento_prontuario_evento'],
       async (tx, est, s, falhar) => {
         this.inscricaoDa(s, o.cbo, falhar);
         const d = (
           await tx.consultarParaAtualizar(
-            `SELECT id, versao, situacao, numero, documento_prontuario_id FROM declaracao_obito
+            `SELECT id, versao, situacao, numero, documento_prontuario_id, profissional_id FROM declaracao_obito
               WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'
               ORDER BY obito_em DESC, id DESC LIMIT 1`,
             [est.id, o.paciente],
           )
         )[0];
         if (!d) falhar('registro-inexistente', 'O paciente não tem declaração de óbito vigente.', 404);
-        const v = validarCancelamentoObito(String(d!['situacao']) as SituacaoDeclaracaoObito, o.motivo);
-        if (!v.ok) falhar(v.codigo, v.mensagem, v.codigo === 'motivo-obrigatorio' ? 422 : 409);
+        const situacao = String(d!['situacao']) as 'rascunho' | 'emitida';
+        const v = validarCancelamentoObito(situacao, o.motivo, num(d!['profissional_id']) === s.profissional);
+        if (!v.ok) falhar(v.codigo, v.mensagem, statusDaRecusaObito(v.codigo));
         const motivo = (v as { motivo: string }).motivo;
         const agora = new Date();
         const id = num(d!['id']);
+        // Sem data de emissão inventada: o rascunho cancelado fica com emitida_em nulo (06_PEP/99_obito_rascunho).
         await tx.alterar('declaracao_obito', id, num(d!['versao']), {
           situacao: 'cancelada',
-          // A restrição da tabela exige a emissão antes do cancelamento: o rascunho cancelado leva a data também.
-          ...(String(d!['situacao']) === 'rascunho' ? { emitida_em: agora } : {}),
           cancelada_em: agora,
           motivo_cancelamento: motivo,
         });
@@ -1072,7 +1072,40 @@ export class DocumentosPropriaPareceres {
           ocorrido_em: agora,
           usuario_id: s.usuario,
         });
-        return { id, documento: numOuNull(d!['documento_prontuario_id']) };
+        const documento = numOuNull(d!['documento_prontuario_id']);
+        if (documento !== null) {
+          const cancelado = await tx.uma(
+            `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'cancelado' AND ativo = TRUE
+              ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
+          );
+          if (!cancelado)
+            falhar(
+              'situacao-documento-sem-cadastro',
+              'O cliente não tem situação de documento ativa na categoria "cancelado".',
+            );
+          const [dp] = await tx.consultarParaAtualizar(
+            'SELECT id, versao FROM documento_prontuario WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [documento, est.id],
+          );
+          if (dp) {
+            await tx.alterar('documento_prontuario', documento, num(dp['versao']), {
+              situacao_documento_prontuario_id: num(cancelado!['id']),
+            });
+            await tx.incluir('documento_prontuario_evento', {
+              documento_prontuario_id: documento,
+              operacao: 'alteracao',
+              acao: 'cancelamento',
+              situacao_documento_prontuario_id: num(cancelado!['id']),
+              profissional_id: s.profissional,
+              justificativa: motivo,
+              evento_em: agora,
+              dados: JSON.stringify({ declaracao_obito: id }),
+              ocorrido_em: agora,
+              usuario_id: s.usuario,
+            });
+          }
+        }
+        return { id, documento };
       },
       (r) => ({ tabela: 'declaracao_obito', id: r.id }),
       (r) => ({ motivo: o.motivo.trim(), dados: { evento: 'pep.obito.cancelado', documento: r.documento } }),

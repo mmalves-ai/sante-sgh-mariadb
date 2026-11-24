@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CATEGORIAS_ASSINAVEIS } from './documentos-porta-propria.js';
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { ErroProntuario } from './tipos-pep.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -141,7 +142,11 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
 
   beforeAll(async () => {
     const banco = `cliente_${CLIENTE}`;
-    for (const arq of ['98_pareceres_tabelas.sql', '98_pareceres_chaves.sql'])
+    for (const arq of [
+      '98_pareceres_tabelas.sql',
+      '98_pareceres_chaves.sql',
+      '99_obito_rascunho_tabelas.sql',
+    ])
       execFileSync(resolve(RAIZ, 'tools/db/sql.sh'), [banco], {
         input: readFileSync(resolve(RAIZ, 'db/migracoes/06_PEP', arq), 'utf8'),
         encoding: 'utf8',
@@ -308,6 +313,14 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         [],
         "INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, criado_em) VALUES (?, ?, 'lancado', ?)",
         [`${P}-lancado`, 'Situação sintética lançado', agora],
+      );
+      await garantir(
+        e,
+        "SELECT id FROM situacao_documento_prontuario WHERE categoria = 'cancelado' AND ativo = TRUE LIMIT 1",
+        [],
+        `INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, final, criado_em)
+           VALUES (?, ?, 'cancelado', TRUE, ?)`,
+        [`${P}-cancelado`, 'Situação sintética cancelado', agora],
       );
       const tipoEvol = await e.uma('SELECT id FROM tipo_documento_clinico WHERE codigo = ?', [
         `${P.toUpperCase()}_EVOL`,
@@ -737,6 +750,14 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     ).toEqual({ codigo: 'motivo-obrigatorio', status: 422 });
     expect(await eventos('cancelamento')).toBe(0);
     const motivo = 'Número do formulário trocado na emissão';
+    // Quem não emitiu não cancela (403), e nada muda.
+    expect(
+      await recusa(porta.cancelarObito(G(RESIDENTE), { paciente: ids.pacienteC, motivo, cbo: null })),
+    ).toEqual({
+      codigo: 'nao-emissor',
+      status: 403,
+    });
+    expect(await eventos('cancelamento')).toBe(0);
     expect(await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null })).toEqual({
       id: ob.id,
       documento: ob.documento,
@@ -757,6 +778,33 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         [ob.id, motivo],
       ),
     ).toBe(1);
+    // A emitida mantém a data de emissão.
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE id = ? AND emitida_em IS NOT NULL', [
+        ob.id,
+      ]),
+    ).toBe(1);
+    // O documento do prontuário sai de vigência: situação de categoria "cancelado" e evento de cancelamento com o
+    // motivo na cadeia do documento, depois do evento de criação.
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM documento_prontuario dp
+           JOIN situacao_documento_prontuario s ON s.id = dp.situacao_documento_prontuario_id
+          WHERE dp.id = ? AND s.categoria = 'cancelado' AND dp.excluido_em IS NULL`,
+        [ob.documento],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM documento_prontuario_evento c
+           JOIN documento_prontuario_evento x ON x.documento_prontuario_id = c.documento_prontuario_id
+                AND x.acao = 'cancelamento' AND x.justificativa = ? AND x.operacao = 'alteracao' AND x.id > c.id
+          WHERE c.documento_prontuario_id = ? AND c.acao = 'criacao'`,
+        [motivo, ob.documento],
+      ),
+    ).toBe(1);
+    // Fora da fila de assinatura e não vigente na leitura: "cancelado" não está nas categorias assináveis.
+    expect(CATEGORIAS_ASSINAVEIS.includes('cancelado')).toBe(false);
     expect(await porta.obito(C(), ids.pacienteC)).toBeNull();
     expect(await recusa(porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null }))).toEqual({
       codigo: 'registro-inexistente',
@@ -768,6 +816,30 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     expect(
       await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
     ).toBe(2);
+    // Rascunho (sem número) cancelado: sem data de emissão inventada e sem evento de emissão; só o de cancelamento.
+    await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null });
+    const rascunho = await porta.registrarObito(G(), { ...o, numero: null });
+    await porta.cancelarObito(G(), {
+      paciente: ids.pacienteC,
+      motivo: 'Rascunho aberto no paciente errado',
+      cbo: null,
+    });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito
+          WHERE id = ? AND situacao = 'cancelada' AND numero IS NULL AND emitida_em IS NULL AND cancelada_em IS NOT NULL`,
+        [rascunho.id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito_evento WHERE declaracao_obito_id = ? AND tipo_evento = 'emissao'`,
+        [rascunho.id],
+      ),
+    ).toBe(0);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
+    ).toBe(3);
   });
 
   it('ciência: inclusão pelo sistema, fechamento da comunicação aberta, exame de outro paciente 404; trilha', async () => {

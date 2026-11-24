@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linhasDaCausa, validarCancelamentoObito } from './declaracao-obito.js';
+import { linhasDaCausa, statusDaRecusaObito, validarCancelamentoObito } from './declaracao-obito.js';
 
 describe('declaração de óbito: causas em linhas', () => {
   it('parte I em ordem, linhas vazias de fora, parte II por último', () => {
@@ -40,5 +40,14 @@ describe('declaração de óbito: cancelamento', () => {
       ok: false,
       codigo: 'motivo-obrigatorio',
     });
+  });
+  it('quem não emitiu: recusa com 403', () => {
+    expect(validarCancelamentoObito('emitida', 'Número do formulário trocado', false)).toMatchObject({
+      ok: false,
+      codigo: 'nao-emissor',
+    });
+    expect(statusDaRecusaObito('nao-emissor')).toBe(403);
+    expect(statusDaRecusaObito('motivo-obrigatorio')).toBe(422);
+    expect(statusDaRecusaObito('ja-cancelada')).toBe(409);
   });
 });

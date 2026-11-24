@@ -123,7 +123,7 @@ test.describe('Prontuário de uso diário @M23 @fase2', () => {
     expect(externas).toEqual([]);
   });
 
-  test('óbito (F3.3 L126): o médico declara com as causas e cancela com motivo e senha; a declaração sai da alta', async ({
+  test('óbito (F3.3 L126): o médico emite com número e causas e cancela com motivo e senha; a declaração sai da alta e da fila de assinatura', async ({
     page,
   }) => {
     await entrar(page, 'SINT.MEDICO');
@@ -132,6 +132,8 @@ test.describe('Prontuário de uso diário @M23 @fase2', () => {
     const form = page.getByTestId('form-obito');
     await expect(form).toBeVisible();
     await form.getByLabel('Data e hora do óbito').fill('2026-11-20T10:00');
+    // Emitida (com número), e não rascunho: o cancelamento é o da declaração emitida.
+    await form.getByLabel('Número da declaração').fill('90000001');
     await form.getByLabel('Causa (a)').fill('Causa SINTETICA imediata');
     await form.getByLabel('Parte II').fill('Condição SINTETICA');
     await form.locator('input[type=password]').fill(SENHA);
@@ -146,6 +148,10 @@ test.describe('Prontuário de uso diário @M23 @fase2', () => {
     await page.getByTestId('confirmacao').getByRole('button').last().click();
     await expect(page.getByTestId('aba-alta-conteudo')).toContainText('Declaração de óbito cancelada.');
     await expect(page.getByTestId('form-obito')).toBeVisible();
+    // O documento da declaração cancelada sai de vigência: não está mais na fila de assinatura do médico.
+    await page.goto('/inicio/assinaturas');
+    await expect(page.getByTestId('tela-assinaturas')).toBeVisible();
+    await expect(page.getByTestId('tela-assinaturas')).not.toContainText('Declaração de óbito');
   });
 
   test('preceptoria: o residente registra indicando o preceptor; o preceptor coassina nas pendências', async ({

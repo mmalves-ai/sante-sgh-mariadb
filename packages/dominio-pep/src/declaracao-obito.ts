@@ -46,18 +46,27 @@ export function linhasDaCausa(c: CausasDeclaradas): LinhaCausaObito[] {
 
 export type RecusaCancelamentoObito =
   | { readonly codigo: 'ja-cancelada'; readonly mensagem: string }
-  | { readonly codigo: 'motivo-obrigatorio'; readonly mensagem: string };
+  | { readonly codigo: 'motivo-obrigatorio'; readonly mensagem: string }
+  | { readonly codigo: 'nao-emissor'; readonly mensagem: string };
 
 /**
- * Pode cancelar? Só a declaração não cancelada, e sempre com motivo escrito (de 10 a 2000 caracteres). Devolve o
- * motivo limpo, ou a recusa.
+ * Pode cancelar? Só a declaração não cancelada, só pelo médico que a emitiu (quem atesta responde pelo documento) e
+ * sempre com motivo escrito (de 10 a 2000 caracteres). Devolve o motivo limpo, ou a recusa. `ehEmissor` fica
+ * verdadeiro só na conferência prévia do motivo, antes de a porta conhecer a declaração.
  */
 export function validarCancelamentoObito(
   situacao: SituacaoDeclaracaoObito,
   motivo: string,
+  ehEmissor = true,
 ): { readonly ok: true; readonly motivo: string } | ({ readonly ok: false } & RecusaCancelamentoObito) {
   if (situacao === 'cancelada')
     return { ok: false, codigo: 'ja-cancelada', mensagem: 'A declaração de óbito já foi cancelada.' };
+  if (!ehEmissor)
+    return {
+      ok: false,
+      codigo: 'nao-emissor',
+      mensagem: 'Só o médico que emitiu a declaração de óbito pode cancelá-la.',
+    };
   const m = (motivo ?? '').trim();
   if (m.length < MIN_MOTIVO_CANCELAMENTO_OBITO || m.length > MAX_MOTIVO_CANCELAMENTO_OBITO)
     return {
@@ -66,4 +75,9 @@ export function validarCancelamentoObito(
       mensagem: `O motivo do cancelamento tem de ${MIN_MOTIVO_CANCELAMENTO_OBITO} a ${MAX_MOTIVO_CANCELAMENTO_OBITO} caracteres.`,
     };
   return { ok: true, motivo: m };
+}
+
+/** Status HTTP de cada recusa do cancelamento. */
+export function statusDaRecusaObito(codigo: RecusaCancelamentoObito['codigo']): number {
+  return codigo === 'motivo-obrigatorio' ? 422 : codigo === 'nao-emissor' ? 403 : 409;
 }

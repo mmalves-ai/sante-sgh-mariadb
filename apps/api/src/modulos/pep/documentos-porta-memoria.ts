@@ -3,7 +3,7 @@
 // encerrado), com catálogo de exames, kits, resultados (um potássio crítico), modelos de impressão e alergias
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
-import { validarCancelamentoObito } from '@sgh/dominio-pep';
+import { statusDaRecusaObito, validarCancelamentoObito } from '@sgh/dominio-pep';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import {
   type CompletudePainelLida,
@@ -213,6 +213,12 @@ interface Estado {
     numero: string | null;
     documento: number | null;
     atendimento: number;
+    /** Emissor (login): só ele cancela a declaração. */
+    emissor: string;
+    /** A cancelada fica (registro nunca apagado), com data e motivo. */
+    situacao: 'rascunho' | 'emitida' | 'cancelada';
+    canceladaEm: string | null;
+    motivoCancelamento: string | null;
   }[];
   anexos: (AnexoLido & { pdf: Buffer })[];
   fila: FluxoLido[];
@@ -1114,7 +1120,17 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     return this.est(c.hospital).transferencias.filter((t) => t.atendimento === atendimento);
   }
   async obito(c: ContextoDocs, paciente: number) {
-    return this.est(c.hospital).obitos.find((o) => o.paciente === paciente) ?? null;
+    const o = this.est(c.hospital).obitos.find((x) => x.paciente === paciente && x.situacao !== 'cancelada');
+    return o
+      ? {
+          id: o.id,
+          paciente: o.paciente,
+          em: o.em,
+          numero: o.numero,
+          documento: o.documento,
+          atendimento: o.atendimento,
+        }
+      : null;
   }
   async ciencias(c: ContextoDocs, paciente: number) {
     return this.est(c.hospital).ciencias.filter((x) => x.paciente === paciente);
@@ -1821,7 +1837,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     },
   ) {
     const e = this.est(c.hospital);
-    if (e.obitos.some((x) => x.paciente === o.paciente))
+    if (e.obitos.some((x) => x.paciente === o.paciente && x.situacao !== 'cancelada'))
       throw new ErroProntuario('ja-registrado', 'O óbito do paciente já foi registrado.');
     const id = e.proximo++;
     const documento = this.novoDocumento(c.hospital, {
@@ -1841,33 +1857,46 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       numero: o.numero,
       documento,
       atendimento: o.atendimento,
+      emissor: c.usuarioLogin,
+      situacao: o.numero ? 'emitida' : 'rascunho',
+      canceladaEm: null,
+      motivoCancelamento: null,
     });
     await this.auditar(c, c.usuarioLogin, 'pep.obito.registrado', {
-      tabela: 'SGH_PEP_OBITO',
+      tabela: 'declaracao_obito',
       id,
       paciente: o.paciente,
     });
     return { id, documento };
   }
 
+  /** Como na porta própria: a declaração fica, cancelada com data e motivo; o documento sai de vigência com evento. */
   async cancelarObito(c: ContextoGravacaoPep, o: { paciente: number; motivo: string; cbo: number | null }) {
     const e = this.est(c.hospital);
-    const i = e.obitos.findIndex((x) => x.paciente === o.paciente);
-    if (i < 0)
+    const x = e.obitos.find((d) => d.paciente === o.paciente && d.situacao !== 'cancelada');
+    if (!x)
       throw new ErroProntuario(
         'registro-inexistente',
         'O paciente não tem declaração de óbito vigente.',
         404,
       );
-    const v = validarCancelamentoObito('emitida', o.motivo);
-    if (!v.ok) throw new ErroProntuario(v.codigo, v.mensagem, 422);
-    const [x] = e.obitos.splice(i, 1);
+    const v = validarCancelamentoObito(x.situacao, o.motivo, x.emissor === c.usuarioLogin);
+    if (!v.ok) throw new ErroProntuario(v.codigo, v.mensagem, statusDaRecusaObito(v.codigo));
+    const agora = new Date().toISOString();
+    x.situacao = 'cancelada';
+    x.canceladaEm = agora;
+    x.motivoCancelamento = (v as { motivo: string }).motivo;
+    const i = e.documentos.findIndex((d) => d.id === x.documento);
+    if (i >= 0) {
+      const d = e.documentos[i]!;
+      e.documentos[i] = { ...d, suspenso: true, eventos: [...d.eventos, { tipo: 'cancelado', em: agora }] };
+    }
     await this.auditar(c, c.usuarioLogin, 'pep.obito.cancelado', {
-      tabela: 'SGH_PEP_OBITO',
-      id: x!.id,
+      tabela: 'declaracao_obito',
+      id: x.id,
       paciente: o.paciente,
     });
-    return { id: x!.id, documento: x!.documento };
+    return { id: x.id, documento: x.documento };
   }
 
   async assinar(

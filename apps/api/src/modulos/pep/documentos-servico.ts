@@ -1990,7 +1990,10 @@ export class ServicoDocumentos {
     });
   }
 
-  /** Cancela a declaração de óbito vigente, com motivo (03-PEP L126): a mesma ação clínica de quem emite. */
+  /**
+   * Cancela a declaração de óbito vigente, com motivo (03-PEP L126): a mesma ação clínica de quem emite; aqui só o motivo
+   * é conferido, e a porta recusa (403) quem não emitiu a declaração.
+   */
   async cancelarObito(c: ContextoGravacaoPep, paciente: number, o: CancelamentoObito, prof: ProfissionalPep) {
     this.exigirAcao(prof, 'declaracao-obito');
     const v = validarCancelamentoObito('emitida', o.motivo);
