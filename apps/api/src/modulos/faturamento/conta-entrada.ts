@@ -302,7 +302,9 @@ export async function apurarConta(
             `SELECT id, fonte_pagadora_id, plano_fonte_pagadora_id, categoria_acomodacao_id, modalidade_internacao_id,
                     idade_minima_anos, idade_maxima_anos, acompanhante, item_faturavel_id, grupo_faturamento_id, quantidade,
                     TIME_FORMAT(hora_virada, '%H:%i') AS virada, tolerancia_minutos, substitui_regra_geral, prioridade,
-                    DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim
+                    DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim,
+                    gera_diaria_parcial, TIME_FORMAT(parcial_hora_limite, '%H:%i') AS parcial_limite,
+                    parcial_item_faturavel_id, parcial_quantidade
                FROM regra_diaria WHERE estabelecimento_id = ? AND ativo = TRUE`,
             [est],
             { teto: 2000 },
@@ -325,6 +327,15 @@ export async function apurarConta(
           prioridade: n(r['prioridade']),
           vigenciaInicio: texto(r['inicio']),
           vigenciaFim: r['fim'] === null ? null : texto(r['fim']),
+          // F3.4 (04-INT linha 81): diária parcial no dia da alta (o CHECK garante a hora limite com a parcial ligada).
+          parcial:
+            Boolean(n(r['gera_diaria_parcial'])) && r['parcial_limite'] !== null
+              ? {
+                  horaLimite: texto(r['parcial_limite']),
+                  item: nn(r['parcial_item_faturavel_id']),
+                  quantidade: r['parcial_quantidade'] === null ? null : n(r['parcial_quantidade']),
+                }
+              : null,
         }));
   const excecoes = await tx.consultar<Linha>(
     `SELECT x.regra_lancamento_id AS regra, x.estabelecimento_id, x.fonte_pagadora_id, x.plano_fonte_pagadora_id,
