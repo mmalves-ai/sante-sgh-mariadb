@@ -461,7 +461,7 @@ export interface ResultadoConferenciaCobranca {
   readonly avisos: readonly string[];
 }
 
-function equivalenciaDe(r: Linha): EquivalenciaItemFonte {
+export function equivalenciaDe(r: Linha): EquivalenciaItemFonte {
   return {
     id: n(r['id']),
     itemId: nn(r['item_faturavel_id']),

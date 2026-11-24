@@ -39,6 +39,7 @@ import {
 import { z } from 'zod';
 import { podeNoEstabelecimento } from '../faturamento/conta-movimentos-propria.js';
 import { conferirCobrancaPropria } from '../precos/cobranca-propria.js';
+import { aplicarDeParaNaConta } from '../precos/de-para-guia.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -251,8 +252,12 @@ export async function apresentarLote(
       setorId: nn(o['setor_funcional_id']),
       profissionalId: nn(o['executante_profissional_id']),
     }));
+    // De-para da fonte pagadora (06-FAT linha 9) antes da regra de apresentação, que pode trocar o código depois.
+    const dp = await aplicarDeParaNaConta(tx as unknown as Leitor, fonte, c.conta, origem, tipoConta);
+    if (dp.trocados)
+      avisos.push(`a conta ${rotulo} leva o código da fonte pagadora em ${dp.trocados} item(ns)`);
     const ap = apresentarConta(
-      c.conta,
+      dp.conta,
       origem,
       regra,
       regra ? itens.filter((i) => i.regraId === regra.id) : [],

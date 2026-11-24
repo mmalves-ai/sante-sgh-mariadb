@@ -4,11 +4,13 @@
 // o item da referência de mercado com o preço da edição na data (PF ou PMC pela tabela) e a equivalência com a
 // operadora. No fim, a massa e a trilha do estabelecimento sintético são apagadas. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
-import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
+import type { ContaTiss } from '@sgh/contratos';
+import { type ContextoOperacao, type Escritor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoCobranca } from './cobranca.controller.js';
 import { conferirCobrancaPropria } from './cobranca-propria.js';
+import { aplicarDeParaNaConta } from './de-para-guia.js';
 import type { CtxPrecos } from './fonte.js';
 import { FontePrecosPropria } from './fonte-propria.js';
 
@@ -554,5 +556,49 @@ describe.skipIf(SEM_BANCO)('cobrança por fonte pagadora na fonte própria (Mari
       ['tuss', g['tuss'], '2026-05-31'],
       ['tuss', g2['tuss'], null],
     ]);
+  });
+
+  it('linha 9 na guia: o item da conta leva o código, a quantidade e o percentual do de-para vigente na data', async () => {
+    await s.gravar('equivalencia-item', op(), {
+      fontePagadoraId: ids.fonte,
+      itemId: ids.item2,
+      codigo: `${P}-I2`,
+      descricao: `ITEM ${P} NA FONTE`,
+      fatorMultiplicacao: 2,
+      percentual: 50,
+      vigenciaInicio: '2024-01-01',
+    });
+    const item = (data: string, sequencial: number) => ({
+      sequencial,
+      tipo: 3,
+      natureza: 'procedimento',
+      data,
+      codigo: 'HOSP-1',
+      codigoTabela: '22',
+      descricao: 'ITEM DO HOSPITAL',
+      quantidade: 3,
+      valorUnitario: 10,
+    });
+    const conta = { conta: `${P}-C`, itens: [item(hoje, 1), item('2023-06-01', 2)] } as unknown as ContaTiss;
+    const origem = { itemId: ids.item2, grupoId: ids.grupo2 };
+    const r = await escrever((e) =>
+      aplicarDeParaNaConta(e as unknown as Leitor, ids.fonte, conta, [origem, origem], null),
+    );
+    expect(r.trocados).toBe(1);
+    // Na data: código e descrição da fonte, 3 x 2 = 6 na unidade dela e o total de 30 pela metade (15).
+    expect(r.conta.itens[0]).toMatchObject({
+      codigo: `${P}-I2`,
+      descricao: `ITEM ${P} NA FONTE`,
+      quantidade: 6,
+      valorUnitario: 2.5,
+      sequencial: 1,
+    });
+    // Antes da vigência do de-para: o item segue como o hospital o lançou.
+    expect(r.conta.itens[1]).toEqual(item('2023-06-01', 2));
+    // Fonte sem de-para: a conta volta igual, sem troca.
+    const sem = await escrever((e) =>
+      aplicarDeParaNaConta(e as unknown as Leitor, ids.fonte + 1_000_000, conta, [origem, origem], null),
+    );
+    expect(sem).toEqual({ conta, trocados: 0 });
   });
 });

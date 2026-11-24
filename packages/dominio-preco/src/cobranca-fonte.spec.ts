@@ -6,6 +6,7 @@ import {
   type EquivalenciaItemFonte,
   escolherEquivalencia,
   type ExcecaoCredenciamento,
+  itemNaFonte,
   type PedidoCobranca,
   precoReferenciaNaData,
   quantidadeNaFonte,
@@ -530,5 +531,28 @@ describe('referência de mercado de mat/med: casos de borda', () => {
     expect(valorDaReferencia({ ...p, pmc: null }, 'pmc')).toBe(10);
     expect(valorDaReferencia({ ...p, pf: null }, 'pf')).toBeNull();
     expect(valorDaReferencia(null, 'pf')).toBeNull();
+  });
+});
+
+describe('de-para aplicado ao item da guia', () => {
+  const item = { codigo: 'H-1', descricao: 'ITEM DO HOSPITAL', quantidade: 2, valorUnitario: 15 };
+  const base = { codigo: 'F-9', descricao: null, fatorMultiplicacao: 1, fatorDivisao: 1, percentual: null };
+  it('troca o código e mantém a descrição do hospital quando a fonte não dá uma', () => {
+    expect(itemNaFonte(item, base)).toEqual({ ...item, codigo: 'F-9' });
+    expect(itemNaFonte(item, { ...base, descricao: 'NA FONTE' }).descricao).toBe('NA FONTE');
+  });
+  it('a troca de unidade reparte o mesmo total pela nova quantidade', () => {
+    const r = itemNaFonte(item, { ...base, fatorMultiplicacao: 10 });
+    expect(r.quantidade).toBe(20);
+    expect(r.valorUnitario).toBe(1.5);
+    const t = itemNaFonte({ ...item, quantidade: 1, valorUnitario: 10 }, { ...base, fatorMultiplicacao: 3 });
+    expect(Math.round(t.quantidade * t.valorUnitario * 100)).toBe(1000);
+  });
+  it('o percentual de cobrança muda o total; sem percentual vale 100%', () => {
+    const r = itemNaFonte(item, { ...base, percentual: 70 });
+    expect(r.quantidade * r.valorUnitario).toBeCloseTo(21, 4);
+    const d = itemNaFonte(item, { ...base, fatorDivisao: 2, percentual: 150 });
+    expect(d.quantidade).toBe(1);
+    expect(d.valorUnitario).toBe(45);
   });
 });

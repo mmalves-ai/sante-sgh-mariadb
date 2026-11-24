@@ -107,6 +107,37 @@ export function quantidadeNaFonte(
   return Math.round(((quantidade * e.fatorMultiplicacao) / e.fatorDivisao) * 10_000) / 10_000;
 }
 
+/** O item como a fonte pagadora o recebe na guia. */
+export interface ItemNaFonte {
+  readonly codigo: string;
+  readonly descricao: string;
+  readonly quantidade: number;
+  readonly valorUnitario: number;
+}
+
+/**
+ * Aplica o de-para ao item da guia: o código e a descrição da fonte, a quantidade na unidade dela (fatores) e o
+ * percentual de cobrança sobre o total. O total só muda pelo percentual (a troca de unidade reparte o mesmo valor pela
+ * nova quantidade; o unitário fica com quatro casas para o total não perder centavo).
+ */
+export function itemNaFonte(
+  item: ItemNaFonte,
+  e: Pick<
+    EquivalenciaItemFonte,
+    'codigo' | 'descricao' | 'fatorMultiplicacao' | 'fatorDivisao' | 'percentual'
+  >,
+): ItemNaFonte {
+  const quantidade = quantidadeNaFonte(item.quantidade, e);
+  const total = item.quantidade * item.valorUnitario * ((e.percentual ?? 100) / 100);
+  const valorUnitario = quantidade > 0 ? Math.round((total / quantidade) * 10_000) / 10_000 : 0;
+  return {
+    codigo: e.codigo,
+    descricao: e.descricao ?? item.descricao,
+    quantidade,
+    valorUnitario,
+  };
+}
+
 export interface NovaEquivalenciaItem {
   readonly itemId: number | null;
   readonly grupoId: number | null;
