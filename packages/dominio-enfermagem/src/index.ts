@@ -10,6 +10,7 @@ export * from './checagem/glicemia.js';
 export * from './checagem/fechamento-turno.js';
 export * from './offline/sincronizacao.js';
 export * from './sinais/validacao.js';
+export * from './sinais/limites-setor.js';
 export * from './plantao/aceite.js';
 export * from './turno/linha-do-tempo.js';
 export * from './contingencia/relatorio.js';
