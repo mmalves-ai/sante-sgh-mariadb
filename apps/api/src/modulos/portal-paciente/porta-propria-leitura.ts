@@ -54,6 +54,10 @@ const TETO = 500;
 const TETO_LEITURAS = 5_000;
 /** Teto das contas abertas (a rotina de manutenção lê todas; passar do teto é erro, nunca corte calado). */
 const TETO_CONTAS = 200_000;
+/** Página interna da leitura dos vínculos ativos (cursor por id; a rotina de vigência recebe todos, sem teto). */
+const PAGINA_VINCULOS_ATIVOS = 1_000;
+/** Janela dos pedidos de cópia já decididos na fila sem filtro (os mais recentes); os pendentes vêm todos. */
+export const JANELA_COPIAS_DECIDIDAS = 2_000;
 /** O login com que a conta do portal aparece na trilha e nos atos (o mesmo `quemDaConta` do serviço). */
 const PREFIXO_CONTA = 'SGH.PORTAL.C';
 
@@ -421,8 +425,24 @@ export class LeiturasPortalProprias {
     return { itens: r.slice(0, TETO_FILA_VINCULOS), haMais: r.length > TETO_FILA_VINCULOS };
   }
 
-  vinculosAtivos(c: ContextoPortal): Promise<VinculoPortal[]> {
-    return this.vinculos(c, " AND v.situacao = 'ativo'", [], 'v.id');
+  /** Todos os vínculos ativos (a rotina de vigência), lidos em páginas por cursor de id: nunca esbarra no teto. */
+  async vinculosAtivos(c: ContextoPortal): Promise<VinculoPortal[]> {
+    const todos: VinculoPortal[] = [];
+    let depoisDe = 0;
+    for (;;) {
+      const pagina = await this.comEst(c, async (l, est) =>
+        (
+          await l.consultar(
+            `${SQL_VINCULO} AND v.situacao = 'ativo' AND v.id > ? ORDER BY v.id LIMIT ${PAGINA_VINCULOS_ATIVOS}`,
+            [est, depoisDe],
+            { teto: PAGINA_VINCULOS_ATIVOS },
+          )
+        ).map((x) => vinculoDaLinha(x, c.hospital)),
+      );
+      todos.push(...pagina);
+      if (pagina.length < PAGINA_VINCULOS_ATIVOS) return todos;
+      depoisDe = pagina[pagina.length - 1]!.id;
+    }
   }
 
   /** Os domínios do consentimento do modelo próprio (os mesmos da gravação própria). */
@@ -467,10 +487,15 @@ export class LeiturasPortalProprias {
     );
   }
 
-  /** A fila da cópia do prontuário: os pendentes primeiro, por prazo. */
+  /**
+   * A fila da cópia do prontuário: os pendentes primeiro, por prazo. Com `protocolo`, só aquele pedido (a ação da
+   * equipe sobre uma cópia busca pelo protocolo no banco). Sem paciente nem protocolo, a fila completa traz todos os
+   * pendentes e só a janela dos JANELA_COPIAS_DECIDIDAS decididos mais recentes: o histórico só cresce e a leitura
+   * nunca esbarra no teto (divergência intencional da memória, que não tem volume).
+   */
   filaCopias(
     c: ContextoPortal,
-    f: { readonly pendentes: boolean; readonly idPaciente?: number },
+    f: { readonly pendentes: boolean; readonly idPaciente?: number; readonly protocolo?: string },
   ): Promise<CopiaNaFila[]> {
     let filtro = '';
     const p: unknown[] = [];
@@ -482,7 +507,23 @@ export class LeiturasPortalProprias {
       filtro += ' AND t.paciente_id = ?';
       p.push(f.idPaciente);
     }
+    if (f.protocolo !== undefined) {
+      filtro += ' AND t.numero = ?';
+      p.push(f.protocolo);
+    }
+    const janela = !f.pendentes && f.idPaciente === undefined && f.protocolo === undefined;
     return this.comEst(c, async (l, est) => {
+      if (janela) {
+        filtro += ` AND (t.situacao IN (${marcas(PEDIDO_PENDENTE.length)}) OR t.id IN (
+            SELECT j.id FROM (
+              SELECT t2.id FROM pedido_titular t2
+                JOIN solicitacao_copia_prontuario s2 ON s2.pedido_titular_id = t2.id
+                     AND s2.estabelecimento_id = t2.estabelecimento_id AND s2.excluido_em IS NULL
+               WHERE t2.estabelecimento_id = ? AND t2.excluido_em IS NULL
+                 AND t2.situacao NOT IN (${marcas(PEDIDO_PENDENTE.length)})
+               ORDER BY t2.id DESC LIMIT ${JANELA_COPIAS_DECIDIDAS}) j))`;
+        p.push(...PEDIDO_PENDENTE, est, ...PEDIDO_PENDENTE);
+      }
       const linhas = await l.consultar(
         `SELECT t.id, t.numero, t.situacao, t.canal_recebimento, t.paciente_id, pa.numero_prontuario, t.recebido_em,
                 t.prazo_em, sol.solicitante, sol.vinculo,
@@ -501,7 +542,7 @@ export class LeiturasPortalProprias {
           WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL${filtro}
           ORDER BY t.situacao IN (${marcas(PEDIDO_PENDENTE.length)}) DESC, t.prazo_em, t.id`,
         [est, ...p, ...PEDIDO_PENDENTE],
-        { teto: TETO },
+        { teto: TETO_CONTAS },
       );
       return linhas.map(
         (x): CopiaNaFila => ({

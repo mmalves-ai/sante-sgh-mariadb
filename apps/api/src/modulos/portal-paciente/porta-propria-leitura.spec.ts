@@ -7,6 +7,7 @@ import {
   consentimentoDaLinha,
   contaDaLinha,
   documentoDaLinha,
+  JANELA_COPIAS_DECIDIDAS,
   LeiturasPortalProprias,
   pedidoDaLinha,
   trocaDaLinha,
@@ -147,6 +148,34 @@ describe('leituras próprias do portal: consultas', () => {
     expect(r.itens).toHaveLength(TETO_FILA_VINCULOS);
     expect(r.haMais).toBe(true);
     expect(chamadas[0]!.p).toEqual([EST, 9, 3]);
+  });
+  it('vínculos ativos: páginas por cursor de id até a última, sem esbarrar no teto', async () => {
+    const paginas = [
+      Array.from({ length: 1_000 }, (_, i) => ({ id: i + 1, escopos: '[]' })),
+      [{ id: 1_001, escopos: '[]' }],
+    ];
+    let n = 0;
+    const { leituras, chamadas } = fonte(() => paginas[n++] ?? []);
+    const r = await leituras.vinculosAtivos(C);
+    expect(r).toHaveLength(1_001);
+    expect(chamadas.map((x) => x.p)).toEqual([
+      [EST, 0],
+      [EST, 1_000],
+    ]);
+    expect(chamadas[0]!.sql).toMatch(/v\.id > \? ORDER BY v\.id LIMIT 1000$/);
+  });
+  it('fila de cópias: protocolo filtra no banco; a fila completa traz os pendentes e a janela dos decididos', async () => {
+    const { leituras, chamadas } = fonte(() => []);
+    await leituras.filaCopias(C, { pendentes: false, protocolo: 'CP-9' });
+    expect(chamadas[0]!.sql).toMatch(/t\.numero = \?/);
+    expect(chamadas[0]!.sql).not.toMatch(/LIMIT/);
+    expect(chamadas[0]!.p).toEqual([EST, 'CP-9', 'recebido', 'em_analise', 'aguardando_titular']);
+    await leituras.filaCopias(C, { pendentes: false });
+    expect(chamadas[1]!.sql).toContain(`LIMIT ${JANELA_COPIAS_DECIDIDAS}`);
+    expect(chamadas[1]!.sql).toMatch(/t2\.situacao NOT IN/);
+    expect(chamadas[1]!.p.filter((x) => x === EST)).toHaveLength(2);
+    await leituras.filaCopias(C, { pendentes: false, idPaciente: 5 });
+    expect(chamadas[2]!.sql).not.toMatch(/LIMIT/);
   });
   it('atos de cópia com id inválido: lista vazia sem consulta', async () => {
     const { leituras, chamadas } = fonte(() => []);
