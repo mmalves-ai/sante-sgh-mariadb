@@ -24,3 +24,4 @@ export * from './prorrogacao.js';
 export * from './periodo-financeiro.js';
 export * from './reclassificacao.js';
 export * from './permissao-financeiro.js';
+export * from './recebivel-cartao.js';
