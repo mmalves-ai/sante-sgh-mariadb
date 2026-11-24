@@ -7,7 +7,7 @@
 -- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a
 -- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).
 -- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).
--- 3685 tabelas. Só de acréscimo: cliente_evento, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
+-- 3687 tabelas. Só de acréscimo: cliente_evento, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
 
 CREATE ROLE IF NOT EXISTS papel_aplicacao;
 
@@ -3086,8 +3086,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_demonstracao TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_desconto_folha TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON modelo_desconto_folha_lancamento TO papel_aplicacao;
 REVOKE DELETE ON modelo_desconto_folha_lancamento FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE ON modelo_documento_caso_teste TO papel_aplicacao;
+REVOKE DELETE ON modelo_documento_caso_teste FROM papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE ON modelo_documento_clinico TO papel_aplicacao;
 REVOKE DELETE ON modelo_documento_clinico FROM papel_aplicacao;
+GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_documento_evento TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_documento_internacao TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_documento_versao TO papel_aplicacao;
 GRANT SELECT, INSERT, UPDATE, DELETE ON modelo_email TO papel_aplicacao;
