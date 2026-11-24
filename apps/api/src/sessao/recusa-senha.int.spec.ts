@@ -1,5 +1,6 @@
 // Integração da recusa de senha contra o MariaDB real, num cliente de teste PRÓPRIO (senhaui_int), criado aqui por
-// `python3 -I tools/db/criar_cliente.py` e apagado no fim (banco do cliente e o registro no banco plataforma). Conta
+// `python3 -I tools/db/criar_cliente.py --plataforma plataforma_validacao_recusa_senha` e apagado no fim (banco do
+// cliente e o banco plataforma de VALIDAÇÃO, recriado a cada execução; nunca o banco plataforma de uso). Conta
 // FICTÍCIA; a senha é gerada a cada execução e nunca sai do processo. Confere: a política lida do banco do cliente vira
 // a lista de regras; a troca que contém o login é recusada com o código deriva-do-login; o log da recusa (de login e de
 // troca) leva rota, status, códigos e login, nunca a senha. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
@@ -8,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { cifrarSenha } from '@sgh/dominio-acesso';
-import { NucleoProprio } from '@sgh/nucleo';
+import { NucleoProprio, ambienteEfetivo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { logger } from '../logger.js';
 import { registrarRecusa } from '../modulos/acesso/acesso.controller.js';
@@ -22,6 +23,8 @@ const RAIZ = resolve(import.meta.dirname, '../../../..');
 const CLIENTE = 'senhaui_int';
 const REDE = 'rede-teste';
 const LOGIN = 'admin';
+/** Banco plataforma de validação, só deste arquivo (o registro do cliente nunca vai ao banco plataforma de uso). */
+const PLAT = 'plataforma_validacao_recusa_senha';
 
 function sql(banco: string | null, texto: string): string {
   return execFileSync('sh', [resolve(RAIZ, 'tools/db/sql.sh'), ...(banco ? [banco] : []), '-N'], {
@@ -32,12 +35,7 @@ function sql(banco: string | null, texto: string): string {
 }
 
 function apagarCliente(): void {
-  sql(
-    'plataforma',
-    `DELETE FROM cliente_evento WHERE cliente_id IN (SELECT id FROM cliente WHERE codigo = '${CLIENTE}');
-     DELETE FROM cliente WHERE codigo = '${CLIENTE}';`,
-  );
-  sql(null, `DROP DATABASE IF EXISTS cliente_${CLIENTE};`);
+  sql(null, `DROP DATABASE IF EXISTS cliente_${CLIENTE}; DROP DATABASE IF EXISTS ${PLAT};`);
 }
 
 describe.skipIf(SEM_BANCO)('recusa de senha contra o MariaDB (cliente senhaui_int)', () => {
@@ -49,13 +47,22 @@ describe.skipIf(SEM_BANCO)('recusa de senha contra o MariaDB (cliente senhaui_in
     apagarCliente();
     execFileSync(
       'python3',
-      ['-I', 'tools/db/criar_cliente.py', CLIENTE, 'Teste da recusa de senha', '--json'],
+      [
+        '-I',
+        'tools/db/criar_cliente.py',
+        CLIENTE,
+        'Teste da recusa de senha',
+        '--plataforma',
+        PLAT,
+        '--json',
+      ],
       {
         cwd: RAIZ,
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
-    nucleo = new NucleoProprio();
+    // O núcleo resolve o cliente pelo banco plataforma de validação (onde o criar_cliente o registrou).
+    nucleo = new NucleoProprio({ env: { ...ambienteEfetivo().env, SGH_BANCO_PLATAFORMA: PLAT } });
     const resumo = await cifrarSenha(senha);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-senhaui' }, async (e) => {
       const agora = new Date();
