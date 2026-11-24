@@ -169,7 +169,7 @@ export const esquemaDefinirCoberturaExame = z
   .strict();
 export type DefinirCoberturaExameEntrada = z.infer<typeof esquemaDefinirCoberturaExame>;
 
-/** Marcação para quem ainda não tem prontuário (pré-cadastro; especificada, POL-3). */
+/** 02-AGE 44: marcação para quem ainda não tem prontuário (pré-cadastro na mesma transação; vira paciente na chegada). */
 export const esquemaAgendarExameSemProntuario = z
   .object({
     agenda: id,
@@ -178,6 +178,9 @@ export const esquemaAgendarExameSemProntuario = z
     nome: textoCp1252(70)
       .overwrite((t) => t.replace(/\s+/g, ' ').trim().toUpperCase())
       .pipe(z.string().min(3)),
+    nascimento: esquemaDataIso,
+    /** Exame escolhido no catálogo do SADT; null ou ausente = a recepção define na chegada. */
+    exame: id.nullable().optional(),
     telefone: z.string().regex(/^\d{8,15}$/, 'Telefone só com dígitos (8 a 15).'),
     convenio: smallint,
     canal: esquemaCanal,

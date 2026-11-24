@@ -487,6 +487,26 @@ export class PortaExameMemoria implements PortaExame {
         });
         return { marcacao: m.id, agenda: a.id };
       }
+      // 02-AGE 44: sem prontuário (na memória, a pessoa fica na marcação; o banco grava o pré-cadastro).
+      case 'agenda.agendarExameSemProntuario': {
+        const a = this.agendaM(s, e['agenda']);
+        const h = this.vaga(s, a, e['data'], normalizarHora(e['hora']), r);
+        this.exigirConvenio(a, e['convenio']);
+        const fone = String(e['telefone']);
+        const pessoa = { id: 0, nome: String(e['nome']), prontuario: 0, telefone: fone, celular: null };
+        const m = this.marcar(s, a, h, pessoa, e['convenio'], null, r, login);
+        m.idPaciente = null;
+        const ex = EXAMES_SINTETICOS.find((x) => x.id === e['exame']);
+        s.ext.set(m.id, {
+          marcacao: m.id,
+          idExame: e['exame'] ?? null,
+          exameNome: ex?.nome ?? null,
+          solicitante: null,
+          retorno: false,
+          canal: e['canal'],
+        });
+        return { marcacao: m.id, agenda: a.id };
+      }
       case 'agenda.cancelarExame': {
         const m = this.marcacaoM(s, e['marcacao']);
         this.desfazer(s, m, textoCurtoDoMotivo(e['motivo'], e['complemento']), r, login);

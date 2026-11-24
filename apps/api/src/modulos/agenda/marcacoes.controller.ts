@@ -1,6 +1,7 @@
 // Marcação, encaixe, remarcação, confirmação, falta, painel do dia e cancelamentos (M17; ficha, seção 7):
 //   GET  /api/agenda/consultas/vagas?agenda&especialidade&profissional&convenio&turno&de&ate   busca de vaga (31 dias)
 //   POST /api/agenda/consultas/marcacoes                         agenda.agendarConsulta
+//   POST /api/agenda/consultas/marcacoes/sem-prontuario          agenda.agendarSemProntuario (02-AGE 42)
 //   POST /api/agenda/consultas/encaixes                          agenda.encaixar (motivo; limite por turno)
 //   GET  /api/agenda/consultas/encaixes/avaliacao?agenda&data&hora   vetos e alertas do encaixe (nada é gravado)
 //   GET  /api/agenda/consultas/marcacoes/:id                     detalhe com o contato (auditado)
@@ -17,6 +18,7 @@ import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, 
 import {
   type BuscaVagas,
   esquemaAgendarConsulta,
+  esquemaAgendarSemProntuario,
   esquemaCancelarConsulta,
   esquemaDesfazerEncaixe,
   esquemaEncaixar,
@@ -142,6 +144,18 @@ export class MarcacoesController {
       );
     await this.exigirAntecedencia(s, e.data, e.hora);
     return this.apoio.executar(s, 'agenda.agendarConsulta', e, 'Consulta marcada.');
+  }
+
+  /** 02-AGE 42: marcação para quem ainda não tem prontuário (nome, nascimento e telefone); vira paciente na chegada. */
+  @Post('marcacoes/sem-prontuario')
+  @HttpCode(201)
+  @Permissao('agenda.marcacao.agendar')
+  @AuditadoNoHandler('agenda.agendarSemProntuario pelo executor (trilha na mesma transação)')
+  async marcarSemProntuario(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAgenda> {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaAgendarSemProntuario, b);
+    await this.exigirAntecedencia(s, e.data, e.hora);
+    return this.apoio.executar(s, 'agenda.agendarSemProntuario', e, 'Consulta marcada sem prontuário.');
   }
 
   private async exigirAntecedencia(s: SessaoCadastro, data: string, hora: string): Promise<void> {

@@ -643,9 +643,9 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     expect(Number(g?.['inclui_feriados'])).toBe(1);
   });
 
-  it('a operação desligada responde que não pode gravar', async () => {
+  it('02-AGE 44: a marcação sem prontuário está ligada (só a permissão do cargo controla)', async () => {
     const p = await porta.podeGravar(ctx, 'agenda.agendarExameSemProntuario');
-    expect(p.pode).toBe(false);
+    expect(p.pode).toBe(true);
     expect((await porta.podeGravar(ctx, 'agenda.agendarExame')).pode).toBe(true);
   });
   // Bateria comum (memória × banco): gerar, marcar, cancelar e remarcar com o mesmo contrato e as mesmas recusas.

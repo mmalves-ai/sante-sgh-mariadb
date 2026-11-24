@@ -180,6 +180,8 @@ export const cancelarEscalaPlanejada = (id: number, versao: number, k: string) =
 export const gerarGrade = (p: unknown, k: string) => gravar(`${P}/grade/gerar`, p, k);
 export const reverterGeracao = (id: number, k: string) => gravar(`${P}/grade/geracoes/${id}/reverter`, {}, k);
 export const marcarConsulta = (p: unknown, k: string) => gravar(`${P}/marcacoes`, p, k);
+/** 02-AGE 42: marcação para quem ainda não tem prontuário (pré-cadastro na mesma gravação). */
+export const marcarSemProntuario = (p: unknown, k: string) => gravar(`${P}/marcacoes/sem-prontuario`, p, k);
 export const encaixar = (p: unknown, k: string) => gravar(`${P}/encaixes`, p, k);
 export const cancelarMarcacao = (id: number, p: unknown, k: string) =>
   gravar(`${P}/marcacoes/${id}/cancelar`, p, k);

@@ -209,6 +209,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       );
       await e.executar('DELETE FROM lista_espera WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM pre_cadastro WHERE estabelecimento_id = ?', [est]);
       await e.executar('UPDATE horario_agenda SET bloqueio_agenda_id = NULL WHERE estabelecimento_id = ?', [
         est,
       ]);
@@ -560,6 +561,99 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
       motivo: 'PAC-DESISTIU',
       solicitante: 'paciente',
     });
+  });
+
+  it('02-AGE 42: marca sem prontuário, grava o pré-cadastro na mesma transação, reaproveita o da mesma pessoa e remarca mantendo o vínculo', async () => {
+    const pessoa = {
+      nome: 'pessoa  sintetica l0104 sem pront',
+      nascimento: '1975-02-03',
+      telefone: '31999910104',
+    };
+    const pedido = {
+      agenda: ids.agenda,
+      data: DIA,
+      hora: '08:45',
+      convenio: 9141,
+      canal: 'telefone',
+      ...pessoa,
+    };
+    const preAntes = await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [
+      ids.est,
+    ]);
+    // Validação na hora: nascimento no futuro não grava nada.
+    await expect(
+      porta.executar(ctx(), 'agenda.agendarSemProntuario', { ...pedido, nascimento: '2031-01-01' }),
+    ).rejects.toMatchObject(recusada('nascimento-futuro'));
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(preAntes);
+    const m = await porta.executar(ctx(), 'agenda.agendarSemProntuario', pedido);
+    const id = Number(m.resultado['marcacao']);
+    const pre = Number(m.resultado['preCadastro']);
+    expect(
+      await linha('SELECT paciente_id, pre_cadastro_id, numero, encaixe FROM marcacao_horario WHERE id = ?', [
+        id,
+      ]),
+    ).toMatchObject({ paciente_id: null, pre_cadastro_id: pre, numero: expect.stringMatching(/^MC-\d+$/) });
+    expect(
+      await linha(
+        "SELECT nome, situacao, telefone, celular, DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS nasc, estabelecimento_id FROM pre_cadastro WHERE id = ?",
+        [pre],
+      ),
+    ).toMatchObject({
+      nome: 'PESSOA SINTETICA L0104 SEM PRONT',
+      situacao: 'pendente',
+      telefone: null,
+      celular: '31999910104',
+      nasc: '1975-02-03',
+      estabelecimento_id: ids.est,
+    });
+    expect(
+      await linha(
+        'SELECT h.situacao, h.vagas_ocupadas FROM horario_agenda h JOIN marcacao_horario m ON m.horario_agenda_id = h.id WHERE m.id = ?',
+        [id],
+      ),
+    ).toMatchObject({ situacao: 'ocupado', vagas_ocupadas: 1 });
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'marcacao_horario' AND entidade_id = ?",
+        [id],
+      ),
+    ).toBe(1);
+    // A remarcação leva o pré-cadastro para a marcação nova (sem paciente ainda).
+    const r = await porta.executar(ctx(), 'agenda.remarcarConsulta', {
+      marcacao: id,
+      destino: { agenda: ids.agenda, data: DIA, hora: '09:45' },
+      modo: 'liberar',
+      canal: 'telefone',
+      motivo: 'PAC-OUTRA-DATA',
+    });
+    const nova = Number(r.resultado['marcacao']);
+    expect(
+      await linha(
+        'SELECT paciente_id, pre_cadastro_id, remarcada_marcacao_horario_id FROM marcacao_horario WHERE id = ?',
+        [nova],
+      ),
+    ).toMatchObject({ paciente_id: null, pre_cadastro_id: pre, remarcada_marcacao_horario_id: id });
+    // A mesma pessoa (nome com outro espaçamento) numa segunda marcação reaproveita o pré-cadastro pendente.
+    const m2 = await porta.executar(ctx(), 'agenda.agendarSemProntuario', {
+      ...pedido,
+      nome: 'Pessoa Sintetica L0104  Sem Pront',
+    });
+    expect(Number(m2.resultado['preCadastro'])).toBe(pre);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM pre_cadastro WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(preAntes + 1);
+    for (const x of [nova, Number(m2.resultado['marcacao'])])
+      await porta.executar(ctx(), 'agenda.cancelarConsulta', {
+        marcacao: x,
+        motivo: 'PAC-DESISTIU',
+        solicitante: 'paciente',
+      });
+    // O pré-cadastro e as marcações continuam no banco (canceladas, nunca apagadas).
+    expect(await contar('SELECT COUNT(*) AS n FROM marcacao_horario WHERE pre_cadastro_id = ?', [pre])).toBe(
+      3,
+    );
   });
 
   it('marcar grava a marcação com número de negócio e ocupa o horário (versao, trilha); confirmar e remarcar liberando', async () => {

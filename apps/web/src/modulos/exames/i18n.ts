@@ -135,9 +135,14 @@ export const mensagensExames = {
     nomeSolicitante: 'Nome do solicitante',
     semProntuario: 'Marcação sem prontuário',
     semProntuarioTexto:
-      'Para quem ainda não tem prontuário (pré-cadastro com nome e telefone). O paciente completa o cadastro na chegada.',
-    semProntuarioDesligada:
-      'Esta marcação ainda está em conferência e fica desligada; complete o cadastro do paciente para marcar com o prontuário.',
+      'Para quem ainda não tem prontuário: nome, nascimento e telefone bastam. Usa o horário, o convênio, o exame e o canal escolhidos acima; a recepção completa o cadastro na chegada.',
+    semProntuarioDesligada: 'Seu cargo não tem permissão para marcar sem prontuário.',
+    nomePessoa: 'Nome completo',
+    nascimento: 'Nascimento',
+    telefone: 'Telefone com DDD',
+    nascimentoFuturo: 'A data de nascimento está no futuro.',
+    telefoneInvalido: 'Telefone só com dígitos, com DDD (8 a 15).',
+    marcarSemProntuario: 'Marcar sem prontuário',
   },
   marcacao: {
     titulo: 'Marcação de exame',

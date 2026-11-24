@@ -129,6 +129,9 @@ export const definirConvenioExame = (id: number, p: unknown, k: string) =>
 export const definirExameCoberto = (id: number, p: unknown, k: string) =>
   gravar(`${P}/agendas/${id}/exames`, p, k);
 export const marcarExame = (p: unknown, k: string) => gravar(`${P}/marcacoes`, p, k);
+/** 02-AGE 44: marcação para quem ainda não tem prontuário (pré-cadastro na mesma gravação). */
+export const marcarExameSemProntuario = (p: unknown, k: string) =>
+  gravar(`${P}/marcacoes/sem-prontuario`, p, k);
 export const cancelarExame = (id: number, p: unknown, k: string) =>
   gravar(`${P}/marcacoes/${id}/cancelar`, p, k);
 export const remarcarExame = (id: number, p: unknown, k: string) =>

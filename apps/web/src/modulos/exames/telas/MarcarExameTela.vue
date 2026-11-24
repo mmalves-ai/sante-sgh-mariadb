@@ -17,6 +17,7 @@ import {
   lerExamesDoPaciente,
   lerGradeExame,
   marcarExame,
+  marcarExameSemProntuario,
   novaChave,
 } from '../api-exames.js';
 import AvisoExame from '../componentes/AvisoExame.vue';
@@ -150,6 +151,62 @@ const solicitanteValido = computed(
 const pronto = computed(
   () => escolha.value !== null && paciente.value !== null && convenio.value !== '' && solicitanteValido.value,
 );
+
+// ── 02-AGE 44: sem prontuário (o mínimo da pessoa; o resto da marcação é o mesmo de cima) ──
+const spNome = ref('');
+const spNascimento = ref('');
+const spTelefone = ref('');
+const hojeIso = () => new Date().toLocaleDateString('en-CA');
+const spErroNascimento = computed(() =>
+  spNascimento.value && spNascimento.value > hojeIso() ? t('exames.marcar.nascimentoFuturo') : null,
+);
+const spDigitos = computed(() => spTelefone.value.replace(/\D/g, ''));
+const spErroTelefone = computed(() =>
+  spTelefone.value && !/^\d{8,15}$/.test(spDigitos.value) ? t('exames.marcar.telefoneInvalido') : null,
+);
+const prontoSemProntuario = computed(
+  () =>
+    escolha.value !== null &&
+    convenio.value !== '' &&
+    spNome.value.trim().length >= 3 &&
+    spNascimento.value !== '' &&
+    !spErroNascimento.value &&
+    spDigitos.value.length >= 8 &&
+    !spErroTelefone.value,
+);
+async function marcarSemProntuario(): Promise<void> {
+  const e = escolha.value;
+  if (!e) return;
+  erro.value = null;
+  mensagem.value = null;
+  ocupado.value = true;
+  try {
+    const r = await marcarExameSemProntuario(
+      {
+        agenda: e.agenda,
+        data: e.data,
+        hora: horaDoContrato(e.hora) ?? e.hora,
+        nome: spNome.value,
+        nascimento: spNascimento.value,
+        telefone: spDigitos.value,
+        convenio: Number(convenio.value),
+        exame: exame.value ? Number(exame.value) : null,
+        canal: canal.value,
+      },
+      chave.value,
+    );
+    mensagem.value = r.mensagem;
+    chave.value = novaChave('marcar-exame');
+    await cliente.invalidateQueries({ queryKey: ['exames'] });
+    const id = Number(r.resultado['marcacao']);
+    if (id) await roteador.push(`/agenda/exames/marcacoes/${id}`);
+  } catch (x) {
+    erro.value = x;
+    chave.value = novaChave('marcar-exame');
+  } finally {
+    ocupado.value = false;
+  }
+}
 
 async function marcar(): Promise<void> {
   const e = escolha.value;
@@ -380,8 +437,48 @@ async function marcar(): Promise<void> {
       <SanteAlerta
         v-if="semProntuario && !semProntuario.pode"
         variante="info"
-        :texto="t('exames.marcar.semProntuarioDesligada')"
+        :texto="semProntuario.motivo ?? t('exames.marcar.semProntuarioDesligada')"
       />
+      <template v-else>
+        <div class="filtros">
+          <SanteCampoTexto
+            v-model="spNome"
+            :rotulo="t('exames.marcar.nomePessoa')"
+            :max-bytes="70"
+            data-testid="sp-nome"
+          />
+          <div class="campo">
+            <label for="sp-nascimento">{{ t('exames.marcar.nascimento') }}</label>
+            <input
+              id="sp-nascimento"
+              v-model="spNascimento"
+              type="date"
+              :max="hojeIso()"
+              data-testid="sp-nascimento"
+              :aria-invalid="spErroNascimento ? 'true' : 'false'"
+            />
+            <small v-if="spErroNascimento" role="alert">{{ spErroNascimento }}</small>
+          </div>
+          <div class="campo">
+            <label for="sp-telefone">{{ t('exames.marcar.telefone') }}</label>
+            <input
+              id="sp-telefone"
+              v-model="spTelefone"
+              inputmode="tel"
+              maxlength="20"
+              data-testid="sp-telefone"
+              :aria-invalid="spErroTelefone ? 'true' : 'false'"
+            />
+            <small v-if="spErroTelefone" role="alert">{{ spErroTelefone }}</small>
+          </div>
+        </div>
+        <SanteBotao
+          :rotulo="t('exames.marcar.marcarSemProntuario')"
+          :desabilitado="!prontoSemProntuario || ocupado"
+          data-testid="botao-marcar-exame-sem-prontuario"
+          @acionar="marcarSemProntuario"
+        />
+      </template>
     </section>
   </section>
 </template>

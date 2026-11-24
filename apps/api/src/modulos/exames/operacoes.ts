@@ -12,6 +12,7 @@
 // prévia incluiu os feriados.
 import {
   type AgendarExameEntrada,
+  type AgendarExameSemProntuarioEntrada,
   type CancelarExameEntrada,
   type DefinirCoberturaExameEntrada,
   esquemaAgendarExame,
@@ -33,7 +34,8 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
-import { OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
+import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
+import { dataNoFuso, preCadastroDaMarcacao } from '../agenda/pre-cadastro-marcacao.js';
 import { instanteCivil, minutosDaHora, normalizarHora } from './relogio.js';
 
 type Linha = Record<string, unknown>;
@@ -119,7 +121,10 @@ interface Marcar {
   readonly agenda: number;
   readonly data: string;
   readonly hora: string;
-  readonly paciente: number;
+  /** null = marcação sem prontuário (02-AGE 44): vai `preCadastro`. */
+  readonly paciente: number | null;
+  /** O pré-cadastro já ligado (remarcação) ou os dados mínimos da pessoa (marcação nova). */
+  readonly preCadastro?: number | PessoaSemProntuario | null;
   readonly convenio: number;
   readonly exame: number | null;
   readonly retorno: boolean;
@@ -146,12 +151,35 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
   if (h['situacao'] !== 'livre' || n(h['vagas_ocupadas']) >= n(h['vagas']))
     throw recusa('horario-ocupado', 'O horário já foi ocupado em outro terminal: escolha outro.');
   await exigirFonteAceita(tx, a.id, e.convenio);
-  const p = await tx.uma('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [
-    e.paciente,
-  ]);
-  if (!p) throw naoEncontrado('Paciente não encontrado', 'O cadastro do paciente não existe.');
-  if (!['ativo', 'provisorio'].includes(String(p['situacao'])))
-    throw recusa('paciente-inativo', 'O cadastro do paciente está inativo, unificado ou em óbito.');
+  let preCadastro: number | null = null;
+  if (e.paciente !== null) {
+    const p = await tx.uma('SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL', [
+      e.paciente,
+    ]);
+    if (!p) throw naoEncontrado('Paciente não encontrado', 'O cadastro do paciente não existe.');
+    if (!['ativo', 'provisorio'].includes(String(p['situacao'])))
+      throw recusa('paciente-inativo', 'O cadastro do paciente está inativo, unificado ou em óbito.');
+  } else if (typeof e.preCadastro === 'number') {
+    const k = await tx.uma('SELECT id FROM pre_cadastro WHERE id = ? AND excluido_em IS NULL', [
+      e.preCadastro,
+    ]);
+    if (!k) throw recusa('pre-cadastro-inexistente', 'O pré-cadastro da marcação não existe.');
+    preCadastro = n(k['id']);
+  } else if (e.preCadastro) {
+    // 02-AGE 44: o pré-cadastro (reaproveitado ou novo) na mesma transação da marcação.
+    preCadastro = (
+      await preCadastroDaMarcacao(tx, {
+        estabelecimento: est,
+        pessoa: e.preCadastro,
+        hoje: dataNoFuso(await fusoDe(tx, est), new Date()),
+        fontePagadora: e.convenio,
+      })
+    ).id;
+  } else
+    throw recusa(
+      'sem-paciente',
+      'Escolha o paciente ou informe os dados mínimos da marcação sem prontuário.',
+    );
   if (e.exame !== null) {
     const x = await tx.uma('SELECT id FROM exame WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL', [
       e.exame,
@@ -180,6 +208,7 @@ async function marcarNoHorario(tx: TxOperacao, ctx: ContextoOperacao, e: Marcar)
     numero: numero.formatado,
     horario_agenda_id: n(h['id']),
     paciente_id: e.paciente,
+    pre_cadastro_id: preCadastro,
     tipo_marcacao_id: tipo,
     situacao_marcacao_id: situacao,
     canal_marcacao_id: canal,
@@ -224,7 +253,7 @@ interface Desfazer {
 async function marcacaoTravada(tx: TxOperacao, est: number, id: number): Promise<Linha> {
   // Só marcação de agenda de exame: a permissão de exame não alcança consulta, procedimento nem sessão.
   const [m] = await tx.consultarParaAtualizar(
-    `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.fonte_pagadora_id, m.observacao,
+    `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.fonte_pagadora_id, m.observacao,
             m.retorno, m.chegada_em, m.atendido_em, s.significado
        FROM marcacao_horario m
        JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
@@ -358,7 +387,9 @@ export const remarcarExame = definirOperacao<RemarcarExameEntrada, ResultadoOper
       agenda: e.destino.agenda,
       data: e.destino.data,
       hora: e.destino.hora,
-      paciente: n(m['paciente_id']),
+      paciente: m['paciente_id'] === null ? null : n(m['paciente_id']),
+      preCadastro:
+        m['pre_cadastro_id'] === null || m['pre_cadastro_id'] === undefined ? null : n(m['pre_cadastro_id']),
       convenio: e.convenio ?? n(m['fonte_pagadora_id']),
       exame: await exameDaMarcacao(tx, e.marcacao),
       retorno: verdadeiro(m['retorno']),
@@ -567,19 +598,35 @@ export const definirCoberturaExame = definirOperacao<DefinirCoberturaExameEntrad
   alvo: (_e, r) => ({ tabela: 'agenda_fonte_pagadora', id: n(r['registro']) }),
 });
 
-/** Construída e desligada (esquemas.ts): recusa sem gravar, com o motivo. */
-export const agendarExameSemProntuario = definirOperacao<unknown, ResultadoOperacao>({
-  nome: 'agenda.agendar_exame_sem_prontuario',
-  tabelas: ['marcacao_horario'],
-  entrada: esquemaAgendarExameSemProntuario,
-  async gravar() {
-    throw recusa(
-      'operacao-nao-liberada',
-      `Operação desligada: ${OPERACOES_EXAME_DESLIGADAS['agenda.agendarExameSemProntuario'] ?? ''}.`,
-    );
+/** 02-AGE 44: exame marcado para quem ainda não tem prontuário; o pré-cadastro vira paciente na chegada. */
+export const agendarExameSemProntuario = definirOperacao<AgendarExameSemProntuarioEntrada, ResultadoOperacao>(
+  {
+    nome: 'agenda.agendar_exame_sem_prontuario',
+    tabelas: [...TABELAS_MARCACAO, 'pre_cadastro'],
+    entrada: esquemaAgendarExameSemProntuario,
+    async gravar(tx, e, ctx) {
+      const id = await marcarNoHorario(tx, ctx, {
+        agenda: e.agenda,
+        data: e.data,
+        hora: e.hora,
+        paciente: null,
+        preCadastro: { nome: e.nome, nascimento: e.nascimento, telefone: e.telefone },
+        convenio: e.convenio,
+        exame: e.exame ?? null,
+        retorno: false,
+        observacao: null,
+        canal: e.canal,
+        remarcada: null,
+      });
+      const [r] = await tx.consultar('SELECT pre_cadastro_id FROM marcacao_horario WHERE id = ?', [id]);
+      return { marcacao: id, agenda: e.agenda, preCadastro: n(r?.['pre_cadastro_id']) };
+    },
+    eventos: (e, r) => [
+      { tipo: 'agenda.exame.semProntuario', carga: { marcacao: r['marcacao'] ?? null, agenda: e.agenda } },
+    ],
+    alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: n(r['marcacao']) }),
   },
-  alvo: () => ({ tabela: 'marcacao_horario', id: null }),
-});
+);
 
 // biome-ignore lint/suspicious/noExplicitAny: o mapa junta operações de entradas diferentes
 /** Operação de cada ação da tela (o nome da tela é o da permissão e da liberação; o da operação vai à trilha). */

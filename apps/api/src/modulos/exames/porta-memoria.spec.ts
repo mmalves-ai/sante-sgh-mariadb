@@ -107,6 +107,6 @@ describe('porta da agenda de exames em memória', () => {
       porPagina: 10,
     });
     expect(canc.total).toBe(1);
-    expect((await p.podeGravar(ctx, 'agenda.agendarExameSemProntuario')).pode).toBe(false);
+    expect((await p.podeGravar(ctx, 'agenda.agendarExameSemProntuario')).pode).toBe(true);
   });
 });

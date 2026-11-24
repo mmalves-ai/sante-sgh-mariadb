@@ -103,8 +103,8 @@ describe('permissões, liberação e opções', () => {
     const g = (await get(s, '/gravacao')).json();
     expect(g.ligada).toBe(true);
     expect(g.operacoes['agenda.agendarExame'].pode).toBe(true);
-    expect(g.operacoes['agenda.agendarExameSemProntuario'].pode).toBe(false);
-    expect(g.operacoes['agenda.agendarExameSemProntuario'].motivo).toMatch(/Falta provar|desligad/i);
+    // 02-AGE 44: tudo ligado, controlado só pela permissão do cargo.
+    expect(g.operacoes['agenda.agendarExameSemProntuario'].pode).toBe(true);
     const o = (await get(s, '/opcoes')).json();
     expect(o.exames.length).toBe(5);
     expect(o.categorias.map((c: { codigo: number }) => c.codigo)).toContain(90);
@@ -258,19 +258,23 @@ describe('vagas, marcação, detalhe auditado, cancelamento e remarcação', () 
     expect(c.statusCode).toBe(422);
   });
 
-  it('a marcação sem prontuário fica desligada (POL-3) com o motivo', async () => {
+  it('02-AGE 44: marca o exame sem prontuário (nome, nascimento e telefone) e recusa sem o nascimento', async () => {
     const s = await entrar('SINT.EXAME');
-    const r = await post(s, '/marcacoes/sem-prontuario', {
+    const pedido = {
       agenda: 951,
       data: AMANHA,
       hora: '08:40',
       nome: 'PACIENTE SINTETICO NOVO',
+      nascimento: '1980-05-10',
       telefone: '31999990000',
       convenio: 10,
       canal: 'telefone',
-    });
-    expect(r.statusCode).toBeGreaterThanOrEqual(400);
-    expect(JSON.stringify(r.json())).toMatch(/Falta provar|desligad/i);
+    };
+    const semNascimento = Object.fromEntries(Object.entries(pedido).filter(([k]) => k !== 'nascimento'));
+    expect((await post(s, '/marcacoes/sem-prontuario', semNascimento)).statusCode).toBe(400);
+    const r = await post(s, '/marcacoes/sem-prontuario', pedido);
+    expect(r.statusCode).toBe(201);
+    expect(r.json().resultado.marcacao).toBeGreaterThan(0);
   });
 });
 

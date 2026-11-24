@@ -3,6 +3,7 @@
 import {
   EVENTOS_AUDITAVEIS,
   esquemaAgendarConsulta,
+  esquemaAgendarSemProntuario,
   esquemaAlterarAgenda,
   esquemaBloquearHorarios,
   esquemaCancelarConsulta,
@@ -41,6 +42,12 @@ export const OPERACOES_AGENDA: Readonly<Record<string, OperacaoAgenda>> = Object
   },
   'agenda.agendarConsulta': {
     entrada: esquemaAgendarConsulta,
+    evento: E.agendaConsultaMarcada.codigo,
+    recurso: 'agenda.consulta',
+  },
+  // 02-AGE 42: marcação sem prontuário (pré-cadastro na mesma transação); o evento é o da consulta marcada.
+  'agenda.agendarSemProntuario': {
+    entrada: esquemaAgendarSemProntuario,
     evento: E.agendaConsultaMarcada.codigo,
     recurso: 'agenda.consulta',
   },

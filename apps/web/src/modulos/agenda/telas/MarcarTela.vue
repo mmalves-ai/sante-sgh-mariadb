@@ -17,6 +17,7 @@ import {
   encaixar,
   lerMarcacoesPaciente,
   marcarConsulta,
+  marcarSemProntuario,
   novaChave,
 } from '../api-agenda.js';
 import AlertaCredenciamentoMarcacao from '../componentes/AlertaCredenciamentoMarcacao.vue';
@@ -144,6 +145,14 @@ const convenio = ref('');
 const retorno = ref(false);
 const canal = ref('telefone');
 const observacao = ref('');
+// 02-AGE 49: grupo de prioridade legal escolhido na marcação. Vazio: a regra do domínio usa o do cadastro e o da
+// idade; um grupo escolhido só soma (a lei não deixa a recepção tirar a prioridade que o cadastro ou a idade dão).
+const grupoLegal = ref('');
+const gruposLegais = computed(() => [
+  { valor: '', rotulo: t('agenda.espera.prioridadeLegalAuto') },
+  ...(opcoes.data.value?.gruposPrioridadeLegal ?? []).map((g) => ({ valor: String(g.codigo), rotulo: g.nome })),
+]);
+const prioridadeEscolhida = () => (grupoLegal.value ? { prioridadeLegal: Number(grupoLegal.value) } : {});
 const chave = ref(novaChave('marcar'));
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -203,7 +212,66 @@ async function marcar(): Promise<void> {
         convenio: Number(convenio.value),
         retorno: retorno.value,
         canal: canal.value,
+        ...prioridadeEscolhida(),
         ...(observacao.value.trim() ? { observacao: observacao.value } : {}),
+      },
+      chave.value,
+    );
+    mensagem.value = t('agenda.marcar.marcada');
+    chave.value = novaChave('marcar');
+    await cliente.invalidateQueries({ queryKey: ['agenda'] });
+    const id = Number(r.resultado['marcacao']);
+    if (id) await roteador.push(`/agenda/consultas/marcacoes/${id}`);
+  } catch (x) {
+    erro.value = x;
+    chave.value = novaChave('marcar');
+    if (codigoDaRecusa(x) === 'horario-ocupado') await sugerirProximo(e);
+  } finally {
+    ocupado.value = false;
+  }
+}
+
+// ── 02-AGE 42: sem prontuário (o mínimo da pessoa; horário, convênio e canal são os de cima) ──
+const podeSemProntuario = pode('agenda.agendarSemProntuario');
+const spNome = ref('');
+const spNascimento = ref('');
+const spTelefone = ref('');
+const hojeIso = () => new Date().toLocaleDateString('en-CA');
+const spErroNascimento = computed(() =>
+  spNascimento.value && spNascimento.value > hojeIso() ? t('agenda.marcar.nascimentoFuturo') : null,
+);
+const spDigitos = computed(() => spTelefone.value.replace(/\D/g, ''));
+const spErroTelefone = computed(() =>
+  spTelefone.value && !/^\d{8,15}$/.test(spDigitos.value) ? t('agenda.marcar.telefoneInvalido') : null,
+);
+const prontoSemProntuario = computed(
+  () =>
+    escolha.value !== null &&
+    convenio.value !== '' &&
+    efeitoCredenciamento.value !== 'bloqueio' &&
+    spNome.value.trim().length >= 3 &&
+    spNascimento.value !== '' &&
+    !spErroNascimento.value &&
+    spDigitos.value.length >= 8 &&
+    !spErroTelefone.value,
+);
+async function marcarSemPront(): Promise<void> {
+  const e = escolha.value;
+  if (!e) return;
+  erro.value = null;
+  mensagem.value = null;
+  ocupado.value = true;
+  try {
+    const r = await marcarSemProntuario(
+      {
+        agenda: e.agenda,
+        data: e.data,
+        hora: horaDoContrato(e.hora) ?? e.hora,
+        nome: spNome.value,
+        nascimento: spNascimento.value,
+        telefone: spDigitos.value,
+        convenio: Number(convenio.value),
+        canal: canal.value,
       },
       chave.value,
     );
@@ -252,6 +320,7 @@ async function fazerEncaixe(): Promise<void> {
         convenio: Number(convenio.value),
         retorno: retorno.value,
         canal: canal.value,
+        ...prioridadeEscolhida(),
         motivo: eMotivo.value,
         ...(observacao.value.trim() ? { observacao: observacao.value } : {}),
       },
@@ -467,6 +536,12 @@ async function fazerEncaixe(): Promise<void> {
           data-testid="marcar-convenio"
         />
         <SanteSelecao v-model="canal" :rotulo="t('agenda.canal')" :opcoes="canais" />
+        <SanteSelecao
+          v-model="grupoLegal"
+          :rotulo="t('agenda.espera.prioridadeLegal')"
+          :opcoes="gruposLegais"
+          data-testid="marcar-prioridade-legal"
+        />
         <label><input v-model="retorno" type="checkbox" /> {{ t('agenda.marcar.retorno') }}</label>
       </div>
       <AlertaCredenciamentoMarcacao
@@ -487,6 +562,46 @@ async function fazerEncaixe(): Promise<void> {
         data-testid="botao-marcar"
         @acionar="marcar"
       />
+      <fieldset v-if="podeSemProntuario && paciente === null" class="filtros" data-testid="sem-prontuario">
+        <legend>{{ t('agenda.marcar.semProntuario') }}</legend>
+        <p class="secundario">{{ t('agenda.marcar.semProntuarioTexto') }}</p>
+        <SanteCampoTexto
+          v-model="spNome"
+          :rotulo="t('agenda.marcar.nomePessoa')"
+          :max-bytes="70"
+          data-testid="sp-nome"
+        />
+        <div class="campo">
+          <label for="sp-nascimento">{{ t('agenda.marcar.nascimento') }}</label>
+          <input
+            id="sp-nascimento"
+            v-model="spNascimento"
+            type="date"
+            :max="hojeIso()"
+            data-testid="sp-nascimento"
+            :aria-invalid="spErroNascimento ? 'true' : 'false'"
+          />
+          <small v-if="spErroNascimento" role="alert">{{ spErroNascimento }}</small>
+        </div>
+        <div class="campo">
+          <label for="sp-telefone">{{ t('agenda.marcar.telefone') }}</label>
+          <input
+            id="sp-telefone"
+            v-model="spTelefone"
+            inputmode="tel"
+            maxlength="20"
+            data-testid="sp-telefone"
+            :aria-invalid="spErroTelefone ? 'true' : 'false'"
+          />
+          <small v-if="spErroTelefone" role="alert">{{ spErroTelefone }}</small>
+        </div>
+        <SanteBotao
+          :rotulo="t('agenda.marcar.marcarSemProntuario')"
+          :desabilitado="!prontoSemProntuario || ocupado"
+          data-testid="botao-marcar-sem-prontuario"
+          @acionar="marcarSemPront"
+        />
+      </fieldset>
     </section>
 
     <section v-if="podeEncaixar" class="painel" aria-labelledby="marcar-encaixe">

@@ -21,10 +21,7 @@ export const ESQUEMAS_OPERACAO_EXAME: Readonly<Record<string, ZodType>> = {
 };
 
 /**
- * Operações construídas e ainda desligadas, com o motivo para a tela. A marcação sem prontuário espera o
- * pré-cadastro da recepção (pre_cadastro) ligado à marcação.
+ * Operações construídas e ainda desligadas, com o motivo para a tela. Vazia: tudo ligado, controlado só pelas
+ * permissões de cada cargo (02-AGE 44: a marcação sem prontuário grava o pré-cadastro na mesma transação).
  */
-export const OPERACOES_EXAME_DESLIGADAS: Readonly<Record<string, string>> = {
-  'agenda.agendarExameSemProntuario':
-    'a marcação sem prontuário depende do pré-cadastro da recepção, ainda não ligado à agenda de exames',
-};
+export const OPERACOES_EXAME_DESLIGADAS: Readonly<Record<string, string>> = {};
