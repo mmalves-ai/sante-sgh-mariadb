@@ -1,0 +1,30 @@
+// Textos da lista nominal de usuários por agenda (02-AGE linha 40). Registrados em pt-BR.ts sob `usuariosAgenda`.
+export const mensagensUsuariosAgenda = {
+  titulo: 'Quem vê e quem marca nesta agenda',
+  livre:
+    'Agenda aberta: todos com acesso à agenda pelo cargo (unidade e tipo de agenda) veem e marcam. Inclua usuários para restringi-la.',
+  restrita: 'Agenda restrita: só os usuários da lista a veem; marca quem tem "marca".',
+  meuAcesso: 'Seu acesso: {acesso}',
+  acessos: {
+    livre: 'pelo cargo',
+    marca: 'vê e marca',
+    consulta: 'só consulta',
+    gestor: 'gestor de agendas (vê para manter a lista; não marca)',
+    'sem-acesso': 'sem acesso',
+  },
+  usuario: 'Usuário',
+  acesso: 'Acesso',
+  marca: 'Vê e marca',
+  consulta: 'Só consulta',
+  tornarConsulta: 'Passar {nome} para só consulta',
+  tornarMarca: 'Permitir que {nome} marque',
+  retirar: 'Retirar {nome}',
+  retirarPergunta: 'Retirar {nome} da lista desta agenda? O histórico fica registrado.',
+  buscar: 'Buscar usuário (nome ou login)',
+  escolher: 'Usuário encontrado',
+  podeMarcar: 'Pode marcar',
+  incluir: 'Incluir na lista',
+  liberar: 'Liberar para todos',
+  liberarPergunta: 'Retirar a lista e deixar a agenda aberta a todos do escopo do cargo?',
+  carregando: 'Carregando a lista…',
+};

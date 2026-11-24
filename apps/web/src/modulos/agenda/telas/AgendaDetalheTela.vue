@@ -22,6 +22,7 @@ import {
 } from '../api-agenda.js';
 import AgendaEstruturadaPainel from '../componentes/AgendaEstruturadaPainel.vue';
 import AvisoGravacao from '../componentes/AvisoGravacao.vue';
+import UsuariosAgendaPainel from '../componentes/UsuariosAgendaPainel.vue';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr } from '../formato.js';
 import { usarAgenda } from '../usar-agenda.js';
@@ -425,6 +426,11 @@ function removerEspecialidade(codigo: number): Promise<boolean> {
           />
         </form>
       </section>
+
+      <UsuariosAgendaPainel
+        :agenda-id="d.agenda.id"
+        :pode-editar="podePermissao('agenda.cobertura.editar')"
+      />
 
       <AgendaEstruturadaPainel
         :agenda-id="d.agenda.id"
