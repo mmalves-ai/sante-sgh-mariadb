@@ -5,6 +5,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import type { ContextoModulo } from '../registro.js';
 import { ligarMapaEstabelecimentos } from './contexto-nucleo.js';
+import { CadastroLigacoesController } from './cadastro-ligacoes.controller.js';
+import { CadastroLigacoesProprio, LIGACOES_CADASTRO } from './cadastro-ligacoes-proprio.js';
 import { FichaComplementarController } from './ficha-complementar.controller.js';
 import { FICHA_COMPLEMENTAR, FichaComplementarPropria } from './ficha-complementar-proprio.js';
 import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
@@ -48,6 +50,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const ficha = ctx.nucleo && cliente ? new FichaComplementarPropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 16): complemento do profissional (fiscal, conta, RQE e assinatura), só no banco do cliente.
   const complemento = ctx.nucleo && cliente ? new ProfissionalComplementoProprio(ctx.nucleo, cliente) : null;
+  // F3.1 (02-CAD linhas 17, 18 e 20): especialidade, lotação e solicitante, só no banco do cliente.
+  const ligacoes = ctx.nucleo && cliente ? new CadastroLigacoesProprio(ctx.nucleo, cliente) : null;
   return {
     module: ModuloCadastro,
     controllers: [
@@ -56,12 +60,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       PacienteVinculosController,
       FichaComplementarController,
       ProfissionalComplementoController,
+      CadastroLigacoesController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: porta },
       { provide: VINCULOS_CADASTRO, useValue: vinculos },
       { provide: FICHA_COMPLEMENTAR, useValue: ficha },
       { provide: COMPLEMENTO_PROFISSIONAL, useValue: complemento },
+      { provide: LIGACOES_CADASTRO, useValue: ligacoes },
     ],
     exports: [PORTA_CADASTRO],
   };

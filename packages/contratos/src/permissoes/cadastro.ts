@@ -182,6 +182,24 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F3.1 (02-CAD linhas 17 e 20): manter as ligações da especialidade e o cadastro do solicitante externo.
+  {
+    codigo: 'cadastro.especialidade.editar',
+    descricao: 'Manter os procedimentos permitidos (com vigência) e as ocupações (CBO) de cada especialidade',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
+  {
+    codigo: 'cadastro.solicitante.editar',
+    descricao:
+      'Alterar, inativar e reativar o médico solicitante externo e o código dele em cada fonte pagadora',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'administrativa',
+  },
 ] as const satisfies readonly DeclaracaoPermissao[];
 
 export type PermissaoCadastro = (typeof PERMISSOES_CADASTRO_M11)[number]['codigo'];
