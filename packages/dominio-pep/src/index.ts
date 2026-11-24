@@ -112,3 +112,5 @@ export * from './especialidades/ciclo-de-vida.js';
 export * from './equipe-painel/regras.js';
 export * from './equipe-painel/filtros.js';
 export * from './impressao-justificada.js';
+// 03-PEP L103/L104: farmacovigilância no paciente e lista de uso contínuo com a reconciliação que parte dela.
+export * from './farmacovigilancia.js';
