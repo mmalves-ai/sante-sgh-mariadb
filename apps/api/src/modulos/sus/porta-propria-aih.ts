@@ -357,7 +357,7 @@ export class GravacoesAihPropria {
 
   private async sigtapId(codigo: string): Promise<number | null> {
     const x = await this.tx.uma(
-      'SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 1',
+      'SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ? ORDER BY id DESC LIMIT 1',
       [codigo.trim()],
     );
     return x ? num(x['id']) : null;
