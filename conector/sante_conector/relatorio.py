@@ -122,27 +122,33 @@ def garantir_ctl(cr, ctl):
                   " (resolvida_execucao_id)" % ctl)
 
 
-def resolver(cr, ctl, eid):
+def resolver(cr, ctl, eid, cadeia=None):
     """Marca `resolvida` toda pendência aberta de execução ANTERIOR do cliente que esta execução não repetiu (mesma
-    tabela, chave e regra). Devolve o número de linhas marcadas."""
+    tabela, chave e regra). Continuação: a execução vale com as pendências da cadeia (`cadeia`, controle.cadeia), que
+    nunca são copiadas; a pendência de qualquer execução da cadeia conta como repetida (e a da própria cadeia nunca é
+    resolvida por ela). Devolve o número de linhas marcadas."""
+    ids = ",".join(str(int(x)) for x in sorted(set(cadeia or ()) | {int(eid)}))
     with cr.cursor() as c:
         c.execute("UPDATE `{b}`.pendencia p SET p.situacao='resolvida', p.resolvida_execucao_id=%s,"
                   " p.alterado_em=UTC_TIMESTAMP(3), p.versao=p.versao+1"
                   " WHERE p.execucao_id < %s AND p.situacao='aberta' AND NOT EXISTS (SELECT 1 FROM `{b}`.pendencia n"
-                  " WHERE n.execucao_id=%s AND n.tabela_origem=p.tabela_origem AND n.regra=p.regra"
-                  " AND n.chave_original <=> p.chave_original)".format(b=ctl), (eid, eid, eid))
+                  " WHERE n.execucao_id IN ({ids}) AND n.tabela_origem=p.tabela_origem AND n.regra=p.regra"
+                  " AND n.chave_original <=> p.chave_original)".format(b=ctl, ids=ids), (eid, eid))
         return c.rowcount
 
 
-def _contar(cr, ctl, eid):
+def _contar(cr, ctl, eid, cadeia=None):
+    """Abertas da execução pela cadeia (controle.pendencias_da_cadeia: sem dupla contagem) e resolvidas por ela."""
+    from .controle import pendencias_da_cadeia
+    ids = sorted(set(cadeia or ()) | {int(eid)})
     with cr.cursor() as c:
-        c.execute("SELECT tabela_origem, regra, gravidade, COUNT(*) FROM `%s`.pendencia WHERE execucao_id=%%s"
-                  " GROUP BY tabela_origem, regra, gravidade" % ctl, (eid,))
+        c.execute("SELECT p.tabela_origem, p.regra, p.gravidade, COUNT(*) FROM `%s`.pendencia p WHERE %s"
+                  " GROUP BY p.tabela_origem, p.regra, p.gravidade" % (ctl, pendencias_da_cadeia(ctl, ids, "p", "aberta")))
         abertas = c.fetchall()
         c.execute("SELECT tabela_origem, regra, gravidade,"
                   " COUNT(DISTINCT tabela_origem, regra, COALESCE(chave_original, ''))"
-                  " FROM `%s`.pendencia WHERE resolvida_execucao_id=%%s GROUP BY tabela_origem, regra, gravidade"
-                  % ctl, (eid,))
+                  " FROM `%s`.pendencia WHERE resolvida_execucao_id IN (%s) GROUP BY tabela_origem, regra, gravidade"
+                  % (ctl, ",".join(str(x) for x in ids)))
         resolvidas = c.fetchall()
     return abertas, resolvidas
 
@@ -303,11 +309,11 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
     }
 
 
-def gerar(cr, ctl, eid, entidades, resolver_pendencias=True, **kw):
+def gerar(cr, ctl, eid, entidades, resolver_pendencias=True, cadeia=None, **kw):
     """Resolve as pendências que esta execução não repetiu (só na execução que conclui: `resolver_pendencias`),
     conta e monta o relatório (commit incluído). A execução que falha só lê: nunca mexe nas anteriores."""
     if resolver_pendencias:
-        resolver(cr, ctl, eid)
+        resolver(cr, ctl, eid, cadeia)
         cr.commit()
-    abertas, resolvidas = _contar(cr, ctl, eid)
+    abertas, resolvidas = _contar(cr, ctl, eid, cadeia)
     return montar(abertas, resolvidas, entidades, rede=rede_sem_rota_externa(), **kw)

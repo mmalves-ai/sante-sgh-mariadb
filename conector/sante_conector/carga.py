@@ -440,7 +440,7 @@ class Carga:
         self.pular = dict(pular or {})      # continuação: {tabela: execução que a concluiu} (continuar.concluidas_propria)
         self.progresso = Batimento(progresso or (lambda pct, etapa: None))
         self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
-        self.pend_repetidas = []            # (tabela, regra, gravidade, detalhe, n): repetidas na continuação
+        self.pend_repetidas = []            # (tabela, regra, gravidade, detalhe, n): herdadas da cadeia (sem cópia)
         self._buf = []                      # pendências ainda não gravadas (vão no próximo commit)
         self._diario = []                   # registros em memória desde o último SAVEPOINT (para desfazer)
         self.origem = {}                    # entidade -> {chave: resumo hex da linha, calculado da origem}
@@ -1269,7 +1269,7 @@ class Carga:
         if pulados:  # continuação: pendências antes da marca (sem a marca, a próxima herda da anterior pela cadeia)
             self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
                 self, {t: self.pular[t] for t in pulados},
-                lambda n: self.progresso(0, "repetindo as pendências do atendimento já concluído (%d)" % n),
+                lambda n: self.progresso(0, "pendências herdadas do atendimento já concluído (%d)" % n),
                 excluir_regras=continuar.CONCILIACAO_PROPRIA)
             continuar.marcar(self, pulados, None, "continuada")
         for i, t in enumerate(self.tabelas):

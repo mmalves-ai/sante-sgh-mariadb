@@ -15,7 +15,8 @@ uma execução nova que aponta para a interrompida (`contadores.continuar_de`). 
 - o estado em memória das tabelas puladas não é relido da origem: o de-para (`existente`) vem do conector_origem sob
   demanda (como sempre), e na conciliação a tabela pulada tem as chaves vistas e a soma da origem refeitas do
   conector_origem pelo mesmo caminho da linha "igual" (`_secundarias_ja_carregadas`); as pendências abertas da
-  interrompida nessas tabelas são repetidas na execução nova (senão o relatório as daria por resolvidas);
+  interrompida nessas tabelas NÃO são copiadas (rodada pendencia-cadeia): ficam na execução em que nasceram, e todo
+  leitor segue a cadeia de continuações (`controle.cadeia`, gravada no controle pelo motor) sem dupla contagem;
 - marca as tabelas puladas como concluídas também na execução nova (`origem='continuada'`): a continuação de uma
   continuação funciona pela marca.
 
@@ -39,8 +40,8 @@ Regra das tabelas concluídas da execução interrompida Y (tabela de controle `
    referência adiada é refeita da linha lida (`CargaMapa._readiar`) e o `_fase2` a grava só se continuar NULL
    (`AND coluna IS NULL`: nunca sobrescreve).
 5. Cadeia: se Y é ela mesma uma continuação (`contadores.continuar_de` = X) e falhou cedo (sem imagem, ou antes de
-   marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são repetidas da
-   execução que a concluiu.
+   marcar o que herdou), as concluídas de X entram também; as pendências de cada tabela pulada são lidas da cadeia
+   da execução que a concluiu.
 """
 from .carga import AGORA, ORDEM
 
@@ -155,8 +156,6 @@ def marcar(cm, tabelas, onda=None, origem="carregada"):
     cm._commit()
 
 
-REPETIR_LOTE = 50000
-
 
 # Carga própria (carga.py): só o grupo do atendimento (a tabela longa e as duas que ele consome) pode ser pulado, e
 # só inteiro. O paciente não: as subentidades e o endereço que aguarda a evidência do CEP dependem da linha da origem.
@@ -198,61 +197,45 @@ def concluidas_propria(conn, ctl, anterior, presentes, contagens, sha256, contad
             if int(c.fetchone()[0]) != int(contagens.get(t, -1)):
                 return {}
         marcas = ",".join(["%s"] * len(grupo))
-        c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=%%s AND regra='alteracao_aguarda_sincronizar'"
-                  " AND tabela_origem IN (%s)" % (ctl, marcas), [e] + grupo)
+        from . import controle  # a pendência fica onde nasceu: a de E pode estar numa execução anterior da cadeia
+        ids = ",".join(str(x) for x in controle.cadeia_cur(c, ctl, e, contadores_de))
+        c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id IN (%s)"
+                  " AND regra='alteracao_aguarda_sincronizar' AND tabela_origem IN (%s)" % (ctl, ids, marcas), grupo)
         if int(c.fetchone()[0]):
             return {}
     return {t: e for t in grupo}
 
 
 def repetir_pendencias(cm, origem, progresso=None, excluir_regras=()):
-    """Pendências abertas nas tabelas puladas, da execução que as concluiu (`origem` {tabela: execução}; a cadeia de
-    continuações aponta para a que de fato carregou): repetidas nesta execução (só metadados: tabela, chave, regra,
-    gravidade, detalhe). Sem isso o relatório desta execução as marcaria resolvidas por não as ver de novo.
+    """Pendências abertas nas tabelas puladas, HERDADAS da cadeia sem cópia (rodada pendencia-cadeia, 2026-11-24).
 
-    Custo (rodada pendencia-quadratica, 2026-11-23): a versão anterior lia TODAS as pendências (46 milhões na execução
-    11 da ProntoCardio) e as regravava com `executemany`, que o pymysql não junta quando o VALUES tem a função de data
-    (vira um INSERT por linha: ~9.400/s), numa transação só, sem batimento: 50 min depois a carga parada desfez tudo e
-    o AUTO_INCREMENT ficou ~23 milhões acima. Agora cada pedaço de até REPETIR_LOTE pendências (por id) é copiado no
-    próprio servidor com UM `INSERT ... SELECT`, commitado, e o batimento é atualizado: cada pendência é gravada uma
-    vez, e o resumo recebe só contagens agregadas (`cm.pend_repetidas`), nunca as linhas. Falha no meio: a marca da tabela só vem depois (marcar), e a próxima continuação herda da execução anterior
-    (cadeia), que continua com as pendências."""
-    por = {}
-    for t, e in origem.items():
-        por.setdefault(int(e), []).append(t)
-    total = 0
-    for e, tabelas in sorted(por.items()):
-        tabelas = sorted(tabelas)
-        marcas = ",".join(["%s"] * len(tabelas))
-        filtro = ("FROM %s.pendencia WHERE execucao_id=%%s AND situacao='aberta' AND tabela_origem IN (%s)"
-                  % (cm.ctl, marcas))
+    A pendência fica na execução em que nasceu. Antes, cada pedaço era copiado para a execução nova (`INSERT ...
+    SELECT`): a execução 13 da ProntoCardio copiou 35.980.210 linhas da 11 e a 14 levaria mais de um dia copiando as da
+    13 (a tabela chegou a 18,5 GB). Agora nada é gravado: todo leitor (relatório L10, resolução, este resumo) segue a
+    cadeia de continuações (controle.cadeia) sem dupla contagem (controle.pendencias_da_cadeia). Aqui só sai a
+    contagem agregada no servidor para o resumo da execução (`cm.pend_repetidas`: tabela, regra, gravidade, detalhe,
+    n), nunca as linhas. `origem` {tabela: execução que a concluiu}: a cadeia lida é a união das cadeias dessas
+    execuções (a continuação que só marcou `continuada` não tem as pendências: estão na que carregou).
+    Devolve o total herdado."""
+    from . import controle
+    tabelas = sorted(origem)
+    if not tabelas:
+        return 0
+    with cm._c() as c:
+        ids = set()
+        for e in set(int(x) for x in origem.values()):
+            ids.update(controle.cadeia_cur(c, cm.ctl, e))
+        cond = controle.pendencias_da_cadeia(cm.ctl, ids, "p", "aberta")
+        cond += " AND p.tabela_origem IN (%s)" % ",".join(["%s"] * len(tabelas))
         if excluir_regras:
-            filtro += " AND regra NOT IN (%s)" % ",".join("'%s'" % r for r in excluir_regras if r.isidentifier())
-        ultimo = 0
-        while True:
-            with cm._c() as c:
-                # só os ids (fronteiras do pedaço): as pendências nunca vêm para a memória do processo
-                c.execute("SELECT id " + filtro + " AND id>%s ORDER BY id LIMIT %s",
-                          [e] + tabelas + [ultimo, REPETIR_LOTE])
-                ids = [x[0] for x in c.fetchall()]
-                if not ids:
-                    break
-                c.execute("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
-                          " detalhe, criado_em) SELECT %%s, tabela_origem, chave_original, regra, gravidade, detalhe,"
-                          " %s " % (cm.ctl, AGORA) + filtro + " AND id BETWEEN %s AND %s ORDER BY id",
-                          [cm.eid, e] + tabelas + [ids[0], ids[-1]])
-            total += len(ids)
-            ultimo = ids[-1]
-            cm._commit()
-            if progresso:
-                progresso(total)
-        # resumo (total, críticas, por regra e por restrição) por contagem agregada no servidor, sobre o mesmo filtro:
-        # a execução de origem terminou, nada entra nela entre a cópia e a contagem
-        with cm._c() as c:
-            c.execute("SELECT tabela_origem, regra, gravidade, detalhe, COUNT(*) " + filtro +
-                      " GROUP BY tabela_origem, regra, gravidade, detalhe", [e] + tabelas)
-            cm.pend_repetidas.extend(tuple(x[:4]) + (int(x[4]),) for x in c.fetchall())
-    cm._commit()
+            cond += " AND p.regra NOT IN (%s)" % ",".join("'%s'" % r for r in excluir_regras if r.isidentifier())
+        c.execute("SELECT p.tabela_origem, p.regra, p.gravidade, p.detalhe, COUNT(*) FROM %s.pendencia p WHERE %s"
+                  " GROUP BY p.tabela_origem, p.regra, p.gravidade, p.detalhe" % (controle._b(cm.ctl), cond), tabelas)
+        agg = [tuple(x[:4]) + (int(x[4]),) for x in c.fetchall()]
+    cm.pend_repetidas.extend(agg)
+    total = sum(x[4] for x in agg)
+    if progresso:
+        progresso(total)
     return total
 
 

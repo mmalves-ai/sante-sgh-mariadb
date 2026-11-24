@@ -61,7 +61,7 @@ def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
             cr, rel["ctl"], eid, rel.get("entidades") or {}, contagens=contagens, plano=rel.get("plano") or (),
             carga_propria=[t for t in contagens if t in carga.MAPA], mapa_exec=mapa_exec,
             provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"),
-            resolver_pendencias=resolver_pendencias)
+            resolver_pendencias=resolver_pendencias, cadeia=rel.get("cadeia"))
     finally:
         cr.close()
 
@@ -98,6 +98,13 @@ def executar(trab, eid):
         if not ex["origem_sha256"] or sha_antes != ex["origem_sha256"]:
             raise FalhaExecucao("o arquivo mudou desde o vínculo (sha256 diferente); vincule de novo")
         ctl = controle.preparar(conn, ex["codigo"], ex["banco_nome"])
+        # continuação: o elo vai para o controle antes de tudo (as pendências não são copiadas; todo leitor segue a
+        # cadeia, controle.cadeia)
+        de0 = (ex["contadores"] or {}).get("continuar_de")
+        if de0:
+            controle.gravar_cadeia(conn, ctl, eid, int(de0))
+        rel["cadeia"] = controle.cadeia(conn, ctl, eid,
+                                        lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"))
         host = controle.host_do_motor(conn)
         usuario = "sscon_e%d_%s" % (eid, banco.ficha_plataforma())
         senha = controle.criar_usuario(conn, usuario, ex["banco_nome"], ctl, host)

@@ -2798,7 +2798,7 @@ class CargaMapa(carga.Carga):
             # tabela desta execução sem as pendências; sem a marca, herda da anterior (cadeia, continuar.py)
             self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
                 self, {t: self.pular_de[t] for t in pul},
-                lambda n: self.progresso(0, "repetindo as pendências das tabelas já concluídas (%d)" % n))
+                lambda n: self.progresso(0, "pendências herdadas das tabelas já concluídas (%d)" % n))
             continuar.marcar(self, pul, None, "continuada")
             # de-para oficial usado pelas puladas: carregado como na leitura delas (a pendência global de catálogo
             # ausente, tabela '-', sai uma vez por execução, também quando só uma tabela pulada o usa)

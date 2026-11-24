@@ -122,6 +122,12 @@ ALTER TABLE {b}.pendencia
     COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
   ADD INDEX IF NOT EXISTS ix_pendencia_regra (tabela_origem, regra, chave_original(190)),
   ADD INDEX IF NOT EXISTS ix_pendencia_resolvida (resolvida_execucao_id);
+CREATE TABLE IF NOT EXISTS {b}.conector_execucao_cadeia (
+  execucao_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT 'conector_execucao.id da continuação',
+  continuar_de BIGINT UNSIGNED NOT NULL COMMENT 'Execução interrompida que ela continua',
+  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
+  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1
+) COMMENT='Cadeia de continuações: a pendência fica na execução em que nasceu e a continuação lê a cadeia';
 CREATE TABLE IF NOT EXISTS {b}.conector_tabela_concluida (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL COMMENT 'conector_execucao.id na plataforma',
@@ -169,6 +175,70 @@ def preparar(conn, codigo, banco_cliente):
             if st.strip():
                 c.execute(st)
     return ctl
+
+
+# ---------------- cadeia de continuações (rodada pendencia-cadeia, 2026-11-24) ----------------
+def _b(ctl):
+    return "`%s`" % nome_seguro(str(ctl).strip("`"))
+
+
+def gravar_cadeia(conn, ctl, eid, continuar_de):
+    """Registra no controle que a execução `eid` continua `continuar_de` (idempotente)."""
+    with conn.cursor() as c:
+        c.execute("INSERT INTO %s.conector_execucao_cadeia (execucao_id, continuar_de, criado_em) VALUES (%%s, %%s,"
+                  " UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE continuar_de=VALUES(continuar_de),"
+                  " alterado_em=UTC_TIMESTAMP(3), versao=versao+1" % _b(ctl), (int(eid), int(continuar_de)))
+
+
+def cadeia_cur(cur, ctl, eid, contadores_de=None):
+    """Cadeia de execuções de `eid`: [eid, a que ela continua, a que esta continua, ...] (da mais nova para a mais
+    antiga). Fonte: `conector_execucao_cadeia` do controle; `contadores_de(id)` (contadores da plataforma) completa o
+    elo que o controle ainda não tem. Ciclo é cortado."""
+    ids, e = [], int(eid)
+    while e and e not in ids:
+        ids.append(e)
+        cur.execute("SELECT continuar_de FROM %s.conector_execucao_cadeia WHERE execucao_id=%%s" % _b(ctl), (e,))
+        r = cur.fetchone()
+        de = r[0] if r else None
+        if de is None and contadores_de is not None:
+            de = (contadores_de(e) or {}).get("continuar_de")
+        e = int(de) if de else None
+    return ids
+
+
+def cadeia(conn, ctl, eid, contadores_de=None):
+    """A função única da cadeia (ver `cadeia_cur`), com uma conexão."""
+    with conn.cursor() as c:
+        return cadeia_cur(c, ctl, eid, contadores_de)
+
+
+_MESMA = ("{q}.tabela_origem={a}.tabela_origem AND {q}.regra={a}.regra AND {q}.chave_original <=> {a}.chave_original"
+          " AND {q}.detalhe <=> {a}.detalhe")
+
+
+def pendencias_da_cadeia(ctl, ids, alias="p", situacao=None):
+    """Condição SQL (sem parâmetros: os ids são inteiros) das pendências de uma cadeia sem dupla contagem: a mesma
+    pendência (tabela_origem, chave_original, regra, detalhe) conta uma vez, nas linhas da execução MAIS ANTIGA da
+    cadeia em que aparece; `situacao` filtra pela situação da ocorrência MAIS RECENTE. Cadeia de uma execução só: a
+    condição simples de sempre (`execucao_id=?`)."""
+    ids = sorted({int(x) for x in ids})
+    if not ids:
+        raise ValueError("cadeia vazia")
+    if situacao not in (None, "aberta", "resolvida"):
+        raise ValueError("situação inválida")
+    a, b = alias, _b(ctl)
+    if len(ids) == 1:
+        cond, sit = "%s.execucao_id=%d" % (a, ids[0]), "%s.situacao" % a
+    else:
+        lista = ",".join(str(x) for x in ids)
+        cond = ("%s.execucao_id IN (%s) AND NOT EXISTS (SELECT 1 FROM %s.pendencia q WHERE q.execucao_id IN (%s)"
+                " AND q.execucao_id < %s.execucao_id AND %s)" % (a, lista, b, lista, a, _MESMA.format(q="q", a=a)))
+        sit = ("COALESCE((SELECT r.situacao FROM %s.pendencia r WHERE r.execucao_id IN (%s) AND r.execucao_id >"
+               " %s.execucao_id AND %s ORDER BY r.execucao_id DESC, r.id DESC LIMIT 1), %s.situacao)"
+               % (b, lista, a, _MESMA.format(q="r", a=a), a))
+    if situacao:
+        cond += " AND %s='%s'" % (sit, situacao)
+    return cond
 
 
 def host_do_motor(conn):

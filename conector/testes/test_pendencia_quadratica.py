@@ -198,16 +198,15 @@ class RepetirPendencias(unittest.TestCase):
             c.execute("SELECT MAX(id) FROM `%s`.pendencia" % self.ctl)
             return c.fetchone()[0]
 
-    def test_insert_por_pedaco_e_nao_por_linha(self):
+    def test_herda_sem_insert_so_contagem_agregada(self):
+        """Rodada pendencia-cadeia: a continuação não copia pendências (nenhum INSERT em pendencia); o resumo recebe
+        só a contagem agregada da cadeia (as resolvidas a0 e b0 ficam fora; a TAB_C não pulada também)."""
         esperado = self.N - 1 + self.N // 2 - 1
         conta, beats = {"insert": 0, "commits": 0}, []
         antes = self._ai()
         cm = self._cm(conta)
-        with unittest.mock.patch.object(continuar, "REPETIR_LOTE", 100):
-            n = continuar.repetir_pendencias(cm, {"TAB_A": 1, "TAB_B": 1}, beats.append)
+        n = continuar.repetir_pendencias(cm, {"TAB_A": 1, "TAB_B": 1}, beats.append)
         self.assertEqual(n, esperado)
-        # memória: nenhuma pendência repetida vem linha a linha para o processo (46 milhões na execução 11); o resumo
-        # recebe só a contagem agregada e soma certo
         self.assertEqual(cm.pend, [])
         self.assertEqual(sorted(cm.pend_repetidas),
                          [("TAB_A", "pai_pendente", "alta", None, self.N - 1),
@@ -219,21 +218,12 @@ class RepetirPendencias(unittest.TestCase):
                                              "tab_b:restricao_destino_1048:critica": self.N // 2 - 1,
                                              "tab_c:valor_presumido:baixa": 1},
                                "por_restricao": {"TAB_B:restricao_destino_1048:coluna_x": self.N // 2 - 1}})
-        pedacos = -(-esperado // 100)
-        self.assertEqual(conta["insert"], pedacos)       # antes: um INSERT por pendência (esperado = 1.498)
-        self.assertEqual(len(beats), pedacos)            # batimento a cada pedaço
-        self.assertGreaterEqual(conta["commits"], pedacos)
+        self.assertEqual(conta["insert"], 0)             # antes: um INSERT ... SELECT por pedaço (cópia inteira)
+        self.assertEqual(beats, [esperado])
+        self.assertEqual(self._ai(), antes)              # nenhuma linha nova na pendencia
         with self.cn.cursor() as c:
-            c.execute("SELECT tabela_origem, regra, gravidade, COALESCE(detalhe,''), COUNT(*),"
-                      " COUNT(DISTINCT chave_original) FROM `%s`.pendencia WHERE execucao_id=2 GROUP BY 1,2,3,4"
-                      % self.ctl)
-            got = sorted(c.fetchall())
-        self.assertEqual(got, [("TAB_A", "pai_pendente", "alta", "", self.N - 1, self.N - 1),
-                               ("TAB_B", "restricao_destino_1048", "critica", "coluna_x", self.N // 2 - 1,
-                                self.N // 2 - 1)])
-        # ids: o INSERT ... SELECT reserva em blocos (InnoDB, quantidade desconhecida de linhas): folga limitada a
-        # menos que o dobro de cada pedaço (linear), nunca proporcional ao acumulado
-        self.assertLess(self._ai() - antes, 2 * esperado)
+            c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=2" % self.ctl)
+            self.assertEqual(c.fetchone()[0], 0)
 
     def test_medicao_antiga_um_insert_por_linha(self):
         """Referência da medição "antes": o executemany com UTC_TIMESTAMP(3) no VALUES manda um INSERT por linha."""
@@ -348,11 +338,12 @@ class ContinuacaoCargaPropria(unittest.TestCase):
         self.assertEqual(hx["atendimento_ficha"], {"f1": "0c" * 16, "f2": "0d" * 16})
         self.assertEqual(hx["atendimento_alta"], {"a1": "0e" * 16})
         self.assertEqual(c.cont["puladas_continuacao"], 6)
-        self.assertEqual(c.cont["pendencias_repetidas"], 3)
+        self.assertEqual(c.cont["pendencias_repetidas"], 3)   # herdadas da cadeia (só contagem)
         self.assertEqual(c.pend, [])
-        with self.cn.cursor() as cur:
-            cur.execute("SELECT regra, COUNT(*) FROM `%s`.pendencia WHERE execucao_id=3 GROUP BY regra" % self.ctl)
-            self.assertEqual(dict(cur.fetchall()), {"carater_estimado": 2, "numero_duplicado": 1})
+        self.assertEqual(sorted(x[1] for x in c.pend_repetidas), ["carater_estimado", "numero_duplicado"])
+        with self.cn.cursor() as cur:   # sem cópia: a execução 3 não grava as pendências da 1
+            cur.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=3" % self.ctl)
+            self.assertEqual(cur.fetchone()[0], 0)
             cur.execute("SELECT tabela_origem, origem FROM `%s`.conector_tabela_concluida WHERE execucao_id=3"
                         % self.ctl)
             self.assertEqual(sorted(cur.fetchall()), [("ATCABECATEND", "continuada"), ("REALTA", "continuada"),
