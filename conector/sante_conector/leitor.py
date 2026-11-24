@@ -120,6 +120,11 @@ class Leitor:
             "SELECT RDB$GENERATOR_NAME FROM RDB$GENERATORS WHERE COALESCE(RDB$SYSTEM_FLAG,0)=0 ORDER BY 1")]
         return {n: self.consultar("SELECT GEN_ID(%s, 0) FROM RDB$DATABASE" % _q(n))[0][0] for n in nomes}
 
+    def contar_generators(self):
+        """Só a quantidade de generators (catálogo): sem GEN_ID, que exige USAGE no generator. A leitura direta do
+        servidor usa um usuário só com SELECT (role de leitura), sem USAGE em generator nenhum."""
+        return self.consultar("SELECT COUNT(*) FROM RDB$GENERATORS WHERE COALESCE(RDB$SYSTEM_FLAG,0)=0")[0][0]
+
     def contar(self, tabela):
         return self.consultar("SELECT COUNT(*) FROM %s" % _q(tabela))[0][0]
 

@@ -63,6 +63,7 @@ describe('rotas e guarda de permissão', () => {
       ['/plataforma/convite', true],
       // O painel de clientes (onboarding) é do administrador da plataforma: exige a permissão, não é pública.
       ['/plataforma/clientes', undefined],
+      ['/plataforma/carga', undefined],
     ]);
   });
 });

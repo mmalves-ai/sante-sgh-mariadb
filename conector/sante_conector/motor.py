@@ -468,7 +468,7 @@ def executar(trab, eid):
                 plataforma.gravar_identidade(conn, ex["origem_id"], ident)
                 tabelas, contagens = _contar(lt, painel, cont)
                 rel["contagens"] = contagens
-                generators = len(lt.generators())
+                generators = lt.contar_generators()
                 cont.update(leitura_direta=True, identidade_base=ident, tabelas=len(tabelas),
                             registros_lidos=sum(contagens.values()), generators=generators)
                 painel.estado("gravando", etapa="gravando a imagem na base de controle", percentual=5,
@@ -498,7 +498,7 @@ def executar(trab, eid):
                     tabelas, contagens = _contar(lt, painel, cont)
                     somente_leitura = lt.somente_leitura()
                     rel["contagens"] = contagens
-                    generators = len(lt.generators())
+                    generators = lt.contar_generators()
                 # fonte independente, no mesmo snapshot, com o leitor fechado (o embarcado não divide o arquivo)
                 painel.progresso(5, "confrontando com o gstat")
                 gs = imagem.gstat_registros(ab.dispositivo)
