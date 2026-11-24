@@ -179,8 +179,10 @@ export class CatalogoPrescricaoPropria {
     return this.ler(c, 'regras', async (l, est) => {
       const gs = await l.consultar(
         `SELECT g.id, g.tipo_atendimento, g.hora_inicio_dia, g.considera_vigencia, g.padrao,
-                g.unidade_internacao_id, g.bloco_internacao_id
+                g.unidade_internacao_id, g.bloco_internacao_id, g.setor_funcional_id,
+                ui.unidade_assistencial_id
            FROM grade_horario_unidade g
+           LEFT JOIN unidade_internacao ui ON ui.id = g.unidade_internacao_id
           WHERE g.estabelecimento_id = ? AND g.ativo
           ORDER BY g.id`,
         [est.id],
@@ -202,19 +204,30 @@ export class CatalogoPrescricaoPropria {
         grades.set(chave, g);
       }
       const geral = grades.get('geral') ?? new Map<number, string[]>();
+      // porBloco pelo id do bloco (texto); porUnidade pela unidade ASSISTENCIAL que a unidade de internação
+      // especializa (1:1), a mesma que o atendimento da porta própria devolve em `unidade`. Havendo mais de uma
+      // grade para o mesmo bloco ou unidade (tipos de atendimento diferentes), vale a de menor id.
       const porBloco = new Map<string, number>();
       const porUnidade = new Map<number, number>();
       const regras: RegraHorarioLida[] = gs.map((g) => {
         const id = num(g['id']);
-        if (g['bloco_internacao_id'] !== null) porBloco.set(String(num(g['bloco_internacao_id'])), id);
-        if (g['unidade_internacao_id'] !== null) porUnidade.set(num(g['unidade_internacao_id']), id);
+        const bloco = g['bloco_internacao_id'] === null ? null : String(num(g['bloco_internacao_id']));
+        const unidade = g['unidade_assistencial_id'] === null ? null : num(g['unidade_assistencial_id']);
+        if (bloco !== null && !porBloco.has(bloco)) porBloco.set(bloco, id);
+        if (unidade !== null && !porUnidade.has(unidade)) porUnidade.set(unidade, id);
+        // Só a grade geral do estabelecimento (sem unidade, bloco nem setor) é candidata a padrão do tipo: uma grade
+        // de unidade marcada como padrão não vira a grade do estabelecimento inteiro.
+        const geralDoEstabelecimento =
+          g['unidade_internacao_id'] === null &&
+          g['bloco_internacao_id'] === null &&
+          g['setor_funcional_id'] === null;
         const propria = grades.get(String(id)) ?? new Map<number, string[]>();
         return {
           id,
           tipoAtendimento: g['tipo_atendimento'] === 'internacao' ? 'I' : 'E',
           horarioInicial: hhmm(g['hora_inicio_dia']) || null,
           considerar: verdadeiro(g['considera_vigencia']) ? 0 : 3,
-          padrao: verdadeiro(g['padrao']),
+          padrao: geralDoEstabelecimento && verdadeiro(g['padrao']),
           grade: new Map([...geral, ...propria]),
         };
       });
@@ -379,13 +392,16 @@ export class CatalogoPrescricaoPropria {
       ids,
       { teto: 100_000 },
     );
-    // Faixa de dose por dose (não por dia nem tratamento, sem recorte de idade, peso ou setor): a do item e a do
-    // princípio do item, do estabelecimento ou de todos; alerta mínimo e máximo na unidade de prescrição.
+    // Faixa de dose por dose (não por dia nem tratamento, sem recorte de idade, peso ou setor): a do item e a dos
+    // princípios do item (o do próprio item e os do insumo ligado, como na lista de princípios acima), do
+    // estabelecimento ou de todos; alerta mínimo e máximo na unidade de prescrição. Cada limite sai uma vez só.
     const faixas = await l.consultar(
       `SELECT ip.id AS item, up.sigla AS unidade, ld.dose_minima_alerta, ld.dose_maxima_alerta
          FROM item_prescritivel ip
          JOIN limite_dose_principio ld ON (ld.item_prescritivel_id = ip.id
-              OR (ld.item_prescritivel_id IS NULL AND ld.principio_ativo_id = ip.principio_ativo_id))
+              OR (ld.item_prescritivel_id IS NULL AND (ld.principio_ativo_id = ip.principio_ativo_id
+                  OR ld.principio_ativo_id IN (SELECT ipa.principio_ativo_id FROM insumo_principio_ativo ipa
+                                                WHERE ipa.insumo_id = ip.insumo_id AND ipa.excluido_em IS NULL))))
          JOIN unidade_prescricao up ON up.id = ld.unidade_prescricao_id
         WHERE ip.id IN (${ph}) AND ld.ativo AND ld.periodo = 'dose' AND NOT ld.por_peso
           AND (ld.estabelecimento_id IS NULL OR ld.estabelecimento_id = ?) AND ld.setor_funcional_id IS NULL

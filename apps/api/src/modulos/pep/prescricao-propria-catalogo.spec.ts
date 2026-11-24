@@ -73,6 +73,8 @@ describe('CatalogoPrescricaoPropria (dublê)', () => {
               padrao: 1,
               unidade_internacao_id: 9,
               bloco_internacao_id: 3,
+              setor_funcional_id: null,
+              unidade_assistencial_id: 19,
             },
             {
               id: 5,
@@ -82,6 +84,19 @@ describe('CatalogoPrescricaoPropria (dublê)', () => {
               padrao: 1,
               unidade_internacao_id: null,
               bloco_internacao_id: null,
+              setor_funcional_id: null,
+              unidade_assistencial_id: null,
+            },
+            {
+              id: 6,
+              tipo_atendimento: 'urgencia',
+              hora_inicio_dia: '07:00:00',
+              considera_vigencia: 1,
+              padrao: 1,
+              unidade_internacao_id: null,
+              bloco_internacao_id: null,
+              setor_funcional_id: 2,
+              unidade_assistencial_id: null,
             },
           ]
         : /FROM horario_padrao_dose/.test(sql)
@@ -95,8 +110,10 @@ describe('CatalogoPrescricaoPropria (dublê)', () => {
     );
     const r = await cat.regras(C);
     expect(r.regras.map((x) => ({ ...x, grade: undefined }))).toEqual([
-      { id: 4, tipoAtendimento: 'I', horarioInicial: '1601', considerar: 0, padrao: true },
+      // Grade de unidade/bloco (4) ou de setor (6) marcada como padrão não é padrão do estabelecimento.
+      { id: 4, tipoAtendimento: 'I', horarioInicial: '1601', considerar: 0, padrao: false },
       { id: 5, tipoAtendimento: 'E', horarioInicial: '0000', considerar: 3, padrao: true },
+      { id: 6, tipoAtendimento: 'E', horarioInicial: '0700', considerar: 0, padrao: false },
     ]);
     expect([...r.regras[0]!.grade]).toEqual([
       [1, ['0800']],
@@ -107,7 +124,8 @@ describe('CatalogoPrescricaoPropria (dublê)', () => {
       [2, ['2200', '1000']],
     ]);
     expect([...r.porBloco]).toEqual([['3', 4]]);
-    expect([...r.porUnidade]).toEqual([[9, 4]]);
+    // porUnidade pela unidade assistencial (a que o atendimento devolve), não pelo id da unidade de internação.
+    expect([...r.porUnidade]).toEqual([[19, 4]]);
     expect(
       chamadas.filter((c) => /grade_horario|horario_padrao/.test(c.sql)).every((c) => c.parametros[0] === 7),
     ).toBe(true);

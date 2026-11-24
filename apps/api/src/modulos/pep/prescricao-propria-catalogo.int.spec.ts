@@ -6,7 +6,8 @@
 // continuam valendo. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
+import { regraDaUnidade } from '@sgh/dominio-pep';
+import { CatalogoPrescricaoPropria, CHAVES_PARAMETROS_PRESCRICAO } from './prescricao-propria-catalogo.js';
 import { dataHora } from './registro-porta-propria.js';
 import { CLIENTE_F22_O4 } from './worklist-massa.spec-util.js';
 
@@ -15,6 +16,11 @@ const P = 'l94cat';
 const FUSO = 'America/Sao_Paulo';
 const HORA = 3_600_000;
 const BASE = 949_400_000;
+/** Insumo, unidade assistencial e bloco fictícios (ids que nenhum cadastro real usa). */
+const INSUMO = BASE + 70;
+const UNIDADE_ASSISTENCIAL = BASE + 81;
+const BLOCO = BASE + 82;
+const CHAVES = Object.values(CHAVES_PARAMETROS_PRESCRICAO);
 const ctx = (hospital: string) => ({
   cliente: CLIENTE_F22_O4,
   estabelecimento: null,
@@ -29,6 +35,12 @@ interface Massa {
   estA: number;
   med: number;
   naoPad: number;
+  porInsumo: number;
+  gradeUnidade: number;
+  gradeBloco: number;
+  dietaA: number;
+  dietaB: number;
+  estB: number;
   tipoDieta: number;
   kit: number;
   prot: number;
@@ -73,6 +85,26 @@ async function limpar(e: Escritor, cenarioCriado = false): Promise<void> {
   await e.executar('DELETE FROM gravidade_interacao WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar(`DELETE FROM horario_padrao_dose WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM grade_horario_unidade WHERE estabelecimento_id IN ${est}`, cods);
+  await e.executar('DELETE FROM unidade_internacao WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar(`DELETE FROM horario_refeicao WHERE estabelecimento_id IN ${est}`, cods);
+  await e.executar(`DELETE FROM modalidade_dieta_refeicao WHERE estabelecimento_id IN ${est}`, cods);
+  await e.executar('DELETE FROM modalidade_dieta WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM refeicao_do_dia WHERE codigo LIKE ?', [`${P}%`]);
+  // Só as definições do lote (descrição com o prefixo) e os valores delas.
+  const defs = `(SELECT id FROM parametro_definicao WHERE chave IN (${CHAVES.map(() => '?').join(', ')}) AND descricao LIKE ?)`;
+  await e.executar(`DELETE FROM parametro_valor WHERE parametro_definicao_id IN ${defs}`, [
+    ...CHAVES,
+    `${P}%`,
+  ]);
+  await e.executar(
+    `DELETE FROM parametro_definicao WHERE chave IN (${CHAVES.map(() => '?').join(', ')}) AND descricao LIKE ?`,
+    [...CHAVES, `${P}%`],
+  );
+  await e.executar('DELETE FROM insumo_principio_ativo WHERE insumo_id = ?', [INSUMO]);
+  await e.executar(
+    'DELETE FROM limite_dose_principio WHERE item_prescritivel_id IS NULL AND principio_ativo_id = ?',
+    [BASE + 3],
+  );
   const prot = '(SELECT id FROM protocolo_prescricao WHERE codigo LIKE ?)';
   await e.executar(`DELETE FROM protocolo_prescricao_item WHERE protocolo_prescricao_id IN ${prot}`, [
     `${P}%`,
@@ -127,6 +159,13 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
     );
     expect(ocups).toHaveLength(2);
     const cenario = await e.uma<{ id: unknown }>("SELECT id FROM cenario_alerta WHERE codigo = 'interacao'");
+    // As quatro definições de parâmetro da prescrição não existem no cliente fora deste lote.
+    expect(
+      await e.consultar(
+        `SELECT chave FROM parametro_definicao WHERE chave IN (${CHAVES.map(() => '?').join(', ')})`,
+        CHAVES,
+      ),
+    ).toEqual([]);
     await e.executar('SET FOREIGN_KEY_CHECKS = 0');
     try {
       const cad = (sql: string, p: unknown[]) => e.inserir(sql, [...p, agora]);
@@ -171,6 +210,22 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       const med = await item(`${P}a`, `${P} MORFINA SINTÉTICA`, tipoMed, BASE + 1);
       const naoPad = await item(`${P}b`, `${P} XAROPE SINTÉTICO`, tipoMed, BASE + 2, false);
       const dieta = await item(`${P}c`, `${P} DIETA SINTÉTICA`, tipoDieta, null);
+      // Item cadastrado só pelo insumo (sem princípio no item): a faixa vem do princípio do insumo.
+      const porInsumo = await item(`${P}d`, `${P} DIPIRONA SINTÉTICA`, tipoMed, null);
+      await e.executar('UPDATE item_prescritivel SET insumo_id = ? WHERE id = ?', [INSUMO, porInsumo]);
+      for (const [pa, principal] of [
+        [BASE + 3, true],
+        [BASE + 4, false],
+      ] as const)
+        await cad(
+          'INSERT INTO insumo_principio_ativo (insumo_id, principio_ativo_id, principal, criado_em) VALUES (?, ?, ?, ?)',
+          [INSUMO, pa, principal],
+        );
+      await cad(
+        `INSERT INTO limite_dose_principio (principio_ativo_id, estabelecimento_id, unidade_prescricao_id,
+           dose_minima_alerta, dose_maxima_alerta, criado_em) VALUES (?, ?, ?, 2, 20, ?)`,
+        [BASE + 3, estA, un],
+      );
       await cad(
         'INSERT INTO item_prescritivel_via (item_prescritivel_id, via_de_uso_id, uso_frequente, criado_em) VALUES (?, ?, TRUE, ?)',
         [med, via2],
@@ -214,11 +269,96 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
          VALUES (?, 2, 'cuidado', 'Elevar cabeceira (sintético)', ?)`,
         [prot],
       );
+      // Grades de unidade e de bloco marcadas como padrão, criadas ANTES da geral (id menor): nenhuma delas pode
+      // virar a grade padrão do estabelecimento.
+      const unidadeInternacao = await cad(
+        `INSERT INTO unidade_internacao (estabelecimento_id, unidade_assistencial_id, codigo, descricao, tipo, criado_em)
+         VALUES (?, ?, ?, 'Unidade sintética', 'enfermaria', ?)`,
+        [estA, UNIDADE_ASSISTENCIAL, `${P}ui`],
+      );
+      const gradeUnidade = await cad(
+        `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, unidade_internacao_id, hora_inicio_dia,
+           considera_vigencia, padrao, criado_em) VALUES (?, 'internacao', ?, '07:00:00', TRUE, TRUE, ?)`,
+        [estA, unidadeInternacao],
+      );
+      const gradeBloco = await cad(
+        `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, bloco_internacao_id, hora_inicio_dia,
+           considera_vigencia, padrao, criado_em) VALUES (?, 'internacao', ?, '08:00:00', FALSE, TRUE, ?)`,
+        [estA, BLOCO],
+      );
       const grade = await cad(
         `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, hora_inicio_dia, considera_vigencia,
            padrao, criado_em) VALUES (?, 'internacao', '16:01:00', TRUE, TRUE, ?)`,
         [estA],
       );
+      // Dieta: refeições do dia e horários. A refeição 1 e a 2 servem a dieta A no estabelecimento A (horário geral
+      // da refeição; a 2 também com horário próprio da dieta, no mesmo horário: não repete); o horário da unidade e
+      // os do estabelecimento B ficam fora do A.
+      const refeicao = (n: number, h: string) =>
+        cad(
+          `INSERT INTO refeicao_do_dia (codigo, descricao, ordem, horario_inicio, criado_em) VALUES (?, ?, ?, ?, ?)`,
+          [`${P}r${n}`, `Refeição sintética ${n}`, 9400 + n, h],
+        );
+      const r1 = await refeicao(1, '07:00:00');
+      const r2 = await refeicao(2, '12:00:00');
+      const r3 = await refeicao(3, '18:00:00');
+      const modalidade = (n: string) =>
+        cad(`INSERT INTO modalidade_dieta (codigo, descricao, criado_em) VALUES (?, ?, ?)`, [
+          `${P}${n}`,
+          `Dieta sintética ${n}`,
+        ]);
+      const dietaA = await modalidade('da');
+      const dietaB = await modalidade('db');
+      for (const [estab, mod, ref] of [
+        [estA, dietaA, r1],
+        [estA, dietaA, r2],
+        [estB, dietaB, r1],
+      ] as const)
+        await cad(
+          'INSERT INTO modalidade_dieta_refeicao (estabelecimento_id, modalidade_dieta_id, refeicao_do_dia_id, criado_em) VALUES (?, ?, ?, ?)',
+          [estab, mod, ref],
+        );
+      for (const [estab, unidade, ref, mod, ini, fim] of [
+        [estA, null, r2, null, '12:00:00', '13:00:00'],
+        [estA, null, r1, null, '07:00:00', '08:00:00'],
+        [estA, null, r2, dietaA, '12:00:00', '13:00:00'],
+        [estA, BASE + 80, r3, dietaA, '18:00:00', '19:00:00'],
+        [estB, null, r3, dietaA, '19:00:00', '20:00:00'],
+        [estB, null, r1, null, '06:00:00', '07:00:00'],
+      ] as const)
+        await cad(
+          `INSERT INTO horario_refeicao (estabelecimento_id, unidade_internacao_id, refeicao_do_dia_id, modalidade_dieta_id,
+             horario_inicio, horario_fim, horario_corte_mapa, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [estab, unidade, ref, mod, ini, fim, ini],
+        );
+      // Parâmetros da prescrição: definição do lote, valor de rede e do estabelecimento, com vigência.
+      const dia = 24 * HORA;
+      const definicao = async (chave: string, padrao: string) =>
+        cad(
+          `INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, valor_padrao,
+             permite_estabelecimento, criado_em) VALUES (?, ?, ?, 'booleano', ?, TRUE, ?)`,
+          [chave, BASE + 90, `${P} ${chave}`, padrao],
+        );
+      const valor = (def: number, estab: number | null, v: string, ini: Date, fim: Date | null = null) =>
+        cad(
+          `INSERT INTO parametro_valor (parametro_definicao_id, nivel, estabelecimento_id, valor, vigencia_inicio,
+             vigencia_fim, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [def, estab === null ? 'rede' : 'estabelecimento', estab, v, ini, fim],
+        );
+      const desde = new Date(agora.getTime() - 30 * dia);
+      // consistirDuplicidade: só o padrão da definição (false, contra o padrão do código true).
+      await definicao(CHAVES_PARAMETROS_PRESCRICAO.consistirDuplicidade, 'false');
+      // porMedicamento: rede false, estabelecimento A true.
+      const dMed = await definicao(CHAVES_PARAMETROS_PRESCRICAO.porMedicamento, 'true');
+      await valor(dMed, null, 'false', desde);
+      await valor(dMed, estA, 'true', desde);
+      // porPrincipio: rede true; no A, um false vencido e um false que só vale no futuro: vale o da rede.
+      const dPrinc = await definicao(CHAVES_PARAMETROS_PRESCRICAO.porPrincipio, 'false');
+      await valor(dPrinc, null, 'true', desde);
+      await valor(dPrinc, estA, 'false', desde, new Date(agora.getTime() - 10 * dia));
+      await valor(dPrinc, estA, 'false', new Date(agora.getTime() + 10 * dia));
+      // calcularVelocidade: padrão da definição true (o do código é false).
+      await definicao(CHAVES_PARAMETROS_PRESCRICAO.calcularVelocidade, 'true');
       await cad(
         `INSERT INTO horario_padrao_dose (estabelecimento_id, grade_horario_unidade_id, doses_por_dia, ordem_dose, horario,
            criado_em) VALUES (?, NULL, 1, 1, '22:00:00', ?)`,
@@ -333,6 +473,12 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         estA,
         med,
         naoPad,
+        porInsumo,
+        gradeUnidade,
+        gradeBloco,
+        dietaA,
+        dietaB,
+        estB,
         tipoDieta,
         kit,
         prot,
@@ -390,7 +536,31 @@ describe.skipIf(SEM_BANCO)('CatalogoPrescricaoPropria contra o MariaDB (cliente 
     const d = await cat.dominios(ctx(P));
     expect(d['vias']).toEqual(expect.arrayContaining([{ id: 'L94EV', nome: 'Endovenosa sintética' }]));
     expect(d['unidades']).toEqual(expect.arrayContaining([{ id: 'L94MG', nome: 'Miligrama sintético' }]));
-    expect(await cat.horariosDieta(ctx(P))).toBeInstanceOf(Map);
+  });
+
+  it('grade de unidade e de bloco não viram padrão; porUnidade pela unidade assistencial, porBloco pelo bloco', async () => {
+    const r = await cat.regras(ctx(P));
+    const doLote = r.regras.filter((x) => [m.gradeUnidade, m.gradeBloco, m.grade].includes(x.id));
+    expect(doLote.map((x) => [x.id, x.padrao, x.horarioInicial, x.considerar])).toEqual([
+      [m.gradeUnidade, false, '0700', 0],
+      [m.gradeBloco, false, '0800', 3],
+      [m.grade, true, '1601', 0],
+    ]);
+    expect(r.porUnidade.get(UNIDADE_ASSISTENCIAL)).toBe(m.gradeUnidade);
+    expect(r.porBloco.get(String(BLOCO))).toBe(m.gradeBloco);
+    // Sem bloco, vale a geral do estabelecimento (não a de unidade de id menor); com o bloco, a do bloco.
+    expect(regraDaUnidade(r.regras, r.porBloco, null, 'I')?.id).toBe(m.grade);
+    expect(regraDaUnidade(r.regras, r.porBloco, String(BLOCO), 'I')?.id).toBe(m.gradeBloco);
+  });
+
+  it('horários de dieta: refeições da dieta no estabelecimento, sem repetir, em ordem, sem os da unidade', async () => {
+    const doLote = (mp: Map<number, string[]>) =>
+      [...mp].filter(([d]) => d === m.dietaA || d === m.dietaB).sort((a, b) => a[0] - b[0]);
+    expect(doLote(await cat.horariosDieta(ctx(P)))).toEqual([[m.dietaA, ['0700', '1200']]]);
+    expect(doLote(await cat.horariosDieta(ctx(`${P}b`)))).toEqual([
+      [m.dietaA, ['1900']],
+      [m.dietaB, ['0600']],
+    ]);
   });
 
   it('produtos, índice e kits', async () => {
@@ -404,6 +574,11 @@ describe.skipIf(SEM_BANCO)('CatalogoPrescricaoPropria contra o MariaDB (cliente 
       vias: ['L94SC', 'L94EV'],
       faixasDose: [{ unidade: 'L94MG', minima: 1, maxima: 10 }],
     });
+    // Item só com insumo: a faixa do princípio do insumo vale (uma vez só); no B, a do A não vale.
+    expect((await cat.produtos(ctx(P), [m.porInsumo]))[0]?.faixasDose).toEqual([
+      { unidade: 'L94MG', minima: 2, maxima: 20 },
+    ]);
+    expect((await cat.produtos(ctx(`${P}b`), [m.porInsumo]))[0]?.faixasDose).toEqual([]);
     // A faixa do estabelecimento A não vale no B.
     expect((await cat.produtos(ctx(`${P}b`), [m.med]))[0]?.faixasDose).toEqual([]);
     const indice = await cat.itensParaIndice(ctx(P));
@@ -412,7 +587,7 @@ describe.skipIf(SEM_BANCO)('CatalogoPrescricaoPropria contra o MariaDB (cliente 
         .filter((i) => i.nome.startsWith(P))
         .map((i) => i.produto)
         .sort(),
-    ).toEqual([m.med, m.naoPad].sort());
+    ).toEqual([m.med, m.naoPad, m.porInsumo].sort());
     expect(await cat.kits(ctx(P), m.med)).toEqual([
       {
         id: m.kit,
@@ -479,8 +654,20 @@ describe.skipIf(SEM_BANCO)('CatalogoPrescricaoPropria contra o MariaDB (cliente 
   });
 
   it('parâmetros, regras de alerta do estabelecimento e interações', async () => {
-    const par = await cat.parametrosPrescricao(ctx(P));
-    expect(Object.values(par).every((v) => typeof v === 'boolean')).toBe(true);
+    // A: padrão da definição, estabelecimento sobre a rede, valor vencido e futuro ignorados.
+    expect(await cat.parametrosPrescricao(ctx(P))).toEqual({
+      consistirDuplicidade: false,
+      porMedicamento: true,
+      porPrincipio: true,
+      calcularVelocidade: true,
+    });
+    // B: sem valor próprio, recebe o da rede.
+    expect(await cat.parametrosPrescricao(ctx(`${P}b`))).toEqual({
+      consistirDuplicidade: false,
+      porMedicamento: false,
+      porPrincipio: true,
+      calcularVelocidade: true,
+    });
     const regras = (await cat.regrasAlerta(ctx(P))).filter((r) => r.codigo.startsWith(P));
     expect(regras).toEqual([
       expect.objectContaining({

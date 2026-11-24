@@ -4,7 +4,7 @@
 // teste (a regra "registro clínico nunca é apagado" é do produto: a massa sintética do teste sai). Nenhum dado de
 // pessoa real. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { converterModelo } from '@sgh/dominio-pep';
-import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
+import { type ContextoOperacao, type Escritor, executarComo, NucleoProprio } from '@sgh/nucleo';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DESLOCAMENTO_OPCAO, RegistroPropriaGravacao } from './registro-propria-gravacao.js';
@@ -15,7 +15,14 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l93reg';
 const PM = P.toUpperCase();
 const PRONTUARIO = 901_093_001;
-const C = { rede: CLIENTE, hospital: P, cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: P };
+const C = {
+  rede: CLIENTE,
+  hospital: P,
+  cliente: CLIENTE,
+  estabelecimento: null,
+  usuario: null,
+  correlacao: P,
+};
 const HASH = 'c'.repeat(64);
 
 interface Massa {
@@ -127,12 +134,10 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
         Number((await e.consultar(sql, p))[0]?.['id'] ?? 0);
       const estabelecimento =
         (await um('SELECT id FROM estabelecimento WHERE codigo = ?', [P])) ||
-        (await ins('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
-          P,
-          `Hospital sintético ${P}`,
-          `Hospital sintético ${P} (fictício)`,
-          agora,
-        ]));
+        (await ins(
+          'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+          [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
+        ));
       const conta = async (login: string) =>
         (await um('SELECT id FROM usuario WHERE login = ?', [login])) ||
         (await ins(
@@ -269,7 +274,11 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
   it('profissional e podeGravar: a conta ligada ao profissional com inscrição ativa grava', async () => {
     const p = await g.profissional(C, `${P}.medico`);
     expect(p).toMatchObject({ idUsuario: m.medico, idProfissional: m.profissional, cbo: m.profissional });
-    expect(await g.podeGravar(C, 'pep.registro.registrar', `${P}.medico`)).toEqual({ pode: true, codigo: null, motivo: null });
+    expect(await g.podeGravar(C, 'pep.registro.registrar', `${P}.medico`)).toEqual({
+      pode: true,
+      codigo: null,
+      motivo: null,
+    });
     expect(await g.profissional(C, `${P}.semprof`)).toBeNull();
     expect((await g.podeGravar(C, 'x', `${P}.semprof`)).codigo).toBe('sem-profissional');
     await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
@@ -302,12 +311,20 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     const doPaciente = await g.rascunhosDoPaciente(C, m.paciente, m.modelo);
     expect(doPaciente[0]).toMatchObject({ id: r1.rascunho, respostas: 3, doNovo: true, cbo: m.profissional });
     expect(doPaciente[0]?.dataHoraClinica).toBe('2026-11-20T09:30:00.000');
-    const r2 = await g.salvarRascunho(C, { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: r1.versao } }, ctx());
+    const r2 = await g.salvarRascunho(
+      C,
+      { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: r1.versao } },
+      ctx(),
+    );
     expect(r2.rascunho).not.toBe(r1.rascunho);
     const lido1 = await g.lerRascunho(C, r1.rascunho);
     expect(lido1).toMatchObject({ aberto: false, substituido: true });
     await expect(
-      g.salvarRascunho(C, { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: r1.versao } }, ctx()),
+      g.salvarRascunho(
+        C,
+        { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: r1.versao } },
+        ctx(),
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'conflito-versao' } });
     // Outro profissional (cbo diferente da sessão): recusa.
     await expect(
@@ -339,17 +356,37 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       suspensoEm: null,
       profissionalNome: `Pessoa sintética ${P} profissional`,
     });
-    expect(await g.prova(C, id)).toEqual({ guardado: HASH, hashConteudo: HASH, atual: HASH, comoSuporte: [] });
-    const cab = await g.cabecalhoDocumento(C, { htPaciente: m.paciente, htAtendimento: m.atendimento }, m.profissional, 1);
+    expect(await g.prova(C, id)).toEqual({
+      guardado: HASH,
+      hashConteudo: HASH,
+      atual: HASH,
+      comoSuporte: [],
+    });
+    const cab = await g.cabecalhoDocumento(
+      C,
+      { htPaciente: m.paciente, htAtendimento: m.atendimento },
+      m.profissional,
+      1,
+    );
     expect(cab.situacao).toBe('Lançado');
     const trilha = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
-      l.uma("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'registro_assistencial' AND entidade_id = ?", [id]),
+      l.uma(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'registro_assistencial' AND entidade_id = ?",
+        [id],
+      ),
     );
     expect(Number(trilha?.['n'])).toBeGreaterThan(0);
 
     // Suspensão: exige reautenticação, só o autor; depois a correção aponta o suspenso.
-    const susp = { registro: id, cbo: m.profissional, justificativa: 'Lançado no paciente errado (teste)', documento: 'x'.repeat(20) };
-    await expect(g.suspender(C, susp, ctx())).rejects.toMatchObject({ problema: { codigo: 'reautenticacao-necessaria' } });
+    const susp = {
+      registro: id,
+      cbo: m.profissional,
+      justificativa: 'Lançado no paciente errado (teste)',
+      documento: 'x'.repeat(20),
+    };
+    await expect(g.suspender(C, susp, ctx())).rejects.toMatchObject({
+      problema: { codigo: 'reautenticacao-necessaria' },
+    });
     await g.suspender(C, susp, ctx({ reautenticadoEm: Date.now() }));
     await expect(g.suspender(C, susp, ctx({ reautenticadoEm: Date.now() }))).rejects.toMatchObject({
       problema: { codigo: 'ja-suspenso' },
@@ -368,10 +405,116 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       g.descartarRascunho(C, { rascunho: r.rascunho, versao: r.versao, cbo: m.profissional }, ctx()),
     ).rejects.toMatchObject({ problema: { codigo: 'rascunho-fechado' } });
     const n = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
-      l.uma("SELECT COUNT(*) AS n FROM registro_assistencial_rascunho WHERE id = ? AND situacao = 'descartado'", [r.rascunho]),
+      l.uma(
+        "SELECT COUNT(*) AS n FROM registro_assistencial_rascunho WHERE id = ? AND situacao = 'descartado'",
+        [r.rascunho],
+      ),
     );
     expect(Number(n?.['n'])).toBe(1);
   });
+
+  it('suporte técnico: gravação e suspensão em sessão de suporte voltam como marcas na prova', async () => {
+    const { registro: id } = await g.registrar(C, { ...registro(), comoSuporte: true } as never, ctx());
+    expect((await g.prova(C, id)).comoSuporte).toEqual(['criado']);
+    const marca = {
+      sessao: `${P}-sessao`,
+      acao: null,
+      atorTipo: 'suporte' as const,
+      idConta: '1',
+      alvo: `${P}.medico`,
+    };
+    await executarComo(marca, () =>
+      g.suspender(
+        C,
+        {
+          registro: id,
+          cbo: m.profissional,
+          justificativa: 'Suspensão em sessão de suporte (teste)',
+          documento: 'x'.repeat(20),
+        },
+        ctx({ reautenticadoEm: Date.now() }),
+      ),
+    );
+    expect((await g.prova(C, id)).comoSuporte).toEqual(['criado', 'suspenso']);
+    const { registro: outro } = await g.registrar(C, registro() as never, ctx());
+    expect((await g.prova(C, outro)).comoSuporte).toEqual([]);
+  }, 60_000);
+
+  it('prova: alteração feita fora do sistema (resposta sem marca, resposta incluída, linha do registro) diverge', async () => {
+    const alterado = `${HASH.slice(0, 63)}x`;
+    const novo = async () => (await g.registrar(C, registro() as never, ctx())).registro;
+    const [a, b, d] = [await novo(), await novo(), await novo()];
+    for (const id of [a, b, d]) expect((await g.prova(C, id)).atual).toBe(HASH);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, async (e) => {
+      await e.executar(
+        "UPDATE registro_assistencial_resposta SET valor_texto = 'Texto trocado fora' WHERE registro_assistencial_id = ? AND valor_texto IS NOT NULL",
+        [a],
+      );
+      await e.executar(
+        `INSERT INTO registro_assistencial_resposta (registro_assistencial_id, sequencia, modelo_campo_id, tipo_valor,
+                valor_texto, criado_em, versao) VALUES (?, 99, ?, 'texto', 'Resposta incluída fora', UTC_TIMESTAMP(3), 1)`,
+        [b, m.campoTexto],
+      );
+      await e.executar("UPDATE registro_assistencial SET texto_consolidado = 'Trocado fora' WHERE id = ?", [
+        d,
+      ]);
+    });
+    for (const id of [a, b, d]) expect((await g.prova(C, id)).atual).toBe(alterado);
+  }, 60_000);
+
+  it('leitura: campo excluído e opção desativada depois da gravação não somem do registro', async () => {
+    const { registro: id } = await g.registrar(C, registro() as never, ctx());
+    const antes = await g.respostasRegistro(C, id);
+    expect(antes.length).toBe(3);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, async (e) => {
+      await e.executar('UPDATE modelo_campo_opcao SET ativo = FALSE WHERE id = ?', [m.opcaoGrave]);
+      await e.executar('UPDATE modelo_campo SET excluido_em = UTC_TIMESTAMP(3) WHERE id = ?', [m.campoTexto]);
+    });
+    try {
+      expect(await g.respostasRegistro(C, id)).toEqual(antes);
+      expect((await g.ultimoRegistro(C, m.paciente, m.modelo))?.linhas).toEqual(antes);
+      const hist = await g.historico(C, m.paciente, m.modelo, '0101');
+      expect(hist[0]?.linhas.map((l) => l.texto)).toEqual(['Quadro sintético estável']);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, async (e) => {
+        await e.executar('UPDATE modelo_campo_opcao SET ativo = TRUE WHERE id = ?', [m.opcaoGrave]);
+        await e.executar('UPDATE modelo_campo SET excluido_em = NULL WHERE id = ?', [m.campoTexto]);
+      });
+    }
+  }, 60_000);
+
+  it('rascunho regravado mantém o lançamento do primeiro da cadeia', async () => {
+    const r1 = await g.salvarRascunho(C, { ...base(), linhas: linhas() }, ctx());
+    const l1 = (await g.lerRascunho(C, r1.rascunho))?.rascunho.lancadoEm;
+    await new Promise((ok) => setTimeout(ok, 1_100));
+    const r2 = await g.salvarRascunho(
+      C,
+      { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: r1.versao } },
+      ctx(),
+    );
+    const r3 = await g.salvarRascunho(
+      C,
+      { ...base(), linhas: linhas(), rascunho: { id: r2.rascunho, versao: r2.versao } },
+      ctx(),
+    );
+    expect(l1).toBeTruthy();
+    expect((await g.lerRascunho(C, r2.rascunho))?.rascunho.lancadoEm).toBe(l1);
+    expect((await g.lerRascunho(C, r3.rascunho))?.rascunho.lancadoEm).toBe(l1);
+    expect(
+      (await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).find((x) => x.id === r3.rascunho)?.lancadoEm,
+    ).toBe(l1);
+    await g.descartarRascunho(C, { rascunho: r3.rascunho, versao: r3.versao, cbo: m.profissional }, ctx());
+  }, 60_000);
+
+  it('idempotência: a mesma chave repete o resultado; com outro conteúdo, 409 idempotencia-divergente', async () => {
+    const k = ctx();
+    const r1 = await g.registrar(C, registro() as never, k);
+    expect((await g.registrar(C, registro() as never, k)).registro).toBe(r1.registro);
+    const outras = linhas().map((l) => (l.ordem === '0101' ? { ...l, texto: 'Outro conteúdo' } : l));
+    await expect(g.registrar(C, { ...registro(), linhas: outras } as never, k)).rejects.toMatchObject({
+      problema: { codigo: 'idempotencia-divergente' },
+    });
+  }, 60_000);
 
   it('modelos de impressão: listas do cliente (fichas e relatórios ativos)', async () => {
     const x = await g.modelosImpressao(C);

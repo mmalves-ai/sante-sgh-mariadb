@@ -112,7 +112,8 @@ export function ordenarCampos(campos: readonly CampoDoModelo[]): CampoOrdenado[]
     const l = (filhos.get(pai) ?? []).sort((a, b) => a.sequencia - b.sequencia || a.id - b.id);
     l.forEach((c, i) => {
       if (ordem.has(c.id)) return;
-      const o = prefixo === null || i + 1 > 99 || nivel > 6 ? null : `${prefixo}${String(i + 1).padStart(2, '0')}`;
+      const o =
+        prefixo === null || i + 1 > 99 || nivel > 6 ? null : `${prefixo}${String(i + 1).padStart(2, '0')}`;
       ordem.set(c.id, o);
       visitar(c.id, o, nivel + 1);
     });
@@ -124,13 +125,21 @@ export function ordenarCampos(campos: readonly CampoDoModelo[]): CampoOrdenado[]
     .sort((a, b) => a.sequencia - b.sequencia || a.id - b.id);
 }
 
-/** Campos (com opções ativas) de todas as versões do modelo, já com a ordem dentro de cada versão. */
-export async function camposDoModelo(l: Leitor, modelo: number): Promise<CampoOrdenado[]> {
+/**
+ * Campos de todas as versões do modelo, já com a ordem dentro de cada versão. Para preencher e gravar (padrão): só os
+ * campos não excluídos e as opções ativas. Para LER registros (`leitura`): todos, porque a resposta gravada continua
+ * sendo do campo e da opção que existiam na gravação (campo excluído ou opção desativada depois não esconde o registro).
+ */
+export async function camposDoModelo(
+  l: Pick<Leitor, 'consultar'>,
+  modelo: number,
+  leitura = false,
+): Promise<CampoOrdenado[]> {
   const linhas = await l.consultar(
     `SELECT c.id, c.modelo_documento_versao_id AS versao_id, c.sequencia, c.pai_modelo_campo_id, c.titulo,
             c.tipo_campo, c.obrigatorio
        FROM modelo_campo c JOIN modelo_documento_versao v ON v.id = c.modelo_documento_versao_id
-      WHERE v.modelo_documento_clinico_id = ? AND c.excluido_em IS NULL
+      WHERE v.modelo_documento_clinico_id = ?${leitura ? '' : ' AND c.excluido_em IS NULL'}
       ORDER BY c.modelo_documento_versao_id, c.sequencia, c.id`,
     [modelo],
   );
@@ -138,7 +147,7 @@ export async function camposDoModelo(l: Leitor, modelo: number): Promise<CampoOr
     `SELECT o.id, o.modelo_campo_id, o.rotulo
        FROM modelo_campo_opcao o JOIN modelo_campo c ON c.id = o.modelo_campo_id
        JOIN modelo_documento_versao v ON v.id = c.modelo_documento_versao_id
-      WHERE v.modelo_documento_clinico_id = ? AND o.ativo = TRUE
+      WHERE v.modelo_documento_clinico_id = ?${leitura ? '' : ' AND o.ativo = TRUE'}
       ORDER BY o.modelo_campo_id, o.sequencia, o.id`,
     [modelo],
   );
@@ -232,7 +241,12 @@ export function definicaoDosCampos(
         '  end',
       );
     if (k.opcoes && k.opcoes.length && k.classe === 'TfRespCheckListBox')
-      linhas.push('  inherited clbResp: TCheckListBox', '    Items.Strings = (', `${lista(k.opcoes)})`, '  end');
+      linhas.push(
+        '  inherited clbResp: TCheckListBox',
+        '    Items.Strings = (',
+        `${lista(k.opcoes)})`,
+        '  end',
+      );
     linhas.push('end');
     return {
       id: c.id,
@@ -300,9 +314,13 @@ const respostaInvalida = (detalhe: string) =>
   recusa(422, 'resposta-fora-do-modelo', 'Resposta recusada', detalhe);
 
 /** A linha do contrato no campo da versão publicada (pela ordem), com o valor na coluna do tipo. */
-export function respostaDaLinha(l: LinhaGravacao, campos: ReadonlyMap<string, CampoOrdenado>): RespostaTipada {
+export function respostaDaLinha(
+  l: LinhaGravacao,
+  campos: ReadonlyMap<string, CampoOrdenado>,
+): RespostaTipada {
   const c = campos.get(l.ordem);
-  if (!c) throw respostaInvalida(`A resposta de ordem ${l.ordem} não é de um campo da versão publicada do modelo.`);
+  if (!c)
+    throw respostaInvalida(`A resposta de ordem ${l.ordem} não é de um campo da versão publicada do modelo.`);
   const base = {
     modelo_campo_id: c.id,
     valor_texto: null,
@@ -320,7 +338,8 @@ export function respostaDaLinha(l: LinhaGravacao, campos: ReadonlyMap<string, Ca
   if (c.tipo === 'multipla') {
     // A marcada vem pelo id da resposta da opção; sem ele, pela posição na lista (a partir de 0).
     const o =
-      daLista ?? (l.idResposta < DESLOCAMENTO_OPCAO && l.indice !== null ? c.opcoes[Number(l.indice)] : undefined);
+      daLista ??
+      (l.idResposta < DESLOCAMENTO_OPCAO && l.indice !== null ? c.opcoes[Number(l.indice)] : undefined);
     if (!o) throw respostaInvalida(`A opção marcada não é do campo de ordem ${l.ordem}.`);
     return { ...base, tipo_valor: 'opcao', modelo_campo_opcao_id: o.id, valor_texto: l.alfa };
   }
@@ -368,7 +387,9 @@ export function linhasDasRespostas(
       ordem: c.ordem,
       seq: c.tipo === 'multipla' ? seq : complemento ? 1 : 0,
       idResposta:
-        (c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo)) && opcao !== null ? DESLOCAMENTO_OPCAO + opcao : c.id,
+        (c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo)) && opcao !== null
+          ? DESLOCAMENTO_OPCAO + opcao
+          : c.id,
       data:
         tipo === 'data' && data !== null && data !== undefined
           ? data instanceof Date
@@ -402,7 +423,8 @@ export function linhasDasRespostas(
 /** Hora civil local (AAAA-MM-DDTHH:MM[:SS]) no fuso do estabelecimento → instante UTC; independe do TZ da máquina. */
 export function localParaUtc(local: string, fuso: string): Date {
   const alvo = Date.parse(`${local.length === 16 ? `${local}:00` : local.slice(0, 19)}Z`);
-  if (Number.isNaN(alvo)) throw recusa(400, 'data-invalida', 'Data inválida', 'A data e hora não são válidas.');
+  if (Number.isNaN(alvo))
+    throw recusa(400, 'data-invalida', 'Data inválida', 'A data e hora não são válidas.');
   const local_ = (t: number) => Date.parse(`${dataHora(new Date(t), fuso)}Z`);
   let t = alvo - (local_(alvo) - alvo);
   t += alvo - local_(t);
@@ -417,6 +439,134 @@ export const versaoDoRascunho = (id: number, versaoLinha: number): string =>
 export function linhasDoRascunho(v: unknown): LinhaGravacao[] {
   const x = typeof v === 'string' ? (JSON.parse(v) as unknown) : v;
   return Array.isArray(x) ? (x as LinhaGravacao[]) : [];
+}
+
+// ── Trilha e selo do conteúdo ─────────────────────────────────────────────────────────────────────────
+
+export const OP_REGISTRAR = 'pep.registro.registrar';
+export const OP_SALVAR_RASCUNHO = 'pep.registro.salvar-rascunho';
+export const OP_DESCARTAR_RASCUNHO = 'pep.registro.descartar-rascunho';
+export const OP_SUSPENDER = 'pep.registro.suspender';
+
+/** Uma linha da trilha (dados_depois) de uma gravação desta família. */
+export interface TrilhaLida {
+  readonly entidadeId: number;
+  readonly operacao: string | null;
+  readonly dados: Record<string, unknown> | null;
+  /** Origem da sessão "como" (ADR 0021) gravada pelo Executor; null fora dela. */
+  readonly origem: unknown;
+}
+
+const jsonOuNull = (v: unknown): unknown => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== 'string') return v;
+  try {
+    return JSON.parse(v) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+/** As linhas da trilha das gravações desta família sobre as linhas dadas (na ordem em que ocorreram). */
+export async function trilhasDe(
+  l: Pick<Leitor, 'consultar'>,
+  estabelecimento: number,
+  entidade: string,
+  ids: readonly number[],
+  operacoes: readonly string[],
+): Promise<TrilhaLida[]> {
+  if (!ids.length) return [];
+  const linhas = await l.consultar(
+    `SELECT entidade_id, JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) AS operacao,
+            JSON_EXTRACT(dados_depois, '$.dados') AS dados, JSON_EXTRACT(dados_depois, '$.origem') AS origem
+       FROM trilha_auditoria
+      WHERE entidade = ? AND entidade_id IN (${ids.map(() => '?').join(', ')})
+        AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.operacao')) IN (${operacoes.map(() => '?').join(', ')})
+      ORDER BY id`,
+    [entidade, ...ids, estabelecimento, ...operacoes],
+  );
+  return linhas.map((x) => {
+    const dados = jsonOuNull(x['dados']);
+    return {
+      entidadeId: num(x['entidade_id']),
+      operacao: textoOuNull(x['operacao']),
+      dados: dados !== null && typeof dados === 'object' ? (dados as Record<string, unknown>) : null,
+      origem: jsonOuNull(x['origem']),
+    };
+  });
+}
+
+/** A gravação ou a suspensão veio de uma sessão de suporte (a marca do serviço ou a origem "como" do Executor). */
+export const deSuporte = (t: TrilhaLida): boolean => t.dados?.['comoSuporte'] === true || t.origem !== null;
+
+/** As marcas de suporte técnico do registro, como a memória: 'criado' e/ou 'suspenso', na ordem da trilha. */
+export function marcasDeSuporte(trilhas: readonly TrilhaLida[]): ('criado' | 'suspenso')[] {
+  const marcas: ('criado' | 'suspenso')[] = [];
+  for (const t of trilhas) {
+    if (!deSuporte(t)) continue;
+    const m = t.operacao === OP_REGISTRAR ? 'criado' : t.operacao === OP_SUSPENDER ? 'suspenso' : null;
+    if (m && !marcas.includes(m)) marcas.push(m);
+  }
+  return marcas;
+}
+
+/**
+ * Selo do conteúdo gravado: SHA-256 das colunas de conteúdo do registro (não as da suspensão) e de TODAS as linhas de
+ * resposta (com versão, alteração e exclusão), lidas como texto pelo próprio banco. Calculado na transação da gravação
+ * (vai à trilha encadeada) e recalculado na prova: qualquer inclusão, alteração ou exclusão feita fora deste sistema
+ * no registro ou nas respostas faz o atual divergir do guardado.
+ */
+export async function seloDoConteudo(
+  l: Pick<Leitor, 'uma' | 'consultar'>,
+  registro: number,
+): Promise<string | null> {
+  const r = await l.uma(
+    `SELECT CAST(id AS CHAR) AS id, CAST(estabelecimento_id AS CHAR) AS est, CAST(paciente_id AS CHAR) AS pac,
+            CAST(atendimento_id AS CHAR) AS atd, CAST(modelo_documento_clinico_id AS CHAR) AS modelo,
+            CAST(autor_profissional_id AS CHAR) AS autor, CAST(autor_usuario_id AS CHAR) AS usuario,
+            CAST(data_hora_clinica AS CHAR) AS clinica, CAST(data_hora_lancamento AS CHAR) AS lancamento,
+            justificativa_retroativo AS retro, impressao_digital AS impressao, texto_consolidado AS texto,
+            CAST(corrige_registro_assistencial_id AS CHAR) AS corrige, CAST(excluido_em AS CHAR) AS excluido
+       FROM registro_assistencial WHERE id = ?`,
+    [registro],
+  );
+  if (!r) return null;
+  const s = await l.consultar(
+    `SELECT CAST(id AS CHAR) AS id, CAST(sequencia AS CHAR) AS seq, CAST(modelo_campo_id AS CHAR) AS campo, tipo_valor,
+            valor_texto, CAST(valor_numero AS CHAR) AS numero, CAST(valor_data AS CHAR) AS data,
+            CAST(valor_data_hora AS CHAR) AS data_hora, CAST(valor_hora AS CHAR) AS hora,
+            CAST(valor_booleano AS CHAR) AS booleano, CAST(modelo_campo_opcao_id AS CHAR) AS opcao,
+            CAST(valor_estruturado AS CHAR) AS estruturado, codigo_cid10, justificativa_diagnostico, unidade,
+            CAST(arquivo_id AS CHAR) AS arquivo, observacao, CAST(autopreenchido AS CHAR) AS auto,
+            CAST(confirmado AS CHAR) AS confirmado, CAST(versao AS CHAR) AS versao,
+            CAST(alterado_em AS CHAR) AS alterado, CAST(excluido_em AS CHAR) AS excluido
+       FROM registro_assistencial_resposta WHERE registro_assistencial_id = ? ORDER BY id`,
+    [registro],
+  );
+  const valores = (x: Record<string, unknown>) =>
+    Object.keys(x)
+      .sort()
+      .map((k) => [k, x[k] ?? null]);
+  return createHash('sha256')
+    .update(JSON.stringify([valores(r), s.map(valores)]), 'utf8')
+    .digest('hex');
+}
+
+/** Lançamento de cada rascunho: o do primeiro da cadeia (gravado na trilha de cada salvamento), como a memória. */
+export async function lancamentosDosRascunhos(
+  l: Pick<Leitor, 'consultar'>,
+  estabelecimento: number,
+  ids: readonly number[],
+): Promise<Map<number, string>> {
+  const m = new Map<number, string>();
+  for (const t of await trilhasDe(l, estabelecimento, 'registro_assistencial_rascunho', ids, [
+    OP_SALVAR_RASCUNHO,
+  ])) {
+    const v = t.dados?.['lancadoEm'];
+    if (typeof v === 'string' && !m.has(t.entidadeId)) m.set(t.entidadeId, v);
+  }
+  return m;
 }
 
 // ── Classe ───────────────────────────────────────────────────────────────────────────────────────────
@@ -499,8 +649,17 @@ export class RegistroPropriaGravacao {
     return this.ler(c, 'podeGravar', async (l, est) => {
       const p = await profissionalDaSessao(l, est.id, { login });
       if (!p)
-        return { pode: false, codigo: 'sem-profissional', motivo: 'A conta da sessão não está ligada a um profissional.' };
-      if (!p.ativo) return { pode: false, codigo: 'profissional-inativo', motivo: 'O profissional da sessão não está ativo.' };
+        return {
+          pode: false,
+          codigo: 'sem-profissional',
+          motivo: 'A conta da sessão não está ligada a um profissional.',
+        };
+      if (!p.ativo)
+        return {
+          pode: false,
+          codigo: 'profissional-inativo',
+          motivo: 'O profissional da sessão não está ativo.',
+        };
       if (!p.inscricaoAtiva)
         return {
           pode: false,
@@ -530,7 +689,11 @@ export class RegistroPropriaGravacao {
     });
   }
 
-  private rascunhoLido(x: Record<string, unknown>, fuso: string): RascunhoLido {
+  private rascunhoLido(
+    x: Record<string, unknown>,
+    fuso: string,
+    lancados: ReadonlyMap<number, string>,
+  ): RascunhoLido {
     const linhas = linhasDoRascunho(x['respostas']);
     return {
       id: num(x['id']),
@@ -543,7 +706,8 @@ export class RegistroPropriaGravacao {
       atendimento: num(x['atendimento_id']),
       cbo: num(x['autor_profissional_id']),
       dataHoraClinica: comMs(dataHora(x['data_hora_clinica'], fuso)),
-      lancadoEm: comMs(dataHora(x['criado_em'], fuso)),
+      // O lançamento é o do primeiro rascunho da cadeia (a versão encadeada é o mesmo lançamento).
+      lancadoEm: comMs(dataHora(lancados.get(num(x['id'])) ?? x['criado_em'], fuso)),
       justificativa: textoOuNull(x['justificativa_retroativo']),
       respostas: new Set(linhas.filter(temValor).map((y) => y.ordem)).size,
       versao: versaoDoRascunho(num(x['id']), num(x['versao'])),
@@ -562,7 +726,12 @@ export class RegistroPropriaGravacao {
           ORDER BY r.id DESC LIMIT ${TETO_RASCUNHOS}`,
         [est.id, ...cbos],
       );
-      return linhas.map((x) => this.rascunhoLido(x, est.fuso));
+      const lancados = await lancamentosDosRascunhos(
+        l,
+        est.id,
+        linhas.map((x) => num(x['id'])),
+      );
+      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados));
     });
   }
 
@@ -575,22 +744,32 @@ export class RegistroPropriaGravacao {
           ORDER BY r.id DESC LIMIT ${TETO_RASCUNHOS}`,
         [est.id, paciente, modelo],
       );
-      return linhas.map((x) => this.rascunhoLido(x, est.fuso));
+      const lancados = await lancamentosDosRascunhos(
+        l,
+        est.id,
+        linhas.map((x) => num(x['id'])),
+      );
+      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados));
     });
   }
 
   lerRascunho(
     c: ContextoRegistro,
     id: number,
-  ): Promise<{ rascunho: RascunhoLido; linhas: LinhaRespostaLida[]; aberto: boolean; substituido: boolean } | null> {
+  ): Promise<{
+    rascunho: RascunhoLido;
+    linhas: LinhaRespostaLida[];
+    aberto: boolean;
+    substituido: boolean;
+  } | null> {
     return this.ler(c, 'lerRascunho', async (l, est) => {
-      const x = await l.uma(`${SQL_RASCUNHO} WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`, [
-        id,
-        est.id,
-      ]);
+      const x = await l.uma(
+        `${SQL_RASCUNHO} WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+        [id, est.id],
+      );
       if (!x) return null;
       return {
-        rascunho: this.rascunhoLido(x, est.fuso),
+        rascunho: this.rascunhoLido(x, est.fuso, await lancamentosDosRascunhos(l, est.id, [id])),
         linhas: linhasDoRascunho(x['respostas']).map((y) => ({
           ...y,
           procedimento: null,
@@ -606,7 +785,7 @@ export class RegistroPropriaGravacao {
   private async respostas(l: Leitor, modelo: number, registros: readonly number[]) {
     const porRegistro = new Map<number, LinhaRespostaLida[]>();
     if (!registros.length) return porRegistro;
-    const campos = new Map((await camposDoModelo(l, modelo)).map((x) => [x.id, x] as const));
+    const campos = new Map((await camposDoModelo(l, modelo, true)).map((x) => [x.id, x] as const));
     const linhas = await l.consultar(
       `SELECT registro_assistencial_id, modelo_campo_id, tipo_valor, valor_texto, valor_numero, valor_data, valor_hora,
               valor_booleano, modelo_campo_opcao_id, codigo_cid10, unidade, observacao, autopreenchido
@@ -652,7 +831,9 @@ export class RegistroPropriaGravacao {
     ordem: string,
   ): Promise<{ registro: number; dataHora: string | null; linhas: LinhaRespostaLida[] }[]> {
     return this.ler(c, 'historico', async (l, est) => {
-      const campos = (await camposDoModelo(l, modelo)).filter((x) => x.ordem === ordem).map((x) => x.id);
+      const campos = (await camposDoModelo(l, modelo, true))
+        .filter((x) => x.ordem === ordem)
+        .map((x) => x.id);
       if (!campos.length) return [];
       const regs = await l.consultar(
         `SELECT r.id, r.data_hora_clinica FROM registro_assistencial r
@@ -717,8 +898,10 @@ export class RegistroPropriaGravacao {
   }
 
   /**
-   * Prova de integridade: a impressão digital guardada na finalização. As respostas são só inclusão; resposta alterada
-   * ou excluída depois da gravação (fora deste sistema) faz o "atual" divergir do guardado. Registro sem prova: nulos.
+   * Prova de integridade: a impressão digital guardada na finalização. O "atual" diverge do guardado quando o selo do
+   * conteúdo (seloDoConteudo, guardado na trilha da gravação) não confere com o recalculado agora, ou quando alguma
+   * resposta foi alterada ou excluída depois da gravação. As marcas de suporte técnico saem da trilha da gravação e da
+   * suspensão. Registro sem prova (de migração): nulos.
    */
   prova(c: ContextoRegistro, registro: number): Promise<ProvaLida> {
     return this.ler(c, 'prova', async (l, est) => {
@@ -733,11 +916,22 @@ export class RegistroPropriaGravacao {
       );
       const hash = textoOuNull(x?.['impressao_digital']);
       if (!x || !hash) return { guardado: null, hashConteudo: null, atual: null, comoSuporte: [] };
+      const trilhas = await trilhasDe(
+        l,
+        est.id,
+        'registro_assistencial',
+        [registro],
+        [OP_REGISTRAR, OP_SUSPENDER],
+      );
+      // O selo guardado na trilha (encadeada) da gravação, recalculado sobre o que está gravado agora.
+      const selo = trilhas.find((t) => t.operacao === OP_REGISTRAR)?.dados?.['selo'];
+      const alteradoFora =
+        num(x['alteradas']) > 0 || (typeof selo === 'string' && selo !== (await seloDoConteudo(l, registro)));
       return {
         guardado: hash,
         hashConteudo: hash,
-        atual: num(x['alteradas']) > 0 ? `${hash.slice(0, 63)}x` : hash,
-        comoSuporte: [],
+        atual: alteradoFora ? `${hash.slice(0, 63)}x` : hash,
+        comoSuporte: marcasDeSuporte(trilhas),
       };
     });
   }
@@ -830,7 +1024,12 @@ export class RegistroPropriaGravacao {
     ctx: ContextoOperacao,
     nome: string,
     critica: boolean,
-    fn: (tx: TxOperacao, est: Estabelecimento, prof: ProfissionalDaSessao) => Promise<{ valor: T; alvo: AlvoGravado }>,
+    conteudo: unknown,
+    fn: (
+      tx: TxOperacao,
+      est: Estabelecimento,
+      prof: ProfissionalDaSessao,
+    ) => Promise<{ valor: T; alvo: AlvoGravado }>,
   ): Promise<T> {
     const cliente = ctx.cliente || c.cliente || this.cliente;
     const est = await this.ler(c, 'estabelecimento', async (_l, e) => e);
@@ -838,7 +1037,8 @@ export class RegistroPropriaGravacao {
     const op = definirOperacao({
       nome,
       tabelas: [...TABELAS_REGISTRO],
-      entrada: z.object({ chave: z.string() }),
+      // O conteúdo entra no hash da idempotência: a mesma chave com outro conteúdo é 409 (idempotencia-divergente).
+      entrada: z.object({ chave: z.string(), conteudo: z.unknown() }),
       critica,
       gravar: async (tx) => {
         const prof = await profissionalDaSessao(tx, est.id, {
@@ -846,7 +1046,12 @@ export class RegistroPropriaGravacao {
           login: loginDaOperacao(ctx),
         });
         if (!prof || !prof.ativo)
-          throw recusa(409, 'profissional-sem-cbo', 'Operação recusada', 'Só o profissional da sessão registra.');
+          throw recusa(
+            409,
+            'profissional-sem-cbo',
+            'Operação recusada',
+            'Só o profissional da sessão registra.',
+          );
         const r = await fn(tx, est, prof);
         alvo = r.alvo;
         return { valor: r.valor } as unknown as ResultadoOperacao;
@@ -858,7 +1063,7 @@ export class RegistroPropriaGravacao {
     const r = await this.executor.executar(
       op,
       cliente,
-      { chave },
+      { chave, conteudo: JSON.parse(JSON.stringify(conteudo ?? null)) as unknown },
       { ...ctx, cliente, estabelecimento: est.id, chaveIdempotencia: chave },
     );
     return (r.resultado as unknown as { valor: T }).valor;
@@ -880,9 +1085,14 @@ export class RegistroPropriaGravacao {
           'O registro com parecer, classificação de risco ou coassinatura ainda não grava no banco próprio.',
         ),
       );
-    return this.gravar(c, ctx, 'pep.registro.registrar', false, async (tx, est, prof) => {
+    return this.gravar(c, ctx, OP_REGISTRAR, false, conteudoDoRegistro(e), async (tx, est, prof) => {
       if (prof.profissional !== e.cbo)
-        throw recusa(409, 'profissional-sem-cbo', 'Operação recusada', 'Só o profissional da sessão registra.');
+        throw recusa(
+          409,
+          'profissional-sem-cbo',
+          'Operação recusada',
+          'Só o profissional da sessão registra.',
+        );
       exigirInscricao(prof);
       await conferirAtendimento(tx, est.id, e.atendimento, e.paciente);
       const modelo = await modeloPublicado(tx, e.modelo);
@@ -939,6 +1149,7 @@ export class RegistroPropriaGravacao {
           sequencia: i + 1,
           ...r,
         });
+      const selo = await seloDoConteudo(tx, id);
       if (rascunho)
         await tx.alterar('registro_assistencial_rascunho', rascunho.id, rascunho.versao, {
           situacao: 'finalizado',
@@ -950,7 +1161,13 @@ export class RegistroPropriaGravacao {
         alvo: {
           tabela: 'registro_assistencial',
           id,
-          dados: { paciente: e.paciente, modelo: e.modelo, respostas: respostas.length, comoSuporte: !!e.comoSuporte },
+          dados: {
+            paciente: e.paciente,
+            modelo: e.modelo,
+            respostas: respostas.length,
+            comoSuporte: !!e.comoSuporte,
+            selo,
+          },
           motivo: e.justificativaRetroativo ?? null,
         },
       };
@@ -962,9 +1179,14 @@ export class RegistroPropriaGravacao {
     e: GravacaoRascunho,
     ctx: ContextoOperacao,
   ): Promise<{ rascunho: number; versao: string; trilha: string | null }> {
-    return this.gravar(c, ctx, 'pep.registro.salvar-rascunho', false, async (tx, est, prof) => {
+    return this.gravar(c, ctx, OP_SALVAR_RASCUNHO, false, conteudoDoRascunho(e), async (tx, est, prof) => {
       if (prof.profissional !== e.cbo)
-        throw recusa(409, 'profissional-sem-cbo', 'Operação recusada', 'Só o profissional da sessão registra.');
+        throw recusa(
+          409,
+          'profissional-sem-cbo',
+          'Operação recusada',
+          'Só o profissional da sessão registra.',
+        );
       exigirInscricao(prof);
       await conferirAtendimento(tx, est.id, e.atendimento, e.paciente);
       await modeloPublicado(tx, e.modelo);
@@ -977,6 +1199,10 @@ export class RegistroPropriaGravacao {
           })
         : null;
       const agora = new Date();
+      // A versão encadeada é o mesmo lançamento: herda o do primeiro rascunho da cadeia (como a memória).
+      const lancadoEm = anterior
+        ? ((await lancamentosDosRascunhos(tx, est.id, [anterior.id])).get(anterior.id) ?? anterior.criadoEm)
+        : agora.toISOString();
       if (anterior)
         await tx.alterar('registro_assistencial_rascunho', anterior.id, anterior.versao, {
           situacao: 'arquivado',
@@ -1001,7 +1227,7 @@ export class RegistroPropriaGravacao {
         alvo: {
           tabela: 'registro_assistencial_rascunho',
           id,
-          dados: { paciente: e.paciente, modelo: e.modelo, anterior: anterior?.id ?? null },
+          dados: { paciente: e.paciente, modelo: e.modelo, anterior: anterior?.id ?? null, lancadoEm },
           motivo: null,
         },
       };
@@ -1009,35 +1235,64 @@ export class RegistroPropriaGravacao {
   }
 
   async descartarRascunho(c: ContextoRegistro, e: DescarteRascunho, ctx: ContextoOperacao): Promise<void> {
-    await this.gravar(c, ctx, 'pep.registro.descartar-rascunho', false, async (tx, est, prof) => {
-      if (prof.profissional !== e.cbo)
-        throw recusa(409, 'profissional-sem-cbo', 'Operação recusada', 'Só o profissional da sessão registra.');
-      const x = await tx.uma(
-        'SELECT paciente_id, modelo_documento_clinico_id FROM registro_assistencial_rascunho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [e.rascunho, est.id],
-      );
-      if (!x) throw recusa(404, 'registro-inexistente', 'Rascunho não encontrado', 'O rascunho não existe mais.');
-      const r = await rascunhoAberto(tx, est.id, { id: e.rascunho, versao: e.versao }, e.cbo, {
-        paciente: num(x['paciente_id']),
-        modelo: num(x['modelo_documento_clinico_id']),
-      });
-      await tx.alterar('registro_assistencial_rascunho', r.id, r.versao, {
-        situacao: 'descartado',
-        encerrado_em: new Date(),
-      });
-      return {
-        valor: undefined,
-        alvo: { tabela: 'registro_assistencial_rascunho', id: r.id, dados: { paciente: r.paciente }, motivo: null },
-      };
-    });
+    await this.gravar(
+      c,
+      ctx,
+      OP_DESCARTAR_RASCUNHO,
+      false,
+      { rascunho: e.rascunho, versao: e.versao, cbo: e.cbo },
+      async (tx, est, prof) => {
+        if (prof.profissional !== e.cbo)
+          throw recusa(
+            409,
+            'profissional-sem-cbo',
+            'Operação recusada',
+            'Só o profissional da sessão registra.',
+          );
+        const x = await tx.uma(
+          'SELECT paciente_id, modelo_documento_clinico_id FROM registro_assistencial_rascunho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [e.rascunho, est.id],
+        );
+        if (!x)
+          throw recusa(404, 'registro-inexistente', 'Rascunho não encontrado', 'O rascunho não existe mais.');
+        const r = await rascunhoAberto(tx, est.id, { id: e.rascunho, versao: e.versao }, e.cbo, {
+          paciente: num(x['paciente_id']),
+          modelo: num(x['modelo_documento_clinico_id']),
+        });
+        await tx.alterar('registro_assistencial_rascunho', r.id, r.versao, {
+          situacao: 'descartado',
+          encerrado_em: new Date(),
+        });
+        return {
+          valor: undefined,
+          alvo: {
+            tabela: 'registro_assistencial_rascunho',
+            id: r.id,
+            dados: { paciente: r.paciente },
+            motivo: null,
+          },
+        };
+      },
+    );
   }
 
   async suspender(c: ContextoRegistro, e: SuspensaoEvolucao, ctx: ContextoOperacao): Promise<void> {
     if (ctx.reautenticadoEm === undefined)
       throw recusa(401, 'reautenticacao-necessaria', 'Confirme a senha', 'Confirme a senha para suspender.');
-    await this.gravar(c, ctx, 'pep.registro.suspender', true, async (tx, est, prof) => {
+    const conteudo = {
+      registro: e.registro,
+      cbo: e.cbo,
+      justificativa: e.justificativa,
+      comoSuporte: !!e.comoSuporte,
+    };
+    await this.gravar(c, ctx, OP_SUSPENDER, true, conteudo, async (tx, est, prof) => {
       if (prof.profissional !== e.cbo)
-        throw recusa(409, 'profissional-sem-cbo', 'Operação recusada', 'Só o profissional da sessão registra.');
+        throw recusa(
+          409,
+          'profissional-sem-cbo',
+          'Operação recusada',
+          'Só o profissional da sessão registra.',
+        );
       const [r] = await tx.consultarParaAtualizar(
         `SELECT id, paciente_id, autor_profissional_id, suspenso_em, versao FROM registro_assistencial
           WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
@@ -1153,17 +1408,31 @@ function exigirInscricao(p: ProfissionalDaSessao): void {
     );
 }
 
-async function conferirAtendimento(l: Consultor, est: number, atendimento: number, paciente: number): Promise<void> {
+async function conferirAtendimento(
+  l: Consultor,
+  est: number,
+  atendimento: number,
+  paciente: number,
+): Promise<void> {
   const a = await l.uma(
     'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [atendimento, est],
   );
-  if (!a) throw recusa(404, 'atendimento-inexistente', 'Atendimento não encontrado', 'O atendimento não existe.');
+  if (!a)
+    throw recusa(404, 'atendimento-inexistente', 'Atendimento não encontrado', 'O atendimento não existe.');
   if (num(a['paciente_id']) !== paciente)
-    throw recusa(409, 'atendimento-de-outro-paciente', 'Operação recusada', 'O atendimento é de outro paciente.');
+    throw recusa(
+      409,
+      'atendimento-de-outro-paciente',
+      'Operação recusada',
+      'O atendimento é de outro paciente.',
+    );
 }
 
-async function modeloPublicado(l: Consultor, modelo: number): Promise<{ versao: number; tipo: number | null }> {
+async function modeloPublicado(
+  l: Consultor,
+  modelo: number,
+): Promise<{ versao: number; tipo: number | null }> {
   const m = await l.uma(
     `SELECT publicada_modelo_documento_versao_id AS versao, tipo_documento_clinico_id AS tipo
        FROM modelo_documento_clinico
@@ -1171,7 +1440,12 @@ async function modeloPublicado(l: Consultor, modelo: number): Promise<{ versao: 
     [modelo],
   );
   if (!m)
-    throw recusa(409, 'modelo-indisponivel', 'Operação recusada', 'O modelo não está publicado para registro.');
+    throw recusa(
+      409,
+      'modelo-indisponivel',
+      'Operação recusada',
+      'O modelo não está publicado para registro.',
+    );
   return { versao: num(m['versao']), tipo: numOuNull(m['tipo']) };
 }
 
@@ -1182,10 +1456,10 @@ async function rascunhoAberto(
   ref: { id: number; versao: string },
   cbo: number,
   de: { paciente: number; modelo: number; atendimento?: number },
-): Promise<{ id: number; versao: number; paciente: number; corrige: number | null }> {
+): Promise<{ id: number; versao: number; paciente: number; corrige: number | null; criadoEm: string }> {
   const [r] = await tx.consultarParaAtualizar(
     `SELECT id, paciente_id, modelo_documento_clinico_id, atendimento_id, autor_profissional_id, situacao, origem,
-            versao, corrige_registro_assistencial_id
+            versao, corrige_registro_assistencial_id, criado_em
        FROM registro_assistencial_rascunho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [ref.id, est],
   );
@@ -1202,7 +1476,12 @@ async function rascunhoAberto(
       { colunas: ['rascunho'] },
     );
   if (r['origem'] !== 'sistema')
-    throw recusa(409, 'rascunho-de-outro-sistema', 'Operação recusada', 'Rascunho começado no outro sistema.');
+    throw recusa(
+      409,
+      'rascunho-de-outro-sistema',
+      'Operação recusada',
+      'Rascunho começado no outro sistema.',
+    );
   if (num(r['autor_profissional_id']) !== cbo)
     throw recusa(409, 'rascunho-de-outro', 'Operação recusada', 'Rascunho de outro profissional.');
   if (num(r['paciente_id']) !== de.paciente || num(r['modelo_documento_clinico_id']) !== de.modelo)
@@ -1214,16 +1493,59 @@ async function rascunhoAberto(
     versao: num(r['versao']),
     paciente: num(r['paciente_id']),
     corrige: numOuNull(r['corrige_registro_assistencial_id']),
+    criadoEm: instanteIso(r['criado_em']),
+  };
+}
+
+/** Instante do banco (Date ou texto UTC) em ISO. */
+function instanteIso(v: unknown): string {
+  if (v instanceof Date) return v.toISOString();
+  const d = new Date(`${String(v).replace(' ', 'T')}Z`);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+/** O conteúdo da gravação do registro que entra no hash da idempotência (a representação deriva dele). */
+export function conteudoDoRegistro(e: GravacaoEvolucao): unknown {
+  return {
+    paciente: e.paciente,
+    atendimento: e.atendimento,
+    modelo: e.modelo,
+    cbo: e.cbo,
+    dataHoraClinica: e.dataHoraClinica,
+    justificativaRetroativo: e.justificativaRetroativo ?? null,
+    linhas: e.linhas,
+    corrige: e.corrige ?? null,
+    rascunho: e.rascunho ?? null,
+    comoSuporte: !!e.comoSuporte,
+  };
+}
+
+/** O conteúdo do salvamento do rascunho que entra no hash da idempotência. */
+export function conteudoDoRascunho(e: GravacaoRascunho): unknown {
+  return {
+    paciente: e.paciente,
+    atendimento: e.atendimento,
+    modelo: e.modelo,
+    cbo: e.cbo,
+    dataHoraClinica: e.dataHoraClinica,
+    justificativaRetroativo: e.justificativaRetroativo ?? null,
+    linhas: e.linhas,
+    corrige: e.corrige ?? null,
+    rascunho: e.rascunho ?? null,
   };
 }
 
 /** Texto do registro para busca e leitura: título do campo e valor, uma linha por resposta. */
-function textoConsolidado(respostas: readonly RespostaTipada[], campos: ReadonlyMap<string, CampoOrdenado>): string {
+function textoConsolidado(
+  respostas: readonly RespostaTipada[],
+  campos: ReadonlyMap<string, CampoOrdenado>,
+): string {
   const porId = new Map([...campos.values()].map((c) => [c.id, c] as const));
   return respostas
     .map((r) => {
       const c = porId.get(r.modelo_campo_id);
-      const opcao = r.modelo_campo_opcao_id === null ? null : c?.opcoes.find((o) => o.id === r.modelo_campo_opcao_id);
+      const opcao =
+        r.modelo_campo_opcao_id === null ? null : c?.opcoes.find((o) => o.id === r.modelo_campo_opcao_id);
       const v =
         opcao?.rotulo ??
         (r.valor_booleano === null ? null : r.valor_booleano ? 'Sim' : 'Não') ??
