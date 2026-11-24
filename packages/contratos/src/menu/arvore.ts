@@ -5,7 +5,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
 // estão neste repositório); a contagem do cabeçalho acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":407,"M":189,"P":57,"N":161};
+// F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":408,"M":189,"P":57,"N":162};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -119,6 +120,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.construtor-de-formularios-modelos-perguntas-versoes","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Construtor de formulários"],"titulo":"Construtor de formulários","selo":"M","fase":2,"rota":"/pep/admin/modelos","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.modelos-de-impressao-e-cabecalhos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Modelos de impressão e cabeçalhos"],"titulo":"Modelos de impressão e cabeçalhos","selo":"M","fase":2,"rota":"/pep/admin/impressao","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.tipos-de-documento-fluxos-de-situacao-e-avisos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Tipos de documento, fluxos de situação e avisos"],"titulo":"Tipos de documento, fluxos de situação e avisos","selo":"M","fase":2,"rota":"/pep/admin/tipos","permissao":"pep.admin.ler"},
+  {"id":"pep.administracao-do-pep.grupos-comparativos-de-resultados","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Grupos comparativos de resultados"],"titulo":"Grupos comparativos de resultados","selo":"N","fase":3,"rota":"/pep/resultados/grupos","permissao":"pep.admin.editar"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
   {"id":"enfermagem.horarios-padrao-de-medicacao-por-unidade","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Horários-padrão de medicação por unidade"],"titulo":"Horários-padrão de medicação por unidade","selo":"M","fase":2,"rota":"/cadastros/prescricao/horarios-padrao","permissao":"pep.gradeHorario.ler"},

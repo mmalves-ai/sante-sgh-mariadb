@@ -19,6 +19,11 @@ export const mensagensResultadosGrupos = {
   semGrupo: 'Nenhum grupo cadastrado. A administração do prontuário cadastra os grupos.',
   resumo: '{fora} fora da faixa · {criticos} críticos',
   preliminar: 'preliminar (conferido, ainda não liberado)',
+  preliminarFora: 'O valor preliminar não entra na tendência nem nas contagens.',
+  recorteAtendimento: 'Só o atendimento atual.',
+  recorteTodos: 'Todos os atendimentos do paciente.',
+  recorteSemAtendimento:
+    'O filtro pede só o atendimento atual, mas o paciente não tem atendimento em curso: mostrando todos os atendimentos.',
   pendentes: 'Pedidos sem resultado liberado',
   salvarFiltro: 'Salvar como filtro',
   nomeFiltro: 'Nome do filtro',

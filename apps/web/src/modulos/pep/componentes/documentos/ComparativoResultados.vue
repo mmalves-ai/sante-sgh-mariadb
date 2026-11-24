@@ -60,7 +60,10 @@ onMounted(async () => {
   }
   await carregar();
 });
-watch(() => props.paciente, carregar);
+watch(
+  () => [props.paciente, props.atendimento],
+  () => void carregar(),
+);
 
 function escolherGrupo(id: number | null): void {
   grupo.value = id;
@@ -203,8 +206,24 @@ const celula = computed(() => {
     <template v-else-if="dados">
       <p v-if="!dados.linhas.length" role="status" data-testid="comparativo-vazio">{{ k('vazio') }}</p>
       <template v-else>
+        <SanteAlerta
+          v-if="dados.recorte === 'sem-atendimento'"
+          variante="aviso"
+          data-testid="comparativo-recorte-sem-atendimento"
+          >{{ k('recorteSemAtendimento') }}</SanteAlerta
+        >
+        <p v-else class="recorte" data-testid="comparativo-recorte" :data-recorte="dados.recorte">
+          {{ dados.recorte === 'atendimento' ? k('recorteAtendimento') : k('recorteTodos') }}
+        </p>
         <p class="resumo" data-testid="comparativo-resumo">
           {{ k('resumo', { fora: dados.foraDaFaixa, criticos: dados.criticos }) }}
+        </p>
+        <p
+          v-if="dados.linhas.some((l) => l.celulas.some((c) => c.preliminar))"
+          class="resumo"
+          data-testid="comparativo-nota-preliminar"
+        >
+          * {{ k('preliminar') }}. {{ k('preliminarFora') }}
         </p>
         <div class="rolagem">
           <table data-testid="comparativo-tabela">

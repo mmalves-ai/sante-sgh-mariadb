@@ -13,19 +13,21 @@ import { PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'l128gr';
+/** Segundo estabelecimento sintético: o mesmo paciente com resultado lá não pode aparecer no comparativo daqui. */
+const P2 = 'l128gs';
 const DIA = 86_400_000;
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+  const est = `(SELECT id FROM estabelecimento WHERE codigo IN ('${P}', '${P2}'))`;
   const req = `(SELECT id FROM requisicao_exame WHERE estabelecimento_id IN ${est})`;
   const item = `(SELECT id FROM exame_item WHERE requisicao_exame_id IN ${req})`;
   await e.executar(
     `DELETE FROM resultado_analito WHERE resultado_exame_id IN (SELECT id FROM resultado_exame WHERE exame_item_id IN ${item})`,
-    [P],
   );
-  await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN ${item}`, [P]);
-  await e.executar(`DELETE FROM exame_item WHERE requisicao_exame_id IN ${req}`, [P]);
-  await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN ${item}`);
+  await e.executar(`DELETE FROM exame_item WHERE requisicao_exame_id IN ${req}`);
+  await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`);
+  await e.executar(`DELETE FROM usuario_vinculo_profissional WHERE estabelecimento_id IN ${est}`);
   await e.executar(
     "DELETE FROM painel_resultado_grupo_exame WHERE painel_resultado_grupo_id IN (SELECT id FROM painel_resultado_grupo WHERE nome LIKE 'l128 %')",
   );
@@ -36,14 +38,15 @@ async function limpar(e: Escritor): Promise<void> {
   ]);
   await e.executar('DELETE FROM exame WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM analito WHERE codigo LIKE ?', [`${P}%`]);
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
 interface Massa {
   est: number;
   usuario: number;
   paciente: number;
+  prof: number;
   exA: number;
   exB: number;
   eaCreat: number;
@@ -91,6 +94,16 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
          VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
         [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
       );
+      const est2 = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
+        [P2, `Hospital sintético ${P2}`, `Hospital sintético ${P2} (fictício)`, agora],
+      );
+      const outroPac = await e.uma(
+        'SELECT MIN(id) AS id FROM paciente WHERE excluido_em IS NULL AND id > ?',
+        [paciente['id']],
+      );
+      if (!outroPac?.['id']) throw new Error('O cliente de teste precisa de dois pacientes.');
       const exame = (sufixo: string, nome: string) =>
         e.inserir(
           "INSERT INTO exame (codigo, sigla, nome, tipo_servico, criado_em) VALUES (?, ?, ?, 'laboratorio', ?)",
@@ -128,12 +141,15 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
           quando: Date,
           situacao: 'liberado' | 'conferido' | null,
           valores: { analito: number; valor: number; min?: number; max?: number; critMax?: number }[],
+          onde: { est?: number; pac?: number } = {},
         ) => {
+          const estR = onde.est ?? est;
+          const pacR = onde.pac ?? pac;
           const rq = await e.inserir(
             `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, setor_diagnostico_id,
                solicitante_profissional_id, fonte_pagadora_id, solicitado_em, criado_em)
              VALUES (?, ?, ?, ?, 1, ?, 1, ?, ?)`,
-            [est, `${P}-${++n}`, pac, atend, prof['id'], quando, agora],
+            [estR, `${P}-${++n}`, pacR, atend, prof['id'], quando, agora],
           );
           const it = await e.inserir(
             'INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, criado_em) VALUES (?, 1, ?, ?)',
@@ -143,7 +159,7 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
           const re = await e.inserir(
             `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, resultado_em, situacao,
                liberado_em, autoliberado, criado_em) VALUES (?, ?, 1, ?, ?, ?, TRUE, ?)`,
-            [it, pac, quando, situacao, situacao === 'liberado' ? quando : null, agora],
+            [it, pacR, quando, situacao, situacao === 'liberado' ? quando : null, agora],
           );
           for (const [i, v] of valores.entries())
             await e.inserir(
@@ -173,6 +189,11 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
         await resultado(exA, 9128002, h(60), 'liberado', [
           { analito: anCreat, valor: 0.9, min: 0.6, max: 1.2 },
         ]);
+        // Isolamento: o mesmo exame de outro paciente aqui e do mesmo paciente no outro estabelecimento.
+        await resultado(exA, 9128003, h(1), 'liberado', [{ analito: anCreat, valor: 55.5 }], {
+          pac: Number(outroPac['id']),
+        });
+        await resultado(exA, 9128004, h(1.5), 'liberado', [{ analito: anCreat, valor: 99.9 }], { est: est2 });
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
@@ -180,6 +201,7 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
         est,
         usuario: Number(usuario['id']),
         paciente: pac,
+        prof: Number(prof['id']),
         exA,
         exB,
         eaCreat,
@@ -199,6 +221,7 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
   }, 120_000);
 
   let grupo = 0;
+  let filtroTudo = 0;
 
   it('grupo: itens em ordem, reordenar, tirar item, versão velha e analito de outro exame recusados', async () => {
     const base = { nome: 'l128 Renal e potássio', tipoExame: 'laboratorio' };
@@ -323,10 +346,26 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
     ).toBe('nao-encontrado');
     await porta.excluirFiltro(ctx(), f1.id, 2);
     expect(await ler('SELECT id FROM filtro_resultado_usuario WHERE id = ?', [f1.id])).toEqual([]);
+    filtroTudo = f2.id;
+    // A trilha da operação fica: o grupo (criação e três alterações) e o filtro, mesmo o já removido.
+    const trilha = async (entidade: string, id: number) =>
+      Number(
+        (
+          await ler<Record<string, unknown>>(
+            'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = ? AND entidade_id = ?',
+            [m.est, entidade, id],
+          )
+        )[0]!['n'],
+      );
+    expect(await trilha('painel_resultado_grupo', grupo)).toBeGreaterThanOrEqual(4);
+    expect(await trilha('filtro_resultado_usuario', f1.id)).toBeGreaterThanOrEqual(2);
+    expect(await trilha('filtro_resultado_usuario', f2.id)).toBeGreaterThanOrEqual(1);
   });
 
   it('comparativo: atendimento, período, faixa, crítico, tendência, preliminar e pendentes', async () => {
     const doAtd = await porta.comparativo(ctx(), m.paciente, { grupo, atendimento: 9128001 });
+    expect(doAtd.recorte).toBe('atendimento');
+    expect(doAtd.atendimento).toBe(9128001);
     expect(doAtd.linhas.map((l) => l.rotulo)).toEqual(['Creatinina sintética', 'Ureia sintética', 'K']);
     const creat = doAtd.linhas[0]!;
     expect(creat.celulas.map((c) => c.situacao)).toEqual(['normal', 'acima']);
@@ -339,16 +378,78 @@ describe.skipIf(SEM_BANCO)('PortaGruposResultadoPropria contra o MariaDB (contra
 
     // Sem atendimento e sem período: entra a coleta antiga; com 30 dias, sai.
     const todos = await porta.comparativo(ctx(), m.paciente, { grupo });
+    // Escopo "atual" sem atendimento em curso: a resposta diz que mostrou todos (a tela avisa).
+    expect(todos.recorte).toBe('sem-atendimento');
     expect(todos.linhas[0]!.celulas).toHaveLength(3);
+    // Isolamento: nem o outro paciente (55,5) nem o mesmo paciente no outro estabelecimento (99,9) entram.
+    const valoresTodos = todos.linhas.flatMap((l) => l.celulas.map((c) => c.numero));
+    expect(valoresTodos).not.toContain(55.5);
+    expect(valoresTodos).not.toContain(99.9);
     const recorte = await porta.comparativo(ctx(), m.paciente, { grupo, dias: 30 });
     expect(recorte.linhas[0]!.celulas).toHaveLength(2);
 
     // O filtro padrão ("l128 Tudo"): além dos liberados (o conferido vem como preliminar) e os pedidos pendentes.
     const padrao = await porta.comparativo(ctx(), m.paciente, {});
     expect(padrao.filtroAplicado?.nome).toBe('l128 Tudo');
+    expect(padrao.recorte).toBe('todos');
     const pot = padrao.linhas.find((l) => l.analito === m.anPot)!;
     expect(pot.celulas.map((c) => c.preliminar)).toEqual([false, true]);
+    // O preliminar (5,9 conferido) não move a tendência nem entra nas contagens: só um potássio liberado.
+    expect(pot.tendencia).toBeNull();
+    expect(pot.variacao).toBeNull();
+    expect(padrao.criticos).toBe(1);
     // Pendentes: o pedido sem resultado e o conferido ainda não liberado.
     expect(padrao.pendentes).toHaveLength(2);
+  });
+  it('recortes e acesso: filtro de outro usuário, grupo fora de uso e só os meus pedidos (com e sem vínculo)', async () => {
+    // O filtro é do usuário: outro usuário não o aplica.
+    expect(
+      (
+        await erro(
+          porta.comparativo({ ...ctx(), usuario: m.usuario + 999_999 }, m.paciente, { filtro: filtroTudo }),
+        )
+      ).codigo,
+    ).toBe('nao-encontrado');
+
+    // Grupo fora de uso não abre no comparativo (nem escolhido, nem pelo filtro).
+    const { id: inativo } = await porta.gravarGrupo(ctx(), {
+      nome: 'l128 Fora de uso',
+      tipoExame: 'laboratorio',
+      ativo: false,
+      itens: [{ exame: m.exA }],
+    });
+    expect((await erro(porta.comparativo(ctx(), m.paciente, { grupo: inativo }))).codigo).toBe(
+      'nao-encontrado',
+    );
+    const { id: fInativo } = await porta.gravarFiltro(ctx(), {
+      nome: 'l128 Só inativo',
+      escopo: 'todos',
+      grupos: [inativo],
+    });
+    expect((await porta.comparativo(ctx(), m.paciente, { filtro: fInativo })).linhas).toEqual([]);
+
+    // Só os meus pedidos: sem vínculo de profissional (ou com vínculo vencido), nenhum pedido é do usuário.
+    const { id: meus } = await porta.gravarFiltro(ctx(), {
+      nome: 'l128 Meus',
+      escopo: 'todos',
+      somenteMeusPedidos: true,
+      grupos: [grupo],
+    });
+    expect((await porta.comparativo(ctx(), m.paciente, { filtro: meus })).linhas).toEqual([]);
+    const dia = (d: number) => new Date(agora.getTime() + d * DIA).toISOString().slice(0, 10);
+    const vincular = (inicio: string, fim: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `vinculo-${P}` }, (e) =>
+        e.inserir(
+          `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio,
+             vigencia_fim, criado_em) VALUES (?, ?, ?, ?, ?, ?)`,
+          [m.usuario, m.est, m.prof, inicio, fim, agora],
+        ),
+      );
+    await vincular(dia(-90), dia(-30));
+    expect((await porta.comparativo(ctx(), m.paciente, { filtro: meus })).linhas).toEqual([]);
+    await vincular(dia(-10), null);
+    const meusLidos = await porta.comparativo(ctx(), m.paciente, { filtro: meus });
+    expect(meusLidos.linhas.map((l) => l.rotulo)).toEqual(['Creatinina sintética', 'Ureia sintética', 'K']);
+    expect(meusLidos.linhas[0]!.celulas).toHaveLength(3);
   });
 });

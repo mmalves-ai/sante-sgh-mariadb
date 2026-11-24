@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
-import { darCiencia, lancarExameExterno, lerResultados } from '../../api-documentos.js';
+import { darCiencia, lancarExameExterno, lerCabecalho, lerResultados } from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
 import ComparativoResultados from '../../componentes/documentos/ComparativoResultados.vue';
 import ImagensPaciente from '../../../sadt/componentes/ImagensPaciente.vue';
@@ -15,6 +15,13 @@ import { dataHoraBr } from '../../formato.js';
 const props = defineProps<{ paciente: number }>();
 const { t } = useI18n();
 const cliente = useQueryClient();
+// O atendimento em curso (o mesmo cabeçalho que o prontuário já leu, pelo cache) recorta o comparativo quando o
+// filtro pede só o atendimento atual.
+const cabecalho = useQuery({
+  queryKey: computed(() => ['pep', 'doc', 'cabecalho', props.paciente]),
+  queryFn: () => lerCabecalho(props.paciente),
+});
+const atendimentoAtual = computed(() => cabecalho.data.value?.atendimentoAtual ?? null);
 const dados = useQuery({
   queryKey: computed(() => ['pep', 'doc', 'resultados', props.paciente]),
   queryFn: () => lerResultados(props.paciente),
@@ -70,7 +77,11 @@ async function lancar(): Promise<void> {
 <template>
   <section class="aba" aria-labelledby="resultados-titulo" data-testid="aba-resultados-conteudo">
     <h2 id="resultados-titulo">{{ t('pep.doc.resultados.titulo') }}</h2>
-    <ComparativoResultados :paciente="paciente" />
+    <ComparativoResultados
+      v-if="!cabecalho.isPending.value"
+      :paciente="paciente"
+      :atendimento="atendimentoAtual"
+    />
     <MensagemErro v-if="dados.isError.value" :erro="dados.error.value" />
     <p v-else-if="!dados.data.value" role="status">{{ t('pep.doc.carregando') }}</p>
     <template v-else>

@@ -112,6 +112,12 @@ export interface ComparativoPaciente extends Comparativo {
   readonly grupos: readonly number[];
   readonly periodoDias: number | null;
   readonly pendentes: readonly { readonly exame: string; readonly pedidoEm: string | null }[];
+  /**
+   * O recorte aplicado: 'atendimento' (escopo atual com o atendimento informado), 'todos' (escopo de todos os
+   * atendimentos) ou 'sem-atendimento' (escopo atual pedido sem atendimento em curso: a tela avisa que mostra todos).
+   */
+  readonly recorte: 'atendimento' | 'todos' | 'sem-atendimento';
+  readonly atendimento: number | null;
 }
 
 const num = (v: unknown): number => Number(v);
@@ -548,7 +554,8 @@ export class PortaGruposResultadoPropria {
         );
         gruposIds = g ? [num(g['id'])] : [];
       }
-      const grupos = gruposIds.length ? await this.gruposLidos(l, gruposIds) : [];
+      // Grupo fora de uso (ativo = FALSE) não abre no comparativo, nem escolhido nem pelo filtro salvo.
+      const grupos = gruposIds.length ? (await this.gruposLidos(l, gruposIds)).filter((g) => g.ativo) : [];
       if (p.grupo && !grupos.length) throw naoEncontrado('Grupo');
       const porId = new Map(grupos.map((g) => [g.id, g]));
       const itens: ItemComparativo[] = itensDoFiltro(
@@ -559,6 +566,10 @@ export class PortaGruposResultadoPropria {
         p.grupo ? [] : (filtro?.exames ?? []),
       );
       const periodoDias = p.dias ?? filtro?.periodoDias ?? null;
+      const escopo = filtro?.escopo ?? 'atual';
+      const porAtendimento = escopo === 'atual' && !!p.atendimento;
+      const recorte: ComparativoPaciente['recorte'] =
+        escopo === 'todos' ? 'todos' : porAtendimento ? 'atendimento' : 'sem-atendimento';
       const vazio: ComparativoPaciente = {
         colunas: [],
         linhas: [],
@@ -568,6 +579,8 @@ export class PortaGruposResultadoPropria {
         grupos: gruposIds,
         periodoDias,
         pendentes: [],
+        recorte,
+        atendimento: porAtendimento ? p.atendimento! : null,
       };
       if (!itens.length) return vazio;
       const exames = [...new Set(itens.map((i) => i.exame))];
@@ -577,16 +590,19 @@ export class PortaGruposResultadoPropria {
         conds.push('re.resultado_em >= ?');
         params.push(new Date(this.agora().getTime() - periodoDias * 86_400_000));
       }
-      const porAtendimento = (filtro?.escopo ?? 'atual') === 'atual' && p.atendimento;
       if (porAtendimento) {
         conds.push('r.atendimento_id = ?');
         params.push(p.atendimento);
       }
       if (filtro?.somenteMeusPedidos && usuario !== null) {
+        // Vínculo vigente hoje no fuso do estabelecimento; sem vínculo de profissional, nenhum pedido é "meu".
+        const hoje = (dataHora(this.agora(), est.fuso) ?? '').slice(0, 10);
         const v = await l.uma(
-          `SELECT profissional_id FROM usuario_vinculo_profissional WHERE usuario_id = ? AND estabelecimento_id = ?
+          `SELECT profissional_id FROM usuario_vinculo_profissional
+            WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND profissional_id IS NOT NULL
+              AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
             ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
-          [usuario, est.id],
+          [usuario, est.id, hoje, hoje],
         );
         const profissional = v ? num(v['profissional_id']) : 0;
         conds.push('r.solicitante_profissional_id = ?');

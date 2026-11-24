@@ -67,6 +67,8 @@ export interface Comparativo {
   grupos: number[];
   periodoDias: number | null;
   pendentes: { exame: string; pedidoEm: string | null }[];
+  recorte: 'atendimento' | 'todos' | 'sem-atendimento';
+  atendimento: number | null;
 }
 
 async function pedir<T>(url: string, metodo = 'GET', corpo?: unknown): Promise<T> {

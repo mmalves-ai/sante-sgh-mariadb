@@ -149,6 +149,42 @@ describe('matriz comparativa', () => {
     expect(c.criticos).toBe(1);
     expect(c.foraDaFaixa).toBe(2); // creatinina 1,8 e ureia 40 (faixa do laudo da massa)
   });
+  it('valor preliminar na última coluna não move a tendência nem entra nas contagens', () => {
+    const c = montarComparativo(
+      [{ exame: 30, analito: null, rotulo: null }],
+      [
+        v({ resultado: 1, exame: 30, em: '2026-11-18T08:00', numero: 4, refMin: 3.5, refMax: 5.1 }),
+        v({
+          resultado: 2,
+          exame: 30,
+          em: '2026-11-19T08:00',
+          numero: 7,
+          refMin: 3.5,
+          refMax: 5.1,
+          critMax: 6.5,
+        }),
+        v({
+          resultado: 3,
+          exame: 30,
+          em: '2026-11-20T08:00',
+          numero: 5.9,
+          refMin: 3.5,
+          refMax: 5.1,
+          critMax: 6.5,
+          preliminar: true,
+        }),
+      ],
+    );
+    const l = c.linhas[0]!;
+    expect(l.celulas.map((x) => x.preliminar)).toEqual([false, false, true]);
+    expect(l.celulas[2]!.situacao).toBe('acima');
+    // Liberados: 4 → 7, subindo 75%; o 5,9 preliminar não vira "descendo".
+    expect(l.tendencia).toBe('subindo');
+    expect(l.variacao).toBe(75);
+    expect(c.criticos).toBe(1);
+    expect(c.foraDaFaixa).toBe(0);
+  });
+
   it('itens do filtro: grupos em ordem e exames avulsos sem repetir', () => {
     expect(itensDoFiltro([[{ exame: 1, analito: null, rotulo: null }]], [1, 2]).map((i) => i.exame)).toEqual([
       1, 2,

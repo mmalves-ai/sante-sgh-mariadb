@@ -182,8 +182,9 @@ export interface LinhaComparativo {
   readonly unidade: string | null;
   readonly faixa: string | null;
   readonly celulas: readonly CelulaComparativo[];
+  /** Tendência dos dois últimos valores liberados (o preliminar nunca entra). */
   readonly tendencia: Tendencia | null;
-  /** Variação do último valor sobre o anterior, em %, uma casa (nula sem dois números). */
+  /** Variação do último valor liberado sobre o anterior, em %, uma casa (nula sem dois números). */
   readonly variacao: number | null;
 }
 
@@ -191,7 +192,9 @@ export interface Comparativo {
   /** Coletas em ordem cronológica (a última à direita). */
   readonly colunas: readonly string[];
   readonly linhas: readonly LinhaComparativo[];
+  /** Células liberadas fora da faixa (o preliminar não conta). */
   readonly foraDaFaixa: number;
+  /** Células liberadas críticas (o preliminar não conta). */
   readonly criticos: number;
 }
 
@@ -272,8 +275,9 @@ export function montarComparativo(
         .map((c) => {
           const v = porColuna.get(c)!;
           const situacao = situacaoDoValor(v);
-          if (situacao === 'abaixo' || situacao === 'acima') fora += 1;
-          if (situacao === 'critico') criticos += 1;
+          // Contagens só do que foi liberado: valor preliminar aparece marcado, mas não conta.
+          if (!v.preliminar && (situacao === 'abaixo' || situacao === 'acima')) fora += 1;
+          if (!v.preliminar && situacao === 'critico') criticos += 1;
           return {
             coluna: c,
             resultado: v.resultado,
@@ -284,7 +288,8 @@ export function montarComparativo(
           };
         });
       const ultimo = [...porColuna.values()].sort((x, y) => x.em.localeCompare(y.em)).at(-1)!;
-      const t = tendenciaDe(celulas.filter((c) => c.numero !== null).map((c) => c.numero!));
+      // Tendência e variação só sobre valores liberados: o preliminar (conferido, não liberado) não move a seta.
+      const t = tendenciaDe(celulas.filter((c) => c.numero !== null && !c.preliminar).map((c) => c.numero!));
       linhas.push({
         exame: item.exame,
         analito: a.analito,
