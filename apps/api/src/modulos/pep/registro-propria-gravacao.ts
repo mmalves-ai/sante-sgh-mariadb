@@ -16,7 +16,12 @@
 // vigente ou vínculo do estabelecimento → profissional ativo); gravar exige ainda inscrição em conselho ativa ou
 // provisória dentro da validade. Registro clínico nunca é apagado: suspensão com justificativa, correção por novo
 // registro que aponta o suspenso, rascunho arquivado ou descartado (situação), nunca DELETE.
-import { type CoassinaturaGravavel, pedidoDeCoassinatura, RecusaCoassinatura } from '@sgh/dominio-pep';
+import {
+  type CoassinaturaGravavel,
+  pedidoDeCoassinatura,
+  RecusaCoassinatura,
+  vinculoDoCadastro,
+} from '@sgh/dominio-pep';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -1292,7 +1297,7 @@ export class RegistroPropriaGravacao {
           501,
           'pendente-modelo-proprio',
           'Ainda não disponível no banco próprio',
-          'O registro com parecer, classificação de risco ou coassinatura ainda não grava no banco próprio.',
+          'O registro com parecer ou classificação de risco ainda não grava no banco próprio.',
         ),
       );
     return this.gravar(c, ctx, OP_REGISTRAR, false, conteudoDoRegistro(e), async (tx, est, prof) => {
@@ -1338,23 +1343,31 @@ export class RegistroPropriaGravacao {
       let coassinatura: CoassinaturaGravavel | null = null;
       if (e.supervisao) {
         const preceptor = e.supervisao.idProfissional;
+        // O preceptor responde neste estabelecimento: vínculo de conta vigente aqui (a conta ligada ao profissional sem
+        // vínculo no estabelecimento não basta, porque a coassinatura é do serviço onde o registro nasce).
         const vig = await tx.uma(
-          // Mesmas ligações da sessão (profissionalDaSessao): vínculo vigente no estabelecimento ou conta ligada vigente.
           `SELECT 1 AS ok FROM profissional p
             WHERE p.id = ? AND p.excluido_em IS NULL
-              AND (EXISTS (SELECT 1 FROM usuario_vinculo_profissional v
-                            WHERE v.profissional_id = p.id AND v.estabelecimento_id = ? AND v.excluido_em IS NULL
-                              AND v.vigencia_inicio <= UTC_DATE() AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= UTC_DATE()))
-                OR EXISTS (SELECT 1 FROM usuario_profissional up
-                            WHERE up.profissional_id = p.id AND up.excluido_em IS NULL
-                              AND up.vigencia_inicio <= UTC_DATE() AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= UTC_DATE())))`,
+              AND EXISTS (SELECT 1 FROM usuario_vinculo_profissional v
+                           WHERE v.profissional_id = p.id AND v.estabelecimento_id = ? AND v.excluido_em IS NULL
+                             AND v.vigencia_inicio <= UTC_DATE() AND (v.vigencia_fim IS NULL OR v.vigencia_fim >= UTC_DATE()))`,
           [preceptor, est.id],
+        );
+        // A relação do autor com o preceptor vem do cadastro de supervisão vigente entre os dois, neste estabelecimento.
+        const cad = await tx.uma(
+          `SELECT tipo_vinculo FROM vinculo_supervisao_profissional
+            WHERE estabelecimento_id = ? AND supervisor_profissional_id = ? AND supervisionado_profissional_id = ?
+              AND ativo = TRUE AND excluido_em IS NULL
+              AND vigencia_inicio <= UTC_DATE() AND (vigencia_fim IS NULL OR vigencia_fim >= UTC_DATE())
+            ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+          [est.id, preceptor, prof.profissional],
         );
         try {
           coassinatura = pedidoDeCoassinatura({
             autor: prof.profissional,
             preceptor,
             preceptorVigente: vig !== null && vig !== undefined,
+            vinculo: vinculoDoCadastro(cad ? String(cad['tipo_vinculo']) : null),
           });
         } catch (x) {
           if (x instanceof RecusaCoassinatura) throw recusa(422, x.codigo, 'Operação recusada', x.message);

@@ -120,6 +120,14 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     );
     const prof = '(SELECT id FROM profissional WHERE observacao = ?)';
     await e.executar(`DELETE FROM inscricao_conselho WHERE profissional_id IN ${prof}`, [`massa ${P}`]);
+    await e.executar(
+      `DELETE FROM vinculo_supervisao_profissional WHERE supervisor_profissional_id IN ${prof}
+          OR supervisionado_profissional_id IN ${prof}`,
+      [`massa ${P}`, `massa ${P}`],
+    );
+    await e.executar(`DELETE FROM usuario_vinculo_profissional WHERE profissional_id IN ${prof}`, [
+      `massa ${P}`,
+    ]);
     await e.executar(`DELETE FROM usuario_profissional WHERE profissional_id IN ${prof}`, [`massa ${P}`]);
     await e.executar('DELETE FROM profissional WHERE observacao = ?', [`massa ${P}`]);
     await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`Pessoa sintética ${P}%`]);
@@ -543,29 +551,46 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
   });
 
   it('coassinatura (03-PEP L96): o registro do residente nasce aguardando o preceptor, com o pedido pendente na mesma transação', async () => {
-    const preceptor = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-preceptor` }, async (e) => {
-      const agora = new Date();
-      const login = `${P}.preceptor`;
-      const u =
-        Number((await e.uma('SELECT id FROM usuario WHERE login = ?', [login]))?.['id'] ?? 0) ||
-        (await e.inserir(
-          "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, ?, 'pessoa', TRUE, ?)",
-          [login, `Conta sintética ${login}`, agora],
-        ));
-      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
-        `Pessoa sintética ${P} preceptor`,
-        agora,
-      ]);
-      const pr = await e.inserir(
-        "INSERT INTO profissional (pessoa_fisica_id, tipo, observacao, criado_em) VALUES (?, 'corpo_clinico', ?, ?)",
-        [pf, `massa ${P}`, agora],
-      );
-      await e.inserir(
-        'INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
-        [u, pr, '2020-01-01', agora],
-      );
-      return pr;
-    });
+    // Dois preceptores: um com vínculo vigente neste estabelecimento e cadastro de supervisão acadêmica do autor; outro
+    // só com a conta ligada (sem vínculo aqui), que é recusado.
+    const preceptorSintetico = (sufixo: string, noEstabelecimento: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-preceptor-${sufixo}` }, async (e) => {
+        const agora = new Date();
+        const login = `${P}.prec${sufixo}`;
+        const u =
+          Number((await e.uma('SELECT id FROM usuario WHERE login = ?', [login]))?.['id'] ?? 0) ||
+          (await e.inserir(
+            "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, ?, 'pessoa', TRUE, ?)",
+            [login, `Conta sintética ${login}`, agora],
+          ));
+        const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+          `Pessoa sintética ${P} preceptor ${sufixo}`,
+          agora,
+        ]);
+        const pr = await e.inserir(
+          "INSERT INTO profissional (pessoa_fisica_id, tipo, observacao, criado_em) VALUES (?, 'corpo_clinico', ?, ?)",
+          [pf, `massa ${P}`, agora],
+        );
+        await e.inserir(
+          'INSERT INTO usuario_profissional (usuario_id, profissional_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+          [u, pr, '2020-01-01', agora],
+        );
+        if (noEstabelecimento) {
+          await e.inserir(
+            `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio, criado_em)
+             VALUES (?, ?, ?, ?, ?)`,
+            [u, m.estabelecimento, pr, '2020-01-01', agora],
+          );
+          await e.inserir(
+            `INSERT INTO vinculo_supervisao_profissional (estabelecimento_id, supervisor_profissional_id,
+               supervisionado_profissional_id, tipo_vinculo, vigencia_inicio, criado_em) VALUES (?, ?, ?, 'academico', ?, ?)`,
+            [m.estabelecimento, pr, m.profissional, '2020-01-01', agora],
+          );
+        }
+        return pr;
+      });
+    const preceptor = await preceptorSintetico('a', true);
+    const semVinculoAqui = await preceptorSintetico('b', false);
     const { registro: id } = await g.registrar(
       C,
       { ...registro(), supervisao: { preceptor: 'PRECEPTOR', idProfissional: preceptor } } as never,
@@ -583,7 +608,7 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     expect(l).toMatchObject({
       sr: 'aguardando_coassinatura',
       situacao: 'pendente',
-      tipo_vinculo: 'residente',
+      tipo_vinculo: 'academico',
     });
     expect(Number(l?.['sequencia'])).toBe(1);
     expect(Number(l?.['preceptor_profissional_id'])).toBe(preceptor);
@@ -602,6 +627,14 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
         ctx(),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'preceptor-e-autor' } });
+    // O preceptor só com a conta ligada, sem vínculo vigente neste estabelecimento, é recusado sem gravar nada.
+    await expect(
+      g.registrar(
+        C,
+        { ...registro(), supervisao: { preceptor: 'FORA', idProfissional: semVinculoAqui } } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'preceptor-indisponivel' } });
     const depois = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (x) =>
       x.uma('SELECT COUNT(*) AS n FROM registro_assistencial WHERE estabelecimento_id = ?', [
         m.estabelecimento,
