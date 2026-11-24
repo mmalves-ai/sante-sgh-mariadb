@@ -25,3 +25,5 @@ export * from './periodo-financeiro.js';
 export * from './reclassificacao.js';
 export * from './permissao-financeiro.js';
 export * from './recebivel-cartao.js';
+export * from './encontro-contas.js';
+export * from './previsao-provisao.js';
