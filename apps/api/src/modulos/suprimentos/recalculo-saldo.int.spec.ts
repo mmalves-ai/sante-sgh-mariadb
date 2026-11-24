@@ -150,6 +150,8 @@ describe.skipIf(SEM_BANCO)(
               estoque_unidade_medida_id: m.unidade,
               situacao: 'ativo',
               controla_lote: lote,
+              // ck_insumo_lote_validade: item com lote controla a validade.
+              controla_validade: lote,
             },
             m.marca,
           );
@@ -315,14 +317,19 @@ describe.skipIf(SEM_BANCO)(
       expect(await codigoDe(porta.previaRecalculo(c, entrada({ ano: 2019, mes: 12 })))).toBe(
         'periodo-fechado',
       );
-      expect(
-        await codigoDe(
-          porta.executar(c, 'suprimentos.recalcularSaldos', entrada({ motivo: 'curto' }), {
-            ...c,
-            chaveIdempotencia: `f36rec-${RODADA}-curto`,
-          }),
-        ),
-      ).toBe('motivo-obrigatorio');
+      // O motivo curto para já no contrato da entrada (esquemaMotivoSuprimentos, ao menos 10 caracteres), antes da
+      // regra do domínio (que repete a exigência e tem prova no spec do domínio): a recusa aponta o campo motivo.
+      const recusa = await porta
+        .executar(c, 'suprimentos.recalcularSaldos', entrada({ motivo: 'curto' }), {
+          ...c,
+          chaveIdempotencia: `f36rec-${RODADA}-curto`,
+        })
+        .then(
+          () => null,
+          (e: unknown) => e as { problema?: { codigo?: unknown } },
+        );
+      expect(recusa?.problema?.codigo).toBe('entrada-invalida');
+      expect(JSON.stringify(recusa?.problema)).toContain('motivo');
     });
 
     it('aplica: grava o saldo refeito, registra o recálculo auditado e deixa o razão intacto; a repetição não grava', async () => {
