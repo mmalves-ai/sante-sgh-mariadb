@@ -127,8 +127,17 @@ const BASE_PRONTUARIO: Readonly<Record<string, number>> = {
   P: 930_400,
   J: 930_500,
   R: 930_600,
+  D: 930_700,
 };
-const BASE_ORDEM: Readonly<Record<string, number>> = { A: 3010, N: 3020, C: 3030, P: 3040, J: 3050, R: 3060 };
+const BASE_ORDEM: Readonly<Record<string, number>> = {
+  A: 3010,
+  N: 3020,
+  C: 3030,
+  P: 3040,
+  J: 3050,
+  R: 3060,
+  D: 3070,
+};
 
 export async function prepararMassaAdt(marca: string): Promise<MassaAdt> {
   const nucleo = new NucleoProprio();

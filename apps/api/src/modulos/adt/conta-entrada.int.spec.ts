@@ -103,9 +103,36 @@ describe.skipIf(SEM_BANCO_ADT)(
         [conta, `${prefixo}%`],
       );
 
+    // Tipos de conta sintéticos de internação deixados ativos por outros contratos no mesmo cliente (ordem 0) empatam a
+    // escolha do tipo de conta da natureza (empate é recusa, nunca "o primeiro"): desligados durante este contrato e
+    // religados no fim, como o caso "sem tipo de conta" faz com todos.
+    let sinteticos: number[] = [];
+    const ligarSinteticos = (ativo: boolean) =>
+      sinteticos.length
+        ? escrever((e) =>
+            e.executar(
+              `UPDATE tipo_conta SET ativo = ? WHERE id IN (${sinteticos.map(() => '?').join(',')})`,
+              [ativo, ...sinteticos],
+            ),
+          )
+        : Promise.resolve();
+
     beforeAll(async () => {
       m = await prepararMassaAdt('C');
       porta = new PortaAdtPropria(M().nucleo);
+      sinteticos = String(
+        (
+          await lerAdt<{ ids: string | null }>(
+            M(),
+            "SELECT GROUP_CONCAT(id) AS ids FROM tipo_conta WHERE natureza = 'internacao' AND ativo = TRUE AND codigo LIKE 'L0%'",
+            [],
+          )
+        )?.ids ?? '',
+      )
+        .split(',')
+        .filter(Boolean)
+        .map(Number);
+      await ligarSinteticos(false);
       Object.assign(
         cfg,
         await escrever(async (e) => {
@@ -224,6 +251,7 @@ describe.skipIf(SEM_BANCO_ADT)(
     }, 90_000);
 
     afterAll(async () => {
+      if (m) await ligarSinteticos(true).catch(() => undefined);
       if (m && cfg.regraLancamento)
         await escrever(async (e) => {
           await e.executar('UPDATE regra_lancamento SET ativo = FALSE WHERE id IN (?, ?, ?)', [

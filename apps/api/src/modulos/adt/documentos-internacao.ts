@@ -273,7 +273,7 @@ export class PortaDocumentosInternacao {
    * Inclui ou altera o modelo (a alteração confere a versão lida). `modeloComum`: a sessão é da administração da
    * plataforma, a única que inclui ou altera o modelo comum a todos os estabelecimentos.
    */
-  salvarModelo(c: ContextoAdt, e: EntradaModeloDocumento, modeloComum = false) {
+  async salvarModelo(c: ContextoAdt, e: EntradaModeloDocumento, modeloComum = false) {
     const p = validarModeloDocumento({
       codigo: e.codigo,
       titulo: e.titulo,
@@ -285,7 +285,7 @@ export class PortaDocumentosInternacao {
     if (p.length) invalida(p);
     return this.gravar(
       c,
-      'internacao.documento.salvarModelo',
+      'internacao.documento.salvar_modelo',
       'modelo_documento_internacao',
       async (tx, est) => {
         const valores = {
@@ -334,12 +334,12 @@ export class PortaDocumentosInternacao {
   }
 
   /** Inclui ou altera a regra; a mesma combinação já existente é recusada (sem duplicar o documento). */
-  salvarRegra(c: ContextoAdt, e: EntradaRegraDocumento) {
+  async salvarRegra(c: ContextoAdt, e: EntradaRegraDocumento) {
     const p = validarRegraDocumento({ momento: e.momento ?? 'admissao', copias: e.copias ?? 1 });
     if (p.length) invalida(p);
     return this.gravar(
       c,
-      'internacao.documento.salvarRegra',
+      'internacao.documento.salvar_regra',
       'regra_documento_internacao',
       async (tx, est) => {
         const modelo = await tx.uma<{ ativo: number; momento_impressao: string; quantidade_copias: number }>(
