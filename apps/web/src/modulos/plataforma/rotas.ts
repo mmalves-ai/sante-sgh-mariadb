@@ -11,4 +11,12 @@ export const rotasPlataformaOnboarding: RouteRecordRaw[] = [
     component: () => import('./telas/ClientesPlataformaTela.vue'),
     meta: { permissao: PERMISSAO_ONBOARDING },
   },
+  // Carga e sincronismo (obra carga-painel, ADR 0010): mesma permissão declarada da API (`config.conexao.ler`,
+  // técnica); o servidor só atende o administrador da plataforma.
+  {
+    path: '/plataforma/carga',
+    name: 'plataforma.carga',
+    component: () => import('./telas/CargaSincronismoTela.vue'),
+    meta: { permissao: PERMISSAO_ONBOARDING },
+  },
 ];

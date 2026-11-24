@@ -70,6 +70,7 @@ import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especial
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
 import { mensagensSessoes } from '../modulos/sessoes/i18n-sessoes.js';
 import { mensagensOnboarding } from '../modulos/plataforma/i18n-onboarding.js';
+import { mensagensCarga } from '../modulos/plataforma/i18n-carga.js';
 import { mensagensDigitalizacao } from '../modulos/same/i18n-digitalizacao.js';
 import { mensagensPortal } from '../modulos/portal/i18n.js';
 import { mensagensBiRede } from '../modulos/rede/i18n-bi.js';
@@ -2331,6 +2332,8 @@ export const mensagensWeb = {
   sessoes: mensagensSessoes,
   // F4 L3: painel de onboarding de clientes da plataforma.
   onboarding: mensagensOnboarding,
+  // Obra carga-painel (ADR 0010): tela "Carga e sincronismo" do painel técnico.
+  carga: mensagensCarga,
   digitalizacao: mensagensDigitalizacao,
   protocolos: mensagensProtocolos,
   regulacao: mensagensRegulacao,

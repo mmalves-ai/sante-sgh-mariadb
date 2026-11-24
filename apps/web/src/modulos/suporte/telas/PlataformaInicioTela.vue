@@ -44,6 +44,9 @@ async function sair(): Promise<void> {
       <RouterLink to="/plataforma/suporte" data-testid="link-suporte">{{
         eu.podeDesignar ? t('suporte.suporteTecnico') : t('suporte.minhasSessoes')
       }}</RouterLink>
+      <RouterLink v-if="eu.conta.papel === 'PLATAFORMA'" to="/plataforma/carga" data-testid="link-carga">{{
+        t('carga.linkInicio')
+      }}</RouterLink>
       <button type="button" class="plataforma__sair" data-testid="plataforma-sair" @click="sair">
         {{ t('suporte.sairConta') }}
       </button>

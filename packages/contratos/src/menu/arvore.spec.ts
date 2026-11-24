@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('409 itens: M 190, P 57, N 162, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 409, M: 190, P: 57, N: 162 });
+  it('410 itens: M 190, P 57, N 163, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 410, M: 190, P: 57, N: 163 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(409);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(410);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -217,6 +217,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/exames/resultados',
         '/cadastros/exames/setores',
         '/cadastros/fornecedores/categorias', // M14
+        '/plataforma/carga', // obra carga-painel (ADR 0010)
         '/repasse/apuracao', // M33
         '/repasse/configuracoes', // M33 (CRUD genérico do subitem)
         '/repasse/cooperativas', // M33 (CRUD genérico do subitem)
@@ -590,6 +591,7 @@ describe('menu gerado da árvore (regra 12)', () => {
       '/administracao/coexistencia/matriz',
       '/administracao/coexistencia/schema',
       '/administracao/saude',
+      '/plataforma/carga',
     ]);
     for (const i of tecnicas) {
       const p = CATALOGO_DECLARADO.find((d) => d.codigo === i.permissao);
