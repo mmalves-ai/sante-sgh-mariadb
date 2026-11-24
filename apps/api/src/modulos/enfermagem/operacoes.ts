@@ -275,7 +275,7 @@ export const checarAdministracao = definirOperacao<ChecagemAdministracao, SaidaC
       if (m.papel === 'principal' && m.situacao === 'A')
         await gravarLoteLido(tx, est, {
           horario: h.id,
-          gtin: e.sgh.gtin,
+          gtin: e.sgh.codigoLido ?? e.sgh.gtin,
           lote: e.sgh.lote,
           validade: e.sgh.validade,
           quantidade: m.quantidade,

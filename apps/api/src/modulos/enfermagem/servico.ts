@@ -396,6 +396,7 @@ export class ServicoEnfermagem {
         gtin,
         lote,
         validade,
+        codigoLido: e.dose?.codigo?.trim() || null,
         conferente: exigida ? (a.conferente?.login.trim().toUpperCase() ?? null) : null,
         dispositivo: e.dispositivo,
         origemOffline: e.origemOffline,
