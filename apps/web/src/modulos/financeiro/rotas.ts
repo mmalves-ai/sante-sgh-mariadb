@@ -80,6 +80,12 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.movimento.ler' },
   },
   {
+    path: '/financeiro/tesouraria/periodo',
+    name: 'financeiro.tesouraria.periodo',
+    component: () => import('./telas/PeriodoFinanceiroTela.vue'),
+    meta: { permissao: 'financeiro.movimento.ler' },
+  },
+  {
     path: '/financeiro/tesouraria/conciliacao',
     name: 'financeiro.tesouraria.conciliacao',
     component: () => import('./telas/ConciliacaoTela.vue'),
