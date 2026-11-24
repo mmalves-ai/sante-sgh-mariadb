@@ -19,7 +19,6 @@ import {
   entregaAtrasada,
   type GestaoPedidoCompra,
   type GravarMotivoCancelamentoCompraEntrada,
-  type ItemPedidoConferido,
   pendenteItem,
   type ProgramarEntregasPedidoEntrada,
   repartirEntregas,
@@ -30,6 +29,8 @@ import type { RecusaSuprimentos } from '@sgh/contratos/regras-suprimentos';
 import { recusa, type Leitor, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 
 type Linha = Record<string, unknown>;
+/** O item do pedido como a regra de cancelamento o lê (quantidade, recebida e cancelada). */
+type ItemPedidoConferido = Parameters<typeof pendenteItem>[0] & { readonly id: number };
 const n = (v: unknown) => Number(v ?? 0);
 const q3 = (v: number) => Math.round(v * 1000) / 1000;
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
@@ -150,7 +151,8 @@ export async function programarEntregasPedido(
   await tx.alterar('pedido_compra_item', e.item, n(item['versao']), {
     data_prevista_entrega: [...e.entregas].map((x) => x.dataPrevista).sort()[0],
   });
-  return { id: n(p['id']), item: e.item, entregas: ids };
+  // O resultado da operação leva só escalares: os ids das entregas gravadas vão em texto.
+  return { id: n(p['id']), item: e.item, entregas: ids.join(',') };
 }
 
 /** Um contato com o fornecedor sobre o pedido (nunca editado: o seguimento é outra linha). */
@@ -291,7 +293,7 @@ export async function cancelarCompra(
         }
       : {}),
   });
-  return { id: n(p['id']), situacao, itens: c.cancelar.map((x) => x.item) };
+  return { id: n(p['id']), situacao, itens: c.cancelar.map((x) => x.item).join(',') };
 }
 
 /** O cadastro do motivo de cancelamento (inclui sem `motivo`; altera com `motivo` e `versao`). Nunca apagado. */

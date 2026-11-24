@@ -498,6 +498,23 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
       [like],
     );
     await e.executar(`DELETE FROM cotacao_fornecedor WHERE cotacao_id IN (${cots})`, [like]);
+    // F3.6 (05-SUP linha 20): a gestão do pedido (cancelamentos, agenda de entregas e contatos) sai antes dos itens.
+    const peds = `SELECT id FROM pedido_compra WHERE estabelecimento_id IN (${ests})`;
+    await e.executar(
+      `DELETE FROM cancelamento_pedido_compra_entrega WHERE cancelamento_pedido_compra_item_id IN (SELECT id FROM cancelamento_pedido_compra_item WHERE pedido_compra_id IN (${peds}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM cancelamento_pedido_compra_item WHERE pedido_compra_id IN (${peds})`, [
+      like,
+    ]);
+    await e.executar(
+      `DELETE FROM pedido_compra_entrega WHERE pedido_compra_item_id IN (SELECT id FROM pedido_compra_item WHERE pedido_compra_id IN (${peds}))`,
+      [like],
+    );
+    await e.executar(
+      `DELETE FROM pedido_compra_acompanhamento WHERE pedido_compra_id IN (${peds}) ORDER BY id DESC`,
+      [like],
+    );
     await e.executar(
       `DELETE FROM pedido_compra_item WHERE pedido_compra_id IN (SELECT id FROM pedido_compra WHERE estabelecimento_id IN (${ests}))`,
       [like],

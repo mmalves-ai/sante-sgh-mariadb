@@ -57,8 +57,9 @@ describe.skipIf(SEM_BANCO)(
         m.estA,
         m.estB,
       ]);
+      // Do seguimento para o contato anterior (a chave do seguimento aponta para a própria tabela).
       await e.executar(
-        'DELETE FROM pedido_compra_acompanhamento WHERE pedido_compra_id IN (SELECT id FROM pedido_compra WHERE estabelecimento_id IN (?, ?))',
+        'DELETE FROM pedido_compra_acompanhamento WHERE pedido_compra_id IN (SELECT id FROM pedido_compra WHERE estabelecimento_id IN (?, ?)) ORDER BY id DESC',
         [m.estA, m.estB],
       );
     };
@@ -90,11 +91,7 @@ describe.skipIf(SEM_BANCO)(
         if (m)
           await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpa-f36-pg' }, async (e) => {
             await limparGestao(e);
-            // A nota do pedido sai antes dos pedidos (limparMassa apaga os pedidos do estabelecimento).
-            await e.executar(
-              'DELETE FROM nota_entrada_item WHERE pedido_compra_item_id IN (SELECT x.id FROM pedido_compra_item x JOIN pedido_compra p ON p.id = x.pedido_compra_id WHERE p.estabelecimento_id IN (?, ?))',
-              [m.estA, m.estB],
-            );
+            // A nota do pedido e os seus movimentos saem pelo limparMassa (antes dos itens do pedido).
           });
         await limparMassa(nucleo, m);
         await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpa-f36-pg-motivo' }, (e) =>
@@ -123,6 +120,17 @@ describe.skipIf(SEM_BANCO)(
 
     it('programa as entregas do item, reprograma sem apagar e recusa passar do pedido', async () => {
       const pedido = { ano, doc };
+      // O alvo da trilha da agenda é o pedido (a operação é sobre o pedido; a entrega é a linha gravada).
+      const trilhaPedido = async () =>
+        Number(
+          (
+            await ler<{ n: number }>(
+              "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'pedido_compra' AND entidade_id = ?",
+              [pedidoId],
+            )
+          )[0]!.n,
+        );
+      const trilhaAntes = await trilhaPedido();
       await op('programarEntregasPedido', {
         pedido,
         item: itemId,
@@ -154,11 +162,8 @@ describe.skipIf(SEM_BANCO)(
           }),
         ),
       ).toBe('entrega-acima-do-pedido');
-      const trilha = await ler<{ n: number }>(
-        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'pedido_compra_entrega' AND entidade_id = ?",
-        [e[1]!.id],
-      );
-      expect(Number(trilha[0]!.n)).toBeGreaterThan(0);
+      // As duas gravações aceitas deixam trilha; a recusada, não.
+      expect((await trilhaPedido()) - trilhaAntes).toBe(2);
     });
 
     it('registra o contato com o fornecedor e o seguimento, sempre linha nova', async () => {
