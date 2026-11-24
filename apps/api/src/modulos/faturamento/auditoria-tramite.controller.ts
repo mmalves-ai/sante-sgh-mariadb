@@ -19,8 +19,22 @@
 //   POST /api/faturamento/guias/:id/pendencias                 faturamento.pendencia.editar
 //   POST /api/faturamento/guias/pendencias/:id/resolucao       faturamento.pendencia.editar
 //   POST /api/faturamento/guias/:id/responsavel                faturamento.pendencia.editar
-//   POST /api/faturamento/guias/:id/anexos                     faturamento.pendencia.editar (conteúdo em base64)
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
+//   POST /api/faturamento/guias/:id/anexos                     faturamento.pendencia.editar (conteúdo em base64, corpo
+//                                                               `application/vnd.sgh.anexos+json` com teto de 15 MB)
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  type OnModuleInit,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
+import { LIMITE_CORPO_ANEXOS_PORTAL, TIPO_CORPO_ANEXOS_PORTAL } from '@sgh/contratos';
 import { validarAnexoGuia } from '@sgh/dominio-faturamento';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
@@ -68,9 +82,34 @@ export class ServicoAuditoriaTramite {
 const objeto = (c: unknown): Record<string, unknown> =>
   c !== null && typeof c === 'object' && !Array.isArray(c) ? (c as Record<string, unknown>) : {};
 
+/** O pedaço do Fastify usado para o tipo do corpo com anexo (o JSON padrão, com teto próprio). */
+interface InstanciaComParser {
+  hasContentTypeParser(tipo: string): boolean;
+  addContentTypeParser(tipo: string, opcoes: { parseAs: 'string'; bodyLimit: number }, parser: unknown): void;
+  getDefaultJsonParser(proto: 'error', construtor: 'error'): unknown;
+}
+
 @Controller()
-export class AuditoriaTramiteController {
-  constructor(@Inject(SERVICO_AUDITORIA_TRAMITE) private readonly servico: ServicoAuditoriaTramite | null) {}
+export class AuditoriaTramiteController implements OnModuleInit {
+  constructor(
+    @Inject(SERVICO_AUDITORIA_TRAMITE) private readonly servico: ServicoAuditoriaTramite | null,
+    private readonly adaptador: HttpAdapterHost,
+  ) {}
+
+  /**
+   * O anexo da guia (até 10 MB, que em base64 vira cerca de 13,4 MB) passa do teto padrão do JSON (1 MB): ele vem com o
+   * tipo próprio do corpo com anexos, com o mesmo parser JSON seguro do Fastify e o teto de 15 MB. O registro é único na
+   * instância (o portal do prestador registra o mesmo tipo; quem chegar primeiro registra).
+   */
+  onModuleInit(): void {
+    const f = this.adaptador.httpAdapter?.getInstance?.() as InstanciaComParser | undefined;
+    if (!f?.hasContentTypeParser || f.hasContentTypeParser(TIPO_CORPO_ANEXOS_PORTAL)) return;
+    f.addContentTypeParser(
+      TIPO_CORPO_ANEXOS_PORTAL,
+      { parseAs: 'string', bodyLimit: LIMITE_CORPO_ANEXOS_PORTAL },
+      f.getDefaultJsonParser('error', 'error'),
+    );
+  }
 
   private s(): ServicoAuditoriaTramite {
     if (!this.servico)

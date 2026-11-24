@@ -185,12 +185,10 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
         );
       ids['setorFat'] = await setor(`${P}FAT`, 'faturamento');
       ids['setorAud'] = await setor(`${P}AUD`, 'auditoria');
-      await garantir(
-        e,
-        "SELECT id FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = 'protocolo_tramite'",
+      // Sem a numeração configurada: o primeiro protocolo do estabelecimento a cria (começa em 1).
+      await e.executar(
+        "DELETE FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = 'protocolo_tramite'",
         [ids['est']],
-        "INSERT INTO sequencia_negocio (estabelecimento_id, tipo, proximo_valor, criado_em) VALUES (?, 'protocolo_tramite', 1, ?)",
-        [ids['est'], agora],
       );
       ids['motivoPend'] = await g(
         'motivo_pendencia_guia',
@@ -448,7 +446,12 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
         { tipo: 'documento', descricao: 'Relatório médico em papel' },
       ],
     });
-    expect(p).toMatchObject({ itens: 2 });
+    expect(p).toMatchObject({ itens: 2, numero: 1 });
+    const [seq] = await linhas(
+      "SELECT proximo_valor FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = 'protocolo_tramite'",
+      [ids['est']],
+    );
+    expect(Number(seq!['proximo_valor'])).toBe(2);
     for (const item of [
       { tipo: 'volume_prontuario', alvoId: ids['volumeB'] },
       { tipo: 'documento', alvoId: ids['documentoB'] },
