@@ -99,8 +99,9 @@ export async function lerAnalise(l: L, est: number, notificacao: number): Promis
     registradaEm: instante(a['criado_em']),
     atualizadaEm: instanteN(a['alterado_em']),
     concluidaEm: concluida ? instanteN(a['concluida_em']) : null,
-    // A análise concluída não muda mais: quem a alterou por último é quem a concluiu.
-    concluidaPor: concluida ? textoN(a['alterada_por']) : null,
+    // A análise concluída não muda mais: quem a alterou por último é quem a concluiu; a criada já concluída (sem
+    // alteração) foi concluída por quem a registrou.
+    concluidaPor: concluida ? (textoN(a['alterada_por']) ?? textoN(a['registrada_por'])) : null,
   };
 }
 

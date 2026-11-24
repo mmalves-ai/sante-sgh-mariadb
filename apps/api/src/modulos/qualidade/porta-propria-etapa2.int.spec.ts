@@ -201,6 +201,38 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
     expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.registrarAnalise(base(id))))).toBe('nao-encontrado');
   });
 
+  it('análise: a primeira gravação já concluída registra quem a concluiu', async () => {
+    const id = await notificar();
+    await porta.gravarSgh(c, trilha, (g) =>
+      g.distribuir({
+        id,
+        versao: 1,
+        usuario: m.login,
+        agora: '2026-11-20T10:30:00',
+        gestor: m.loginGestor,
+        unidade: m.setor,
+        prazoAnalise: '2026-12-10',
+        orientacao: null,
+      }),
+    );
+    const r = await porta.gravarSgh(c, trilha, (g) =>
+      g.registrarAnalise({
+        ...base(id),
+        versaoNotificacao: 2,
+        atual: null,
+        causaRaiz: 'Causa sintética.',
+        fatores: ['equipe'],
+        concluir: true,
+        eventos: ['analiseIniciada', 'analiseConcluida'],
+        situacaoNotificacao: 'concluida',
+      }),
+    );
+    expect(r).toMatchObject({ versao: 1, versaoNotificacao: 3 });
+    const a = await porta.analise(c, id);
+    expect(a).toMatchObject({ situacao: 'concluida', registradaPor: m.login, concluidaPor: m.login });
+    expect(a?.concluidaEm).not.toBeNull();
+  });
+
   function base(id: number) {
     return {
       notificacao: id,
