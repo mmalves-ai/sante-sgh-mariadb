@@ -24,7 +24,11 @@ import {
 } from './massa-adt.spec-util.js';
 import { carimboVersao } from './operacoes.js';
 import { PortaAdtPropria } from './porta-propria.js';
-import { lerOperadoresDaUnidade, lerRegistrosDaInternacao } from './registros-internacao.js';
+import {
+  lerCandidatosOperadores,
+  lerOperadoresDaUnidade,
+  lerRegistrosDaInternacao,
+} from './registros-internacao.js';
 
 const codigoDe = (e: unknown) =>
   (e as { problema?: { codigo?: string } }).problema?.codigo ?? (e as { codigo?: string }).codigo;
@@ -418,6 +422,33 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
     ).rejects.toSatisfy(
       (e) => codigoDe(e) === 'registro-inexistente' || codigoDe(e) === 'sem-estabelecimento',
     );
+  });
+
+  it('candidatos à lista de operadores: só usuários ativos, pelo login, com o curinga do termo neutralizado', async () => {
+    const eu = await lerAdt<{ login: string; situacao: string }>(
+      M(),
+      'SELECT login, situacao FROM usuario WHERE id = ?',
+      [M().usuario],
+    );
+    const login = String(eu?.login);
+    const achados = await porta.lerNoEstabelecimento(contextoAdt(M()), (l) =>
+      lerCandidatosOperadores(l, login),
+    );
+    if (eu?.situacao === 'ativo') expect(achados.map((c) => c.usuario)).toContain(M().usuario);
+    expect(achados.length).toBeLessThanOrEqual(30);
+    const inativos = await lerAdt<{ n: number }>(
+      M(),
+      `SELECT COUNT(*) AS n FROM usuario WHERE situacao <> 'ativo' AND id IN (${achados.map(() => '?').join(',') || 'NULL'})`,
+      achados.map((c) => c.usuario),
+    );
+    expect(Number(inativos?.n)).toBe(0);
+    // Termo curto não busca; o % digitado não vira curinga (nenhum login tem %).
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l) => lerCandidatosOperadores(l, 'a')),
+    ).toEqual([]);
+    expect(
+      await porta.lerNoEstabelecimento(contextoAdt(M()), (l) => lerCandidatosOperadores(l, '%%')),
+    ).toEqual([]);
   });
 
   it('operadores da unidade: com a regra, quem não está liberado não admite; lista vazia retira sem apagar', async () => {
