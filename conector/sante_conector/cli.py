@@ -26,6 +26,8 @@ Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   worker [--uma] [--espera S]             trabalhador (com --uma: no máximo uma execução; precisa do abridor)
   worker-separado [--uma] [--espera S]    abridor privilegiado sem rede + motor sem privilégio (o conector.sh usa)
   conta-motor --rede CIDR                 cria/renova a conta restrita do motor (feita pela root, fora do worker)
+  migrar-controle <codigo>                migração idempotente do controle do cliente (índices da pendência e elos
+                                          da cadeia de continuações, lidos da plataforma só para leitura)
 """
 import argparse
 import json
@@ -81,6 +83,7 @@ def main(argv=None):
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
     p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
     sub.add_parser("worker-separado")
+    p = sub.add_parser("migrar-controle"); p.add_argument("codigo")
     p = sub.add_parser("conta-motor"); p.add_argument("--rede", required=True)
     # rodada 5 (ADR 0006, item 3): semente do espelho padrão da base a partir da cópia da origem (uma vez)
     p = sub.add_parser("semear-espelho"); p.add_argument("relativo"); p.add_argument("--espelho", default="espelho")
@@ -119,6 +122,13 @@ def main(argv=None):
             _json({"erro": 422, "motivo": str(e)}); return 3
         finally:
             conn.close()
+    if a.cmd == "migrar-controle":
+        from . import banco, controle
+        root, plat = banco.conectar(None, autocommit=False), banco.conectar(banco.plataforma_banco())
+        try:
+            return _json(controle.migrar(root, plat, a.codigo))
+        finally:
+            root.close(); plat.close()
     if a.cmd == "worker":
         from .trabalhador import Trabalhador
         t = Trabalhador()

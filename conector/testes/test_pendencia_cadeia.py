@@ -153,3 +153,59 @@ class Cadeia(unittest.TestCase):
                       % self.ctl)
         self.cn.commit()
         self.assertEqual(continuar.concluidas_propria(*args), {})
+
+
+class _PlatFalsa:
+    """Plataforma falsa (só leitura): o cliente e as execuções com `contadores.continuar_de`."""
+
+    def __init__(self, banco_nome, execucoes):
+        self.banco_nome, self.execucoes = banco_nome, execucoes
+
+    def cursor(self):
+        dono = self
+
+        class C:
+            def __enter__(s):
+                return s
+
+            def __exit__(s, *a):
+                return False
+
+            def execute(s, sql, args=()):
+                assert sql.lstrip().upper().startswith("SELECT"), "a migração só lê a plataforma"
+                s.r = [(7, dono.banco_nome)] if "FROM cliente" in sql else dono.execucoes
+
+            def fetchone(s):
+                return s.r[0] if s.r else None
+
+            def fetchall(s):
+                return list(s.r)
+        return C()
+
+
+@unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
+class Migracao(Cadeia):
+    COD = "pq_cadeia_mig"
+
+    def test_migracao_idempotente_indices_e_elos(self):
+        with self.root.cursor() as c:   # controle de antes da rodada: os dois índices antigos
+            c.execute("ALTER TABLE `%s`.pendencia ADD INDEX ix_pendencia_execucao (execucao_id, situacao),"
+                      " ADD INDEX ix_pendencia_regra (tabela_origem, regra, chave_original(190))" % self.ctl)
+            c.execute("DELETE FROM `%s`.conector_execucao_cadeia" % self.ctl)
+        plat = _PlatFalsa(self.cli, [(10, None), (11, '{"continuar_de": 10}'), (12, '{"continuar_de": 11}'),
+                                     (20, '{"outro": 1}')])
+        for _ in range(2):   # idempotente
+            r = controle.migrar(self.root, plat, self.COD)
+            self.assertEqual(r["elos_cadeia"], 2)
+            self.assertEqual(r["cadeias"], {11: [11, 10], 12: [12, 11, 10]})
+            self.assertIn("ix_pendencia_execucao_tabela", r["indices_pendencia"])
+            self.assertIn("ix_pendencia_mesma", r["indices_pendencia"])
+            self.assertNotIn("ix_pendencia_regra", r["indices_pendencia"])
+            self.assertNotIn("ix_pendencia_execucao", r["indices_pendencia"])
+        self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.conector_execucao_cadeia"), 2)
+        with self.cn.cursor() as c:   # a leitura por execução, situação e tabela em pedaços de id tem índice próprio
+            c.execute("EXPLAIN SELECT id FROM `%s`.pendencia WHERE execucao_id=10 AND situacao='aberta'"
+                      " AND tabela_origem IN ('TAB_A','TAB_B') AND id>0 ORDER BY id LIMIT 100" % self.ctl)
+            nomes = [d[0] for d in c.description]
+            chaves = " ".join(str(dict(zip(nomes, x)).get("possible_keys")) for x in c.fetchall())
+        self.assertIn("ix_pendencia_execucao_tabela", chaves)

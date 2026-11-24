@@ -116,8 +116,8 @@ def garantir_ctl(cr, ctl):
     with cr.cursor() as c:
         c.execute("ALTER TABLE `%s`.pendencia ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL"
                   " COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)'" % ctl)
-        c.execute("ALTER TABLE `%s`.pendencia ADD INDEX IF NOT EXISTS ix_pendencia_regra"
-                  " (tabela_origem, regra, chave_original(190))" % ctl)
+        c.execute("ALTER TABLE `%s`.pendencia ADD INDEX IF NOT EXISTS ix_pendencia_mesma"
+                  " (tabela_origem, regra, chave_original(190), execucao_id)" % ctl)
         c.execute("ALTER TABLE `%s`.pendencia ADD INDEX IF NOT EXISTS ix_pendencia_resolvida"
                   " (resolvida_execucao_id)" % ctl)
 

@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS {b}.pendencia (
   situacao VARCHAR(10) NOT NULL DEFAULT 'aberta',
   criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
   alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
-  KEY ix_pendencia_execucao (execucao_id, situacao),
+  KEY ix_pendencia_execucao_tabela (execucao_id, situacao, tabela_origem, id),
   CONSTRAINT ck_pendencia_gravidade CHECK (gravidade IN ('critica','alta','media','baixa')),
   CONSTRAINT ck_pendencia_situacao CHECK (situacao IN ('aberta','resolvida'))
 ) COMMENT='Pendências do conector: tabela, chave original e regra, sem valores';
@@ -120,8 +120,14 @@ ALTER TABLE {b}.pendencia
     COMMENT 'C7: metadado da recusa pelo destino (coluna, restrição ou chave); nunca o valor',
   ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL
     COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
-  ADD INDEX IF NOT EXISTS ix_pendencia_regra (tabela_origem, regra, chave_original(190)),
   ADD INDEX IF NOT EXISTS ix_pendencia_resolvida (resolvida_execucao_id);
+-- rodada pendencia-cadeia (2026-11-24): leitura por execução, situação e tabela em pedaços de id (resumo herdado,
+-- descarte) e a mesma pendência noutra execução da cadeia (dupla contagem, resolução); os dois antigos são prefixo
+-- dos novos e saem (só depois de os novos existirem)
+ALTER TABLE {b}.pendencia
+  ADD INDEX IF NOT EXISTS ix_pendencia_execucao_tabela (execucao_id, situacao, tabela_origem, id),
+  ADD INDEX IF NOT EXISTS ix_pendencia_mesma (tabela_origem, regra, chave_original(190), execucao_id);
+ALTER TABLE {b}.pendencia DROP INDEX IF EXISTS ix_pendencia_execucao, DROP INDEX IF EXISTS ix_pendencia_regra;
 CREATE TABLE IF NOT EXISTS {b}.conector_execucao_cadeia (
   execucao_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT 'conector_execucao.id da continuação',
   continuar_de BIGINT UNSIGNED NOT NULL COMMENT 'Execução interrompida que ela continua',
@@ -239,6 +245,34 @@ def pendencias_da_cadeia(ctl, ids, alias="p", situacao=None):
     if situacao:
         cond += " AND %s='%s'" % (sit, situacao)
     return cond
+
+
+def migrar(conn, conn_plataforma, codigo):
+    """Migração do controle de um cliente já existente (idempotente): o DDL de `preparar` (índices da leitura pela
+    cadeia) e os elos da cadeia das continuações já feitas, lidos da plataforma (`contadores.continuar_de`; só
+    leitura lá). Devolve contagens."""
+    import json
+    with conn_plataforma.cursor() as c:
+        c.execute("SELECT id, banco_nome FROM cliente WHERE codigo=%s", (codigo,))
+        r = c.fetchone()
+        if not r:
+            raise RuntimeError("cliente inexistente")
+        c.execute("SELECT id, contadores FROM conector_execucao WHERE cliente_id=%s ORDER BY id", (r[0],))
+        elos = []
+        for eid, cont in c.fetchall():
+            de = (json.loads(cont) if isinstance(cont, (str, bytes)) else (cont or {})) if cont else {}
+            if isinstance(de, dict) and de.get("continuar_de"):
+                elos.append((int(eid), int(de["continuar_de"])))
+    ctl = preparar(conn, codigo, r[1])
+    for eid, de in elos:
+        gravar_cadeia(conn, ctl, eid, de)
+    conn.commit()
+    with conn.cursor() as c:
+        c.execute("SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='pendencia'"
+                  " GROUP BY INDEX_NAME ORDER BY INDEX_NAME", (ctl,))
+        indices = [x[0] for x in c.fetchall()]
+    return {"ctl": ctl, "elos_cadeia": len(elos), "cadeias": {e: cadeia(conn, ctl, e) for e, _ in elos},
+            "indices_pendencia": indices}
 
 
 def host_do_motor(conn):
