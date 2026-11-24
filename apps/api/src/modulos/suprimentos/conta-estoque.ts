@@ -118,13 +118,41 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
     const fatorConversao =
       vinculo && idOuNulo(vinculo['item_referencia_matmed_id']) === refId ? numOuNulo(vinculo['fator_conversao']) : null;
     const negociados = await tx.consultar<Linha>(
-      `SELECT id, plano_fonte_pagadora_id, tipo_conta_id, tabela_preco_id, vigencia_inicio, vigencia_fim, valor_unitario,
-              percentual_ajuste, quantidade_fixa
+      `SELECT id, plano_fonte_pagadora_id, contrato_fonte_pagadora_id, tipo_conta_id, tabela_preco_id, unidade_medida_id,
+              vigencia_inicio, vigencia_fim, valor_unitario, percentual_ajuste, quantidade_fixa
          FROM preco_negociado_matmed
-        WHERE fonte_pagadora_id = ? AND ativo AND vigencia_inicio <= ?
-          AND (item_faturavel_id = ? OR (item_faturavel_id IS NULL AND item_referencia_matmed_id = ?))`,
-      [n(conta['fonte_pagadora_id']), data, n(fat['id']), refId ?? 0],
+        WHERE fonte_pagadora_id = ? AND item_faturavel_id = ? AND ativo AND vigencia_inicio <= ?`,
+      [n(conta['fonte_pagadora_id']), n(fat['id']), data],
     );
+    // Os contratos dos negociados (situação e vigência) e o fator de cada unidade de negociado para a de estoque.
+    const idsContrato = [...new Set(negociados.map((x) => idOuNulo(x['contrato_fonte_pagadora_id'])).filter((x): x is number => x !== null))];
+    const contratos = idsContrato.length
+      ? await tx.consultar<Linha>(
+          `SELECT id, situacao, vigencia_inicio, vigencia_fim FROM contrato_fonte_pagadora
+            WHERE id IN (${idsContrato.map(() => '?').join(', ')}) AND excluido_em IS NULL`,
+          idsContrato,
+        )
+      : [];
+    const idsUnidade = [...new Set(negociados.map((x) => idOuNulo(x['unidade_medida_id'])).filter((x): x is number => x !== null))];
+    const fatorDaUnidade = new Map<number, number>();
+    if (idsUnidade.length) {
+      const ins = await tx.uma<Linha>('SELECT estoque_unidade_medida_id FROM insumo WHERE id = ?', [s.insumo]);
+      const unidadeRef =
+        refId === null
+          ? null
+          : await tx.uma<Linha>('SELECT unidade_medida_id FROM item_referencia_matmed WHERE id = ?', [refId]);
+      const doInsumo = await tx.consultar<Linha>(
+        `SELECT unidade_medida_id, fator_conversao FROM insumo_unidade
+          WHERE insumo_id = ? AND ativo AND excluido_em IS NULL AND unidade_medida_id IN (${idsUnidade.map(() => '?').join(', ')})`,
+        [s.insumo, ...idsUnidade],
+      );
+      for (const u of idsUnidade) {
+        const cadastro = doInsumo.find((x) => n(x['unidade_medida_id']) === u);
+        if (u === idOuNulo(ins?.['estoque_unidade_medida_id'])) fatorDaUnidade.set(u, 1);
+        else if (cadastro && n(cadastro['fator_conversao']) > 0) fatorDaUnidade.set(u, n(cadastro['fator_conversao']));
+        else if (u === idOuNulo(unidadeRef?.['unidade_medida_id'])) fatorDaUnidade.set(u, fatorConversao ?? 1);
+      }
+    }
     const referencias =
       refId === null
         ? []
@@ -148,6 +176,10 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
       negociados: negociados.map((x) => ({
         id: n(x['id']),
         plano: idOuNulo(x['plano_fonte_pagadora_id']),
+        contrato: idOuNulo(x['contrato_fonte_pagadora_id']),
+        unidade: idOuNulo(x['unidade_medida_id']),
+        fatorUnidade:
+          idOuNulo(x['unidade_medida_id']) === null ? null : (fatorDaUnidade.get(n(x['unidade_medida_id'])) ?? null),
         tipoConta: idOuNulo(x['tipo_conta_id']),
         tabelaPreco: idOuNulo(x['tabela_preco_id']),
         vigenciaInicio: dataIso(x['vigencia_inicio']),
@@ -155,6 +187,12 @@ export function lancadorContaEstoque(tx: TxOperacao, est: number, usuario: numbe
         valorUnitario: numOuNulo(x['valor_unitario']),
         percentualAjuste: numOuNulo(x['percentual_ajuste']),
         quantidadeFixa: numOuNulo(x['quantidade_fixa']),
+      })),
+      contratos: contratos.map((x) => ({
+        id: n(x['id']),
+        situacao: String(x['situacao']),
+        vigenciaInicio: dataIso(x['vigencia_inicio']),
+        vigenciaFim: x['vigencia_fim'] === null ? null : dataIso(x['vigencia_fim']),
       })),
       referencias: referencias.map((x) => ({
         id: n(x['id']),

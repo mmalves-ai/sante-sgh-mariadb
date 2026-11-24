@@ -3,9 +3,12 @@
 // com o lançamento do razão do estoque, na mesma transação do movimento) fica na API.
 // Preço (prática de mercado, TISS e contratos com operadoras):
 //   1. o preço negociado com a fonte pagadora vigente na data do consumo prevalece; entre os negociados vale o mais
-//      específico (plano, depois tipo de conta, depois tabela da conta), e no empate a vigência mais recente;
+//      específico (plano, depois contrato, depois tipo de conta, depois tabela da conta), e no empate a vigência mais
+//      recente; o negociado de um contrato só vale com o contrato vigente na data (situação e vigência);
 //   2. o negociado traz valor fixo, ou percentual sobre a referência de mercado (o mesmo item na publicação), e pode
-//      fixar a quantidade cobrada;
+//      fixar a quantidade cobrada; o negociado só de quantidade fixa cobra essa quantidade pela referência;
+//      o valor e a quantidade fixa estão na unidade do negociado (sem unidade: a de estoque para o valor fixo, a da
+//      referência para o percentual), convertida pelo fator da unidade; unidade sem conversão conhecida não vale;
 //   3. sem negociado, vale a referência de mercado vigente pela base de preço da tabela da conta (preço de fábrica ou
 //      máximo ao consumidor; sem base declarada, o máximo ao consumidor), dividida pelo fator da embalagem;
 //   4. sem preço nenhum, o item entra com valor zero e a regra "sem_preco", para a conferência da conta tratar: a falta de
@@ -19,6 +22,8 @@ export type BasePrecoReferencia = 'pf' | 'pmc';
 export interface PrecoNegociadoEstoque {
   readonly id: number;
   readonly plano: number | null;
+  /** O contrato com a fonte pagadora a que o negociado pertence (nulo: vale sem contrato). */
+  readonly contrato: number | null;
   readonly tipoConta: number | null;
   readonly tabelaPreco: number | null;
   /** AAAA-MM-DD. */
@@ -27,6 +32,20 @@ export interface PrecoNegociadoEstoque {
   readonly valorUnitario: number | null;
   readonly percentualAjuste: number | null;
   readonly quantidadeFixa: number | null;
+  /** A unidade de medida do negociado (nula: a padrão da regra). */
+  readonly unidade: number | null;
+  /** Quantas unidades de estoque valem uma unidade do negociado (nulo com unidade informada: sem conversão). */
+  readonly fatorUnidade: number | null;
+}
+
+/** O contrato com a fonte pagadora, para conferir se o negociado dele vale na data. */
+export interface ContratoNegociadoEstoque {
+  readonly id: number;
+  /** rascunho, vigente, suspenso ou encerrado. */
+  readonly situacao: string;
+  /** AAAA-MM-DD. */
+  readonly vigenciaInicio: string;
+  readonly vigenciaFim: string | null;
 }
 
 export interface ReferenciaEstoque {
@@ -55,10 +74,17 @@ export interface EntradaPrecoEstoque {
   readonly fatorConversao: number | null;
   readonly conta: ContaDoLancamentoEstoque;
   readonly negociados: readonly PrecoNegociadoEstoque[];
+  /** Os contratos citados pelos negociados (o que faltar aqui conta como não vigente). */
+  readonly contratos: readonly ContratoNegociadoEstoque[];
   readonly referencias: readonly ReferenciaEstoque[];
 }
 
-export type RegraPrecoEstoque = 'negociado_fixo' | 'negociado_percentual' | 'referencia' | 'sem_preco';
+export type RegraPrecoEstoque =
+  | 'negociado_fixo'
+  | 'negociado_percentual'
+  | 'negociado_quantidade'
+  | 'referencia'
+  | 'sem_preco';
 
 export interface PrecoEstoque {
   readonly regra: RegraPrecoEstoque;
@@ -80,21 +106,48 @@ const fator = (f: number | null) => (f !== null && f > 0 ? f : 1);
 const vigente = (inicio: string, fim: string | null, data: string) =>
   dia(inicio) <= data && (fim === null || dia(fim) >= data);
 
-/** O negociado que vale para a conta na data: o mais específico, depois a vigência mais recente, depois o maior id. */
+/** Por que o negociado não vale para a conta na data (null: vale). */
+export function negociadoNaoVale(
+  n: PrecoNegociadoEstoque,
+  conta: ContaDoLancamentoEstoque,
+  dataBase: string,
+  contratos: readonly ContratoNegociadoEstoque[] = [],
+): string | null {
+  const data = dia(dataBase);
+  if (!vigente(n.vigenciaInicio, n.vigenciaFim, data)) return 'fora da vigência';
+  if (n.plano !== null && n.plano !== conta.plano) return 'de outro plano';
+  if (n.tipoConta !== null && n.tipoConta !== conta.tipoConta) return 'de outro tipo de conta';
+  if (n.tabelaPreco !== null && n.tabelaPreco !== conta.tabelaPreco) return 'de outra tabela';
+  if (n.valorUnitario === null && n.percentualAjuste === null && !(n.quantidadeFixa !== null && n.quantidadeFixa > 0))
+    return 'sem valor, percentual nem quantidade';
+  if (n.unidade !== null && !(n.fatorUnidade !== null && n.fatorUnidade > 0))
+    return `unidade ${n.unidade} sem conversão para a unidade de estoque`;
+  if (n.contrato !== null) {
+    const c = contratos.find((x) => x.id === n.contrato);
+    if (!c || c.situacao !== 'vigente' || !vigente(c.vigenciaInicio, c.vigenciaFim, data))
+      return `contrato ${n.contrato} não vigente na data${c ? ` (${c.situacao})` : ''}`;
+  }
+  return null;
+}
+
+/**
+ * O negociado que vale para a conta na data: o mais específico (plano, contrato, tipo de conta, tabela), depois a
+ * vigência mais recente, depois o maior id.
+ */
 export function negociadoDaConta(
   negociados: readonly PrecoNegociadoEstoque[],
   conta: ContaDoLancamentoEstoque,
   dataBase: string,
+  contratos: readonly ContratoNegociadoEstoque[] = [],
 ): PrecoNegociadoEstoque | null {
-  const data = dia(dataBase);
   let melhor: { n: PrecoNegociadoEstoque; peso: number } | null = null;
   for (const n of negociados) {
-    if (!vigente(n.vigenciaInicio, n.vigenciaFim, data)) continue;
-    if (n.plano !== null && n.plano !== conta.plano) continue;
-    if (n.tipoConta !== null && n.tipoConta !== conta.tipoConta) continue;
-    if (n.tabelaPreco !== null && n.tabelaPreco !== conta.tabelaPreco) continue;
-    if (n.valorUnitario === null && n.percentualAjuste === null) continue;
-    const peso = (n.plano !== null ? 4 : 0) + (n.tipoConta !== null ? 2 : 0) + (n.tabelaPreco !== null ? 1 : 0);
+    if (negociadoNaoVale(n, conta, dataBase, contratos) !== null) continue;
+    const peso =
+      (n.plano !== null ? 8 : 0) +
+      (n.contrato !== null ? 4 : 0) +
+      (n.tipoConta !== null ? 2 : 0) +
+      (n.tabelaPreco !== null ? 1 : 0);
     const ganha =
       !melhor ||
       peso > melhor.peso ||
@@ -134,7 +187,14 @@ export function precoDoItemDeEstoque(e: EntradaPrecoEstoque): PrecoEstoque {
   const data = dia(e.dataBase);
   const qEstoque = r4(e.quantidade);
   const qReferencia = r4(qEstoque / fator(e.fatorConversao));
-  const neg = negociadoDaConta(e.negociados, e.conta, data);
+  const neg = negociadoDaConta(e.negociados, e.conta, data, e.contratos);
+  // Os negociados descartados ficam na memória do preço (contrato encerrado, unidade sem conversão etc.).
+  for (const x of e.negociados) {
+    if (x === neg) continue;
+    const motivo = negociadoNaoVale(x, e.conta, data, e.contratos);
+    if (motivo && motivo !== 'fora da vigência' && !motivo.startsWith('de outr'))
+      passos.push(`negociado ${x.id} não vale: ${motivo}`);
+  }
   const ref = referenciaVigente(e.referencias, e.conta.basePreco, data);
   const fechar = (
     regra: RegraPrecoEstoque,
@@ -156,34 +216,46 @@ export function precoDoItemDeEstoque(e: EntradaPrecoEstoque): PrecoEstoque {
       passos,
     };
   };
+  let fixaSemPreco: number | null = null;
   if (neg) {
     const fixa = neg.quantidadeFixa !== null && neg.quantidadeFixa > 0;
+    const fFixo = neg.unidade === null ? 1 : neg.fatorUnidade!;
     if (neg.valorUnitario !== null) {
-      passos.push(`negociado ${neg.id}: valor fixo ${neg.valorUnitario} por unidade de estoque`);
+      passos.push(
+        neg.unidade === null
+          ? `negociado ${neg.id}: valor fixo ${neg.valorUnitario} por unidade de estoque`
+          : `negociado ${neg.id}: valor fixo ${neg.valorUnitario} por unidade ${neg.unidade} (${fFixo} de estoque)`,
+      );
       if (fixa) passos.push(`quantidade fixa ${neg.quantidadeFixa}`);
-      return fechar('negociado_fixo', neg.valorUnitario, fixa ? neg.quantidadeFixa! : qEstoque, fixa);
+      return fechar('negociado_fixo', neg.valorUnitario, fixa ? neg.quantidadeFixa! : qEstoque / fFixo, fixa);
     }
+    // Percentual ou só quantidade fixa: sobre a referência, na unidade do negociado (sem unidade: a da referência).
+    const fRef = fator(e.fatorConversao);
+    const fNeg = neg.unidade === null ? fRef : neg.fatorUnidade!;
+    const regra: RegraPrecoEstoque = neg.percentualAjuste === null ? 'negociado_quantidade' : 'negociado_percentual';
     if (ref) {
       const pct = neg.percentualAjuste ?? 0;
+      const unitario = (ref.unitario * fNeg) / fRef;
       passos.push(
-        `negociado ${neg.id}: ${pct}% sobre a referência ${ref.ref.id} (${ref.base}, ${ref.unitario} por unidade)`,
+        `negociado ${neg.id}: ${pct}% sobre a referência ${ref.ref.id} (${ref.base}, ${ref.unitario} por unidade da referência` +
+          (fNeg !== fRef ? `, ${r4(unitario)} por unidade ${neg.unidade}` : '') +
+          ')',
       );
       if (fixa) passos.push(`quantidade fixa ${neg.quantidadeFixa}`);
-      return fechar(
-        'negociado_percentual',
-        ref.unitario * (1 + pct / 100),
-        fixa ? neg.quantidadeFixa! : qReferencia,
-        fixa,
-      );
+      return fechar(regra, unitario * (1 + pct / 100), fixa ? neg.quantidadeFixa! : qEstoque / fNeg, fixa);
     }
-    passos.push(`negociado ${neg.id} é percentual e não há referência vigente`);
+    passos.push(`negociado ${neg.id} depende da referência e não há referência vigente`);
+    if (fixa) {
+      passos.push(`quantidade fixa ${neg.quantidadeFixa}`);
+      fixaSemPreco = neg.quantidadeFixa;
+    }
   }
   if (ref) {
     passos.push(`referência ${ref.ref.id} (${ref.base}): ${ref.unitario} por unidade da referência`);
     return fechar('referencia', ref.unitario, qReferencia, false);
   }
   passos.push('sem preço negociado nem referência vigente na data');
-  return fechar('sem_preco', 0, qEstoque, false);
+  return fechar('sem_preco', 0, fixaSemPreco ?? qEstoque, fixaSemPreco !== null);
 }
 
 /** Situações da conta em que ainda se lança e estorna item. */
