@@ -169,7 +169,10 @@ export class PreferenciaSegundoFatorPropria {
             await tx.alterar(TABELA_PREFERENCIA_SEGUNDO_FATOR, alvo, Number(atual['versao']), { metodo });
         } else {
           try {
-            alvo = await tx.incluir(TABELA_PREFERENCIA_SEGUNDO_FATOR, { usuario_id: Number(u['id']), metodo });
+            alvo = await tx.incluir(TABELA_PREFERENCIA_SEGUNDO_FATOR, {
+              usuario_id: Number(u['id']),
+              metodo,
+            });
           } catch (e) {
             if (restricaoViolada(e)?.tipo === 'unica')
               throw recusa('escolha-em-uso', 'Outro pedido gravou a escolha agora: tente de novo.');
@@ -195,13 +198,18 @@ export class PreferenciaSegundoFatorPropria {
       { cliente: o.cliente, estabelecimento: o.estabelecimento, correlacao: 'acesso-segundo-fator' },
       (l) => l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [a.login]),
     );
-    const r = await this.executor.executar(op, o.cliente, { login: a.login, metodo }, {
-      cliente: o.cliente,
-      estabelecimento: o.estabelecimento,
-      usuario: ator ? Number(ator['id']) : null,
-      correlacao: (a.correlacao || 'acesso-segundo-fator').slice(0, 64),
-      chaveIdempotencia: `segundo-fator:${randomUUID()}`,
-    });
+    const r = await this.executor.executar(
+      op,
+      o.cliente,
+      { login: a.login, metodo },
+      {
+        cliente: o.cliente,
+        estabelecimento: o.estabelecimento,
+        usuario: ator ? Number(ator['id']) : null,
+        correlacao: (a.correlacao || 'acesso-segundo-fator').slice(0, 64),
+        chaveIdempotencia: `segundo-fator:${randomUUID()}`,
+      },
+    );
     return r.resultado as { anterior: MetodoSegundoFator };
   }
 }
@@ -275,8 +283,17 @@ export function montarAcessoEmailProprio(d: DependenciasAcessoEmail): ServicosAc
     estabelecimento: d.estabelecimento(hospital),
   });
   const executor = d.nucleo.criarExecutor();
-  const envio = d.email ? new EnvioRecuperacaoPropria(d.nucleo, d.cliente, d.email, `${base}/recuperar-senha`) : null;
-  const recuperacao = new ServicoRecuperacaoSenha(d.sessao, d.armazem, d.configuracao(), envio, d.trilha, aviso);
+  const envio = d.email
+    ? new EnvioRecuperacaoPropria(d.nucleo, d.cliente, d.email, `${base}/recuperar-senha`)
+    : null;
+  const recuperacao = new ServicoRecuperacaoSenha(
+    d.sessao,
+    d.armazem,
+    d.configuracao(),
+    envio,
+    d.trilha,
+    aviso,
+  );
   const trocaRapida = new ServicoTrocaRapida(d.sessao, {
     porta: new PortaPinPropria(d.nucleo, resolver, executor),
     parametros: parametrosTrocaRapidaPelaConfiguracao(d.configuracao),
@@ -290,7 +307,9 @@ export function montarAcessoEmailProprio(d: DependenciasAcessoEmail): ServicosAc
     recuperacao,
     trocaRapida,
     preferencia,
-    codigoUsuario: codigos ? new SegundoFatorEmailUsuario(d.nucleo, () => d.cliente, codigos, preferencia) : null,
+    codigoUsuario: codigos
+      ? new SegundoFatorEmailUsuario(d.nucleo, () => d.cliente, codigos, preferencia)
+      : null,
     recuperacaoPlataforma: np
       ? new ServicoRecuperacaoPlataforma(np, d.armazem, d.email, codigos, {
           linkTela: `${base}/plataforma/recuperar-senha`,

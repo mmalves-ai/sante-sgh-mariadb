@@ -98,15 +98,27 @@ describe('leituras próprias do portal: linhas → contrato', () => {
     expect(k).toMatchObject({ situacao: 3, signatario: 2, revogadoEm: '2026-11-02T00:00:00.000Z' });
   });
   it('pedido: tipo e situação do contrato', () => {
-    const p = pedidoDaLinha({ id: 8, numero: 'LGPD-1', tipo: 'informacao_compartilhamento', situacao: 'em_analise' });
+    const p = pedidoDaLinha({
+      id: 8,
+      numero: 'LGPD-1',
+      tipo: 'informacao_compartilhamento',
+      situacao: 'em_analise',
+    });
     expect(p).toMatchObject({ id: '8', tipo: 'compartilhamento', situacao: 'identidade-verificada' });
   });
   it('ato da cópia: o autor é o usuário ou a conta do portal', () => {
-    expect(atoDaLinha({ id: 1, ato: 'solicitacao', conta_portal_paciente_id: 3 }).usuario).toBe('SGH.PORTAL.C3');
+    expect(atoDaLinha({ id: 1, ato: 'solicitacao', conta_portal_paciente_id: 3 }).usuario).toBe(
+      'SGH.PORTAL.C3',
+    );
     expect(atoDaLinha({ id: 1, ato: 'entrega', login: 'rec' }).usuario).toBe('rec');
   });
   it('documento: só o assinado tem o evento "assinado"; cancelado é suspenso', () => {
-    const d = documentoDaLinha({ id: 4, situacao: 'assinado', nivel_exigido: 'icp-brasil', codigo_verificacao: 'X' });
+    const d = documentoDaLinha({
+      id: 4,
+      situacao: 'assinado',
+      nivel_exigido: 'icp-brasil',
+      codigo_verificacao: 'X',
+    });
     expect(d).toMatchObject({ eventos: ['assinado'], assinaturaIcp: 4, codigoVerificacao: 'X' });
     expect(documentoDaLinha({ id: 4, situacao: 'cancelado' }).eventos).toContain('suspenso');
   });
@@ -142,7 +154,10 @@ describe('leituras próprias do portal: consultas', () => {
   it('fila de vínculos: titulares vazios não consultam; a página corta no teto', async () => {
     const linhas = Array.from({ length: TETO_FILA_VINCULOS + 1 }, (_, i) => ({ id: i + 1, escopos: '[]' }));
     const { leituras, chamadas } = fonte(() => linhas);
-    expect(await leituras.filaVinculos(C, { situacao: null, titulares: [] })).toEqual({ itens: [], haMais: false });
+    expect(await leituras.filaVinculos(C, { situacao: null, titulares: [] })).toEqual({
+      itens: [],
+      haMais: false,
+    });
     expect(chamadas).toHaveLength(0);
     const r = await leituras.filaVinculos(C, { situacao: null, titulares: [9], depoisDe: 3 });
     expect(r.itens).toHaveLength(TETO_FILA_VINCULOS);

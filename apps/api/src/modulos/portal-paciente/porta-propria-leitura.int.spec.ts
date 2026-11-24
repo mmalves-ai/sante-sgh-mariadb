@@ -8,7 +8,11 @@ import { type ContextoOperacao, definirOperacao, type Escritor, NucleoProprio } 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { ContextoPortal, GravadorPortal } from './porta.js';
-import { type EscritaPortal, gravadorGravacaoPropria, TABELAS_GRAVACAO_PORTAL } from './porta-propria-gravacao.js';
+import {
+  type EscritaPortal,
+  gravadorGravacaoPropria,
+  TABELAS_GRAVACAO_PORTAL,
+} from './porta-propria-gravacao.js';
 import { LeiturasPortalProprias } from './porta-propria-leitura.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -41,7 +45,9 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 
 async function limpar(e: Escritor, est: number): Promise<void> {
   const sol = 'SELECT id FROM solicitacao_copia_prontuario WHERE estabelecimento_id = ?';
-  await e.executar(`DELETE FROM ato_copia_prontuario WHERE solicitacao_copia_prontuario_id IN (${sol})`, [est]);
+  await e.executar(`DELETE FROM ato_copia_prontuario WHERE solicitacao_copia_prontuario_id IN (${sol})`, [
+    est,
+  ]);
   await e.executar('DELETE FROM solicitacao_copia_prontuario WHERE estabelecimento_id = ?', [est]);
   await e.executar(
     'DELETE h FROM pedido_titular_historico h JOIN pedido_titular p ON p.id = h.pedido_titular_id WHERE p.estabelecimento_id = ?',
@@ -54,7 +60,9 @@ async function limpar(e: Escritor, est: number): Promise<void> {
   );
   await e.executar('DELETE FROM consentimento_titular WHERE estabelecimento_id = ?', [est]);
   const contas = 'SELECT id FROM conta_portal_paciente WHERE estabelecimento_id = ?';
-  await e.executar(`DELETE FROM troca_email_conta_portal WHERE conta_portal_paciente_id IN (${contas})`, [est]);
+  await e.executar(`DELETE FROM troca_email_conta_portal WHERE conta_portal_paciente_id IN (${contas})`, [
+    est,
+  ]);
   await e.executar('DELETE FROM vinculo_responsavel_portal WHERE estabelecimento_id = ?', [est]);
   await e.executar('DELETE FROM conta_portal_paciente WHERE estabelecimento_id = ?', [est]);
   await e.executar('DELETE FROM sequencia_negocio WHERE estabelecimento_id = ?', [est]);
@@ -62,7 +70,10 @@ async function limpar(e: Escritor, est: number): Promise<void> {
 
 async function limparPacientes(e: Escritor): Promise<void> {
   const pr = PRONT.map(() => '?').join(', ');
-  const pfs = await e.consultar(`SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario IN (${pr})`, PRONT);
+  const pfs = await e.consultar(
+    `SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario IN (${pr})`,
+    PRONT,
+  );
   await e.executar(`DELETE FROM paciente WHERE numero_prontuario IN (${pr})`, PRONT);
   for (const x of pfs) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [x['id']]);
 }
@@ -86,7 +97,11 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
     inicio: new Date(),
   };
 
-  async function gravar<T>(fn: (g: G) => Promise<T>, estab: number, dados?: Record<string, unknown>): Promise<T> {
+  async function gravar<T>(
+    fn: (g: G) => Promise<T>,
+    estab: number,
+    dados?: Record<string, unknown>,
+  ): Promise<T> {
     const correlacao = `portal-l-${randomUUID()}`.slice(0, 64);
     const ctx: ContextoOperacao = {
       cliente: CLIENTE,
@@ -240,7 +255,13 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
       )
     ).id;
     await gravar(
-      (g) => g.revogarConsentimento({ idPaciente: pac[0]!, id: massa.consentimento, motivo: 2, usuario: 'SGH.PORTAL' }),
+      (g) =>
+        g.revogarConsentimento({
+          idPaciente: pac[0]!,
+          id: massa.consentimento,
+          motivo: 2,
+          usuario: 'SGH.PORTAL',
+        }),
       est,
     );
     massa.pedido = (
@@ -373,13 +394,22 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
     const fila = await leituras.filaVinculos(C, { situacao: 'pendente' });
     expect(fila).toMatchObject({ haMais: false });
     expect(fila.itens.map((v) => v.id)).toEqual([b, d]);
-    expect((await leituras.filaVinculos(C, { situacao: null, depoisDe: a })).itens.map((v) => v.id)).toEqual([b, d]);
+    expect((await leituras.filaVinculos(C, { situacao: null, depoisDe: a })).itens.map((v) => v.id)).toEqual([
+      b,
+      d,
+    ]);
     expect((await leituras.filaVinculos(C, { situacao: null, titulares: [pac[1]!] })).itens).toEqual([]);
   });
 
   it('consentimento: o revogado mantém a situação e traz a data; domínios do modelo', async () => {
     const [k] = await leituras.consentimentos(C, pac[0]!);
-    expect(k).toMatchObject({ id: massa.consentimento, situacao: 3, signatario: 1, versao: '2', canal: 'portal' });
+    expect(k).toMatchObject({
+      id: massa.consentimento,
+      situacao: 3,
+      signatario: 1,
+      versao: '2',
+      canal: 'portal',
+    });
     expect(k!.revogadoEm).not.toBeNull();
     expect(await leituras.consentimentos(C2, pac[0]!)).toEqual([]);
     expect((await leituras.dominiosConsentimento()).revogacoes).toHaveLength(1);
@@ -388,7 +418,11 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
   it('pedidos da conta e a cópia do prontuário (fila e atos)', async () => {
     const ps = await leituras.pedidos(C, massa.conta, pac[0]!);
     expect(ps.map((p) => p.id)).toEqual([massa.pedido, massa.copia]);
-    expect(ps[0]).toMatchObject({ tipo: 'compartilhamento', situacao: 'identidade-verificada', decididoEm: null });
+    expect(ps[0]).toMatchObject({
+      tipo: 'compartilhamento',
+      situacao: 'identidade-verificada',
+      decididoEm: null,
+    });
     expect(await leituras.pedidos(C, massa.contaRes, pac[0]!)).toEqual([]);
     const fila = await leituras.filaCopias(C, { pendentes: true });
     expect(fila).toHaveLength(1);
@@ -405,7 +439,9 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
     });
     expect(await leituras.filaCopias(C, { pendentes: false, idPaciente: pac[1]! })).toEqual([]);
     // A fila completa (com a janela dos decididos) e a busca pelo protocolo rodam no banco e acham a mesma cópia.
-    expect((await leituras.filaCopias(C, { pendentes: false })).map((x) => x.idPedido)).toEqual([massa.copia]);
+    expect((await leituras.filaCopias(C, { pendentes: false })).map((x) => x.idPedido)).toEqual([
+      massa.copia,
+    ]);
     const porProtocolo = await leituras.filaCopias(C, { pendentes: false, protocolo: fila[0]!.protocolo });
     expect(porProtocolo.map((x) => x.idPedido)).toEqual([massa.copia]);
     expect(await leituras.filaCopias(C, { pendentes: false, protocolo: 'NAO-EXISTE' })).toEqual([]);
@@ -419,7 +455,10 @@ describe.skipIf(SEM_BANCO)(`leituras próprias do portal do paciente (MariaDB, c
   });
 
   it('documentos (nenhum envelope do paciente sintético) e leituras do titular pela trilha', async () => {
-    expect(await leituras.documentos(C, pac[0]!, ['receita', 'atestado'], 1)).toEqual({ itens: [], haMais: false });
+    expect(await leituras.documentos(C, pac[0]!, ['receita', 'atestado'], 1)).toEqual({
+      itens: [],
+      haMais: false,
+    });
     const hoje = new Date().toISOString().slice(0, 10);
     const de = massa.inicio.toISOString().slice(0, 10);
     const r = await leituras.leituras(C, pac[0]!, ['portal.documento.visto'], de, hoje);

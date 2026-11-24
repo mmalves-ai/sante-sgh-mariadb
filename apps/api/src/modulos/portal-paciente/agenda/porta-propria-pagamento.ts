@@ -90,7 +90,9 @@ export async function confirmarPagamentoProprio(
   if (!paga && tardia)
     for (const k of outras)
       if (String(k['situacao']) === 'pendente')
-        await tx.alterar('intencao_pagamento_portal', num(k['id']), num(k['versao']), { situacao: 'expirado' });
+        await tx.alterar('intencao_pagamento_portal', num(k['id']), num(k['versao']), {
+          situacao: 'expirado',
+        });
 
   const recebimento = await baixarNoCaixa(tx, estabelecimento, {
     paciente: num(atual['paciente_id']),
@@ -121,7 +123,9 @@ async function baixarNoCaixa(
     [estabelecimento, CAIXA_PORTAL],
   );
   if (!caixa)
-    throw catalogoIncompleto(`Cadastre o caixa "${CAIXA_PORTAL}" que recebe os pagamentos do portal do paciente.`);
+    throw catalogoIncompleto(
+      `Cadastre o caixa "${CAIXA_PORTAL}" que recebe os pagamentos do portal do paciente.`,
+    );
   const meio = p.forma === 'cartao_credito' ? 'cartao_credito' : 'pix';
   const forma = await tx.uma(
     `SELECT id FROM forma_recebimento

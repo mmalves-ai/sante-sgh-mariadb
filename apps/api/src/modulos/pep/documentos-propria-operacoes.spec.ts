@@ -90,7 +90,9 @@ describe('documentos-propria-operacoes (unidade)', () => {
     const base = { paciente: 1, alergia: 2, versao: '2' };
     expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(250) }).success).toBe(true);
     expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(251) }).success).toBe(false);
-    expect(await codigo(ops['pep.inativarAlergia']!(C, { ...base, motivo: 'm'.repeat(300) }, CTX))).toBe('entrada-invalida');
+    expect(await codigo(ops['pep.inativarAlergia']!(C, { ...base, motivo: 'm'.repeat(300) }, CTX))).toBe(
+      'entrada-invalida',
+    );
   });
 
   it('validade da receita pela data LOCAL da emissão (perto da meia-noite no fuso do estabelecimento)', () => {
@@ -105,7 +107,9 @@ describe('documentos-propria-operacoes (unidade)', () => {
     expect(await codigo(ops['pep.registrarAlergia']!(C, alergia, CTX))).toBe('entrada-invalida');
     expect(await codigo(ops['pep.inativarAlergia']!(C, { paciente: 1 }, CTX))).toBe('entrada-invalida');
     // CID sem autorização e atestado sem dias já não recusam antes da sessão: o núcleo intocável é alcançado.
-    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, cid: 'A09' }, CTX))).toContain('não podia ser tocado');
+    expect(await codigo(ops['pep.emitirDocumento']!(C, { ...atestado, cid: 'A09' }, CTX))).toContain(
+      'não podia ser tocado',
+    );
     expect(
       await codigo(
         ops['pep.lancarExameExterno']!(

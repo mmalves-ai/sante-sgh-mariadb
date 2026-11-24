@@ -417,9 +417,13 @@ export class LeiturasPortalProprias {
     }
     const r = await this.comEst(c, async (l, est) =>
       (
-        await l.consultar(`${SQL_VINCULO}${filtro} ORDER BY v.id LIMIT ${TETO_FILA_VINCULOS + 1}`, [est, ...p], {
-          teto: TETO_FILA_VINCULOS + 1,
-        })
+        await l.consultar(
+          `${SQL_VINCULO}${filtro} ORDER BY v.id LIMIT ${TETO_FILA_VINCULOS + 1}`,
+          [est, ...p],
+          {
+            teto: TETO_FILA_VINCULOS + 1,
+          },
+        )
       ).map((x) => vinculoDaLinha(x, c.hospital)),
     );
     return { itens: r.slice(0, TETO_FILA_VINCULOS), haMais: r.length > TETO_FILA_VINCULOS };
@@ -544,23 +548,21 @@ export class LeiturasPortalProprias {
         [est, ...p, ...PEDIDO_PENDENTE],
         { teto: TETO_CONTAS },
       );
-      return linhas.map(
-        (x): CopiaNaFila => ({
-          idPedido: String(num(x['id'])),
-          protocolo: texto(x['numero']),
-          situacao: situacaoPedido(texto(x['situacao'])),
-          canal: texto(x['canal_recebimento']) === 'presencial' ? 'balcao' : texto(x['canal_recebimento']),
-          idPaciente: num(x['paciente_id']),
-          prontuario: numOuNull(x['numero_prontuario']),
-          abertoEm: instante(x['recebido_em']) ?? new Date(0),
-          prazo: instante(x['prazo_em']) ?? new Date(0),
-          solicitante: textoOuNull(x['solicitante']) ?? 'titular',
-          vinculo: textoOuNull(x['vinculo']),
-          legitimidade: num(x['legitimidade']) > 0,
-          geracoes: num(x['geracoes']),
-          entregue: num(x['entregue']) > 0,
-        }),
-      );
+      return linhas.map((x): CopiaNaFila => ({
+        idPedido: String(num(x['id'])),
+        protocolo: texto(x['numero']),
+        situacao: situacaoPedido(texto(x['situacao'])),
+        canal: texto(x['canal_recebimento']) === 'presencial' ? 'balcao' : texto(x['canal_recebimento']),
+        idPaciente: num(x['paciente_id']),
+        prontuario: numOuNull(x['numero_prontuario']),
+        abertoEm: instante(x['recebido_em']) ?? new Date(0),
+        prazo: instante(x['prazo_em']) ?? new Date(0),
+        solicitante: textoOuNull(x['solicitante']) ?? 'titular',
+        vinculo: textoOuNull(x['vinculo']),
+        legitimidade: num(x['legitimidade']) > 0,
+        geracoes: num(x['geracoes']),
+        entregue: num(x['entregue']) > 0,
+      }));
     });
   }
 
@@ -626,8 +628,10 @@ export class LeiturasPortalProprias {
     ate: string,
   ): Promise<{ itens: LeituraTitular[]; haMais: boolean }> {
     if (eventos.length === 0) return { itens: [], haMais: false };
-    const evento = "COALESCE(JSON_VALUE(t.dados_depois, '$.evento'), JSON_VALUE(t.dados_depois, '$.dados.evento'))";
-    const pac = "COALESCE(JSON_VALUE(t.dados_depois, '$.paciente'), JSON_VALUE(t.dados_depois, '$.dados.paciente'))";
+    const evento =
+      "COALESCE(JSON_VALUE(t.dados_depois, '$.evento'), JSON_VALUE(t.dados_depois, '$.dados.evento'))";
+    const pac =
+      "COALESCE(JSON_VALUE(t.dados_depois, '$.paciente'), JSON_VALUE(t.dados_depois, '$.dados.paciente'))";
     const r = await this.comEst(c, (l, est) =>
       l.consultar(
         `SELECT t.ocorrido_em, ${evento} AS evento,
@@ -644,14 +648,12 @@ export class LeiturasPortalProprias {
         { teto: TETO_LEITURAS + 1 },
       ),
     );
-    const itens = r.slice(0, TETO_LEITURAS).map(
-      (x): LeituraTitular => ({
-        em: instanteIso(x['ocorrido_em']) ?? '',
-        usuario: texto(x['usuario']),
-        evento: texto(x['evento']),
-        idAlvo: textoOuNull(x['id_alvo']),
-      }),
-    );
+    const itens = r.slice(0, TETO_LEITURAS).map((x): LeituraTitular => ({
+      em: instanteIso(x['ocorrido_em']) ?? '',
+      usuario: texto(x['usuario']),
+      evento: texto(x['evento']),
+      idAlvo: textoOuNull(x['id_alvo']),
+    }));
     return { itens, haMais: r.length > TETO_LEITURAS };
   }
 }

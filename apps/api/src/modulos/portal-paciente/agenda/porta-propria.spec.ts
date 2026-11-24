@@ -82,7 +82,15 @@ describe('PortaAgendaOnlinePropria (unidade)', () => {
       nucleoFalso((sql) => {
         if (estab(sql)) return [{ id: 1, fuso_horario: 'America/Sao_Paulo' }];
         if (sql.includes('FROM pre_checkin_documento'))
-          return [{ pre_checkin_id: 4, tipo: 'carteira_convenio', resumo_conteudo: 'h', tipo_midia: 'image/png', chave_armazenamento: 'k' }];
+          return [
+            {
+              pre_checkin_id: 4,
+              tipo: 'carteira_convenio',
+              resumo_conteudo: 'h',
+              tipo_midia: 'image/png',
+              chave_armazenamento: 'k',
+            },
+          ];
         return [
           {
             id: 4,
@@ -136,7 +144,18 @@ describe('PortaAgendaOnlinePropria (unidade)', () => {
       nucleoFalso((sql) => {
         if (estab(sql)) return [{ id: 1, fuso_horario: null }];
         if (sql.includes('FROM conciliacao_pagamento_portal'))
-          return [{ id: 1, intencao_pagamento_portal_id: 3, acao: 'divergente', valor: '10.00', referencia: null, motivo: 'm', login: 'T', criado_em: new Date('2026-11-23T10:00:00Z') }];
+          return [
+            {
+              id: 1,
+              intencao_pagamento_portal_id: 3,
+              acao: 'divergente',
+              valor: '10.00',
+              referencia: null,
+              motivo: 'm',
+              login: 'T',
+              criado_em: new Date('2026-11-23T10:00:00Z'),
+            },
+          ];
         return [
           {
             id: 3,
@@ -161,10 +180,24 @@ describe('PortaAgendaOnlinePropria (unidade)', () => {
       }),
     );
     const t = await porta.pagamentoTesouraria(c, 3);
-    expect(t?.pagamento).toMatchObject({ forma: 'cartao-credito', conector: 'gateway', pagamentoCaixa: 77, valor: 10 });
+    expect(t?.pagamento).toMatchObject({
+      forma: 'cartao-credito',
+      conector: 'gateway',
+      pagamentoCaixa: 77,
+      valor: 10,
+    });
     expect(t?.cobradoPor).toBe('SGH.PORTAL');
     expect(t?.atos).toEqual([
-      { id: 1, pagamento: 3, acao: 'divergente', valor: 10, referencia: null, motivo: 'm', usuario: 'T', em: '2026-11-23T10:00:00.000' },
+      {
+        id: 1,
+        pagamento: 3,
+        acao: 'divergente',
+        valor: 10,
+        referencia: null,
+        motivo: 'm',
+        usuario: 'T',
+        em: '2026-11-23T10:00:00.000',
+      },
     ]);
   });
 

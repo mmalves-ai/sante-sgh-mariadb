@@ -59,7 +59,8 @@ function cabecalhoAssunto(assunto: string): string {
 }
 
 export function montarMensagemAcesso(de: string, m: MensagemAcesso, data = new Date()): string {
-  if (!ENDERECO_EMAIL.test(de) || !ENDERECO_EMAIL.test(m.para)) throw new Error('Endereço de e-mail inválido.');
+  if (!ENDERECO_EMAIL.test(de) || !ENDERECO_EMAIL.test(m.para))
+    throw new Error('Endereço de e-mail inválido.');
   if (/[\r\n]/.test(m.assunto)) throw new Error('Assunto inválido.');
   const corpo = Buffer.from(m.texto, 'utf8')
     .toString('base64')

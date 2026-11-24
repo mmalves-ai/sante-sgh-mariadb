@@ -61,12 +61,7 @@ const conflitoAlergias = () =>
 
 /** A descrição livre normalizada para a duplicidade: sem acento, minúscula, espaços colapsados. */
 export function descricaoNormalizada(t: string): string {
-  return t
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 /** Origem da informação da tela → valor do banco (hífen → sublinhado; CHECK de alergia_paciente). */
@@ -147,7 +142,11 @@ async function sessao(
   if (profissional === null) {
     if (!exigir)
       return { est: est.id, fuso: est.fuso, usuario, profissional: null, ocupacao: null, cbo: null };
-    throw recusar(403, 'sem-profissional', 'A conta da sessão não tem vínculo de profissional vigente neste estabelecimento.');
+    throw recusar(
+      403,
+      'sem-profissional',
+      'A conta da sessão não tem vínculo de profissional vigente neste estabelecimento.',
+    );
   }
   const i = await tx.uma(
     `SELECT i.id, i.ocupacao_cbo_id, o.codigo_cbo FROM inscricao_conselho i
@@ -158,8 +157,7 @@ async function sessao(
     inscricao !== null ? [profissional, inscricao] : [profissional],
   );
   if (!i) {
-    if (!exigir)
-      return { est: est.id, fuso: est.fuso, usuario, profissional, ocupacao: null, cbo: null };
+    if (!exigir) return { est: est.id, fuso: est.fuso, usuario, profissional, ocupacao: null, cbo: null };
     throw recusar(
       403,
       inscricao !== null ? 'cbo-de-outro-profissional' : 'sem-conselho-ativo',
@@ -179,10 +177,19 @@ async function sessao(
 /** Documento emitido só por médico (CBO 225x), como a memória. */
 function conferirMedico(s: Sessao): void {
   if (!(s.cbo ?? '').startsWith('225'))
-    throw recusar(422, 'categoria-nao-permitida', 'Este documento é emitido só por médico com registro ativo no conselho.');
+    throw recusar(
+      422,
+      'categoria-nao-permitida',
+      'Este documento é emitido só por médico com registro ativo no conselho.',
+    );
 }
 
-async function conferirAtendimento(tx: TxOperacao, s: Sessao, atendimento: number, paciente: number): Promise<void> {
+async function conferirAtendimento(
+  tx: TxOperacao,
+  s: Sessao,
+  atendimento: number,
+  paciente: number,
+): Promise<void> {
   const at = await tx.uma(
     'SELECT paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [atendimento, s.est],
@@ -224,13 +231,21 @@ async function documentoProntuario(
     [d.categoria, d.categoria],
   );
   if (!tipo)
-    throw recusar(409, 'tipo-documento-sem-cadastro', `O cliente não tem tipo de documento clínico ativo na categoria "${d.categoria}".`);
+    throw recusar(
+      409,
+      'tipo-documento-sem-cadastro',
+      `O cliente não tem tipo de documento clínico ativo na categoria "${d.categoria}".`,
+    );
   const sit = await tx.uma(
     `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE
       ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
   );
   if (!sit)
-    throw recusar(409, 'situacao-documento-sem-cadastro', 'O cliente não tem situação de documento ativa na categoria "lancado".');
+    throw recusar(
+      409,
+      'situacao-documento-sem-cadastro',
+      'O cliente não tem situação de documento ativa na categoria "lancado".',
+    );
   const agora = new Date();
   const documento = await tx.incluir('documento_prontuario', {
     estabelecimento_id: s.est,
@@ -269,7 +284,10 @@ const TABELAS_DOCUMENTO = ['documento_prontuario', 'documento_prontuario_evento'
 const SQL_E_ALERGIA = `excluido_em IS NULL AND tipo_registro IN ('alergia','intolerancia') AND situacao_registro = 'confirmado'`;
 
 /** Versão da lista (ids ativos em ordem, todos os estabelecimentos do cliente), com as linhas travadas. */
-async function versaoTravada(tx: TxOperacao, paciente: number): Promise<{ versao: string; linhas: Record<string, unknown>[] }> {
+async function versaoTravada(
+  tx: TxOperacao,
+  paciente: number,
+): Promise<{ versao: string; linhas: Record<string, unknown>[] }> {
   const linhas = await tx.consultarParaAtualizar(
     `SELECT id, alergeno_id, descricao_livre, versao FROM alergia_paciente
       WHERE paciente_id = ? AND ativa = TRUE AND ${SQL_E_ALERGIA} ORDER BY id`,
@@ -295,18 +313,30 @@ export function operacoesDocumentosPropria(
     nome: string,
     entrada: Record<string, unknown>,
     tabelas: readonly string[],
-    fn: (tx: TxOperacao, est: { id: number; fuso: string }) => Promise<Resultado & { tabela: string; id: number }>,
+    fn: (
+      tx: TxOperacao,
+      est: { id: number; fuso: string },
+    ) => Promise<Resultado & { tabela: string; id: number }>,
     trilha: (r: Resultado) => Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const banco = c.cliente || cliente;
-    const est = await nucleo.lerSomente({ cliente: banco, correlacao: `pep.documentos.${nome}` }, async (l) => {
-      const e = await l.uma('SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
-        c.hospital,
-      ]);
-      if (!e)
-        throw new ErroOperacao(404, 'estabelecimento-inexistente', 'Estabelecimento não encontrado', 'O estabelecimento da sessão não existe neste cliente.');
-      return { id: num(e['id']), fuso: fusoValido(e['fuso_horario']) };
-    });
+    const est = await nucleo.lerSomente(
+      { cliente: banco, correlacao: `pep.documentos.${nome}` },
+      async (l) => {
+        const e = await l.uma(
+          'SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+          [c.hospital],
+        );
+        if (!e)
+          throw new ErroOperacao(
+            404,
+            'estabelecimento-inexistente',
+            'Estabelecimento não encontrado',
+            'O estabelecimento da sessão não existe neste cliente.',
+          );
+        return { id: num(e['id']), fuso: fusoValido(e['fuso_horario']) };
+      },
+    );
     const op = definirOperacao({
       nome,
       tabelas: [...tabelas, ...TABELAS_DOCUMENTO],
@@ -315,7 +345,11 @@ export function operacoesDocumentosPropria(
       alvo: (_e, x) => ({ tabela: String(x['tabela']), id: Number(x['id']) }),
       trilha: (_e, x) => ({ dados: trilha(x) }),
     });
-    const saida = await executor.executar(op, banco, entrada, { ...ctx, cliente: banco, estabelecimento: est.id });
+    const saida = await executor.executar(op, banco, entrada, {
+      ...ctx,
+      cliente: banco,
+      estabelecimento: est.id,
+    });
     const resto: Record<string, unknown> = { ...saida.resultado };
     delete resto['tabela'];
     delete resto['id'];
@@ -364,24 +398,51 @@ export function operacoesDocumentosPropria(
           const nega = u?.['nega'] ?? null;
           const ultima = u?.['alergia'] ?? null;
           if (nega !== null && (ultima === null || new Date(String(ultima)) <= new Date(String(nega))))
-            throw new ErroOperacao(409, 'nega-repetida', 'Já registrado', 'O paciente já está registrado como "nega alergias".');
-          id = await tx.incluir('alergia_paciente', { ...comum, tipo_registro: 'nega_alergias', observacao: x.observacao ?? null });
+            throw new ErroOperacao(
+              409,
+              'nega-repetida',
+              'Já registrado',
+              'O paciente já está registrado como "nega alergias".',
+            );
+          id = await tx.incluir('alergia_paciente', {
+            ...comum,
+            tipo_registro: 'nega_alergias',
+            observacao: x.observacao ?? null,
+          });
           alergia = 0;
         } else {
           if (x.agente !== undefined) {
             const ag = await tx.uma('SELECT id FROM alergeno WHERE id = ? AND ativo = TRUE', [x.agente]);
             if (!ag)
-              throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', { campos: ['agente'] });
+              throw new ErroOperacao(
+                400,
+                'entrada-invalida',
+                'Entrada inválida',
+                'Confira os campos indicados.',
+                { campos: ['agente'] },
+              );
             if (linhas.some((l) => numOuNull(l['alergeno_id']) === x.agente))
-              throw new ErroOperacao(422, 'duplicada', 'Alergia já registrada', 'O agente já está na lista ativa.');
+              throw new ErroOperacao(
+                422,
+                'duplicada',
+                'Alergia já registrada',
+                'O agente já está na lista ativa.',
+              );
           } else {
             const alvo = descricaoNormalizada(x.descricaoLivre ?? '');
             if (
               linhas.some(
-                (l) => l['alergeno_id'] === null && descricaoNormalizada(String(l['descricao_livre'] ?? '')) === alvo,
+                (l) =>
+                  l['alergeno_id'] === null &&
+                  descricaoNormalizada(String(l['descricao_livre'] ?? '')) === alvo,
               )
             )
-              throw new ErroOperacao(422, 'duplicada', 'Alergia já registrada', 'O agente já está na lista ativa.');
+              throw new ErroOperacao(
+                422,
+                'duplicada',
+                'Alergia já registrada',
+                'O agente já está na lista ativa.',
+              );
           }
           const principios = [...new Set(x.principios)];
           if (principios.length) {
@@ -390,7 +451,13 @@ export function operacoesDocumentosPropria(
               principios,
             );
             if (ok.length !== principios.length)
-              throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', { campos: ['principios'] });
+              throw new ErroOperacao(
+                400,
+                'entrada-invalida',
+                'Entrada inválida',
+                'Confira os campos indicados.',
+                { campos: ['principios'] },
+              );
           }
           id = await tx.incluir('alergia_paciente', {
             ...comum,
@@ -404,7 +471,10 @@ export function operacoesDocumentosPropria(
             ativa: true,
           });
           for (const p of principios)
-            await tx.incluir('alergia_paciente_principio', { alergia_paciente_id: id, principio_ativo_id: p });
+            await tx.incluir('alergia_paciente_principio', {
+              alergia_paciente_id: id,
+              principio_ativo_id: p,
+            });
           alergia = id;
         }
         const documento = await documentoProntuario(tx, s, {
@@ -438,7 +508,13 @@ export function operacoesDocumentosPropria(
           `SELECT id, ativa, versao FROM alergia_paciente WHERE id = ? AND paciente_id = ? AND ${SQL_E_ALERGIA}`,
           [x.alergia, x.paciente],
         );
-        if (!a) throw new ErroOperacao(404, 'registro-inexistente', 'Alergia não encontrada', 'A alergia não é deste paciente.');
+        if (!a)
+          throw new ErroOperacao(
+            404,
+            'registro-inexistente',
+            'Alergia não encontrada',
+            'A alergia não é deste paciente.',
+          );
         const { versao } = await versaoTravada(tx, x.paciente);
         if (!Number(a['ativa']) || versao !== x.versao) throw conflitoAlergias();
         await tx.alterar('alergia_paciente', num(a['id']), num(a['versao']), {
@@ -489,7 +565,12 @@ export function operacoesDocumentosPropria(
             `SELECT id, numero_vias, validade_dias FROM tipo_receita WHERE ativo = TRUE AND ${flags}
               ORDER BY padrao DESC, exige_notificacao, id LIMIT 1`,
           );
-          if (!t) throw recusar(409, 'tipo-receita-sem-cadastro', `O cliente não tem tipo de receita ativo para "${x.tipo}".`);
+          if (!t)
+            throw recusar(
+              409,
+              'tipo-receita-sem-cadastro',
+              `O cliente não tem tipo de receita ativo para "${x.tipo}".`,
+            );
           const numero = await tx.proximoNumero(SEQUENCIA_RECEITA);
           const validade = numOuNull(t['validade_dias']);
           const validadeAte = validade === null ? null : validadeLocal(clinico, s.fuso, validade);
@@ -523,7 +604,13 @@ export function operacoesDocumentosPropria(
                   AND excluido_em IS NULL`,
               [x.corrige, x.paciente, s.est],
             );
-            if (!o) throw new ErroOperacao(404, 'registro-inexistente', 'Documento não encontrado', 'O documento corrigido não é deste paciente.');
+            if (!o)
+              throw new ErroOperacao(
+                404,
+                'registro-inexistente',
+                'Documento não encontrado',
+                'O documento corrigido não é deste paciente.',
+              );
           }
           const modelo = await tx.uma(
             `SELECT id FROM modelo_documento_clinico WHERE titulo = ? AND excluido_em IS NULL ORDER BY id LIMIT 1`,
@@ -570,7 +657,9 @@ export function operacoesDocumentosPropria(
         });
         if (!receita) {
           const v = await tx.uma('SELECT versao FROM documento_emitido WHERE id = ?', [origem]);
-          await tx.alterar('documento_emitido', origem, num(v?.['versao'] ?? 1), { documento_prontuario_id: documento });
+          await tx.alterar('documento_emitido', origem, num(v?.['versao'] ?? 1), {
+            documento_prontuario_id: documento,
+          });
         }
         return {
           tabela: receita ? 'receita_medica' : 'documento_emitido',
@@ -655,7 +744,12 @@ export function operacoesDocumentosPropria(
           [x.atendimento],
         );
         if (vs.some((v) => ['finalizado', 'assinado'].includes(String(v['situacao']))))
-          throw new ErroOperacao(409, 'sumario-finalizado', 'Já finalizado', 'O sumário de alta deste atendimento já foi finalizado.');
+          throw new ErroOperacao(
+            409,
+            'sumario-finalizado',
+            'Já finalizado',
+            'O sumário de alta deste atendimento já foi finalizado.',
+          );
         if (x.versao !== Math.max(0, ...vs.map((v) => num(v['numero_versao']))) + 1)
           throw new ErroOperacao(
             409,

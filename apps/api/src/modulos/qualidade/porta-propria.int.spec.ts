@@ -303,7 +303,9 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação contra o MariaDB
     // A etapa 2 (porta-propria-etapa2.int.spec.ts) também não enxerga a notificação de outro estabelecimento.
     expect(
       await codigo(
-        porta.gravarSgh(fora, trilha(), (g) => g.registrarAnalise({ notificacao: id, usuario: m.login } as never)),
+        porta.gravarSgh(fora, trilha(), (g) =>
+          g.registrarAnalise({ notificacao: id, usuario: m.login } as never),
+        ),
       ),
     ).toBe('nao-encontrado');
   });

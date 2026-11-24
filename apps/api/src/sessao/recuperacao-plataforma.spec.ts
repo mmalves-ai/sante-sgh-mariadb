@@ -27,13 +27,22 @@ function bancoFalso(adms: Adm[]) {
   const leitor = {
     uma: (sql: string, p: unknown[]) =>
       Promise.resolve(
-        linha(sql.includes('a.email = ?') ? adms.find((a) => a.email === p[0]) : adms.find((a) => a.id === p[0])),
+        linha(
+          sql.includes('a.email = ?') ? adms.find((a) => a.email === p[0]) : adms.find((a) => a.id === p[0]),
+        ),
       ),
   } as unknown as Leitor;
   const escritor = {
     executar: (sql: string, p: unknown[]) => {
       if (sql.includes('INSERT INTO credencial_administrador_evento')) {
-        eventos.push({ id: Number(p[0]), tipo: sql.includes("'senha_recuperada'") ? 'senha_recuperada' : sql.includes("'segundo_fator_metodo_alterado'") ? 'segundo_fator_metodo_alterado' : String(p[1]) });
+        eventos.push({
+          id: Number(p[0]),
+          tipo: sql.includes("'senha_recuperada'")
+            ? 'senha_recuperada'
+            : sql.includes("'segundo_fator_metodo_alterado'")
+              ? 'segundo_fator_metodo_alterado'
+              : String(p[1]),
+        });
         return Promise.resolve(1);
       }
       const a = adms.find((x) => x.id === p[p.length - 1]);
@@ -67,10 +76,16 @@ function montar(adms: Adm[]) {
   const banco = bancoFalso(adms);
   const email = emailAcessoMemoria();
   const armazem = new ArmazemMemoria();
-  const s = new ServicoRecuperacaoPlataforma(banco.nucleo, armazem, email, new ServicoCodigoEmail(armazem, email), {
-    linkTela: 'http://127.0.0.1/plataforma/recuperar-senha',
-    cifrar: (x) => Promise.resolve(`$argon2id$teste$${x.length}`),
-  });
+  const s = new ServicoRecuperacaoPlataforma(
+    banco.nucleo,
+    armazem,
+    email,
+    new ServicoCodigoEmail(armazem, email),
+    {
+      linkTela: 'http://127.0.0.1/plataforma/recuperar-senha',
+      cifrar: (x) => Promise.resolve(`$argon2id$teste$${x.length}`),
+    },
+  );
   return { s, email, banco, adms };
 }
 
@@ -78,7 +93,10 @@ const tokenDe = (texto: string) => /token=([A-Za-z0-9_-]{43})/.exec(texto)?.[1] 
 
 describe('ServicoRecuperacaoPlataforma', () => {
   it('mesma resposta exista ou não a conta; só a conta ativa recebe o link', async () => {
-    const { s, email, banco } = montar([adm(1, 'ativo@exemplo.invalid'), adm(2, 'inativo@exemplo.invalid', false)]);
+    const { s, email, banco } = montar([
+      adm(1, 'ativo@exemplo.invalid'),
+      adm(2, 'inativo@exemplo.invalid', false),
+    ]);
     for (const e of ['ATIVO@exemplo.invalid', 'inativo@exemplo.invalid', 'ninguem@exemplo.invalid'])
       expect(await s.pedir(e, '10.0.0.1', 'c1')).toEqual({ mensagem: RESPOSTA_RECUPERACAO_PLATAFORMA });
     await s.aguardarEnvios();
@@ -114,7 +132,8 @@ describe('ServicoRecuperacaoPlataforma', () => {
 
   it('limite por conta conta antes de saber se ela existe (429 igual para todos)', async () => {
     const { s } = montar([]);
-    for (let k = 0; k < PEDIDOS_PLATAFORMA_POR_CONTA_HORA; k++) await s.pedir('ninguem@exemplo.invalid', `ip${k}`, 'c');
+    for (let k = 0; k < PEDIDOS_PLATAFORMA_POR_CONTA_HORA; k++)
+      await s.pedir('ninguem@exemplo.invalid', `ip${k}`, 'c');
     await expect(s.pedir('ninguem@exemplo.invalid', 'ip-novo', 'c')).rejects.toMatchObject({ status: 429 });
   });
 
@@ -122,7 +141,9 @@ describe('ServicoRecuperacaoPlataforma', () => {
     const { s } = montar([]);
     await expect(s.pedir('sem-arroba', null, 'c')).rejects.toMatchObject({ status: 400 });
     const banco = bancoFalso([]);
-    const sem = new ServicoRecuperacaoPlataforma(banco.nucleo, new ArmazemMemoria(), null, null, { linkTela: 'x' });
+    const sem = new ServicoRecuperacaoPlataforma(banco.nucleo, new ArmazemMemoria(), null, null, {
+      linkTela: 'x',
+    });
     expect(sem.disponivel).toBe(false);
     await expect(sem.pedir('a@b.c', null, 'c')).rejects.toMatchObject({ status: 503 });
   });
@@ -144,13 +165,18 @@ describe('ServicoRecuperacaoPlataforma', () => {
       'codigo_email_conferido',
       'codigo_email_recusado',
     ]);
-    await expect(s.escolherMetodoSegundoFator(5, 'sms' as never, null, 'c')).rejects.toMatchObject({ status: 400 });
+    await expect(s.escolherMetodoSegundoFator(5, 'sms' as never, null, 'c')).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('segundo fator: quem usa o aplicativo não recebe nem confere código por e-mail (409)', async () => {
     const { s, email, banco } = montar([adm(6, 'adm6@exemplo.invalid')]);
     expect(await s.metodoSegundoFator(6)).toBe('aplicativo');
-    await expect(s.emitirCodigo(6, null, 'c')).rejects.toMatchObject({ codigo: 'metodo-nao-escolhido', status: 409 });
+    await expect(s.emitirCodigo(6, null, 'c')).rejects.toMatchObject({
+      codigo: 'metodo-nao-escolhido',
+      status: 409,
+    });
     await expect(s.conferirCodigo(6, '123456', null, 'c')).rejects.toMatchObject({
       codigo: 'metodo-nao-escolhido',
       status: 409,

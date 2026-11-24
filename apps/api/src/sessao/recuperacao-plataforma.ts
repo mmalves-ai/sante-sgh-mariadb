@@ -144,7 +144,14 @@ export class ServicoRecuperacaoPlataforma {
         `INSERT INTO credencial_administrador_evento
            (administrador_plataforma_id, tipo, origem_resumo, correlacao, ocorrido_em, criado_em)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [id, tipo, ip === null ? null : resumo(`origem\u0000${ip}`), correlacao.slice(0, 64) || null, agora, agora],
+        [
+          id,
+          tipo,
+          ip === null ? null : resumo(`origem\u0000${ip}`),
+          correlacao.slice(0, 64) || null,
+          agora,
+          agora,
+        ],
       ),
     );
   }
@@ -296,13 +303,22 @@ export class ServicoRecuperacaoPlataforma {
   }
 
   /** Envia o código ao e-mail do administrador (depois da senha conferida no login). */
-  async emitirCodigo(id: number, ip: string | null, correlacao: string): Promise<{ validadeMinutos: number }> {
-    if (!this.codigos) throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
+  async emitirCodigo(
+    id: number,
+    ip: string | null,
+    correlacao: string,
+  ): Promise<{ validadeMinutos: number }> {
+    if (!this.codigos)
+      throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
     const adm = await this.lerPorId(id);
     if (!adm || !bool(adm.ativo))
       throw new ErroRecuperacaoPlataforma('conta-impedida', 409, 'A conta não está ativa.');
     this.exigirEmailEscolhido(adm);
-    const r = await this.codigos.emitir(contaPlataforma(id), String(adm.email), 'Código de acesso da plataforma');
+    const r = await this.codigos.emitir(
+      contaPlataforma(id),
+      String(adm.email),
+      'Código de acesso da plataforma',
+    );
     await this.evento(id, 'codigo_email_enviado', ip, correlacao).catch(() => undefined);
     return r;
   }
@@ -314,15 +330,20 @@ export class ServicoRecuperacaoPlataforma {
     ip: string | null,
     correlacao: string,
   ): Promise<DesfechoConferenciaCodigo> {
-    if (!this.codigos) throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
+    if (!this.codigos)
+      throw new ErroRecuperacaoPlataforma('indisponivel', 503, 'Envio de e-mail indisponível.');
     const adm = await this.lerPorId(id);
     if (!adm || !bool(adm.ativo))
       throw new ErroRecuperacaoPlataforma('conta-impedida', 409, 'A conta não está ativa.');
     this.exigirEmailEscolhido(adm);
     const r = await this.codigos.conferir(contaPlataforma(id), String(codigo ?? ''));
-    await this.evento(id, r === 'ok' ? 'codigo_email_conferido' : 'codigo_email_recusado', ip, correlacao).catch(
-      (e: unknown) =>
-        this.aviso('plataforma: evento do código não gravado', { erro: e instanceof Error ? e.name : 'erro' }),
+    await this.evento(
+      id,
+      r === 'ok' ? 'codigo_email_conferido' : 'codigo_email_recusado',
+      ip,
+      correlacao,
+    ).catch((e: unknown) =>
+      this.aviso('plataforma: evento do código não gravado', { erro: e instanceof Error ? e.name : 'erro' }),
     );
     return r;
   }

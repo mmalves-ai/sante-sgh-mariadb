@@ -948,7 +948,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     };
   }
 
-  async alergias(c: ContextoDocs, paciente: number): Promise<(AlergiaDoProntuarioLida & { paciente: number })[]> {
+  async alergias(
+    c: ContextoDocs,
+    paciente: number,
+  ): Promise<(AlergiaDoProntuarioLida & { paciente: number })[]> {
     // O dado completo (como a porta própria): o que a memória não guarda vai vazio; a origem é o hospital da sessão.
     return this.est(c.hospital)
       .alergias.filter((a) => a.paciente === paciente)

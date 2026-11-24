@@ -59,8 +59,12 @@ async function limpar(e: Escritor, est: number): Promise<void> {
   await e.executar("DELETE FROM arquivo WHERE chave_armazenamento LIKE 'teste-pao2ao/%'", []);
   await e.executar('DELETE FROM pre_checkin WHERE estabelecimento_id = ?', [est]);
   const cfg = 'SELECT id FROM agenda_online_configuracao WHERE estabelecimento_id = ?';
-  await e.executar(`DELETE FROM agenda_online_convenio WHERE agenda_online_configuracao_id IN (${cfg})`, [est]);
-  await e.executar(`DELETE FROM agenda_online_servico WHERE agenda_online_configuracao_id IN (${cfg})`, [est]);
+  await e.executar(`DELETE FROM agenda_online_convenio WHERE agenda_online_configuracao_id IN (${cfg})`, [
+    est,
+  ]);
+  await e.executar(`DELETE FROM agenda_online_servico WHERE agenda_online_configuracao_id IN (${cfg})`, [
+    est,
+  ]);
   await e.executar('DELETE FROM agenda_online_configuracao WHERE estabelecimento_id = ?', [est]);
   await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', [est]);
   await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id = ?', [est]);
@@ -69,7 +73,9 @@ async function limpar(e: Escritor, est: number): Promise<void> {
     'DELETE c FROM conta_portal_paciente c JOIN paciente p ON p.id = c.paciente_id WHERE p.numero_prontuario = ?',
     [PRONT],
   );
-  const pfs = await e.consultar('SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario = ?', [PRONT]);
+  const pfs = await e.consultar('SELECT pessoa_fisica_id AS id FROM paciente WHERE numero_prontuario = ?', [
+    PRONT,
+  ]);
   await e.executar('DELETE FROM paciente WHERE numero_prontuario = ?', [PRONT]);
   for (const x of pfs) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [x['id']]);
   await e.executar('DELETE FROM modelo_pesquisa_satisfacao WHERE codigo = ?', [MODELO]);
@@ -107,7 +113,8 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
   const ler = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-pao2ao' }, (l) => l.consultar(sql, p));
   const hoje = new Date().toISOString().slice(0, 10);
-  const idDe = async (login: string) => Number((await ler('SELECT id FROM usuario WHERE login = ?', [login]))[0]?.['id']);
+  const idDe = async (login: string) =>
+    Number((await ler('SELECT id FROM usuario WHERE login = ?', [login]))[0]?.['id']);
 
   beforeAll(async () => {
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-pao2ao' }, async (e) => {
@@ -140,7 +147,10 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
         "INSERT INTO categoria_agenda (codigo, descricao, natureza, criado_em) VALUES ('pao2ao_consulta', 'CONSULTA SINTETICA', 'consulta', ?)",
         [agora],
       );
-      const pfProf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [PROF, agora]);
+      const pfProf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        PROF,
+        agora,
+      ]);
       const prof = await e.inserir(
         "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
         [pfProf, agora],
@@ -211,7 +221,10 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
   });
 
   afterAll(async () => {
-    if (m) await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-pao2ao' }, (e) => limpar(e, m.est));
+    if (m)
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-pao2ao' }, (e) =>
+        limpar(e, m.est),
+      );
     await nucleo.encerrar();
   });
 
@@ -232,7 +245,11 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
       teleconsulta: false,
       por: LOGIN,
     };
-    const r = await porta.gravar(c, (g) => g.gravarConfig({ ...base, versao: null }), trilha('portal.agenda.config'));
+    const r = await porta.gravar(
+      c,
+      (g) => g.gravarConfig({ ...base, versao: null }),
+      trilha('portal.agenda.config'),
+    );
     expect(r.versao).toBe(1);
     const lida = await porta.config(c, 'consulta', m.agenda);
     expect(lida).toMatchObject({
@@ -256,7 +273,11 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
       trilha('portal.agenda.config'),
     );
     expect(r2).toEqual({ id: r.id, versao: 2 });
-    expect(await porta.config(c, 'consulta', m.agenda)).toMatchObject({ convenios: [], servicos: [], ativa: false });
+    expect(await porta.config(c, 'consulta', m.agenda)).toMatchObject({
+      convenios: [],
+      servicos: [],
+      ativa: false,
+    });
     const tr = await ler(
       "SELECT motivo, usuario_id, dados_depois FROM trilha_auditoria WHERE entidade = 'agenda_online_configuracao' AND entidade_id = ? ORDER BY id",
       [r.id],
@@ -266,9 +287,13 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     const u = await idDe(LOGIN);
     expect(tr.map((x) => Number(x['usuario_id']))).toEqual([u, u]);
     const bruto = tr[0]?.['dados_depois'];
-    const dados = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as { dados: Record<string, unknown> };
+    const dados = (typeof bruto === 'string' ? JSON.parse(bruto) : bruto) as {
+      dados: Record<string, unknown>;
+    };
     expect(dados.dados).toMatchObject({ usuario: LOGIN, correlacao: 'teste-pao2ao', atendimento: null });
-    const linha = await ler('SELECT criado_por, alterado_por FROM agenda_online_configuracao WHERE id = ?', [r.id]);
+    const linha = await ler('SELECT criado_por, alterado_por FROM agenda_online_configuracao WHERE id = ?', [
+      r.id,
+    ]);
     expect(linha.map((x) => [Number(x['criado_por']), Number(x['alterado_por'])])).toEqual([[u, u]]);
   });
 
@@ -309,9 +334,9 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     expect((await porta.preCheckinsDoPaciente(c, m.paciente)).map((k) => k.id)).toEqual([r.id]);
     const fila = await porta.filaPreCheckin(c, { situacao: 'enviado', de: hoje, ate: hoje });
     expect(fila).toMatchObject({ haMais: false, itens: [{ id: r.id }] });
-    expect((await porta.filaPreCheckin(c, { situacao: 'enviado', de: hoje, ate: hoje, depoisDe: r.id })).itens).toEqual(
-      [],
-    );
+    expect(
+      (await porta.filaPreCheckin(c, { situacao: 'enviado', de: hoje, ate: hoje, depoisDe: r.id })).itens,
+    ).toEqual([]);
     // Reenvio com outro documento: o anterior recebe exclusão lógica (SBIS-26), nunca DELETE.
     const doc2 = { tipo: 'carteirinha', chave: CHAVE2, sha256: 'b'.repeat(64), mime: 'application/pdf' };
     const r2 = await porta.gravar(c, (g) => g.enviarPreCheckin({ ...envio, documentos: [doc2] }), null);
@@ -329,24 +354,24 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     ]);
     // O mesmo arquivo reenviado reativa a sua linha (chave pré-check-in + arquivo), sem duplicar.
     const r3 = await porta.gravar(c, (g) => g.enviarPreCheckin(envio), null);
-    expect((await porta.preCheckinPorId(c, r.id))?.documentos).toMatchObject([{ chave: CHAVE, tipo: 'identidade' }]);
+    expect((await porta.preCheckinPorId(c, r.id))?.documentos).toMatchObject([
+      { chave: CHAVE, tipo: 'identidade' },
+    ]);
     expect((await docs()).map((x) => [x['chave'], Number(x['excluido'])])).toEqual([
       [CHAVE, 0],
       [CHAVE2, 1],
     ]);
     // Reserva desfeita: quem a desfez fica na linha (alterado_por) e na trilha, pelo login do registro.
     const res0 = await porta.gravar(c, (g) => g.reservarConferencia(r.id, r3.versao, LOGIN), null);
-    await porta.gravar(
-      c,
-      (g) => g.liberarConferencia(r.id, res0.versao),
-      { ...trilha('portal.precheckin.reserva-desfeita'), usuario: LOGIN2 },
-    );
+    await porta.gravar(c, (g) => g.liberarConferencia(r.id, res0.versao), {
+      ...trilha('portal.precheckin.reserva-desfeita'),
+      usuario: LOGIN2,
+    });
     const u2 = await idDe(LOGIN2);
     expect(
-      (await ler('SELECT alterado_por, reservado_por_usuario_id FROM pre_checkin WHERE id = ?', [r.id])).map((x) => [
-        Number(x['alterado_por']),
-        x['reservado_por_usuario_id'],
-      ]),
+      (await ler('SELECT alterado_por, reservado_por_usuario_id FROM pre_checkin WHERE id = ?', [r.id])).map(
+        (x) => [Number(x['alterado_por']), x['reservado_por_usuario_id']],
+      ),
     ).toEqual([[u2, null]]);
     const trLib = await ler(
       "SELECT usuario_id FROM trilha_auditoria WHERE entidade = 'pre_checkin' AND entidade_id = ? AND motivo = 'portal.precheckin.reserva-desfeita'",
@@ -356,11 +381,15 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     const versaoLivre = res0.versao + 1;
     const res = await porta.gravar(c, (g) => g.reservarConferencia(r.id, versaoLivre, LOGIN), null);
     expect((await porta.preCheckinPorId(c, r.id))?.reservadoPor).toBe(LOGIN);
+    await expect(porta.gravar(c, (g) => g.enviarPreCheckin(envio), null)).rejects.toMatchObject({
+      codigo: 'situacao',
+    });
     await expect(
-      porta.gravar(c, (g) => g.enviarPreCheckin(envio), null),
-    ).rejects.toMatchObject({ codigo: 'situacao' });
-    await expect(
-      porta.gravar(c, (g) => g.decidirPreCheckin(r.id, res.versao, { conferido: true, campos: [], por: LOGIN2 }), null),
+      porta.gravar(
+        c,
+        (g) => g.decidirPreCheckin(r.id, res.versao, { conferido: true, campos: [], por: LOGIN2 }),
+        null,
+      ),
     ).rejects.toMatchObject({ codigo: 'versao-desatualizada' });
     await porta.gravar(
       c,
@@ -398,7 +427,13 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
       porta.gravar(c, (g) => g.iniciarPagamento({ ...nova, transacao: `${nova.transacao}-2` }), null),
     ).rejects.toMatchObject({ codigo: 'situacao' });
     const p = await porta.pagamentoPorTransacao(c, nova.transacao);
-    expect(p).toMatchObject({ id: r.id, forma: 'cartao-credito', situacao: 'pendente', valor: 150, tipo: 'consulta' });
+    expect(p).toMatchObject({
+      id: r.id,
+      forma: 'cartao-credito',
+      situacao: 'pendente',
+      valor: 150,
+      tipo: 'consulta',
+    });
     expect((await porta.pagamentoPorId(c, r.id))?.transacao).toBe(nova.transacao);
     expect(await porta.pagamentoPorId(cOutro, r.id)).toBeNull();
     expect((await porta.pagamentosDoPaciente(c, m.paciente)).map((k) => k.id)).toEqual([r.id]);
@@ -407,14 +442,28 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
     await expect(
       porta.gravar(
         c,
-        (g) => g.registrarConciliacao({ pagamento: r.id, acao: 'conciliado', valor: 150, referencia: null, motivo: null, usuario: LOGIN2 }),
+        (g) =>
+          g.registrarConciliacao({
+            pagamento: r.id,
+            acao: 'conciliado',
+            valor: 150,
+            referencia: null,
+            motivo: null,
+            usuario: LOGIN2,
+          }),
         null,
       ),
     ).rejects.toMatchObject({ codigo: 'situacao' });
     await expect(
       porta.gravar(
         c,
-        (g) => g.confirmarPagamento({ transacao: nova.transacao, resultado: 'aprovado', comprovante: 'x', por: 'retorno' }),
+        (g) =>
+          g.confirmarPagamento({
+            transacao: nova.transacao,
+            resultado: 'aprovado',
+            comprovante: 'x',
+            por: 'retorno',
+          }),
         null,
       ),
     ).rejects.toMatchObject({ problema: { status: 503, codigo: 'catalogo-incompleto' } });
@@ -438,12 +487,22 @@ describe.skipIf(SEM_BANCO)(`porta própria da agenda online do portal (MariaDB, 
       nota: 9,
       comentario: 'sintetico',
     };
-    const r = await porta.gravar(c, (g) => g.responderPesquisa(resposta), trilha('portal.pesquisa.respondida'));
+    const r = await porta.gravar(
+      c,
+      (g) => g.responderPesquisa(resposta),
+      trilha('portal.pesquisa.respondida'),
+    );
     await expect(porta.gravar(c, (g) => g.responderPesquisa(resposta), null)).rejects.toMatchObject({
       codigo: 'situacao',
     });
     expect(await porta.pesquisasDoPaciente(c, m.paciente)).toEqual([
-      expect.objectContaining({ id: r.id, nota: 9, nomeAgenda: AGENDA, dataAtendimento: hoje, comentario: 'sintetico' }),
+      expect.objectContaining({
+        id: r.id,
+        nota: 9,
+        nomeAgenda: AGENDA,
+        dataAtendimento: hoje,
+        comentario: 'sintetico',
+      }),
     ]);
     expect(await porta.pesquisasDoPaciente(cOutro, m.paciente)).toEqual([]);
   });

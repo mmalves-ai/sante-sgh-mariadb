@@ -198,7 +198,9 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
       ),
     ).toBe('versao-desatualizada');
     expect(await porta.analise(fora, id)).toBeNull();
-    expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.registrarAnalise(base(id))))).toBe('nao-encontrado');
+    expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.registrarAnalise(base(id))))).toBe(
+      'nao-encontrado',
+    );
   });
 
   it('análise: a primeira gravação já concluída registra quem a concluiu', async () => {
@@ -268,7 +270,12 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
       g.incluirAcao({ notificacao: id, usuario: m.login, agora: AGORA, acao: acao() }),
     );
     const a2 = await porta.gravarSgh(c, trilha, (g) =>
-      g.incluirAcao({ notificacao: id, usuario: m.login, agora: AGORA, acao: acao({ oQue: 'Treinar equipe' }) }),
+      g.incluirAcao({
+        notificacao: id,
+        usuario: m.login,
+        agora: AGORA,
+        acao: acao({ oQue: 'Treinar equipe' }),
+      }),
     );
     expect([a1.sequencia, a2.sequencia, a1.versao]).toEqual([1, 2, 1]);
     const planos = await ler(
@@ -286,7 +293,13 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
       expect.arrayContaining([a1.id, a2.id]),
     );
     const v2 = await porta.gravarSgh(c, trilha, (g) =>
-      g.alterarAcao({ id: a1.id, versao: 1, usuario: m.login, agora: AGORA, acao: acao({ quando: '2026-12-15' }) }),
+      g.alterarAcao({
+        id: a1.id,
+        versao: 1,
+        usuario: m.login,
+        agora: AGORA,
+        acao: acao({ quando: '2026-12-15' }),
+      }),
     );
     expect(v2.versao).toBe(2);
     const [pr] = await ler(
@@ -333,8 +346,15 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
     });
     expect(await porta.gravarSgh(c, trilha, (g) => g.acoesNaTransacao(id))).toHaveLength(2);
     const painel = await porta.painelAcoes(c, '2026-11-20');
-    expect(painel).toContainEqual({ situacao: 'concluida', eficacia: 'eficaz', vencida: false, quantidade: 1 });
-    expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.travarAcao(id, a1.id)))).toBe('nao-encontrado');
+    expect(painel).toContainEqual({
+      situacao: 'concluida',
+      eficacia: 'eficaz',
+      vencida: false,
+      quantidade: 1,
+    });
+    expect(await codigo(porta.gravarSgh(fora, trilha, (g) => g.travarAcao(id, a1.id)))).toBe(
+      'nao-encontrado',
+    );
   });
 
   it('vigilância de produto: abertura, andamento, encerramento, linha do tempo, filtros e recusas', async () => {
@@ -371,13 +391,16 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
       registradaPor: m.login,
       encerradaEm: null,
     });
-    const [linha] = await ler('SELECT numero, lote_segregado, natureza FROM queixa_tecnica_produto WHERE id = ?', [
-      q.id,
-    ]);
+    const [linha] = await ler(
+      'SELECT numero, lote_segregado, natureza FROM queixa_tecnica_produto WHERE id = ?',
+      [q.id],
+    );
     expect(String(linha?.['numero'])).toMatch(/^QT-2026-\d{6}$/);
     expect(linha).toMatchObject({ lote_segregado: 1, natureza: 'evento_adverso' });
     const t = await porta.gravarSgh(c, trilha, (g) =>
-      g.abrirQueixa(nova({ area: 'tecnovigilancia', tipo: 'alertaSanitario', alerta: 'ALERTA 0001', conduta: 'nenhuma' })),
+      g.abrirQueixa(
+        nova({ area: 'tecnovigilancia', tipo: 'alertaSanitario', alerta: 'ALERTA 0001', conduta: 'nenhuma' }),
+      ),
     );
     const v2 = await porta.gravarSgh(c, trilha, (g) =>
       g.andamentoQueixa({
@@ -392,11 +415,16 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
         agora: '2026-11-21T10:00:00',
       }),
     );
-    expect(await porta.queixa(c, q.id)).toMatchObject({ situacao: 'notificada', notivisaNumero: 'NV-SINT-1' });
+    expect(await porta.queixa(c, q.id)).toMatchObject({
+      situacao: 'notificada',
+      notivisaNumero: 'NV-SINT-1',
+    });
     const pagina = await porta.queixas(c, { situacao: 'notificada', pagina: 1, porPagina: 10 });
     expect(pagina.itens.map((x) => x.id)).toEqual([q.id]);
     const tecno = await porta.queixas(c, { area: 'tecnovigilancia', pagina: 1, porPagina: 1 });
-    expect(tecno.itens.map((x) => [x.id, x.tipo, x.alerta])).toEqual([[t.id, 'alertaSanitario', 'ALERTA 0001']]);
+    expect(tecno.itens.map((x) => [x.id, x.tipo, x.alerta])).toEqual([
+      [t.id, 'alertaSanitario', 'ALERTA 0001'],
+    ]);
     expect((await porta.queixas(c, { pagina: 1, porPagina: 1 })).temMais).toBe(true);
     await porta.gravarSgh(c, trilha, (g) =>
       g.andamentoQueixa({
@@ -411,7 +439,10 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
         agora: '2026-11-22T10:00:00',
       }),
     );
-    expect(await porta.queixa(c, q.id)).toMatchObject({ situacao: 'encerrada', encerradaEm: '2026-11-22T10:00:00' });
+    expect(await porta.queixa(c, q.id)).toMatchObject({
+      situacao: 'encerrada',
+      encerradaEm: '2026-11-22T10:00:00',
+    });
     expect((await porta.eventosQueixa(c, q.id)).map((e) => [e.situacao, e.conduta, e.texto, e.por])).toEqual([
       ['aberta', 'segregado', null, m.login],
       ['notificada', 'recolhido', 'Transcrita.', m.login],
@@ -443,31 +474,34 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
   });
 
   it('produtos do cadastro: busca por código e por nome, nomes pelos códigos e a queixa ligada ao item', async () => {
-    const insumo = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-etapa2' }, async (e) => {
-      const agora = new Date();
-      const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
-        const l = await e.uma<{ id: number }>(sel, p);
-        return l ? Number(l.id) : e.inserir(ins, pi);
-      };
-      const grupo = await um(
-        'SELECT id FROM grupo_insumo WHERE codigo = ?',
-        [CODIGO_GRUPO],
-        "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'GRUPO SINTETICO', 'medicamento', ?)",
-        [CODIGO_GRUPO, agora],
-      );
-      const unidade = await um(
-        'SELECT id FROM unidade_medida WHERE codigo = ?',
-        [CODIGO_GRUPO],
-        "INSERT INTO unidade_medida (codigo, descricao, sigla, uso_estoque, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', TRUE, ?)",
-        [CODIGO_GRUPO, agora],
-      );
-      return um(
-        'SELECT id FROM insumo WHERE codigo = ?',
-        [String(CODIGO_ITEM)],
-        "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em) VALUES (?, 'PRODUTO SINTETICO QUALIDADE ETAPA2', 'medicamento', ?, ?, ?)",
-        [String(CODIGO_ITEM), grupo, unidade, agora],
-      );
-    });
+    const insumo = await m.nucleo.escrever(
+      { cliente: CLIENTE_QUA, correlacao: 'preparo-etapa2' },
+      async (e) => {
+        const agora = new Date();
+        const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
+          const l = await e.uma<{ id: number }>(sel, p);
+          return l ? Number(l.id) : e.inserir(ins, pi);
+        };
+        const grupo = await um(
+          'SELECT id FROM grupo_insumo WHERE codigo = ?',
+          [CODIGO_GRUPO],
+          "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'GRUPO SINTETICO', 'medicamento', ?)",
+          [CODIGO_GRUPO, agora],
+        );
+        const unidade = await um(
+          'SELECT id FROM unidade_medida WHERE codigo = ?',
+          [CODIGO_GRUPO],
+          "INSERT INTO unidade_medida (codigo, descricao, sigla, uso_estoque, criado_em) VALUES (?, 'UNIDADE SINTETICA', 'US', TRUE, ?)",
+          [CODIGO_GRUPO, agora],
+        );
+        return um(
+          'SELECT id FROM insumo WHERE codigo = ?',
+          [String(CODIGO_ITEM)],
+          "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em) VALUES (?, 'PRODUTO SINTETICO QUALIDADE ETAPA2', 'medicamento', ?, ?, ?)",
+          [String(CODIGO_ITEM), grupo, unidade, agora],
+        );
+      },
+    );
     expect(insumo).toBeGreaterThan(0);
     expect(await porta.itens(c, String(CODIGO_ITEM))).toEqual([
       { codigo: CODIGO_ITEM, nome: 'PRODUTO SINTETICO QUALIDADE ETAPA2' },
@@ -508,10 +542,14 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da segurança do paciente, etapa 
   it('sugestão resolvida: grava uma vez por resumo e lê só no estabelecimento', async () => {
     const r = randomBytes(32).toString('hex');
     const outro = randomBytes(32).toString('hex');
-    expect(await porta.gravarSgh(c, trilha, (g) => g.resolverSugestao({ resumo: r, dia: '2026-11-20' }))).toEqual({
+    expect(
+      await porta.gravarSgh(c, trilha, (g) => g.resolverSugestao({ resumo: r, dia: '2026-11-20' })),
+    ).toEqual({
       gravou: true,
     });
-    expect(await porta.gravarSgh(c, trilha, (g) => g.resolverSugestao({ resumo: r, dia: '2026-11-21' }))).toEqual({
+    expect(
+      await porta.gravarSgh(c, trilha, (g) => g.resolverSugestao({ resumo: r, dia: '2026-11-21' })),
+    ).toEqual({
       gravou: false,
     });
     expect([...(await porta.resolvidas(c, [r, outro]))]).toEqual([r]);

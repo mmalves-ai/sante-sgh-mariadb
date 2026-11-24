@@ -20,11 +20,7 @@
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
 import { PLANO_DO_TIPO } from '@sgh/contratos';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
-import {
-  dataHora,
-  fusoValido,
-  PortaRegistroPropria,
-} from './registro-porta-propria.js';
+import { dataHora, fusoValido, PortaRegistroPropria } from './registro-porta-propria.js';
 import { alergiasDaPrescricao } from './alergias-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
 import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';

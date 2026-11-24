@@ -69,7 +69,11 @@ export class ServicoCodigoEmail {
    * Gera e envia o código ao e-mail da conta. Lança ErroCodigoEmail ('sem-email' sem endereço válido; 'muitos-envios'
    * acima do limite por hora). A falha do servidor de e-mail propaga e o código é descartado.
    */
-  async emitir(conta: string, para: string | null, assunto = 'Código de acesso'): Promise<{ validadeMinutos: number }> {
+  async emitir(
+    conta: string,
+    para: string | null,
+    assunto = 'Código de acesso',
+  ): Promise<{ validadeMinutos: number }> {
     if (!para || !ENDERECO_EMAIL.test(para)) throw new ErroCodigoEmail('sem-email');
     const n = await this.armazem.incrementar(`${this.base(conta)}:envios`, HORA_SEG);
     if (n > ENVIOS_CODIGO_EMAIL_HORA) throw new ErroCodigoEmail('muitos-envios');

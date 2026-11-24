@@ -2,11 +2,7 @@
 // filtra o estabelecimento da sessão e a exclusão lógica, o SQL é parametrizado e o mapeamento não cria sentinela.
 import type { Leitor, Linha } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import {
-  PortaRegistroPropria,
-  dataHora,
-  fusoValido,
-} from './registro-porta-propria.js';
+import { PortaRegistroPropria, dataHora, fusoValido } from './registro-porta-propria.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 import type { PortaRegistro } from './registro-porta.js';
 import { ServicoRegistro, situacaoAdmin } from './registro-servico.js';
@@ -208,7 +204,10 @@ describe('PortaRegistroPropria (dublê)', () => {
       problema: { status: 404, codigo: 'estabelecimento-inexistente' },
     });
     await expect(p.definicao(C, 1)).rejects.toMatchObject({ problema: { status: 404 } });
-    expect(d.contextos.map((x) => x.correlacao)).toEqual(['pep.registro.podeGravar', 'pep.registro.definicao']);
+    expect(d.contextos.map((x) => x.correlacao)).toEqual([
+      'pep.registro.podeGravar',
+      'pep.registro.definicao',
+    ]);
   });
 
   it('serviço: publicado sem uso continua liberável; só o aposentado é descontinuado', () => {

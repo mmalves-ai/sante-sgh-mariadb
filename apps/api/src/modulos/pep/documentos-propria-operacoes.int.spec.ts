@@ -34,7 +34,16 @@ async function codigo(p: Promise<unknown>): Promise<string> {
 
 describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (cliente f22_o4)', () => {
   let nucleo: NucleoProprio;
-  const ids = { est: 0, usuario: 0, prof: 0, inscricao: 0, paciente: 0, atendimento: 0, alergeno: 0, principio: 0 };
+  const ids = {
+    est: 0,
+    usuario: 0,
+    prof: 0,
+    inscricao: 0,
+    paciente: 0,
+    atendimento: 0,
+    alergeno: 0,
+    principio: 0,
+  };
   let fuso = 'America/Sao_Paulo';
   const C = () => ({
     rede: 'rede-sintetica',
@@ -74,8 +83,14 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
           WHERE d.estabelecimento_id IN ${est}`,
         [P],
       );
-      await e.executar(`UPDATE documento_emitido SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`, [P]);
-      await e.executar(`UPDATE sumario_alta SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`, [P]);
+      await e.executar(
+        `UPDATE documento_emitido SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(
+        `UPDATE sumario_alta SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`,
+        [P],
+      );
       await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(
         `DELETE pp FROM alergia_paciente_principio pp JOIN alergia_paciente a ON a.id = pp.alergia_paciente_id
@@ -87,7 +102,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
           WHERE d.estabelecimento_id IN ${est}`,
         [P],
       );
-      for (const t of ['alergia_paciente', 'documento_emitido', 'receita_medica', 'exame_lancado_prontuario', 'sumario_alta'])
+      for (const t of [
+        'alergia_paciente',
+        'documento_emitido',
+        'receita_medica',
+        'exame_lancado_prontuario',
+        'sumario_alta',
+      ])
         await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN ${est}`, [P]);
     })();
 
@@ -104,7 +125,9 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
       );
-      fuso = fusoValido((await e.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [ids.est]))?.['fuso_horario']);
+      fuso = fusoValido(
+        (await e.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [ids.est]))?.['fuso_horario'],
+      );
       ids.usuario = await garantir(
         e,
         'SELECT id FROM usuario WHERE login = ?',
@@ -113,10 +136,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         [LOGIN, `Conta sintética ${LOGIN}`, '24000093101', agora],
       );
       const pessoa = (nome: string) =>
-        garantir(e, 'SELECT id FROM pessoa_fisica WHERE nome = ?', [nome], 'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
-          nome,
-          agora,
-        ]);
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
       const pessoaProf = await pessoa(`PESSOA SINTETICA ${P} PROFISSIONAL`);
       const pessoaPac = await pessoa(`PESSOA SINTETICA ${P} PACIENTE`);
       ids.prof = await garantir(
@@ -205,7 +231,16 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
            carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
          VALUES (?, 'L93-1', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-        [ids.est, ids.paciente, categoriaAt, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+        [
+          ids.est,
+          ids.paciente,
+          categoriaAt,
+          carater,
+          fonte,
+          ids.prof,
+          new Date('2026-11-20T10:00:00Z'),
+          agora,
+        ],
       );
       await garantir(
         e,
@@ -273,7 +308,14 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   it('alergia do catálogo com princípio; duplicada recusa; versão velha é conflito', async () => {
     const r = await ops()['pep.registrarAlergia']!(
       C(),
-      { ...baseAlergia(), agente: ids.alergeno, principios: [ids.principio], gravidade: 'grave', origem: 'relato-paciente', versao: await versao() },
+      {
+        ...baseAlergia(),
+        agente: ids.alergeno,
+        principios: [ids.principio],
+        gravidade: 'grave',
+        origem: 'relato-paciente',
+        versao: await versao(),
+      },
       ctx('ag'),
     );
     expect(Number(r['alergia'])).toBeGreaterThan(0);
@@ -287,11 +329,23 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(Number(l?.['registrado_profissional_id'])).toBe(ids.prof);
     expect(Number(l?.['princ'])).toBe(1);
     expect(
-      await codigo(ops()['pep.registrarAlergia']!(C(), { ...baseAlergia(), agente: ids.alergeno, versao: await versao() }, ctx('ag2'))),
+      await codigo(
+        ops()['pep.registrarAlergia']!(
+          C(),
+          { ...baseAlergia(), agente: ids.alergeno, versao: await versao() },
+          ctx('ag2'),
+        ),
+      ),
     ).toBe('duplicada');
-    expect(await codigo(ops()['pep.registrarAlergia']!(C(), { ...baseAlergia(), agente: ids.alergeno, versao: '' }, ctx('ag3')))).toBe(
-      'conflito-versao',
-    );
+    expect(
+      await codigo(
+        ops()['pep.registrarAlergia']!(
+          C(),
+          { ...baseAlergia(), agente: ids.alergeno, versao: '' },
+          ctx('ag3'),
+        ),
+      ),
+    ).toBe('conflito-versao');
   });
 
   it('alergia livre: duplicidade pela descrição normalizada', async () => {
@@ -300,11 +354,17 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       { ...baseAlergia(), descricaoLivre: 'Dipirona Sódica', versao: await versao() },
       ctx('lv'),
     );
-    const l = await uma('SELECT alergeno_id, descricao_livre FROM alergia_paciente WHERE id = ?', [r['alergia']]);
+    const l = await uma('SELECT alergeno_id, descricao_livre FROM alergia_paciente WHERE id = ?', [
+      r['alergia'],
+    ]);
     expect(l?.['alergeno_id']).toBeNull();
     expect(
       await codigo(
-        ops()['pep.registrarAlergia']!(C(), { ...baseAlergia(), descricaoLivre: '  dipirona   SODICA ', versao: await versao() }, ctx('lv2')),
+        ops()['pep.registrarAlergia']!(
+          C(),
+          { ...baseAlergia(), descricaoLivre: '  dipirona   SODICA ', versao: await versao() },
+          ctx('lv2'),
+        ),
       ),
     ).toBe('duplicada');
   });
@@ -318,7 +378,10 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       ctx('in'),
     );
     expect(r['alergia']).toBe(alvo);
-    const l = await uma('SELECT ativa, motivo_inativacao, inativado_por_usuario_id, versao FROM alergia_paciente WHERE id = ?', [alvo]);
+    const l = await uma(
+      'SELECT ativa, motivo_inativacao, inativado_por_usuario_id, versao FROM alergia_paciente WHERE id = ?',
+      [alvo],
+    );
     expect(Number(l?.['ativa'])).toBe(0);
     expect(Number(l?.['inativado_por_usuario_id'])).toBe(ids.usuario);
     expect(Number(l?.['versao'])).toBe(2);
@@ -326,7 +389,12 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       await codigo(
         ops()['pep.inativarAlergia']!(
           C(),
-          { paciente: ids.paciente, alergia: alvo, motivo: 'Informação corrigida pelo paciente', versao: await versao() },
+          {
+            paciente: ids.paciente,
+            alergia: alvo,
+            motivo: 'Informação corrigida pelo paciente',
+            versao: await versao(),
+          },
           ctx('in2'),
         ),
       ),
@@ -334,11 +402,21 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   });
 
   it('nega alergias: grava a declaração; repetida sem alergia depois recusa', async () => {
-    const r = await ops()['pep.registrarAlergia']!(C(), { ...baseAlergia(), nega: true, versao: await versao() }, ctx('ng'));
-    expect(r['alergia']).toBe(0);
-    expect(await codigo(ops()['pep.registrarAlergia']!(C(), { ...baseAlergia(), nega: true, versao: await versao() }, ctx('ng2')))).toBe(
-      'nega-repetida',
+    const r = await ops()['pep.registrarAlergia']!(
+      C(),
+      { ...baseAlergia(), nega: true, versao: await versao() },
+      ctx('ng'),
     );
+    expect(r['alergia']).toBe(0);
+    expect(
+      await codigo(
+        ops()['pep.registrarAlergia']!(
+          C(),
+          { ...baseAlergia(), nega: true, versao: await versao() },
+          ctx('ng2'),
+        ),
+      ),
+    ).toBe('nega-repetida');
   });
 
   const baseDoc = () => ({
@@ -371,10 +449,20 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   });
 
   it('atestado: exige os dias; emite com a versão "emissao" e o vínculo ao documento', async () => {
-    const at = { ...baseDoc(), familia: 'atestado', tipo: 'atestado', modeloNome: 'Atestado médico', conteudoXml: '<atestado>sintetico</atestado>' };
-    expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe('dias-afastamento-obrigatorio');
+    const at = {
+      ...baseDoc(),
+      familia: 'atestado',
+      tipo: 'atestado',
+      modeloNome: 'Atestado médico',
+      conteudoXml: '<atestado>sintetico</atestado>',
+    };
+    expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe(
+      'dias-afastamento-obrigatorio',
+    );
     // Ordem da memória: sessão e médico, depois o CID sem autorização (antes dos dias).
-    expect(await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09' }, ctx('at1')))).toBe('cid-sem-autorizacao');
+    expect(await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09' }, ctx('at1')))).toBe(
+      'cid-sem-autorizacao',
+    );
     const r = await ops()['pep.emitirDocumento']!(C(), { ...at, diasAfastamento: 2 }, ctx('at'));
     const l = await uma(
       `SELECT d.dias_afastamento, d.documento_prontuario_id, d.situacao,
@@ -405,9 +493,9 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       [ids.paciente],
     );
     expect(Number(n?.['n'])).toBe(1);
-    expect(await codigo(ops()['pep.lancarExameExterno']!(C(), { ...ex, nomeExame: 'Outro exame sintético' }, c))).toBe(
-      'idempotencia-divergente',
-    );
+    expect(
+      await codigo(ops()['pep.lancarExameExterno']!(C(), { ...ex, nomeExame: 'Outro exame sintético' }, c)),
+    ).toBe('idempotencia-divergente');
   });
 
   it('validade da receita: data local da emissão + validade_dias do tipo', async () => {
@@ -437,13 +525,22 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       itens: [],
     };
     const r = await ops()['pep.lancarExameExterno']!(C(), ex, ctx('ex'));
-    const l = await uma('SELECT nome_exame, resultado, situacao, profissional_id FROM exame_lancado_prontuario WHERE id = ?', [r['origem']]);
+    const l = await uma(
+      'SELECT nome_exame, resultado, situacao, profissional_id FROM exame_lancado_prontuario WHERE id = ?',
+      [r['origem']],
+    );
     expect(l?.['nome_exame']).toBe('Hemograma sintético');
     expect(l?.['situacao']).toBe('ativo');
     expect(Number(l?.['profissional_id'])).toBe(ids.prof);
-    expect(await codigo(ops()['pep.lancarExameExterno']!(C(), { ...ex, realizadoEm: agoraLocal(120), dataHoraClinica: agoraLocal(180) }, ctx('ex2')))).toBe(
-      'horario-futuro',
-    );
+    expect(
+      await codigo(
+        ops()['pep.lancarExameExterno']!(
+          C(),
+          { ...ex, realizadoEm: agoraLocal(120), dataHoraClinica: agoraLocal(180) },
+          ctx('ex2'),
+        ),
+      ),
+    ).toBe('horario-futuro');
   });
 
   it('sumário de alta: finaliza a versão seguinte; de novo é "sumario-finalizado"', async () => {
@@ -456,12 +553,19 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       fhir: '{"resourceType":"Bundle"}',
       perfilFhir: 'sumario-alta',
     };
-    expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa0')))).toBe('conflito-versao');
+    expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa0')))).toBe(
+      'conflito-versao',
+    );
     const r = await ops()['pep.finalizarSumarioAlta']!(C(), s, ctx('sa'));
-    const l = await uma('SELECT situacao, finalizado_em IS NOT NULL AS f, documento_prontuario_id FROM sumario_alta WHERE id = ?', [r['origem']]);
+    const l = await uma(
+      'SELECT situacao, finalizado_em IS NOT NULL AS f, documento_prontuario_id FROM sumario_alta WHERE id = ?',
+      [r['origem']],
+    );
     expect(l?.['situacao']).toBe('finalizado');
     expect(Number(l?.['f'])).toBe(1);
     expect(Number(l?.['documento_prontuario_id'])).toBe(Number(r['documento']));
-    expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa2')))).toBe('sumario-finalizado');
+    expect(await codigo(ops()['pep.finalizarSumarioAlta']!(C(), { ...s, versao: 2 }, ctx('sa2')))).toBe(
+      'sumario-finalizado',
+    );
   });
 });

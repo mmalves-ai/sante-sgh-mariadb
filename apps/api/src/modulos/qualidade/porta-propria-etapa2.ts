@@ -49,8 +49,14 @@ export const TABELAS_ETAPA2 = [
   'sugestao_notificacao_resolvida',
 ] as const;
 
-const FATOR_DO_BANCO: Readonly<Record<string, string>> = { profissional: 'individuo', externo: 'institucional' };
-const FATOR_PARA_BANCO: Readonly<Record<string, string>> = { individuo: 'profissional', institucional: 'externo' };
+const FATOR_DO_BANCO: Readonly<Record<string, string>> = {
+  profissional: 'individuo',
+  externo: 'institucional',
+};
+const FATOR_PARA_BANCO: Readonly<Record<string, string>> = {
+  individuo: 'profissional',
+  institucional: 'externo',
+};
 
 const versaoMudou = (o: string) => recusa('versao-desatualizada', `${o} mudou desde que você abriu a tela.`);
 const naoEncontrado = (o: string) =>
@@ -231,7 +237,12 @@ function queixaDe(r: Linha): QueixaTecnicaRegistrada {
 export async function lerQueixas(
   l: L,
   est: number,
-  f: { readonly situacao?: string; readonly area?: string; readonly pagina: number; readonly porPagina: number },
+  f: {
+    readonly situacao?: string;
+    readonly area?: string;
+    readonly pagina: number;
+    readonly porPagina: number;
+  },
 ): Promise<{ itens: QueixaTecnicaRegistrada[]; temMais: boolean }> {
   const filtros: string[] = [];
   const p: unknown[] = [est];
@@ -408,7 +419,12 @@ export function gravadorEtapa2(tx: TxOperacao, est: number, apoio: ApoioEtapa2):
   };
 
   /** Os fatores da análise: os retirados ficam marcados como excluídos; os novos entram na sequência seguinte. */
-  const gravarFatores = async (analise: number, fatores: readonly string[], usuario: number, agora: string) => {
+  const gravarFatores = async (
+    analise: number,
+    fatores: readonly string[],
+    usuario: number,
+    agora: string,
+  ) => {
     const atuais = await tx.consultar(
       `SELECT ca.id, ca.versao, f.categoria, ca.excluido_em FROM analise_incidente_causa ca
          LEFT JOIN fator_contribuinte f ON f.id = ca.fator_contribuinte_id
@@ -449,9 +465,13 @@ export function gravadorEtapa2(tx: TxOperacao, est: number, apoio: ApoioEtapa2):
   };
 
   const travarAcaoLinha = async (notificacao: number | null, id: number): Promise<AcaoPlanoRegistrada> => {
-    await tx.consultarParaAtualizar('SELECT id FROM acao_plano_qualidade WHERE id = ? AND excluido_em IS NULL', [id], {
-      teto: 1,
-    });
+    await tx.consultarParaAtualizar(
+      'SELECT id FROM acao_plano_qualidade WHERE id = ? AND excluido_em IS NULL',
+      [id],
+      {
+        teto: 1,
+      },
+    );
     const r = await tx.uma(
       `${SQL_ACAO} AND ap.id = ?${notificacao === null ? '' : ' AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) = ?'}`,
       notificacao === null ? [est, id] : [est, id, notificacao],
@@ -531,7 +551,12 @@ export function gravadorEtapa2(tx: TxOperacao, est: number, apoio: ApoioEtapa2):
         });
         versao = 1;
       } else {
-        if (atual === null || atual.id !== a.atual.id || atual.versao !== a.atual.versao || atual.situacao !== 'rascunho')
+        if (
+          atual === null ||
+          atual.id !== a.atual.id ||
+          atual.versao !== a.atual.versao ||
+          atual.situacao !== 'rascunho'
+        )
           throw versaoMudou('A análise');
         id = atual.id;
         versao = await tx.alterar('analise_incidente', id, a.atual.versao, valores);
@@ -548,7 +573,10 @@ export function gravadorEtapa2(tx: TxOperacao, est: number, apoio: ApoioEtapa2):
           })
         ).versao;
       for (const tipo of a.eventos)
-        await apoio.eventoNotificacao(a.notificacao, a.agora, antes, depois, usuario, { tipo, por: a.usuario });
+        await apoio.eventoNotificacao(a.notificacao, a.agora, antes, depois, usuario, {
+          tipo,
+          por: a.usuario,
+        });
       return { id, versao, versaoNotificacao };
     },
 
@@ -673,7 +701,8 @@ export function gravadorEtapa2(tx: TxOperacao, est: number, apoio: ApoioEtapa2):
           'SELECT id FROM notificacao_incidente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
           [q.notificacao, est],
         );
-        if (!x) throw recusa('notificacao-inexistente', 'A notificação informada não é deste estabelecimento.');
+        if (!x)
+          throw recusa('notificacao-inexistente', 'A notificação informada não é deste estabelecimento.');
       }
       const conduta = cobra(q.conduta);
       const agora = seg(q.agora);

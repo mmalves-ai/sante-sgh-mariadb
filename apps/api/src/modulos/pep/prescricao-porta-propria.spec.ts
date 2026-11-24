@@ -5,10 +5,7 @@ import type { Leitor, Linha } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
 import type { PortaPrescricao } from './prescricao-porta.js';
-import {
-  BASE_PLANO_PROPRIO,
-  PortaPrescricaoPropria,
-} from './prescricao-porta-propria.js';
+import { BASE_PLANO_PROPRIO, PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import type { NucleoRegistroGravacao } from './registro-propria-gravacao.js';
 
 interface Chamada {

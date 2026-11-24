@@ -17,7 +17,11 @@ const codigoDe = (texto: string) => /(\d{6})/.exec(texto)?.[1] ?? '';
 function montar(seq: number[] = []) {
   const email = emailAcessoMemoria();
   let i = 0;
-  const s = new ServicoCodigoEmail(new ArmazemMemoria(), email, seq.length ? () => seq[i++ % seq.length] as number : undefined);
+  const s = new ServicoCodigoEmail(
+    new ArmazemMemoria(),
+    email,
+    seq.length ? () => seq[i++ % seq.length] as number : undefined,
+  );
   return { s, email };
 }
 
@@ -54,7 +58,8 @@ describe('ServicoCodigoEmail', () => {
     const { s } = montar([123456]);
     const conta = contaUsuario('rede', 'h1', 'joao');
     await s.emitir(conta, PARA);
-    for (let k = 0; k < TENTATIVAS_CODIGO_EMAIL; k++) expect(await s.conferir(conta, '000000')).toBe('invalido');
+    for (let k = 0; k < TENTATIVAS_CODIGO_EMAIL; k++)
+      expect(await s.conferir(conta, '000000')).toBe('invalido');
     expect(await s.conferir(conta, '123456')).toBe('esgotado');
   });
 
@@ -77,7 +82,11 @@ describe('ServicoCodigoEmail', () => {
 
   it('falha do servidor de e-mail descarta o código', async () => {
     const armazem = new ArmazemMemoria();
-    const s = new ServicoCodigoEmail(armazem, { destino: 'memoria', enviar: () => Promise.reject(new Error('x')) }, () => 5);
+    const s = new ServicoCodigoEmail(
+      armazem,
+      { destino: 'memoria', enviar: () => Promise.reject(new Error('x')) },
+      () => 5,
+    );
     await expect(s.emitir(contaPlataforma(4), PARA)).rejects.toThrow('x');
     expect(await s.conferir(contaPlataforma(4), '000005')).toBe('invalido');
   });
@@ -88,19 +97,25 @@ describe('envio pela captura local (regra 6)', () => {
     expect(emailAcessoDoAmbiente({})).toBe(null);
   });
   it('fora de produção, só loopback', () => {
-    expect(emailAcessoDoAmbiente({ SMTP_URL: 'smtp://127.0.0.1:1025', AMBIENTE: 'dev' })?.destino).toBe('smtp');
-    expect(() => emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25', AMBIENTE: 'homologacao' })).toThrow(
-      /loopback/,
-    );
-    expect(() => emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25' })).toThrow(/loopback/);
-    expect(emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25', AMBIENTE: 'producao' })?.destino).toBe(
+    expect(emailAcessoDoAmbiente({ SMTP_URL: 'smtp://127.0.0.1:1025', AMBIENTE: 'dev' })?.destino).toBe(
       'smtp',
     );
+    expect(() =>
+      emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25', AMBIENTE: 'homologacao' }),
+    ).toThrow(/loopback/);
+    expect(() => emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25' })).toThrow(/loopback/);
+    expect(
+      emailAcessoDoAmbiente({ SMTP_URL: 'smtp://smtp.exemplo.com:25', AMBIENTE: 'producao' })?.destino,
+    ).toBe('smtp');
     expect(() => emailAcessoDoAmbiente({ SMTP_URL: 'http://127.0.0.1:1025' })).toThrow(/smtp/);
   });
   it('a mensagem recusa cabeçalho injetado e endereço inválido', () => {
-    expect(() => montarMensagemAcesso('a@b.c', { para: 'x@y.z', assunto: 'a\r\nBcc: z@w.k', texto: '' })).toThrow();
+    expect(() =>
+      montarMensagemAcesso('a@b.c', { para: 'x@y.z', assunto: 'a\r\nBcc: z@w.k', texto: '' }),
+    ).toThrow();
     expect(() => montarMensagemAcesso('a@b.c', { para: 'x@y.z>, w@k.l', assunto: 'a', texto: '' })).toThrow();
-    expect(montarMensagemAcesso('a@b.c', { para: 'x@y.z', assunto: 'Código', texto: 'oi' })).toContain('=?UTF-8?B?');
+    expect(montarMensagemAcesso('a@b.c', { para: 'x@y.z', assunto: 'Código', texto: 'oi' })).toContain(
+      '=?UTF-8?B?',
+    );
   });
 });
