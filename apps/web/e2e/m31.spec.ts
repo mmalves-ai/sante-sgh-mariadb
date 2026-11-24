@@ -100,7 +100,11 @@ test.describe('TISS, competência, demonstrativos, glosa e recurso @M31', () => 
     await page.getByTestId('gl-evidencia').fill('Evolução médica do dia do atendimento');
     await page.getByTestId('gl-confirmar').click();
     await expect(page.getByTestId('gl-mensagem')).toContainText('recurso');
-    await page.locator('[data-testid^="gl-recorrer-"]').first().click();
+    // Recurso em lote: marca os itens decididos como "recorrer" e monta o recurso numa ação só.
+    await page.getByTestId('gl-marcar-todos').check();
+    await expect(page.getByTestId('gl-montar-recurso')).toBeEnabled();
+    await page.getByTestId('gl-montar-recurso').click();
+    await expect(page.getByTestId('gl-acao')).toContainText('lote por fonte pagadora');
     await page.getByTestId('gl-confirmar').click();
     await expect(page.getByTestId('gl-mensagem')).toContainText('Recurso registrado');
     await page.locator('[data-testid^="gl-desfecho-"]').first().click();

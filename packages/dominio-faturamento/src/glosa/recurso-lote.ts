@@ -117,8 +117,8 @@ export interface ItemGlosaRecurso {
 }
 
 /**
- * A situação da glosa depois de recurso e retorno: com algum item em recurso sem retorno, "em_recurso"; com todos os
- * recorridos retornados, "recuperada" (algo voltou) ou "encerrada" (nada voltou). Sem recurso, a situação fica como
+ * A situação da glosa depois de recurso e retorno: com algum item em recurso, ou decidido como "recorrer" e ainda fora
+ * do lote, sem retorno, "em_recurso"; com todos os recorridos retornados e nenhum pendente, "recuperada" (algo voltou) ou "encerrada" (nada voltou). Sem recurso, a situação fica como
  * está (a decisão de aceitar cuida dela).
  */
 export function situacaoDaGlosaNoRecurso(
@@ -129,7 +129,8 @@ export function situacaoDaGlosaNoRecurso(
   if (atual === 'cancelada') return { situacao: atual, valorRecuperado, encerrada: false };
   const recorridos = itens.filter((i) => i.emRecurso);
   if (recorridos.length === 0) return { situacao: atual, valorRecuperado, encerrada: false };
-  if (recorridos.some((i) => !i.retornado))
+  // Aberto: todo item em recurso ou decidido como "recorrer" (ainda fora do lote) que não teve retorno.
+  if (itens.some((i) => (i.emRecurso || i.decisao === 'recorrer') && !i.retornado))
     return { situacao: 'em_recurso', valorRecuperado, encerrada: false };
   if (itens.some((i) => i.decisao === 'pendente'))
     return { situacao: 'em_recurso', valorRecuperado, encerrada: false };

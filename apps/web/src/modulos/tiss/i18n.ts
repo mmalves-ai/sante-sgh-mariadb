@@ -190,6 +190,10 @@ export const mensagensTiss = {
     desfechos: { acatado: 'Acatado', parcial: 'Parcial', negado: 'Negado' },
     decidir: 'Decidir',
     recorrer: 'Recorrer',
+    marcarTodos: 'Marcar todos os decididos como recorrer',
+    montarRecurso: 'Montar recurso ({n} itens)',
+    paraRecurso: 'Marcar para o recurso',
+    selecionar: 'Marcar o item {item} para o recurso',
     aceitar: 'Aceitar a glosa',
     desfecho: 'Desfecho',
     decisao: 'Decisão',
@@ -208,6 +212,7 @@ export const mensagensTiss = {
     acoes: {
       decidir: 'Decidir a glosa do item {item}',
       recorrer: 'Recurso do item {item}',
+      recorrerLote: 'Recurso de {n} itens (um lote por fonte pagadora)',
       desfecho: 'Desfecho do recurso do item {item}',
     },
   },

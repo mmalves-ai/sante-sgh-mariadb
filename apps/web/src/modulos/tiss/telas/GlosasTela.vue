@@ -35,7 +35,26 @@ const estado = ref('com-glosa');
 const pagina = ref(0);
 const filtro = ref<{ convenio: string; competencia: string; estado: string } | null>(null);
 const conta = computed<number | null>(() => (rota.query['conta'] ? Number(rota.query['conta']) : null));
-const acao = ref<{ tipo: 'decidir' | 'recorrer' | 'desfecho'; item: ItemGlosaLido } | null>(null);
+const acao = ref<{
+  tipo: 'decidir' | 'recorrer' | 'desfecho';
+  item: ItemGlosaLido;
+  /** Recurso em lote: os itens marcados na grade (o servidor monta um lote por fonte pagadora). */
+  lote?: readonly ItemGlosaLido[];
+} | null>(null);
+/** Itens marcados para o recurso em lote (só os decididos como "recorrer" e ainda fora de recurso). */
+const selecionados = ref<number[]>([]);
+const prontoParaRecurso = (i: ItemGlosaLido) => i.estado === 'recorrida' && i.valorRecurso === 0;
+const marcaveis = computed(() => (itens.data.value ?? []).filter(prontoParaRecurso));
+const marcados = computed(() => marcaveis.value.filter((i) => selecionados.value.includes(i.item)));
+function marcarTodos(v: boolean) {
+  selecionados.value = v ? marcaveis.value.map((i) => i.item) : [];
+}
+function montarRecurso() {
+  const lote = marcados.value;
+  if (lote.length === 0) return;
+  abrir('recorrer', lote[0]!);
+  acao.value = { tipo: 'recorrer', item: lote[0]!, lote };
+}
 const decisao = ref<'aceitar' | 'recorrer'>('recorrer');
 const texto = ref('');
 const evidencia = ref('');
@@ -115,14 +134,13 @@ async function confirmar() {
         : a.tipo === 'recorrer'
           ? await recorrer(
               {
-                itens: [
-                  {
-                    item: a.item.item,
-                    versao: a.item.versao,
-                    valor: valor.value ? numero(valor.value) : null,
-                    quantidade: null,
-                  },
-                ],
+                itens: (a.lote ?? [a.item]).map((x) => ({
+                  item: x.item,
+                  versao: x.versao,
+                  // Em lote, cada item pleiteia o que não foi aceito; o valor digitado vale para um item só.
+                  valor: !a.lote && valor.value ? numero(valor.value) : null,
+                  quantidade: null,
+                })),
                 dataProtocolo: dataAcao.value,
               },
               novaChave('recurso'),
@@ -146,6 +164,7 @@ async function confirmar() {
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
     acao.value = null;
+    selecionados.value = [];
     await qc.invalidateQueries({ queryKey: ['tiss'] });
   } catch (e) {
     erro.value = e;
@@ -249,9 +268,31 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
       <h2>{{ t('tiss.glosas.itensDaConta', { conta }) }}</h2>
       <ErroFaturamento v-if="itens.error.value" :erro="itens.error.value" />
       <p v-else-if="!itens.data.value" role="status">{{ t('tiss.carregando') }}</p>
-      <table v-else class="tabela" data-testid="gl-itens">
+      <div v-if="itens.data.value && marcaveis.length > 0" class="acoes">
+        <label>
+          <input
+            type="checkbox"
+            data-testid="gl-marcar-todos"
+            :checked="marcados.length === marcaveis.length"
+            @change="marcarTodos(($event.target as HTMLInputElement).checked)"
+          />
+          {{ t('tiss.glosas.marcarTodos') }}
+        </label>
+        <button
+          type="button"
+          data-testid="gl-montar-recurso"
+          :disabled="marcados.length === 0 || !pode('faturamento.registrarRecurso')"
+          @click="montarRecurso"
+        >
+          {{ t('tiss.glosas.montarRecurso', { n: marcados.length }) }}
+        </button>
+      </div>
+      <table v-if="itens.data.value" class="tabela" data-testid="gl-itens">
         <thead>
           <tr>
+            <th scope="col">
+              <span class="sr-only">{{ t('tiss.glosas.paraRecurso') }}</span>
+            </th>
             <th scope="col">{{ t('tiss.item') }}</th>
             <th scope="col">{{ t('tiss.cobrado') }}</th>
             <th scope="col">{{ t('tiss.glosas.conciliado') }}</th>
@@ -266,6 +307,16 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
         </thead>
         <tbody>
           <tr v-for="i in itens.data.value" :key="i.item" :data-testid="`gl-item-${i.item}`">
+            <td>
+              <input
+                v-if="prontoParaRecurso(i)"
+                v-model="selecionados"
+                type="checkbox"
+                :value="i.item"
+                :aria-label="t('tiss.glosas.selecionar', { item: i.item })"
+                :data-testid="`gl-sel-${i.item}`"
+              />
+            </td>
             <td>{{ i.codigo }} · {{ i.descricao }}</td>
             <td>{{ reais(i.valorCobrado) }}</td>
             <td>{{ i.conciliado ? t('tiss.sim') : t('tiss.nao') }}</td>
@@ -306,7 +357,7 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
                 {{ t('tiss.glosas.decidir') }}
               </button>
               <button
-                v-if="i.conciliado && i.glosa > 0 && i.valorRecurso === 0 && i.estado !== 'aceita'"
+                v-if="prontoParaRecurso(i)"
                 type="button"
                 :disabled="!pode('faturamento.registrarRecurso')"
                 :data-testid="`gl-recorrer-${i.item}`"
@@ -359,7 +410,13 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
       data-testid="gl-acao"
       @submit.prevent="confirmar"
     >
-      <h2 id="gl-acao-titulo">{{ t(`tiss.glosas.acoes.${acao.tipo}`, { item: acao.item.item }) }}</h2>
+      <h2 id="gl-acao-titulo">
+        {{
+          acao.lote
+            ? t('tiss.glosas.acoes.recorrerLote', { n: acao.lote.length })
+            : t(`tiss.glosas.acoes.${acao.tipo}`, { item: acao.item.item })
+        }}
+      </h2>
       <template v-if="acao.tipo === 'decidir'">
         <span class="campo">
           <SanteSelecao
@@ -410,7 +467,7 @@ const recursoAberto = (i: ItemGlosaLido) => i.valorRecurso > 0 && i.dataRetorno 
             data-testid="gl-tipo-desfecho"
           />
         </span>
-        <span v-if="acao.tipo === 'recorrer' || desfecho === 'parcial'" class="campo">
+        <span v-if="(acao.tipo === 'recorrer' && !acao.lote) || desfecho === 'parcial'" class="campo">
           <label for="gl-valor">{{
             acao.tipo === 'recorrer' ? t('tiss.glosas.valorRecurso') : t('tiss.glosas.valorRetorno')
           }}</label>

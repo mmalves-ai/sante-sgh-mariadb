@@ -36,6 +36,9 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
   let porta: PortaTissPropria;
   let c: ContextoTiss;
   const ids = { est: 0, usuario: 0, conta: 0, contaAberta: 0, itens: [0, 0, 0], itemAberto: 0 };
+  /** A massa para o segundo caso: as contas novas reaproveitam o atendimento, o tipo e o item faturável. */
+  const massa = { atendimento: 0, paciente: 0, tipoConta: 0, item: 0, fontes: [0, 0] };
+  let novaConta: (numero: string, fonte: number, itens: number) => Promise<number[]> = async () => [];
 
   const limpar = async (e: Escritor) => {
     const est = [ids.est];
@@ -119,6 +122,13 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
         [`${P}FP`],
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, registro_ans, criado_em) VALUES (?, ?, 'operadora', '999998', ?)",
         [`${P}FP`, `OPERADORA SINTETICA ${P}`, agora],
+      );
+      const fonteB = await garantir(
+        e,
+        'SELECT id FROM fonte_pagadora WHERE codigo = ?',
+        [`${P}FB`],
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, registro_ans, criado_em) VALUES (?, ?, 'operadora', '999997', ?)",
+        [`${P}FB`, `OPERADORA SINTETICA ${P} B`, agora],
       );
       const categoria = await garantir(
         e,
@@ -221,7 +231,41 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
         );
       ids.itens = [await lancar(ids.conta, 1), await lancar(ids.conta, 2), await lancar(ids.conta, 3)];
       ids.itemAberto = await lancar(ids.contaAberta, 1);
+      Object.assign(massa, { atendimento, paciente, tipoConta, item, fontes: [fonte, fonteB] });
     });
+    novaConta = (numero, fonte, qtd) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-0734b' }, async (e) => {
+        const agora = new Date();
+        const ct = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+             tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+             fechada_por_usuario_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-10-01', ?, ?, 'faturada', 900, 900, ?, ?, ?)`,
+          [
+            ids.est,
+            numero,
+            massa.atendimento,
+            massa.paciente,
+            fonte,
+            massa.tipoConta,
+            agora,
+            agora,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        const itens: number[] = [];
+        for (let k = 1; k <= qtd; k += 1)
+          itens.push(
+            await e.inserir(
+              `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em,
+                 quantidade, valor_unitario, valor_total, criado_em) VALUES (?, ?, ?, ?, 3, 100, 300, ?)`,
+              [ct, k, massa.item, agora, agora],
+            ),
+          );
+        return itens;
+      });
     porta = new PortaTissPropria(nucleo, CLIENTE, armazemXmlMemoria());
     c = {
       cliente: CLIENTE,
@@ -246,7 +290,7 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
       'faturamento.registrarRecurso',
       'faturamento.registrarRetornoRecurso',
     ])
-      expect((await porta.podeGravar(c, o)).codigo).not.toBe('operacao-pendente');
+      expect(await porta.podeGravar(c, o)).toMatchObject({ pode: true });
 
     // Conta ainda não apresentada: recusa sem gravar.
     const naoApresentada = await erroDe(
@@ -486,5 +530,150 @@ describe.skipIf(SEM_BANCO)('glosa por item: baixa, lote de recurso e retorno (Ma
         [ids.est],
       ),
     ).toMatchObject({ q: 2 });
+  }, 120_000);
+
+  it('prazo gravado na baixa, lote por fonte pagadora, teto do valor e retornos acatado, parcial do lote e negado', async () => {
+    const [fa, fb] = massa.fontes as [number, number];
+    const [a1, a2, a3] = (await novaConta(`${P}-C3`, fa, 3)) as [number, number, number];
+    const [b1] = (await novaConta(`${P}-C4`, fb, 1)) as [number];
+    const [s1] = (await novaConta(`${P}-C5`, fa, 1)) as [number];
+    const baixa = async (itens: number[], prazoParametro?: string) =>
+      executar('faturamento.registrarGlosa', {
+        itens: await Promise.all(
+          itens.map(async (i) => ({
+            item: i,
+            versao: await versao(i),
+            valorPago: 0,
+            quantidadePaga: 0,
+            motivo: 9734,
+          })),
+        ),
+        dataPagamento: '2026-11-10',
+        ...(prazoParametro === undefined ? {} : { prazoParametro }),
+      });
+    // A baixa grava o prazo pela regra da grade: 30 dias na fonte A, 10 na fonte B, a contar do pagamento.
+    await baixa([a1, a2, a3, b1], `${fa}:30;${fb}:10`);
+    const limite = async (item: number) =>
+      (
+        await lerUma(
+          `SELECT DATE_FORMAT(g.data_limite_recurso, '%Y-%m-%d') AS d FROM glosa_item gi
+             JOIN glosa g ON g.id = gi.glosa_id WHERE gi.conta_hospitalar_item_id = ?`,
+          [item],
+        )
+      )?.['d'];
+    expect(await limite(a1)).toBe('2026-12-10');
+    expect(await limite(b1)).toBe('2026-11-20');
+    // Baixa sem o parâmetro: a glosa fica sem prazo gravado; o recurso calcula pela mesma regra.
+    await baixa([s1]);
+    expect(await limite(s1)).toBeNull();
+
+    for (const item of [a1, a2, a3, b1, s1])
+      await porta.gravarSgh(
+        c,
+        (x: { id: number }) => ({
+          estabelecimento: null,
+          usuario: null,
+          correlacao: null,
+          acao: 'alteracao' as const,
+          entidade: 'glosa_item',
+          entidadeId: x.id,
+          motivo: 'decisão da glosa (teste)',
+        }),
+        (g) =>
+          g.decidirGlosa({
+            item,
+            decisao: 'recorrer',
+            texto: 'Procedimento autorizado pela senha da guia',
+            evidencia: '',
+            usuario: 'x',
+            prazo: null,
+          }),
+      );
+    const recorrer = async (
+      itens: { item: number; valor?: number }[],
+      dataProtocolo: string,
+      prazoParametro = '',
+    ) =>
+      executar('faturamento.registrarRecurso', {
+        itens: await Promise.all(itens.map(async (i) => ({ ...i, versao: await versao(i.item) }))),
+        dataProtocolo,
+        prazoParametro,
+      });
+    // Prazo vencido: gravado (fonte B, até 20/11) e calculado na hora (sem prazo gravado: 3 dias da baixa).
+    expect(codigo(await erroDe(recorrer([{ item: b1 }], '2026-11-21')))).toBe('prazo-vencido');
+    expect(codigo(await erroDe(recorrer([{ item: s1 }], '2026-11-20', `${fa}:3`)))).toBe('prazo-vencido');
+    // Valor acima do que não foi aceito (300 glosados, nada aceito).
+    expect(codigo(await erroDe(recorrer([{ item: a1, valor: 300.01 }], '2026-11-20')))).toBe(
+      'valor-acima-da-glosa',
+    );
+    expect(
+      await lerUma(
+        `SELECT COUNT(*) AS q FROM recurso_glosa_item ri JOIN recurso_glosa r ON r.id = ri.recurso_glosa_id
+          WHERE r.estabelecimento_id = ? AND ri.conta_hospitalar_item_id IN (?, ?, ?)`,
+        [ids.est, a1, b1, s1],
+      ),
+    ).toMatchObject({ q: 0 });
+
+    // Um pedido com duas fontes pagadoras: um lote por fonte; o da fonte A com dois itens em sequência.
+    const rec = await recorrer([{ item: a1 }, { item: b1 }, { item: a2 }], '2026-11-20');
+    const [ra, rb] = String(rec.resultado['recursos']).split(',').map(Number) as [number, number];
+    expect(
+      await lerUma(
+        `SELECT fonte_pagadora_id AS fonte, valor_recursado, DATE_FORMAT(prazo_ate, '%Y-%m-%d') AS prazo,
+                (SELECT GROUP_CONCAT(CONCAT(sequencia, ':', conta_hospitalar_item_id) ORDER BY sequencia)
+                   FROM recurso_glosa_item WHERE recurso_glosa_id = r.id) AS itens
+           FROM recurso_glosa r WHERE id = ?`,
+        [ra],
+      ),
+    ).toMatchObject({ fonte: fa, valor_recursado: '600.00', prazo: '2026-12-10', itens: `1:${a1},2:${a2}` });
+    expect(
+      await lerUma(
+        `SELECT fonte_pagadora_id AS fonte, valor_recursado, DATE_FORMAT(prazo_ate, '%Y-%m-%d') AS prazo
+           FROM recurso_glosa WHERE id = ?`,
+        [rb],
+      ),
+    ).toMatchObject({ fonte: fb, valor_recursado: '300.00', prazo: '2026-11-20' });
+
+    const retorno = async (item: number, desfecho: string, motivo: number | null) =>
+      executar('faturamento.registrarRetornoRecurso', {
+        itens: [{ item, versao: await versao(item), desfecho, valor: null, motivo }],
+        data: '2026-12-05',
+        numeroDemonstrativo: 'DEM-0734B',
+      });
+    const recurso = (id: number) =>
+      lerUma('SELECT situacao, valor_acatado FROM recurso_glosa WHERE id = ?', [id]);
+    const glosaDe = (item: number) =>
+      lerUma(
+        `SELECT g.situacao, g.valor_recuperado, g.encerrado_em IS NOT NULL AS encerrada
+           FROM glosa_item gi JOIN glosa g ON g.id = gi.glosa_id WHERE gi.conta_hospitalar_item_id = ?`,
+        [item],
+      );
+    // Retorno de um item do lote de dois: o lote segue enviado.
+    await retorno(a1, 'acatado', null);
+    expect(await recurso(ra)).toMatchObject({ situacao: 'enviado', valor_acatado: null });
+    await retorno(a2, 'acatado', null);
+    expect(await recurso(ra)).toMatchObject({ situacao: 'acatado', valor_acatado: '600.00' });
+    // O item 3 foi decidido "recorrer" e ainda não entrou em lote: a glosa não encerra.
+    expect(await glosaDe(a1)).toMatchObject({
+      situacao: 'em_recurso',
+      valor_recuperado: '600.00',
+      encerrada: 0,
+    });
+    const r3 = Number(String((await recorrer([{ item: a3 }], '2026-11-25')).resultado['recursos']));
+    await retorno(a3, 'negado', 9735);
+    expect(await recurso(r3)).toMatchObject({ situacao: 'negado', valor_acatado: '0.00' });
+    expect(await glosaDe(a1)).toMatchObject({
+      situacao: 'recuperada',
+      valor_recuperado: '600.00',
+      encerrada: 1,
+    });
+    // Fonte B negada por inteiro: a glosa encerra sem recuperar nada.
+    await retorno(b1, 'negado', 9735);
+    expect(await recurso(rb)).toMatchObject({ situacao: 'negado', valor_acatado: '0.00' });
+    expect(await glosaDe(b1)).toMatchObject({
+      situacao: 'encerrada',
+      valor_recuperado: '0.00',
+      encerrada: 1,
+    });
   }, 120_000);
 });

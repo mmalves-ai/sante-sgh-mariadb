@@ -16,6 +16,7 @@ import {
   esquemaRegistrarRecurso,
   esquemaRegistrarRetornoRecurso,
   MOTIVO_NAO_INFORMADO,
+  prazoRecurso,
   type RegistrarGlosaEntrada,
   type RegistrarRecursoEntrada,
   type RegistrarRetornoRecursoEntrada,
@@ -36,6 +37,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { z } from 'zod';
 import { versaoNumero } from '../faturamento/esquemas.js';
 import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 
@@ -45,6 +47,17 @@ const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const dataIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
 const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * O prazo do recurso pela regra que a grade mostra (prazoRecurso: os dias do convênio no parâmetro
+ * `faturamento.recursoPrazoPorOperadora`, contados da data da baixa). O parâmetro é resolvido pelo serviço na sessão e
+ * entra só por aqui: o corpo da requisição é conferido pelo esquema estrito do contrato, que não tem este campo.
+ */
+const prazoParametro = { prazoParametro: z.string().max(4000).default('') };
+const esquemaBaixa = esquemaRegistrarGlosa.extend(prazoParametro);
+const esquemaRecurso = esquemaRegistrarRecurso.extend(prazoParametro);
+type BaixaComPrazo = RegistrarGlosaEntrada & { readonly prazoParametro?: string };
+type RecursoComPrazo = RegistrarRecursoEntrada & { readonly prazoParametro?: string };
 
 function estabelecimentoDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -74,7 +87,7 @@ const SQL_ITEM = `
                     AND lt.situacao <> 'cancelado') AS em_lote,
          gi.id AS glosa_item, gi.versao AS versao_glosa, gi.glosa_id, gi.motivo_glosa_id, gi.valor_glosado,
          gi.valor_aceito, gi.valor_recursado, gi.quantidade_glosada, gi.decisao, gi.justificativa, gi.recurso_glosa_id,
-         gi.valor_recuperado, gi.data_recuperacao, gl.data_limite_recurso, rg.enviado_em AS recurso_em
+         gi.valor_recuperado, gi.data_recuperacao, gl.data_limite_recurso, gl.data_glosa, rg.enviado_em AS recurso_em
     FROM conta_hospitalar_item ci
     JOIN conta_hospitalar ch ON ch.id = ci.conta_hospitalar_id
     LEFT JOIN glosa_item gi ON gi.id = ${GLOSA_VIVA}
@@ -118,10 +131,10 @@ async function numeroNegocio(tx: TxOperacao, tipo: string, est: number, usuario:
 
 // ── Baixa do retorno por item ───────────────────────────────────────────────────────────────────────────
 
-const registrarGlosa = definirOperacao<RegistrarGlosaEntrada, ResultadoOperacao>({
+const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
   nome: 'faturamento.registrar-glosa',
   tabelas: ['conta_hospitalar_item', 'glosa', 'glosa_item', 'sequencia_negocio', ...TABELAS_PRODUCAO_CONTA],
-  entrada: esquemaRegistrarGlosa,
+  entrada: esquemaBaixa,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const linhas = await itensTravados(tx, est, e.itens);
@@ -181,6 +194,12 @@ const registrarGlosa = definirOperacao<RegistrarGlosaEntrada, ResultadoOperacao>
           conta_hospitalar_id: conta,
           demonstrativo_analise_conta_id: demonstrativo,
           data_glosa: e.dataPagamento,
+          // O prazo fica gravado na baixa: a grade e a conferência do recurso leem a mesma data.
+          data_limite_recurso: prazoRecurso(
+            e.prazoParametro ?? '',
+            n(l['fonte_pagadora_id']),
+            e.dataPagamento,
+          ).prazo,
           competencia: l['competencia'] ?? null,
           valor_apresentado: 0,
           valor_glosado: 0,
@@ -229,10 +248,10 @@ const registrarGlosa = definirOperacao<RegistrarGlosaEntrada, ResultadoOperacao>
 
 // ── Lote de recurso ─────────────────────────────────────────────────────────────────────────────────────
 
-const registrarRecurso = definirOperacao<RegistrarRecursoEntrada, ResultadoOperacao>({
+const registrarRecurso = definirOperacao<RecursoComPrazo, ResultadoOperacao>({
   nome: 'faturamento.registrar-recurso',
   tabelas: ['recurso_glosa', 'recurso_glosa_item', 'glosa', 'glosa_item', 'sequencia_negocio'],
-  entrada: esquemaRegistrarRecurso,
+  entrada: esquemaRecurso,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const linhas = await itensTravados(tx, est, e.itens);
@@ -250,14 +269,17 @@ const registrarRecurso = definirOperacao<RegistrarRecursoEntrada, ResultadoOpera
         valorGlosado: n(l['valor_glosado']),
         valorAceito: n(l['valor_aceito']),
         emRecurso: l['recurso_glosa_id'] !== null || n(l['valor_recursado']) > 0,
-        prazo: dataIso(l['data_limite_recurso']),
+        // Glosa sem prazo gravado (anterior à baixa por item, ou de outra origem): a mesma regra da grade.
+        prazo:
+          dataIso(l['data_limite_recurso']) ??
+          prazoRecurso(e.prazoParametro ?? '', n(l['fonte_pagadora_id']), dataIso(l['data_glosa'])).prazo,
       };
       const valor = r2(it.valor ?? valorPadraoDoRecurso(g));
       const r = conferirItemDoRecurso(g, valor, e.dataProtocolo);
       if (r)
         throw recusa(r.codigo, `Item ${it.item}: ${r.mensagem}`, r.campos ? { campos: [...r.campos] } : {});
       const quantidade = it.quantidade ?? (n(l['quantidade_glosada']) || n(l['quantidade']) || 1);
-      return { l, valor, quantidade, fontePagadora: n(l['fonte_pagadora_id']) };
+      return { l, valor, quantidade, prazo: g.prazo, fontePagadora: n(l['fonte_pagadora_id']) };
     });
     for (const p of pedidos) {
       const m = await tx.uma<Linha>('SELECT permite_reapresentacao FROM motivo_glosa WHERE id = ?', [
@@ -273,9 +295,7 @@ const registrarRecurso = definirOperacao<RegistrarRecursoEntrada, ResultadoOpera
     const porGlosa = new Map<number, number>();
     for (const lote of lotesDeRecurso(pedidos)) {
       const total = r2(lote.itens.reduce((t, p) => t + p.valor, 0));
-      const prazos = lote.itens
-        .map((p) => dataIso(p.l['data_limite_recurso']))
-        .filter((x): x is string => !!x);
+      const prazos = lote.itens.map((p) => p.prazo).filter((x): x is string => !!x);
       const rec = await tx.incluir('recurso_glosa', {
         estabelecimento_id: est,
         numero: await numeroNegocio(tx, 'recurso_glosa', est, ctx.usuario),

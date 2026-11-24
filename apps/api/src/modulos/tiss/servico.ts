@@ -163,14 +163,17 @@ export class ServicoTiss {
     return this.executar(
       s,
       'faturamento.registrarGlosa',
-      e,
+      { ...e, prazoParametro: await this.parametroTexto(s, 'faturamento.recursoPrazoPorOperadora') },
       e.itens.length > 1 ? `${e.itens.length} itens baixados.` : 'Retorno do item baixado.',
     );
   }
 
   async registrarRecurso(s: SessaoCadastro, e: RegistrarRecursoEntrada): Promise<ResultadoTiss> {
     await this.escopoDosItens(s, e.itens);
-    return this.executar(s, 'faturamento.registrarRecurso', e);
+    return this.executar(s, 'faturamento.registrarRecurso', {
+      ...e,
+      prazoParametro: await this.parametroTexto(s, 'faturamento.recursoPrazoPorOperadora'),
+    });
   }
 
   async registrarRetorno(s: SessaoCadastro, e: RegistrarRetornoRecursoEntrada): Promise<ResultadoTiss> {

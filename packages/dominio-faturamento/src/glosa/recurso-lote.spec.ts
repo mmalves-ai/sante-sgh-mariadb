@@ -84,6 +84,25 @@ describe('lote de recurso de glosa (06-FAT linha 34)', () => {
         { decisao: 'pendente', emRecurso: false, retornado: false, valorRecuperado: 0 },
       ]).situacao,
     ).toBe('em_recurso');
+    // A e B decididos "recorrer"; só A foi ao lote e retornou: B ainda pode ser recorrido, a glosa não encerra.
+    const b = { decisao: 'recorrer', emRecurso: false, retornado: false, valorRecuperado: 0 };
+    expect(
+      situacaoDaGlosaNoRecurso('em_recurso', [{ ...it1, retornado: true, valorRecuperado: 40 }, b]),
+    ).toEqual({ situacao: 'em_recurso', valorRecuperado: 40, encerrada: false });
+    // Com B no lote e retornado, a glosa encerra.
+    expect(
+      situacaoDaGlosaNoRecurso('em_recurso', [
+        { ...it1, retornado: true, valorRecuperado: 40 },
+        { ...b, emRecurso: true, retornado: true },
+      ]).encerrada,
+    ).toBe(true);
+    // Item aceito ao lado do recorrido não segura o encerramento.
+    expect(
+      situacaoDaGlosaNoRecurso('em_recurso', [
+        { ...it1, retornado: true },
+        { decisao: 'aceitar', emRecurso: false, retornado: false, valorRecuperado: 0 },
+      ]).situacao,
+    ).toBe('encerrada');
     expect(situacaoDaGlosaNoRecurso('aceita_total', [{ ...it1, emRecurso: false }]).situacao).toBe(
       'aceita_total',
     );

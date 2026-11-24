@@ -1080,7 +1080,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       'faturamento.registrarRecurso',
       'faturamento.registrarRetornoRecurso',
     ])
-      expect((await porta.podeGravar(c, o)).codigo).not.toBe('operacao-pendente');
+      expect(await porta.podeGravar(c, o)).toMatchObject({ pode: true });
     expect(
       codigo(
         await erroDe(
