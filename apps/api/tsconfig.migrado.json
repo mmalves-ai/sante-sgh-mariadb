@@ -1110,6 +1110,8 @@
     "src/modulos/administracao/comum.ts",
     "src/modulos/administracao/estrutura.controller.spec.ts",
     "src/modulos/administracao/estrutura.controller.ts",
+    "src/modulos/administracao/preferencias-memoria.spec.ts",
+    "src/modulos/administracao/preferencias-memoria.ts",
     "src/modulos/administracao/fonte-memoria.ts",
     "src/modulos/administracao/fonte.ts",
     "src/modulos/administracao/login-painel.ts",

@@ -17,6 +17,7 @@ import {
 } from '../acesso/fonte-sintetica.js';
 import { NOMES_PAPEL } from '../acesso/gestao-fonte.js';
 import type { FonteAdministracao } from './fonte.js';
+import { preferenciasMemoria } from './preferencias-memoria.js';
 import {
   type AcaoMenu,
   type ContextoGestao,
@@ -804,6 +805,18 @@ export function fonteAdministracaoMemoria(
         })),
       ),
     async executar(nome, entrada, ctx: ContextoGestao) {
+      // 01-ADM L84: preferências da conta em memória, com as regras do domínio (preferencias-memoria.ts).
+      if (nome === 'preferencias.gravarGeral' || nome === 'preferencias.gravarVisaoTela') {
+        const e = (entrada ?? {}) as Record<string, unknown>;
+        const { permissoesSessao, ...resto } = e;
+        return nome === 'preferencias.gravarGeral'
+          ? preferenciasMemoria.gravarGeral(
+              ctx.login,
+              resto,
+              Array.isArray(permissoesSessao) ? (permissoesSessao as string[]) : [],
+            )
+          : preferenciasMemoria.gravarVisaoTela(ctx.login, e);
+      }
       const escopo =
         /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(
           nome,
