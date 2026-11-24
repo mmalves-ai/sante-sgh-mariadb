@@ -393,7 +393,7 @@ async function anexar() {
 
 <style scoped>
 .alerta {
-  color: var(--sgh-perigo-texto);
+  color: var(--sgh-alerta);
   font-weight: 600;
 }
 </style>
