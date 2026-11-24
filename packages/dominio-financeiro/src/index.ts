@@ -16,3 +16,5 @@ export * from './indicadores.js';
 export * from './orcamento.js';
 export * from './prorrogacao.js';
 export * from './periodo-financeiro.js';
+export * from './reclassificacao.js';
+export * from './permissao-financeiro.js';
