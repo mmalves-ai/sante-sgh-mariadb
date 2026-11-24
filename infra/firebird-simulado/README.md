@@ -6,7 +6,7 @@ Simula, nesta VM, o servidor Firebird vivo de um hospital, para o conector ler d
 |---|---|
 | Container | `sante-sgh-fb-prontocardio` (`firebirdsql/firebird:3.0.14-jammy`, `--restart unless-stopped`) |
 | Base | volume `sante-sgh-fb-prontocardio-data`, arquivo `/prontocardio.fdb` (cópia já conferida; os scripts nunca copiam nem apagam) |
-| Alias | `prontocardio` (`databases.conf` desta pasta, montado `:ro`) |
+| Alias | `prontocardio` (`databases.conf` desta pasta, copiado pelo `subir.sh` para `sante-sgh-dados/firebird-simulado/` e montado de lá `:ro`, fora de qualquer worktree; container com o bind de outro lugar é recriado) |
 | Rede | interna `sante-sgh-conector-int`, alias `fb-prontocardio`, porta 3050; host em `127.0.0.1:3354` pela rede `sante-sgh-fb-loopback` (sem NAT de saída; rede interna não publica porta) |
 | DSN do conector | `fb-prontocardio/3050:prontocardio`, role `LEITURA` |
 | Segredos | `sante-sgh-dados/segredos/fb-prontocardio.env` (`FB_SIM_SYSDBA_SENHA`, `FB_SIM_LEITOR_USUARIO`, `FB_SIM_LEITOR_SENHA`); nunca impressos |
