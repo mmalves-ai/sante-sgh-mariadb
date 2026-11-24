@@ -246,12 +246,17 @@ async function principal(argvBruto: readonly string[]): Promise<number> {
   if (ehProducao(env))
     throw new Error('recusado em produção: a primeira conta é do procedimento de implantação');
   const peloDono = argvBruto.includes('--entregar-ao-dono');
-  const argv = argvBruto.filter((a) => a !== '--entregar-ao-dono');
+  // --endereco=<url>: só o endereço do link do convite (a tela que o dono abre, ex.: o IP da VM em dev); não passa
+  // pela neutralização do ambiente, que recusa WEB_ENDERECO fora do loopback para as integrações.
+  const endereco = argvBruto.find((a) => a.startsWith('--endereco='))?.slice('--endereco='.length);
+  if (endereco !== undefined && !/^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/.test(endereco))
+    throw new Error('recusado: --endereco fora do formato http(s)://host[:porta]');
+  const argv = argvBruto.filter((a) => a !== '--entregar-ao-dono' && !a.startsWith('--endereco='));
   const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
   const nucleo = new NucleoProprio({ env });
   try {
     await executar(argv, {
-      env,
+      env: endereco ? { ...env, WEB_ENDERECO: endereco } : env,
       email: peloDono ? envioPeloCanalDoDono(env, raiz) : emailAcessoDoAmbiente(env as NodeJS.ProcessEnv),
       escrever: (fn) => nucleo.escreverPlataforma('plataforma-criar-admin', fn),
     });
@@ -269,7 +274,8 @@ if ((import.meta as { main?: boolean }).main) {
       const m = e instanceof Error ? e.message : '';
       const codigo = (e as { code?: unknown } | null)?.code;
       console.error(
-        /^(recusado|envio de e-mail|--|argumento desconhecido)/.test(m)
+        /^(recusado|envio de e-mail|--|argumento desconhecido)/.test(m) ||
+          (e instanceof Error && e.name === 'ErroConfiguracao') // cita a chave, nunca o valor
           ? m
           : `falhou: ${e instanceof Error ? e.name : 'erro'} ${String(codigo ?? '')}`,
       );
