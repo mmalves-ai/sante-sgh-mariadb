@@ -95,6 +95,11 @@ export const mensagensVinculos = {
     ligar: 'Ligar ao paciente',
     semCpf: 'Sem paciente com este CPF: cadastre com os dados abaixo e ligue o pré-cadastro.',
     cadastrar: 'Cadastrar paciente',
+    fichaDoPre:
+      'Ficha preenchida com o pré-cadastro: confira e complete; ao gravar, as marcações, as captações e a carteira passam ao paciente.',
+    fichaLigada: 'Pré-cadastro ligado ao paciente: {marcacoes} marcação(ões) passaram a ele.',
+    fichaNaoLigada: 'O pré-cadastro não foi ligado ({motivo}): ligue pela tela de pré-cadastros.',
+    fichaFalhaGenerica: 'falha ao ligar',
     buscaPaciente: 'Buscar o paciente (nome, CPF ou prontuário)',
     buscarPaciente: 'Buscar paciente',
     nenhumPaciente: 'Nenhum paciente encontrado.',

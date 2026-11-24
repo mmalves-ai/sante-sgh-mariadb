@@ -269,7 +269,11 @@ watch(situacao, () => void carregar());
             <dd>{{ v ?? '—' }}</dd>
           </template>
         </dl>
-        <RouterLink to="/cadastros/pacientes/novo">{{ t('vinculos.pre.cadastrar') }}</RouterLink>
+        <RouterLink
+          :to="{ path: '/cadastros/pacientes/novo', query: { preCadastro: String(previa.id) } }"
+          data-testid="cadastrar-do-pre"
+          >{{ t('vinculos.pre.cadastrar') }}</RouterLink
+        >
         <form data-testid="busca-paciente-chegada" @submit.prevent="buscarPaciente">
           <label
             >{{ t('vinculos.pre.buscaPaciente') }}

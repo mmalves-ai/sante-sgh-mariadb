@@ -27,7 +27,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
@@ -39,6 +39,7 @@ import {
   lerFicha,
   lerGravacaoCadastro,
 } from '../api-cadastro.js';
+import { converterPreCadastro, previaConversao } from '../api-vinculos.js';
 import ConsentimentosPaciente from '../componentes/ConsentimentosPaciente.vue';
 import VinculosPaciente from '../componentes/VinculosPaciente.vue';
 import ContaPortalPaciente from '../../portal/componentes/ContaPortalPaciente.vue';
@@ -47,6 +48,7 @@ import { carimboBr, dataBr, diferencas, somenteDigitos } from '../formato.js';
 const props = defineProps<{ id?: string }>();
 const { t } = useI18n();
 const roteador = useRouter();
+const rota = useRoute();
 const cliente = useQueryClient();
 
 const novo = computed(() => props.id === undefined || props.id === 'novo');
@@ -193,6 +195,47 @@ watch(
   { immediate: true },
 );
 
+// 02-CAD linha 6: a ficha nova vinda da chegada do pré-cadastro (/novo?preCadastro=<id>) já abre preenchida com o que
+// a central de marcação gravou e, ao gravar o paciente, liga o pré-cadastro a ele (marcações, captações e carteira).
+const preCadastroId = computed(() => {
+  const v = Number(rota.query['preCadastro']);
+  return novo.value && Number.isInteger(v) && v > 0 ? v : null;
+});
+const textoDe = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+watch(
+  preCadastroId,
+  async (id) => {
+    if (id === null) return;
+    try {
+      const r = (await previaConversao(id)).rascunho;
+      if (!r || preCadastroId.value !== id) return;
+      form.value = {
+        ...form.value,
+        nome: textoDe(r['nome']),
+        nascimento: textoDe(r['nascimento']),
+        cpf: somenteDigitos(textoDe(r['cpf'])),
+        celular: textoDe(r['celular']),
+        telefone: textoDe(r['telefone']),
+        email: textoDe(r['email']),
+      };
+    } catch (e) {
+      erro.value = e;
+    }
+  },
+  { immediate: true },
+);
+
+/** Liga o pré-cadastro ao paciente recém-criado; a falha não desfaz o cadastro e diz como ligar depois. */
+async function ligarPreCadastro(id: number, paciente: number): Promise<string> {
+  try {
+    const r = await converterPreCadastro(id, paciente);
+    return t('vinculos.pre.fichaLigada', { marcacoes: r.marcacoes });
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : t('vinculos.pre.fichaFalhaGenerica');
+    return t('vinculos.pre.fichaNaoLigada', { motivo });
+  }
+}
+
 function abrirEdicao(): void {
   if (!f.value) return;
   lido.value = formularioDa(f.value);
@@ -333,9 +376,13 @@ async function salvar(): Promise<void> {
       // Procurar antes de criar (ref 01 §3.14): CPF já cadastrado mostra os candidatos e não grava.
       await procurarCpf();
       if (candidatos.value && candidatos.value.length > 0) return;
+      const pre = preCadastroId.value;
       const r = await cadastrarPaciente(e);
+      const ligado = pre === null ? null : await ligarPreCadastro(pre, r.idPaciente);
       await roteador.replace(`/cadastros/pacientes/${r.idPaciente}`);
-      mensagem.value = t('cadastro.ficha.criado', { prontuario: r.prontuario });
+      mensagem.value = [t('cadastro.ficha.criado', { prontuario: r.prontuario }), ligado]
+        .filter(Boolean)
+        .join(' ');
       editando.value = false;
     } else {
       const a = alteracoesDoForm();
@@ -440,6 +487,9 @@ const sim = (b: boolean) => (b ? t('cadastro.sim') : t('cadastro.nao'));
         data-testid="sem-gravacao"
       />
       <p v-if="mensagem" role="status" data-testid="mensagem-ficha">{{ mensagem }}</p>
+      <p v-if="preCadastroId !== null" class="secundario" data-testid="ficha-do-pre-cadastro">
+        {{ t('vinculos.pre.fichaDoPre') }}
+      </p>
 
       <!-- ── visualização ── -->
       <div v-if="f && !editando" class="ficha" data-testid="ficha-visualizacao">
