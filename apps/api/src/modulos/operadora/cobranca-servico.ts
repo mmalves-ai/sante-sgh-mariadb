@@ -52,7 +52,8 @@ import {
   situacaoInadimplencia,
   somarDias,
   ultimoDia,
-  valorCoparticipacao,
+  calcularCoparticipacao,
+  problemasDaCoparticipacao,
 } from '@sgh/dominio-operadora';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { type DadosCobranca, type DadosReajuste, type EntradaCobranca } from './dados-portas.js';
@@ -529,14 +530,16 @@ export class ServicoCobrancaOperadora {
     const b = await this.porta.beneficiario(s.porta, e.beneficiario);
     if (!b) throw naoEncontrada('Beneficiário');
     const k = await this.contratoDe(s, b.contrato);
-    const valor = valorCoparticipacao(k.coparticipacao, e.valorEvento);
-    recusar(
-      [
-        ...problemasDoLancamento({ competencia: e.competencia, vencimento: e.vencimento }),
-        ...(valor === null ? ['produto-sem-coparticipacao'] : valor <= 0 ? ['coparticipacao-zero'] : []),
-      ],
-      'Coparticipação não lançada',
+    const lancamento = problemasDoLancamento({ competencia: e.competencia, vencimento: e.vencimento });
+    recusar(lancamento, 'Coparticipação não lançada');
+    // A regra vigente do contrato (ou do plano) com os tetos por evento, mês e ano do beneficiário (08-SGO L98).
+    const calculo = calcularCoparticipacao(
+      k.coparticipacao,
+      e.valorEvento,
+      await this.porta.coparticipacaoAcumulada(s.porta, b.id, e.competencia),
     );
+    recusar(problemasDaCoparticipacao(calculo), 'Coparticipação não lançada');
+    const valor = calculo.valor;
     const pagador = k.tipo === 1 ? (b.titular ?? b.id) : null;
     const r = await this.gravar(
       s,
@@ -570,7 +573,17 @@ export class ServicoCobrancaOperadora {
           por: s.login,
         }),
     );
-    return { ok: true, id: r.id, versao: r.versao, mensagem: 'Coparticipação lançada.', avisos: [] };
+    return {
+      ok: true,
+      id: r.id,
+      versao: r.versao,
+      mensagem: 'Coparticipação lançada.',
+      avisos: calculo.limitadoPor
+        ? [
+            `${MENSAGENS_COBRANCA[`coparticipacao-limitada-${calculo.limitadoPor}`]} Calculado R$ ${calculo.calculado!.toFixed(2)}, lançado R$ ${valor!.toFixed(2)}.`,
+          ]
+        : [],
+    };
   }
 
   async avulsa(s: SessaoCadastro, e: LancarAvulsaEntrada): Promise<ResultadoCobranca> {

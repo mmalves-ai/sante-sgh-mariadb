@@ -346,6 +346,23 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
     return r;
   }
 
+  async coparticipacaoAcumulada(
+    c: ContextoCobranca,
+    beneficiario: number,
+    competencia: string,
+  ): Promise<{ mes: number; ano: number }> {
+    let mes = 0;
+    let ano = 0;
+    for (const x of this.daqui(c))
+      if (x.tipo === 2 && x.situacao !== 'cancelada' && x.competencia.slice(0, 4) === competencia.slice(0, 4))
+        for (const i of x.itens)
+          if (i.beneficiario === beneficiario) {
+            ano += i.valor;
+            if (x.competencia === competencia) mes += i.valor;
+          }
+    return { mes: Math.round(mes * 100) / 100, ano: Math.round(ano * 100) / 100 };
+  }
+
   async renegociadas(c: ContextoCobranca, acordo: number): Promise<DadosCobranca[]> {
     const ls = this.daqui(c)
       .filter((x) => x.acordoDestino === acordo)

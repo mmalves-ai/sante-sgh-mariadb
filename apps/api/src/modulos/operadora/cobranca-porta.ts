@@ -114,6 +114,15 @@ export interface PortaCobrancaOperadora {
     f: FiltroBaseMensalidades,
   ): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }>;
   contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null>;
+  /**
+   * A coparticipação já lançada ao beneficiário (cobranças não canceladas) na competência e no ano dela, para os tetos
+   * mensal e anual da regra (08-SGO L98).
+   */
+  coparticipacaoAcumulada(
+    c: ContextoCobranca,
+    beneficiario: number,
+    competencia: string,
+  ): Promise<{ mes: number; ano: number }>;
   beneficiario(
     c: ContextoCobranca,
     id: number,

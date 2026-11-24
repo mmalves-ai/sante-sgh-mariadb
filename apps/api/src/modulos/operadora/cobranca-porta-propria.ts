@@ -270,8 +270,44 @@ function contratoDe(k: Linha): DadosContratoCobranca {
     produto: num(k['produto_id']),
     produtoNome: txt(k['produto_nome']),
     natureza: 'plano',
-    coparticipacao: { tipo: 0, valor: null },
+    coparticipacao: { tipo: 1, valor: null },
     precos: null,
+  };
+}
+
+const TIPO_DA_COPARTICIPACAO: Readonly<Record<string, number>> = { nenhuma: 1, percentual: 2, valor_fixo: 3 };
+
+/**
+ * A regra geral de coparticipação vigente hoje para o contrato (08-SGO L98): a do próprio contrato prevalece sobre a do
+ * plano comercializado do produto no estabelecimento; só a regra geral (sem grupo, procedimento, tipo de guia nem
+ * regime). Sem regra: tipo 1 (nenhuma), e o lançamento recusa com produto-sem-coparticipacao.
+ */
+async function coparticipacaoDoContrato(
+  l: Leitor,
+  k: Linha,
+  estabelecimento: number,
+): Promise<DadosContratoCobranca['coparticipacao']> {
+  const r = await l.uma(
+    `SELECT r.tipo_coparticipacao, r.percentual, r.valor, r.teto_por_evento, r.teto_mensal, r.teto_anual
+       FROM regra_coparticipacao r
+      WHERE r.operadora_saude_id = ? AND r.ativo = TRUE
+        AND r.grupo_procedimento_operadora_id IS NULL AND r.item_faturavel_id IS NULL
+        AND r.tipo_guia_plano_id IS NULL AND r.regime_atendimento_rede_id IS NULL
+        AND r.vigencia_inicio <= CURRENT_DATE AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURRENT_DATE)
+        AND (r.contrato_plano_id = ?
+             OR (r.contrato_plano_id IS NULL AND r.plano_comercializado_id IN (
+                   SELECT pc.id FROM plano_comercializado pc WHERE pc.produto_plano_id = ? AND pc.estabelecimento_id = ?)))
+      ORDER BY (r.contrato_plano_id IS NULL), r.vigencia_inicio DESC, r.id DESC
+      LIMIT 1`,
+    [num(k['operadora_saude_id']), num(k['id']), numOuNulo(k['produto_id']) ?? 0, estabelecimento],
+  );
+  const tipo = r ? (TIPO_DA_COPARTICIPACAO[txt(r['tipo_coparticipacao'])] ?? 1) : 1;
+  return {
+    tipo,
+    valor: tipo === 2 ? numOuNulo(r?.['percentual']) : tipo === 3 ? numOuNulo(r?.['valor']) : null,
+    tetoEvento: numOuNulo(r?.['teto_por_evento']),
+    tetoMensal: numOuNulo(r?.['teto_mensal']),
+    tetoAnual: numOuNulo(r?.['teto_anual']),
   };
 }
 
@@ -395,8 +431,34 @@ export class PortaCobrancaOperadoraPropria
         [id, c.estabelecimento ?? 0],
       );
       return k
-        ? { ...contratoDe(k), precos: await precosDoContrato(l, num(k['id']), numOuNulo(k['produto_id'])) }
+        ? {
+            ...contratoDe(k),
+            coparticipacao: await coparticipacaoDoContrato(l, k, c.estabelecimento ?? 0),
+            precos: await precosDoContrato(l, num(k['id']), numOuNulo(k['produto_id'])),
+          }
         : null;
+    });
+  }
+
+  /** A coparticipação lançada ao beneficiário (faturas não canceladas do estabelecimento) no mês e no ano da competência. */
+  coparticipacaoAcumulada(
+    c: ContextoCobranca,
+    beneficiario: number,
+    competencia: string,
+  ): Promise<{ mes: number; ano: number }> {
+    return this.ler(c, async (l) => {
+      const mes = primeiroDia(competencia);
+      const r = await l.uma(
+        `SELECT COALESCE(SUM(CASE WHEN COALESCE(i.competencia_referencia, f.competencia) = ? THEN i.valor ELSE 0 END), 0) AS mes,
+                COALESCE(SUM(i.valor), 0) AS ano
+           FROM fatura_plano_item i
+           JOIN fatura_plano f ON f.id = i.fatura_plano_id
+          WHERE i.beneficiario_plano_id = ? AND f.estabelecimento_id = ? AND f.tipo_fatura = 'coparticipacao'
+            AND f.situacao <> 'cancelada' AND f.excluido_em IS NULL AND i.excluido_em IS NULL
+            AND i.natureza = 'debito' AND COALESCE(i.competencia_referencia, f.competencia) BETWEEN ? AND ?`,
+        [mes, beneficiario, c.estabelecimento ?? 0, `${mes.slice(0, 4)}-01-01`, `${mes.slice(0, 4)}-12-01`],
+      );
+      return { mes: num(r?.['mes']), ano: num(r?.['ano']) };
     });
   }
 
