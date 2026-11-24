@@ -5,6 +5,7 @@ import { mensagensRegistroClinico } from './i18n-registro.js';
 import { mensagensFormularioNovo } from './i18n-formulario-novo.js';
 import { mensagensEquipePainel } from './i18n-equipe-painel.js';
 import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
+import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -19,6 +20,7 @@ export const mensagensPep = {
   equipe: mensagensEquipePainel,
   // F3.3 (L124): seções configuráveis do sumário de alta.
   sumarioSecoes: mensagensSumarioSecoes,
+  resultadosGrupos: mensagensResultadosGrupos,
   carregando: 'Carregando…',
   busca: {
     titulo: 'Prontuário ao vivo: consulta',

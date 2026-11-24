@@ -52,6 +52,8 @@ import { EquipePainelController } from './equipe-painel.controller.js';
 import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-propria.js';
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
+import { ResultadosGruposController } from './resultados-grupos.controller.js';
+import { PORTA_GRUPOS_RESULTADO, PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
 import { WorklistMedicoController } from './worklist.controller.js';
 import {
   PORTA_WORKLIST,
@@ -153,6 +155,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       WorklistMedicoController,
       EquipePainelController,
       SumarioAltaSecoesController,
+      ResultadosGruposController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: cadastro },
@@ -182,6 +185,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaSumarioSecoesPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F3.3 (L128): grupos comparativos de resultados e filtro salvo; sem núcleo, 503.
+      {
+        provide: PORTA_GRUPOS_RESULTADO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaGruposResultadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),

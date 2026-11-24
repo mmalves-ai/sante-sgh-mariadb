@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
 import { darCiencia, lancarExameExterno, lerResultados } from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
+import ComparativoResultados from '../../componentes/documentos/ComparativoResultados.vue';
 import ImagensPaciente from '../../../sadt/componentes/ImagensPaciente.vue';
 import { dataHoraBr } from '../../formato.js';
 
@@ -69,6 +70,7 @@ async function lancar(): Promise<void> {
 <template>
   <section class="aba" aria-labelledby="resultados-titulo" data-testid="aba-resultados-conteudo">
     <h2 id="resultados-titulo">{{ t('pep.doc.resultados.titulo') }}</h2>
+    <ComparativoResultados :paciente="paciente" />
     <MensagemErro v-if="dados.isError.value" :erro="dados.error.value" />
     <p v-else-if="!dados.data.value" role="status">{{ t('pep.doc.carregando') }}</p>
     <template v-else>

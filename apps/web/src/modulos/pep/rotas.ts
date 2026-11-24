@@ -286,6 +286,13 @@ export const rotasPep: RouteRecordRaw[] = [
     component: () => import('./telas/ConfiguracaoSetorProntuarioTela.vue'),
     meta: { permissao: 'pep.admin.ler' },
   },
+  // F3.3 (L128): grupos comparativos de resultados (exames lado a lado no prontuário).
+  {
+    path: '/pep/resultados/grupos',
+    name: 'pep.resultadosGrupos',
+    component: () => import('./telas/GruposResultadoTela.vue'),
+    meta: { permissao: 'pep.admin.editar' },
+  },
   // F3.3 (L124): seções configuráveis do sumário de alta (ordem, obrigatórias, recorte de tempo).
   {
     path: '/pep/sumario-alta/secoes',

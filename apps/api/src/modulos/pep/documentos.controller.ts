@@ -133,6 +133,7 @@ import { LiberacaoPep } from './liberacao-pep.js';
 import { ESTADO_PRONTUARIO } from './prontuario.controller.js';
 import type { EstadoProntuario } from './sessao-prontuario.js';
 import { PORTA_SUMARIO_SECOES, type PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
+import { PORTA_GRUPOS_RESULTADO, type PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
 
 export const SERVICO_DOCUMENTOS = Symbol('SERVICO_DOCUMENTOS');
 /** M47 (etapa 3): quem lê os estudos de imagem do paciente (a lista de trabalho DICOM do SADT). */
@@ -206,6 +207,10 @@ export class DocumentosPepController {
   // F3.3 (L124): seções configuradas do sumário de alta; as obrigatórias sem conteúdo recusam a finalização.
   @Optional() @Inject(PORTA_SUMARIO_SECOES) private readonly secoesSumario: PortaSumarioSecoesPropria | null =
     null;
+  // F3.3 (L128): grupos comparativos e filtro salvo; o comparativo do paciente passa pelo vínculo e pela leitura.
+  @Optional()
+  @Inject(PORTA_GRUPOS_RESULTADO)
+  private readonly gruposResultado: PortaGruposResultadoPropria | null = null;
   private readonly liberacao: LiberacaoPep;
   /** Emissões em PDF desta instância por documento (a 2ª via pede o motivo). */
   private readonly emitidos = new Map<string, string>();
@@ -750,6 +755,41 @@ export class DocumentosPepController {
       paciente,
       tabelaAlvo: 'resultado_exame',
       chaveNaturalAlvo: `parte:resultados;n:${r.resultados.length}`,
+    };
+    return r;
+  }
+
+  /** F3.3 (L128): resultados do paciente lado a lado pelo grupo comparativo ou pelo filtro salvo (o padrão ao abrir). */
+  @Get('paciente/:p/resultados/comparativo')
+  @Permissao('pep.resultado.ler')
+  @Auditar('pep.resultado.lido')
+  async resultadosComparativo(
+    @Param('p') p: string,
+    @Req() req: RequisicaoAutorizada,
+    @Query('grupo') grupo?: string,
+    @Query('filtro') filtro?: string,
+    @Query('atendimento') atendimento?: string,
+    @Query('dias') dias?: string,
+  ) {
+    if (!this.gruposResultado)
+      throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
+    const s = sessaoDe(req);
+    const paciente = await this.paciente(s, p, 'pep.resultado.ler', true);
+    const n = (v: string | undefined) => (v && /^\d{1,12}$/.test(v) && Number(v) > 0 ? Number(v) : null);
+    const r = await this.gruposResultado
+      .comparativo(this.c(s), paciente, {
+        grupo: n(grupo),
+        filtro: n(filtro),
+        atendimento: n(atendimento),
+        dias: n(dias) !== null ? Math.min(n(dias)!, 3650) : null,
+      })
+      .catch((e: unknown) => {
+        throw problemaDoCadastro(e);
+      });
+    req.sghAlvo = {
+      paciente,
+      tabelaAlvo: 'resultado_exame',
+      chaveNaturalAlvo: `parte:resultados-comparativo;n:${r.linhas.length}`,
     };
     return r;
   }
