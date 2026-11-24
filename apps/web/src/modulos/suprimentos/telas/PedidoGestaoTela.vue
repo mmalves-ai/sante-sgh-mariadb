@@ -338,18 +338,12 @@ const opcoesSituacaoContato = SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({
       <div v-if="!fechado && pode('suprimentos.cancelarCompra')" class="acoes">
         <SanteBotao
           :rotulo="M.cancelarPedido"
-          variante="destrutivo"
-          :confirmacao="M.confirmarCancelamento + '?'"
+          variante="secundario"
           data-testid="pg-cancelar-pedido"
           @acionar="abrirCancelamento(null)"
         />
       </div>
-      <form
-        v-if="canc.aberto"
-        class="cancelamento"
-        data-testid="pg-form-cancelamento"
-        @submit.prevent="confirmarCancelamento"
-      >
+      <form v-if="canc.aberto" class="cancelamento" data-testid="pg-form-cancelamento" @submit.prevent>
         <SanteSelecao
           v-model="canc.motivo"
           :rotulo="M.motivo"
@@ -381,11 +375,11 @@ const opcoesSituacaoContato = SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({
         </ul>
         <SanteBotao
           :rotulo="M.confirmarCancelamento"
-          tipo="submit"
           variante="destrutivo"
           :confirmacao="M.confirmarCancelamento + '?'"
           :desabilitado="ocupado || canc.motivo === null || conferenciaCancelamento.recusas.length > 0"
           data-testid="pg-canc-confirmar"
+          @acionar="confirmarCancelamento"
         />
         <button type="button" @click="canc.aberto = false">{{ M.cancelar }}</button>
       </form>
