@@ -2,11 +2,16 @@
 // prontuários pela comissão, no terceiro quarto (ordem alfabética) dos métodos que ainda falhavam fechados. Classe
 // auxiliar: a porta própria completa delega a ela (a ligação fica com o integrador). Mesmo contrato da porta de memória.
 // Mapeamento para o modelo próprio:
-// - Checklist da revisão: um modelo_checklist_qualidade por comissão (código `revisao_prontuario_<comissão>`, finalidade
-//   revisao_prontuario); cada publicação é uma modelo_checklist_qualidade_versao (o id do checklist no contrato é o id
-//   da versão; a revisão é o numero_versao) com os itens em modelo_checklist_qualidade_item (código estável do item,
-//   migração 18_QUA/99, e o título no enunciado). A versão vigente passa a substituída (com o fim da vigência) na mesma
-//   transação; publicar sem citar a vigente quando há uma recusa (versão desatualizada), nunca duas vigentes.
+// - Checklist da revisão: um modelo_checklist_qualidade por comissão, ligado pela chave comissao_hospitalar_id (FK e
+//   única com a finalidade revisao_prontuario, migração 18_QUA/99_revisao_checklist); o estabelecimento vem da
+//   comissão. O código do modelo é só rótulo (único, exigido pelo DDL), nunca a ligação. Cada publicação é uma
+//   modelo_checklist_qualidade_versao (o id do checklist no contrato é o id da versão; a revisão é o numero_versao) com
+//   os itens em modelo_checklist_qualidade_item (código estável do item e o título no enunciado). A versão vigente
+//   passa a substituída (com o fim da vigência) na mesma transação; publicar sem citar a vigente quando há uma recusa
+//   (versão desatualizada), nunca duas vigentes. O motivo do contrato (nulo quando não informado) fica no retrato da
+//   versão (dados.motivo); o motivo_publicacao, obrigatório no DDL, leva o texto padrão quando nulo.
+// - Inativação: a versão vigente vira inativa (situação própria da migração), com quem, quando e o motivo em colunas
+//   próprias (inativado_por_usuario_id, inativado_em, motivo_inativacao) e o fim da vigência; nada é apagado.
 // - Prontuário da amostra: revisao_prontuario do sorteio. A ordem é a posição pela chave dentro do sorteio; a situação
 //   do contrato sai do modelo (sem data de revisão: aRevisar; depois, o resultado: conforme ou naoConforme); as
 //   respostas são as linhas de revisao_prontuario_item (código do item, resultado e observação) em JSON, na ordem da
@@ -35,6 +40,7 @@ import {
 } from './apoio-propria.js';
 import type { ContextoGestao, GravadorGestao } from './porta-gestao.js';
 import {
+  type ChecklistRevisaoRegistrado,
   type PendenciaRevisaoRegistrada,
   type ProntuarioRevisaoRegistrado,
   type PublicacaoChecklist,
@@ -43,6 +49,9 @@ import {
 
 /** Os métodos da porta da gestão que este complemento cobre (a ligação na porta completa é do integrador). */
 export const METODOS_COMPLEMENTO_Q3 = [
+  'checklistRevisao',
+  'checklistsRevisao',
+  'inativarChecklistRevisao',
   'pendenciaRevisao',
   'pendenciasDoLogin',
   'pendenciasDosProntuarios',
@@ -64,7 +73,7 @@ export const TABELAS_COMPLEMENTO_Q3 = [
 export const TETO_PENDENCIAS = 2000;
 const LOTE_IDS = 500;
 
-/** O código do checklist da revisão de prontuários de uma comissão. */
+/** O rótulo (código único do modelo) do checklist da revisão de uma comissão; a ligação é a FK comissao_hospitalar_id. */
 export const codigoChecklistRevisao = (comissao: number): string => `revisao_prontuario_${comissao}`;
 
 const RESULTADO_CONTRATO: Record<string, string> = {
@@ -72,6 +81,68 @@ const RESULTADO_CONTRATO: Record<string, string> = {
   nao_conforme: 'naoConforme',
   nao_se_aplica: 'naoAplicavel',
 };
+
+// ── Checklists da revisão ──────────────────────────────────────────────────────────────────────────────────────
+
+const SQL_CHECKLIST = `
+  SELECT v.id, q.comissao_hospitalar_id AS comissao, v.numero_versao, v.situacao, v.dados, v.motivo_publicacao,
+         v.publicado_em, up.login AS publicado_por, v.inativado_em, ui.login AS inativado_por, v.motivo_inativacao,
+         v.versao
+    FROM modelo_checklist_qualidade_versao v
+    JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id
+    JOIN comissao_hospitalar ch ON ch.id = q.comissao_hospitalar_id
+    LEFT JOIN usuario up ON up.id = v.publicador_usuario_id
+    LEFT JOIN usuario ui ON ui.id = v.inativado_por_usuario_id
+   WHERE ch.estabelecimento_id = ? AND q.finalidade = 'revisao_prontuario' AND v.situacao <> 'rascunho'`;
+
+export function checklist(r: Linha, itens: string): ChecklistRevisaoRegistrado {
+  const dados = json<{ motivo?: string | null }>(r['dados'], {});
+  return {
+    id: n(r['id']),
+    comissao: n(r['comissao']),
+    revisao: n(r['numero_versao']),
+    itens,
+    situacao: texto(r['situacao']),
+    motivo: dados && 'motivo' in dados ? (dados.motivo ?? null) : textoN(r['motivo_publicacao']),
+    publicadoPor: texto(r['publicado_por']),
+    publicadoEm: instante(r['publicado_em']),
+    inativadoPor: textoN(r['inativado_por']),
+    inativadoEm: instanteN(r['inativado_em']),
+    motivoInativacao: textoN(r['motivo_inativacao']),
+    versao: n(r['versao']),
+  };
+}
+
+/** Os itens de cada versão (JSON do contrato: código e título, na ordem da sequência). */
+async function itensDas(l: L, ids: readonly number[]): Promise<Map<number, string>> {
+  const porVersao = new Map<number, { codigo: string; titulo: string }[]>();
+  for (let i = 0; i < ids.length; i += LOTE_IDS) {
+    const lote = ids.slice(i, i + LOTE_IDS);
+    const linhas = await l.consultar(
+      `SELECT modelo_checklist_qualidade_versao_id AS v, sequencia, codigo, enunciado
+         FROM modelo_checklist_qualidade_item
+        WHERE modelo_checklist_qualidade_versao_id IN (${marcas(lote.length)})
+        ORDER BY modelo_checklist_qualidade_versao_id, sequencia`,
+      lote,
+      { teto: lote.length * 200 + 1 },
+    );
+    for (const x of linhas) {
+      const k = n(x['v']);
+      const lista = porVersao.get(k) ?? [];
+      lista.push({ codigo: texto(x['codigo']) || `item${n(x['sequencia'])}`, titulo: texto(x['enunciado']) });
+      porVersao.set(k, lista);
+    }
+  }
+  return new Map([...porVersao].map(([k, v]) => [k, JSON.stringify(v)]));
+}
+
+async function checklists(l: L, linhas: Linha[]): Promise<ChecklistRevisaoRegistrado[]> {
+  const itens = await itensDas(
+    l,
+    linhas.map((r) => n(r['id'])),
+  );
+  return linhas.map((r) => checklist(r, itens.get(n(r['id'])) ?? '[]'));
+}
 
 // ── Prontuários da amostra ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -211,6 +282,25 @@ export function pendencia(r: Linha): PendenciaRevisaoRegistrada {
 export class LeiturasRevisaoComplementoQ3 {
   constructor(private readonly nucleo: NucleoQualidade) {}
 
+  /** As revisões publicadas do checklist da comissão, da mais nova para a mais antiga. */
+  checklistsRevisao(c: ContextoGestao, comissao: number): Promise<ChecklistRevisaoRegistrado[]> {
+    return lerNoEstabelecimento(this.nucleo, c, async (l, est) => {
+      const linhas = await l.consultar(
+        `${SQL_CHECKLIST} AND q.comissao_hospitalar_id = ? ORDER BY v.numero_versao DESC`,
+        [est, comissao],
+        { teto: 65_536 },
+      );
+      return checklists(l, linhas);
+    });
+  }
+
+  checklistRevisao(c: ContextoGestao, id: number): Promise<ChecklistRevisaoRegistrado | null> {
+    return lerNoEstabelecimento(this.nucleo, c, async (l, est) => {
+      const r = await l.uma(`${SQL_CHECKLIST} AND v.id = ?`, [est, id]);
+      return r ? ((await checklists(l, [r]))[0] ?? null) : null;
+    });
+  }
+
   prontuariosDoSorteio(c: ContextoGestao, sorteio: number): Promise<ProntuarioRevisaoRegistrado[]> {
     return lerNoEstabelecimento(this.nucleo, c, async (l, est) => {
       const linhas = await l.consultar(
@@ -301,26 +391,27 @@ async function publicarChecklistRevisao(
   );
   if (!comissao)
     throw recusa('comissao-inexistente', 'A comissão não está cadastrada neste estabelecimento.');
+  const comissaoId = n(comissao.id);
   const itens = json<ItemPublicado[]>(p.itens, []);
   if (!Array.isArray(itens) || itens.length === 0)
     throw recusa('checklist-sem-itens', 'O checklist precisa de ao menos um item.');
   const agora = paraBanco(p.agora);
   const hoje = agora.slice(0, 10);
-  const codigo = codigoChecklistRevisao(p.comissao);
+  // O modelo da comissão pela chave (FK comissao_hospitalar_id, única com a finalidade), travado para a publicação.
   const modelo =
     (
       await tx.consultarParaAtualizar(
-        'SELECT id FROM modelo_checklist_qualidade WHERE codigo = ?',
-        [codigo],
-        {
-          teto: 1,
-        },
+        `SELECT id FROM modelo_checklist_qualidade
+          WHERE comissao_hospitalar_id = ? AND finalidade = 'revisao_prontuario'`,
+        [comissaoId],
+        { teto: 1 },
       )
     )[0]?.['id'] ??
     (await tx.incluir('modelo_checklist_qualidade', {
-      codigo,
-      nome: `Revisão de prontuários da comissão ${p.comissao}`,
+      codigo: codigoChecklistRevisao(comissaoId),
+      nome: `Revisão de prontuários da comissão ${comissaoId}`,
       finalidade: 'revisao_prontuario',
+      comissao_hospitalar_id: comissaoId,
       situacao: 'publicado',
     }));
   const modeloId = n(modelo);
@@ -351,7 +442,7 @@ async function publicarChecklistRevisao(
   const id = await tx.incluir('modelo_checklist_qualidade_versao', {
     modelo_checklist_qualidade_id: modeloId,
     operacao: 'inclusao',
-    dados: JSON.stringify({ comissao: p.comissao, itens }),
+    dados: JSON.stringify({ comissao: p.comissao, motivo: p.motivo ?? null, itens }),
     ocorrido_em: agora,
     usuario_id: usuario,
     numero_versao: revisao,
@@ -373,6 +464,34 @@ async function publicarChecklistRevisao(
     });
   }
   return { id, revisao };
+}
+
+async function inativarChecklistRevisao(
+  tx: TxOperacao,
+  est: number,
+  m: Parameters<GravadorGestao['inativarChecklistRevisao']>[0],
+): Promise<{ versao: number }> {
+  const [v] = await tx.consultarParaAtualizar(
+    `SELECT v.id, v.versao, v.situacao FROM modelo_checklist_qualidade_versao v
+       JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id
+       JOIN comissao_hospitalar ch ON ch.id = q.comissao_hospitalar_id
+      WHERE v.id = ? AND ch.estabelecimento_id = ? AND q.finalidade = 'revisao_prontuario'`,
+    [m.id, est],
+    { teto: 1 },
+  );
+  if (!v || n(v['versao']) !== m.versao || texto(v['situacao']) !== 'vigente')
+    throw recusaVersaoGestao('O checklist');
+  const usuario = await exigirUsuario(tx, m.usuario);
+  const agora = paraBanco(m.agora);
+  const versao = await tx.alterar('modelo_checklist_qualidade_versao', m.id, m.versao, {
+    situacao: 'inativa',
+    vigencia_fim: agora.slice(0, 10),
+    inativado_em: agora,
+    inativado_por_usuario_id: usuario,
+    motivo_inativacao: m.motivo,
+    operacao: 'alteracao',
+  });
+  return { versao };
 }
 
 async function responderPendenciaRevisao(
@@ -403,9 +522,13 @@ async function responderPendenciaRevisao(
 export function gravacoesComplementoQ3(
   tx: TxOperacao,
   est: number,
-): Pick<GravadorGestao, 'publicarChecklistRevisao' | 'responderPendenciaRevisao'> {
+): Pick<
+  GravadorGestao,
+  'publicarChecklistRevisao' | 'inativarChecklistRevisao' | 'responderPendenciaRevisao'
+> {
   return {
     publicarChecklistRevisao: (p) => publicarChecklistRevisao(tx, est, p),
+    inativarChecklistRevisao: (m) => inativarChecklistRevisao(tx, est, m),
     responderPendenciaRevisao: (p) => responderPendenciaRevisao(tx, est, p),
   };
 }

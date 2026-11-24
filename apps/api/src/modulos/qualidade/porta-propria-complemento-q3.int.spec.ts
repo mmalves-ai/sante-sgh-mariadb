@@ -136,7 +136,7 @@ describe.skipIf(SEM_BANCO_QUA)(
 
     afterAll(async () => {
       // Só o sintético desta execução, na ordem das chaves; a trilha fica (só de acréscimo). O checklist publicado é
-      // histórico: se o privilégio recusar, a linha fica no estabelecimento da massa (código revisao_prontuario_*).
+      // histórico: se o privilégio recusar, a linha fica no estabelecimento da massa (ligada à comissão sintética).
       if (m && ids['comissao'])
         await m.nucleo
           .escrever({ cliente: CLIENTE_QUA, correlacao: 'limpeza-teste-qualidade-q3' }, async (e) => {
@@ -156,16 +156,16 @@ describe.skipIf(SEM_BANCO_QUA)(
             await run(
               `DELETE i FROM modelo_checklist_qualidade_item i
                  JOIN modelo_checklist_qualidade_versao v ON v.id = i.modelo_checklist_qualidade_versao_id
-                 JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id WHERE q.codigo = ?`,
-              [`revisao_prontuario_${ids['comissao']}`],
+                 JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id WHERE q.comissao_hospitalar_id = ?`,
+              [ids['comissao']],
             );
             await run(
               `DELETE v FROM modelo_checklist_qualidade_versao v
-                 JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id WHERE q.codigo = ?`,
-              [`revisao_prontuario_${ids['comissao']}`],
+                 JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id WHERE q.comissao_hospitalar_id = ?`,
+              [ids['comissao']],
             );
-            await run('DELETE FROM modelo_checklist_qualidade WHERE codigo = ?', [
-              `revisao_prontuario_${ids['comissao']}`,
+            await run('DELETE FROM modelo_checklist_qualidade WHERE comissao_hospitalar_id = ?', [
+              ids['comissao'],
             ]);
             await run('DELETE FROM atendimento WHERE id IN (?, ?)', [
               ids['atendimento1'],
@@ -248,6 +248,67 @@ describe.skipIf(SEM_BANCO_QUA)(
       expect(sit.map((x) => [x['situacao'], Number(x['fim']), Number(x['itens'])])).toEqual([
         ['substituida', 1, 2],
         ['vigente', 0, 2],
+      ]);
+      // O modelo fica ligado à comissão pela chave (FK), não pelo código.
+      const [dono] = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'conf-q3-dono' }, (e) =>
+        e.consultar(
+          `SELECT COUNT(DISTINCT q.id) AS modelos, MIN(q.comissao_hospitalar_id) AS comissao
+             FROM modelo_checklist_qualidade_versao v
+             JOIN modelo_checklist_qualidade q ON q.id = v.modelo_checklist_qualidade_id
+            WHERE v.id IN (?, ?)`,
+          [r1.id, r2.id],
+        ),
+      );
+      expect([Number(dono?.['modelos']), Number(dono?.['comissao'])]).toEqual([1, ids['comissao']]);
+    });
+
+    it('checklistsRevisao, checklistRevisao e inativarChecklistRevisao: leitura pela comissão e inativação conferida', async () => {
+      const lista = await leituras.checklistsRevisao(c, ids['comissao']!);
+      expect(lista.map((x) => [x.revisao, x.situacao, x.motivo])).toEqual([
+        [2, 'vigente', 'Nova revisão'],
+        [1, 'substituida', null],
+      ]);
+      expect(JSON.parse(lista[0]!.itens)).toEqual(JSON.parse(itens));
+      expect(lista[0]!.publicadoPor).toBe(m.login);
+      expect(await leituras.checklistsRevisao(cOutro, ids['comissao']!)).toEqual([]);
+      expect(await leituras.checklistRevisao(cOutro, checklist.id)).toBeNull();
+      const vig = await leituras.checklistRevisao(c, checklist.id);
+      expect(vig?.id).toBe(checklist.id);
+      // Inativação de outro estabelecimento ou com versão desatualizada recusa.
+      await expect(
+        gravar(
+          (g) =>
+            g.inativarChecklistRevisao({
+              id: checklist.id,
+              versao: vig!.versao,
+              motivo: 'x',
+              agora,
+              usuario: m.login,
+            }),
+          cOutro,
+        ),
+      ).rejects.toMatchObject({ problema: { status: 409 } });
+      await expect(
+        gravar((g) =>
+          g.inativarChecklistRevisao({ id: checklist.id, versao: 99, motivo: 'x', agora, usuario: m.login }),
+        ),
+      ).rejects.toMatchObject({ problema: { status: 409 } });
+      const r = await gravar((g) =>
+        g.inativarChecklistRevisao({
+          id: checklist.id,
+          versao: vig!.versao,
+          motivo: 'Obsoleto.',
+          agora,
+          usuario: m.login,
+        }),
+      );
+      expect(r.versao).toBe(vig!.versao + 1);
+      const ina = await leituras.checklistRevisao(c, checklist.id);
+      expect([ina?.situacao, ina?.motivoInativacao, ina?.inativadoPor, ina?.versao]).toEqual([
+        'inativa',
+        'Obsoleto.',
+        m.login,
+        r.versao,
       ]);
     });
 

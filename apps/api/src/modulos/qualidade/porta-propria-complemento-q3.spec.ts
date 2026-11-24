@@ -3,6 +3,7 @@
 import type { TxOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import {
+  checklist,
   codigoChecklistRevisao,
   gravacoesComplementoQ3,
   METODOS_COMPLEMENTO_Q3,
@@ -32,6 +33,9 @@ describe('complemento Q3: mapeamento', () => {
   it('cobre os métodos do terceiro quarto e grava só as tabelas do checklist e da pendência', () => {
     expect([...METODOS_COMPLEMENTO_Q3].sort()).toEqual(
       [
+        'checklistRevisao',
+        'checklistsRevisao',
+        'inativarChecklistRevisao',
         'pendenciaRevisao',
         'pendenciasDoLogin',
         'pendenciasDosProntuarios',
@@ -43,6 +47,57 @@ describe('complemento Q3: mapeamento', () => {
     );
     expect(TABELAS_COMPLEMENTO_Q3).toContain('pendencia_prontuario');
     expect(codigoChecklistRevisao(12)).toBe('revisao_prontuario_12');
+  });
+
+  it('checklist: a comissão da FK, a revisão, o motivo do contrato no retrato e a inativação em colunas próprias', () => {
+    const base = {
+      id: 40,
+      comissao: 7,
+      numero_versao: 2,
+      motivo_publicacao: 'Nova revisão do checklist.',
+      publicado_em: new Date(2026, 10, 2, 9, 0, 0),
+      publicado_por: 'U',
+      versao: 1,
+    };
+    const vig = checklist(
+      {
+        ...base,
+        situacao: 'vigente',
+        dados: '{"motivo":null}',
+        inativado_em: null,
+        inativado_por: null,
+        motivo_inativacao: null,
+      },
+      '[{"codigo":"a","titulo":"Item A"}]',
+    );
+    expect([vig.comissao, vig.revisao, vig.situacao, vig.motivo, vig.publicadoEm, vig.inativadoPor]).toEqual([
+      7,
+      2,
+      'vigente',
+      null,
+      '2026-11-02T09:00:00',
+      null,
+    ]);
+    const ina = checklist(
+      {
+        ...base,
+        situacao: 'inativa',
+        dados: '{"motivo":"Troca"}',
+        inativado_em: new Date(2026, 10, 3, 10, 0, 0),
+        inativado_por: 'CHEFE',
+        motivo_inativacao: 'Obsoleto.',
+        versao: 2,
+      },
+      '[]',
+    );
+    expect([
+      ina.situacao,
+      ina.motivo,
+      ina.inativadoPor,
+      ina.inativadoEm,
+      ina.motivoInativacao,
+      ina.versao,
+    ]).toEqual(['inativa', 'Troca', 'CHEFE', '2026-11-03T10:00:00', 'Obsoleto.', 2]);
   });
 
   it('pendência: aberta, resolvida (com resposta) e cancelada (quem, quando e motivo)', () => {
@@ -173,6 +228,38 @@ describe('complemento Q3: gravações', () => {
           resolucao: 'Ok.',
           resolvida_em: '2026-11-02 09:00:00',
           resolvida_por_usuario_id: 1,
+        },
+      ],
+    ]);
+  });
+
+  it('inativar: inexistente, versão diferente ou não vigente recusam 409; a vigente vira inativa com quem e quando', async () => {
+    const m = { id: 40, versao: 1, motivo: 'Obsoleto.', agora: '2026-11-03T10:00:00', usuario: 'U' };
+    for (const linhas of [
+      [],
+      [{ id: 40, versao: 2, situacao: 'vigente' }],
+      [{ id: 40, versao: 1, situacao: 'substituida' }],
+    ]) {
+      const { tx, alteracoes } = txFalsa(linhas);
+      await expect(gravacoesComplementoQ3(tx, 1).inativarChecklistRevisao(m)).rejects.toMatchObject({
+        problema: { status: 409 },
+      });
+      expect(alteracoes).toEqual([]);
+    }
+    const { tx, alteracoes } = txFalsa([{ id: 40, versao: 1, situacao: 'vigente' }]);
+    await expect(gravacoesComplementoQ3(tx, 1).inativarChecklistRevisao(m)).resolves.toEqual({ versao: 2 });
+    expect(alteracoes).toEqual([
+      [
+        'modelo_checklist_qualidade_versao',
+        40,
+        1,
+        {
+          situacao: 'inativa',
+          vigencia_fim: '2026-11-03',
+          inativado_em: '2026-11-03 10:00:00',
+          inativado_por_usuario_id: 1,
+          motivo_inativacao: 'Obsoleto.',
+          operacao: 'alteracao',
         },
       ],
     ]);
