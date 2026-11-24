@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { catalogoManifestacoes, historicoDaAlergia } from './alergias-historico-propria.js';
 import { operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 
@@ -436,6 +437,18 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect([ev?.['operacao'], ev?.['motivo']]).toEqual(['alteracao', 'Informação corrigida pelo paciente']);
     expect(Number(ev?.['usuario_id'])).toBe(ids.usuario);
     expect(String(ev?.['da'])).toBe('false');
+    // A leitura do histórico: a linha do tempo inteira da alergia retirada, com o motivo e o autor.
+    const hist = await historicoDaAlergia(nucleo, CLIENTE, C(), ids.paciente, alvo);
+    expect(hist.passos.map((p) => p.titulo)).toEqual(['Registrada', 'Retirada da lista']);
+    expect(hist.passos[1]!.motivo).toBe('Informação corrigida pelo paciente');
+    expect(hist.passos.every((p) => p.quando !== null)).toBe(true);
+    expect(hist.manifestacoes.map((m) => m.id)).toEqual([ids.manifestacao]);
+    expect((await catalogoManifestacoes(nucleo, CLIENTE, C())).some((m) => m.id === ids.manifestacao)).toBe(
+      true,
+    );
+    expect(await codigo(historicoDaAlergia(nucleo, CLIENTE, C(), ids.paciente + 1_000_000, alvo))).toBe(
+      'registro-inexistente',
+    );
     expect(
       await codigo(
         ops()['pep.inativarAlergia']!(
