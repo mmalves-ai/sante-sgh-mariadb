@@ -4,6 +4,7 @@ import {
   conferirVisaoTela,
   normalizarPreferenciaGeral,
   PREFERENCIA_GERAL_PADRAO,
+  rotaPermitida,
   textoAmpliado,
   visaoInicial,
   ZOOM_TEXTO_AMPLIADO,
@@ -42,12 +43,40 @@ describe('preferências do usuário (01-ADM L84)', () => {
     });
   });
 
-  it('tela inicial: ativa, com endereço e do menu', () => {
-    expect(conferirTelaInicial({ ativa: true, rota: '/agenda', avulsa: false })).toBeNull();
+  it('tela inicial: ativa, com endereço, do menu e permitida ao cargo', () => {
+    const t = { ativa: true, rota: '/agenda', avulsa: false, permitida: true };
+    expect(conferirTelaInicial(t)).toBeNull();
     expect(conferirTelaInicial(null)).toBe('tela-inexistente');
-    expect(conferirTelaInicial({ ativa: false, rota: '/agenda', avulsa: false })).toBe('tela-inexistente');
-    expect(conferirTelaInicial({ ativa: true, rota: null, avulsa: false })).toBe('tela-inicial-sem-rota');
-    expect(conferirTelaInicial({ ativa: true, rota: '/x', avulsa: true })).toBe('tela-inicial-sem-rota');
+    expect(conferirTelaInicial({ ...t, ativa: false })).toBe('tela-inexistente');
+    expect(conferirTelaInicial({ ...t, rota: null })).toBe('tela-inicial-sem-rota');
+    expect(conferirTelaInicial({ ...t, rota: '/x', avulsa: true })).toBe('tela-inicial-sem-rota');
+    expect(conferirTelaInicial({ ...t, permitida: false })).toBe('tela-sem-permissao');
+  });
+
+  it('rota permitida: só a entrada do menu com a rota e permissão que o cargo dá', () => {
+    const menu = [
+      { rota: '/agenda', permissao: 'agenda.ler' },
+      { rota: '/faturamento', permissao: 'faturamento.ler' },
+      { rota: '/sem-permissao', permissao: null },
+    ];
+    const cargo = new Set(['agenda.ler']);
+    expect(rotaPermitida('/agenda', menu, cargo)).toBe(true);
+    expect(rotaPermitida('/faturamento', menu, cargo)).toBe(false);
+    expect(rotaPermitida('/sem-permissao', menu, cargo)).toBe(false);
+    expect(rotaPermitida('/fora-do-menu', menu, cargo)).toBe(false);
+    expect(rotaPermitida(null, menu, cargo)).toBe(false);
+  });
+
+  it('visão de tela: regravar sem padrão explícito mantém a marca; só padrão explícito a troca', () => {
+    const v = { colunas: ['leito', 'paciente'] };
+    const marca = (r: ReturnType<typeof conferirVisaoTela>) => ('visao' in r ? r.visao.padrao : r.recusa);
+    expect(marca(conferirVisaoTela({ ...v, nome: 'Plantão' }, { padraoAtual: true }))).toBe(true);
+    expect(marca(conferirVisaoTela({ ...v, nome: 'Plantão' }, { padraoAtual: false }))).toBe(false);
+    expect(marca(conferirVisaoTela({ ...v, nome: 'Plantão', padrao: false }, { padraoAtual: true }))).toBe(
+      false,
+    );
+    expect(marca(conferirVisaoTela({ ...v, padrao: true }, { padraoAtual: false }))).toBe(true);
+    expect(marca(conferirVisaoTela(v, { primeiraDaTela: true }))).toBe(true);
   });
 
   it('visão de tela: colunas sem repetição, ordenação só por coluna visível, faixa de itens', () => {

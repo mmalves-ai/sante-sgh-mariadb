@@ -651,6 +651,7 @@ export const mensagensWeb = {
     temaEscuro: 'Escuro',
     temaSistema: 'Igual ao computador',
     densidade: 'Densidade',
+    densidadeNormal: 'Padrão do sistema',
     densidadeCompacta: 'Compacta (estação de trabalho)',
     densidadeConfortavel: 'Confortável (tablet)',
     fonte: 'Tamanho do texto',

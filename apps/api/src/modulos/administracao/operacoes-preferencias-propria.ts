@@ -5,13 +5,18 @@
 //   atendimento e alerta em janela, numa linha por usuário (criada na primeira gravação, depois alterada);
 // - preferencias.gravarVisaoTela: a visão salva de uma tela (colunas na ordem, ordenação, filtros, itens por
 //   página), por nome; marcar uma como padrão tira a marca das outras da mesma tela (nada é apagado).
-// As regras ficam em `@sgh/dominio-acesso` (preferencias/preferencias-usuario.ts).
+// As regras ficam em `@sgh/dominio-acesso` (preferencias/preferencias-usuario.ts). A tela inicial e a lista de
+// telas que podem sê-la seguem só os níveis de acesso do cargo: a rota precisa estar numa entrada do menu cuja
+// permissão de leitura a sessão tem (`permissoesSessao`, preenchida pela rota da API a partir da sessão).
+import { ARVORE_MENU } from '@sgh/contratos';
 import {
   conferirTelaInicial,
   conferirVisaoTela,
   MENSAGEM_PREFERENCIA,
+  NOME_VISAO_PADRAO,
   normalizarPreferenciaGeral,
   PREFERENCIA_GERAL_PADRAO,
+  rotaPermitida,
   textoAmpliado,
   visaoInicial,
   type DensidadePreferida,
@@ -53,6 +58,11 @@ export const esquemaGravarPreferenciaGeral = z
     alertaJanelaSuspensa: z.boolean().optional(),
     /** Código da tela do menu aberta após o login; nulo volta à página inicial do perfil. */
     telaInicial: codigoTela.nullable().optional(),
+    /**
+     * Permissões da sessão. A rota da API sempre as preenche a partir da sessão, por cima do que vier no corpo;
+     * ausentes, nenhuma tela é permitida como inicial (falha fechada).
+     */
+    permissoesSessao: z.array(z.string().max(120)).max(5000).optional(),
   })
   .strict();
 
@@ -112,12 +122,14 @@ const operacaoGravarGeral = definirOperacao({
       if (e.telaInicial === null) telaInicial = null;
       else {
         const t = await telaPorCodigo(tx, e.telaInicial);
+        const rota = t ? ((t['rota'] as string | null) ?? null) : null;
         const recusaTela = conferirTelaInicial(
           t
             ? {
                 ativa: bool(t['ativo']),
-                rota: (t['rota'] as string | null) ?? null,
+                rota,
                 avulsa: bool(t['avulsa']),
+                permitida: rotaPermitida(rota, ARVORE_MENU, new Set(e.permissoesSessao ?? [])),
               }
             : null,
         );
@@ -159,7 +171,12 @@ const operacaoGravarVisaoTela = definirOperacao({
       'SELECT id, versao, nome, padrao FROM preferencia_tela_usuario WHERE usuario_id = ? AND tela_sistema_id = ?',
       [usuario, tela],
     );
-    const r = conferirVisaoTela(e, { primeiraDaTela: daTela.length === 0 });
+    const nomePedido = (e.nome ?? NOME_VISAO_PADRAO).trim();
+    const mesma = daTela.find((a) => String(a['nome']) === nomePedido);
+    const r = conferirVisaoTela(e, {
+      primeiraDaTela: daTela.length === 0,
+      padraoAtual: mesma ? bool(mesma['padrao']) : undefined,
+    });
     if ('recusa' in r) throw recusar(r.recusa);
     const v = r.visao;
     const valores = {
@@ -227,19 +244,28 @@ export interface PreferenciasLidas {
   readonly visaoInicialPorTela: Record<string, string>;
 }
 
-/** Lê as preferências da conta (sem conta: as de fábrica, nada guardado). `tela` filtra as visões. */
+/**
+ * Lê as preferências da conta (sem conta: as de fábrica, nada guardado). `tela` filtra as visões. `permissoes` são
+ * as da sessão: as telas que podem ser a inicial são só as do menu do cargo, e a tela inicial guardada que o cargo
+ * deixou de alcançar não é devolvida (a linha fica como está; volta a valer se o acesso voltar).
+ */
 export async function lerPreferenciasDoUsuario(
   l: LeitorPreferencias,
   usuario: number | null,
   tela?: string,
+  permissoes: ReadonlySet<string> = new Set(),
 ): Promise<PreferenciasLidas> {
+  const permitida = (rota: unknown) =>
+    rotaPermitida(vazio(rota) ? null : String(rota), ARVORE_MENU, permissoes);
   const telasDoMenu = (
     await l.consultar(
       'SELECT codigo, titulo, rota FROM tela_sistema WHERE ativo AND NOT avulsa AND rota IS NOT NULL ORDER BY titulo',
       [],
       { teto: 5000 },
     )
-  ).map((x) => ({ codigo: String(x['codigo']), titulo: String(x['titulo']), rota: String(x['rota']) }));
+  )
+    .filter((x) => permitida(x['rota']))
+    .map((x) => ({ codigo: String(x['codigo']), titulo: String(x['titulo']), rota: String(x['rota']) }));
   const linha =
     usuario === null
       ? null
@@ -278,7 +304,7 @@ export async function lerPreferenciasDoUsuario(
     guardadas: !!linha,
     geral: { ...geral, textoAmpliado: textoAmpliado(geral.zoomPercentual) },
     telaInicial:
-      linha && !vazio(linha['tela_codigo'])
+      linha && !vazio(linha['tela_codigo']) && permitida(linha['tela_rota'])
         ? {
             codigo: String(linha['tela_codigo']),
             titulo: String(linha['tela_titulo']),

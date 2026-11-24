@@ -4,6 +4,9 @@ import { erroDaResposta } from '../erros/problem-details.js';
 import { tokenCsrf } from '../../api.js';
 import type { DensidadeEscolhida, Preferencias, Tema } from './preferencias.js';
 
+/** Densidade guardada na conta: a "normal" é o padrão do sistema; a casca a desenha como a sua padrão (compacta). */
+export type DensidadeDaConta = 'compacta' | 'normal' | 'confortavel';
+
 export interface TelaDoMenu {
   readonly codigo: string;
   readonly titulo: string;
@@ -24,7 +27,7 @@ export interface PreferenciasDaConta {
   readonly guardadas: boolean;
   readonly geral: {
     tema: Tema;
-    densidade: string;
+    densidade: DensidadeDaConta;
     textoAmpliado: boolean;
     tipoAtendimentoPadrao: string | null;
   };
@@ -64,7 +67,7 @@ export async function lerPreferenciasDaConta(
 export async function gravarPreferenciasDaConta(
   corpo: Partial<{
     tema: Tema;
-    densidade: DensidadeEscolhida;
+    densidade: DensidadeDaConta;
     textoAmpliado: boolean;
     telaInicial: string | null;
     tipoAtendimentoPadrao: string | null;
@@ -103,13 +106,28 @@ export async function visaoInicialDaTela(
   return p.visoes.find((v) => v.tela === tela && v.nome === nome) ?? null;
 }
 
-/** Traduz a preferência da conta para a da casca (a densidade "normal" da conta abre como a compacta). */
+/**
+ * Como a casca desenha a densidade da conta: "normal" (padrão do sistema) usa o desenho padrão da casca, o compacto.
+ * Só o desenho: a conta continua guardando "normal" (a tela de preferências nunca a regrava sem a pessoa mudar).
+ */
+export function densidadeParaCasca(d: string): DensidadeEscolhida {
+  return d === 'confortavel' ? 'confortavel' : 'compacta';
+}
+
+/** Traduz a preferência da conta para a da casca (só para desenhar; nada volta para a conta). */
 export function daConta(p: PreferenciasDaConta['geral']): Preferencias {
-  return {
-    tema: p.tema,
-    densidade: p.densidade === 'confortavel' ? 'confortavel' : 'compacta',
-    fonteAmpliada: p.textoAmpliado,
-  };
+  return { tema: p.tema, densidade: densidadeParaCasca(p.densidade), fonteAmpliada: p.textoAmpliado };
+}
+
+/** O que gravar: só os campos em que a escolha difere do que a conta guarda (nada, se a pessoa não mudou nada). */
+export function mudancasParaConta<T extends Record<string, unknown>>(
+  guardado: T,
+  escolhido: Partial<T>,
+): Partial<T> {
+  const r: Partial<T> = {};
+  for (const k of Object.keys(escolhido) as (keyof T)[])
+    if (escolhido[k] !== undefined && escolhido[k] !== guardado[k]) r[k] = escolhido[k];
+  return r;
 }
 
 let destinoJaDecidido = false;

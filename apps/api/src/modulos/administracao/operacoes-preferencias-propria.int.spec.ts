@@ -1,8 +1,11 @@
 // Contrato de efeito das preferências do usuário (01-ADM L84) no MariaDB: a primeira gravação cria a linha da conta
 // e as seguintes a alteram (versão crescente, sem linha nova); o texto ampliado vira zoom; a tela inicial só aceita
 // tela do menu; a visão de tela guarda colunas e ordenação, nasce padrão e a nova padrão tira a marca da anterior
-// (nada apagado); valor fora da faixa e conta sem pessoa são recusados sem gravar. Massa sintética (prefixo L84I).
+// (nada apagado) e regravar a padrão sem dizer `padrao` mantém a marca; a tela inicial e as telas oferecidas seguem
+// só o menu do cargo (rota de entrada do menu com permissão da sessão); valor fora da faixa e conta sem pessoa são
+// recusados sem gravar. Massa sintética (prefixo L84I).
 import { randomUUID } from 'node:crypto';
+import { ARVORE_MENU } from '@sgh/contratos';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../problema.filter.js';
@@ -28,7 +31,9 @@ async function codigo(p: Promise<unknown>): Promise<string> {
 describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente f22_o2)', () => {
   const nucleo = new NucleoProprio();
   let fonte: FonteAdministracaoPropria;
-  const ids = { est: 0, pessoa: 0, tela: 0, telaAvulsa: 0 };
+  const ids = { est: 0, pessoa: 0, tela: 0, telaAvulsa: 0, telaMenu: 0 };
+  // Uma entrada real do menu (rota e permissão de leitura): a tela sintética ${P}M usa a rota dela.
+  const menu = { rota: '', permissao: '' };
   const ctx = (usuario: number | null = ids.pessoa): ContextoGestao => ({
     rede: 'rede-sint',
     hospital: P,
@@ -92,6 +97,18 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
           [cod, modulo.id, rota, avulsa, agora],
         );
       ids.tela = await tela(P, '/l84i-sintetica', false);
+      const jaMinha = await e.uma<{ rota: string }>('SELECT rota FROM tela_sistema WHERE codigo = ?', [
+        `${P}M`,
+      ]);
+      for (const i of ARVORE_MENU) {
+        if (!i.rota || !i.permissao) continue;
+        if (jaMinha && jaMinha.rota !== i.rota) continue;
+        if (!jaMinha && (await e.uma('SELECT id FROM tela_sistema WHERE rota = ?', [i.rota]))) continue;
+        Object.assign(menu, { rota: i.rota, permissao: i.permissao });
+        break;
+      }
+      if (!menu.rota) throw new Error('Nenhuma entrada do menu livre para a massa.');
+      ids.telaMenu = await tela(`${P}M`, menu.rota, false);
       ids.telaAvulsa = await tela(`${P}AV`, null, true);
     });
     fonte = new FonteAdministracaoPropria(nucleo, CLIENTE, { rede: 'rede-sint' });
@@ -109,7 +126,12 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
     expect(l1).toMatchObject({ id: r1['id'], tema: 'escuro', densidade: 'normal', versao: 1 });
     expect(Number(l1!['zoom_percentual'])).toBe(125);
     expect(Number(l1!['criado_por'])).toBe(ids.pessoa);
-    await exec('preferencias.gravarGeral', { densidade: 'compacta', textoAmpliado: false, telaInicial: P });
+    await exec('preferencias.gravarGeral', {
+      densidade: 'compacta',
+      textoAmpliado: false,
+      telaInicial: `${P}M`,
+      permissoesSessao: [menu.permissao],
+    });
     const linhas = await todos('SELECT * FROM preferencia_usuario WHERE usuario_id = ?', [ids.pessoa]);
     expect(linhas).toHaveLength(1);
     expect(linhas[0]).toMatchObject({
@@ -118,12 +140,19 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
       zoom_percentual: null,
       versao: 2,
     });
-    expect(Number(linhas[0]!['tela_inicial_id'])).toBe(ids.tela);
-    const lidas = await fonte.lerPreferencias({ rede: 'rede-sint', hospital: P, traceId: 't' }, ids.pessoa);
+    expect(Number(linhas[0]!['tela_inicial_id'])).toBe(ids.telaMenu);
+    const c = { rede: 'rede-sint', hospital: P, traceId: 't' };
+    const lidas = await fonte.lerPreferencias(c, ids.pessoa, undefined, new Set([menu.permissao]));
     expect(lidas.guardadas).toBe(true);
-    expect(lidas.telaInicial).toEqual({ codigo: P, titulo: 'TELA SINTETICA', rota: '/l84i-sintetica' });
+    expect(lidas.telaInicial).toEqual({ codigo: `${P}M`, titulo: 'TELA SINTETICA', rota: menu.rota });
     expect(lidas.geral).toMatchObject({ tema: 'escuro', densidade: 'compacta', textoAmpliado: false });
-    expect(lidas.telasDoMenu.some((t) => t.codigo === `${P}AV`)).toBe(false);
+    expect(lidas.telasDoMenu.map((t) => t.codigo)).toContain(`${P}M`);
+    // Fora do menu do cargo: nem a tela sintética sem entrada no menu nem a avulsa são oferecidas.
+    expect(lidas.telasDoMenu.some((t) => t.codigo === P || t.codigo === `${P}AV`)).toBe(false);
+    // O cargo perdeu o acesso: a tela não é oferecida nem devolvida como inicial, e a linha fica como está.
+    const semAcesso = await fonte.lerPreferencias(c, ids.pessoa, undefined, new Set());
+    expect(semAcesso.telaInicial).toBeNull();
+    expect(semAcesso.telasDoMenu.some((t) => t.codigo === `${P}M`)).toBe(false);
   });
 
   it('geral: recusa valor fora da faixa, tela avulsa e conta sem pessoa, sem gravar', async () => {
@@ -133,6 +162,15 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
       'tela-inicial-sem-rota',
     );
     expect(await codigo(exec('preferencias.gravarGeral', { tema: 'claro' }, null))).toBe('sem-conta');
+    // Tela do menu sem a permissão do cargo e tela fora do menu: recusadas.
+    expect(
+      await codigo(
+        exec('preferencias.gravarGeral', { telaInicial: `${P}M`, permissoesSessao: ['outra.ler'] }),
+      ),
+    ).toBe('tela-sem-permissao');
+    expect(
+      await codigo(exec('preferencias.gravarGeral', { telaInicial: P, permissoesSessao: [menu.permissao] })),
+    ).toBe('tela-sem-permissao');
     expect(
       await um('SELECT versao, tema FROM preferencia_usuario WHERE usuario_id = ?', [ids.pessoa]),
     ).toMatchObject({
@@ -173,6 +211,17 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
     );
     expect(lidas.visaoInicialPorTela[P]).toBe('Plantão noturno');
     expect(lidas.visoes).toHaveLength(2);
+    // Regravar a visão padrão (só as colunas, sem `padrao`) mantém a marca; a outra segue sem ela.
+    await exec('preferencias.gravarVisaoTela', { tela: P, nome: 'Plantão noturno', colunas: ['paciente'] });
+    const marcas = await todos(
+      'SELECT nome, padrao, versao FROM preferencia_tela_usuario WHERE usuario_id = ? ORDER BY nome',
+      [ids.pessoa],
+    );
+    expect(marcas.map((x) => [x['nome'], Number(x['padrao'])])).toEqual([
+      ['padrao', 0],
+      ['Plantão noturno', 1],
+    ]);
+    expect(Number(marcas[1]!['versao'])).toBe(2);
     expect(
       await codigo(
         exec('preferencias.gravarVisaoTela', {
@@ -189,6 +238,6 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = 'teste-l84i' AND usuario_id = ?",
       [ids.pessoa],
     );
-    expect(Number(trilha?.['n'] ?? 0)).toBeGreaterThanOrEqual(4);
+    expect(Number(trilha?.['n'] ?? 0)).toBeGreaterThanOrEqual(5);
   });
 });

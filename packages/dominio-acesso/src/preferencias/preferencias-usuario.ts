@@ -33,6 +33,7 @@ export type RecusaPreferencia =
   | 'tipo-atendimento-invalido'
   | 'tela-inexistente'
   | 'tela-inicial-sem-rota'
+  | 'tela-sem-permissao'
   | 'visao-sem-colunas'
   | 'coluna-repetida'
   | 'coluna-desconhecida'
@@ -49,6 +50,7 @@ export const MENSAGEM_PREFERENCIA: Readonly<Record<RecusaPreferencia, string>> =
   'tipo-atendimento-invalido': 'O filtro inicial de atendimento não é conhecido.',
   'tela-inexistente': 'Essa tela não existe ou não está ativa.',
   'tela-inicial-sem-rota': 'A tela inicial precisa ser uma tela do menu, com endereço próprio.',
+  'tela-sem-permissao': 'Seu cargo não dá acesso a essa tela; escolha uma tela do seu menu.',
   'visao-sem-colunas': 'Deixe ao menos uma coluna visível.',
   'coluna-repetida': 'A mesma coluna aparece duas vezes.',
   'coluna-desconhecida': 'Uma das colunas não existe nesta tela.',
@@ -124,13 +126,30 @@ export function normalizarPreferenciaGeral(
 /** Texto ampliado é qualquer zoom acima de 100%. */
 export const textoAmpliado = (zoom: number | null): boolean => zoom !== null && zoom > 100;
 
-/** A tela inicial precisa existir, estar ativa, ter endereço e não ser avulsa (aberta só por outra tela). */
+/**
+ * A tela inicial precisa existir, estar ativa, ter endereço, não ser avulsa (aberta só por outra tela) e estar no
+ * menu da pessoa (`permitida`: a permissão de leitura da entrada do menu ligada à rota está entre as do cargo).
+ */
 export function conferirTelaInicial(
-  t: { ativa: boolean; rota: string | null; avulsa: boolean } | null,
+  t: { ativa: boolean; rota: string | null; avulsa: boolean; permitida: boolean } | null,
 ): RecusaPreferencia | null {
   if (!t || !t.ativa) return 'tela-inexistente';
   if (!t.rota || t.avulsa) return 'tela-inicial-sem-rota';
+  if (!t.permitida) return 'tela-sem-permissao';
   return null;
+}
+
+/**
+ * A rota está no menu da pessoa: alguma entrada do menu com essa rota tem permissão de leitura que o cargo dá. Rota
+ * fora do menu ou entrada sem permissão não conta (falha fechada, como o próprio menu).
+ */
+export function rotaPermitida(
+  rota: string | null,
+  menu: readonly { readonly rota: string | null; readonly permissao: string | null }[],
+  permissoes: ReadonlySet<string>,
+): boolean {
+  if (!rota) return false;
+  return menu.some((i) => i.rota === rota && i.permissao !== null && permissoes.has(i.permissao));
 }
 
 export interface OrdenacaoColuna {
@@ -156,12 +175,17 @@ export interface VisaoTelaNormalizada {
 
 /**
  * Confere uma visão salva de tela. `colunasDaTela` (opcional) é a lista de colunas que a tela oferece: quando
- * vem, coluna fora dela é recusada. O nome é aparado; sem nome, é a visão "padrao". A primeira visão da tela
+ * vem, coluna fora dela é recusada. O nome é aparado; sem nome, é a visão "padrao". A marca de padrão só muda com
+ * `padrao` explícito: sem ele, a visão regravada mantém a marca que tinha (`padraoAtual`) e a primeira visão da tela
  * (`primeiraDaTela`) já nasce padrão, para a tela abrir nela sem mais um clique.
  */
 export function conferirVisaoTela(
   v: VisaoTelaPedida,
-  f: { colunasDaTela?: readonly string[] | undefined; primeiraDaTela?: boolean | undefined } = {},
+  f: {
+    colunasDaTela?: readonly string[] | undefined;
+    primeiraDaTela?: boolean | undefined;
+    padraoAtual?: boolean | undefined;
+  } = {},
 ): { recusa: RecusaPreferencia } | { visao: VisaoTelaNormalizada } {
   const nome = (v.nome ?? NOME_VISAO_PADRAO).trim();
   if (nome.length < 1 || nome.length > 100) return { recusa: 'nome-visao-invalido' };
@@ -186,7 +210,7 @@ export function conferirVisaoTela(
       colunas,
       ordenacao,
       itensPorPagina: itens,
-      padrao: v.padrao === true || f.primeiraDaTela === true,
+      padrao: v.padrao ?? (f.padraoAtual === true || f.primeiraDaTela === true),
     },
   };
 }

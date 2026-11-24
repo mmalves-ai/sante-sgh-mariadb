@@ -1,23 +1,25 @@
 <script setup lang="ts">
 // Preferências: tema, densidade, tamanho do texto, tela inicial e atalhos; o segundo fator abre a segurança da
 // conta (M59-F2). 01-ADM L84: cada escolha é gravada na conta na hora (sem botão salvar) e segue a pessoa em qualquer
-// computador; as visões salvas das telas (colunas e ordenação) aparecem aqui, com a que cada tela abre.
+// computador; as visões salvas das telas (colunas e ordenação) aparecem aqui, com a que cada tela abre. Abrir a tela
+// não grava nada: só a escolha da pessoa grava, e só o campo que ela mudou. A densidade oferece as três da conta
+// (a "padrão do sistema" é a normal, desenhada pela casca como a compacta). A tela inicial lista só as telas do menu
+// do cargo (a API filtra pelas permissões da sessão).
 import { PERMISSOES_ACESSO } from '@sgh/contratos';
 import { SanteOpcoes } from '@sgh/ui';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import { ATALHOS } from '../../../casca/atalhos/atalhos.js';
-import {
-  usarPreferencias,
-  type DensidadeEscolhida,
-  type Tema,
-} from '../../../casca/preferencias/preferencias.js';
+import { usarPreferencias, type Tema } from '../../../casca/preferencias/preferencias.js';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import {
   daConta,
+  densidadeParaCasca,
   gravarPreferenciasDaConta,
   lerPreferenciasDaConta,
+  mudancasParaConta,
+  type DensidadeDaConta,
   type PreferenciasDaConta,
 } from '../../../casca/preferencias/preferencias-servidor.js';
 
@@ -31,7 +33,8 @@ const temas = computed<{ valor: Tema; rotulo: string }[]>(() => [
   { valor: 'escuro', rotulo: t('preferencias.temaEscuro') },
   { valor: 'sistema', rotulo: t('preferencias.temaSistema') },
 ]);
-const densidades = computed<{ valor: DensidadeEscolhida; rotulo: string }[]>(() => [
+const densidades = computed<{ valor: DensidadeDaConta; rotulo: string }[]>(() => [
+  { valor: 'normal', rotulo: t('preferencias.densidadeNormal') },
   { valor: 'compacta', rotulo: t('preferencias.densidadeCompacta') },
   { valor: 'confortavel', rotulo: t('preferencias.densidadeConfortavel') },
 ]);
@@ -39,43 +42,77 @@ const fontes = computed(() => [
   { valor: 'normal' as const, rotulo: t('preferencias.fonteNormal') },
   { valor: 'ampliada' as const, rotulo: t('preferencias.fonteAmpliada') },
 ]);
-const fonte = computed({
-  get: () => (p.fonteAmpliada ? 'ampliada' : 'normal'),
-  set: (v: 'normal' | 'ampliada') => (p.fonteAmpliada = v === 'ampliada'),
-});
-const tema = computed({ get: () => p.tema, set: (v: Tema) => (p.tema = v) });
-const densidade = computed({ get: () => p.densidade, set: (v: DensidadeEscolhida) => (p.densidade = v) });
+type Escolha = Exclude<Parameters<typeof gravarPreferenciasDaConta>[0], undefined>;
+type Guardado = Required<Pick<Escolha, 'tema' | 'densidade' | 'textoAmpliado' | 'telaInicial'>>;
 
 const conta = ref<PreferenciasDaConta | null>(null);
-const telaInicial = ref('');
+/** O que a conta guarda (lido ao abrir e atualizado a cada gravação aceita): base para gravar só o que mudou. */
+let guardado: Guardado | null = null;
+const densidadeConta = ref<DensidadeDaConta>(p.densidade === 'confortavel' ? 'confortavel' : 'normal');
+const telaInicialEscolhida = ref('');
 const situacaoConta = ref<'carregando' | 'guardada' | 'gravando' | 'erro' | 'local'>('carregando');
-let carregada = false;
 onMounted(async () => {
   try {
-    conta.value = await lerPreferenciasDaConta();
-    if (conta.value.guardadas) p.substituir(daConta(conta.value.geral));
-    telaInicial.value = conta.value.telaInicial?.codigo ?? '';
+    const lida = await lerPreferenciasDaConta();
+    conta.value = lida;
+    if (lida.guardadas) {
+      p.substituir(daConta(lida.geral));
+      densidadeConta.value = lida.geral.densidade;
+    }
+    telaInicialEscolhida.value = lida.telaInicial?.codigo ?? '';
+    guardado = {
+      tema: lida.geral.tema,
+      densidade: lida.geral.densidade,
+      textoAmpliado: lida.geral.textoAmpliado,
+      telaInicial: lida.telaInicial?.codigo ?? null,
+    };
     situacaoConta.value = 'guardada';
   } catch {
     situacaoConta.value = 'local';
   }
-  carregada = true;
 });
-async function gravarNaConta(corpo: Parameters<typeof gravarPreferenciasDaConta>[0]): Promise<void> {
-  if (!carregada || !podeEditar.value || situacaoConta.value === 'local') return;
+async function gravarNaConta(escolha: Escolha): Promise<void> {
+  if (!guardado || !podeEditar.value || situacaoConta.value === 'local') return;
+  const mudou = mudancasParaConta(guardado, escolha);
+  if (Object.keys(mudou).length === 0) return;
   situacaoConta.value = 'gravando';
   try {
-    await gravarPreferenciasDaConta(corpo);
+    await gravarPreferenciasDaConta(mudou);
+    guardado = { ...guardado, ...mudou };
     situacaoConta.value = 'guardada';
   } catch {
     situacaoConta.value = 'erro';
   }
 }
-watch(
-  () => [p.tema, p.densidade, p.fonteAmpliada] as const,
-  ([tema, densidade, textoAmpliado]) => void gravarNaConta({ tema, densidade, textoAmpliado }),
-);
-watch(telaInicial, (v) => void gravarNaConta({ telaInicial: v || null }));
+const fonte = computed({
+  get: () => (p.fonteAmpliada ? 'ampliada' : 'normal'),
+  set: (v: 'normal' | 'ampliada') => {
+    p.fonteAmpliada = v === 'ampliada';
+    void gravarNaConta({ textoAmpliado: p.fonteAmpliada });
+  },
+});
+const tema = computed({
+  get: () => p.tema,
+  set: (v: Tema) => {
+    p.tema = v;
+    void gravarNaConta({ tema: v });
+  },
+});
+const densidade = computed({
+  get: () => densidadeConta.value,
+  set: (v: DensidadeDaConta) => {
+    densidadeConta.value = v;
+    p.densidade = densidadeParaCasca(v);
+    void gravarNaConta({ densidade: v });
+  },
+});
+const telaInicial = computed({
+  get: () => telaInicialEscolhida.value,
+  set: (v: string) => {
+    telaInicialEscolhida.value = v;
+    void gravarNaConta({ telaInicial: v || null });
+  },
+});
 const visoesPorTela = computed(() => {
   const titulos = new Map((conta.value?.telasDoMenu ?? []).map((x) => [x.codigo, x.titulo]));
   return (conta.value?.visoes ?? []).map((v) => ({

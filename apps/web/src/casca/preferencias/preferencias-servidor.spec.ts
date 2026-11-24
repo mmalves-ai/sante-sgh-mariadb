@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   daConta,
+  densidadeParaCasca,
+  mudancasParaConta,
   destinoInicialDaConta,
   gravarPreferenciasDaConta,
   gravarVisaoDaTela,
@@ -42,6 +44,22 @@ const resposta = (corpo: unknown, status = 200) =>
 describe('preferências guardadas na conta (01-ADM L84)', () => {
   it('a densidade normal da conta abre como compacta; texto ampliado vira fonte ampliada', () => {
     expect(daConta(CONTA.geral)).toEqual({ tema: 'escuro', densidade: 'compacta', fonteAmpliada: true });
+  });
+
+  it('a conta guarda as três densidades; a casca desenha a normal como a sua padrão', () => {
+    expect(densidadeParaCasca('normal')).toBe('compacta');
+    expect(densidadeParaCasca('compacta')).toBe('compacta');
+    expect(densidadeParaCasca('confortavel')).toBe('confortavel');
+  });
+
+  it('grava só o que a pessoa mudou: abrir a tela sem mudar nada não grava', () => {
+    const guardado = { tema: 'escuro', densidade: 'normal', textoAmpliado: true, telaInicial: null };
+    expect(mudancasParaConta(guardado, { ...guardado })).toEqual({});
+    expect(mudancasParaConta(guardado, { densidade: 'normal' })).toEqual({});
+    expect(mudancasParaConta(guardado, { densidade: 'compacta' })).toEqual({ densidade: 'compacta' });
+    expect(mudancasParaConta(guardado, { telaInicial: 'AGE01', tema: 'escuro' })).toEqual({
+      telaInicial: 'AGE01',
+    });
   });
 
   it('o início aplica as preferências da conta e abre a tela inicial escolhida, uma vez por carga', async () => {

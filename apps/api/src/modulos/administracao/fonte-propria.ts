@@ -1015,8 +1015,8 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
     );
 
   /** Preferências da própria conta (01-ADM L84). */
-  lerPreferencias(c: Ctx, usuario: number | null, tela?: string) {
-    return this.ler(c, (l) => lerPreferenciasDoUsuario(l, usuario, tela));
+  lerPreferencias(c: Ctx, usuario: number | null, tela?: string, permissoes?: ReadonlySet<string>) {
+    return this.ler(c, (l) => lerPreferenciasDoUsuario(l, usuario, tela, permissoes));
   }
 
   receita = (nome: string): EstadoOperacaoGestao =>
