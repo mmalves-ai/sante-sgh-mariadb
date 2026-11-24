@@ -10,6 +10,7 @@ export * from './leiaute.js';
 export * from './ciha-leiaute.js';
 export * from './catalogo-competencia.js';
 export * from './compatibilidade.js';
+export * from './tabela-competencia.js';
 export * from './bpa.js';
 export * from './bpa-leiaute.js';
 export * from './apac.js';
