@@ -71,6 +71,16 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
           await w.executar('DELETE FROM gerador_senha WHERE id = ?', [gerador]);
         })
         .catch(() => undefined);
+    // As etapas do PA (só de acréscimo) saem antes dos atendimentos da massa (a chave estrangeira).
+    if (m)
+      await nucleo
+        .escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-etapas' }, (w) =>
+          w.executar(
+            'DELETE e FROM atendimento_etapa_pa e JOIN atendimento a ON a.id = e.atendimento_id WHERE a.estabelecimento_id = ?',
+            [m!.estabelecimento],
+          ),
+        )
+        .catch(() => undefined);
     await limparMassa(nucleo, m).catch(() => undefined);
     await nucleo?.encerrar();
   });
@@ -386,6 +396,40 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
       situacao: 'aguardando',
     });
     expect(await porta.previaCancelamento(c, comSenha)).toMatchObject({ pode: false });
+  });
+
+  it('etapas manuais do PA: fato só de acréscimo com a hora e a conta; a ficha lê na ordem; etapa fora do vocabulário recusa', async () => {
+    const mm = m!;
+    const c = contextoPorta(mm);
+    const a = await porta.executar(c, 'atendimento.abrirAtendimento', abertura(mm), contextoGravacao(mm));
+    const cab = String(a.resultado['cabecalho']);
+    const r = Number(a.resultado['reg']);
+    const trilha = {
+      estabelecimento: mm.estabelecimento,
+      usuario: mm.usuario,
+      acao: 'operacao' as const,
+      entidade: 'atendimento',
+      entidadeId: r,
+      correlacao: 'f22-0102-etapa',
+    };
+    const etapa = (e: string) =>
+      porta.gravarSgh(c, trilha, (g) =>
+        g.registrarEtapa({ cabecalho: cab, reg: r, senha: null, etapa: e, usuario: mm.login }),
+      );
+    const i1 = await etapa('atendimentoMedico');
+    const i2 = await etapa('exames');
+    expect(i2).toBeGreaterThan(i1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM atendimento_etapa_pa WHERE atendimento_id = ? AND usuario_id = ?',
+        [r, mm.usuario],
+      ),
+    ).toBe(2);
+    await expect(etapa('inexistente')).rejects.toMatchObject({ problema: { codigo: 'etapa-invalida' } });
+    const d = await porta.detalhe(c, r);
+    expect(d?.etapas.map((x) => x.etapa)).toEqual(['atendimentoMedico', 'exames']);
+    expect(d?.etapas[0]).toMatchObject({ rotulo: 'Em atendimento médico' });
+    expect(d?.etapas[0]?.em).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
   });
 
   it('observação pela mesma sequência da rota (alocar + etapa): um leito por paciente, transferência mantém a entrada, saída volta a em atendimento, exclusão fecha o leito', async () => {

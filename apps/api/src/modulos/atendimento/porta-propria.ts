@@ -18,7 +18,7 @@
 // dia à fila e desfaz o vínculo da marcação); ato médico só por médico (CBO 225 ou CRM ativo), relido na operação.
 // Melhoria: observação sem dois leitos para o mesmo atendimento; na transferência a contagem das horas continua a da
 // primeira entrada; justificativa e horas pelo domínio; a saída devolve o atendimento a "em atendimento".
-// Pendente (pedido ao orquestrador): alteração, herança, segurado, procedimento extra, etapas do PA, impressos, paciente
+// Pendente (pedido ao orquestrador): alteração, herança, segurado, procedimento extra, impressos, paciente
 // não identificado, escore do PA, sinais, indicadores e marcação respondem 501 (ou vazio no quadro) até a regra e o
 // modelo chegarem.
 import { randomUUID } from 'node:crypto';
@@ -74,6 +74,7 @@ import type { GravacaoFeita } from '../exames/public-api.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
+import { gravarEtapaPa, lerEtapasPa } from './porta-propria-etapas.js';
 import type {
   ContextoAtendimento,
   DadosImpresso,
@@ -279,11 +280,11 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
       [atendimento],
     );
   return {
-    // A etapa "observação" do PA é a própria ocupação do leito (devolve o id dela); as demais etapas esperam o modelo
-    // de etapas do PA (pedido ao orquestrador).
+    // A etapa "observação" do PA é a própria ocupação do leito (devolve o id dela); as demais etapas são fatos só de
+    // acréscimo em atendimento_etapa_pa (porta-propria-etapas.ts).
     async registrarEtapa(r) {
-      if (r.etapa !== 'observacao') throw pendenteGravacao('Etapas do pronto atendimento');
       const a = await atendimentoPorNumero(r.cabecalho);
+      if (r.etapa !== 'observacao') return gravarEtapaPa(tx, a.id, r.etapa);
       const o = await ocupacaoAtiva(a.id);
       if (!o) throw recusa('fora-de-observacao', 'O paciente não está em observação.');
       return Number(o.id);
@@ -365,6 +366,7 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
 
 const TABELAS_GRAVACAO_DIRETA = [
   'atendimento',
+  'atendimento_etapa_pa',
   'atendimento_situacao_historico',
   'ocupacao_leito_observacao',
 ];
@@ -658,7 +660,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
               alerta: horasObs >= 24,
             }
           : null,
-        etapas: [],
+        etapas: await lerEtapasPa(l, reg, (d) => localNoFuso(d, fuso)),
         cidPrincipal: await termo(ids?.['c1']),
         cidSecundario: await termo(ids?.['c2']),
         solicitante: sol
