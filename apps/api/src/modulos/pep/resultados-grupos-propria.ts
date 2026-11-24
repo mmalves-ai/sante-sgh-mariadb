@@ -339,7 +339,7 @@ export class PortaGruposResultadoPropria {
     if (erros.length) throw recusa(erros);
     return this.gravar(
       c,
-      'pep.resultados.configurarGrupo',
+      'pep.resultados.configurar_grupo',
       'painel_resultado_grupo',
       async (tx) => {
         // O analito escolhido tem de ser do exame do item (falha fechada).
@@ -457,7 +457,7 @@ export class PortaGruposResultadoPropria {
     const x = entradaValida(esquemaFiltro, entrada);
     const erros = validarFiltroResultado(x);
     if (erros.length) throw recusa(erros);
-    return this.gravar(c, 'pep.resultados.salvarFiltro', 'filtro_resultado_usuario', async (tx, usuario) => {
+    return this.gravar(c, 'pep.resultados.salvar_filtro', 'filtro_resultado_usuario', async (tx, usuario) => {
       const valores = {
         nome: x.nome.trim(),
         padrao: x.padrao,
@@ -506,16 +506,21 @@ export class PortaGruposResultadoPropria {
 
   /** O filtro é preferência do próprio usuário (não é registro clínico): sai de vez. */
   excluirFiltro(c: ContextoDocs, filtro: number, versao: number): Promise<{ id: number }> {
-    return this.gravar(c, 'pep.resultados.excluirFiltro', 'filtro_resultado_usuario', async (tx, usuario) => {
-      const a = await tx.uma(
-        'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ? FOR UPDATE',
-        [filtro, usuario],
-      );
-      if (!a) throw naoEncontrado('Filtro');
-      if (num(a['versao']) !== versao) throw conflito();
-      await tx.excluir('filtro_resultado_usuario', filtro, versao);
-      return filtro;
-    });
+    return this.gravar(
+      c,
+      'pep.resultados.excluir_filtro',
+      'filtro_resultado_usuario',
+      async (tx, usuario) => {
+        const a = await tx.uma(
+          'SELECT id, versao FROM filtro_resultado_usuario WHERE id = ? AND usuario_id = ? FOR UPDATE',
+          [filtro, usuario],
+        );
+        if (!a) throw naoEncontrado('Filtro');
+        if (num(a['versao']) !== versao) throw conflito();
+        await tx.excluir('filtro_resultado_usuario', filtro, versao);
+        return filtro;
+      },
+    );
   }
 
   // ── Comparativo do paciente ───────────────────────────────────────────────────────────────────────

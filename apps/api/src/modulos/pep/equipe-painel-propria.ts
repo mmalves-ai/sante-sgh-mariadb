@@ -346,7 +346,7 @@ export class PortaEquipePainelPropria {
   deixarDeAcompanhar(c: ContextoDocs, paciente: number): Promise<{ id: number }> {
     return this.gravar(
       c,
-      'pep.painel.deixarAcompanhar',
+      'pep.painel.deixar_acompanhar',
       ['paciente_acompanhado'],
       async (tx, est, usuario) => {
         const v = await tx.uma(
@@ -399,7 +399,7 @@ export class PortaEquipePainelPropria {
   /** Filtro salvo padrão do painel (a unidade que abre o painel), no banco por usuário e estabelecimento. */
   gravarFiltroPadrao(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(z.object({ unidade: z.number().int().positive().nullable() }).strict(), entrada);
-    return this.gravar(c, 'pep.painel.filtroPadrao', ['painel_filtro_usuario'], async (tx, est, usuario) => {
+    return this.gravar(c, 'pep.painel.filtro_padrao', ['painel_filtro_usuario'], async (tx, est, usuario) => {
       if (x.unidade !== null) {
         const u = await tx.uma(
           `SELECT id FROM unidade_assistencial
@@ -486,7 +486,7 @@ export class PortaEquipePainelPropria {
     if (erros.length) throw recusaRegra(erros);
     return this.gravar(
       c,
-      'pep.prontuario.configurarSetor',
+      'pep.prontuario.configurar_setor',
       ['configuracao_setor_prontuario'],
       async (tx, est) => {
         const s = await tx.uma(
@@ -607,7 +607,7 @@ export class PortaEquipePainelPropria {
     const x = entradaValida(esquemaMembro, entrada);
     return this.gravar(
       c,
-      'pep.equipe.incluirMembro',
+      'pep.equipe.incluir_membro',
       ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
       async (tx, est) => {
         const a = await tx.uma(
@@ -752,7 +752,7 @@ export class PortaEquipePainelPropria {
     const x = entradaValida(esquemaSaida, entrada);
     return this.gravar(
       c,
-      'pep.equipe.encerrarEquipe',
+      'pep.equipe.encerrar_equipe',
       ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
       async (tx, est) => {
         const e = await tx.uma(
@@ -795,7 +795,7 @@ export class PortaEquipePainelPropria {
   /** Saída do membro: grava o fim e o motivo (nova versão da linha); a participação fica no histórico. */
   encerrarMembro(c: ContextoDocs, membro: number, entrada: unknown): Promise<{ id: number }> {
     const x = entradaValida(esquemaSaida, entrada);
-    return this.gravar(c, 'pep.equipe.encerrarMembro', ['equipe_assistencial_membro'], async (tx, est) => {
+    return this.gravar(c, 'pep.equipe.encerrar_membro', ['equipe_assistencial_membro'], async (tx, est) => {
       const r = await tx.uma(
         `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal, m.recebe_notificacao,
                 m.inicio_em, m.fim_em, m.versao

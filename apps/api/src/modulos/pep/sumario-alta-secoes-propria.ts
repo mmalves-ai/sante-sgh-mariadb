@@ -338,7 +338,7 @@ export class PortaSumarioSecoesPropria {
   }
 
   private gravarSecaoNaTx(c: ContextoDocs, x: z.infer<typeof esquemaComponente>): Promise<{ id: number }> {
-    return this.gravar(c, 'pep.sumarioAlta.configurarSecao', 'componente_sumario_alta', async (tx, est) => {
+    return this.gravar(c, 'pep.sumario_alta.configurar_secao', 'componente_sumario_alta', async (tx, est) => {
       if (x.periodoConsulta !== null) {
         const p = await tx.uma('SELECT ativo FROM periodo_consulta_sumario_alta WHERE id = ?', [
           x.periodoConsulta,
@@ -415,7 +415,7 @@ export class PortaSumarioSecoesPropria {
     if (erros.length) throw recusa(erros);
     return this.gravar(
       c,
-      'pep.sumarioAlta.configurarPeriodo',
+      'pep.sumario_alta.configurar_periodo',
       'periodo_consulta_sumario_alta',
       async (tx) => {
         const valores = {
