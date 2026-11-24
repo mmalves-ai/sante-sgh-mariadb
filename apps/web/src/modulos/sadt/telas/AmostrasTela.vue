@@ -3,12 +3,13 @@
 // (coletada, em transporte, recebida, em análise, rejeitada e recoleta) com hora e responsável; o leitor acha a amostra
 // pelo código da etiqueta. A rejeição pede o motivo (a lista padrão) e o "outro" pede o detalhe; as rejeições do dia
 // aparecem por motivo. Só no novo (as tabelas de rastreio do outro sistema estão vazias).
-import { podeMudar } from '@sgh/dominio-sadt';
+import { aceitaPedidoDeRecoleta, podeMudar } from '@sgh/dominio-sadt';
 import { CODIGOS_ESTADO_AMOSTRA, type AmostraDetalhe, type EstadoAmostra } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { lerMotivosPedido, pedirRecoleta } from '../api-pedido.js';
 import { lerAmostraPorCodigo, listarAmostras, mudarEstadoAmostra, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
@@ -46,14 +47,24 @@ async function achar(): Promise<void> {
 }
 const novoEstado = ref<Record<number, string>>({});
 const motivo = ref<Record<number, string>>({});
+const motivoRecoleta = ref<Record<number, string>>({});
 const detalhe = ref<Record<number, string>>({});
 const motivos = computed(() => [
   { valor: '', rotulo: t('sadt.escolha') },
   ...(apoio.data.value?.motivosRejeicao ?? []).map((m) => ({ valor: m.codigo, rotulo: m.rotulo })),
 ]);
+// A recoleta não é troca de estado: vira o pedido de recoleta com o motivo do cadastro, que rejeita a original (e as
+// alíquotas) e cria a nova coleta numerada (05-SADT linha 7). Oferecida em toda amostra coletada ainda não substituída.
+const motivosPedido = useQuery({ queryKey: ['sadt', 'pedido', 'motivos'], queryFn: lerMotivosPedido });
+const motivosRecoleta = computed(() => [
+  { valor: '', rotulo: t('sadt.escolha') },
+  ...(motivosPedido.data.value?.recoleta ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+]);
 const proximos = (de: EstadoAmostra) => [
   { valor: '', rotulo: t('sadt.escolha') },
-  ...CODIGOS_ESTADO_AMOSTRA.filter((p) => podeMudar(de, p).pode).map((p) => ({
+  ...CODIGOS_ESTADO_AMOSTRA.filter((p) =>
+    p === 'recoleta' ? aceitaPedidoDeRecoleta(de) : podeMudar(de, p).pode,
+  ).map((p) => ({
     valor: p,
     rotulo: t(`sadt.amostras.estados.${p}`),
   })),
@@ -67,6 +78,14 @@ async function mudar(a: AmostraDetalhe): Promise<void> {
   ocupado.value = true;
   try {
     const para = novoEstado.value[a.id] ?? '';
+    if (para === 'recoleta') {
+      const rc = await pedirRecoleta(a.id, Number(motivoRecoleta.value[a.id]), novaChave('recoleta.pedir'));
+      mensagem.value = t('sadt.pedido.pedida', { numero: rc.numero });
+      novoEstado.value[a.id] = '';
+      achada.value = null;
+      await cliente.invalidateQueries({ queryKey: ['sadt'] });
+      return;
+    }
     const r = await mudarEstadoAmostra(
       a.id,
       {
@@ -138,7 +157,15 @@ const visiveis = computed(() => {
           :opcoes="proximos(a.estado)"
           :data-testid="`amostra-estado-${a.codigo}`"
         />
-        <template v-if="novoEstado[a.id] === 'rejeitada' || novoEstado[a.id] === 'recoleta'">
+        <SanteSelecao
+          v-if="novoEstado[a.id] === 'recoleta'"
+          :model-value="motivoRecoleta[a.id] ?? ''"
+          @update:model-value="(v: string) => (motivoRecoleta[a.id] = v)"
+          :rotulo="t('sadt.motivo')"
+          :opcoes="motivosRecoleta"
+          :data-testid="`amostra-motivo-recoleta-${a.codigo}`"
+        />
+        <template v-if="novoEstado[a.id] === 'rejeitada'">
           <SanteSelecao
             :model-value="motivo[a.id] ?? ''"
             @update:model-value="(v: string) => (motivo[a.id] = v)"
@@ -153,7 +180,7 @@ const visiveis = computed(() => {
         <SanteBotao
           v-if="novoEstado[a.id] && podePassar(novoEstado[a.id] ?? '')"
           :rotulo="t('sadt.amostras.mudar')"
-          :desabilitado="ocupado"
+          :desabilitado="ocupado || (novoEstado[a.id] === 'recoleta' && !motivoRecoleta[a.id])"
           :data-testid="`amostra-mudar-${a.codigo}`"
           @acionar="mudar(a)"
         />
