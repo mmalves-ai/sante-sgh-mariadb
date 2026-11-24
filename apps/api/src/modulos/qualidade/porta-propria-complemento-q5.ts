@@ -17,10 +17,12 @@
 // - avalRevisao: a revisão concluída, sem aval e sem pendência aberta, vai a 'avalizada' (CHECK ck_revisao_prontuario_aval);
 // - cancelarPendenciaRevisao: a pendência aberta vai a 'cancelada' (o motivo em resolucao, o instante e quem em
 //   resolvida_em/_por, que a leitura do Q3 lê como cancelamento);
-// - cancelarReuniao: a reunião não cancelada, sem ata assinada nem assinatura anterior, vai a 'cancelada';
+// - cancelarReuniao: a reunião não cancelada, sem ata assinada nem assinatura anterior, vai a 'cancelada' (sem
+//   realizada_em, pelo CHECK da realização; a linha inteira fica na versão anterior);
 // - cancelarNaoConformidade: a não conformidade aberta vai a 'cancelada' com o motivo, quem e a duplicada (do mesmo
-//   estabelecimento, ativa e diferente dela); recusa `com-dependentes` quando outra não conformidade ativa a aponta
-//   como duplicada. O evento da situação não leva 'cancelada' (CHECK do evento): o cancelamento fica na trilha.
+//   estabelecimento, ativa e diferente dela); a reaberta conta como aberta (a leitura a entrega assim). Recusa
+//   `com-dependentes` quando outra não conformidade não excluída a aponta como duplicada, cancelada ou não (como a
+//   memória): a duplicada só se grava no próprio cancelamento, então toda dependente já está cancelada. O evento da situação não leva 'cancelada' (CHECK do evento): o cancelamento fica na trilha.
 // Os cancelamentos guardam a linha anterior em anotacao.dados.versaoAnterior (ação `cancelamento`), que `versoes` lê;
 // o aval não versiona (como na memória): fica na trilha da operação.
 // Ligação (integrador): a porta completa delega as leituras de METODOS_COMPLEMENTO_Q5 a LeiturasGestaoComplementoQ5,
@@ -365,6 +367,12 @@ function anotarVersao(
   };
 }
 
+/**
+ * A situação da não conformidade que o contrato chama de 'aberta' (a leitura própria entrega a reaberta como aberta,
+ * situacaoNcContrato): as duas se cancelam, como na memória.
+ */
+const NC_ABERTA = ['aberta', 'reaberta'];
+
 /** A situação aberta da pendência no banco (a leitura do Q3 lê 'aberta' e 'em_resolucao' como aberta). */
 const PENDENCIA_ABERTA = ['aberta', 'em_resolucao'];
 
@@ -454,10 +462,13 @@ export function gravacoesComplementoQ5(
       )
         throw recusaVersaoGestao('A reunião');
       await exigirUsuario(tx, r.usuario);
+      // ck_reuniao_comissao_realizacao: só a 'realizada' tem realizada_em. A cancelada deixa a realização (que fica
+      // inteira na versão anterior da trilha); a leitura mostra então a agendada_para (NOT NULL).
       const versao = await tx.alterar('reuniao_comissao', r.id, r.versao, {
         situacao: 'cancelada',
         cancelada_em: paraBanco(r.agora),
         motivo_cancelamento: r.justificativa,
+        realizada_em: null,
       });
       anotarVersao(anotacao, 'reuniao_comissao', antes, 'cancelamento', r.justificativa);
       return { versao };
@@ -473,7 +484,7 @@ export function gravacoesComplementoQ5(
         !antes ||
         n(antes['versao']) !== x.versao ||
         antes['cancelada_em'] !== null ||
-        texto(antes['situacao']) !== 'aberta'
+        !NC_ABERTA.includes(texto(antes['situacao']))
       )
         throw recusaVersaoGestao('A não conformidade');
       if (x.duplicadaDe !== null) {
@@ -493,7 +504,7 @@ export function gravacoesComplementoQ5(
       }
       const dependente = await tx.uma(
         `SELECT id FROM nao_conformidade_qualidade
-          WHERE duplicada_de_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'
+          WHERE duplicada_de_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
           LIMIT 1`,
         [x.id, est],
       );

@@ -60,7 +60,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação compulsória con
   });
 
   beforeAll(async () => {
-    m = await prepararMassaQualidade('G');
+    m = await prepararMassaQualidade('AG');
     porta = new PortaAgravoPropria(m.nucleo);
     c = ctxBanco(m.est, m.codigoEst, m.usuario);
     fora = ctxBanco(m.outro, m.codigoOutro, m.usuario);

@@ -33,7 +33,7 @@ describe.skipIf(SEM_BANCO_QUA)(
 
     beforeAll(async () => {
       // A massa do complemento D (o código do estabelecimento novo segue o formato do cadastro; o par 'D' já existe).
-      m = await prepararMassaQualidade('D');
+      m = await prepararMassaQualidade('D2');
       leituras = new LeiturasGestaoComplementoQ2(m.nucleo);
       c = ctxBanco(m.est, m.codigoEst, m.usuario);
       cOutro = ctxBanco(m.outro, m.codigoOutro, m.usuario);

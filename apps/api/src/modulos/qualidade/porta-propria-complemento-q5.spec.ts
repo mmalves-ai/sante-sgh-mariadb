@@ -38,9 +38,11 @@ function leiturasFalsas(respostas: Record<string, unknown[]>) {
 
 function txFalsa(travada: Record<string, unknown> | null, umas: Record<string, unknown> = {}) {
   const alteracoes: { tabela: string; id: number; versao: number; dados: Record<string, unknown> }[] = [];
+  const sqls: string[] = [];
   const tx = {
     consultarParaAtualizar: () => Promise.resolve(travada ? [travada] : []),
     uma: (sql: string) => {
+      sqls.push(sql);
       if (sql.includes('FROM usuario')) return Promise.resolve({ id: 77 });
       const k = Object.keys(umas).find((x) => sql.includes(x));
       return Promise.resolve(k ? umas[k] : null);
@@ -51,7 +53,7 @@ function txFalsa(travada: Record<string, unknown> | null, umas: Record<string, u
       return Promise.resolve(versao + 1);
     },
   } as unknown as TxOperacao;
-  return { tx, alteracoes };
+  return { tx, alteracoes, sqls };
 }
 
 async function codigo(p: Promise<unknown>): Promise<string> {
@@ -248,6 +250,7 @@ describe('complemento Q5 da porta própria da gestão (unidade)', () => {
       situacao: 'cancelada',
       cancelada_em: '2026-11-02 10:00:00',
       motivo_cancelamento: 'Motivo sintético',
+      realizada_em: null,
     });
     const assinada = txFalsa({ ...base, situacao: 'realizada', ata_assinada_em: new Date() });
     expect(await codigo(gravacoesComplementoQ5(assinada.tx, 3).cancelarReuniao(MUDANCA))).toBe(
@@ -256,7 +259,7 @@ describe('complemento Q5 da porta própria da gestão (unidade)', () => {
     expect(assinada.alteracoes).toEqual([]);
   });
 
-  it('a não conformidade aberta se cancela com a duplicada; dependente e duplicada inválida recusam', async () => {
+  it('a não conformidade aberta ou reaberta se cancela com a duplicada; dependente (mesmo cancelada) e duplicada inválida recusam', async () => {
     const nc = { id: 5, versao: 2, situacao: 'aberta', cancelada_em: null };
     const t = txFalsa(nc, { 'WHERE id = ?': { id: 4 } });
     expect(
@@ -281,6 +284,16 @@ describe('complemento Q5 da porta própria da gestão (unidade)', () => {
       ),
     ).toBe('409:com-dependentes');
     expect(dep.alteracoes).toEqual([]);
+    // A dependente já está cancelada (a duplicada só se grava no cancelamento): a consulta não a filtra pela situação.
+    const sqlDep = dep.sqls.find((x) => x.includes('WHERE duplicada_de_id = ?')) ?? '';
+    expect(sqlDep).toContain('excluido_em IS NULL');
+    expect(sqlDep).not.toContain('situacao');
+    // A reaberta é 'aberta' no contrato (a leitura a entrega assim) e se cancela.
+    const reaberta = txFalsa({ ...nc, situacao: 'reaberta' });
+    expect(
+      await gravacoesComplementoQ5(reaberta.tx, 3).cancelarNaoConformidade({ ...MUDANCA, duplicadaDe: null }),
+    ).toEqual({ versao: 3 });
+    expect(reaberta.alteracoes[0]?.dados).toMatchObject({ situacao: 'cancelada', duplicada_de_id: null });
     const tratada = txFalsa({ ...nc, situacao: 'em_tratamento' });
     expect(
       await codigo(

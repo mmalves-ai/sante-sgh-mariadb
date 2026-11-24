@@ -43,9 +43,10 @@ export function ctxBanco(est: number, codigo: string, usuario: number | null): C
 /** Apaga o que a integração gravou nos estabelecimentos da massa. */
 export async function limparQualidade(e: Escritor, ests: readonly number[]): Promise<void> {
   const em = ests.map(() => '?').join(', ');
-  // A gestão (riscos, não conformidades e o plano de ação delas): o plano e a não conformidade se apontam.
+  // A gestão (riscos, não conformidades e o plano de ação delas): o plano e a não conformidade se apontam, e a
+  // não conformidade cancelada como duplicada aponta a original (a chave da duplicada recusa apagar a original antes).
   await e.executar(
-    `UPDATE nao_conformidade_qualidade SET plano_acao_qualidade_id = NULL WHERE estabelecimento_id IN (${em})`,
+    `UPDATE nao_conformidade_qualidade SET plano_acao_qualidade_id = NULL, duplicada_de_id = NULL WHERE estabelecimento_id IN (${em})`,
     ests,
   );
   await e.executar(
@@ -93,7 +94,12 @@ export async function limparQualidade(e: Escritor, ests: readonly number[]): Pro
   await e.executar(`DELETE FROM gatilho_exame_agravo WHERE estabelecimento_id IN (${em})`, ests);
 }
 
-/** `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). */
+/**
+ * `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). A marca é ÚNICA por arquivo:
+ * a limpeza apaga tudo o que os estabelecimentos da marca têm, então dois arquivos com a mesma marca apagam a massa um do
+ * outro. Em uso (fecho-1): AG agravo, B porta completa, C/E/P porta-propria, CC ccih, D complemento-d, D2 complemento-q2,
+ * F/N notificacao.autorizacao, G gestao, Q1..Q5 complementos (Q2 é da etapa2), QC complemento-c, S seguranca.
+ */
 export async function prepararMassaQualidade(marca: string): Promise<MassaQualidade> {
   const nucleo = new NucleoProprio();
   // O código do estabelecimento segue ck_estabelecimento_codigo_formato (^[a-z][a-z0-9]{1,9}$): minúsculo, até 10.
