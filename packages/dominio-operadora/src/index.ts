@@ -31,3 +31,5 @@ export * from './ans/ressarcimento.js';
 export * from './ans/retorno.js';
 // Etapa 8 (F7): o atendimento ao beneficiário com protocolo e o acesso ao portal do prestador.
 export * from './atendimento.js';
+// F7 (08-SGO linhas 93 a 95): responsáveis, setores, parâmetros, aditivo, cancelamento, abrangência, carência e cartão.
+export * from './cadastro-complementar.js';
