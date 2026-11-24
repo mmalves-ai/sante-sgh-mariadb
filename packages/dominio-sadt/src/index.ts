@@ -25,3 +25,4 @@ export * from './catalogo/regras.js';
 export * from './catalogo/analito-pop.js';
 export * from './mapa/distribuir.js';
 export * from './escala/index.js';
+export * from './resultado/ciclo.js';
