@@ -216,7 +216,7 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     };
   }
 
-  incluir(c: ContextoPortaPropria, entrada: unknown, quem: QuemGravaTexto): Promise<{ id: number }> {
+  async incluir(c: ContextoPortaPropria, entrada: unknown, quem: QuemGravaTexto): Promise<{ id: number }> {
     const e = entradaValida(esquemaTexto, entrada);
     return this.gravar(
       c,
