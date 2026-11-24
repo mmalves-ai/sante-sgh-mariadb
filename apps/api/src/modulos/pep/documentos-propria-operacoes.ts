@@ -304,7 +304,7 @@ export function operacoesDocumentosPropria(
     return resto as T;
   }
 
-  const registrarAlergia: GravacaoDocumentos = (c, entrada, ctx) => {
+  const registrarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaAlergiaPropria, entrada);
     return gravar(
       c,
@@ -350,7 +350,7 @@ export function operacoesDocumentosPropria(
           alergia = 0;
         } else {
           if (x.agente !== undefined) {
-            const ag = await tx.uma('SELECT id FROM alergeno WHERE id = ? AND ativo = TRUE AND excluido_em IS NULL', [x.agente]);
+            const ag = await tx.uma('SELECT id FROM alergeno WHERE id = ? AND ativo = TRUE', [x.agente]);
             if (!ag)
               throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', { campos: ['agente'] });
             if (linhas.some((l) => numOuNull(l['alergeno_id']) === x.agente))
@@ -405,7 +405,7 @@ export function operacoesDocumentosPropria(
     );
   };
 
-  const inativarAlergia: GravacaoDocumentos = (c, entrada, ctx) => {
+  const inativarAlergia: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaInativacaoAlergia, entrada);
     return gravar(
       c,
@@ -434,7 +434,7 @@ export function operacoesDocumentosPropria(
     );
   };
 
-  const emitirDocumento: GravacaoDocumentos = (c, entrada, ctx) => {
+  const emitirDocumento: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaEmissaoPropria, entrada);
     if (x.familia === 'atestado' && x.cid && !x.autorizacaoCid)
       return Promise.reject(recusar(422, 'cid-sem-autorizacao', 'O CID exige a autorização do paciente.'));
@@ -567,14 +567,14 @@ export function operacoesDocumentosPropria(
     );
   };
 
-  const lancarExameExterno: GravacaoDocumentos = (c, entrada, ctx) => {
+  const lancarExameExterno: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaExameExterno, entrada);
     if (x.realizadoEm > x.dataHoraClinica)
       return Promise.reject(recusar(422, 'horario-futuro', 'O exame não pode ter sido feito no futuro.'));
     return gravar(
       c,
       ctx,
-      'pep.exame.lancarExterno',
+      'pep.exame.externo',
       ['exame_lancado_prontuario'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
@@ -614,12 +614,12 @@ export function operacoesDocumentosPropria(
     );
   };
 
-  const finalizarSumarioAlta: GravacaoDocumentos = (c, entrada, ctx) => {
+  const finalizarSumarioAlta: GravacaoDocumentos = async (c, entrada, ctx) => {
     const x = entradaValida(esquemaFinalizacaoSumario, entrada);
     return gravar(
       c,
       ctx,
-      'pep.sumarioAlta.finalizar',
+      'pep.sumario.finalizar',
       ['sumario_alta'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
