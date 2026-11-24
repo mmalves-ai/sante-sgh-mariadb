@@ -1,19 +1,20 @@
 <script setup lang="ts">
 // Locais de armazenagem e estoque mínimo/máximo (ficha do M28, seção 7): `/suprimentos/locais`. Escolhe o local e
 // mostra a grade item × saldo × mínimo × máximo (GELIMLOC), com o item abaixo do mínimo em destaque. A edição dos
-// limites é P2 (cadastro pela receita genérica) e segue desligada (POL-3): a tela mostra o motivo.
+// locais (setores atendidos, classificação, regras de atendimento) abre o cadastro do local (F3.6-1, 05-SUP linha 3).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { listarSaldos } from '../api-suprimentos.js';
-import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import { qtd, usarSuprimentos } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
 const { locais } = usarSuprimentos();
 const local = ref('');
+const podeEditar = computed(() => pode('suprimentos.local.editar'));
 const opcoes = computed(() => [
   { valor: '', rotulo: t('suprimentos.escolha') },
   ...locais.value.map((l) => ({ valor: String(l.codigo), rotulo: `${l.codigo} · ${l.nome}` })),
@@ -30,7 +31,11 @@ const abaixo = (q: number, min: number | null) => min !== null && q < min;
   <section class="tela-agenda" aria-labelledby="locais-titulo" data-testid="tela-suprimentos-locais">
     <h1 id="locais-titulo">{{ t('suprimentos.locais.titulo') }}</h1>
     <p>{{ t('suprimentos.locais.texto') }}</p>
-    <AvisoSuprimentos :motivo="t('suprimentos.locais.edicaoDesligada')" />
+    <p v-if="podeEditar" class="atalhos">
+      <RouterLink to="/suprimentos/locais/cadastro" data-testid="locais-cadastro">{{
+        t('cadastroEstoque.atalhos.cadastroLocais')
+      }}</RouterLink>
+    </p>
     <table class="tabela" data-testid="locais-lista">
       <caption>
         {{

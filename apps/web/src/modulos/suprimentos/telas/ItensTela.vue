@@ -1,20 +1,20 @@
 <script setup lang="ts">
 // Itens de estoque (ficha do M28, seção 7): `/suprimentos/itens`. Busca o item (nome ou código) e mostra a ficha do
 // estoque: unidade, lote (rastreável), Portaria 344 (controlado), antimicrobiano, consignado, o saldo e o custo médio
-// por local (do banco) e a posição dos últimos meses. A edição do cadastro é P2 e segue desligada (POL-3): a tela
-// mostra o motivo.
+// por local (do banco) e a posição dos últimos meses. A edição abre o cadastro do item (F3.6-1, 05-SUP linha 1).
 import type { ItemBusca } from '@sgh/contratos';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { lerFichaItem, lerPosicao, listarSaldos } from '../api-suprimentos.js';
-import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import BuscaItem from '../componentes/BuscaItem.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
-import { qtd, reais, usarSuprimentos } from '../usar-suprimentos.js';
+import { qtd, reais } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
-const { motivoFuncionalidade } = usarSuprimentos();
+// Quem tem o cadastro do item no cargo vê os atalhos; a guarda do servidor decide.
+const podeEditar = computed(() => pode('suprimentos.item.editar'));
 const item = ref<ItemBusca | null>(null);
 const codigo = computed(() => item.value?.codigo ?? 0);
 const saldos = useQuery({
@@ -40,12 +40,19 @@ const sim = (b: boolean) => (b ? t('suprimentos.sim') : t('suprimentos.nao'));
   <section class="tela-agenda" aria-labelledby="itens-titulo" data-testid="tela-suprimentos-itens">
     <h1 id="itens-titulo">{{ t('suprimentos.itensTela.titulo') }}</h1>
     <p>{{ t('suprimentos.itensTela.texto') }}</p>
-    <AvisoSuprimentos
-      :motivo="motivoFuncionalidade('suprimentos.cadastros') ?? t('suprimentos.itensTela.edicaoDesligada')"
-    />
+    <p v-if="podeEditar" class="atalhos">
+      <RouterLink to="/suprimentos/itens/cadastro" data-testid="itens-novo">{{
+        t('cadastroEstoque.atalhos.novoItem')
+      }}</RouterLink>
+    </p>
     <BuscaItem testid="itens-busca" @escolher="(i) => (item = i)" />
     <div v-if="item" class="painel" data-testid="itens-ficha">
       <h2>{{ item.codigo }} · {{ item.nome }}</h2>
+      <p v-if="podeEditar">
+        <RouterLink :to="`/suprimentos/itens/cadastro/${item.codigo}`" data-testid="itens-editar">{{
+          t('cadastroEstoque.atalhos.editarItem')
+        }}</RouterLink>
+      </p>
       <dl class="ficha">
         <dt>{{ t('suprimentos.unidade') }}</dt>
         <dd>{{ item.unidade }}</dd>

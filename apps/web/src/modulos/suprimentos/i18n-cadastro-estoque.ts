@@ -68,8 +68,13 @@ export const mensagensCadastroEstoque = {
     estabilidades: 'Estabilidade',
     condicao: 'Condição',
     horas: 'Horas',
-    guarda: 'Guarda (código da condição de armazenamento)',
-    diluente: 'Diluente (código interno do item)',
+    guarda: 'Guarda',
+    qualquerGuarda: 'Qualquer guarda',
+    diluente: 'Diluente',
+    unidadeConcentracao: 'Unidade da concentração',
+    padraoBarras: 'Padrão',
+    padroesBarras: { gtin: 'GTIN', datamatrix: 'DataMatrix', interno: 'Interno', outro: 'Outro' },
+    gtinInvalido: 'GTIN inválido: confira os dígitos (8, 12, 13 ou 14, com o verificador).',
     saldoTotal: 'Saldo total em estoque: {q}',
     situacao: 'Situação',
     tipos: {
@@ -152,6 +157,13 @@ export const mensagensCadastroEstoque = {
       desbloquearFechamento: 'Desbloquear fechamento',
       visualizaPreco: 'Ver preço',
     },
+  },
+  // Atalhos das telas de consulta (itens, locais e usuários do estoque) para o cadastro.
+  atalhos: {
+    novoItem: 'Novo item',
+    editarItem: 'Editar o cadastro deste item',
+    cadastroLocais: 'Cadastrar e alterar locais',
+    escopoUsuarios: 'Editar o escopo do usuário',
   },
   separacao: {
     abrir: 'Lista de separação',

@@ -667,6 +667,20 @@ export class PortaCadastroEstoquePropria implements PortaCadastroEstoque {
           { teto: 2000 },
         ),
       ),
+      guardas: opcoes(
+        await l.consultar(
+          'SELECT id, codigo, descricao AS nome FROM condicao_armazenamento WHERE ativo = TRUE ORDER BY descricao',
+          [],
+          { teto: 500 },
+        ),
+      ),
+      diluentes: opcoes(
+        await l.consultar(
+          "SELECT id, codigo, nome FROM insumo WHERE tipo = 'solucao' AND situacao = 'ativo' AND excluido_em IS NULL ORDER BY nome",
+          [],
+          { teto: 2000 },
+        ),
+      ),
     }));
   }
 

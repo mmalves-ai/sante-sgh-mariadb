@@ -26,6 +26,8 @@ export interface ApoioCadastroEstoque {
   readonly setores: Opcao[];
   readonly centrosCusto: Opcao[];
   readonly locais: Opcao[];
+  readonly guardas: Opcao[];
+  readonly diluentes: Opcao[];
 }
 export interface FichaItemEdicao extends ItemEstoqueEntrada {
   readonly id: number;

@@ -29,6 +29,9 @@ export interface ApoioCadastroEstoque {
   readonly setores: Opcao[];
   readonly centrosCusto: Opcao[];
   readonly locais: Opcao[];
+  /** As guardas (condições de armazenamento) e os diluentes (soluções ativas) que a estabilidade escolhe por lista. */
+  readonly guardas: Opcao[];
+  readonly diluentes: Opcao[];
 }
 
 export interface FichaItemEdicao extends ItemEstoqueEntrada {

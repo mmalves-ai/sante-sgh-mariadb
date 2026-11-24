@@ -500,6 +500,18 @@ describe.skipIf(SEM_BANCO)('cadastro do estoque na porta própria (MariaDB, clie
     });
   }, 60_000);
 
+  it('apoio da tela: guardas e diluentes por lista, os mesmos do banco (soluções ativas)', async () => {
+    const ap = await porta.apoio(c);
+    const g = await um('SELECT COUNT(*) AS n FROM condicao_armazenamento WHERE ativo = TRUE', []);
+    const d = await um(
+      "SELECT COUNT(*) AS n FROM insumo WHERE tipo = 'solucao' AND situacao = 'ativo' AND excluido_em IS NULL",
+      [],
+    );
+    expect(ap.guardas.length).toBe(Number(g?.['n']));
+    expect(ap.diluentes.length).toBe(Number(d?.['n']));
+    expect(ap.guardas.every((o) => o.id > 0 && o.nome !== '')).toBe(true);
+  });
+
   it('lista de separação: só o que falta, endereço do local, lotes pela validade e a falta', async () => {
     const [reqId, reqCancelada] = await nucleo.escrever(
       { cliente: CLIENTE, correlacao: 't-f361-req' },

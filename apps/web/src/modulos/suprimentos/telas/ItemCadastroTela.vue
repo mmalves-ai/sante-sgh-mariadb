@@ -8,6 +8,8 @@ import type { ItemEstoqueEntrada } from '@sgh/contratos/regras-suprimentos';
 import {
   CONDICOES_ESTABILIDADE,
   conferirItemEstoque,
+  gtinValido,
+  PADROES_CODIGO_BARRAS,
   TIPOS_ITEM_ESTOQUE,
 } from '@sgh/contratos/regras-suprimentos';
 import { useQuery } from '@tanstack/vue-query';
@@ -85,6 +87,9 @@ const enviado = ref(false);
 const recusas = computed(() => (enviado.value ? conferirItemEstoque(f.value) : []));
 const doCampo = (...cs: string[]) =>
   recusas.value.filter((x) => x.campos?.some((c) => cs.includes(c))).map((x) => x.mensagem);
+/** Listas editadas na hora (códigos de barras e apresentações): a recusa aparece ao incluir, sem esperar o salvar. */
+const vivas = computed(() => conferirItemEstoque(f.value));
+const doCampoVivo = (c: string) => vivas.value.filter((x) => x.campos?.includes(c)).map((x) => x.mensagem);
 const subgrupos = computed(() =>
   (apoio.data.value?.subgrupos ?? []).filter((s) => s.grupo === f.value.grupo),
 );
@@ -207,6 +212,67 @@ const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k)
 function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' | 'diluente', valor: string) {
   const v = valor.trim() === '' ? (campo === 'horas' ? 0 : null) : Number(valor);
   f.value.estabilidades = f.value.estabilidades.map((s, k) => (k === i ? { ...s, [campo]: v } : s));
+}
+/** Concentração e unidade do princípio ativo editadas na própria linha. */
+function mudarPrincipio(i: number, campo: 'concentracao' | 'unidade', valor: number | string | null) {
+  const v = valor === null || String(valor).trim() === '' ? null : Number(valor);
+  f.value.principiosAtivos = f.value.principiosAtivos.map((p, k) => (k === i ? { ...p, [campo]: v } : p));
+}
+const opcoesUnidade = computed(() => [
+  { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+  ...(apoio.data.value?.unidades ?? []).map((o) => ({ valor: o.id, rotulo: `${o.codigo} · ${o.nome}` })),
+]);
+/** Novo código de barras: GTIN conferido na hora; a unidade padrão é a de estoque. */
+const novoBarras = ref({
+  codigo: '',
+  padrao: 'gtin' as (typeof PADROES_CODIGO_BARRAS)[number],
+  quantidade: 1,
+  unidade: null as number | null,
+});
+const barrasInvalido = computed(
+  () =>
+    novoBarras.value.padrao === 'gtin' &&
+    novoBarras.value.codigo.trim() !== '' &&
+    !gtinValido(novoBarras.value.codigo.trim()),
+);
+function incluirBarras() {
+  const b = novoBarras.value;
+  const unidade = b.unidade ?? f.value.unidadeEstoque;
+  if (!b.codigo.trim() || barrasInvalido.value || !unidade) return;
+  f.value.codigosBarras = [
+    ...f.value.codigosBarras,
+    {
+      codigo: b.codigo.trim(),
+      padrao: b.padrao,
+      quantidade: Number(b.quantidade),
+      unidade,
+      principal: !f.value.codigosBarras.length,
+    },
+  ];
+  novoBarras.value = { codigo: '', padrao: b.padrao, quantidade: 1, unidade: null };
+}
+/** Nova apresentação comercial, com o registro sanitário opcional (fabricante: o do item). */
+const novaApr = ref({
+  nomeComercial: '',
+  apresentacao: '',
+  quantidadeEmbalagem: 1,
+  registro: '',
+  validade: '',
+});
+function incluirApresentacao() {
+  const a = novaApr.value;
+  if (!a.nomeComercial.trim()) return;
+  f.value.apresentacoes = [
+    ...f.value.apresentacoes,
+    {
+      nomeComercial: a.nomeComercial.trim(),
+      apresentacao: a.apresentacao.trim() || null,
+      fabricante: f.value.fabricante ?? null,
+      quantidadeEmbalagem: Number(a.quantidadeEmbalagem),
+      registro: a.registro.trim() ? { numero: a.registro.trim(), validade: a.validade || null } : null,
+    },
+  ];
+  novaApr.value = { nomeComercial: '', apresentacao: '', quantidadeEmbalagem: 1, registro: '', validade: '' };
 }
 </script>
 
@@ -374,7 +440,24 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
         <legend>{{ t('cadastroEstoque.item.principios') }}</legend>
         <ul>
           <li v-for="(p, i) in f.principiosAtivos" :key="p.principio">
-            {{ nomesPa[p.principio] ?? p.principio }} · {{ p.concentracao ?? '' }} {{ sigla(p.unidade) }}
+            {{ nomesPa[p.principio] ?? p.principio }}
+            <label
+              >{{ t('cadastroEstoque.item.concentracao') }}
+              <input
+                type="number"
+                min="0"
+                step="any"
+                :value="p.concentracao ?? ''"
+                :data-testid="`principio-concentracao-${i}`"
+                @change="mudarPrincipio(i, 'concentracao', ($event.target as HTMLInputElement).value)"
+            /></label>
+            <SanteSelecao
+              :model-value="p.unidade ?? null"
+              :rotulo="t('cadastroEstoque.item.unidadeConcentracao')"
+              :opcoes="opcoesUnidade"
+              :data-testid="`principio-unidade-${i}`"
+              @update:model-value="(v) => mudarPrincipio(i, 'unidade', v)"
+            />
             <span v-if="p.principal"> · {{ t('cadastroEstoque.item.principal') }}</span>
             <button type="button" class="link" @click="f.principiosAtivos = remover(f.principiosAtivos, i)">
               {{ t('cadastroEstoque.remover') }}
@@ -435,7 +518,51 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <small v-for="m in doCampo('codigosBarras')" :key="m" class="erro">{{ m }}</small>
+        <div class="filtros">
+          <label class="campo"
+            >{{ t('cadastroEstoque.codigo') }}
+            <input v-model="novoBarras.codigo" inputmode="numeric" maxlength="60" data-testid="barras-codigo"
+          /></label>
+          <SanteSelecao
+            v-model="novoBarras.padrao"
+            :rotulo="t('cadastroEstoque.item.padraoBarras')"
+            :opcoes="
+              PADROES_CODIGO_BARRAS.map((x) => ({
+                valor: x,
+                rotulo: t(`cadastroEstoque.item.padroesBarras.${x}`),
+              }))
+            "
+            class="campo"
+          />
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.quantidade') }}
+            <input
+              v-model.number="novoBarras.quantidade"
+              type="number"
+              min="0"
+              step="any"
+              data-testid="barras-quantidade"
+          /></label>
+          <SanteSelecao
+            v-model="novoBarras.unidade"
+            :rotulo="t('cadastroEstoque.item.unidadeEstoque')"
+            :opcoes="opcoesUnidade"
+            class="campo"
+          />
+          <button
+            type="button"
+            class="botao"
+            data-testid="barras-incluir"
+            :disabled="barrasInvalido"
+            @click="incluirBarras"
+          >
+            {{ t('cadastroEstoque.incluir') }}
+          </button>
+        </div>
+        <small v-if="barrasInvalido" class="erro" data-testid="barras-invalido">{{
+          t('cadastroEstoque.item.gtinInvalido')
+        }}</small>
+        <small v-for="m in doCampoVivo('codigosBarras')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.apresentacoes') }}</legend>
@@ -452,7 +579,37 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <small v-for="m in doCampo('apresentacoes')" :key="m" class="erro">{{ m }}</small>
+        <div class="filtros">
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.nomeComercial') }}
+            <input v-model="novaApr.nomeComercial" maxlength="150" data-testid="apr-nome"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.apresentacao') }}
+            <input v-model="novaApr.apresentacao" maxlength="150" data-testid="apr-apresentacao"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.embalagem') }}
+            <input
+              v-model.number="novaApr.quantidadeEmbalagem"
+              type="number"
+              min="0"
+              step="any"
+              data-testid="apr-quantidade"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.registro') }}
+            <input v-model="novaApr.registro" inputmode="numeric" maxlength="13" data-testid="apr-registro"
+          /></label>
+          <label class="campo"
+            >{{ t('cadastroEstoque.item.validadeRegistro') }}
+            <input v-model="novaApr.validade" type="date" data-testid="apr-validade"
+          /></label>
+          <button type="button" class="botao" data-testid="apr-incluir" @click="incluirApresentacao">
+            {{ t('cadastroEstoque.incluir') }}
+          </button>
+        </div>
+        <small v-for="m in doCampoVivo('apresentacoes')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.estabilidades') }}</legend>
@@ -469,24 +626,32 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
                 :data-testid="`estabilidade-horas-${i}`"
                 @change="mudarEstabilidade(i, 'horas', ($event.target as HTMLInputElement).value)"
             /></label>
-            <label
-              >{{ t('cadastroEstoque.item.guarda') }}
-              <input
-                type="number"
-                min="1"
-                :value="s.condicaoArmazenamento ?? ''"
-                @change="
-                  mudarEstabilidade(i, 'condicaoArmazenamento', ($event.target as HTMLInputElement).value)
-                "
-            /></label>
-            <label v-if="s.condicao === 'diluido'"
-              >{{ t('cadastroEstoque.item.diluente') }}
-              <input
-                type="number"
-                min="1"
-                :value="s.diluente ?? ''"
-                @change="mudarEstabilidade(i, 'diluente', ($event.target as HTMLInputElement).value)"
-            /></label>
+            <SanteSelecao
+              :model-value="s.condicaoArmazenamento ?? null"
+              :rotulo="t('cadastroEstoque.item.guarda')"
+              :opcoes="[
+                { valor: null, rotulo: t('cadastroEstoque.item.qualquerGuarda') },
+                ...(apoio.data.value?.guardas ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+              ]"
+              :data-testid="`estabilidade-guarda-${i}`"
+              @update:model-value="
+                (v) => mudarEstabilidade(i, 'condicaoArmazenamento', v === null ? '' : String(v))
+              "
+            />
+            <SanteSelecao
+              v-if="s.condicao === 'diluido'"
+              :model-value="s.diluente ?? null"
+              :rotulo="t('cadastroEstoque.item.diluente')"
+              :opcoes="[
+                { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+                ...(apoio.data.value?.diluentes ?? []).map((o) => ({
+                  valor: o.id,
+                  rotulo: `${o.codigo} · ${o.nome}`,
+                })),
+              ]"
+              :data-testid="`estabilidade-diluente-${i}`"
+              @update:model-value="(v) => mudarEstabilidade(i, 'diluente', v === null ? '' : String(v))"
+            />
             <button type="button" class="link" @click="f.estabilidades = remover(f.estabilidades, i)">
               {{ t('cadastroEstoque.remover') }}
             </button>
