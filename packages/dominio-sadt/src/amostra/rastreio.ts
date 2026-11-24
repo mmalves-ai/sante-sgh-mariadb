@@ -67,6 +67,30 @@ export function podeMudar(
   return { pode: false, motivo: 'Passagem de estado não permitida para a amostra.' };
 }
 
+/**
+ * Passagem pedida no rastreio (leitor ou lista do dia). A recoleta nunca é só uma troca de estado: ela nasce do pedido de
+ * recoleta com o motivo do cadastro, que rejeita a original e cria a nova coleta numerada (`conferirRecoleta`). Pedir
+ * "recoleta" pelo rastreio é recusado com o código `recoleta-pelo-pedido`, para a amostra não ficar sem a nova coleta.
+ */
+export function conferirPassagemDoRastreio(
+  de: EstadoAmostra,
+  para: EstadoAmostra,
+): { readonly pode: boolean; readonly motivo: string | null; readonly codigo: string | null } {
+  if (para === 'recoleta' && de !== 'recoleta')
+    return {
+      pode: false,
+      motivo:
+        'A recoleta é pedida com o motivo do cadastro, pelo pedido de recoleta, que cria a nova coleta.',
+      codigo: 'recoleta-pelo-pedido',
+    };
+  const p = podeMudar(de, para);
+  return { ...p, codigo: p.pode ? null : 'amostra-transicao' };
+}
+
+/** A amostra coletada e ainda não substituída aceita o pedido de recoleta (a original é rejeitada junto, se não estiver). */
+export const aceitaPedidoDeRecoleta = (de: EstadoAmostra): boolean =>
+  de !== 'aguardandoColeta' && de !== 'recoleta';
+
 /** A coleta exige a pulseira no internado e os dois identificadores conferidos sempre (regra 3). */
 export function conferirColeta(c: {
   readonly internado: boolean;
