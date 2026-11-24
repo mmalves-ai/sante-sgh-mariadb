@@ -138,6 +138,28 @@ export const PERMISSOES_CADASTRO_M11 = [
     perfis: ['administrador-sistema'],
     categoria: 'administrativa',
   },
+  // F3.1 (02-CAD linha 16): o dado fiscal do repasse e a conta para o pagamento do profissional, com acesso restrito ao
+  // cargo do repasse (a edição do profissional não basta).
+  {
+    codigo: 'cadastro.profissional.financeiro.ler',
+    descricao:
+      'Consultar os dados fiscais (regime, retenções, ISS) e as contas para o pagamento do profissional',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+    criticidade: 'sensivel',
+  },
+  {
+    codigo: 'cadastro.profissional.financeiro.editar',
+    descricao:
+      'Incluir e encerrar os dados fiscais do repasse e incluir e inativar as contas e chaves de pagamento do profissional',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    categoria: 'financeira',
+    criticidade: 'critica',
+  },
   // D-PROF-39 (requisitos do dono de 18/11/2026): inativar, reativar e excluir o cadastrado por engano (só sem
   // vínculo), para quem tem Profissionais › Gerenciamento › Excluir (6393), e encerrar ou reativar um registro. O
   // vínculo com o login exige a gestão de acessos (acesso.perfil.gerir; revisão da D-PROF-39).
