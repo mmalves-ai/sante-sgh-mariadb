@@ -16,3 +16,4 @@ export * from './exame.js';
 export * from './online/index.js';
 export * from './sessoes/index.js';
 export * from './estruturada.js';
+export * from './acesso-nominal.js';
