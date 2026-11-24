@@ -530,7 +530,8 @@ const filtrada = (qual: string, chave: string) => {
                 :class="{ inativo: !v['ativo'] }"
               >
                 {{ rotulo(v) }}<span v-if="v['padrao']"> {{ T.padrao }}</span>
-                <SanteBotao v-if="v['ativo']"
+                <SanteBotao
+                  v-if="v['ativo']"
                   :rotulo="T.inativar"
                   :data-testid="`inativar-${s.t}-${v['id']}`"
                   @acionar="inativar(s.t, v)"
@@ -657,7 +658,8 @@ const filtrada = (qual: string, chave: string) => {
                             falhasFaixas[i]?.['referenciaTexto']
                           }}</small></label
                         >
-                        <SanteBotao v-if="faixas.length > 1"
+                        <SanteBotao
+                          v-if="faixas.length > 1"
                           :rotulo="T.tirarFaixa"
                           @acionar="faixas.splice(i, 1)"
                         />
