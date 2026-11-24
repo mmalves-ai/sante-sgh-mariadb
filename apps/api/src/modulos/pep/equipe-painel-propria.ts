@@ -1,0 +1,612 @@
+// Porta PRÓPRIA do painel do profissional, da configuração do prontuário por setor e da equipe assistencial (F3.3,
+// linhas 03-PEP L90, L91 e L94 da análise), sobre o banco do cliente pelo @sgh/nucleo:
+//   - pacientes acompanhados (`paciente_acompanhado`): marcar abre um período; desmarcar grava o fim (nova versão da
+//     linha), nunca apaga — a troca de computador não perde o painel, e o histórico de quem acompanhou fica;
+//   - colunas do painel (`painel_coluna_usuario`, sem filtro = valem para todos os filtros): exibir e ordem por coluna;
+//   - configuração do prontuário por setor e tipo de atendimento (`configuracao_setor_prontuario`): leitura, gravação
+//     (inclui ou altera com a versão lida) e a resolução da que vale (regra do domínio);
+//   - equipe assistencial do atendimento (`equipe_assistencial_paciente` e `equipe_assistencial_membro`, funções em
+//     `funcao_equipe_assistencial`): inclusão de membro com as regras do domínio e saída com fim e motivo.
+// Toda leitura e gravação fica no estabelecimento da sessão; SQL parametrizado; as gravações pelo executor (trilha).
+import { randomUUID } from 'node:crypto';
+import {
+  type ConfiguracaoSetor,
+  type ErroRegra,
+  type FuncaoEquipe,
+  type MembroEquipe,
+  resolverConfiguracaoProntuario,
+  temVinculoPelaEquipe,
+  type TipoAtendimentoProntuario,
+  validarAcompanhar,
+  validarColunasPainel,
+  validarConfiguracaoSetor,
+  validarInclusaoMembro,
+  validarSaidaMembro,
+} from '@sgh/dominio-pep';
+import { COLUNAS_PAINEL } from '@sgh/contratos';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  ErroOperacao,
+  type Executor,
+  type Leitor,
+  type TxOperacao,
+} from '@sgh/nucleo';
+import { z } from 'zod';
+import type { ContextoDocs } from './documentos-porta.js';
+import { dataHora, fusoValido } from './registro-porta-propria.js';
+
+export interface NucleoEquipePainel {
+  lerSomente<T>(
+    contexto: { readonly cliente: string; readonly correlacao: string },
+    fn: (l: Leitor) => Promise<T>,
+  ): Promise<T>;
+  criarExecutor(): Executor;
+}
+
+export const PORTA_EQUIPE_PAINEL = Symbol('PORTA_EQUIPE_PAINEL');
+
+export interface AcompanhadoLido {
+  readonly id: number;
+  readonly paciente: number;
+  readonly atendimento: number | null;
+  readonly inicio: string | null;
+  readonly motivo: string | null;
+  readonly versao: number;
+}
+
+export interface ConfiguracaoSetorLida extends ConfiguracaoSetor {
+  readonly id: number;
+  readonly setorNome: string;
+  readonly versao: number;
+}
+
+export interface MembroLido extends MembroEquipe {
+  readonly profissionalNome: string;
+  readonly funcaoDescricao: string;
+  readonly especialidade: number | null;
+  readonly motivoSaida: string | null;
+  readonly versao: number;
+}
+
+export interface EquipeLida {
+  readonly equipe: number | null;
+  readonly atendimento: number;
+  readonly paciente: number;
+  readonly membros: MembroLido[];
+}
+
+export const esquemaAcompanhar = z
+  .object({
+    paciente: z.number().int().positive(),
+    atendimento: z.number().int().positive().nullable().default(null),
+    motivo: z.string().max(500).nullable().default(null),
+  })
+  .strict();
+export const esquemaColunas = z.object({ colunas: z.array(z.string().max(60)).max(30) }).strict();
+export const esquemaConfiguracaoSetor = z
+  .object({
+    setor: z.number().int().positive(),
+    tipoAtendimento: z.enum([
+      'todos',
+      'internacao',
+      'pronto_atendimento',
+      'ambulatorio',
+      'hospital_dia',
+      'externo',
+    ]),
+    permiteRetroativo: z.boolean(),
+    toleranciaRetroativoHoras: z.number().int().nullable(),
+    assinaturaExigida: z.enum(['nenhuma', 'eletronica', 'digital_icp']),
+    exigeEvolucaoMedica: z.boolean(),
+    exigeEvolucaoEnfermagem: z.boolean(),
+    ativo: z.boolean().default(true),
+    versao: z.number().int().positive().nullable().default(null),
+  })
+  .strict();
+export const esquemaMembro = z
+  .object({
+    profissional: z.number().int().positive(),
+    funcao: z.number().int().positive(),
+    especialidade: z.number().int().positive().nullable().default(null),
+    recebeNotificacao: z.boolean().default(false),
+  })
+  .strict();
+export const esquemaSaida = z.object({ motivo: z.string().min(1).max(500) }).strict();
+
+const num = (v: unknown): number => Number(v);
+const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+const txt = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
+const bool = (v: unknown): boolean => Boolean(Number(v));
+
+function recusaRegra(erros: readonly ErroRegra[]): ErroOperacao {
+  return new ErroOperacao(
+    422,
+    erros[0]!.codigo,
+    'Operação recusada',
+    erros.map((e) => e.mensagem).join(' '),
+    {
+      campos: erros.map((e) => e.campo),
+    },
+  );
+}
+const naoEncontrado = (o: string) =>
+  new ErroOperacao(404, `${o}-inexistente`, 'Não encontrado', `${o} não encontrado neste estabelecimento.`);
+
+export function entradaValida<T>(esq: z.ZodType<T>, entrada: unknown): T {
+  const r = esq.safeParse(entrada);
+  if (!r.success)
+    throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', {
+      campos: r.error.issues.map((i) => i.path.map(String).join('.')),
+    });
+  return r.data;
+}
+
+interface Est {
+  readonly id: number;
+  readonly fuso: string;
+}
+
+const TABELAS = [
+  'paciente_acompanhado',
+  'painel_coluna_usuario',
+  'configuracao_setor_prontuario',
+  'equipe_assistencial_paciente',
+  'equipe_assistencial_membro',
+];
+
+const SQL_MEMBROS = `
+  SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.especialidade_medica_id, m.responsavel_principal,
+         m.recebe_notificacao, m.inicio_em, m.fim_em, m.motivo_saida, m.versao,
+         COALESCE(pf.nome, CONCAT('Profissional ', m.profissional_id)) AS nome, f.descricao
+    FROM equipe_assistencial_membro m
+    JOIN funcao_equipe_assistencial f ON f.id = m.funcao_equipe_assistencial_id
+    LEFT JOIN profissional p ON p.id = m.profissional_id
+    LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+   WHERE m.equipe_assistencial_paciente_id = ? AND m.excluido_em IS NULL
+   ORDER BY m.fim_em IS NOT NULL, m.responsavel_principal DESC, m.sequencia`;
+
+function membroLido(x: Record<string, unknown>, fuso: string): MembroLido {
+  return {
+    id: num(x['id']),
+    profissional: num(x['profissional_id']),
+    funcao: num(x['funcao_equipe_assistencial_id']),
+    especialidade: numOuNull(x['especialidade_medica_id']),
+    responsavelPrincipal: bool(x['responsavel_principal']),
+    recebeNotificacao: bool(x['recebe_notificacao']),
+    inicio: dataHora(x['inicio_em'] as Date, fuso) ?? '',
+    fim: x['fim_em'] ? dataHora(x['fim_em'] as Date, fuso) : null,
+    motivoSaida: txt(x['motivo_saida']),
+    versao: num(x['versao']),
+    profissionalNome: String(x['nome'] ?? ''),
+    funcaoDescricao: String(x['descricao'] ?? ''),
+  };
+}
+
+function configuracaoLida(x: Record<string, unknown>): ConfiguracaoSetorLida {
+  return {
+    id: num(x['id']),
+    setor: num(x['setor_funcional_id']),
+    setorNome: String(x['setor_nome'] ?? ''),
+    tipoAtendimento: String(x['tipo_atendimento']) as TipoAtendimentoProntuario,
+    permiteRetroativo: bool(x['permite_retroativo']),
+    toleranciaRetroativoHoras: numOuNull(x['tolerancia_retroativo_horas']),
+    assinaturaExigida: String(x['assinatura_exigida']) as ConfiguracaoSetor['assinaturaExigida'],
+    exigeEvolucaoMedica: bool(x['exige_evolucao_medica']),
+    exigeEvolucaoEnfermagem: bool(x['exige_evolucao_enfermagem']),
+    ativo: bool(x['ativo']),
+    versao: num(x['versao']),
+  };
+}
+
+export class PortaEquipePainelPropria {
+  private readonly executor: Executor;
+
+  constructor(
+    private readonly nucleo: NucleoEquipePainel,
+    private readonly cliente: string,
+    executor?: Executor,
+  ) {
+    this.executor = executor ?? nucleo.criarExecutor();
+  }
+
+  private banco(c: ContextoDocs): string {
+    return c.cliente || this.cliente;
+  }
+
+  private ler<T>(c: ContextoDocs, rotulo: string, fn: (l: Leitor, est: Est) => Promise<T>): Promise<T> {
+    return this.nucleo.lerSomente(
+      { cliente: this.banco(c), correlacao: `pep.equipe.${rotulo}` },
+      async (l) => {
+        const e = await l.uma(
+          'SELECT id, fuso_horario FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL',
+          [c.hospital],
+        );
+        if (!e) throw naoEncontrado('Estabelecimento');
+        return fn(l, { id: num(e['id']), fuso: fusoValido(e['fuso_horario']) });
+      },
+    );
+  }
+
+  /** Grava pelo executor (trilha da operação), no estabelecimento da sessão, com o usuário da sessão. */
+  private async gravar<T extends Record<string, unknown>>(
+    c: ContextoDocs,
+    nome: string,
+    tabelas: readonly string[],
+    fn: (tx: TxOperacao, est: Est, usuario: number) => Promise<T & { tabela: string; id: number | null }>,
+  ): Promise<T> {
+    if (c.usuario === null)
+      throw new ErroOperacao(
+        403,
+        'usuario-inexistente',
+        'Operação recusada',
+        'A sessão não tem usuário neste cliente.',
+      );
+    const usuario = c.usuario;
+    const est = await this.ler(c, 'identidade', async (_l, e) => e);
+    const contexto: ContextoOperacao = {
+      cliente: this.banco(c),
+      estabelecimento: est.id,
+      usuario,
+      correlacao: (c.correlacao || nome).slice(0, 64),
+      chaveIdempotencia: `${nome}:${randomUUID()}`,
+    };
+    let feito: T | null = null;
+    const op = definirOperacao({
+      nome,
+      tabelas: tabelas.filter((t) => TABELAS.includes(t)),
+      entrada: z.object({}).strict(),
+      gravar: async (tx: TxOperacao) => {
+        const r = await fn(tx, est, usuario);
+        feito = r;
+        return { tabela: r.tabela, id: r.id };
+      },
+      alvo: (_e, s) => ({ tabela: String(s['tabela']), id: s['id'] === null ? null : Number(s['id']) }),
+    });
+    await this.executor.executar(op, this.banco(c), {}, contexto);
+    if (!feito) throw new Error(`A operação ${nome} terminou sem resultado.`);
+    return feito;
+  }
+
+  // ── Pacientes acompanhados e colunas ───────────────────────────────────────────────────────────
+
+  acompanhados(c: ContextoDocs): Promise<AcompanhadoLido[]> {
+    return this.ler(c, 'acompanhados', async (l, est) => {
+      const r = await l.consultar(
+        `SELECT id, paciente_id, atendimento_id, inicio_em, motivo, versao FROM paciente_acompanhado
+          WHERE estabelecimento_id = ? AND usuario_id = ? AND fim_em IS NULL AND excluido_em IS NULL
+          ORDER BY inicio_em DESC, id DESC LIMIT 500`,
+        [est.id, c.usuario ?? 0],
+      );
+      return r.map((x) => ({
+        id: num(x['id']),
+        paciente: num(x['paciente_id']),
+        atendimento: numOuNull(x['atendimento_id']),
+        inicio: dataHora(x['inicio_em'] as Date, est.fuso),
+        motivo: txt(x['motivo']),
+        versao: num(x['versao']),
+      }));
+    });
+  }
+
+  acompanhar(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(esquemaAcompanhar, entrada);
+    return this.gravar(c, 'pep.painel.acompanhar', ['paciente_acompanhado'], async (tx, est, usuario) => {
+      const pac = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [x.paciente]);
+      if (!pac) throw naoEncontrado('Paciente');
+      if (x.atendimento !== null) {
+        const a = await tx.uma(
+          'SELECT id FROM atendimento WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [x.atendimento, x.paciente, est.id],
+        );
+        if (!a) throw naoEncontrado('Atendimento');
+      }
+      const vig = await tx.consultar(
+        `SELECT paciente_id FROM paciente_acompanhado
+          WHERE estabelecimento_id = ? AND usuario_id = ? AND paciente_id = ? AND fim_em IS NULL AND excluido_em IS NULL
+          FOR UPDATE`,
+        [est.id, usuario, x.paciente],
+      );
+      const erros = validarAcompanhar(
+        vig.map((v) => ({ paciente: num(v['paciente_id']), fim: null })),
+        x.paciente,
+        x.motivo,
+      );
+      if (erros.length) throw recusaRegra(erros);
+      const id = await tx.incluir('paciente_acompanhado', {
+        estabelecimento_id: est.id,
+        usuario_id: usuario,
+        paciente_id: x.paciente,
+        atendimento_id: x.atendimento,
+        inicio_em: new Date(),
+        motivo: x.motivo?.trim() || null,
+      });
+      return { tabela: 'paciente_acompanhado', id };
+    });
+  }
+
+  /** Deixa de acompanhar: grava o fim do período (a linha fica, com quem e quando). */
+  deixarDeAcompanhar(c: ContextoDocs, paciente: number): Promise<{ id: number }> {
+    return this.gravar(
+      c,
+      'pep.painel.deixarAcompanhar',
+      ['paciente_acompanhado'],
+      async (tx, est, usuario) => {
+        const v = await tx.uma(
+          `SELECT id, versao FROM paciente_acompanhado
+          WHERE estabelecimento_id = ? AND usuario_id = ? AND paciente_id = ? AND fim_em IS NULL AND excluido_em IS NULL
+          ORDER BY id DESC LIMIT 1`,
+          [est.id, usuario, paciente],
+        );
+        if (!v) throw naoEncontrado('Acompanhamento');
+        await tx.alterar('paciente_acompanhado', num(v['id']), num(v['versao']), { fim_em: new Date() });
+        return { tabela: 'paciente_acompanhado', id: num(v['id']) };
+      },
+    );
+  }
+
+  colunas(c: ContextoDocs): Promise<string[]> {
+    return this.ler(c, 'colunas', async (l) => {
+      const r = await l.consultar(
+        `SELECT coluna FROM painel_coluna_usuario
+          WHERE usuario_id = ? AND painel_filtro_usuario_id IS NULL AND exibir = TRUE ORDER BY ordem, id`,
+        [c.usuario ?? 0],
+      );
+      return r.map((x) => String(x['coluna']));
+    });
+  }
+
+  /** Grava as colunas do usuário: as escolhidas com exibir e ordem; as demais do catálogo, ocultas. */
+  gravarColunas(c: ContextoDocs, entrada: unknown): Promise<{ colunas: string[] }> {
+    const x = entradaValida(esquemaColunas, entrada);
+    const erros = validarColunasPainel(x.colunas, COLUNAS_PAINEL);
+    if (erros.length) throw recusaRegra(erros);
+    return this.gravar(c, 'pep.painel.colunas', ['painel_coluna_usuario'], async (tx, _est, usuario) => {
+      const atuais = await tx.consultar(
+        `SELECT id, coluna, versao FROM painel_coluna_usuario
+          WHERE usuario_id = ? AND painel_filtro_usuario_id IS NULL FOR UPDATE`,
+        [usuario],
+      );
+      const porColuna = new Map(atuais.map((a) => [String(a['coluna']), a]));
+      const todas = [...x.colunas, ...COLUNAS_PAINEL.filter((k) => !x.colunas.includes(k))];
+      for (const [i, coluna] of todas.entries()) {
+        const valores = { exibir: x.colunas.includes(coluna), ordem: i + 1 };
+        const a = porColuna.get(coluna);
+        if (a) await tx.alterar('painel_coluna_usuario', num(a['id']), num(a['versao']), valores);
+        else await tx.incluir('painel_coluna_usuario', { usuario_id: usuario, coluna, ...valores });
+      }
+      return { tabela: 'painel_coluna_usuario', id: null, colunas: [...x.colunas] };
+    });
+  }
+
+  // ── Configuração do prontuário por setor ───────────────────────────────────────────────────────
+
+  configuracoesSetor(c: ContextoDocs): Promise<ConfiguracaoSetorLida[]> {
+    return this.ler(c, 'config-setor', async (l, est) => {
+      const r = await l.consultar(
+        `SELECT c.*, s.nome AS setor_nome FROM configuracao_setor_prontuario c
+           JOIN setor_funcional s ON s.id = c.setor_funcional_id
+          WHERE c.estabelecimento_id = ? ORDER BY s.nome, c.tipo_atendimento LIMIT 1000`,
+        [est.id],
+      );
+      return r.map(configuracaoLida);
+    });
+  }
+
+  /** A configuração que vale para o setor e o tipo de atendimento (regra do domínio), e de onde veio. */
+  async configuracaoVigente(c: ContextoDocs, setor: number | null, tipo: TipoAtendimentoProntuario) {
+    const linhas = await this.configuracoesSetor(c);
+    return resolverConfiguracaoProntuario(linhas, setor, tipo);
+  }
+
+  setores(c: ContextoDocs): Promise<{ id: number; nome: string }[]> {
+    return this.ler(c, 'setores', async (l, est) =>
+      (
+        await l.consultar(
+          'SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome LIMIT 1000',
+          [est.id],
+        )
+      ).map((x) => ({ id: num(x['id']), nome: String(x['nome']) })),
+    );
+  }
+
+  /** Inclui ou altera (com a versão lida) a configuração do setor e tipo de atendimento. */
+  gravarConfiguracaoSetor(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(esquemaConfiguracaoSetor, entrada);
+    const erros = validarConfiguracaoSetor(x);
+    if (erros.length) throw recusaRegra(erros);
+    return this.gravar(
+      c,
+      'pep.prontuario.configurarSetor',
+      ['configuracao_setor_prontuario'],
+      async (tx, est) => {
+        const s = await tx.uma(
+          'SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [x.setor, est.id],
+        );
+        if (!s) throw naoEncontrado('Setor');
+        const valores = {
+          permite_retroativo: x.permiteRetroativo,
+          tolerancia_retroativo_horas: x.toleranciaRetroativoHoras,
+          assinatura_exigida: x.assinaturaExigida,
+          exige_evolucao_medica: x.exigeEvolucaoMedica,
+          exige_evolucao_enfermagem: x.exigeEvolucaoEnfermagem,
+          ativo: x.ativo,
+        };
+        const a = await tx.uma(
+          'SELECT id, versao FROM configuracao_setor_prontuario WHERE setor_funcional_id = ? AND tipo_atendimento = ? FOR UPDATE',
+          [x.setor, x.tipoAtendimento],
+        );
+        if (a) {
+          await tx.alterar(
+            'configuracao_setor_prontuario',
+            num(a['id']),
+            x.versao ?? num(a['versao']),
+            valores,
+          );
+          return { tabela: 'configuracao_setor_prontuario', id: num(a['id']) };
+        }
+        const id = await tx.incluir('configuracao_setor_prontuario', {
+          estabelecimento_id: est.id,
+          setor_funcional_id: x.setor,
+          tipo_atendimento: x.tipoAtendimento,
+          ...valores,
+        });
+        return { tabela: 'configuracao_setor_prontuario', id };
+      },
+    );
+  }
+
+  // ── Equipe assistencial ────────────────────────────────────────────────────────────────────────
+
+  funcoes(c: ContextoDocs): Promise<(FuncaoEquipe & { descricao: string })[]> {
+    return this.ler(c, 'funcoes', async (l) =>
+      (
+        await l.consultar(
+          `SELECT id, descricao, categoria, responsavel_principal, ativo FROM funcao_equipe_assistencial
+            WHERE ativo = TRUE ORDER BY ordem, descricao`,
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        descricao: String(x['descricao']),
+        categoria: String(x['categoria']) as FuncaoEquipe['categoria'],
+        responsavelPrincipal: bool(x['responsavel_principal']),
+        ativo: bool(x['ativo']),
+      })),
+    );
+  }
+
+  equipe(c: ContextoDocs, atendimento: number): Promise<EquipeLida> {
+    return this.ler(c, 'equipe', async (l, est) => {
+      const a = await l.uma(
+        'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [atendimento, est.id],
+      );
+      if (!a) throw naoEncontrado('Atendimento');
+      const e = await l.uma(
+        'SELECT id FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL',
+        [atendimento],
+      );
+      const membros = e
+        ? (await l.consultar(SQL_MEMBROS, [e['id']])).map((x) => membroLido(x, est.fuso))
+        : [];
+      return { equipe: e ? num(e['id']) : null, atendimento, paciente: num(a['paciente_id']), membros };
+    });
+  }
+
+  /** O profissional está na equipe vigente de algum atendimento do paciente neste estabelecimento? */
+  vinculoPelaEquipe(c: ContextoDocs, paciente: number, profissional: number): Promise<boolean> {
+    return this.ler(c, 'vinculo-equipe', async (l, est) => {
+      const r = await l.consultar(
+        `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal,
+                m.recebe_notificacao, m.inicio_em, m.fim_em
+           FROM equipe_assistencial_membro m
+           JOIN equipe_assistencial_paciente e ON e.id = m.equipe_assistencial_paciente_id
+          WHERE e.paciente_id = ? AND e.estabelecimento_id = ? AND e.situacao = 'ativa' AND e.excluido_em IS NULL
+            AND m.excluido_em IS NULL AND m.profissional_id = ?`,
+        [paciente, est.id, profissional],
+      );
+      return temVinculoPelaEquipe(
+        r.map((x) => membroLido({ ...x, nome: '', descricao: '' }, est.fuso)),
+        profissional,
+      );
+    });
+  }
+
+  /** Inclui o profissional na equipe do atendimento (abre a equipe na primeira inclusão), pelas regras do domínio. */
+  incluirMembro(
+    c: ContextoDocs,
+    atendimento: number,
+    entrada: unknown,
+  ): Promise<{ id: number; equipe: number }> {
+    const x = entradaValida(esquemaMembro, entrada);
+    return this.gravar(
+      c,
+      'pep.equipe.incluirMembro',
+      ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
+      async (tx, est) => {
+        const a = await tx.uma(
+          'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [atendimento, est.id],
+        );
+        if (!a) throw naoEncontrado('Atendimento');
+        const f = await tx.uma(
+          'SELECT id, categoria, responsavel_principal, ativo FROM funcao_equipe_assistencial WHERE id = ?',
+          [x.funcao],
+        );
+        if (!f) throw naoEncontrado('Função');
+        const p = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [
+          x.profissional,
+        ]);
+        if (!p) throw naoEncontrado('Profissional');
+        const agora = new Date();
+        const e = await tx.uma(
+          'SELECT id FROM equipe_assistencial_paciente WHERE atendimento_id = ? AND excluido_em IS NULL FOR UPDATE',
+          [atendimento],
+        );
+        const equipe = e
+          ? num(e['id'])
+          : await tx.incluir('equipe_assistencial_paciente', {
+              estabelecimento_id: est.id,
+              atendimento_id: atendimento,
+              paciente_id: num(a['paciente_id']),
+              inicio_em: agora,
+              situacao: 'ativa',
+            });
+        const atuais = (await tx.consultar(`${SQL_MEMBROS} FOR UPDATE`, [equipe])).map((m) =>
+          membroLido(m, est.fuso),
+        );
+        const funcao: FuncaoEquipe = {
+          id: num(f['id']),
+          categoria: String(f['categoria']) as FuncaoEquipe['categoria'],
+          responsavelPrincipal: bool(f['responsavel_principal']),
+          ativo: bool(f['ativo']),
+        };
+        const erros = validarInclusaoMembro(atuais, {
+          profissional: x.profissional,
+          funcao,
+          recebeNotificacao: x.recebeNotificacao,
+        });
+        if (erros.length) throw recusaRegra(erros);
+        const seq = await tx.uma(
+          'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM equipe_assistencial_membro WHERE equipe_assistencial_paciente_id = ?',
+          [equipe],
+        );
+        const id = await tx.incluir('equipe_assistencial_membro', {
+          equipe_assistencial_paciente_id: equipe,
+          sequencia: num(seq?.['s'] ?? 1),
+          profissional_id: x.profissional,
+          funcao_equipe_assistencial_id: funcao.id,
+          especialidade_medica_id: x.especialidade,
+          responsavel_principal: funcao.responsavelPrincipal,
+          recebe_notificacao: x.recebeNotificacao,
+          inicio_em: agora,
+        });
+        return { tabela: 'equipe_assistencial_membro', id, equipe };
+      },
+    );
+  }
+
+  /** Saída do membro: grava o fim e o motivo (nova versão da linha); a participação fica no histórico. */
+  encerrarMembro(c: ContextoDocs, membro: number, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(esquemaSaida, entrada);
+    return this.gravar(c, 'pep.equipe.encerrarMembro', ['equipe_assistencial_membro'], async (tx, est) => {
+      const r = await tx.uma(
+        `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal, m.recebe_notificacao,
+                m.inicio_em, m.fim_em, m.versao
+           FROM equipe_assistencial_membro m
+           JOIN equipe_assistencial_paciente e ON e.id = m.equipe_assistencial_paciente_id
+          WHERE m.id = ? AND e.estabelecimento_id = ? AND m.excluido_em IS NULL FOR UPDATE`,
+        [membro, est.id],
+      );
+      const lido = r ? membroLido({ ...r, nome: '', descricao: '' }, est.fuso) : undefined;
+      const erros = validarSaidaMembro(lido, x.motivo);
+      if (erros.length) throw recusaRegra(erros);
+      await tx.alterar('equipe_assistencial_membro', membro, lido!.versao, {
+        fim_em: new Date(),
+        motivo_saida: x.motivo.trim(),
+      });
+      return { tabela: 'equipe_assistencial_membro', id: membro };
+    });
+  }
+}

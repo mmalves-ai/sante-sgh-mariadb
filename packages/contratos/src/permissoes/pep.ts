@@ -288,6 +288,12 @@ export const PERMISSOES_PEP_M23: readonly DeclaracaoPermissao[] = [
     'Ver o painel "Meus pacientes" (internados e em atendimento por unidade, com favoritos e alertas)',
   ),
   clinica(
+    'pep.equipe.gerenciar',
+    'Registrar a equipe assistencial do paciente: incluir o profissional com função e encerrar a participação com motivo',
+
+    'sensivel',
+  ),
+  clinica(
     'pep.painel.configurar',
     'Configurar as colunas e os filtros do próprio painel de pacientes',
 

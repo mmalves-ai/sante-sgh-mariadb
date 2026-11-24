@@ -48,6 +48,8 @@ import { RegistroClinicoController, SERVICO_REGISTRO } from './registro.controll
 import { ServicoRegistro } from './registro-servico.js';
 import { ServicoProntuario } from './servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
+import { EquipePainelController } from './equipe-painel.controller.js';
+import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-propria.js';
 import { WorklistMedicoController } from './worklist.controller.js';
 import {
   PORTA_WORKLIST,
@@ -147,6 +149,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       AcessoRedePepController,
       DocumentosPepController,
       WorklistMedicoController,
+      EquipePainelController,
     ],
     providers: [
       { provide: PORTA_CADASTRO, useValue: cadastro },
@@ -162,6 +165,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       { provide: PORTA_DOCUMENTOS, useValue: p.documentos },
       { provide: SERVICO_DOCUMENTOS, useValue: new ServicoDocumentos(p.documentos) },
       { provide: PORTA_WORKLIST, useValue: p.worklist },
+      // F3.3 (L90, L91, L94): painel no banco, configuração por setor e equipe assistencial; sem núcleo, 503.
+      {
+        provide: PORTA_EQUIPE_PAINEL,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaEquipePainelPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),
     ],
     exports: [
