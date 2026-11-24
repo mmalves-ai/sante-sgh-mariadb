@@ -307,5 +307,14 @@
       "descricao": "Instrução de trabalho",
       "categoria": "instrucao_trabalho"
     }
+  ],
+  "tipo_pendencia_prontuario": [
+    {
+      "codigo": "revisao_comissao",
+      "descricao": "Item não conforme na revisão do prontuário pela comissão",
+      "categoria": "documento",
+      "responsavel": "medico",
+      "resolucao_manual": true
+    }
   ]
 }
