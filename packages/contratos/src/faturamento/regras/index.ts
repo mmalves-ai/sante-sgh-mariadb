@@ -20,3 +20,4 @@ export * from './tiss.js';
 // M42: regras da onda 4 (abertura da competência, dias sem versão, códigos de baixa confiança, acompanhamento e
 // conferência da competência).
 export * from './onda4.js';
+export * from './estoque-conta.js';
