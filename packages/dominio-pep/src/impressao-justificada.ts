@@ -7,7 +7,8 @@
 export const JUSTIFICATIVA_MINIMA_IMPRESSAO = 10;
 /** Mínimo do motivo da 2ª via em diante. */
 export const MOTIVO_MINIMO_SEGUNDA_VIA = 5;
-export const JUSTIFICATIVA_MAXIMA_IMPRESSAO = 255;
+/** O que cabe no registro da emissão (o mesmo do motivo da reemissão). */
+export const JUSTIFICATIVA_MAXIMA_IMPRESSAO = 200;
 
 /** Razões mais comuns (a tela oferece como atalho; o texto continua livre). */
 export const RAZOES_IMPRESSAO = [

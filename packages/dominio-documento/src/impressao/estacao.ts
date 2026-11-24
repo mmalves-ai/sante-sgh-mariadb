@@ -15,7 +15,10 @@ export type RecusaImpressao =
   | 'motivo-inexistente'
   | 'motivo-inativo'
   | 'complemento-obrigatorio'
-  | 'documento-nunca-impresso';
+  | 'documento-nunca-impresso'
+  | 'documento-inexistente'
+  | 'documento-emitido-inexistente'
+  | 'usuario-sem-vinculo';
 
 export const MENSAGEM_IMPRESSAO: Readonly<Record<RecusaImpressao, string>> = {
   'estacao-inexistente': 'Estação de trabalho não encontrada neste estabelecimento.',
@@ -29,6 +32,9 @@ export const MENSAGEM_IMPRESSAO: Readonly<Record<RecusaImpressao, string>> = {
   'complemento-obrigatorio': 'Este motivo pede o complemento (mínimo de 5 caracteres).',
   'documento-nunca-impresso':
     'Este documento ainda não foi impresso: a primeira impressão não é reimpressão.',
+  'documento-inexistente': 'O documento a reimprimir não existe neste estabelecimento.',
+  'documento-emitido-inexistente': 'O documento emitido informado não existe neste estabelecimento.',
+  'usuario-sem-vinculo': 'O usuário da preferência não tem vínculo vigente com o estabelecimento da estação.',
 };
 
 export const COMPLEMENTO_MINIMO_REIMPRESSAO = 5;
@@ -38,8 +44,11 @@ export function conferirVinculoEstacao(f: {
   readonly estacaoEstabelecimento: number | null;
   readonly impressora: { readonly estabelecimento: number; readonly ativa: boolean } | null;
   readonly finalidadeAtiva: boolean | null;
+  /** Preferência por usuário: o usuário tem vínculo vigente com o estabelecimento (null: sem preferência). */
+  readonly usuarioVinculado?: boolean | null;
 }): RecusaImpressao | null {
   if (f.estacaoEstabelecimento === null) return 'estacao-inexistente';
+  if (f.usuarioVinculado === false) return 'usuario-sem-vinculo';
   if (!f.impressora) return 'impressora-inexistente';
   if (f.finalidadeAtiva === null) return 'finalidade-inexistente';
   if (f.impressora.estabelecimento !== f.estacaoEstabelecimento) return 'impressora-de-outro-estabelecimento';
@@ -62,6 +71,9 @@ export interface CandidatoImpressora {
 /**
  * A impressora que sai para esta estação, usuário e unidade: preferência do usuário na estação, depois o padrão da
  * estação, depois o padrão da unidade no estabelecimento, depois o geral. Impressora inativa não conta.
+ * Decisão (01-ADM L79): o vínculo anterior da estação (não mais o padrão, nunca apagado) serve de reserva no mesmo
+ * nível quando a impressora padrão fica inativa: a estação continua na impressora que já usava antes de cair para o
+ * padrão da unidade ou do estabelecimento.
  */
 export function escolherImpressora(
   candidatos: readonly CandidatoImpressora[],
@@ -85,6 +97,17 @@ export function escolherImpressora(
   if (un) return { impressora: un.impressora, nivel: 'unidade' };
   const g = primeiro((c) => c.origem === 'estabelecimento' && (c.unidade ?? null) === null);
   return g ? { impressora: g.impressora, nivel: 'estabelecimento' } : null;
+}
+
+/**
+ * Quantas vias o documento já teve: a maior entre a última via registrada de reimpressão e o que o próprio documento
+ * diz (vias impressas, data da impressão ou a emissão). Zero quer dizer nunca impresso: a reimpressão é recusada.
+ */
+export function viasAnterioresDaReimpressao(f: {
+  readonly ultimaViaRegistrada: number | null;
+  readonly viasDoDocumento: number;
+}): number {
+  return Math.max(f.ultimaViaRegistrada ?? 0, f.viasDoDocumento, 0);
 }
 
 /** Reimpressão: confere o motivo e diz o número da via (a 1ª impressão é a via 1; a reimpressão começa na 2). */

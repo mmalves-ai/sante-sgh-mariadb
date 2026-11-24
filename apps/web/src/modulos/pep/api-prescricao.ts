@@ -167,13 +167,14 @@ export function itensDoProtocolo(id: number, buscar: typeof fetch = fetch): Prom
 export async function imprimirPrescricao(
   paciente: number,
   id: number,
-  motivo: string | null,
+  porque: string | null,
   buscar: typeof fetch = fetch,
 ): Promise<Blob> {
+  // 01-ADM L82: o porquê vai sempre; o servidor decide se é a justificativa da 1ª via ou o motivo da nova via.
   const r = await buscar(`${P}/${paciente}/prescricoes/${id}/imprimir`, {
     method: 'POST',
     headers: { accept: 'application/pdf', 'content-type': 'application/json', 'x-csrf': tokenCsrf() },
-    body: JSON.stringify(motivo ? { motivo } : {}),
+    body: JSON.stringify(porque ? { justificativa: porque } : {}),
   });
   if (!r.ok) throw await erroDaResposta(r);
   return r.blob();

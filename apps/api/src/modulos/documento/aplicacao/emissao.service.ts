@@ -118,6 +118,11 @@ export interface PedidoEmissao {
    * código opaco da prévia; sem isto, o QR da validação do M09.
    */
   readonly qr?: { readonly identificador: string; readonly url: string };
+  /**
+   * 01-ADM L82: a justificativa da 1ª via de documento do prontuário (a nova via leva o motivo). Fica gravada na
+   * própria emissão, ao lado do motivo da reemissão, para toda impressão dizer por quê.
+   */
+  readonly justificativa?: string | null;
 }
 
 /** Tentativas da reemissão quando outra pegou a mesma via ao mesmo tempo. */
@@ -336,7 +341,7 @@ export class EmissaoService {
   }
 
   emitir(pedido: PedidoEmissao): Promise<EmissaoFeita> {
-    return this.emitirVia(pedido, 1, null, null);
+    return this.emitirVia(pedido, 1, null, pedido.justificativa?.trim().slice(0, 200) || null);
   }
 
   /**

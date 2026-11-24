@@ -100,7 +100,7 @@ async function imprimir(): Promise<void> {
           <input
             v-model="motivo"
             data-testid="justificativa-impressao"
-            maxlength="255"
+            maxlength="200"
             :minlength="minimo"
             list="razoes-impressao"
             required

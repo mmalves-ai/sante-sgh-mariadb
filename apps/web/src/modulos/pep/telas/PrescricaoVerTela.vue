@@ -195,7 +195,8 @@ function renovar(modo: 'renovacao' | 'copia'): void {
     },
   });
 }
-// Impressão: o PDF/A do serviço de emissão (a reimpressão é a 2ª via, com o motivo); sem o serviço, a impressão da
+// Impressão: o PDF/A do serviço de emissão (01-ADM L82: a 1ª via leva a justificativa; a reimpressão é a 2ª via,
+// com o motivo); sem o serviço, a impressão da
 // própria tela (com os horários previstos).
 const impressoes = ref(0);
 const motivoVia = ref('');
@@ -203,9 +204,7 @@ const erroImpressao = ref<unknown>(null);
 async function imprimir(): Promise<void> {
   erroImpressao.value = null;
   try {
-    abrirPdf(
-      await imprimirPrescricao(paciente.value, pid.value, impressoes.value > 0 ? motivoVia.value : null),
-    );
+    abrirPdf(await imprimirPrescricao(paciente.value, pid.value, motivoVia.value.trim() || null));
     impressoes.value++;
     motivoVia.value = '';
   } catch (e) {
@@ -310,9 +309,8 @@ async function imprimir(): Promise<void> {
         />
         <form class="imprimir" data-testid="imprimir-prescricao" @submit.prevent="imprimir">
           <SanteCampoTexto
-            v-if="impressoes > 0"
             v-model="motivoVia"
-            :rotulo="t('pep.presc.ver.segundaVia')"
+            :rotulo="impressoes > 0 ? t('pep.presc.ver.segundaVia') : t('pep.presc.ver.justificativa')"
             :max-bytes="200"
             obrigatorio
           />

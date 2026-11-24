@@ -195,10 +195,10 @@ const TABELA_DO_TIPO: Readonly<Record<TipoDocumentoAberto, string>> = {
   'pedido-exame': 'requisicao_exame',
   'exame-externo': 'exame_lancado_prontuario',
   anexo: 'anexo_prontuario',
-  tcle: 'SGH_PEP_TCLE',
+  tcle: 'termo_consentimento_paciente',
   'sumario-alta': 'documento_emitido',
-  'rel-transferencia': 'SGH_PEP_REL_TRANSF',
-  'declaracao-obito': 'SGH_PEP_OBITO',
+  'rel-transferencia': 'relatorio_transferencia',
+  'declaracao-obito': 'declaracao_obito',
 };
 
 @Controller('pep')
@@ -212,8 +212,6 @@ export class DocumentosPepController {
   @Inject(PORTA_GRUPOS_RESULTADO)
   private readonly gruposResultado: PortaGruposResultadoPropria | null = null;
   private readonly liberacao: LiberacaoPep;
-  /** Emissões em PDF desta instância por documento (a 2ª via pede o motivo). */
-  private readonly emitidos = new Map<string, string>();
 
   constructor(
     @Inject(SERVICO_DOCUMENTOS) private readonly servico: ServicoDocumentos,
@@ -465,12 +463,15 @@ export class DocumentosPepController {
       corpo: d.paragrafos,
     });
     const marca = req.sghComo ? marcaSuporteTecnico(req.sghComo.alvoNome) : null;
-    const chave = `${s.hospital}:${tipo}:${id}`;
-    const anterior = this.emitidos.get(chave);
-    // 01-ADM L82: toda impressão do prontuário diz por quê (1ª via: justificativa; nova via: motivo).
+    // 01-ADM L82: toda impressão do prontuário diz por quê (1ª via: justificativa; nova via: motivo). A 1ª via vem
+    // do registro das emissões (vale depois de reiniciar a API e entre instâncias), nunca de estado do processo.
     const pedido = validar(esquemaImprimirDocumentoProntuario, corpo ?? {});
+    const original = await fonte.emissao
+      .originalDaOrigem(s.hospital, modelo, { tipo, idLegado: id })
+      .catch(() => null);
+    const anterior = original?.id ?? null;
     const just = regraJustificativaImpressao({
-      viaAnterior: !!anterior,
+      viaAnterior: anterior !== null,
       justificativa: pedido.justificativa ?? null,
       motivo: pedido.motivo ?? null,
     });
@@ -480,10 +481,11 @@ export class DocumentosPepController {
         codigo: just.codigo,
       });
     try {
+      // A justificativa fica sempre na própria emissão (1ª via e nova via), haja ou não espelho no prontuário.
       const r = anterior
         ? await fonte.emissao.segundaVia(
             anterior,
-            validar(esquemaSegundaVia, { motivo: just.justificativa.slice(0, 200) }).motivo,
+            validar(esquemaSegundaVia, { motivo: just.justificativa }).motivo,
             {
               titulo: TITULOS_PEP[modelo],
               campos,
@@ -501,9 +503,9 @@ export class DocumentosPepController {
             campos,
             autor: s.login,
             marcaSuporte: marca,
+            justificativa: just.justificativa,
           });
-      if (!anterior) this.emitidos.set(chave, r.emissao.id);
-      // O evento do documento (tipo, justificativa, quem, quando) fica no prontuário, nunca apagado.
+      // Com espelho no prontuário, também o evento do documento (tipo, justificativa, quem, quando), nunca apagado.
       const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
       if (proprio)
         await this.servico.porta.registrarEventoDocumento(this.sgh(s, 'pep.documento.impresso'), {
@@ -515,7 +517,7 @@ export class DocumentosPepController {
         paciente,
         tabelaAlvo: TABELA_DO_TIPO[tipo],
         idAlvo: String(id),
-        chaveNaturalAlvo: `impresso:${tipo};via:${r.emissao.via};justificativa:sim`,
+        chaveNaturalAlvo: `impresso:${tipo};via:${r.emissao.via};justificativa:emissao${proprio ? '+evento' : ''}`,
       };
       res.header('content-disposition', `inline; filename="${tipo}-${id}-via${r.emissao.via}.pdf"`);
       return Buffer.from(r.pdf);
@@ -1147,9 +1149,7 @@ export class DocumentosPepController {
     const prof = this.servico.exigirProfissional(await this.prof(s));
     // F3.3 (L124): as seções configuradas do atendimento (já conferido no serviço) decidem as obrigatórias e o texto.
     const porta = this.secoesSumario;
-    const secoes = porta
-      ? (atd: number) => porta.vigentesDoAtendimento(this.c(s), atd, paciente)
-      : null;
+    const secoes = porta ? (atd: number) => porta.vigentesDoAtendimento(this.c(s), atd, paciente) : null;
     const entrada = await this.servico.montarFinalizacao(
       this.c(s),
       paciente,

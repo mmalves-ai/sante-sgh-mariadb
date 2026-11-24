@@ -8,6 +8,7 @@ import {
   escolherImpressora,
   MENSAGEM_IMPRESSAO,
   planoReimpressao,
+  viasAnterioresDaReimpressao,
   type CandidatoImpressora,
   type RecusaImpressao,
 } from '@sgh/dominio-documento';
@@ -23,12 +24,29 @@ export const esquemaVincularEstacaoImpressora = z
   .object({ estacao: id, finalidade: id, impressora: id, usuario: id.nullable().optional() })
   .strict();
 
+/**
+ * O que pode ser reimpresso e onde o próprio documento diz quantas vias já saíram (a prova da 1ª impressão). Lista
+ * fechada: nome de tabela nunca vem livre da entrada; toda tabela daqui tem estabelecimento_id e excluido_em.
+ */
+const VIAS_DO_DOCUMENTO = {
+  documento_prontuario: 'vias_impressas',
+  documento_emitido: '1',
+  recibo: 'vias_impressas',
+  etiqueta_identificacao: 'impressoes',
+  etiqueta_amostra_apoio: 'GREATEST(impressoes, impresso_em IS NOT NULL)',
+  amostra_biologica: '(etiqueta_impressa_em IS NOT NULL)',
+  prescricao: '(impressa_em IS NOT NULL)',
+  laudo_internacao_sus: '(impresso_em IS NOT NULL)',
+} as const;
+type EntidadeReimpressao = keyof typeof VIAS_DO_DOCUMENTO;
+const ENTIDADES_REIMPRESSAO = Object.keys(VIAS_DO_DOCUMENTO) as [
+  EntidadeReimpressao,
+  ...EntidadeReimpressao[],
+];
+
 export const esquemaRegistrarReimpressao = z
   .object({
-    entidade: z
-      .string()
-      .regex(/^[a-z][a-z0-9_]{1,63}$/)
-      .max(64),
+    entidade: z.enum(ENTIDADES_REIMPRESSAO),
     entidadeId: id,
     documentoEmitido: id.optional(),
     motivo: id,
@@ -63,10 +81,21 @@ const operacaoVincularEstacao = definirOperacao({
     const est = await estacaoDoEstabelecimento(tx, e.estacao);
     const imp = await tx.uma('SELECT estabelecimento_id, ativo FROM impressora WHERE id = ?', [e.impressora]);
     const fin = await tx.uma('SELECT ativo FROM finalidade_impressao WHERE id = ?', [e.finalidade]);
+    // A preferência por usuário só vale para quem tem vínculo vigente com o estabelecimento da estação.
+    const usuarioVinculado =
+      e.usuario === undefined || e.usuario === null
+        ? null
+        : !!(await tx.uma(
+            `SELECT 1 AS ok FROM usuario_estabelecimento
+              WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+                AND vigencia_inicio <= CURDATE() AND (vigencia_fim IS NULL OR vigencia_fim >= CURDATE())`,
+            [e.usuario, tx.contexto.estabelecimento],
+          ));
     const r = conferirVinculoEstacao({
       estacaoEstabelecimento: est?.estabelecimento ?? null,
       impressora: imp ? { estabelecimento: num(imp['estabelecimento_id']), ativa: bool(imp['ativo']) } : null,
       finalidadeAtiva: fin ? bool(fin['ativo']) : null,
+      usuarioVinculado,
     });
     if (r) throw recusar(r);
     const usuario = e.usuario ?? null;
@@ -147,15 +176,37 @@ const operacaoRegistrarReimpressao = definirOperacao({
     const m = await tx.uma('SELECT ativo, exige_complemento FROM motivo_reimpressao WHERE id = ?', [
       e.motivo,
     ]);
+    // O documento existe neste estabelecimento e diz quantas vias já saíram (a 1ª impressão tem de existir).
+    const doc = await tx.uma(
+      `SELECT ${VIAS_DO_DOCUMENTO[e.entidade]} AS vias FROM ${e.entidade}
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [e.entidadeId, ctx.estabelecimento],
+    );
+    if (!doc) throw recusar('documento-inexistente');
+    let viasDoDocumento = num(doc['vias']) || 0;
+    if (e.documentoEmitido !== undefined) {
+      const de = await tx.uma(
+        'SELECT 1 AS ok FROM documento_emitido WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [e.documentoEmitido, ctx.estabelecimento],
+      );
+      if (!de) throw recusar('documento-emitido-inexistente');
+      viasDoDocumento = Math.max(viasDoDocumento, 1);
+    }
+    if (e.finalidade !== undefined) {
+      const fin = await tx.uma('SELECT ativo FROM finalidade_impressao WHERE id = ?', [e.finalidade]);
+      if (!fin) throw recusar('finalidade-inexistente');
+      if (!bool(fin['ativo'])) throw recusar('finalidade-inativa');
+    }
     const [ultima] = await tx.consultarParaAtualizar(
       `SELECT MAX(via) AS via FROM registro_reimpressao
         WHERE entidade = ? AND entidade_id = ? AND estabelecimento_id = ?`,
       [e.entidade, e.entidadeId, ctx.estabelecimento],
     );
-    // A 1ª impressão é a via 1; sem reimpressão anterior, a reimpressão é a via 2.
-    const viasAnteriores = ultima && ultima['via'] !== null ? num(ultima['via']) : 1;
     const p = planoReimpressao({
-      viasAnteriores,
+      viasAnteriores: viasAnterioresDaReimpressao({
+        ultimaViaRegistrada: ultima && ultima['via'] !== null ? num(ultima['via']) : null,
+        viasDoDocumento,
+      }),
       motivo: m ? { ativo: bool(m['ativo']), exigeComplemento: bool(m['exige_complemento']) } : null,
       complemento: e.complemento ?? null,
     });
@@ -205,10 +256,75 @@ const operacaoRegistrarReimpressao = definirOperacao({
   trilha: (e, r) => ({ motivo: e.complemento ?? null, dados: { entidade: e.entidade, via: r.via } }),
 });
 
+export const esquemaDefinirPadraoEstabelecimento = z
+  .object({
+    finalidade: id,
+    impressora: id,
+    unidade: id.nullable().optional(),
+    copias: z.number().int().min(1).max(99).default(1),
+  })
+  .strict();
+
+/**
+ * Padrão do estabelecimento (ou de uma unidade) por finalidade: a impressora que sai quando a estação não tem vínculo.
+ * Um escopo por finalidade e unidade; trocar a impressora altera a linha (versão e trilha), nunca apaga.
+ */
+const operacaoDefinirPadraoEstabelecimento = definirOperacao({
+  nome: 'impressao.definir_padrao_estabelecimento',
+  tabelas: ['impressora_finalidade_estabelecimento'],
+  entrada: esquemaDefinirPadraoEstabelecimento,
+  async gravar(tx, e, ctx) {
+    const unidade = e.unidade ?? null;
+    if (unidade !== null) {
+      const u = await tx.uma(
+        'SELECT 1 AS ok FROM unidade_assistencial WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [unidade, ctx.estabelecimento],
+      );
+      if (!u) throw recusa('unidade-inexistente', 'Unidade não encontrada neste estabelecimento.');
+    }
+    const imp = await tx.uma('SELECT estabelecimento_id, ativo FROM impressora WHERE id = ?', [e.impressora]);
+    const fin = await tx.uma('SELECT ativo FROM finalidade_impressao WHERE id = ?', [e.finalidade]);
+    const r = conferirVinculoEstacao({
+      estacaoEstabelecimento: ctx.estabelecimento,
+      impressora: imp ? { estabelecimento: num(imp['estabelecimento_id']), ativa: bool(imp['ativo']) } : null,
+      finalidadeAtiva: fin ? bool(fin['ativo']) : null,
+    });
+    if (r) throw recusar(r);
+    const [atual] = await tx.consultarParaAtualizar(
+      `SELECT id, versao FROM impressora_finalidade_estabelecimento
+        WHERE estabelecimento_id = ? AND finalidade_impressao_id = ? AND unidade_chave = ?`,
+      [ctx.estabelecimento, e.finalidade, unidade ?? 0],
+    );
+    if (atual) {
+      await tx.alterar('impressora_finalidade_estabelecimento', num(atual['id']), num(atual['versao']), {
+        impressora_id: e.impressora,
+        copias: e.copias,
+        ativo: true,
+      });
+      return { id: num(atual['id']) };
+    }
+    return {
+      id: await tx.incluir('impressora_finalidade_estabelecimento', {
+        estabelecimento_id: ctx.estabelecimento,
+        finalidade_impressao_id: e.finalidade,
+        unidade_assistencial_id: unidade,
+        impressora_id: e.impressora,
+        copias: e.copias,
+      }),
+    };
+  },
+  alvo: (_e, r) => ({ tabela: 'impressora_finalidade_estabelecimento', id: r.id }),
+  eventos: (_e, r) => [{ tipo: 'impressao.padrao.definido', carga: { id: r.id } }],
+  trilha: (e) => ({
+    dados: { finalidade: e.finalidade, impressora: e.impressora, unidade: e.unidade ?? null },
+  }),
+});
+
 /** Receitas da impressão ligadas no banco próprio (o mapa OPERACOES da fonte própria as soma). */
 export const OPERACOES_IMPRESSAO_PROPRIA = {
   'impressao.vincularEstacao': operacaoVincularEstacao,
   'impressao.registrarReimpressao': operacaoRegistrarReimpressao,
+  'impressao.definirPadraoEstabelecimento': operacaoDefinirPadraoEstabelecimento,
 } as const;
 
 export const NOMES_OPERACOES_IMPRESSAO_PROPRIA = Object.keys(OPERACOES_IMPRESSAO_PROPRIA);

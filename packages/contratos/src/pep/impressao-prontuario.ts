@@ -5,8 +5,8 @@ import { textoCp1252 } from '../texto-cp1252.js';
 
 export const esquemaImprimirDocumentoProntuario = z
   .object({
-    justificativa: textoCp1252(255).optional(),
-    motivo: textoCp1252(255).optional(),
+    justificativa: textoCp1252(200).optional(),
+    motivo: textoCp1252(200).optional(),
   })
   .strict();
 export type ImprimirDocumentoProntuario = z.infer<typeof esquemaImprimirDocumentoProntuario>;

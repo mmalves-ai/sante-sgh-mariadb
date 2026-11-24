@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { conferirVinculoEstacao, escolherImpressora, planoReimpressao } from './estacao.js';
+import {
+  conferirVinculoEstacao,
+  escolherImpressora,
+  planoReimpressao,
+  viasAnterioresDaReimpressao,
+} from './estacao.js';
 
 describe('impressora por estação e reimpressão (01-ADM L79)', () => {
   it('vínculo: estação, impressora e finalidade do mesmo estabelecimento e ativas', () => {
@@ -66,5 +71,45 @@ describe('impressora por estação e reimpressão (01-ADM L79)', () => {
         complemento: ' Rasgou ',
       }),
     ).toEqual({ via: 4, complemento: 'Rasgou' });
+  });
+
+  it('vínculo: preferência de usuário sem vínculo vigente com o estabelecimento é recusada', () => {
+    const base = {
+      estacaoEstabelecimento: 1,
+      impressora: { estabelecimento: 1, ativa: true },
+      finalidadeAtiva: true,
+    };
+    expect(conferirVinculoEstacao({ ...base, usuarioVinculado: false })).toBe('usuario-sem-vinculo');
+    expect(conferirVinculoEstacao({ ...base, usuarioVinculado: true })).toBeNull();
+    expect(conferirVinculoEstacao({ ...base, usuarioVinculado: null })).toBeNull();
+  });
+
+  it('escolha: o vínculo anterior da estação é a reserva quando o padrão fica inativo', () => {
+    const c = [
+      { impressora: 1, origem: 'estacao' as const, padrao: true, ativa: false },
+      { impressora: 2, origem: 'estacao' as const, padrao: false, ativa: true },
+      { impressora: 3, origem: 'estabelecimento' as const, ativa: true },
+    ];
+    expect(escolherImpressora(c, { usuario: null, unidade: null })).toEqual({
+      impressora: 2,
+      nivel: 'estacao',
+    });
+    expect(escolherImpressora(c.slice(0, 1).concat(c[2]!), { usuario: null, unidade: null })).toEqual({
+      impressora: 3,
+      nivel: 'estabelecimento',
+    });
+  });
+
+  it('vias anteriores: a maior entre o registro e o documento; nunca impresso é zero', () => {
+    expect(viasAnterioresDaReimpressao({ ultimaViaRegistrada: null, viasDoDocumento: 0 })).toBe(0);
+    expect(viasAnterioresDaReimpressao({ ultimaViaRegistrada: null, viasDoDocumento: 1 })).toBe(1);
+    expect(viasAnterioresDaReimpressao({ ultimaViaRegistrada: 3, viasDoDocumento: 1 })).toBe(3);
+    expect(viasAnterioresDaReimpressao({ ultimaViaRegistrada: 2, viasDoDocumento: 4 })).toBe(4);
+    expect(
+      planoReimpressao({
+        viasAnteriores: viasAnterioresDaReimpressao({ ultimaViaRegistrada: null, viasDoDocumento: 0 }),
+        motivo: { ativo: true, exigeComplemento: false },
+      }),
+    ).toEqual({ recusa: 'documento-nunca-impresso' });
   });
 });

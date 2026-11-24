@@ -298,6 +298,7 @@ export const mensagensPrescricao = {
     copiar: 'Copiar',
     imprimir: 'Imprimir',
     segundaVia: 'Motivo da 2ª via',
+    justificativa: 'Justificativa da impressão',
     alertasDecididos: 'Alertas decididos na assinatura',
     dialogoSuspenderItem: 'Suspender o item',
     dialogoCorrigir: 'Corrigir o item (suspende e inclui o corrigido)',

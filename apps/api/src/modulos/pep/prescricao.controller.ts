@@ -52,7 +52,7 @@ import {
   esquemaPrescrever,
   esquemaPrescricaoFutura,
   esquemaReconciliacao,
-  esquemaSegundaVia,
+  esquemaImprimirDocumentoProntuario,
   esquemaSuspenderItem,
   esquemaSuspenderPrescricao,
   esquemaTermoCadastroPrescricao,
@@ -91,6 +91,7 @@ import {
   receitasDaAlta,
   type ReceitaProposta,
   REGRAS_PADRAO,
+  regraJustificativaImpressao,
   vencemNoTurno,
 } from '@sgh/dominio-pep';
 import { z } from 'zod';
@@ -735,8 +736,11 @@ export class PrescricaoController {
         idLegado: id,
       });
       const anterior = original?.id ?? null;
+      // 01-ADM L82: a impressão da prescrição também diz por quê (1ª via: justificativa; nova via: motivo), e o
+      // texto fica gravado na própria emissão.
+      const porque = justificativaDaImpressao(corpo, anterior !== null);
       const e = anterior
-        ? await fonte.emissao.segundaVia(anterior, validarSegundaVia(corpo), {
+        ? await fonte.emissao.segundaVia(anterior, porque, {
             titulo: TITULOS_PEP.prescricao,
             campos,
             autor: s.login,
@@ -752,6 +756,7 @@ export class PrescricaoController {
             campos,
             autor: s.login,
             marcaSuporte: marca,
+            justificativa: porque,
           });
       req.sghAlvo = {
         paciente,
@@ -1567,10 +1572,21 @@ function entradaInvalida(issues: readonly { path: readonly PropertyKey[]; messag
 }
 
 /** Motivo da 2ª via (o mesmo contrato da reimpressão dos documentos do prontuário). */
-function validarSegundaVia(corpo: unknown): string {
-  const e = esquemaSegundaVia.safeParse(corpo ?? {});
+/** 01-ADM L82: o porquê da impressão pela regra do domínio (a mesma dos documentos do prontuário). */
+function justificativaDaImpressao(corpo: unknown, viaAnterior: boolean): string {
+  const e = esquemaImprimirDocumentoProntuario.safeParse(corpo ?? {});
   if (!e.success) throw entradaInvalida(e.error.issues);
-  return e.data.motivo;
+  const r = regraJustificativaImpressao({
+    viaAnterior,
+    justificativa: e.data.justificativa ?? null,
+    motivo: e.data.motivo ?? null,
+  });
+  if (!r.ok)
+    throw new ErroProblema('entrada-invalida', 400, 'Justificativa obrigatória', r.mensagem, {
+      campos: [viaAnterior ? 'motivo' : 'justificativa'],
+      codigo: r.codigo,
+    });
+  return r.justificativa;
 }
 
 const SITUACAO_IMPRESSA: Readonly<Record<PrescricaoLida['situacao'], string>> = {

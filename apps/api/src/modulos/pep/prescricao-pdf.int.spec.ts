@@ -195,7 +195,11 @@ describe('impressão pela API (porta em memória, serviço de emissão do Compos
         headers: { cookie, 'x-csrf': csrf },
         payload,
       });
-    const um = await imprimir({});
+    // 01-ADM L82: sem justificativa, a 1ª via é recusada; com ela, sai e o texto fica na emissão.
+    const sem = await imprimir({});
+    expect(sem.statusCode).toBe(400);
+    expect(sem.json()).toMatchObject({ codigo: 'justificativa-obrigatoria' });
+    const um = await imprimir({ justificativa: 'Entrega ao paciente na alta' });
     expect(um.statusCode).toBe(200);
     expect(um.headers['content-type']).toMatch(/application\/pdf/);
     expect(um.rawPayload.subarray(0, 4).toString()).toBe('%PDF');

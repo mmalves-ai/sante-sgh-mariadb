@@ -55,6 +55,8 @@ describe('cadastros de prescrição e impressão (M24)', () => {
     expect(pedidos[0]!.url).toBe('/api/pep/prescricao/1001/prescricoes/7/imprimir');
     expect(pedidos[0]!.init?.body).toBe('{}');
     await imprimirPrescricao(1001, 7, 'Reimpressão para a enfermagem', falso(pdf, pedidos));
-    expect(JSON.parse(String(pedidos[1]!.init?.body))).toEqual({ motivo: 'Reimpressão para a enfermagem' });
+    expect(JSON.parse(String(pedidos[1]!.init?.body))).toEqual({
+      justificativa: 'Reimpressão para a enfermagem',
+    });
   });
 });
