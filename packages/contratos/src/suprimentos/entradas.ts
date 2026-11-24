@@ -18,7 +18,8 @@ import { idBanco } from '../validacao/id-banco.js';
 
 const id = idBanco;
 const smallint = z.number().int().positive().max(32_767);
-const local = z.number().int().min(1).max(99);
+// O local é o id do banco próprio (BIGINT), sem o teto de dois dígitos do código antigo.
+const local = id;
 const quantidade = z
   .number()
   .positive('A quantidade tem de ser maior que zero.')
