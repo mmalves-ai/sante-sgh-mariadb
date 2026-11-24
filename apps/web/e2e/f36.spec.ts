@@ -31,6 +31,10 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     const recusas = page.getByTestId('par-recusas-regra');
     await expect(recusas).toContainText('centro de custo, setor ou unidade');
     await page.getByTestId('par-centro').selectOption({ index: 1 });
+    // A exceção por item: o subgrupo filtra pelo grupo e o item pelo subgrupo.
+    await page.getByTestId('par-grupo').selectOption({ index: 1 });
+    await page.getByTestId('par-subgrupo').selectOption({ index: 1 });
+    await page.getByTestId('par-item').selectOption({ index: 1 });
     await page.getByTestId('par-local').selectOption({ index: 1 });
     await page.getByTestId('par-momento').selectOption('antes_do_horario');
     await expect(recusas).toContainText('antecedência');
@@ -49,6 +53,20 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     await page.getByTestId('par-gravar-grade').click();
     await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
     await expect(page.getByTestId('par-grades')).toContainText('06:00, 14:00, 22:00');
+
+    // Dias restritos num horário: gravados, mostrados na lista e preservados ao reabrir a grade e gravar de novo.
+    await page.getByTestId('par-dia-0600-2').check();
+    await page.getByTestId('par-dia-0600-4').check();
+    await page.getByTestId('par-gravar-grade').click();
+    await expect(page.getByTestId('par-grades')).toContainText('06:00 (Seg, Qua), 14:00, 22:00');
+    await page.reload();
+    await page.getByTestId('par-editar-grade-1').click();
+    await expect(page.getByTestId('par-dia-0600-2')).toBeChecked();
+    await expect(page.getByTestId('par-dia-0600-4')).toBeChecked();
+    await expect(page.getByTestId('par-dia-1400-2')).not.toBeChecked();
+    await page.getByTestId('par-gravar-grade').click();
+    await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
+    await expect(page.getByTestId('par-grades')).toContainText('06:00 (Seg, Qua), 14:00, 22:00');
     await semViolacaoAxe(page, '/farmacia/parametros');
     expect(externas).toEqual([]);
   });

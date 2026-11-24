@@ -148,3 +148,94 @@ export const diasDoTexto = (t: string | null): number[] =>
         .map((x) => Number(x.trim()))
         .filter((x) => Number.isInteger(x))
     : [];
+
+/** O atendimento e o item prescrito, para escolher a regra vigente. */
+export interface ContextoIntegracao {
+  readonly centroCusto: number | null;
+  readonly setor: number | null;
+  readonly unidade: number | null;
+  readonly tipoItem: number | null;
+  readonly grupo: number | null;
+  readonly subgrupo: number | null;
+  readonly item: number;
+}
+
+export interface RegraCandidata extends RegraIntegracaoConferida {
+  readonly regra: number;
+  readonly tipoItem: number | null;
+  readonly prioridade: number;
+  readonly ativo: boolean;
+}
+
+/**
+ * A especificidade de uma regra que atende o contexto: primeiro o filtro do item (item > subgrupo > grupo > tipo de
+ * item > nenhum), depois o escopo (setor > unidade > centro de custo). Nulo quando a regra não atende.
+ */
+export function especificidadeRegra(r: RegraCandidata, c: ContextoIntegracao): readonly number[] | null {
+  const pares: [number | null, number | null][] = [
+    [r.centroCusto, c.centroCusto],
+    [r.setor, c.setor],
+    [r.unidade, c.unidade],
+    [r.tipoItem, c.tipoItem],
+    [r.grupo, c.grupo],
+    [r.subgrupo, c.subgrupo],
+    [r.item, c.item],
+  ];
+  if (!r.ativo || pares.some(([regra, ctx]) => regra !== null && regra !== ctx)) return null;
+  const filtro =
+    r.item !== null ? 4 : r.subgrupo !== null ? 3 : r.grupo !== null ? 2 : r.tipoItem !== null ? 1 : 0;
+  const escopo = r.setor !== null ? 3 : r.unidade !== null ? 2 : r.centroCusto !== null ? 1 : 0;
+  return [filtro, escopo];
+}
+
+/**
+ * A regra vigente para o item no atendimento: a mais específica vence; no empate, a de menor número de prioridade
+ * (1 vem antes de 999); persistindo o empate, a regra mais antiga (menor id), para a escolha ser sempre a mesma.
+ * Nulo quando nenhuma regra ativa atende: o item segue sem integração automática.
+ */
+export function regraVigente<R extends RegraCandidata>(
+  regras: readonly R[],
+  c: ContextoIntegracao,
+): R | null {
+  let melhor: { r: R; chave: readonly number[] } | null = null;
+  for (const r of regras) {
+    const e = especificidadeRegra(r, c);
+    if (!e) continue;
+    const chave = [...e, -r.prioridade, -r.regra];
+    if (!melhor || compararChaves(chave, melhor.chave) > 0) melhor = { r, chave };
+  }
+  return melhor?.r ?? null;
+}
+
+function compararChaves(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return (a[i] ?? 0) - (b[i] ?? 0);
+  return 0;
+}
+
+/** O que a regra decide para uma dose: se vai ao estoque, de qual local e a partir de quando. */
+export interface DecisaoIntegracao {
+  readonly integraEstoque: boolean;
+  /** O local que atende; o substituto quando o atendente não tem saldo; nulo sem saldo em nenhum. */
+  readonly local: number | null;
+  readonly usouSubstituto: boolean;
+  /** O instante em que a requisição ou a dose entra na fila; nulo quando depende de um evento (liberação, aprazamento). */
+  readonly liberarEm: Date | null;
+}
+
+export function decidirIntegracao(
+  r: RegraCandidata | null,
+  o: { temSaldo: (local: number) => boolean; prescritoEm: Date; horarioDose: Date | null },
+): DecisaoIntegracao {
+  if (!r || r.tipoIntegracao === 'sem_integracao')
+    return { integraEstoque: false, local: null, usouSubstituto: false, liberarEm: null };
+  const noAtendente = o.temSaldo(r.localAtendente);
+  const substituto = !noAtendente && r.localSubstituto !== null && o.temSaldo(r.localSubstituto);
+  const local = noAtendente ? r.localAtendente : substituto ? r.localSubstituto : null;
+  const liberarEm =
+    r.momento === 'na_prescricao'
+      ? o.prescritoEm
+      : r.momento === 'antes_do_horario' && o.horarioDose
+        ? new Date(o.horarioDose.getTime() - (r.antecedenciaMinutos ?? 0) * 60_000)
+        : null;
+  return { integraEstoque: true, local, usouSubstituto: substituto, liberarEm };
+}

@@ -1124,6 +1124,12 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
     const primeiro = this.e(c).controles[0];
     return { desde: primeiro ? minuto(primeiro.em) : null };
   }
+  /** F3.6: o cadastro sintético de frequências, o mesmo na leitura e na conferência da grade. */
+  private static readonly FREQUENCIAS: readonly { id: number; nome: string; dosesPorDia: number | null }[] = [
+    { id: 1, nome: '8/8H SINTETICA', dosesPorDia: 3 },
+    { id: 2, nome: 'SE NECESSARIO SINTETICA', dosesPorDia: null },
+  ];
+
   /** F3.6: as regras e as grades gravadas nesta memória, com as opções sintéticas. */
   async parametrosEditaveis(c: ContextoFarmacia): Promise<ParametrosIntegracaoEditaveis> {
     const s = this.e(c);
@@ -1131,8 +1137,10 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
       regras: s.regras ?? [],
       grades: [...(s.grades ?? new Map()).values()].map((g) => ({
         ...g,
-        frequenciaNome: `Frequência ${g.frequencia}`,
-        dosesPorDia: null,
+        frequenciaNome:
+          PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === g.frequencia)?.nome ??
+          `Frequência ${g.frequencia}`,
+        dosesPorDia: PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === g.frequencia)?.dosesPorDia ?? null,
         setorNome: g.setor === null ? null : `Setor ${g.setor}`,
       })),
       opcoes: {
@@ -1141,8 +1149,10 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
         unidades: [],
         locais: [{ id: LOCAL_FARMACIA_SINTETICO, nome: 'FARMACIA SINTETICA' }],
         tiposItem: [],
-        grupos: [],
-        frequencias: [{ id: 1, nome: '8/8H SINTETICA', dosesPorDia: 3 }],
+        grupos: [{ id: 1, nome: 'MEDICAMENTOS SINTETICOS' }],
+        subgrupos: [{ id: 11, nome: 'ANALGESICOS SINTETICOS', grupo: 1 }],
+        itens: [{ id: 7001, nome: '7001 · DIPIRONA SINTETICA 1 G', subgrupo: 11 }],
+        frequencias: [...PortaFarmaciaMemoria.FREQUENCIAS],
       },
     };
   }
@@ -1190,7 +1200,9 @@ export class PortaFarmaciaMemoria implements PortaFarmacia {
   }
 
   private gravarGrade(s: Estado, e: GravarHorariosPadraoEntrada): Record<string, number> {
-    const rs = conferirHorariosPadrao(e.horarios, e.frequencia === 1 ? 3 : null);
+    const freq = PortaFarmaciaMemoria.FREQUENCIAS.find((f) => f.id === e.frequencia);
+    if (!freq) throw recusaOp('referencia-inexistente', 'Escolha uma frequência ativa.', ['frequencia']);
+    const rs = conferirHorariosPadrao(e.horarios, freq.dosesPorDia);
     if (rs[0])
       throw recusaOp(
         rs[0].codigo,

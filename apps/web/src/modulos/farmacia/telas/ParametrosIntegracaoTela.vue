@@ -71,6 +71,24 @@ const vazio = (): Form => ({
   ativo: true,
 });
 const form = ref<Form>(vazio());
+/** O subgrupo só entre os do grupo escolhido; o item, só entre os do subgrupo escolhido. */
+const subgruposDoGrupo = computed(() =>
+  (opcoes.value?.subgrupos ?? []).filter((s) => form.value.grupo === null || s.grupo === form.value.grupo),
+);
+const itensDoSubgrupo = computed(() =>
+  form.value.subgrupo === null
+    ? []
+    : (opcoes.value?.itens ?? []).filter((i) => i.subgrupo === form.value.subgrupo),
+);
+function escolherGrupo(v: number | null): void {
+  form.value.grupo = v;
+  form.value.subgrupo = null;
+  form.value.item = null;
+}
+function escolherSubgrupo(v: number | null): void {
+  form.value.subgrupo = v;
+  form.value.item = null;
+}
 const nulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
 
 /** As recusas na hora, pelas mesmas regras da API. */
@@ -108,13 +126,27 @@ const frequencia = ref<number | null>(null);
 const setorGrade = ref<number | null>(null);
 /** Os horários digitados de uma vez: "06:00, 14:00, 22:00". */
 const horariosTexto = ref('');
-const horarios = computed(() =>
+/** Os dias de cada horário (1 = domingo … 7 = sábado; vazio = todos os dias), preservados ao reabrir a grade. */
+const diasPorHora = ref<Record<string, number[]>>({});
+const DIAS = [1, 2, 3, 4, 5, 6, 7] as const;
+const horas = computed(() =>
   horariosTexto.value
     .split(/[,;\s]+/)
     .map((x) => x.trim())
     .filter(Boolean)
-    .map((x) => ({ hora: /^\d:\d\d$/.test(x) ? `0${x}` : x, dias: [] as number[] })),
+    .map((x) => (/^\d:\d\d$/.test(x) ? `0${x}` : x)),
 );
+const horarios = computed(() =>
+  horas.value.map((hora) => ({ hora, dias: [...(diasPorHora.value[hora] ?? [])].sort((a, b) => a - b) })),
+);
+function alternarDia(hora: string, dia: number, marcado: boolean): void {
+  const atuais = new Set(diasPorHora.value[hora] ?? []);
+  if (marcado) atuais.add(dia);
+  else atuais.delete(dia);
+  diasPorHora.value = { ...diasPorHora.value, [hora]: [...atuais] };
+}
+const nomeDias = (dias: readonly number[]) =>
+  dias.length === 0 ? '' : ` (${dias.map((d) => t(`farmacia.parametros.dias.${d}`)).join(', ')})`;
 const dosesPorDia = computed(
   () => opcoes.value?.frequencias.find((f) => f.id === frequencia.value)?.dosesPorDia ?? null,
 );
@@ -127,11 +159,12 @@ const recusasGrade = computed(() =>
 function editarGrade(g: {
   frequencia: number;
   setor: number | null;
-  horarios: readonly { hora: string }[];
+  horarios: readonly { hora: string; dias: readonly number[] }[];
 }): void {
   frequencia.value = g.frequencia;
   setorGrade.value = g.setor;
   horariosTexto.value = g.horarios.map((h) => h.hora).join(', ');
+  diasPorHora.value = Object.fromEntries(g.horarios.map((h) => [h.hora, [...h.dias]]));
 }
 
 async function gravarGrade(): Promise<void> {
@@ -174,7 +207,7 @@ async function gravarGrade(): Promise<void> {
             <th scope="col">{{ t('farmacia.parametros.forma') }}</th>
             <th scope="col">{{ t('farmacia.parametros.prioridade') }}</th>
             <th scope="col">{{ t('farmacia.parametros.ativa') }}</th>
-            <th scope="col"></th>
+            <th scope="col">{{ t('farmacia.acoes') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -261,10 +294,35 @@ async function gravarGrade(): Promise<void> {
           <select
             id="par-grupo"
             :value="form.grupo ?? ''"
-            @change="form.grupo = nulo(($event.target as HTMLSelectElement).value)"
+            data-testid="par-grupo"
+            @change="escolherGrupo(nulo(($event.target as HTMLSelectElement).value))"
           >
             <option value="">{{ t('farmacia.parametros.todos') }}</option>
             <option v-for="o in opcoes.grupos" :key="o.id" :value="o.id">{{ o.nome }}</option>
+          </select>
+        </span>
+        <span class="campo">
+          <label for="par-subgrupo">{{ t('farmacia.parametros.subgrupo') }}</label>
+          <select
+            id="par-subgrupo"
+            :value="form.subgrupo ?? ''"
+            data-testid="par-subgrupo"
+            @change="escolherSubgrupo(nulo(($event.target as HTMLSelectElement).value))"
+          >
+            <option value="">{{ t('farmacia.parametros.todos') }}</option>
+            <option v-for="o in subgruposDoGrupo" :key="o.id" :value="o.id">{{ o.nome }}</option>
+          </select>
+        </span>
+        <span v-if="form.subgrupo !== null" class="campo">
+          <label for="par-item">{{ t('farmacia.parametros.item') }}</label>
+          <select
+            id="par-item"
+            :value="form.item ?? ''"
+            data-testid="par-item"
+            @change="form.item = nulo(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ t('farmacia.parametros.todos') }}</option>
+            <option v-for="o in itensDoSubgrupo" :key="o.id" :value="o.id">{{ o.nome }}</option>
           </select>
         </span>
         <span class="campo">
@@ -330,17 +388,19 @@ async function gravarGrade(): Promise<void> {
           <label for="par-prioridade">{{ t('farmacia.parametros.prioridade') }}</label>
           <input id="par-prioridade" v-model.number="form.prioridade" type="number" min="1" max="999" />
         </span>
-        <label
-          ><input v-model="form.geraManipulacao" type="checkbox" />
-          {{ t('farmacia.parametros.manipulacao') }}</label
-        >
-        <label
-          ><input v-model="form.ativo" type="checkbox" data-testid="par-ativa" />
-          {{ t('farmacia.parametros.ativa') }}</label
-        >
-        <ul v-if="recusasRegra.length" role="alert" data-testid="par-recusas-regra">
-          <li v-for="m in recusasRegra" :key="m">{{ m }}</li>
-        </ul>
+        <span class="campo">
+          <input id="par-manipulacao" v-model="form.geraManipulacao" type="checkbox" />
+          <label for="par-manipulacao">{{ t('farmacia.parametros.manipulacao') }}</label>
+        </span>
+        <span class="campo">
+          <input id="par-ativa" v-model="form.ativo" type="checkbox" data-testid="par-ativa" />
+          <label for="par-ativa">{{ t('farmacia.parametros.ativa') }}</label>
+        </span>
+        <div v-if="recusasRegra.length" role="alert" data-testid="par-recusas-regra">
+          <ul>
+            <li v-for="m in recusasRegra" :key="m">{{ m }}</li>
+          </ul>
+        </div>
         <SanteBotao
           :rotulo="t('farmacia.parametros.gravar')"
           :desabilitado="recusasRegra.length > 0"
@@ -365,18 +425,19 @@ async function gravarGrade(): Promise<void> {
             <th scope="col">{{ t('farmacia.parametros.frequencia') }}</th>
             <th scope="col">{{ t('farmacia.parametros.setor') }}</th>
             <th scope="col">{{ t('farmacia.parametros.valor') }}</th>
-            <th scope="col"></th>
+            <th scope="col">{{ t('farmacia.acoes') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="g in p.data.value.grades" :key="`${g.frequencia}-${g.setor}`">
             <td>{{ g.frequenciaNome }}</td>
             <td>{{ g.setorNome ?? t('farmacia.parametros.todoEstabelecimento') }}</td>
-            <td>{{ g.horarios.map((h) => h.hora).join(', ') }}</td>
+            <td>{{ g.horarios.map((h) => `${h.hora}${nomeDias(h.dias)}`).join(', ') }}</td>
             <td>
               <SanteBotao
                 variante="secundario"
                 :rotulo="t('farmacia.parametros.editar')"
+                :data-testid="`par-editar-grade-${g.frequencia}`"
                 @acionar="editarGrade(g)"
               />
             </td>
@@ -416,9 +477,26 @@ async function gravarGrade(): Promise<void> {
             data-testid="par-horarios"
           />
         </span>
-        <ul v-if="recusasGrade.length" role="alert" data-testid="par-recusas-grade">
-          <li v-for="m in recusasGrade" :key="m">{{ m }}</li>
-        </ul>
+        <fieldset v-for="h in horas" :key="h" class="filtros" :data-testid="`par-dias-${h.replace(':', '')}`">
+          <legend>{{ t('farmacia.parametros.diasDe', { hora: h }) }}</legend>
+          <span v-for="d in DIAS" :key="d" class="campo">
+            <input
+              :id="`par-dia-${h.replace(':', '')}-${d}`"
+              type="checkbox"
+              :checked="(diasPorHora[h] ?? []).includes(d)"
+              :data-testid="`par-dia-${h.replace(':', '')}-${d}`"
+              @change="alternarDia(h, d, ($event.target as HTMLInputElement).checked)"
+            />
+            <label :for="`par-dia-${h.replace(':', '')}-${d}`">{{
+              t(`farmacia.parametros.dias.${d}`)
+            }}</label>
+          </span>
+        </fieldset>
+        <div v-if="recusasGrade.length" role="alert" data-testid="par-recusas-grade">
+          <ul>
+            <li v-for="m in recusasGrade" :key="m">{{ m }}</li>
+          </ul>
+        </div>
         <SanteBotao
           :rotulo="t('farmacia.parametros.gravarHorarios')"
           :desabilitado="recusasGrade.length > 0"

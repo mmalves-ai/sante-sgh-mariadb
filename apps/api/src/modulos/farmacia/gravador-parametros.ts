@@ -316,6 +316,18 @@ export async function lerParametrosEditaveis(l: Leitor, est: number): Promise<Pa
         'SELECT id, descricao AS nome FROM tipo_item_prescricao WHERE ativo ORDER BY descricao',
       ),
       grupos: await opcoes('SELECT id, descricao AS nome FROM grupo_insumo WHERE ativo ORDER BY descricao'),
+      subgrupos: (
+        await l.consultar<Linha>(
+          'SELECT id, descricao AS nome, grupo_insumo_id FROM subgrupo_insumo WHERE ativo ORDER BY descricao LIMIT 2000',
+        )
+      ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']), grupo: n(r['grupo_insumo_id']) })),
+      itens: (
+        await l.consultar<Linha>(
+          `SELECT id, CONCAT(codigo, ' · ', nome) AS nome, subgrupo_insumo_id FROM insumo
+            WHERE situacao = 'ativo' AND excluido_em IS NULL AND subgrupo_insumo_id IS NOT NULL
+            ORDER BY nome LIMIT 20000`,
+        )
+      ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']), subgrupo: idOuNulo(r['subgrupo_insumo_id']) })),
       frequencias: await opcoes(
         'SELECT id, descricao AS nome, doses_por_dia AS doses FROM frequencia_administracao WHERE ativo ORDER BY descricao',
       ),

@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   chaveRegraIntegracao,
+  type ContextoIntegracao,
   conferirHorariosPadrao,
+  decidirIntegracao,
+  type RegraCandidata,
+  regraVigente,
   conferirRegraIntegracao,
   diasDoTexto,
   diasParaTexto,
@@ -92,5 +96,88 @@ describe('grade de horários padrão', () => {
     expect(diasParaTexto([6, 2, 4])).toBe('2,4,6');
     expect(diasDoTexto('2,4,6')).toEqual([2, 4, 6]);
     expect(diasDoTexto(null)).toEqual([]);
+  });
+});
+
+describe('regra vigente e decisão da integração', () => {
+  const ctx: ContextoIntegracao = {
+    centroCusto: 1,
+    setor: 5,
+    unidade: null,
+    tipoItem: 2,
+    grupo: 3,
+    subgrupo: 4,
+    item: 99,
+  };
+  const r = (regra: number, x: Partial<RegraCandidata>): RegraCandidata => ({
+    ...base,
+    regra,
+    tipoItem: null,
+    prioridade: 100,
+    ativo: true,
+    ...x,
+  });
+
+  it('a mais específica vence: item > subgrupo > grupo > tipo; e o setor antes do centro de custo', () => {
+    const regras = [
+      r(1, { centroCusto: 1 }),
+      r(2, { centroCusto: null, setor: 5 }),
+      r(3, { tipoItem: 2 }),
+      r(4, { grupo: 3 }),
+      r(5, { subgrupo: 4 }),
+      r(6, { item: 99 }),
+    ];
+    expect(regraVigente(regras, ctx)?.regra).toBe(6);
+    expect(regraVigente(regras.slice(0, 5), ctx)?.regra).toBe(5);
+    expect(regraVigente(regras.slice(0, 2), ctx)?.regra).toBe(2);
+  });
+
+  it('a prioridade desempata (menor número vence) e, por fim, a regra mais antiga', () => {
+    expect(regraVigente([r(1, { prioridade: 50 }), r(2, { prioridade: 10 })], ctx)?.regra).toBe(2);
+    expect(regraVigente([r(8, {}), r(7, {})], ctx)?.regra).toBe(7);
+  });
+
+  it('regra inativa ou de outro escopo ou item não vale; sem regra, nada vai ao estoque', () => {
+    expect(
+      regraVigente([r(1, { ativo: false }), r(2, { centroCusto: 9 }), r(3, { item: 98 })], ctx),
+    ).toBeNull();
+    const d = decidirIntegracao(null, { temSaldo: () => true, prescritoEm: new Date(0), horarioDose: null });
+    expect(d.integraEstoque).toBe(false);
+  });
+
+  it('local atendente com saldo; sem saldo, o substituto; antecedência conta do horário da dose', () => {
+    const regra = r(1, { localSubstituto: 20, momento: 'antes_do_horario', antecedenciaMinutos: 90 });
+    const dose = new Date('2026-11-24T14:00:00Z');
+    const comSaldo = decidirIntegracao(regra, {
+      temSaldo: () => true,
+      prescritoEm: new Date(0),
+      horarioDose: dose,
+    });
+    expect(comSaldo).toEqual({
+      integraEstoque: true,
+      local: 10,
+      usouSubstituto: false,
+      liberarEm: new Date('2026-11-24T12:30:00Z'),
+    });
+    const semSaldo = decidirIntegracao(regra, {
+      temSaldo: (l) => l === 20,
+      prescritoEm: new Date(0),
+      horarioDose: dose,
+    });
+    expect(semSaldo.local).toBe(20);
+    expect(semSaldo.usouSubstituto).toBe(true);
+    const nenhum = decidirIntegracao(regra, {
+      temSaldo: () => false,
+      prescritoEm: new Date(0),
+      horarioDose: dose,
+    });
+    expect(nenhum.local).toBeNull();
+    expect(
+      decidirIntegracao(r(2, { tipoIntegracao: 'sem_integracao' }), {
+        temSaldo: () => true,
+        prescritoEm: new Date(0),
+        horarioDose: null,
+      }).integraEstoque,
+    ).toBe(false);
   });
 });

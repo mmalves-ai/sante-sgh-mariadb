@@ -308,6 +308,9 @@ export interface OpcaoParametro {
   readonly id: number;
   readonly nome: string;
   readonly dosesPorDia?: number | null;
+  /** Subgrupo: o grupo a que pertence (a tela filtra por ele). Item: o seu subgrupo. */
+  readonly grupo?: number;
+  readonly subgrupo?: number | null;
 }
 
 export interface ParametrosIntegracaoEditaveis {
@@ -320,6 +323,9 @@ export interface ParametrosIntegracaoEditaveis {
     readonly locais: readonly OpcaoParametro[];
     readonly tiposItem: readonly OpcaoParametro[];
     readonly grupos: readonly OpcaoParametro[];
+    readonly subgrupos: readonly OpcaoParametro[];
+    /** Os itens ativos com subgrupo (exceção por item), filtrados na tela pelo subgrupo escolhido. */
+    readonly itens: readonly OpcaoParametro[];
     readonly frequencias: readonly OpcaoParametro[];
   };
 }
