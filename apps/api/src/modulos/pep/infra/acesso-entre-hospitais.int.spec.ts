@@ -53,6 +53,10 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM paciente WHERE cadastro_estabelecimento_id IN ${est}`, cods);
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`Pessoa sintética ${P}%`]);
+  // Desde a cadeia por hash (SBIS-16), a cabeça e o fecho diário apontam para as linhas da trilha: saem antes delas
+  // (só a cadeia dos dois estabelecimentos sintéticos desta massa).
+  await e.executar(`DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id IN ${est}`, cods);
+  await e.executar(`DELETE FROM trilha_cadeia WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, cods);
   await e.executar('DELETE FROM usuario WHERE login LIKE ?', [`${P}.%`]);
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', cods);

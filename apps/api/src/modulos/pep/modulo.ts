@@ -17,10 +17,12 @@ import { AcessoRedePepController } from './acesso-rede.controller.js';
 import { AcessosProntuarioController } from './acessos.controller.js';
 import { PORTA_DOCUMENTOS, type PortaDocumentos } from './documentos-porta.js';
 import { PortaDocumentosMemoria } from './documentos-porta-memoria.js';
+import { PortaDocumentosPropria } from './documentos-porta-propria.js';
 import { DocumentosPepController, SERVICO_DOCUMENTOS } from './documentos.controller.js';
 import { ServicoDocumentos } from './documentos-servico.js';
 import { PORTA_FORMULARIO_NOVO, type PortaFormularioNovo } from './formulario-novo-porta.js';
 import { PortaFormularioNovoMemoria } from './formulario-novo-porta-memoria.js';
+import { PortaFormularioNovoPropria } from './formulario-novo-porta-propria.js';
 import { FormularioNovoController } from './formulario-novo.controller.js';
 import { PORTA_PRONTUARIO, type PortaProntuario } from './porta.js';
 import { PortaProntuarioMemoria } from './porta-memoria.js';
@@ -33,8 +35,10 @@ import {
 } from './portas-indisponiveis.js';
 import { PORTA_PRESCRICAO, type PortaPrescricao } from './prescricao-porta.js';
 import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
+import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import { PrescricaoController, SERVICO_PRESCRICAO } from './prescricao.controller.js';
 import { ServicoPrescricao } from './prescricao-servico.js';
+import { PortaProntuarioPropria } from './prontuario-porta-propria.js';
 import { ESTADO_PRONTUARIO, ProntuarioController, SERVICO_PRONTUARIO } from './prontuario.controller.js';
 import { PORTA_REGISTRO, type PortaRegistro } from './registro-porta.js';
 import { PortaRegistroMemoria } from './registro-porta-memoria.js';
@@ -81,11 +85,11 @@ export function portasDoPep(ctx: ContextoModulo, o: OpcoesModuloPep = {}): Porta
   if (ctx.nucleo && cliente) {
     const nucleo = ctx.nucleo;
     return {
-      prontuario: o.prontuario ?? portaProntuarioIndisponivel(),
+      prontuario: o.prontuario ?? new PortaProntuarioPropria(nucleo, cliente),
       registro: o.registro ?? new PortaRegistroPropria(nucleo, cliente),
-      formularioNovo: o.formularioNovo ?? portaFormularioNovoIndisponivel(),
-      prescricao: o.prescricao ?? portaPrescricaoIndisponivel(),
-      documentos: o.documentos ?? portaDocumentosIndisponivel(),
+      formularioNovo: o.formularioNovo ?? new PortaFormularioNovoPropria(nucleo, cliente),
+      prescricao: o.prescricao ?? new PortaPrescricaoPropria(nucleo, cliente),
+      documentos: o.documentos ?? new PortaDocumentosPropria(nucleo, cliente),
       worklist: o.worklist ?? new PortaWorklistPropria(nucleo, cliente),
     };
   }

@@ -887,6 +887,7 @@
     "src/modulos/pep/aplicacao/worklist-medico.autorizacao.int.spec.ts",
     "src/modulos/pep/worklist.controller.ts",
     "src/modulos/pep/modulo.ts",
+    "src/modulos/pep/modulo.spec.ts",
     "src/modulos/pep/teste.spec-util.ts",
     "src/modulos/pep/infra/acesso-entre-hospitais.int.spec.ts",
     "src/modulos/pep/acesso-rede.spec.ts",
