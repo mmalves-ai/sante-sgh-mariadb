@@ -110,16 +110,20 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
       await e.executar('DELETE FROM programacao_ferias WHERE estabelecimento_id = ?', est);
       await e.executar('DELETE FROM periodo_aquisitivo WHERE estabelecimento_id = ?', est);
       await e.executar(
+        "DELETE FROM periodo_aquisitivo WHERE estabelecimento_id = ? AND inicio = '2095-01-01'",
+        [m.outro],
+      );
+      await e.executar(
         'DELETE l FROM processamento_folha_linha l JOIN processamento_folha p ON p.id = l.processamento_folha_id WHERE p.estabelecimento_id = ?',
         est,
       );
       await e.executar('DELETE FROM processamento_folha WHERE estabelecimento_id = ?', est);
       await e.executar('DELETE FROM fechamento_periodo_folha WHERE estabelecimento_id = ?', est);
       await e.executar(
-        'DELETE c FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id WHERE t.versao_fonte = ?',
-        [MARCA],
+        'DELETE c FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id WHERE t.versao_fonte LIKE ?',
+        [`${MARCA}%`],
       );
-      await e.executar('DELETE FROM tabela_esocial WHERE versao_fonte = ?', [MARCA]);
+      await e.executar('DELETE FROM tabela_esocial WHERE versao_fonte LIKE ?', [`${MARCA}%`]);
     });
   }
 
@@ -234,6 +238,88 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
     });
     const calculada = await calculo.feriasPorId(ctx(), ids[0]!);
     expect(calculada).toMatchObject({ situacao: 'calculada', processo, situacaoPor: m.login });
+    const recibos = async () =>
+      m.nucleo.lerSomente(ctx(), async (l) => {
+        const r = await l.uma(
+          `SELECT SUM(situacao <> 'cancelado') AS vivos, SUM(situacao = 'cancelado') AS cancelados
+             FROM recibo_ferias WHERE programacao_ferias_id = ?`,
+          [ids[0]!],
+        );
+        return { vivos: Number(r?.['vivos'] ?? 0), cancelados: Number(r?.['cancelados'] ?? 0) };
+      });
+    expect(await recibos()).toEqual({ vivos: 1, cancelados: 0 });
+    // Voltar a programar cancela o recibo; recalcular deixa um só recibo vivo.
+    await gravar((g) =>
+      g.situacaoFerias({
+        id: ids[0]!,
+        versao: calculada!.versao,
+        de: 'calculada',
+        para: 'programada',
+        motivo: null,
+        por: m.login,
+      }),
+    );
+    expect(await recibos()).toEqual({ vivos: 0, cancelados: 1 });
+    const reprogramada = await calculo.feriasPorId(ctx(), ids[0]!);
+    await gravar((g) =>
+      g.situacaoFerias({
+        id: ids[0]!,
+        versao: reprogramada!.versao,
+        de: 'programada',
+        para: 'calculada',
+        processo,
+        motivo: null,
+        por: m.login,
+      }),
+    );
+    expect(await recibos()).toEqual({ vivos: 1, cancelados: 1 });
+    // Recibo conferido: as férias não se cancelam.
+    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'recibo-conferido' }, (e) =>
+      e.executar(
+        "UPDATE recibo_ferias SET situacao = 'conferido' WHERE programacao_ferias_id = ? AND situacao = 'calculado'",
+        [ids[0]!],
+      ),
+    );
+    const recalculada = await calculo.feriasPorId(ctx(), ids[0]!);
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.situacaoFerias({
+            id: ids[0]!,
+            versao: recalculada!.versao,
+            de: 'calculada',
+            para: 'cancelada',
+            motivo: 'teste',
+            por: m.login,
+          }),
+        ),
+      ),
+    ).toBe('recibo-ferias-conferido');
+    expect(await calculo.feriasPorId(ctx(), ids[0]!)).toMatchObject({ situacao: 'calculada' });
+    // O período aquisitivo de outro estabelecimento com o mesmo início não se reaproveita.
+    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'periodo-outro-est' }, async (e) => {
+      const [v] = await e.consultar('SELECT colaborador_id FROM vinculo_trabalho WHERE id = ?', [m.vinculo]);
+      await e.inserir(
+        `INSERT INTO periodo_aquisitivo (estabelecimento_id, colaborador_id, inicio, fim, limite_concessivo, criado_em)
+         VALUES (?, ?, '2095-01-01', '2095-12-31', '2096-12-31', NOW(3))`,
+        [m.outro, v!['colaborador_id']],
+      );
+    });
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.incluirFerias({
+            ...nova,
+            aquisitivoInicio: '2095-01-01',
+            aquisitivoFim: '2095-12-31',
+            inicio: '2096-03-01',
+            fim: '2096-03-10',
+            pagamento: '2096-02-27',
+            por: m.login,
+          }),
+        ),
+      ),
+    ).toBe('periodo-aquisitivo-de-outro-estabelecimento');
     // A versão lida antes não vale mais.
     expect(
       await codigo(
@@ -414,9 +500,26 @@ describe.skipIf(SEM_BANCO_O3)(`férias e obrigações próprias da folha (client
           `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?, NOW(3))`,
           [id, `9${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código sintético', MARCA],
         );
+        // Código revogado na edição vigente e edição encerrada: nenhum dos dois é oferecido.
+        await e.inserir(
+          `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, vigencia_inicio, vigencia_fim, versao_fonte, criado_em) VALUES (?, ?, ?, '2000-01-01', '2000-12-31', ?, NOW(3))`,
+          [id, `8${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código revogado', MARCA],
+        );
+        const antiga = await e.inserir(
+          `INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, vigencia_inicio, vigencia_fim, versao_fonte, criado_em) VALUES (?, ?, ?, '1999-01-01', '2000-12-31', ?, NOW(3))`,
+          [t.fonte, t.tabela, `Edição encerrada ${k}`, `${MARCA}A`],
+        );
+        await e.inserir(
+          `INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?, NOW(3))`,
+          [antiga, `7${CATALOGOS_OBRIGACOES.indexOf(k)}`, 'Código da edição encerrada', `${MARCA}A`],
+        );
       }
     });
     const c = await leituras.catalogosObrigacoes(ctx());
-    CATALOGOS_OBRIGACOES.forEach((k, i) => expect(c[k]).toContain(`9${i}`));
+    CATALOGOS_OBRIGACOES.forEach((k, i) => {
+      expect(c[k]).toContain(`9${i}`);
+      expect(c[k]).not.toContain(`8${i}`);
+      expect(c[k]).not.toContain(`7${i}`);
+    });
   });
 });

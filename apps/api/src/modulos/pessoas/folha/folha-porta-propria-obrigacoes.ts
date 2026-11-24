@@ -327,14 +327,23 @@ export const CODIGOS_TABELAS_OBRIGACOES: Readonly<
   admissoesRais: { fonte: 'rais', tabela: 'admissao' },
 };
 
-export async function lerCatalogosObrigacoes(l: LeitorObrigacoes): Promise<CodigosCatalogosObrigacoes> {
+/**
+ * Os códigos vigentes na data de referência (hoje, por omissão): só a edição da tabela oficial e os códigos cuja
+ * vigência alcança a data; edição encerrada e código revogado não são oferecidos nem aceitos.
+ */
+export async function lerCatalogosObrigacoes(
+  l: LeitorObrigacoes,
+  data: string = hoje(),
+): Promise<CodigosCatalogosObrigacoes> {
   const pares = CATALOGOS_OBRIGACOES.map((k) => CODIGOS_TABELAS_OBRIGACOES[k]);
   const rs = await l.consultar(
     `SELECT DISTINCT t.fonte, t.codigo_oficial, c.codigo_esocial
        FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id
       WHERE (t.fonte, t.codigo_oficial) IN (${pares.map(() => '(?, ?)').join(', ')})
+        AND (t.vigencia_inicio IS NULL OR t.vigencia_inicio <= ?) AND (t.vigencia_fim IS NULL OR t.vigencia_fim >= ?)
+        AND (c.vigencia_inicio IS NULL OR c.vigencia_inicio <= ?) AND (c.vigencia_fim IS NULL OR c.vigencia_fim >= ?)
       ORDER BY c.codigo_esocial`,
-    pares.flatMap((x) => [x.fonte, x.tabela]),
+    [...pares.flatMap((x) => [x.fonte, x.tabela]), data, data, data, data],
   );
   const saida = Object.fromEntries(CATALOGOS_OBRIGACOES.map((k) => [k, [] as string[]])) as Record<
     (typeof CATALOGOS_OBRIGACOES)[number],
@@ -371,11 +380,27 @@ export function gravadorFolhaObrigacoes(
     if (empresa !== est) throw foraDaSessao();
   };
 
-  /** O período aquisitivo do colaborador com este início (travado) ou um novo. */
+  /**
+   * O período aquisitivo do colaborador com este início neste estabelecimento (travado) ou um novo. O período tem
+   * estabelecimento, mas não vínculo, e a UNIQUE (colaborador_id, inicio) admite um só período por início: o período de
+   * outro estabelecimento nunca é reaproveitado (recusa `periodo-aquisitivo-de-outro-estabelecimento`). Decisão de
+   * modelo pendente: período por vínculo, para o colaborador com dois contratos de mesmo início.
+   */
   async function periodoAquisitivo(colaborador: number, inicio: string, fim: string, gozo: string) {
+    const outro = await tx.uma(
+      `SELECT COUNT(*) AS q FROM periodo_aquisitivo
+        WHERE colaborador_id = ? AND inicio = ? AND estabelecimento_id <> ?`,
+      [colaborador, inicio, est],
+    );
+    if (n(outro?.['q']) > 0)
+      throw recusa(
+        'periodo-aquisitivo-de-outro-estabelecimento',
+        'O colaborador já tem um período aquisitivo com este início em outro estabelecimento: o período de um contrato não se reaproveita em outro.',
+      );
     const [pa] = await tx.consultarParaAtualizar(
-      'SELECT id, fim FROM periodo_aquisitivo WHERE colaborador_id = ? AND inicio = ? AND excluido_em IS NULL',
-      [colaborador, inicio],
+      `SELECT id, fim FROM periodo_aquisitivo
+        WHERE colaborador_id = ? AND inicio = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [colaborador, inicio, est],
     );
     if (pa) {
       if (dia(pa['fim']) !== fim)
@@ -395,6 +420,25 @@ export function gravadorFolhaObrigacoes(
       limite_concessivo: somarMeses(fim, 12),
       situacao: fim < gozo ? 'adquirido' : 'aberto',
     });
+  }
+
+  /**
+   * Cancela os recibos vigentes das férias (ao sair de `calculada` ou antes de recalcular): fica um só recibo vivo por
+   * programação. Recibo conferido ou pago não se cancela: recusa e a transação inteira se desfaz.
+   */
+  async function cancelarRecibosVigentes(programacao: number) {
+    const vivos = await tx.consultarParaAtualizar(
+      `SELECT id, situacao, versao FROM recibo_ferias
+        WHERE programacao_ferias_id = ? AND estabelecimento_id = ? AND situacao <> 'cancelado' AND excluido_em IS NULL`,
+      [programacao, est],
+    );
+    if (vivos.some((r) => texto(r['situacao']) !== 'calculado'))
+      throw recusa(
+        'recibo-ferias-conferido',
+        'O recibo destas férias já foi conferido ou pago: as férias não se cancelam nem se recalculam.',
+      );
+    for (const r of vivos)
+      await tx.alterar('recibo_ferias', n(r['id']), n(r['versao']), { situacao: 'cancelado' });
   }
 
   return {
@@ -465,6 +509,7 @@ export function gravadorFolhaObrigacoes(
       // Férias em gozo ou gozadas não se cancelam nem se recalculam (o throw desfaz a transação inteira).
       await exigirFeriasAlteravel(trava, est, x.id);
       await exigirUsuario(tx, x.por);
+      if (x.de === 'calculada' || x.para === 'calculada') await cancelarRecibosVigentes(x.id);
       if (x.para !== 'calculada') {
         await tx.alterar('programacao_ferias', x.id, x.versao, {
           situacao: FERIAS_GRAVADA[x.para],
