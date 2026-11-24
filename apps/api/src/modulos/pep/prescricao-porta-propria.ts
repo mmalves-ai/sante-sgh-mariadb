@@ -572,4 +572,13 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   gravarGrade(...a: Parameters<PortaPrescricao['gravarGrade']>) {
     return this.gravacao.gravarGrade(...a);
   }
+  favoritos(...a: Parameters<PortaPrescricao['favoritos']>) {
+    return this.gravacao.favoritos(...a);
+  }
+  marcarFavorito(...a: Parameters<PortaPrescricao['marcarFavorito']>) {
+    return this.gravacao.marcarFavorito(...a);
+  }
+  desmarcarFavorito(...a: Parameters<PortaPrescricao['desmarcarFavorito']>) {
+    return this.gravacao.desmarcarFavorito(...a);
+  }
 }

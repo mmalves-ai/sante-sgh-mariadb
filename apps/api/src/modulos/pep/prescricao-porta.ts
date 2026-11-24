@@ -7,6 +7,7 @@
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { SecaoCadastroPrescricao } from '@sgh/contratos';
 import type { ContextoOperacao } from '@sgh/nucleo';
+import type { FavoritoNovo, FavoritoPrescritorLido } from './prescricao-propria-favoritos.js';
 import type {
   AlergiaLida,
   DadosClinicosLidos,
@@ -177,4 +178,8 @@ export interface PortaPrescricao {
   registrarReconciliacao(c: ContextoPrescricao, usuario: string, r: ReconciliacaoGravacao): Promise<number>;
   registrarFicha(c: ContextoPrescricao, usuario: string, f: FichaAvulsa): Promise<number>;
   gravarGrade(c: ContextoPrescricao, autor: string, g: NovaGradeClasse): Promise<number>;
+  /** Favoritos do prescritor da sessão (03-PEP L107). */
+  favoritos(c: ContextoPrescricao, usuario: string): Promise<FavoritoPrescritorLido[]>;
+  marcarFavorito(c: ContextoPrescricao, usuario: string, f: FavoritoNovo): Promise<number>;
+  desmarcarFavorito(c: ContextoPrescricao, usuario: string, id: number): Promise<number>;
 }

@@ -33,7 +33,12 @@ import {
   loginDaOperacao,
 } from './tipos-pep.js';
 import { ROTULOS_TIPO_ITEM, type SecaoCadastroPrescricao, tipoDoPlano } from '@sgh/contratos';
-import { frequencia as frequenciaDe } from '@sgh/dominio-pep';
+import {
+  decidirFavorito,
+  type FavoritoNovo,
+  frequencia as frequenciaDe,
+  ordenarFavoritos,
+} from '@sgh/dominio-pep';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 
@@ -1295,6 +1300,66 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
   async gravarGrade(c: ContextoPrescricao, autor: string, g: Parameters<PortaPrescricao['gravarGrade']>[2]) {
     const id = this.proximo++;
     this.lista(this.gradesSgh, c.hospital).push({ id, ...g, horarios: [...g.horarios], autor });
+    return id;
+  }
+
+  /** Favoritos do prescritor em memória (por login): a mesma regra do domínio que o banco próprio usa. */
+  private readonly favoritosMem: {
+    id: number;
+    usuario: string;
+    tipo: FavoritoNovo['tipo'];
+    alvo: number;
+    rotulo: string | null;
+    ordem: number | null;
+    ativo: boolean;
+  }[] = [];
+
+  async favoritos(_c: ContextoPrescricao, usuario: string) {
+    return ordenarFavoritos(
+      this.favoritosMem
+        .filter((f) => f.usuario === usuario && f.ativo)
+        .map((f) => ({
+          id: f.id,
+          tipo: f.tipo,
+          alvo: f.alvo,
+          rotulo: f.rotulo ?? `#${f.alvo}`,
+          ordem: f.ordem,
+        })),
+    );
+  }
+
+  async marcarFavorito(_c: ContextoPrescricao, usuario: string, f: FavoritoNovo) {
+    const meus = this.favoritosMem.filter((x) => x.usuario === usuario);
+    const d = decidirFavorito(f, meus);
+    if (d.acao === 'recusar')
+      throw new ErroOperacao(
+        d.codigo === 'favorito-duplicado' ? 409 : 422,
+        d.codigo,
+        'Favorito recusado',
+        d.detalhe,
+      );
+    if (d.acao === 'reativar') {
+      Object.assign(
+        meus.find((x) => x.id === d.id)!,
+        { ativo: true, rotulo: f.rotulo, ordem: f.ordem },
+      );
+      return d.id;
+    }
+    const id = this.proximo++;
+    this.favoritosMem.push({ id, usuario, ...f, ativo: true });
+    return id;
+  }
+
+  async desmarcarFavorito(_c: ContextoPrescricao, usuario: string, id: number) {
+    const f = this.favoritosMem.find((x) => x.id === id && x.usuario === usuario);
+    if (!f)
+      throw new ErroOperacao(
+        404,
+        'registro-inexistente',
+        'Favorito recusado',
+        'O favorito não foi encontrado entre os seus.',
+      );
+    f.ativo = false;
     return id;
   }
 }

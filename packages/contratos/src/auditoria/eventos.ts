@@ -892,6 +892,11 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Grade de horários por classe de medicamento alterada (só no novo)',
     legado: null,
   },
+  favoritoPrescritorAlterado: {
+    codigo: 'pep.favoritoPrescritor.alterado',
+    descricao: 'Favorito do prescritor marcado, reativado ou desmarcado (só no novo; desmarcar não apaga)',
+    legado: null,
+  },
   configuracaoConsultada: {
     codigo: 'config.consulta.lida',
     descricao: 'Consulta de alertas, servidor de e-mail, dados fiscais ou backup (credencial nunca sai)',

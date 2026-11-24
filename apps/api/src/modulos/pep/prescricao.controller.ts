@@ -95,6 +95,8 @@ import {
   vencemNoTurno,
 } from '@sgh/dominio-pep';
 import { z } from 'zod';
+import { TIPOS_FAVORITO_PRESCRICAO } from '@sgh/dominio-pep';
+import type { FavoritoPrescritorLido } from './prescricao-propria-favoritos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
@@ -195,6 +197,15 @@ const esquemaFicha = z
     culturaColhida: z.boolean(),
     diaTratamento: z.number().int().min(1).max(180),
     duracaoDias: z.number().int().min(1).max(180).nullable().default(null),
+  })
+  .strict();
+
+const esquemaFavorito = z
+  .object({
+    tipo: z.enum(TIPOS_FAVORITO_PRESCRICAO),
+    alvo: z.number().int().positive(),
+    rotulo: z.string().trim().min(1).max(100).optional(),
+    ordem: z.number().int().min(0).max(999).optional(),
   })
   .strict();
 
@@ -1526,6 +1537,51 @@ export class PrescricaoController {
       idAlvo: String(id),
       chaveNaturalAlvo: `${e.data.classe}:${e.data.numDoses}`,
     };
+    return { id };
+  }
+
+  /** Favoritos do prescritor da sessão (03-PEP L107): atalhos para item, protocolo e kit, em um clique. */
+  @Get('pep/prescricao/favoritos')
+  @Permissao('pep.prescricao.criar')
+  async favoritos(@Req() req: RequisicaoAutorizada): Promise<{ favoritos: FavoritoPrescritorLido[] }> {
+    const s = sessaoDe(req);
+    return { favoritos: await this.servico.portaDados.favoritos(s.porta, s.login) };
+  }
+
+  @Post('pep/prescricao/favoritos')
+  @HttpCode(201)
+  @Permissao('pep.prescricao.criar')
+  @Auditar('pep.favoritoPrescritor.alterado')
+  async marcarFavorito(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<{ id: number }> {
+    const s = sessaoDe(req);
+    const e = esquemaFavorito.safeParse(corpo);
+    if (!e.success) throw entradaInvalida(e.error.issues);
+    const id = await this.servico.portaDados
+      .marcarFavorito(s.porta, s.login, {
+        tipo: e.data.tipo,
+        alvo: e.data.alvo,
+        rotulo: e.data.rotulo ?? null,
+        ordem: e.data.ordem ?? null,
+      })
+      .catch((x: unknown) => {
+        throw problemaDaPrescricao(x);
+      });
+    req.sghAlvo = { tabelaAlvo: 'favorito_prescritor', idAlvo: String(id), chaveNaturalAlvo: e.data.tipo };
+    return { id };
+  }
+
+  @Post('pep/prescricao/favoritos/:id/desmarcar')
+  @HttpCode(200)
+  @Permissao('pep.prescricao.criar')
+  @Auditar('pep.favoritoPrescritor.alterado')
+  async desmarcarFavorito(@Param('id') i: string, @Req() req: RequisicaoAutorizada): Promise<{ id: number }> {
+    const s = sessaoDe(req);
+    const id = await this.servico.portaDados
+      .desmarcarFavorito(s.porta, s.login, idDaRota(i))
+      .catch((x: unknown) => {
+        throw problemaDaPrescricao(x);
+      });
+    req.sghAlvo = { tabelaAlvo: 'favorito_prescritor', idAlvo: String(id), chaveNaturalAlvo: 'desmarcado' };
     return { id };
   }
 }

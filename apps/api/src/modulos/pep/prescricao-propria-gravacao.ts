@@ -33,6 +33,13 @@ import {
   produtoDoItem,
 } from './prescricao-propria-itens.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
+import {
+  desmarcarFavorito,
+  type FavoritoNovo,
+  type FavoritoPrescritorLido,
+  lerFavoritos,
+  marcarFavorito,
+} from './prescricao-propria-favoritos.js';
 import type {
   CabecalhoDocumentoLido,
   CampoDocumentoLido,
@@ -1209,6 +1216,42 @@ export class GravacaoPrescricaoPropria {
         });
       },
       (id) => ({ tabela: 'grade_horario_classe', id }),
+    );
+  }
+
+  /** Favoritos do prescritor da sessão (03-PEP L107); sem profissional vinculado, lista vazia. */
+  favoritos(c: ContextoPrescricao, usuario: string): Promise<FavoritoPrescritorLido[]> {
+    return this.ler(c, 'favoritos', async (l, est) => {
+      const prof = await profissionalDaSessao(l, contextoDoLogin(c, 'pep.favoritos', usuario), null);
+      return prof ? lerFavoritos(l, prof.profissional, est.id) : [];
+    });
+  }
+
+  /** Marca um favorito do prescritor da sessão (inclui ou reativa o antigo do mesmo alvo). */
+  marcarFavorito(c: ContextoPrescricao, usuario: string, f: FavoritoNovo): Promise<number> {
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.marcarFavorito', usuario),
+      'pep.marcarFavorito',
+      null,
+      (tx, est, prof) => marcarFavorito(tx, prof.profissional, est.id, f),
+      (id) => ({ tabela: 'favorito_prescritor', id }),
+      null,
+      f,
+    );
+  }
+
+  /** Desmarca um favorito do prescritor da sessão (ativo = false, sem apagar). */
+  desmarcarFavorito(c: ContextoPrescricao, usuario: string, id: number): Promise<number> {
+    return this.gravar(
+      c,
+      contextoDoLogin(c, 'pep.desmarcarFavorito', usuario),
+      'pep.desmarcarFavorito',
+      null,
+      (tx, _est, prof) => desmarcarFavorito(tx, prof.profissional, id),
+      (r) => ({ tabela: 'favorito_prescritor', id: r }),
+      null,
+      { id },
     );
   }
 
