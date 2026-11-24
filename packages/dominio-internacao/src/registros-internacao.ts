@@ -67,7 +67,7 @@ export const TIPOS_DIAGNOSTICO_TELA: readonly TipoDiagnosticoInternacao[] = [
   'causa_externa',
 ];
 
-export interface DiagnosticoExistente {
+export interface DiagnosticoJaRegistrado {
   readonly cid: number;
   readonly tipo: string;
   readonly sequencia: number;
@@ -92,7 +92,7 @@ export type ResultadoRegra<T> =
  * substitui (a internação tem um principal vigente só; o anterior fica no histórico como substituído).
  */
 export function conferirDiagnostico(
-  existentes: readonly DiagnosticoExistente[],
+  existentes: readonly DiagnosticoJaRegistrado[],
   novo: { readonly cid: number; readonly codigo: string; readonly tipo: TipoDiagnosticoInternacao },
 ): ResultadoRegra<{ sequencia: number; substitui: number | null }> {
   if (!TIPOS_DIAGNOSTICO_TELA.includes(novo.tipo))
