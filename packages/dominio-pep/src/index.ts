@@ -48,6 +48,7 @@ export * from './prescricao/se-necessario.js';
 export * from './prescricao/itens-gravaveis.js';
 export * from './prescricao/renovacao.js';
 export * from './prescricao/copia.js';
+export * from './prescricao/favoritos.js';
 export * from './prescricao/protocolo.js';
 export * from './prescricao/receita-alta.js';
 export * from './prescricao/avaliacao.js';
