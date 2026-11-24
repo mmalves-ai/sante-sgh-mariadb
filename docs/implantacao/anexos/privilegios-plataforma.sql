@@ -7,7 +7,7 @@
 -- Só cria o papel, concede e retira: nenhuma tabela nem dado é alterado. Cada GRANT vem seguido do REVOKE do que a
 -- tabela não deve ter, para que reaplicar o anexo convirja (a tabela que passou à exclusão lógica perde o DELETE).
 -- Depois, atribua o papel à conta da aplicação e torne-o o papel padrão dela (GRANT e SET DEFAULT ROLE).
--- 6 tabelas. Só de acréscimo: cliente_evento, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
+-- 6 tabelas. Só de acréscimo: cliente_evento, modelo_documento_evento, trilha_auditoria, trilha_auditoria_fecho, trilha_encadeamento_inicio; tabela com exclusão lógica e tabela clínica não recebem DELETE.
 
 CREATE ROLE IF NOT EXISTS papel_aplicacao;
 

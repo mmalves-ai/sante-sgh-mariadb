@@ -28,6 +28,8 @@ export const SO_ACRESCIMO: ReadonlySet<string> = new Set([
   'trilha_auditoria_fecho',
   'trilha_encadeamento_inicio',
   'cliente_evento',
+  // história de aprovação dos modelos de formulário (com o SHA-256 da definição publicada): só inclusão
+  'modelo_documento_evento',
 ]);
 
 /** O banco a que o anexo se aplica. */
