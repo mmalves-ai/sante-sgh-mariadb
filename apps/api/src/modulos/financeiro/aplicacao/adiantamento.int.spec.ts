@@ -63,9 +63,10 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
       [m.est],
     ),
   });
-  const recusada = async (p: Promise<unknown>) => {
+  // Recebe a gravação ainda não começada: o retrato de antes é tirado antes dela (sem corrida nem rejeição solta).
+  const recusada = async (gravar: () => Promise<unknown>) => {
     const antes = await retrato();
-    const codigo = await codigoDaGravacao(p);
+    const codigo = await codigoDaGravacao(gravar());
     expect(await retrato()).toEqual(antes);
     return codigo;
   };
@@ -177,8 +178,8 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
     ]).toEqual(['aberto', 500, 0, null]);
 
     // Sem aprovação não sai; quem pediu não aprova.
-    expect(await recusada(pagar(ad.id, m.paga))).toBe('sem-aprovacao');
-    expect(await recusada(aprovar(ad.id, m.lanca))).toBe('segregacao-lancou-aprova');
+    expect(await recusada(() => pagar(ad.id, m.paga))).toBe('sem-aprovacao');
+    expect(await recusada(() => aprovar(ad.id, m.lanca))).toBe('segregacao-lancou-aprova');
     const ap = await aprovar(ad.id, m.aprova);
     expect([ap.aprovado, ap.faltam]).toEqual([true, 0]);
     expect(
@@ -190,11 +191,11 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
     expect(String((await uma('SELECT situacao FROM adiantamento WHERE id = ?', [ad.id]))?.['situacao'])).toBe(
       'aprovado',
     );
-    expect(await recusada(aprovar(ad.id, m.paga))).toBe('adiantamento-ja-aprovado');
+    expect(await recusada(() => aprovar(ad.id, m.paga))).toBe('adiantamento-ja-aprovado');
 
     // Quem pediu ou aprovou não paga; a outra pessoa paga: o grupo e a saída na conta.
-    expect(await recusada(pagar(ad.id, m.lanca))).toBe('segregacao-lancou-paga');
-    expect(await recusada(pagar(ad.id, m.aprova))).toBe('segregacao-aprovou-paga');
+    expect(await recusada(() => pagar(ad.id, m.lanca))).toBe('segregacao-lancou-paga');
+    expect(await recusada(() => pagar(ad.id, m.aprova))).toBe('segregacao-aprovou-paga');
     const r1 = await retrato();
     const pg = await pagar(ad.id, m.paga);
     expect(await retrato()).toEqual({ ...r1, movimento: r1.movimento + 1, grupo: r1.grupo + 1 });
@@ -213,14 +214,14 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
       m.contaA,
       Number(a1?.['g']),
     ]);
-    expect(await recusada(pagar(ad.id, m.paga))).toBe('adiantamento-ja-pago');
+    expect(await recusada(() => pagar(ad.id, m.paga))).toBe('adiantamento-ja-pago');
 
     // O título do mesmo credor (300): sem aprovação na alçada a compensação é recusada (é uma baixa).
     const t = await titulo(7401, 300);
-    expect(await recusada(compensar(ad.id, t.parcela, 300))).toBe('sem-aprovacao');
+    expect(await recusada(() => compensar(ad.id, t.parcela, 300))).toBe('sem-aprovacao');
     expect((await aprovarTitulo(t.parcela)).aprovado).toBe(true);
-    expect(await recusada(compensar(ad.id, t.parcela, 300, m.lanca))).toBe('segregacao-lancou-paga');
-    expect(await recusada(compensar(ad.id, t.parcela, 300, m.aprova))).toBe('segregacao-aprovou-paga');
+    expect(await recusada(() => compensar(ad.id, t.parcela, 300, m.lanca))).toBe('segregacao-lancou-paga');
+    expect(await recusada(() => compensar(ad.id, t.parcela, 300, m.aprova))).toBe('segregacao-aprovou-paga');
     const r2 = await retrato();
     const chave = `t0207-ad-${randomUUID()}`;
     const comp = await compensar(ad.id, t.parcela, 300, m.paga, chave);
@@ -248,9 +249,9 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
     expect([String(a2?.['situacao']), Number(a2?.['s'])]).toEqual(['compensado_parcial', 200]);
 
     // Compensar de novo a parcela já paga é recusado; devolver mais do que o saldo também.
-    expect(await recusada(compensar(ad.id, t.parcela, 1))).toBe('titulo-inexistente');
-    expect(await recusada(devolver(ad.id, 200.01))).toBe('acima-do-saldo');
-    expect(await recusada(devolver(ad.id, 50, ' '))).toBe('motivo-obrigatorio');
+    expect(await recusada(() => compensar(ad.id, t.parcela, 1))).toBe('titulo-inexistente');
+    expect(await recusada(() => devolver(ad.id, 200.01))).toBe('acima-do-saldo');
+    expect(await recusada(() => devolver(ad.id, 50, ' '))).toBe('motivo-obrigatorio');
     // Devolução parcial (50) e depois a do resto (150): duas entradas na conta.
     const dv1 = await devolver(ad.id, 50);
     expect(dv1.saldo).toBe(150);
@@ -289,9 +290,9 @@ describe.skipIf(SEM_BANCO)('adiantamento: pedir, aprovar, pagar, compensar e dev
     const ad = await pago(m.tributo, 100);
     const t = await titulo(7402, 50);
     await aprovarTitulo(t.parcela);
-    expect(await recusada(compensar(ad.id, t.parcela, 50))).toBe('credor-diferente');
-    expect(await recusada(pedir(m.fornecedor, 10, m.contaOutroEst))).toBe('fora-do-escopo');
-    expect(await recusada(pedir(m.fornecedor, 0))).toBe('valor-obrigatorio');
+    expect(await recusada(() => compensar(ad.id, t.parcela, 50))).toBe('credor-diferente');
+    expect(await recusada(() => pedir(m.fornecedor, 10, m.contaOutroEst))).toBe('fora-do-escopo');
+    expect(await recusada(() => pedir(m.fornecedor, 0))).toBe('valor-obrigatorio');
     // A lista de títulos do credor pelo par (tipo, id): o título do fornecedor N não aparece para o profissional N.
     const filtro = {
       situacao: null,
