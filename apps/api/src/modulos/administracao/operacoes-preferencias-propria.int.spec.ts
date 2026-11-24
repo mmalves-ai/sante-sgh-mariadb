@@ -17,6 +17,9 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L84I';
 
+/** Coluna JSON: o driver pode devolvê-la já interpretada ou como texto. */
+const doBanco = (v: unknown): unknown => (typeof v === 'string' ? JSON.parse(v) : v);
+
 async function codigo(p: Promise<unknown>): Promise<string> {
   try {
     await p;
@@ -201,9 +204,9 @@ describe.skipIf(SEM_BANCO)('preferências do usuário no banco próprio (cliente
       ['padrao', 0],
       ['Plantão noturno', 1],
     ]);
-    expect(JSON.parse(String(v[0]!['colunas_visiveis']))).toEqual(['leito', 'paciente', 'idade']);
+    expect(doBanco(v[0]!['colunas_visiveis'])).toEqual(['leito', 'paciente', 'idade']);
     expect(Number(v[0]!['itens_por_pagina'])).toBe(50);
-    expect(JSON.parse(String(v[1]!['ordenacao']))).toEqual([{ coluna: 'paciente', direcao: 'desc' }]);
+    expect(doBanco(v[1]!['ordenacao'])).toEqual([{ coluna: 'paciente', direcao: 'desc' }]);
     const lidas = await fonte.lerPreferencias(
       { rede: 'rede-sint', hospital: P, traceId: 't' },
       ids.pessoa,
