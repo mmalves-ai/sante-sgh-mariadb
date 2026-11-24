@@ -22,3 +22,5 @@ export * from './rastreio/index.js';
 export * from './texto-padrao.js';
 // F3.4 (04-CC linha 96): descrição cirúrgica assinada (adendo) e intercorrências do ato.
 export * from './descricao/index.js';
+// F3.4 (04-CC linha 100): gasto de sala do ato (sugestão pela lista padrão, conferência e situação até o débito).
+export * from './gasto-sala/index.js';

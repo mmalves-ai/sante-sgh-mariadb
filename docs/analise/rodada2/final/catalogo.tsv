@@ -259,7 +259,7 @@ conta_bancaria_profissional	CAD	item	F3	Contas bancárias e chaves de pagamento 
 correspondencia_setor_estabelecimento	CAD	vinculo	F7	Correspondência entre setores de estabelecimentos diferentes da rede, para transferência e consolidação	rodada2:nova	02	1
 crenca_religiosa	CAD	dominio	F3	Religiões e crenças declaradas, usadas em assistência espiritual e restrições de tratamento	F15; SPDATA TBRELIG (11); MV RELIGIAO	02	2
 critica_cnes	CAD	item	F7	Críticas encontradas antes da remessa (profissional sem cartão, carga horária, vínculo)	F29; MV CRITICA_PRESTADOR_SUS, PRESTADOR_SUS_CNS	02	1
-dia_nao_util	CAD	principal	F3	Feriado ou dia sem expediente com abrangência (nacional, estadual, municipal, estabelecimento), fixo ou móvel	F28; SPDATA TBFERIAD (11); MV FERIADO*, FERIADO_EMPRESA; dono 02 (conflitos.md)	02	6
+dia_nao_util	CAD	principal	F3	Feriado ou dia sem expediente com abrangência (nacional, estadual, municipal, estabelecimento), fixo ou móvel	F28; SPDATA TBFERIAD (11); MV FERIADO*, FERIADO_EMPRESA; dono 02 (conflitos.md); cadastro único de feriados e dias não úteis (F3.1-6, decisão registrada na migração 05_AGE/90_dia_nao_util_unico)	02	6
 distrito_sanitario	CAD	dominio	F7	Distrito sanitário do município, com código externo, usado no endereço e nos relatórios públicos	rodada2:nova	02	1
 documento_exigido_plano	CAD	configuracao	F7	Documentos exigidos pelo plano por tipo de atendimento	F24; MV DOCUMENTO_CONVENIO_PLANO	02	3
 documento_pessoa	CAD	item	F3	Documentos de identificação da pessoa (identidade, CNH, passaporte, certidão), com número, órgão emissor, UF e validade	F1; SPDATA campos de RICADPAC, TBTPDOCUMENTO; MV PACIENTE_IDENTIDADE	02	5
@@ -421,6 +421,7 @@ configuracao_usuario_bloco	CC	configuracao	F3	Permissões e preferências do usu
 confirmacao_checklist_cirurgia	CC	item	F7	Resposta de cada item do checklist, com quem confirmou e quando	MV CHECK_LIST	04	1
 consumo_cirurgia	CC	principal	F3	Folha de gasto de sala do ato cirúrgico, com situação de conferência e débito na conta	MV DEBITO_MATMED_CIRURGIA, IMP_GASTO_SALA; depende de conta (06)	04	0
 consumo_cirurgia_item	CC	item	F3	Item consumido na cirurgia com produto, lote, quantidade, origem do estoque e item da conta gerado	MV DEBITO_MATMED_CIRURGIA, CONTA_KIT; depende de produto e lote (05)	04	2
+consumo_cirurgia_motivo	CC	vinculo	F3	Motivo registrado no gasto de sala: item obrigatório da lista padrão não usado, reabertura da conferência ou cancelamento (nunca apagado)	Produto: gasto de sala conferido antes do débito (fatia F3.4-5, migração 08_CC/92_gasto_sala)	08	0
 contagem_instrumental_cirurgia	CC	item	F7	Contagem de compressas, agulhas e instrumentais antes e depois do ato, com divergência	MV ITCONTAGEM_KIT	04	0
 descricao_cirurgica	CC	principal	F3	Descrição do ato pelo cirurgião, com achados, técnica, peças enviadas e assinatura	MV DESCRICAO_AVISO_CIRURGIA, ACHADO_CIRURGICO; LOG_DESCRICAO_CIRURGIA vira trilha_auditoria	04	2
 descricao_cirurgica_achado	CC	item	F3	Achados padronizados registrados na descrição da cirurgia, com complemento livre	rodada2:nova	04	1
@@ -3509,7 +3510,7 @@ chave_busca_nome	CAD	item	F3	Palavras e chaves fonéticas dos nomes para a busca
 dispositivo_recepcao	REC	configuracao	F3	Dispositivo de painel ou totem da recepção (token por resumo)	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
 dispositivo_recepcao_gerador	REC	vinculo	F3	Serviços que o totem oferece	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
 dispositivo_recepcao_local	REC	vinculo	F3	Locais de atendimento que o painel mostra	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
-feriado	AGE	configuracao	F3	Feriados e pontos facultativos por abrangência	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+feriado	AGE	configuracao	F3	Congelada: feriados anteriores ao cadastro único, copiados para dia_nao_util; só leitura até sair	F2.2 onda 1 (pedido de lote; db/migracoes); substituída por dia_nao_util (migração 05_AGE/90_dia_nao_util_unico, F3.1-6)	02	0
 inclusao_protocolo_registro	PEP	item	F3	Metas, checklist e encerramento do protocolo gerenciado do paciente	F2.2 onda 1 (pedido de lote; db/migracoes)	03	0
 liberacao_chave	ADM	configuracao	F3	Chave de liberação de operação ou recurso por estabelecimento e escopo	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
 liberacao_lote	ADM	historico	F3	Lote reversível de mudança das chaves de liberação, com justificativa	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0

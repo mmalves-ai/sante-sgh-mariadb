@@ -1841,7 +1841,7 @@ async function pedidoTravado(tx: TxOperacao, est: number, ano: number, doc: numb
 const escopoDaOperacao = (tx: TxOperacao, est: number) => escopoDoUsuario(tx, est, usuarioDe(tx));
 
 /** Hoje no fuso do estabelecimento. */
-async function hojeNoEstabelecimento(l: Leitor, est: number): Promise<string> {
+export async function hojeNoEstabelecimento(l: Leitor, est: number): Promise<string> {
   const r = await l.uma<{ fuso_horario: string | null }>(
     'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
     [est],
@@ -1872,7 +1872,8 @@ type Ids = Record<string, number | string>;
 type Manipulador = (tx: TxOperacao, est: number, e: never, hoje: string) => Promise<Ids>;
 
 /** A saída (paciente, setor ou terceiro): documento, itens, movimentos e lotes; atende a requisição quando vem nela. */
-async function registrarSaida(
+/** Exportada para o débito do gasto de sala do ato cirúrgico (F3.4, 04-CC linha 100), na mesma transação. */
+export async function registrarSaida(
   tx: TxOperacao,
   est: number,
   e: RegistrarSaidaEntrada,
