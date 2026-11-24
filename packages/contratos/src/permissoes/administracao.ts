@@ -146,7 +146,8 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
   },
   {
     codigo: C.alertaEditar,
-    descricao: 'Gravar as regras de alerta e de consolidação dos avisos, consolidar e registrar a entrega por canal',
+    descricao:
+      'Gravar as regras de alerta e de consolidação dos avisos, consolidar e registrar a entrega por canal',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,
