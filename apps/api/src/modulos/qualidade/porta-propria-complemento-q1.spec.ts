@@ -45,16 +45,20 @@ const C = { cliente: 'teste', estabelecimento: 3, usuario: 1, correlacao: 'x' } 
 
 function txFalsa(linhas: Record<string, unknown[]>) {
   const alteracoes: { tabela: string; id: number; versao: number; valores: Record<string, unknown> }[] = [];
+  const consultas: string[] = [];
   const achar = (sql: string) => linhas[Object.keys(linhas).find((x) => sql.includes(x)) ?? ''] ?? [];
   const tx = {
     consultarParaAtualizar: (sql: string) => Promise.resolve(achar(sql)),
-    uma: (sql: string) => Promise.resolve(achar(sql)[0] ?? null),
+    uma: (sql: string) => {
+      consultas.push(sql.replace(/\s+/g, ' '));
+      return Promise.resolve(achar(sql)[0] ?? null);
+    },
     alterar: (tabela: string, id: number, versao: number, valores: Record<string, unknown>) => {
       alteracoes.push({ tabela, id, versao, valores });
       return Promise.resolve(versao + 1);
     },
   } as unknown as TxOperacao;
-  return { tx, alteracoes };
+  return { tx, alteracoes, consultas };
 }
 const USUARIO = { 'FROM usuario': [{ id: 4 }] };
 const codigo = async (p: Promise<unknown>) => {
@@ -145,6 +149,11 @@ describe('complemento Q1 da porta própria da gestão (unidade)', () => {
       '409:versao-desatualizada',
     );
     expect(revisado.alteracoes).toEqual([]);
+    // O critério de revisado é o da leitura (revisada_em preenchido), não a situação da revisão: a revisão em andamento
+    // que já tem revisada_em conta como revisada.
+    const q = revisado.consultas.find((x) => x.includes('FROM revisao_prontuario'))!;
+    expect(q).toContain('revisada_em IS NOT NULL');
+    expect(q).not.toContain('situacao');
     const cancelado = txFalsa({
       'FROM sorteio_revisao_prontuario': [{ id: 8, versao: 2, situacao: 'cancelado' }],
     });
@@ -205,5 +214,16 @@ describe('complemento Q1 da porta própria da gestão (unidade)', () => {
     });
     expect(await codigo(gravacoesComplementoQ1(dep.tx, 3).cancelarAuditoria(a))).toBe('409:com-dependentes');
     expect(dep.alteracoes).toEqual([]);
+    // Só a não conformidade ativa (não cancelada) de origem auditoria é dependente, como na memória.
+    const q = dep.consultas.find((x) => x.includes('FROM nao_conformidade_qualidade'))!;
+    expect(q).toContain("tipo_origem = 'auditoria'");
+    expect(q).toContain("situacao <> 'cancelada'");
+    expect(q).toContain('cancelada_em IS NULL');
+    // A auditoria cuja única não conformidade foi cancelada (a consulta não acha ativa) se cancela.
+    const soCancelada = txFalsa({
+      'FROM auditoria_interna': [{ id: 5, versao: 3, situacao: 'concluida' }],
+      ...USUARIO,
+    });
+    expect(await gravacoesComplementoQ1(soCancelada.tx, 3).cancelarAuditoria(a)).toEqual({ versao: 4 });
   });
 });

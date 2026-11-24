@@ -7,12 +7,15 @@
 //   `loginsDosMedicos` liga ao login) e o nome dele. `reg` é o id da internação. Teto de linhas: o excedente marca
 //   `cortada` (o sorteio recusa o universo cortado), nunca erro nem corte mudo.
 // - cancelarSorteioRevisao: o sorteio passa a `cancelado` com o motivo (justificativa); recusa (409 de versão) se algum
-//   prontuário do sorteio já foi revisado (revisão concluída ou avalizada). O instante e o autor do cancelamento são a
-//   alteração da linha (o cancelado é terminal: nada o altera depois).
+//   prontuário do sorteio já foi revisado: revisão viva com `revisada_em` preenchido, o mesmo critério da leitura (o
+//   prontuário que não está `aRevisar`), qualquer que seja a situação da revisão. O instante e o autor do cancelamento
+//   são a alteração da linha (o cancelado é terminal: nada o altera depois).
 // - assinarAta: a assinatura (aprovação) da ata da reunião realizada, ainda não assinada, da comissão do
-//   estabelecimento (colunas da migração 18_QUA/96_assinatura_ata_cancelamento_auditoria).
-// - cancelarAuditoria: a auditoria interna passa a `cancelada` com o instante e o motivo (mesma migração); recusa
-//   `com-dependentes` quando há não conformidade ligada a ela (o cancelamento deixaria órfãos).
+//   estabelecimento (colunas da 18_QUA/23; a 18_QUA/96_assinatura_ata_cancelamento_auditoria garante no banco que só
+//   a reunião realizada tem ata assinada).
+// - cancelarAuditoria: a auditoria interna passa a `cancelada` com o instante e o motivo (colunas e verificação da
+//   18_QUA/23); recusa `com-dependentes` quando há não conformidade ativa (não cancelada) de origem auditoria ligada a
+//   ela (o cancelamento deixaria órfãos), como a porta de memória.
 // - Nos dois cancelamentos, a linha como estava vai a `anotacao.dados.versaoAnterior` (tabela, id, versão, ação, motivo
 //   e dados), no mesmo formato que `versoes` lê da trilha (histórico só de acréscimo; nada é apagado).
 import type { TxOperacao } from '@sgh/nucleo';
@@ -155,7 +158,7 @@ export function gravacoesComplementoQ1(
         throw recusaVersaoGestao('O sorteio');
       const revisado = await tx.uma(
         `SELECT id FROM revisao_prontuario
-          WHERE sorteio_revisao_prontuario_id = ? AND excluido_em IS NULL AND situacao IN ('concluida', 'avalizada')
+          WHERE sorteio_revisao_prontuario_id = ? AND excluido_em IS NULL AND revisada_em IS NOT NULL
           LIMIT 1`,
         [m.id],
       );
@@ -203,7 +206,9 @@ export function gravacoesComplementoQ1(
         throw recusaVersaoGestao('A auditoria');
       const dependente = await tx.uma(
         `SELECT id FROM nao_conformidade_qualidade
-          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND auditoria_interna_id = ? LIMIT 1`,
+          WHERE estabelecimento_id = ? AND excluido_em IS NULL AND tipo_origem = 'auditoria'
+            AND auditoria_interna_id = ? AND situacao <> 'cancelada' AND cancelada_em IS NULL
+          LIMIT 1`,
         [est, a.id],
       );
       if (dependente)
