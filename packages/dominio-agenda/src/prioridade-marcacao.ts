@@ -1,6 +1,7 @@
 // Prioridade legal na marcação (02-AGE linha 49; Lei 10.048/2000, Lei 10.741/2003 com a prioridade especial acima de
-// 80 anos da Lei 13.466/2017, Lei 12.764/2012). A marcação grava o grupo (marcacao_horario.grupo_prioridade_legal_id),
-// que vai à senha na chegada e ordena os encaixes do dia.
+// 80 anos da Lei 13.466/2017, Lei 12.764/2012). A gravação da marcação (agendarConsulta e encaixar) aplica esta regra
+// e grava o grupo em marcacao_horario.grupo_prioridade_legal_id. `ordenarEncaixes` é a regra da ordem dos encaixes do
+// mesmo horário; ainda não é aplicada no painel, e o grupo ainda não segue para a senha na chegada (ficha F3.2).
 //
 // Regras:
 //   - candidatos: o grupo informado na marcação, os grupos vigentes do cadastro do paciente na data da marcação e o
