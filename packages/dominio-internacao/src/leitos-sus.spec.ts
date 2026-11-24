@@ -62,6 +62,24 @@ describe('leitos no programa', () => {
       }),
     ).toEqual([]);
   });
+  it('o teto vale em todo o período: vínculo futuro conta, e o que termina antes dele não', () => {
+    const umLeito = { ...base, habilitacao: { ...hab, quantidadeLeitosHabilitados: 1 } };
+    const futuro = [{ leito: 1, vigenciaInicio: '2025-12-01', vigenciaFim: null }];
+    expect(
+      conferirVinculoLeitoPrograma({
+        ...umLeito,
+        vinculos: futuro,
+        novo: { leito: 2, vigenciaInicio: '2025-11-01', vigenciaFim: null },
+      })[0]?.mensagem,
+    ).toMatch(/permite 1 leito\(s\) e já tem 1 no programa nesse período/);
+    expect(
+      conferirVinculoLeitoPrograma({
+        ...umLeito,
+        vinculos: futuro,
+        novo: { leito: 2, vigenciaInicio: '2025-11-01', vigenciaFim: '2025-11-30' },
+      }),
+    ).toEqual([]);
+  });
   it('recusa passar da quantidade habilitada, leito repetido, fora da vigência e habilitação inativa', () => {
     const vinculos = [
       { leito: 1, vigenciaInicio: '2025-02-01', vigenciaFim: null },
@@ -83,7 +101,8 @@ describe('leitos no programa', () => {
           novo: { leito: 1, vigenciaInicio: '2025-01-01', vigenciaFim: null },
         }),
       ),
-    ).toEqual(['habilitacao', 'vigenciaInicio', 'leito']);
+      // leito repetido e, a partir de 01/02, os dois vínculos existentes mais o novo passam do teto
+    ).toEqual(['habilitacao', 'vigenciaInicio', 'leito', 'leito']);
   });
   it('o leito que saiu do programa libera a vaga', () => {
     expect(

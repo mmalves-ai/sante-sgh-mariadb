@@ -4,10 +4,12 @@
 // desligadas só no preparo); usuário é id já existente do cliente (só lido).
 // Prova o que fica no banco: a comunicação da internação nasce pendente com a fonte da internação, a segunda viva do
 // mesmo tipo e a alta antes da alta registrada são recusadas sem gravar, a fonte pública é recusada, a mensagem de
-// comunicação de beneficiário sai dos dados gravados (registro, carteira, evento, motivo de encerramento da alta), as
+// comunicação de beneficiário sai dos dados gravados e valida com 0 erro no XSD TISS 04.03.00 (carteira e recém-nascido em
+// dadosBeneficiario, tipo de internação da modalidade e motivo de encerramento da alta em dadosInternacao), as
 // transições gravam situação, datas, protocolo e resposta com a versão lida, o cancelamento guarda o motivo (nada
 // apagado), o isolamento por estabelecimento e a trilha da operação.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { type ArquivoEsquema, carregarEsquemas, latin1, validarNoXsd } from '@sgh/dominio-faturamento';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -27,11 +29,17 @@ async function limpar(e: Escritor): Promise<void> {
       [P],
     );
     await e.executar(
+      `DELETE rn FROM internacao_recem_nascido rn JOIN internacao i ON i.id = rn.propria_internacao_id
+        WHERE i.estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(
       `DELETE a FROM alta_hospitalar a JOIN internacao i ON i.id = a.internacao_id WHERE i.estabelecimento_id IN ${est}`,
       [P],
     );
     await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar('DELETE FROM motivo_saida_hospitalar WHERE codigo LIKE ?', [`${P}-%`]);
+    await e.executar('DELETE FROM modalidade_internacao WHERE codigo LIKE ?', [`${P}-%`]);
     await e.executar('DELETE FROM fonte_pagadora WHERE codigo LIKE ?', [`${P}-%`]);
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -43,7 +51,17 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('PortaComunicacaoOperadoraPropria contra o MariaDB (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaComunicacaoOperadoraPropria;
-  let m: { est: number; usuario: number; op: number; int: number; intPublica: number; motivo: number };
+  let m: {
+    est: number;
+    usuario: number;
+    op: number;
+    int: number;
+    intPublica: number;
+    intRn: number;
+    motivo: number;
+  };
+  let esquemas: ArquivoEsquema[];
+  const noXsd = async (xml: string | null) => (await validarNoXsd(latin1(xml ?? ''), esquemas)).erros;
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
@@ -58,6 +76,7 @@ describe.skipIf(SEM_BANCO)('PortaComunicacaoOperadoraPropria contra o MariaDB (c
     );
 
   beforeAll(async () => {
+    esquemas = await carregarEsquemas();
     nucleo = new NucleoProprio();
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
       await limpar(e);
@@ -84,28 +103,41 @@ describe.skipIf(SEM_BANCO)('PortaComunicacaoOperadoraPropria contra o MariaDB (c
            VALUES (?, 'Alta melhorada (sintético)', 'alta', '12', ?)`,
           [`${P}-M1`, agora],
         );
-        const internar = (fonte: number, n: string, carteira: string | null) =>
+        const modalidade = await e.inserir(
+          `INSERT INTO modalidade_internacao (codigo, descricao, codigo_tiss, classificacao, criado_em)
+           VALUES (?, 'Cirúrgica (sintético)', NULL, 'cirurgica', ?)`,
+          [`${P}-MOD`, agora],
+        );
+        const internar = (fonte: number, n: string, carteira: string | null, desvio = 0) =>
           e.inserir(
             `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
                carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, acomodacao_id, especialidade_medica_id,
                medico_assistente_profissional_id, fonte_pagadora_id, numero_carteira, numero_guia, criado_em)
-             VALUES (?, ?, ?, ?, '2025-03-01 10:20:30', 1, 1, 1, 1, 1, 1, ?, ?, 'G-1', ?)`,
+             VALUES (?, ?, ?, ?, '2025-03-01 10:20:30', 1, ?, 1, 1, 1, 1, ?, ?, 'G-1', ?)`,
             [
               est,
               n,
-              990000000 + est * 10 + (fonte % 7),
-              990000000 + est * 10 + (fonte % 7),
+              990000000 + est * 10 + (fonte % 7) + desvio * 100000,
+              990000000 + est * 10 + (fonte % 7) + desvio * 100000,
+              modalidade,
               fonte,
               carteira,
               agora,
             ],
           );
+        const intRn = await internar(op, `${P}-3`, '0009990002', 1);
+        await e.inserir(
+          `INSERT INTO internacao_recem_nascido (mae_internacao_id, recem_nascido_paciente_id, propria_internacao_id,
+             data_hora_nascimento, criado_em) VALUES (?, ?, ?, '2025-03-01 09:00:00', ?)`,
+          [intRn, 990000000 + est * 10 + 5 + 200000, intRn, agora],
+        );
         return {
           est,
           usuario: Number(usuario['id']),
           op,
           int: await internar(op, `${P}-1`, '0009990001'),
           intPublica: await internar(pub, `${P}-2`, null),
+          intRn,
           motivo,
         };
       } finally {
@@ -155,10 +187,22 @@ describe.skipIf(SEM_BANCO)('PortaComunicacaoOperadoraPropria contra o MariaDB (c
     });
     const msg = await porta.mensagem(ctx(), id);
     expect(msg.problemas).toEqual([]);
-    expect(msg.xml).toContain('<ans:registroANS>999991</ans:registroANS>');
-    expect(msg.xml).toContain('<ans:numeroCarteira>0009990001</ans:numeroCarteira>');
-    expect(msg.xml).toContain('<ans:tipoEvento>I</ans:tipoEvento>');
-    expect(msg.xml).toContain('<ans:numeroGuiaOperadora>G-1</ans:numeroGuiaOperadora>');
+    expect(await noXsd(msg.xml)).toEqual([]);
+    expect(msg.xml).toContain('<ans:tipoTransacao>COMUNICACAO_BENEFICIARIO</ans:tipoTransacao>');
+    expect(msg.xml).toContain('<ans:destino><ans:registroANS>999991</ans:registroANS></ans:destino>');
+    expect(msg.xml).toMatch(
+      /<ans:comunicacaoInternacao>\s*<ans:dadosBeneficiario>\s*<ans:numeroCarteira>0009990001<\/ans:numeroCarteira>\s*<ans:atendimentoRN>N<\/ans:atendimentoRN>\s*<\/ans:dadosBeneficiario>\s*<ans:dataEvento>2025-03-01<\/ans:dataEvento>\s*<ans:tipoEvento>I<\/ans:tipoEvento>\s*<ans:dadosInternacao>\s*<ans:tipoInternacao>2<\/ans:tipoInternacao>/,
+    );
+    expect(msg.xml).toMatch(/<ans:epilogo>\s*<ans:hash>[0-9a-f]{32}<\/ans:hash>/);
+  });
+
+  it('o recém-nascido internado pela carteira da mãe sai com atendimento ao recém-nascido', async () => {
+    const { id } = await porta.registrar(ctx(), m.intRn, { tipo: 'internacao' });
+    const msg = await porta.mensagem(ctx(), id);
+    expect(await noXsd(msg.xml)).toEqual([]);
+    expect(msg.xml).toMatch(
+      /<ans:numeroCarteira>0009990002<\/ans:numeroCarteira>\s*<ans:atendimentoRN>S<\/ans:atendimentoRN>/,
+    );
   });
 
   it('transições gravam situação, datas, protocolo e resposta; cancelar guarda o motivo; alta depois da alta registrada', async () => {
@@ -197,9 +241,11 @@ describe.skipIf(SEM_BANCO)('PortaComunicacaoOperadoraPropria contra o MariaDB (c
     });
     const alta = await porta.registrar(ctx(), m.int, { tipo: 'alta' });
     const msg = await porta.mensagem(ctx(), alta.id);
-    expect(msg.xml).toContain('<ans:tipoEvento>A</ans:tipoEvento>');
-    expect(msg.xml).toContain('<ans:dataEvento>2025-03-05</ans:dataEvento>');
-    expect(msg.xml).toContain('<ans:motivoEncerramento>12</ans:motivoEncerramento>');
+    expect(msg.problemas).toEqual([]);
+    expect(await noXsd(msg.xml)).toEqual([]);
+    expect(msg.xml).toMatch(
+      /<ans:dataEvento>2025-03-05<\/ans:dataEvento>\s*<ans:tipoEvento>A<\/ans:tipoEvento>\s*<ans:dadosInternacao>\s*<ans:motivoEncerramento>12<\/ans:motivoEncerramento>/,
+    );
     await porta.transicao(ctx(), alta.id, { acao: 'falhar', versao: 1, resposta: 'Sem resposta do serviço' });
     await expect(porta.transicao(ctx(), alta.id, { acao: 'cancelar', versao: 2 })).rejects.toMatchObject({
       problema: { status: 422 },

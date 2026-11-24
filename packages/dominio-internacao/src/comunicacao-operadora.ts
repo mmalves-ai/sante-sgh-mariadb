@@ -1,7 +1,8 @@
 // Comunicação da internação e da alta à operadora (F78.04-2, 04-INT linha 80). Regras puras: quando cada comunicação
 // pode nascer, as transições da situação (pendente, enviada, confirmada, rejeitada, erro, cancelada) e a mensagem de
-// comunicação de beneficiário no padrão de troca da saúde suplementar (internação ou alta, carteira, data do evento,
-// tipo de internação e motivo de encerramento na alta). Sem banco e sem relógio.
+// conferência da comunicação de beneficiário do padrão de troca da saúde suplementar (internação ou alta, carteira,
+// data do evento, tipo de internação no início e motivo de encerramento na alta); a serialização no XSD e o hash são do
+// montador do faturamento. Sem banco e sem relógio.
 // Melhoria: a comunicação nasce da própria internação (nada redigitado), uma só ativa por tipo, a alta só depois da
 // alta registrada, o óbito exige alta por óbito, e a resposta da operadora fica guardada com a situação; nada se apaga
 // (cancelar guarda o motivo).
@@ -127,16 +128,26 @@ export function transicaoComunicacao(entrada: {
 export interface DadosMensagemComunicacao {
   readonly tipo: TipoComunicacaoOperadora;
   readonly registroAns: string;
-  readonly cnesOuCodigoPrestador: string;
   readonly numeroCarteira: string;
+  /** Recém-nascido atendido pela carteira da mãe (atendimentoRN do padrão de troca). */
   readonly recemNascido: boolean;
-  readonly numeroGuia: string | null;
   /** Data e hora do evento em ISO (entrada na internação; saída na alta e no óbito). */
   readonly eventoEm: string;
+  /** Tipo de internação do padrão de troca (1 a 5), obrigatório na comunicação da internação. */
   readonly tipoInternacao: string | null;
-  /** Motivo de encerramento da terminologia de troca, obrigatório na alta e no óbito. */
+  /** Motivo de encerramento da terminologia de troca (2 dígitos), obrigatório na alta e no óbito. */
   readonly motivoEncerramento: string | null;
-  readonly sequencial: string;
+}
+
+/** O que a mensagem leva, já conferido: o montador do padrão de troca (faturamento) serializa e assina com o hash. */
+export interface MensagemComunicacaoConferida {
+  readonly numeroCarteira: string;
+  readonly recemNascido: boolean;
+  /** AAAA-MM-DD */
+  readonly dataEvento: string;
+  readonly tipoEvento: 'I' | 'A';
+  readonly tipoInternacao: string | null;
+  readonly motivoEncerramento: string | null;
 }
 
 /** Tipo do evento na mensagem: a comunicação de beneficiário só conhece internação e alta (óbito sai como alta). */
@@ -146,61 +157,63 @@ export function eventoDaMensagem(tipo: TipoComunicacaoOperadora): 'internacao' |
   return null;
 }
 
-const esc = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const CLASSIFICACAO_TIPO_INTERNACAO: Readonly<Record<string, string>> = {
+  clinica: '1',
+  cirurgica: '2',
+  obstetrica: '3',
+  pediatrica: '4',
+  psiquiatrica: '5',
+};
 
 /**
- * Monta a mensagem de comunicação de beneficiário (internação ou alta) no padrão de troca: cabeçalho com a
- * transação, a operadora (registro), o prestador e o corpo com a carteira, o evento e, na alta, o motivo de
- * encerramento. Prorrogação e transferência não têm mensagem própria (seguem pela guia de prorrogação).
+ * O tipo de internação do padrão de troca (1 clínica, 2 cirúrgica, 3 obstétrica, 4 pediátrica, 5 psiquiátrica): o
+ * código informado no cadastro da modalidade, se válido; senão, a classificação da modalidade; 'outra' fica sem tipo.
  */
-export function montarMensagemComunicacao(d: DadosMensagemComunicacao): {
-  xml: string | null;
+export function tipoInternacaoDaModalidade(
+  codigoInformado: string | null,
+  classificacao: string | null,
+): string | null {
+  const c = codigoInformado?.trim() ?? '';
+  if (/^[1-5]$/.test(c)) return c;
+  return (classificacao && CLASSIFICACAO_TIPO_INTERNACAO[classificacao]) ?? null;
+}
+
+/**
+ * Confere os dados da comunicação de beneficiário (internação ou alta) antes da montagem: o registro da operadora, a
+ * carteira, a data do evento, o tipo de internação no início e o motivo de encerramento na alta. Prorrogação e
+ * transferência não têm mensagem própria (seguem pela guia de prorrogação).
+ */
+export function conferirMensagemComunicacao(d: DadosMensagemComunicacao): {
+  dados: MensagemComunicacaoConferida | null;
   problemas: ProblemaComunicacao[];
 } {
   const evento = eventoDaMensagem(d.tipo);
   const p: ProblemaComunicacao[] = [];
   if (!evento)
     p.push({ campo: 'tipo', mensagem: 'Este tipo segue pela guia de prorrogação, sem mensagem própria.' });
-  if (evento === 'alta' && !d.motivoEncerramento?.trim())
+  if (evento === 'internacao' && !/^[1-5]$/.test(d.tipoInternacao?.trim() ?? ''))
+    p.push({
+      campo: 'tipoInternacao',
+      mensagem: 'A internação precisa do tipo (clínica, cirúrgica, obstétrica, pediátrica ou psiquiátrica).',
+    });
+  if (evento === 'alta' && !/^\d{2}$/.test(d.motivoEncerramento?.trim() ?? ''))
     p.push({ campo: 'motivoEncerramento', mensagem: 'A alta precisa do motivo de encerramento.' });
   if (!/^\d{6}$/.test(d.registroAns))
     p.push({ campo: 'fonte', mensagem: 'O registro da operadora tem 6 dígitos.' });
+  if (!d.numeroCarteira.trim())
+    p.push({ campo: 'carteira', mensagem: 'A internação não tem o número da carteira do beneficiário.' });
   if (Number.isNaN(Date.parse(d.eventoEm)))
     p.push({ campo: 'eventoEm', mensagem: 'Data do evento inválida.' });
-  if (p.length) return { xml: null, problemas: p };
-  const data = d.eventoEm.slice(0, 10);
-  const hora = d.eventoEm.slice(11, 19);
-  const linhas = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<ans:mensagemTISS xmlns:ans="http://www.ans.gov.br/padroes/tiss/schemas">',
-    '  <ans:cabecalho>',
-    '    <ans:identificacaoTransacao>',
-    '      <ans:tipoTransacao>COMUNICACAO_BENEFICIARIO</ans:tipoTransacao>',
-    `      <ans:sequencialTransacao>${esc(d.sequencial)}</ans:sequencialTransacao>`,
-    '    </ans:identificacaoTransacao>',
-    `    <ans:origem><ans:identificacaoPrestador><ans:codigoPrestadorNaOperadora>${esc(d.cnesOuCodigoPrestador)}</ans:codigoPrestadorNaOperadora></ans:identificacaoPrestador></ans:origem>`,
-    `    <ans:destino><ans:registroANS>${esc(d.registroAns)}</ans:registroANS></ans:destino>`,
-    '  </ans:cabecalho>',
-    '  <ans:prestadorParaOperadora>',
-    '    <ans:comunicacaoBeneficiario>',
-    `      <ans:numeroCarteira>${esc(d.numeroCarteira)}</ans:numeroCarteira>`,
-    `      <ans:atendimentoRN>${d.recemNascido ? 'S' : 'N'}</ans:atendimentoRN>`,
-    `      <ans:tipoEvento>${evento === 'internacao' ? 'I' : 'A'}</ans:tipoEvento>`,
-    `      <ans:dataEvento>${data}</ans:dataEvento>`,
-    `      <ans:horaEvento>${hora}</ans:horaEvento>`,
-    ...(d.numeroGuia
-      ? [`      <ans:numeroGuiaOperadora>${esc(d.numeroGuia)}</ans:numeroGuiaOperadora>`]
-      : []),
-    ...(evento === 'internacao' && d.tipoInternacao
-      ? [`      <ans:tipoInternacao>${esc(d.tipoInternacao)}</ans:tipoInternacao>`]
-      : []),
-    ...(evento === 'alta'
-      ? [`      <ans:motivoEncerramento>${esc(d.motivoEncerramento!)}</ans:motivoEncerramento>`]
-      : []),
-    '    </ans:comunicacaoBeneficiario>',
-    '  </ans:prestadorParaOperadora>',
-    '</ans:mensagemTISS>',
-  ];
-  return { xml: linhas.join('\n'), problemas: [] };
+  if (p.length) return { dados: null, problemas: p };
+  return {
+    dados: {
+      numeroCarteira: d.numeroCarteira.trim(),
+      recemNascido: d.recemNascido,
+      dataEvento: d.eventoEm.slice(0, 10),
+      tipoEvento: evento === 'internacao' ? 'I' : 'A',
+      tipoInternacao: evento === 'internacao' ? d.tipoInternacao!.trim() : null,
+      motivoEncerramento: evento === 'alta' ? d.motivoEncerramento!.trim() : null,
+    },
+    problemas: [],
+  };
 }

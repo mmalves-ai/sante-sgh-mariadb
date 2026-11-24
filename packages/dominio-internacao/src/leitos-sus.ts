@@ -85,7 +85,7 @@ export function vinculosVigentes<T extends VinculoLeitoPrograma>(vinculos: reado
 
 /**
  * Confere a entrada de um leito no programa: dentro da vigência da habilitação, sem vínculo vigente do mesmo leito e
- * sem passar da quantidade habilitada na data de início.
+ * sem passar da quantidade habilitada em nenhuma data do período do vínculo.
  */
 export function conferirVinculoLeitoPrograma(entrada: {
   readonly habilitacao: Pick<
@@ -114,11 +114,19 @@ export function conferirVinculoLeitoPrograma(entrada: {
     (novo.vigenciaFim === null || novo.vigenciaFim >= a.vigenciaInicio);
   if (entrada.vinculos.some(sobrepoe))
     p.push({ campo: 'leito', mensagem: 'O leito já está no programa nesse período.' });
-  const vigentes = vinculosVigentes(entrada.vinculos, novo.vigenciaInicio);
-  if (h.quantidadeLeitosHabilitados !== null && vigentes.length + 1 > h.quantidadeLeitosHabilitados)
+  // O teto vale em todo o período do novo vínculo: o pico de vínculos simultâneos acontece no início do novo ou no
+  // início de algum vínculo existente que cai dentro do período dele (um vínculo futuro também conta).
+  const datas = [
+    novo.vigenciaInicio,
+    ...entrada.vinculos
+      .map((v) => v.vigenciaInicio)
+      .filter((d) => d > novo.vigenciaInicio && (novo.vigenciaFim === null || d <= novo.vigenciaFim)),
+  ];
+  const pico = Math.max(...datas.map((d) => vinculosVigentes(entrada.vinculos, d).length));
+  if (h.quantidadeLeitosHabilitados !== null && pico + 1 > h.quantidadeLeitosHabilitados)
     p.push({
       campo: 'leito',
-      mensagem: `A habilitação permite ${h.quantidadeLeitosHabilitados} leito(s) e já tem ${vigentes.length} no programa.`,
+      mensagem: `A habilitação permite ${h.quantidadeLeitosHabilitados} leito(s) e já tem ${pico} no programa nesse período.`,
     });
   return p;
 }

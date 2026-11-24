@@ -3,18 +3,22 @@
 //   - registrar: `comunicacao_internacao_operadora` pendente (internação, fonte pagadora da internação, tipo, número da guia
 //     vem da internação), conferida pelo domínio com os dados da própria internação (fonte de saúde
 //     suplementar com registro, carteira, alta registrada, alta por óbito, uma viva por tipo); nada é redigitado;
-//   - mensagem: a comunicação de beneficiário montada dos dados gravados (carteira, data do evento, guia, motivo de
-//     encerramento da alta pelo código de troca do motivo de saída) — prévia sem gravar;
+//   - mensagem: a comunicação de beneficiário (COMUNICACAO_BENEFICIARIO do TISS 04.03.00, montada pelo gerador do
+//     faturamento com cabeçalho completo e hash do epílogo) a partir dos dados gravados: carteira, recém-nascido pela
+//     carteira da mãe, data do evento, tipo de internação da modalidade e motivo de encerramento da alta pelo código de
+//     troca do motivo de saída — prévia sem gravar;
 //   - transição (enviar, confirmar, rejeitar, falhar, reenviar, cancelar): situação, protocolo, resposta e as datas
 //     de envio e de resposta, com a versão lida; nada é apagado (cancelar guarda o motivo).
+import { ErroLoteTiss, mensagemComunicacaoBeneficiario } from '@sgh/dominio-faturamento';
 import {
   type AcaoComunicacao,
+  conferirMensagemComunicacao,
   conferirNovaComunicacao,
-  montarMensagemComunicacao,
   SITUACOES_COMUNICACAO_VIVAS,
   type SituacaoComunicacaoOperadora,
   TIPOS_COMUNICACAO_OPERADORA,
   type TipoComunicacaoOperadora,
+  tipoInternacaoDaModalidade,
   transicaoComunicacao,
 } from '@sgh/dominio-internacao';
 import type { Leitor } from '@sgh/nucleo';
@@ -75,6 +79,8 @@ interface DadosInternacao {
   readonly altaEm: string | null;
   readonly altaPorObito: boolean;
   readonly motivoTiss: string | null;
+  readonly tipoInternacao: string | null;
+  readonly recemNascido: boolean;
 }
 
 async function lerInternacao(l: Leitor, internacao: number, est: number): Promise<DadosInternacao> {
@@ -84,8 +90,12 @@ async function lerInternacao(l: Leitor, internacao: number, est: number): Promis
             COALESCE((SELECT t.codigo_prestador_operadora FROM configuracao_tiss_fonte_pagadora t
                        WHERE t.fonte_pagadora_id = i.fonte_pagadora_id AND t.estabelecimento_id = i.estabelecimento_id
                        ORDER BY t.id DESC LIMIT 1), e.codigo_cnes, e.codigo) AS prestador,
-            a.alta_em, a.destino, m.tipo_saida, m.codigo_tiss
+            a.alta_em, a.destino, m.tipo_saida, m.codigo_tiss,
+            mi.codigo_tiss AS modalidade_tiss, mi.classificacao AS modalidade_classificacao,
+            EXISTS (SELECT 1 FROM internacao_recem_nascido rn
+                     WHERE rn.propria_internacao_id = i.id AND rn.excluido_em IS NULL) AS recem_nascido
        FROM internacao i
+       JOIN modalidade_internacao mi ON mi.id = i.modalidade_internacao_id
        JOIN fonte_pagadora f ON f.id = i.fonte_pagadora_id
        JOIN estabelecimento e ON e.id = i.estabelecimento_id
        LEFT JOIN alta_hospitalar a ON a.id = (SELECT MAX(x.id) FROM alta_hospitalar x
@@ -108,6 +118,11 @@ async function lerInternacao(l: Leitor, internacao: number, est: number): Promis
     altaEm: iso(r['alta_em']),
     altaPorObito: r['destino'] === 'obito' || r['tipo_saida'] === 'obito',
     motivoTiss: txtOuNull(r['codigo_tiss']),
+    tipoInternacao: tipoInternacaoDaModalidade(
+      txtOuNull(r['modalidade_tiss']),
+      txtOuNull(r['modalidade_classificacao']),
+    ),
+    recemNascido: num(r['recem_nascido']) === 1,
   };
 }
 
@@ -198,18 +213,48 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
       if (!r) throw naoEncontrado('Comunicação');
       const d = await lerInternacao(l, num(r['internacao_id']), est.id);
       const tipo = String(r['tipo']) as TipoComunicacaoOperadora;
-      return montarMensagemComunicacao({
+      const conferida = conferirMensagemComunicacao({
         tipo,
         registroAns: d.registroAns ?? '',
-        cnesOuCodigoPrestador: d.codigoPrestador,
         numeroCarteira: d.carteira ?? '',
-        recemNascido: false,
-        numeroGuia: d.guia,
+        recemNascido: d.recemNascido,
         eventoEm: tipo === 'internacao' ? d.entrada : (d.altaEm ?? d.entrada),
-        tipoInternacao: null,
+        tipoInternacao: d.tipoInternacao,
         motivoEncerramento: d.motivoTiss,
-        sequencial: String(id),
       });
+      const m = conferida.dados;
+      if (!m) return { xml: null, problemas: conferida.problemas };
+      if (!d.codigoPrestador.trim())
+        return {
+          xml: null,
+          problemas: [
+            { campo: 'prestador', mensagem: 'O hospital não tem o código de prestador na operadora.' },
+          ],
+        };
+      const agora = new Date().toISOString();
+      try {
+        const msg = mensagemComunicacaoBeneficiario(
+          {
+            sequencialTransacao: String(id),
+            data: agora.slice(0, 10),
+            hora: agora.slice(11, 19),
+            codigoPrestadorNaOperadora: d.codigoPrestador,
+            registroANS: d.registroAns!,
+          },
+          {
+            beneficiario: { numeroCarteira: m.numeroCarteira, atendimentoRN: m.recemNascido },
+            dataEvento: m.dataEvento,
+            tipoEvento: m.tipoEvento,
+            tipoInternacao: m.tipoInternacao,
+            motivoEncerramento: m.motivoEncerramento,
+          },
+        );
+        return { xml: msg.xml, problemas: [] };
+      } catch (erro) {
+        if (erro instanceof ErroLoteTiss)
+          return { xml: null, problemas: [{ campo: 'mensagem', mensagem: erro.message }] };
+        throw erro;
+      }
     });
   }
 

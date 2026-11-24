@@ -18,7 +18,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (05-SADT linha 6): o item "Limites do pedido de exame" entrou à mão (mesmo motivo); a contagem acompanha.
 // F3.1 (02-CAD linha 28): o item "Calendário de feriados e dias não úteis" entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":420,"M":195,"P":57,"N":168};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":421,"M":195,"P":57,"N":169};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -94,6 +94,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"internacao-e-leitos.nir-e-regulacao.quadro-clinico-e-evolucao-da-regulacao","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","NIR e regulação","Quadro clínico e evolução da regulação"],"titulo":"Quadro clínico e evolução da regulação","selo":"N","fase":7,"rota":"/internacao/controles/regulacao","permissao":"internacao.regulacao.ler"},
   {"id":"internacao-e-leitos.controles-da-internacao.auditoria-do-isolamento","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Auditoria do isolamento"],"titulo":"Auditoria do isolamento","selo":"N","fase":7,"rota":"/internacao/controles/isolamento","permissao":"qualidade.precaucao.ler"},
   {"id":"internacao-e-leitos.controles-da-internacao.formularios-da-declaracao-de-obito","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Controles da internação","Formulários da declaração de óbito"],"titulo":"Formulários da declaração de óbito","selo":"N","fase":7,"rota":"/internacao/controles/formularios-obito","permissao":"pep.declaracaoObito.emitir"},
+  {"id":"internacao-e-leitos.leitos.leitos-do-sistema-publico-habilitacao-e-capacidade","area":"ATENDIMENTO AO PACIENTE","grupo":"Internação e leitos","caminho":["Internação e leitos","Leitos","Leitos do sistema público"],"titulo":"Leitos do sistema público","selo":"N","fase":7,"rota":"/internacao/leitos-sus","permissao":"faturamento.susLeitoUti.ler"},
   {"id":"centro-cirurgico.agenda-cirurgica-mapa-de-salas","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Agenda cirúrgica"],"titulo":"Agenda cirúrgica","selo":"M","fase":2,"rota":"/cirurgia/mapa","permissao":"cirurgia.agenda.ler"},
   {"id":"centro-cirurgico.registro-de-cirurgia-procedimentos-equipe-tempos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Registro de cirurgia"],"titulo":"Registro de cirurgia","selo":"M","fase":2,"rota":"/cirurgia/registro","permissao":"cirurgia.registro.ler"},
   {"id":"centro-cirurgico.salas-cirurgicas-e-usuarios-permitidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Salas cirúrgicas e usuários permitidos"],"titulo":"Salas cirúrgicas e usuários permitidos","selo":"M","fase":2,"rota":"/cirurgia/salas","permissao":"cirurgia.sala.ler"},

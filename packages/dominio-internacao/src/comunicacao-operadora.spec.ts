@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   conferirNovaComunicacao,
   type ContextoNovaComunicacao,
-  montarMensagemComunicacao,
+  conferirMensagemComunicacao,
+  tipoInternacaoDaModalidade,
   transicaoComunicacao,
 } from './comunicacao-operadora.js';
 
@@ -86,30 +87,50 @@ describe('mensagem de comunicação de beneficiário', () => {
   const d = {
     tipo: 'internacao' as const,
     registroAns: '123456',
-    cnesOuCodigoPrestador: 'PRE<1>',
-    numeroCarteira: '0001',
-    recemNascido: false,
-    numeroGuia: 'G1',
+    numeroCarteira: ' 0001 ',
+    recemNascido: true,
     eventoEm: '2025-03-01T10:20:30.000Z',
     tipoInternacao: '1',
     motivoEncerramento: null,
-    sequencial: '9',
   };
-  it('monta a internação com carteira, evento e guia, com escape', () => {
-    const r = montarMensagemComunicacao(d);
-    expect(r.problemas).toEqual([]);
-    expect(r.xml).toContain('<ans:tipoEvento>I</ans:tipoEvento>');
-    expect(r.xml).toContain('<ans:dataEvento>2025-03-01</ans:dataEvento>');
-    expect(r.xml).toContain('PRE&lt;1&gt;');
-    expect(r.xml).toContain('<ans:tipoInternacao>1</ans:tipoInternacao>');
-    expect(r.xml).not.toContain('motivoEncerramento');
+  it('a internação leva carteira, recém-nascido, data, evento I e o tipo de internação', () => {
+    expect(conferirMensagemComunicacao(d)).toEqual({
+      dados: {
+        numeroCarteira: '0001',
+        recemNascido: true,
+        dataEvento: '2025-03-01',
+        tipoEvento: 'I',
+        tipoInternacao: '1',
+        motivoEncerramento: null,
+      },
+      problemas: [],
+    });
+  });
+  it('a internação sem tipo de internação é recusada', () => {
+    expect(conferirMensagemComunicacao({ ...d, tipoInternacao: null }).problemas.map((p) => p.campo)).toEqual(
+      ['tipoInternacao'],
+    );
+    expect(conferirMensagemComunicacao({ ...d, tipoInternacao: '9' }).dados).toBeNull();
   });
   it('alta e óbito saem como alta com motivo; sem motivo, recusa; prorrogação não tem mensagem', () => {
-    expect(montarMensagemComunicacao({ ...d, tipo: 'alta' }).problemas[0]?.campo).toBe('motivoEncerramento');
-    const r = montarMensagemComunicacao({ ...d, tipo: 'obito', motivoEncerramento: '41' });
-    expect(r.xml).toContain('<ans:tipoEvento>A</ans:tipoEvento>');
-    expect(r.xml).toContain('<ans:motivoEncerramento>41</ans:motivoEncerramento>');
-    expect(montarMensagemComunicacao({ ...d, tipo: 'prorrogacao' }).xml).toBeNull();
-    expect(montarMensagemComunicacao({ ...d, registroAns: '12' }).problemas[0]?.campo).toBe('fonte');
+    expect(conferirMensagemComunicacao({ ...d, tipo: 'alta' }).problemas[0]?.campo).toBe(
+      'motivoEncerramento',
+    );
+    const r = conferirMensagemComunicacao({
+      ...d,
+      tipo: 'obito',
+      tipoInternacao: null,
+      motivoEncerramento: '41',
+    });
+    expect(r.dados).toMatchObject({ tipoEvento: 'A', motivoEncerramento: '41', tipoInternacao: null });
+    expect(conferirMensagemComunicacao({ ...d, tipo: 'prorrogacao' }).dados).toBeNull();
+    expect(conferirMensagemComunicacao({ ...d, registroAns: '12' }).problemas[0]?.campo).toBe('fonte');
+    expect(conferirMensagemComunicacao({ ...d, numeroCarteira: ' ' }).problemas[0]?.campo).toBe('carteira');
+  });
+  it('tipo de internação pelo código do cadastro ou pela classificação da modalidade', () => {
+    expect(tipoInternacaoDaModalidade('3', 'clinica')).toBe('3');
+    expect(tipoInternacaoDaModalidade(null, 'cirurgica')).toBe('2');
+    expect(tipoInternacaoDaModalidade('X', 'psiquiatrica')).toBe('5');
+    expect(tipoInternacaoDaModalidade(null, 'outra')).toBeNull();
   });
 });
