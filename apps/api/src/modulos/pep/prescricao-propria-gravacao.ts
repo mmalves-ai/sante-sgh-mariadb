@@ -27,7 +27,7 @@ import { categoriaPorOcupacao, exigeCoassinatura, PLANO_DO_TIPO } from '@sgh/con
 import { z } from 'zod';
 import type { ContextoPrescricao } from './prescricao-porta.js';
 import {
-  categoriaDoDetalhe,
+  conferirCategoriaDoItem,
   conferirItensGravaveis,
   gravarDetalhe,
   produtoDoItem,
@@ -89,7 +89,13 @@ export const CATEGORIAS_PENDENTES = ['pendente', 'atrasado', 'adiado', 'administ
 export const CATEGORIA_DO_PLANO: Readonly<Record<number, string>> = {
   [PLANO_DO_TIPO.medicamento]: 'medicamento',
   [PLANO_DO_TIPO.solucao]: 'solucao',
+  [PLANO_DO_TIPO.jejum]: 'dieta',
+  [PLANO_DO_TIPO['dieta-livre']]: 'dieta',
   [PLANO_DO_TIPO['dieta-oral']]: 'dieta',
+  [PLANO_DO_TIPO['dieta-enteral']]: 'dieta',
+  [PLANO_DO_TIPO.vni]: 'ventilacao',
+  [PLANO_DO_TIPO.vmi]: 'ventilacao',
+  [PLANO_DO_TIPO.glicemia]: 'procedimento',
   [PLANO_DO_TIPO.hemoterapia]: 'hemocomponente',
   [PLANO_DO_TIPO.procedimento]: 'procedimento',
 };
@@ -639,7 +645,7 @@ export class GravacaoPrescricaoPropria {
     e: GravacaoPrescricao,
     ctx: ContextoOperacao,
   ): Promise<{ prescricao: number; horarios: number }> {
-    conferirItensSuportados(e.itens);
+    conferirItensSuportados(e.itens, e.vigencia);
     if (e.sgh.fichas.length > 0) throw recusaPendenteGravacao('fichas de antimicrobiano');
     return this.gravar(
       c,
@@ -1419,8 +1425,11 @@ export async function profissionalDaSessao(
 }
 
 /** Os tipos de item com adaptador (prescricao-propria-itens.ts) e a coerência clínica do domínio. */
-export function conferirItensSuportados(itens: readonly ItemGravacao[]): void {
-  conferirItensGravaveis(itens);
+export function conferirItensSuportados(
+  itens: readonly ItemGravacao[],
+  vigencia: { readonly inicio: string; readonly fim: string } | null = null,
+): void {
+  conferirItensGravaveis(itens, vigencia);
 }
 
 /** SELECT ... FOR UPDATE de uma linha (o núcleo põe a trava; o caminho de leitura recusa FOR UPDATE no texto). */
@@ -1518,20 +1527,24 @@ async function inserirItem(
   sgh: GravacaoPrescricao['sgh'] | undefined,
 ): Promise<{ item: number; horarios: number }> {
   const d = it.detalhe;
-  const categoria = CATEGORIA_DO_PLANO[it.plano] ?? categoriaDoDetalhe(d);
+  const proprio = it.plano >= BASE_PLANO_PROPRIO;
+  const categoria = proprio ? null : (CATEGORIA_DO_PLANO[it.plano] ?? null);
   const produtoItem = produtoDoItem(d);
-  const tipo =
-    it.plano >= BASE_PLANO_PROPRIO
-      ? await tx.uma('SELECT id FROM tipo_item_prescricao WHERE id = ?', [it.plano - BASE_PLANO_PROPRIO])
-      : categoria
-        ? await tx.uma(
-            `SELECT t.id FROM tipo_item_prescricao t WHERE t.categoria = ?
+  const tipo = proprio
+    ? await tx.uma('SELECT id, categoria FROM tipo_item_prescricao WHERE id = ?', [
+        it.plano - BASE_PLANO_PROPRIO,
+      ])
+    : categoria
+      ? await tx.uma(
+          `SELECT t.id FROM tipo_item_prescricao t WHERE t.categoria = ?
               ORDER BY (t.id = (SELECT ip.tipo_item_prescricao_id FROM item_prescritivel ip WHERE ip.id = ?)) DESC,
                        t.ativo DESC, t.id LIMIT 1`,
-            [categoria, produtoItem],
-          )
-        : null;
+          [categoria, produtoItem],
+        )
+      : null;
   if (!tipo) throw recusar(422, 'tipo-item-sem-cadastro', 'O tipo do item não está no cadastro.');
+  // O plano (do legado ou próprio) tem de casar com o detalhe: dieta com tipo de dieta, VMI e VNI com ventilação.
+  conferirCategoriaDoItem(proprio ? String(tipo['categoria']) : categoria!, d);
   if (produtoItem !== null) {
     const produto = await tx.uma('SELECT id FROM item_prescritivel WHERE id = ? AND excluido_em IS NULL', [
       produtoItem,

@@ -8,6 +8,7 @@ import {
 } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { chaveChecagem, documentoPrescricao, type ItemDocumento } from './documento.js';
+import { minLocal } from './tempo.js';
 import { type ContextoMontagem, ErroMontagem, horariosDaGrade, kitQueCasa, montarItem } from './montagem.js';
 
 const VIG = { inicio: '2026-10-21T16:01', fim: '2026-10-22T16:00' };
@@ -101,7 +102,9 @@ describe('montarItem (M24)', () => {
       PAD,
     );
     expect(sn.integracaoEstoque).toBe(false);
-    expect(sn.detalhe).toMatchObject({ seNecessario: [1] });
+    expect(sn.detalhe).toMatchObject({ seNecessario: [1], intervaloMinimoMinutos: 360 });
+    // "Se necessário" não gera horário fixo pendente.
+    expect(sn.horarios).toEqual([]);
     const rel = montarItem(
       item({
         tipo: 'medicamento',
@@ -215,11 +218,12 @@ describe('montarItem (M24)', () => {
         via: 'EV',
         frequencia: 4,
         componentes: [
-          { produto: 504, dose: 500, unidade: 'ML', principal: true },
-          { produto: 508, dose: 10, unidade: 'ML', principal: false },
+          { produto: 504, dose: 500, unidade: 'ML', principal: true, etapa: 1 },
+          { produto: 508, dose: 10, unidade: 'ML', principal: false, etapa: 1 },
+          { produto: 504, dose: 210, unidade: 'ML', principal: true, etapa: 2 },
         ],
         etapas: [
-          { etapa: 1, velocidade: 42, unidadeInfusao: 1 },
+          { etapa: 1, velocidade: 125, unidadeInfusao: 1 },
           { etapa: 2, velocidade: 21, unidadeInfusao: 1 },
         ],
       }),
@@ -229,8 +233,13 @@ describe('montarItem (M24)', () => {
     expect(sol.detalhe).toMatchObject({ tipo: 'solucao', unidade: 'ML', tipoInfusao: 1 });
     if (sol.detalhe.tipo === 'solucao') {
       expect(sol.detalhe.etapas).toHaveLength(2);
-      expect(sol.detalhe.etapas[1]!.fim).toBe('2026-10-22T16:00');
-      expect(sol.detalhe.etapas[0]!.volume).toBe(500);
+      // Cada componente na sua etapa; etapas em sequência, com duração = volume ÷ velocidade (4 h e 10 h).
+      const [e1, e2] = sol.detalhe.etapas;
+      expect(sol.detalhe.componentes.map((x) => x.etapa)).toEqual([1, 1, 2]);
+      expect([e1!.volume, e2!.volume]).toEqual([500, 210]);
+      expect(e1!.fim).toBe(e2!.inicio);
+      expect(minLocal(e1!.fim) - minLocal(e1!.inicio)).toBe(240);
+      expect(minLocal(e2!.fim) - minLocal(e2!.inicio)).toBe(600);
     }
     const vmi = montarItem(
       item({ tipo: 'vmi', viaAerea: 1, modo: 1, frequencia: 4, fio2: 40, peep: 5, pressaoInspiratoria: 20 }),
@@ -242,7 +251,11 @@ describe('montarItem (M24)', () => {
       unidade: 'ML',
       unidadePressao: 1,
       unidadeFio2: 2,
-      frequenciaRespiratoria: 0,
+      // Sem sentinela: o que não foi prescrito fica nulo.
+      frequenciaRespiratoria: null,
+      volumeCorrente: null,
+      tempoInspiratorio: null,
+      tempoExpiratorio: null,
     });
     const vmiSem = montarItem(item({ tipo: 'vmi', viaAerea: 1, modo: 1, frequencia: null }), ctx, PAD);
     expect(vmiSem).toMatchObject({ numDose: 1, detalhe: { unidadePressao: null, unidadeFio2: null } });

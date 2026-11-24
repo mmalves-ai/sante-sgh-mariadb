@@ -409,6 +409,13 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
         .nullable(),
       justificativaAlergia: textoCp1252(255).nullable(),
       seNecessario: z.array(ID).max(5),
+      /** "Se necessário": intervalo mínimo entre doses (min) e dose máxima no período; nulos sem condição. */
+      intervaloMinimoMinutos: z.number().int().positive().max(2_880).nullable().default(null),
+      doseMaxima: z
+        .object({ dose: QTDE, periodoHoras: z.number().int().min(1).max(72) })
+        .strict()
+        .nullable()
+        .default(null),
       kit: z.array(esquemaKit).max(30),
     })
     .strict(),
@@ -438,9 +445,11 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
   z
     .object({
       tipo: z.literal('dieta'),
+      /** Jejum e dieta livre sem quantidade; oral medida e enteral com quantidade (regra no domínio). */
+      classe: z.enum(['jejum', 'livre', 'oral', 'enteral']),
       dieta: ID,
       viaDieta: ID.nullable(),
-      quantidade: QTDE,
+      quantidade: QTDE.nullable(),
       unidade: UNIDADE.nullable(),
       tipoInfusao: ID.nullable(),
       velocidade: QTDE.nullable(),
@@ -484,15 +493,16 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
       viaAerea: ID,
       modo: ID,
       unidade: UNIDADE,
-      frequenciaRespiratoria: z.number().int().min(0).max(80),
-      peep: z.number().int().min(0).max(40),
-      volumeCorrente: QTDE,
-      pressao: z.number().int().min(0).max(80).nullable(),
+      /** Parâmetro não prescrito vem nulo e fica nulo (sem sentinela); faixas clínicas no domínio. */
+      frequenciaRespiratoria: z.number().int().min(0).max(80).nullable(),
+      peep: z.number().min(0).max(40).nullable(),
+      volumeCorrente: QTDE.nullable(),
+      pressao: z.number().min(0).max(80).nullable(),
       unidadePressao: ID.nullable(),
       fio2: z.number().int().min(0).max(100).nullable(),
       unidadeFio2: ID.nullable(),
-      tempoInspiratorio: QTDE,
-      tempoExpiratorio: QTDE,
+      tempoInspiratorio: QTDE.nullable(),
+      tempoExpiratorio: QTDE.nullable(),
     })
     .strict(),
   z
@@ -500,8 +510,12 @@ export const esquemaDetalheGravacao = z.discriminatedUnion('tipo', [
       tipo: z.literal('vni'),
       viaAerea: ID,
       modo: ID,
-      pressaoInspiratoria: z.number().int().min(0).max(80).nullable(),
+      pressaoInspiratoria: z.number().min(0).max(80).nullable(),
       unidadePressaoInspiratoria: ID.nullable(),
+      /** EPAP (CPAP quando só ele), pressão de suporte e duração da sessão. */
+      pressaoExpiratoria: z.number().min(0).max(40).nullable().default(null),
+      pressaoSuporte: z.number().min(0).max(40).nullable().default(null),
+      duracaoMinutos: z.number().int().positive().max(1_440).nullable().default(null),
       fio2: z.number().int().min(0).max(100).nullable(),
       unidadeFio2: ID.nullable(),
     })

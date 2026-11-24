@@ -234,7 +234,12 @@ export const esquemaMedicamento = z.object({
   relativos: z.array(ID).max(13).default([]),
   /** "Se necessário": condição objetiva (motivos do cadastro) e intervalo mínimo em horas (regra 9). */
   seNecessario: z
-    .object({ motivos: z.array(ID).min(1).max(5), intervaloMinimoHoras: z.number().positive().max(48) })
+    .object({
+      motivos: z.array(ID).min(1).max(5),
+      intervaloMinimoHoras: z.number().positive().max(48),
+      /** Dose máxima no período (horas), opcional. */
+      doseMaxima: z.object({ dose: QUANTIDADE, periodoHoras: z.number().int().min(1).max(72) }).optional(),
+    })
     .optional(),
   iniciarAgora: z.boolean().default(false),
   /** A enfermagem não ajusta o esquema de horários. */
@@ -249,6 +254,8 @@ export const esquemaComponenteSolucao = z.object({
   dose: QUANTIDADE,
   unidade: UNIDADE,
   principal: z.boolean(),
+  /** Etapa do esquema em que o componente entra (ausente: a primeira). */
+  etapa: z.number().int().min(1).max(24).optional(),
 });
 
 export const esquemaSolucao = z.object({
@@ -342,6 +349,11 @@ export const esquemaVentilacao = z.object({
   peep: z.number().min(0).max(40).optional(),
   volumeCorrente: z.number().min(0).max(3_000).optional(),
   frequenciaRespiratoria: z.number().int().min(0).max(80).optional(),
+  /** VMI: tempos inspiratório e expiratório (s); VNI: pressão de suporte e duração da sessão (min). */
+  tempoInspiratorio: z.number().positive().max(10).optional(),
+  tempoExpiratorio: z.number().positive().max(10).optional(),
+  pressaoSuporte: z.number().min(0).max(40).optional(),
+  duracaoMinutos: z.number().int().positive().max(1_440).optional(),
 });
 
 export const esquemaHemoterapia = z.object({

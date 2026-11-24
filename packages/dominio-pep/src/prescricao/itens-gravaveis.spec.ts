@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { conferirItemGravavel, MENSAGENS_ITEM_GRAVAVEL } from './itens-gravaveis.js';
+import {
+  conferirCategoriaDoDetalhe,
+  conferirItemGravavel,
+  conferirVentilacaoNoCadastro,
+  MENSAGENS_ITEM_GRAVAVEL,
+  mlPorHoraDaSigla,
+} from './itens-gravaveis.js';
 
 const sol = (over: Record<string, unknown> = {}) => ({
   tipo: 'solucao' as const,
@@ -9,33 +15,79 @@ const sol = (over: Record<string, unknown> = {}) => ({
     { dose: 500, principal: true, etapa: 2 },
   ],
   etapas: [
-    { etapa: 1, inicio: '2026-11-24T08:00', fim: '2026-11-24T14:00', velocidade: 83, volume: 500 },
-    { etapa: 2, inicio: '2026-11-24T14:00', fim: '2026-11-24T20:00', velocidade: 83, volume: 500 },
+    {
+      etapa: 1,
+      inicio: '2026-11-24T08:00',
+      fim: '2026-11-24T12:00',
+      velocidade: 125,
+      unidadeInfusao: 1,
+      volume: 500,
+    },
+    {
+      etapa: 2,
+      inicio: '2026-11-24T12:00',
+      fim: '2026-11-24T22:00',
+      velocidade: 50,
+      unidadeInfusao: 1,
+      volume: 500,
+    },
   ],
   ...over,
 });
+const mlh = () => 1;
 
 describe('conferência do item antes de gravar (03-PEP L105)', () => {
   it('medicamento: dose positiva e condições de "se necessário" sem repetição', () => {
-    expect(conferirItemGravavel({ tipo: 'medicamento', dose: 1, seNecessario: [1, 2] })).toBeNull();
+    const sn = { tipo: 'medicamento' as const, dose: 1, seNecessario: [1, 2], intervaloMinimoMinutos: 360 };
+    expect(conferirItemGravavel(sn)).toBeNull();
     expect(conferirItemGravavel({ tipo: 'medicamento', dose: 0, seNecessario: [] })).toBe('dose-invalida');
-    expect(conferirItemGravavel({ tipo: 'medicamento', dose: 1, seNecessario: [3, 3] })).toBe(
-      'se-necessario-repetido',
-    );
+    expect(conferirItemGravavel({ ...sn, seNecessario: [3, 3] })).toBe('se-necessario-repetido');
   });
 
-  it('dieta: quantidade, unidade da velocidade e característica única', () => {
+  it('"se necessário": intervalo mínimo obrigatório, sem horário fixo e dose máxima coerente', () => {
+    const sn = { tipo: 'medicamento' as const, dose: 500, seNecessario: [1], intervaloMinimoMinutos: 360 };
+    expect(conferirItemGravavel({ ...sn, intervaloMinimoMinutos: null })).toBe('se-necessario-sem-intervalo');
+    expect(conferirItemGravavel({ ...sn, intervaloMinimoMinutos: 0 })).toBe('se-necessario-sem-intervalo');
+    expect(conferirItemGravavel(sn, { horarios: 1 })).toBe('se-necessario-com-horario');
+    expect(conferirItemGravavel(sn, { horarios: 0 })).toBeNull();
+    expect(conferirItemGravavel({ ...sn, doseMaxima: { dose: 2000, periodoHoras: 24 } })).toBeNull();
+    expect(conferirItemGravavel({ ...sn, doseMaxima: { dose: 100, periodoHoras: 24 } })).toBe(
+      'se-necessario-dose-maxima-invalida',
+    );
+    expect(conferirItemGravavel({ ...sn, doseMaxima: { dose: 2000, periodoHoras: 0 } })).toBe(
+      'se-necessario-dose-maxima-invalida',
+    );
+    expect(conferirItemGravavel({ ...sn, seNecessario: [] })).toBe('se-necessario-sem-condicao');
+    // Medicamento de horário fixo segue com horários.
+    expect(
+      conferirItemGravavel({ tipo: 'medicamento', dose: 1, seNecessario: [] }, { horarios: 4 }),
+    ).toBeNull();
+  });
+
+  it('dieta por classe: jejum e dieta livre sem quantidade; oral medida e enteral com quantidade', () => {
     const base = {
       tipo: 'dieta' as const,
+      classe: 'enteral' as const,
       quantidade: 1500,
       velocidade: null,
       unidadeInfusao: null,
       caracteristicas: [],
     };
     expect(conferirItemGravavel(base)).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'jejum', quantidade: null })).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'livre', quantidade: null })).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'jejum', quantidade: 0 })).toBe(
+      'dieta-quantidade-indevida',
+    );
+    expect(conferirItemGravavel({ ...base, classe: 'oral', quantidade: null })).toBe(
+      'dieta-quantidade-invalida',
+    );
     expect(conferirItemGravavel({ ...base, quantidade: 0 })).toBe('dieta-quantidade-invalida');
     expect(conferirItemGravavel({ ...base, velocidade: 60 })).toBe('dieta-velocidade-sem-unidade');
     expect(conferirItemGravavel({ ...base, velocidade: 60, unidadeInfusao: 2 })).toBeNull();
+    expect(conferirItemGravavel({ ...base, classe: 'oral', velocidade: 60, unidadeInfusao: 2 })).toBe(
+      'dieta-velocidade-indevida',
+    );
     expect(
       conferirItemGravavel({
         ...base,
@@ -52,27 +104,155 @@ describe('conferência do item antes de gravar (03-PEP L105)', () => {
     expect(conferirItemGravavel(sol({ componentes: [{ dose: 10, principal: false, etapa: 1 }] }))).toBe(
       'solucao-sem-principal',
     );
-    const e1 = sol().etapas[0]!;
+    const [e1, e2] = sol().etapas;
     expect(conferirItemGravavel(sol({ etapas: [e1, e1] }))).toBe('solucao-etapa-repetida');
     expect(conferirItemGravavel(sol({ etapas: [e1] }))).toBe('solucao-componente-sem-etapa');
-    expect(conferirItemGravavel(sol({ etapas: [...sol().etapas, { ...e1, etapa: 3 }] }))).toBe(
+    expect(conferirItemGravavel(sol({ etapas: [e1, e2, { ...e2!, etapa: 3 }] }))).toBe(
       'solucao-etapa-sem-componente',
     );
-    expect(conferirItemGravavel(sol({ etapas: [{ ...e1, fim: '2026-11-24T07:00' }, sol().etapas[1]] }))).toBe(
+    expect(conferirItemGravavel(sol({ etapas: [{ ...e1!, fim: '2026-11-24T07:00' }, e2] }))).toBe(
       'solucao-etapa-fim-antes-inicio',
     );
-    expect(conferirItemGravavel(sol({ etapas: [{ ...e1, volume: 0 }, sol().etapas[1]] }))).toBe(
-      'solucao-etapa-invalida',
-    );
+    expect(conferirItemGravavel(sol({ etapas: [{ ...e1!, volume: 0 }, e2] }))).toBe('solucao-etapa-invalida');
   });
 
-  it('ventilação: FiO2 de 21% a 100% e parâmetros na faixa clínica', () => {
-    const vmi = { tipo: 'vmi' as const, frequenciaRespiratoria: 16, peep: 5, volumeCorrente: 450, fio2: 40 };
+  it('solução: sem sobreposição, dentro da vigência e volume = velocidade × duração', () => {
+    const [e1, e2] = sol().etapas;
+    const vig = { inicio: '2026-11-24T08:00', fim: '2026-11-25T08:00' };
+    expect(conferirItemGravavel(sol(), { vigencia: vig, mlPorHora: mlh })).toBeNull();
+    expect(conferirItemGravavel(sol({ etapas: [e1, { ...e2!, inicio: '2026-11-24T11:00' }] }))).toBe(
+      'solucao-etapa-sobreposta',
+    );
+    expect(conferirItemGravavel(sol(), { vigencia: { ...vig, fim: '2026-11-24T20:00' } })).toBe(
+      'solucao-etapa-fora-da-vigencia',
+    );
+    // 500 mL a 125 mL/h em 24 h não confere (seriam 3.000 mL).
+    const longa = { ...e1!, fim: '2026-11-25T08:00' };
+    expect(
+      conferirItemGravavel(
+        sol({ etapas: [longa], componentes: [{ dose: 500, principal: true, etapa: 1 }] }),
+        {
+          mlPorHora: mlh,
+        },
+      ),
+    ).toBe('solucao-volume-incoerente');
+    // 83,3 mL/h em 6 h = 499,8 mL: dentro da tolerância.
+    const arred = { ...e1!, fim: '2026-11-24T14:00', velocidade: 83.3 };
+    expect(
+      conferirItemGravavel(
+        sol({ etapas: [arred], componentes: [{ dose: 500, principal: true, etapa: 1 }] }),
+        {
+          mlPorHora: mlh,
+        },
+      ),
+    ).toBeNull();
+    // Gotas por minuto: 41,7 gt/min ≈ 125 mL/h.
+    const gotas = { ...e1!, velocidade: 41.7 };
+    expect(
+      conferirItemGravavel(
+        sol({ etapas: [gotas], componentes: [{ dose: 500, principal: true, etapa: 1 }] }),
+        {
+          mlPorHora: () => 3,
+        },
+      ),
+    ).toBeNull();
+    // Unidade sem conversão: não confere volume.
+    expect(
+      conferirItemGravavel(
+        sol({ etapas: [longa], componentes: [{ dose: 500, principal: true, etapa: 1 }] }),
+        {
+          mlPorHora: () => null,
+        },
+      ),
+    ).toBeNull();
+    expect([mlPorHoraDaSigla('mL/h'), mlPorHoraDaSigla('gts/min'), mlPorHoraDaSigla('mgts/min')]).toEqual([
+      1, 3, 1,
+    ]);
+    expect(mlPorHoraDaSigla('mg/kg/min')).toBeNull();
+  });
+
+  it('VMI: sem sentinela, faixas clínicas e alvo por volume ou por pressão', () => {
+    const vmi = {
+      tipo: 'vmi' as const,
+      frequenciaRespiratoria: 16,
+      peep: 5,
+      volumeCorrente: 450,
+      pressao: null,
+      tempoInspiratorio: null,
+      tempoExpiratorio: null,
+      fio2: 40,
+    };
     expect(conferirItemGravavel(vmi)).toBeNull();
+    // Pressão controlada sem volume corrente.
+    expect(conferirItemGravavel({ ...vmi, volumeCorrente: null, pressao: 18 })).toBeNull();
+    expect(conferirItemGravavel({ ...vmi, volumeCorrente: null })).toBe('ventilacao-sem-alvo');
     expect(conferirItemGravavel({ ...vmi, fio2: 15 })).toBe('ventilacao-fio2-fora-da-faixa');
-    expect(conferirItemGravavel({ ...vmi, volumeCorrente: 0 })).toBe('ventilacao-parametro-invalido');
-    expect(conferirItemGravavel({ tipo: 'vni', fio2: null })).toBeNull();
-    expect(conferirItemGravavel({ tipo: 'vni', fio2: 101 })).toBe('ventilacao-fio2-fora-da-faixa');
+    for (const ruim of [
+      { volumeCorrente: 0 },
+      { volumeCorrente: 1_000_000 },
+      { frequenciaRespiratoria: 0 },
+      { frequenciaRespiratoria: 61 },
+      { peep: 0 },
+      { peep: 31 },
+      { tempoInspiratorio: 0 },
+      { tempoExpiratorio: 0 },
+      { pressao: 2 },
+    ])
+      expect(conferirItemGravavel({ ...vmi, ...ruim })).toBe('ventilacao-parametro-invalido');
+    // Parâmetros não informados passam nulos.
+    expect(conferirItemGravavel({ ...vmi, frequenciaRespiratoria: null, peep: null })).toBeNull();
+  });
+
+  it('VNI: EPAP ou IPAP, IPAP maior que EPAP, pressão de suporte e duração da sessão', () => {
+    const vni = {
+      tipo: 'vni' as const,
+      pressaoInspiratoria: 12,
+      pressaoExpiratoria: 6,
+      pressaoSuporte: null,
+      duracaoMinutos: 120,
+      fio2: null,
+    };
+    expect(conferirItemGravavel(vni)).toBeNull();
+    expect(conferirItemGravavel({ ...vni, pressaoInspiratoria: null })).toBeNull(); // CPAP
+    expect(conferirItemGravavel({ ...vni, pressaoInspiratoria: null, pressaoExpiratoria: null })).toBe(
+      'ventilacao-sem-pressao',
+    );
+    expect(conferirItemGravavel({ ...vni, pressaoInspiratoria: 6 })).toBe('ventilacao-ipap-menor-epap');
+    expect(conferirItemGravavel({ ...vni, fio2: 101 })).toBe('ventilacao-fio2-fora-da-faixa');
+    expect(conferirItemGravavel({ ...vni, duracaoMinutos: 2_000 })).toBe('ventilacao-parametro-invalido');
+    expect(conferirItemGravavel({ ...vni, pressaoExpiratoria: 2 })).toBe('ventilacao-parametro-invalido');
+  });
+
+  it('ventilação contra o cadastro: via aérea da modalidade e FR em modo controlado', () => {
+    const inv = { viaInvasiva: true, modoControlado: true };
+    expect(conferirVentilacaoNoCadastro({ tipo: 'vmi', frequenciaRespiratoria: 16 }, inv)).toBeNull();
+    expect(conferirVentilacaoNoCadastro({ tipo: 'vmi', frequenciaRespiratoria: null }, inv)).toBe(
+      'ventilacao-fr-obrigatoria',
+    );
+    expect(
+      conferirVentilacaoNoCadastro(
+        { tipo: 'vmi', frequenciaRespiratoria: null },
+        { ...inv, modoControlado: false },
+      ),
+    ).toBeNull();
+    expect(
+      conferirVentilacaoNoCadastro(
+        { tipo: 'vmi', frequenciaRespiratoria: 16 },
+        { ...inv, viaInvasiva: false },
+      ),
+    ).toBe('ventilacao-via-incoerente');
+    expect(conferirVentilacaoNoCadastro({ tipo: 'vni' }, inv)).toBe('ventilacao-via-incoerente');
+    expect(
+      conferirVentilacaoNoCadastro({ tipo: 'vni' }, { viaInvasiva: false, modoControlado: false }),
+    ).toBeNull();
+  });
+
+  it('o tipo de lançamento casa com o detalhe', () => {
+    expect(conferirCategoriaDoDetalhe('dieta', 'dieta')).toBeNull();
+    expect(conferirCategoriaDoDetalhe('ventilacao', 'vmi')).toBeNull();
+    expect(conferirCategoriaDoDetalhe('medicamento', 'dieta')).toBe('tipo-item-incoerente');
+    expect(conferirCategoriaDoDetalhe('medicamento', 'vni')).toBe('tipo-item-incoerente');
+    expect(conferirCategoriaDoDetalhe('dieta', 'desconhecido')).toBe('tipo-item-incoerente');
   });
 
   it('toda recusa tem mensagem', () => {

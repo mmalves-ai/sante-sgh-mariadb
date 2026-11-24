@@ -2,7 +2,10 @@
 // de tipo de item ainda sem adaptador e as leituras sobre um Leitor dublê (sem banco).
 import { ErroOperacao, type Executor, type Leitor } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
+import { PLANO_DO_TIPO } from '@sgh/contratos';
+import { conferirCategoriaDoItem } from './prescricao-propria-itens.js';
 import {
+  CATEGORIA_DO_PLANO,
   conferirItensSuportados,
   decisaoGravada,
   GravacaoPrescricaoPropria,
@@ -115,6 +118,7 @@ describe('apoio da gravação da prescrição própria', () => {
     // Dieta, solução, ventilação e "se necessário" gravam; a coerência clínica do domínio vira 422.
     const dieta = {
       tipo: 'dieta',
+      classe: 'enteral',
       quantidade: 1500,
       velocidade: 60,
       unidadeInfusao: null,
@@ -130,6 +134,73 @@ describe('apoio da gravação da prescrição própria', () => {
       '501:pendente-modelo-proprio',
     );
     expect(codigo(() => conferirItensSuportados([item({ ...med, dose: 0 })]))).toBe('422:dose-invalida');
+    // Jejum e dieta livre gravam sem quantidade (antes vinham com o sentinela 0 e voltavam 422).
+    const jejum = { ...dieta, classe: 'jejum', quantidade: null, velocidade: null };
+    expect(codigo(() => conferirItensSuportados([item(jejum)]))).toBeNull();
+    expect(codigo(() => conferirItensSuportados([item({ ...jejum, classe: 'livre' })]))).toBeNull();
+    // "Se necessário" com horário fixo pendente é recusado.
+    const sn = { ...med, seNecessario: [1], intervaloMinimoMinutos: 360 };
+    expect(
+      codigo(() =>
+        conferirItensSuportados([
+          { ...item(sn), horarios: [{ dataHora: '2026-11-24T10:00', relativo: null }] },
+        ]),
+      ),
+    ).toBe('422:se-necessario-com-horario');
+    // Etapa da solução fora da vigência da prescrição.
+    const etapa = {
+      etapa: 1,
+      inicio: '2026-11-24T08:00',
+      fim: '2026-11-24T12:00',
+      velocidade: 125,
+      unidadeInfusao: 1,
+      volume: 500,
+    };
+    const solucao = {
+      tipo: 'solucao',
+      componentes: [{ dose: 500, principal: true, etapa: 1 }],
+      etapas: [etapa],
+    };
+    expect(
+      codigo(() =>
+        conferirItensSuportados([item(solucao)], { inicio: '2026-11-24T09:00', fim: '2026-11-25T09:00' }),
+      ),
+    ).toBe('422:solucao-etapa-fora-da-vigencia');
+    // VMI a pressão (sem volume corrente) passa; sem alvo nenhum, não.
+    const vmi = {
+      tipo: 'vmi',
+      frequenciaRespiratoria: 16,
+      peep: 5,
+      volumeCorrente: null,
+      pressao: 18,
+      tempoInspiratorio: null,
+      tempoExpiratorio: null,
+      fio2: 40,
+    };
+    expect(codigo(() => conferirItensSuportados([item(vmi)]))).toBeNull();
+    expect(codigo(() => conferirItensSuportados([item({ ...vmi, pressao: null })]))).toBe(
+      '422:ventilacao-sem-alvo',
+    );
+  });
+
+  it('o tipo de lançamento casa com o detalhe (plano de medicamento com dieta ou ventilação é recusado)', () => {
+    const codigo = (f: () => void) => {
+      try {
+        f();
+        return null;
+      } catch (e) {
+        return e instanceof ErroOperacao ? `${e.problema.status}:${e.problema.codigo}` : 'outro';
+      }
+    };
+    expect(CATEGORIA_DO_PLANO[PLANO_DO_TIPO.jejum]).toBe('dieta');
+    expect(CATEGORIA_DO_PLANO[PLANO_DO_TIPO.vmi]).toBe('ventilacao');
+    expect(codigo(() => conferirCategoriaDoItem('medicamento', { tipo: 'dieta' } as never))).toBe(
+      '422:tipo-item-incoerente',
+    );
+    expect(codigo(() => conferirCategoriaDoItem('medicamento', { tipo: 'vmi' } as never))).toBe(
+      '422:tipo-item-incoerente',
+    );
+    expect(codigo(() => conferirCategoriaDoItem('ventilacao', { tipo: 'vni' } as never))).toBeNull();
   });
 });
 

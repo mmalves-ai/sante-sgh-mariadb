@@ -34,7 +34,16 @@ export interface ContextoMontagem {
   readonly kit: (produto: number, via: string, unidade: string, dose: number) => readonly KitMontado[];
   /** Retrato do CID da justificativa do não padronizado. */
   readonly retratoCid: (cid: string) => number | null;
+  /** mL/h por unidade de velocidade de infusão (ausente: mL/h). */
+  readonly mlPorHora?: (unidadeInfusao: number) => number | null;
 }
+
+const CLASSE_DA_DIETA = {
+  jejum: 'jejum',
+  'dieta-livre': 'livre',
+  'dieta-oral': 'oral',
+  'dieta-enteral': 'enteral',
+} as const;
 
 export interface HorarioMontado {
   readonly dataHora: string;
@@ -53,6 +62,8 @@ export type DetalheMontado =
       naoPadronizado: { justificativa: string; htcid: number } | null;
       justificativaAlergia: string | null;
       seNecessario: number[];
+      intervaloMinimoMinutos: number | null;
+      doseMaxima: { dose: number; periodoHoras: number } | null;
       kit: KitMontado[];
     }
   | {
@@ -65,9 +76,10 @@ export type DetalheMontado =
     }
   | {
       tipo: 'dieta';
+      classe: 'jejum' | 'livre' | 'oral' | 'enteral';
       dieta: number;
       viaDieta: number | null;
-      quantidade: number;
+      quantidade: number | null;
       unidade: string | null;
       tipoInfusao: number | null;
       velocidade: number | null;
@@ -95,15 +107,15 @@ export type DetalheMontado =
       viaAerea: number;
       modo: number;
       unidade: string;
-      frequenciaRespiratoria: number;
-      peep: number;
-      volumeCorrente: number;
+      frequenciaRespiratoria: number | null;
+      peep: number | null;
+      volumeCorrente: number | null;
       pressao: number | null;
       unidadePressao: number | null;
       fio2: number | null;
       unidadeFio2: number | null;
-      tempoInspiratorio: number;
-      tempoExpiratorio: number;
+      tempoInspiratorio: number | null;
+      tempoExpiratorio: number | null;
     }
   | {
       tipo: 'vni';
@@ -111,6 +123,9 @@ export type DetalheMontado =
       modo: number;
       pressaoInspiratoria: number | null;
       unidadePressaoInspiratoria: number | null;
+      pressaoExpiratoria: number | null;
+      pressaoSuporte: number | null;
+      duracaoMinutos: number | null;
       fio2: number | null;
       unidadeFio2: number | null;
     }
@@ -183,11 +198,14 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
   switch (d.tipo) {
     case 'medicamento': {
       const kit = [...c.kit(d.item.produto, d.via, d.unidade, d.dose)];
-      const horarios = previstos({
-        iniciarAgora: d.iniciarAgora,
-        primeiroHorario: d.primeiroHorario ?? null,
-        relativos: d.relativos,
-      });
+      // "Se necessário" não tem horário fixo pendente: a dose é registrada quando a condição ocorre.
+      const horarios = d.seNecessario
+        ? []
+        : previstos({
+            iniciarAgora: d.iniciarAgora,
+            primeiroHorario: d.primeiroHorario ?? null,
+            relativos: d.relativos,
+          });
       const np = d.item.naoPadronizado;
       const htcid = np ? c.retratoCid(np.cid) : null;
       if (np && htcid === null)
@@ -214,6 +232,10 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
               .join('; ')
               .slice(0, 255) || null,
           seNecessario: d.seNecessario?.motivos ?? [],
+          intervaloMinimoMinutos: d.seNecessario
+            ? Math.round(d.seNecessario.intervaloMinimoHoras * 60)
+            : null,
+          doseMaxima: d.seNecessario?.doseMaxima ?? null,
           kit,
         },
         horarios,
@@ -244,11 +266,14 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
               }))
             : [],
         },
-        horarios: previstos({
-          iniciarAgora: d.iniciarAgora,
-          primeiroHorario: d.tipo === 'procedimento' ? (d.primeiroHorario ?? null) : null,
-          relativos: d.tipo === 'procedimento' ? d.relativos : [],
-        }),
+        horarios:
+          d.tipo === 'procedimento' && d.seNecessario
+            ? []
+            : previstos({
+                iniciarAgora: d.iniciarAgora,
+                primeiroHorario: d.tipo === 'procedimento' ? (d.primeiroHorario ?? null) : null,
+                relativos: d.tipo === 'procedimento' ? d.relativos : [],
+              }),
       };
     }
     case 'jejum':
@@ -268,9 +293,11 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
         integracaoEstoque: false,
         detalhe: {
           tipo: 'dieta',
+          classe: CLASSE_DA_DIETA[d.tipo],
           dieta: d.dieta,
           viaDieta: enteral?.viaDieta ?? null,
-          quantidade: d.tipo === 'dieta-oral' || d.tipo === 'dieta-enteral' ? d.quantidade : 0,
+          // Jejum e dieta livre não têm quantidade: nulo, nunca o 0.
+          quantidade: d.tipo === 'dieta-oral' || d.tipo === 'dieta-enteral' ? d.quantidade : null,
           unidade: enteral?.unidade ?? null,
           tipoInfusao: enteral?.tipoInfusao ?? null,
           velocidade: enteral?.velocidade ?? null,
@@ -284,20 +311,24 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
       };
     }
     case 'solucao': {
-      const doses = Math.max(1, f.doses ?? 1);
-      const ini = Math.max(minLocal(c.vigencia.inicio), minLocal(c.agora));
-      const fim = minLocal(c.vigencia.fim);
-      const passo = Math.floor((fim - ini + 1) / Math.max(d.etapas.length, 1));
-      const etapas = d.etapas.map((e, k) => {
-        const a = ini + k * passo;
-        const b = k === d.etapas.length - 1 ? fim : a + passo - 1;
+      // Cada componente na etapa que a tela indicou (sem indicação: a primeira). As etapas correm em sequência a
+      // partir do início do item, cada uma com a duração do seu volume na velocidade digitada (volume = velocidade ×
+      // tempo); a conferência do domínio recusa a etapa que sair da vigência.
+      const primeiraEtapa = d.etapas[0]?.etapa ?? 1;
+      const etapaDe = (cp: { etapa?: number | undefined }) => cp.etapa ?? primeiraEtapa;
+      let cursor = Math.max(minLocal(c.vigencia.inicio), minLocal(c.agora));
+      const etapas = d.etapas.map((e) => {
         const volume = d.componentes
-          .filter((cp) => cp.principal && doses > 0)
+          .filter((cp) => cp.principal && etapaDe(cp) === e.etapa)
           .reduce((s, cp) => s + cp.dose, 0);
+        const fator = c.mlPorHora?.(e.unidadeInfusao) ?? 1;
+        const minutos = Math.max(1, Math.round((volume / (e.velocidade * fator)) * 60));
+        const a = cursor;
+        cursor += minutos;
         return {
           etapa: e.etapa,
           inicio: localDe(a),
-          fim: localDe(b),
+          fim: localDe(cursor),
           velocidade: e.velocidade,
           unidadeInfusao: e.unidadeInfusao,
           volume,
@@ -319,7 +350,7 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
             dose: cp.dose,
             unidade: cp.unidade,
             principal: cp.principal,
-            etapa: d.etapas[0]?.etapa ?? 1,
+            etapa: etapaDe(cp),
           })),
           etapas,
         },
@@ -337,15 +368,16 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
           viaAerea: d.viaAerea,
           modo: d.modo,
           unidade: p.unidadeVolume,
-          frequenciaRespiratoria: d.frequenciaRespiratoria ?? 0,
-          peep: d.peep ?? 0,
-          volumeCorrente: d.volumeCorrente ?? 0,
+          // Parâmetro não prescrito fica nulo (sem sentinela 0 nem tempo inventado).
+          frequenciaRespiratoria: d.frequenciaRespiratoria ?? null,
+          peep: d.peep ?? null,
+          volumeCorrente: d.volumeCorrente ?? null,
           pressao: d.pressaoInspiratoria ?? null,
           unidadePressao: d.pressaoInspiratoria === undefined ? null : p.unidadePressao,
           fio2: d.fio2 ?? null,
           unidadeFio2: d.fio2 === undefined ? null : p.unidadeFio2,
-          tempoInspiratorio: 1,
-          tempoExpiratorio: 2,
+          tempoInspiratorio: d.tempoInspiratorio ?? null,
+          tempoExpiratorio: d.tempoExpiratorio ?? null,
         },
         horarios: previstos({}),
       };
@@ -361,6 +393,9 @@ export function montarItem(i: ItemPrescricao, c: ContextoMontagem, p: PadroesMon
           modo: d.modo,
           pressaoInspiratoria: d.pressaoInspiratoria ?? null,
           unidadePressaoInspiratoria: d.pressaoInspiratoria === undefined ? null : p.unidadePressao,
+          pressaoExpiratoria: d.pressaoExpiratoria ?? null,
+          pressaoSuporte: d.pressaoSuporte ?? null,
+          duracaoMinutos: d.duracaoMinutos ?? null,
           fio2: d.fio2 ?? null,
           unidadeFio2: d.fio2 === undefined ? null : p.unidadeFio2,
         },
