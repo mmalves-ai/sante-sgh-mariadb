@@ -46,6 +46,11 @@ import { PORTA_SAME_GUARDA, PortaSameGuardaPropria } from './same-guarda-propria
 import { SameTramiteController } from './same-tramite.controller.js';
 import { PORTA_SAME_TRAMITE, PortaSameTramitePropria } from './same-tramite-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
+import { ControlesAssistenciaisController } from './controles-assistenciais.controller.js';
+import {
+  PORTA_CONTROLES_ASSISTENCIAIS,
+  PortaControlesAssistenciaisPropria,
+} from './controles-assistenciais-propria.js';
 
 export interface OpcoesModuloAdt {
   /** Portas prontas (testes). */
@@ -110,6 +115,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
+      ControlesAssistenciaisController,
     ],
     providers: [
       { provide: PORTA_ADT, useValue: adt },
@@ -136,6 +142,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaSameTramitePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F78.04-1 (04-INT L74, L75, L78): formulários de óbito, auditoria do isolamento e evolução da regulação; sem núcleo, 503.
+      {
+        provide: PORTA_CONTROLES_ASSISTENCIAIS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaControlesAssistenciaisPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       {
