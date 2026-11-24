@@ -1207,6 +1207,7 @@
     "src/modulos/cirurgia/bloco-seguro.spec.ts",
     "src/modulos/cirurgia/cirurgia.controller.ts",
     "src/modulos/cirurgia/cirurgia.spec.ts",
+    "src/modulos/cirurgia/descricao-cirurgica.controller.spec.ts",
     "src/modulos/cirurgia/esquemas.ts",
     "src/modulos/cirurgia/modulo.ts",
     "src/modulos/cirurgia/operacoes.ts",
