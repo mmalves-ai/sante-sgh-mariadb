@@ -792,12 +792,14 @@ export class MontagensSusPropria {
     };
   }
 
-  /** Os lotes dos itens das contas da internação (a rastreabilidade da OPM no espelho). */
+  /** Os lotes dos itens das contas da internação na fonte dela (a rastreabilidade da OPM no espelho da AIH; a conta de
+   * outra fonte no mesmo atendimento, como a particular, não entra). */
   async lotesSaida(registro: number): Promise<LoteSaida[]> {
     const ls = await this.l.consultar(
       `SELECT ci.item_faturavel_id, f.descricao, SUM(ci.quantidade) AS quantidade, ci.numero_lote
          FROM internacao i
          JOIN conta_hospitalar c ON c.atendimento_id = i.atendimento_id AND c.excluido_em IS NULL
+           AND c.situacao <> 'cancelada' AND c.fonte_pagadora_id = i.fonte_pagadora_id
          JOIN conta_hospitalar_item ci ON ci.conta_hospitalar_id = c.id AND ci.excluido_em IS NULL
          JOIN item_faturavel f ON f.id = ci.item_faturavel_id
         WHERE i.id = ? AND i.estabelecimento_id = ? AND ci.numero_lote IS NOT NULL AND ci.numero_lote <> ''

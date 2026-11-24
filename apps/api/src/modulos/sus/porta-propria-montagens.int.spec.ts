@@ -1,8 +1,10 @@
 // Integração das montagens do faturamento SUS na porta própria (porta-propria-montagens.ts) contra o MariaDB real
 // (cliente f22_o3). Massa SINTÉTICA e idempotente (fica para a próxima execução, como a internação da AIH): um
 // atendimento ambulatorial de fonte privada (CIHA), um ambulatorial de fonte SUS com executante e CBO (BPA, laudo da
-// APAC) e uma internação SUS com alta na competência e item com lote (AIH). Prova a leitura da produção pela conta
-// própria, a SIGTAP pela equivalência vigente, o isolamento por estabelecimento e as leituras das linhas sem remessa.
+// APAC) e uma internação SUS com alta na competência e item com lote (AIH, mais uma conta particular com lote no mesmo
+// atendimento); as remessas do BPA e da APAC com linhas nos dois estabelecimentos; o CRM do médico e um profissional sem
+// CRM. Prova a leitura da produção pela conta própria, a SIGTAP pela equivalência vigente, as linhas guardadas dos
+// arquivos (totais, paginação e filtros) e o isolamento por estabelecimento.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -14,6 +16,11 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'F24SM';
 const SIG = '0301019324';
 const CPF_MED = '24024024000';
+const CPF_SEM_CRM = '24024024001';
+const CRM_MED = '924024';
+const ARQ_BPA = 924_024_001;
+const ARQ_APAC = 924_024_002;
+const NUM_APAC = '2624024000011';
 const INTERVALO = { inicio: '2026-03-01', fim: '2026-03-31' };
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
@@ -35,7 +42,21 @@ class LeituraComApoio extends LeituraSusPropria {
 
 describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (cliente f22_o3)', () => {
   let nucleo: NucleoProprio;
-  const ids = { est: 0, estB: 0, sig: 0, privada: 0, sus: 0, atPriv: 0, atSus: 0, internacao: 0, item: 0 };
+  const ids = {
+    est: 0,
+    estB: 0,
+    sig: 0,
+    privada: 0,
+    sus: 0,
+    atPriv: 0,
+    atSus: 0,
+    internacao: 0,
+    item: 0,
+    linhaC2: 0,
+    linhaB: 0,
+    apac: 0,
+    laudo: 0,
+  };
 
   const ler = <T>(est: number, fn: (m: MontagensSusPropria) => Promise<T>) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-ler`, estabelecimento: est }, (l: Leitor) =>
@@ -233,7 +254,136 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
           ],
         );
         await conta(`${P}-C3`, at3, ids.sus, 'internacao', 'LOTE-F24');
+        // Uma conta particular no mesmo atendimento da internação, com lote: não entra nos lotes do espelho da AIH.
+        await conta(`${P}-C4`, at3, ids.privada, 'internacao', 'LOTE-F24-PRIV');
       }
+      // O CRM do médico sintético e um segundo profissional sem CRM (não aparece na busca de solicitantes da APAC).
+      const crm = await e.uma<{ id: number }>("SELECT id FROM conselho_classe WHERE sigla = 'CRM'", []);
+      const uf = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM unidade_federativa', []);
+      if (!crm || !uf?.id) throw new Error('massa: o catálogo do CRM ou das UFs está vazio no cliente de teste');
+      await garantir(
+        e,
+        'SELECT id FROM inscricao_conselho WHERE profissional_id = ? AND sequencia = 1',
+        [prof],
+        `INSERT INTO inscricao_conselho (profissional_id, sequencia, conselho_classe_id, unidade_federativa_id,
+           numero_inscricao, principal, criado_em) VALUES (?, 1, ?, ?, ?, TRUE, ?)`,
+        [prof, crm.id, uf.id, CRM_MED, agora],
+      );
+      const pSem = await pessoa(`MEDICO SINTETICO ${P} SEM CRM`, CPF_SEM_CRM, null);
+      await garantir(
+        e,
+        'SELECT id FROM profissional WHERE pessoa_fisica_id = ?',
+        [pSem],
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pSem, agora],
+      );
+      // As remessas do BPA e da APAC da competência, com linhas, nos dois estabelecimentos (o mesmo número de arquivo).
+      const cboLinha = cbo?.id ?? (await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM ocupacao_cbo', []))?.id;
+      if (!cboLinha) throw new Error('massa: o catálogo de ocupações (CBO) está vazio no cliente de teste');
+      const competencia = (estId: number, instrumento: string) =>
+        garantir(
+          e,
+          'SELECT id FROM competencia_sus WHERE estabelecimento_id = ? AND instrumento = ? AND competencia = ?',
+          [estId, instrumento, '202603'],
+          `INSERT INTO competencia_sus (estabelecimento_id, instrumento, competencia, periodo_inicio, periodo_fim, aberta_em,
+             criado_em) VALUES (?, ?, '202603', '2026-03-01', '2026-03-31', ?, ?)`,
+          [estId, instrumento, agora, agora],
+        );
+      const remessaBpa = async (estId: number) => {
+        const c = await competencia(estId, 'bpa');
+        const r = await garantir(
+          e,
+          'SELECT id FROM remessa_bpa WHERE estabelecimento_id = ? AND numero = ?',
+          [estId, String(ARQ_BPA)],
+          `INSERT INTO remessa_bpa (estabelecimento_id, competencia_sus_id, numero, tipo_bpa, aberta_em, criado_em)
+           VALUES (?, ?, ?, 'misto', ?, ?)`,
+          [estId, c, String(ARQ_BPA), agora, agora],
+        );
+        return { c, r };
+      };
+      const folha = (estId: number, c: number, r: number, tipo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM producao_ambulatorial_sus WHERE competencia_sus_id = ? AND tipo_folha = ? AND numero_folha = 1',
+          [c, tipo],
+          `INSERT INTO producao_ambulatorial_sus (estabelecimento_id, competencia_sus_id, tipo_folha, numero_folha,
+             remessa_bpa_id, criado_em) VALUES (?, ?, ?, 1, ?, ?)`,
+          [estId, c, tipo, r, agora],
+        );
+      const linha = (folhaId: number, seq: number, qtd: number, pacienteId: number | null) =>
+        garantir(
+          e,
+          'SELECT id FROM producao_ambulatorial_sus_item WHERE producao_ambulatorial_sus_id = ? AND sequencia = ?',
+          [folhaId, seq],
+          `INSERT INTO producao_ambulatorial_sus_item (producao_ambulatorial_sus_id, sequencia, procedimento_sigtap_id,
+             ocupacao_cbo_id, paciente_id, atendimento_id, data_atendimento, idade_anos, quantidade, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, '2026-03-12', 65, ?, ?)`,
+          [folhaId, seq, ids.sig, cboLinha, pacienteId, pacienteId ? ids.atSus : null, qtd, agora],
+        );
+      const bA = await remessaBpa(ids.est);
+      const consA = await folha(ids.est, bA.c, bA.r, 'consolidado');
+      await linha(consA, 1, 5, null);
+      ids.linhaC2 = await linha(consA, 2, 7, null);
+      await linha(await folha(ids.est, bA.c, bA.r, 'individualizado'), 1, 2, paciente);
+      const bB = await remessaBpa(ids.estB);
+      ids.linhaB = await linha(await folha(ids.estB, bB.c, bB.r, 'consolidado'), 1, 9, null);
+      // A APAC: laudo, autorização, remessa e uma APAC com dois procedimentos no estabelecimento A; no B, a remessa
+      // com o mesmo número, sem APAC.
+      const tipoLaudo = await garantir(
+        e,
+        'SELECT id FROM tipo_laudo_apac WHERE codigo = ?',
+        [`${P}-TL`],
+        "INSERT INTO tipo_laudo_apac (codigo, descricao, grupo_laudo, criado_em) VALUES (?, 'LAUDO FICTICIO F24', 'outro', ?)",
+        [`${P}-TL`, agora],
+      );
+      ids.laudo = await garantir(
+        e,
+        'SELECT id FROM laudo_apac WHERE estabelecimento_id = ? AND numero_laudo = ?',
+        [ids.est, `${P}-L1`],
+        `INSERT INTO laudo_apac (estabelecimento_id, numero_laudo, paciente_id, atendimento_id, tipo_laudo_apac_id, data_laudo,
+           solicitado_procedimento_sigtap_id, codigo_cid10_principal, solicitante_profissional_id, justificativa, criado_em)
+         VALUES (?, ?, ?, ?, ?, '2026-03-12', ?, 'N180', ?, 'JUSTIFICATIVA FICTICIA', ?)`,
+        [ids.est, `${P}-L1`, paciente, ids.atSus, tipoLaudo, ids.sig, prof, agora],
+      );
+      const aut = await garantir(
+        e,
+        'SELECT id FROM autorizacao_apac WHERE laudo_apac_id = ?',
+        [ids.laudo],
+        `INSERT INTO autorizacao_apac (estabelecimento_id, laudo_apac_id, data_solicitacao, criado_em)
+         VALUES (?, ?, '2026-03-12', ?)`,
+        [ids.est, ids.laudo, agora],
+      );
+      const remessaApac = async (estId: number) =>
+        garantir(
+          e,
+          'SELECT id FROM remessa_apac WHERE estabelecimento_id = ? AND numero = ?',
+          [estId, String(ARQ_APAC)],
+          `INSERT INTO remessa_apac (estabelecimento_id, competencia_sus_id, numero, competencia_apresentacao, criado_em)
+           VALUES (?, ?, ?, '2026-03-01', ?)`,
+          [estId, await competencia(estId, 'apac'), String(ARQ_APAC), agora],
+        );
+      const rApacA = await remessaApac(ids.est);
+      await remessaApac(ids.estB);
+      ids.apac = await garantir(
+        e,
+        'SELECT id FROM apac WHERE estabelecimento_id = ? AND numero_apac = ?',
+        [ids.est, NUM_APAC],
+        `INSERT INTO apac (estabelecimento_id, autorizacao_apac_id, competencia_sus_id, numero_apac, tipo_apac, atendimento_id,
+           data_inicio, data_fim, principal_procedimento_sigtap_id, codigo_cid10_principal, remessa_apac_id, criado_em)
+         VALUES (?, ?, ?, ?, 'inicial', ?, '2026-03-01', '2026-03-31', ?, 'N180', ?, ?)`,
+        [ids.est, aut, await competencia(ids.est, 'apac'), NUM_APAC, ids.atSus, ids.sig, rApacA, agora],
+      );
+      const procApac = (seq: number, tipo: string, qtd: number) =>
+        garantir(
+          e,
+          'SELECT id FROM apac_procedimento WHERE apac_id = ? AND sequencia = ?',
+          [ids.apac, seq],
+          `INSERT INTO apac_procedimento (apac_id, sequencia, procedimento_sigtap_id, tipo, quantidade, ocupacao_cbo_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [ids.apac, seq, ids.sig, tipo, qtd, cboLinha, agora],
+        );
+      await procApac(1, 'principal', 1);
+      await procApac(2, 'secundario', 3);
     });
   }, 120_000);
 
@@ -302,31 +452,96 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     ]);
     const sol = await ler(ids.est, (m) => m.solicitantesApacPorChave([CPF_MED, 'x']));
     expect(sol).toEqual([expect.objectContaining({ chave: CPF_MED, cns: '700000000240002' })]);
+    // Pela chave: o profissional sem CRM também vem (crm nulo); a chave de CPF fora do cadastro, nada.
+    expect(await ler(ids.est, (m) => m.solicitantesApacPorChave([CPF_SEM_CRM]))).toEqual([
+      expect.objectContaining({ chave: CPF_SEM_CRM, crm: null }),
+    ]);
+    expect(await ler(ids.est, (m) => m.solicitantesApacPorChave(['24024024999']))).toEqual([]);
     expect(await ler(ids.est, (m) => m.buscarSolicitantesApac('a'))).toEqual([]);
-    expect(Array.isArray(await ler(ids.est, (m) => m.buscarSolicitantesApac(`MEDICO SINTETICO ${P}`)))).toBe(
-      true,
-    );
+    // A busca só traz médico com CRM: pelo nome (o sem CRM, de nome parecido, fica fora) e pelo começo do CRM.
+    const porNome = await ler(ids.est, (m) => m.buscarSolicitantesApac(`MEDICO SINTETICO ${P}`));
+    expect(porNome).toEqual([
+      { chave: CPF_MED, nome: `MEDICO SINTETICO ${P}`, crm: Number(CRM_MED), cns: '700000000240002' },
+    ]);
+    const porCrm = await ler(ids.est, (m) => m.buscarSolicitantesApac(CRM_MED.slice(0, 5)));
+    expect(porCrm.map((x) => x.chave)).toContain(CPF_MED);
+    expect(porCrm.map((x) => x.chave)).not.toContain(CPF_SEM_CRM);
   });
 
-  it('linhas dos arquivos: sem a remessa, vazias (BPA, APAC e a linha do BPA da competência)', async () => {
+  it('linhas do BPA: itens, total, porTipo, paginação, filtros e isolamento por estabelecimento', async () => {
+    const tudo = await ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, pagina: 0, porPagina: 10 }));
+    expect(tudo.total).toBe(3);
+    expect(tudo.porTipo).toEqual({ c: { linhas: 2, quantidade: 12 }, i: { linhas: 1, quantidade: 2 } });
+    expect(tudo.itens.map((x) => [x.tipo, x.folha, x.sequencia, x.quantidade])).toEqual([
+      ['c', 1, 1, 5],
+      ['c', 1, 2, 7],
+      ['i', 1, 1, 2],
+    ]);
+    expect(tudo.itens[2]).toMatchObject({
+      procedimento: SIG,
+      idade: 65,
+      data: '2026-03-12',
+      atendimento: ids.atSus,
+    });
+    expect(tudo.itens.map((x) => x.id)).not.toContain(ids.linhaB);
+    // Paginação: duas por página, a segunda página tem a individualizada.
+    const p1 = await ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, pagina: 1, porPagina: 2 }));
+    expect([p1.total, p1.itens.map((x) => x.tipo)]).toEqual([3, ['i']]);
+    // Filtros: tipo e começo do procedimento.
+    const c = await ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, tipo: 'c', pagina: 0, porPagina: 10 }));
+    expect([c.total, c.itens.every((x) => x.tipo === 'c')]).toEqual([2, true]);
+    const proc = (procedimento: string) =>
+      ler(ids.est, (m) => m.linhasBpa({ arquivo: ARQ_BPA, procedimento, pagina: 0, porPagina: 10 }));
+    expect((await proc(SIG.slice(0, 6))).total).toBe(3);
+    expect((await proc('99')).total).toBe(0);
+    // O outro estabelecimento, com o mesmo número de arquivo, vê só a linha dele; sem a remessa, vazio.
+    const b = await ler(ids.estB, (m) => m.linhasBpa({ arquivo: ARQ_BPA, pagina: 0, porPagina: 10 }));
+    expect([b.total, b.itens.map((x) => x.id), b.porTipo]).toEqual([
+      1,
+      [ids.linhaB],
+      { c: { linhas: 1, quantidade: 9 } },
+    ]);
     expect(
       await ler(ids.est, (m) => m.linhasBpa({ arquivo: 999_999_991, pagina: 0, porPagina: 10 })),
-    ).toEqual({
-      itens: [],
-      total: 0,
-      porTipo: {},
-    });
+    ).toEqual({ itens: [], total: 0, porTipo: {} });
+  });
+
+  it('linha do BPA da competência: pela folha e sequência, só no estabelecimento dela', async () => {
     expect(
-      await ler(ids.est, (m) => m.linhasApac({ arquivo: 999_999_991, pagina: 0, porPagina: 10 })),
-    ).toEqual({
+      await ler(ids.est, (m) => m.linhaBpaDaCompetencia('202603', { tipo: 'c', folha: 1, sequencia: 2 })),
+    ).toEqual({ linha: ids.linhaC2, arquivo: ARQ_BPA, procedimento: SIG });
+    expect(
+      await ler(ids.estB, (m) => m.linhaBpaDaCompetencia('202603', { tipo: 'c', folha: 1, sequencia: 1 })),
+    ).toEqual({ linha: ids.linhaB, arquivo: ARQ_BPA, procedimento: SIG });
+    // O B não tem a sequência 2; o tipo errado e outra competência, nada.
+    expect(
+      await ler(ids.estB, (m) => m.linhaBpaDaCompetencia('202603', { tipo: 'c', folha: 1, sequencia: 2 })),
+    ).toBeNull();
+    expect(
+      await ler(ids.est, (m) => m.linhaBpaDaCompetencia('202603', { tipo: 'i', folha: 1, sequencia: 2 })),
+    ).toBeNull();
+    expect(
+      await ler(ids.est, (m) => m.linhaBpaDaCompetencia('202604', { tipo: 'c', folha: 1, sequencia: 1 })),
+    ).toBeNull();
+  });
+
+  it('linhas da APAC: os procedimentos da remessa, totais, paginação e isolamento por estabelecimento', async () => {
+    const a = await ler(ids.est, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 0, porPagina: 10 }));
+    expect([a.total, a.apacs, a.quantidade]).toEqual([2, 1, 4]);
+    expect(a.itens.map((x) => [x.apac, x.numero, x.tipoNoArquivo, x.procedimento, x.principal, x.quantidade])).toEqual([
+      [ids.laudo, NUM_APAC, '1', SIG, true, 1],
+      [ids.laudo, NUM_APAC, '1', SIG, false, 3],
+    ]);
+    expect(a.itens[0]?.conta).toEqual(expect.any(Number));
+    const p1 = await ler(ids.est, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 1, porPagina: 1 }));
+    expect([p1.total, p1.itens.map((x) => x.principal)]).toEqual([2, [false]]);
+    // O B tem a remessa com o mesmo número, sem APAC: não vê as linhas do A.
+    expect(await ler(ids.estB, (m) => m.linhasApac({ arquivo: ARQ_APAC, pagina: 0, porPagina: 10 }))).toEqual({
       itens: [],
       total: 0,
       apacs: 0,
       quantidade: 0,
     });
-    expect(
-      await ler(ids.est, (m) => m.linhaBpaDaCompetencia('202603', { tipo: 'i', folha: 1, sequencia: 1 })),
-    ).toBeNull();
   });
 
   it('AIH: a internação SUS com alta na competência, a conta, os itens e os lotes', async () => {
@@ -345,9 +560,11 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     expect(d.internacoes).toHaveLength(1);
     expect(d.itens).toEqual([expect.objectContaining({ sigtap: ids.sig, quantidade: 2, tipo: 1 })]);
     expect(d.porCodigo.map((x) => x.codigo)).toEqual([SIG]);
+    // Só os lotes da conta na fonte da internação: o lote da conta particular do mesmo atendimento fica fora.
     expect(await ler(ids.est, (m) => m.lotesSaida(ids.internacao))).toEqual([
       { item: ids.item, nome: 'ITEM FICTICIO F24', quantidade: 2, lote: 'LOTE-F24' },
     ]);
+    expect(await ler(ids.estB, (m) => m.lotesSaida(ids.internacao))).toEqual([]);
     expect(await ler(ids.estB, (m) => m.internacaoAih(ids.internacao, [ids.sus]))).toBeNull();
   });
 });

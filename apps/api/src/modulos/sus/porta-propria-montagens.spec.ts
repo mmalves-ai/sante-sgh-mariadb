@@ -1,8 +1,9 @@
 // Unidade das montagens próprias do faturamento SUS (porta-propria-montagens.ts) sobre um leitor falso: os domínios da
-// APAC pelo código oficial, a chave do solicitante (CPF) e o CRM, a linha sem remessa e o BPA sem fonte SUS.
+// APAC pelo código oficial, a chave do solicitante (CPF) e o CRM, a linha sem remessa, o BPA sem fonte SUS e o código
+// SIH da acomodação (nunca o id interno).
 import type { Leitor } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
-import { type ApoioMontagemSus, MontagensSusPropria } from './porta-propria-montagens.js';
+import { type ApoioMontagemSus, codigoAcomodacaoSih, MontagensSusPropria } from './porta-propria-montagens.js';
 
 type Linha = Record<string, unknown>;
 
@@ -75,5 +76,40 @@ describe('montagens próprias do faturamento SUS', () => {
     expect(d.cnesCadastrados).toEqual([1234567]);
     // Sem fonte SUS, nenhuma consulta à produção.
     expect(l.sqls.some((s) => s.includes('conta_hospitalar c'))).toBe(false);
+  });
+
+  it('acomodação da passagem da AIH: só o código SIH numérico da enfermaria; sem ele, nada (nunca o id interno)', () => {
+    expect(codigoAcomodacaoSih('3')).toBe(3);
+    expect(codigoAcomodacaoSih(' 17 ')).toBe(17);
+    expect(codigoAcomodacaoSih(7)).toBe(7);
+    expect(codigoAcomodacaoSih(null)).toBeNull();
+    expect(codigoAcomodacaoSih('')).toBeNull();
+    expect(codigoAcomodacaoSih('UTI')).toBeNull();
+    expect(codigoAcomodacaoSih('3A')).toBeNull();
+    expect(codigoAcomodacaoSih('-3')).toBeNull();
+  });
+
+  it('dados da AIH: a passagem em quarto sem código SIH fica fora da trajetória', async () => {
+    const l = leitor((sql) => {
+      if (sql.includes('FROM internacao i'))
+        return [
+          {
+            id: 41,
+            atendimento_id: 51,
+            fonte_pagadora_id: 2,
+            entrada: '2026-03-02',
+            alta: '2026-03-06',
+          },
+        ];
+      if (sql.includes('FROM ocupacao_leito'))
+        return [
+          { internacao_id: 41, entrada: '2026-03-02', saida: '2026-03-03', acomodacao: null },
+          { internacao_id: 41, entrada: '2026-03-03', saida: '2026-03-04', acomodacao: 'X1' },
+          { internacao_id: 41, entrada: '2026-03-04', saida: null, acomodacao: '3' },
+        ];
+      return [];
+    });
+    const d = await new MontagensSusPropria(l, 7, apoio).dadosAih([41], [], [], [2]);
+    expect(d.passagens.map((p) => [p.entrada, p.acomodacao])).toEqual([['2026-03-04', 3]]);
   });
 });
