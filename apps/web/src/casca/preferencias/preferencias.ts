@@ -1,5 +1,6 @@
-// Preferências de interface (tema, densidade, fonte). Até o M05 (SGH_ACESSO_PREFERENCIA pela API), ficam
-// no navegador; a leitura é protegida por try/catch e o padrão é "igual ao computador" (ficha, seção 6).
+// Preferências de interface (tema, densidade, fonte). A fonte é a conta (01-ADM L84, preferencias-servidor.ts):
+// a escolha feita na tela de preferências é gravada na conta e aplicada ao entrar em qualquer computador; o
+// navegador guarda a cópia para abrir sem piscar (leitura protegida por try/catch, padrão "igual ao computador").
 import { CLASSE_ESCURO, CLASSE_FONTE_AMPLIADA, DENSIDADES, classeDensidade, type Densidade } from '@sgh/ui';
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
@@ -69,5 +70,11 @@ export const usarPreferencias = defineStore('preferencias', () => {
   consulta?.addEventListener('change', aplicar);
   watch([tema, densidade, fonteAmpliada], aplicar);
   aplicar();
-  return { tema, densidade, fonteAmpliada, aplicar };
+  /** Troca as três de uma vez (preferências lidas da conta), sem gravar de volta na conta. */
+  function substituir(p: Preferencias): void {
+    tema.value = p.tema;
+    densidade.value = p.densidade;
+    fonteAmpliada.value = p.fonteAmpliada;
+  }
+  return { tema, densidade, fonteAmpliada, aplicar, substituir };
 });

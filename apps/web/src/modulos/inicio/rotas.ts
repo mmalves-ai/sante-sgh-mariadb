@@ -9,6 +9,13 @@ export const rotasInicio: RouteRecordRaw[] = [
     name: 'inicio',
     component: () => import('./telas/InicioTela.vue'),
     meta: { permissao: PERMISSOES_ACESSO.inicioLer },
+    // 01-ADM L84: na primeira abertura, as preferências da conta são aplicadas e a tela inicial escolhida abre.
+    beforeEnter: async () => {
+      const { destinoInicialDaConta } = await import('../../casca/preferencias/preferencias-servidor.js');
+      const { usarPreferencias } = await import('../../casca/preferencias/preferencias.js');
+      const destino = await destinoInicialDaConta((p) => usarPreferencias().substituir(p));
+      return destino ?? true;
+    },
   },
   {
     path: '/inicio/medico',

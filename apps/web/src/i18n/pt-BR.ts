@@ -657,8 +657,21 @@ export const mensagensWeb = {
     segundoFatorTexto:
       'Além da senha, o login pode pedir o código do aplicativo autenticador do seu celular.',
     segundoFatorAbrir: 'Abrir a segurança da conta',
-    guardadas: 'As preferências ficam guardadas neste navegador.',
+    guardadas: 'As preferências ficam guardadas na sua conta e valem em qualquer computador.',
     semEdicao: 'Seu perfil não permite alterar as preferências.',
+    telaInicial: 'Tela que abre ao entrar',
+    telaInicialPerfil: 'Página inicial do perfil',
+    visoes: 'Visões salvas das telas',
+    visaoPadrao: 'Padrão',
+    colunas: 'colunas',
+    abreNela: 'A tela abre nesta visão',
+    conta: {
+      carregando: 'Lendo as preferências da sua conta…',
+      guardada: 'Guardado na sua conta: vale em qualquer computador.',
+      gravando: 'Guardando na sua conta…',
+      erro: 'Não foi possível guardar na conta agora; a escolha vale neste navegador.',
+      local: 'Preferências da conta indisponíveis: a escolha vale neste navegador.',
+    },
   },
   sobre: {
     titulo: 'Sobre o sistema',

@@ -27,6 +27,7 @@ import { PortaSbisMemoria } from './sbis/porta-memoria.js';
 import { PortaSbisPropria } from './sbis/porta-propria.js';
 import { SbisController } from './sbis/sbis.controller.js';
 import { ImpressaoController } from './impressao.controller.js';
+import { PreferenciasController } from './preferencias.controller.js';
 import { SERVICO_SBIS, ServicoSbis } from './sbis/servico.js';
 
 /** O produto não convive com sistema anterior (ADR 0003). */
@@ -100,6 +101,7 @@ export async function modulo(
       AuditoriaController,
       SbisController,
       ImpressaoController,
+      PreferenciasController,
       ...(opcoes.controladores ?? []),
     ],
     providers: [

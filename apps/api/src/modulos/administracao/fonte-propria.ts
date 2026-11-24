@@ -47,6 +47,11 @@ import {
   NOMES_OPERACOES_IMPRESSAO_PROPRIA,
   OPERACOES_IMPRESSAO_PROPRIA,
 } from './operacoes-impressao-propria.js';
+import {
+  lerPreferenciasDoUsuario,
+  NOMES_OPERACOES_PREFERENCIAS_PROPRIA,
+  OPERACOES_PREFERENCIAS_PROPRIA,
+} from './operacoes-preferencias-propria.js';
 import { CODIGOS_PAPEL, PERFIL_GESTOR_ACESSOS } from '../acesso/gestao-tipos.js';
 import type { FonteAdministracao } from './fonte.js';
 import {
@@ -147,6 +152,8 @@ export const OPERACOES_IMPLEMENTADAS = [
   ...NOMES_OPERACOES_USUARIO_PROPRIA,
   // Impressora por estação e reimpressão (01-ADM L79): operacoes-impressao-propria.ts.
   ...NOMES_OPERACOES_IMPRESSAO_PROPRIA,
+  // Preferências da própria conta (01-ADM L84): operacoes-preferencias-propria.ts.
+  ...NOMES_OPERACOES_PREFERENCIAS_PROPRIA,
 ];
 export const MOTIVO_PENDENTE =
   'Esta operação ainda não tem implementação no banco próprio (pendência registrada da F2.2): nada foi gravado.';
@@ -403,6 +410,7 @@ const OPERACOES = {
   'acesso.publicarTermo': operacaoPublicarTermo,
   ...OPERACOES_USUARIO_PROPRIA,
   ...OPERACOES_IMPRESSAO_PROPRIA,
+  ...OPERACOES_PREFERENCIAS_PROPRIA,
 } as const;
 
 /** Pedido do titular lido do modelo, na forma da tela. */
@@ -1005,6 +1013,11 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         )
       ).map((x) => ({ nome: txt(x['codigo']), ativo: bool(x['ativo']), usuariosAtivos: num(x['ativos']) })),
     );
+
+  /** Preferências da própria conta (01-ADM L84). */
+  lerPreferencias(c: Ctx, usuario: number | null, tela?: string) {
+    return this.ler(c, (l) => lerPreferenciasDoUsuario(l, usuario, tela));
+  }
 
   receita = (nome: string): EstadoOperacaoGestao =>
     nome in OPERACOES
