@@ -26,7 +26,12 @@ async function codigoDo(p: Promise<unknown>): Promise<string> {
   try {
     await p;
   } catch (e) {
-    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema['tipo'] ?? '');
+    if (e instanceof ErroOperacao)
+      return String(
+        (e.problema as unknown as Record<string, unknown>)['codigo'] ??
+          (e.problema as unknown as Record<string, unknown>)['tipo'] ??
+          '',
+      );
     throw e;
   }
   throw new Error('esperava recusa');
@@ -135,6 +140,15 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
         ['f374.teste', `USUARIO SINTETICO ${P}`, agora],
       );
       await limpar(e);
+      // Numeração da transferência no estabelecimento sintético (configuração, como faz o "criar novo cliente").
+      await garantir(
+        e,
+        "SELECT id FROM sequencia_negocio WHERE tipo = 'transferencia_conta' AND estabelecimento_id = ?",
+        [ids['est']],
+        `INSERT INTO sequencia_negocio (estabelecimento_id, tipo, prefixo, proximo_valor, incremento, valor_maximo, ativo,
+           criado_em, versao) VALUES (?, 'transferencia_conta', NULL, 1, 1, 999999999, TRUE, ?, 1)`,
+        [ids['est'], agora],
+      );
       const fonte = (c: string) =>
         g(
           'fonte_pagadora',
@@ -291,8 +305,8 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       ) =>
         e.inserir(
           `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
-             tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, situacao, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', ?, ?, ?)`,
+             tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, situacao, fechada_em, fechada_por_usuario_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', ?, ?, ?, ?, ?)`,
           [
             x.est ?? ids['est'],
             numero,
@@ -303,6 +317,8 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
             ids['tipoConta'],
             x.inicio ?? '2026-01-20 08:00:00',
             x.situacao ?? 'aberta',
+            x.situacao === 'fechada' ? agora : null,
+            x.situacao === 'fechada' ? ids['usuario'] : null,
             agora,
           ],
         );

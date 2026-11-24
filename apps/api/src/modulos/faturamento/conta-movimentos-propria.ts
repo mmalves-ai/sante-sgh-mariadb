@@ -50,7 +50,7 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 
 function exigirValido(erros: Record<string, string>) {
   const campos = Object.keys(erros);
-  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos, erros });
+  if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
 }
 function estDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
@@ -154,7 +154,7 @@ async function funcoesEquipe(l: Consulta): Promise<Map<number, FuncaoEquipe>> {
   const fs = await l.consultar<Linha>(
     `SELECT id, codigo, descricao, ativo, tipo_funcao, percentual_cobranca, grau_participacao_termo_terminologia_id AS grau,
             ordem_auxiliar, ordem_apresentacao
-       FROM funcao_equipe_cobranca WHERE excluido_em IS NULL ORDER BY COALESCE(ordem_apresentacao, 1000), id`,
+       FROM funcao_equipe_cobranca ORDER BY COALESCE(ordem_apresentacao, 1000), id`,
     [],
     { teto: 500 },
   );
@@ -183,7 +183,7 @@ async function kitDo(
 ): Promise<KitCobranca & { codigo: string; descricao: string }> {
   const k = await l.uma<Linha>(
     `SELECT id, codigo, descricao, ativo, modo_cobranca, item_faturavel_id, fonte_pagadora_id, plano_fonte_pagadora_id
-       FROM kit_cobranca WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+       FROM kit_cobranca WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
     [id, est],
   );
   if (!k) throw recusa('nao-encontrado', 'O kit não existe.', { campos: ['kitId'] });
@@ -245,7 +245,7 @@ export async function movimentosContaPropria(
   })[];
   const kits = await l.consultar<Linha>(
     `SELECT id, codigo, descricao, modo_cobranca FROM kit_cobranca
-      WHERE ativo = TRUE AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+      WHERE ativo = TRUE AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
         AND (fonte_pagadora_id IS NULL OR fonte_pagadora_id = ?)
         AND (plano_fonte_pagadora_id IS NULL OR plano_fonte_pagadora_id <=> ?) ORDER BY descricao`,
     [est, c.fontePagadora, c.plano],
@@ -668,7 +668,7 @@ export const opLancarKit = definirOperacao({
       lancados.push(item);
     }
     await tx.alterar('conta_hospitalar', c.id, c.versao, await totalDosItens(tx, c.id));
-    return { contaId: c.id, itens: lancados, semPreco, avisos: r.avisos };
+    return { contaId: c.id, itens: lancados.length, semPreco, avisos: r.avisos.join(',') };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.contaId }),
 });
