@@ -156,6 +156,7 @@
     "src/modulos/plataforma-onboarding/onboarding.spec.ts",
     "src/modulos/plataforma-onboarding/relatorio.spec.ts",
     "src/modulos/plataforma-onboarding/carga.spec.ts",
+    "src/modulos/plataforma-onboarding/conector-sh-testar-origem.spec.ts",
     "src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts",
     "src/modulos/config/cache-config.ts",
     "src/modulos/config/chave-recurso.ts",

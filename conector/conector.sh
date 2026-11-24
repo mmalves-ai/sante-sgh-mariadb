@@ -131,6 +131,47 @@ if [ "$1" = servico ]; then
   exit 0
 fi
 
+# testar-origem <cliente> (tela "Testar conexão"): como o serviço, SEM a senha root do MariaDB (conta restrita do motor),
+# sem privilégio e com a mesma rede que alcança o servidor do hospital: a interna (dev: o servidor simulado e o
+# MariaDB) e, em produção, também CONECTOR_REDE_ORIGEM (a interna é --internal, sem saída). Decifra a senha do cofre
+# de arquivo (chave mestra + COFRE_DIR só leitura) ou, fora de produção, pela referência env:NOME. Nada é impresso.
+if [ "$1" = testar-origem ]; then
+  rede_interna
+  CONECTOR_MARIADB_SENHA=${CONECTOR_MARIADB_SENHA:-$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)}  # worktree sem .env: herda do ambiente
+  CONECTOR_MOTOR_SENHA=$(senha_motor)
+  export CONECTOR_MARIADB_SENHA CONECTOR_MOTOR_SENHA
+  SUBREDE=$(docker network inspect "$REDE_INT" -f '{{(index .IPAM.Config 0).Subnet}}')
+  CONTA=$(docker run --rm --user 0:0 --network "$REDE_INT" -v "$AQUI/sante_conector:/app/sante_conector:ro" \
+    -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA \
+    -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" "$IMG" conta-motor --rede "$SUBREDE" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["conta"])')
+  unset CONECTOR_MARIADB_SENHA          # o teste de conexão nunca recebe a senha root
+  for VAR in PLATAFORMA_CHAVE_MESTRA COFRE_DIR AMBIENTE; do herdar "$VAR"; done
+  EXTRA=()
+  if [ -n "${COFRE_DIR:-}" ] && [ -d "$COFRE_DIR" ]; then EXTRA+=(-v "$COFRE_DIR:$COFRE_DIR:ro" -e COFRE_DIR); fi
+  SIM=$DADOS/segredos/fb-prontocardio.env
+  if [ "${AMBIENTE:-dev}" != producao ] && [ -f "$SIM" ]; then
+    FB_SIM_LEITOR_SENHA=$(grep '^FB_SIM_LEITOR_SENHA=' "$SIM" | cut -d= -f2-)
+    export FB_SIM_LEITOR_SENHA
+    EXTRA+=(-e FB_SIM_LEITOR_SENHA)
+  fi
+  # a senha da conta restrita só pelo nome (-e VAR): nunca no argv do docker
+  CONECTOR_MARIADB_USUARIO=$CONTA CONECTOR_MARIADB_SENHA=$CONECTOR_MOTOR_SENHA
+  export CONECTOR_MARIADB_USUARIO CONECTOR_MARIADB_SENHA
+  CT=$(docker create --user "$(id -u):$(id -g)" --network "$REDE_INT" --cap-drop ALL --security-opt no-new-privileges \
+    -v "$AQUI/sante_conector:/app/sante_conector:ro" "${EXTRA[@]}" \
+    -e HOME=/tmp -e FIREBIRD_LOCK=/tmp -e PLATAFORMA_CHAVE_MESTRA -e AMBIENTE="${AMBIENTE:-dev}" \
+    -e CONECTOR_ORIGEM_ROLE="${CONECTOR_ORIGEM_ROLE:-LEITURA}" -e CONECTOR_MARIADB_USUARIO -e CONECTOR_MARIADB_SENHA \
+    -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" "$IMG" "$@")
+  trap 'docker rm -f "$CT" >/dev/null 2>&1 || true' EXIT
+  if [ -n "${CONECTOR_REDE_ORIGEM:-}" ] && [ "$CONECTOR_REDE_ORIGEM" != "$REDE_INT" ]; then
+    docker network connect "$CONECTOR_REDE_ORIGEM" "$CT"
+  fi
+  RC=0
+  docker start -a "$CT" || RC=$?
+  exit "$RC"
+fi
+
 origens_padrao() {
   local d="$RAIZ"
   for _ in 1 2 3 4; do
@@ -153,7 +194,7 @@ PRIV=()
 case "$1" in registrar|ler-faixa|medir-adr9|medir-carga|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 case "$1" in
-  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho|medir-carga|migrar-controle|descartar-pendencias-copiadas|testar-origem|pausar)
+  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho|medir-carga|migrar-controle|descartar-pendencias-copiadas|pausar)
     rede_interna
     REDE=(--network "$REDE_INT")
     CONECTOR_MARIADB_SENHA=${CONECTOR_MARIADB_SENHA:-$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)}  # worktree sem .env: herda do ambiente
@@ -193,19 +234,6 @@ if [ "$1" = worker-separado ]; then  # log por execução (registro_log.py), gra
   ARQ+=(-v "$LOGS:/logs" -e CONECTOR_LOG_DIR=/logs)
   herdar COFRE_DIR
   if [ -n "${COFRE_DIR:-}" ] && [ -d "$COFRE_DIR" ]; then ARQ+=(-v "$COFRE_DIR:$COFRE_DIR:ro" -e COFRE_DIR); fi
-elif [ "$1" = testar-origem ]; then
-  # testar-origem: decifra a senha do cofre de arquivo (chave mestra + COFRE_DIR só leitura) ou, fora de produção,
-  # pela referência env:NOME (dev: a senha do leitor do servidor simulado). Nada é impresso.
-  unset ARQUIVOS_RAIZ
-  for VAR in PLATAFORMA_CHAVE_MESTRA COFRE_DIR AMBIENTE; do herdar "$VAR"; done
-  ARQ+=(-e AMBIENTE="${AMBIENTE:-dev}" -e CONECTOR_ORIGEM_ROLE="${CONECTOR_ORIGEM_ROLE:-LEITURA}")
-  if [ -n "${COFRE_DIR:-}" ] && [ -d "$COFRE_DIR" ]; then ARQ+=(-v "$COFRE_DIR:$COFRE_DIR:ro" -e COFRE_DIR); fi
-  SIM=$DADOS/segredos/fb-prontocardio.env
-  if [ "${AMBIENTE:-dev}" != producao ] && [ -f "$SIM" ]; then
-    FB_SIM_LEITOR_SENHA=$(grep '^FB_SIM_LEITOR_SENHA=' "$SIM" | cut -d= -f2-)
-    export FB_SIM_LEITOR_SENHA
-    ARQ+=(-e FB_SIM_LEITOR_SENHA)
-  fi
 else
   unset PLATAFORMA_CHAVE_MESTRA ARQUIVOS_RAIZ
 fi
