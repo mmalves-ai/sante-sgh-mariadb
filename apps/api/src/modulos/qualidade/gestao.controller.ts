@@ -703,6 +703,7 @@ export class GestaoQualidadeController {
           prazo: e.prazo,
           agora,
           usuario: s.login,
+          ficha: ind.ficha,
         }),
     );
   }

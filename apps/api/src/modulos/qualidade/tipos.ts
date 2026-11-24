@@ -4,7 +4,12 @@
 // Os logins (`usuario`, `por`, `registradaPor`...) são o login da conta do cliente; a porta própria resolve o id.
 // Melhoria: os tipos são do próprio módulo (antes, os do acesso ao sistema de origem), sem o campo `hospital` (o
 // estabelecimento vem do contexto da sessão) e com as tabelas corrigíveis nomeadas pelas tabelas do modelo próprio.
-import type { ChaveLeito, Precaucao, RegistroVersionadoQualidade } from '@sgh/contratos';
+import type {
+  ChaveLeito,
+  FichaIndicadorQualidade,
+  Precaucao,
+  RegistroVersionadoQualidade,
+} from '@sgh/contratos';
 import { type ErroOperacao, recusa } from '@sgh/nucleo';
 
 /** As tabelas da qualidade que se corrigem por versão (o retrato anterior vai à trilha de auditoria). */
@@ -765,6 +770,8 @@ export interface AnaliseIndicadorNova {
   readonly prazo: string | null;
   readonly agora: string;
   readonly usuario: string;
+  /** A ficha do indicador calculado (o banco próprio inclui o indicador do catálogo na primeira análise). */
+  readonly ficha?: FichaIndicadorQualidade;
 }
 
 export interface AnaliseIndicadorRegistrada {

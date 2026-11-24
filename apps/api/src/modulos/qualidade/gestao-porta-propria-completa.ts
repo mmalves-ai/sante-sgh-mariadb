@@ -53,6 +53,8 @@ import {
   LeiturasGestaoComplementoQ5,
   TABELAS_COMPLEMENTO_Q5,
 } from './porta-propria-complemento-q5.js';
+import { gravacaoRevisarProntuario, TABELAS_REVISAR_PRONTUARIO } from './porta-propria-revisar-prontuario.js';
+import { gravacoesComplementoQ6, TABELAS_COMPLEMENTO_Q6 } from './porta-propria-complemento-q6.js';
 import {
   type EnvioRegulatorioRegistrado,
   type FiltroDocumentos,
@@ -69,6 +71,8 @@ export const TABELAS_GESTAO_COMPLETA = [
     ...TABELAS_COMPLEMENTO_Q3,
     ...TABELAS_COMPLEMENTO_Q4,
     ...TABELAS_COMPLEMENTO_Q5,
+    ...TABELAS_REVISAR_PRONTUARIO,
+    ...TABELAS_COMPLEMENTO_Q6,
     ...TABELAS_DOCUMENTOS,
   ]),
 ] as const;
@@ -192,6 +196,8 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
         ...gravacoesComplementoQ3(tx, est),
         ...gravadorComplementoQ4(tx, est, anotacao),
         ...gravacoesComplementoQ5(tx, est, anotacao),
+        ...gravacaoRevisarProntuario(tx, est, anotacao),
+        ...gravacoesComplementoQ6(tx, est, anotacao),
         ...gravacoesDocumentos(tx, est),
         gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
         registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),

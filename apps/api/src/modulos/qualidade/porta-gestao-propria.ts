@@ -296,7 +296,12 @@ async function pagina<T>(
  * (a leitura devolve o nome, e salvar sem mudar nada não pode trocar de setor homônimo). Nome repetido entre setores
  * ativos recusa com `area-ambigua`, em vez de escolher um deles em silêncio.
  */
-async function setorDaArea(tx: L, est: number, area: string, atual: number | null = null): Promise<number> {
+export async function setorDaArea(
+  tx: L,
+  est: number,
+  area: string,
+  atual: number | null = null,
+): Promise<number> {
   const a = area.trim();
   if (atual !== null) {
     const mesmo = await tx.uma<{ id: number }>(
@@ -330,7 +335,7 @@ async function setorDaArea(tx: L, est: number, area: string, atual: number | nul
  * Na alteração, `atual` é o responsável gravado na linha travada: se o texto ainda é o login ou o nome dele, ele fica
  * (a leitura devolve o nome, e salvar sem mudar nada não pode recusar por homônimo).
  */
-async function responsavelPeloNome(tx: L, quem: string, atual: number | null = null): Promise<number> {
+export async function responsavelPeloNome(tx: L, quem: string, atual: number | null = null): Promise<number> {
   const q = quem.trim();
   if (atual !== null) {
     const mesmo = await tx.uma<{ id: number }>(
@@ -378,7 +383,7 @@ async function proximoDoAno(tx: TxOperacao, est: number, tipo: string, agora: st
 }
 
 /** O próximo número de negócio do ano no formato `PREFIXO-AAAA-NNNNNN`. */
-async function numeroDoAno(
+export async function numeroDoAno(
   tx: TxOperacao,
   est: number,
   tipo: string,

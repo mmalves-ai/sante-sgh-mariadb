@@ -137,12 +137,12 @@ export function auditoriaDaLinha(r: Linha, itens: string): AuditoriaRegistrada {
 
 /** O checklist de cada auditoria (JSON do contrato, na ordem da sequência). */
 async function itensDasAuditorias(l: L, ids: readonly number[]): Promise<Map<number, string>> {
-  type Item = { requisito: string; secao: null; resultado: string; evidencia: string | null };
+  type Item = { requisito: string; secao: string | null; resultado: string; evidencia: string | null };
   const porAuditoria = new Map<number, Item[]>(ids.map((id) => [id, []]));
   for (let i = 0; i < ids.length; i += LOTE_IDS) {
     const lote = ids.slice(i, i + LOTE_IDS);
     const linhas = await l.consultar(
-      `SELECT auditoria_interna_id AS a, pergunta, resultado, evidencia
+      `SELECT auditoria_interna_id AS a, pergunta, secao, resultado, evidencia
          FROM auditoria_interna_item
         WHERE auditoria_interna_id IN (${marcas(lote.length)}) AND excluido_em IS NULL
         ORDER BY auditoria_interna_id, sequencia`,
@@ -152,7 +152,7 @@ async function itensDasAuditorias(l: L, ids: readonly number[]): Promise<Map<num
     for (const x of linhas)
       porAuditoria.get(n(x['a']))?.push({
         requisito: texto(x['pergunta']),
-        secao: null,
+        secao: textoN(x['secao']),
         resultado: RESULTADO_ITEM[texto(x['resultado'])] ?? 'naoAplicavel',
         evidencia: textoN(x['evidencia']),
       });
