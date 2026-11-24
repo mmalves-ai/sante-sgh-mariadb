@@ -4,3 +4,13 @@
 	tls /certs/servidor-vm.crt /certs/servidor-vm.key
 	reverse_proxy sgh-gestao-adminer:8080
 }
+
+# Captura de e-mail do desenvolvimento (Mailpit, pedido do dono, 2026-11-24): o dono VÊ os e-mails do produto fora de
+# produção (recuperação de senha, código do segundo fator). Mesmo certificado da CA local; só leitura: o que muda ou
+# reenvia (apagar, marcar, liberar para fora) é recusado aqui. O Mailpit continua no loopback do host (8325).
+:5325 {
+	tls /certs/servidor-vm.crt /certs/servidor-vm.key
+	@escrita not method GET HEAD OPTIONS
+	respond @escrita "Somente leitura." 403
+	reverse_proxy sgh-mailpit:8025
+}

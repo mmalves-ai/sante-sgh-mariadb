@@ -16,15 +16,20 @@ services:
     restart: unless-stopped
     ports:
       - '0.0.0.0:5320:5320'
+      - '0.0.0.0:5325:5325'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../../certs:/certs:ro
       - caddy-dados:/data
-    networks: [borda]
+    # captura: a rede do Mailpit (sgh-mailpit), só para a tela de leitura dos e-mails do desenvolvimento
+    networks: [borda, captura]
 networks:
   banco:
     external: true
     name: sante-sgh-oracle_default
   borda: {}
+  captura:
+    external: true
+    name: sgh-rede
 volumes:
   caddy-dados: {}
