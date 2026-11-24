@@ -1,7 +1,9 @@
 // 05-SADT linha 26: montagem do orçamento de exames, destino da conversão e divisão por setor executante.
 import { describe, expect, it } from 'vitest';
 import {
+  conferirAtendimentoDaConversao,
   conferirDestinoDaConversao,
+  conferirFonteParticular,
   conferirInteressado,
   montarOrcamentoExames,
   RecusaOrcamento,
@@ -81,21 +83,70 @@ describe('destino da conversão', () => {
     ).toBe('paciente-diferente');
   });
 
-  it('interessado sem cadastro vincula o paciente do atendimento, salvo CPF diferente', () => {
+  it('interessado sem cadastro: CPFs iguais vinculam; diferentes recusam; sem CPF só com a confirmação', () => {
+    const cpf = '1'.repeat(11);
     expect(
-      conferirDestinoDaConversao(
-        { paciente: null, cpfInteressado: '1'.repeat(11) },
-        { paciente: 8, cpfPaciente: null },
-      ),
+      conferirDestinoDaConversao({ paciente: null, cpfInteressado: cpf }, { paciente: 8, cpfPaciente: cpf }),
     ).toEqual({ vinculaPaciente: true });
     expect(
       codigo(() =>
         conferirDestinoDaConversao(
-          { paciente: null, cpfInteressado: '1'.repeat(11) },
+          { paciente: null, cpfInteressado: cpf },
           { paciente: 8, cpfPaciente: '2'.repeat(11) },
         ),
       )?.codigo,
     ).toBe('paciente-diferente');
+    // Sem CPF de um dos lados: um id digitado por engano não liga o orçamento a outro paciente.
+    expect(
+      codigo(() =>
+        conferirDestinoDaConversao(
+          { paciente: null, cpfInteressado: cpf },
+          { paciente: 8, cpfPaciente: null },
+        ),
+      ),
+    ).toEqual({ codigo: 'vinculo-nao-confirmado', campos: ['confirmaPaciente'] });
+    expect(
+      codigo(() =>
+        conferirDestinoDaConversao(
+          { paciente: null, cpfInteressado: null },
+          { paciente: 8, cpfPaciente: cpf },
+          9,
+        ),
+      )?.codigo,
+    ).toBe('vinculo-nao-confirmado');
+    expect(
+      conferirDestinoDaConversao(
+        { paciente: null, cpfInteressado: null },
+        { paciente: 8, cpfPaciente: null },
+        8,
+      ),
+    ).toEqual({ vinculaPaciente: true });
+  });
+});
+
+describe('fonte e atendimento da conversão', () => {
+  it('só fonte particular no orçamento', () => {
+    expect(codigo(() => conferirFonteParticular('operadora'))).toEqual({
+      codigo: 'fonte-nao-particular',
+      campos: ['fontePagadora'],
+    });
+    expect(codigo(() => conferirFonteParticular(null))?.codigo).toBe('fonte-nao-particular');
+    expect(codigo(() => conferirFonteParticular('particular'))).toBeNull();
+  });
+
+  it('atendimento cancelado ou de outra fonte é recusado', () => {
+    expect(
+      codigo(() => conferirAtendimentoDaConversao({ fonte: 3 }, { situacao: 'cancelado', fonte: 3 }))?.codigo,
+    ).toBe('atendimento-cancelado');
+    expect(
+      codigo(() => conferirAtendimentoDaConversao({ fonte: 3 }, { situacao: 'aberto', fonte: 4 }))?.codigo,
+    ).toBe('fonte-diferente');
+    expect(
+      codigo(() => conferirAtendimentoDaConversao({ fonte: 3 }, { situacao: 'aberto', fonte: null }))?.codigo,
+    ).toBe('fonte-diferente');
+    expect(
+      codigo(() => conferirAtendimentoDaConversao({ fonte: 3 }, { situacao: 'encerrado', fonte: 3 })),
+    ).toBeNull();
   });
 });
 

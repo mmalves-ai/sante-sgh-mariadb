@@ -113,12 +113,49 @@ export function conferirInteressado(o: {
 }
 
 /**
+ * O orçamento particular sai pela tabela de uma fonte pagadora do tipo particular: uma operadora daria o preço do
+ * convênio a quem paga do bolso.
+ */
+export function conferirFonteParticular(tipo: string | null): void {
+  if (tipo !== 'particular')
+    throw new RecusaOrcamento(
+      'fonte-nao-particular',
+      'O orçamento de exames usa a tabela de uma fonte pagadora particular: escolha uma fonte particular.',
+      ['fontePagadora'],
+    );
+}
+
+/**
+ * O atendimento da conversão: não pode estar cancelado e tem de ser da mesma fonte particular do orçamento, para que o
+ * exame seja cobrado de quem aprovou o orçamento, pelo valor aprovado (e não da operadora do atendimento).
+ */
+export function conferirAtendimentoDaConversao(
+  orcamento: { readonly fonte: number },
+  atendimento: { readonly situacao: string; readonly fonte: number | null },
+): void {
+  if (atendimento.situacao === 'cancelado')
+    throw new RecusaOrcamento(
+      'atendimento-cancelado',
+      'O atendimento está cancelado: escolha um atendimento ativo do paciente.',
+      ['atendimento'],
+    );
+  if (atendimento.fonte !== orcamento.fonte)
+    throw new RecusaOrcamento(
+      'fonte-diferente',
+      'O atendimento é de outra fonte pagadora: o orçamento particular só se converte num atendimento da mesma fonte particular.',
+      ['atendimento'],
+    );
+}
+
+/**
  * O atendimento da conversão tem de ser do paciente do orçamento. Orçamento sem paciente (interessado sem cadastro):
- * aceita o paciente do atendimento, mas recusa quando os dois CPFs existem e diferem.
+ * os dois CPFs iguais vinculam o paciente do atendimento; CPFs diferentes recusam; faltando um dos CPFs, o vínculo só
+ * sai com a confirmação explícita do paciente (quem converte viu o nome e confirmou o id do paciente do atendimento).
  */
 export function conferirDestinoDaConversao(
   orcamento: { readonly paciente: number | null; readonly cpfInteressado: string | null },
   atendimento: { readonly paciente: number; readonly cpfPaciente: string | null },
+  pacienteConfirmado: number | null = null,
 ): { readonly vinculaPaciente: boolean } {
   if (orcamento.paciente !== null) {
     if (orcamento.paciente !== atendimento.paciente)
@@ -129,15 +166,20 @@ export function conferirDestinoDaConversao(
       );
     return { vinculaPaciente: false };
   }
-  if (
-    orcamento.cpfInteressado !== null &&
-    atendimento.cpfPaciente !== null &&
-    orcamento.cpfInteressado !== atendimento.cpfPaciente
-  )
+  if (orcamento.cpfInteressado !== null && atendimento.cpfPaciente !== null) {
+    if (orcamento.cpfInteressado !== atendimento.cpfPaciente)
+      throw new RecusaOrcamento(
+        'paciente-diferente',
+        'O CPF do paciente do atendimento difere do CPF do interessado do orçamento.',
+        ['atendimento'],
+      );
+    return { vinculaPaciente: true };
+  }
+  if (pacienteConfirmado !== atendimento.paciente)
     throw new RecusaOrcamento(
-      'paciente-diferente',
-      'O CPF do paciente do atendimento difere do CPF do interessado do orçamento.',
-      ['atendimento'],
+      'vinculo-nao-confirmado',
+      'Sem CPF para conferir, confirme que o interessado do orçamento é o paciente deste atendimento.',
+      ['confirmaPaciente'],
     );
   return { vinculaPaciente: true };
 }
