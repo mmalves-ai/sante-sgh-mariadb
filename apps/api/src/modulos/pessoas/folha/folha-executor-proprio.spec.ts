@@ -8,7 +8,6 @@ import {
   gravadorFolhaExecutor,
   linhaDe,
   processoDe,
-  rescisaoDe,
   resumirLinhas,
   tipoProcessoNoBanco,
 } from './folha-executor-proprio.js';
@@ -98,8 +97,9 @@ describe('traduções do processamento', () => {
     ]);
   });
 
-  it('rescisão: modalidade e aviso do banco (sublinhado) para o contrato (hífen)', () => {
-    const r = rescisaoDe({
+  it('rescisão relida com trava pela leitura do cálculo: filtro da simulação, sublinhado para hífen, conferida = calculada', async () => {
+    const sqls: string[] = [];
+    const linha = {
       id: 1,
       vinculo_trabalho_id: 5,
       estabelecimento_id: 3,
@@ -115,23 +115,37 @@ describe('traduções do processamento', () => {
       saldo_fgts_informado: 1,
       valor_multa_fgts: '4.00',
       pagamento_limite_em: '2098-08-20',
-      situacao: 'calculada',
+      situacao: 'conferida',
       processamento_folha_id: 8,
       motivo_situacao: null,
       criado_em: '2098-08-10 10:00:00',
       alterado_em: null,
       versao: 1,
-      registrado_por: 'fulano',
-    });
-    expect(r).toMatchObject({
+      registrado_login: 'fulano',
+    };
+    const tx = {
+      consultarParaAtualizar: async (sql: string) => {
+        sqls.push(sql);
+        return /FROM vinculo_trabalho/.test(sql)
+          ? [{ id: 5, data_desligamento: '2098-08-10', tipo_rescisao_id: 7 }]
+          : [linha];
+      },
+    } as unknown as TxOperacao;
+    const t = await gravadorFolhaExecutor(tx, 3).rescisoesDoVinculoComTrava(5);
+    expect(t).toMatchObject({ desligamento: '2098-08-10', tipoRescisao: 7 });
+    expect(t.rescisoes[0]).toMatchObject({
       modalidade: 'sem-justa-causa',
       aviso: 'nao-cumprido',
-      tipoRescisao: null,
+      situacao: 'calculada',
+      situacaoPor: null,
       projecao: '2098-08-10',
       saldoFgts: 10,
       saldoFgtsInformado: true,
       processo: 8,
+      registradoPor: 'fulano',
     });
+    expect(sqls[1]).toMatch(/situacao <> 'simulacao'/);
+    expect(sqls[1]).toMatch(/processamento_folha_id IS NOT NULL/);
   });
 });
 
@@ -161,11 +175,11 @@ describe('recusas do gravador sem tocar no banco', () => {
     ).toBe('empresa-fora-da-sessao');
   });
 
-  it('férias e obrigações: modelo-pendente', async () => {
+  it('incluir férias, marcá-las calculadas e as obrigações: modelo-pendente', async () => {
     for (const p of [
-      g.feriasDoVinculoComTrava(1),
       g.incluirFerias({} as never),
-      g.situacaoFerias({} as never),
+      g.situacaoFerias({ id: 1, versao: 1, de: 'programada', para: 'calculada', motivo: null, por: 'x' }),
+      g.situacaoFerias({ id: 1, versao: 1, de: 'programada', para: 'cancelada', processo: 9, motivo: 'm', por: 'x' }),
       g.obrigacoesEmVigorComTrava(3, 'sefip', '2098-07'),
       g.obrigacaoComTrava(1),
       g.incluirObrigacao({} as never),

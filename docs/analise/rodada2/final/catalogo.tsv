@@ -3687,3 +3687,4 @@ atividade_cuidado_enfermagem	PEP	principal	F7	Atividade de cuidado prescrita pel
 checagem_cuidado_enfermagem	PEP	historico	F7	Checagem de cada horário previsto da atividade de cuidado (feita ou não feita com motivo), só inclusão	Produto: prescrição de enfermagem (migração 06_PEP/96_cuidado_enfermagem)	03	0
 estorno_checagem_cuidado_enfermagem	PEP	historico	F7	Estorno da checagem do cuidado com a justificativa (a checagem fica), só inclusão	Produto: prescrição de enfermagem (migração 06_PEP/96_cuidado_enfermagem)	03	0
 preferencia_segundo_fator	ADM	principal	F3	Segundo fator escolhido por cada usuário: aplicativo autenticador ou código enviado ao e-mail	modulos-proprios-2, família acesso-email (pedido do dono de 23/11; db/migracoes)	01	0
+ficha_esocial_vinculo	RH	principal	F7	Ficha do eSocial do vínculo (dados do trabalhador para os eventos), cifrada pela API, com versão	modulos-proprios-2: família folha-executor (gravarFicha do eSocial)	07	0

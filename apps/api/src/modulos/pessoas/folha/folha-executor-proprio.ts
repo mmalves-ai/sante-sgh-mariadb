@@ -4,11 +4,17 @@
 //     linhas, a troca de situação pela versão e as releituras; calcular, recalcular ou descartar em período fechado
 //     (fechamento_periodo_folha `fechado`) é recusado com `competencia-fechada`;
 //   - rescisão (rescisao, ligada ao desligamento do vínculo e ao processamento `rescisao`): as do vínculo com trava, a
-//     inclusão (o número complementar seguinte) e a troca de situação pela versão.
-// Ficam recusando com `modelo-pendente` (sem lugar no modelo): as férias (programacao_ferias exige o período
-// aquisitivo e o tipo de férias e não liga o processamento) e as obrigações (o arquivo cifrado pela porta de
-// armazenamento e as situações `entregue`/`substituida`); os parâmetros das obrigações gravam (parametro_obrigacao,
-// início AAAA-MM no primeiro dia do mês). O integrador junta este gravador ao de porta-calculo-propria.
+//     inclusão (o número complementar seguinte) e a troca de situação pela versão. O desligamento do domínio marca o
+//     vínculo (data e tipo); a primeira rescisão cria a linha de `desligamento` a partir do vínculo travado (motivo do
+//     eSocial e iniciativa do tipo de rescisão). A releitura usa as funções da leitura (folha-porta-propria-calculo.ts)
+//     com trava: o mesmo filtro e a mesma tradução de situação, e o carimbo do serviço bate;
+//   - férias (programacao_ferias): as do vínculo com trava (a leitura do cálculo) e a troca de situação para cancelada
+//     ou programada pela versão.
+// Ficam recusando com `modelo-pendente` (sem lugar no modelo): incluir férias e marcá-las calculadas (programacao_ferias
+// exige o período aquisitivo e o tipo de férias, e o processamento liga pelo recibo_ferias) e as obrigações (o arquivo
+// cifrado pela porta de armazenamento e as situações `entregue`/`substituida`); os parâmetros das obrigações gravam
+// (parametro_obrigacao, início AAAA-MM no primeiro dia do mês). O integrador junta este gravador ao de
+// porta-calculo-propria.
 // Tipos do processamento: o contrato diz `decimo1`/`decimo2`; o banco, `decimo_terceiro_1`/`decimo_terceiro_2`.
 // Quem calculou e quem trocou a situação vêm da auditoria (criado_por e alterado_por), nunca de coluna à parte.
 import {
@@ -16,8 +22,8 @@ import {
   esquemaParametrosObrigacoes,
   type ModalidadeRescisao,
   type AvisoPrevio,
+  type SituacaoFerias,
   type SituacaoProcessoFolha,
-  type SituacaoRescisao,
   TIPO_DO_PAPEL,
   type TipoProcessoFolha,
   type TotaisCalculoFolha,
@@ -26,11 +32,11 @@ import {
 } from '@sgh/contratos';
 import { ErroOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
+import { lerFerias, lerFeriasPorId, lerRescisaoPorId, lerRescisoes } from './folha-porta-propria-calculo.js';
 import type { GravadorCalculoFolha } from './porta-calculo.js';
 import type {
   LinhaCalculoDoVinculo,
   ProcessoDaFolha,
-  RescisaoDaFolha,
   ResumoVinculoDoProcesso,
 } from './tipos-folha.js';
 
@@ -83,10 +89,7 @@ const conferirData = (campo: string, v: string): string | null => {
   return d;
 };
 const modalidadeNoBanco = (m: ModalidadeRescisao): string => m.replace(/-/g, '_');
-const modalidadeDoBanco = (v: unknown): ModalidadeRescisao =>
-  String(v ?? '').replace(/_/g, '-') as ModalidadeRescisao;
 const avisoNoBanco = (a: AvisoPrevio): string => a.replace(/-/g, '_');
-const avisoDoBanco = (v: unknown): AvisoPrevio => String(v ?? 'nenhum').replace(/_/g, '-') as AvisoPrevio;
 
 /** O período do processamento no fechamento (mensal: o mês; anual: o ano), como o banco grava. */
 function periodoDoFechamento(tipo: TipoProcessoFolha, competencia: string) {
@@ -230,49 +233,35 @@ export function resumirLinhas(linhas: readonly LinhaCalculoDoVinculo[]): ResumoV
     }));
 }
 
-// ── Rescisão ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Rescisão e férias: a mesma leitura do cálculo, com trava ─────────────────────────────────────────────────────
 
-const SQL_RESCISOES = `
-  SELECT r.id, d.vinculo_trabalho_id, r.estabelecimento_id, r.data_desligamento, r.tipo_rescisao_id, r.modalidade,
-         r.aviso_previo, r.dias_aviso, r.dias_aviso_indenizados, r.data_projetada_aviso, r.termo_contrato,
-         r.saldo_fgts, r.saldo_fgts_informado, r.valor_multa_fgts, r.pagamento_limite_em, r.situacao,
-         r.processamento_folha_id, r.motivo_situacao, r.criado_em, r.alterado_em, r.versao,
-         uc.login AS registrado_por, ua.login AS situacao_por
-    FROM rescisao r
-    JOIN desligamento d ON d.id = r.desligamento_id
-    LEFT JOIN usuario uc ON uc.id = r.criado_por
-    LEFT JOIN usuario ua ON ua.id = r.alterado_por
-   WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL`;
-
-export function rescisaoDe(r: Linha): RescisaoDaFolha {
-  const mudou = r['alterado_em'] !== null && r['alterado_em'] !== undefined;
+/** O leitor da transação que trava o que lê (SELECT ... FOR UPDATE): as releituras do gravador usam as mesmas funções
+ * da leitura (folha-porta-propria-calculo.ts), com o mesmo filtro (rescisão migrada, sem modalidade ou em simulação
+ * fica de fora) e a mesma tradução de situação (conferida, paga e homologada = calculada; aprovada = programada). Assim
+ * o carimbo da releitura bate com o da montagem do serviço. */
+function leitorComTrava(tx: TxOperacao): Pick<Leitor, 'consultar' | 'uma'> {
   return {
-    id: n(r['id']),
-    vinculo: n(r['vinculo_trabalho_id']),
-    empresa: n(r['estabelecimento_id']),
-    desligamento: dia(r['data_desligamento']) ?? '',
-    tipoRescisao:
-      r['tipo_rescisao_id'] === null || r['tipo_rescisao_id'] === undefined ? null : n(r['tipo_rescisao_id']),
-    modalidade: modalidadeDoBanco(r['modalidade']),
-    aviso: avisoDoBanco(r['aviso_previo']),
-    diasAviso: n(r['dias_aviso']),
-    diasIndenizados: n(r['dias_aviso_indenizados']),
-    projecao: dia(r['data_projetada_aviso']) ?? dia(r['data_desligamento']) ?? '',
-    termo: dia(r['termo_contrato']),
-    saldoFgts: n(r['saldo_fgts']),
-    saldoFgtsInformado: !!n(r['saldo_fgts_informado']),
-    multaFgts: n(r['valor_multa_fgts']),
-    pagamento: dia(r['pagamento_limite_em']) ?? '',
-    situacao: String(r['situacao']) as SituacaoRescisao,
-    processo: n(r['processamento_folha_id']),
-    motivo: textoOuNulo(r['motivo_situacao']),
-    registradoPor: String(r['registrado_por'] ?? ''),
-    registradoEm: instante(r['criado_em']) ?? '',
-    situacaoPor: mudou ? textoOuNulo(r['situacao_por']) : null,
-    situacaoEm: mudou ? instante(r['alterado_em']) : null,
-    versao: n(r['versao']),
+    consultar: ((sql: string, p?: readonly unknown[]) =>
+      tx.consultarParaAtualizar(sql, p as unknown[])) as Leitor['consultar'],
+    uma: (async (sql: string, p?: readonly unknown[]) =>
+      (await tx.consultarParaAtualizar(sql, p as unknown[]))[0] ?? null) as Leitor['uma'],
   };
 }
+
+/** O aviso prévio do contrato no desligamento (o desligamento não distingue o aviso não cumprido: era trabalhado). */
+const AVISO_NO_DESLIGAMENTO: Readonly<Record<AvisoPrevio, string>> = {
+  indenizado: 'indenizado',
+  trabalhado: 'trabalhado',
+  'nao-cumprido': 'trabalhado',
+  dispensado: 'dispensado',
+  nenhum: 'nao_se_aplica',
+};
+/** A situação das férias do contrato como o banco grava (a leitura traduz o caminho de volta). */
+const FERIAS_NO_BANCO: Readonly<Record<SituacaoFerias, string>> = {
+  programada: 'programada',
+  calculada: 'calculada',
+  cancelada: 'cancelada',
+};
 
 // ── O gravador ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -306,6 +295,8 @@ export const TABELAS_FOLHA_EXECUTOR = [
   'processamento_folha',
   'processamento_folha_linha',
   'rescisao',
+  'desligamento',
+  'programacao_ferias',
   'parametro_obrigacao',
 ] as const;
 
@@ -322,6 +313,58 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
       throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
   };
   const sem = (operacao: string, falta: string) => () => Promise.reject(erroModeloPendente(operacao, falta));
+  const trava = leitorComTrava(tx);
+  /** O desligamento da rescisão: o registrado no vínculo nesta data ou, quando o desligamento do domínio só marcou o
+   * vínculo (data e tipo de rescisão em vinculo_trabalho), o desligamento criado aqui a partir do vínculo travado, com a
+   * mesma data e o mesmo tipo, o motivo do eSocial e a iniciativa do tipo de rescisão e o aviso da rescisão. Uma fonte
+   * só: a data vem sempre do vínculo. */
+  const desligamentoDaRescisao = async (
+    v: Linha,
+    x: Parameters<GravadorFolhaExecutor['incluirRescisao']>[0],
+  ): Promise<number> => {
+    if (dia(v['data_desligamento']) !== x.desligamento)
+      throw recusa(
+        'desligamento-nao-registrado',
+        'O vínculo não está desligado nesta data: registre o desligamento antes da rescisão.',
+      );
+    const [d] = await tx.consultarParaAtualizar(
+      `SELECT id FROM desligamento
+        WHERE vinculo_trabalho_id = ? AND estabelecimento_id = ? AND data_desligamento = ? AND excluido_em IS NULL
+          AND situacao <> 'cancelado'
+        ORDER BY id DESC LIMIT 1`,
+      [x.vinculo, est, x.desligamento],
+    );
+    if (d) return n(d['id']);
+    const tipoId = v['tipo_rescisao_id'] === null || v['tipo_rescisao_id'] === undefined
+      ? x.tipoRescisao
+      : n(v['tipo_rescisao_id']);
+    const t = await tx.uma(
+      'SELECT id, iniciativa, motivo_desligamento_codigo_esocial_id AS motivo FROM tipo_rescisao WHERE id = ?',
+      [tipoId],
+    );
+    if (!t) throw recusa('tipo-rescisao-inexistente', 'Tipo de rescisão inexistente.');
+    if (t['motivo'] === null || t['motivo'] === undefined)
+      throw recusa(
+        'tipo-rescisao-sem-motivo-esocial',
+        'O tipo de rescisão não indica o motivo de desligamento do eSocial (tabela 19): complete o cadastro do tipo antes de gravar a rescisão.',
+      );
+    const projecao = dataOuNulo(x.projecao);
+    return tx.incluir('desligamento', {
+      estabelecimento_id: est,
+      vinculo_trabalho_id: x.vinculo,
+      motivo_codigo_esocial_id: n(t['motivo']),
+      tipo_rescisao_id: tipoId,
+      iniciativa: String(t['iniciativa']),
+      // A data do aviso não chega à rescisão: fica a do desligamento (a CHECK exige comunicação até o desligamento).
+      data_comunicacao: x.desligamento,
+      data_desligamento: x.desligamento,
+      aviso_previo: AVISO_NO_DESLIGAMENTO[x.aviso],
+      dias_aviso_previo: x.diasAviso >= 30 && x.diasAviso <= 90 ? x.diasAviso : null,
+      data_projetada_aviso: projecao && projecao > x.desligamento ? projecao : null,
+      justa_causa: x.modalidade === 'justa-causa',
+      situacao: 'confirmado',
+    });
+  };
   const processoNaTx = async (id: number) => {
     const r = await tx.uma(`${SQL_PROCESSOS_FOLHA} AND p.id = ?`, [est, id]);
     return r ? processoDe(r) : null;
@@ -455,17 +498,14 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
         [vinculo, est],
       );
       if (!v) return { desligamento: null, tipoRescisao: null, rescisoes: [] };
-      const rs = await tx.consultarParaAtualizar(
-        `${SQL_RESCISOES} AND d.vinculo_trabalho_id = ? ORDER BY r.id`,
-        [est, vinculo],
-      );
+      const rescisoes = await lerRescisoes(trava, est, { vinculo });
       return {
         desligamento: dia(v['data_desligamento']),
         tipoRescisao:
           v['tipo_rescisao_id'] === null || v['tipo_rescisao_id'] === undefined
             ? null
             : n(v['tipo_rescisao_id']),
-        rescisoes: rs.map(rescisaoDe),
+        rescisoes,
       };
     },
 
@@ -473,7 +513,8 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
       daSessao(x.empresa);
       await exigirUsuario(tx, x.por);
       const [v] = await tx.consultarParaAtualizar(
-        'SELECT id, colaborador_id FROM vinculo_trabalho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        `SELECT id, colaborador_id, data_desligamento, tipo_rescisao_id FROM vinculo_trabalho
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [x.vinculo, est],
       );
       if (!v) throw recusa('vinculo-inexistente', 'O vínculo não existe neste estabelecimento.');
@@ -482,18 +523,7 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
           'tipo-rescisao-obrigatorio',
           'Informe o tipo de rescisão do desligamento do vínculo antes de gravar a rescisão.',
         );
-      const [d] = await tx.consultarParaAtualizar(
-        `SELECT id FROM desligamento
-          WHERE vinculo_trabalho_id = ? AND estabelecimento_id = ? AND data_desligamento = ? AND excluido_em IS NULL
-            AND situacao <> 'cancelado'
-          ORDER BY id DESC LIMIT 1`,
-        [x.vinculo, est, x.desligamento],
-      );
-      if (!d)
-        throw recusa(
-          'desligamento-nao-registrado',
-          'O desligamento do vínculo nesta data não está registrado: registre o desligamento antes da rescisão.',
-        );
+      const desligamentoId = await desligamentoDaRescisao(v, x);
       const p = await processoNaTx(x.processo);
       if (!p || p.tipo !== 'rescisao')
         throw recusa(
@@ -502,13 +532,13 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
         );
       const [ultimo] = await tx.consultarParaAtualizar(
         'SELECT MAX(numero_complementar) AS m, COUNT(*) AS q FROM rescisao WHERE desligamento_id = ?',
-        [n(d['id'])],
+        [desligamentoId],
       );
       const numero = n(ultimo?.['q']) === 0 ? 0 : n(ultimo?.['m']) + 1;
       return tx.incluir('rescisao', {
         estabelecimento_id: est,
         colaborador_id: n(v['colaborador_id']),
-        desligamento_id: n(d['id']),
+        desligamento_id: desligamentoId,
         tipo_rescisao_id: x.tipoRescisao,
         numero_complementar: numero,
         data_desligamento: x.desligamento,
@@ -528,18 +558,28 @@ export function gravadorFolhaExecutor(tx: TxOperacao, est: number): GravadorFolh
     },
 
     async situacaoRescisao(x) {
-      const [r] = await tx.consultarParaAtualizar(
-        'SELECT id, situacao, versao FROM rescisao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [x.id, est],
-      );
-      if (!r || r['situacao'] !== x.de || n(r['versao']) !== x.versao) throw desatualizado();
+      // A situação relida pela tradução da leitura: `de: calculada` vale para a conferida, a paga e a homologada.
+      const r = await lerRescisaoPorId(trava, est, x.id);
+      if (!r || r.situacao !== x.de || r.versao !== x.versao) throw desatualizado();
       await exigirUsuario(tx, x.por);
       await tx.alterar('rescisao', x.id, x.versao, { situacao: x.para, motivo_situacao: x.motivo });
     },
 
-    feriasDoVinculoComTrava: sem('Ler as férias do vínculo', FALTA.ferias),
+    feriasDoVinculoComTrava: (vinculo) => lerFerias(trava, est, { vinculo }),
     incluirFerias: sem('Gravar as férias', FALTA.ferias),
-    situacaoFerias: sem('Trocar a situação das férias', FALTA.ferias),
+    async situacaoFerias(x) {
+      // Cancelar ou voltar a programar grava aqui; marcar calculada liga o recibo ao processamento (recibo_ferias), que
+      // segue com a gravação das férias.
+      if (x.para === 'calculada' || (x.processo ?? null) !== null)
+        throw erroModeloPendente('Marcar as férias como calculadas', FALTA.ferias);
+      const f = await lerFeriasPorId(trava, est, x.id);
+      if (!f || f.situacao !== x.de || f.versao !== x.versao) throw desatualizado();
+      await exigirUsuario(tx, x.por);
+      await tx.alterar('programacao_ferias', x.id, x.versao, {
+        situacao: FERIAS_NO_BANCO[x.para],
+        motivo_cancelamento: x.para === 'cancelada' ? x.motivo : null,
+      });
+    },
     async incluirParametrosObrigacoes(x) {
       daSessao(x.empresa);
       const repetida = await tx.consultarParaAtualizar(

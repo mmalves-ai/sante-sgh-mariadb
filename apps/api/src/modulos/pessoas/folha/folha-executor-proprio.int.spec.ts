@@ -24,6 +24,8 @@ import {
   gravadorFolhaExecutor,
   TABELAS_FOLHA_EXECUTOR,
 } from './folha-executor-proprio.js';
+import { PortaPessoasPropria } from '../porta-propria.js';
+import { lerFerias, lerRescisoes } from './folha-porta-propria-calculo.js';
 import type { LinhaCalculoDoVinculo } from './tipos-folha.js';
 
 const MARCA = 'TF24FX';
@@ -91,7 +93,7 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       await e.executar('DELETE FROM parametro_obrigacao WHERE estabelecimento_id = ?', [m.est]);
       await e.executar(`DELETE FROM ${TABELA_FICHA_ESOCIAL} WHERE estabelecimento_id = ?`, [m.est]);
       await e.executar(
-        'UPDATE vinculo_trabalho SET data_desligamento = NULL, tipo_rescisao_id = NULL WHERE id = ?',
+        "UPDATE vinculo_trabalho SET situacao = 'ativo', data_desligamento = NULL, tipo_rescisao_id = NULL WHERE id = ?",
         [m.vinculo],
       );
       await e.executar('DELETE FROM tipo_rescisao WHERE codigo = ?', [MARCA]);
@@ -192,7 +194,8 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
         ),
       ),
     ).toBe('calculo-concorrente');
-    expect(await codigo(gravar((g) => g.incluirLinhas(r.id, [linhas[0]!])))).toMatch(/linha repetida/);
+    // Linha repetida é defeito de quem chama (o serviço nunca repete): erro interno, como o `Error` da porta de memória.
+    expect(await codigo(gravar((g) => g.incluirLinhas(r.id, [linhas[0]!])))).toBe('erro-interno');
 
     // 13º: tipo traduzido, intervalo do ano, data de pagamento.
     const d1 = await gravar(async (g) => {
@@ -346,20 +349,10 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       por: m.login,
     };
     expect(await codigo(gravar((g) => g.incluirRescisao(nova)))).toBe('tipo-rescisao-obrigatorio');
+    // Catálogo sintético: a tabela 19 do eSocial (motivo do desligamento) e o tipo de rescisão que aponta para ela.
     await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'teste-folha-executor' }, async (e) => {
       await e.executar(
-        "INSERT INTO tipo_rescisao (codigo, descricao, iniciativa, criado_em) VALUES (?, 'TIPO SINTETICO', 'empregador', NOW(3))",
-        [MARCA],
-      );
-      const [t] = await e.consultar('SELECT id FROM tipo_rescisao WHERE codigo = ?', [MARCA]);
-      tipoRescisao = Number(t!['id']);
-    });
-    expect(await codigo(gravar((g) => g.incluirRescisao({ ...nova, tipoRescisao })))).toBe(
-      'desligamento-nao-registrado',
-    );
-    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'teste-folha-executor' }, async (e) => {
-      await e.executar(
-        "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES ('teste', ?, 'TABELA SINTETICA', 't', NOW(3))",
+        "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES ('esocial', ?, 'TABELA SINTETICA', 't', NOW(3))",
         [MARCA],
       );
       const [t] = await e.consultar('SELECT id FROM tabela_esocial WHERE codigo_oficial = ?', [MARCA]);
@@ -369,17 +362,52 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       );
       const [c] = await e.consultar('SELECT id FROM codigo_esocial WHERE tabela_esocial_id = ?', [t!['id']]);
       await e.executar(
-        `INSERT INTO desligamento (estabelecimento_id, vinculo_trabalho_id, motivo_codigo_esocial_id, iniciativa,
-           data_comunicacao, data_desligamento, aviso_previo, criado_em)
-         VALUES (?, ?, ?, 'empregador', '2098-08-01', '2098-08-10', 'indenizado', NOW(3))`,
-        [m.est, m.vinculo, c!['id']],
+        `INSERT INTO tipo_rescisao (codigo, descricao, iniciativa, motivo_desligamento_codigo_esocial_id, criado_em)
+         VALUES (?, 'TIPO SINTETICO', 'empregador', ?, NOW(3))`,
+        [MARCA, c!['id']],
       );
-      await e.executar(
-        'UPDATE vinculo_trabalho SET data_desligamento = ?, tipo_rescisao_id = ? WHERE id = ?',
-        ['2098-08-10', tipoRescisao, m.vinculo],
-      );
+      const [tr] = await e.consultar('SELECT id FROM tipo_rescisao WHERE codigo = ?', [MARCA]);
+      tipoRescisao = Number(tr!['id']);
     });
+    // Vínculo ainda ativo: não há desligamento nesta data.
+    expect(await codigo(gravar((g) => g.incluirRescisao({ ...nova, tipoRescisao })))).toBe(
+      'desligamento-nao-registrado',
+    );
+    // O desligamento pelo caminho real: a porta própria de pessoas (só marca o vínculo), sem INSERT manual.
+    const pessoas = new PortaPessoasPropria(m.nucleo, {} as never, exec);
+    const vinculo = (await pessoas.vinculo(ctx(), m.vinculo))!;
+    await pessoas.gravarSgh(
+      ctx(),
+      { ...trilha, estabelecimento: m.est, usuario: m.usuario, acao: 'alteracao', entidade: 'vinculo_trabalho' },
+      (g) =>
+        g.desligarVinculo({
+          id: m.vinculo,
+          versao: vinculo.versao,
+          data: '2098-08-10',
+          tipoRescisao,
+          motivo: 'Desligamento sintético',
+          por: m.login,
+        }),
+    );
     const id = await gravar((g) => g.incluirRescisao({ ...nova, tipoRescisao }));
+    const deslig = await m.nucleo.lerSomente(ctx(), (l) =>
+      l.consultar(
+        `SELECT d.situacao, d.iniciativa, d.aviso_previo, d.tipo_rescisao_id, d.motivo_codigo_esocial_id IS NOT NULL AS motivo,
+                (SELECT COUNT(*) FROM rescisao r WHERE r.desligamento_id = d.id) AS rescisoes
+           FROM desligamento d WHERE d.vinculo_trabalho_id = ? AND d.data_desligamento = '2098-08-10'`,
+        [m.vinculo],
+      ),
+    );
+    expect(deslig.map((d) => ({ ...d, tipo_rescisao_id: Number(d['tipo_rescisao_id']) }))).toEqual([
+      expect.objectContaining({
+        situacao: 'confirmado',
+        iniciativa: 'empregador',
+        aviso_previo: 'trabalhado',
+        tipo_rescisao_id: tipoRescisao,
+      }),
+    ]);
+    expect(Number(deslig[0]!['motivo'])).toBe(1);
+    expect(Number(deslig[0]!['rescisoes'])).toBe(1);
     const lidas = await gravar((g) => g.rescisoesDoVinculoComTrava(m.vinculo));
     expect(lidas.desligamento).toBe('2098-08-10');
     expect(lidas.tipoRescisao).toBe(tipoRescisao);
@@ -407,6 +435,37 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
       registradoPor: m.login,
       situacaoPor: null,
     });
+    // Conferida fora do cálculo e uma simulação no mesmo desligamento: a releitura com trava filtra e traduz como a
+    // leitura da montagem, e o carimbo do serviço (id:situação:versão) bate.
+    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'teste-folha-executor' }, async (e) => {
+      const cols = (
+        await e.consultar(
+          `SELECT column_name AS c FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = 'rescisao' AND column_name NOT IN ('id', 'situacao', 'numero_complementar')
+            ORDER BY ordinal_position`,
+          [],
+        )
+      ).map((x) => String(x['c'] ?? x['C']));
+      await e.executar(
+        `INSERT INTO rescisao (${cols.join(', ')}, situacao, numero_complementar)
+         SELECT ${cols.join(', ')}, 'simulacao', 90 FROM rescisao WHERE id = ?`,
+        [id],
+      );
+      await e.executar("UPDATE rescisao SET situacao = 'conferida' WHERE id = ?", [id]);
+    });
+    const carimbo = (xs: readonly { id: number; situacao: string; versao: number }[]) =>
+      xs.map((x) => `${x.id}:${x.situacao}:${x.versao}`).sort().join(',');
+    const montagem = await m.nucleo.lerSomente(ctx(), async (l) => ({
+      rescisoes: await lerRescisoes(l, m.est, { vinculo: m.vinculo }),
+      ferias: await lerFerias(l, m.est, { vinculo: m.vinculo }),
+    }));
+    const relida = await gravar(async (g) => ({
+      t: await g.rescisoesDoVinculoComTrava(m.vinculo),
+      ferias: await g.feriasDoVinculoComTrava(m.vinculo),
+    }));
+    expect(relida.t.rescisoes.map((x) => [x.id, x.situacao])).toEqual([[id, 'calculada']]);
+    expect(carimbo(relida.t.rescisoes)).toBe(carimbo(montagem.rescisoes));
+    expect(carimbo(relida.ferias)).toBe(carimbo(montagem.ferias));
     const troca = (versao: number) =>
       gravar((g) =>
         g.situacaoRescisao({
@@ -459,8 +518,22 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
     ).toBe('empresa-fora-da-sessao');
   });
 
-  it('férias e obrigações seguem recusando com modelo-pendente, sem gravar', async () => {
-    expect(await codigo(gravar((g) => g.feriasDoVinculoComTrava(m.vinculo)))).toBe('modelo-pendente');
+  it('férias relidas pela leitura do cálculo; marcá-las calculadas e as obrigações seguem com modelo-pendente', async () => {
+    expect(await gravar((g) => g.feriasDoVinculoComTrava(m.vinculo))).toEqual([]);
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.situacaoFerias({ id: 0, versao: 1, de: 'programada', para: 'cancelada', motivo: 'x', por: m.login }),
+        ),
+      ),
+    ).toBe('desatualizado');
+    expect(
+      await codigo(
+        gravar((g) =>
+          g.situacaoFerias({ id: 0, versao: 1, de: 'programada', para: 'calculada', motivo: null, por: m.login }),
+        ),
+      ),
+    ).toBe('modelo-pendente');
     expect(await codigo(gravar((g) => g.obrigacaoComTrava(1)))).toBe('modelo-pendente');
   });
 
