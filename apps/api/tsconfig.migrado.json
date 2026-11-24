@@ -12,6 +12,7 @@
     "src/sessao/troca-rapida.ts",
     "src/modulos/acesso/senha/porta-senha.ts",
     "src/sessao/teste.spec-util.ts",
+    "src/teste/limpar-trilha.spec-util.ts",
     "src/modulos/acesso/senha/porta-senha-redefinicao.spec.ts",
     "src/modulos/acesso/senha/porta-senha.spec.ts",
     "src/sessao/chaves-conta.spec.ts",

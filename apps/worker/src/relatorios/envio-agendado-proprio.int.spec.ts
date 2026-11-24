@@ -7,7 +7,7 @@
 // mascarados, e não conclui duas vezes; as falhas seguidas contam do histórico e zeram com o envio feito; o
 // agendamento de outro estabelecimento é recusado. Massa sintética (e-mails
 // .invalid), apagada no fim. SGH_NUCLEO_SEM_BANCO=1 pula.
-import { NucleoProprio } from '@sgh/nucleo';
+import { limparTrilhaDaMassa, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   escrever,
@@ -145,16 +145,9 @@ describe.skipIf(SEM_BANCO)('envio agendado de relatório sobre o banco próprio 
     if (!nucleo) return;
     await escrever(nucleo, async (e) => {
       const ag = [ids.ag, ids.agOutro, ids.agSuspenso];
-      const envios = await e.consultar(
-        'SELECT id FROM envio_relatorio WHERE agendamento_relatorio_id IN (?, ?, ?)',
-        ag,
-      );
-      for (const x of envios)
-        await e
-          .executar("DELETE FROM trilha_auditoria WHERE entidade = 'envio_relatorio' AND entidade_id = ?", [
-            x['id'],
-          ])
-          .catch(() => 0);
+      // A trilha dos dois estabelecimentos sintéticos sai na ordem das chaves (dependentes, fecho, cabeça e linhas):
+      // apagar só a linha da trilha dá o erro 1451 desde a cadeia por hash.
+      await limparTrilhaDaMassa(e, { ids: [ids.est, ids.outro] });
       await e.executar('DELETE FROM envio_relatorio WHERE agendamento_relatorio_id IN (?, ?, ?)', ag);
       await e.executar(
         'DELETE FROM agendamento_relatorio_destinatario WHERE agendamento_relatorio_id IN (?, ?, ?)',

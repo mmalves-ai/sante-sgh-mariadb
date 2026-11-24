@@ -10,6 +10,7 @@ export * from './contexto.js';
 export * from './erros.js';
 export * from './executor.js';
 export * from './gravacao.js';
+export * from './limpar-trilha-teste.js';
 export * from './idempotencia.js';
 export * from './neutralizacao.js';
 export * from './nucleo.js';
