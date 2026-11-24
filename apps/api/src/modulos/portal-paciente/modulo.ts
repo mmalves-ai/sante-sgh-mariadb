@@ -72,7 +72,7 @@ export function portasDoPortal(ctx: ContextoModulo): {
 } {
   const cliente = ctx.configuracao.clientePadrao;
   if (ctx.nucleo && cliente)
-    return { porta: new PortaPortalPropria(ctx.nucleo), agendaOnline: new PortaAgendaOnlinePropria() };
+    return { porta: new PortaPortalPropria(ctx.nucleo), agendaOnline: new PortaAgendaOnlinePropria(ctx.nucleo) };
   if (!ctx.nucleo && fontesSinteticas(ctx.env))
     return {
       porta: new PortaPortalMemoria(),

@@ -11,7 +11,6 @@
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PortaAgendaOnlinePropria } from './agenda/porta-propria.js';
 import type { ContextoPortal } from './porta.js';
 import { PortaPortalPropria } from './porta-propria.js';
 import type { RegistroTrilhaPortal } from './tipos.js';
@@ -384,10 +383,5 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do paciente (MariaDB, clien
     await expect(porta.gravar(c, (g) => g.criarConta({} as never), null)).rejects.toMatchObject({
       problema: { codigo: 'recurso-sem-modelo' },
     });
-    const agenda = new PortaAgendaOnlinePropria();
-    await expect(agenda.configs()).rejects.toMatchObject({
-      problema: { status: 503, codigo: 'recurso-sem-modelo' },
-    });
-    await expect(agenda.gravar()).rejects.toMatchObject({ problema: { codigo: 'recurso-sem-modelo' } });
   });
 });
