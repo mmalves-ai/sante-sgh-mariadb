@@ -19,6 +19,7 @@ export * from './laudo/autenticacao.js';
 export * from './laudo/numero.js';
 export * from './laudo/redacao.js';
 export * from './laudo/estruturado.js';
+export * from './apoio/remessa.js';
 export * from './portal/acesso.js';
 export * from './pacs/index.js';
 export * from './transfusao/index.js';
