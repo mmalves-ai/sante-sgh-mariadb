@@ -9,3 +9,4 @@ export * from './nir/index.js';
 export * from './portaria/index.js';
 export * from './digitalizacao/index.js';
 export * from './documentos-internacao.js';
+export * from './registros-internacao.js';
