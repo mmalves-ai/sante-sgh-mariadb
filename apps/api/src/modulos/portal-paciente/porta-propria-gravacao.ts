@@ -22,12 +22,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import type { DominiosConsentimento, GravadorPortal } from './porta.js';
-import {
-  ErroPedido,
-  ErroPortal,
-  type RegistroTrilhaPortal,
-  type SituacaoContaPortal,
-} from './tipos.js';
+import { ErroPedido, ErroPortal, type RegistroTrilhaPortal, type SituacaoContaPortal } from './tipos.js';
 
 /** Tabelas que estas gravações tocam (somar às TABELAS_PORTAL da operação `portal-paciente.gravar`). */
 export const TABELAS_GRAVACAO_PORTAL = [
@@ -73,7 +68,10 @@ export const DOMINIOS_CONSENTIMENTO_PROPRIO: DominiosConsentimento = {
   ],
   revogacoes: [{ id: 2, descricao: 'Revogação', ativo: true }],
 };
-export const SIGNATARIO_DO_BANCO: Readonly<Record<number, string>> = { 1: 'paciente', 2: 'representante_legal' };
+export const SIGNATARIO_DO_BANCO: Readonly<Record<number, string>> = {
+  1: 'paciente',
+  2: 'representante_legal',
+};
 export const SITUACAO_CONSENTIMENTO_DO_BANCO: Readonly<Record<number, string>> = {
   1: 'emitido',
   3: 'autorizado',
@@ -139,15 +137,27 @@ export function gravadorGravacaoPropria(
   };
 
   const travarConta = async (id: number) => {
-    const [l] = await tx.consultarParaAtualizar(
+    const [l] = await tx.consultarParaAtualizar<Linha>(
       `SELECT id, versao, situacao, convite_usado_em, ativada_em, tentativas_falhas
          FROM conta_portal_paciente WHERE id = ? AND excluido_em IS NULL`,
       [id],
     );
-    return l ? { ...l, situacao: SITUACAO_CONTA_DO_BANCO[String(l['situacao'])]!, versao: num(l['versao']) } : null;
+    return l
+      ? {
+          conviteUsadoEm: l['convite_usado_em'] as unknown,
+          ativadaEm: l['ativada_em'] as unknown,
+          situacao: SITUACAO_CONTA_DO_BANCO[String(l['situacao'])]!,
+          versao: num(l['versao']),
+        }
+      : null;
   };
   /** A conta travada na versão e numa das situações aceitas; senão, a versão está velha. */
-  const contaPara = async (id: number, versao: number | null, aceitas: readonly SituacaoContaPortal[], o: string) => {
+  const contaPara = async (
+    id: number,
+    versao: number | null,
+    aceitas: readonly SituacaoContaPortal[],
+    o: string,
+  ) => {
     const k = await travarConta(id);
     if (!k || (versao !== null && k.versao !== versao) || !aceitas.includes(k.situacao)) throw versaoVelha(o);
     return k;
@@ -162,10 +172,12 @@ export function gravadorGravacaoPropria(
   };
   const traduzirUnica = (e: unknown): unknown => {
     const r = restricaoUnicaViolada(e);
-    if (r === 'uq_conta_portal_paciente_convite') return new ErroPortal('convite-repetido', 'Código de convite repetido.');
+    if (r === 'uq_conta_portal_paciente_convite')
+      return new ErroPortal('convite-repetido', 'Código de convite repetido.');
     if (r === 'uq_conta_portal_paciente_email_resumo' || r === 'uq_conta_portal_paciente_login')
       return new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.');
-    if (r === 'uq_troca_email_conta_portal_codigo') return new ErroPortal('convite-repetido', 'Token repetido.');
+    if (r === 'uq_troca_email_conta_portal_codigo')
+      return new ErroPortal('convite-repetido', 'Token repetido.');
     return e;
   };
   const conviteUnico = async (resumo: string, exceto: number) => {
@@ -190,7 +202,8 @@ export function gravadorGravacaoPropria(
   };
   const exigirUsuario = async (login: string): Promise<number> => {
     const u = await usuarioDoLogin(login);
-    if (u === null) throw recusa('usuario-inexistente', 'Quem registra o ato precisa ser usuário do hospital.');
+    if (u === null)
+      throw recusa('usuario-inexistente', 'Quem registra o ato precisa ser usuário do hospital.');
     return u;
   };
   const pacienteDoCadastro = async (id: number) => {
@@ -202,7 +215,13 @@ export function gravadorGravacaoPropria(
     if (!l) throw new ErroPedido('paciente-inexistente', 'Paciente não encontrado.');
     return l;
   };
-  const historicoPedido = (id: number, antes: string | null, depois: string, descricao: string, usuario: number | null) =>
+  const historicoPedido = (
+    id: number,
+    antes: string | null,
+    depois: string,
+    descricao: string,
+    usuario: number | null,
+  ) =>
     tx.incluir('pedido_titular_historico', {
       pedido_titular_id: id,
       operacao: antes === null ? 'inclusao' : 'alteracao',
@@ -315,12 +334,15 @@ export function gravadorGravacaoPropria(
       const k = await travarConta(id);
       if (k?.situacao !== 'convidada') return;
       // O contador não muda a versão (o formulário aberto continua válido).
-      await tx.executar('UPDATE conta_portal_paciente SET convite_erradas = convite_erradas + 1 WHERE id = ?', [id]);
+      await tx.executar(
+        'UPDATE conta_portal_paciente SET convite_erradas = convite_erradas + 1 WHERE id = ?',
+        [id],
+      );
       marcar('conta_portal_paciente', id);
     },
     ativar: async (id, versao, a) => {
       const k = await contaPara(id, versao, ['convidada'], 'ativação');
-      if (k['convite_usado_em']) throw versaoVelha('ativação');
+      if (k.conviteUsadoEm) throw versaoVelha('ativação');
       await emailLivre(a.emailResumo, id);
       const t = new Date();
       await alterarConta(id, k.versao, {
@@ -337,7 +359,7 @@ export function gravadorGravacaoPropria(
         termo_uso_aceito: corte(a.termoUso, 40),
         politica_aceita: corte(a.politica, 40),
         convite_usado_em: t,
-        ativada_em: k['ativada_em'] ?? t,
+        ativada_em: k.ativadaEm ?? t,
         ultimo_acesso_em: t,
         tentativas_falhas: 0,
         bloqueada_ate: null,
@@ -547,11 +569,15 @@ export function gravadorGravacaoPropria(
       const situacao = DOMINIOS_CONSENTIMENTO_PROPRIO.situacoes.some((d) => d.id === x.situacao && d.ativo)
         ? SITUACAO_CONSENTIMENTO_DO_BANCO[x.situacao]
         : undefined;
-      if (!situacao) throw recusa('situacao-invalida', 'Situação do termo desconhecida.', { campos: ['situacao'] });
-      const signatario = DOMINIOS_CONSENTIMENTO_PROPRIO.signatarios.some((d) => d.id === x.signatario && d.ativo)
+      if (!situacao)
+        throw recusa('situacao-invalida', 'Situação do termo desconhecida.', { campos: ['situacao'] });
+      const signatario = DOMINIOS_CONSENTIMENTO_PROPRIO.signatarios.some(
+        (d) => d.id === x.signatario && d.ativo,
+      )
         ? SIGNATARIO_DO_BANCO[x.signatario]
         : undefined;
-      if (!signatario) throw recusa('signatario-invalido', 'Signatário desconhecido.', { campos: ['signatario'] });
+      if (!signatario)
+        throw recusa('signatario-invalido', 'Signatário desconhecido.', { campos: ['signatario'] });
       if (signatario === 'representante_legal' && x.vinculo === null)
         throw recusa('signatario-invalido', 'O representante assina pelo vínculo do portal.', {
           campos: ['signatario'],
@@ -662,7 +688,8 @@ export function gravadorGravacaoPropria(
     pedirCopia: async (p, trilhas) => {
       const balcao = p.canal === 'balcao';
       const usuario = balcao ? await exigirUsuario(p.por) : null;
-      if (!balcao && p.conta === null) throw recusa('conta-inexistente', 'A cópia pelo portal precisa da conta.');
+      if (!balcao && p.conta === null)
+        throw recusa('conta-inexistente', 'A cópia pelo portal precisa da conta.');
       const pedido = await novoPedido({
         idPaciente: p.idPaciente,
         tipo: 'acesso',
@@ -733,7 +760,10 @@ export function gravadorGravacaoPropria(
         [num(s['id'])],
       )) as Linha[];
       const antes = String(k['situacao']);
-      const r = d.conferir(SITUACAO_PEDIDO_DO_BANCO[antes] ?? antes, atos.map((a) => ({ ato: String(a['ato']) })));
+      const r = d.conferir(
+        SITUACAO_PEDIDO_DO_BANCO[antes] ?? antes,
+        atos.map((a) => ({ ato: String(a['ato']) })),
+      );
       if (r) throw new ErroPedido('transicao', r);
       const usuario = await exigirUsuario(d.por);
       const agora = new Date();
@@ -777,10 +807,16 @@ export function gravadorGravacaoPropria(
         });
       }
       await tx.alterar('solicitacao_copia_prontuario', num(s['id']), num(s['versao']), solicitacao);
-      if (depois !== antes) await historicoPedido(idPedido, antes, depois, `Cópia do prontuário: ${d.ato}`, usuario);
+      if (depois !== antes)
+        await historicoPedido(idPedido, antes, depois, `Cópia do prontuário: ${d.ato}`, usuario);
       marcar('ato_copia_prontuario', id);
       trilhaDe(trilha, 'ato_copia_prontuario', id, d.protocolo);
-      return { id: String(id), idPedido: String(idPedido), protocolo: d.protocolo, situacao: SITUACAO_PEDIDO_DO_BANCO[depois] ?? depois };
+      return {
+        id: String(id),
+        idPedido: String(idPedido),
+        protocolo: d.protocolo,
+        situacao: SITUACAO_PEDIDO_DO_BANCO[depois] ?? depois,
+      };
     },
   };
 }
