@@ -150,6 +150,9 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       }
       await e.executar('DELETE FROM movimento_caixa WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM sessao_caixa WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar('DELETE FROM ciclo_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]);
       await e.executar('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [
         ids.est,
       ]);

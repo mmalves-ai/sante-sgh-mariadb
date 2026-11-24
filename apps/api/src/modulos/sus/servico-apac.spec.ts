@@ -1,4 +1,4 @@
-// Serviço do faturamento SUS, etapa 3 (APAC), sobre a porta em memória (massa SINTÉTICA): desligada (DP-35) recusa;
+// Serviço do faturamento SUS, etapa 3 (APAC), sobre a porta em memória (massa SINTÉTICA): tudo ligado (F3.7);
 // ligada: o laudo (atendimento SUS, procedimento, solicitante e o laudo de nefrologia) → a crítica da competência acusa
 // a produção sem autorização → a autorização (número, validade) → a crítica sem bloqueante → o APAC-Mag com hash → as
 // linhas sem dado pessoal → o download pela rota da APAC; a continuidade e o encerramento; as recusas (versão, número
@@ -22,7 +22,7 @@ const numero = (k: number) => {
   return `${b}${digitoApac(b)}`;
 };
 
-function sessao(extra: Partial<SessaoSus> = {}, apacLigada = true): SessaoSus {
+function sessao(extra: Partial<SessaoSus> = {}): SessaoSus {
   return {
     rede: 'rede-teste',
     hospital: 'pc',
@@ -45,7 +45,6 @@ function sessao(extra: Partial<SessaoSus> = {}, apacLigada = true): SessaoSus {
       },
       apac: { uf: '33' },
     },
-    liberado: async (i) => i === 'ciha' || (apacLigada && i === 'apac'),
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
       hospital: 'pc',
@@ -93,21 +92,6 @@ const laudo = (extra: Record<string, unknown> = {}) => ({
 });
 
 describe('faturamento SUS, etapa 3: APAC', () => {
-  it('desligada por estabelecimento (DP-35): a lista, o laudo, a crítica e a geração recusam', async () => {
-    const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria(), undefined, SELO);
-    const s = sessao({}, false);
-    await expect(sv.listarApacs(s, { pagina: 0, porPagina: 50 })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(sv.registrarApac(s, laudo())).rejects.toEqual(recusa('recurso-desligado'));
-    await expect(sv.abrir(s, { instrumento: 'apac', competencia: COMP })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(sv.gerarApac(s, { competencia: COMP, versao: '0000000001' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-  });
-
   it('o caminho inteiro: laudo, crítica, autorização, APAC-Mag com hash, linhas, download e trilha', async () => {
     const porta = new PortaSusMemoria();
     const armazem = armazemSusMemoria();
@@ -418,14 +402,8 @@ describe('faturamento SUS, etapa 3: APAC', () => {
     );
   });
 
-  it('a busca dos solicitantes e os domínios seguem a liberação e o escopo; o atendimento não SUS é recusado sem CID', async () => {
+  it('a busca dos solicitantes e os domínios seguem o escopo; o atendimento não SUS é recusado sem CID', async () => {
     const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria(), undefined, SELO);
-    const desligada = sessao({}, false);
-    await expect(sv.buscarSolicitantesApac(desligada, 'apac')).rejects.toEqual(recusa('recurso-desligado'));
-    await expect(sv.dominiosApac(desligada)).rejects.toEqual(recusa('recurso-desligado'));
-    await expect(sv.atendimentoLaudoApac(desligada, REGISTRO_APAC_SINTETICO)).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
     await expect(sv.buscarSolicitantesApac(sessao({ convenios: [10] }), 'apac')).rejects.toEqual(
       recusa('escopo-parcial'),
     );

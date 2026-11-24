@@ -99,12 +99,7 @@ export const SETORES_ONDA_4: readonly SetorOnda4[] = [
     ordem: 3,
     momento: 'fim-da-competencia',
     marco: 'M31',
-    operacoes: [
-      'faturamento.gerarLote',
-      'faturamento.registrarProtocolo',
-      'faturamento.fecharCompetencia',
-      'faturamento.reabrirCompetencia',
-    ],
+    operacoes: ['faturamento.gerarLote', 'faturamento.registrarProtocolo', 'faturamento.fecharCompetencia'],
     recursos: ['faturamento.lote', 'faturamento.competencia', 'integracao.tiss'],
     grupos: ['FATURAMENTO'],
     respostas: ['FAT-07', 'FAT-14'],

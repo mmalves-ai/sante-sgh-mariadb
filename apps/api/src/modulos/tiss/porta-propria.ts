@@ -718,13 +718,17 @@ export class PortaTissPropria implements PortaTiss {
               SUM(EXISTS (SELECT 1 FROM lote_tiss_conta ltc JOIN lote_tiss lt ON lt.id = ltc.lote_tiss_id
                            WHERE ltc.conta_hospitalar_id = ch.id AND ltc.excluido_em IS NULL
                              AND lt.excluido_em IS NULL AND lt.situacao <> 'cancelado')) AS em_lote,
-              MAX(fc.situacao) AS situacao_fechamento, MAX(fc.fechado_em) AS fechado_em, MAX(u.login) AS fechado_por
+              MAX(fc.situacao) AS situacao_fechamento, MAX(fc.fechado_em) AS fechado_em, MAX(u.login) AS fechado_por,
+              MAX(fc.reaberto_em) AS reaberto_em, MAX(ur.login) AS reaberto_por, MAX(fc.motivo_reabertura) AS motivo,
+              MAX((SELECT COUNT(*) FROM ciclo_competencia_fonte_pagadora cc
+                    WHERE cc.fechamento_competencia_fonte_pagadora_id = fc.id AND cc.excluido_em IS NULL)) AS ciclos
          FROM conta_hospitalar ch
          JOIN fonte_pagadora fp ON fp.id = ch.fonte_pagadora_id
          LEFT JOIN fechamento_competencia_fonte_pagadora fc ON fc.estabelecimento_id = ch.estabelecimento_id
                AND fc.fonte_pagadora_id = ch.fonte_pagadora_id AND fc.competencia = ch.competencia
                AND fc.excluido_em IS NULL
          LEFT JOIN usuario u ON u.id = fc.fechado_por_usuario_id
+         LEFT JOIN usuario ur ON ur.id = fc.reaberto_por_usuario_id
         WHERE ch.estabelecimento_id = ? AND ch.excluido_em IS NULL AND ch.situacao <> 'cancelada'${where}
         GROUP BY ch.fonte_pagadora_id, fp.nome, ch.competencia
         ORDER BY ch.competencia DESC, fp.nome`,
@@ -733,6 +737,7 @@ export class PortaTissPropria implements PortaTiss {
     return linhas.map((r) => {
       const d = dataIso(r['competencia']) ?? '0000-00';
       const fechada = texto(r['situacao_fechamento']) === 'fechada';
+      const reaberta = texto(r['situacao_fechamento']) === 'reaberta';
       return {
         convenio: n(r['fonte_pagadora_id']),
         convenioNome: texto(r['fonte']),
@@ -741,6 +746,11 @@ export class PortaTissPropria implements PortaTiss {
         fechada,
         fechadaEm: fechada ? instante(r['fechado_em']) : null,
         fechadaPor: fechada ? texto(r['fechado_por']) : '',
+        reaberta,
+        reabertaEm: reaberta ? instante(r['reaberto_em']) : null,
+        reabertaPor: reaberta ? texto(r['reaberto_por']) : '',
+        motivoReabertura: reaberta ? texto(r['motivo']) : '',
+        ciclos: n(r['ciclos']),
         contas: n(r['contas']),
         emLote: n(r['em_lote']),
         valor: n(r['valor']),
@@ -782,12 +792,17 @@ export class PortaTissPropria implements PortaTiss {
       if (r) return r;
       const fp = await l.uma<Linha>('SELECT nome FROM fonte_pagadora WHERE id = ?', [x.convenio]);
       const fc = await l.uma<Linha>(
-        `SELECT fc.situacao, fc.fechado_em, u.login FROM fechamento_competencia_fonte_pagadora fc
+        `SELECT fc.situacao, fc.fechado_em, u.login, fc.reaberto_em, ur.login AS reaberto_por, fc.motivo_reabertura,
+                (SELECT COUNT(*) FROM ciclo_competencia_fonte_pagadora cc
+                  WHERE cc.fechamento_competencia_fonte_pagadora_id = fc.id AND cc.excluido_em IS NULL) AS ciclos
+           FROM fechamento_competencia_fonte_pagadora fc
            LEFT JOIN usuario u ON u.id = fc.fechado_por_usuario_id
+           LEFT JOIN usuario ur ON ur.id = fc.reaberto_por_usuario_id
           WHERE fc.estabelecimento_id = ? AND fc.fonte_pagadora_id = ? AND fc.competencia = ? AND fc.excluido_em IS NULL`,
         [est, x.convenio, diaDaCompetencia(x.ano, x.mes)],
       );
       const fechada = texto(fc?.['situacao']) === 'fechada';
+      const reaberta = texto(fc?.['situacao']) === 'reaberta';
       return {
         convenio: x.convenio,
         convenioNome: texto(fp?.['nome']),
@@ -796,6 +811,11 @@ export class PortaTissPropria implements PortaTiss {
         fechada,
         fechadaEm: fechada ? instante(fc?.['fechado_em']) : null,
         fechadaPor: fechada ? texto(fc?.['login']) : '',
+        reaberta,
+        reabertaEm: reaberta ? instante(fc?.['reaberto_em']) : null,
+        reabertaPor: reaberta ? texto(fc?.['reaberto_por']) : '',
+        motivoReabertura: reaberta ? texto(fc?.['motivo_reabertura']) : '',
+        ciclos: n(fc?.['ciclos']),
         contas: 0,
         emLote: 0,
         valor: 0,

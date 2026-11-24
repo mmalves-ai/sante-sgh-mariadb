@@ -327,7 +327,6 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
         },
         apac: { uf: '33' },
       } as unknown as SessaoSus['parametros'],
-      liberado: async () => true,
       trilha: (evento, operacao, alvo) => ({
         rede: 'rede-teste',
         hospital: EST_A,

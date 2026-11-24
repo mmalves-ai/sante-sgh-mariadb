@@ -1,7 +1,7 @@
-// As funcionalidades do pós-fechamento (ficha do M31, seção 12): uma chave de liberação por funcionalidade (protocolo,
-// recurso e retorno; conciliação; lote; competência; webservices), cada uma um apoio de gravação do M18 (POL-3:
-// completa e DESLIGADA até a conferência; o administrador liga por estabelecimento, setor ou pessoa), com o mapa
-// operação → permissão de agir que vale também no servidor.
+// As funcionalidades do pós-fechamento (protocolo, recurso e retorno; conciliação; lote; competência; webservices),
+// cada uma um apoio de gravação com o mapa operação → permissão de agir que vale também no servidor. Tudo ligado para
+// todos (decisão de produto, F3.7): nenhuma chave de liberação; o acesso é só a permissão do cargo. A `chave` fica
+// como o nome do recurso na trilha.
 import type { GravacaoTiss } from '@sgh/contratos';
 import { destinoEnvio } from '@sgh/dominio-faturamento';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -71,6 +71,7 @@ export class ApoiosTiss {
           chave: FUNCIONALIDADES_TISS[f].chave,
           nome: FUNCIONALIDADES_TISS[f].nome,
           operacoes: FUNCIONALIDADES_TISS[f].operacoes,
+          semLiberacao: true,
         },
         porta,
         trilha,

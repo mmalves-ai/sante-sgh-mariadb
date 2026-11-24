@@ -115,6 +115,13 @@ export interface CompetenciaLida {
   readonly fechada: boolean;
   readonly fechadaEm: string | null;
   readonly fechadaPor: string;
+  /** Reaberta depois de um fechamento: quando, por quem e o motivo (null/'' na que nunca foi reaberta ou fechou de novo). */
+  readonly reaberta: boolean;
+  readonly reabertaEm: string | null;
+  readonly reabertaPor: string;
+  readonly motivoReabertura: string;
+  /** Ciclos de fechamento e reabertura gravados (o histórico; nenhum é sobrescrito). */
+  readonly ciclos: number;
   readonly contas: number;
   readonly emLote: number;
   readonly valor: number;

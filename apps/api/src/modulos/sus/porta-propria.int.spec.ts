@@ -575,7 +575,6 @@ describe.skipIf(SEM_BANCO)('porta própria do faturamento SUS contra o MariaDB (
       hoje: '2026-11-21',
       convenios: null,
       parametros: { cnes: CNES } as unknown as SessaoSus['parametros'],
-      liberado: async () => true,
       trilha: (evento, operacao, alvo) => {
         const l = { ...linha(evento, alvo.tabela, alvo.id), operacao };
         trilhas.push(l);

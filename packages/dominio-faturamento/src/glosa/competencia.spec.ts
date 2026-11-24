@@ -1,11 +1,10 @@
 // Regra 9 do M31: competência fechada não recebe conta; fechar duas vezes, mês inválido e competência futura são
-// recusados; reabrir exige supervisor e motivo.
+// recusados. A reabertura está em src/competencia/reabertura.spec.ts.
 import { describe, expect, it } from 'vitest';
 import {
   chaveCompetencia,
   conferirCompetenciaAberta,
   conferirFechamentoCompetencia,
-  conferirReaberturaCompetencia,
 } from '@sgh/contratos/regras-faturamento';
 
 describe('competência', () => {
@@ -27,20 +26,6 @@ describe('competência', () => {
   it('competência fechada não recebe conta', () => {
     expect(conferirCompetenciaAberta(true)?.codigo).toBe('competencia-fechada');
     expect(conferirCompetenciaAberta(false)).toBeNull();
-  });
-  it('reabrir: supervisor e motivo', () => {
-    expect(
-      conferirReaberturaCompetencia({ fechada: true, supervisor: true, motivo: 'erro no fechamento' }),
-    ).toBeNull();
-    expect(conferirReaberturaCompetencia({ fechada: false, supervisor: true, motivo: 'x' })?.codigo).toBe(
-      'competencia-aberta',
-    );
-    expect(
-      conferirReaberturaCompetencia({ fechada: true, supervisor: false, motivo: 'motivo ok' })?.codigo,
-    ).toBe('sem-supervisor');
-    expect(conferirReaberturaCompetencia({ fechada: true, supervisor: true, motivo: 'x' })?.codigo).toBe(
-      'motivo-obrigatorio',
-    );
   });
   it('chave da competência', () => {
     expect(chaveCompetencia(301, 2026, 9)).toBe('301/2026/09');

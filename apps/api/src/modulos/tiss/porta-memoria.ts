@@ -136,7 +136,19 @@ interface Estado {
   itens: Map<number, ItemM>;
   lotes: Map<number, LoteM>;
   contador: Map<number, { numero: string; sequencial: string }>;
-  competencias: { convenio: number; ano: number; mes: number; em: string; por: string }[];
+  /** O estado atual de cada competência fechada alguma vez; reabrir marca, nunca remove (histórico nos ciclos). */
+  competencias: {
+    convenio: number;
+    ano: number;
+    mes: number;
+    em: string;
+    por: string;
+    situacao: 'fechada' | 'reaberta';
+    reabertaEm: string | null;
+    reabertaPor: string;
+    motivo: string;
+    ciclos: { tipo: 'fechamento' | 'reabertura'; em: string; por: string; motivo: string }[];
+  }[];
   protocolos: {
     lote: number;
     acao: 'registrado' | 'limpo';
@@ -230,6 +242,11 @@ export class PortaTissMemoria implements PortaTiss {
           mes: anterior.mes === 1 ? 12 : anterior.mes - 1,
           em: `${hoje}T08:00:00`,
           por: 'SINT.TISS',
+          situacao: 'fechada',
+          reabertaEm: null,
+          reabertaPor: '',
+          motivo: '',
+          ciclos: [{ tipo: 'fechamento', em: `${hoje}T08:00:00`, por: 'SINT.TISS', motivo: '' }],
         },
       ],
       protocolos: [],
@@ -443,7 +460,7 @@ export class PortaTissMemoria implements PortaTiss {
     const lotes = [...s.lotes.values()].filter((l) => l.contas.some((k) => idsDoMes.has(k)));
     const conveniosComConta = new Set(contasDoMes.map((k) => k.convenio));
     const fechados = s.competencias.filter(
-      (x) => x.ano === f.ano && x.mes === f.mes && noEscopo(x.convenio),
+      (x) => x.situacao === 'fechada' && x.ano === f.ano && x.mes === f.mes && noEscopo(x.convenio),
     ).length;
     const lidas = new Map([...(this.gravadas.get(c.hospital) ?? new Map<string, number>())]);
     for (const [op, n] of this.fonteContas?.gravacoes(c.hospital) ?? [])
@@ -575,7 +592,13 @@ export class PortaTissMemoria implements PortaTiss {
           if (r) throw recusa(r.codigo, r.mensagem);
           // Regra 9: a conta de competência fechada para o convênio não entra em lote.
           const f = conferirCompetenciaAberta(
-            s.competencias.some((k) => k.convenio === ct.convenio && k.ano === ct.ano && k.mes === ct.mes),
+            s.competencias.some(
+              (k) =>
+                k.situacao === 'fechada' &&
+                k.convenio === ct.convenio &&
+                k.ano === ct.ano &&
+                k.mes === ct.mes,
+            ),
           );
           if (f) throw recusa(f.codigo, f.mensagem);
         }
@@ -777,23 +800,61 @@ export class PortaTissMemoria implements PortaTiss {
         if (!CONVENIOS[e.convenio]) throw recusa('convenio-inexistente', 'O convênio não existe.');
         const r = conferirFechamentoCompetencia({
           jaFechada: s.competencias.some(
-            (x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes,
+            (x) =>
+              x.situacao === 'fechada' && x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes,
           ),
           ano: e.ano,
           mes: e.mes,
           hoje,
         });
         if (r) throw recusa(r.codigo, r.mensagem);
-        s.competencias.unshift({ convenio: e.convenio, ano: e.ano, mes: e.mes, em: agora(), por: usuario });
+        const em = agora();
+        const ciclo = { tipo: 'fechamento' as const, em, por: usuario, motivo: '' };
+        const ja = s.competencias.find(
+          (x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes,
+        );
+        if (ja)
+          Object.assign(ja, {
+            em,
+            por: usuario,
+            situacao: 'fechada',
+            reabertaEm: null,
+            reabertaPor: '',
+            motivo: '',
+          });
+        else
+          s.competencias.unshift({
+            convenio: e.convenio,
+            ano: e.ano,
+            mes: e.mes,
+            em,
+            por: usuario,
+            situacao: 'fechada',
+            reabertaEm: null,
+            reabertaPor: '',
+            motivo: '',
+            ciclos: [],
+          });
+        (ja ?? s.competencias[0]!).ciclos.push(ciclo);
         return { convenio: e.convenio, ano: e.ano, mes: e.mes };
       }
       case 'faturamento.reabrirCompetencia': {
-        const i = s.competencias.findIndex(
-          (x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes,
+        const k = s.competencias.find((x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes);
+        const doMes = [...s.contas.values()].filter(
+          (x) => x.convenio === e.convenio && x.ano === e.ano && x.mes === e.mes && x.fechada === 'A',
         );
-        const r = conferirReaberturaCompetencia({ fechada: i >= 0, supervisor: true, motivo: e.motivo });
+        const r = conferirReaberturaCompetencia({
+          fechada: k?.situacao === 'fechada',
+          motivo: e.motivo,
+          impacto: { contasApresentadas: doMes.length, valorApresentado: 0 },
+          confirmarImpacto: e.confirmarImpacto,
+        });
         if (r) throw recusa(r.codigo, r.mensagem);
-        s.competencias.splice(i, 1);
+        // Histórico nunca é apagado: marca reaberta com quando, quem e o motivo; o retrato do fechamento fica.
+        const em = agora();
+        const motivo = e.motivo.trim();
+        Object.assign(k!, { situacao: 'reaberta', reabertaEm: em, reabertaPor: usuario, motivo });
+        k!.ciclos.push({ tipo: 'reabertura', em, por: usuario, motivo });
         return { convenio: e.convenio, ano: e.ano, mes: e.mes };
       }
       default:
@@ -1156,9 +1217,14 @@ export class PortaTissMemoria implements PortaTiss {
         convenioNome: CONVENIOS[x.convenio] ?? '',
         ano: x.ano,
         mes: x.mes,
-        fechada: true,
-        fechadaEm: x.em,
-        fechadaPor: x.por,
+        fechada: x.situacao === 'fechada',
+        fechadaEm: x.situacao === 'fechada' ? x.em : null,
+        fechadaPor: x.situacao === 'fechada' ? x.por : '',
+        reaberta: x.situacao === 'reaberta',
+        reabertaEm: x.reabertaEm,
+        reabertaPor: x.reabertaPor,
+        motivoReabertura: x.motivo,
+        ciclos: x.ciclos.length,
         contas: 0,
         emLote: 0,
         valor: 0,
@@ -1177,9 +1243,14 @@ export class PortaTissMemoria implements PortaTiss {
     return {
       ...x,
       convenioNome: CONVENIOS[x.convenio] ?? '',
-      fechada: Boolean(f),
-      fechadaEm: f?.em ?? null,
-      fechadaPor: f?.por ?? '',
+      fechada: f?.situacao === 'fechada',
+      fechadaEm: f?.situacao === 'fechada' ? f.em : null,
+      fechadaPor: f?.situacao === 'fechada' ? f.por : '',
+      reaberta: f?.situacao === 'reaberta',
+      reabertaEm: f?.reabertaEm ?? null,
+      reabertaPor: f?.reabertaPor ?? '',
+      motivoReabertura: f?.motivo ?? '',
+      ciclos: f?.ciclos.length ?? 0,
       contas: contas.length,
       emLote: contas.filter((k) => k.fechada === 'A').length,
       valor: centavos(

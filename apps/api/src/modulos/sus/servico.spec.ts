@@ -1,6 +1,6 @@
 // Serviço do faturamento SUS (M51, etapa 1) sobre a porta em memória (massa sintética): abrir → criticar → corrigir o
 // equivalente → criticar de novo → gerar a CIHA com hash → baixar conferindo o hash → fechar e reabrir; as recusas
-// (competência futura, instrumento desligado, escopo parcial, versão, bloqueante, crítica não executada) e a trilha
+// (competência futura, escopo parcial, versão, bloqueante, crítica não executada) e a trilha
 // sem dado pessoal.
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -35,7 +35,6 @@ function sessao(extra: Partial<SessaoSus> = {}): SessaoSus {
       },
       apac: { uf: '33' },
     },
-    liberado: async (i) => i === 'ciha',
     pode: (acao) => acao === ACAO_EQUIVALENCIA_SUS_REDE,
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
@@ -256,17 +255,11 @@ describe('faturamento SUS: competência, crítica e CIHA', () => {
     expect(texto).not.toMatch(/PACIENTE SINTETICO|RUA SINTETICA|10000000\d{3}/);
   });
 
-  it('recusas: competência futura, instrumento desligado, escopo parcial e competência inexistente', async () => {
+  it('recusas: competência futura, escopo parcial e competência inexistente', async () => {
     const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
     const s = sessao();
     await expect(sv.abrir(s, { instrumento: 'ciha', competencia: '202612' })).rejects.toEqual(
       recusa('competencia-futura'),
-    );
-    await expect(sv.abrir(s, { instrumento: 'bpa', competencia: '202609' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(sv.criticar(s, { instrumento: 'aih', competencia: '202609' })).rejects.toEqual(
-      recusa('recurso-desligado'),
     );
     await expect(
       sv.listarCriticas(s, { instrumento: 'ciha', competencia: '202601', pagina: 0, porPagina: 10 }),

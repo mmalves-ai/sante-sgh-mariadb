@@ -1,4 +1,4 @@
-// Serviço do faturamento SUS, etapa 2 (BPA), sobre a porta em memória (massa SINTÉTICA): desligado (DP-35) recusa;
+// Serviço do faturamento SUS, etapa 2 (BPA), sobre a porta em memória (massa SINTÉTICA): tudo ligado (F3.7);
 // ligado: abrir → criticar (o validador de compatibilidade e o item sem equivalente) → equivalência do hospital → criticar
 // de novo → gerar o BPA-C e o BPA-I com hash → as linhas sem dado pessoal → baixar pela rota do BPA (a da CIHA não
 // entrega) → a trilha sem dado pessoal; as recusas (escopo parcial, versão, cabeçalho incompleto, sem produção).
@@ -12,7 +12,7 @@ import {
 } from './porta-memoria.js';
 import { ACAO_EQUIVALENCIA_SUS_REDE, ServicoSus, type SessaoSus } from './servico.js';
 
-function sessao(extra: Partial<SessaoSus> = {}, bpaLigado = true, apacLigada = true): SessaoSus {
+function sessao(extra: Partial<SessaoSus> = {}): SessaoSus {
   return {
     rede: 'rede-teste',
     hospital: 'pc',
@@ -35,7 +35,6 @@ function sessao(extra: Partial<SessaoSus> = {}, bpaLigado = true, apacLigada = t
       },
       apac: { uf: '33' },
     },
-    liberado: async (i) => i === 'ciha' || (bpaLigado && i === 'bpa') || (apacLigada && i === 'apac'),
     pode: (acao) => acao === ACAO_EQUIVALENCIA_SUS_REDE,
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
@@ -59,34 +58,6 @@ function sessao(extra: Partial<SessaoSus> = {}, bpaLigado = true, apacLigada = t
 const recusa = (codigo: string) => expect.objectContaining({ extras: expect.objectContaining({ codigo }) });
 
 describe('faturamento SUS, etapa 2: BPA', () => {
-  it('desligado por estabelecimento (DP-35): abrir, criticar e gerar recusam', async () => {
-    const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
-    const s = sessao({}, false);
-    await expect(sv.abrir(s, { instrumento: 'bpa', competencia: '202609' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(sv.criticar(s, { instrumento: 'bpa', competencia: '202609' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(sv.gerarBpa(s, { competencia: '202609', versao: '0000000001' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-  });
-
-  it('com a APAC desligada, a hemodiálise (só de APAC) fica no BPA com a crítica do instrumento (D-BPA-APAC-513)', async () => {
-    const sv = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
-    const s = sessao({}, true, false);
-    await sv.abrir(s, { instrumento: 'bpa', competencia: '202609' });
-    const r = await sv.criticar(s, { instrumento: 'bpa', competencia: '202609' });
-    expect(r.porRegra['instrumento-incompativel']).toBeGreaterThan(0);
-    const ligada = sessao();
-    const sv2 = new ServicoSus(new PortaSusMemoria(), armazemSusMemoria());
-    await sv2.abrir(ligada, { instrumento: 'bpa', competencia: '202609' });
-    expect((await sv2.criticar(ligada, { instrumento: 'bpa', competencia: '202609' })).porRegra).toEqual({
-      'sem-sigtap': 1,
-    });
-  });
-
   it('o caminho inteiro: crítica, equivalência, BPA-C e BPA-I com hash, linhas, download e trilha', async () => {
     const porta = new PortaSusMemoria();
     const armazem = armazemSusMemoria();

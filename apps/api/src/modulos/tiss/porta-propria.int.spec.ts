@@ -92,6 +92,10 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-03-16' }, (l) =>
       l.uma<Record<string, unknown>>(sql, p),
     );
+  const lerTodas = (sql: string, p: unknown[]) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'leitura-teste-03-16' }, (l) =>
+      l.consultar<Record<string, unknown>>(sql, p),
+    );
   const versaoDaConta = async (id: number) =>
     versaoTexto(Number((await lerUma('SELECT versao FROM conta_hospitalar WHERE id = ?', [id]))?.['versao']));
 
@@ -121,6 +125,10 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       await e.executar('DELETE FROM lote_tiss WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar(
         "DELETE FROM arquivo WHERE estabelecimento_id IN (?, ?) AND entidade = 'lote_tiss'",
+        est,
+      );
+      await e.executar(
+        'DELETE FROM ciclo_competencia_fonte_pagadora WHERE estabelecimento_id IN (?, ?)',
         est,
       );
       await e.executar(
@@ -727,16 +735,35 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     expect(atual.find((x) => x.fechada === false)).toMatchObject({ contas: 1, emLote: 1, valor: 300 });
   });
 
-  it('competência: reabrir grava quem, quando e o motivo, guarda o retrato e o fechamento; a aberta recusa; fecha de novo', async () => {
+  it('competência: reabrir grava quem, quando e o motivo, guarda o retrato; conta em lote exige confirmar o impacto; fecha de novo sem sobrescrever o ciclo', async () => {
     const comp = { convenio: ids.fonte, ano: anoAnt, mes: mesAnt };
+    const dia = `${anoAnt}-${String(mesAnt).padStart(2, '0')}-01`;
     const antes = await lerUma(
       'SELECT id, quantidade_contas, valor_apresentado, fechado_em FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ?',
-      [ids.est, ids.fonte, `${anoAnt}-${String(mesAnt).padStart(2, '0')}-01`],
+      [ids.est, ids.fonte, dia],
     );
+    const lote = await lerUma(
+      `SELECT COUNT(*) AS q FROM conta_hospitalar ch
+        WHERE ch.estabelecimento_id = ? AND ch.fonte_pagadora_id = ? AND ch.competencia = ? AND ch.excluido_em IS NULL
+          AND ch.situacao <> 'cancelada'
+          AND EXISTS (SELECT 1 FROM lote_tiss_conta ltc JOIN lote_tiss lt ON lt.id = ltc.lote_tiss_id
+                       WHERE ltc.conta_hospitalar_id = ch.id AND ltc.excluido_em IS NULL AND lt.excluido_em IS NULL
+                         AND lt.situacao <> 'cancelado')`,
+      [ids.est, ids.fonte, dia],
+    );
+    const emLote = Number(lote!['q']);
+    // Conta já apresentada à operadora: sem a confirmação, recusa mostrando o impacto, sem gravar nada.
+    if (emLote > 0) {
+      const e0 = await erroDe(
+        porta.executar(c, 'faturamento.reabrirCompetencia', { ...comp, motivo: 'conta esquecida' }, op()),
+      );
+      expect(codigo(e0)).toBe('competencia-apresentada');
+      expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(true);
+    }
     const r = await porta.executar(
       c,
       'faturamento.reabrirCompetencia',
-      { ...comp, motivo: 'conta esquecida' },
+      { ...comp, motivo: 'conta esquecida', confirmarImpacto: emLote > 0 },
       op(),
     );
     expect(r.resultado['fechamento']).toBe(antes!['id']);
@@ -754,13 +781,44 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     });
     expect(Number(f!['quando'])).toBe(1);
     expect(f!['fechado_em']).toEqual(antes!['fechado_em']);
-    expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(false);
+    expect(await porta.resumoCompetencia(c, comp)).toMatchObject({
+      fechada: false,
+      reaberta: true,
+      reabertaPor: 'l0316.teste',
+      motivoReabertura: 'conta esquecida',
+      ciclos: 2,
+    });
     const e = await erroDe(
       porta.executar(c, 'faturamento.reabrirCompetencia', { ...comp, motivo: 'segunda vez' }, op()),
     );
     expect(codigo(e)).toBe('competencia-aberta');
     await porta.executar(c, 'faturamento.fecharCompetencia', comp, op());
-    expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(true);
+    expect(await porta.resumoCompetencia(c, comp)).toMatchObject({
+      fechada: true,
+      reaberta: false,
+      ciclos: 3,
+    });
+    // A linha guarda só o estado atual (sem a reabertura antiga); os dois retratos e a reabertura ficam nos ciclos.
+    expect(
+      await lerUma(
+        'SELECT reaberto_em, reaberto_por_usuario_id, motivo_reabertura FROM fechamento_competencia_fonte_pagadora WHERE id = ?',
+        [antes!['id']],
+      ),
+    ).toMatchObject({ reaberto_em: null, reaberto_por_usuario_id: null, motivo_reabertura: null });
+    const ciclos = await lerTodas(
+      `SELECT tipo, usuario_id, quantidade_contas, valor_apresentado, contas_em_lote, impacto_confirmado, motivo
+         FROM ciclo_competencia_fonte_pagadora WHERE fechamento_competencia_fonte_pagadora_id = ? ORDER BY id`,
+      [antes!['id']],
+    );
+    expect(ciclos.map((x) => x['tipo'])).toEqual(['fechamento', 'reabertura', 'fechamento']);
+    expect(ciclos[0]).toMatchObject({
+      usuario_id: ids.usuario,
+      quantidade_contas: antes!['quantidade_contas'],
+      valor_apresentado: antes!['valor_apresentado'],
+      motivo: null,
+    });
+    expect(ciclos[1]).toMatchObject({ motivo: 'conta esquecida', contas_em_lote: emLote });
+    expect(Number(ciclos[1]!['impacto_confirmado'])).toBe(emLote > 0 ? 1 : 0);
   });
 
   it('glosa: a decisão de aceitar grava no item, a grade e o painel somam; decidir de novo recusa', async () => {

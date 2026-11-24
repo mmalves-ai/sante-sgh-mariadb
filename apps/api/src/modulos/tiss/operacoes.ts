@@ -30,11 +30,11 @@ import {
 } from '@sgh/contratos';
 import {
   conferirFechamentoCompetencia,
-  conferirReaberturaCompetencia,
   conferirRegistroProtocolo,
   faltasDoPrestador,
   normalizarProtocolo,
   VERSAO_TISS_VIGENTE,
+  conferirReaberturaCompetencia,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -645,7 +645,7 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
 /** Fecha a competência do convênio com o retrato das contas (quantidade e valor apresentado). */
 const fecharCompetencia = definirOperacao<FecharCompetenciaEntrada, ResultadoOperacao>({
   nome: 'faturamento.fechar-competencia',
-  tabelas: ['fechamento_competencia_fonte_pagadora'],
+  tabelas: ['fechamento_competencia_fonte_pagadora', 'ciclo_competencia_fonte_pagadora'],
   entrada: esquemaFecharCompetencia,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -673,21 +673,24 @@ const fecharCompetencia = definirOperacao<FecharCompetenciaEntrada, ResultadoOpe
           AND situacao <> 'cancelada'`,
       [est, e.convenio, competencia],
     );
+    const agora = new Date();
     const valores = {
       situacao: 'fechada',
-      fechado_em: new Date(),
+      fechado_em: agora,
       fechado_por_usuario_id: ctx.usuario,
       quantidade_contas: n(soma?.['contas']),
       valor_apresentado: n(soma?.['valor']),
       valor_total: n(soma?.['valor']),
     };
+    // Fechar de novo depois de reabrir: a linha guarda só o estado atual (a reabertura anterior sai dela e fica no
+    // ciclo, como o retrato de cada fechamento).
     const id = atual
-      ? (await tx.alterar(
-          'fechamento_competencia_fonte_pagadora',
-          n(atual['id']),
-          n(atual['versao']),
-          valores,
-        ),
+      ? (await tx.alterar('fechamento_competencia_fonte_pagadora', n(atual['id']), n(atual['versao']), {
+          ...valores,
+          reaberto_em: null,
+          reaberto_por_usuario_id: null,
+          motivo_reabertura: null,
+        }),
         n(atual['id']))
       : await tx.incluir('fechamento_competencia_fonte_pagadora', {
           estabelecimento_id: est,
@@ -696,19 +699,29 @@ const fecharCompetencia = definirOperacao<FecharCompetenciaEntrada, ResultadoOpe
           data_abertura: competencia,
           ...valores,
         });
+    await tx.incluir('ciclo_competencia_fonte_pagadora', {
+      estabelecimento_id: est,
+      fechamento_competencia_fonte_pagadora_id: id,
+      tipo: 'fechamento',
+      ocorrido_em: agora,
+      usuario_id: ctx.usuario,
+      quantidade_contas: valores.quantidade_contas,
+      valor_apresentado: valores.valor_apresentado,
+    });
     return { convenio: e.convenio, ano: e.ano, mes: e.mes, fechamento: id };
   },
   alvo: (_e, r) => ({ tabela: 'fechamento_competencia_fonte_pagadora', id: n(r['fechamento']) }),
 });
 
 /**
- * Reabre a competência fechada do convênio (supervisor, com motivo): a linha do fechamento passa a `reaberta` com
- * quando, quem e o motivo; o retrato do fechamento (contas e valores) e quem fechou ficam gravados. A alçada é a
- * permissão `faturamento.competencia.reabrir`, conferida pelo executor antes da gravação.
+ * Reabre a competência fechada do convênio (com motivo): a linha do fechamento passa a `reaberta` com quando, quem e
+ * o motivo, e o ciclo ganha a linha da reabertura (o retrato de cada fechamento fica no seu ciclo). Conta da
+ * competência já em lote exige a confirmação do impacto (regra do domínio). A alçada é a permissão
+ * `faturamento.competencia.reabrir`, conferida pelo executor antes da gravação.
  */
 const reabrirCompetencia = definirOperacao<ReabrirCompetenciaEntrada, ResultadoOperacao>({
   nome: 'faturamento.reabrir-competencia',
-  tabelas: ['fechamento_competencia_fonte_pagadora'],
+  tabelas: ['fechamento_competencia_fonte_pagadora', 'ciclo_competencia_fonte_pagadora'],
   entrada: esquemaReabrirCompetencia,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -717,22 +730,49 @@ const reabrirCompetencia = definirOperacao<ReabrirCompetenciaEntrada, ResultadoO
         WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ? AND excluido_em IS NULL`,
       [est, e.convenio, diaDaCompetencia(e.ano, e.mes)],
     );
+    const apresentadas = await tx.uma<Linha>(
+      `SELECT COUNT(*) AS contas, COALESCE(SUM(ch.valor_total), 0) AS valor FROM conta_hospitalar ch
+        WHERE ch.estabelecimento_id = ? AND ch.fonte_pagadora_id = ? AND ch.competencia = ?
+          AND ch.excluido_em IS NULL AND ch.situacao <> 'cancelada'
+          AND EXISTS (SELECT 1 FROM lote_tiss_conta ltc JOIN lote_tiss lt ON lt.id = ltc.lote_tiss_id
+                       WHERE ltc.conta_hospitalar_id = ch.id AND ltc.excluido_em IS NULL
+                         AND lt.excluido_em IS NULL AND lt.situacao <> 'cancelado')`,
+      [est, e.convenio, diaDaCompetencia(e.ano, e.mes)],
+    );
+    const impacto = {
+      contasApresentadas: n(apresentadas?.['contas']),
+      valorApresentado: n(apresentadas?.['valor']),
+    };
     const r = conferirReaberturaCompetencia({
       fechada: atual?.['situacao'] === 'fechada',
-      supervisor: true,
       motivo: e.motivo,
+      impacto,
+      confirmarImpacto: e.confirmarImpacto,
     });
     if (r) throw recusa(r.codigo, r.mensagem);
+    const agora = new Date();
+    const motivo = e.motivo.trim().slice(0, 250);
     await tx.alterar('fechamento_competencia_fonte_pagadora', n(atual!['id']), n(atual!['versao']), {
       situacao: 'reaberta',
-      reaberto_em: new Date(),
+      reaberto_em: agora,
       reaberto_por_usuario_id: ctx.usuario,
-      motivo_reabertura: e.motivo.trim().slice(0, 250),
+      motivo_reabertura: motivo,
+    });
+    await tx.incluir('ciclo_competencia_fonte_pagadora', {
+      estabelecimento_id: est,
+      fechamento_competencia_fonte_pagadora_id: n(atual!['id']),
+      tipo: 'reabertura',
+      ocorrido_em: agora,
+      usuario_id: ctx.usuario,
+      contas_em_lote: impacto.contasApresentadas,
+      valor_em_lote: impacto.valorApresentado,
+      impacto_confirmado: impacto.contasApresentadas > 0,
+      motivo,
     });
     return { convenio: e.convenio, ano: e.ano, mes: e.mes, fechamento: n(atual!['id']) };
   },
   alvo: (_e, r) => ({ tabela: 'fechamento_competencia_fonte_pagadora', id: n(r['fechamento']) }),
-  trilha: (e) => ({ dados: { motivo: e.motivo } }),
+  trilha: (e) => ({ dados: { motivo: e.motivo, confirmarImpacto: e.confirmarImpacto } }),
 });
 
 /** Nome da operação na trilha do núcleo (minúsculas com hífen): 'faturamento.gerarLote' → 'faturamento.gerar-lote'. */

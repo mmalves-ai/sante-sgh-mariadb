@@ -23,7 +23,6 @@ import {
   type FiltroRetornosSus,
   type GerarSisaihEntrada,
   type ImportarRetornoSusEntrada,
-  type InstrumentoSus,
   type InternacaoParaAih,
   type LinhaEspelhoAih,
   type PaginaAihs,
@@ -74,7 +73,6 @@ import {
 } from './tipos.js';
 
 export const MENSAGENS_RECUSA_AIH = {
-  'instrumento-desligado': 'Este instrumento está desligado neste estabelecimento.',
   'escopo-parcial':
     'Seu acesso cobre só parte dos convênios: a faixa, o arquivo e o retorno exigem acesso a todos os convênios do estabelecimento.',
   'fora-do-escopo-sus': 'Seu acesso não cobre os convênios do SUS deste estabelecimento.',
@@ -112,10 +110,6 @@ function recusa(codigo: RecusaAihApi, detalhe: Record<string, unknown> = {}): Er
   const m = MENSAGENS_RECUSA_AIH[codigo];
   if (codigo === 'versao-alterada')
     return new ErroProblema('conflito-de-versao', 409, 'Registro alterado', m, { codigo });
-  if (codigo === 'instrumento-desligado')
-    return new ErroProblema('recurso-desligado', 403, 'Funcionalidade desligada', m, {
-      codigo: 'recurso-desligado',
-    });
   if (codigo === 'escopo-parcial' || codigo === 'fora-do-escopo-sus')
     return new ErroProblema('sem-permissao', 403, 'Fora do escopo', m, { codigo });
   if (codigo === 'internacao-inexistente')
@@ -192,10 +186,6 @@ export class ServicoSusAih {
     } catch (erro) {
       return problemaDaGravacao(erro);
     }
-  }
-
-  private async exigirLiberado(s: SessaoSus, i: InstrumentoSus = 'aih'): Promise<void> {
-    if (!(await s.liberado(i))) throw recusa('instrumento-desligado');
   }
 
   private exigirEscopoTotal(s: SessaoSus): void {
@@ -326,8 +316,9 @@ export class ServicoSusAih {
     leiauteConferido: boolean;
   }> {
     const pAih = await this.parametrosAih(s);
-    const liberado = await s.liberado('aih');
-    const retornoBpaLiberado = await s.liberado('bpa');
+    // Tudo ligado para todos (F3.7): a AIH e o retorno do BPA valem em todo estabelecimento.
+    const liberado = true;
+    const retornoBpaLiberado = true;
     return this.porta.ler(this.ctx(s), async (l) => {
       const faixas = await this.faixasCom(l);
       const pagina = await l.paginaAihs({ pagina: 0, porPagina: 1 });
@@ -412,7 +403,6 @@ export class ServicoSusAih {
   // ── Faixa ────────────────────────────────────────────────────────────────────────────────────────────
 
   async registrarFaixa(s: SessaoSus, e: RegistrarFaixaAihEntrada): Promise<FaixaAihLida> {
-    await this.exigirLiberado(s);
     this.exigirEscopoTotal(s);
     return this.gravar(s, async (g) => {
       let id: number;
@@ -463,7 +453,6 @@ export class ServicoSusAih {
 
   /** `faturamento.registrarAih`: uma ação por chamada (laudo, autorizar, negar, fechar, reabrir, cancelar). */
   async registrar(s: SessaoSus, e: RegistrarAihEntrada): Promise<AihLida> {
-    await this.exigirLiberado(s);
     this.exigirSus(s);
     const pAih = await this.parametrosAih(s);
     // O fechamento monta antes da transação (a leitura da produção é longa); a transação confere a versão.
@@ -773,7 +762,6 @@ export class ServicoSusAih {
    * pessoal) e o banco guarda o hash e as AIHs apresentadas.
    */
   async gerarSisaih(s: SessaoSus, e: GerarSisaihEntrada): Promise<ArquivoSusGerado> {
-    await this.exigirLiberado(s);
     this.exigirEscopoTotal(s);
     const t0 = Date.now();
     const { comp, m, pAih } = await this.montarCompetencia(s, e.competencia);
@@ -904,7 +892,6 @@ export class ServicoSusAih {
    * fora, listada. A AIH fica aprovada ou rejeitada; a linha rejeitada ou glosada fica pendente da decisão.
    */
   async importarRetorno(s: SessaoSus, e: ImportarRetornoSusEntrada): Promise<ResultadoRetornoSus> {
-    await this.exigirLiberado(s, e.instrumento);
     this.exigirEscopoTotal(s);
     const leitura = lerRetornoSus(e.conteudo, e.instrumento, e.competencia);
     if (leitura.linhas.length === 0) throw recusa('retorno-sem-linhas', { erros: leitura.erros.length });
@@ -993,7 +980,6 @@ export class ServicoSusAih {
     return this.gravar(s, async (g) => {
       const r = await g.retornoSus(e.retorno, true);
       if (!r) throw new ErroProblema('nao-encontrado', 404, 'Retorno não encontrado');
-      if (!(await s.liberado(r.instrumento))) throw recusa('instrumento-desligado');
       if (versaoSus(r.versao) !== e.versao) throw recusa('versao-alterada');
       if (r.tratamento !== 'pendente' || r.situacao === 'aprovada') throw recusa('retorno-sem-pendencia');
       if (e.decisao === 'reapresentar' && r.instrumento === 'aih' && r.situacao !== 'rejeitada')

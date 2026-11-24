@@ -1,7 +1,7 @@
-// As funcionalidades da conta do paciente (ficha do M30, seção 12): uma chave de liberação por funcionalidade (contas,
-// lançamento manual, fila tardia, auditoria, regras e pacotes, particular, pagamento eletrônico), cada uma um apoio de
-// gravação do M18 (POL-3: completa e DESLIGADA até a conferência; o administrador liga por estabelecimento, setor ou
-// pessoa), com o mapa operação → permissão de agir que vale também no servidor.
+// As funcionalidades da conta do paciente (contas, lançamento manual, fila tardia, auditoria, regras e pacotes,
+// particular, pagamento eletrônico), cada uma um apoio de gravação com o mapa operação → permissão de agir que vale
+// também no servidor. Tudo ligado para todos (decisão de produto, F3.7): nenhuma chave de liberação; o acesso é só a
+// permissão do cargo. A `chave` fica como o nome do recurso na trilha.
 import type { GravacaoFaturamento } from '@sgh/contratos';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
@@ -86,6 +86,7 @@ export class ApoiosFaturamento {
           chave: FUNCIONALIDADES[f].chave,
           nome: FUNCIONALIDADES[f].nome,
           operacoes: FUNCIONALIDADES[f].operacoes,
+          semLiberacao: true,
         },
         porta,
         trilha,

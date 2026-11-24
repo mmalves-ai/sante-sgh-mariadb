@@ -12,6 +12,8 @@ import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
 import { modulo } from './modulo.js';
+import type { SessaoCadastro } from '../cadastro/comum.js';
+import { ApoiosTiss } from './apoios.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,tiss' };
@@ -171,12 +173,28 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().mensagem).toContain('reaberta');
+    // Histórico nunca é apagado: a reaberta continua lida, com quem, o motivo e os dois ciclos (fechar e reabrir).
+    const reaberta = (await get(s, `/tiss/competencias/resumo?convenio=92&ano=${ano}&mes=${mes}`)).json();
+    expect(reaberta).toMatchObject({
+      fechada: false,
+      reaberta: true,
+      reabertaPor: 'SINT.TISS',
+      motivoReabertura: 'conta esquecida',
+      ciclos: 2,
+    });
     expect(
       (
         await post(s, '/tiss/competencias/reabrir', { convenio: 92, ano, mes, motivo: 'de novo, sem fechar' })
       ).json().codigo,
     ).toBe('competencia-aberta');
     expect((await post(s, '/tiss/competencias', { convenio: 92, ano, mes })).statusCode).toBe(200);
+    expect(
+      (await get(s, `/tiss/competencias/resumo?convenio=92&ano=${ano}&mes=${mes}`)).json(),
+    ).toMatchObject({
+      fechada: true,
+      reaberta: false,
+      ciclos: 3,
+    });
     const leitor = await entrar('SINT.TISS.LEITOR');
     expect(
       (
@@ -190,7 +208,11 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     ).toBe(403);
   });
 
-  it('glosa: demonstrativo (XML e digitação, idempotente), baixa, decisão, recurso com alerta e desfecho parcial', async () => {
+  // Prova SÓ da porta em memória: na porta própria (MariaDB), registrarGlosa, registrarRecurso e
+  // registrarRetornoRecurso ainda recusam por OPERACOES_TISS_PENDENTES e a importação do demonstrativo responde
+  // 'operacao-pendente' (o .int.spec 'operações pendentes' prova a recusa). A ficha F3.7 conta glosa e recurso como
+  // Parciais (06-FAT linhas 33 e 34) até o contrato de efeito ser provado na porta própria.
+  it('glosa (só porta em memória): demonstrativo (XML e digitação, idempotente), baixa, decisão, recurso com alerta e desfecho parcial', async () => {
     const s = await entrar('SINT.TISS');
     const hoje = (await get(s, '/tiss/apoio')).json().hoje as string;
     const itens = (await get(s, '/tiss/glosas/contas/9201')).json();
@@ -426,5 +448,27 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     });
     expect(ok.statusCode).toBe(200);
     expect((await get(s, '/tiss/configuracao')).json().endpoints).toHaveLength(1);
+  });
+
+  it('tudo ligado (F3.7): sem nenhuma linha de liberação, as funcionalidades valem só pela permissão do cargo', async () => {
+    const apoios = new ApoiosTiss(tiss, new RegistradorTrilhaMemoria(), null, null, 'dev');
+    const porta = {
+      cliente: 'x',
+      estabelecimento: 1,
+      usuario: 1,
+      correlacao: 'sem-liberacao',
+      rede: 'r',
+      hospital: 'aa',
+    };
+    const comCargo = { pode: () => true, porta } as unknown as SessaoCadastro;
+    const g = await apoios.gravacao(comCargo);
+    expect(Object.values(g.funcionalidades).every((f) => f.ligada)).toBe(true);
+    expect(g.operacoes['faturamento.reabrirCompetencia']).toMatchObject({ ligada: true, motivo: null });
+    expect(g.operacoes['faturamento.fecharCompetencia']).toMatchObject({ ligada: true });
+    const semCargo = { pode: () => false, porta } as unknown as SessaoCadastro;
+    expect((await apoios.gravacao(semCargo)).operacoes['faturamento.reabrirCompetencia']).toMatchObject({
+      ligada: false,
+      motivo: 'Seu perfil não permite esta ação.',
+    });
   });
 });

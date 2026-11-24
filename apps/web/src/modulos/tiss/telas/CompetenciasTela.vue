@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Fechamento de competência por convênio (ficha do M31, seção 7): `/faturamento/competencias`. Os totais da competência
 // (contas, em lote e valor) e o fechamento como o cadastro de origem grava; a competência fechada não recebe conta nova
-// nas telas do novo; reabrir é do supervisor, com motivo (validado na hora: o botão só liga com 5 letras ou mais).
+// nas telas do novo; reabrir pede a permissão do cargo e o motivo (validado na hora: o botão só liga com 5 letras ou
+// mais) e, com conta já em lote, a confirmação do impacto. A reaberta mostra quando, quem e o motivo.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -28,13 +29,17 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
 const motivoReabrir = ref('');
-const motivoValido = computed(() => motivoReabrir.value.trim().length >= 5);
 const convenios = computed(() => opcoesConvenio(apoio.data.value?.convenios));
 const resumo = useQuery({
   queryKey: computed(() => ['tiss', 'competencia', pedido.value]),
   queryFn: () => resumoCompetencia(pedido.value!),
   enabled: computed(() => pedido.value !== null),
 });
+const confirmarImpacto = ref(false);
+const comLote = computed(() => (resumo.data.value?.emLote ?? 0) > 0);
+const motivoValido = computed(
+  () => motivoReabrir.value.trim().length >= 5 && (!comLote.value || confirmarImpacto.value),
+);
 const lista = useQuery({ queryKey: ['tiss', 'competencias'], queryFn: () => listarCompetencias({}) });
 function consultar() {
   if (!convenio.value) return;
@@ -70,11 +75,18 @@ async function reabrir() {
   try {
     const [ano, mes] = pedido.value.competencia.split('-').map(Number);
     const r = await reabrirCompetencia(
-      { convenio: Number(pedido.value.convenio), ano: ano!, mes: mes!, motivo: motivoReabrir.value.trim() },
+      {
+        convenio: Number(pedido.value.convenio),
+        ano: ano!,
+        mes: mes!,
+        motivo: motivoReabrir.value.trim(),
+        confirmarImpacto: comLote.value && confirmarImpacto.value,
+      },
       novaChave('competencia-reabrir'),
     );
     mensagem.value = r.mensagem;
     motivoReabrir.value = '';
+    confirmarImpacto.value = false;
     await qc.invalidateQueries({ queryKey: ['tiss'] });
   } catch (e) {
     erro.value = e;
@@ -127,10 +139,19 @@ async function reabrir() {
                   em: quando(resumo.data.value.fechadaEm),
                   por: resumo.data.value.fechadaPor,
                 })
-              : t('tiss.competencias.aberta')
+              : resumo.data.value.reaberta
+                ? t('tiss.competencias.reabertaEm', {
+                    em: quando(resumo.data.value.reabertaEm),
+                    por: resumo.data.value.reabertaPor,
+                    motivo: resumo.data.value.motivoReabertura,
+                  })
+                : t('tiss.competencias.aberta')
           }}
         </dd>
       </dl>
+      <p v-if="resumo.data.value.ciclos > 0" class="secundario" data-testid="cp-ciclos">
+        {{ t('tiss.competencias.ciclos', { n: resumo.data.value.ciclos }) }}
+      </p>
       <p v-if="!pode('faturamento.fecharCompetencia')" class="secundario">
         {{ motivo('faturamento.fecharCompetencia') }}
       </p>
@@ -152,6 +173,12 @@ async function reabrir() {
         <span class="campo">
           <label for="cp-motivo">{{ t('tiss.competencias.motivoReabrir') }}</label>
           <input id="cp-motivo" v-model="motivoReabrir" maxlength="250" data-testid="cp-motivo" />
+        </span>
+        <span v-if="comLote" class="campo">
+          <label>
+            <input v-model="confirmarImpacto" type="checkbox" data-testid="cp-confirmar-impacto" />
+            {{ t('tiss.competencias.confirmarImpacto', { n: resumo.data.value.emLote }) }}
+          </label>
         </span>
         <button type="submit" :disabled="gravando || !motivoValido" data-testid="cp-reabrir">
           {{ t('tiss.competencias.reabrir') }}

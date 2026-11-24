@@ -47,16 +47,15 @@ describe('competência SUS (AAAAMM)', () => {
   });
 
   it('abrir: uma por instrumento; nunca futura; instrumento desligado não abre (DP-35)', () => {
-    expect(recusaAbrirCompetencia('202510', '2026-10-24', null, true)).toBeNull();
-    expect(recusaAbrirCompetencia('202610', '2026-10-24', null, true)).toBeNull();
-    expect(recusaAbrirCompetencia('202611', '2026-10-24', null, true)).toBe('competencia-futura');
-    expect(recusaAbrirCompetencia('202509', '2026-10-24', { situacao: 'aberta' }, true)).toBe(
+    expect(recusaAbrirCompetencia('202510', '2026-10-24', null)).toBeNull();
+    expect(recusaAbrirCompetencia('202610', '2026-10-24', null)).toBeNull();
+    expect(recusaAbrirCompetencia('202611', '2026-10-24', null)).toBe('competencia-futura');
+    expect(recusaAbrirCompetencia('202509', '2026-10-24', { situacao: 'aberta' })).toBe(
       'competencia-ja-aberta',
     );
-    expect(recusaAbrirCompetencia('202509', '2026-10-24', { situacao: 'fechada' }, true)).toBe(
+    expect(recusaAbrirCompetencia('202509', '2026-10-24', { situacao: 'fechada' })).toBe(
       'competencia-ja-fechada',
     );
-    expect(recusaAbrirCompetencia('202509', '2026-10-24', null, false)).toBe('instrumento-desligado');
   });
 
   it('fechar: só aberta, criticada e com as críticas tratadas (bloqueante corrigida e aviso justificado não impedem)', () => {

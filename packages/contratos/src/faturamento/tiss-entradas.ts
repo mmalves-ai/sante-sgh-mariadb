@@ -116,9 +116,12 @@ export const esquemaFecharCompetencia = z
   .strict();
 export type FecharCompetenciaEntrada = z.infer<typeof esquemaFecharCompetencia>;
 
-/** faturamento.reabrirCompetencia (P2, especificada): supervisor e motivo. */
+/**
+ * faturamento.reabrirCompetencia: motivo (a alçada é a permissão do cargo) e, quando há conta da competência já em
+ * lote, a confirmação de quem reabre depois de ver o impacto (quantas contas e o valor apresentado).
+ */
 export const esquemaReabrirCompetencia = esquemaFecharCompetencia
-  .extend({ motivo: texto(250).pipe(z.string().min(5)) })
+  .extend({ motivo: texto(250).pipe(z.string().min(5)), confirmarImpacto: z.boolean().default(false) })
   .strict();
 export type ReabrirCompetenciaEntrada = z.infer<typeof esquemaReabrirCompetencia>;
 

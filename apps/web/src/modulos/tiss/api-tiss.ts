@@ -105,7 +105,7 @@ export const resumoCompetencia = (f: { convenio: string; competencia: string }) 
 export const fecharCompetencia = (corpo: { convenio: number; ano: number; mes: number }, chave: string) =>
   gravar(`${T}/competencias`, corpo, chave);
 export const reabrirCompetencia = (
-  corpo: { convenio: number; ano: number; mes: number; motivo: string },
+  corpo: { convenio: number; ano: number; mes: number; motivo: string; confirmarImpacto: boolean },
   chave: string,
 ) => gravar(`${T}/competencias/reabrir`, corpo, chave);
 

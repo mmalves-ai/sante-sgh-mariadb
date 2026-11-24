@@ -262,7 +262,6 @@ export class SusController {
   async sessao(req: RequisicaoAutorizada): Promise<SessaoSus> {
     const s = sessaoDe(req);
     const escopo = escopoConvenios(s);
-    const cache = new Map<InstrumentoSus, boolean>();
     return {
       rede: s.rede,
       hospital: s.hospital,
@@ -274,13 +273,6 @@ export class SusController {
       convenios: escopo.length === 0 ? null : escopo.map(Number).filter(Number.isFinite),
       parametros: await this.parametros(s),
       pode: (acao) => s.pode(acao),
-      liberado: async (i) => {
-        // Regra 8: a CIHA é gerada e mostrada sempre; BPA, APAC e AIH só com a chave ligada (DP-35).
-        if (i === 'ciha') return true;
-        if (!cache.has(i))
-          cache.set(i, (await this.liberacao.consultar(s, chaveLiberacaoDoInstrumento(i))).ligada);
-        return cache.get(i) ?? false;
-      },
       trilha: (evento, operacao, alvo) => {
         const base = linhaTrilha(s, evento, 'faturamento.sus', operacao, {
           tabela: alvo.tabela,
@@ -324,7 +316,8 @@ export class SusController {
   }> {
     const s = await this.sessao(req);
     const instrumentos: { instrumento: InstrumentoSus; liberado: boolean }[] = [];
-    for (const i of INSTRUMENTOS_SUS) instrumentos.push({ instrumento: i, liberado: await s.liberado(i) });
+    // Tudo ligado para todos (F3.7): nenhuma chave de liberação por instrumento; o acesso é o do cargo.
+    for (const i of INSTRUMENTOS_SUS) instrumentos.push({ instrumento: i, liberado: true });
     const fonte = await this.liberacao.consultar(sessaoDe(req), chaveLiberacaoDoInstrumento('ciha'));
     return {
       competencias: await this.servico.listarCompetencias(s, instrumentoDe(q['instrumento'])),

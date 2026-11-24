@@ -252,7 +252,7 @@ export class ServicoRepasse {
     cache: CacheConfig | null,
   ) {
     this.apoio = new ApoioGravacao<GravadorRepasse>(
-      { chave: 'repasse', nome: 'o repasse médico', operacoes: OPERACOES_REPASSE_TELA },
+      { chave: 'repasse', nome: 'o repasse médico', operacoes: OPERACOES_REPASSE_TELA, semLiberacao: true },
       porta,
       trilha,
       configuracao,

@@ -17,3 +17,5 @@ export * from './tiss/operadora.js';
 export * from './sus/index.js';
 // F3.0: a conta aberta na entrada do paciente e o lançamento automático de diárias e taxas (apuração idempotente).
 export * from './conta/admissao.js';
+// F3.7: a reabertura da competência do convênio (motivo e confirmação do impacto da conta já apresentada).
+export * from './competencia/reabertura.js';

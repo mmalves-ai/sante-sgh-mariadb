@@ -71,8 +71,7 @@ export type RecusaCompetenciaSus =
   | 'competencia-nao-fechada'
   | 'criticas-bloqueantes-abertas'
   | 'avisos-nao-justificados'
-  | 'critica-nao-executada'
-  | 'instrumento-desligado';
+  | 'critica-nao-executada';
 
 export interface CompetenciaExistente {
   readonly situacao: SituacaoCompetenciaSus;
@@ -80,15 +79,14 @@ export interface CompetenciaExistente {
 
 /**
  * Pode abrir? Uma por instrumento e competência; nunca uma competência futura (a de hoje pode, porque a produção do
- * mês corrente é acompanhada antes do fechamento). Os instrumentos desligados (DP-35) não abrem.
+ * mês corrente é acompanhada antes do fechamento). Tudo ligado para todos (F3.7): BPA, APAC, AIH e CIHA valem em todo
+ * estabelecimento; o acesso é a permissão do cargo.
  */
 export function recusaAbrirCompetencia(
   c: CompetenciaSus,
   hoje: string,
   existente: CompetenciaExistente | null,
-  instrumentoLigado: boolean,
 ): RecusaCompetenciaSus | null {
-  if (!instrumentoLigado) return 'instrumento-desligado';
   const atual = competenciaDaData(hoje);
   if (atual && c > atual) return 'competencia-futura';
   if (existente) return existente.situacao === 'fechada' ? 'competencia-ja-fechada' : 'competencia-ja-aberta';

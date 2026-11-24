@@ -119,7 +119,7 @@ export const mensagensTiss = {
   competencias: {
     titulo: 'Fechamento de competência por convênio',
     texto:
-      'Os totais da competência do convênio e o fechamento. A competência fechada não recebe conta nova; reabrir é do supervisor, com motivo.',
+      'Os totais da competência do convênio e o fechamento. A competência fechada não recebe conta nova; reabrir pede a permissão do cargo e o motivo; com conta já em lote, a confirmação do impacto.',
     contas: 'Contas da competência',
     emLote: '{n} em lote',
     aberta: 'Aberta',
@@ -129,6 +129,10 @@ export const mensagensTiss = {
     fechadaQuando: 'Fechada em',
     reabrir: 'Reabrir a competência',
     motivoReabrir: 'Motivo da reabertura (mínimo 5 letras)',
+    reabertaEm: 'Reaberta em {em} por {por}. Motivo: {motivo}',
+    confirmarImpacto:
+      '{n} conta(s) desta competência já estão em lote (apresentadas à operadora). Confirmo que alterar uma conta apresentada exige cancelar ou reapresentar a guia.',
+    ciclos: 'Fechamentos e reaberturas registrados: {n}',
   },
   demonstrativos: {
     titulo: 'Demonstrativos e conciliação item a item',

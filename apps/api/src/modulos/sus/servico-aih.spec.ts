@@ -1,5 +1,5 @@
-// Serviço do faturamento SUS, etapa 4 (AIH e retorno do gestor), sobre a porta em memória (massa SINTÉTICA): desligado
-// (DP-35) recusa; ligado: faixa → laudo → autorização com o número da faixa → crítica da competência (a internação sem
+// Serviço do faturamento SUS, etapa 4 (AIH e retorno do gestor), sobre a porta em memória (massa SINTÉTICA), tudo
+// ligado (F3.7): faixa → laudo → autorização com o número da faixa → crítica da competência (a internação sem
 // AIH, a AIH sem fechamento) → fechamento (regra 6: bloqueante recusa; o OPM pede a nota) → espelho com os valores →
 // SISAIH01 com hash e download → retorno do gestor (rejeitada) → reapresentação → glosa aceita; as recusas (escopo,
 // versão, máquina de estados, número fora da faixa ou em uso) e a trilha sem dado pessoal.
@@ -31,7 +31,7 @@ const AUTORIZADOR = (() => {
   throw new Error('sem CNS');
 })();
 
-function sessao(extra: Partial<SessaoSus> = {}, ligado = true, uti = '3:2:0802010083'): SessaoSus {
+function sessao(extra: Partial<SessaoSus> = {}, uti = '3:2:0802010083'): SessaoSus {
   return {
     rede: 'rede-teste',
     hospital: 'pc',
@@ -55,7 +55,6 @@ function sessao(extra: Partial<SessaoSus> = {}, ligado = true, uti = '3:2:080201
       apac: { uf: '33' },
       aih: { utiPorAcomodacao: uti, diretorClinicoCns: DIRETOR },
     },
-    liberado: async (i) => i === 'ciha' || (ligado && (i === 'aih' || i === 'bpa')),
     trilha: (evento, operacao, alvo) => ({
       rede: 'rede-teste',
       hospital: 'pc',
@@ -108,26 +107,6 @@ const LAUDO = {
 const FAIXA = { inicial: numeroAih('332510000001'), final: numeroAih('332510000003') };
 
 describe('faturamento SUS, etapa 4: AIH', () => {
-  it('desligado por estabelecimento (DP-35): o laudo, a faixa e o SISAIH01 recusam', async () => {
-    const { aih } = montar();
-    const s = sessao({}, false);
-    await expect(aih.registrar(s, { acao: 'laudo', laudo: LAUDO })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    await expect(
-      aih.registrarFaixa(s, {
-        acao: 'registrar',
-        ...FAIXA,
-        orgaoEmissor: 'SMS SINTETICA',
-        dataLiberacao: dia(1),
-      }),
-    ).rejects.toEqual(recusa('recurso-desligado'));
-    await expect(aih.gerarSisaih(s, { competencia: COMP, versao: '0000000001' })).rejects.toEqual(
-      recusa('recurso-desligado'),
-    );
-    expect((await aih.painel(s)).liberado).toBe(false);
-  });
-
   it('o caminho inteiro: faixa, laudo, autorização, crítica, fechamento, espelho, SISAIH01, retorno e reapresentação', async () => {
     const { porta, armazem, sus, aih } = montar();
     const s = sessao();
@@ -218,7 +197,7 @@ describe('faturamento SUS, etapa 4: AIH', () => {
     expect(c1).toMatchObject({ bloqueantes: 0, avisos: 2, registros: 2 });
     // O fechamento sem o tipo de UTI do SIH no parâmetro recusa (regra 6); com ele, o OPM pede a nota.
     await expect(
-      aih.registrar(sessao({}, true, ''), {
+      aih.registrar(sessao({}, ''), {
         acao: 'fechar',
         aih: a2.id,
         versao: a2.versao,

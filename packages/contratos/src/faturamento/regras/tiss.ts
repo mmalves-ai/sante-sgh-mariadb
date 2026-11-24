@@ -188,21 +188,9 @@ export function conferirCompetenciaAberta(fechada: boolean): RecusaFaturamento |
   return fechada
     ? recusaFat(
         'competencia-fechada',
-        'A competência desta conta está fechada para o convênio: reabrir exige o supervisor e o motivo.',
+        'A competência desta conta está fechada para o convênio: reabrir exige a permissão e o motivo.',
       )
     : null;
-}
-
-export function conferirReaberturaCompetencia(r: {
-  readonly fechada: boolean;
-  readonly supervisor: boolean;
-  readonly motivo: string;
-}): RecusaFaturamento | null {
-  if (!r.fechada) return recusaFat('competencia-aberta', 'A competência já está aberta.');
-  if (!r.supervisor)
-    return recusaFat('sem-supervisor', 'Reabrir a competência é do supervisor do faturamento.');
-  if (r.motivo.trim().length < 5) return recusaFat('motivo-obrigatorio', 'Informe o motivo.', ['motivo']);
-  return null;
 }
 
 // ── Glosa e baixa (regras 6 e 7) ────────────────────────────────────────────────────────────────────

@@ -120,8 +120,6 @@ export interface SessaoSus {
   /** Escopo por convênio (null: todos os convênios do estabelecimento). */
   readonly convenios: readonly number[] | null;
   readonly parametros: ParametrosSus;
-  /** A chave de liberação do instrumento ligada no estabelecimento da sessão. */
-  liberado(instrumento: InstrumentoSus): Promise<boolean>;
   /** Se a sessão tem a ação do catálogo (as mesmas regras da rota); ausente, nega (falha fechada). */
   pode?(acao: string): boolean;
   /** A linha da trilha de uma gravação (o banco é o da sessão). */
@@ -205,7 +203,6 @@ export const MENSAGENS_RECUSA_SUS: Readonly<
   'criticas-bloqueantes-abertas':
     'Há críticas bloqueantes abertas: corrija na origem e rode a crítica de novo.',
   'critica-nao-executada': 'Rode a crítica antes de fechar ou gerar o arquivo.',
-  'instrumento-desligado': 'Este instrumento está desligado neste estabelecimento.',
   'escopo-parcial':
     'Seu acesso cobre só parte dos convênios: a geração, o fechamento e a equivalência SIGTAP exigem acesso a todos os convênios do estabelecimento.',
   'equivalencia-sem-acesso-rede':
@@ -222,16 +219,6 @@ function recusa(codigo: keyof typeof MENSAGENS_RECUSA_SUS): ErroProblema {
     return new ErroProblema('conflito-de-versao', 409, 'APAC alterada', MENSAGENS_RECUSA_SUS[codigo], {
       codigo,
     });
-  if (codigo === 'instrumento-desligado')
-    return new ErroProblema(
-      'recurso-desligado',
-      403,
-      'Funcionalidade desligada',
-      MENSAGENS_RECUSA_SUS[codigo],
-      {
-        codigo: 'recurso-desligado',
-      },
-    );
   if (codigo === 'escopo-parcial' || codigo === 'equivalencia-sem-acesso-rede')
     return new ErroProblema('sem-permissao', 403, 'Fora do escopo', MENSAGENS_RECUSA_SUS[codigo], { codigo });
   return new ErroProblema('recusa-de-negocio', 422, 'Operação recusada', MENSAGENS_RECUSA_SUS[codigo], {
@@ -343,10 +330,6 @@ export class ServicoSus {
     };
   }
 
-  private async exigirLiberado(s: SessaoSus, i: InstrumentoSus): Promise<void> {
-    if (!(await s.liberado(i))) throw recusa('instrumento-desligado');
-  }
-
   private exigirEscopoTotal(s: SessaoSus): void {
     if (s.convenios !== null) throw recusa('escopo-parcial');
   }
@@ -438,20 +421,14 @@ export class ServicoSus {
     instrumento: InstrumentoSus | null,
   ): Promise<CompetenciaSusResumo[]> {
     const linhas = await this.porta.ler(this.ctx(s), (l) => l.competencias(instrumento));
-    const liberadas = new Map<InstrumentoSus, boolean>();
-    const out: CompetenciaSusResumo[] = [];
-    for (const c of linhas) {
-      if (!liberadas.has(c.instrumento)) liberadas.set(c.instrumento, await s.liberado(c.instrumento));
-      out.push(this.resumo(c, liberadas.get(c.instrumento) ?? false));
-    }
-    return out;
+    // Tudo ligado para todos (F3.7): BPA, APAC, AIH e CIHA valem em todo estabelecimento; o acesso é o do cargo.
+    return linhas.map((c) => this.resumo(c, true));
   }
 
   async abrir(s: SessaoSus, e: AbrirCompetenciaSusEntrada): Promise<CompetenciaSusResumo> {
-    const liberado = await s.liberado(e.instrumento);
     return this.gravar(s, async (g) => {
       const existente = await g.competencia(e.instrumento, e.competencia);
-      const r = recusaAbrirCompetencia(e.competencia, s.hoje, existente, liberado);
+      const r = recusaAbrirCompetencia(e.competencia, s.hoje, existente);
       if (r) throw recusa(r);
       const c = await g.abrir({ instrumento: e.instrumento, competencia: e.competencia, por: s.login });
       await g.trilha(
@@ -465,13 +442,12 @@ export class ServicoSus {
           },
         ),
       );
-      return this.resumo(c, liberado);
+      return this.resumo(c, true);
     });
   }
 
   /** `faturamento.criticarSus`: lê a produção da competência, monta pela SIGTAP dela e grava as críticas. */
   async criticar(s: SessaoSus, e: CriticarSusEntrada): Promise<ResultadoCriticaSus> {
-    await this.exigirLiberado(s, e.instrumento);
     const t0 = Date.now();
     // Etapa 2: o BPA tem a própria montagem (a produção SUS com o validador de compatibilidade); a etapa 3, a da APAC;
     // a etapa 4 registra a da AIH (registrarMontagem); os demais, a CIHA.
@@ -554,7 +530,7 @@ export class ServicoSus {
   }
 
   private async montarBpa(s: SessaoSus, competencia: CompetenciaSus) {
-    const apacLiberada = await s.liberado('apac');
+    const apacLiberada = true;
     return this.porta.ler(this.ctx(s), async (l) => {
       const comp = await this.exigirCompetencia(l, 'bpa', competencia);
       const equivalencias = await l.equivalencias();
@@ -633,7 +609,6 @@ export class ServicoSus {
         throw recusa('escopo-parcial');
       const comp = (await g.competencias(null)).find((c) => c.id === x.competencia);
       if (!comp) throw naoEncontrada();
-      await this.exigirLiberado(s, comp.instrumento);
       if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
       if (versaoSus(x.versao) !== e.versao) throw recusa('versao-alterada');
       await g.justificar({ id: x.id, versao: x.versao }, e.justificativa, s.login);
@@ -654,7 +629,6 @@ export class ServicoSus {
   }
 
   async fechar(s: SessaoSus, e: FecharCompetenciaSusEntrada): Promise<CompetenciaSusResumo> {
-    await this.exigirLiberado(s, e.instrumento);
     this.exigirEscopoTotal(s);
     return this.gravar(s, async (g) => {
       const c = await this.exigirCompetencia(g, e.instrumento, e.competencia, true);
@@ -694,7 +668,6 @@ export class ServicoSus {
   }
 
   async reabrir(s: SessaoSus, e: ReabrirCompetenciaSusEntrada): Promise<CompetenciaSusResumo> {
-    await this.exigirLiberado(s, e.instrumento);
     this.exigirEscopoTotal(s);
     return this.gravar(s, async (g) => {
       const c = await this.exigirCompetencia(g, e.instrumento, e.competencia, true);
@@ -730,7 +703,6 @@ export class ServicoSus {
     s: SessaoSus,
     e: { competencia: CompetenciaSus; versao: string },
   ): Promise<ArquivoSusGerado> {
-    await this.exigirLiberado(s, 'ciha');
     this.exigirEscopoTotal(s);
     const t0 = Date.now();
     const { m, comp } = await this.montar(s, 'ciha', e.competencia);
@@ -828,7 +800,6 @@ export class ServicoSus {
    * e a trilha; na falha, a versão guardada é removida; depois do COMMIT, a guarda definitiva é fixada.
    */
   async gerarBpa(s: SessaoSus, e: GerarBpaEntrada): Promise<ArquivoSusGerado> {
-    await this.exigirLiberado(s, 'bpa');
     this.exigirEscopoTotal(s);
     const t0 = Date.now();
     const { m, comp } = await this.montarBpa(s, e.competencia);
@@ -943,7 +914,6 @@ export class ServicoSus {
 
   /** As linhas de um arquivo BPA (sem dado pessoal), com o resumo por tipo. */
   async listarLinhasBpa(s: SessaoSus, f: FiltroLinhasBpa): Promise<PaginaLinhasBpa> {
-    await this.exigirLiberado(s, 'bpa');
     // As linhas cobrem todos os convênios SUS do arquivo, como o download: escopo parcial não lista (coerente com
     // gerarBpa e baixar).
     this.exigirEscopoTotal(s);
@@ -995,7 +965,6 @@ export class ServicoSus {
     // A rota de cada instrumento tem a permissão dele: o arquivo de outro instrumento não é entregue por ela.
     if (!a || a.instrumento !== instrumento)
       throw new ErroProblema('nao-encontrado', 404, 'Arquivo não encontrado');
-    await this.exigirLiberado(s, a.instrumento);
     const conteudo = await this.armazem.ler(a.chaveObjeto);
     if (!conteudo || sha256(conteudo) !== a.hash)
       throw new ErroProblema(
@@ -1076,7 +1045,6 @@ export class ServicoSus {
 
   /** As APACs do estabelecimento (sem documento: o paciente pelo prontuário). */
   async listarApacs(s: SessaoSus, f: FiltroApacs): Promise<PaginaApacs> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoSus(s);
     return this.porta.ler(this.ctx(s), async (l) => {
       const r = await l.paginaApacs({
@@ -1102,7 +1070,6 @@ export class ServicoSus {
    * (D-ATEND-513; a rota é auditada).
    */
   async atendimentoLaudoApac(s: SessaoSus, registro: number): Promise<AtendimentoLaudoApac> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoSus(s);
     const sus = s.parametros.conveniosSus;
     const a = await this.porta.ler(this.ctx(s), (l) => l.atendimentoLaudoApac(registro, sus));
@@ -1122,7 +1089,6 @@ export class ServicoSus {
 
   /** Os domínios do laudo de nefrologia (consulta). */
   async dominiosApac(s: SessaoSus): Promise<DominiosApac> {
-    await this.exigirLiberado(s, 'apac');
     const d = await this.porta.ler(this.ctx(s), (l) => l.dominiosApac());
     return {
       caracteristicaTratamento: [...d.caracteristicaTratamento],
@@ -1137,7 +1103,6 @@ export class ServicoSus {
    * válido; com a APAC liberada e o escopo SUS, como o laudo.
    */
   async buscarSolicitantesApac(s: SessaoSus, termo: string): Promise<SolicitanteApac[]> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoSus(s);
     const r = await this.porta.ler(this.ctx(s), (l) => l.buscarSolicitantesApac(termo));
     return r.map((x) => ({
@@ -1177,7 +1142,6 @@ export class ServicoSus {
    * ação, o procedimento e as competências, nunca dado pessoal.
    */
   async registrarApac(s: SessaoSus, e: RegistrarApacEntrada): Promise<ApacLida> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoSus(s);
     const trilha = (g: GravacaoSus, a: ApacRegistro, diferenca: string) =>
       g.trilha(
@@ -1324,7 +1288,6 @@ export class ServicoSus {
    * APAC a apresentar, nada é gravado. O conteúdo vai ao armazenamento na transação; na falha, é removido.
    */
   async gerarApac(s: SessaoSus, e: GerarApacEntrada): Promise<ArquivoSusGerado> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoTotal(s);
     const t0 = Date.now();
     const { m, comp } = await this.montarApac(s, e.competencia);
@@ -1433,7 +1396,6 @@ export class ServicoSus {
 
   /** As linhas de procedimento de um APAC-Mag gerado (sem dado pessoal). */
   async listarLinhasApac(s: SessaoSus, f: FiltroLinhasApac): Promise<PaginaLinhasApac> {
-    await this.exigirLiberado(s, 'apac');
     this.exigirEscopoTotal(s);
     return this.porta.ler(this.ctx(s), async (l) => {
       const a = await l.arquivo(f.arquivo);
@@ -1499,7 +1461,6 @@ export class ServicoSus {
     s: SessaoSus,
     e: RegistrarEquivalenciaSusEntrada,
   ): Promise<{ equivalencia: EquivalenciaSusLida; mudou: boolean }> {
-    await this.exigirLiberado(s, 'ciha');
     // A equivalência vale para a rede inteira (muda a CIHA de todos os hospitais e convênios): escopo total e a ação
     // de nível rede.
     this.exigirEquivalenciaDaRede(s);
@@ -1559,7 +1520,6 @@ export class ServicoSus {
     s: SessaoSus,
     e: DesativarEquivalenciaSusEntrada,
   ): Promise<EquivalenciaSusLida> {
-    await this.exigirLiberado(s, 'ciha');
     this.exigirEquivalenciaDaRede(s);
     return this.gravar(s, async (g) => {
       const r = await g.desativarEquivalencia({
