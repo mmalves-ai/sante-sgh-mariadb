@@ -12,7 +12,8 @@
 // SHA-256, um por arquivo no estabelecimento, número pela sequência de negócio); cada linha é um retorno_sus_item (uma
 // por identificação no arquivo: a linha repetida não entra). A AIH da tela é a autorização de internação
 // (autorizacao_internacao_sus); a linha aponta o último fechamento (conta_aih). Mudar a situação da AIH é regra da
-// família da AIH: entra pela ponte (PonteAihDoRetorno); sem ela, recusa com "modelo-pendente".
+// família da AIH: entra pela ponte (PonteAihDoRetorno: a PonteAihPropria de porta-propria-aih.ts, que o integrador
+// injeta); sem ela, recusa com "modelo-pendente".
 import { garantirSequencia, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   type ApacRegistro,
@@ -57,7 +58,8 @@ export const SEQUENCIA_RETORNO_SUS = 'retorno_sus';
 
 /** AAAAMM → primeiro e último dia. */
 function diasDaCompetencia(c: string): { inicio: string; fim: string } {
-  if (!/^\d{4}(0[1-9]|1[0-2])$/.test(c)) throw new ErroSus('nao-encontrado', 'Competência inválida (AAAAMM).');
+  if (!/^\d{4}(0[1-9]|1[0-2])$/.test(c))
+    throw new ErroSus('nao-encontrado', 'Competência inválida (AAAAMM).');
   const ano = Number(c.slice(0, 4));
   const mes = Number(c.slice(4, 6));
   const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
@@ -92,11 +94,19 @@ const SQL_APAC = `
     JOIN procedimento_sigtap ps ON ps.id = la.solicitado_procedimento_sigtap_id
     JOIN profissional pr ON pr.id = la.solicitante_profissional_id
     JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
-    LEFT JOIN laudo_apac_nefrologia n ON n.laudo_apac_id = la.id AND n.sequencia = 1 AND n.excluido_em IS NULL
+    LEFT JOIN laudo_apac_nefrologia n ON n.laudo_apac_id = la.id AND n.excluido_em IS NULL
+     AND n.sequencia = (SELECT MAX(n2.sequencia) FROM laudo_apac_nefrologia n2
+                         WHERE n2.laudo_apac_id = la.id AND n2.excluido_em IS NULL)
     LEFT JOIN dominio_sigtap ds ON ds.id = aa.motivo_saida_dominio_sigtap_id
    WHERE la.estabelecimento_id = ? AND la.excluido_em IS NULL`;
 
-const SITUACOES_APAC: readonly SituacaoApac[] = ['solicitada', 'autorizada', 'negada', 'encerrada', 'cancelada'];
+const SITUACOES_APAC: readonly SituacaoApac[] = [
+  'solicitada',
+  'autorizada',
+  'negada',
+  'encerrada',
+  'cancelada',
+];
 
 function apacDaLinha(x: Linha): ApacRegistro {
   const situacao = txt(x['situacao']) as SituacaoApac;
@@ -312,10 +322,10 @@ export class LeituraApacRetorno {
   }
 
   async ultimoRetornoDaAih(aih: number): Promise<RetornoSus | null> {
-    const x = await this.l.uma(`${SQL_RETORNO} AND ca.autorizacao_internacao_sus_id = ? ORDER BY i.id DESC LIMIT 1`, [
-      this.est,
-      aih,
-    ]);
+    const x = await this.l.uma(
+      `${SQL_RETORNO} AND ca.autorizacao_internacao_sus_id = ? ORDER BY i.id DESC LIMIT 1`,
+      [this.est, aih],
+    );
     return x ? retornoDaLinha(x) : null;
   }
 }
@@ -387,7 +397,8 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
   private async gravarNefrologia(laudo: number, n: LaudoNefrologiaApac | null, atual: ApacRegistro | null) {
     const existente = atual
       ? await this.tx.uma(
-          'SELECT id, versao FROM laudo_apac_nefrologia WHERE laudo_apac_id = ? AND sequencia = 1 AND excluido_em IS NULL',
+          `SELECT id, versao FROM laudo_apac_nefrologia WHERE laudo_apac_id = ? AND excluido_em IS NULL
+            ORDER BY sequencia DESC LIMIT 1`,
           [laudo],
         )
       : null;
@@ -409,20 +420,15 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
     if (existente)
       await this.tx.alterar('laudo_apac_nefrologia', num(existente['id']), num(existente['versao']), campos);
     else {
-      // A sequência 1 pode ter sido retirada antes (marcada como excluída, nunca apagada): a nova vai na seguinte
-      // e volta a ser a 1 só quando não houver nenhuma.
-      const usada = await this.tx.uma(
-        'SELECT COUNT(*) AS n FROM laudo_apac_nefrologia WHERE laudo_apac_id = ? AND sequencia = 1',
+      // O complemento retirado antes fica marcado como excluído (nunca apagado): o que volta pela correção entra
+      // na sequência seguinte do laudo (a leitura usa o não excluído de maior sequência).
+      const seq = await this.tx.uma(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM laudo_apac_nefrologia WHERE laudo_apac_id = ?',
         [laudo],
       );
-      if (num(usada?.['n']) > 0)
-        throw recusa(
-          'modelo-pendente',
-          'O complemento de terapia renal retirado deste laudo não pode voltar pela correção: registre um laudo novo.',
-        );
       await this.tx.incluir('laudo_apac_nefrologia', {
         laudo_apac_id: laudo,
-        sequencia: 1,
+        sequencia: num(seq?.['s']),
         ...campos,
       });
     }
@@ -577,7 +583,11 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
       'SELECT id FROM competencia_sus WHERE estabelecimento_id = ? AND instrumento = ? AND competencia = ?',
       [this.est, r.instrumento, r.competencia],
     );
-    if (!c) throw new ErroSus('competencia-nao-aberta', 'A competência do retorno não foi aberta neste estabelecimento.');
+    if (!c)
+      throw new ErroSus(
+        'competencia-nao-aberta',
+        'A competência do retorno não foi aberta neste estabelecimento.',
+      );
     let remessa: Record<string, unknown> = {};
     if (r.arquivo !== null) {
       const t = r.instrumento === 'aih' ? 'remessa_sisaih' : 'remessa_bpa';
@@ -607,17 +617,20 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
   private usuarioQueTrata(): number {
     const u = this.tx.contexto.usuario;
     if (u === null || u === undefined)
-      throw recusa('usuario-obrigatorio', 'O tratamento do retorno precisa do usuário da sessão: nada foi gravado.');
+      throw recusa(
+        'usuario-obrigatorio',
+        'O tratamento do retorno precisa do usuário da sessão: nada foi gravado.',
+      );
     return u;
   }
 
   async inserirRetornoSus(r: RetornoSusParaGravar): Promise<number | null> {
     const tratador = r.situacao === 'aprovada' ? this.usuarioQueTrata() : null;
     const cab = await this.cabecalhoDoRetorno(r);
-    const ja = await this.tx.uma('SELECT id FROM retorno_sus_item WHERE retorno_sus_id = ? AND identificacao = ?', [
-      cab,
-      r.identificacao.slice(0, 30),
-    ]);
+    const ja = await this.tx.uma(
+      'SELECT id FROM retorno_sus_item WHERE retorno_sus_id = ? AND identificacao = ?',
+      [cab, r.identificacao.slice(0, 30)],
+    );
     if (ja) return null;
     let conta: number | null = null;
     if (r.aih !== null) {
@@ -708,4 +721,3 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
     }
   }
 }
-

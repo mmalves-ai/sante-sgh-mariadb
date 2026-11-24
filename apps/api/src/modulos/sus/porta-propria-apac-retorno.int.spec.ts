@@ -5,7 +5,9 @@
 // duas versões e nunca apaga o complemento retirado; o encerramento sem o motivo na lista oficial recusa
 // (catalogo-incompleto). O retorno do gestor grava o cabeçalho por arquivo (SHA-256) e uma linha por identificação
 // (a repetida não entra), com as contagens no cabeçalho; o tratamento confere a versão; sem a ponte da AIH, mudar a
-// AIH recusa (modelo-pendente). Massa SINTÉTICA, limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// AIH recusa (modelo-pendente); com a ponte própria da AIH, a linha ligada a uma AIH apresentada a rejeita e a
+// reapresentação abre um fechamento novo. O complemento de terapia renal retirado volta na sequência seguinte.
+// Massa SINTÉTICA, limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio, type ResultadoOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -16,9 +18,11 @@ import {
   TABELAS_APAC_RETORNO,
 } from './porta-propria-apac-retorno.js';
 import { TABELAS_SUS } from './porta-propria.js';
+import { PonteAihPropria, TABELAS_SUS_AIH } from './porta-propria-aih.js';
 import { type NovaApac, type RetornoSusParaGravar } from './tipos.js';
 
-const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
+// O f22_o3 é o cliente de teste da família da AIH (tem a 13_SUS/93 que a ponte da AIH lê).
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'sapac1';
 const SIG = '0899990001';
@@ -44,6 +48,7 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
   let atendimento = 0;
   let sigtap = 0;
   let usuario = 0;
+  let aih = 0;
   let dom: number[] = [];
   const massa: { tabela: string; id: number }[] = [];
 
@@ -53,16 +58,16 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     );
   }
 
-  async function gravar<T>(fn: (g: GravacaoApacRetorno) => Promise<T>): Promise<T> {
+  async function gravar<T>(fn: (g: GravacaoApacRetorno) => Promise<T>, comPonte = false): Promise<T> {
     let saida: { v: T } | null = null;
     let recusada: unknown = null;
     const op = definirOperacao({
       nome: 'faturamento.sus.gravacao',
-      tabelas: [...new Set([...TABELAS_SUS, ...TABELAS_APAC_RETORNO])],
+      tabelas: [...new Set([...TABELAS_SUS, ...TABELAS_APAC_RETORNO, ...TABELAS_SUS_AIH])],
       entrada: z.object({ chave: z.string() }),
       async gravar(tx) {
         try {
-          saida = { v: await fn(new GravacaoApacRetorno(tx, est)) };
+          saida = { v: await fn(new GravacaoApacRetorno(tx, est, comPonte ? new PonteAihPropria() : null)) };
         } catch (e) {
           recusada = e;
           throw e;
@@ -73,15 +78,18 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     });
     const chave = `sapac:${randomUUID()}`;
     try {
-      await nucleo
-        .criarExecutor()
-        .executar(op, CLIENTE, { chave }, {
+      await nucleo.criarExecutor().executar(
+        op,
+        CLIENTE,
+        { chave },
+        {
           cliente: CLIENTE,
           estabelecimento: est,
           usuario,
           correlacao: 'sapac-gravar',
           chaveIdempotencia: chave,
-        });
+        },
+      );
     } catch (e) {
       // A recusa de negócio volta como a porta a lançou (como na PortaSusPropria).
       throw recusada ?? e;
@@ -103,6 +111,17 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
         [est],
       );
       await e.executar('DELETE FROM retorno_sus WHERE estabelecimento_id = ?', [est]);
+      for (const t of ['conta_aih_procedimento', 'conta_aih_opm'])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN conta_aih c ON c.id = x.conta_aih_id WHERE c.estabelecimento_id = ?`,
+          [est],
+        );
+      await e.executar('UPDATE conta_aih SET anterior_conta_aih_id = NULL WHERE estabelecimento_id = ?', [
+        est,
+      ]);
+      await e.executar('DELETE FROM conta_aih WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM autorizacao_internacao_sus WHERE estabelecimento_id = ?', [est]);
+      await e.executar('DELETE FROM remessa_sisaih WHERE estabelecimento_id = ?', [est]);
       await e.executar(
         'DELETE n FROM laudo_apac_nefrologia n JOIN laudo_apac l ON l.id = n.laudo_apac_id WHERE l.estabelecimento_id = ?',
         [est],
@@ -213,6 +232,47 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
             [lista, 'SAPAC', `Valor fictício ${lista}`, agora],
           ),
         );
+      // Uma AIH autorizada com o primeiro fechamento apresentado no SISAIH (competência 202510, remessa fictícia).
+      const compAih = await e.inserir(
+        `INSERT INTO competencia_sus (estabelecimento_id, instrumento, competencia, periodo_inicio, periodo_fim, situacao,
+           aberta_em, criado_em) VALUES (?, 'aih', '202510', '2025-10-01', '2025-10-31', 'aberta', ?, ?)`,
+        [est, agora, agora],
+      );
+      const remessa = await e.inserir(
+        `INSERT INTO remessa_sisaih (estabelecimento_id, competencia_sus_id, numero, situacao, aberta_em, criado_em)
+         VALUES (?, ?, '977001', 'aberta', ?, ?)`,
+        [est, compAih, agora, agora],
+      );
+      const internacao = await garantir(
+        'internacao',
+        "SELECT id FROM internacao WHERE estabelecimento_id = ? AND numero = '977001'",
+        [est],
+        `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
+           carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, acomodacao_id, especialidade_medica_id,
+           medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
+         VALUES (?, '977001', ?, ?, '2025-10-01 08:00:00', 1, 1, 1, 1, 1, 1, 77, 'ativa', ?)`,
+        [est, atendimento, paciente, agora],
+      );
+      aih = await e.inserir(
+        `INSERT INTO autorizacao_internacao_sus (estabelecimento_id, paciente_id, data_solicitacao,
+           solicitado_procedimento_sigtap_id, codigo_cid10_principal, situacao, numero_aih, data_autorizacao, criado_em)
+         VALUES (?, ?, '2025-10-01', ?, 'N180', 'autorizada', '9770010000011', '2025-10-02', ?)`,
+        [est, paciente, sigtap, agora],
+      );
+      const conta = await e.inserir(
+        `INSERT INTO conta_aih (estabelecimento_id, internacao_id, paciente_id, autorizacao_internacao_sus_id,
+           competencia_sus_id, remessa_sisaih_id, numero_aih, numero_fechamento, data_internacao, carater_dominio_sus_id,
+           solicitado_procedimento_sigtap_id, realizado_procedimento_sigtap_id, codigo_cid10_principal, dias_permanencia,
+           situacao, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, '9770010000011', 1, '2025-10-01', ?, ?, ?, 'N180',
+                 3, 'apresentada', ?)`,
+        [est, internacao, paciente, aih, compAih, remessa, dom[0], sigtap, sigtap, agora],
+      );
+      await e.executar(
+        `INSERT INTO conta_aih_procedimento (conta_aih_id, sequencia, procedimento_sigtap_id, tipo, quantidade, criado_em)
+         VALUES (?, 1, ?, 'principal', 1, ?)`,
+        [conta, sigtap, agora],
+      );
       const u = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM usuario', []);
       usuario = Number(u?.id ?? 0);
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -277,7 +337,9 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     const p = await ler((l) => l.paginaApacs({ pagina: 0, porPagina: 10 }));
     expect(p.total).toBe(1);
     expect(p.porSituacao).toEqual({ solicitada: 1 });
-    expect(await contar('SELECT COUNT(*) AS n FROM autorizacao_apac WHERE laudo_apac_id = ?', [a.id])).toBe(1);
+    expect(await contar('SELECT COUNT(*) AS n FROM autorizacao_apac WHERE laudo_apac_id = ?', [a.id])).toBe(
+      1,
+    );
   });
 
   it('autoriza, confere a versão e o número único, continua e entra na competência', async () => {
@@ -311,14 +373,26 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
       gravar((g) => g.mudarApac({ id: b.id, versao: b.versao, por: 'teste', mudanca: aut })),
     ).rejects.toMatchObject({ codigo: 'apac-numero-duplicado' });
     const c = await gravar((g) =>
-      g.mudarApac({ id: a!.id, versao: 2, por: 'teste', mudanca: { acao: 'continuar', ultimaCompetencia: '202510' } }),
+      g.mudarApac({
+        id: a!.id,
+        versao: 2,
+        por: 'teste',
+        mudanca: { acao: 'continuar', ultimaCompetencia: '202510' },
+      }),
     );
     expect(c.depois.ultimaCompetencia).toBe('202510');
     expect((await ler((l) => l.apacsDaCompetencia('202510'))).map((x) => x.id)).toEqual([a!.id]);
     expect(await ler((l) => l.apacsDaCompetencia('202511'))).toEqual([]);
-    expect((await ler((l) => l.paginaApacs({ competencia: '202509', pagina: 0, porPagina: 5 }))).total).toBe(1);
+    expect((await ler((l) => l.paginaApacs({ competencia: '202509', pagina: 0, porPagina: 5 }))).total).toBe(
+      1,
+    );
     const can = await gravar((g) =>
-      g.mudarApac({ id: b.id, versao: b.versao, por: 'teste', mudanca: { acao: 'cancelar', justificativa: 'Duplicada.' } }),
+      g.mudarApac({
+        id: b.id,
+        versao: b.versao,
+        por: 'teste',
+        mudanca: { acao: 'cancelar', justificativa: 'Duplicada.' },
+      }),
     );
     expect(can.depois).toMatchObject({ situacao: 'cancelada', justificativaSituacao: 'Duplicada.' });
   });
@@ -355,7 +429,12 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
         id: a!.id,
         versao: a!.versao,
         por: 'teste',
-        mudanca: { acao: 'encerrar', motivo: '99', dataEncerramento: '2025-10-20', ultimaCompetencia: '202510' },
+        mudanca: {
+          acao: 'encerrar',
+          motivo: '99',
+          dataEncerramento: '2025-10-20',
+          ultimaCompetencia: '202510',
+        },
       }),
     ).catch((e: unknown) => e);
     expect(textoDoErro(erro)).toContain('catalogo-incompleto');
@@ -385,7 +464,13 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     expect(id).toBeGreaterThan(0);
     expect(await gravar((g) => g.inserirRetornoSus(base))).toBeNull();
     await gravar((g) =>
-      g.inserirRetornoSus({ ...base, identificacao: 'L0002', situacao: 'aprovada', valorGlosado: 0, motivo: null }),
+      g.inserirRetornoSus({
+        ...base,
+        identificacao: 'L0002',
+        situacao: 'aprovada',
+        valorGlosado: 0,
+        motivo: null,
+      }),
     );
     const p = await ler((l) => l.paginaRetornos({ competencia: '202509', pagina: 0, porPagina: 10 }));
     expect(p.total).toBe(2);
@@ -394,23 +479,145 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     expect(p.itens.map((x) => x.tratamento).sort()).toEqual(['aceita', 'pendente']);
     expect(
       await contar(
-        "SELECT quantidade_registros AS n FROM retorno_sus WHERE estabelecimento_id = ? AND quantidade_glosados = 1 AND valor_glosado = 40",
+        'SELECT quantidade_registros AS n FROM retorno_sus WHERE estabelecimento_id = ? AND quantidade_glosados = 1 AND valor_glosado = 40',
         [est],
       ),
     ).toBe(2);
     const r = await ler((l) => l.retornoSus(id!));
     expect(r).toMatchObject({ identificacao: 'L0001', procedimento: SIG, situacao: 'glosada', versao: 1 });
     await gravar((g) =>
-      g.tratarRetornoSus({ id: id!, versao: 1 }, { decisao: 'aceita', justificativa: 'Aceita.', por: 'teste', aih: null }),
+      g.tratarRetornoSus(
+        { id: id!, versao: 1 },
+        { decisao: 'aceita', justificativa: 'Aceita.', por: 'teste', aih: null },
+      ),
     );
     expect((await ler((l) => l.retornoSus(id!)))?.tratamento).toBe('aceita');
     await expect(
       gravar((g) =>
-        g.tratarRetornoSus({ id: id!, versao: 1 }, { decisao: 'aceita', justificativa: 'x', por: 'teste', aih: null }),
+        g.tratarRetornoSus(
+          { id: id!, versao: 1 },
+          { decisao: 'aceita', justificativa: 'x', por: 'teste', aih: null },
+        ),
       ),
     ).rejects.toMatchObject({ codigo: 'versao-alterada' });
-    const semPonte = await gravar((g) => g.aplicarRetornoNaAih(1, 'aprovada', 'teste')).catch((e: unknown) => e);
+    const semPonte = await gravar((g) => g.aplicarRetornoNaAih(1, 'aprovada', 'teste')).catch(
+      (e: unknown) => e,
+    );
     expect(textoDoErro(semPonte)).toContain('modelo-pendente');
     expect(await ler((l) => l.ultimoRetornoDaAih(1))).toBeNull();
+  });
+
+  it('repõe na correção o complemento de terapia renal retirado (sequência seguinte, o retirado fica)', async () => {
+    const a = await gravar((g) => g.incluirApac(nova()));
+    const corrigir = (versao: number, nefrologia: NovaApac['nefrologia']) =>
+      gravar((g) =>
+        g.mudarApac({
+          id: a.id,
+          versao,
+          por: 'teste',
+          mudanca: {
+            acao: 'corrigir',
+            cidPrincipal: 'N18.0',
+            cidSecundario: null,
+            cidAssociado: null,
+            solicitante: CPF,
+            dataSolicitacao: '2025-09-02',
+            justificativa: 'Correção fictícia.',
+            nefrologia,
+          },
+        }),
+      );
+    const r1 = await corrigir(a.versao, null);
+    expect(r1.depois).toMatchObject({ laudoEspecifico: 'nenhum', nefrologia: null });
+    const r2 = await corrigir(r1.depois.versao, { ...nova().nefrologia!, inicioTratamento: '2025-08-15' });
+    expect(r2.depois).toMatchObject({ laudoEspecifico: 'nefrologia' });
+    expect(r2.depois.nefrologia?.inicioTratamento).toBe('2025-08-15');
+    expect((await ler((l) => l.apac(a.id)))?.nefrologia?.inicioTratamento).toBe('2025-08-15');
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM laudo_apac_nefrologia WHERE laudo_apac_id = ? AND excluido_em IS NOT NULL AND sequencia = 1',
+        [a.id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM laudo_apac_nefrologia WHERE laudo_apac_id = ? AND excluido_em IS NULL AND sequencia = 2',
+        [a.id],
+      ),
+    ).toBe(1);
+    // Corrigir de novo altera o complemento vigente (a sequência 2), sem abrir outro.
+    const r3 = await corrigir(r2.depois.versao, { ...nova().nefrologia!, inicioTratamento: '2025-08-20' });
+    expect(r3.depois.nefrologia?.inicioTratamento).toBe('2025-08-20');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM laudo_apac_nefrologia WHERE laudo_apac_id = ?', [a.id]),
+    ).toBe(2);
+  });
+
+  it('a linha do retorno ligada a uma AIH passa pela ponte: rejeita a AIH e a reapresentação abre fechamento novo', async () => {
+    const linha: RetornoSusParaGravar = {
+      instrumento: 'aih',
+      competencia: '202510',
+      identificacao: '9770010000011',
+      procedimento: SIG,
+      aih,
+      linhaBpa: null,
+      arquivo: 977001,
+      situacao: 'rejeitada',
+      motivo: 'Motivo fictício da rejeição',
+      valorApresentado: 500,
+      valorAprovado: 0,
+      valorGlosado: 500,
+      arquivoRetorno: 'retorno-aih-ficticio.txt',
+      hashRetorno: 'b'.repeat(64),
+      por: 'teste',
+    };
+    // Como no servico-aih: a linha entra e a AIH casada recebe a situação, na mesma transação.
+    const id = await gravar(async (g) => {
+      const n = await g.inserirRetornoSus(linha);
+      expect(await g.aplicarRetornoNaAih(aih, 'rejeitada', 'teste')).toBe(true);
+      return n;
+    }, true);
+    expect(id).toBeGreaterThan(0);
+    const r = await ler((l) => l.retornoSus(id!));
+    expect(r).toMatchObject({ instrumento: 'aih', aih, situacao: 'rejeitada', tratamento: 'pendente' });
+    expect((await ler((l) => l.ultimoRetornoDaAih(aih)))?.id).toBe(id);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'rejeitada'",
+        [aih],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM retorno_sus r JOIN remessa_sisaih s ON s.id = r.remessa_sisaih_id WHERE r.estabelecimento_id = ?',
+        [est],
+      ),
+    ).toBe(1);
+    await gravar(
+      (g) =>
+        g.tratarRetornoSus(
+          { id: id!, versao: r!.versao },
+          { decisao: 'reapresentar', justificativa: 'Reapresentar corrigida.', por: 'teste', aih },
+        ),
+      true,
+    );
+    expect((await ler((l) => l.retornoSus(id!)))?.tratamento).toBe('reapresentar');
+    // A rejeitada fica (com a remessa); o fechamento novo é fechado, aponta a anterior e traz o item.
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'rejeitada' AND remessa_sisaih_id IS NOT NULL",
+        [aih],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM conta_aih c JOIN conta_aih_procedimento p ON p.conta_aih_id = c.id
+          WHERE c.autorizacao_internacao_sus_id = ? AND c.situacao = 'fechada' AND c.numero_fechamento = 2
+            AND c.anterior_conta_aih_id IS NOT NULL AND c.remessa_sisaih_id IS NULL`,
+        [aih],
+      ),
+    ).toBe(1);
+    // A AIH voltou a fechada: um retorno novo nela não muda nada (devolve false, como a memória).
+    await expect(gravar((g) => g.aplicarRetornoNaAih(aih, 'aprovada', 'teste'), true)).resolves.toBe(false);
   });
 });
