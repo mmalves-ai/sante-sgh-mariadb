@@ -56,6 +56,15 @@ export interface ComponenteSumario {
   readonly ordem: number;
   readonly obrigatorio: boolean;
   readonly periodo: PeriodoSecao | null;
+  /** Período próprio do cliente (cadastro de períodos); quando informado, vale no lugar do recorte fixo. */
+  readonly periodoConsulta?: number | null;
+  readonly ativo: boolean;
+}
+
+/** Período próprio do cliente, como a resolução precisa dele. */
+export interface PeriodoProprio {
+  readonly atendimentoInteiro: boolean;
+  readonly horasRetroativas: number | null;
   readonly ativo: boolean;
 }
 
@@ -66,6 +75,9 @@ export interface SecaoVigente {
   readonly ordem: number;
   readonly obrigatorio: boolean;
   readonly periodo: PeriodoSecao | null;
+  /** Período próprio escolhido na seção (id) e as horas dele; nulo quando vale o recorte fixo. */
+  readonly periodoConsulta?: number | null;
+  readonly horasRetroativas?: number | null;
   /** De onde a seção veio: do estabelecimento, do cliente inteiro ou do conjunto padrão. */
   readonly origem: 'estabelecimento' | 'cliente' | 'padrao';
 }
@@ -154,6 +166,20 @@ export const SECOES_PADRAO: readonly SecaoVigente[] = [
 
 const CODIGO = /^[a-z0-9][a-z0-9_-]{0,29}$/;
 
+/** Tipos sem campo próprio no sumário: o conteúdo é o texto da seção (em `secoes`, pelo código). */
+export const TIPOS_DE_TEXTO: ReadonlySet<TipoConteudoSecao> = new Set([
+  'texto_livre',
+  'orientacoes',
+  'exames',
+  'dispositivos',
+]);
+
+/**
+ * Piso legal: o diagnóstico é conteúdo mínimo do sumário de alta (CIT 33/2017; Portaria GM/MS 8.026/2025) e não sai
+ * pela configuração. Tudo o mais (condição na alta, plano, seções próprias) segue o que o estabelecimento configurou.
+ */
+export const PISO_LEGAL_SUMARIO: readonly TipoConteudoSecao[] = ['diagnosticos'];
+
 /** Validação do cadastro da seção, na hora (a tela mostra o erro no campo). */
 export function validarComponenteSumario(c: Omit<ComponenteSumario, 'ativo'>): ErroSecao[] {
   const r: ErroSecao[] = [];
@@ -166,6 +192,18 @@ export function validarComponenteSumario(c: Omit<ComponenteSumario, 'ativo'>): E
   if (!c.descricao.trim())
     r.push({ campo: 'descricao', codigo: 'descricao-vazia', mensagem: 'Informe o título da seção.' });
   if (c.periodo !== null && !TIPOS_COM_PERIODO.has(c.tipoConteudo))
+    r.push({
+      campo: 'periodo',
+      codigo: 'periodo-sem-dados',
+      mensagem: 'O recorte de tempo só vale para seções que trazem dados do episódio.',
+    });
+  if ((c.periodoConsulta ?? null) !== null && c.periodo !== null)
+    r.push({
+      campo: 'periodo',
+      codigo: 'periodo-duplo',
+      mensagem: 'Escolha o recorte fixo ou um período próprio, não os dois.',
+    });
+  if ((c.periodoConsulta ?? null) !== null && !TIPOS_COM_PERIODO.has(c.tipoConteudo))
     r.push({
       campo: 'periodo',
       codigo: 'periodo-sem-dados',
@@ -184,12 +222,14 @@ function peso(c: ComponenteSumario): number {
  * As seções que valem para o estabelecimento e o tipo de atendimento. Para cada código ganha a linha mais específica
  * (estabelecimento antes do cliente; tipo de atendimento antes de "todos"); se a mais específica está inativa, a seção
  * sai do sumário (é assim que um estabelecimento tira uma seção do cliente). Sem nenhuma linha que se aplique, vale o
- * conjunto padrão.
+ * conjunto padrão. O período próprio (ativo) vale no lugar do recorte fixo; retirado de uso, a seção volta a trazer o
+ * atendimento inteiro.
  */
 export function resolverSecoesSumario(
   componentes: readonly ComponenteSumario[],
   estabelecimento: number,
   tipo: TipoAtendimentoSecao,
+  periodos: ReadonlyMap<number, PeriodoProprio> = new Map(),
 ): SecaoVigente[] {
   const aplicaveis = componentes.filter(
     (c) =>
@@ -204,24 +244,44 @@ export function resolverSecoesSumario(
   }
   return [...porCodigo.values()]
     .filter((c) => c.ativo)
-    .map((c) => ({
-      codigo: c.codigo,
-      descricao: c.descricao,
-      tipoConteudo: c.tipoConteudo,
-      ordem: c.ordem,
-      obrigatorio: c.obrigatorio,
-      periodo: c.periodo,
-      origem: c.estabelecimento !== null ? ('estabelecimento' as const) : ('cliente' as const),
-    }))
+    .map((c) => {
+      const id = c.periodoConsulta ?? null;
+      const p = id !== null ? periodos.get(id) : undefined;
+      const proprio = id !== null && p !== undefined && p.ativo;
+      return {
+        codigo: c.codigo,
+        descricao: c.descricao,
+        tipoConteudo: c.tipoConteudo,
+        ordem: c.ordem,
+        obrigatorio: c.obrigatorio,
+        periodo: proprio
+          ? p.atendimentoInteiro
+            ? ('atendimento_inteiro' as const)
+            : null
+          : id !== null
+            ? ('atendimento_inteiro' as const)
+            : c.periodo,
+        periodoConsulta: proprio ? id : null,
+        horasRetroativas: proprio && !p.atendimentoInteiro ? p.horasRetroativas : null,
+        origem: c.estabelecimento !== null ? ('estabelecimento' as const) : ('cliente' as const),
+      };
+    })
     .sort((a, b) => a.ordem - b.ordem || a.descricao.localeCompare(b.descricao, 'pt-BR'));
 }
 
 const preenchido = (s: string | undefined) => (s?.trim().length ?? 0) > 0;
 
-/** Se a seção tem conteúdo no sumário: o campo estruturado do tipo, ou o texto da seção pelo código. */
+/** O texto da seção no sumário (pelo código), sem espaços nas pontas. */
+export function textoDaSecao(s: SumarioAltaEstruturado, codigo: string): string {
+  return (s.secoes ?? []).find((x) => x.codigo === codigo)?.texto.trim() ?? '';
+}
+
+/**
+ * Se a seção tem conteúdo no sumário. Os tipos estruturados olham só o campo deles (um diagnóstico obrigatório não
+ * passa com texto solto, sem CID); os tipos de texto olham o texto da seção pelo código (a seção "motivo" também o
+ * motivo da internação).
+ */
 export function secaoPreenchida(secao: SecaoVigente, s: SumarioAltaEstruturado): boolean {
-  const livre = (s.secoes ?? []).find((x) => x.codigo === secao.codigo);
-  if (livre && preenchido(livre.texto)) return true;
   switch (secao.tipoConteudo) {
     case 'diagnosticos':
       return s.diagnosticos.length > 0;
@@ -238,9 +298,26 @@ export function secaoPreenchida(secao: SecaoVigente, s: SumarioAltaEstruturado):
     case 'condicao_alta':
       return preenchido(s.condicaoAlta);
     case 'texto_livre':
-      return secao.codigo === 'motivo' && preenchido(s.motivoInternacao);
+      return (
+        textoDaSecao(s, secao.codigo).length > 0 ||
+        (secao.codigo === 'motivo' && preenchido(s.motivoInternacao))
+      );
     default:
-      return false;
+      return textoDaSecao(s, secao.codigo).length > 0;
+  }
+}
+
+/** O campo do formulário da seção (os estruturados apontam para o campo próprio; os de texto, para a seção). */
+export function campoDaSecao(secao: SecaoVigente): string {
+  switch (secao.tipoConteudo) {
+    case 'diagnosticos':
+      return 'diagnosticos';
+    case 'condicao_alta':
+      return 'condicaoAlta';
+    case 'plano_terapeutico':
+      return 'plano';
+    default:
+      return `secao.${secao.codigo}`;
   }
 }
 
@@ -251,7 +328,24 @@ export function pendenciasDasSecoes(
 ): { campo: string; motivo: string }[] {
   return secoes
     .filter((x) => x.obrigatorio && !secaoPreenchida(x, s))
-    .map((x) => ({ campo: `secao.${x.codigo}`, motivo: `Preencha a seção "${x.descricao}".` }));
+    .map((x) => ({ campo: campoDaSecao(x), motivo: `Preencha a seção "${x.descricao}".` }));
+}
+
+/**
+ * O sumário só com o texto das seções vigentes de texto: código fora das seções que valem (ou de seção estruturada,
+ * ou retirada de uso) é descartado, e o título é a descrição do cadastro, nunca o que veio do navegador.
+ */
+export function sumarioNasSecoes(
+  s: SumarioAltaEstruturado,
+  secoes: readonly SecaoVigente[],
+): SumarioAltaEstruturado {
+  const resto: SumarioAltaEstruturado = { ...s };
+  delete resto.secoes;
+  const r = secoes
+    .filter((x) => TIPOS_DE_TEXTO.has(x.tipoConteudo))
+    .map((x) => ({ codigo: x.codigo, titulo: x.descricao, texto: textoDaSecao(s, x.codigo) }))
+    .filter((x) => x.texto.length > 0);
+  return r.length ? { ...resto, secoes: r } : resto;
 }
 
 /**

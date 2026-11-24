@@ -3,6 +3,13 @@
 // novo exige sumário finalizado (parâmetro por tipo de atendimento); a do outro sistema segue as regras dele. O FHIR é
 // gerado e guardado, sem envio (RNDS na Fase 5), no perfil BR Core de versão fixada no projeto (DP-47.6).
 import { jcs, sha256Hex, type SumarioAltaEstruturado } from '@sgh/contratos';
+import {
+  pendenciasDasSecoes,
+  PISO_LEGAL_SUMARIO,
+  SECOES_PADRAO,
+  type SecaoVigente,
+  textoDaSecao,
+} from './sumario-alta-secoes.js';
 
 /** Perfil fixado (DP-47.6: BR Core 1.6.1 em 2026-10-19). */
 export const PERFIL_FHIR_SUMARIO = 'br-core-1.6.1';
@@ -36,36 +43,67 @@ export interface PendenciaSumario {
   readonly motivo: string;
 }
 
-/** O mínimo para finalizar: diagnóstico, condição na alta, plano (ou encaminhamento) e medicamentos revistos. */
-export function pendenciasDoSumario(s: SumarioAltaEstruturado): PendenciaSumario[] {
-  const r: PendenciaSumario[] = [];
-  if (s.diagnosticos.length === 0)
-    r.push({ campo: 'diagnosticos', motivo: 'Informe ao menos um diagnóstico.' });
-  if (!s.condicaoAlta?.trim()) r.push({ campo: 'condicaoAlta', motivo: 'Informe a condição na alta.' });
-  if (!s.plano?.trim() && s.encaminhamentos.length === 0)
-    r.push({ campo: 'plano', motivo: 'Informe o plano pós-alta ou os encaminhamentos.' });
+/**
+ * O que falta para finalizar, pelas seções que valem para o atendimento (sem configuração, o conjunto padrão:
+ * diagnóstico, plano ou encaminhamento e condição na alta). A configuração do estabelecimento manda na
+ * obrigatoriedade; só o piso legal (o diagnóstico) é exigido sempre.
+ */
+export function pendenciasDoSumario(
+  s: SumarioAltaEstruturado,
+  secoes: readonly SecaoVigente[] = SECOES_PADRAO,
+): PendenciaSumario[] {
+  const r: PendenciaSumario[] = pendenciasDasSecoes(secoes, s);
+  if (
+    PISO_LEGAL_SUMARIO.includes('diagnosticos') &&
+    s.diagnosticos.length === 0 &&
+    !r.some((p) => p.campo === 'diagnosticos')
+  )
+    r.unshift({ campo: 'diagnosticos', motivo: 'Informe ao menos um diagnóstico.' });
   return r;
 }
 
-/** Texto do sumário (o que vai ao documento do legado e ao PDF), em seções. */
-export function textoDoSumario(s: SumarioAltaEstruturado): string {
-  const secao = (t: string, linhas: readonly string[]) =>
+/**
+ * Texto do sumário (o que vai ao documento e ao PDF): as seções vigentes na ordem cadastrada, com a descrição do
+ * cadastro como título; a seção retirada de uso não aparece. Sem configuração, o conjunto padrão.
+ */
+export function textoDoSumario(
+  s: SumarioAltaEstruturado,
+  secoes: readonly SecaoVigente[] = SECOES_PADRAO,
+): string {
+  const lista = (t: string, linhas: readonly string[]) =>
     linhas.length ? [`${t}:`, ...linhas.map((l) => `- ${l}`), ''] : [];
-  return [
-    ...(s.motivoInternacao ? ['Motivo da internação:', s.motivoInternacao, ''] : []),
-    ...secao(
-      'Diagnósticos',
-      s.diagnosticos.map((d) => (d.cid ? `${d.cid} ${d.descricao}` : d.descricao)),
-    ),
-    ...secao('Procedimentos', s.procedimentos),
-    ...(s.evolucao ? ['Evolução:', s.evolucao, ''] : []),
-    ...secao('Alergias', s.alergias.length ? s.alergias : ['Sem alergias registradas']),
-    ...secao('Medicamentos na alta', s.medicamentosAlta),
-    ...(s.plano ? ['Plano pós-alta:', s.plano, ''] : []),
-    ...secao('Encaminhamentos', s.encaminhamentos),
-    ...(s.secoes ?? []).flatMap((x) => (x.texto.trim() ? [`${x.titulo ?? x.codigo}:`, x.texto, ''] : [])),
-    ...(s.condicaoAlta ? ['Condição na alta:', s.condicaoAlta] : []),
-  ]
+  const bloco = (t: string, texto: string | undefined) => (texto?.trim() ? [`${t}:`, texto.trim(), ''] : []);
+  const parte = (x: SecaoVigente): string[] => {
+    switch (x.tipoConteudo) {
+      case 'diagnosticos':
+        return lista(
+          x.descricao,
+          s.diagnosticos.map((d) => (d.cid ? `${d.cid} ${d.descricao}` : d.descricao)),
+        );
+      case 'procedimentos':
+        return lista(x.descricao, s.procedimentos);
+      case 'evolucao_clinica':
+        return bloco(x.descricao, s.evolucao);
+      case 'alergias':
+        return lista(x.descricao, s.alergias.length ? s.alergias : ['Sem alergias registradas']);
+      case 'medicamentos':
+        return lista(x.descricao, s.medicamentosAlta);
+      case 'plano_terapeutico':
+        return [...bloco(x.descricao, s.plano), ...lista('Encaminhamentos', s.encaminhamentos)];
+      case 'condicao_alta':
+        return bloco(x.descricao, s.condicaoAlta);
+      case 'texto_livre':
+        return bloco(
+          x.descricao,
+          textoDaSecao(s, x.codigo) || (x.codigo === 'motivo' ? s.motivoInternacao : undefined),
+        );
+      default:
+        return bloco(x.descricao, textoDaSecao(s, x.codigo));
+    }
+  };
+  return [...secoes]
+    .sort((a, b) => a.ordem - b.ordem)
+    .flatMap(parte)
     .join('\n')
     .trim();
 }

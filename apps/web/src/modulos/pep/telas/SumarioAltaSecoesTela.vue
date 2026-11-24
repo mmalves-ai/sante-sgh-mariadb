@@ -44,9 +44,19 @@ function vazia(): Componente {
     ordem: (itens.value.length + 1) * 10,
     obrigatorio: false,
     periodo: null,
+    periodoConsulta: null,
     ativo: true,
     versao: null,
   };
+}
+/** O recorte da seção numa só lista: fixo ("f:") ou período próprio do cliente ("p:"). */
+function valorPeriodo(c: Componente): string {
+  if (c.periodoConsulta !== null) return `p:${c.periodoConsulta}`;
+  return c.periodo !== null ? `f:${c.periodo}` : '';
+}
+function escolherPeriodo(c: Componente, v: string): void {
+  c.periodoConsulta = v.startsWith('p:') ? Number(v.slice(2)) : null;
+  c.periodo = v.startsWith('f:') ? (v.slice(2) as Componente['periodo']) : null;
 }
 function periodoVazio(): PeriodoConsulta {
   return {
@@ -186,13 +196,23 @@ onMounted(carregar);
             </td>
             <td>
               <select
-                v-model="c.periodo"
+                :value="valorPeriodo(c)"
                 :disabled="!TIPOS_COM_PERIODO.has(c.tipoConteudo)"
                 :aria-label="k('periodo')"
                 data-testid="sec-periodo"
+                @change="escolherPeriodo(c, ($event.target as HTMLSelectElement).value)"
               >
-                <option :value="null">{{ k('semPeriodo') }}</option>
-                <option v-for="x in PERIODOS" :key="x" :value="x">{{ k(`periodosFixos.${x}`) }}</option>
+                <option value="">{{ k('semPeriodo') }}</option>
+                <option v-for="x in PERIODOS" :key="x" :value="`f:${x}`">
+                  {{ k(`periodosFixos.${x}`) }}
+                </option>
+                <option
+                  v-for="p in periodos.filter((x) => x.ativo && x.id !== null)"
+                  :key="`p${p.id}`"
+                  :value="`p:${p.id}`"
+                >
+                  {{ p.descricao }}
+                </option>
               </select>
             </td>
             <td>

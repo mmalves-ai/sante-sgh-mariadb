@@ -17,7 +17,7 @@ import {
 } from '../../api-documentos.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
 import SecoesSumarioAlta from '../../componentes/documentos/SecoesSumarioAlta.vue';
-import type { TextoSecao } from '../../api-sumario-secoes.js';
+import { secoesDoAtendimento, type SecaoVigente, type TextoSecao } from '../../api-sumario-secoes.js';
 import { dataHoraBr } from '../../formato.js';
 
 const props = defineProps<{ paciente: number }>();
@@ -46,6 +46,26 @@ const f = ref({
 });
 // F3.3 (L124): texto das seções configuradas pelo estabelecimento (pelo código da seção).
 const secoes = ref<TextoSecao[]>([]);
+// F3.3 (L124): as seções que valem para o atendimento mandam nos campos próprios do sumário: a seção fora de uso some,
+// o título é a descrição do cadastro e a ordem é a cadastrada. Sem resposta (sem banco próprio), todos os campos.
+const idAtendimento = computed(() => dados.data.value?.atendimento?.id ?? null);
+const secoesQ = useQuery({
+  queryKey: computed(() => ['pep', 'doc', 'alta-secoes', idAtendimento.value]),
+  queryFn: () => secoesDoAtendimento(idAtendimento.value!),
+  enabled: computed(() => idAtendimento.value !== null),
+  retry: false,
+});
+const vigentes = computed<readonly SecaoVigente[] | null>(() => secoesQ.data.value?.itens ?? null);
+function achar(tipo: string, codigo?: string): SecaoVigente | undefined {
+  return vigentes.value?.find((x) => x.tipoConteudo === tipo && (codigo === undefined || x.codigo === codigo));
+}
+const mostra = (tipo: string) => vigentes.value === null || achar(tipo) !== undefined;
+const mostraMotivo = computed(
+  () => vigentes.value === null || achar('texto_livre', 'motivo')?.origem === 'padrao',
+);
+const rotulo = (tipo: string, chave: string) => achar(tipo)?.descricao ?? t(chave);
+const ordem = (tipo: string) => ({ order: (achar(tipo)?.ordem ?? 0) + 1 });
+const obrigatoria = (tipo: string) => achar(tipo)?.obrigatorio === true;
 watch(
   () => dados.data.value?.sumario,
   (s) => {
@@ -210,52 +230,67 @@ async function cancelar(): Promise<void> {
           @acionar="cancelar"
         />
       </form>
-      <form class="form" data-testid="form-sumario" @submit.prevent="salvar(true)">
-        <h3>{{ t('pep.doc.alta.sumario') }}</h3>
-        <label
+      <form class="form form-sumario" data-testid="form-sumario" @submit.prevent="salvar(true)">
+        <h3 class="primeiro">{{ t('pep.doc.alta.sumario') }}</h3>
+        <label v-if="mostraMotivo" :style="ordem('texto_livre')"
           ><span>{{ t('pep.doc.alta.motivo') }}</span
           ><textarea v-model="f.motivo" rows="2" maxlength="1000" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.diagnosticos') }}</span
+        <label :style="ordem('diagnosticos')"
+          ><span
+            >{{ rotulo('diagnosticos', 'pep.doc.alta.diagnosticos')
+            }}<template v-if="obrigatoria('diagnosticos')"> *</template></span
           ><textarea v-model="f.diagnosticos" rows="3" data-testid="sumario-diagnosticos" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.procedimentos') }}</span
+        <label v-if="mostra('procedimentos')" :style="ordem('procedimentos')"
+          ><span
+            >{{ rotulo('procedimentos', 'pep.doc.alta.procedimentos')
+            }}<template v-if="obrigatoria('procedimentos')"> *</template></span
           ><textarea v-model="f.procedimentos" rows="2" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.evolucao') }}</span
+        <label v-if="mostra('evolucao_clinica')" :style="ordem('evolucao_clinica')"
+          ><span
+            >{{ rotulo('evolucao_clinica', 'pep.doc.alta.evolucao')
+            }}<template v-if="obrigatoria('evolucao_clinica')"> *</template></span
           ><textarea v-model="f.evolucao" rows="3" maxlength="4000" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.medicamentos') }}</span
+        <label v-if="mostra('medicamentos')" :style="ordem('medicamentos')"
+          ><span
+            >{{ rotulo('medicamentos', 'pep.doc.alta.medicamentos')
+            }}<template v-if="obrigatoria('medicamentos')"> *</template></span
           ><textarea v-model="f.medicamentos" rows="2" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.alergias') }}</span
+        <label v-if="mostra('alergias')" :style="ordem('alergias')"
+          ><span
+            >{{ rotulo('alergias', 'pep.doc.alta.alergias')
+            }}<template v-if="obrigatoria('alergias')"> *</template></span
           ><textarea v-model="f.alergias" rows="2" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.plano') }}</span
+        <label v-if="mostra('plano_terapeutico')" :style="ordem('plano_terapeutico')"
+          ><span
+            >{{ rotulo('plano_terapeutico', 'pep.doc.alta.plano')
+            }}<template v-if="obrigatoria('plano_terapeutico')"> *</template></span
           ><textarea v-model="f.plano" rows="2" maxlength="2000" data-testid="sumario-plano" />
         </label>
-        <label
+        <label v-if="mostra('plano_terapeutico')" :style="ordem('plano_terapeutico')"
           ><span>{{ t('pep.doc.alta.encaminhamentos') }}</span
           ><textarea v-model="f.encaminhamentos" rows="2" />
         </label>
-        <label
-          ><span>{{ t('pep.doc.alta.condicao') }}</span
+        <label v-if="mostra('condicao_alta')" :style="ordem('condicao_alta')"
+          ><span
+            >{{ rotulo('condicao_alta', 'pep.doc.alta.condicao')
+            }}<template v-if="obrigatoria('condicao_alta')"> *</template></span
           ><input v-model="f.condicao" maxlength="200" data-testid="sumario-condicao"
         /></label>
         <SecoesSumarioAlta
+          class="ultimo"
           v-if="dados.data.value.atendimento"
           v-model="secoes"
           :atendimento="dados.data.value.atendimento.id"
           :desabilitado="dados.data.value.finalizado"
         />
-        <AvisoConsulta :acao="dados.data.value.finalizar" />
-        <div v-if="!dados.data.value.finalizado" class="acoes">
+        <AvisoConsulta class="ultimo" :acao="dados.data.value.finalizar" />
+        <div v-if="!dados.data.value.finalizado" class="acoes ultimo">
           <SanteBotao
             variante="secundario"
             :rotulo="t('pep.doc.alta.salvarRascunho')"
@@ -361,3 +396,16 @@ async function cancelar(): Promise<void> {
 </template>
 
 <style scoped src="./abas.css"></style>
+
+<style scoped>
+.form-sumario {
+  display: flex;
+  flex-direction: column;
+}
+.form-sumario .primeiro {
+  order: -1;
+}
+.form-sumario .ultimo {
+  order: 100000;
+}
+</style>

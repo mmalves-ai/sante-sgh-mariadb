@@ -91,6 +91,9 @@ import {
   paragrafosDoTexto,
   parecerAtrasado,
   pendenciasDoSumario,
+  SECOES_PADRAO,
+  type SecaoVigente,
+  sumarioNasSecoes,
   PERFIL_FHIR_SUMARIO,
   podeGravarPedido,
   podePraticar,
@@ -1885,9 +1888,14 @@ export class ServicoDocumentos {
     prof: ProfissionalPep,
     login: string,
     o: OpcoesGravacao,
+    /** F3.3 (L124): as seções que valem para o atendimento conferido; nulo (sem banco próprio): o conjunto padrão. */
+    resolverSecoes: ((atendimento: number) => Promise<readonly SecaoVigente[]>) | null,
   ) {
     this.exigirAcao(prof, 'sumario-alta');
-    const pend = pendenciasDoSumario(s.sumario);
+    const retratos = await this.exigirAtendimento(c, paciente, s.atendimento);
+    const secoes = resolverSecoes ? await resolverSecoes(s.atendimento) : SECOES_PADRAO;
+    const sumario = sumarioNasSecoes(s.sumario, secoes);
+    const pend = pendenciasDoSumario(sumario, secoes);
     if (pend.length > 0)
       throw new ErroProblema(
         'entrada-invalida',
@@ -1899,7 +1907,6 @@ export class ServicoDocumentos {
           campos: pend.map((p) => p.campo),
         },
       );
-    const retratos = await this.exigirAtendimento(c, paciente, s.atendimento);
     const vs = await this.porta.sumarios(c, s.atendimento);
     if (vs.some((v) => v.situacao === 'finalizado'))
       throw new ErroProblema(
@@ -1937,7 +1944,7 @@ export class ServicoDocumentos {
       );
     const agora = await this.agora(c);
     const dataHoraClinica = horaLocal(agora.local);
-    const texto = textoDoSumario(s.sumario);
+    const texto = textoDoSumario(sumario, secoes);
     const conteudoXml = xmlDoAtestado({ codigo: ficha.codigo, nome: ficha.nome }, ficha.componentes, texto);
     const cab = cabecalhoDoAto(
       await this.porta.cabecalhoDocumento(c, retratos, prof.cbo, SITUACAO_DOC.lancado, TIPO_ATO.atestado),
@@ -1953,16 +1960,16 @@ export class ServicoDocumentos {
       modeloNome: ficha.nome.slice(0, 50),
       conteudoXml,
       documento: documentoAtestado(cab, texto, conteudoXml),
-      hashConteudo: await hashCanonico({ atendimento: s.atendimento, versao, sumario: s.sumario }),
+      hashConteudo: await hashCanonico({ atendimento: s.atendimento, versao, sumario }),
       versao,
-      sumario: JSON.stringify(s.sumario),
+      sumario: JSON.stringify(sumario),
       fhir: fhirDoSumario({
         id: `${c.hospital}-${s.atendimento}-${versao}`,
         paciente,
         atendimento: s.atendimento,
         autor: login,
         data: `${dataHoraClinica}:00-03:00`,
-        sumario: s.sumario,
+        sumario,
       }),
       perfilFhir: PERFIL_FHIR_SUMARIO,
       ...(o.comoSuporte ? { comoSuporte: true } : {}),

@@ -1145,20 +1145,20 @@ export class DocumentosPepController {
     const e = validar(esquemaSalvarSumario, corpo);
     const paciente = await this.paciente(s, p, 'pep.sumarioAlta.finalizar', false);
     const prof = this.servico.exigirProfissional(await this.prof(s));
-    const pendSecoes = this.secoesSumario
-      ? await this.secoesSumario.pendencias(this.c(s), e.atendimento, e.sumario)
-      : [];
-    if (pendSecoes.length > 0)
-      throw new ErroProblema(
-        'entrada-invalida',
-        400,
-        'Sumário incompleto',
-        pendSecoes.map((x) => x.motivo).join(' '),
-        { codigo: 'sumario-incompleto', campos: pendSecoes.map((x) => x.campo) },
-      );
-    const entrada = await this.servico.montarFinalizacao(this.c(s), paciente, e, prof, s.login, {
-      comoSuporte: req.sghComo !== undefined,
-    });
+    // F3.3 (L124): as seções configuradas do atendimento (já conferido no serviço) decidem as obrigatórias e o texto.
+    const porta = this.secoesSumario;
+    const secoes = porta
+      ? (atd: number) => porta.vigentesDoAtendimento(this.c(s), atd, paciente)
+      : null;
+    const entrada = await this.servico.montarFinalizacao(
+      this.c(s),
+      paciente,
+      e,
+      prof,
+      s.login,
+      { comoSuporte: req.sghComo !== undefined },
+      secoes,
+    );
     const r = await this.executar(s, 'pep.finalizarSumarioAlta', entrada, 'sumario');
     return { ...this.servico.gravado(r, entrada.hashConteudo), pdf: true };
   }

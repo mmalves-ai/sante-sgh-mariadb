@@ -93,6 +93,15 @@ export const PERMISSOES_PEP_M22: readonly DeclaracaoPermissao[] = [
     categoria: 'tecnica',
     criticidade: 'sensivel',
   },
+  {
+    codigo: 'pep.admin.cliente',
+    descricao:
+      'Editar a configuração do PEP que vale para todos os estabelecimentos do cliente (ex.: seções do sumário de alta)',
+
+    concessaoPorPerfil: null,
+    categoria: 'tecnica',
+    criticidade: 'sensivel',
+  },
 ];
 
 export const PERMISSOES_PEP_M24: readonly DeclaracaoPermissao[] = [

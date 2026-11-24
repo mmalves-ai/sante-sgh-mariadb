@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { secoesDoAtendimento, type TextoSecao, TIPOS_DE_TEXTO } from '../../api-sumario-secoes.js';
+import { dataHoraBr } from '../../formato.js';
 
 const props = defineProps<{ atendimento: number; desabilitado?: boolean }>();
 const modelo = defineModel<TextoSecao[]>({ required: true });
@@ -22,6 +23,10 @@ const deTexto = computed(() =>
     (s) => TIPOS_DE_TEXTO.has(s.tipoConteudo) && !(s.origem === 'padrao' && s.codigo === 'motivo'),
   ),
 );
+/** De quando a quando os dados do episódio entram na seção. */
+function periodoDaJanela(j: { desde: string; ate: string }): string {
+  return `· ${dataHoraBr(j.desde)} – ${dataHoraBr(j.ate)}`;
+}
 function texto(codigo: string): string {
   return modelo.value.find((x) => x.codigo === codigo)?.texto ?? '';
 }
@@ -42,6 +47,9 @@ function escrever(codigo: string, titulo: string, v: string): void {
       <li v-for="s in secoes" :key="s.codigo" :data-testid="`sumario-secao-${s.codigo}`">
         {{ s.descricao }}
         <strong v-if="s.obrigatorio">({{ t('pep.sumarioSecoes.naAlta.obrigatoria') }})</strong>
+        <small v-if="s.janela" :data-testid="`sumario-secao-janela-${s.codigo}`">
+          {{ periodoDaJanela(s.janela) }}
+        </small>
       </li>
     </ul>
     <label v-for="s in deTexto" :key="s.codigo" class="campo"

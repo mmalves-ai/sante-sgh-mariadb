@@ -3,7 +3,10 @@
 // atendimento fictícios (chaves desligadas só no preparo); usuário, paciente e profissional são ids já existentes do
 // cliente de teste (só lidos). Prova o que fica no banco: a seção do estabelecimento com versão, a recusa da versão
 // velha, tirar de uso sem apagar, o período próprio do cliente e as pendências das obrigatórias pelo atendimento.
-// A linha do cliente inteiro é provada no tipo "hospital_dia", que nenhum outro teste usa, e apagada no fim.
+// A linha do cliente inteiro é provada no tipo "hospital_dia", que nenhum outro teste usa, e apagada no fim; o tipo
+// vem do atendimento real (internação numa clínica assistencial de hospital-dia), pelo caminho vigentesDoAtendimento.
+// Também: a chave única da linha do cliente (duas inclusões simultâneas: uma vira conflito), o período próprio na seção
+// (com a janela) e a recusa do atendimento de fora.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -20,8 +23,10 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(
     "DELETE FROM componente_sumario_alta WHERE estabelecimento_id IS NULL AND codigo = 'l124-cli'",
   );
+  await e.executar("DELETE FROM componente_sumario_alta WHERE codigo LIKE 'l124-%'");
   await e.executar("DELETE FROM periodo_consulta_sumario_alta WHERE codigo LIKE 'l124-%'");
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
+  await e.executar("DELETE FROM clinica_assistencial WHERE codigo = 'l124-hd'");
   await e.executar("DELETE FROM categoria_atendimento WHERE codigo = 'l124-int'");
   await limparTrilhaDaMassa(e, { codigos: [P] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
@@ -30,7 +35,7 @@ async function limpar(e: Escritor): Promise<void> {
 describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaSumarioSecoesPropria;
-  let m: { est: number; usuario: number; atd: number };
+  let m: { est: number; usuario: number; atd: number; atdHd: number; paciente: number };
   const ctx = () => ({
     cliente: CLIENTE,
     estabelecimento: m.est,
@@ -78,7 +83,29 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
            VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?)`,
           [est, `${P}-1`, paciente['id'], cat, prof['id'], agora, agora],
         );
-        return { est, usuario: Number(usuario['id']), atd };
+        const clin = await e.inserir(
+          `INSERT INTO clinica_assistencial (codigo, descricao, natureza, hospital_dia, criado_em)
+           VALUES ('l124-hd', 'Hospital-dia (teste)', 'hospital_dia', TRUE, ?)`,
+          [agora],
+        );
+        const atdHd = await e.inserir(
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, clinica_assistencial_id, entrada_em,
+             alta_medica_em, criado_em)
+           VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)`,
+          [
+            est,
+            `${P}-2`,
+            paciente['id'],
+            cat,
+            prof['id'],
+            clin,
+            new Date('2026-11-01T08:00:00Z'),
+            new Date('2026-11-02T08:00:00Z'),
+            agora,
+          ],
+        );
+        return { est, usuario: Number(usuario['id']), atd, atdHd, paciente: Number(paciente['id']) };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
@@ -176,11 +203,41 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
       [id],
     );
     expect(l).toMatchObject({ estabelecimento_id: null, periodo: 'ultimas_24_horas' });
-    const v = await porta.vigentes(ctx(), 'hospital_dia');
+    // Pelo atendimento real: internação em clínica de hospital-dia vale como hospital-dia, com a janela de 24 h.
+    const v = await porta.vigentesDoAtendimento(ctx(), m.atdHd, m.paciente);
     expect(v.find((x) => x.codigo === 'l124-cli')).toMatchObject({
       origem: 'cliente',
       periodo: 'ultimas_24_horas',
+      janela: { desde: '2026-11-01T08:00:00.000Z', ate: '2026-11-02T08:00:00.000Z', ultimo: false },
     });
+    // A internação comum não recebe a seção do hospital-dia.
+    expect((await porta.vigentesDoAtendimento(ctx(), m.atd)).some((x) => x.codigo === 'l124-cli')).toBe(false);
+    // Atendimento de outro paciente (ou de fora do estabelecimento) é recusado, nunca vira "todos".
+    expect((await erro(porta.vigentesDoAtendimento(ctx(), m.atdHd, m.paciente + 1))).codigo).toBe(
+      'atendimento-inexistente',
+    );
+    expect((await erro(porta.pendencias(ctx(), 999_999_999, { diagnosticos: [], procedimentos: [], medicamentosAlta: [], alergias: [], encaminhamentos: [] }))).codigo).toBe(
+      'atendimento-inexistente',
+    );
+  });
+
+  it('a linha do cliente é única no banco: duas inclusões simultâneas do mesmo código, uma vira conflito', async () => {
+    const nova = {
+      doCliente: true,
+      codigo: 'l124-cli',
+      descricao: 'Orientações (dupla)',
+      tipoConteudo: 'orientacoes',
+      tipoAtendimento: 'pronto_atendimento',
+    };
+    const r = await Promise.allSettled([porta.gravarComponente(ctx(), nova), porta.gravarComponente(ctx(), nova)]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const recusa = r.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect((recusa.reason as { problema?: { codigo?: string } }).problema?.codigo).toBe('conflito-versao');
+    const [n] = await ler<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM componente_sumario_alta
+        WHERE estabelecimento_id IS NULL AND codigo = 'l124-cli' AND tipo_atendimento = 'pronto_atendimento'`,
+    );
+    expect(Number(n!.n)).toBe(1);
   });
 
   it('período próprio do cliente: horas antes da alta, com versão; sem horas é recusado', async () => {
@@ -228,5 +285,44 @@ describe.skipIf(SEM_BANCO)('PortaSumarioSecoesPropria contra o MariaDB (contrato
       2,
     ]);
     expect((await porta.periodos(ctx())).some((p) => p.codigo === 'l124-h12')).toBe(true);
+  });
+
+  it('a seção usa o período próprio (horas antes da alta) e a janela sai pelo atendimento', async () => {
+    const { id: per } = await porta.gravarPeriodo(ctx(), {
+      codigo: 'l124-h6',
+      descricao: 'Últimas 6 horas',
+      atendimentoInteiro: false,
+      horasRetroativas: 6,
+    });
+    const { id } = await porta.gravarComponente(ctx(), {
+      codigo: 'l124-exa',
+      descricao: 'Exames recentes',
+      tipoConteudo: 'exames',
+      tipoAtendimento: 'hospital_dia',
+      periodoConsulta: per,
+    });
+    const [l] = await ler<Record<string, unknown>>(
+      'SELECT periodo, periodo_consulta_id FROM componente_sumario_alta WHERE id = ?',
+      [id],
+    );
+    expect([l!['periodo'], Number(l!['periodo_consulta_id'])]).toEqual([null, per]);
+    const v = await porta.vigentesDoAtendimento(ctx(), m.atdHd);
+    expect(v.find((x) => x.codigo === 'l124-exa')).toMatchObject({
+      periodoConsulta: per,
+      horasRetroativas: 6,
+      janela: { desde: '2026-11-02T02:00:00.000Z', ate: '2026-11-02T08:00:00.000Z' },
+    });
+    expect(
+      (
+        await erro(
+          porta.gravarComponente(ctx(), {
+            codigo: 'l124-exb',
+            descricao: 'Exames',
+            tipoConteudo: 'exames',
+            periodoConsulta: 999_999_999,
+          }),
+        )
+      ).codigo,
+    ).toBe('periodo-inexistente');
   });
 });

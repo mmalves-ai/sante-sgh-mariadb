@@ -27,7 +27,7 @@ describe('sumário de alta (regra 13)', () => {
     const s = montarSumario(episodio);
     expect(s.diagnosticos).toHaveLength(2);
     expect(s.evolucao).toContain('Troponina');
-    expect(pendenciasDoSumario(s).map((p) => p.campo)).toEqual(['condicaoAlta', 'plano']);
+    expect(pendenciasDoSumario(s).map((p) => p.campo)).toEqual(['plano', 'condicaoAlta']);
     const pronto = { ...s, condicaoAlta: 'Estável', plano: 'Retorno em 7 dias' };
     expect(pendenciasDoSumario(pronto)).toEqual([]);
     expect(pendenciasDoSumario({ ...pronto, diagnosticos: [] })[0]?.campo).toBe('diagnosticos');

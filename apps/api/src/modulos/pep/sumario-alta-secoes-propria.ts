@@ -4,6 +4,9 @@
 //     tirar de uso é `ativo = FALSE` (nada é apagado: os sumários já gravados seguem com o que tinham);
 //   - períodos de consulta (`periodo_consulta_sumario_alta`): janelas próprias do cliente (atendimento inteiro ou
 //     horas antes da alta), com a mesma regra de versão;
+//   - a seção pode apontar um período próprio (`periodo_consulta_id`), que vale no lugar do recorte fixo; a janela
+//     (desde/até) de cada seção sai pelo atendimento (entrada e alta) para quem monta o sumário;
+//   - a linha do cliente inteiro é única no banco pela coluna gerada `estabelecimento_chave` (migração 99_sumario_secoes);
 //   - as seções que valem para o estabelecimento e o tipo de atendimento (regra do domínio), usadas pela tela da
 //     alta e pela finalização (as obrigatórias sem conteúdo recusam).
 // Toda gravação pelo executor (trilha da operação), SQL parametrizado.
@@ -12,11 +15,14 @@ import type { SumarioAltaEstruturado } from '@sgh/contratos';
 import {
   type ComponenteSumario,
   type ErroSecao,
-  pendenciasDasSecoes,
+  janelaDaSecao,
+  pendenciasDoSumario,
+  type PeriodoProprio,
   PERIODOS_SECAO,
   resolverSecoesSumario,
   type SecaoVigente,
   TIPOS_ATENDIMENTO_SECAO,
+  TIPOS_COM_PERIODO,
   TIPOS_CONTEUDO_SECAO,
   type TipoAtendimentoSecao,
   validarComponenteSumario,
@@ -64,6 +70,7 @@ export const esquemaComponente = z
     ordem: z.number().int().default(0),
     obrigatorio: z.boolean().default(false),
     periodo: z.enum(PERIODOS_SECAO).nullable().default(null),
+    periodoConsulta: z.number().int().positive().nullable().default(null),
     ativo: z.boolean().default(true),
     versao: z.number().int().positive().nullable().default(null),
   })
@@ -126,13 +133,41 @@ function componenteLido(x: Record<string, unknown>): ComponenteLido {
     ordem: num(x['ordem']),
     obrigatorio: bool(x['obrigatorio']),
     periodo: (x['periodo'] === null ? null : String(x['periodo'])) as ComponenteSumario['periodo'],
+    periodoConsulta: numOuNull(x['periodo_consulta_id']),
     ativo: bool(x['ativo']),
     versao: num(x['versao']),
   };
 }
 
-/** O tipo de atendimento da seção a partir do fluxo da categoria do atendimento. */
-export function tipoDoFluxo(fluxo: string | null): TipoAtendimentoSecao {
+/**
+ * Violação de chave única ou impasse de trava (a outra transação incluiu o mesmo código ao mesmo tempo): para quem
+ * grava, é o mesmo conflito de "gravado por outra pessoa".
+ */
+const duplicada = (e: unknown): boolean => {
+  const o = e as { errno?: number; code?: string; message?: string; cause?: unknown } | null;
+  if (!o) return false;
+  if (
+    o.errno === 1062 ||
+    o.errno === 1213 ||
+    o.code === 'ER_DUP_ENTRY' ||
+    o.code === 'ER_LOCK_DEADLOCK' ||
+    /Duplicate entry|Deadlock found/.test(String(o.message ?? ''))
+  )
+    return true;
+  return o.cause !== undefined && o.cause !== e ? duplicada(o.cause) : false;
+};
+
+/** A seção que vale, com a janela de tempo dos dados do episódio (só nos tipos que trazem dados). */
+export interface SecaoDoAtendimento extends SecaoVigente {
+  readonly janela: { readonly desde: string; readonly ate: string; readonly ultimo: boolean } | null;
+}
+
+/**
+ * O tipo de atendimento da seção a partir do fluxo da categoria do atendimento; a internação numa clínica assistencial
+ * de hospital-dia é hospital-dia (o dado real do atendimento).
+ */
+export function tipoDoFluxo(fluxo: string | null, hospitalDia = false): TipoAtendimentoSecao {
+  if (fluxo === 'internacao' && hospitalDia) return 'hospital_dia';
   if (fluxo === 'internacao' || fluxo === 'pronto_atendimento' || fluxo === 'ambulatorio') return fluxo;
   return fluxo === 'externo' || fluxo === 'telessaude' ? 'ambulatorio' : 'todos';
 }
@@ -214,7 +249,7 @@ export class PortaSumarioSecoesPropria {
       (
         await l.consultar(
           `SELECT id, estabelecimento_id, codigo, descricao, tipo_conteudo, tipo_atendimento, ordem, obrigatorio,
-                  periodo, ativo, versao
+                  periodo, periodo_consulta_id, ativo, versao
              FROM componente_sumario_alta
             WHERE estabelecimento_id IS NULL OR estabelecimento_id = ?
             ORDER BY tipo_atendimento, ordem, descricao LIMIT 500`,
@@ -224,28 +259,65 @@ export class PortaSumarioSecoesPropria {
     );
   }
 
+  /** Os períodos próprios do cliente, pelo id (para a resolução das seções). */
+  private async periodosPorId(c: ContextoDocs): Promise<Map<number, PeriodoProprio>> {
+    return new Map((await this.periodos(c)).map((p) => [p.id, p]));
+  }
+
   /** As seções que valem para o estabelecimento da sessão e o tipo de atendimento. */
   async vigentes(c: ContextoDocs, tipo: TipoAtendimentoSecao): Promise<SecaoVigente[]> {
     const est = await this.ler(c, 'identidade', async (_l, e) => e);
-    return resolverSecoesSumario(await this.componentes(c), est, tipo);
+    const [componentes, periodos] = await Promise.all([this.componentes(c), this.periodosPorId(c)]);
+    return resolverSecoesSumario(componentes, est, tipo, periodos);
   }
 
-  /** As seções que valem para o atendimento (tipo pelo fluxo da categoria; externo e telessaúde como ambulatório). */
-  async vigentesDoAtendimento(c: ContextoDocs, atendimento: number): Promise<SecaoVigente[]> {
-    const tipo = await this.ler(c, 'tipo-atendimento', async (l, est) => {
-      const a = await l.uma(
-        `SELECT k.tipo_base FROM atendimento a JOIN categoria_atendimento k ON k.id = a.categoria_atendimento_id
-          WHERE a.id = ? AND a.estabelecimento_id = ?`,
-        [atendimento, est],
+  /**
+   * As seções que valem para o atendimento do estabelecimento da sessão (e do paciente, quando informado): tipo pelo
+   * fluxo da categoria (externo e telessaúde como ambulatório; internação em clínica de hospital-dia como hospital-dia)
+   * e a janela de cada seção pela entrada e pela alta (sem alta, agora). Atendimento de fora é recusado (404), nunca
+   * cai em "todos".
+   */
+  async vigentesDoAtendimento(
+    c: ContextoDocs,
+    atendimento: number,
+    paciente: number | null = null,
+  ): Promise<SecaoDoAtendimento[]> {
+    const a = await this.ler(c, 'tipo-atendimento', async (l, est) =>
+      l.uma(
+        `SELECT k.tipo_base, COALESCE(ca.hospital_dia, FALSE) AS hospital_dia, a.entrada_em,
+                COALESCE(a.alta_medica_em, a.saida_em) AS alta_em
+           FROM atendimento a
+           JOIN categoria_atendimento k ON k.id = a.categoria_atendimento_id
+           LEFT JOIN clinica_assistencial ca ON ca.id = a.clinica_assistencial_id
+          WHERE a.id = ? AND a.estabelecimento_id = ? AND (? IS NULL OR a.paciente_id = ?)`,
+        [atendimento, est, paciente, paciente],
+      ),
+    );
+    if (!a)
+      throw new ErroOperacao(
+        404,
+        'atendimento-inexistente',
+        'Não encontrado',
+        'Atendimento não encontrado neste estabelecimento.',
       );
-      return tipoDoFluxo(a ? String(a['tipo_base']) : null);
+    const secoes = await this.vigentes(c, tipoDoFluxo(String(a['tipo_base']), bool(a['hospital_dia'])));
+    const entrada = new Date(a['entrada_em'] as string | Date);
+    const alta = a['alta_em'] ? new Date(a['alta_em'] as string | Date) : new Date();
+    return secoes.map((x) => {
+      if (!TIPOS_COM_PERIODO.has(x.tipoConteudo)) return { ...x, janela: null };
+      const j = janelaDaSecao(x.periodo, entrada, alta, x.horasRetroativas ?? null);
+      return { ...x, janela: { desde: j.desde.toISOString(), ate: j.ate.toISOString(), ultimo: j.ultimo } };
     });
-    return this.vigentes(c, tipo);
   }
 
-  /** As obrigatórias sem conteúdo no sumário que vai ser finalizado (regra do domínio). */
-  async pendencias(c: ContextoDocs, atendimento: number, sumario: SumarioAltaEstruturado) {
-    return pendenciasDasSecoes(await this.vigentesDoAtendimento(c, atendimento), sumario);
+  /** O que falta no sumário que vai ser finalizado: as seções do atendimento e o piso legal (regra do domínio). */
+  async pendencias(
+    c: ContextoDocs,
+    atendimento: number,
+    sumario: SumarioAltaEstruturado,
+    paciente: number | null = null,
+  ) {
+    return pendenciasDoSumario(sumario, await this.vigentesDoAtendimento(c, atendimento, paciente));
   }
 
   /** Inclui ou altera (com a versão lida) a seção; a linha do cliente só é alterada pelo cadastro do cliente. */
@@ -253,7 +325,33 @@ export class PortaSumarioSecoesPropria {
     const x = entradaValida(esquemaComponente, entrada);
     const erros = validarComponenteSumario({ ...x, estabelecimento: null });
     if (erros.length) throw recusa(erros);
+    return this.gravarSecao(c, x);
+  }
+
+  private async gravarSecao(c: ContextoDocs, x: z.infer<typeof esquemaComponente>): Promise<{ id: number }> {
+    try {
+      return await this.gravarSecaoNaTx(c, x);
+    } catch (e) {
+      if (duplicada(e)) throw conflito();
+      throw e;
+    }
+  }
+
+  private gravarSecaoNaTx(c: ContextoDocs, x: z.infer<typeof esquemaComponente>): Promise<{ id: number }> {
     return this.gravar(c, 'pep.sumarioAlta.configurarSecao', 'componente_sumario_alta', async (tx, est) => {
+      if (x.periodoConsulta !== null) {
+        const p = await tx.uma('SELECT ativo FROM periodo_consulta_sumario_alta WHERE id = ?', [
+          x.periodoConsulta,
+        ]);
+        if (!p || !bool(p['ativo']))
+          throw recusa([
+            {
+              campo: 'periodo',
+              codigo: 'periodo-inexistente',
+              mensagem: 'O período escolhido não existe ou foi retirado de uso.',
+            },
+          ]);
+      }
       const alvoEst = x.doCliente ? null : est;
       const valores = {
         descricao: x.descricao.trim(),
@@ -261,12 +359,13 @@ export class PortaSumarioSecoesPropria {
         ordem: x.ordem,
         obrigatorio: x.obrigatorio,
         periodo: x.periodo,
+        periodo_consulta_id: x.periodoConsulta,
         ativo: x.ativo,
       };
       const a = await tx.uma(
         `SELECT id, versao FROM componente_sumario_alta
-          WHERE codigo = ? AND tipo_atendimento = ? AND estabelecimento_id <=> ? FOR UPDATE`,
-        [x.codigo, x.tipoAtendimento, alvoEst],
+          WHERE estabelecimento_chave = COALESCE(?, 0) AND tipo_atendimento = ? AND codigo = ? FOR UPDATE`,
+        [alvoEst, x.tipoAtendimento, x.codigo],
       );
       if (a) {
         if (x.versao === null || x.versao !== num(a['versao']) || (x.id !== null && x.id !== num(a['id'])))
@@ -275,12 +374,18 @@ export class PortaSumarioSecoesPropria {
         return num(a['id']);
       }
       if (x.id !== null) throw conflito();
-      return tx.incluir('componente_sumario_alta', {
-        estabelecimento_id: alvoEst,
-        codigo: x.codigo,
-        tipo_atendimento: x.tipoAtendimento,
-        ...valores,
-      });
+      try {
+        return await tx.incluir('componente_sumario_alta', {
+          estabelecimento_id: alvoEst,
+          codigo: x.codigo,
+          tipo_atendimento: x.tipoAtendimento,
+          ...valores,
+        });
+      } catch (e) {
+        // Duas inclusões simultâneas do mesmo código: a chave única (estabelecimento_chave) recusa a segunda.
+        if (duplicada(e)) throw conflito();
+        throw e;
+      }
     });
   }
 

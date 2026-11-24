@@ -67,6 +67,8 @@ export interface Componente {
   ordem: number;
   obrigatorio: boolean;
   periodo: Periodo | null;
+  /** Período próprio do cliente (id); vale no lugar do recorte fixo. */
+  periodoConsulta: number | null;
   ativo: boolean;
   versao: number | null;
 }
@@ -77,7 +79,11 @@ export interface SecaoVigente {
   ordem: number;
   obrigatorio: boolean;
   periodo: Periodo | null;
+  periodoConsulta?: number | null;
+  horasRetroativas?: number | null;
   origem: 'estabelecimento' | 'cliente' | 'padrao';
+  /** Só nas seções do atendimento: de quando a quando os dados do episódio entram. */
+  janela?: { desde: string; ate: string; ultimo: boolean } | null;
 }
 export interface PeriodoConsulta {
   id: number | null;
@@ -115,7 +121,8 @@ export const gravarSecao = (c: Componente) =>
     tipoAtendimento: c.tipoAtendimento,
     ordem: c.ordem,
     obrigatorio: c.obrigatorio,
-    periodo: TIPOS_COM_PERIODO.has(c.tipoConteudo) ? c.periodo : null,
+    periodo: TIPOS_COM_PERIODO.has(c.tipoConteudo) && c.periodoConsulta === null ? c.periodo : null,
+    periodoConsulta: TIPOS_COM_PERIODO.has(c.tipoConteudo) ? c.periodoConsulta : null,
     ativo: c.ativo,
     versao: c.versao,
   });

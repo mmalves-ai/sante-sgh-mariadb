@@ -82,7 +82,7 @@ describe('seções configuráveis do sumário de alta (03-PEP L124)', () => {
       'internacao',
     );
     const vazio = pendenciasDasSecoes(secoes, sumario());
-    expect(vazio.map((p) => p.campo)).toEqual(['secao.diag', 'secao.orient', 'secao.plano']);
+    expect(vazio.map((p) => p.campo)).toEqual(['diagnosticos', 'secao.orient', 'plano']);
     const cheio = sumario({
       diagnosticos: [{ descricao: 'x' }],
       encaminhamentos: ['Ambulatório'],
