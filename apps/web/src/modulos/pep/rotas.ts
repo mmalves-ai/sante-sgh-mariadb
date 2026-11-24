@@ -194,6 +194,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.reconciliacao.ler' },
   },
   {
+    // F7 (03-PEP L103 e L104): reação adversa no paciente com o histórico e a lista de uso contínuo.
+    path: `/pep/paciente/:paciente${id}/farmacovigilancia`,
+    name: 'pep.farmacovigilancia',
+    component: () => import('./telas/FarmacovigilanciaTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.reconciliacao.ler' },
+  },
+  {
     path: '/farmacia-clinica/interacoes',
     name: 'farmacia.interacoes',
     component: () => import('./telas/FarmaciaInteracoesTela.vue'),

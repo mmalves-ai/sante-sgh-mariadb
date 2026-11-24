@@ -6,6 +6,7 @@ import { mensagensFormularioNovo } from './i18n-formulario-novo.js';
 import { mensagensEquipePainel } from './i18n-equipe-painel.js';
 import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
 import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
+import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -21,6 +22,8 @@ export const mensagensPep = {
   // F3.3 (L124): seções configuráveis do sumário de alta.
   sumarioSecoes: mensagensSumarioSecoes,
   resultadosGrupos: mensagensResultadosGrupos,
+  // F7 (03-PEP L103 e L104): reação adversa no paciente e uso contínuo.
+  farmaco: mensagensFarmacovigilancia,
   carregando: 'Carregando…',
   busca: {
     titulo: 'Prontuário ao vivo: consulta',
