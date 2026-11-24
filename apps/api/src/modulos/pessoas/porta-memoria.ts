@@ -4,6 +4,7 @@
 // inclusão) e do bloqueio do M10 (ninguém a si mesmo; o já bloqueado recusa). O bloqueio vale no login sintético (o
 // estado do acesso que a sessão sintética lê). A transação em memória é tudo ou nada (o estado só troca no fim).
 // Nada vai ao banco; nenhum dado real.
+import { PARENTESCOS_DEPENDENTE } from '@sgh/contratos';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import { CONTAS_SINTETICAS, estadoAcessoSintetico, idUsuarioSintetico } from '../acesso/fonte-sintetica.js';
 import type { GravacaoFeita, LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
@@ -204,8 +205,8 @@ const copia = (s: EstadoHospital): EstadoHospital => ({
   idem: s.idem,
 });
 
-const recusa = (codigo: string, detalhe: string) =>
-  new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
+const recusa = (codigo: string, detalhe: string, campos?: readonly string[]) =>
+  new ErroOperacao(409, codigo, 'Operação recusada', detalhe, campos ? { campos } : {});
 const desatualizado = () =>
   recusa('desatualizado', 'O cadastro mudou depois que você abriu (outra pessoa gravou). Abra de novo.');
 const hojeLocal = () => {
@@ -220,6 +221,12 @@ export class PortaPessoasMemoria implements PortaPessoas {
   private readonly estados = new Map<string, EstadoHospital>();
   /** Testes: a data do relógio sintético (sem ela, a data de hoje). */
   hojeFixo: string | null = null;
+  /**
+   * O catálogo sintético da tabela 07 do eSocial (tipo de dependente) vigente no cliente: os códigos da tela. Como na
+   * porta própria, o parentesco fora dele recusa 'catalogo-pendente'; testes reduzem o conjunto para simular o cliente
+   * sem o código carregado.
+   */
+  tabelaTipoDependente: ReadonlySet<string> = new Set(Object.keys(PARENTESCOS_DEPENDENTE));
   /**
    * W0-06 (5d-3a): de onde vem o cargo do quadro de cargos. O módulo liga a porta de cargos em memória; sem
    * ela, nenhum cargo existe (a ligação responde 404 do cargo).
@@ -422,6 +429,25 @@ export class PortaPessoasMemoria implements PortaPessoas {
         return id;
       },
       incluirDependente: async (d) => {
+        // As mesmas recusas da porta própria: vínculo deste estabelecimento, tipo no catálogo da tabela 07 e CPF único
+        // entre os dependentes do colaborador (o colaborador é o CPF do titular: vários vínculos, os mesmos dependentes).
+        const v = vinc(d.vinculo);
+        if (!v) throw desatualizado();
+        if (!this.tabelaTipoDependente.has(d.parentesco))
+          throw recusa(
+            'catalogo-pendente',
+            `O tipo de dependente ${d.parentesco} não está na tabela 07 do eSocial carregada neste cliente.`,
+            ['parentesco'],
+          );
+        if (
+          d.cpfHmac &&
+          [...s.dependentes.values()].some(
+            (x) => x.cpfHmac === d.cpfHmac && vinc(x.vinculo)?.cpfHmac === v.cpfHmac,
+          )
+        )
+          throw recusa('cpf-repetido', 'Este CPF já é de outro dependente deste colaborador.', ['cpf']);
+        // A dependência vale da inclusão (nunca antes do nascimento).
+        const hoje = this.hojeFixo ?? hojeLocal();
         const id = ++s.seq;
         s.dependentes.set(id, {
           id,
@@ -433,7 +459,7 @@ export class PortaPessoasMemoria implements PortaPessoas {
           cpfCifrado: d.cpfCifrado,
           dependenteIr: d.dependenteIr,
           dependenteSalarioFamilia: d.dependenteSalarioFamilia,
-          desde: null,
+          desde: hoje < d.nascimento ? d.nascimento : hoje,
           ate: null,
           motivoFim: null,
         });

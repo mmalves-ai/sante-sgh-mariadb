@@ -270,7 +270,9 @@ describe('alteração do dependente com versão (W0-06)', () => {
   async function comDependente() {
     const m = montar();
     const h = `t-dep-alt-${++k}`;
-    const v = (await m.servico.admitir(sessao(h), admissao())).id;
+    const v = (await m.servico.admitir(sessao(h), admissao({ admissao: '2026-09-01' }))).id;
+    // A dependência vale do dia da inclusão (como na porta própria): incluído antes das datas das versões do teste.
+    m.porta.hojeFixo = '2026-09-01';
     const d = (
       await m.servico.incluirDependente(sessao(h), {
         vinculo: v,
@@ -282,6 +284,7 @@ describe('alteração do dependente com versão (W0-06)', () => {
         dependenteSalarioFamilia: false,
       })
     ).id;
+    m.porta.hojeFixo = '2026-10-25';
     return { ...m, h, v, d };
   }
   const MOT = 'Marca do IR esquecida na inclusão';

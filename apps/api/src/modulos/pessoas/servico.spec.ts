@@ -188,6 +188,58 @@ describe('serviço da gestão de pessoas (corretor do M52.1)', () => {
     expect(ok.id).toBeGreaterThan(0);
   });
 
+  it('dependente: as recusas da porta própria também na memória (tabela 07, CPF repetido no colaborador, vínculo de outro estabelecimento) e a dependência vale da inclusão', async () => {
+    const { servico, porta } = montar();
+    const h = 't-dep-recusas';
+    const v = (await servico.admitir(sessao(h), admissao())).id;
+    const dep = (extra: Record<string, unknown> = {}) => ({
+      vinculo: v,
+      nome: 'FILHO SINTETICO',
+      nascimento: '2020-05-10',
+      parentesco: '03',
+      cpf: cpfSintetico('900520027'),
+      dependenteIr: true,
+      dependenteSalarioFamilia: false,
+      ...extra,
+    });
+    // O cliente sem o código na tabela 07 carregada: recusa, sem tipo inventado.
+    porta.tabelaTipoDependente = new Set(['01', '03']);
+    expect(await recusa(servico.incluirDependente(sessao(h), dep({ parentesco: '99' })))).toMatchObject({
+      status: 409,
+      codigo: 'catalogo-pendente',
+    });
+    const id = (await servico.incluirDependente(sessao(h), dep())).id;
+    expect(
+      await recusa(servico.incluirDependente(sessao(h), dep({ nome: 'OUTRO SINTETICO' }))),
+    ).toMatchObject({
+      status: 409,
+      codigo: 'cpf-repetido',
+    });
+    // A dependência começa no dia da inclusão (o relógio sintético), e no nascimento quando ele é posterior.
+    const deps = await porta.dependentes(ctxTeste(h, 'rede-sintetica'), v);
+    expect(deps.find((d) => d.id === id)).toMatchObject({ desde: '2026-10-25' });
+    // O vínculo de outro estabelecimento (ou inexistente) não recebe dependente pela porta.
+    const outro = await porta
+      .gravarSgh(ctxTeste('t-dep-outro', 'rede-sintetica'), { tabela: 'x', id: '1' } as never, (g) =>
+        g.incluirDependente({
+          vinculo: v,
+          nome: 'FILHO SINTETICO',
+          nascimento: '2020-05-10',
+          parentesco: '03',
+          cpfHmac: null,
+          cpfCifrado: null,
+          dependenteIr: false,
+          dependenteSalarioFamilia: false,
+          por: 'SINT.RH',
+        }),
+      )
+      .then(
+        () => null,
+        (x: unknown) => x,
+      );
+    expect(outro).toMatchObject({ problema: { status: 409, codigo: 'desatualizado' } });
+  });
+
   it('o dependente se encerra com data e motivo (sai da ficha, nunca apagado); repetir dá 404; data futura, 409', async () => {
     const { servico, trilha } = montar();
     const h = 't-dep';
