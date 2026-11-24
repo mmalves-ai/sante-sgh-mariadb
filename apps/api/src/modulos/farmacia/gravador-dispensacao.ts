@@ -50,6 +50,7 @@ import type {
 } from '@sgh/contratos';
 import { ErroOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO } from '../exames/relogio.js';
+import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from '../suprimentos/conta-estoque.js';
 import type { ExtrasGravacaoFarmacia } from './gravador-avaliacao.js';
 import type { GravadorSghFarmacia } from './porta.js';
 
@@ -82,6 +83,8 @@ export const TABELAS_DISPENSACAO = [
   'receita_controlada',
   'envio_controlado_nacional',
   'envio_controlado_nacional_item',
+  // Motor estoque → conta: a saída ao paciente lança o item na conta; a devolução e o cancelamento o estornam.
+  ...TABELAS_CONTA_ESTOQUE.filter((t) => t !== 'movimento_estoque'),
 ] as const;
 
 /** Situação da entrega ao setor (modelo) ↔ número do contrato das telas (7 dispensada, 8 entregue, 9 estornada). */
@@ -170,6 +173,7 @@ export function gravadorDispensacao(
   extras: ExtrasGravacaoFarmacia,
 ) {
   const agora = new Date();
+  const conta = lancadorContaEstoque(tx, est, usuario);
   let fusoLido: string | null = null;
   const fuso = async () => {
     if (fusoLido === null) {
@@ -449,6 +453,18 @@ export function gravadorDispensacao(
       [dispensacao, est],
     )) ?? null;
 
+  /** O lançamento de saída do item dispensado (o que lançou o item na conta). */
+  const saidaDoItem = async (item: number): Promise<number | null> =>
+    idOuNulo(
+      (
+        await tx.uma<Linha>(
+          `SELECT id FROM movimento_estoque WHERE dispensacao_item_id = ? AND natureza = 'saida' AND estabelecimento_id = ?
+            AND excluido_em IS NULL ORDER BY id LIMIT 1`,
+          [item, est],
+        )
+      )?.['id'],
+    );
+
   const evento = (tipo: string, carga: Record<string, number | string | null>) =>
     extras.eventos.push({ tipo, carga });
 
@@ -662,6 +678,18 @@ export function gravadorDispensacao(
           },
         });
         valor += Math.round(p.q * mov.custo * 100) / 100;
+        await conta.lancarSaida({
+          movimento: mov.id,
+          atendimento: e.atendimento,
+          insumo: x.insumo.id,
+          quantidade: p.q,
+          lote: p.lote?.id ?? null,
+          setor,
+          centroCusto: e.centroCusto,
+          solicitante: idOuNulo(x.h['prescritor_profissional_id']),
+          realizadoEm: agora,
+          dataBase: hojeIso,
+        });
         await linhaDocumento(documento, seq, x.insumo, p.lote, p.q, mov, {
           dispensacao_item_id: item,
           prescricao_item_id: n(x.h['prescricao_item_id']),
@@ -903,6 +931,9 @@ export function gravadorDispensacao(
       dispensacao_item_id: n(d['item_id']),
       prescricao_item_id: idOuNulo(d['prescricao_item_id']),
     });
+    const saidaDaDose = await saidaDoItem(n(d['item_id']));
+    if (saidaDaDose)
+      await conta.estornarDevolucao({ movimentoSaida: saidaDaDose, movimentoDevolucao: mov.id, quantidade: q });
     const devolvida = q4(n(d['quantidade_devolvida']) + q);
     const inteira = devolvida + 1e-9 >= n(d['quantidade']);
     await tx.alterar('dispensacao_item', n(d['item_id']), n(d['item_versao']), {
@@ -937,11 +968,7 @@ export function gravadorDispensacao(
     let estorno: number | null = null;
     if (resto > 0) {
       // O estorno do lançamento de saída da dose: entrada no mesmo local, apontando o lançamento estornado.
-      const original = await tx.uma<Linha>(
-        `SELECT id FROM movimento_estoque WHERE dispensacao_item_id = ? AND natureza = 'saida' AND estabelecimento_id = ?
-          AND excluido_em IS NULL ORDER BY id LIMIT 1`,
-        [n(d['item_id']), est],
-      );
+      const original = await saidaDoItem(n(d['item_id']));
       estorno = (
         await movimentar({
           local: n(d['local_estoque_id']),
@@ -953,7 +980,7 @@ export function gravadorDispensacao(
           refs: {
             documento_estoque_id: doc ? n(doc['id']) : null,
             dispensacao_item_id: n(d['item_id']),
-            estorno_movimento_estoque_id: original ? n(original['id']) : null,
+            estorno_movimento_estoque_id: original,
             atendimento_id: idOuNulo(d['atendimento_id']),
             paciente_id: idOuNulo(d['paciente_id']),
             setor_funcional_id: idOuNulo(d['setor_funcional_id']),
@@ -961,6 +988,8 @@ export function gravadorDispensacao(
           },
         })
       ).id;
+      if (original)
+        await conta.estornarDevolucao({ movimentoSaida: original, movimentoDevolucao: estorno, quantidade: resto });
     }
     await tx.alterar('dose_dispensada', e.dose, n(d['versao']), { situacao: 'cancelada' });
     await tx.alterar('dispensacao_item', n(d['item_id']), n(d['item_versao']), { situacao: 'cancelado' });

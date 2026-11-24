@@ -121,6 +121,7 @@ import {
 } from '@sgh/contratos';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
+import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
 import {
   chaveDaTela,
   contextoNucleo,
@@ -1920,6 +1921,7 @@ async function registrarSaida(
   });
   let total = 0;
   let ultimo: SaidaFeita | null = null;
+  const contaDoEstoque = lancadorContaEstoque(tx, est, usuarioDe(tx));
   for (const [k, it] of e.itens.entries()) {
     const insumo = await insumoAtivo(tx, it.item);
     await exigirSaldo(tx, est, e.local, insumo, it.quantidade);
@@ -1954,6 +1956,18 @@ async function registrarSaida(
       faturavel: paraPaciente,
       consignado: verdadeiro(insumo['consignado']),
     });
+    if (paraPaciente)
+      await contaDoEstoque.lancarSaida({
+        movimento: mov.id,
+        atendimento: e.atendimento ?? null,
+        insumo: it.item,
+        quantidade: it.quantidade,
+        lote: lotes.length === 1 ? lotes[0]!.id : null,
+        centroCusto: e.centroCusto,
+        solicitante: it.prescritorControlado ?? e.medico ?? null,
+        realizadoEm: new Date(),
+        dataBase: hoje,
+      });
     await fecharItem(tx, item, mov, it.quantidade);
     total += mov.valor;
     ultimo = { mov, item, lotes, insumo: it.item, quantidade: it.quantidade };
@@ -2277,6 +2291,11 @@ async function registrarDevolucao(
       paciente: numeroOuNulo(saida['paciente_id']),
       centroCusto: numeroOuNulo(saida['centro_custo_id']),
       estorno: n(orig['movimento_estoque_id']),
+    });
+    await lancadorContaEstoque(tx, est, usuarioDe(tx)).estornarDevolucao({
+      movimentoSaida: n(orig['movimento_estoque_id']),
+      movimentoDevolucao: mov.id,
+      quantidade: it.quantidade,
     });
     await fecharItem(tx, item, mov, it.quantidade);
     total += mov.valor;
@@ -3265,6 +3284,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'solicitacao_opme_item',
   'ordem_manipulacao',
   'ordem_manipulacao_insumo',
+  // Motor estoque → conta: a saída ao paciente lança o item na conta; a devolução o estorna.
+  ...TABELAS_CONTA_ESTOQUE.filter((t) => t !== 'movimento_estoque'),
 ] as const;
 
 /** O nome da operação no núcleo (minúsculas com sublinhado: suprimentos.registrar_saida). */
