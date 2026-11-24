@@ -27,3 +27,4 @@ export * from './permissao-financeiro.js';
 export * from './recebivel-cartao.js';
 export * from './encontro-contas.js';
 export * from './previsao-provisao.js';
+export * from './nota-credito-cessao.js';
