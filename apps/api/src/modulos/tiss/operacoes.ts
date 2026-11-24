@@ -640,6 +640,8 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
       const dados = {
         recebido_em: e.data ? new Date(`${e.data}T12:00:00Z`) : new Date(),
         situacao,
+        // O recibo do comprovante de entrega (06-FAT linha 31): vazio fica sem recibo, nunca texto inventado.
+        recibo: e.recibo.trim() || null,
         valor_protocolo: n(l['valor_total']),
         quantidade_guias: n(l['quantidade_guias']),
       };
@@ -696,7 +698,7 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
     };
   },
   alvo: (e) => ({ tabela: 'lote_tiss', id: e.lote }),
-  // O recibo do comprovante vai na trilha (o modelo do protocolo ainda não tem a coluna: pedido do lote 03-16).
+  // O recibo vai também à trilha (o registro do protocolo guarda o recibo vigente).
   trilha: (e) => ({ dados: { recibo: e.recibo, data: e.data, situacao: e.situacao } }),
 });
 

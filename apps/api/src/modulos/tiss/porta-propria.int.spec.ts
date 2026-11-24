@@ -844,6 +844,16 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         [ids.lote],
       ),
     ).toMatchObject({ situacao: 'protocolada', protocolo_recebimento: 'PRT0316', entregue: 1 });
+    // O recibo do comprovante fica no registro do protocolo e volta no histórico; a fatura aparece no detalhe do lote.
+    expect(
+      await lerUma(
+        'SELECT recibo FROM protocolo_recebimento WHERE lote_tiss_id = ? AND numero_protocolo = ?',
+        [ids.lote, 'PRT0316'],
+      ),
+    ).toMatchObject({ recibo: 'R1' });
+    const detalhe = await porta.lote(c, ids.lote, hoje);
+    expect(detalhe?.historico[0]).toMatchObject({ acao: 'registrado', protocolo: 'PRT0316', recibo: 'R1' });
+    expect(detalhe?.fatura).toMatchObject({ situacao: 'protocolada', protocolo: 'PRT0316', entrega: hoje });
     expect(
       codigo(
         await erroDe(
