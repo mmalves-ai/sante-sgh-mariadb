@@ -45,9 +45,10 @@ function vazia(): ConfiguracaoSetor {
 /** A mesma regra do domínio, na hora: tolerância só com retroativo, de 1 a 720 h. */
 function problema(c: ConfiguracaoSetor): string | null {
   if (!c.setor) return t('pep.equipe.setor.escolhaSetor');
-  const t = c.toleranciaRetroativoHoras;
-  if (!c.permiteRetroativo && t !== null) return t('pep.equipe.setor.toleranciaSemRetroativo');
-  if (t !== null && (!Number.isInteger(t) || t < 1 || t > 720)) return t('pep.equipe.setor.toleranciaFora');
+  const tol = c.toleranciaRetroativoHoras;
+  if (!c.permiteRetroativo && tol !== null) return t('pep.equipe.setor.toleranciaSemRetroativo');
+  if (tol !== null && (!Number.isInteger(tol) || tol < 1 || tol > 720))
+    return t('pep.equipe.setor.toleranciaFora');
   return null;
 }
 const problemaNova = computed(() => problema(nova.value));
@@ -71,6 +72,8 @@ async function salvar(c: ConfiguracaoSetor): Promise<void> {
     await carregar();
   } catch (x) {
     erro.value = x instanceof Error ? x.message : String(x);
+    // Conflito de versão (outro gravou antes): recarrega para alterar a partir do que está gravado.
+    await carregar();
   }
 }
 function retroativo(c: ConfiguracaoSetor, v: boolean): void {

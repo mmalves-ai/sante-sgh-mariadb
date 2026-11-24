@@ -98,7 +98,15 @@ export const lerEquipe = (atendimento: number) =>
   );
 export const incluirMembro = (
   atendimento: number,
-  m: { profissional: number; funcao: number; recebeNotificacao: boolean },
+  m: { profissional: number; funcao: number; especialidade: number | null; recebeNotificacao: boolean },
 ) => pedir<{ id: number }>(`${P}/equipe/atendimento/${atendimento}`, 'POST', m);
+export const lerEspecialidadesProfissional = (profissional: number) =>
+  pedir<{ itens: { id: number; descricao: string }[] }>(
+    `${P}/equipe/profissional/${profissional}/especialidades`,
+  );
+export const encerrarEquipe = (atendimento: number, motivo: string) =>
+  pedir<{ id: number; membros: number }>(`${P}/equipe/atendimento/${atendimento}/encerramento`, 'POST', {
+    motivo,
+  });
 export const encerrarMembro = (membro: number, motivo: string) =>
   pedir<{ id: number }>(`${P}/equipe/membro/${membro}/saida`, 'POST', { motivo });

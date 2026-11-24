@@ -2,15 +2,19 @@
 // Equipe assistencial do atendimento (F3.3, linha 03-PEP L94): quem cuida do paciente, com função, responsável
 // principal e quem recebe as pendências. Incluir é uma linha só (profissional, função, avisos); a saída pede o motivo
 // na própria linha e fica no histórico. As regras (um responsável, médico; sem repetir) vêm do domínio pela API e a
-// tela já avisa antes de enviar. Gravar exige pep.equipe.gerenciar; sem ela, a API recusa e a tela mostra o motivo.
+// tela já avisa antes de enviar. A especialidade só aparece em função médica e só com as do profissional; no fim do
+// atendimento, a equipe se encerra (todos os vigentes saem com o motivo) e deixa de dar vínculo.
+// Gravar exige pep.equipe.gerenciar; sem ela, a API recusa e a tela mostra o motivo.
 import { SanteAlerta } from '@sgh/ui';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  encerrarEquipe,
   encerrarMembro,
   type FuncaoEquipe,
   incluirMembro,
   lerEquipe,
+  lerEspecialidadesProfissional,
   lerFuncoesEquipe,
   type MembroEquipe,
 } from '../api-equipe-painel.js';
@@ -21,7 +25,11 @@ const atd = computed(() => Number(props.atendimento));
 const membros = ref<MembroEquipe[]>([]);
 const funcoes = ref<FuncaoEquipe[]>([]);
 const erro = ref<string | null>(null);
-const novo = ref({ profissional: '', funcao: 0, recebeNotificacao: true });
+const novo = ref({ profissional: '', funcao: 0, especialidade: 0, recebeNotificacao: true });
+const especialidades = ref<{ id: number; descricao: string }[]>([]);
+const encerrando = ref(false);
+const motivoEquipe = ref('');
+const aviso = ref<string | null>(null);
 const saindo = ref<number | null>(null);
 const motivo = ref('');
 
@@ -33,6 +41,21 @@ const avisoResponsavel = computed(() =>
   funcaoEscolhida.value?.responsavelPrincipal && vigentes.value.some((m) => m.responsavelPrincipal)
     ? t('pep.equipe.avisoResponsavel')
     : null,
+);
+const funcaoMedica = computed(() => funcaoEscolhida.value?.categoria === 'medica');
+/** Especialidades do profissional digitado (a tela só oferece as dele, e só em função médica). */
+watch(
+  () => [novo.value.profissional, funcaoMedica.value] as const,
+  async ([prof, medica]) => {
+    novo.value.especialidade = 0;
+    especialidades.value = [];
+    if (!medica || !/^\d+$/.test(prof)) return;
+    try {
+      especialidades.value = (await lerEspecialidadesProfissional(Number(prof))).itens;
+    } catch {
+      especialidades.value = [];
+    }
+  },
 );
 const podeIncluir = computed(
   () => /^\d+$/.test(novo.value.profissional) && !!funcaoEscolhida.value && !avisoResponsavel.value,
@@ -56,6 +79,7 @@ async function incluir(): Promise<void> {
     await incluirMembro(atd.value, {
       profissional: Number(novo.value.profissional),
       funcao: Number(novo.value.funcao),
+      especialidade: funcaoMedica.value && novo.value.especialidade ? Number(novo.value.especialidade) : null,
       recebeNotificacao: novo.value.recebeNotificacao,
     });
     novo.value.profissional = '';
@@ -76,6 +100,19 @@ async function confirmarSaida(id: number): Promise<void> {
     erro.value = x instanceof Error ? x.message : String(x);
   }
 }
+async function confirmarEncerramento(): Promise<void> {
+  if (motivoEquipe.value.trim().length < 3) return;
+  try {
+    erro.value = null;
+    const r = await encerrarEquipe(atd.value, motivoEquipe.value.trim());
+    aviso.value = t('pep.equipe.equipeEncerrada', { n: r.membros });
+    encerrando.value = false;
+    motivoEquipe.value = '';
+    await carregar();
+  } catch (x) {
+    erro.value = x instanceof Error ? x.message : String(x);
+  }
+}
 onMounted(carregar);
 </script>
 
@@ -83,6 +120,7 @@ onMounted(carregar);
   <section class="equipe" data-testid="equipe-assistencial">
     <h1>{{ t('pep.equipe.titulo') }}</h1>
     <SanteAlerta v-if="erro" :texto="erro" data-testid="equipe-erro" />
+    <p v-if="aviso" role="status" data-testid="equipe-aviso-encerrada">{{ aviso }}</p>
     <table>
       <caption>
         {{
@@ -158,6 +196,13 @@ onMounted(carregar);
           <option v-for="f in funcoes" :key="f.id" :value="f.id">{{ f.descricao }}</option>
         </select>
       </label>
+      <label v-if="funcaoMedica">
+        {{ t('pep.equipe.especialidade') }}
+        <select v-model="novo.especialidade" data-testid="equipe-especialidade">
+          <option :value="0">{{ t('pep.equipe.semEspecialidade') }}</option>
+          <option v-for="e in especialidades" :key="e.id" :value="e.id">{{ e.descricao }}</option>
+        </select>
+      </label>
       <label>
         <input v-model="novo.recebeNotificacao" type="checkbox" />
         {{ t('pep.equipe.recebePendencias') }}
@@ -166,7 +211,29 @@ onMounted(carregar);
         {{ t('pep.equipe.incluir') }}
       </button>
       <p v-if="avisoResponsavel" role="status" data-testid="equipe-aviso">{{ avisoResponsavel }}</p>
+      <p class="dica">{{ t('pep.equipe.avisoCategoria') }}</p>
     </form>
+
+    <div v-if="vigentes.length" class="encerrar-equipe">
+      <template v-if="encerrando">
+        <label>
+          {{ t('pep.equipe.motivoEncerramento') }}
+          <input v-model="motivoEquipe" maxlength="500" data-testid="equipe-motivo-encerramento" />
+        </label>
+        <button
+          type="button"
+          :disabled="motivoEquipe.trim().length < 3"
+          data-testid="equipe-confirmar-encerramento"
+          @click="confirmarEncerramento"
+        >
+          {{ t('pep.equipe.confirmar') }}
+        </button>
+        <button type="button" @click="encerrando = false">{{ t('pep.equipe.cancelar') }}</button>
+      </template>
+      <button v-else type="button" data-testid="equipe-encerrar" @click="encerrando = true">
+        {{ t('pep.equipe.encerrarEquipe') }}
+      </button>
+    </div>
 
     <details v-if="historico.length" data-testid="equipe-historico">
       <summary>{{ t('pep.equipe.historico', { n: historico.length }) }}</summary>

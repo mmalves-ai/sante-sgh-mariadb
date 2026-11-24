@@ -21,6 +21,13 @@ export const mensagensEquipePainel = {
   historico: 'Histórico da equipe ({n})',
   periodo: '{nome} — {funcao}: {inicio} a {fim} ({motivo})',
   avisoResponsavel: 'A equipe já tem responsável principal: encerre a participação dele antes.',
+  especialidade: 'Especialidade',
+  semEspecialidade: 'Sem especialidade',
+  avisoCategoria:
+    'Só profissional com lotação neste estabelecimento e da categoria da função entra na equipe.',
+  encerrarEquipe: 'Encerrar a equipe (fim do atendimento)',
+  motivoEncerramento: 'Motivo do encerramento',
+  equipeEncerrada: 'Equipe encerrada: {n} participação(ões) fechada(s).',
   setor: {
     titulo: 'Regras do prontuário por setor',
     gravada: 'Configuração gravada.',
