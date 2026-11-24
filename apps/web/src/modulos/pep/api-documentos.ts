@@ -242,7 +242,7 @@ export const lerPrevia = (id: number, b: typeof fetch = fetch) =>
 export const assinarLote = (e: AssinarLote) => enviar<ResultadoAssinatura>(`${P}/assinaturas`, e, null);
 /** Regra 3: o preceptor coassina (ou recusa com o motivo) o registro do residente. */
 export const coassinar = (id: number, e: { decisao: 'coassinado' | 'recusado'; motivo?: string }) =>
-  enviar<{ ok: true; campoSupervisao: AcaoLiberada }>(`${P}/supervisao/${id}/coassinar`, e, null);
+  enviar<{ ok: true }>(`${P}/supervisao/${id}/coassinar`, e, null);
 
 /** Validação pública do documento pelo QR (sem conteúdo clínico). */
 export async function validarDocumento(qr: string, buscar: typeof fetch = fetch): Promise<unknown> {

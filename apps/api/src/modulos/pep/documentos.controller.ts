@@ -1320,21 +1320,19 @@ export class DocumentosPepController {
   // ── Preceptoria (regra 3) ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * O preceptor indicado coassina (ou recusa com o motivo) o registro do residente. Coassinado: com a operação do
-   * campo de supervisão liberada, a gravação no registro do legado e a do novo vão na MESMA transação; desligada
-   * (POL-3: falta a prova), a coassinatura fica no novo e a resposta traz o motivo.
+   * O preceptor indicado coassina (ou recusa com o motivo) o registro do residente (03-PEP L96; CFM, supervisão da
+   * residência). A decisão é gravada no próprio registro clínico (registro_assistencial_supervisao), na mesma
+   * transação que finaliza o registro quando era o último pedido pendente.
    */
   @Post('supervisao/:id/coassinar')
   @HttpCode(200)
   @Permissao('pep.evolucao.coassinar')
-  @AuditadoNoHandler(
-    'SGH_PEP_SUPERVISAO e SGH_TRILHA (e o executor, se a coassinatura no registro estiver liberada)',
-  )
+  @AuditadoNoHandler('registro_assistencial_supervisao, registro_assistencial e a trilha na mesma transação')
   async coassinar(
     @Param('id') i: string,
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ ok: true; campoSupervisao: AcaoLiberada }> {
+  ): Promise<{ ok: true }> {
     const s = sessaoDe(req);
     await this.liberacao.exigir(s, RECURSOS_M23.assinatura);
     const e = validar(esquemaCoassinar, corpo);
@@ -1349,32 +1347,15 @@ export class DocumentosPepController {
         'Só o preceptor indicado pelo residente coassina este registro.',
       );
     await this.acesso.exigirVinculo(s, sup.paciente, 'pep.evolucao.coassinar', 'pep.prontuario');
-    if (e.decisao === 'recusado') {
-      await this.gravarSgh(() =>
-        this.servico.porta.coassinarNoNovo(this.sgh(s, 'coassinatura'), {
-          id,
-          decisao: 'recusado',
-          motivo: e.motivo ?? null,
-        }),
-      );
-      return { ok: true, campoSupervisao: { pode: false, motivo: null } };
-    }
-    const prof = await this.prof(s);
-    const campo = prof
-      ? await this.servico.podeGravar(this.c(s), 'pep.coassinarEvolucao', s.login)
-      : { pode: false, motivo: 'Sem ocupação no cadastro de profissionais.' };
-    if (campo.pode && prof)
-      await this.executar(
-        s,
-        'pep.coassinarEvolucao',
-        { supervisao: id, registro: sup.registro, paciente: sup.paciente, preceptor: prof.idProfissional },
-        'coassinatura',
-      );
-    else
-      await this.gravarSgh(() =>
-        this.servico.porta.coassinarNoNovo(this.sgh(s, 'coassinatura'), { id, decisao: 'coassinado' }),
-      );
-    return { ok: true, campoSupervisao: { pode: campo.pode, motivo: campo.motivo } };
+    await this.gravarSgh(() =>
+      this.servico.porta.coassinarNoNovo(
+        this.sgh(s, 'coassinatura'),
+        e.decisao === 'recusado'
+          ? { id, decisao: 'recusado', motivo: e.motivo ?? null }
+          : { id, decisao: 'coassinado' },
+      ),
+    );
+    return { ok: true };
   }
 
   /** A trilha da gravação só do novo já sai na transação; o registrador fica para as negações. */

@@ -501,9 +501,8 @@ describe('prontuário de uso diário (M23)', () => {
     ).toBe(403);
     const ok = await post(medico, `/api/pep/supervisao/${c.id}/coassinar`, { decisao: 'coassinado' });
     expect(ok.statusCode).toBe(200);
-    // POL-3: o campo de supervisão do registro fica desligado com o motivo; a coassinatura vale no novo.
-    expect(ok.json().campoSupervisao.pode).toBe(false);
-    expect(ok.json().campoSupervisao.motivo).toMatch(/ainda não foi provada/);
+    // A coassinatura é gravada no próprio registro clínico, sem restrição herdada do sistema antigo (L96).
+    expect(ok.json()).toEqual({ ok: true });
     expect(trilha.eventos.some((e) => e.evento === 'pep.evolucao.coassinada')).toBe(true);
     expect(
       (await post(medico, `/api/pep/supervisao/${c.id}/coassinar`, { decisao: 'coassinado' })).statusCode,

@@ -343,11 +343,8 @@ describe('receitas, atestados, fichas e fila', () => {
 });
 
 describe('podeGravar e executar', () => {
-  it('coassinatura desligada; sem adaptador, pendente; sem profissional ou conselho, não pode', async () => {
+  it('sem adaptador, pendente; sem profissional ou conselho, não pode', async () => {
     const { nucleo, sqls } = duble();
-    expect((await podeGravar(nucleo, 'cli', C, 'pep.coassinarEvolucao', 'med')).codigo).toBe(
-      'operacao-nao-liberada',
-    );
     expect((await podeGravar(nucleo, 'cli', C, 'pep.registrarObito', 'med')).codigo).toBe(
       'pendente-modelo-proprio',
     );

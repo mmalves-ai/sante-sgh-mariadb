@@ -30,7 +30,6 @@ import {
   type FluxoLido,
   type LiberacaoConsultada,
   type LinhaPainelLida,
-  MOTIVO_COASSINATURA_DESLIGADA,
   type RecortePainel,
 } from './tipos-pep.js';
 
@@ -873,7 +872,7 @@ export function fluxo(
 export const OPERACOES_PAINEL: readonly string[] = ['pep.suspenderDocumento'];
 
 /**
- * Passo 0 do executor (como a memória): a coassinatura no campo de supervisão é desligada; a operação sem adaptador no
+ * Passo 0 do executor (como a memória): a operação sem adaptador no
  * banco próprio (fora de `disponiveis`) recusa com `pendente-modelo-proprio`; o login precisa de profissional com
  * vínculo vigente no estabelecimento e inscrição ativa no conselho. Nada é gravado.
  */
@@ -885,12 +884,6 @@ export function podeGravar(
   login: string,
   disponiveis: readonly string[] = OPERACOES_PAINEL,
 ): Promise<LiberacaoConsultada> {
-  if (operacao === 'pep.coassinarEvolucao')
-    return Promise.resolve({
-      pode: false,
-      codigo: 'operacao-nao-liberada',
-      motivo: MOTIVO_COASSINATURA_DESLIGADA,
-    });
   if (!disponiveis.includes(operacao))
     return Promise.resolve({
       pode: false,

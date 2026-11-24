@@ -20,7 +20,6 @@ import {
   type DocumentoResumoLido,
   type DocumentoProprioLido,
   ErroProntuario,
-  MOTIVO_COASSINATURA_DESLIGADA,
   esquemaAnexo,
   esquemaEmissaoDocumento,
   esquemaExameExterno,
@@ -1135,10 +1134,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   async fluxo(c: ContextoDocs, id: number) {
     return this.est(c.hospital).fila.find((x) => x.id === id) ?? null;
   }
-  async podeGravar(_c: ContextoDocs, operacao: string) {
-    // POL-3: a coassinatura no campo de supervisão do legado é especificada e desligada (como fora de dev).
-    if (operacao === 'pep.coassinarEvolucao')
-      return { pode: false, codigo: 'operacao-nao-liberada', motivo: MOTIVO_COASSINATURA_DESLIGADA };
+  async podeGravar() {
     return { pode: true, codigo: null, motivo: null };
   }
 

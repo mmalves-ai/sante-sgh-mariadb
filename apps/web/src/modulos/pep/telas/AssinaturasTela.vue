@@ -45,14 +45,11 @@ const coassinado = ref<{ id: number; aviso: string | null } | null>(null);
 async function decidir(id: number, decisao: 'coassinado' | 'recusado'): Promise<void> {
   erro.value = null;
   try {
-    const r = await coassinar(
+    await coassinar(
       id,
       decisao === 'recusado' ? { decisao, motivo: motivoRecusa.value.trim() } : { decisao },
     );
-    coassinado.value = {
-      id,
-      aviso: decisao === 'coassinado' && !r.campoSupervisao.pode ? r.campoSupervisao.motivo : null,
-    };
+    coassinado.value = { id, aviso: null };
     motivoRecusa.value = '';
     await cliente.invalidateQueries({ queryKey: ['pep', 'doc'] });
   } catch (e) {

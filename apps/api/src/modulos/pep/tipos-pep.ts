@@ -385,9 +385,6 @@ export const esquemaPedidoExames = z
   })
   .strict();
 
-export const MOTIVO_COASSINATURA_DESLIGADA =
-  'A gravação da coassinatura no campo de supervisão do registro clínico ainda não foi provada: o campo só foi usado em 2020 e 2021 e a prova depende do cenário controlado no outro sistema. A coassinatura fica registrada neste sistema.';
-
 export const UNIDADE = z.string().trim().min(1).max(10);
 
 export const QTDE = z.number().nonnegative().max(1_000_000);
