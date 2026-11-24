@@ -67,6 +67,8 @@ export interface GravadorSghFarmacia {
     usuario: string;
     responsavelTecnico: boolean;
     chaveOficialLigada: boolean;
+    /** Fechamento oficial: o conteúdo montado já guardado pela porta de arquivos (ADR 0004). */
+    conteudo?: { readonly arquivo: number; readonly hash: string } | null;
   }): Promise<{ id: number; hash: string; guardaAte: string }>;
   dispensarAmbulatorial(d: {
     paciente: number;
@@ -168,6 +170,11 @@ export interface PortaFarmacia extends PortaGravacaoM18<GravadorSghFarmacia> {
     }[]
   >;
   controlados(c: ContextoFarmacia): Promise<ItemControlado[]>;
+  /**
+   * Guarda o conteúdo do livro montado na porta de arquivos (disco local, ADR 0004) para o fechamento oficial, com a
+   * guarda legal; o mesmo conteúdo reaproveita o arquivo. Só a porta do banco tem (a de memória não guarda arquivo).
+   */
+  guardarConteudoLivro?(c: ContextoFarmacia, livro: LivroMontado): Promise<{ arquivo: number; hash: string }>;
   movimentos(
     c: ContextoFarmacia,
     o: { itens: readonly number[]; inicio: Date; fim: Date },

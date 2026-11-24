@@ -28,12 +28,16 @@ import type {
   ParametrosIntegracaoEditaveis,
   RegistrarPerdaControladoEntrada,
 } from '@sgh/contratos';
+import { guardaAte, type LivroMontado } from '@sgh/contratos/regras-suprimentos';
 import {
   type ContextoOperacao,
+  criarArmazemLocal,
   definirOperacao,
   ErroOperacao,
   type Executor,
   type Leitor,
+  lerRaizArquivos,
+  type NucleoArmazem,
   type NucleoProprio,
   recusa,
   type ResultadoOperacao,
@@ -50,6 +54,7 @@ import {
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { type ExtrasGravacaoFarmacia, gravadorAvaliacao, TABELAS_AVALIACAO } from './gravador-avaliacao.js';
 import {
+  armazenamentoIndisponivel,
   ENTREGA_DO_NUMERO,
   gravadorDispensacao,
   NUMERO_DA_ENTREGA,
@@ -190,6 +195,34 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
       [est],
     );
     return r?.fuso_horario || FUSO_PADRAO;
+  }
+
+  /**
+   * O conteúdo do livro oficial na porta de arquivos (ADR 0004: disco local sob ARQUIVOS_RAIZ, metadado na tabela
+   * `arquivo` pelo Executor), com a guarda legal do livro. Sem raiz: a mesma recusa do fechamento (nada gravado).
+   */
+  async guardarConteudoLivro(
+    c: ContextoFarmacia,
+    livro: LivroMontado,
+  ): Promise<{ arquivo: number; hash: string }> {
+    const est = c.estabelecimento;
+    if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    const raiz = lerRaizArquivos(process.env);
+    const nucleo = this.nucleo as NucleoFarmacia & Partial<NucleoArmazem>;
+    if (!raiz || typeof nucleo.cliente !== 'function') throw armazenamentoIndisponivel();
+    const armazem = criarArmazemLocal(nucleo as NucleoArmazem, { raiz, executor: this.executor });
+    const g = await armazem.guardar(
+      {
+        conteudo: Buffer.from(JSON.stringify(livro), 'utf8'),
+        nomeOriginal: `livro-controlado-${livro.livro}-${livro.inicio}.json`,
+        tipoMime: 'application/json',
+        finalidade: 'livro_controlado',
+        entidade: 'livro_controlado',
+        retencaoAte: guardaAte(livro.fim),
+      },
+      { ...contextoDe(c), chaveIdempotencia: `farmacia:livro:${randomUUID()}` },
+    );
+    return { arquivo: g.id, hash: g.hash };
   }
 
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import {
   listaDoItem,
   livroDaLista,
   LIVROS_CONTROLADOS,
+  conferirFechamentoLivro,
   type LivroMontado,
   montarFila,
   montarLivro,
@@ -43,6 +44,7 @@ import {
 import { enfileirarZpl, ErroZpl, zplEtiquetaDose } from '@sgh/dominio-documento';
 import type { DoseDaFila, Triagem } from './tipos.js';
 import { estacaoDaRequisicao } from '../../autorizacao/estacao.js';
+import { recusa } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { FonteDocumento } from '../documento/public-api.js';
@@ -648,6 +650,22 @@ ${l.fechado ? `<p>Fechado por ${esc(l.fechado.por)} em ${esc(l.fechado.em)}; gua
     const l = await this.livro(s, livro, inicio, fim);
     const chaveOficial = (await this.apoios.apoios.livroOficial.liberacao(s)).ligada;
     const montado: LivroMontado = { ...l.montado, modo: oficial ? 'oficial' : 'conferencia' };
+    // O oficial guarda antes o conteúdo na porta de arquivos (ADR 0004); só depois das regras que não leem o banco,
+    // para não guardar arquivo de quem não pode fechar. A gravação confere o hash do arquivo com o do livro.
+    let conteudo: { arquivo: number; hash: string } | null = null;
+    if (oficial) {
+      const r0 = conferirFechamentoLivro({
+        responsavelTecnico: s.pode('suprimentos.livro.fechar'),
+        inicio: montado.inicio,
+        fim: montado.fim,
+        oficial,
+        chaveOficialLigada: chaveOficial,
+        jaFechado: false,
+      });
+      if (r0) throw recusa(r0.codigo, r0.mensagem, r0.campos ? { campos: r0.campos } : {});
+      if (this.apoios.porta.guardarConteudoLivro)
+        conteudo = await this.apoios.porta.guardarConteudoLivro(ctx(s), montado);
+    }
     const r = await this.apoios.apoios.controlados.sgh(
       s,
       EVENTOS_AUDITAVEIS.suprimentosLivroFechado.codigo,
@@ -659,6 +677,7 @@ ${l.fechado ? `<p>Fechado por ${esc(l.fechado.por)} em ${esc(l.fechado.em)}; gua
           usuario: s.login,
           responsavelTecnico: s.pode('suprimentos.livro.fechar'),
           chaveOficialLigada: chaveOficial,
+          conteudo,
         }),
     );
     return resultado(

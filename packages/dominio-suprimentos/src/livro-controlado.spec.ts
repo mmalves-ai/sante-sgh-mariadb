@@ -2,11 +2,13 @@
 // guarda de 2 anos, fechado pelo farmacêutico responsável, escrituração semanal; o oficial só com a chave da VISA.
 import { describe, expect, it } from 'vitest';
 import {
+  conferirEmitenteDoLivro,
   conferirFechamentoLivro,
   guardaAte,
   LIVROS_CONTROLADOS,
   livroDaLista,
   montarLivro,
+  termosDoLivro,
 } from '@sgh/contratos/regras-suprimentos';
 
 describe('livro de controlados (regra 9)', () => {
@@ -80,5 +82,21 @@ describe('livro de controlados (regra 9)', () => {
   });
   it('guarda de 2 anos', () => {
     expect(guardaAte('2026-10-25')).toBe('2028-10-25');
+  });
+
+  it('termos de abertura e encerramento: páginas do livro e emitente exigido no oficial', () => {
+    expect(termosDoLivro(3)).toEqual([
+      { tipo: 'abertura', sequencia: 1, paginaInicial: 1, paginaFinal: 3 },
+      { tipo: 'encerramento', sequencia: 2, paginaInicial: 1, paginaFinal: 3 },
+    ]);
+    expect(termosDoLivro(0)[1].paginaFinal).toBe(1);
+    expect(conferirEmitenteDoLivro({ razaoSocial: 'H', cnpj: null, oficial: true })?.codigo).toBe(
+      'estabelecimento-sem-cnpj',
+    );
+    expect(conferirEmitenteDoLivro({ razaoSocial: ' ', cnpj: '12345678000190', oficial: true })?.codigo).toBe(
+      'estabelecimento-sem-cnpj',
+    );
+    expect(conferirEmitenteDoLivro({ razaoSocial: 'H', cnpj: '12345678000190', oficial: true })).toBeNull();
+    expect(conferirEmitenteDoLivro({ razaoSocial: 'H', cnpj: null, oficial: false })).toBeNull();
   });
 });

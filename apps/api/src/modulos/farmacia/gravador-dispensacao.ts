@@ -31,6 +31,7 @@ import {
   conferirDevolucaoDose,
   conferirDispensacaoAmbulatorial,
   conferirDuplaConferencia,
+  conferirEmitenteDoLivro,
   conferirFechamentoLivro,
   conferirPerdaControlado,
   conferirPrescritorControlado,
@@ -40,6 +41,7 @@ import {
   montarEnvioSngpc,
   type PrescritorControlado,
   type RecusaSuprimentos,
+  termosDoLivro,
 } from '@sgh/contratos/regras-suprimentos';
 import type {
   CancelarDispensacaoEntrada,
@@ -80,6 +82,7 @@ export const TABELAS_DISPENSACAO = [
   'devolucao_dispensacao_item',
   'conferencia_controlado',
   'livro_controlado',
+  'termo_livro_controlado',
   'receita_controlada',
   'envio_controlado_nacional',
   'envio_controlado_nacional_item',
@@ -126,13 +129,13 @@ function recusar(r: RecusaSuprimentos | null | undefined): void {
   if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 }
 
-/** A recusa do fechamento oficial do livro: o conteúdo vai ao armazenamento de arquivos (ADR 0004), não ligado aqui. */
+/** A recusa do fechamento oficial do livro sem o conteúdo guardado no armazenamento de arquivos (ADR 0004). */
 export function armazenamentoIndisponivel(): ErroOperacao {
   return new ErroOperacao(
     503,
     'armazenamento-indisponivel',
     'Armazenamento de arquivos indisponível',
-    'O fechamento oficial guarda o conteúdo do livro no armazenamento de arquivos, que ainda não está ligado à farmácia: feche no modo conferência. Nada foi gravado.',
+    'O fechamento oficial guarda o conteúdo do livro no armazenamento de arquivos, que não está disponível (ARQUIVOS_RAIZ): feche no modo conferência. Nada foi gravado.',
   );
 }
 
@@ -1197,7 +1200,13 @@ export function gravadorDispensacao(
         jaFechado: !!ja,
       }),
     );
-    if (oficial) throw armazenamentoIndisponivel();
+    if (oficial && !f.conteudo) throw armazenamentoIndisponivel();
+    const emitente = await tx.uma<Linha>('SELECT razao_social, cnpj FROM estabelecimento WHERE id = ?', [
+      est,
+    ]);
+    const razaoSocial = texto(emitente?.['razao_social']).trim() || null;
+    const cnpj = texto(emitente?.['cnpj']) || null;
+    recusar(conferirEmitenteDoLivro({ razaoSocial, cnpj, oficial }));
     const responsavel = await profissionalDe(usuario);
     if (responsavel === null)
       throw recusa(
@@ -1205,7 +1214,21 @@ export function gravadorDispensacao(
         'O usuário da sessão não tem vínculo profissional no estabelecimento: o livro leva o responsável técnico.',
       );
     const hash = createHash('sha256').update(JSON.stringify(f.livro), 'utf8').digest('hex');
+    // O oficial: o arquivo guardado é o conteúdo deste livro (mesmo hash, mesmo estabelecimento, ativo).
+    if (oficial && f.conteudo) {
+      const arq = await tx.uma<Linha>(
+        'SELECT hash_sha256, estabelecimento_id FROM arquivo WHERE id = ? AND excluido_em IS NULL',
+        [f.conteudo.arquivo],
+      );
+      if (!arq || texto(arq['hash_sha256']) !== hash || n(arq['estabelecimento_id']) !== est)
+        throw recusa(
+          'conteudo-divergente',
+          'O arquivo guardado não é o conteúdo deste livro: monte o livro de novo e feche outra vez.',
+          { campos: ['livro'] },
+        );
+    }
     const guarda = guardaAte(f.livro.fim);
+    const modo = oficial ? 'oficial' : 'conferencia';
     const id = await tx.incluir('livro_controlado', {
       estabelecimento_id: est,
       numero,
@@ -1215,12 +1238,28 @@ export function gravadorDispensacao(
       situacao: 'encerrado',
       aberto_em: agora,
       encerrado_em: agora,
-      modo_fechamento: 'conferencia',
+      modo_fechamento: modo,
       hash_conteudo: hash,
+      conteudo_arquivo_id: oficial && f.conteudo ? f.conteudo.arquivo : null,
       guarda_ate: guarda,
     });
+    // Termos de abertura e de encerramento (Portaria 344, art. 62), com o emitente; o de encerramento cita o arquivo.
+    if (razaoSocial && cnpj && /^\d{14}$/.test(cnpj))
+      for (const t of termosDoLivro(f.livro.paginas.length))
+        await tx.incluir('termo_livro_controlado', {
+          livro_controlado_id: id,
+          sequencia: t.sequencia,
+          tipo: t.tipo,
+          pagina_inicial: t.paginaInicial,
+          pagina_final: t.paginaFinal,
+          responsavel_profissional_id: responsavel,
+          razao_social: razaoSocial,
+          cnpj,
+          emitido_em: agora,
+          arquivo_id: t.tipo === 'encerramento' && oficial && f.conteudo ? f.conteudo.arquivo : null,
+        });
     extras.alvo = { tabela: 'livro_controlado', id };
-    evento('farmacia.livro.fechado', { livro: id, modo: 'conferencia' });
+    evento('farmacia.livro.fechado', { livro: id, modo });
     return { id, hash, guardaAte: guarda };
   };
 

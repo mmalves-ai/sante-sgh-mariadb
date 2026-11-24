@@ -134,3 +134,39 @@ export function guardaAte(fim: string): string {
   const [a, m, d] = fim.split('-').map(Number) as [number, number, number];
   return `${a + GUARDA_LIVRO_ANOS}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+/** Termo de abertura ou de encerramento do livro fechado (Portaria 344, art. 62): páginas numeradas e emitente. */
+export interface TermoDoLivro {
+  readonly tipo: 'abertura' | 'encerramento';
+  readonly sequencia: 1 | 2;
+  readonly paginaInicial: number;
+  readonly paginaFinal: number;
+}
+
+/**
+ * O emitente dos termos: a razão social e o CNPJ do estabelecimento. O livro oficial não fecha sem eles (o termo é
+ * peça legal); o de conferência grava os termos quando o cadastro os tem.
+ */
+export function conferirEmitenteDoLivro(c: {
+  razaoSocial: string | null;
+  cnpj: string | null;
+  oficial: boolean;
+}): RecusaSuprimentos | null {
+  const completo = !!c.razaoSocial?.trim() && /^\d{14}$/.test(c.cnpj ?? '');
+  if (c.oficial && !completo)
+    return recusa(
+      'estabelecimento-sem-cnpj',
+      'O livro oficial leva nos termos a razão social e o CNPJ do estabelecimento: complete o cadastro do estabelecimento.',
+      ['estabelecimento'],
+    );
+  return null;
+}
+
+/** Os dois termos do livro fechado: a abertura (sequência 1) e o encerramento (2), da página 1 à última (mínimo 1). */
+export function termosDoLivro(paginas: number): readonly [TermoDoLivro, TermoDoLivro] {
+  const ultima = Math.max(1, Math.trunc(paginas));
+  return [
+    { tipo: 'abertura', sequencia: 1, paginaInicial: 1, paginaFinal: ultima },
+    { tipo: 'encerramento', sequencia: 2, paginaInicial: 1, paginaFinal: ultima },
+  ];
+}
