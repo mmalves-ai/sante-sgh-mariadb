@@ -300,9 +300,12 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação contra o MariaDB
     );
     expect(await porta.notificacao(fora, id)).toBeNull();
     expect(await codigo(porta.gravarSgh(fora, trilha(), (g) => g.travar(id)))).toBe('nao-encontrado');
-    expect(await codigo(porta.gravarSgh(c, trilha(), (g) => g.registrarAnalise({} as never)))).toBe(
-      'modelo-pendente',
-    );
+    // A etapa 2 (porta-propria-etapa2.int.spec.ts) também não enxerga a notificação de outro estabelecimento.
+    expect(
+      await codigo(
+        porta.gravarSgh(fora, trilha(), (g) => g.registrarAnalise({ notificacao: id, usuario: m.login } as never)),
+      ),
+    ).toBe('nao-encontrado');
   });
 
   it('leituras de apoio: relógio, unidades, feriados, conta ativa e gestores do estabelecimento', async () => {

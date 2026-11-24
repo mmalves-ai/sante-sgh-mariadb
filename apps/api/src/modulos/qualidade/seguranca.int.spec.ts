@@ -152,10 +152,7 @@ describe.skipIf(SEM_BANCO_QUA)('painel da segurança do paciente no MariaDB (f22
     }
   });
 
-  // O fluxo da etapa 2 que o sistema anterior fazia aguarda o mapeamento (pedido em saida/04-03.json): pendente nomeado.
-  it.todo(
-    'notificação → análise → plano 5W2H → conclusão (analise_incidente, plano_acao_qualidade, acao_plano_qualidade)',
-  );
-  it.todo('a sugestão de notificação resolvida pelo resumo (sugestao_notificacao_incidente)');
-  it.todo('a vigilância de produto com os expostos (queixa_tecnica_produto)');
+  // A análise, o plano 5W2H, a queixa técnica e a sugestão resolvida: porta-propria-etapa2.int.spec.ts. Os expostos
+  // ao lote dependem da leitura do estoque (pendente nomeado).
+  it.todo('a vigilância de produto com os expostos ao lote (saídas do lote no estoque e consumos em sala)');
 });

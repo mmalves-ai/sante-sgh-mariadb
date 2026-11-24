@@ -23,12 +23,10 @@
 // travada de uma linha que outra transação mudou depois do instantâneo (isolamento por instantâneo: erro 1020) ou a trava
 // ocupada, a gravação inteira é desfeita e refeita (até 3 vezes) — nada fica pela metade.
 // Melhoria: o painel das análises conta pelos prazos e conclusões gravados na própria notificação.
-// Pendente (pedido em docs/obra/fatias/f22/arquivo-ondas-1a4/saida/04-03.json e docs/obra/fatias/f24/saida/15-qualidade.json): a análise (analise_incidente), o plano de ação
-// (plano_acao_qualidade e acao_plano_qualidade), a queixa técnica (queixa_tecnica_produto) e a sugestão resolvida
-// (sugestao_notificacao_incidente, que pede o gatilho): as gravações recusam com `modelo-pendente`. Como nada disso pode
-// ter sido gravado neste banco, a leitura deles é de fato vazia (nenhuma análise, ação ou queixa existe); as leituras
-// que dependem de dado de OUTRO módulo ainda sem mapeamento (candidatos à sugestão, adesão aos protocolos, histórico de
-// riscos, tecnovigilância por item) falham fechadas (503 `modelo-pendente`).
+// Etapa 2 (a análise, o plano de ação, a queixa técnica e a sugestão resolvida): porta-propria-etapa2.ts, na mesma
+// transação da notificação. Pendente: as leituras que dependem de dado de OUTRO módulo ainda sem mapeamento (candidatos
+// à sugestão, adesão aos protocolos, histórico de riscos, protocolos gerenciados e tecnovigilância por item) falham
+// fechadas (503 `modelo-pendente`).
 import type { ContextoNotificacaoLido } from '@sgh/contratos';
 import {
   ehTravaOcupada,
@@ -54,7 +52,6 @@ import {
   lerNoEstabelecimento,
   type Linha,
   marcas,
-  modeloPendente,
   n,
   nn,
   type NucleoQualidade,
@@ -67,9 +64,19 @@ import {
   verdadeiro,
 } from './apoio-propria.js';
 import type { ContextoQualidade, GravadorQualidade, PortaQualidade } from './porta.js';
+import {
+  gravadorEtapa2,
+  lerAcoes,
+  lerAnalise,
+  lerEventosQueixa,
+  lerQueixa,
+  lerQueixas,
+  lerResolvidas,
+  SQL_ACAO,
+  acaoPlano,
+  TABELAS_ETAPA2,
+} from './porta-propria-etapa2.js';
 import type {
-  AcaoPlanoRegistrada,
-  AnaliseRegistrada,
   EventoNotificacaoNovo,
   EventoNotificacaoRegistrado,
   FiltroNotificacoes,
@@ -93,53 +100,6 @@ const ERRNO_LINHA_MUDOU = 1020;
 const GRAVACAO_CONCORRENTE = 'gravacao-concorrente';
 function concorrencia(e: unknown): boolean {
   return (e as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU || ehTravaOcupada(e);
-}
-const ETAPA_2 = 'A análise, o plano de ação, a queixa técnica e a sugestão resolvida';
-const QUEIXA =
-  'A queixa técnica de produto (área de vigilância, conduta, alerta, série e registro do produto)';
-const SUGESTAO = 'A sugestão de notificação resolvida (o resumo da sugestão)';
-
-const FATOR_DO_BANCO: Readonly<Record<string, string>> = {
-  profissional: 'individuo',
-  externo: 'institucional',
-};
-
-const SQL_ACAO = `
-  SELECT ap.id, COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) AS notificacao, ap.sequencia, ap.o_que,
-         ap.por_que, ap.onde, ap.prazo, ru.login AS quem, ap.como, ap.quanto_descricao, ap.situacao, ap.evidencia_execucao,
-         ap.concluida_em, ap.eficacia, ap.eficacia_descricao, ap.eficacia_verificada_em, ue.login AS eficacia_por,
-         ap.versao, uc.login AS criada_por, ap.criado_em
-    FROM acao_plano_qualidade ap
-    JOIN plano_acao_qualidade pa ON pa.id = ap.plano_acao_qualidade_id AND pa.excluido_em IS NULL
-    LEFT JOIN analise_incidente ai ON ai.id = pa.analise_incidente_id
-    LEFT JOIN usuario ru ON ru.id = ap.responsavel_usuario_id
-    LEFT JOIN usuario ue ON ue.id = ap.eficacia_verificador_usuario_id
-    LEFT JOIN usuario uc ON uc.id = ap.criado_por
-   WHERE pa.estabelecimento_id = ? AND ap.excluido_em IS NULL`;
-
-function acaoPlano(r: Linha): AcaoPlanoRegistrada {
-  return {
-    id: n(r['id']),
-    notificacao: n(r['notificacao']),
-    sequencia: n(r['sequencia']),
-    oQue: texto(r['o_que']),
-    porQue: texto(r['por_que']),
-    onde: texto(r['onde']),
-    quando: dataIso(r['prazo']) ?? '',
-    quem: texto(r['quem']),
-    como: texto(r['como']),
-    quanto: textoN(r['quanto_descricao']),
-    situacao: camelo(r['situacao']),
-    texto: textoN(r['evidencia_execucao']),
-    concluidaEm: instanteN(r['concluida_em']),
-    eficacia: textoN(r['eficacia']),
-    eficaciaTexto: textoN(r['eficacia_descricao']),
-    eficaciaEm: instanteN(r['eficacia_verificada_em']),
-    eficaciaPor: textoN(r['eficacia_por']),
-    versao: n(r['versao']),
-    criadaPor: texto(r['criada_por']),
-    criadaEm: instante(r['criado_em']),
-  };
 }
 
 const DE_OUTROS =
@@ -310,7 +270,7 @@ export class PortaQualidadePropria implements PortaQualidade {
       try {
         return await gravacaoDireta(this.executor, c, {
           nome: 'qualidade.notificacao',
-          tabelas: TABELAS_NOTIFICACAO,
+          tabelas: [...TABELAS_NOTIFICACAO, ...TABELAS_ETAPA2],
           trilha,
           gravador: (tx, est) => this.gravador(tx, est),
           fn: async (g) => {
@@ -377,7 +337,6 @@ export class PortaQualidadePropria implements PortaQualidade {
   }
 
   private gravador(tx: TxOperacao, est: number): GravadorQualidade {
-    const pendente = (): Promise<never> => Promise.reject(modeloPendente(ETAPA_2));
     const quem = (login: string) => exigirUsuario(tx, login);
     return {
       notificar: async (x) => {
@@ -579,18 +538,11 @@ export class PortaQualidadePropria implements PortaQualidade {
         });
         return { versao: r.versao };
       },
-      travarAnalise: () => Promise.resolve(null),
-      acoesNaTransacao: () => Promise.resolve([]),
-      registrarAnalise: pendente,
-      travarAcao: pendente,
-      incluirAcao: pendente,
-      alterarAcao: pendente,
-      situacaoAcao: pendente,
-      eficaciaAcao: pendente,
-      resolverSugestao: () => Promise.resolve({ gravou: false }),
-      abrirQueixa: pendente,
-      travarQueixa: pendente,
-      andamentoQueixa: pendente,
+      ...gravadorEtapa2(tx, est, {
+        travarNotificacao: (id) => this.travarLinha(tx, est, id),
+        mudarNotificacao: (id, versao, valores) => this.mudar(tx, est, id, versao, valores),
+        eventoNotificacao: (id, agora, antes, depois, usuario, e) => evento(tx, id, agora, antes, depois, usuario, e),
+      }),
     };
   }
 
@@ -850,68 +802,11 @@ export class PortaQualidadePropria implements PortaQualidade {
   // da sugestão): falham fechadas (503 `modelo-pendente`). ──
 
   analise(c: ContextoQualidade, notificacao: number) {
-    return this.ler(c, async (l, est) => {
-      const a = await l.uma(
-        `SELECT a.id, a.notificacao_incidente_id, a.metodo, a.conteudo, a.causa_raiz, a.licoes_aprendidas,
-                a.sem_acao_justificativa, a.situacao, a.versao, uc.login AS registrada_por, a.criado_em, a.alterado_em,
-                a.concluida_em, ua.login AS alterada_por
-           FROM analise_incidente a
-           LEFT JOIN usuario uc ON uc.id = a.criado_por
-           LEFT JOIN usuario ua ON ua.id = a.alterado_por
-          WHERE a.notificacao_incidente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
-            AND a.situacao <> 'cancelada'
-          ORDER BY a.id DESC LIMIT 1`,
-        [notificacao, est],
-      );
-      if (!a) return null;
-      const fatores = await l.consultar(
-        `SELECT DISTINCT f.categoria FROM analise_incidente_causa ca JOIN fator_contribuinte f ON f.id = ca.fator_contribuinte_id
-          WHERE ca.analise_incidente_id = ? AND ca.excluido_em IS NULL ORDER BY f.categoria`,
-        [a['id']],
-        { teto: 100 },
-      );
-      const bruto = a['conteudo'];
-      const concluida = texto(a['situacao']) === 'concluida';
-      const r: AnaliseRegistrada = {
-        id: n(a['id']),
-        notificacao: n(a['notificacao_incidente_id']),
-        metodo: camelo(a['metodo']),
-        conteudo:
-          bruto === null || bruto === undefined
-            ? ''
-            : typeof bruto === 'string'
-              ? bruto
-              : JSON.stringify(bruto),
-        causaRaiz: textoN(a['causa_raiz']),
-        // O fator do contrato é a categoria do fator contribuinte (o profissional é o indivíduo; o externo, o institucional).
-        fatores: fatores.map((f) => FATOR_DO_BANCO[texto(f['categoria'])] ?? texto(f['categoria'])),
-        licoes: textoN(a['licoes_aprendidas']),
-        semAcaoJustificativa: textoN(a['sem_acao_justificativa']),
-        situacao: concluida ? 'concluida' : 'rascunho',
-        versao: n(a['versao']),
-        registradaPor: texto(a['registrada_por']),
-        registradaEm: instante(a['criado_em']),
-        atualizadaEm: instanteN(a['alterado_em']),
-        concluidaEm: concluida ? instanteN(a['concluida_em']) : null,
-        // A análise concluída não muda mais: quem a alterou por último é quem a concluiu.
-        concluidaPor: concluida ? textoN(a['alterada_por']) : null,
-      };
-      return r;
-    });
+    return this.ler(c, (l, est) => lerAnalise(l, est, notificacao));
   }
 
   acoes(c: ContextoQualidade, notificacao: number) {
-    return this.ler(c, async (l, est) =>
-      (
-        await l.consultar(
-          `${SQL_ACAO} AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) = ? ORDER BY ap.sequencia, ap.id`,
-          [est, notificacao],
-          {
-            teto: 500,
-          },
-        )
-      ).map(acaoPlano),
-    );
+    return this.ler(c, (l, est) => lerAcoes(l, est, notificacao));
   }
 
   /** As ações abertas de que o login é o responsável (teto 200). */
@@ -927,20 +822,23 @@ export class PortaQualidadePropria implements PortaQualidade {
     );
   }
 
-  queixas(): Promise<never> {
-    return Promise.reject(leituraPendente(QUEIXA));
+  queixas(
+    c: ContextoQualidade,
+    f: { readonly situacao?: string; readonly area?: string; readonly pagina: number; readonly porPagina: number },
+  ) {
+    return this.ler(c, (l, est) => lerQueixas(l, est, f));
   }
 
-  queixa(): Promise<never> {
-    return Promise.reject(leituraPendente(QUEIXA));
+  queixa(c: ContextoQualidade, id: number) {
+    return this.ler(c, (l, est) => lerQueixa(l, est, id));
   }
 
-  eventosQueixa(): Promise<never> {
-    return Promise.reject(leituraPendente(QUEIXA));
+  eventosQueixa(c: ContextoQualidade, id: number) {
+    return this.ler(c, (l, est) => lerEventosQueixa(l, est, id));
   }
 
-  resolvidas(): Promise<never> {
-    return Promise.reject(leituraPendente(SUGESTAO));
+  resolvidas(c: ContextoQualidade, resumos: readonly string[]) {
+    return this.ler(c, (l, est) => lerResolvidas(l, est, resumos));
   }
 
   /** As ações dos planos das notificações por situação, eficácia e prazo vencido (aberta com prazo antes de hoje). */
