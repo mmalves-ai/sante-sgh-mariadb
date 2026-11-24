@@ -73,6 +73,7 @@ import {
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { deParaDoEstabelecimento, fatosContabeis } from './contabil-fiscal-propria.js';
+import { exigirPeriodoAberto } from './periodo-propria.js';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import {
   aprovacoesPorTitulo,
@@ -2188,7 +2189,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
 
     async atribuirCredito(d) {
       const [cr] = await tx.consultarParaAtualizar(
-        'SELECT id, versao, conta_bancaria_id, situacao FROM credito_nao_identificado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        'SELECT id, versao, conta_bancaria_id, situacao, data_credito FROM credito_nao_identificado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [d.credito, est],
         { teto: 1 },
       );
@@ -2198,6 +2199,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         throw foraDoEscopo();
       if (texto(cr['situacao']) !== 'pendente')
         throw recusa('credito-identificado', 'O crédito já foi identificado.');
+      // O recebimento do título fica na data do crédito: período fechado não recebe a atribuição (07-FIN linha 85).
+      await exigirPeriodoAberto(tx, est, dataIso(cr['data_credito']) ?? '', 'credito');
       const t = await tx.uma(
         "SELECT id FROM titulo_receber WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao IN ('aberto','recebido_parcial')",
         [d.tituloReceber, est],
@@ -2329,6 +2332,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     },
 
     async pagarAdiantamento(d) {
+      await exigirPeriodoAberto(tx, est, d.data);
       const a = await adiantamentoTravado(d.adiantamento);
       recusar(conferirSaida(texto(a['situacao'])));
       const contaSaida = numero(a['conta_bancaria_id']);
@@ -2375,6 +2379,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     },
 
     async compensarAdiantamento(d) {
+      await exigirPeriodoAberto(tx, est, d.data);
       const a = await adiantamentoTravado(d.adiantamento);
       const [p] = await tx.consultarParaAtualizar(
         `SELECT p.id, p.versao, p.saldo, p.valor_pago, p.situacao, p.titulo_pagar_id, t.empresa_fornecedora_id,
@@ -2481,6 +2486,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
     },
 
     async devolverAdiantamento(d) {
+      await exigirPeriodoAberto(tx, est, d.data);
       const a = await adiantamentoTravado(d.adiantamento);
       if (!d.contasEscopo.includes(d.conta)) throw foraDoEscopo();
       if (!(await contasDoEscopo(tx, est, usuario, 'movimentar')).includes(d.conta)) throw foraDoEscopo();

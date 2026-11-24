@@ -213,6 +213,47 @@ describe.skipIf(SEM_BANCO)('período financeiro: fechar em ordem, travar e reabr
         }),
       ),
     ).toBe('periodo-fechado');
+    // As gravações diretas do adiantamento (saída, compensação e devolução) passam pela mesma trava, antes de tudo.
+    const trilha = {
+      estabelecimento: null,
+      usuario: null,
+      acao: 'operacao' as const,
+      entidade: 'adiantamento',
+      entidadeId: 0,
+      correlacao: null,
+    };
+    const gravar = (f: Parameters<PortaFinanceiroPropria['gravarSgh']>[2]) =>
+      codigoDaGravacao(porta.gravarSgh(op(m.ctx(m.paga)), trilha, f));
+    const escopo = [m.contaA, m.contaB];
+    expect(
+      await gravar((g) =>
+        g.pagarAdiantamento({ adiantamento: 999_999_999, data: D1, usuario: 'x', contasEscopo: escopo }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      await gravar((g) =>
+        g.compensarAdiantamento({
+          adiantamento: 999_999_999,
+          parcela: 999_999_999,
+          valor: 5,
+          data: D0,
+          usuario: 'x',
+        }),
+      ),
+    ).toBe('periodo-fechado');
+    expect(
+      await gravar((g) =>
+        g.devolverAdiantamento({
+          adiantamento: 999_999_999,
+          conta: m.contaA,
+          valor: 5,
+          data: D1,
+          motivo: 'Sobra devolvida',
+          usuario: 'x',
+          contasEscopo: escopo,
+        }),
+      ),
+    ).toBe('periodo-fechado');
     expect([await movimentosDoMes(ANTERIOR), await movimentosDoMes()]).toEqual(antes);
     for (const comp of [COMP, ANTERIOR])
       expect(await codigoDaGravacao(executar('financeiro.fecharPeriodo', { competencia: comp }))).toBe(
