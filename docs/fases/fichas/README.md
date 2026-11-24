@@ -26,6 +26,9 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 - `tiss.spec.ts` lê o resumo pela competência `AAAA-MM`: 10 de 10 verdes.
 - Quatro arquivos novos da rodada entraram no `apps/api/tsconfig.migrado.json`: a pré-internação, o gravador dos
   parâmetros da farmácia, a integração da farmácia e o adiantamento.
+- **Não rodados:** o tsc dos 157 arquivos de API e pacotes da rodada (`apps/api/tsconfig.f3int-tmp.json`), o
+  vue-tsc dos 30 arquivos da web e os E2E. O livre da VM ficou entre 2 e 7 GB das 08h47 às 09h02 por causa da carga
+  da ProntoCardio, abaixo dos 10 GB que a trava exige, e a espera passou de 8 minutos.
 - Nenhum conflito nos arquivos compartilhados: sem marcadores de conflito e sem entrada repetida no tsconfig migrado.
 
 ## O que fica para a próxima rodada
