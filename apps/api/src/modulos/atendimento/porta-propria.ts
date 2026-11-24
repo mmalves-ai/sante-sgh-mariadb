@@ -71,6 +71,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
 import type { LiberacaoOperacao, RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { GravacaoFeita } from '../exames/public-api.js';
+import { abrirContaDaEntrada, apurarConta, TABELAS_CONTA_ENTRADA } from '../faturamento/conta-entrada.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
@@ -1152,6 +1153,8 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
 // ---- operações (Executor) ----
 
 const TABELAS_ATENDIMENTO = [
+  // F3.0: a conta aberta na entrada (consulta, PA e exame que gerem cobrança) e as taxas de abertura.
+  ...TABELAS_CONTA_ENTRADA,
   'atendimento',
   'atendimento_etapa_pa',
   'atendimento_situacao_historico',
@@ -1746,6 +1749,9 @@ const OPERACAO_ABRIR = definirOperacao({
     }
     if (tele !== null) await tx.alterar('teleconsulta', tele, teleVersao, { atendimento_id: id });
     await gravarEtapasSePa(tx, id, ['abertura']);
+    // F3.0: a conta do atendimento nasce na abertura (mesma transação), com as taxas de abertura da regra.
+    const conta = await abrirContaDaEntrada(tx, est, id);
+    if (conta !== null) await apurarConta(tx, est, conta, agora);
     const aberto = {
       reg: id,
       cabecalho: numero.formatado,

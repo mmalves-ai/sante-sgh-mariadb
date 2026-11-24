@@ -18,6 +18,11 @@
 // Melhoria: os cadastros (caráter, categoria, modalidade, motivos) vêm pelo id escolhido ou, sem escolha, do único
 // ativo que serve; nunca "o primeiro por id". A internação trava o paciente antes de conferir a internação aberta.
 import {
+  abrirContaDaEntrada,
+  apurarContasDoAtendimento,
+  TABELAS_CONTA_ENTRADA,
+} from '../faturamento/conta-entrada.js';
+import {
   type CorrigirPreInternacaoEntrada,
   type ChaveLeito,
   type DarAltaEntrada,
@@ -350,6 +355,8 @@ const TABELAS_INTERNAR = [
   'reserva_leito',
   'pedido_leito',
   'leito_hospitalar',
+  // F3.0: a conta do paciente nasce com a internação e recebe a diária do dia (mesma transação).
+  ...TABELAS_CONTA_ENTRADA,
 ];
 
 const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
@@ -483,7 +490,12 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
     if (e.solicitacaoNir !== undefined)
       await concluirPedido(tx, est, e.solicitacaoNir, id, n(leito['id']), agora);
     await situarLeito(tx, n(leito['id']));
-    return { internacao: id, numero: numero.formatado };
+    // F3.0: a conta aberta na entrada (fonte pagadora, plano, tabela vigente, acomodação) e a diária do dia.
+    const conta = await abrirContaDaEntrada(tx, est, atendimento, {
+      categoriaAcomodacao: nn(leito['categoria_acomodacao_id']),
+    });
+    if (conta !== null) await apurarContasDoAtendimento(tx, est, atendimento, agora);
+    return { internacao: id, numero: numero.formatado, ...(conta !== null ? { conta } : {}) };
   },
   eventos: (_e, r) => [{ tipo: 'internacao.internada', carga: { internacao: n(r['internacao']) } }],
   alvo: (_e, r) => ({ tabela: 'internacao', id: n(r['internacao']) }),
@@ -523,6 +535,7 @@ async function concluirPedido(
 const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOperacao>({
   nome: 'internacao.transferir-leito',
   tabelas: [
+    ...TABELAS_CONTA_ENTRADA,
     'internacao',
     'ocupacao_leito',
     'transferencia_leito',
@@ -600,6 +613,8 @@ const transferirLeito = definirOperacao<TransferirLeitoBancoEntrada, ResultadoOp
       await concluirPedido(tx, est, e.solicitacaoNir, e.internacao, n(destino['id']), agora);
     if (nn(i['leito_hospitalar_id']) !== null) await situarLeito(tx, n(i['leito_hospitalar_id']));
     await situarLeito(tx, n(destino['id']));
+    // F3.0: a troca de acomodação reapura as diárias (a do dia vai para a acomodação da virada; a antiga é estornada).
+    await apurarContasDoAtendimento(tx, est, n(i['atendimento_id']));
     return { internacao: e.internacao, versao: carimboVersao(versao) };
   },
   eventos: (e) => [{ tipo: 'internacao.transferida', carga: { internacao: e.internacao } }],
@@ -694,6 +709,7 @@ const DESTINO_DO_TIPO_SAIDA: Readonly<Record<string, string>> = {
 const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
   nome: 'internacao.dar-alta',
   tabelas: [
+    ...TABELAS_CONTA_ENTRADA,
     'internacao',
     'ocupacao_leito',
     'alta_hospitalar',
@@ -796,6 +812,8 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
             atendimento: n(i['atendimento_id']),
             alta,
           });
+    // F3.0: a alta fecha a contagem das diárias (e estorna a do dia que deixou de ser devida).
+    await apurarContasDoAtendimento(tx, est, n(i['atendimento_id']), altaEm);
     return { internacao: e.internacao, alta, solicitacao, versao: carimboVersao(versao) };
   },
   eventos: (e, r) => [
@@ -810,6 +828,7 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
 const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao>({
   nome: 'internacao.cancelar-alta',
   tabelas: [
+    ...TABELAS_CONTA_ENTRADA,
     'internacao',
     'ocupacao_leito',
     'alta_hospitalar',
@@ -906,6 +925,8 @@ const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao
         desfecho: null,
       });
     await situarLeito(tx, leito);
+    // F3.0: a alta cancelada reabre a contagem das diárias.
+    await apurarContasDoAtendimento(tx, estabelecimentoDe(ctx), n(i['atendimento_id']));
     return { internacao: e.internacao, versao: carimboVersao(versao) };
   },
   eventos: (e) => [{ tipo: 'internacao.alta_cancelada', carga: { internacao: e.internacao } }],
@@ -915,7 +936,14 @@ const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao
 
 const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOperacao>({
   nome: 'internacao.excluir-internacao',
-  tabelas: ['internacao', 'ocupacao_leito', 'cancelamento_internacao', 'atendimento', 'leito_hospitalar'],
+  tabelas: [
+    'internacao',
+    'ocupacao_leito',
+    'cancelamento_internacao',
+    'atendimento',
+    'leito_hospitalar',
+    ...TABELAS_CONTA_ENTRADA,
+  ],
   entrada: esquemaExcluirInternacao,
   critica: true,
   async gravar(tx, e, ctx) {
@@ -965,6 +993,8 @@ const excluirInternacao = definirOperacao<ExcluirInternacaoEntrada, ResultadoOpe
     if (at)
       await tx.alterar('atendimento', n(i['atendimento_id']), n(at['versao']), { situacao: 'cancelado' });
     if (nn(i['leito_hospitalar_id']) !== null) await situarLeito(tx, n(i['leito_hospitalar_id']));
+    // F3.0: a internação excluída não deve diária nem taxa: a apuração estorna os lançamentos automáticos.
+    await apurarContasDoAtendimento(tx, estabelecimentoDe(ctx), n(i['atendimento_id']));
     return { internacao: e.internacao };
   },
   eventos: (e) => [{ tipo: 'internacao.excluida', carga: { internacao: e.internacao } }],
