@@ -41,7 +41,16 @@ export interface RepositorioPlataforma {
   contas(): Promise<ContaLida[]>;
   atribuicoes(idConta?: string): Promise<AtribuicaoLida[]>;
   criarConta(c: ContaNova, evento: Omit<EventoConta, 'contaAlvo'>): Promise<string>;
-  alterarConta(id: string, m: MudancaConta, evento: EventoConta | null): Promise<void>;
+  /**
+   * Altera a conta. Com `condicao.conviteHash`, só altera se o convite gravado ainda é esse (uso único do convite:
+   * dois aceites do mesmo token, ou um convite reemitido no meio, não passam); senão, ErroConviteMudou.
+   */
+  alterarConta(
+    id: string,
+    m: MudancaConta,
+    evento: EventoConta | null,
+    condicao?: { readonly conviteHash: string },
+  ): Promise<void>;
   definirAtribuicoes(
     id: string,
     rede: string,
@@ -52,8 +61,9 @@ export interface RepositorioPlataforma {
   registrarEventoConta(evento: EventoConta): Promise<void>;
   abrirSessaoComo(s: SessaoComoNova): Promise<{ id: string; inicio: Date; expiraEm: Date }>;
   /**
-   * Aviso ao Auditor da sessão "como" já aberta (a carga completa). true: gravado no outbox (o relay
-   * entrega); false: sem outbox (memória), quem chama manda pela fila.
+   * Aviso ao Auditor da sessão "como" já aberta (a carga completa), registrado (falha: erro, e quem chama encerra a
+   * sessão). true: gravado num outbox que um relay entrega; false: registrado sem relay (memória e banco plataforma),
+   * quem chama manda pela fila.
    */
   registrarAvisoComo(aviso: AvisoOutbox): Promise<boolean>;
   encerrarSessaoComo(id: string, motivo: string, por: string | null): Promise<boolean>;
@@ -85,12 +95,24 @@ export interface FonteComoEstabelecimento {
     ator: AtorCorrecao,
     linha: Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>,
   ): Promise<CorrecaoFeita[]>;
-  cruzamento(hospital: string, janela: { alvo: string; inicio: Date; fim: Date }): Promise<LinhaCruzamento[]>;
+  /**
+   * A trilha do alvo na janela da sessão; doSuporte só nas linhas gravadas por ESTA sessão (janela.sessao). Acima do
+   * limite, ficam as linhas mais recentes e `truncado` é true.
+   */
+  cruzamento(
+    hospital: string,
+    janela: { sessao: string; alvo: string; inicio: Date; fim: Date },
+  ): Promise<{ linhas: LinhaCruzamento[]; truncado: boolean }>;
 }
 
 /** O Corrigir recusado (fora do ambiente que permite a correção). */
 export class ErroCorrigirIndisponivel extends Error {
   override readonly name = 'ErroCorrigirIndisponivel';
+}
+
+/** O convite mudou (usado, reemitido ou revogado) entre a leitura e a gravação: o aceite não vale. */
+export class ErroConviteMudou extends Error {
+  override readonly name = 'ErroConviteMudou';
 }
 
 // ── Memória (testes e dev/ci com a fonte sintética) ────────────────────────────────────────────
@@ -229,10 +251,17 @@ export class RepositorioPlataformaMemoria implements RepositorioPlataforma {
   private eventoMem(e: EventoConta) {
     this.eventos.unshift({ ...e, id: this.novo(), dataHora: new Date(this.agora()) });
   }
-  async alterarConta(id: string, m: MudancaConta, evento: EventoConta | null) {
+  async alterarConta(
+    id: string,
+    m: MudancaConta,
+    evento: EventoConta | null,
+    condicao?: { readonly conviteHash: string },
+  ) {
     await this.ok(null);
     const c = this.contasMem.get(id);
     if (!c) throw new Error('conta_plataforma: conta não alterada.');
+    if (condicao && c.conviteHash !== condicao.conviteHash)
+      throw new ErroConviteMudou('conta_plataforma: o convite mudou.');
     this.contasMem.set(id, {
       ...c,
       ...(m.ativo !== undefined ? { ativo: m.ativo } : {}),
@@ -390,6 +419,6 @@ export class FonteComoMemoria implements FonteComoEstabelecimento {
     return Promise.resolve([] as CorrecaoFeita[]);
   }
   cruzamento() {
-    return Promise.resolve([] as LinhaCruzamento[]);
+    return Promise.resolve({ linhas: [] as LinhaCruzamento[], truncado: false });
   }
 }

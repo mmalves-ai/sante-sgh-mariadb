@@ -176,7 +176,7 @@ describe('aviso ao Auditor chega ao worker no formato conferido; o Corrigir pela
           modo === 'feitas' ? [{ imagem: '1', correcao: '2', compensacao: 'restaurar' as const }] : [],
         );
       },
-      cruzamento: () => Promise.resolve([]),
+      cruzamento: () => Promise.resolve({ linhas: [], truncado: false }),
     };
   }
 

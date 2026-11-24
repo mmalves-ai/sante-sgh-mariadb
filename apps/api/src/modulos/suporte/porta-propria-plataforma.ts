@@ -11,6 +11,8 @@
 import type { Escritor, Leitor, Linha, NucleoProprio } from '@sgh/nucleo';
 import type { NucleoPlataforma } from '../../sessao/fonte-plataforma.js';
 import {
+  type AvisoOutbox,
+  ErroConviteMudou,
   ErroCorrigirIndisponivel,
   type FonteComoEstabelecimento,
   type RepositorioPlataforma,
@@ -234,12 +236,18 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
         return String(id);
       });
     } catch (e) {
-      if (duplicado(e, 'uq_conta_plataforma_email')) throw new Error('uq_conta_plataforma_email', { cause: e });
+      if (duplicado(e, 'uq_conta_plataforma_email'))
+        throw new Error('uq_conta_plataforma_email', { cause: e });
       throw e;
     }
   }
 
-  async alterarConta(id: string, m: MudancaConta, evento: EventoConta | null): Promise<void> {
+  async alterarConta(
+    id: string,
+    m: MudancaConta,
+    evento: EventoConta | null,
+    condicao?: { readonly conviteHash: string },
+  ): Promise<void> {
     const n = idBanco(id);
     if (n === null) throw new Error('conta_plataforma: conta não alterada.');
     const sets: string[] = [];
@@ -258,9 +266,17 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
       const agora = this.quando();
       const feito = await e.executar(
         `UPDATE conta_plataforma SET ${[...sets, 'alterado_em = ?', 'alterado_por = ?', 'versao = versao + 1'].join(', ')}
-          WHERE id = ?`,
-        [...p, agora, evento?.ator ? idBanco(evento.ator) : null, n],
+          WHERE id = ?${condicao ? ' AND convite_resumo = ? AND CAST(convite_resumo AS BINARY) = CAST(? AS BINARY)' : ''}`,
+        [
+          ...p,
+          agora,
+          evento?.ator ? idBanco(evento.ator) : null,
+          n,
+          ...(condicao ? [condicao.conviteHash, condicao.conviteHash] : []),
+        ],
       );
+      // Com a condição do convite, 0 linhas é o convite que mudou entre a leitura e a gravação (uso único).
+      if (feito !== 1 && condicao) throw new ErroConviteMudou('conta_plataforma: o convite mudou.');
       if (feito !== 1) throw new Error('conta_plataforma: conta não alterada.');
       if (evento) await this.evento(e, evento);
     });
@@ -364,9 +380,40 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
     return { id: String(id), inicio, expiraEm };
   }
 
-  /** O banco plataforma não tem outbox: como a memória, devolve false e o serviço manda o aviso pela fila. */
-  registrarAvisoComo(): Promise<boolean> {
-    return Promise.resolve(false);
+  /**
+   * R2: o aviso ao Auditor fica registrado no banco plataforma (sessao_suporte_aviso, só de acréscimo). Falha ao
+   * gravar sobe, e o serviço encerra a sessão ('aviso-nao-registrado'). Sem relay deste registro, devolve false: a
+   * entrega é pela fila de e-mail da rede, que o serviço chama.
+   */
+  async registrarAvisoComo(aviso: AvisoOutbox): Promise<boolean> {
+    const sessao = idBanco(txt(aviso.carga['idSessao']));
+    if (sessao === null) throw new Error('sessao_suporte_aviso: sessão inexistente.');
+    const agora = this.quando();
+    await this.escrever('aviso', (e) =>
+      e.inserir(
+        `INSERT INTO sessao_suporte_aviso (sessao_suporte_id, tipo, chave, conteudo, criado_em)
+         VALUES (?, ?, ?, ?, ?)`,
+        [sessao, aviso.tipo, aviso.chave.slice(0, 120), JSON.stringify(aviso.carga), agora],
+      ),
+    );
+    return false;
+  }
+
+  /** Os avisos registrados de uma sessão (conferência e auditoria). */
+  async avisosDaSessao(sessao: string): Promise<AvisoOutbox[]> {
+    const n = idBanco(sessao);
+    if (n === null) return [];
+    const ls = await this.ler('avisos', (x) =>
+      x.consultar(
+        'SELECT tipo, chave, conteudo FROM sessao_suporte_aviso WHERE sessao_suporte_id = ? ORDER BY id',
+        [n],
+      ),
+    );
+    return ls.map((l) => {
+      const c = l['conteudo'];
+      const carga = (typeof c === 'string' ? JSON.parse(c) : c) as Record<string, string>;
+      return { tipo: txt(l['tipo']), chave: txt(l['chave']), carga };
+    });
   }
 
   async encerrarSessaoComo(id: string, motivo: string, por: string | null = null): Promise<boolean> {
@@ -391,7 +438,11 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
     return l ? sessaoDaLinha(l) : null;
   }
 
-  async sessoesComo(filtro: { hospital?: string; idConta?: string; limite?: number }): Promise<SessaoComoLida[]> {
+  async sessoesComo(filtro: {
+    hospital?: string;
+    idConta?: string;
+    limite?: number;
+  }): Promise<SessaoComoLida[]> {
     const onde: string[] = [];
     const p: unknown[] = [];
     if (filtro.hospital) {
@@ -422,7 +473,17 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
         `INSERT INTO sessao_suporte_acao
            (sessao_suporte_id, metodo, caminho, situacao, codigo_http, clinico, nao_reversivel, ocorrido_em, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [s, a.metodo, a.caminho, SITUACAO_NO_BANCO[a.status], a.http, a.clinico, a.naoReversivel, agora, agora],
+        [
+          s,
+          a.metodo,
+          a.caminho,
+          SITUACAO_NO_BANCO[a.status],
+          a.http,
+          a.clinico,
+          a.naoReversivel,
+          agora,
+          agora,
+        ],
       ),
     );
     return String(id);
@@ -454,7 +515,13 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
     return ls.map(acaoDaLinha);
   }
 
-  async somarLeituras(sessao: string, caminho: string, n: number, primeira: Date, ultima: Date): Promise<void> {
+  async somarLeituras(
+    sessao: string,
+    caminho: string,
+    n: number,
+    primeira: Date,
+    ultima: Date,
+  ): Promise<void> {
     const s = idBanco(sessao);
     if (s === null) return;
     const agora = this.quando();
@@ -577,12 +644,17 @@ export class FonteComoEstabelecimentoPropria implements FonteComoEstabelecimento
 
   /**
    * A trilha própria do estabelecimento na janela da sessão, das linhas do usuário alvo. A gravação feita numa sessão
-   * "como" leva a origem em dados_depois.origem (núcleo, como.ts): é a marca de autoria do suporte.
+   * "como" leva a origem em dados_depois.origem.sessao (núcleo, como.ts): só a da sessão consultada é do suporte
+   * NESTA sessão (outra sessão sobre o mesmo alvo, na mesma janela, não é atribuída a ela). Acima do limite, ficam as
+   * linhas mais recentes, com truncado.
    */
-  cruzamento(hospital: string, janela: { alvo: string; inicio: Date; fim: Date }): Promise<LinhaCruzamento[]> {
+  cruzamento(
+    hospital: string,
+    janela: { sessao: string; alvo: string; inicio: Date; fim: Date },
+  ): Promise<{ linhas: LinhaCruzamento[]; truncado: boolean }> {
     return this.ler('cruzamento', async (l) => {
       const est = await this.estabelecimento(l, hospital);
-      if (est === null) return [];
+      if (est === null) return { linhas: [], truncado: false };
       const ls = await l.consultar(
         `SELECT t.id, t.ocorrido_em, u.login, t.endereco_ip,
                 JSON_VALUE(t.dados_depois, '$.origem.sessao') AS origem
@@ -590,22 +662,27 @@ export class FonteComoEstabelecimentoPropria implements FonteComoEstabelecimento
            JOIN trilha_auditoria t ON t.usuario_id = u.id
           WHERE u.login = ? AND u.excluido_em IS NULL AND t.estabelecimento_id = ?
             AND t.ocorrido_em >= ? AND t.ocorrido_em <= ?
-          ORDER BY t.ocorrido_em, t.id
-          LIMIT ${LIMITE_CRUZAMENTO}`,
+          ORDER BY t.ocorrido_em DESC, t.id DESC
+          LIMIT ${LIMITE_CRUZAMENTO + 1}`,
         [janela.alvo, est, janela.inicio, janela.fim],
       );
-      return ls.map((x) => {
-        const origem = txtOuNull(x['origem']);
-        return {
-          idTrilha: txt(x['id']),
-          dataHora: dataOuNull(x['ocorrido_em']),
-          usuarioLogin: txt(x['login']),
-          tipo: null,
-          estacao: txt(x['endereco_ip']),
-          origem,
-          doSuporte: origem !== null,
-        };
-      });
+      const truncado = ls.length > LIMITE_CRUZAMENTO;
+      const linhas = ls
+        .slice(0, LIMITE_CRUZAMENTO)
+        .reverse()
+        .map((x) => {
+          const origem = txtOuNull(x['origem']);
+          return {
+            idTrilha: txt(x['id']),
+            dataHora: dataOuNull(x['ocorrido_em']),
+            usuarioLogin: txt(x['login']),
+            tipo: null,
+            estacao: txt(x['endereco_ip']),
+            origem,
+            doSuporte: origem !== null && origem === janela.sessao,
+          };
+        });
+      return { linhas, truncado };
     });
   }
 }

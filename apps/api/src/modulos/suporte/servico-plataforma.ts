@@ -28,7 +28,7 @@ import {
   type ContaRegra,
 } from '@sgh/dominio-acesso';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
-import type { RepositorioPlataforma } from './repositorio.js';
+import { ErroConviteMudou, type RepositorioPlataforma } from './repositorio.js';
 import type { AtribuicaoLida, ContaLida } from './tipos.js';
 
 export class ErroPlataforma extends Error {
@@ -382,16 +382,34 @@ export class ServicoPlataforma {
 
   /** Devolve a conta (quem chama encerra as sessões "como" abertas com a credencial antiga). */
   async aceitarConvite(token: string, senha: string, estacao: string): Promise<string> {
-    const conta = await this.tentar(() => this.repo.contaPorConvite(hashConvite(token)));
+    const resumo = hashConvite(token);
+    const conta = await this.tentar(() => this.repo.contaPorConvite(resumo));
     if (!conta || !conta.conviteAte || conta.conviteAte.getTime() < this.agora())
       throw new ErroPlataforma('nao-encontrado', 'Convite inválido ou vencido: peça um novo à plataforma.');
     const cifra = await cifrarSenha(senha);
+    // Uso único: grava só se o convite ainda é o lido (outro aceite ou um convite reemitido no meio não passa).
     await this.tentar(() =>
-      this.repo.alterarConta(
-        conta.id,
-        { cifra, conviteHash: null, conviteAte: null },
-        { ator: conta.id, evento: 'plataforma.senha.definida', contaAlvo: conta.id, detalhe: null, estacao },
-      ),
+      this.repo
+        .alterarConta(
+          conta.id,
+          { cifra, conviteHash: null, conviteAte: null },
+          {
+            ator: conta.id,
+            evento: 'plataforma.senha.definida',
+            contaAlvo: conta.id,
+            detalhe: null,
+            estacao,
+          },
+          { conviteHash: resumo },
+        )
+        .catch((e: unknown) => {
+          if (e instanceof ErroConviteMudou)
+            throw new ErroPlataforma(
+              'nao-encontrado',
+              'Convite inválido ou vencido: peça um novo à plataforma.',
+            );
+          throw e;
+        }),
     );
     return conta.id;
   }

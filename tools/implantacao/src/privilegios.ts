@@ -30,6 +30,21 @@ export const SO_ACRESCIMO: ReadonlySet<string> = new Set([
   'cliente_evento',
   // história de aprovação dos modelos de formulário (com o SHA-256 da definição publicada): só inclusão
   'modelo_documento_evento',
+  // banco plataforma (ADR 0021): auditoria das contas da plataforma e o aviso ao Auditor de cada sessão "como"
+  'conta_plataforma_evento',
+  'sessao_suporte_aviso',
+]);
+
+/**
+ * Registro de auditoria que a aplicação altera (estado, contagem, encerramento) mas nunca apaga, sem exclusão lógica:
+ * sem DELETE. Banco plataforma (ADR 0021): contas, atribuições e as sessões "como" com as suas escritas e leituras.
+ */
+export const SEM_EXCLUSAO_FISICA: ReadonlySet<string> = new Set([
+  'conta_plataforma',
+  'atribuicao_suporte',
+  'sessao_suporte',
+  'sessao_suporte_acao',
+  'sessao_suporte_leitura',
 ]);
 
 /** O banco a que o anexo se aplica. */
@@ -125,7 +140,8 @@ export function privilegiosDoPapel(
       // SBIS-26: registro clínico nunca é apagado (corrige-se por nova versão): sem DELETE, mesmo sem exclusão lógica.
       // Exceção só onde o código apaga fisicamente (comExclusaoFisica), conflito registrado no teste do anexo.
       const apaga =
-        comExclusaoFisica.has(t.tabela) || (!t.exclusaoLogica && !deleteClinicoProibido(t.tabela));
+        comExclusaoFisica.has(t.tabela) ||
+        (!t.exclusaoLogica && !deleteClinicoProibido(t.tabela) && !SEM_EXCLUSAO_FISICA.has(t.tabela));
       return { tabela: t.tabela, acoes: ORDEM_ACOES.filter((a) => a !== 'DELETE' || apaga) };
     });
 }

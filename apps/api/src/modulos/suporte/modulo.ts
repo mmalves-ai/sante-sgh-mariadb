@@ -20,6 +20,7 @@ import { logger } from '../../logger.js';
 import { nucleoPlataforma } from '../../sessao/fonte-plataforma.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { lerRedePadrao } from '../../sessao/rede.js';
+import { type AlertaAuditor, AlertaPorFila, AlertaSemFila } from '../acesso/alerta.js';
 import { lerEstabelecimentosSinteticos } from '../acesso/estabelecimentos-sinteticos.js';
 import { FonteAcessoSintetica } from '../acesso/fonte-sintetica.js';
 import type { ContextoModulo } from '../registro.js';
@@ -58,6 +59,22 @@ export interface OpcoesModuloSuporte {
   readonly fonteComo?: FonteComoEstabelecimento | null;
   /** Testes: os serviços já montados (o teste liga os ganchos do "como" na sessão). */
   readonly servicos?: { readonly plataforma: ServicoPlataforma | null; readonly como: ServicoComo | null };
+}
+
+/**
+ * O aviso ao Auditor da sessão "como" pela fila de e-mail da rede (worker; fora de produção, captura local: regra 6).
+ * Sem VALKEY_URL (dev sem Valkey) ou fora de loopback, só o log; o registro do aviso no banco é o que fecha a sessão.
+ */
+export function alertaDoSuporte(env: ContextoModulo['env']): AlertaAuditor {
+  const semFila = new AlertaSemFila((m, c) => logger.warn(c, m));
+  const url = env['VALKEY_URL']?.trim();
+  if (!url) return semFila;
+  try {
+    return new AlertaPorFila(url);
+  } catch (e) {
+    logger.warn({ erro: (e as Error).message }, 'aviso ao Auditor do suporte sem fila (VALKEY_URL recusada)');
+    return semFila;
+  }
 }
 
 /** Os serviços do suporte pela regra do módulo; liga os ganchos tardios do "como" na sessão da base. */
@@ -111,6 +128,7 @@ export function servicosSuporte(
           },
           minutos: minutosSessaoComo(ctx.env['SUPORTE_SESSAO_MINUTOS']),
           avisoAuditor: (ctx.env['SUPORTE_AVISO_AUDITOR'] ?? '').trim() !== 'nao',
+          alerta: alertaDoSuporte(ctx.env),
           aviso: (m, c) => logger.warn(c, m),
           emNomeDe: emNomeDePadrao(ctx.env['PLATAFORMA_EM_NOME_DE']),
         })

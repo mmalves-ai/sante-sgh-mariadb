@@ -707,9 +707,16 @@ export class ServicoComo {
     const s = await this.tentar(() => this.repo.sessaoComo(idSessao));
     if (!s) throw new ErroPlataforma('nao-encontrado', 'Sessão não encontrada.');
     this.exigirVer(c, s);
-    const linhas = await this.tentar(() =>
-      this.fonte.cruzamento(s.hospital, { alvo: s.alvoLogin, inicio: s.inicio, fim: s.fim ?? s.expiraEm }),
+    const { linhas, truncado } = await this.tentar(() =>
+      this.fonte.cruzamento(s.hospital, {
+        sessao: s.id,
+        alvo: s.alvoLogin,
+        inicio: s.inicio,
+        fim: s.fim ?? s.expiraEm,
+      }),
     );
+    // Acima do limite, a fonte guarda as linhas mais recentes; o corte não é silencioso.
+    if (truncado) this.cfg.aviso?.('cruzamento da sessão do suporte truncado no limite', { sessao: s.id });
     // O contrato da tela ainda usa os nomes antigos dos campos (pedido de contrato da onda 2): aqui é a trilha
     // própria do estabelecimento.
     return linhas.map((l) => ({
