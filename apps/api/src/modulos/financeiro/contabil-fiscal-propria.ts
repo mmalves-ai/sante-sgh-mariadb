@@ -12,6 +12,9 @@ import {
   conferirEncerramento,
   EVENTOS_CONTABEIS_FINANCEIRO,
   type FatoContabil,
+  fatoDaCompensacao,
+  fatoDaConcessao,
+  fatoDaDevolucao,
   fatoDoPagamento,
   fatosDaApropriacao,
   type FatoRetencao,
@@ -319,6 +322,8 @@ export async function fatosContabeis(
   const pagas = await l.consultar(
     `SELECT p.id, DATE(p.quitada_em) AS data, p.valor_pago, t.numero_documento, t.referente, t.natureza_financeira_id,
             t.centro_custo_id, t.empresa_fornecedora_id, ${guia} AS guia,
+            (SELECT COALESCE(SUM(c.valor_compensado), 0) FROM compensacao_adiantamento c
+              WHERE c.parcela_pagar_id = p.id AND c.excluido_em IS NULL) AS compensado,
             (SELECT tr.natureza_financeira_id FROM retencao_titulo rr JOIN tributo tr ON tr.id = rr.tributo_id
               WHERE rr.recolhimento_titulo_pagar_id = t.id AND rr.excluido_em IS NULL ORDER BY rr.id LIMIT 1) AS natureza_tributo
        FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
@@ -329,11 +334,13 @@ export async function fatosContabeis(
   const pagamento = (r: Record<string, unknown>) => ({
     ...descricao(r),
     data: dataIso(r['data']) ?? de,
-    valor: numero(r['valor_pago']),
+    // O que o adiantamento compensou não sai do banco: vira o fato da compensação (fatosDoAdiantamento).
+    valor: centavos(numero(r['valor_pago']) - numero(r['compensado'])),
   });
+  const adiantamento = await fatosDoAdiantamento(l, est, de, ate, regua);
   if (regua === 'caixa') {
     const daParcela = await retidosPor('p.id', `DATE(p.quitada_em) BETWEEN ? AND ?`, [de, ate]);
-    return pagas.flatMap((r) => {
+    const doCaixa = pagas.flatMap((r) => {
       const f = pagamento(r);
       if (Number(r['guia']))
         return [fatoDoPagamento({ ...f, recolhimento: { naturezaTributo: nulo(r['natureza_tributo']) } })];
@@ -343,6 +350,7 @@ export async function fatosContabeis(
         'caixa',
       );
     });
+    return emOrdem([...doCaixa, ...adiantamento]);
   }
   const emitidos = await l.consultar(
     `SELECT t.id, t.data_emissao AS data, t.valor_bruto - t.valor_desconto + t.valor_acrescimo AS valor_despesa,
@@ -364,18 +372,83 @@ export async function fatosContabeis(
         'competencia',
       ),
     ),
-    ...pagas.map((r) =>
-      fatoDoPagamento({
-        ...pagamento(r),
-        recolhimento: Number(r['guia']) ? { naturezaTributo: nulo(r['natureza_tributo']) } : null,
-      }),
-    ),
+    ...pagas
+      .filter((r) => pagamento(r).valor > 0)
+      .map((r) =>
+        fatoDoPagamento({
+          ...pagamento(r),
+          recolhimento: Number(r['guia']) ? { naturezaTributo: nulo(r['natureza_tributo']) } : null,
+        }),
+      ),
+    ...adiantamento,
   ];
-  // Ordem do lote: pela data do fato (a emissão antes do pagamento no mesmo dia, pela ordem acima).
+  return emOrdem(fatos);
+}
+
+/** Ordem do lote: pela data do fato (a emissão antes do pagamento no mesmo dia, pela ordem de montagem). */
+function emOrdem(fatos: readonly FatoContabil[]): FatoContabil[] {
   return fatos
     .map((f, i) => ({ f, i }))
     .sort((x, y) => x.f.data.localeCompare(y.f.data) || x.i - y.i)
     .map((x) => x.f);
+}
+
+/**
+ * F3.8, 07-FIN linha 67: o adiantamento no lote, pelo de-para por evento. A concessão paga (débito adiantamento,
+ * crédito banco), a compensação na baixa do título (crédito o adiantamento; débito o fornecedor ou a despesa paga, pela
+ * natureza do título) e a devolução da sobra (débito banco, crédito o adiantamento). Nenhuma conta fixa no código.
+ */
+async function fatosDoAdiantamento(
+  l: Leitor,
+  est: number,
+  de: string,
+  ate: string,
+  regua: 'competencia' | 'caixa',
+): Promise<FatoContabil[]> {
+  const doAdiantamento = (r: Record<string, unknown>, data: unknown, valor: unknown) => ({
+    data: dataIso(data) ?? de,
+    valor: numero(valor),
+    historico: `ADIANTAMENTO ${texto(r['numero'])} ${texto(r['referente'])}`.trim().slice(0, 200),
+    documento: texto(r['documento']) || texto(r['numero']),
+    natureza: nulo(r['natureza_financeira_id']),
+    centro: nulo(r['centro_custo_id']),
+    credor: nulo(r['empresa_fornecedora_id']),
+  });
+  const concessoes = await l.consultar(
+    `SELECT a.numero, a.referente, NULL AS documento, a.natureza_financeira_id, a.centro_custo_id,
+            a.empresa_fornecedora_id, a.data_pagamento, a.valor_pago
+       FROM adiantamento a
+      WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.valor_pago > 0
+        AND a.data_pagamento BETWEEN ? AND ? ORDER BY a.data_pagamento, a.id LIMIT 20000`,
+    [est, de, ate],
+  );
+  const compensacoes = await l.consultar(
+    `SELECT a.numero, a.referente, t.numero_documento AS documento, t.natureza_financeira_id, t.centro_custo_id,
+            t.empresa_fornecedora_id, c.data_compensacao, c.valor_compensado
+       FROM compensacao_adiantamento c JOIN adiantamento a ON a.id = c.adiantamento_id
+       JOIN parcela_pagar p ON p.id = c.parcela_pagar_id JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+      WHERE a.estabelecimento_id = ? AND c.excluido_em IS NULL AND p.excluido_em IS NULL AND t.excluido_em IS NULL
+        AND t.situacao <> 'cancelado' AND c.data_compensacao BETWEEN ? AND ?
+      ORDER BY c.data_compensacao, c.id LIMIT 20000`,
+    [est, de, ate],
+  );
+  // A devolução é a entrada (crédito) na conta no grupo do adiantamento (a saída é o débito do mesmo grupo).
+  const devolucoes = await l.consultar(
+    `SELECT a.numero, a.referente, NULL AS documento, a.natureza_financeira_id, a.centro_custo_id,
+            a.empresa_fornecedora_id, m.data_movimento, m.valor
+       FROM movimento_bancario m JOIN adiantamento a
+         ON a.grupo_lancamento_financeiro_id = m.grupo_lancamento_financeiro_id AND a.estabelecimento_id = m.estabelecimento_id
+      WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND m.natureza = 'credito' AND m.situacao = 'ativo'
+        AND m.excluido_em IS NULL AND m.data_movimento BETWEEN ? AND ? ORDER BY m.data_movimento, m.id LIMIT 20000`,
+    [est, de, ate],
+  );
+  return [
+    ...concessoes.map((r) => fatoDaConcessao(doAdiantamento(r, r['data_pagamento'], r['valor_pago']))),
+    ...compensacoes.map((r) =>
+      fatoDaCompensacao(doAdiantamento(r, r['data_compensacao'], r['valor_compensado']), regua),
+    ),
+    ...devolucoes.map((r) => fatoDaDevolucao(doAdiantamento(r, r['data_movimento'], r['valor']))),
+  ];
 }
 
 // ── Regras de retenção ─────────────────────────────────────────────────────────────────────────────────────────

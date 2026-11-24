@@ -20,6 +20,12 @@ export const EVENTOS_CONTABEIS_FINANCEIRO = {
   fin_pagamento_titulo: 'Pagamento ao fornecedor (débito: o fornecedor da emissão; crédito: banco)',
   fin_despesa_paga: 'Despesa paga, regime de caixa (débito despesa; crédito banco)',
   fin_recolhimento_retencao: 'Pagamento da guia do retido (débito: o tributo a recolher; crédito: banco)',
+  fin_adiantamento_concedido:
+    'Adiantamento pago ao fornecedor ou ao médico (débito: adiantamento a fornecedor; crédito: banco)',
+  fin_adiantamento_compensado:
+    'Adiantamento compensado na baixa do título (débito: o fornecedor da emissão ou a despesa paga; crédito: o adiantamento da concessão)',
+  fin_adiantamento_devolvido:
+    'Sobra do adiantamento devolvida (débito: banco; crédito: o adiantamento da concessão)',
 } as const;
 export type EventoContabilFinanceiro = keyof typeof EVENTOS_CONTABEIS_FINANCEIRO;
 export type LadoDePara = 'debito' | 'credito' | 'ambos';
@@ -49,11 +55,19 @@ export interface FatoContabil {
     readonly lado: 'debito' | 'credito';
     readonly natureza: number | null;
   };
+  /** O crédito herdado de outra regra (a conta do adiantamento da concessão, que a compensação e a devolução baixam). */
+  readonly creditoDe?: {
+    readonly evento: string;
+    readonly lado: 'debito' | 'credito';
+    readonly natureza: number | null;
+  };
 }
 
 /** A regra que dá a conta de cada lado do fato (o débito pode vir de outra regra, `debitoDe`). */
 function origemDoLado(f: FatoContabil, lado: 'debito' | 'credito') {
-  return lado === 'debito' && f.debitoDe ? f.debitoDe : { evento: f.evento, lado, natureza: f.natureza };
+  if (lado === 'debito' && f.debitoDe) return f.debitoDe;
+  if (lado === 'credito' && f.creditoDe) return f.creditoDe;
+  return { evento: f.evento, lado, natureza: f.natureza };
 }
 function contaDoLado(regras: readonly RegraDeParaConta[], f: FatoContabil, lado: 'debito' | 'credito') {
   const o = origemDoLado(f, lado);
@@ -133,6 +147,49 @@ export function fatoDoPagamento(p: {
         evento: 'fin_pagamento_titulo',
         debitoDe: { evento: 'fin_despesa_reconhecida', lado: 'credito', natureza: p.natureza },
       };
+}
+
+/** O adiantamento na contabilização: a concessão (saída do banco), a compensação e a devolução (baixas dele). */
+export interface AdiantamentoParaContabil {
+  readonly data: string;
+  readonly valor: number;
+  readonly historico: string;
+  readonly documento: string;
+  readonly natureza: number | null;
+  readonly centro: number | null;
+  readonly credor: number | null;
+}
+/** A conta do adiantamento é uma só: o débito da concessão, que a compensação e a devolução creditam. */
+const CONTA_DO_ADIANTAMENTO = {
+  evento: 'fin_adiantamento_concedido',
+  lado: 'debito',
+  natureza: null,
+} as const;
+
+/** A concessão paga: débito o adiantamento a fornecedor, crédito o banco. */
+export function fatoDaConcessao(a: AdiantamentoParaContabil): FatoContabil {
+  return { ...a, evento: 'fin_adiantamento_concedido', natureza: null };
+}
+
+/**
+ * A compensação na baixa do título: crédito o adiantamento (a conta da concessão); débito o fornecedor da emissão
+ * (competência: baixa o passivo que a emissão criou) ou a despesa paga, pela natureza do título (caixa).
+ */
+export function fatoDaCompensacao(c: AdiantamentoParaContabil, regua: 'competencia' | 'caixa'): FatoContabil {
+  return {
+    ...c,
+    evento: 'fin_adiantamento_compensado',
+    debitoDe:
+      regua === 'competencia'
+        ? { evento: 'fin_despesa_reconhecida', lado: 'credito', natureza: c.natureza }
+        : { evento: 'fin_despesa_paga', lado: 'debito', natureza: c.natureza },
+    creditoDe: CONTA_DO_ADIANTAMENTO,
+  };
+}
+
+/** A sobra devolvida: débito o banco (regra do evento), crédito o adiantamento (a conta da concessão). */
+export function fatoDaDevolucao(d: AdiantamentoParaContabil): FatoContabil {
+  return { ...d, evento: 'fin_adiantamento_devolvido', natureza: null, creditoDe: CONTA_DO_ADIANTAMENTO };
 }
 
 const CONTA_EXTERNA = /^[0-9A-Za-z][0-9A-Za-z.-]{0,49}$/;
