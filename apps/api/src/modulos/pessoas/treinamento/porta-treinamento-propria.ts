@@ -108,7 +108,10 @@ export const TABELAS_TREINAMENTO = [
   'documento_qualidade_versao',
   'ciencia_procedimento',
   'sequencia_negocio',
+  // A trilha gravada pela própria gravação (gravarTrilha): a linha, a cadeia do dia e o fecho do dia anterior (SBIS-16).
   'trilha_auditoria',
+  'trilha_cadeia',
+  'trilha_auditoria_fecho',
 ] as const;
 
 const TETO = 20_000;

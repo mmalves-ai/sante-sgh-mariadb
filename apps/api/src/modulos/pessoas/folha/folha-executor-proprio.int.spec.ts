@@ -489,7 +489,19 @@ describe.skipIf(SEM_BANCO_O3)(`gravador próprio do cálculo da folha (cliente $
         }),
       );
     expect(await codigo(troca(r.versao + 1))).toBe('desatualizado');
+    // Conferida (lida como calculada) não se substitui: a guarda lê a situação do banco com a trava, e nada muda.
+    expect(await codigo(troca(r.versao))).toBe('rescisao-encerrada');
+    const situacaoNoBanco = async () =>
+      m.nucleo.lerSomente(ctx(), async (l) =>
+        String((await l.uma('SELECT situacao FROM rescisao WHERE id = ?', [id]))?.['situacao']),
+      );
+    expect(await situacaoNoBanco()).toBe('conferida');
+    // Volta a calculada (o cálculo ainda não conferido) e aí o recálculo substitui.
+    await m.nucleo.escrever({ cliente: CLIENTE_O3, correlacao: 'teste-folha-executor' }, (e) =>
+      e.executar("UPDATE rescisao SET situacao = 'calculada' WHERE id = ?", [id]),
+    );
     await troca(r.versao);
+    expect(await situacaoNoBanco()).toBe('substituida');
     const id2 = await gravar((g) => g.incluirRescisao({ ...nova, tipoRescisao }));
     const depois = (await gravar((g) => g.rescisoesDoVinculoComTrava(m.vinculo))).rescisoes;
     // A ordem é a da leitura (desligamento mais recente, id maior primeiro); o serviço compara pelo carimbo ordenado.
