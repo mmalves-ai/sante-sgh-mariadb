@@ -33,7 +33,6 @@ import {
   ErroOperacao,
   erroConflitoVersao,
   erroEntradaInvalida,
-  type Leitor,
   type Operacao,
   recusa,
   type ResultadoOperacao,
@@ -44,7 +43,10 @@ import {
   credenciamentosVigentes,
   opcoesCredenciamentoConvenio,
 } from '@sgh/persistencia';
+import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from './conta-entrada.js';
 import { versaoNumero } from './esquemas.js';
+import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
 import {
   conferirCompetenciaDaConta,
   conferirConferenciaItens,
@@ -174,82 +176,33 @@ const travaConta = (id: number, versaoEsperada?: number) => ({
 
 // ── Preço ───────────────────────────────────────────────────────────────────────────────────────────────
 
-/** As tabelas de preço que valem para a conta: a da própria conta, a do plano e as da fonte pagadora. */
-export async function tabelasDePreco(
-  l: Leitor,
-  est: number,
-  fonte: number,
-  plano: number | null,
-  daConta: number | null = null,
-): Promise<number[]> {
-  const ids: number[] = [];
-  if (daConta !== null) ids.push(daConta);
-  if (plano !== null) {
-    const p = await l.uma<Linha>('SELECT tabela_preco_id FROM plano_fonte_pagadora WHERE id = ?', [plano]);
-    if (p?.['tabela_preco_id']) ids.push(n(p['tabela_preco_id']));
-  }
-  const r = await l.consultar<Linha>(
-    `SELECT id FROM tabela_preco WHERE fonte_pagadora_id = ? AND excluido_em IS NULL AND situacao = 'ativa'
-        AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
-      ORDER BY estabelecimento_id IS NULL, id`,
-    [fonte, est],
-    { teto: 100 },
+export { type PrecoVigente, precoVigente, tabelasDePreco };
+
+/** O total da conta a partir dos itens cobrados (sem gatilho): itens, filme e total com acréscimo e desconto. */
+export async function totalDosItens(
+  tx: Pick<TxOperacao, 'uma'>,
+  conta: number,
+): Promise<{ valor_itens: number; valor_filme: number; valor_total: number }> {
+  const soma = await tx.uma<Linha>(
+    `SELECT COALESCE(SUM(valor_total), 0) AS itens, COALESCE(SUM(valor_filme), 0) AS filme
+       FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
+        AND situacao NOT IN ('estornado','transferido','sem_cobranca')`,
+    [conta],
   );
-  for (const x of r) if (!ids.includes(n(x['id']))) ids.push(n(x['id']));
-  return ids;
-}
-
-export interface PrecoVigente {
-  readonly modelo: string;
-  readonly unitario: number;
-  readonly honorario: number;
-  readonly custoOperacional: number;
-  readonly filme: number;
-  readonly vigencia: string;
-  readonly tabela: number;
-}
-
-/** O preço vigente do item na data, pela primeira tabela (na ordem dada) que o tem. */
-export async function precoVigente(
-  l: Leitor,
-  tabelas: readonly number[],
-  item: number,
-  data: string,
-): Promise<PrecoVigente | null> {
-  for (const t of tabelas) {
-    const v = await l.uma<Linha>(
-      `SELECT pp.modelo_valor, pv.vigencia_inicio, pv.valor_honorario, pv.valor_custo_operacional, pv.valor_filme,
-              pv.valor_total
-         FROM preco_procedimento pp JOIN preco_procedimento_valor pv ON pv.preco_procedimento_id = pp.id
-        WHERE pp.tabela_preco_id = ? AND pp.item_faturavel_id = ? AND pp.ativo = 1 AND pp.excluido_em IS NULL
-          AND pv.vigencia_inicio <= ?
-        ORDER BY pv.vigencia_inicio DESC, pv.id DESC`,
-      [t, item, data],
-    );
-    if (!v) continue;
-    const honorario = n(v['valor_honorario']);
-    const custoOperacional = n(v['valor_custo_operacional']);
-    const filme = n(v['valor_filme']);
-    const total = v['valor_total'] === null ? r2(honorario + custoOperacional + filme) : n(v['valor_total']);
-    const vig = v['vigencia_inicio'];
-    return {
-      modelo: texto(v['modelo_valor']),
-      unitario: total,
-      honorario,
-      custoOperacional,
-      filme,
-      vigencia: vig instanceof Date ? vig.toISOString().slice(0, 10) : texto(vig).slice(0, 10),
-      tabela: t,
-    };
-  }
-  return null;
+  const cab = await tx.uma<Linha>('SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?', [conta]);
+  const itens = n(soma?.['itens']);
+  return {
+    valor_itens: itens,
+    valor_filme: n(soma?.['filme']),
+    valor_total: Math.max(0, r2(itens + n(cab?.['valor_acrescimo']) - n(cab?.['valor_desconto']))),
+  };
 }
 
 // ── Operações ───────────────────────────────────────────────────────────────────────────────────────────
 
 export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao>({
   nome: 'faturamento.fechar-conta',
-  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa'],
+  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa', ...TABELAS_PRODUCAO_CONTA],
   entrada: esquemaFecharConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -280,12 +233,19 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
     });
     if (r) throw recusaDe(r);
     await conferirCompetencia(tx, conta, est);
+    // O total sai dos itens na hora de fechar: a diária, o mat/med do estoque e o lançamento manual entram pelo mesmo
+    // cálculo (a saída do estoque só marca a conta como não calculada).
+    const total = await totalDosItens(tx, conta.id);
     await tx.alterar('conta_hospitalar', conta.id, conta.versao, {
+      ...total,
+      calculada: true,
       situacao: 'fechada',
       fechada_em: new Date(),
       fechada_por_usuario_id: ctx.usuario,
     });
-    await registrarEtapa(tx, conta, 'fechada', { etapa: 'fechamento', situacao: 'registrada' }, null);
+    await registrarEtapa(tx, conta, 'fechada', { etapa: 'fechamento', situacao: 'registrada' }, null, total.valor_total);
+    // A produção do repasse do momento "fechamento" nasce na mesma transação (no momento "lançamento" já existe).
+    await sincronizarProducaoDaConta(tx, { conta: conta.id, evento: 'fechamento' }, { estabelecimento: est, usuario: ctx.usuario });
     return { conta: conta.id };
   },
   eventos: (_e, r) => [{ tipo: 'faturamento.conta.fechada', carga: { conta: Number(r['conta']) } }],
@@ -508,7 +468,7 @@ async function credenciamentoDoItem(
 
 export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>({
   nome: 'faturamento.lancar-item',
-  tabelas: ['conta_hospitalar_item', 'conta_hospitalar_item_memoria', 'conta_hospitalar'],
+  tabelas: ['conta_hospitalar_item', 'conta_hospitalar_item_memoria', 'conta_hospitalar', ...TABELAS_PRODUCAO_CONTA],
   entrada: esquemaLancarItem,
   travar: (e) => travaConta(e.conta),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -620,6 +580,9 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       valor_filme: valorizacao === 'tabela' && preco ? r2(preco.filme * e.quantidade) : 0,
       valor_total: valor,
       tipo_valorizacao: valorizacao,
+      // O executor e a função na equipe: a produção do repasse sai deles (sem executor informado, não há produção).
+      executante_profissional_id: e.executante,
+      funcao_equipe_cobranca_id: e.funcao,
       situacao: 'lancado',
       observacao: e.precoManual ? `Preço manual: ${e.precoManual.justificativa}`.slice(0, 2000) : null,
     });
@@ -664,22 +627,13 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       usuario_id: ctx.usuario,
     });
     // O total da conta a partir dos itens, na mesma transação (sem gatilho).
-    const soma = await tx.uma<Linha>(
-      `SELECT COALESCE(SUM(valor_total), 0) AS itens, COALESCE(SUM(valor_filme), 0) AS filme
-         FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
-          AND situacao NOT IN ('estornado','transferido','sem_cobranca')`,
-      [conta.id],
+    await tx.alterar('conta_hospitalar', conta.id, conta.versao, await totalDosItens(tx, conta.id));
+    // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
+    await sincronizarProducaoDaConta(
+      tx,
+      { conta: conta.id, itens: [id], evento: 'lancamento' },
+      { estabelecimento: est, usuario: ctx.usuario },
     );
-    const cab = await tx.uma<Linha>(
-      'SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?',
-      [conta.id],
-    );
-    const itens = n(soma?.['itens']);
-    await tx.alterar('conta_hospitalar', conta.id, conta.versao, {
-      valor_itens: itens,
-      valor_filme: n(soma?.['filme']),
-      valor_total: Math.max(0, r2(itens + n(cab?.['valor_acrescimo']) - n(cab?.['valor_desconto']))),
-    });
     // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
     return alerta
       ? { id, conta: conta.id, valor, alerta: 'profissional-nao-credenciado', alertaMotivo: alerta.motivo }
@@ -700,4 +654,6 @@ export const OPERACOES_CONTA: Readonly<Record<string, Operacao<never, ResultadoO
   'faturamento.reabrirConta': comoOperacao(reabrirConta),
   'faturamento.conferirItem': comoOperacao(conferirItem),
   'faturamento.lancarItem': comoOperacao(lancarItem),
+  'faturamento.apurarLancamentosAutomaticos': comoOperacao(apurarLancamentosAutomaticos),
+  'faturamento.apurarLancamentosDoDia': comoOperacao(apurarLancamentosDoDia),
 };

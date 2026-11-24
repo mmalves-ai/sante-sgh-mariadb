@@ -9,6 +9,7 @@ import { FaturamentoController } from './faturamento.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
+import { RotinaDiariaContas } from './rotina-diaria.js';
 
 export interface OpcoesModuloFaturamento {
   /** Porta pronta (testes). */
@@ -31,7 +32,18 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
   return {
     module: ModuloFaturamento,
     controllers: [FaturamentoController],
-    providers: [{ provide: PORTA_FATURAMENTO, useValue: porta }],
+    providers: [
+      { provide: PORTA_FATURAMENTO, useValue: porta },
+      // A rotina diária das contas (diária do dia de corte) roda só sobre o banco do cliente, nunca na porta de teste.
+      {
+        provide: RotinaDiariaContas,
+        useValue: new RotinaDiariaContas(
+          opcoes.porta ? null : ctx.nucleo,
+          ctx.configuracao.clientePadrao ?? null,
+          ctx.env as Readonly<Record<string, string | undefined>>,
+        ),
+      },
+    ],
     exports: [PORTA_FATURAMENTO],
   };
 }

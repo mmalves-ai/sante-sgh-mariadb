@@ -43,7 +43,7 @@ import {
 } from '@sgh/dominio-faturamento';
 import { definirOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
-import { precoVigente, tabelasDePreco } from './operacoes.js';
+import { precoVigente, tabelasDePreco } from './preco-conta.js';
 import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
 
 type Linha = Record<string, unknown>;

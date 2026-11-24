@@ -49,6 +49,8 @@ export const esquemaLancarItem = z
     local: z.number().int().min(0).max(9999),
     ato: z.number().int().min(0).max(999),
     executante: z.number().int().positive().nullable().default(null),
+    /** Função do executor na equipe (funcao_equipe_cobranca); sem ela, a produção do repasse usa a função titular. */
+    funcao: z.number().int().positive().nullable().default(null),
     /** Preço manual (só com faturamento.preco.manual e dentro da faixa, ou com aprovação; regra 12). */
     precoManual: z
       .object({
