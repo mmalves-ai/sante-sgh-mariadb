@@ -4,7 +4,10 @@
 // de conta são ids já existentes do cliente de teste (só lidos, nunca alterados).
 // Prova o que fica no banco: o uso com início e fim e as horas apuradas, a troca de fluxo que encerra o anterior e o
 // aponta, o cancelamento sem apagar, a regra com faixas e simultâneo, e o lançamento na conta (item com a quantidade da
-// regra, memória com os passos, usos faturados apontando a conta, conta não calculada).
+// regra, memória com os passos, usos faturados apontando a conta, conta não calculada), o valor pelo preço vigente, a
+// recusa sem preço (nada lançado nem marcado), a cobrança pelo ACUMULADO da conta (o lançamento seguinte é só a
+// diferença; quantidade zero marca o uso sem item), o isolamento (setor de outro estabelecimento, insumo que não é gás)
+// e a trilha da operação.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +27,8 @@ interface Massa {
   ar: number;
   fatO2: number;
   fatAr: number;
+  mat: number;
+  tabela: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -53,6 +58,16 @@ async function limpar(e: Escritor): Promise<void> {
     );
     await e.executar(`DELETE FROM regra_cobranca_gas WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM conta_hospitalar WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      `DELETE v FROM preco_procedimento_valor v JOIN preco_procedimento pp ON pp.id = v.preco_procedimento_id
+         JOIN tabela_preco t ON t.id = pp.tabela_preco_id WHERE t.codigo = ?`,
+      [`${P}-TP`],
+    );
+    await e.executar(
+      'DELETE pp FROM preco_procedimento pp JOIN tabela_preco t ON t.id = pp.tabela_preco_id WHERE t.codigo = ?',
+      [`${P}-TP`],
+    );
+    await e.executar('DELETE FROM tabela_preco WHERE codigo = ?', [`${P}-TP`]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar('DELETE FROM item_faturavel WHERE codigo LIKE ?', [`${P}-%`]);
     await e.executar('DELETE FROM insumo WHERE codigo LIKE ?', [`${P}-%`]);
@@ -72,6 +87,20 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
   const antes = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const precificar = (item: number, valor: number) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: `preco-${P}` }, async (e) => {
+      const agora = new Date();
+      const pp = await e.inserir(
+        `INSERT INTO preco_procedimento (tabela_preco_id, sequencia, item_faturavel_id, modelo_valor, criado_em)
+         VALUES (?, ?, ?, 'valor', ?)`,
+        [m.tabela, item, item, agora],
+      );
+      await e.inserir(
+        `INSERT INTO preco_procedimento_valor (preco_procedimento_id, vigencia_inicio, valor_total, ocorrido_em, criado_em)
+         VALUES (?, '2020-01-01', ?, ?, ?)`,
+        [pp, valor, agora, agora],
+      );
+    });
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -111,6 +140,16 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
         };
         const [o2, fatO2] = await gas('O2');
         const [ar, fatAr] = await gas('AR');
+        const mat = await e.inserir(
+          `INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, criado_em)
+           VALUES (?, 'Material sintético', 'material', 1, 1, ?)`,
+          [`${P}-MAT`, agora],
+        );
+        const tabela = await e.inserir(
+          `INSERT INTO tabela_preco (estabelecimento_id, codigo, descricao, tipo_item, referencia, fonte_pagadora_id,
+             situacao, criado_em) VALUES (?, ?, 'TABELA SINTETICA GASES', 'gas', 'propria', ?, 'ativa', ?)`,
+          [est, `${P}-TP`, fonte['id'], agora],
+        );
         const atd = await e.inserir(
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
              carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
@@ -119,8 +158,8 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
         );
         const conta = await e.inserir(
           `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
-             tipo_conta_id, natureza, competencia, inicio_em, calculada, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, NOW(3) - INTERVAL 2 DAY, TRUE, ?)`,
+             tipo_conta_id, natureza, competencia, inicio_em, calculada, tabela_preco_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, NOW(3) - INTERVAL 2 DAY, TRUE, ?, ?)`,
           [
             est,
             `${P}-C1`,
@@ -129,10 +168,11 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
             fonte['id'],
             tipoConta['id'],
             `${agora.toISOString().slice(0, 7)}-01`,
+            tabela,
             agora,
           ],
         );
-        return { est, usuario: Number(usuario['id']), atd, conta, o2, ar, fatO2, fatAr };
+        return { est, usuario: Number(usuario['id']), atd, conta, o2, ar, fatO2, fatAr, mat, tabela };
       } finally {
         await e.executar('SET FOREIGN_KEY_CHECKS = 1');
       }
@@ -148,12 +188,36 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
   });
 
   it('uso: inicia, recusa o segundo aberto do mesmo gás, troca o fluxo encerrando o anterior, encerra com horas e cancela sem apagar', async () => {
+    // Isolamento: insumo que não é gás medicinal e setor de outro estabelecimento são recusados (404), nada gravado.
+    await expect(
+      porta.iniciar(ctx(), { atendimento: m.atd, insumo: m.mat, inicio: antes(300) }),
+    ).rejects.toMatchObject({ problema: { status: 404 } });
+    const [outroSetor] = await ler(
+      'SELECT MIN(id) AS id FROM setor_funcional WHERE estabelecimento_id <> ?',
+      [m.est],
+    );
+    if (outroSetor?.['id'])
+      await expect(
+        porta.iniciar(ctx(), {
+          atendimento: m.atd,
+          insumo: m.o2,
+          inicio: antes(300),
+          setor: Number(outroSetor['id']),
+        }),
+      ).rejects.toMatchObject({ problema: { status: 404 } });
+    const [n0] = await ler('SELECT COUNT(*) AS n FROM uso_gas_medicinal WHERE atendimento_id = ?', [m.atd]);
+    expect(Number(n0!['n'])).toBe(0);
     const a = await porta.iniciar(ctx(), {
       atendimento: m.atd,
       insumo: m.o2,
       fluxoLitrosMinuto: 2,
       inicio: antes(300),
     });
+    const [tr] = await ler(
+      'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND usuario_id = ?',
+      [m.est, m.usuario],
+    );
+    expect(Number(tr!['n'])).toBeGreaterThan(0);
     await expect(
       porta.iniciar(ctx(), { atendimento: m.atd, insumo: m.o2, inicio: antes(290) }),
     ).rejects.toMatchObject({
@@ -236,16 +300,37 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
     );
     expect(Number(rf!['n'])).toBe(1);
 
+    // Só o O2 tem preço: recusa (422) sem lançar nada nem marcar uso (antes ia a zero com "valor a conferir").
+    await precificar(m.fatO2, 12.5);
+    await expect(porta.lancarNaConta(ctx(), m.atd)).rejects.toMatchObject({ problema: { status: 422 } });
+    const [semPreco] = await ler(
+      `SELECT (SELECT COUNT(*) FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?) AS itens,
+              (SELECT COUNT(*) FROM uso_gas_medicinal WHERE atendimento_id = ? AND faturado) AS faturados`,
+      [m.conta, m.atd],
+    );
+    expect([Number(semPreco!['itens']), Number(semPreco!['faturados'])]).toEqual([0, 0]);
+    await precificar(m.fatAr, 7);
+
     const r = await porta.lancarNaConta(ctx(), m.atd);
     expect(r.itens).toHaveLength(2);
     const itens = await ler(
-      `SELECT item_faturavel_id, quantidade, valor_unitario, situacao, tipo_valorizacao FROM conta_hospitalar_item
+      `SELECT item_faturavel_id, quantidade, valor_unitario, valor_total, situacao, tipo_valorizacao FROM conta_hospitalar_item
         WHERE conta_hospitalar_id = ? ORDER BY item_faturavel_id`,
       [m.conta],
     );
     // O2: 3 h de uso, 1 h sobreposta ao ar com 50% => 2,5 h, por hora para cima => 3. Ar: 1 h na primeira faixa => 1.
     const porItem = new Map(itens.map((i) => [Number(i['item_faturavel_id']), Number(i['quantidade'])]));
     expect([porItem.get(m.fatO2), porItem.get(m.fatAr)]).toEqual([3, 1]);
+    const valor = new Map(
+      itens.map((i) => [
+        Number(i['item_faturavel_id']),
+        [Number(i['valor_unitario']), Number(i['valor_total'])],
+      ]),
+    );
+    expect([valor.get(m.fatO2), valor.get(m.fatAr)]).toEqual([
+      [12.5, 37.5],
+      [7, 7],
+    ]);
     expect(itens.every((i) => i['situacao'] === 'lancado' && i['tipo_valorizacao'] === 'tabela')).toBe(true);
     const mem = await ler<{ dados: unknown }>(
       `SELECT m.dados FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id
@@ -254,6 +339,7 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
     );
     expect(mem).toHaveLength(2);
     expect(JSON.stringify(mem[0]!.dados)).toContain('gas_tempo_uso');
+    expect(JSON.stringify(mem.map((x) => x.dados))).toContain('quantidadeAcumulada');
     const usos = await ler(
       `SELECT situacao, faturado, conta_hospitalar_id FROM uso_gas_medicinal WHERE atendimento_id = ? AND situacao = 'encerrado'`,
       [m.atd],
@@ -263,7 +349,26 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
     ).toBe(true);
     const [conta] = await ler('SELECT calculada FROM conta_hospitalar WHERE id = ?', [m.conta]);
     expect(Number(conta!['calculada'])).toBe(0);
-    // Nada mais a lançar; o uso faturado não se cancela (acerto pela conta).
+    // Nada mais a lançar.
     await expect(porta.lancarNaConta(ctx(), m.atd)).rejects.toMatchObject({ problema: { status: 422 } });
+
+    // Acumulado: +20 min de O2 => 2,5 h + 0,33 h = 2,83 h, para cima 3 = já lançado: nenhum item novo (lançado à
+    // parte daria 1 h a mais), mas o uso sai da fila apontando a conta.
+    const e1 = await porta.iniciar(ctx(), { atendimento: m.atd, insumo: m.o2, inicio: antes(110) });
+    await porta.encerrar(ctx(), e1.id, { fim: antes(90), versao: 1 });
+    expect((await porta.lancarNaConta(ctx(), m.atd)).itens).toHaveLength(0);
+    const [ue1] = await ler('SELECT faturado, conta_hospitalar_id FROM uso_gas_medicinal WHERE id = ?', [
+      e1.id,
+    ]);
+    expect([Number(ue1!['faturado']), Number(ue1!['conta_hospitalar_id'])]).toEqual([1, m.conta]);
+    // +40 min => 3,5 h, para cima 4: lança só a diferença (1), com o valor dela.
+    const e2 = await porta.iniciar(ctx(), { atendimento: m.atd, insumo: m.o2, inicio: antes(80) });
+    await porta.encerrar(ctx(), e2.id, { fim: antes(40), versao: 1 });
+    const r3 = await porta.lancarNaConta(ctx(), m.atd);
+    expect(r3.itens).toHaveLength(1);
+    const [i3] = await ler('SELECT quantidade, valor_total FROM conta_hospitalar_item WHERE id = ?', [
+      r3.itens[0],
+    ]);
+    expect([Number(i3!['quantidade']), Number(i3!['valor_total'])]).toEqual([1, 12.5]);
   });
 });

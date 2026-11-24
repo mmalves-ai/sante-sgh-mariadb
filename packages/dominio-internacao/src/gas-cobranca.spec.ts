@@ -5,6 +5,7 @@ import {
   conferirFimUsoGas,
   conferirInicioUsoGas,
   conferirRegraCobrancaGas,
+  diferencaALancarGas,
   horasDeUso,
   type RegraCobrancaGas,
   regraGasQueVale,
@@ -195,5 +196,58 @@ describe('cobrança por tempo', () => {
     });
     expect(minutos(maior(AR), O2)).toBe(120);
     expect(minutos(maior(O2), AR)).toBe(0);
+  });
+});
+
+describe('lançamento pelo acumulado (achado da revisão: cobrança não depende do momento do clique)', () => {
+  const d = (dia: number, hhmm: string) => new Date(`2026-11-${dia}T${hhmm}:00Z`);
+  it('lançamentos diários somam o total arredondado uma vez só', () => {
+    // Dois dias de 25 h 10 min cada (troca de fluxo encerra e abre outro uso): acumulado 50 h 20 min → 51 h.
+    const u1 = { gas: O2, inicio: d(20, '00:00'), fim: d(21, '01:10'), fluxoLitrosMinuto: 2 };
+    const u2 = { gas: O2, inicio: d(21, '01:10'), fim: d(22, '02:20'), fluxoLitrosMinuto: 2 };
+    const dia1 = calcularCobrancaGas({ regra: base, gas: O2, usos: [u1] });
+    const l1 = diferencaALancarGas({ cobranca: dia1, item: O2, lancados: [] });
+    expect(l1).toMatchObject({ quantidade: 26, problemas: [] });
+    const dia2 = calcularCobrancaGas({ regra: base, gas: O2, usos: [u1, u2] });
+    const l2 = diferencaALancarGas({ cobranca: dia2, item: O2, lancados: [{ item: O2, quantidade: 26 }] });
+    expect(l2).toMatchObject({ quantidade: 25, problemas: [] });
+    expect(l1.quantidade + l2.quantidade).toBe(51); // não 52 (26 + 26)
+  });
+  it('a tolerância desconta uma vez só no acumulado', () => {
+    const regra = { ...base, toleranciaMinutos: 30, arredondamento: 'nenhum' as const };
+    const u1 = { gas: O2, inicio: t('08:00'), fim: t('09:00'), fluxoLitrosMinuto: null };
+    const u2 = { gas: O2, inicio: t('09:00'), fim: t('10:00'), fluxoLitrosMinuto: null };
+    const a = calcularCobrancaGas({ regra, gas: O2, usos: [u1] });
+    expect(a.quantidade).toBe(0.5);
+    const b = calcularCobrancaGas({ regra, gas: O2, usos: [u1, u2] });
+    expect(
+      diferencaALancarGas({ cobranca: b, item: O2, lancados: [{ item: O2, quantidade: 0.5 }] }).quantidade,
+    ).toBe(1);
+  });
+  it('faixa que troca o item depois de lançado recusa (acerto por estorno)', () => {
+    const regra: RegraCobrancaGas = {
+      ...base,
+      faixas: [
+        { horasInicio: 0, horasFim: 2, item: 101, quantidade: 1 },
+        { horasInicio: 2, horasFim: null, item: 102, quantidade: 1 },
+      ],
+    };
+    const u1 = { gas: O2, inicio: t('08:00'), fim: t('09:00'), fluxoLitrosMinuto: null };
+    const u2 = { gas: O2, inicio: t('09:00'), fim: t('11:00'), fluxoLitrosMinuto: null };
+    const c = calcularCobrancaGas({ regra, gas: O2, usos: [u1, u2] });
+    expect(c.itemFaixa).toBe(102); // 3 h caem uma vez na faixa acima de 2 h
+    const r = diferencaALancarGas({ cobranca: c, item: 102, lancados: [{ item: 101, quantidade: 1 }] });
+    expect(r.problemas.map((p) => p.campo)).toEqual(['faixa']);
+  });
+  it('acumulado menor que o já lançado recusa e não lança negativo', () => {
+    const c = calcularCobrancaGas({
+      regra: base,
+      gas: O2,
+      usos: [{ gas: O2, inicio: t('08:00'), fim: t('09:00'), fluxoLitrosMinuto: null }],
+    });
+    const r = diferencaALancarGas({ cobranca: c, item: O2, lancados: [{ item: O2, quantidade: 3 }] });
+    expect(r.quantidade).toBe(0);
+    expect(r.problemas.map((p) => p.campo)).toEqual(['quantidade']);
+    expect(AR).not.toBe(O2);
   });
 });

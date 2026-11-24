@@ -28,6 +28,8 @@ import { PORTA_TEXTO_PADRAO_CIRURGIA, type PortaTextoPadraoCirurgiaPropria } fro
 export const PERMISSOES_TEXTO_PADRAO = {
   ler: 'cirurgia.registro.ler',
   editar: 'cirurgia.registro.criar',
+  /** Quem administra o bloco (a mesma da exceção de sobreposição) mantém o texto pessoal de qualquer cirurgião. */
+  gerirDeOutro: 'cirurgia.agenda.excecao',
 } as const;
 
 const idOuNulo = (v: string | undefined): number | null => {
@@ -47,13 +49,19 @@ export class TextoPadraoCirurgiaController {
 
   private async com<T>(
     req: RequisicaoAutorizada,
-    fn: (p: PortaTextoPadraoCirurgiaPropria, c: ReturnType<typeof sessaoDe>['porta']) => Promise<T>,
+    fn: (
+      p: PortaTextoPadraoCirurgiaPropria,
+      c: ReturnType<typeof sessaoDe>['porta'],
+      quem: { gestor: boolean },
+    ) => Promise<T>,
   ) {
     if (!this.porta) throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
     const s = sessaoDe(req);
-    return fn(this.porta, s.porta).catch((e: unknown) => {
-      throw problemaDoCadastro(e);
-    });
+    return fn(this.porta, s.porta, { gestor: s.pode(PERMISSOES_TEXTO_PADRAO.gerirDeOutro) }).catch(
+      (e: unknown) => {
+        throw problemaDoCadastro(e);
+      },
+    );
   }
 
   @Get()
@@ -82,20 +90,20 @@ export class TextoPadraoCirurgiaController {
   @HttpCode(201)
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
   incluir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.incluir(c, corpo));
+    return this.com(req, (p, c, q) => p.incluir(c, corpo, q));
   }
 
   @Put(':id')
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
   alterar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.alterar(c, id, corpo));
+    return this.com(req, (p, c, q) => p.alterar(c, id, corpo, q));
   }
 
   @Post(':id/uso')
   @HttpCode(200)
   @Permissao(PERMISSOES_TEXTO_PADRAO.editar)
   uso(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
-    return this.com(req, (p, c) => p.definirUso(c, id, corpo));
+    return this.com(req, (p, c, q) => p.definirUso(c, id, corpo, q));
   }
 
   @Post(':id/preencher')

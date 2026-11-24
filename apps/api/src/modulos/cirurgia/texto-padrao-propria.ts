@@ -5,8 +5,13 @@
 //     recusado (409) antes do banco;
 //   - alterar: a mesma linha com a versão lida (+1); a anterior fica na trilha;
 //   - tirar de uso / voltar ao uso: `ativo` com a versão; nada é apagado;
-//   - para a descrição: os textos ativos na ordem do domínio (do cirurgião para o procedimento primeiro) e o
-//     preenchimento dos campos, sem gravar.
+//   - para a descrição: os textos ativos na ordem do domínio (do cirurgião para o procedimento primeiro), filtrados no
+//     SQL, e o preenchimento dos campos de um texto ativo, sem gravar;
+//   - dono: o texto pessoal (com cirurgião) só é incluído, alterado ou tirado de uso pelo próprio cirurgião (usuário
+//     ligado ao profissional) ou por quem administra o bloco (permissão de gestão, passada pela rota); o texto do
+//     serviço (sem cirurgião), por quem edita o registro cirúrgico.
+//   - escopo: o texto é do cliente (vale em todos os estabelecimentos), como o cadastro de procedimento cirúrgico e o
+//     de profissional a que se liga; decisão registrada na ficha F3.4 (04-CC linha 91).
 import {
   camposDoTexto,
   preencherTexto,
@@ -29,6 +34,11 @@ import {
 } from '../../porta-estabelecimento-propria.js';
 
 export const PORTA_TEXTO_PADRAO_CIRURGIA = Symbol('PORTA_TEXTO_PADRAO_CIRURGIA');
+
+/** Quem grava: a rota informa se o usuário administra o bloco (pode mexer no texto de qualquer cirurgião). */
+export interface QuemGravaTexto {
+  readonly gestor: boolean;
+}
 
 export interface TextoPadraoLido extends TextoPadraoCirurgia {
   readonly procedimentoDescricao: string | null;
@@ -87,7 +97,27 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     filtro: { procedimento?: number | null; cirurgiao?: number | null; paraDescricao?: boolean },
   ): Promise<TextoPadraoLido[]> {
     return this.ler(c, 'listar', async (l) => {
-      const r = (await l.consultar(`${SQL} ORDER BY t.titulo, t.id LIMIT 2000`, [])).map(lido);
+      const onde: string[] = [];
+      const args: unknown[] = [];
+      if (filtro.paraDescricao) {
+        onde.push(
+          't.ativo = 1',
+          '(t.procedimento_cirurgico_id IS NULL OR t.procedimento_cirurgico_id <=> ?)',
+        );
+        onde.push('(t.profissional_id IS NULL OR t.profissional_id <=> ?)');
+        args.push(filtro.procedimento ?? null, filtro.cirurgiao ?? null);
+      } else {
+        if (filtro.procedimento) {
+          onde.push('t.procedimento_cirurgico_id = ?');
+          args.push(filtro.procedimento);
+        }
+        if (filtro.cirurgiao) {
+          onde.push('t.profissional_id = ?');
+          args.push(filtro.cirurgiao);
+        }
+      }
+      const where = onde.length ? ` WHERE ${onde.join(' AND ')}` : '';
+      const r = (await l.consultar(`${SQL}${where} ORDER BY t.titulo, t.id LIMIT 2000`, args)).map(lido);
       if (!filtro.paraDescricao) return r;
       return textosParaDescricao(r, {
         procedimento: filtro.procedimento ?? null,
@@ -106,6 +136,13 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
       const t = await l.uma(`${SQL} WHERE t.id = ?`, [id]);
       if (!t) throw naoEncontrado('Texto padrão');
       const v = lido(t);
+      if (!v.ativo)
+        throw recusaRegra('Texto fora de uso', [
+          {
+            campo: 'ativo',
+            mensagem: 'Este texto padrão está fora de uso: escolha outro ou volte-o ao uso.',
+          },
+        ]);
       const d = preencherTexto(v.textoDescricao, x.valores);
       const r = v.textoRisco ? preencherTexto(v.textoRisco, x.valores) : null;
       const i = v.textoIntercorrencia ? preencherTexto(v.textoIntercorrencia, x.valores) : null;
@@ -145,6 +182,27 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
       );
   }
 
+  /** O texto pessoal de outro cirurgião só com a gestão do bloco. */
+  private async conferirDono(
+    tx: Leitor,
+    usuario: number,
+    quem: QuemGravaTexto,
+    cirurgiao: number | null,
+  ): Promise<void> {
+    if (cirurgiao === null || quem.gestor) return;
+    const meu = await tx.uma(
+      'SELECT profissional_id FROM usuario_profissional WHERE usuario_vigente_id = ?',
+      [usuario],
+    );
+    if (numOuNull(meu?.['profissional_id']) !== cirurgiao)
+      throw new ErroOperacao(
+        403,
+        'texto-de-outro-cirurgiao',
+        'Texto de outro cirurgião',
+        'O texto pessoal só é mantido pelo próprio cirurgião ou por quem administra o bloco cirúrgico.',
+      );
+  }
+
   private colunas(e: z.infer<typeof esquemaTexto>) {
     return {
       titulo: e.titulo.trim(),
@@ -157,13 +215,14 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     };
   }
 
-  incluir(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  incluir(c: ContextoPortaPropria, entrada: unknown, quem: QuemGravaTexto): Promise<{ id: number }> {
     const e = entradaValida(esquemaTexto, entrada);
     return this.gravar(
       c,
       'cirurgia.textoPadrao.incluir',
       ['texto_padrao_cirurgia'],
-      async (tx: TxOperacao) => {
+      async (tx: TxOperacao, _est, usuario) => {
+        await this.conferirDono(tx, usuario, quem, e.cirurgiao);
         await this.conferir(tx, e, null);
         const id = await tx.incluir('texto_padrao_cirurgia', { ...this.colunas(e), ativo: true });
         return { tabela: 'texto_padrao_cirurgia', id };
@@ -171,7 +230,12 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
     );
   }
 
-  alterar(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
+  alterar(
+    c: ContextoPortaPropria,
+    id: number,
+    entrada: unknown,
+    quem: QuemGravaTexto,
+  ): Promise<{ id: number }> {
     const { versao, ...resto } = entradaValida(
       esquemaTexto.extend({ versao: z.number().int().positive() }).strict(),
       entrada,
@@ -180,9 +244,11 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
       c,
       'cirurgia.textoPadrao.alterar',
       ['texto_padrao_cirurgia'],
-      async (tx: TxOperacao) => {
-        const a = await tx.uma('SELECT id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
+      async (tx: TxOperacao, _est, usuario) => {
+        const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
         if (!a) throw naoEncontrado('Texto padrão');
+        await this.conferirDono(tx, usuario, quem, numOuNull(a['profissional_id']));
+        await this.conferirDono(tx, usuario, quem, resto.cirurgiao);
         await this.conferir(tx, resto, id);
         await tx.alterar('texto_padrao_cirurgia', id, versao, this.colunas(resto));
         return { tabela: 'texto_padrao_cirurgia', id };
@@ -191,16 +257,27 @@ export class PortaTextoPadraoCirurgiaPropria extends PortaEstabelecimentoPropria
   }
 
   /** Tira de uso ou volta ao uso (nunca apaga: a descrição já assinada guarda o texto que usou). */
-  definirUso(c: ContextoPortaPropria, id: number, entrada: unknown): Promise<{ id: number }> {
+  definirUso(
+    c: ContextoPortaPropria,
+    id: number,
+    entrada: unknown,
+    quem: QuemGravaTexto,
+  ): Promise<{ id: number }> {
     const x = entradaValida(
       z.object({ ativo: z.boolean(), versao: z.number().int().positive() }).strict(),
       entrada,
     );
-    return this.gravar(c, 'cirurgia.textoPadrao.uso', ['texto_padrao_cirurgia'], async (tx: TxOperacao) => {
-      const a = await tx.uma('SELECT id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
-      if (!a) throw naoEncontrado('Texto padrão');
-      await tx.alterar('texto_padrao_cirurgia', id, x.versao, { ativo: x.ativo });
-      return { tabela: 'texto_padrao_cirurgia', id };
-    });
+    return this.gravar(
+      c,
+      'cirurgia.textoPadrao.uso',
+      ['texto_padrao_cirurgia'],
+      async (tx, _est, usuario) => {
+        const a = await tx.uma('SELECT id, profissional_id FROM texto_padrao_cirurgia WHERE id = ?', [id]);
+        if (!a) throw naoEncontrado('Texto padrão');
+        await this.conferirDono(tx, usuario, quem, numOuNull(a['profissional_id']));
+        await tx.alterar('texto_padrao_cirurgia', id, x.versao, { ativo: x.ativo });
+        return { tabela: 'texto_padrao_cirurgia', id };
+      },
+    );
   }
 }

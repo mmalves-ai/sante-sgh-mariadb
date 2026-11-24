@@ -326,3 +326,45 @@ export function regraGasQueVale<
   cabe.sort((a, b) => nota(b) - nota(a) || b.vigenciaInicio.localeCompare(a.vigenciaInicio));
   return cabe[0] ?? null;
 }
+
+/** O que já foi lançado na conta para o gás (itens vivos: nem estornados nem transferidos). */
+export interface LancadoGas {
+  readonly item: number;
+  readonly quantidade: number;
+}
+
+/**
+ * O que lançar agora: a cobrança é sempre do tempo ACUMULADO do gás na conta (tolerância, arredondamento e faixa
+ * aplicados uma vez só sobre o total), e o lançamento é só a diferença para o que já foi lançado. Assim, lançar todo
+ * dia ou uma vez no fim dá a mesma quantidade total. Quando a faixa troca o item cobrado, ou o acumulado cobra menos
+ * que o já lançado, não há diferença a lançar sem estorno: recusa, e o acerto é pela conta.
+ */
+export function diferencaALancarGas(e: {
+  readonly cobranca: CobrancaGas;
+  readonly item: number;
+  readonly lancados: readonly LancadoGas[];
+}): { quantidade: number; problemas: ProblemaGas[]; passos: string[] } {
+  const jaMesmo = r4(e.lancados.filter((l) => l.item === e.item).reduce((s, l) => s + l.quantidade, 0));
+  const outros = [
+    ...new Set(e.lancados.filter((l) => l.item !== e.item && l.quantidade > 0).map((l) => l.item)),
+  ];
+  const problemas: ProblemaGas[] = [];
+  if (outros.length)
+    problemas.push({
+      campo: 'faixa',
+      mensagem: `O tempo acumulado mudou a faixa para o item ${e.item}, mas a conta já tem o gás lançado no item ${outros.join(', ')}: estorne os lançamentos anteriores do gás e lance de novo.`,
+    });
+  const quantidade = r4(e.cobranca.quantidade - jaMesmo);
+  if (quantidade < 0)
+    problemas.push({
+      campo: 'quantidade',
+      mensagem: `O tempo acumulado cobra ${e.cobranca.quantidade} e a conta já tem ${jaMesmo} lançado: estorne o excesso pela conta.`,
+    });
+  return {
+    quantidade: Math.max(0, quantidade),
+    problemas,
+    passos: [
+      `Acumulado na conta: ${e.cobranca.quantidade}; já lançado: ${jaMesmo}; a lançar agora: ${Math.max(0, quantidade)}.`,
+    ],
+  };
+}

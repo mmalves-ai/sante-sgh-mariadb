@@ -7,15 +7,18 @@
 //   - cancelar: situação 'cancelado' com o motivo (registro lançado por engano; nunca apagado; o faturado não cancela);
 //   - regra de cobrança: `regra_cobranca_gas` com as faixas (`_faixa`) e o uso simultâneo (`_simultaneo`), conferida
 //     pelo domínio; encerrar a vigência grava o fim (nada apagado);
-//   - lançar na conta: por gás, os usos encerrados e não faturados viram um `conta_hospitalar_item` (quantidade da
-//     regra que vale para a fonte e o plano da conta, preço vigente pelas tabelas da conta, período do uso) com a
-//     memória (`conta_hospitalar_item_memoria`, passos do cálculo), os usos ficam faturados apontando a conta e a
-//     conta fica "não calculada". Gás sem regra vigente recusa (422) sem lançar nada.
+//   - lançar na conta: na conta cujo período contém os usos pendentes, por gás, a cobrança do tempo ACUMULADO na conta
+//     (faturados nela + pendentes; tolerância, arredondamento e faixa uma vez só) e um `conta_hospitalar_item` só com a
+//     diferença para o já lançado do gás (preço vigente pelas tabelas da conta) com a memória
+//     (`conta_hospitalar_item_memoria`, passos, gás e acumulado); os usos ficam faturados apontando a conta e a conta
+//     fica "não calculada". Sem regra vigente, sem preço vigente, faixa que troca de item depois de lançada ou
+//     acumulado menor que o lançado: recusa (422) sem lançar nem marcar nada.
 import {
   calcularCobrancaGas,
   conferirFimUsoGas,
   conferirInicioUsoGas,
   conferirRegraCobrancaGas,
+  diferencaALancarGas,
   horasDeUso,
   LOCAIS_USO_GAS,
   ARREDONDAMENTOS_GAS,
@@ -249,10 +252,24 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
         `SELECT i.id, COALESCE(i.item_faturavel_id,
                 (SELECT f.id FROM item_faturavel f WHERE f.insumo_id = i.id AND f.excluido_em IS NULL
                    AND f.situacao = 'ativo' ORDER BY f.id LIMIT 1)) AS item
-           FROM insumo i WHERE i.id = ?`,
+           FROM insumo i WHERE i.id = ? AND i.tipo = 'gas_medicinal'`,
         [e.insumo],
       );
       if (!ins) throw naoEncontrado('Gás medicinal');
+      if (e.setor !== null) {
+        const st = await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?', [
+          e.setor,
+          est.id,
+        ]);
+        if (!st) throw naoEncontrado('Setor');
+      }
+      if (e.leito !== null) {
+        const lt = await tx.uma('SELECT id FROM leito_hospitalar WHERE id = ? AND estabelecimento_id = ?', [
+          e.leito,
+          est.id,
+        ]);
+        if (!lt) throw naoEncontrado('Leito');
+      }
       const internacao = await tx.uma(
         'SELECT id FROM internacao WHERE atendimento_id = ? ORDER BY id DESC LIMIT 1',
         [e.atendimento],
@@ -473,7 +490,10 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  /** Lança na conta aberta do atendimento os usos encerrados e não faturados, um item por gás. */
+  /**
+   * Lança na conta do período os usos encerrados do atendimento. A cobrança é do tempo ACUMULADO do gás na conta
+   * (usos já faturados nela e os pendentes), e o item lançado é só a diferença para o que a conta já tem do gás.
+   */
   lancarNaConta(
     c: ContextoPortaPropria,
     atendimento: number,
@@ -483,33 +503,13 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
       'internacao.gas.lancar',
       ['uso_gas_medicinal', 'conta_hospitalar', 'conta_hospitalar_item', 'conta_hospitalar_item_memoria'],
       async (tx: TxOperacao, est, usuario) => {
-        const [conta] = await tx.consultarParaAtualizar<Record<string, unknown>>(
-          `SELECT id, versao, calculada, fonte_pagadora_id, plano_fonte_pagadora_id, tabela_preco_id
-             FROM conta_hospitalar
-            WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
-              AND situacao IN (${SITUACOES_CONTA_LANCAVEL.map(() => '?').join(', ')})
-            ORDER BY (tipo_cobranca = 'total') DESC, id DESC LIMIT 1`,
-          [atendimento, est.id, ...SITUACOES_CONTA_LANCAVEL],
-        );
-        if (!conta)
-          throw recusaRegra('Lançamento recusado', [
-            { campo: 'conta', mensagem: 'O atendimento não tem conta aberta para lançar.' },
-          ]);
         const usos = await tx.consultarParaAtualizar<Record<string, unknown>>(
           `SELECT u.id, u.versao, u.insumo_id, u.item_faturavel_id, u.iniciado_em, u.encerrado_em, u.fluxo_litros_minuto,
-                  u.faturado, u.situacao, u.setor_funcional_id
+                  u.faturado, u.situacao, u.setor_funcional_id, u.conta_hospitalar_id
              FROM uso_gas_medicinal u
             WHERE u.atendimento_id = ? AND u.estabelecimento_id = ? AND u.excluido_em IS NULL AND u.situacao <> 'cancelado'`,
           [atendimento, est.id],
         );
-        const gasDe = (u: Record<string, unknown>) =>
-          numOuNull(u['item_faturavel_id']) ?? -num(u['insumo_id']);
-        const periodos: UsoGasPeriodo[] = usos.map((u) => ({
-          gas: gasDe(u),
-          inicio: u['iniciado_em'] as Date,
-          fim: (u['encerrado_em'] as Date | null) ?? null,
-          fluxoLitrosMinuto: numOuNull(u['fluxo_litros_minuto']),
-        }));
         const pendentes = usos.filter((u) => u['situacao'] === 'encerrado' && !bool(u['faturado']));
         if (!pendentes.length)
           throw recusaRegra('Nada a lançar', [
@@ -522,6 +522,35 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
               mensagem: 'Há gás sem item faturável no cadastro: ligue o item ao gás antes de lançar.',
             },
           ]);
+        // A conta cujo período contém o período dos usos pendentes (conta parcial por período na internação longa).
+        const iniPend = pendentes.map((u) => u['iniciado_em'] as Date).reduce((a, b) => (a < b ? a : b));
+        const fimPend = pendentes.map((u) => u['encerrado_em'] as Date).reduce((a, b) => (a > b ? a : b));
+        const [conta] = await tx.consultarParaAtualizar<Record<string, unknown>>(
+          `SELECT id, versao, calculada, fonte_pagadora_id, plano_fonte_pagadora_id, tabela_preco_id
+             FROM conta_hospitalar
+            WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+              AND situacao IN (${SITUACOES_CONTA_LANCAVEL.map(() => '?').join(', ')})
+              AND inicio_em <= ? AND (fim_em IS NULL OR fim_em >= ?)
+            ORDER BY inicio_em DESC, id DESC LIMIT 1`,
+          [atendimento, est.id, ...SITUACOES_CONTA_LANCAVEL, iniPend, fimPend],
+        );
+        if (!conta)
+          throw recusaRegra('Lançamento recusado', [
+            {
+              campo: 'conta',
+              mensagem:
+                'Nenhuma conta aberta do atendimento cobre o período dos usos a lançar: abra a conta do período ou ajuste o período da conta.',
+            },
+          ]);
+        const contaId = num(conta['id']);
+        const gasDe = (u: Record<string, unknown>) =>
+          numOuNull(u['item_faturavel_id']) ?? -num(u['insumo_id']);
+        const periodos: UsoGasPeriodo[] = usos.map((u) => ({
+          gas: gasDe(u),
+          inicio: u['iniciado_em'] as Date,
+          fim: (u['encerrado_em'] as Date | null) ?? null,
+          fluxoLitrosMinuto: numOuNull(u['fluxo_litros_minuto']),
+        }));
         const tabelas = await tabelasDePreco(
           tx,
           est.id,
@@ -529,14 +558,19 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
           numOuNull(conta['plano_fonte_pagadora_id']),
           numOuNull(conta['tabela_preco_id']),
         );
-        const itens: number[] = [];
-        const semRegra: number[] = [];
+        const problemas: { campo: string; mensagem: string }[] = [];
         const gases = [...new Set(pendentes.map(gasDe))];
         const calculos = [];
         for (const gas of gases) {
-          const meus = pendentes.filter((u) => gasDe(u) === gas);
-          const ultimoFim = meus.map((u) => u['encerrado_em'] as Date).reduce((a, b) => (a > b ? a : b));
-          const data = ultimoFim.toISOString().slice(0, 10);
+          const pend = pendentes.filter((u) => gasDe(u) === gas);
+          // O acumulado do gás nesta conta: os já faturados nela e os pendentes.
+          const acum = usos.filter(
+            (u) =>
+              gasDe(u) === gas &&
+              u['situacao'] === 'encerrado' &&
+              (!bool(u['faturado']) || numOuNull(u['conta_hospitalar_id']) === contaId),
+          );
+          const data = fimPend.toISOString().slice(0, 10);
           const vale = regraGasQueVale(
             await regrasDoGas(tx, est.id, gas),
             {
@@ -546,93 +580,110 @@ export class PortaGasMedicinalPropria extends PortaEstabelecimentoPropria {
             data,
           );
           if (!vale) {
-            semRegra.push(gas);
+            problemas.push({
+              campo: 'regra',
+              mensagem: `Gás sem regra de cobrança vigente para a fonte e o plano da conta (item ${gas}).`,
+            });
             continue;
           }
-          // Só os pendentes deste gás entram no tempo; os outros gases (lançados ou não) contam para a sobreposição.
-          const ids = new Set(meus.map((u) => num(u['id'])));
+          const ids = new Set(acum.map((u) => num(u['id'])));
           const usosCalculo = periodos.filter((p, i) => p.gas !== gas || ids.has(num(usos[i]!['id'])));
-          calculos.push({
-            gas,
-            meus,
-            data,
-            vale,
-            cobranca: calcularCobrancaGas({ regra: vale.regra, gas, usos: usosCalculo }),
-          });
+          const cobranca = calcularCobrancaGas({ regra: vale.regra, gas, usos: usosCalculo });
+          const itemFat = cobranca.itemFaixa ?? vale.cobranca ?? gas;
+          const lancados = (
+            await tx.consultar(
+              `SELECT i.item_faturavel_id, i.quantidade
+                 FROM conta_hospitalar_item i
+                 JOIN conta_hospitalar_item_memoria m ON m.conta_hospitalar_item_id = i.id AND m.operacao = 'inclusao'
+                WHERE i.conta_hospitalar_id = ? AND i.excluido_em IS NULL
+                  AND i.situacao NOT IN ('estornado', 'transferido')
+                  AND JSON_VALUE(m.dados, '$.regra') = 'gas_tempo_uso' AND JSON_VALUE(m.dados, '$.gas') = ?`,
+              [contaId, gas],
+            )
+          ).map((x) => ({ item: num(x['item_faturavel_id']), quantidade: num(x['quantidade']) }));
+          const dif = diferencaALancarGas({ cobranca, item: itemFat, lancados });
+          problemas.push(...dif.problemas);
+          const preco = dif.quantidade > 0 ? await precoVigente(tx, tabelas, itemFat, data) : null;
+          if (dif.quantidade > 0 && !preco)
+            problemas.push({
+              campo: 'preco',
+              mensagem: `Sem preço vigente nas tabelas da conta para o item ${itemFat}: cadastre o preço antes de lançar.`,
+            });
+          calculos.push({ gas, pend, acum, data, vale, cobranca, itemFat, dif, preco });
         }
-        if (semRegra.length)
-          throw recusaRegra('Lançamento recusado', [
-            {
-              campo: 'regra',
-              mensagem: `Gás sem regra de cobrança vigente para a fonte e o plano da conta (item ${semRegra.join(', ')}).`,
-            },
-          ]);
+        // Falta de regra, de preço ou diferença sem acerto: recusa tudo, nada é lançado nem marcado.
+        if (problemas.length) throw recusaRegra('Lançamento recusado', problemas);
         const origem = await tx.uma(
           "SELECT id FROM origem_lancamento WHERE codigo = 'estoque' AND ativo LIMIT 1",
           [],
         );
+        const itens: number[] = [];
         for (const k of calculos) {
-          if (k.cobranca.quantidade > 0) {
-            const itemFat = k.cobranca.itemFaixa ?? k.vale.cobranca ?? k.gas;
-            const preco = await precoVigente(tx, tabelas, itemFat, k.data);
+          if (k.dif.quantidade > 0 && k.preco) {
             const fat = await tx.uma('SELECT grupo_faturamento_id FROM item_faturavel WHERE id = ?', [
-              itemFat,
+              k.itemFat,
             ]);
             const seq = await tx.uma(
               'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
-              [num(conta['id'])],
+              [contaId],
             );
-            const unitario = preco?.unitario ?? 0;
-            const inicio = k.meus.map((u) => u['iniciado_em'] as Date).reduce((a, b) => (a < b ? a : b));
-            const fim = k.meus.map((u) => u['encerrado_em'] as Date).reduce((a, b) => (a > b ? a : b));
+            const unitario = k.preco.unitario;
+            const total = Math.round(unitario * k.dif.quantidade * 100) / 100;
+            const inicio = k.pend.map((u) => u['iniciado_em'] as Date).reduce((a, b) => (a < b ? a : b));
+            const fim = k.pend.map((u) => u['encerrado_em'] as Date).reduce((a, b) => (a > b ? a : b));
             const item = await tx.incluir('conta_hospitalar_item', {
-              conta_hospitalar_id: num(conta['id']),
+              conta_hospitalar_id: contaId,
               sequencia: num(seq?.['s']),
-              item_faturavel_id: itemFat,
+              item_faturavel_id: k.itemFat,
               grupo_faturamento_id: numOuNull(fat?.['grupo_faturamento_id']),
               origem_lancamento_id: numOuNull(origem?.['id']),
               realizado_em: inicio,
               realizado_fim_em: fim,
-              quantidade: k.cobranca.quantidade,
+              quantidade: k.dif.quantidade,
               valor_unitario: unitario,
               percentual_cobranca: 100,
-              valor_total: Math.round(unitario * k.cobranca.quantidade * 100) / 100,
-              setor_funcional_id: numOuNull(k.meus[0]!['setor_funcional_id']),
+              valor_total: total,
+              setor_funcional_id: numOuNull(k.pend[0]!['setor_funcional_id']),
               tipo_valorizacao: 'tabela',
               situacao: 'lancado',
-              observacao: (
-                `Gás medicinal por tempo de uso (${k.cobranca.minutosCobraveis} min cobráveis).` +
-                (preco ? '' : ' Sem preço vigente na tabela da conta: valor a conferir.')
-              ).slice(0, 2000),
+              observacao:
+                `Gás medicinal por tempo de uso (${k.cobranca.minutosCobraveis} min cobráveis acumulados na conta).`.slice(
+                  0,
+                  2000,
+                ),
             });
             await tx.incluir('conta_hospitalar_item_memoria', {
               conta_hospitalar_item_id: item,
               operacao: 'inclusao',
               dados: JSON.stringify({
                 regra: 'gas_tempo_uso',
+                gas: k.gas,
                 regraCobrancaGas: k.vale.id,
-                usos: k.meus.map((u) => num(u['id'])),
-                passos: k.cobranca.passos,
+                usos: k.pend.map((u) => num(u['id'])),
+                usosAcumulados: k.acum.map((u) => num(u['id'])),
+                quantidadeAcumulada: k.cobranca.quantidade,
+                passos: [...k.cobranca.passos, ...k.dif.passos],
               }),
               ocorrido_em: new Date(),
               usuario_id: usuario,
-              tabela_preco_id: preco?.tabela ?? null,
+              tabela_preco_id: k.preco.tabela ?? null,
               percentual_aplicado: 100,
-              valor_unitario_calculado: preco?.unitario ?? null,
-              valor_total_calculado: preco ? Math.round(unitario * k.cobranca.quantidade * 100) / 100 : null,
+              valor_unitario_calculado: unitario,
+              valor_total_calculado: total,
             });
             itens.push(item);
           }
-          // Sem quantidade (tolerância ou sobreposição não cobrada) o uso também sai da fila: foi apurado e não cobra.
-          for (const u of k.meus)
+          // Sem diferença (tolerância, sobreposição não cobrada ou arredondamento já coberto) o uso também sai da
+          // fila: foi apurado no acumulado da conta e entra nos próximos acumulados por ela.
+          for (const u of k.pend)
             await tx.alterar('uso_gas_medicinal', num(u['id']), num(u['versao']), {
               faturado: true,
-              conta_hospitalar_id: num(conta['id']),
+              conta_hospitalar_id: contaId,
             });
         }
         if (bool(conta['calculada']))
-          await tx.alterar('conta_hospitalar', num(conta['id']), num(conta['versao']), { calculada: false });
-        return { tabela: 'conta_hospitalar', id: num(conta['id']), itens };
+          await tx.alterar('conta_hospitalar', contaId, num(conta['versao']), { calculada: false });
+        return { tabela: 'conta_hospitalar', id: contaId, itens };
       },
     );
   }
