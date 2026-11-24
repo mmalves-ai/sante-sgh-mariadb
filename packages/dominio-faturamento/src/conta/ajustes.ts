@@ -30,6 +30,13 @@ export interface FaixaHorarioEspecial {
   readonly vigenciaFim: string | null;
   /** Nulo: vale para todas as fontes pagadoras. */
   readonly fontePagadoraId: number | null;
+  /** Acordo (contrato da fonte) que define a faixa: vale antes da faixa só da fonte e da geral. */
+  readonly contratoId?: number | null;
+  /** Percentuais por componente do item; nulo: o componente segue o percentual geral. */
+  readonly percentualCustoOperacional?: number | null;
+  readonly percentualFilme?: number | null;
+  /** Percentual do item de anestesia (grupo de faturamento de anestesia); nulo: o geral. */
+  readonly percentualAnestesia?: number | null;
   readonly ativo: boolean;
 }
 
@@ -62,6 +69,8 @@ export interface HorarioDoItem {
   readonly quando: string;
   readonly feriado: boolean;
   readonly fontePagadoraId: number;
+  /** Acordo da conta; a faixa do acordo vence a da fonte, que vence a geral. */
+  readonly contratoId?: number | null;
 }
 
 /** A faixa de horário especial que vale para o momento do item, ou nulo (horário normal). */
@@ -79,6 +88,7 @@ export function faixaDoHorario(
   const valem = faixas.filter((f) => {
     if (!f.ativo || f.vigenciaInicio > data || (f.vigenciaFim !== null && f.vigenciaFim < data)) return false;
     if (f.fontePagadoraId !== null && f.fontePagadoraId !== h.fontePagadoraId) return false;
+    if ((f.contratoId ?? null) !== null && f.contratoId !== (h.contratoId ?? null)) return false;
     if (h.feriado && (f.aplicaFeriado || f.tipoHorario === 'feriado')) return true;
     if (f.diaSemana !== null && f.diaSemana !== dow + 1) return false;
     const naHora = f.horaInicio === null || f.horaFim === null || naFaixa(min, f.horaInicio, f.horaFim);
@@ -96,17 +106,50 @@ export function faixaDoHorario(
   if (!valem.length) return null;
   return [...valem].sort(
     (a, b) =>
+      Number((b.contratoId ?? null) !== null) - Number((a.contratoId ?? null) !== null) ||
       Number(b.fontePagadoraId !== null) - Number(a.fontePagadoraId !== null) ||
       b.percentual - a.percentual ||
       a.id - b.id,
   )[0]!;
 }
 
-/** O acréscimo do item: honorário pelo percentual próprio (quando há) e o resto pelo percentual geral. */
-export function acrescimoDoItem(base: number, honorario: number, faixa: FaixaHorarioEspecial): number {
-  const hon = Math.min(Math.max(honorario, 0), base);
-  const pH = faixa.percentualHonorario ?? faixa.percentual;
-  return r2((hon * pH) / 100 + ((base - hon) * faixa.percentual) / 100);
+/** Componentes do valor do item (a parte que não é nenhum deles segue o percentual geral). */
+export interface ComponentesItem {
+  readonly honorario: number;
+  readonly custoOperacional?: number;
+  readonly filme?: number;
+  /** O item é de anestesia: o valor inteiro segue o percentual de anestesia da faixa (quando há). */
+  readonly anestesia?: boolean;
+}
+
+/**
+ * O acréscimo de horário especial do item, por componente: honorário, custo operacional e filme pelos percentuais
+ * próprios da faixa (quando há) e o resto pelo percentual geral; item de anestesia pelo percentual de anestesia.
+ * Os componentes nunca passam da base (o que sobra deles é cortado na ordem honorário, custo, filme).
+ */
+export function acrescimoDoItem(
+  base: number,
+  componentes: number | ComponentesItem,
+  faixa: FaixaHorarioEspecial,
+): number {
+  const c: ComponentesItem = typeof componentes === 'number' ? { honorario: componentes } : componentes;
+  const geral = c.anestesia ? (faixa.percentualAnestesia ?? faixa.percentual) : faixa.percentual;
+  let resto = Math.max(base, 0);
+  const parte = (v: number | undefined) => {
+    const x = Math.min(Math.max(v ?? 0, 0), resto);
+    resto -= x;
+    return x;
+  };
+  const hon = parte(c.honorario);
+  const co = parte(c.custoOperacional);
+  const fi = parte(c.filme);
+  return r2(
+    (hon * (faixa.percentualHonorario ?? geral) +
+      co * (faixa.percentualCustoOperacional ?? geral) +
+      fi * (faixa.percentualFilme ?? geral) +
+      resto * geral) /
+      100,
+  );
 }
 
 export interface EntradaFaixaHorario {
@@ -119,6 +162,9 @@ export interface EntradaFaixaHorario {
   readonly horaFim: string | null;
   readonly percentual: number;
   readonly percentualHonorario: number | null;
+  readonly percentualCustoOperacional?: number | null;
+  readonly percentualFilme?: number | null;
+  readonly percentualAnestesia?: number | null;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
 }
@@ -145,6 +191,10 @@ export function validarFaixaHorario(e: EntradaFaixaHorario): Record<string, stri
   if (!(e.percentual > 0) || e.percentual > 300) erros['percentual'] = 'O percentual vai de 0,01 a 300.';
   if (e.percentualHonorario !== null && (e.percentualHonorario < 0 || e.percentualHonorario > 300))
     erros['percentualHonorario'] = 'O percentual do honorário vai de 0 a 300.';
+  for (const k of ['percentualCustoOperacional', 'percentualFilme', 'percentualAnestesia'] as const) {
+    const v = e[k];
+    if (v !== null && v !== undefined && (v < 0 || v > 300)) erros[k] = 'O percentual vai de 0 a 300.';
+  }
   if (e.vigenciaFim !== null && e.vigenciaFim < e.vigenciaInicio)
     erros['vigenciaFim'] = 'O fim da vigência é anterior ao início.';
   return erros;
@@ -219,6 +269,48 @@ export function conferirDecisaoAjuste(
   if (decisor === solicitante)
     return 'Quem pediu o ajuste não pode decidi-lo: peça a outro usuário com a alçada.';
   return null;
+}
+
+/** Um nível da alçada de aprovação do ajuste: quem (perfil ou usuário) aprova até que valor. */
+export interface NivelAlcadaAjuste {
+  readonly id: number;
+  readonly nivel: number;
+  readonly perfilId: number | null;
+  readonly usuarioId: number | null;
+  readonly valorMinimo: number;
+  /** Nulo: sem teto. */
+  readonly valorMaximo: number | null;
+}
+
+/**
+ * Alçada por valor: o decisor só aprova o ajuste se um nível da alçada vigente o cobre (pelo usuário ou por um dos
+ * perfis dele) e o valor cabe na faixa do nível. Sem alçada cadastrada no estabelecimento, vale só a separação de
+ * quem pede e quem decide (conferirDecisaoAjuste). Recusar não exige alçada de valor: só a permissão de decidir.
+ * Devolve o nível que cobre o valor, ou o motivo da recusa.
+ */
+export function conferirAlcadaDoValor(
+  valor: number,
+  niveis: readonly NivelAlcadaAjuste[],
+  decisor: number,
+  perfisDoDecisor: readonly number[],
+): { nivel: NivelAlcadaAjuste | null; motivo: string | null } {
+  if (!niveis.length) return { nivel: null, motivo: null };
+  const meus = niveis.filter(
+    (n) =>
+      (n.usuarioId !== null && n.usuarioId === decisor) ||
+      (n.perfilId !== null && perfisDoDecisor.includes(n.perfilId)),
+  );
+  if (!meus.length)
+    return { nivel: null, motivo: 'O seu cargo não está na alçada de aprovação de ajustes da conta.' };
+  const cobre = meus
+    .filter((n) => valor >= n.valorMinimo && (n.valorMaximo === null || valor <= n.valorMaximo))
+    .sort((a, b) => a.nivel - b.nivel)[0];
+  if (cobre) return { nivel: cobre, motivo: null };
+  const teto = Math.max(...meus.map((n) => n.valorMaximo ?? Number.POSITIVE_INFINITY));
+  return {
+    nivel: null,
+    motivo: `O ajuste de ${valor.toFixed(2)} passa a sua alçada (até ${teto.toFixed(2)}): peça a quem tem alçada maior.`,
+  };
 }
 
 /** Totais de acréscimo e desconto da conta: só os ajustes aprovados mudam o valor. */
@@ -300,6 +392,42 @@ export interface ItemParaPacote {
 }
 export type Classe = 'incluso' | 'a_parte' | 'descaracteriza';
 
+/** Composição do pacote (inclusões, exceções, tetos e diárias), como a API lê e como o retrato da versão guarda. */
+export interface ComposicaoPacote<I = RegraInclusao, E = RegraExcecao, T = TetoPacote, D = unknown> {
+  readonly inclusoes: readonly I[];
+  readonly excecoes: readonly E[];
+  readonly tetos: readonly T[];
+  readonly diarias: readonly D[];
+}
+
+/**
+ * A composição que governa a conta: a versão já encerrada (com sucessora) vale pelo retrato guardado ao encerrar; a
+ * versão aberta vale pela composição atual. Retrato ilegível ou ausente: a composição atual.
+ */
+export function composicaoDaVersao<C extends ComposicaoPacote<unknown, unknown, unknown, unknown>>(
+  versao: { vigenciaFim: string | null } | null,
+  retrato: unknown,
+  atual: C,
+): C {
+  if (!versao || versao.vigenciaFim === null || retrato === null || retrato === undefined) return atual;
+  let r: unknown = retrato;
+  if (typeof r === 'string')
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return atual;
+    }
+  const o = r as Partial<C> | null;
+  if (!o || !Array.isArray(o.inclusoes) || !Array.isArray(o.excecoes)) return atual;
+  return {
+    ...atual,
+    inclusoes: o.inclusoes,
+    excecoes: o.excecoes,
+    tetos: Array.isArray(o.tetos) ? o.tetos : atual.tetos,
+    diarias: Array.isArray(o.diarias) ? o.diarias : atual.diarias,
+  };
+}
+
 const casa = (
   r: { itemId: number | null; grupoId: number | null; setorId: number | null },
   i: ItemParaPacote,
@@ -361,6 +489,12 @@ export interface AlertaPacote {
   readonly tipo: 'teto' | 'excecao' | 'diarias';
   readonly descaracteriza: boolean;
   readonly mensagem: string;
+  /** Diárias além das incluídas: a proposta de lançamento pelo item e valor da composição (quando cadastrados). */
+  readonly proposta?: { itemId: number | null; quantidade: number; valorUnitario: number | null };
+}
+export interface DiariaAdicional {
+  readonly itemId: number | null;
+  readonly valor: number | null;
 }
 
 /** Confere os tetos e as exceções que descaracterizam: devolve alertas, nunca descaracteriza sozinho. */
@@ -370,6 +504,7 @@ export function alertasDoPacote(
   tetos: readonly TetoPacote[],
   dias: number,
   diariasIncluidas: number | null,
+  adicional: DiariaAdicional | null = null,
 ): AlertaPacote[] {
   const a: AlertaPacote[] = [];
   const inclusos = itens.filter((i) => classes.get(i.id) === 'incluso');
@@ -408,7 +543,18 @@ export function alertasDoPacote(
     a.push({
       tipo: 'diarias',
       descaracteriza: false,
-      mensagem: `${dias - diariasIncluidas} diária(s) além das ${diariasIncluidas} incluídas: cobradas à parte.`,
+      mensagem:
+        `${dias - diariasIncluidas} diária(s) além das ${diariasIncluidas} incluídas: cobradas à parte` +
+        (adicional?.valor != null ? ` a ${adicional.valor.toFixed(2)} cada.` : '.'),
+      ...(adicional
+        ? {
+            proposta: {
+              itemId: adicional.itemId,
+              quantidade: dias - diariasIncluidas,
+              valorUnitario: adicional.valor,
+            },
+          }
+        : {}),
     });
   return a;
 }

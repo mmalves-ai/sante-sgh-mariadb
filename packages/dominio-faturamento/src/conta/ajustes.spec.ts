@@ -4,6 +4,8 @@ import {
   acrescimoDoItem,
   alertasDoPacote,
   classificarItens,
+  composicaoDaVersao,
+  conferirAlcadaDoValor,
   conferirDecisaoAjuste,
   diaDaSemana,
   diasDePermanencia,
@@ -276,5 +278,63 @@ describe('pacote na conta (linha 20)', () => {
     expect(alertasDoPacote(itens, cl, [], 1, 2)).toEqual([]);
     expect(diasDePermanencia('2026-01-01', '2026-01-03')).toBe(2);
     expect(diasDePermanencia('2026-01-01', '2026-01-01')).toBe(1);
+  });
+});
+
+describe('correções da revisão (linhas 17, 18 e 20)', () => {
+  it('horário: percentual por componente e item de anestesia', () => {
+    const f = faixa({ percentualHonorario: 50, percentualCustoOperacional: 10, percentualFilme: 0 });
+    // 300 = 100 honorário (50%) + 100 custo operacional (10%) + 50 filme (0%) + 50 resto (30%)
+    expect(acrescimoDoItem(300, { honorario: 100, custoOperacional: 100, filme: 50 }, f)).toBe(75);
+    // componentes acima da base são cortados
+    expect(acrescimoDoItem(100, { honorario: 80, custoOperacional: 80 }, f)).toBe(42);
+    expect(acrescimoDoItem(100, { honorario: 0, anestesia: true }, faixa({ percentualAnestesia: 40 }))).toBe(
+      40,
+    );
+    expect(acrescimoDoItem(100, { honorario: 0, anestesia: true }, faixa({}))).toBe(30);
+  });
+  it('horário: a faixa do acordo vence a da fonte, que vence a geral; acordo de outro não vale', () => {
+    const geral = faixa({ id: 1, percentual: 50 });
+    const fonte = faixa({ id: 2, fontePagadoraId: 7, percentual: 40 });
+    const acordo = faixa({ id: 3, fontePagadoraId: 7, contratoId: 9, percentual: 20 });
+    const h = { quando: '2026-01-20T23:00', feriado: false, fontePagadoraId: 7 };
+    expect(faixaDoHorario({ ...h, contratoId: 9 }, [geral, fonte, acordo])?.id).toBe(3);
+    expect(faixaDoHorario({ ...h, contratoId: 8 }, [geral, fonte, acordo])?.id).toBe(2);
+    expect(faixaDoHorario({ ...h, fontePagadoraId: 1 }, [geral, fonte, acordo])?.id).toBe(1);
+  });
+  it('alçada por valor: nível do usuário ou do perfil, faixa de valor, sem alçada cadastrada vale a separação', () => {
+    const niveis = [
+      { id: 1, nivel: 1, perfilId: 10, usuarioId: null, valorMinimo: 0, valorMaximo: 100 },
+      { id: 2, nivel: 2, perfilId: null, usuarioId: 5, valorMinimo: 0, valorMaximo: null },
+    ];
+    expect(conferirAlcadaDoValor(50, niveis, 3, [10]).nivel?.id).toBe(1);
+    expect(conferirAlcadaDoValor(150, niveis, 3, [10]).motivo).toContain('passa a sua alçada (até 100.00)');
+    expect(conferirAlcadaDoValor(150, niveis, 3, [11]).motivo).toContain('não está na alçada');
+    expect(conferirAlcadaDoValor(9999, niveis, 5, []).nivel?.id).toBe(2);
+    expect(conferirAlcadaDoValor(9999, [], 3, [])).toEqual({ nivel: null, motivo: null });
+  });
+  it('pacote: versão encerrada vale pelo retrato; a aberta pela composição atual', () => {
+    const atual = { inclusoes: [{ itemId: 1 }], excecoes: [{ itemId: 2 }], tetos: [], diarias: [] };
+    const retrato = JSON.stringify({ inclusoes: [], excecoes: [], tetos: [{ id: 1 }], diarias: [] });
+    expect(composicaoDaVersao({ vigenciaFim: '2025-12-31' }, retrato, atual)).toEqual({
+      inclusoes: [],
+      excecoes: [],
+      tetos: [{ id: 1 }],
+      diarias: [],
+    });
+    expect(composicaoDaVersao({ vigenciaFim: null }, retrato, atual)).toBe(atual);
+    expect(composicaoDaVersao({ vigenciaFim: '2025-12-31' }, 'ilegível', atual)).toBe(atual);
+    expect(composicaoDaVersao(null, retrato, atual)).toBe(atual);
+  });
+  it('pacote: diárias além das incluídas trazem a proposta de lançamento', () => {
+    const a = alertasDoPacote([], new Map(), [], 5, 2, { itemId: 44, valor: 150 });
+    expect(a).toEqual([
+      {
+        tipo: 'diarias',
+        descaracteriza: false,
+        mensagem: '3 diária(s) além das 2 incluídas: cobradas à parte a 150.00 cada.',
+        proposta: { itemId: 44, quantidade: 3, valorUnitario: 150 },
+      },
+    ]);
   });
 });
