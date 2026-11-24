@@ -95,6 +95,11 @@ export class FonteAcessoPropria implements FonteAcesso {
     return this.lista;
   }
 
+  /** O id no banco do cliente do estabelecimento ativo de código dado (null: fora da lista lida). */
+  idEstabelecimento(codigo: string): number | null {
+    return this.lista.find((e) => e.codigo === codigo)?.id ?? null;
+  }
+
   private ler<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
     return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'fonte-acesso-propria' }, fn);
   }
