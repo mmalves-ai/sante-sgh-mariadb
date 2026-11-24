@@ -7,6 +7,8 @@
 // assinatura encerram a vigência; a conta e o RQE são inativados.
 import { randomUUID } from 'node:crypto';
 import {
+  assinaturaVigente,
+  dadoFiscalVigente,
   errosAssinatura,
   errosContaBancaria,
   errosDadoFiscal,
@@ -15,10 +17,11 @@ import {
   INCIDENCIAS_IMPOSTO,
   REGIMES_TRIBUTARIOS,
   sobreposicaoFiscal,
+  sobreposicaoVigencia,
   TIPOS_ASSINATURA,
+  type TipoAssinatura,
   TIPOS_CHAVE_PIX,
   TIPOS_RECEBEDOR,
-  vespera,
 } from '@sgh/dominio-cadastro';
 import {
   type ContextoOperacao,
@@ -26,15 +29,19 @@ import {
   ErroOperacao,
   type Executor,
   type Leitor,
+  type NucleoArmazem,
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { type ArquivosDoModulo, arquivosDoAmbiente } from '../arquivos-locais.js';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 export const COMPLEMENTO_PROFISSIONAL = Symbol('COMPLEMENTO_PROFISSIONAL');
+/** Finalidade do arquivo da assinatura em imagem na porta de arquivos (dono: a tabela profissional, o id dele). */
+export const FINALIDADE_ASSINATURA = 'assinatura_profissional';
 
 const texto = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 const data = (v: unknown): string | null =>
@@ -78,7 +85,12 @@ const MENSAGENS: Record<string, string> = {
   'recebedor-sem-empresa': 'Recebedor pessoa jurídica exige a empresa.',
   'empresa-sem-recebedor-pj': 'A empresa só se informa quando o recebedor é pessoa jurídica.',
   'pis-invalido': 'PIS/PASEP inválido (dígito verificador).',
-  'aliquota-iss-fora': 'A alíquota do ISS fica entre 0 e 100%.',
+  'aliquota-iss-fora': 'A alíquota do ISS fica entre 2% e 5%.',
+  'aliquota-iss-isento': 'O regime isento não tem alíquota de ISS (deixe vazia ou zero).',
+  'retencao-iss-isento': 'O regime isento não tem retenção de ISS.',
+  'regime-incompativel':
+    'O regime não combina com o recebedor (autônomo é pessoa física; Simples e lucro são de empresa).',
+  'pis-obrigatorio': 'A pessoa física com INSS retido precisa do PIS/PASEP/NIT.',
   'percentual-inss-fora': 'O percentual do INSS fica entre 0 e 100%.',
   'retencao-iss-sem-aliquota': 'Reter ISS exige a alíquota.',
   'retencao-inss-sem-percentual': 'Reter INSS exige o percentual.',
@@ -110,6 +122,10 @@ const CAMPO: Record<string, string> = {
   'empresa-sem-recebedor-pj': 'pessoaJuridica',
   'pis-invalido': 'pisPasep',
   'aliquota-iss-fora': 'aliquotaIss',
+  'aliquota-iss-isento': 'aliquotaIss',
+  'retencao-iss-isento': 'retemIss',
+  'regime-incompativel': 'regime',
+  'pis-obrigatorio': 'pisPasep',
   'percentual-inss-fora': 'percentualInss',
   'retencao-iss-sem-aliquota': 'aliquotaIss',
   'retencao-inss-sem-percentual': 'percentualInss',
@@ -437,9 +453,20 @@ const operacaoIncluirRqe = (trilha: RegistroTrilhaTela) =>
           'O profissional não tem registro ativo no conselho desta UF: inclua o registro antes do RQE.',
           ['uf'],
         );
+      // O mesmo RQE na UF é de um só profissional: a leitura trava o intervalo (UF, número) do índice até o COMMIT, na
+      // inclusão e na volta do inativado.
+      const outro = await tx.uma(
+        `SELECT id FROM profissional_rqe WHERE unidade_federativa_id = ? AND numero_rqe = ? AND ativo
+            AND excluido_em IS NULL AND profissional_id <> ? FOR UPDATE`,
+        [uf['id'], e.numero, e.profissional],
+      );
+      if (outro)
+        throw recusaCampos('rqe-de-outro', 'Este RQE nesta UF já está no cadastro de outro profissional.', [
+          'numero',
+        ]);
       const ja = await tx.uma(
-        `SELECT id, versao, ativo FROM profissional_rqe WHERE profissional_id = ? AND especialidade_medica_id = ?
-            AND unidade_federativa_id = ? AND excluido_em IS NULL`,
+        `SELECT id, versao, ativo, numero_rqe FROM profissional_rqe WHERE profissional_id = ?
+            AND especialidade_medica_id = ? AND unidade_federativa_id = ? AND excluido_em IS NULL FOR UPDATE`,
         [e.profissional, e.especialidade, uf['id']],
       );
       const valores = {
@@ -454,19 +481,16 @@ const operacaoIncluirRqe = (trilha: RegistroTrilhaTela) =>
           throw recusaCampos('rqe-repetido', 'O profissional já tem RQE ativo nesta especialidade e UF.', [
             'especialidade',
           ]);
-        // O RQE inativado volta na mesma linha (a trilha guarda a inativação e a volta).
+        // O RQE inativado volta na mesma linha só com o mesmo número: o número registrado nunca é sobrescrito.
+        if (String(ja['numero_rqe']) !== e.numero)
+          throw recusaCampos(
+            'rqe-numero-diferente',
+            `O RQE inativado desta especialidade e UF tem outro número (${String(ja['numero_rqe'])}): reative com o mesmo número.`,
+            ['numero'],
+          );
         await tx.alterar('profissional_rqe', Number(ja['id']), Number(ja['versao']), valores);
         return { id: Number(ja['id']) };
       }
-      const outro = await tx.uma(
-        `SELECT id FROM profissional_rqe WHERE unidade_federativa_id = ? AND numero_rqe = ? AND ativo
-            AND excluido_em IS NULL AND profissional_id <> ?`,
-        [uf['id'], e.numero, e.profissional],
-      );
-      if (outro)
-        throw recusaCampos('rqe-de-outro', 'Este RQE nesta UF já está no cadastro de outro profissional.', [
-          'numero',
-        ]);
       const id = await tx.incluir('profissional_rqe', {
         profissional_id: e.profissional,
         sequencia: await proximaSequencia(tx, 'profissional_rqe', e.profissional),
@@ -508,8 +532,23 @@ const operacaoIncluirAssinatura = (trilha: RegistroTrilhaTela) =>
       await conferirProfissional(tx, e.profissional);
       recusarErros(errosAssinatura(e));
       if (e.arquivo !== null) {
-        const a = await tx.uma('SELECT tipo_mime FROM arquivo WHERE id = ?', [e.arquivo]);
-        if (!a || !/^image\/(png|jpeg)$/.test(String(a['tipo_mime'])))
+        // Só o arquivo enviado como assinatura deste profissional (nunca o documento ou a foto de um paciente).
+        const a = await tx.uma(
+          'SELECT tipo_mime, finalidade, entidade, entidade_id FROM arquivo WHERE id = ? AND excluido_em IS NULL',
+          [e.arquivo],
+        );
+        if (
+          !a ||
+          a['finalidade'] !== FINALIDADE_ASSINATURA ||
+          a['entidade'] !== 'profissional' ||
+          Number(a['entidade_id']) !== e.profissional
+        )
+          throw recusaCampos(
+            'arquivo-nao-e-assinatura',
+            'O arquivo não foi enviado como assinatura deste profissional: envie a imagem pela tela.',
+            ['arquivo'],
+          );
+        if (!/^image\/(png|jpeg)$/.test(String(a['tipo_mime'])))
           throw recusaCampos('arquivo-nao-imagem', 'O arquivo da assinatura tem de ser imagem PNG ou JPEG.', [
             'arquivo',
           ]);
@@ -527,23 +566,30 @@ const operacaoIncluirAssinatura = (trilha: RegistroTrilhaTela) =>
             ['numeroSerie'],
           );
       }
-      // Uma assinatura vigente por tipo: a anterior aberta encerra na véspera da nova; a que começaria depois sai de uso.
-      const abertas = await tx.consultar(
-        `SELECT id, versao, vigencia_inicio FROM profissional_assinatura WHERE profissional_id = ? AND tipo = ?
-            AND ativo AND vigencia_fim IS NULL AND excluido_em IS NULL FOR UPDATE`,
+      // Uma assinatura vigente por tipo (regra do domínio): a anterior aberta encerra na véspera da nova; qualquer outra
+      // sobreposição (com fim informado, ou que começa no mesmo dia ou depois) recusa.
+      const ativas = await tx.consultar(
+        `SELECT id, versao, vigencia_inicio, vigencia_fim FROM profissional_assinatura WHERE profissional_id = ?
+            AND tipo = ? AND ativo AND excluido_em IS NULL FOR UPDATE`,
         [e.profissional, e.tipo],
       );
-      for (const a of abertas) {
-        const inicio = data(a['vigencia_inicio'])!;
-        await tx.alterar(
-          'profissional_assinatura',
-          Number(a['id']),
-          Number(a['versao']),
-          inicio < e.vigenciaInicio
-            ? { vigencia_fim: vespera(e.vigenciaInicio) }
-            : { vigencia_fim: inicio, ativo: false },
+      const versoes = new Map(ativas.map((a) => [Number(a['id']), Number(a['versao'])]));
+      const s = sobreposicaoVigencia(
+        ativas.map((a) => ({
+          id: Number(a['id']),
+          inicio: data(a['vigencia_inicio'])!,
+          fim: data(a['vigencia_fim']),
+        })),
+        { inicio: e.vigenciaInicio, fim: e.vigenciaFim },
+      );
+      if (s.conflitos.length)
+        throw recusaCampos(
+          'vigencia-sobreposta',
+          'Já há assinatura deste tipo neste período: encerre a anterior ou ajuste a vigência.',
+          ['vigenciaInicio'],
         );
-      }
+      for (const x of s.encerrar)
+        await tx.alterar('profissional_assinatura', x.id, versoes.get(x.id)!, { vigencia_fim: x.fim });
       const id = await tx.incluir('profissional_assinatura', {
         profissional_id: e.profissional,
         tipo: e.tipo,
@@ -562,6 +608,15 @@ const operacaoIncluirAssinatura = (trilha: RegistroTrilhaTela) =>
     alvo: (_e, r) => ({ tabela: 'profissional_assinatura', id: Number(r.id) }),
     trilha: () => ({ dados: trilha.dadosDepois ?? null, motivo: null }),
   });
+
+/** Até 512 KB: a assinatura é uma imagem pequena, impressa no rodapé dos documentos. */
+export const TAMANHO_MAXIMO_ASSINATURA = 512 * 1024;
+/** O tipo pela assinatura do conteúdo (nunca pelo nome nem pelo tipo declarado): PNG ou JPEG; outro, null. */
+export function tipoImagem(b: Uint8Array): 'image/png' | 'image/jpeg' | null {
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  return null;
+}
 
 // ── Leituras ──
 
@@ -598,6 +653,7 @@ export interface FinanceiroProfissional {
     id: number;
     versao: number;
     estabelecimento: number | null;
+    estabelecimentoNome: string | null;
     vigenciaInicio: string;
     vigenciaFim: string | null;
     tipoRecebedor: string;
@@ -605,6 +661,8 @@ export interface FinanceiroProfissional {
     empresa: string | null;
     regime: string | null;
     inscricaoMunicipal: string | null;
+    inscricaoInss: string | null;
+    categoriaSefip: number | null;
     pisPasep: string | null;
     aliquotaIss: number | null;
     percentualInss: number | null;
@@ -640,8 +698,20 @@ export class ProfissionalComplementoProprio {
     private readonly nucleo: NucleoCadastro,
     private readonly cliente: string,
     executor?: Executor,
+    /** Porta de arquivos (disco local, ADR 0004) para a imagem da assinatura; sem ela, o envio da imagem dá 503. */
+    private arquivos?: ArquivosDoModulo | null,
   ) {
     this.executor = executor ?? nucleo.criarExecutor();
+  }
+
+  /** A porta de arquivos do ambiente (ARQUIVOS_RAIZ), criada no primeiro envio; sem o núcleo de arquivos, null. */
+  private arquivosDe(): ArquivosDoModulo | null {
+    if (this.arquivos === undefined)
+      this.arquivos =
+        'cliente' in this.nucleo && 'criarExecutor' in this.nucleo
+          ? arquivosDoAmbiente(this.nucleo as unknown as NucleoArmazem, this.cliente)
+          : null;
+    return this.arquivos;
   }
 
   private ler<T>(c: ContextoPorta, fn: (l: Leitor) => Promise<T>): Promise<T> {
@@ -696,6 +766,73 @@ export class ProfissionalComplementoProprio {
   }
   incluirAssinatura(c: ContextoPorta, e: EntradaAssinatura, t: RegistroTrilhaTela) {
     return this.executar(c, operacaoIncluirAssinatura(t), e, t);
+  }
+  /**
+   * Assinatura em imagem enviada pela tela: confere o conteúdo (PNG ou JPEG pela assinatura do arquivo, até 512 KB),
+   * guarda pela porta de arquivos com a finalidade da assinatura e o profissional como dono, e inclui a assinatura.
+   */
+  async enviarImagemAssinatura(
+    c: ContextoPorta,
+    e: {
+      profissional: number;
+      conteudo: Uint8Array;
+      nomeOriginal: string;
+      usoTiss: boolean;
+      vigenciaInicio: string;
+      vigenciaFim: string | null;
+    },
+    t: RegistroTrilhaTela,
+  ): Promise<number> {
+    const tipoMime = tipoImagem(e.conteudo);
+    if (!tipoMime || e.conteudo.length > TAMANHO_MAXIMO_ASSINATURA)
+      throw recusaCampos(
+        'arquivo-nao-imagem',
+        'A imagem da assinatura tem de ser PNG ou JPEG, com até 512 KB.',
+        ['arquivo'],
+      );
+    const arquivos = this.arquivosDe();
+    if (!arquivos || !c.hospital)
+      throw new ErroOperacao(
+        503,
+        'indisponivel',
+        'Indisponível',
+        'O armazenamento de arquivos não está configurado.',
+      );
+    await this.ler(c, async (l) => {
+      if (
+        !(await l.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [e.profissional]))
+      )
+        throw new ErroOperacao(
+          404,
+          'profissional-inexistente',
+          'Não encontrado',
+          'Profissional não encontrado.',
+        );
+    });
+    const a = await arquivos.guardar(c.hospital, {
+      conteudo: e.conteudo,
+      nomeOriginal: e.nomeOriginal.slice(0, 255) || 'assinatura',
+      tipoMime,
+      finalidade: FINALIDADE_ASSINATURA,
+      entidade: 'profissional',
+      entidadeId: e.profissional,
+    });
+    return this.incluirAssinatura(
+      c,
+      {
+        profissional: e.profissional,
+        tipo: 'imagem',
+        arquivo: a.id,
+        titular: null,
+        numeroSerie: null,
+        emissor: null,
+        impressaoDigital: null,
+        usoTiss: e.usoTiss,
+        vigenciaInicio: e.vigenciaInicio,
+        vigenciaFim: e.vigenciaFim,
+      },
+      t,
+    );
   }
   /** Encerra a vigência (dado fiscal, assinatura) ou inativa (conta, RQE); nada se apaga. */
   encerrar(
@@ -766,7 +903,9 @@ export class ProfissionalComplementoProprio {
     return this.ler(c, async (l) => {
       const hoje = await hojeDe(l);
       const fiscais = await l.consultar(
-        `SELECT f.*, pj.razao_social FROM profissional_dado_fiscal f LEFT JOIN pessoa_juridica pj ON pj.id = f.pessoa_juridica_id
+        `SELECT f.*, pj.razao_social, es.nome_fantasia FROM profissional_dado_fiscal f
+           LEFT JOIN pessoa_juridica pj ON pj.id = f.pessoa_juridica_id
+           LEFT JOIN estabelecimento es ON es.id = f.estabelecimento_id
           WHERE f.profissional_id = ? AND f.excluido_em IS NULL ORDER BY f.vigencia_inicio DESC, f.id DESC`,
         [profissional],
       );
@@ -783,6 +922,7 @@ export class ProfissionalComplementoProprio {
             id: Number(f['id']),
             versao: Number(f['versao']),
             estabelecimento: num(f['estabelecimento_id']),
+            estabelecimentoNome: texto(f['nome_fantasia']),
             vigenciaInicio: inicio,
             vigenciaFim: fim,
             tipoRecebedor: String(f['tipo_recebedor']),
@@ -790,6 +930,8 @@ export class ProfissionalComplementoProprio {
             empresa: texto(f['razao_social']),
             regime: texto(f['regime_tributario']),
             inscricaoMunicipal: texto(f['inscricao_municipal']),
+            inscricaoInss: texto(f['inscricao_inss']),
+            categoriaSefip: num(f['categoria_sefip']),
             pisPasep: texto(f['pis_pasep']),
             aliquotaIss: num(f['aliquota_iss']),
             percentualInss: num(f['percentual_inss']),
@@ -821,6 +963,50 @@ export class ProfissionalComplementoProprio {
     });
   }
 
+  /**
+   * O que o repasse usa no dia e no estabelecimento: o dado fiscal que vale (o do estabelecimento sobre o geral) e a
+   * conta principal ativa (destino do pagamento). Sem dado fiscal ou sem conta: null no campo.
+   */
+  async destinoDoRepasse(
+    c: ContextoPorta,
+    profissional: number,
+    dia: string,
+    estabelecimento: number | null,
+  ): Promise<{
+    dadoFiscal: FinanceiroProfissional['fiscais'][number] | null;
+    conta: FinanceiroProfissional['contas'][number] | null;
+  }> {
+    const f = await this.financeiro(c, profissional);
+    const dadoFiscal = dadoFiscalVigente(
+      f.fiscais.map((x) => ({ ...x, inicio: x.vigenciaInicio, fim: x.vigenciaFim })),
+      dia,
+      estabelecimento,
+    );
+    return {
+      dadoFiscal: dadoFiscal ? f.fiscais.find((x) => x.id === dadoFiscal.id)! : null,
+      conta: f.contas.find((x) => x.ativo && x.principal) ?? null,
+    };
+  }
+
+  /** A assinatura do tipo que vale no dia (a que documentos clínicos e guias usam) e os RQE ativos do profissional. */
+  async assinaturaNoDia(c: ContextoPorta, profissional: number, tipo: TipoAssinatura, dia: string) {
+    const x = await this.complemento(c, profissional);
+    const a = assinaturaVigente(
+      x.assinaturas.map((y) => ({
+        ...y,
+        tipo: y.tipo as TipoAssinatura,
+        inicio: y.vigenciaInicio,
+        fim: y.vigenciaFim,
+      })),
+      tipo,
+      dia,
+    );
+    return {
+      assinatura: a ? x.assinaturas.find((y) => y.id === a.id)! : null,
+      rqes: x.rqes.filter((r) => r.ativo),
+    };
+  }
+
   /** Opções dos formulários: bancos, tipos de conta, especialidades e empresas (busca por nome ou CNPJ). */
   async opcoes(c: ContextoPorta, empresa: string | null) {
     return this.ler(c, async (l) => {
@@ -835,6 +1021,10 @@ export class ProfissionalComplementoProprio {
       );
       const esp = await l.consultar(
         'SELECT id, descricao FROM especialidade_medica WHERE ativo ORDER BY descricao LIMIT 1000',
+        [],
+      );
+      const ests = await l.consultar(
+        'SELECT id, nome_fantasia FROM estabelecimento WHERE excluido_em IS NULL ORDER BY nome_fantasia LIMIT 200',
         [],
       );
       const termo = (empresa ?? '').trim();
@@ -853,6 +1043,7 @@ export class ProfissionalComplementoProprio {
         })),
         tiposConta: tipos.map((t) => ({ id: Number(t['id']), texto: String(t['descricao']) })),
         especialidades: esp.map((t) => ({ id: Number(t['id']), texto: String(t['descricao']) })),
+        estabelecimentos: ests.map((t) => ({ id: Number(t['id']), texto: String(t['nome_fantasia']) })),
         empresas: empresas.map((t) => ({
           id: Number(t['id']),
           texto: String(t['razao_social']),

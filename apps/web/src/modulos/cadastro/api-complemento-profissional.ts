@@ -41,6 +41,7 @@ export interface DadoFiscal {
   id: number;
   versao: number;
   estabelecimento: number | null;
+  estabelecimentoNome: string | null;
   vigenciaInicio: string;
   vigenciaFim: string | null;
   tipoRecebedor: string;
@@ -48,6 +49,8 @@ export interface DadoFiscal {
   empresa: string | null;
   regime: string | null;
   inscricaoMunicipal: string | null;
+  inscricaoInss: string | null;
+  categoriaSefip: number | null;
   pisPasep: string | null;
   aliquotaIss: number | null;
   percentualInss: number | null;
@@ -82,6 +85,7 @@ export interface OpcoesComplemento {
   bancos: { id: number; texto: string }[];
   tiposConta: { id: number; texto: string }[];
   especialidades: { id: number; texto: string }[];
+  estabelecimentos: { id: number; texto: string }[];
   empresas: { id: number; texto: string; cnpj: string | null }[];
 }
 export type TipoComplemento = 'dados-fiscais' | 'contas' | 'rqes' | 'assinaturas';
@@ -125,6 +129,11 @@ export const incluirRqe = (p: number, c: Record<string, unknown>) =>
   pedir<{ id: number }>(`${C}/profissionais/${p}/rqes`, 'POST', c);
 export const incluirAssinatura = (p: number, c: Record<string, unknown>) =>
   pedir<{ id: number }>(`${C}/profissionais/${p}/assinaturas`, 'POST', c);
+/** A imagem da assinatura (data URL ou base64), guardada pela porta de arquivos com a finalidade da assinatura. */
+export const enviarImagemAssinatura = (
+  p: number,
+  c: { conteudo: string; nomeOriginal: string; usoTiss: boolean; vigenciaInicio: string },
+) => pedir<{ id: number }>(`${C}/profissionais/${p}/assinaturas/imagem`, 'POST', c);
 export const gravarDadoFiscal = (p: number, c: Record<string, unknown>) =>
   pedir<{ id: number }>(`${C}/profissionais/${p}/dados-fiscais`, 'POST', c);
 export const incluirConta = (p: number, c: Record<string, unknown>) =>
@@ -135,4 +144,10 @@ export const encerrarComplemento = (
   id: number,
   versao: number,
   fim: string | null = null,
-) => pedir<{ id: number }>(`${C}/profissionais/${p}/${tipo}/${id}/encerrar`, 'POST', { versao, fim });
+) =>
+  pedir<{ id: number }>(
+    // O dado fiscal e a conta têm a rota do cargo do repasse; RQE e assinatura, a da edição do profissional.
+    `${C}/profissionais/${p}/${tipo === 'dados-fiscais' || tipo === 'contas' ? 'financeiro/' : ''}${tipo}/${id}/encerrar`,
+    'POST',
+    { versao, fim },
+  );

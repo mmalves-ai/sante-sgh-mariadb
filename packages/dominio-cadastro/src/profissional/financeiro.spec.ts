@@ -11,7 +11,9 @@ import {
   errosRqe,
   favorecidoTerceiro,
   pisValido,
+  dadoFiscalVigente,
   sobreposicaoFiscal,
+  sobreposicaoVigencia,
   vespera,
 } from './financeiro.js';
 
@@ -23,7 +25,7 @@ const fiscal = (x: Partial<DadoFiscal> = {}): DadoFiscal => ({
   tipoRecebedor: 'pessoa_fisica',
   pessoaJuridica: null,
   regime: 'autonomo',
-  pisPasep: null,
+  pisPasep: '12056412547',
   aliquotaIss: 5,
   percentualInss: 11,
   retemIss: true,
@@ -47,18 +49,45 @@ describe('dado fiscal do repasse', () => {
   it('aceita o autônomo completo e recusa cada inconsistência pelo código', () => {
     expect(errosDadoFiscal(fiscal())).toEqual([]);
     expect(errosDadoFiscal(fiscal({ vigenciaFim: '2025-12-31' }))).toContain('vigencia-invertida');
-    expect(errosDadoFiscal(fiscal({ tipoRecebedor: 'pessoa_juridica', dependentesIrrf: 0 }))).toEqual([
-      'recebedor-sem-empresa',
-    ]);
+    expect(
+      errosDadoFiscal(
+        fiscal({ tipoRecebedor: 'pessoa_juridica', regime: 'simples_nacional', dependentesIrrf: 0 }),
+      ),
+    ).toEqual(['recebedor-sem-empresa']);
     expect(errosDadoFiscal(fiscal({ pessoaJuridica: 3 }))).toContain('empresa-sem-recebedor-pj');
     expect(errosDadoFiscal(fiscal({ aliquotaIss: 101 }))).toContain('aliquota-iss-fora');
     expect(errosDadoFiscal(fiscal({ aliquotaIss: null }))).toContain('retencao-iss-sem-aliquota');
     expect(errosDadoFiscal(fiscal({ percentualInss: null }))).toContain('retencao-inss-sem-percentual');
     expect(
-      errosDadoFiscal(fiscal({ tipoRecebedor: 'pessoa_juridica', pessoaJuridica: 3, dependentesIrrf: 2 })),
+      errosDadoFiscal(
+        fiscal({
+          tipoRecebedor: 'pessoa_juridica',
+          pessoaJuridica: 3,
+          regime: 'lucro_presumido',
+          dependentesIrrf: 2,
+        }),
+      ),
     ).toEqual(['dependentes-em-pj']);
     expect(errosDadoFiscal(fiscal({ regime: 'mei' }))).toContain('mei-sem-empresa');
     expect(errosDadoFiscal(fiscal({ pisPasep: '12345678900' }))).toContain('pis-invalido');
+  });
+
+  it('ISS de 2% a 5% (isento sem alíquota nem retenção); regime do recebedor; PIS do contribuinte com INSS retido', () => {
+    expect(errosDadoFiscal(fiscal({ aliquotaIss: 2 }))).toEqual([]);
+    expect(errosDadoFiscal(fiscal({ aliquotaIss: 1.99 }))).toEqual(['aliquota-iss-fora']);
+    expect(errosDadoFiscal(fiscal({ aliquotaIss: 5.01 }))).toEqual(['aliquota-iss-fora']);
+    expect(errosDadoFiscal(fiscal({ regime: 'isento', aliquotaIss: 0, retemIss: false }))).toEqual([]);
+    expect(errosDadoFiscal(fiscal({ regime: 'isento', aliquotaIss: 3, retemIss: false }))).toEqual([
+      'aliquota-iss-isento',
+    ]);
+    expect(errosDadoFiscal(fiscal({ regime: 'isento', aliquotaIss: 0 }))).toEqual(['retencao-iss-isento']);
+    for (const regime of ['simples_nacional', 'lucro_presumido', 'lucro_real'] as const)
+      expect(errosDadoFiscal(fiscal({ regime }))).toEqual(['regime-incompativel']);
+    const pj = { tipoRecebedor: 'pessoa_juridica' as const, pessoaJuridica: 3, dependentesIrrf: 0 };
+    expect(errosDadoFiscal(fiscal({ ...pj, regime: 'autonomo' }))).toEqual(['regime-incompativel']);
+    expect(errosDadoFiscal(fiscal({ ...pj, regime: 'mei', pisPasep: null }))).toEqual([]);
+    expect(errosDadoFiscal(fiscal({ pisPasep: null }))).toEqual(['pis-obrigatorio']);
+    expect(errosDadoFiscal(fiscal({ pisPasep: null, retemInss: false, percentualInss: null }))).toEqual([]);
   });
 
   it('PIS pelo dígito verificador', () => {
@@ -84,6 +113,20 @@ describe('dado fiscal do repasse', () => {
     });
     expect(c.conflitos).toEqual([4]);
     expect(vespera('2026-03-01')).toBe('2026-02-28');
+  });
+
+  it('o geral e o do estabelecimento convivem; no dia, o do estabelecimento vale sobre o geral', () => {
+    const geral = { id: 1, estabelecimento: null, inicio: '2026-01-01', fim: null };
+    const doEst = { id: 2, estabelecimento: 7, inicio: '2026-03-01', fim: '2026-03-31' };
+    expect(sobreposicaoFiscal([geral], { estabelecimento: 7, inicio: '2026-03-01', fim: null })).toEqual({
+      encerrar: [],
+      conflitos: [],
+    });
+    expect(dadoFiscalVigente([geral, doEst], '2026-03-15', 7)?.id).toBe(2);
+    expect(dadoFiscalVigente([geral, doEst], '2026-04-01', 7)?.id).toBe(1);
+    expect(dadoFiscalVigente([geral, doEst], '2026-03-15', 8)?.id).toBe(1);
+    expect(dadoFiscalVigente([geral, doEst], '2026-03-15', null)?.id).toBe(1);
+    expect(dadoFiscalVigente([doEst], '2026-03-15', 8)).toBeNull();
   });
 });
 
@@ -162,6 +205,20 @@ describe('RQE e assinatura', () => {
         impressaoDigital: 'b',
       }),
     ).toEqual(['serie-invalida', 'impressao-digital-invalida', 'certificado-sem-titular']);
+  });
+
+  it('assinatura nova: a aberta anterior encerra na véspera; a com fim que se sobrepõe e a posterior recusam', () => {
+    expect(
+      sobreposicaoVigencia(
+        [
+          { id: 1, inicio: '2025-01-01', fim: null },
+          { id: 2, inicio: '2026-02-01', fim: '2026-08-31' },
+          { id: 3, inicio: '2026-09-01', fim: null },
+          { id: 4, inicio: '2024-01-01', fim: '2024-12-31' },
+        ],
+        { inicio: '2026-06-01', fim: null },
+      ),
+    ).toEqual({ encerrar: [{ id: 1, fim: '2026-05-31' }], conflitos: [2, 3] });
   });
 
   it('uma assinatura vigente por tipo: a mais recente no dia', () => {

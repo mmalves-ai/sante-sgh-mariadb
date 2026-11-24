@@ -5,7 +5,9 @@
 //   GET  /api/cadastros/profissionais/:id/financeiro                   dados fiscais e contas (cargo do repasse)
 //   POST /api/cadastros/profissionais/:id/dados-fiscais                inclui o dado fiscal (encerra o anterior aberto)
 //   POST /api/cadastros/profissionais/:id/contas                       inclui conta ou chave (uma principal)
-//   POST /api/cadastros/profissionais/:id/:tipo/:rid/encerrar          encerra ou inativa (nada se apaga)
+//   POST /api/cadastros/profissionais/:id/assinaturas/imagem           envia a imagem (base64) e inclui a assinatura
+//   POST /api/cadastros/profissionais/:id/:tipo/:rid/encerrar          RQE e assinatura: encerra ou inativa
+//   POST /api/cadastros/profissionais/:id/financeiro/:tipo/:rid/encerrar  dado fiscal e conta (cargo do repasse)
 //   GET  /api/cadastros/profissionais-complemento/opcoes?empresa=      bancos, tipos de conta, especialidades, empresas
 // Acesso só pelos níveis de cada cargo: RQE e assinatura com cadastro.profissional.ler/editar; o dado fiscal e o
 // bancário com cadastro.profissional.financeiro.ler/editar (cargo do repasse). Gravações pelo executor, com a trilha.
@@ -43,11 +45,12 @@ const decimal = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : NaN;
 };
 const sim = (v: unknown): boolean => v === true;
-const TIPOS_ENCERRAR = {
-  'dados-fiscais': { tabela: 'profissional_dado_fiscal', financeiro: true },
-  contas: { tabela: 'conta_bancaria_profissional', financeiro: true },
-  rqes: { tabela: 'profissional_rqe', financeiro: false },
-  assinaturas: { tabela: 'profissional_assinatura', financeiro: false },
+// Cada grupo tem a sua rota e o seu nível: RQE e assinatura com a edição do profissional; dado fiscal e conta só com o
+// nível do cargo do repasse (o mesmo da inclusão).
+const TIPOS_ENCERRAR_CLINICO = { rqes: 'profissional_rqe', assinaturas: 'profissional_assinatura' } as const;
+const TIPOS_ENCERRAR_FINANCEIRO = {
+  'dados-fiscais': 'profissional_dado_fiscal',
+  contas: 'conta_bancaria_profissional',
 } as const;
 
 @Controller('cadastros')
@@ -253,6 +256,42 @@ export class ProfissionalComplementoController {
     return { id: r };
   }
 
+  @Post('profissionais/:id/assinaturas/imagem')
+  @HttpCode(201)
+  @Permissao('cadastro.profissional.editar')
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async enviarImagem(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const b = corpoDe(corpo);
+    const base64 = typeof b['conteudo'] === 'string' ? b['conteudo'].replace(/^data:[^,]*,/, '') : '';
+    if (!base64 || base64.length > 800_000 || !/^[A-Za-z0-9+/=\s]+$/.test(base64))
+      throw new ErroProblema(
+        'arquivo-nao-imagem',
+        422,
+        'Imagem inválida',
+        'Envie a imagem PNG ou JPEG, com até 512 KB.',
+      );
+    const e = {
+      profissional: n,
+      conteudo: new Uint8Array(Buffer.from(base64, 'base64')),
+      nomeOriginal: txt(b['nomeOriginal']) ?? 'assinatura',
+      usoTiss: sim(b['usoTiss']),
+      vigenciaInicio: txt(b['vigenciaInicio']) ?? '',
+      vigenciaFim: txt(b['vigenciaFim']),
+    };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.vigenciaInicio))
+      throw new ErroProblema('vigencia-invalida', 422, 'Vigência inválida', 'Informe o início da vigência.');
+    const r = await this.rodar(() =>
+      this.servico().enviarImagemAssinatura(
+        s.porta,
+        e,
+        this.trilha(s, 'cadastro.incluirAssinatura', 'profissional_assinatura', n),
+      ),
+    );
+    return { id: r };
+  }
+
   @Post('profissionais/:id/:tipo/:rid/encerrar')
   @HttpCode(200)
   @Permissao('cadastro.profissional.editar')
@@ -264,28 +303,40 @@ export class ProfissionalComplementoController {
     @Body() corpo: unknown,
     @Req() req: RequisicaoAutorizada,
   ) {
+    return this.encerrarEm(TIPOS_ENCERRAR_CLINICO, p, tipo, rid, corpo, req);
+  }
+
+  @Post('profissionais/:id/financeiro/:tipo/:rid/encerrar')
+  @HttpCode(200)
+  @Permissao(PERMISSAO_FINANCEIRO_EDITAR)
+  @AuditadoNoHandler('executor: trilha na mesma transação')
+  async encerrarFinanceiro(
+    @Param('id') p: string,
+    @Param('tipo') tipo: string,
+    @Param('rid') rid: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    return this.encerrarEm(TIPOS_ENCERRAR_FINANCEIRO, p, tipo, rid, corpo, req);
+  }
+
+  private async encerrarEm(
+    tipos: Readonly<Record<string, Parameters<ProfissionalComplementoProprio['encerrar']>[1]>>,
+    p: string,
+    tipo: string,
+    rid: string,
+    corpo: unknown,
+    req: RequisicaoAutorizada,
+  ) {
     const s = sessaoDe(req);
     const n = idDaRota(p);
-    const alvo = TIPOS_ENCERRAR[tipo as keyof typeof TIPOS_ENCERRAR];
-    if (!alvo)
+    const tabela = Object.hasOwn(tipos, tipo) ? tipos[tipo] : undefined;
+    if (!tabela)
       throw new ErroProblema('nao-encontrado', 404, 'Não encontrado', 'Tipo de registro desconhecido.');
-    // O dado fiscal e a conta pedem, além da edição do profissional, o nível do cargo do repasse.
-    if (alvo.financeiro && !s.pode(PERMISSAO_FINANCEIRO_EDITAR))
-      throw new ErroProblema(
-        'sem-permissao',
-        403,
-        'Sem permissão',
-        'Só o cargo do repasse altera o dado fiscal e a conta.',
-      );
     const b = corpoDe(corpo);
     const e = { profissional: n, id: idDaRota(rid), versao: id(b['versao']) ?? 0, fim: txt(b['fim']) };
     const r = await this.rodar(() =>
-      this.servico().encerrar(
-        s.porta,
-        alvo.tabela,
-        e,
-        this.trilha(s, 'cadastro.encerrarComplemento', alvo.tabela, n),
-      ),
+      this.servico().encerrar(s.porta, tabela, e, this.trilha(s, 'cadastro.encerrarComplemento', tabela, n)),
     );
     return { id: r };
   }

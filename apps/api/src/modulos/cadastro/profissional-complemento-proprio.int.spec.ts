@@ -1,10 +1,12 @@
 // Contrato de efeito do complemento do profissional (F3.1, 02-CAD linha 16) contra o MariaDB real, no cliente de teste
 // f22_o1, com a massa SINTÉTICA do lote 01-02 (prefixo F22L0102; nenhuma pessoa real). Prova o que fica no banco: dado
 // fiscal com vigência (o anterior aberto encerra na véspera; sobreposição recusa), conta e chave de pagamento (uma
-// principal, favorecido terceiro só confirmado, inativar passa a principal), RQE (exige o registro na UF, volta na mesma
-// linha) e assinatura (uma vigente por tipo; encerrar não apaga). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// principal, favorecido terceiro só confirmado, inativar passa a principal), RQE (exige o registro na UF, de um só
+// profissional, volta na mesma linha só com o mesmo número) e assinatura (uma vigente por tipo, série de um só
+// profissional, imagem só da finalidade da assinatura; encerrar não apaga). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import {
   CLIENTE_F22,
   contextoPorta,
@@ -19,6 +21,7 @@ import {
 import {
   type EntradaConta,
   type EntradaDadoFiscal,
+  FINALIDADE_ASSINATURA,
   ProfissionalComplementoProprio,
 } from './profissional-complemento-proprio.js';
 import type { RegistroTrilhaTela } from './tipos.js';
@@ -33,7 +36,9 @@ const TABELAS = [
 async function limparComplemento(nucleo: NucleoProprio, m: Massa | null): Promise<void> {
   if (!m) return;
   await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, async (e) => {
-    for (const t of TABELAS) await e.executar(`DELETE FROM ${t} WHERE profissional_id = ?`, [m.profissional]);
+    for (const t of TABELAS)
+      await e.executar(`DELETE FROM ${t} WHERE profissional_id IN (?, ?)`, [m.profissional, m.enfermeira]);
+    await e.executar("DELETE FROM arquivo WHERE chave_armazenamento LIKE 'f22-0102-compl/%'", []);
   });
 }
 
@@ -126,6 +131,10 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
 
   afterAll(async () => {
     await limparComplemento(nucleo, m);
+    if (m)
+      await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, (e) =>
+        limparTrilhaDaMassa(e, { ids: [m!.estabelecimento, m!.outroEstabelecimento] }),
+      );
     await limparMassa(nucleo, m);
     await nucleo.encerrar();
   });
@@ -190,6 +199,38 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
       [m!.profissional],
     );
     expect(Number(n!.n)).toBe(2);
+    // O do estabelecimento convive com o geral e vale sobre ele no dia; no mesmo escopo, sobreposição recusa.
+    const est = await c.gravarDadoFiscal(
+      ctx,
+      fiscal({
+        estabelecimento: m!.estabelecimento,
+        vigenciaInicio: '2026-08-01',
+        vigenciaFim: '2026-08-31',
+      }),
+      trilha('profissional_dado_fiscal'),
+    );
+    await expect(
+      c.gravarDadoFiscal(
+        ctx,
+        fiscal({
+          estabelecimento: m!.estabelecimento,
+          vigenciaInicio: '2026-08-15',
+          vigenciaFim: '2026-09-15',
+        }),
+        trilha('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'vigencia-sobreposta' } });
+    expect(
+      (await c.destinoDoRepasse(ctx, m!.profissional, '2026-08-10', m!.estabelecimento)).dadoFiscal?.id,
+    ).toBe(est);
+    expect(
+      (await c.destinoDoRepasse(ctx, m!.profissional, '2026-08-10', m!.outroEstabelecimento)).dadoFiscal?.id,
+    ).toBe(b);
+    expect((await c.destinoDoRepasse(ctx, m!.profissional, '2026-03-10', null)).dadoFiscal?.id).toBe(a);
+    // Regra fiscal do domínio antes do banco: ISS fora de 2% a 5% e regime de empresa para pessoa física recusam.
+    await expect(
+      c.gravarDadoFiscal(ctx, fiscal({ vigenciaInicio: '2027-01-01', aliquotaIss: 10 }), trilha('x')),
+    ).rejects.toMatchObject({ problema: { codigo: 'aliquota-iss-fora' } });
   });
 
   it('conta e chave: a primeira é a principal; nova principal tira a marca; terceiro só confirmado; inativar passa a principal', async () => {
@@ -237,6 +278,8 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
     const inativa = await um('SELECT principal, ativo FROM conta_bancaria_profissional WHERE id = ?', [b]);
     expect(Number(depois!['principal'])).toBe(1);
     expect(inativa).toMatchObject({ principal: 0, ativo: 0 });
+    // O repasse usa a conta principal ativa.
+    expect((await c.destinoDoRepasse(ctx, m!.profissional, '2026-08-10', null)).conta?.id).toBe(a);
   });
 
   it('RQE: exige o registro ativo na UF; repetido recusa; inativado volta na mesma linha', async () => {
@@ -268,11 +311,32 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
       { profissional: m!.profissional, id, versao: Number(l!['versao']), fim: null },
       trilha('x'),
     );
-    const volta = await c.incluirRqe(ctx, { ...e, numero: '45679' }, trilha('profissional_rqe'));
+    // A volta com outro número recusa (o número registrado nunca é sobrescrito); com o mesmo número, volta na linha.
+    await expect(c.incluirRqe(ctx, { ...e, numero: '45679' }, trilha('x'))).rejects.toMatchObject({
+      problema: { codigo: 'rqe-numero-diferente' },
+    });
+    // O RQE ativo de outro profissional na mesma UF recusa a inclusão e a volta.
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, (w) =>
+      w.executar(
+        `INSERT INTO profissional_rqe (profissional_id, sequencia, numero_rqe, unidade_federativa_id,
+            especialidade_medica_id, ativo, criado_em) VALUES (?, 1, '45678', ?, ?, TRUE, NOW(3))`,
+        [m!.enfermeira, m!.uf, m!.especialidade],
+      ),
+    );
+    await expect(c.incluirRqe(ctx, e, trilha('x'))).rejects.toMatchObject({
+      problema: { codigo: 'rqe-de-outro' },
+    });
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, (w) =>
+      w.executar('UPDATE profissional_rqe SET ativo = FALSE WHERE profissional_id = ?', [m!.enfermeira]),
+    );
+    const volta = await c.incluirRqe(ctx, e, trilha('profissional_rqe'));
     expect(volta).toBe(id);
     const lista = (await c.complemento(ctx, m!.profissional)).rqes;
     expect(lista).toHaveLength(1);
-    expect(lista[0]).toMatchObject({ numero: '45679', ativo: true, uf: siglaUf });
+    expect(lista[0]).toMatchObject({ numero: '45678', ativo: true, uf: siglaUf });
+    expect(
+      (await c.assinaturaNoDia(ctx, m!.profissional, 'imagem', '2026-08-10')).rqes.map((r) => r.id),
+    ).toEqual([id]);
   });
 
   it('assinatura: certificado com série única; o novo encerra o anterior na véspera; encerrar não apaga', async () => {
@@ -298,9 +362,42 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
     await expect(c.incluirAssinatura(ctx, { ...cert, tipo: 'imagem' }, trilha('x'))).rejects.toMatchObject({
       problema: { codigo: 'imagem-sem-arquivo' },
     });
-    const la = await um('SELECT vigencia_fim, ativo FROM profissional_assinatura WHERE id = ?', [a]);
-    expect(la!['vigencia_fim']).not.toBeNull();
+    const la = await um(
+      "SELECT DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim, ativo FROM profissional_assinatura WHERE id = ?",
+      [a],
+    );
+    expect(la!['fim']).toBe('2026-05-31');
     expect(Number(la!['ativo'])).toBe(1);
+    // Sobreposição com a de fim informado (a encerrada) ou com a nova: recusa, nunca duas vigentes no mesmo dia.
+    await expect(
+      c.incluirAssinatura(
+        ctx,
+        { ...cert, numeroSerie: 'F22D0102', vigenciaInicio: '2026-05-15', vigenciaFim: '2026-05-20' },
+        trilha('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'vigencia-sobreposta' } });
+    // A série de outro profissional recusa.
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, (w) =>
+      w.executar(
+        `INSERT INTO profissional_assinatura (profissional_id, tipo, certificado_titular, certificado_numero_serie,
+            uso_tiss, vigencia_inicio, ativo, criado_em) VALUES (?, 'certificado_digital', ?, 'F22E0102', FALSE,
+            '2026-01-01', TRUE, NOW(3))`,
+        [m!.enfermeira, `OUTRO ${MARCA}`],
+      ),
+    );
+    await expect(
+      c.incluirAssinatura(
+        ctx,
+        { ...cert, numeroSerie: 'F22E0102', vigenciaInicio: '2027-01-01' },
+        trilha('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'certificado-de-outro' } });
+    expect(
+      (await c.assinaturaNoDia(ctx, m!.profissional, 'certificado_digital', '2026-05-31')).assinatura?.id,
+    ).toBe(a);
+    expect(
+      (await c.assinaturaNoDia(ctx, m!.profissional, 'certificado_digital', '2026-06-01')).assinatura?.id,
+    ).toBe(b);
     const lista = (await c.complemento(ctx, m!.profissional)).assinaturas;
     expect(lista.filter((x) => x.vigente).map((x) => x.id)).toEqual([b]);
     const vb = lista.find((x) => x.id === b)!.versao;
@@ -320,5 +417,66 @@ describe.skipIf(SEM_BANCO)('complemento do profissional no banco próprio (f22_o
       [String(a), String(b)],
     );
     expect(Number(trilhas!.n)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('assinatura em imagem: só o arquivo enviado como assinatura deste profissional (nunca o de um paciente)', async () => {
+    const ctx = contextoPorta(m!);
+    const arquivo = async (sufixo: string, finalidade: string, entidade: string, dono: number) => {
+      let id = 0;
+      await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-compl' }, async (w) => {
+        await w.executar(
+          `INSERT INTO arquivo (estabelecimento_id, entidade, entidade_id, finalidade, nome_original, tipo_mime,
+              tamanho_bytes, hash_sha256, chave_armazenamento, criado_em) VALUES (?, ?, ?, ?, 'a.png', 'image/png', 10, ?, ?, NOW(3))`,
+          [
+            m!.estabelecimento,
+            entidade,
+            dono,
+            finalidade,
+            sufixo.padEnd(64, '0'),
+            `f22-0102-compl/${sufixo}`,
+          ],
+        );
+        const r = await w.uma<{ id: unknown }>('SELECT id FROM arquivo WHERE chave_armazenamento = ?', [
+          `f22-0102-compl/${sufixo}`,
+        ]);
+        id = Number(r!.id);
+      });
+      return id;
+    };
+    const img = {
+      profissional: m!.profissional,
+      tipo: 'imagem' as const,
+      titular: null,
+      numeroSerie: null,
+      emissor: null,
+      impressaoDigital: null,
+      usoTiss: false,
+      vigenciaInicio: '2026-01-01',
+      vigenciaFim: null,
+    };
+    const dePaciente = await arquivo('a1', 'imagem', 'paciente', m!.profissional);
+    const deOutro = await arquivo('a2', FINALIDADE_ASSINATURA, 'profissional', m!.enfermeira);
+    const certo = await arquivo('a3', FINALIDADE_ASSINATURA, 'profissional', m!.profissional);
+    for (const x of [dePaciente, deOutro])
+      await expect(c.incluirAssinatura(ctx, { ...img, arquivo: x }, trilha('x'))).rejects.toMatchObject({
+        problema: { codigo: 'arquivo-nao-e-assinatura' },
+      });
+    const id = await c.incluirAssinatura(ctx, { ...img, arquivo: certo }, trilha('profissional_assinatura'));
+    expect((await c.assinaturaNoDia(ctx, m!.profissional, 'imagem', '2026-08-10')).assinatura?.id).toBe(id);
+    // O envio pela tela confere o conteúdo: o que não é PNG nem JPEG recusa antes de guardar.
+    await expect(
+      c.enviarImagemAssinatura(
+        ctx,
+        {
+          profissional: m!.profissional,
+          conteudo: new TextEncoder().encode('%PDF-1.7 nao e imagem'),
+          nomeOriginal: 'x.pdf',
+          usoTiss: false,
+          vigenciaInicio: '2026-01-01',
+          vigenciaFim: null,
+        },
+        trilha('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'arquivo-nao-imagem' } });
   });
 });

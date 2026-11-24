@@ -16,6 +16,19 @@ export const REGIMES_TRIBUTARIOS = [
   'outro',
 ] as const;
 export type RegimeTributario = (typeof REGIMES_TRIBUTARIOS)[number];
+/** Regimes de quem recebe como pessoa física e como pessoa jurídica ('isento' e 'outro' valem para os dois). */
+export const REGIMES_PESSOA_FISICA: readonly RegimeTributario[] = ['autonomo', 'isento', 'outro'];
+export const REGIMES_PESSOA_JURIDICA: readonly RegimeTributario[] = [
+  'simples_nacional',
+  'mei',
+  'lucro_presumido',
+  'lucro_real',
+  'isento',
+  'outro',
+];
+/** Alíquota do ISS: de 2% a 5% (lei complementar 116/2003, art. 8º e 8º-A); o regime isento não tem alíquota. */
+export const ISS_MINIMO = 2;
+export const ISS_MAXIMO = 5;
 export const INCIDENCIAS_IMPOSTO = ['producao', 'pagamento'] as const;
 export const TIPOS_CHAVE_PIX = ['cpf', 'cnpj', 'email', 'telefone', 'aleatoria'] as const;
 export type TipoChavePix = (typeof TIPOS_CHAVE_PIX)[number];
@@ -52,17 +65,31 @@ export function errosDadoFiscal(d: DadoFiscal): string[] {
   if (d.tipoRecebedor === 'pessoa_juridica' && d.pessoaJuridica === null) e.push('recebedor-sem-empresa');
   if (d.tipoRecebedor === 'pessoa_fisica' && d.pessoaJuridica !== null) e.push('empresa-sem-recebedor-pj');
   if (d.pisPasep !== null && !pisValido(d.pisPasep)) e.push('pis-invalido');
-  for (const [v, cod] of [
-    [d.aliquotaIss, 'aliquota-iss-fora'],
-    [d.percentualInss, 'percentual-inss-fora'],
-  ] as const)
-    if (v !== null && !(v >= 0 && v <= 100)) e.push(cod);
+  if (d.aliquotaIss !== null) {
+    if (d.regime === 'isento') {
+      if (d.aliquotaIss !== 0) e.push('aliquota-iss-isento');
+    } else if (!(d.aliquotaIss >= ISS_MINIMO && d.aliquotaIss <= ISS_MAXIMO)) e.push('aliquota-iss-fora');
+  }
+  if (d.regime === 'isento' && d.retemIss) e.push('retencao-iss-isento');
+  if (d.percentualInss !== null && !(d.percentualInss >= 0 && d.percentualInss <= 100))
+    e.push('percentual-inss-fora');
   // Reter sem a alíquota deixa o repasse sem base de cálculo: a retenção exige o percentual.
   if (d.retemIss && d.aliquotaIss === null) e.push('retencao-iss-sem-aliquota');
   if (d.retemInss && d.percentualInss === null) e.push('retencao-inss-sem-percentual');
-  // Pessoa jurídica não tem INSS de contribuinte individual retido nem dependente de IRRF.
+  // Dependente de IRRF é dedução da pessoa física: a pessoa jurídica não o tem (a retenção de INSS da PJ, na cessão de
+  // mão de obra, continua possível).
   if (d.tipoRecebedor === 'pessoa_juridica' && d.dependentesIrrf > 0) e.push('dependentes-em-pj');
+  // O regime acompanha o recebedor: autônomo é pessoa física; Simples, MEI e lucro presumido ou real são de empresa.
   if (d.regime === 'mei' && d.tipoRecebedor !== 'pessoa_juridica') e.push('mei-sem-empresa');
+  else if (
+    d.regime !== null &&
+    !(d.tipoRecebedor === 'pessoa_juridica' ? REGIMES_PESSOA_JURIDICA : REGIMES_PESSOA_FISICA).includes(
+      d.regime,
+    )
+  )
+    e.push('regime-incompativel');
+  // O contribuinte individual com INSS retido é informado no eSocial pelo PIS/PASEP/NIT.
+  if (d.tipoRecebedor === 'pessoa_fisica' && d.retemInss && d.pisPasep === null) e.push('pis-obrigatorio');
   if (!Number.isInteger(d.dependentesIrrf) || d.dependentesIrrf < 0 || d.dependentesIrrf > 99)
     e.push('dependentes-fora');
   return e;
@@ -75,26 +102,63 @@ export interface Vigencia {
   readonly fim: string | null;
 }
 
+export interface Periodo {
+  readonly id: number;
+  readonly inicio: string;
+  readonly fim: string | null;
+}
+export interface Sobreposicao {
+  encerrar: { id: number; fim: string }[];
+  conflitos: number[];
+}
+
 /**
- * Os dados fiscais vigentes que se sobrepõem ao novo no mesmo escopo (o mesmo estabelecimento ou o de todos): o
- * repasse precisa de um só dado fiscal por dia. Quem começa antes e está aberto é encerrado na véspera do novo (devolvido
- * em `encerrar`); qualquer outra sobreposição recusa (devolvida em `conflitos`).
+ * Os períodos que se sobrepõem ao novo: quem começa antes e está aberto é encerrado na véspera do novo (devolvido em
+ * `encerrar`); qualquer outra sobreposição (com fim informado, ou que começa no mesmo dia ou depois) recusa
+ * (devolvida em `conflitos`). Vale para o dado fiscal (por escopo) e para a assinatura (por tipo).
  */
-export function sobreposicaoFiscal(
-  existentes: readonly Vigencia[],
-  novo: Omit<Vigencia, 'id'>,
-): { encerrar: { id: number; fim: string }[]; conflitos: number[] } {
+export function sobreposicaoVigencia(
+  existentes: readonly Periodo[],
+  novo: Omit<Periodo, 'id'>,
+): Sobreposicao {
   const encerrar: { id: number; fim: string }[] = [];
   const conflitos: number[] = [];
   const fimNovo = novo.fim ?? '9999-12-31';
   for (const v of existentes) {
-    if (v.estabelecimento !== novo.estabelecimento) continue;
     const fimV = v.fim ?? '9999-12-31';
     if (fimV < novo.inicio || v.inicio > fimNovo) continue;
     if (v.inicio < novo.inicio && v.fim === null) encerrar.push({ id: v.id, fim: vespera(novo.inicio) });
     else conflitos.push(v.id);
   }
   return { encerrar, conflitos };
+}
+
+/**
+ * Um só dado fiscal por dia em cada escopo (o mesmo estabelecimento, ou o geral, de estabelecimento nulo). O geral e o
+ * de um estabelecimento podem conviver: no dia, o do estabelecimento vale sobre o geral (`dadoFiscalVigente`).
+ */
+export function sobreposicaoFiscal(
+  existentes: readonly Vigencia[],
+  novo: Omit<Vigencia, 'id'>,
+): Sobreposicao {
+  return sobreposicaoVigencia(
+    existentes.filter((v) => v.estabelecimento === novo.estabelecimento),
+    novo,
+  );
+}
+
+/** O dado fiscal que vale no dia e no estabelecimento: o do estabelecimento, senão o geral; nenhum, null. */
+export function dadoFiscalVigente<T extends Omit<Vigencia, 'id'>>(
+  lista: readonly T[],
+  dia: string,
+  estabelecimento: number | null,
+): T | null {
+  const noDia = lista.filter((v) => v.inicio <= dia && (v.fim === null || v.fim >= dia));
+  return (
+    (estabelecimento !== null ? noDia.find((v) => v.estabelecimento === estabelecimento) : undefined) ??
+    noDia.find((v) => v.estabelecimento === null) ??
+    null
+  );
 }
 
 /** O dia anterior (AAAA-MM-DD), em UTC. */

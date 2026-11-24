@@ -10,6 +10,7 @@ import { pode } from '../../../casca/sessao/pode.js';
 import {
   type Complemento,
   encerrarComplemento,
+  enviarImagemAssinatura,
   type Financeiro,
   gravarDadoFiscal,
   incluirAssinatura,
@@ -37,12 +38,13 @@ const opcoes = ref<OpcoesComplemento | null>(null);
 const erro = ref<unknown>(null);
 const mensagem = ref('');
 const hoje = new Date().toISOString().slice(0, 10);
-const REGIMES = ['autonomo', 'simples_nacional', 'mei', 'lucro_presumido', 'lucro_real', 'isento', 'outro'];
+// O regime acompanha o recebedor (a mesma regra do domínio): autônomo é pessoa física; Simples, MEI e lucro são de empresa.
+const REGIMES_PF = ['autonomo', 'isento', 'outro'];
+const REGIMES_PJ = ['simples_nacional', 'mei', 'lucro_presumido', 'lucro_real', 'isento', 'outro'];
 
 const rqe = ref({ numero: '', uf: '', especialidade: 0, dataRegistro: '' });
 const ass = ref({
   tipo: 'certificado_digital' as 'imagem' | 'certificado_digital',
-  arquivo: '',
   titular: '',
   numeroSerie: '',
   emissor: '',
@@ -50,13 +52,34 @@ const ass = ref({
   usoTiss: false,
   vigenciaInicio: hoje,
 });
+// A imagem da assinatura escolhida na tela (PNG ou JPEG, até 512 KB), enviada em base64 com o resto do formulário.
+const imagem = ref<{ conteudo: string; nome: string } | null>(null);
+const imagemErro = ref('');
+function escolherImagem(ev: Event): void {
+  const arq = (ev.target as HTMLInputElement).files?.[0];
+  imagem.value = null;
+  imagemErro.value = '';
+  if (!arq) return;
+  if (!/^image\/(png|jpeg)$/.test(arq.type) || arq.size > 512 * 1024) {
+    imagemErro.value = T('assinatura.imagemInvalida');
+    return;
+  }
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    imagem.value = { conteudo: String(leitor.result), nome: arq.name };
+  };
+  leitor.readAsDataURL(arq);
+}
 const fiscal = ref({
+  estabelecimento: 0,
   vigenciaInicio: hoje,
   tipoRecebedor: 'pessoa_fisica',
   pessoaJuridica: 0,
   regime: 'autonomo',
   pisPasep: '',
   inscricaoMunicipal: '',
+  inscricaoInss: '',
+  categoriaSefip: '',
   aliquotaIss: '',
   percentualInss: '',
   retemIss: false,
@@ -131,17 +154,32 @@ const rqeOk = computed(
 );
 const assOk = computed(() =>
   ass.value.tipo === 'imagem'
-    ? /^\d+$/.test(ass.value.arquivo)
+    ? imagem.value !== null
     : /^[0-9A-Fa-f:\s]{1,90}$/.test(ass.value.numeroSerie) &&
       !!ass.value.titular.trim() &&
       (!ass.value.impressaoDigital || /^[0-9A-Fa-f:\s]{64,95}$/.test(ass.value.impressaoDigital)),
+);
+const regimes = computed(() => (fiscal.value.tipoRecebedor === 'pessoa_juridica' ? REGIMES_PJ : REGIMES_PF));
+watch(regimes, (r) => {
+  if (!r.includes(fiscal.value.regime)) fiscal.value.regime = r[0]!;
+});
+const issFora = computed(() => {
+  const v = fiscal.value.aliquotaIss;
+  if (v === '') return false;
+  const n = Number(String(v).replace(',', '.'));
+  return fiscal.value.regime === 'isento' ? n !== 0 : !(n >= 2 && n <= 5);
+});
+const pisFalta = computed(
+  () => fiscal.value.tipoRecebedor === 'pessoa_fisica' && fiscal.value.retemInss && !fiscal.value.pisPasep,
 );
 const fiscalOk = computed(
   () =>
     !!fiscal.value.vigenciaInicio &&
     (fiscal.value.tipoRecebedor === 'pessoa_fisica' || fiscal.value.pessoaJuridica > 0) &&
     (!fiscal.value.retemIss || fiscal.value.aliquotaIss !== '') &&
-    (!fiscal.value.retemInss || fiscal.value.percentualInss !== ''),
+    (!fiscal.value.retemInss || fiscal.value.percentualInss !== '') &&
+    !issFora.value &&
+    !pisFalta.value,
 );
 const temConta = computed(() => conta.value.banco > 0 && !!conta.value.agencia && !!conta.value.numeroConta);
 const contaOk = computed(
@@ -162,12 +200,21 @@ async function gravarRqe() {
 }
 async function gravarAssinatura() {
   const a = ass.value;
-  const corpo =
-    a.tipo === 'imagem'
-      ? { tipo: a.tipo, arquivo: Number(a.arquivo), usoTiss: a.usoTiss, vigenciaInicio: a.vigenciaInicio }
-      : { ...a, arquivo: null };
-  if (await agir(() => incluirAssinatura(props.idProfissional, corpo), T('gravado')))
-    ass.value = { ...ass.value, arquivo: '', numeroSerie: '', impressaoDigital: '' };
+  const img = imagem.value;
+  const enviar =
+    a.tipo === 'imagem' && img
+      ? () =>
+          enviarImagemAssinatura(props.idProfissional, {
+            conteudo: img.conteudo,
+            nomeOriginal: img.nome,
+            usoTiss: a.usoTiss,
+            vigenciaInicio: a.vigenciaInicio,
+          })
+      : () => incluirAssinatura(props.idProfissional, { ...a, arquivo: null });
+  if (await agir(enviar, T('gravado'))) {
+    ass.value = { ...ass.value, numeroSerie: '', impressaoDigital: '' };
+    imagem.value = null;
+  }
 }
 async function gravarFiscal() {
   const f = fiscal.value;
@@ -175,6 +222,8 @@ async function gravarFiscal() {
     () =>
       gravarDadoFiscal(props.idProfissional, {
         ...f,
+        estabelecimento: f.estabelecimento || null,
+        categoriaSefip: f.categoriaSefip === '' ? null : Number(f.categoriaSefip),
         pessoaJuridica: f.tipoRecebedor === 'pessoa_juridica' ? f.pessoaJuridica : null,
         aliquotaIss: f.aliquotaIss === '' ? null : f.aliquotaIss,
         percentualInss: f.percentualInss === '' ? null : f.percentualInss,
@@ -310,7 +359,15 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         </select>
       </label>
       <template v-if="ass.tipo === 'imagem'">
-        <label>{{ T('assinatura.arquivo') }} <input v-model.trim="ass.arquivo" inputmode="numeric" /></label>
+        <label
+          >{{ T('assinatura.arquivo') }}
+          <input
+            type="file"
+            accept="image/png,image/jpeg"
+            data-testid="arquivo-assinatura"
+            @change="escolherImagem"
+        /></label>
+        <small v-if="imagemErro" class="erro">{{ imagemErro }}</small>
       </template>
       <template v-else>
         <label>{{ T('assinatura.titular') }} <input v-model="ass.titular" maxlength="150" /></label>
@@ -336,6 +393,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         <tbody>
           <tr v-for="f in fin.fiscais" :key="f.id" :class="{ inativo: !f.vigente }">
             <td>{{ periodo(f.vigenciaInicio, f.vigenciaFim) }}</td>
+            <td>{{ f.estabelecimentoNome ?? T('fiscal.todos') }}</td>
             <td>{{ T(`fiscal.recebedores.${f.tipoRecebedor}`) }}{{ f.empresa ? ` · ${f.empresa}` : '' }}</td>
             <td>{{ f.regime ? T(`fiscal.regimes.${f.regime}`) : '—' }}</td>
             <td>{{ impostos(f) }}</td>
@@ -358,6 +416,15 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         data-testid="form-fiscal"
         @submit.prevent="gravarFiscal"
       >
+        <label
+          >{{ T('fiscal.estabelecimento') }}
+          <select v-model.number="fiscal.estabelecimento">
+            <option :value="0">{{ T('fiscal.todos') }}</option>
+            <option v-for="e in opcoes?.estabelecimentos ?? []" :key="e.id" :value="e.id">
+              {{ e.texto }}
+            </option>
+          </select>
+        </label>
         <label>{{ T('inicio') }} <input v-model="fiscal.vigenciaInicio" type="date" /></label>
         <label
           >{{ T('fiscal.recebedor') }}
@@ -376,19 +443,39 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         <label
           >{{ T('fiscal.regime') }}
           <select v-model="fiscal.regime">
-            <option v-for="r in REGIMES" :key="r" :value="r">
+            <option v-for="r in regimes" :key="r" :value="r">
               {{ T(`fiscal.regimes.${r}`) }}
             </option>
           </select>
         </label>
         <label
-          >{{ T('fiscal.pis') }} <input v-model.trim="fiscal.pisPasep" inputmode="numeric" maxlength="14"
+          >{{ T('fiscal.pis') }}
+          <input
+            v-model.trim="fiscal.pisPasep"
+            inputmode="numeric"
+            maxlength="14"
+            :aria-invalid="pisFalta"
+            :title="pisFalta ? T('fiscal.pisObrigatorio') : ''"
+        /></label>
+        <label
+          >{{ T('fiscal.inscricaoInss') }} <input v-model.trim="fiscal.inscricaoInss" maxlength="15"
+        /></label>
+        <label
+          >{{ T('fiscal.categoria') }}
+          <input v-model.trim="fiscal.categoriaSefip" inputmode="numeric" maxlength="3"
         /></label>
         <label
           >{{ T('fiscal.inscricaoMunicipal') }}
           <input v-model.trim="fiscal.inscricaoMunicipal" maxlength="20"
         /></label>
-        <label>{{ T('fiscal.iss') }} <input v-model="fiscal.aliquotaIss" inputmode="decimal" /></label>
+        <label
+          >{{ T('fiscal.iss') }}
+          <input
+            v-model="fiscal.aliquotaIss"
+            inputmode="decimal"
+            :aria-invalid="issFora"
+            :title="issFora ? T('fiscal.issFora') : ''"
+        /></label>
         <label>{{ T('fiscal.inss') }} <input v-model="fiscal.percentualInss" inputmode="decimal" /></label>
         <label class="marca"
           ><input v-model="fiscal.retemIss" type="checkbox" /> {{ T('fiscal.retemIss') }}</label
