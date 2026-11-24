@@ -47,6 +47,20 @@ export const PARAMETROS_REPASSE: readonly DefinicaoParametro[] = [
     origem: 'ficha do M33, regras 6 e "Estorno não apaga"; FAT-10 (POL-1): glosa mantida estorna o repasse',
   },
   {
+    chave: 'repasse.momentoProducao',
+    modulo: 'repasse',
+    descricao:
+      'Quando o item da conta com profissional executor vira produção do repasse: no lançamento do item ou no fechamento da conta',
+    tipo: 'lista',
+    padrao: 'lancamento',
+    opcoes: ['lancamento', 'fechamento'],
+    niveis: ['estabelecimento', 'rede'],
+    critico: true,
+    dono: 'repasse',
+    origem:
+      'F3, motores (docs/analise/06: a produção do repasse nasce do item faturado); prática de mercado: produção no lançamento, com o fechamento completando o que faltou',
+  },
+  {
     chave: 'repasse.adicionalModo',
     modulo: 'repasse',
     descricao:

@@ -125,9 +125,9 @@ async function numeroDe(tx: TxOperacao, tipo: string, prefixo: string, est: numb
 }
 
 /** Código das regras de repasse integral da consulta particular gravadas pelo conector (ADR 0009). */
-const PREFIXO_INTEGRAL = 'INTEGRAL-PART-%';
+export const PREFIXO_INTEGRAL = 'INTEGRAL-PART-%';
 
-const SQL_REGRAS = `
+export const SQL_REGRAS = `
   SELECT i.id, r.vigencia_inicio, r.beneficiario, r.base_calculo, i.profissional_id, i.fonte_pagadora_id, i.codigo_procedimento_inicial,
          i.codigo_procedimento_final, i.especialidade_medica_id, i.funcao_equipe_cobranca_id, i.grupo_ato_id, i.local_atendimento_id,
          i.unidade_assistencial_id, i.centro_custo_id, i.cooperativa_medica_id, i.tipo_lancamento_id, i.escopo_conta,
@@ -138,7 +138,7 @@ const SQL_REGRAS = `
    WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.vigencia_inicio <= ?
      AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND (i.fonte_pagadora_id = ? OR i.fonte_pagadora_id IS NULL)`;
 
-function regraDe(r: Linha): RegraRepasse {
+export function regraDe(r: Linha): RegraRepasse {
   const cod = (v: unknown) =>
     v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
   return {
@@ -177,9 +177,57 @@ function regraDe(r: Linha): RegraRepasse {
  * O código de negócio do procedimento (item faturável) como número, para casar com a faixa da regra. Um código que não
  * é só de dígitos fica fora de qualquer faixa (0: as faixas da regra começam em 1); a regra sem faixa vale para ele.
  */
-function codigoProcedimento(v: unknown): number {
+export function codigoProcedimento(v: unknown): number {
   const t = texto(v).trim();
   return /^\d{1,15}$/.test(t) ? Number(t) : 0;
+}
+
+/** ADR 0009: as regras integrais da consulta particular vigentes na data (também na transação da produção da conta). */
+export async function lerIntegraisParticular(l: Leitor, est: number, data: string): Promise<IntegraisParticular> {
+  const rs = await l.consultar(
+    `SELECT i.fonte_pagadora_id, f.tipo AS tipo_fonte, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
+       FROM regra_repasse r
+       JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
+       -- Só a fonte particular: a marca "consulta particular inteira ao médico" nunca vale num convênio.
+       JOIN fonte_pagadora f ON f.id = i.fonte_pagadora_id AND f.tipo = 'particular'
+       LEFT JOIN item_faturavel ifa ON ifa.id = i.item_faturavel_id
+      WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.codigo LIKE ? AND r.vigencia_inicio <= ?
+        AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND i.percentual = 100
+        AND i.fonte_pagadora_id IS NOT NULL AND (i.item_faturavel_id IS NOT NULL OR i.grupo_faturamento_id IS NOT NULL)
+      ORDER BY i.id`,
+    [est, PREFIXO_INTEGRAL, data, data],
+    { teto: 500 },
+  );
+  const integrais: RegraRepasseParticularIntegral[] = [];
+  for (const r of rs) {
+    const item = r['item_codigo'] == null ? null : codigoProcedimento(r['item_codigo']);
+    if (item === 0) continue; // código que não é só de dígitos: nenhum item de produção casa com ele
+    integrais.push(
+      regraRepasseParticularIntegral({
+        fontePagadoraId: n(r['fonte_pagadora_id']),
+        tipoFonte: String(r['tipo_fonte']),
+        profissionalId: nn(r['profissional_id']),
+        itemFaturavelId: item,
+        grupoFaturamentoId: item === null ? nn(r['grupo_faturamento_id']) : null,
+      }),
+    );
+  }
+  const grupos = [
+    ...new Set(integrais.flatMap((x) => (x.grupoFaturamentoId === null ? [] : [x.grupoFaturamentoId]))),
+  ];
+  const grupoDoProcedimento = new Map<number, number>();
+  if (grupos.length > 0)
+    for (const r of await l.consultar(
+      `SELECT codigo, grupo_faturamento_id FROM item_faturavel
+        WHERE grupo_faturamento_id IN (${marcas(grupos)}) AND excluido_em IS NULL`,
+      grupos,
+      { teto: 20000 },
+    )) {
+      const cod = codigoProcedimento(r['codigo']);
+      if (cod !== 0) grupoDoProcedimento.set(cod, n(r['grupo_faturamento_id']));
+    }
+  const fontesParticulares = new Set(integrais.map((x) => x.fontePagadoraId));
+  return { integrais, grupoDoProcedimento, fontesParticulares };
 }
 
 const SQL_APURACAO = `
@@ -992,52 +1040,7 @@ export class PortaRepassePropria implements PortaRepasse {
   }
 
   integraisParticular(c: ContextoRepasse, data: string): Promise<IntegraisParticular> {
-    return this.ler(c, async (l, est) => {
-      const rs = await l.consultar(
-        `SELECT i.fonte_pagadora_id, f.tipo AS tipo_fonte, i.profissional_id, ifa.codigo AS item_codigo, i.grupo_faturamento_id
-           FROM regra_repasse r
-           JOIN regra_repasse_item i ON i.regra_repasse_id = r.id AND i.excluido_em IS NULL
-           -- Só a fonte particular: a marca "consulta particular inteira ao médico" nunca vale num convênio.
-           JOIN fonte_pagadora f ON f.id = i.fonte_pagadora_id AND f.tipo = 'particular'
-           LEFT JOIN item_faturavel ifa ON ifa.id = i.item_faturavel_id
-          WHERE r.estabelecimento_id = ? AND r.ativo = TRUE AND r.codigo LIKE ? AND r.vigencia_inicio <= ?
-            AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?) AND i.percentual = 100
-            AND i.fonte_pagadora_id IS NOT NULL AND (i.item_faturavel_id IS NOT NULL OR i.grupo_faturamento_id IS NOT NULL)
-          ORDER BY i.id`,
-        [est, PREFIXO_INTEGRAL, data, data],
-        { teto: 500 },
-      );
-      const integrais: RegraRepasseParticularIntegral[] = [];
-      for (const r of rs) {
-        const item = r['item_codigo'] == null ? null : codigoProcedimento(r['item_codigo']);
-        if (item === 0) continue; // código que não é só de dígitos: nenhum item de produção casa com ele
-        integrais.push(
-          regraRepasseParticularIntegral({
-            fontePagadoraId: n(r['fonte_pagadora_id']),
-            tipoFonte: String(r['tipo_fonte']),
-            profissionalId: nn(r['profissional_id']),
-            itemFaturavelId: item,
-            grupoFaturamentoId: item === null ? nn(r['grupo_faturamento_id']) : null,
-          }),
-        );
-      }
-      const grupos = [
-        ...new Set(integrais.flatMap((x) => (x.grupoFaturamentoId === null ? [] : [x.grupoFaturamentoId]))),
-      ];
-      const grupoDoProcedimento = new Map<number, number>();
-      if (grupos.length > 0)
-        for (const r of await l.consultar(
-          `SELECT codigo, grupo_faturamento_id FROM item_faturavel
-            WHERE grupo_faturamento_id IN (${marcas(grupos)}) AND excluido_em IS NULL`,
-          grupos,
-          { teto: 20000 },
-        )) {
-          const cod = codigoProcedimento(r['codigo']);
-          if (cod !== 0) grupoDoProcedimento.set(cod, n(r['grupo_faturamento_id']));
-        }
-      const fontesParticulares = new Set(integrais.map((x) => x.fontePagadoraId));
-      return { integrais, grupoDoProcedimento, fontesParticulares };
-    });
+    return this.ler(c, (l, est) => lerIntegraisParticular(l, est, data));
   }
 
   // Enquanto a memória não guarda o item de regra aplicado (pedido do lote), um item conta como usado quando a sua regra
@@ -1090,7 +1093,7 @@ export class PortaRepassePropria implements PortaRepasse {
            JOIN item_faturavel ifa ON ifa.id = chi.item_faturavel_id
            JOIN atendimento at ON at.id = ch.atendimento_id
            LEFT JOIN profissional pr ON pr.id = p.profissional_id
-          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.situacao <> 'cancelado'
+          WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.situacao NOT IN ('cancelado', 'estornado')
             AND ch.competencia = ? AND p.id > ?
           ORDER BY p.id LIMIT ${TETO + 1}`,
         [est, `${competencia}-01`, depoisDe],
