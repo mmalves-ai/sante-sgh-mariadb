@@ -2,9 +2,10 @@
 // segundo fator, designação das contas de suporte e atribuições) e do "como" (entrar como o usuário, a auditoria da
 // sessão, a correção das escritas). O repositório das contas e a fonte do "como":
 //   - dev/ci com as fontes sintéticas e sem núcleo: as contas SINTÉTICAS da plataforma em memória e os alvos sintéticos;
-//   - com o núcleo: aguardam a decisão de onde ficam a credencial, o segundo fator e o convite das contas de suporte
-//     (banco plataforma × conta_plataforma do cliente; pedido do lote 01-06). Até lá, as rotas respondem 503 (falha
-//     fechada), como o controlador faz sem os serviços.
+//   - com o núcleo: as contas, o segundo fator, o convite, as atribuições e a auditoria do "como" no banco plataforma
+//     (db/plataforma/0090, RepositorioPlataformaPropria) e os grupos, os usuários e a trilha de cada estabelecimento
+//     no banco do cliente (FonteComoEstabelecimentoPropria). Sem o banco plataforma no núcleo ou sem o cliente
+//     padrão, as rotas respondem 503 (falha fechada), como o controlador faz sem os serviços.
 // A guarda da sessão "como" (conferir a sessão de suporte a cada requisição) é da base: a sessão nasce com ganchos
 // tardios (ContextoModulo.ganchosComo) que este módulo liga ao serviço do "como"; sem eles, nenhuma sessão "como" vale.
 // O módulo é global: a guarda da base lê a AUDITORIA_COMO (bloqueio) e o interceptor do "como" registra cada escrita
@@ -16,12 +17,14 @@ import { cifrarSenha, chaveMestra, minutosSessaoComo } from '@sgh/dominio-acesso
 import { InterceptadorComo } from '../../autorizacao/interceptor-como.js';
 import { AUDITORIA_COMO } from '../../autorizacao/simbolos.js';
 import { logger } from '../../logger.js';
+import { nucleoPlataforma } from '../../sessao/fonte-plataforma.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { lerRedePadrao } from '../../sessao/rede.js';
 import { lerEstabelecimentosSinteticos } from '../acesso/estabelecimentos-sinteticos.js';
 import { FonteAcessoSintetica } from '../acesso/fonte-sintetica.js';
 import type { ContextoModulo } from '../registro.js';
 import { PlataformaController, SERVICO_COMO, SERVICO_PLATAFORMA } from './plataforma.controller.js';
+import { FonteComoEstabelecimentoPropria, RepositorioPlataformaPropria } from './porta-propria-plataforma.js';
 import {
   type FonteComoEstabelecimento,
   FonteComoMemoria,
@@ -64,6 +67,9 @@ export function servicosSuporte(
 ): { plataforma: ServicoPlataforma | null; como: ServicoComo | null } {
   const sintetico = !ctx.nucleo && fontesSinteticas(ctx.env);
   const rede = lerRedePadrao(ctx.env) ?? ctx.configuracao.rede ?? 'rede-sintetica';
+  // Banco próprio: o banco plataforma pelo núcleo; o "como" no banco do cliente padrão.
+  const plat = ctx.nucleo ? nucleoPlataforma(ctx.nucleo) : null;
+  const cliente = ctx.configuracao.clientePadrao;
   const repo =
     opcoes.repositorio !== undefined
       ? opcoes.repositorio
@@ -73,13 +79,17 @@ export function servicosSuporte(
             lerEstabelecimentosSinteticos(ctx.env).map((e) => e.codigo),
             (x) => cifrarSenha(x),
           )
-        : null;
+        : plat
+          ? new RepositorioPlataformaPropria(plat)
+          : null;
   const fonte =
     opcoes.fonteComo !== undefined
       ? opcoes.fonteComo
       : sintetico
         ? new FonteComoMemoria(new FonteAcessoSintetica(ctx.env))
-        : null;
+        : ctx.nucleo && cliente
+          ? new FonteComoEstabelecimentoPropria(ctx.nucleo, cliente)
+          : null;
   const plataforma = repo
     ? new ServicoPlataforma(repo, ctx.armazem, {
         ambiente: ctx.configuracao.ambiente,
