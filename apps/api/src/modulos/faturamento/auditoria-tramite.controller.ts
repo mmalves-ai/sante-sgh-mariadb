@@ -13,6 +13,7 @@
 //   POST /api/faturamento/protocolos-tramite/:id/envio         faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/conferencia   faturamento.protocolo.registrar
 //   POST /api/faturamento/protocolos-tramite/:id/cancelamento  faturamento.protocolo.registrar
+//   GET  /api/faturamento/guias-convenio?situacao=&minhas=1   faturamento.guia.ler (fila: abertas primeiro)
 //   GET  /api/faturamento/guias/:id/acompanhamento             faturamento.guia.ler
 //   POST /api/faturamento/guias/:id/resposta                   faturamento.pendencia.editar
 //   POST /api/faturamento/guias/:id/pendencias                 faturamento.pendencia.editar
@@ -33,6 +34,7 @@ import {
   empresasAuditoria,
   gravarAuditoriaTramite,
   guiaAcompanhamentoPropria,
+  guiasConvenioPropria,
   type NomeOperacaoAuditoriaTramite,
   protocolosPropria,
 } from './auditoria-tramite-propria.js';
@@ -198,6 +200,22 @@ export class AuditoriaTramiteController {
   }
 
   // ── Guia do convênio ──
+  @Get('faturamento/guias-convenio')
+  @Permissao('faturamento.guia.ler')
+  guias(
+    @Query('situacao') situacao: string | undefined,
+    @Query('minhas') minhas: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const ctx = ctxDe(req, ORIGEM);
+    const sit = situacao && /^[a-z_]{3,30}$/.test(situacao) ? situacao : null;
+    return this.rodar(() =>
+      this.s().ler(ctx, (l, est) =>
+        guiasConvenioPropria(l, est, { situacao: sit, minhas: minhas === '1', usuario: ctx.usuario ?? null }),
+      ),
+    );
+  }
+
   @Get('faturamento/guias/:id/acompanhamento')
   @Permissao('faturamento.guia.ler')
   guia(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {

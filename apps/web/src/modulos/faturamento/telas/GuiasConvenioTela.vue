@@ -1,0 +1,351 @@
+<script setup lang="ts">
+// Guias do convênio no hospital (F3.7, 06-FAT linha 24): `/faturamento/guias-convenio`.
+// A fila mostra as guias abertas (pendentes primeiro, com a contagem de pendências, o responsável e a marca da
+// cirurgia); ao escolher uma, o painel ao lado reúne a resposta da operadora (número, senha, validade, dias), as
+// pendências (abrir e resolver), os anexos e a linha do tempo, sem trocar de tela. A validação é a do domínio.
+import {
+  TIPOS_ANEXO_GUIA,
+  validarAnexoGuia,
+  validarPendenciaGuia,
+  validarRespostaGuia,
+} from '@sgh/dominio-faturamento';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
+import { computed, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import {
+  abrirPendenciaGuia,
+  anexarGuia,
+  assumirGuia,
+  lerGuia,
+  lerGuiasConvenio,
+  resolverPendenciaGuia,
+  responderGuia,
+} from '../api-auditoria-tramite.js';
+import ErroFaturamento from '../componentes/ErroFaturamento.vue';
+
+const { t } = useI18n();
+const qc = useQueryClient();
+const situacao = ref<string | null>(null);
+const minhas = ref(false);
+const fila = useQuery({
+  queryKey: ['faturamento', 'guias-convenio', situacao, minhas],
+  queryFn: () => lerGuiasConvenio(situacao.value, minhas.value),
+});
+const escolhida = ref<number | null>(null);
+const guia = useQuery({
+  queryKey: ['faturamento', 'guia-convenio', escolhida],
+  queryFn: () => lerGuia(escolhida.value!),
+  enabled: computed(() => escolhida.value !== null),
+});
+const erro = ref<unknown>(null);
+const aviso = ref('');
+const chave = () => crypto.randomUUID();
+const dataHora = (v: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
+async function rodar(fn: () => Promise<unknown>) {
+  erro.value = null;
+  aviso.value = '';
+  try {
+    await fn();
+    aviso.value = t('auditoriaTramite.feito');
+    await qc.invalidateQueries({ queryKey: ['faturamento', 'guias-convenio'] });
+    await qc.invalidateQueries({ queryKey: ['faturamento', 'guia-convenio'] });
+    return true;
+  } catch (e) {
+    erro.value = e;
+    return false;
+  }
+}
+const SITUACOES = [
+  'pendente',
+  'em_analise',
+  'solicitada',
+  'autorizada',
+  'autorizada_parcial',
+  'negada',
+] as const;
+const RESPOSTAS = ['em_analise', 'autorizada', 'autorizada_parcial', 'negada'] as const;
+const hoje = () => new Date().toISOString().slice(0, 10);
+
+// ── Resposta da operadora ──
+const resposta = reactive({
+  resposta: 'autorizada' as (typeof RESPOSTAS)[number],
+  numeroOperadora: '',
+  senha: '',
+  validadeSenha: '',
+  diasAutorizados: null as number | null,
+  motivoNegacao: '',
+});
+const errosResposta = computed(() => {
+  const g = guia.data.value;
+  if (!g) return {};
+  return validarRespostaGuia({
+    situacaoAtual: g.situacao,
+    resposta: resposta.resposta,
+    senha: resposta.senha,
+    validadeSenha: resposta.validadeSenha || null,
+    diasSolicitados: g.diasSolicitados,
+    diasAutorizados: resposta.diasAutorizados,
+    motivoNegacao: resposta.motivoNegacao,
+    pendenciasAbertas: g.pendencias.filter((p) => p.situacao === 'aberta' || p.situacao === 'em_tratamento')
+      .length,
+    hoje: hoje(),
+  });
+});
+const responder = () =>
+  rodar(() =>
+    responderGuia(
+      escolhida.value!,
+      {
+        resposta: resposta.resposta,
+        numeroOperadora: resposta.numeroOperadora || null,
+        senha: resposta.senha || null,
+        validadeSenha: resposta.validadeSenha || null,
+        diasAutorizados: resposta.diasAutorizados,
+        motivoNegacao: resposta.motivoNegacao || null,
+      },
+      chave(),
+    ),
+  );
+
+// ── Pendência ──
+const pendencia = reactive({ motivoId: null as number | null, descricao: '', prazo: '' });
+const errosPendencia = computed(() =>
+  guia.data.value
+    ? validarPendenciaGuia({
+        situacaoAtual: guia.data.value.situacao,
+        motivoId: pendencia.motivoId,
+        prazo: pendencia.prazo ? new Date(pendencia.prazo).toISOString() : null,
+        agora: new Date().toISOString(),
+      })
+    : {},
+);
+const abrirPendencia = () =>
+  rodar(() =>
+    abrirPendenciaGuia(
+      escolhida.value!,
+      {
+        motivoId: pendencia.motivoId,
+        descricao: pendencia.descricao || null,
+        prazo: pendencia.prazo ? new Date(pendencia.prazo).toISOString() : null,
+      },
+      chave(),
+    ),
+  );
+const solucoes = ref<Record<number, string>>({});
+
+// ── Anexo ──
+const anexo = reactive({ tipoDocumento: 'laudo', descricao: '', arquivo: null as File | null });
+const errosAnexo = computed(() =>
+  anexo.arquivo && guia.data.value
+    ? validarAnexoGuia({
+        situacaoGuia: guia.data.value.situacao,
+        tipoDocumento: anexo.tipoDocumento,
+        tipoMime: anexo.arquivo.type,
+        tamanhoBytes: anexo.arquivo.size,
+      })
+    : {},
+);
+function escolherArquivo(e: Event) {
+  anexo.arquivo = (e.target as HTMLInputElement).files?.[0] ?? null;
+}
+async function anexar() {
+  const f = anexo.arquivo;
+  if (!f) return;
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  await rodar(() =>
+    anexarGuia(
+      escolhida.value!,
+      {
+        tipoDocumento: anexo.tipoDocumento,
+        descricao: anexo.descricao || null,
+        nomeOriginal: f.name,
+        tipoMime: f.type,
+        conteudo: btoa(bin),
+      },
+      chave(),
+    ),
+  );
+}
+</script>
+
+<template>
+  <section class="tela" data-testid="guias-convenio">
+    <h1>{{ t('auditoriaTramite.guia.titulo') }}</h1>
+    <ErroFaturamento v-if="fila.error.value" :erro="fila.error.value" />
+    <ErroFaturamento v-if="erro" :erro="erro" />
+    <p v-if="aviso" role="status">{{ aviso }}</p>
+    <div class="filtros">
+      <label>
+        {{ t('auditoriaTramite.guia.filtro') }}
+        <select v-model="situacao" data-testid="gc-situacao">
+          <option :value="null">{{ t('auditoriaTramite.guia.abertas') }}</option>
+          <option v-for="s in SITUACOES" :key="s" :value="s">
+            {{ t(`auditoriaTramite.guia.situacoes.${s}`) }}
+          </option>
+        </select>
+      </label>
+      <label><input v-model="minhas" type="checkbox" /> {{ t('auditoriaTramite.guia.minhas') }}</label>
+    </div>
+    <p v-if="fila.data.value && !fila.data.value.length" class="secundario">
+      {{ t('auditoriaTramite.guia.vazio') }}
+    </p>
+    <table v-if="fila.data.value?.length">
+      <thead>
+        <tr>
+          <th>{{ t('auditoriaTramite.guia.numero') }}</th>
+          <th>{{ t('auditoriaTramite.guia.fonte') }}</th>
+          <th>{{ t('auditoriaTramite.situacao') }}</th>
+          <th>{{ t('auditoriaTramite.guia.pendencias') }}</th>
+          <th>{{ t('auditoriaTramite.guia.responsavel') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="g in fila.data.value"
+          :key="g.id"
+          :data-testid="`gc-${g.numero}`"
+          :aria-selected="escolhida === g.id"
+          @click="escolhida = g.id"
+        >
+          <td>
+            {{ g.numero }}<span v-if="g.numeroOperadora" class="secundario"> · {{ g.numeroOperadora }}</span>
+            <span v-if="g.cirurgia" class="secundario"> · {{ t('auditoriaTramite.guia.cirurgia') }}</span>
+          </td>
+          <td>{{ g.fonte }}</td>
+          <td>{{ t(`auditoriaTramite.guia.situacoes.${g.situacao}`) }}</td>
+          <td>{{ g.pendencias }}</td>
+          <td>{{ g.responsavel ?? t('auditoriaTramite.guia.semResponsavel') }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <aside v-if="guia.data.value" data-testid="gc-painel">
+      <h2>
+        {{ guia.data.value.numero }} · {{ guia.data.value.fonte }} ·
+        {{ t(`auditoriaTramite.guia.situacoes.${guia.data.value.situacao}`) }}
+      </h2>
+      <p>
+        {{ t('auditoriaTramite.guia.responsavel') }}:
+        {{ guia.data.value.responsavel ?? t('auditoriaTramite.guia.semResponsavel') }}
+        <button type="button" data-testid="gc-assumir" @click="rodar(() => assumirGuia(escolhida!, chave()))">
+          {{ t('auditoriaTramite.guia.assumir') }}
+        </button>
+      </p>
+      <p v-if="guia.data.value.senha">
+        {{ t('auditoriaTramite.guia.senha') }}: {{ guia.data.value.senha }}
+        <span v-if="guia.data.value.validadeSenha"> · {{ guia.data.value.validadeSenha }}</span>
+      </p>
+
+      <form class="filtros" data-testid="gc-form-resposta" @submit.prevent="responder">
+        <h3>{{ t('auditoriaTramite.guia.resposta') }}</h3>
+        <select v-model="resposta.resposta" data-testid="gc-resposta">
+          <option v-for="r in RESPOSTAS" :key="r" :value="r">
+            {{ t(`auditoriaTramite.guia.respostas.${r}`) }}
+          </option>
+        </select>
+        <label>
+          {{ t('auditoriaTramite.guia.operadora') }}
+          <input v-model="resposta.numeroOperadora" maxlength="20" />
+        </label>
+        <template v-if="resposta.resposta === 'autorizada' || resposta.resposta === 'autorizada_parcial'">
+          <label>
+            {{ t('auditoriaTramite.guia.senha') }}
+            <input v-model="resposta.senha" maxlength="20" data-testid="gc-senha" />
+          </label>
+          <label>
+            {{ t('auditoriaTramite.guia.validadeSenha') }}
+            <input v-model="resposta.validadeSenha" type="date" />
+          </label>
+          <label v-if="guia.data.value.diasSolicitados !== null">
+            {{ t('auditoriaTramite.guia.diasAutorizados', { n: guia.data.value.diasSolicitados }) }}
+            <input v-model.number="resposta.diasAutorizados" type="number" min="0" />
+          </label>
+        </template>
+        <label v-if="resposta.resposta === 'negada'">
+          {{ t('auditoriaTramite.guia.motivoNegacao') }}
+          <input v-model="resposta.motivoNegacao" maxlength="500" />
+        </label>
+        <p v-for="(m, k) in errosResposta" :key="k" role="alert">{{ m }}</p>
+        <button type="submit" :disabled="Object.keys(errosResposta).length > 0" data-testid="gc-responder">
+          {{ t('auditoriaTramite.guia.registrar') }}
+        </button>
+      </form>
+
+      <h3>{{ t('auditoriaTramite.guia.pendencias') }}</h3>
+      <ul>
+        <li v-for="p in guia.data.value.pendencias" :key="p.id" :data-testid="`gc-pend-${p.sequencia}`">
+          {{ p.motivo }}<span v-if="p.descricao"> · {{ p.descricao }}</span> · {{ dataHora(p.abertaEm) }}
+          <template v-if="p.situacao === 'aberta' || p.situacao === 'em_tratamento'">
+            <input
+              v-model="solucoes[p.id]"
+              :placeholder="t('auditoriaTramite.guia.solucao')"
+              maxlength="500"
+            />
+            <button
+              type="button"
+              :disabled="(solucoes[p.id] ?? '').trim().length < 3"
+              @click="rodar(() => resolverPendenciaGuia(p.id, solucoes[p.id]!, chave()))"
+            >
+              {{ t('auditoriaTramite.guia.resolver') }}
+            </button>
+          </template>
+          <span v-else class="secundario"> · {{ p.solucao }} ({{ p.resolvidoPor }})</span>
+        </li>
+      </ul>
+      <form class="filtros" data-testid="gc-form-pendencia" @submit.prevent="abrirPendencia">
+        <select v-model.number="pendencia.motivoId" data-testid="gc-motivo">
+          <option v-for="m in guia.data.value.motivosPendencia" :key="m.id" :value="m.id">
+            {{ m.descricao }}
+          </option>
+        </select>
+        <input v-model="pendencia.descricao" maxlength="500" :placeholder="t('auditoriaTramite.motivo')" />
+        <label>
+          {{ t('auditoriaTramite.guia.prazo') }}
+          <input v-model="pendencia.prazo" type="datetime-local" />
+        </label>
+        <p v-for="(m, k) in errosPendencia" :key="k" role="alert">{{ m }}</p>
+        <button
+          type="submit"
+          :disabled="Object.keys(errosPendencia).length > 0"
+          data-testid="gc-abrir-pendencia"
+        >
+          {{ t('auditoriaTramite.guia.novaPendencia') }}
+        </button>
+      </form>
+
+      <h3>{{ t('auditoriaTramite.guia.anexos') }}</h3>
+      <ul>
+        <li v-for="a in guia.data.value.anexos" :key="a.id">
+          {{ t(`auditoriaTramite.guia.tiposAnexo.${a.tipo}`) }} · {{ a.nome }} · {{ dataHora(a.em) }}
+        </li>
+      </ul>
+      <form class="filtros" data-testid="gc-form-anexo" @submit.prevent="anexar">
+        <select v-model="anexo.tipoDocumento">
+          <option v-for="tp in TIPOS_ANEXO_GUIA" :key="tp" :value="tp">
+            {{ t(`auditoriaTramite.guia.tiposAnexo.${tp}`) }}
+          </option>
+        </select>
+        <input type="file" accept="application/pdf,image/jpeg,image/png" @change="escolherArquivo" />
+        <p v-for="(m, k) in errosAnexo" :key="k" role="alert">{{ m }}</p>
+        <button type="submit" :disabled="!anexo.arquivo || Object.keys(errosAnexo).length > 0">
+          {{ t('auditoriaTramite.guia.anexar') }}
+        </button>
+      </form>
+
+      <h3>{{ t('auditoriaTramite.guia.historico') }}</h3>
+      <ol data-testid="gc-historico">
+        <li v-for="h in guia.data.value.historico" :key="h.id">
+          {{ dataHora(h.em) }} · {{ t(`auditoriaTramite.guia.eventos.${h.evento}`) }}
+          <span v-if="h.de && h.para && h.de !== h.para">
+            {{ '·' }} {{ t(`auditoriaTramite.guia.situacoes.${h.de}`) }} {{ '→' }}
+            {{ t(`auditoriaTramite.guia.situacoes.${h.para}`) }}
+          </span>
+          <span v-if="h.observacao"> · {{ h.observacao }}</span>
+          <span v-if="h.usuario" class="secundario"> · {{ h.usuario }}</span>
+        </li>
+      </ol>
+    </aside>
+  </section>
+</template>

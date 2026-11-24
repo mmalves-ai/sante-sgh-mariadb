@@ -91,6 +91,26 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     props: true,
     meta: { permissao: 'faturamento.item.ler' },
   },
+  // F3.7, 06-FAT linhas 21, 22 e 24: auditoria item a item, protocolo entre setores e guias do convênio.
+  {
+    path: '/faturamento/contas/:id(\\d+)/auditoria-itens',
+    name: 'faturamento.contaAuditoriaItens',
+    component: () => import('./telas/AuditoriaItensTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.auditoria.ler' },
+  },
+  {
+    path: '/faturamento/protocolos',
+    name: 'faturamento.protocolosTramite',
+    component: () => import('./telas/ProtocolosTramiteTela.vue'),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/guias-convenio',
+    name: 'faturamento.guiasConvenio',
+    component: () => import('./telas/GuiasConvenioTela.vue'),
+    meta: { permissao: 'faturamento.guia.ler' },
+  },
   {
     path: '/faturamento/contas/:id(\\d+)/movimentos',
     name: 'faturamento.contaMovimentos',

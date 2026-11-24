@@ -995,6 +995,50 @@ export async function guiaAcompanhamentoPropria(l: Leitor, est: number, guia: nu
   };
 }
 
+/** A fila das guias do convênio no hospital: abertas primeiro (pendente, em análise, solicitada), filtro por situação. */
+export async function guiasConvenioPropria(
+  l: Leitor,
+  est: number,
+  f: { situacao: string | null; minhas: boolean; usuario: number | null },
+) {
+  const filtros: string[] = ['g.estabelecimento_id = ?', 'g.excluido_em IS NULL'];
+  const p: unknown[] = [est];
+  if (f.situacao) {
+    filtros.push('g.situacao = ?');
+    p.push(f.situacao);
+  } else filtros.push("g.situacao IN ('rascunho','solicitada','em_analise','pendente')");
+  if (f.minhas && f.usuario) {
+    filtros.push('g.responsavel_usuario_id = ?');
+    p.push(f.usuario);
+  }
+  const gs = await l.consultar<Linha>(
+    `SELECT g.id, g.numero, g.numero_guia_operadora, g.tipo_guia, g.situacao, g.data_solicitacao, g.senha,
+            g.agendamento_cirurgico_id, f.nome AS fonte, u.login AS responsavel,
+            (SELECT COUNT(*) FROM guia_pendencia gp WHERE gp.guia_fonte_pagadora_id = g.id
+                AND gp.situacao IN ('aberta','em_tratamento') AND gp.excluido_em IS NULL) AS pendencias
+       FROM guia_fonte_pagadora g JOIN fonte_pagadora f ON f.id = g.fonte_pagadora_id
+       LEFT JOIN usuario u ON u.id = g.responsavel_usuario_id
+      WHERE ${filtros.join(' AND ')}
+      ORDER BY FIELD(g.situacao, 'pendente', 'em_analise', 'solicitada', 'rascunho') , g.data_solicitacao
+      LIMIT 300`,
+    p,
+    { teto: 300 },
+  );
+  return gs.map((g) => ({
+    id: n(g['id']),
+    numero: txt(g['numero']),
+    numeroOperadora: g['numero_guia_operadora'] === null ? null : txt(g['numero_guia_operadora']),
+    tipo: txt(g['tipo_guia']),
+    situacao: txt(g['situacao']),
+    fonte: txt(g['fonte']),
+    solicitadaEm: iso(g['data_solicitacao']),
+    temSenha: g['senha'] !== null,
+    cirurgia: g['agendamento_cirurgico_id'] !== null,
+    responsavel: g['responsavel'] === null ? null : txt(g['responsavel']),
+    pendencias: n(g['pendencias']),
+  }));
+}
+
 async function guiaDo(tx: TxOperacao, est: number, guia: number) {
   const [g] = await tx.consultarParaAtualizar<Linha>(
     `SELECT id, versao, situacao, data_solicitacao, dias_solicitados, motivo_pendencia_guia_id, responsavel_usuario_id
