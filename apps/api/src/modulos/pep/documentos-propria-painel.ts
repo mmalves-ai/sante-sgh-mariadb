@@ -149,7 +149,8 @@ export function painel(
     const filtros: string[] = [];
     const p: unknown[] = [est.id, est.id];
     if (f.unidade !== null) {
-      filtros.push('COALESCE(i.unidade_internacao_id, a.unidade_assistencial_id) = ?');
+      // A unidade é a assistencial: a que a unidade de internação especializa ou, sem internação, a do atendimento.
+      filtros.push('COALESCE(uin.unidade_assistencial_id, a.unidade_assistencial_id) = ?');
       p.push(f.unidade);
     }
     const termo = f.busca?.trim().toUpperCase() ?? '';
@@ -175,7 +176,9 @@ export function painel(
       const esp = idsValidos(f.equipe.especialidades);
       if (esp.length === 0) return { linhas: [], limitado: false };
       // A especialidade da internação; sem internação (pronto atendimento, ambulatório), a do atendimento.
-      filtros.push(`COALESCE(i.especialidade_medica_id, a.especialidade_medica_id) IN (${marcadores(esp.length)})`);
+      filtros.push(
+        `COALESCE(i.especialidade_medica_id, a.especialidade_medica_id) IN (${marcadores(esp.length)})`,
+      );
       p.push(...esp);
     }
     const ls = await l.consultar(
@@ -194,7 +197,8 @@ export function painel(
          LEFT JOIN sexo sx ON sx.id = pf.sexo_id
          LEFT JOIN unidade_assistencial ua ON ua.id = a.unidade_assistencial_id
          LEFT JOIN internacao i ON i.atendimento_id = a.id AND i.excluido_em IS NULL
-         LEFT JOIN unidade_assistencial ui ON ui.id = i.unidade_internacao_id
+         LEFT JOIN unidade_internacao uin ON uin.id = i.unidade_internacao_id
+         LEFT JOIN unidade_assistencial ui ON ui.id = uin.unidade_assistencial_id
          LEFT JOIN leito_hospitalar lh ON lh.id = i.leito_hospitalar_id
          LEFT JOIN fonte_pagadora fp ON fp.id = a.fonte_pagadora_id
          LEFT JOIN profissional pm ON pm.id = COALESCE(i.medico_assistente_profissional_id, a.profissional_id)
@@ -406,8 +410,9 @@ export function preferenciasPainel(
     const u = await l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]);
     if (!u) return { unidade: null, campos: [] };
     const filtro = await l.uma(
-      `SELECT id, unidade_internacao_id FROM painel_filtro_usuario
-        WHERE usuario_id = ? AND estabelecimento_id = ? ORDER BY padrao DESC, id LIMIT 1`,
+      `SELECT f.id, COALESCE(f.unidade_assistencial_id, ui.unidade_assistencial_id) AS unidade
+         FROM painel_filtro_usuario f LEFT JOIN unidade_internacao ui ON ui.id = f.unidade_internacao_id
+        WHERE f.usuario_id = ? AND f.estabelecimento_id = ? ORDER BY f.padrao DESC, f.id LIMIT 1`,
       [u['id'], est.id],
     );
     const campos = await l.consultar(
@@ -417,7 +422,7 @@ export function preferenciasPainel(
       filtro ? [u['id'], filtro['id']] : [u['id']],
     );
     return {
-      unidade: filtro ? numOuNull(filtro['unidade_internacao_id']) : null,
+      unidade: filtro ? numOuNull(filtro['unidade']) : null,
       campos: campos.map((x) => ({
         campo: String(x['coluna']),
         exibir: Boolean(Number(x['exibir'])),

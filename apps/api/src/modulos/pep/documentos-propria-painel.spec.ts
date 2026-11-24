@@ -128,6 +128,8 @@ describe('painel', () => {
     expect(q.sql).toMatch(/a\.excluido_em IS NULL AND a\.saida_em IS NULL/);
     expect(q.sql).toMatch(/NOT IN \('encerrado','cancelado'\)/);
     expect(q.params).toEqual([7, 7, 3, 'SINT\\%', 'SINT%']);
+    expect(q.sql).toMatch(/COALESCE\(uin\.unidade_assistencial_id, a\.unidade_assistencial_id\) = \?/);
+    expect(q.sql).toMatch(/JOIN unidade_internacao uin ON uin\.id = i\.unidade_internacao_id/);
   });
 
   it('equipe sem especialidade: nenhuma linha e nenhuma leitura do painel', async () => {
@@ -142,9 +144,21 @@ describe('painel', () => {
   });
 
   it('equipe: a especialidade da internação ou, sem internação, a do atendimento (externo entra)', async () => {
-    const externo = { id: 11, numero: '11', paciente_id: 101, tipo_base: 'pronto_atendimento', nome: 'X', numero_prontuario: 1, alergias: 0 };
+    const externo = {
+      id: 11,
+      numero: '11',
+      paciente_id: 101,
+      tipo_base: 'pronto_atendimento',
+      nome: 'X',
+      numero_prontuario: 1,
+      alergias: 0,
+    };
     const { nucleo, sqls } = duble({ consultar: () => [externo] });
-    const r = await painel(nucleo, 'cli', C, { unidade: null, busca: null, equipe: { especialidades: [5, 5, -1, 6] } });
+    const r = await painel(nucleo, 'cli', C, {
+      unidade: null,
+      busca: null,
+      equipe: { especialidades: [5, 5, -1, 6] },
+    });
     expect(r.linhas.map((x) => [x.atendimento, x.tipo])).toEqual([[11, 'externo']]);
     const q = sqls.at(-1)!;
     expect(q.sql).toMatch(/COALESCE\(i\.especialidade_medica_id, a\.especialidade_medica_id\) IN \(\?, \?\)/);
@@ -169,9 +183,17 @@ describe('painel', () => {
 describe('episódio', () => {
   it('sem internação: vazio, sem ler cirurgia nem exame; id inválido não lê', async () => {
     const d = duble();
-    expect(await episodio(d.nucleo, 'cli', C, 0)).toEqual({ motivoInternacao: null, procedimentos: [], exames: [] });
+    expect(await episodio(d.nucleo, 'cli', C, 0)).toEqual({
+      motivoInternacao: null,
+      procedimentos: [],
+      exames: [],
+    });
     expect(d.sqls).toHaveLength(0);
-    expect(await episodio(d.nucleo, 'cli', C, 9)).toEqual({ motivoInternacao: null, procedimentos: [], exames: [] });
+    expect(await episodio(d.nucleo, 'cli', C, 9)).toEqual({
+      motivoInternacao: null,
+      procedimentos: [],
+      exames: [],
+    });
     expect(d.sqls.some((x) => /ato_cirurgico|resultado_exame/.test(x.sql))).toBe(false);
   });
 
@@ -234,14 +256,18 @@ describe('completude e preferências', () => {
 
   it('preferências: sem conta, vazio; com filtro padrão, unidade e colunas', async () => {
     expect(await preferenciasPainel(duble().nucleo, 'cli', C, 'x')).toEqual({ unidade: null, campos: [] });
-    const { nucleo } = duble({
-      uma: (sql) => (/FROM usuario/.test(sql) ? { id: 3 } : { id: 8, unidade_internacao_id: 4 }),
+    const { nucleo, sqls } = duble({
+      uma: (sql) => (/FROM usuario/.test(sql) ? { id: 3 } : { id: 8, unidade: 4 }),
       consultar: () => [{ coluna: 'leito', exibir: 0, ordem: 2 }],
     });
     expect(await preferenciasPainel(nucleo, 'cli', C, 'med')).toEqual({
       unidade: 4,
       campos: [{ campo: 'leito', exibir: false, ordem: 2 }],
     });
+    // A unidade do filtro é a assistencial (a própria ou a que a unidade de internação especializa).
+    const f = sqls.find((x) => /FROM painel_filtro_usuario/.test(x.sql))!;
+    expect(f.sql).toMatch(/COALESCE\(f\.unidade_assistencial_id, ui\.unidade_assistencial_id\)/);
+    expect(f.params).toEqual([3, 7]);
   });
 });
 
