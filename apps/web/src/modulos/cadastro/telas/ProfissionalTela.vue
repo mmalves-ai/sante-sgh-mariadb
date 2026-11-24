@@ -126,7 +126,6 @@ function teclaAba(e: KeyboardEvent, i: number): void {
 const contagem = computed<Partial<Record<AbaProfissional, number>>>(() => ({
   registros: reais.value.length,
   especialidades: p.value?.especialidades.length ?? 0,
-  lotacao: p.value?.lotacao.length ?? 0,
   convenios: p.value?.credenciamentos.length ?? 0,
 }));
 
@@ -528,27 +527,8 @@ const textoRegistro = (r: Registro) => [r.cbo, r.cboDescricao].filter(Boolean).j
         <!-- Lotação -->
         <section v-if="aba === 'lotacao'" class="cartao" aria-labelledby="lot-titulo">
           <h2 id="lot-titulo" class="cartao__titulo">{{ t('cadastro.profissionais.lotacao') }}</h2>
-          <p v-if="p.lotacao.length === 0">{{ t('cadastro.nenhum') }}</p>
-          <ul v-else class="lista">
-            <li v-for="l in p.lotacao" :key="`${l.registro}-${l.unidade}`">
-              {{ l.nome ?? l.unidade }} <span class="etiqueta">{{ registroDe(l.registro) }}</span>
-              {{
-                t('cadastro.profissionais.horas', {
-                  a: l.horasAmbulatorio,
-                  h: l.horasHospital,
-                  o: l.horasOutros,
-                })
-              }}
-              <span v-if="!l.ativo" class="pilula pilula--neutra">{{ T('inativo') }}</span>
-            </li>
-          </ul>
-          <EdicaoProfissional
-            v-if="editarAba('acaoLotacao')"
-            :ficha="p"
-            secao="lotacao"
-            @gravado="recarregar"
-          />
-          <!-- F3.1 (02-CAD linha 18): lotação por estabelecimento e unidade com CBO, carga semanal, vínculo e vigência. -->
+          <!-- F3.1 (02-CAD linha 18): a lotação é só esta (estabelecimento e unidade com CBO, carga semanal, vínculo e
+               vigência); a lista e o formulário antigos, por registro e em horas por mês, saíram da aba. -->
           <LotacoesProfissional :profissional="Number(props.id)" />
         </section>
 

@@ -46,25 +46,48 @@ const sobrepoe = (aIni: string, aFim: string | null, bIni: string, bFim: string 
   (aFim === null || aFim >= bIni) && (bFim === null || bFim >= aIni);
 
 /**
+ * Aviso (sem bloqueio) acima desta carga semanal somada: o teto de 168 horas é só o físico; acima de 60 horas por
+ * semana a jornada deixa de ser praticável para o mesmo profissional e a ficha do cadastro nacional costuma ser
+ * questionada. A gravação passa; a tela mostra o aviso.
+ */
+export const CARGA_SEMANAL_ALTA = 60;
+
+/** Carga somada das lotações que valem no dia `d` (a vigência inclui o início e o fim). */
+export const cargaNoDia = (lotacoes: readonly LotacaoExistente[], d: string) =>
+  lotacoes
+    .filter((x) => x.inicio <= d && (x.fim === null || x.fim >= d))
+    .reduce((s, x) => s + x.cargaSemanal, 0);
+
+/**
  * Conflitos com as lotações já gravadas: a mesma ocupação no mesmo estabelecimento e unidade não pode ter duas
- * vigências que se cruzam (encerre a anterior). A soma das cargas que valem no início da nova não passa da semana.
+ * vigências que se cruzam (encerre a anterior). A carga é a MÁXIMA SIMULTÂNEA dentro do período da nova: a soma só
+ * das lotações que valem ao mesmo tempo, conferida em cada ponto em que a carga pode subir (o início da nova e o
+ * início de cada lotação dentro do período dela). Lotações sequenciais (uma termina antes de a outra começar) nunca
+ * se somam. Acima da semana recusa; acima de CARGA_SEMANAL_ALTA só avisa.
  */
 export function conflitosLotacao(
   existentes: readonly LotacaoExistente[],
   nova: LotacaoProposta,
-): { sobrepostas: number[]; cargaNoPeriodo: number; excedeSemana: boolean } {
-  const sobrepostas = existentes
+): { sobrepostas: number[]; cargaNoPeriodo: number; excedeSemana: boolean; cargaAlta: boolean } {
+  const noPeriodo = existentes.filter((x) =>
+    sobrepoe(x.inicio, x.fim, nova.vigenciaInicio, nova.vigenciaFim),
+  );
+  const sobrepostas = noPeriodo
     .filter(
       (x) =>
         x.estabelecimento === nova.estabelecimento &&
         x.unidade === nova.unidade &&
-        x.ocupacao === nova.ocupacao &&
-        sobrepoe(x.inicio, x.fim, nova.vigenciaInicio, nova.vigenciaFim),
+        x.ocupacao === nova.ocupacao,
     )
     .map((x) => x.id);
-  const cargaNoPeriodo =
-    existentes
-      .filter((x) => sobrepoe(x.inicio, x.fim, nova.vigenciaInicio, nova.vigenciaFim))
-      .reduce((s, x) => s + x.cargaSemanal, 0) + cargaSemanal(nova);
-  return { sobrepostas, cargaNoPeriodo, excedeSemana: cargaNoPeriodo > CARGA_SEMANAL_MAXIMA };
+  const pontos = new Set([nova.vigenciaInicio]);
+  for (const x of noPeriodo) if (x.inicio > nova.vigenciaInicio) pontos.add(x.inicio);
+  const maxima = Math.max(...[...pontos].map((d) => cargaNoDia(noPeriodo, d)));
+  const cargaNoPeriodo = maxima + cargaSemanal(nova);
+  return {
+    sobrepostas,
+    cargaNoPeriodo,
+    excedeSemana: cargaNoPeriodo > CARGA_SEMANAL_MAXIMA,
+    cargaAlta: cargaNoPeriodo > CARGA_SEMANAL_ALTA,
+  };
 }

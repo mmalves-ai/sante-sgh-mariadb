@@ -52,6 +52,7 @@ export interface OpcoesLigacoes {
   tiposVinculo: { id: number; codigo: string; descricao: string }[];
   ocupacoes: { id: number; codigo: string; descricao: string }[];
   procedimentos: { id: number; codigo: string; descricao: string }[];
+  especialidades: { id: number; codigo: string; descricao: string }[];
 }
 export interface Parecido {
   id: number;
@@ -129,7 +130,9 @@ export const gravarOcupacaoEspecialidade = (e: number, ocupacao: number, princip
 export const retirarOcupacaoEspecialidade = (e: number, id: number, versao: number) =>
   pedir<Gravado>(`${C}/especialidades/${e}/ocupacoes/${id}/retirar`, 'POST', { versao });
 export const lerLotacoes = (p: number) =>
-  pedir<{ hoje: string; itens: Lotacao[] }>(`${C}/profissionais/${p}/lotacoes`);
+  pedir<{ hoje: string; itens: Lotacao[]; cargaHoje: number; cargaAlta: boolean }>(
+    `${C}/profissionais/${p}/lotacoes`,
+  );
 export const incluirLotacao = (p: number, c: Record<string, unknown>) =>
   pedir<Gravado>(`${C}/profissionais/${p}/lotacoes`, 'POST', c);
 export const encerrarLotacao = (p: number, id: number, versao: number, fim: string | null) =>

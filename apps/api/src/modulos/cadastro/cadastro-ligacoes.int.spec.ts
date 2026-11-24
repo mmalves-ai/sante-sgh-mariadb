@@ -6,6 +6,7 @@
 // apaga) e solicitante externo (alterar, inativar com motivo e reativar, código por fonte pagadora; parecidos na ficha).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CadastroLigacoesProprio } from './cadastro-ligacoes-proprio.js';
 import {
@@ -89,8 +90,21 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     });
   }, 120_000);
 
+  /** A linha da trilha de cada operação, na mesma transação: [ação, motivo] da última gravada para o alvo. */
+  const trilhaDe = async (entidade: string, id: number) => {
+    const r = await um(
+      'SELECT acao, motivo, estabelecimento_id FROM trilha_auditoria WHERE entidade = ? AND entidade_id = ? ORDER BY id DESC LIMIT 1',
+      [entidade, id],
+    );
+    return r ? [r['acao'], r['motivo'], Number(r['estabelecimento_id'])] : null;
+  };
+
   afterAll(async () => {
     await limparMinhas();
+    if (m)
+      await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+        limparTrilhaDaMassa(e, { ids: [m!.estabelecimento, m!.outroEstabelecimento] }),
+      );
     await limparMassa(nucleo, m);
     await nucleo.encerrar();
   });
@@ -208,6 +222,10 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     ).rejects.toMatchObject({
       problema: { codigo: 'vigencia-sobreposta' },
     });
+    // Fora do acesso total, outro estabelecimento é recusado (lotar, ler e encerrar só no da sessão).
+    await expect(
+      s.incluirLotacao(c(), { ...base, estabelecimento: m!.outroEstabelecimento, unidade: null }, t('x')),
+    ).rejects.toMatchObject({ problema: { codigo: 'estabelecimento-fora-da-sessao' } });
     await expect(
       s.incluirLotacao(
         c(),
@@ -219,11 +237,45 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
           cargaAmbulatorial: 0,
         },
         t('x'),
+        true,
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'carga-acima-da-semana' } });
     await expect(
-      s.incluirLotacao(c(), { ...base, estabelecimento: m!.outroEstabelecimento }, t('x')),
+      s.incluirLotacao(c(), { ...base, estabelecimento: m!.outroEstabelecimento }, t('x'), true),
     ).rejects.toMatchObject({ problema: { codigo: 'unidade-de-outro-estabelecimento' } });
+    // Com acesso total (administrador), lota no outro estabelecimento; o usuário do estabelecimento não a vê nem a encerra.
+    const alheia = await s.incluirLotacao(
+      c(),
+      {
+        ...base,
+        estabelecimento: m!.outroEstabelecimento,
+        unidade: null,
+        ocupacaoPadrao: false,
+        cargaAmbulatorial: 4,
+      },
+      t('x'),
+      true,
+    );
+    await expect(
+      s.encerrarLotacao(
+        c(),
+        {
+          dono: m!.profissional,
+          id: alheia,
+          versao: await versao('lotacao_profissional', alheia),
+          fim: null,
+        },
+        t('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'estabelecimento-fora-da-sessao' } });
+    expect((await s.lotacoes(c(), m!.profissional)).itens.map((x) => x.id)).toEqual([id]);
+    expect((await s.lotacoes(c(), m!.profissional, true)).itens.map((x) => x.id).sort()).toEqual(
+      [id, alheia].sort(),
+    );
+    expect((await s.opcoes(c(), null)).estabelecimentos.map((x) => x.id)).toEqual([m!.estabelecimento]);
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar('DELETE FROM lotacao_profissional WHERE id = ?', [alheia]),
+    );
     await expect(
       s.incluirLotacao(c(), { ...base, cargaAmbulatorial: 0, cargaHospitalar: 0 }, t('x')),
     ).rejects.toMatchObject({
@@ -259,6 +311,9 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
     ]);
     const lidas = await s.lotacoes(c(), m!.profissional);
     expect(lidas.itens.map((x) => x.cargaSemanal)).toEqual([40, 30]);
+    // Trilha na mesma transação: inclusão e encerramento da lotação, no estabelecimento da sessão.
+    expect(await trilhaDe('lotacao_profissional', id2)).toEqual(['inclusao', null, m!.estabelecimento]);
+    expect(await trilhaDe('lotacao_profissional', id)).toEqual(['alteracao', null, m!.estabelecimento]);
   });
 
   it('solicitante: altera, inativa com motivo e reativa, código por fonte; a ficha mostra parecidos e o que falta', async () => {
@@ -282,6 +337,38 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
       },
       t('x'),
     );
+    expect((await trilhaDe('solicitante_externo', a))?.[0]).toBe('alteracao');
+    const alt = {
+      id: b,
+      nome: `DRA ANA ${MARCA} LIG SINTETICA`,
+      cpf: null,
+      cns: null,
+      ocupacao: null,
+      especialidade: null,
+      instituicaoNome: null,
+      instituicaoCnpj: null,
+      instituicaoCnes: null,
+      telefone: null,
+      email: null,
+      observacao: null,
+    };
+    // Corrigir o número para o de outro cadastro: colisão recusada pela chave do domínio (zeros à esquerda contam igual).
+    await expect(
+      s.alterarSolicitante(
+        c(),
+        { ...alt, versao: await versao('solicitante_externo', b), numero: '09914001' },
+        t('x'),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'solicitante-existente' } });
+    // Corrigir o erro de digitação no registro sem criar outro cadastro.
+    await s.alterarSolicitante(
+      c(),
+      { ...alt, versao: await versao('solicitante_externo', b), numero: '9914003' },
+      t('x'),
+    );
+    expect(
+      (await um('SELECT numero_conselho FROM solicitante_externo WHERE id = ?', [b]))!['numero_conselho'],
+    ).toBe('9914003');
     await expect(
       s.mudarSituacaoSolicitante(
         c(),
@@ -308,6 +395,11 @@ describe.skipIf(SEM_BANCO)('ligações do cadastro no banco próprio (f22_o1)', 
       0,
       '2026-02-01',
       null,
+    ]);
+    expect(await trilhaDe('solicitante_externo', b)).toEqual([
+      'alteracao',
+      'Cadastro repetido do mesmo médico',
+      m!.estabelecimento,
     ]);
     await s.mudarSituacaoSolicitante(
       c(),

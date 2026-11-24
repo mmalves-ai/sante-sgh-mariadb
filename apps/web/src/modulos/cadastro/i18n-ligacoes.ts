@@ -21,6 +21,9 @@ export const mensagensLigacoes = {
     procedimento: 'Procedimento',
     ocupacoes: 'Ocupações (CBO) da especialidade',
     ocupacao: 'Ocupação (CBO)',
+    escolher: 'Especialidade (busque pelo nome ou código)',
+    escolhida: 'Especialidade escolhida: {nome}',
+    trocar: 'Trocar',
   },
   lotacao: {
     titulo: 'Lotação por estabelecimento e unidade',
@@ -37,6 +40,8 @@ export const mensagensLigacoes = {
     repasse: 'Gera repasse',
     resumo: '{est} · {un} · {cbo} · {h} h/semana · desde {ini}',
     incluir: 'Incluir lotação',
+    cargaAlta:
+      'Atenção: {n} h por semana somadas nas lotações vigentes, acima de 60 h. A gravação passa; confira se a jornada é praticável.',
   },
   solicitante: {
     titulo: 'Solicitante externo',
@@ -45,6 +50,9 @@ export const mensagensLigacoes = {
     nome: 'Nome',
     cpf: 'CPF',
     cns: 'Cartão Nacional de Saúde',
+    conselho: 'Conselho (sigla)',
+    uf: 'UF do conselho',
+    numero: 'Número no conselho',
     instituicao: 'Instituição de origem',
     cnes: 'CNES da instituição',
     telefone: 'Telefone',

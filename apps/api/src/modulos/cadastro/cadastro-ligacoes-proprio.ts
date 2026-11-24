@@ -9,7 +9,9 @@
 // (trilha e idempotência na mesma transação).
 import { randomUUID } from 'node:crypto';
 import {
+  CARGA_SEMANAL_ALTA,
   camposFaltantes,
+  chaveSolicitante,
   conflitosLotacao,
   errosCodigoNaFonte,
   errosInativacao,
@@ -134,7 +136,11 @@ const esquemaEncerrar = z.object({ dono: idPos, id: idPos, versao: idPos, fim: d
 export type EntradaEncerrar = z.infer<typeof esquemaEncerrar>;
 
 /** Encerra a vigência (procedimento da especialidade ou lotação); a linha fica, com o fim gravado. */
-const opEncerrar = (tabela: 'especialidade_procedimento' | 'lotacao_profissional', t: RegistroTrilhaTela) =>
+const opEncerrar = (
+  tabela: 'especialidade_procedimento' | 'lotacao_profissional',
+  t: RegistroTrilhaTela,
+  restrito: number | null,
+) =>
   definirOperacao({
     nome: `cadastro.encerrar-${tabela}`,
     tabelas: [tabela],
@@ -142,11 +148,12 @@ const opEncerrar = (tabela: 'especialidade_procedimento' | 'lotacao_profissional
     acao: 'alteracao',
     async gravar(tx, e) {
       const dono = tabela === 'lotacao_profissional' ? 'profissional_id' : 'especialidade_medica_id';
-      const x = await tx.uma(
-        `SELECT id, vigencia_inicio, vigencia_fim FROM ${tabela} WHERE id = ? AND ${dono} = ? AND excluido_em IS NULL`,
-        [e.id, e.dono],
-      );
+      const x = await tx.uma(`SELECT * FROM ${tabela} WHERE id = ? AND ${dono} = ? AND excluido_em IS NULL`, [
+        e.id,
+        e.dono,
+      ]);
       if (!x) throw naoAchado('Registro');
+      if (restrito !== null && Number(x['estabelecimento_id']) !== restrito) throw recusaEstabelecimento();
       const fim = e.fim ?? (await hojeDe(tx));
       const atual = data(x['vigencia_fim']);
       if (atual !== null && atual <= fim)
@@ -267,7 +274,16 @@ const esquemaLotacao = z
   .strict();
 export type EntradaLotacao = z.infer<typeof esquemaLotacao>;
 
-const opIncluirLotacao = (t: RegistroTrilhaTela) =>
+/** A lotação de outro estabelecimento só pelo acesso total (administrador da plataforma). */
+const recusaEstabelecimento = () =>
+  new ErroOperacao(
+    403,
+    'estabelecimento-fora-da-sessao',
+    'Outro estabelecimento',
+    'A lotação só pode ser gravada no estabelecimento da sessão.',
+  );
+
+const opIncluirLotacao = (t: RegistroTrilhaTela, restrito: number | null) =>
   definirOperacao({
     nome: 'cadastro.profissional.incluir-lotacao',
     tabelas: ['lotacao_profissional'],
@@ -279,6 +295,7 @@ const opIncluirLotacao = (t: RegistroTrilhaTela) =>
       )
         throw naoAchado('Profissional');
       recusarErros(errosLotacao(e));
+      if (restrito !== null && e.estabelecimento !== restrito) throw recusaEstabelecimento();
       if (
         !(await tx.uma('SELECT id FROM estabelecimento WHERE id = ? AND excluido_em IS NULL', [
           e.estabelecimento,
@@ -390,6 +407,17 @@ const esquemaAlterarSolicitante = z
     id: idPos,
     versao: idPos,
     nome: z.string().trim().min(3).max(150),
+    // O registro no conselho corrige o erro de digitação (o que a regra 'numero-proximo' aponta) sem criar outro
+    // cadastro; ausente, fica o gravado.
+    conselho: z.string().trim().min(1).max(10).optional(),
+    uf: z
+      .string()
+      .regex(/^[A-Za-z]{2}$/)
+      .optional(),
+    numero: z
+      .string()
+      .regex(/^\d{1,15}$/)
+      .optional(),
     cpf: z
       .string()
       .regex(/^\d{11}$/)
@@ -423,8 +451,40 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
     entrada: esquemaAlterarSolicitante,
     acao: 'alteracao',
     async gravar(tx, e) {
-      if (!(await tx.uma('SELECT id FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL', [e.id])))
-        throw naoAchado('Solicitante');
+      const atual = await tx.uma(
+        `SELECT s.conselho_classe_id, s.conselho_unidade_federativa_id, s.numero_conselho, cc.sigla AS conselho,
+                uf.sigla AS uf
+           FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
+           JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+          WHERE s.id = ? AND s.excluido_em IS NULL`,
+        [e.id],
+      );
+      if (!atual) throw naoAchado('Solicitante');
+      const sigla = (e.conselho ?? String(atual['conselho'])).toUpperCase();
+      const ufSigla = (e.uf ?? String(atual['uf'])).toUpperCase();
+      const numero = e.numero ?? String(atual['numero_conselho']);
+      const conselho = await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ? AND ativo', [sigla]);
+      if (!conselho) throw recusaCampo('conselho-inexistente', 'Conselho não encontrado.', 'conselho');
+      const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ?', [ufSigla]);
+      if (!uf) throw recusaCampo('uf-inexistente', 'UF não encontrada.', 'uf');
+      // Colisão pela chave do domínio (conselho, UF e número normalizados), não pela comparação exata do texto.
+      const chave = chaveSolicitante({
+        id: e.id,
+        conselho: sigla,
+        uf: ufSigla,
+        numero: Number(numero),
+        cbo: null,
+      });
+      const outros = (
+        await tx.consultar(`${SQL_SOLICITANTES} AND uf.sigla = ? AND s.id <> ?`, [ufSigla, e.id])
+      ).map(comparavel);
+      const iguais = outros.filter((o) => chave !== null && chaveSolicitante(o) === chave).map((o) => o.id);
+      if (iguais.length)
+        throw recusa(
+          'solicitante-existente',
+          `Já existe outro solicitante com este conselho, UF e número (cadastro ${iguais.join(', ')}).`,
+          { campos: ['numero'] },
+        );
       if (e.ocupacao !== null && !(await tx.uma('SELECT id FROM ocupacao_cbo WHERE id = ?', [e.ocupacao])))
         throw recusaCampo('cbo-inexistente', 'Ocupação (CBO) não encontrada.', 'ocupacao');
       if (
@@ -434,6 +494,9 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
         throw recusaCampo('especialidade-inexistente', 'Especialidade não encontrada.', 'especialidade');
       await tx.alterar('solicitante_externo', e.id, e.versao, {
         nome: e.nome,
+        conselho_classe_id: Number(conselho['id']),
+        conselho_unidade_federativa_id: Number(uf['id']),
+        numero_conselho: numero,
         cpf: e.cpf,
         cns: e.cns,
         ocupacao_cbo_id: e.ocupacao,
@@ -661,6 +724,11 @@ export class CadastroLigacoesProprio {
     return Number(r.id);
   }
 
+  /** O estabelecimento a que a lotação se limita: o da sessão; null só no acesso total (administrador). */
+  private async escopo(c: ContextoPorta, todos: boolean): Promise<number | null> {
+    return todos ? null : this.estabelecimento(c);
+  }
+
   private async executar<E>(
     c: ContextoPorta,
     op: Parameters<Executor['executar']>[0],
@@ -683,7 +751,7 @@ export class CadastroLigacoesProprio {
     return this.executar(c, opIncluirProcedimento(t), e, t);
   }
   encerrarProcedimento(c: ContextoPorta, e: EntradaEncerrar, t: RegistroTrilhaTela) {
-    return this.executar(c, opEncerrar('especialidade_procedimento', t), e, t);
+    return this.executar(c, opEncerrar('especialidade_procedimento', t, null), e, t);
   }
   gravarOcupacao(c: ContextoPorta, e: EntradaOcupacaoEspecialidade, t: RegistroTrilhaTela) {
     return this.executar(c, opGravarOcupacao(t), e, t);
@@ -691,11 +759,11 @@ export class CadastroLigacoesProprio {
   retirarOcupacao(c: ContextoPorta, e: { dono: number; id: number; versao: number }, t: RegistroTrilhaTela) {
     return this.executar(c, opRetirarOcupacao(t), e, t);
   }
-  incluirLotacao(c: ContextoPorta, e: EntradaLotacao, t: RegistroTrilhaTela) {
-    return this.executar(c, opIncluirLotacao(t), e, t);
+  async incluirLotacao(c: ContextoPorta, e: EntradaLotacao, t: RegistroTrilhaTela, todos = false) {
+    return this.executar(c, opIncluirLotacao(t, await this.escopo(c, todos)), e, t);
   }
-  encerrarLotacao(c: ContextoPorta, e: EntradaEncerrar, t: RegistroTrilhaTela) {
-    return this.executar(c, opEncerrar('lotacao_profissional', t), e, t);
+  async encerrarLotacao(c: ContextoPorta, e: EntradaEncerrar, t: RegistroTrilhaTela, todos = false) {
+    return this.executar(c, opEncerrar('lotacao_profissional', t, await this.escopo(c, todos)), e, t);
   }
   alterarSolicitante(c: ContextoPorta, e: EntradaAlterarSolicitante, t: RegistroTrilhaTela) {
     return this.executar(c, opAlterarSolicitante(t), e, t);
@@ -751,21 +819,39 @@ export class CadastroLigacoesProprio {
     });
   }
 
-  lotacoes(c: ContextoPorta, profissional: number): Promise<{ hoje: string; itens: LotacaoLida[] }> {
+  /**
+   * Lotações do profissional. Fora do acesso total (administrador da plataforma), só as do estabelecimento da sessão.
+   * `cargaHoje` é a soma das lotações que valem hoje (todas as do profissional, para o aviso de jornada alta).
+   */
+  async lotacoes(
+    c: ContextoPorta,
+    profissional: number,
+    todos = false,
+  ): Promise<{ hoje: string; itens: LotacaoLida[]; cargaHoje: number; cargaAlta: boolean }> {
+    const restrito = await this.escopo(c, todos);
     return this.ler(c, async (l) => {
+      const soma = await l.uma<{ carga: unknown }>(
+        `SELECT COALESCE(SUM(carga_horaria_ambulatorial + carga_horaria_hospitalar + carga_horaria_outros), 0) AS carga
+           FROM lotacao_profissional WHERE profissional_id = ? AND ativo AND excluido_em IS NULL
+            AND vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
+        [profissional],
+      );
+      const cargaHoje = Number(soma?.carga ?? 0);
       const hoje = await hojeDe(l);
       const rs = await l.consultar(
-        `SELECT lp.*, e.nome AS est_nome, u.nome AS un_nome, o.codigo_cbo, o.descricao AS cbo_desc, tv.descricao AS tv_desc
+        `SELECT lp.*, e.nome_fantasia AS est_nome, u.nome AS un_nome, o.codigo_cbo, o.descricao AS cbo_desc, tv.descricao AS tv_desc
            FROM lotacao_profissional lp JOIN estabelecimento e ON e.id = lp.estabelecimento_id
            JOIN ocupacao_cbo o ON o.id = lp.ocupacao_cbo_id
            LEFT JOIN unidade_assistencial u ON u.id = lp.unidade_assistencial_id
            LEFT JOIN tipo_vinculo_trabalho tv ON tv.id = lp.tipo_vinculo_trabalho_id
-          WHERE lp.profissional_id = ? AND lp.ativo AND lp.excluido_em IS NULL
+          WHERE lp.profissional_id = ? AND lp.ativo AND lp.excluido_em IS NULL${restrito === null ? '' : ' AND lp.estabelecimento_id = ?'}
           ORDER BY lp.vigencia_fim IS NULL DESC, lp.vigencia_inicio DESC, lp.id DESC`,
-        [profissional],
+        restrito === null ? [profissional] : [profissional, restrito],
       );
       return {
         hoje,
+        cargaHoje,
+        cargaAlta: cargaHoje > CARGA_SEMANAL_ALTA,
         itens: rs.map((r) => {
           const inicio = data(r['vigencia_inicio'])!;
           const fim = data(r['vigencia_fim']);
@@ -802,14 +888,20 @@ export class CadastroLigacoesProprio {
   }
 
   /** Listas da tela da lotação e da especialidade (busca por termo nas ocupações e nos procedimentos). */
-  opcoes(c: ContextoPorta, termo: string | null) {
+  async opcoes(c: ContextoPorta, termo: string | null, todos = false) {
+    const restrito = await this.escopo(c, todos);
+    const soEst = restrito === null ? '' : ' AND id = ?';
+    const estP = restrito === null ? [] : [restrito];
     return this.ler(c, async (l) => {
       const like = `%${(termo ?? '').replace(/[%_]/g, '')}%`;
-      const [ests, unids, vincs, cbos, procs] = await Promise.all([
-        l.consultar('SELECT id, nome FROM estabelecimento WHERE excluido_em IS NULL ORDER BY nome', []),
+      const [ests, unids, vincs, cbos, procs, esps] = await Promise.all([
         l.consultar(
-          'SELECT id, estabelecimento_id, nome FROM unidade_assistencial WHERE excluido_em IS NULL ORDER BY nome',
-          [],
+          'SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL${soEst} ORDER BY nome_fantasia',
+          estP,
+        ),
+        l.consultar(
+          `SELECT id, estabelecimento_id, nome FROM unidade_assistencial WHERE excluido_em IS NULL${soEst.replace('id', 'estabelecimento_id')} ORDER BY nome`,
+          estP,
         ),
         l.consultar(
           "SELECT id, codigo_cnes, descricao FROM tipo_vinculo_trabalho WHERE ativo AND nivel <> 'vinculo' ORDER BY codigo_cnes",
@@ -824,6 +916,12 @@ export class CadastroLigacoesProprio {
         termo
           ? l.consultar(
               "SELECT id, codigo, descricao FROM item_faturavel WHERE excluido_em IS NULL AND tipo_item = 'procedimento' AND (codigo LIKE ? OR descricao LIKE ?) ORDER BY descricao LIMIT 30",
+              [like, like],
+            )
+          : Promise.resolve([]),
+        termo
+          ? l.consultar(
+              'SELECT id, codigo, descricao FROM especialidade_medica WHERE excluido_em IS NULL AND (codigo LIKE ? OR descricao LIKE ?) ORDER BY descricao LIMIT 30',
               [like, like],
             )
           : Promise.resolve([]),
@@ -846,6 +944,11 @@ export class CadastroLigacoesProprio {
           descricao: String(o['descricao']),
         })),
         procedimentos: procs.map((p) => ({
+          id: Number(p['id']),
+          codigo: String(p['codigo']),
+          descricao: String(p['descricao']),
+        })),
+        especialidades: esps.map((p) => ({
           id: Number(p['id']),
           codigo: String(p['codigo']),
           descricao: String(p['descricao']),

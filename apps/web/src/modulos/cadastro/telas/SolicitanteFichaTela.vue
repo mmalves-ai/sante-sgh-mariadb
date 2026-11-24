@@ -26,6 +26,9 @@ const f = computed(() => consulta.data.value);
 const fontes = useQuery({ queryKey: ['cadastro', 'vinculos-opcoes'], queryFn: lerOpcoes, enabled: editar });
 const CAMPOS = [
   'nome',
+  'conselho',
+  'uf',
+  'numero',
   'cpf',
   'cns',
   'instituicaoNome',

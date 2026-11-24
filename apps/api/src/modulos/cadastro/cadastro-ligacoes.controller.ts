@@ -10,7 +10,7 @@
 //   GET  /api/cadastros/ligacoes/opcoes?termo=                            estabelecimentos, unidades, vínculos, CBO, procedimentos
 //   GET  /api/cadastros/solicitantes/parecidos?nome=&conselho=&uf=&numero= parecidos antes de incluir (aviso na hora)
 //   GET  /api/cadastros/solicitantes/:id/ficha                            ficha, campos da guia, parecidos e códigos
-//   PUT  /api/cadastros/solicitantes/:id                                  altera os dados (o registro no conselho fica)
+//   PUT  /api/cadastros/solicitantes/:id                                  altera os dados e corrige o registro (colisão recusada)
 //   POST /api/cadastros/solicitantes/:id/situacao                         inativa ou reativa, com o motivo (nunca apaga)
 //   POST /api/cadastros/solicitantes/:id/codigos                          código na fonte pagadora (inclui, troca, inativa)
 // Acesso só pelos níveis de cada cargo (cadastro.especialidade.editar, cadastro.profissional.editar,
@@ -55,6 +55,8 @@ const inteiro = (v: unknown): number => {
   return Number.isFinite(n) ? n : NaN;
 };
 const sim = (v: unknown): boolean => v === true;
+/** Acesso total: o administrador da plataforma (ADR 0022) lota em qualquer estabelecimento; os demais, só no da sessão. */
+const acessoTotal = (req: RequisicaoAutorizada): boolean => req.sgh?.sessao.usuario.ator === 'plataforma';
 
 @Controller('cadastros')
 export class CadastroLigacoesController {
@@ -199,14 +201,14 @@ export class CadastroLigacoesController {
   @Permissao('cadastro.profissional.ler')
   lotacoes(@Param('id') p: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    return this.rodar(() => this.servico().lotacoes(s.porta, idDaRota(p)));
+    return this.rodar(() => this.servico().lotacoes(s.porta, idDaRota(p), acessoTotal(req)));
   }
 
   @Get('ligacoes/opcoes')
   @Permissao('cadastro.profissional.ler')
   opcoes(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    return this.rodar(() => this.servico().opcoes(s.porta, txt(termo)));
+    return this.rodar(() => this.servico().opcoes(s.porta, txt(termo), acessoTotal(req)));
   }
 
   @Post('profissionais/:id/lotacoes')
@@ -234,7 +236,7 @@ export class CadastroLigacoesController {
       vigenciaFim: txt(b['vigenciaFim']),
     };
     const t = this.trilha(s, 'cadastro.profissional.gravado', 'incluirLotacao', 'lotacao_profissional', n);
-    return { id: await this.rodar(() => this.servico().incluirLotacao(s.porta, e, t)) };
+    return { id: await this.rodar(() => this.servico().incluirLotacao(s.porta, e, t, acessoTotal(req))) };
   }
 
   @Post('profissionais/:id/lotacoes/:rid/encerrar')
@@ -251,7 +253,9 @@ export class CadastroLigacoesController {
     const n = idDaRota(p);
     const t = this.trilha(s, 'cadastro.profissional.gravado', 'encerrarLotacao', 'lotacao_profissional', n);
     return {
-      id: await this.rodar(() => this.servico().encerrarLotacao(s.porta, this.encerrar(corpo, n, rid), t)),
+      id: await this.rodar(() =>
+        this.servico().encerrarLotacao(s.porta, this.encerrar(corpo, n, rid), t, acessoTotal(req)),
+      ),
     };
   }
 
@@ -297,6 +301,9 @@ export class CadastroLigacoesController {
       id: n,
       versao: id(b['versao']) ?? 0,
       nome: txt(b['nome']) ?? '',
+      ...(txt(b['conselho']) ? { conselho: txt(b['conselho'])! } : {}),
+      ...(txt(b['uf']) ? { uf: txt(b['uf'])! } : {}),
+      ...(digitos(b['numero']) ? { numero: digitos(b['numero'])! } : {}),
       cpf: digitos(b['cpf']),
       cns: digitos(b['cns']),
       ocupacao: id(b['ocupacao']),

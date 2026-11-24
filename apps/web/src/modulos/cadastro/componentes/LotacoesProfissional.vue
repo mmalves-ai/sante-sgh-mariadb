@@ -65,6 +65,9 @@ const incluir = () =>
     <h3 id="lotacoes-titulo">{{ t('ligacoes.lotacao.titulo') }}</h3>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" data-testid="lotacao-erro" />
+    <p v-if="consulta.data.value?.cargaAlta" role="status" class="aviso" data-testid="lotacao-carga-alta">
+      {{ t('ligacoes.lotacao.cargaAlta', { n: consulta.data.value.cargaHoje }) }}
+    </p>
     <p v-if="consulta.data.value?.itens.length === 0">{{ t('ligacoes.comum.nenhum') }}</p>
     <ul v-else-if="consulta.data.value" data-testid="lista-lotacoes">
       <li v-for="l in consulta.data.value.itens" :key="l.id">
