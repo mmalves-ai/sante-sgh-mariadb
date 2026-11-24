@@ -875,7 +875,7 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     await expect(mesma).rejects.toMatchObject({
       extras: { codigo: 'aih-reapresentada-mesma-competencia' },
     });
-    expect((await mesma.catch((e: ErroProblema) => e)).getStatus()).toBe(409);
+    expect(((await mesma.catch((e: unknown) => e)) as ErroProblema).getStatus()).toBe(409);
     expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
       situacao: 'fechada',
       competenciaApresentacao: null,

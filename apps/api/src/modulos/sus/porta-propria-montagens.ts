@@ -100,7 +100,9 @@ function pacienteDaLinha(x: Linha): PacienteDoArquivo {
 }
 
 /** A equivalência SIGTAP vigente do item faturável (a do instrumento antes da de todos). */
-const sigtapDoItem = (instrumento: string) => `(SELECT q.procedimento_sigtap_id FROM equivalencia_sigtap_item q
+const sigtapDoItem = (
+  instrumento: string,
+) => `(SELECT q.procedimento_sigtap_id FROM equivalencia_sigtap_item q
       WHERE q.item_faturavel_id = ci.item_faturavel_id AND q.vigencia_fim IS NULL AND q.excluido_em IS NULL
         AND q.instrumento IN ('${instrumento}', 'todos')
       ORDER BY q.instrumento = 'todos', q.id LIMIT 1)`;
@@ -170,7 +172,9 @@ export class MontagensSusPropria {
     sigtapExtra: readonly number[],
   ): Promise<DadosCihaLidos> {
     const momento = 'CASE WHEN i.id IS NOT NULL THEN i.data_hora_alta ELSE at.entrada_em END';
-    const foraSus = conveniosSus.length ? ` AND c.fonte_pagadora_id NOT IN (${marcadores(conveniosSus.length)})` : '';
+    const foraSus = conveniosSus.length
+      ? ` AND c.fonte_pagadora_id NOT IN (${marcadores(conveniosSus.length)})`
+      : '';
     const contas = await this.l.consultar(
       `SELECT c.id AS conta, c.atendimento_id, c.fonte_pagadora_id, c.natureza, i.id AS internacao_id,
               ${dia('COALESCE(i.data_hora_entrada, at.entrada_em)')} AS entrada,
@@ -215,7 +219,10 @@ export class MontagensSusPropria {
       });
       porConta.set(conta, lista);
     }
-    const porAtendimento = new Map<number, { conta: ContaCiha; contas: number[]; itens: ItemContaSigtap[] }>();
+    const porAtendimento = new Map<
+      number,
+      { conta: ContaCiha; contas: number[]; itens: ItemContaSigtap[] }
+    >();
     const cids = new Set<string>();
     for (const x of contas) {
       const registro = num(x['atendimento_id']);
@@ -319,7 +326,8 @@ export class MontagensSusPropria {
     for (const x of itens) {
       const conta = num(x['conta_hospitalar_id']);
       const lista = porConta.get(conta) ?? [];
-      const temExecutante = x['executante_profissional_id'] !== null && x['executante_profissional_id'] !== undefined;
+      const temExecutante =
+        x['executante_profissional_id'] !== null && x['executante_profissional_id'] !== undefined;
       lista.push({
         conta,
         item: num(x['id']),
@@ -403,7 +411,8 @@ export class MontagensSusPropria {
       { teto: 10 },
     );
     const porTipo: Record<string, { linhas: number; quantidade: number }> = {};
-    for (const x of resumo) porTipo[txt(x['tipo'])] = { linhas: num(x['linhas']), quantidade: num(x['quantidade']) };
+    for (const x of resumo)
+      porTipo[txt(x['tipo'])] = { linhas: num(x['linhas']), quantidade: num(x['quantidade']) };
     let filtro = '';
     const p: unknown[] = [remessa, this.est];
     if (f.tipo) {
@@ -476,9 +485,7 @@ export class MontagensSusPropria {
     registro: number,
     conveniosSus: readonly number[],
   ): Promise<AtendimentoLaudoApacDados | null> {
-    const sus = conveniosSus.length
-      ? `c.fonte_pagadora_id IN (${marcadores(conveniosSus.length)})`
-      : 'FALSE';
+    const sus = conveniosSus.length ? `c.fonte_pagadora_id IN (${marcadores(conveniosSus.length)})` : 'FALSE';
     const x = await this.l.uma(
       `SELECT at.id, ${dia('at.entrada_em')} AS data, at.fonte_pagadora_id, ${cid('ta1.codigo_termo')} AS cid_principal,
               (SELECT c.fonte_pagadora_id FROM conta_hospitalar c
@@ -625,7 +632,10 @@ export class MontagensSusPropria {
 
   // ── AIH ──
 
-  private async internacoesDe(registros: readonly number[], conveniosSus: readonly number[]): Promise<InternacaoAih[]> {
+  private async internacoesDe(
+    registros: readonly number[],
+    conveniosSus: readonly number[],
+  ): Promise<InternacaoAih[]> {
     const ids = [...new Set(registros.filter((r) => Number.isSafeInteger(r) && r > 0))];
     const saida: InternacaoAih[] = [];
     for (const parte of lotes(ids)) {
@@ -668,7 +678,8 @@ export class MontagensSusPropria {
           entrada: txtOuNulo(x['entrada']),
           alta: txtOuNulo(x['alta']),
           motivoSaida: numOuNulo(x['motivo_saida']),
-          carater: x['urgencia'] === null || x['urgencia'] === undefined ? null : num(x['urgencia']) ? '2' : '1',
+          carater:
+            x['urgencia'] === null || x['urgencia'] === undefined ? null : num(x['urgencia']) ? '2' : '1',
           // A especialidade do leito no SIH não é guardada na internação: a montagem usa a da SIGTAP do principal.
           especialidadeLeito: null,
           cidPrincipal: txtOuNulo(x['cid_principal']),

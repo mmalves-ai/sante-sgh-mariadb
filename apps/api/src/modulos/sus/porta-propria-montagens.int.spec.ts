@@ -121,7 +121,10 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
         );
       ids.privada = await fonte(`${P}-PRIV`, 'OPERADORA FICTICIA F24');
       ids.sus = await fonte(`${P}-SUS`, 'SUS FICTICIO F24');
-      const grupoFat = await e.uma<{ id: number }>('SELECT id FROM grupo_faturamento ORDER BY id LIMIT 1', []);
+      const grupoFat = await e.uma<{ id: number }>(
+        'SELECT id FROM grupo_faturamento ORDER BY id LIMIT 1',
+        [],
+      );
       ids.item = await um(
         'item_faturavel',
         `${P}-IT`,
@@ -196,7 +199,10 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
       const car = await e.uma<{ id: number }>('SELECT id FROM carater_admissao ORDER BY id LIMIT 1', []);
       const mod = await e.uma<{ id: number }>('SELECT id FROM modalidade_internacao ORDER BY id LIMIT 1', []);
       const esp = await e.uma<{ id: number }>('SELECT id FROM especialidade_medica ORDER BY id LIMIT 1', []);
-      const saida = await e.uma<{ id: number }>('SELECT id FROM motivo_saida_hospitalar ORDER BY id LIMIT 1', []);
+      const saida = await e.uma<{ id: number }>(
+        'SELECT id FROM motivo_saida_hospitalar ORDER BY id LIMIT 1',
+        [],
+      );
       if (acom && car && mod && esp && saida) {
         const at3 = await atendimento(`${P}-AT3`, ids.sus, '2026-03-02T10:00:00Z');
         ids.internacao = await garantir(
@@ -239,8 +245,16 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     const d = await ler(ids.est, (m) => m.dadosCiha(INTERVALO, [ids.sus], []));
     const at = d.atendimentos.find((a) => a.conta.registro === ids.atPriv);
     expect(at).toBeDefined();
-    expect(at?.conta).toMatchObject({ modalidade: 'ambulatorial', convenio: ids.privada, entrada: '2026-03-10' });
-    expect(at?.conta.paciente).toMatchObject({ cns: '700000000240001', nascimento: '1960-05-06', prontuario: 240_024_001 });
+    expect(at?.conta).toMatchObject({
+      modalidade: 'ambulatorial',
+      convenio: ids.privada,
+      entrada: '2026-03-10',
+    });
+    expect(at?.conta.paciente).toMatchObject({
+      cns: '700000000240001',
+      nascimento: '1960-05-06',
+      prontuario: 240_024_001,
+    });
     expect(at?.conta.operadora.regAns).toBe(123456);
     expect(at?.itens).toEqual([
       expect.objectContaining({ sigtap: ids.sig, quantidade: 2, procedimento: ids.item }),
@@ -248,14 +262,20 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     expect(d.procedimentos.map((p) => p.codigo)).toContain(SIG);
     // As contas SUS não entram na CIHA; fora do intervalo, nada.
     expect(d.atendimentos.some((a) => a.conta.convenio === ids.sus)).toBe(false);
-    const fora = await ler(ids.est, (m) => m.dadosCiha({ inicio: '2026-05-01', fim: '2026-05-31' }, [ids.sus], []));
+    const fora = await ler(ids.est, (m) =>
+      m.dadosCiha({ inicio: '2026-05-01', fim: '2026-05-31' }, [ids.sus], []),
+    );
     expect(fora.atendimentos.filter((a) => a.conta.registro === ids.atPriv)).toEqual([]);
   });
 
   it('BPA: a conta ambulatorial SUS, o executante com CNS e o isolamento por estabelecimento', async () => {
     const d = await ler(ids.est, (m) => m.dadosBpa(INTERVALO, [ids.sus], []));
     const at = d.atendimentos.find((a) => a.conta.registro === ids.atSus);
-    expect(at?.conta).toMatchObject({ convenio: ids.sus, data: '2026-03-12', pacienteId: expect.any(Number) });
+    expect(at?.conta).toMatchObject({
+      convenio: ids.sus,
+      data: '2026-03-12',
+      pacienteId: expect.any(Number),
+    });
     expect(at?.itens[0]).toMatchObject({ sigtap: ids.sig, quantidade: 2 });
     expect(at?.itens[0]?.executante).toMatchObject({ cns: '700000000240002', cpf: CPF_MED });
     // A internação não entra no BPA; sem fonte SUS configurada, nada; o outro estabelecimento não vê a produção.
@@ -266,7 +286,12 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
 
   it('APAC: o atendimento do laudo (conta SUS primeiro), os domínios e os solicitantes pela chave', async () => {
     const a = await ler(ids.est, (m) => m.atendimentoLaudoApac(ids.atSus, [ids.sus]));
-    expect(a).toMatchObject({ registro: ids.atSus, convenio: ids.sus, prontuario: 240_024_001, data: '2026-03-12' });
+    expect(a).toMatchObject({
+      registro: ids.atSus,
+      convenio: ids.sus,
+      prontuario: 240_024_001,
+      data: '2026-03-12',
+    });
     expect(await ler(ids.estB, (m) => m.atendimentoLaudoApac(ids.atSus, [ids.sus]))).toBeNull();
     const dom = await ler(ids.est, (m) => m.dominiosApac());
     expect(Object.keys(dom).sort()).toEqual([
@@ -278,16 +303,22 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     const sol = await ler(ids.est, (m) => m.solicitantesApacPorChave([CPF_MED, 'x']));
     expect(sol).toEqual([expect.objectContaining({ chave: CPF_MED, cns: '700000000240002' })]);
     expect(await ler(ids.est, (m) => m.buscarSolicitantesApac('a'))).toEqual([]);
-    expect(Array.isArray(await ler(ids.est, (m) => m.buscarSolicitantesApac(`MEDICO SINTETICO ${P}`)))).toBe(true);
+    expect(Array.isArray(await ler(ids.est, (m) => m.buscarSolicitantesApac(`MEDICO SINTETICO ${P}`)))).toBe(
+      true,
+    );
   });
 
   it('linhas dos arquivos: sem a remessa, vazias (BPA, APAC e a linha do BPA da competência)', async () => {
-    expect(await ler(ids.est, (m) => m.linhasBpa({ arquivo: 999_999_991, pagina: 0, porPagina: 10 }))).toEqual({
+    expect(
+      await ler(ids.est, (m) => m.linhasBpa({ arquivo: 999_999_991, pagina: 0, porPagina: 10 })),
+    ).toEqual({
       itens: [],
       total: 0,
       porTipo: {},
     });
-    expect(await ler(ids.est, (m) => m.linhasApac({ arquivo: 999_999_991, pagina: 0, porPagina: 10 }))).toEqual({
+    expect(
+      await ler(ids.est, (m) => m.linhasApac({ arquivo: 999_999_991, pagina: 0, porPagina: 10 })),
+    ).toEqual({
       itens: [],
       total: 0,
       apacs: 0,
@@ -299,11 +330,16 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
   });
 
   it('AIH: a internação SUS com alta na competência, a conta, os itens e os lotes', async () => {
-    if (!ids.internacao) return; // sem catálogo de internação no cliente de teste
+    expect(ids.internacao).toBeGreaterThan(0);
     const lista = await ler(ids.est, (m) => m.internacoesSus(INTERVALO, [ids.sus]));
     expect(lista.map((x) => x.registro)).toContain(ids.internacao);
     const i = await ler(ids.est, (m) => m.internacaoAih(ids.internacao, [ids.sus]));
-    expect(i).toMatchObject({ registro: ids.internacao, convenio: ids.sus, entrada: '2026-03-02', alta: '2026-03-06' });
+    expect(i).toMatchObject({
+      registro: ids.internacao,
+      convenio: ids.sus,
+      entrada: '2026-03-02',
+      alta: '2026-03-06',
+    });
     expect(i?.contasSus).toHaveLength(1);
     const d = await ler(ids.est, (m) => m.dadosAih([ids.internacao], [SIG], [], [ids.sus]));
     expect(d.internacoes).toHaveLength(1);
