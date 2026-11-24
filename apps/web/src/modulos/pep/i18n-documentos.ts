@@ -322,6 +322,11 @@ export const mensagensDocumentos = {
     causaD: 'Causa (d)',
     parteII: 'Parte II',
     obitoRegistrado: 'Óbito registrado em {data}.',
+    cancelarObito: 'Cancelar a declaração de óbito',
+    motivoCancelamento: 'Motivo do cancelamento (mínimo de 10 caracteres)',
+    confirmarCancelamento:
+      'Cancelar a declaração? Ela continua no prontuário com o motivo, e uma nova declaração poderá ser emitida.',
+    obitoCancelado: 'Declaração de óbito cancelada. O motivo fica registrado.',
   },
   anexos: {
     titulo: 'Anexos e documentos digitalizados',

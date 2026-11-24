@@ -9,6 +9,7 @@ import type {
   AnexosPaciente,
   AssinarLote,
   CabecalhoPep,
+  CancelamentoObito,
   CienciaCritico,
   DeclaracaoObito,
   DocumentoAberto,
@@ -214,6 +215,8 @@ export const registrarTransferencia = (p: number, e: RelatorioTransferencia) =>
   enviar<{ id: number; documento: number }>(`${pac(p)}/alta/transferencia`, e, null);
 export const registrarObito = (p: number, e: DeclaracaoObito) =>
   enviar<{ id: number; documento: number }>(`${pac(p)}/alta/obito`, e, null);
+export const cancelarObito = (p: number, e: CancelamentoObito) =>
+  enviar<{ id: number; documento: number | null }>(`${pac(p)}/alta/obito/cancelar`, e, null);
 
 export const lerAnexos = (p: number, b: typeof fetch = fetch) => ler<AnexosPaciente>(`${pac(p)}/anexos`, b);
 export const anexarDocumento = (p: number, e: AnexarDocumento) =>

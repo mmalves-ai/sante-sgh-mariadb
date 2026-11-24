@@ -500,7 +500,14 @@ describe('gravações', () => {
       ['incluir', 'documento_prontuario'],
       ['incluir', 'documento_prontuario_evento'],
       ['alterar', 'declaracao_obito'],
+      // A emissão com número é o primeiro evento da declaração (L126).
+      ['incluir', 'declaracao_obito_evento'],
     ]);
+    expect(d.escritas[4]!.valores).toMatchObject({
+      operacao: 'inclusao',
+      tipo_evento: 'emissao',
+      numero: '12345678',
+    });
     expect(d.escritas[0]!.valores).toMatchObject({
       situacao: 'emitida',
       numero: '12345678',

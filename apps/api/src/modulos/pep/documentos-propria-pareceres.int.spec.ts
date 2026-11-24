@@ -94,6 +94,12 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
           [P],
         );
       await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
+      for (const t of ['declaracao_obito_causa', 'declaracao_obito_evento'])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN declaracao_obito d ON d.id = x.declaracao_obito_id
+            WHERE d.estabelecimento_id IN ${est}`,
+          [P],
+        );
       for (const t of [
         'declaracao_obito',
         'relatorio_transferencia',
@@ -645,6 +651,7 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     };
     const ob = await porta.registrarObito(G(), o);
     expect(await porta.obito(C(), ids.paciente)).toEqual({
+      id: ob.id,
       em: '2026-11-22T07:00:00',
       numero: null,
       documento: ob.documento,
@@ -693,6 +700,74 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     expect(
       await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
     ).toBe(0);
+  });
+
+  it('óbito (L126): causas em linhas, evento de emissão; cancelamento com motivo e evento; nova declaração depois', async () => {
+    const o = {
+      paciente: ids.pacienteC,
+      atendimento: ids.atendimentoC,
+      dataHora: new Date('2026-11-22T12:00:00Z'),
+      numero: 'L9800002',
+      causas: 'Causa sintética a | Causa sintética b | Condição sintética',
+      causasLinhas: [
+        { sequencia: 1, parte: 'I' as const, linha: 'a' as const, descricao: 'Causa sintética a' },
+        { sequencia: 2, parte: 'I' as const, linha: 'b' as const, descricao: 'Causa sintética b' },
+        { sequencia: 3, parte: 'II' as const, linha: null, descricao: 'Condição sintética' },
+      ],
+      cbo: null,
+      hashConteudo: HASH,
+    };
+    const ob = await porta.registrarObito(G(), o);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito_causa
+          WHERE declaracao_obito_id = ? AND ((parte = 'I' AND linha IN ('a','b')) OR (parte = 'II' AND linha IS NULL))`,
+        [ob.id],
+      ),
+    ).toBe(3);
+    const eventos = (tipo: string) =>
+      contar(
+        'SELECT COUNT(*) AS n FROM declaracao_obito_evento WHERE declaracao_obito_id = ? AND tipo_evento = ?',
+        [ob.id, tipo],
+      );
+    expect(await eventos('emissao')).toBe(1);
+    // Motivo curto: recusa e nada muda.
+    expect(
+      await recusa(porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo: 'curto', cbo: null })),
+    ).toEqual({ codigo: 'motivo-obrigatorio', status: 422 });
+    expect(await eventos('cancelamento')).toBe(0);
+    const motivo = 'Número do formulário trocado na emissão';
+    expect(await porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null })).toEqual({
+      id: ob.id,
+      documento: ob.documento,
+    });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito
+          WHERE id = ? AND situacao = 'cancelada' AND cancelada_em IS NOT NULL AND motivo_cancelamento = ?
+            AND excluido_em IS NULL`,
+        [ob.id, motivo],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito_evento
+          WHERE declaracao_obito_id = ? AND tipo_evento = 'cancelamento' AND operacao = 'alteracao'
+            AND motivo = ? AND numero = 'L9800002' AND usuario_id IS NOT NULL`,
+        [ob.id, motivo],
+      ),
+    ).toBe(1);
+    expect(await porta.obito(C(), ids.pacienteC)).toBeNull();
+    expect(await recusa(porta.cancelarObito(G(), { paciente: ids.pacienteC, motivo, cbo: null }))).toEqual({
+      codigo: 'registro-inexistente',
+      status: 404,
+    });
+    // Cancelada, a pessoa pode receber nova declaração (com outro número); a cancelada continua no banco.
+    const nova = await porta.registrarObito(G(), { ...o, numero: 'L9800003' });
+    expect(await porta.obito(C(), ids.pacienteC)).toMatchObject({ id: nova.id, numero: 'L9800003' });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
+    ).toBe(2);
   });
 
   it('ciência: inclusão pelo sistema, fechamento da comunicação aberta, exame de outro paciente 404; trilha', async () => {

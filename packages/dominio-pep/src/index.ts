@@ -64,6 +64,7 @@ export * from './alergia.js';
 export * from './receita.js';
 export * from './atestado.js';
 export * from './documento-legado.js';
+export * from './declaracao-obito.js';
 export * from './interconsulta.js';
 export * from './pedido-exame.js';
 export * from './sumario-alta.js';

@@ -17,7 +17,7 @@
 //   GET|POST /api/pep/paciente/:p/atestados[/:id/suspender]       atestados e declarações (executor)
 //   GET|POST /api/pep/paciente/:p/tcle[/:id/situacao]             termo de consentimento (só do novo)
 //   GET  /api/pep/paciente/:p/alta                                sumário, transferência e óbito
-//   POST /api/pep/paciente/:p/alta/rascunho|finalizar|transferencia|obito
+//   POST /api/pep/paciente/:p/alta/rascunho|finalizar|transferencia|obito|obito/cancelar
 //   GET|POST /api/pep/paciente/:p/anexos[/:id/arquivo]            anexos (executor)
 //   GET  /api/pep/paciente/:p/tempos                              registro de tempo
 //   GET  /api/pep/interconsultas, POST /:id/aceitar|cancelar       fila do parecer
@@ -52,6 +52,7 @@ import {
   esquemaCancelarParecer,
   esquemaCoassinar,
   esquemaCienciaCritico,
+  esquemaCancelamentoObito,
   esquemaDeclaracaoObito,
   esquemaEmitirAtestado,
   esquemaEmitirReceita,
@@ -1110,6 +1111,20 @@ export class DocumentosPepController {
     return this.gravarSgh(() =>
       this.servico.obito(this.sgh(s, 'obito'), paciente, e, prof, req.sghComo !== undefined),
     );
+  }
+
+  @Post('paciente/:p/alta/obito/cancelar')
+  @HttpCode(200)
+  @Permissao('pep.declaracaoObito.emitir')
+  @AuditadoNoHandler('declaracao_obito e declaracao_obito_evento na mesma transação, com a trilha (crítica)')
+  async cancelarObito(@Param('p') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    await this.liberacao.exigir(s, RECURSOS_M23.documentos);
+    const e = validar(esquemaCancelamentoObito, corpo);
+    const paciente = await this.paciente(s, p, 'pep.declaracaoObito.emitir', false);
+    await this.reautenticado(req, e.senha);
+    const prof = this.servico.exigirProfissional(await this.prof(s));
+    return this.gravarSgh(() => this.servico.cancelarObito(this.sgh(s, 'obito'), paciente, e, prof));
   }
 
   // ── Anexos e tempos ──────────────────────────────────────────────────────────────────────────────

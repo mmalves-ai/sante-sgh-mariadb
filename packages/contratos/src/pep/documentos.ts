@@ -741,7 +741,7 @@ export interface AltaPaciente {
   readonly versoes: readonly VersaoSumario[];
   readonly finalizado: boolean;
   readonly transferencias: readonly { id: number; destino: string; em: string; documento: number | null }[];
-  readonly obito: { em: string; numero: string | null; documento: number | null } | null;
+  readonly obito: { id: number; em: string; numero: string | null; documento: number | null } | null;
   readonly finalizar: AcaoLiberada;
   readonly obitoAcao: AcaoLiberada;
 }
@@ -777,6 +777,15 @@ export const esquemaDeclaracaoObito = z
   })
   .strict();
 export type DeclaracaoObito = z.infer<typeof esquemaDeclaracaoObito>;
+
+/** Cancelamento da declaração de óbito (03-PEP L126): motivo escrito e a senha (operação crítica). */
+export const esquemaCancelamentoObito = z
+  .object({
+    motivo: textoCp1252(2000).pipe(z.string().trim().min(10)),
+    senha: z.string().min(1).max(200).optional(),
+  })
+  .strict();
+export type CancelamentoObito = z.infer<typeof esquemaCancelamentoObito>;
 
 // ── Anexos e registro de tempo ────────────────────────────────────────────────────────────────────────
 

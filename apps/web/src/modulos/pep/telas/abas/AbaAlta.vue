@@ -10,6 +10,7 @@ import MensagemErro from '../../../../casca/MensagemErro.vue';
 import {
   finalizarSumario,
   lerAlta,
+  cancelarObito,
   registrarObito,
   registrarTransferencia,
   salvarSumario,
@@ -146,6 +147,19 @@ async function obito(): Promise<void> {
     erro.value = x;
   }
 }
+const cancelamento = ref({ motivo: '', senha: '' });
+async function cancelar(): Promise<void> {
+  erro.value = null;
+  const v = cancelamento.value;
+  try {
+    await cancelarObito(props.paciente, { motivo: v.motivo.trim(), ...(v.senha ? { senha: v.senha } : {}) });
+    cancelamento.value = { motivo: '', senha: '' };
+    mensagem.value = t('pep.doc.alta.obitoCancelado');
+    await atualizar();
+  } catch (x) {
+    erro.value = x;
+  }
+}
 </script>
 
 <template>
@@ -159,6 +173,37 @@ async function obito(): Promise<void> {
         variante="info"
         :texto="t('pep.doc.alta.obitoRegistrado', { data: dataHoraBr(dados.data.value.obito.em) })"
       />
+      <form
+        v-if="dados.data.value.obito && dados.data.value.obitoAcao.pode"
+        class="form"
+        data-testid="form-cancelar-obito"
+        @submit.prevent="cancelar"
+      >
+        <h3>{{ t('pep.doc.alta.cancelarObito') }}</h3>
+        <label
+          ><span>{{ t('pep.doc.alta.motivoCancelamento') }}</span
+          ><textarea
+            v-model="cancelamento.motivo"
+            rows="2"
+            minlength="10"
+            maxlength="2000"
+            required
+            data-testid="cancelar-obito-motivo"
+          />
+        </label>
+        <label
+          ><span>{{ t('pep.doc.senha') }}</span
+          ><input v-model="cancelamento.senha" type="password" autocomplete="current-password"
+        /></label>
+        <SanteBotao
+          variante="destrutivo"
+          :confirmacao="t('pep.doc.alta.confirmarCancelamento')"
+          :rotulo="t('pep.doc.alta.cancelarObito')"
+          :desabilitado="cancelamento.motivo.trim().length < 10"
+          data-testid="cancelar-obito"
+          @acionar="cancelar"
+        />
+      </form>
       <form class="form" data-testid="form-sumario" @submit.prevent="salvar(true)">
         <h3>{{ t('pep.doc.alta.sumario') }}</h3>
         <label

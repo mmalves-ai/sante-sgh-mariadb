@@ -20,6 +20,7 @@ import {
   type AvisoPedidoExame,
   type CategoriaAssistencial,
   type VinculoPainel,
+  type CancelamentoObito,
   type DeclaracaoObito,
   type DocumentoAberto,
   type DocumentoGravado,
@@ -107,6 +108,9 @@ import {
   TIPO_PADRAO_LEGADO,
   tipoDoModelo,
   xmlDoAtestado,
+  linhasDaCausa,
+  validarCancelamentoObito,
+  type LinhaCausaObito,
 } from '@sgh/dominio-pep';
 import { linhasComMarcaTelemedicina } from '@sgh/dominio-atendimento';
 import { type ConteudoPep, type ModeloPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
@@ -1828,7 +1832,7 @@ export class ServicoDocumentos {
       })),
       finalizado,
       transferencias: transf,
-      obito: obito ? { em: obito.em, numero: obito.numero, documento: obito.documento } : null,
+      obito: obito ? { id: obito.id, em: obito.em, numero: obito.numero, documento: obito.documento } : null,
       finalizar: finalizado
         ? { pode: false, motivo: 'O sumário de alta deste atendimento já foi finalizado.' }
         : acoes.finalizar,
@@ -1982,6 +1986,17 @@ export class ServicoDocumentos {
     });
   }
 
+  /** Cancela a declaração de óbito vigente, com motivo (03-PEP L126): a mesma ação clínica de quem emite. */
+  async cancelarObito(c: ContextoGravacaoPep, paciente: number, o: CancelamentoObito, prof: ProfissionalPep) {
+    this.exigirAcao(prof, 'declaracao-obito');
+    const v = validarCancelamentoObito('emitida', o.motivo);
+    if (!v.ok)
+      throw new ErroProblema('entrada-invalida', 400, 'Motivo do cancelamento', v.mensagem, {
+        campos: ['motivo'],
+      });
+    return this.porta.cancelarObito(c, { paciente, motivo: v.motivo, cbo: prof.cbo });
+  }
+
   async obito(
     c: ContextoGravacaoPep,
     paciente: number,
@@ -2005,12 +2020,21 @@ export class ServicoDocumentos {
     const causas = [o.causas.a, o.causas.b, o.causas.c, o.causas.d, o.causas.parteII]
       .filter(Boolean)
       .join(' | ');
+    let causasLinhas: LinhaCausaObito[];
+    try {
+      causasLinhas = linhasDaCausa(o.causas);
+    } catch (x) {
+      throw new ErroProblema('entrada-invalida', 400, 'Causas do óbito', (x as Error).message, {
+        campos: ['causas'],
+      });
+    }
     return this.porta.registrarObito(c, {
       paciente,
       atendimento: o.atendimento,
       dataHora: new Date(`${o.dataHora}:00`),
       numero: o.numero ?? null,
       causas,
+      causasLinhas,
       cbo: prof.cbo,
       hashConteudo: await hashCanonico({
         paciente,

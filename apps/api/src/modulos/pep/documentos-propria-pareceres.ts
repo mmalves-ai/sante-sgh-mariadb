@@ -10,6 +10,11 @@
 // (problema_paciente_versao), sumário por nova versão (sumario_alta.numero_versao), parecer por cancelamento com motivo.
 // Tabelas novas ou colunas: migração 06_PEP/98_pareceres (relatorio_transferencia; rascunho do sumário; número da
 // declaração de óbito opcional só no rascunho; conta que deu a ciência).
+import {
+  validarCancelamentoObito,
+  type LinhaCausaObito,
+  type SituacaoDeclaracaoObito,
+} from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
@@ -885,16 +890,23 @@ export class DocumentosPropriaPareceres {
   obito(
     c: ContextoDocs,
     paciente: number,
-  ): Promise<{ em: string; numero: string | null; documento: number | null; atendimento: number } | null> {
+  ): Promise<{
+    id: number;
+    em: string;
+    numero: string | null;
+    documento: number | null;
+    atendimento: number;
+  } | null> {
     return this.ler(c, 'obito', async (l, est) => {
       const x = await l.uma(
-        `SELECT obito_em, numero, documento_prontuario_id, atendimento_id FROM declaracao_obito
+        `SELECT id, obito_em, numero, documento_prontuario_id, atendimento_id FROM declaracao_obito
           WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'
           ORDER BY obito_em DESC, id DESC LIMIT 1`,
         [est.id, paciente],
       );
       return x
         ? {
+            id: num(x['id']),
             em: dataHora(x['obito_em'], est.fuso) ?? '',
             numero: textoOuNull(x['numero']),
             documento: numOuNull(x['documento_prontuario_id']),
@@ -912,6 +924,7 @@ export class DocumentosPropriaPareceres {
       dataHora: Date;
       numero: string | null;
       causas: string;
+      causasLinhas?: readonly LinhaCausaObito[];
       cbo: number | null;
       hashConteudo: string;
       comoSuporte?: boolean;
@@ -931,7 +944,13 @@ export class DocumentosPropriaPareceres {
     return this.gravar(
       c,
       'pep.obito.registrar',
-      ['declaracao_obito', 'documento_prontuario', 'documento_prontuario_evento'],
+      [
+        'declaracao_obito',
+        'declaracao_obito_causa',
+        'declaracao_obito_evento',
+        'documento_prontuario',
+        'documento_prontuario_evento',
+      ],
       async (tx, est, s, falhar) => {
         await this.exigirAtendimento(tx, est.id, o.paciente, o.atendimento, falhar);
         // A pessoa morre uma vez: qualquer declaração não cancelada do paciente, em qualquer estabelecimento, recusa.
@@ -981,10 +1000,82 @@ export class DocumentosPropriaPareceres {
           falhar,
         );
         await tx.alterar('declaracao_obito', id, 1, { documento_prontuario_id: documento });
+        // As causas em linhas (parte I e II), na ordem em que o médico as declarou.
+        for (const l of o.causasLinhas ?? [])
+          await tx.incluir('declaracao_obito_causa', {
+            declaracao_obito_id: id,
+            sequencia: l.sequencia,
+            parte: l.parte,
+            linha: l.linha,
+            descricao: l.descricao,
+            origem: 'sistema',
+          });
+        // A emissão (com número) é o primeiro evento da declaração; o rascunho ainda não tem evento.
+        if (numero !== null)
+          await tx.incluir('declaracao_obito_evento', {
+            declaracao_obito_id: id,
+            operacao: 'inclusao',
+            tipo_evento: 'emissao',
+            numero,
+            ocorrido_em: agora,
+            usuario_id: s.usuario,
+          });
         return { id, documento };
       },
       (r) => ({ tabela: 'declaracao_obito', id: r.id }),
       (r) => ({ dados: { evento: 'pep.obito.registrado', documento: r.documento } }),
+    );
+  }
+
+  /**
+   * Cancela a declaração vigente do paciente no estabelecimento (03-PEP L126): situação, data e motivo na declaração e
+   * o evento de cancelamento, na mesma transação. A declaração e o documento ficam (registro nunca apagado); o
+   * paciente pode receber uma nova declaração.
+   */
+  async cancelarObito(
+    c: ContextoGravacaoPep,
+    o: { paciente: number; motivo: string; cbo: number | null },
+  ): Promise<{ id: number; documento: number | null }> {
+    return this.gravar(
+      c,
+      'pep.obito.cancelar',
+      ['declaracao_obito', 'declaracao_obito_evento'],
+      async (tx, est, s, falhar) => {
+        this.inscricaoDa(s, o.cbo, falhar);
+        const d = (
+          await tx.consultarParaAtualizar(
+            `SELECT id, versao, situacao, numero, documento_prontuario_id FROM declaracao_obito
+              WHERE estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL AND situacao <> 'cancelada'
+              ORDER BY obito_em DESC, id DESC LIMIT 1`,
+            [est.id, o.paciente],
+          )
+        )[0];
+        if (!d) falhar('registro-inexistente', 'O paciente não tem declaração de óbito vigente.', 404);
+        const v = validarCancelamentoObito(String(d!['situacao']) as SituacaoDeclaracaoObito, o.motivo);
+        if (!v.ok) falhar(v.codigo, v.mensagem, v.codigo === 'motivo-obrigatorio' ? 422 : 409);
+        const motivo = (v as { motivo: string }).motivo;
+        const agora = new Date();
+        const id = num(d!['id']);
+        await tx.alterar('declaracao_obito', id, num(d!['versao']), {
+          situacao: 'cancelada',
+          // A restrição da tabela exige a emissão antes do cancelamento: o rascunho cancelado leva a data também.
+          ...(String(d!['situacao']) === 'rascunho' ? { emitida_em: agora } : {}),
+          cancelada_em: agora,
+          motivo_cancelamento: motivo,
+        });
+        await tx.incluir('declaracao_obito_evento', {
+          declaracao_obito_id: id,
+          operacao: 'alteracao',
+          tipo_evento: 'cancelamento',
+          numero: textoOuNull(d!['numero']),
+          motivo,
+          ocorrido_em: agora,
+          usuario_id: s.usuario,
+        });
+        return { id, documento: numOuNull(d!['documento_prontuario_id']) };
+      },
+      (r) => ({ tabela: 'declaracao_obito', id: r.id }),
+      (r) => ({ motivo: o.motivo.trim(), dados: { evento: 'pep.obito.cancelado', documento: r.documento } }),
     );
   }
 

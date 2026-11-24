@@ -1093,4 +1093,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
   registrarObito(...a: Parameters<PortaDocumentos['registrarObito']>) {
     return this.pareceres.registrarObito(...a);
   }
+  cancelarObito(...a: Parameters<PortaDocumentos['cancelarObito']>) {
+    return this.pareceres.cancelarObito(...a);
+  }
 }

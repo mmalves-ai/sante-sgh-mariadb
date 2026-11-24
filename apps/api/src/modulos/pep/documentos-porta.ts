@@ -5,6 +5,7 @@
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com dados SINTÉTICOS em memória;
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 (falha fechada).
 // Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
+import type { LinhaCausaObito } from '@sgh/dominio-pep';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { ContextoOperacao } from '@sgh/nucleo';
 import type {
@@ -179,7 +180,13 @@ export interface PortaDocumentos {
   obito(
     c: ContextoDocs,
     paciente: number,
-  ): Promise<{ em: string; numero: string | null; documento: number | null; atendimento: number } | null>;
+  ): Promise<{
+    id: number;
+    em: string;
+    numero: string | null;
+    documento: number | null;
+    atendimento: number;
+  } | null>;
   ciencias(c: ContextoDocs, paciente: number): Promise<CienciaLida[]>;
   fila(
     c: ContextoDocs,
@@ -254,11 +261,18 @@ export interface PortaDocumentos {
       dataHora: Date;
       numero: string | null;
       causas: string;
+      /** As causas em linhas (parte I, a até d; parte II), gravadas uma a uma. */
+      causasLinhas?: readonly LinhaCausaObito[];
       cbo: number | null;
       hashConteudo: string;
       comoSuporte?: boolean;
     },
   ): Promise<{ id: number; documento: number }>;
+  /** Cancela a declaração de óbito vigente do paciente, com motivo e evento (03-PEP L126). Nada é apagado. */
+  cancelarObito(
+    c: ContextoGravacaoPep,
+    o: { paciente: number; motivo: string; cbo: number | null },
+  ): Promise<{ id: number; documento: number | null }>;
   assinar(
     c: ContextoGravacaoPep,
     itens: readonly { documento: number; hash: string }[],

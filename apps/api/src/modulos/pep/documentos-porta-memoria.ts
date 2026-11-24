@@ -3,6 +3,7 @@
 // encerrado), com catálogo de exames, kits, resultados (um potássio crítico), modelos de impressão e alergias
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
+import { validarCancelamentoObito } from '@sgh/dominio-pep';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import {
   type CompletudePainelLida,
@@ -207,6 +208,7 @@ interface Estado {
     documento: number | null;
   }[];
   obitos: {
+    id: number;
     paciente: number;
     em: string;
     numero: string | null;
@@ -1837,6 +1839,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       comoSuporte: o.comoSuporte === true,
     });
     e.obitos.push({
+      id,
       paciente: o.paciente,
       em: o.dataHora.toISOString(),
       numero: o.numero,
@@ -1849,6 +1852,26 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       paciente: o.paciente,
     });
     return { id, documento };
+  }
+
+  async cancelarObito(c: ContextoGravacaoPep, o: { paciente: number; motivo: string; cbo: number | null }) {
+    const e = this.est(c.hospital);
+    const i = e.obitos.findIndex((x) => x.paciente === o.paciente);
+    if (i < 0)
+      throw new ErroProntuario(
+        'registro-inexistente',
+        'O paciente não tem declaração de óbito vigente.',
+        404,
+      );
+    const v = validarCancelamentoObito('emitida', o.motivo);
+    if (!v.ok) throw new ErroProntuario(v.codigo, v.mensagem, 422);
+    const [x] = e.obitos.splice(i, 1);
+    await this.auditar(c, c.usuarioLogin, 'pep.obito.cancelado', {
+      tabela: 'SGH_PEP_OBITO',
+      id: x!.id,
+      paciente: o.paciente,
+    });
+    return { id: x!.id, documento: x!.documento };
   }
 
   async assinar(
