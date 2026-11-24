@@ -13,3 +13,5 @@ export * from './pdf/modelo.js';
 export * from './pdf/modelos-pep.js';
 // M49: motor da assinatura ICP-Brasil (certificado, política, validação, carimbo, PSC, agente local, cofre e SNCR).
 export * from './assinatura/index.js';
+// 01-ADM L79: impressora por estação e finalidade, e a reimpressão com motivo e via.
+export * from './impressao/estacao.js';
