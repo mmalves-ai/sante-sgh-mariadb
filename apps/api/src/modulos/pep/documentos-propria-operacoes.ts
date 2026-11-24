@@ -52,7 +52,7 @@ const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const textoOuNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 /** Resultado gravado na idempotência: só ids, códigos e nulos (ResultadoOperacao do núcleo). */
-type Resultado = Readonly<Record<string, number | string | boolean | null>>;
+export type Resultado = Readonly<Record<string, number | string | boolean | null>>;
 const marcadores = (n: number): string => Array.from({ length: n }, () => '?').join(', ');
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
   new ErroOperacao(status, codigo, 'Operação recusada', detalhe);
@@ -79,22 +79,11 @@ export const esquemaAlergiaPropria = z
     message: 'agente',
   });
 
-/** O atestado (tipo "atestado") exige os dias de afastamento (CHECK do banco); declaração e requerimento não. */
-export const esquemaEmissaoPropria = z.union([
-  esquemaEmissaoDocumento.options[0],
-  esquemaEmissaoDocumento.options[1]
-    .extend({ diasAfastamento: z.number().int().min(0).max(365).optional() })
-    .strict(),
-]);
+/** O atestado (tipo "atestado") exige os dias de afastamento no esquema comum (tipos-pep.ts), como o CHECK do banco. */
+export const esquemaEmissaoPropria = esquemaEmissaoDocumento;
 
-/**
- * Inativação da alergia: o esquema comum aceita 500 caracteres no motivo, mas a coluna guarda 250. Acima disso a entrada
- * é recusada com 400 (o registro clínico nunca é truncado em silêncio; divergência intencional registrada).
- */
-export const esquemaInativacaoPropria = esquemaInativacaoAlergia.refine((x) => x.motivo.length <= 250, {
-  path: ['motivo'],
-  message: 'motivo',
-});
+/** Inativação da alergia: motivo até 500 caracteres, como a memória (coluna alargada na 06_PEP/99_alergia_motivo). */
+export const esquemaInativacaoPropria = esquemaInativacaoAlergia;
 
 /** Validade da receita: a data LOCAL da emissão (fuso do estabelecimento) somada dos dias de validade. */
 export function validadeLocal(emitida: Date, fuso: string, dias: number): string {
@@ -103,7 +92,7 @@ export function validadeLocal(emitida: Date, fuso: string, dias: number): string
   return new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]! + dias)).toISOString().slice(0, 10);
 }
 
-function entradaValida<T>(esq: z.ZodType<T>, entrada: unknown): T {
+export function entradaValida<T>(esq: z.ZodType<T>, entrada: unknown): T {
   const r = esq.safeParse(entrada);
   if (!r.success)
     throw new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', {
@@ -112,7 +101,7 @@ function entradaValida<T>(esq: z.ZodType<T>, entrada: unknown): T {
   return r.data;
 }
 
-interface Sessao {
+export interface Sessao {
   readonly est: number;
   readonly fuso: string;
   readonly usuario: number;
@@ -123,7 +112,7 @@ interface Sessao {
 }
 
 /** Profissional do usuário da sessão no estabelecimento; com `inscricao`, ela tem de ser dele e estar ativa. */
-async function sessao(
+export async function sessao(
   tx: TxOperacao,
   est: { id: number; fuso: string },
   inscricao: number | null,
@@ -175,7 +164,7 @@ async function sessao(
 }
 
 /** Documento emitido só por médico (CBO 225x), como a memória. */
-function conferirMedico(s: Sessao): void {
+export function conferirMedico(s: Sessao): void {
   if (!(s.cbo ?? '').startsWith('225'))
     throw recusar(
       422,
@@ -184,7 +173,7 @@ function conferirMedico(s: Sessao): void {
     );
 }
 
-async function conferirAtendimento(
+export async function conferirAtendimento(
   tx: TxOperacao,
   s: Sessao,
   atendimento: number,
@@ -200,7 +189,7 @@ async function conferirAtendimento(
 }
 
 /** O horário clínico (local do estabelecimento) como instante; retroativo além de 5 minutos exige justificativa. */
-function horarioClinico(s: Sessao, local: string, justificativa: string | undefined, agora: Date): Date {
+export function horarioClinico(s: Sessao, local: string, justificativa: string | undefined, agora: Date): Date {
   const t = instanteLocal(local, s.fuso);
   if (t.getTime() > agora.getTime() + 5 * 60_000)
     throw recusar(422, 'horario-futuro', 'O horário clínico não pode estar no futuro.');
@@ -210,7 +199,7 @@ function horarioClinico(s: Sessao, local: string, justificativa: string | undefi
 }
 
 /** Documento do prontuário da gravação (lançado, à espera de assinatura) e o evento de criação. */
-async function documentoProntuario(
+export async function documentoProntuario(
   tx: TxOperacao,
   s: Sessao,
   d: {
@@ -278,7 +267,7 @@ async function documentoProntuario(
   return documento;
 }
 
-const TABELAS_DOCUMENTO = ['documento_prontuario', 'documento_prontuario_evento'] as const;
+export const TABELAS_DOCUMENTO = ['documento_prontuario', 'documento_prontuario_evento'] as const;
 
 /** Linhas de alergia que valem para a lista e a versão (as mesmas de alergias-propria.ts). */
 const SQL_E_ALERGIA = `excluido_em IS NULL AND tipo_registro IN ('alergia','intolerancia') AND situacao_registro = 'confirmado'`;
@@ -545,10 +534,6 @@ export function operacoesDocumentosPropria(
         if (x.familia === 'atestado' && x.tipo === 'atestado') conferirMedico(s);
         if (x.familia === 'atestado' && x.cid && !x.autorizacaoCid)
           throw recusar(422, 'cid-sem-autorizacao', 'O CID exige a autorização do paciente.');
-        // Divergência intencional (registrada): o CHECK ck_documento_emitido_dias_afastamento exige os dias no atestado;
-        // a memória não tem o campo. Recusa depois das conferências da memória, nunca inventa o número de dias.
-        if (x.familia === 'atestado' && x.tipo === 'atestado' && x.diasAfastamento === undefined)
-          throw recusar(422, 'dias-afastamento-obrigatorio', 'O atestado exige os dias de afastamento.');
         await conferirAtendimento(tx, s, x.atendimento, x.paciente);
         const agora = new Date();
         const clinico = horarioClinico(s, x.dataHoraClinica, x.justificativaRetroativo, agora);

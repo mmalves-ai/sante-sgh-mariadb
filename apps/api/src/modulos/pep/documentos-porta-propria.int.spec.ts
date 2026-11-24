@@ -506,8 +506,8 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
     ).toBe(1);
   });
 
-  it('operação sem adaptador próprio (emitir documento) não é liberada', async () => {
-    expect(await porta.podeGravar(C(), 'pep.emitirDocumento', LOGIN)).toMatchObject({
+  it('operação sem adaptador próprio não é liberada (falha fechada)', async () => {
+    expect(await porta.podeGravar(C(), 'pep.operacaoSemAdaptador', LOGIN)).toMatchObject({
       pode: false,
       codigo: 'pendente-modelo-proprio',
     });

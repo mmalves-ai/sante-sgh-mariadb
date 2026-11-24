@@ -456,11 +456,11 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       modeloNome: 'Atestado médico',
       conteudoXml: '<atestado>sintetico</atestado>',
     };
-    expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe(
-      'dias-afastamento-obrigatorio',
-    );
-    // Ordem da memória: sessão e médico, depois o CID sem autorização (antes dos dias).
-    expect(await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09' }, ctx('at1')))).toBe(
+    // Sem os dias, o atestado é entrada inválida (esquema comum, como o CHECK do banco).
+    expect(await codigo(ops()['pep.emitirDocumento']!(C(), at, ctx('at0')))).toBe('entrada-invalida');
+    expect(
+      await codigo(ops()['pep.emitirDocumento']!(C(), { ...at, cid: 'A09', diasAfastamento: 2 }, ctx('at1'))),
+    ).toBe(
       'cid-sem-autorizacao',
     );
     const r = await ops()['pep.emitirDocumento']!(C(), { ...at, diasAfastamento: 2 }, ctx('at'));

@@ -1620,6 +1620,7 @@ export class ServicoDocumentos {
       ...(e.cid ? { cid: e.cid } : {}),
       ...(e.autorizacaoCid ? { autorizacaoCid: e.autorizacaoCid } : {}),
       ...(e.corrige ? { corrige: e.corrige } : {}),
+      ...(e.tipo === 'atestado' && e.diasAfastamento !== undefined ? { diasAfastamento: e.diasAfastamento } : {}),
       documento: documentoAtestado(cab, texto, conteudoXml),
       hashConteudo: await hashCanonico({
         paciente,

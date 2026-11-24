@@ -86,11 +86,11 @@ describe('documentos-propria-operacoes (unidade)', () => {
     expect(esquemaEmissaoPropria.safeParse({ ...atestado, diasAfastamento: 400 }).success).toBe(false);
   });
 
-  it('inativação: motivo acima da coluna (250) recusa com entrada inválida, nunca truncado', async () => {
+  it('inativação: motivo até 500 como a memória; acima recusa com entrada inválida, nunca truncado', async () => {
     const base = { paciente: 1, alergia: 2, versao: '2' };
-    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(250) }).success).toBe(true);
-    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(251) }).success).toBe(false);
-    expect(await codigo(ops['pep.inativarAlergia']!(C, { ...base, motivo: 'm'.repeat(300) }, CTX))).toBe(
+    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(500) }).success).toBe(true);
+    expect(esquemaInativacaoPropria.safeParse({ ...base, motivo: 'm'.repeat(501) }).success).toBe(false);
+    expect(await codigo(ops['pep.inativarAlergia']!(C, { ...base, motivo: 'm'.repeat(600) }, CTX))).toBe(
       'entrada-invalida',
     );
   });

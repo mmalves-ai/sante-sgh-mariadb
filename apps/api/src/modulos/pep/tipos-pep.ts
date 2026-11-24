@@ -199,8 +199,14 @@ export const esquemaEmissaoDocumento = z.discriminatedUnion('familia', [
         .optional(),
       autorizacaoCid: z.enum(['paciente', 'responsavel']).optional(),
       corrige: ID.optional(),
+      /** Dias de afastamento: obrigatório no atestado (CHECK do banco); declaração e requerimento não levam. */
+      diasAfastamento: z.number().int().min(0).max(365).optional(),
     })
-    .strict(),
+    .strict()
+    .refine((x) => x.tipo !== 'atestado' || x.diasAfastamento !== undefined, {
+      path: ['diasAfastamento'],
+      message: 'diasAfastamento',
+    }),
 ]);
 
 export const esquemaSuspensaoDocumento = z

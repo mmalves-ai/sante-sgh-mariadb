@@ -58,13 +58,16 @@ const mensagem = ref<string | null>(null);
 async function emitir(): Promise<void> {
   erro.value = null;
   if (atendimento.value === null || modelo.value === null) return;
+  // O atestado exige os dias de afastamento (0 a 365); declaração e requerimento não levam.
+  const diasValidos = typeof dias.value === 'number' && Number.isInteger(dias.value) && dias.value >= 0 && dias.value <= 365;
+  if (tipo.value === 'atestado' && !diasValidos) return;
   try {
     await emitirAtestado(props.paciente, {
       atendimento: atendimento.value,
       tipo: tipo.value,
       modelo: modelo.value,
       texto: texto.value.trim(),
-      ...(tipo.value === 'atestado' && dias.value !== null ? { diasAfastamento: dias.value } : {}),
+      ...(tipo.value === 'atestado' && diasValidos ? { diasAfastamento: dias.value as number } : {}),
       ...(cid.value.trim() ? { cid: cid.value.trim().toUpperCase() } : {}),
       ...(autorizacao.value ? { autorizacaoCid: autorizacao.value } : {}),
       ...(corrige.value !== null ? { corrige: corrige.value } : {}),
