@@ -215,7 +215,8 @@ def repetir_pendencias(cm, origem, progresso=None, excluir_regras=()):
     cadeia de continuações (controle.cadeia) sem dupla contagem (controle.pendencias_da_cadeia). Aqui só sai a
     contagem agregada no servidor para o resumo da execução (`cm.pend_repetidas`: tabela, regra, gravidade, detalhe,
     n), nunca as linhas. `origem` {tabela: execução que a concluiu}: a cadeia lida é a união das cadeias dessas
-    execuções (a continuação que só marcou `continuada` não tem as pendências: estão na que carregou).
+    execuções (a continuação que só marcou `continuada` não tem as pendências: estão na que carregou), e de cada tabela
+    só vale a pendência da execução que a carregou (controle.vigentes_cur), como no relatório L10.
     Devolve o total herdado."""
     from . import controle
     tabelas = sorted(origem)
@@ -227,8 +228,9 @@ def repetir_pendencias(cm, origem, progresso=None, excluir_regras=()):
             ids.update(controle.cadeia_cur(c, cm.ctl, e))
         cond = controle.pendencias_da_cadeia(cm.ctl, ids, "p", "aberta")
         cond += " AND p.tabela_origem IN (%s)" % ",".join(["%s"] * len(tabelas))
-        if excluir_regras:
-            cond += " AND p.regra NOT IN (%s)" % ",".join("'%s'" % r for r in excluir_regras if r.isidentifier())
+        # só a pendência da execução que carregou a tabela (ou a repetição dela): a carga parcial refeita não herda
+        cond += " AND " + controle.condicao_vigente(cm.ctl, controle.vigentes_cur(c, cm.ctl, origem), "p",
+                                                    excluir_regras)
         c.execute("SELECT p.tabela_origem, p.regra, p.gravidade, p.detalhe, COUNT(*) FROM %s.pendencia p WHERE %s"
                   " GROUP BY p.tabela_origem, p.regra, p.gravidade, p.detalhe" % (controle._b(cm.ctl), cond), tabelas)
         agg = [tuple(x[:4]) + (int(x[4]),) for x in c.fetchall()]

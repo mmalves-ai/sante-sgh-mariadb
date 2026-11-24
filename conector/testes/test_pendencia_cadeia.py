@@ -100,15 +100,60 @@ class Cadeia(unittest.TestCase):
         self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.pendencia p WHERE " + cond + " AND p.tabela_origem='TAB_D'"),
                          0)
 
-    def test_resolucao_pela_cadeia(self):
-        cad = controle.cadeia(self.cn, self.ctl, 12)
-        n = relatorio.resolver(self.cn, self.ctl, 12, cad)
+    def _marcas(self):
+        """A 10 carregou A inteira; a 11 marcou A `continuada` e carregou B (refeita); a 12 pula A e B."""
+        with self.cn.cursor() as c:
+            c.executemany("INSERT INTO `%s`.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, origem,"
+                          " criado_em) VALUES (%%s, 1, %%s, %%s, NOW())" % self.ctl,
+                          [(10, "TAB_A", "carregada"), (11, "TAB_A", "continuada"), (11, "TAB_B", "carregada")])
         self.cn.commit()
-        self.assertEqual(n, 1)   # só a "velha" da importação 5: nada da cadeia, nem a a0 repetida pela 10
-        self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.pendencia WHERE situacao='resolvida'"
-                                 " AND resolvida_execucao_id=12"), 1)
-        self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.pendencia WHERE execucao_id IN (10,11,12)"
-                                 " AND resolvida_execucao_id IS NOT NULL"), 0)
+        return {"TAB_A": 11, "TAB_B": 11}
+
+    def test_resolucao_pela_cadeia(self):
+        cad, pular = controle.cadeia(self.cn, self.ctl, 12), self._marcas()
+        n = relatorio.resolver(self.cn, self.ctl, 12, cad, pular)
+        self.cn.commit()
+        # a "velha" da importação 5 e a d1 aberta da 10 (tabela D refeita pela 12, que não a repete); a a0 da 5 fica
+        # (a 10 a repete, aberta), e nada das tabelas puladas nem do que a 12 repete
+        self.assertEqual(n, 2)
+        self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.pendencia WHERE resolvida_execucao_id=12"
+                                 " AND ((execucao_id=5 AND chave_original='velha') OR (execucao_id=10"
+                                 " AND tabela_origem='TAB_D'))"), 2)
+        abertas, resolvidas = relatorio._contar(self.cn, self.ctl, 12, cad)
+        self.assertEqual(sorted(abertas), sorted(relatorio._contar(self.cn, self.ctl, 20)[0]))
+        self.assertEqual(resolvidas, (("TAB_A", "pai_pendente", "alta", 1),))   # a da cadeia é interna: não conta
+
+    def test_carga_parcial_refeita_bate_com_a_inteira(self):
+        """Pendência da cadeia que a continuação que conclui não repete: resolvida, e o relatório bate com o da
+        importação inteira (achado do revisor: ficava aberta e era reemitida para sempre)."""
+        extra = [(10, "TAB_B", "b9", "alteracao_aguarda_sincronizar", "media", None),  # carga parcial de B, não reemitida
+                 (10, "TAB_B", "b1", "restricao_destino_1048", "critica", "coluna_y"),  # mesma chave, outro detalhe
+                 (10, "TAB_A", "a9", "edicao_no_destino", "media", None),               # a conciliação refaz
+                 (11, "TAB_C", "c9", "conflito_origem_venceu", "media", None),          # carga parcial de C (11)
+                 (11, "TAB_A", "a0", "pai_pendente", "alta", None)]                     # repetição de vigente
+        with self.cn.cursor() as c:
+            c.executemany("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                          " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,NOW())" % self.ctl, extra)
+        self.cn.commit()
+        cad, pular = controle.cadeia(self.cn, self.ctl, 12), self._marcas()
+        ref = sorted(relatorio._contar(self.cn, self.ctl, 20)[0])
+        self.assertNotEqual(sorted(relatorio._contar(self.cn, self.ctl, 12, cad)[0]), ref)   # antes: 4 a mais
+        # o resumo herdado já conta só as vigentes (sem b9, b1/coluna_y nem a9)
+        cm = type("CM", (), {})()
+        cm.ctl, cm.eid, cm.pend, cm.pend_repetidas = "`%s`" % self.ctl, 12, [], []
+        cm._c = self.cn.cursor
+        self.assertEqual(continuar.repetir_pendencias(cm, pular, excluir_regras=continuar.CONCILIACAO_PROPRIA), 8)
+        n = relatorio.resolver(self.cn, self.ctl, 12, cad, pular)
+        self.cn.commit()
+        self.assertEqual(n, 2 + 4)
+        abertas, resolvidas = relatorio._contar(self.cn, self.ctl, 12, cad)
+        self.assertEqual(sorted(abertas), ref)
+        self.assertEqual(sum(x[3] for x in abertas), len(INTEIRA))
+        self.assertEqual(resolvidas, (("TAB_A", "pai_pendente", "alta", 1),))
+        # nada vigente foi resolvido: A da 10 e da 11 (repetição), B da 11
+        self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.pendencia WHERE resolvida_execucao_id=12 AND"
+                                 " regra IN ('pai_pendente','restricao_destino_1048') AND COALESCE(detalhe,'')<>'coluna_y'"
+                                 " AND execucao_id<>5"), 0)
 
     def test_heranca_sem_copia_pela_cadeia(self):
         conta = {"insert": 0}
@@ -189,8 +234,9 @@ class Migracao(Cadeia):
 
     def test_migracao_idempotente_indices_e_elos(self):
         with self.root.cursor() as c:   # controle de antes da rodada: os dois índices antigos
-            c.execute("ALTER TABLE `%s`.pendencia ADD INDEX ix_pendencia_execucao (execucao_id, situacao),"
-                      " ADD INDEX ix_pendencia_regra (tabela_origem, regra, chave_original(190))" % self.ctl)
+            c.execute("ALTER TABLE `%s`.pendencia DROP INDEX ix_pendencia_mesma,"
+                      " ADD INDEX ix_pendencia_regra (tabela_origem, regra, chave_original(190)),"
+                      " ADD INDEX ix_pendencia_execucao_tabela (execucao_id, situacao, tabela_origem, id)" % self.ctl)
             c.execute("DELETE FROM `%s`.conector_execucao_cadeia" % self.ctl)
         plat = _PlatFalsa(self.cli, [(10, None), (11, '{"continuar_de": 10}'), (12, '{"continuar_de": 11}'),
                                      (20, '{"outro": 1}')])
@@ -198,17 +244,22 @@ class Migracao(Cadeia):
             r = controle.migrar(self.root, plat, self.COD)
             self.assertEqual(r["elos_cadeia"], 2)
             self.assertEqual(r["cadeias"], {11: [11, 10], 12: [12, 11, 10]})
-            self.assertIn("ix_pendencia_execucao_tabela", r["indices_pendencia"])
+            self.assertIn("ix_pendencia_execucao", r["indices_pendencia"])
             self.assertIn("ix_pendencia_mesma", r["indices_pendencia"])
             self.assertNotIn("ix_pendencia_regra", r["indices_pendencia"])
-            self.assertNotIn("ix_pendencia_execucao", r["indices_pendencia"])
+            self.assertNotIn("ix_pendencia_execucao_tabela", r["indices_pendencia"])
         self.assertEqual(self._n("SELECT COUNT(*) FROM %(b)s.conector_execucao_cadeia"), 2)
-        with self.cn.cursor() as c:   # a leitura por execução, situação e tabela em pedaços de id tem índice próprio
-            c.execute("EXPLAIN SELECT id FROM `%s`.pendencia WHERE execucao_id=10 AND situacao='aberta'"
-                      " AND tabela_origem IN ('TAB_A','TAB_B') AND id>0 ORDER BY id LIMIT 100" % self.ctl)
+        # o SQL que a leitura pela cadeia gera de fato: as subconsultas da dupla contagem e da situação mais recente
+        # escolhem o ix_pendencia_mesma (key, não só possible_keys)
+        cond = controle.pendencias_da_cadeia(self.ctl, [10, 11, 12], "p", "aberta")
+        with self.cn.cursor() as c:
+            c.execute("EXPLAIN SELECT p.tabela_origem, COUNT(*) FROM `%s`.pendencia p WHERE %s GROUP BY 1"
+                      % (self.ctl, cond))
             nomes = [d[0] for d in c.description]
-            chaves = " ".join(str(dict(zip(nomes, x)).get("possible_keys")) for x in c.fetchall())
-        self.assertIn("ix_pendencia_execucao_tabela", chaves)
+            linhas = [dict(zip(nomes, x)) for x in c.fetchall()]
+        subs = [x for x in linhas if x["table"] in ("q", "r")]
+        self.assertEqual(len(subs), 2, linhas)
+        self.assertEqual({x["key"] for x in subs}, {"ix_pendencia_mesma"}, linhas)
 
 
 @unittest.skipUnless(TEM_BANCO, "precisa do MariaDB da rede interna")
@@ -238,6 +289,10 @@ class DescartarCopiadas(unittest.TestCase):
         with self.cn.cursor() as c:
             c.executemany("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
                           " detalhe, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,NOW())" % self.ctl, linhas)
+            # r1: resolvida na 10 (por outra execução concluída) e reemitida aberta pela 12: não é cópia (preservada)
+            c.executemany("INSERT INTO `%s`.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                          " situacao, criado_em) VALUES (%%s,'TAB_A','r1','valor_presumido','baixa',%%s,NOW())"
+                          % self.ctl, [(10, "resolvida"), (12, "aberta")])
         self.cn.commit()
         controle.gravar_cadeia(self.cn, self.ctl, 11, 10)
         controle.gravar_cadeia(self.cn, self.ctl, 12, 11)
@@ -258,20 +313,27 @@ class DescartarCopiadas(unittest.TestCase):
         leitura = self._abertas()
         r = dp.descartar(self.cn, self.ctl, lote=2)             # sem --executar: só conta
         self.assertEqual(r["modo"], "contagem")
-        self.assertEqual(r["antes"], {"10": 5, "11": 6, "12": 9})
+        self.assertEqual(r["antes"], {"10": 6, "11": 6, "12": 10})
         self.assertEqual(r["duplicatas"], {"11": 5, "12": 6})
+        self.assertEqual(r["preservadas_situacao"], {"11": 0, "12": 1})
         self.assertEqual(r["depois"], r["antes"])
+        # a janela de p comanda a leitura (chave primária) e a anterior é procurada pelo ix_pendencia_mesma
+        lin = r["plano"]["linhas"]
+        self.assertEqual([x["key"] for x in lin if x["table"] == "p"], ["PRIMARY"], lin)
+        self.assertEqual([x["key"] for x in lin if x["table"] == "q"], ["ix_pendencia_mesma"], lin)
+        self.assertEqual([x["select_type"] for x in lin if x["table"] == "q"], ["DEPENDENT SUBQUERY"], lin)
         self.assertEqual(self._abertas(), leitura)
         passos = []
         r = dp.descartar(self.cn, self.ctl, executar=True, lote=2, progresso=lambda e, z, n: passos.append(e))
         self.assertEqual(r["duplicatas"], {"11": 5, "12": 6})
-        self.assertEqual(r["depois"], {"10": 5, "11": 1, "12": 3})
+        self.assertEqual(r["depois"], {"10": 6, "11": 1, "12": 4})
         self.assertGreater(len(passos), 2)                      # em pedaços, com commit a cada um
         with self.cn.cursor() as c:
             c.execute("SELECT execucao_id, chave_original, COALESCE(detalhe,''), gravidade FROM `%s`.pendencia"
                       " WHERE execucao_id IN (11,12) ORDER BY 1,2,3" % self.ctl)
             self.assertEqual(c.fetchall(), ((11, "n1", "", "baixa"), (12, "k0", "", "media"),
-                                            (12, "k9", "coluna_y", "critica"), (12, "n2", "", "baixa")))
+                                            (12, "k9", "coluna_y", "critica"), (12, "n2", "", "baixa"),
+                                            (12, "r1", "", "baixa")))
             c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=30" % self.ctl)
             self.assertEqual(c.fetchone()[0], 5)                # fora da cadeia: intocada
         self.assertEqual(self._abertas(), leitura)              # a leitura pela cadeia não muda

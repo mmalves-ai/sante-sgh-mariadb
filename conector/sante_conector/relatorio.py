@@ -122,33 +122,58 @@ def garantir_ctl(cr, ctl):
                   " (resolvida_execucao_id)" % ctl)
 
 
-def resolver(cr, ctl, eid, cadeia=None):
+def resolver(cr, ctl, eid, cadeia=None, pular=None):
     """Marca `resolvida` toda pendência aberta de execução ANTERIOR do cliente que esta execução não repetiu (mesma
-    tabela, chave e regra). Continuação: a execução vale com as pendências da cadeia (`cadeia`, controle.cadeia), que
-    nunca são copiadas; a pendência de qualquer execução da cadeia conta como repetida (e a da própria cadeia nunca é
-    resolvida por ela). Devolve o número de linhas marcadas."""
-    ids = ",".join(str(int(x)) for x in sorted(set(cadeia or ()) | {int(eid)}))
+    tabela, chave e regra). Continuação (`cadeia`, controle.cadeia; as pendências nunca são copiadas):
+
+    1. a linha aberta de uma execução da cadeia (fora `eid`) que deixou de valer é resolvida: vale só a pendência de
+       uma tabela pulada (`pular` {tabela: execução que a concluiu}) gravada pela execução que a carregou, ou a
+       repetição dela noutra execução da cadeia (controle.condicao_vigente), fora as regras que a conciliação refaz
+       (continuar.CONCILIACAO_PROPRIA); a carga parcial de uma tabela refeita, a regra não reemitida (carga
+       NAO_REEMITIR) e a mesma chave com outro detalhe deixam de contar quando `eid` não as grava de novo (mesma
+       tabela, chave, regra e detalhe);
+    2. a linha aberta de uma execução anterior fora da cadeia é resolvida quando nem `eid` nem uma linha ainda aberta
+       da cadeia a repete.
+
+    Devolve o número de linhas marcadas."""
+    from . import continuar, controle
+    cad = sorted(set(int(x) for x in (cadeia or ())) | {int(eid)})
+    ids = ",".join(str(x) for x in cad)
+    sets = ("UPDATE `{b}`.pendencia p SET p.situacao='resolvida', p.resolvida_execucao_id=%s,"
+            " p.alterado_em=UTC_TIMESTAMP(3), p.versao=p.versao+1").format(b=ctl)
+    n = 0
     with cr.cursor() as c:
-        c.execute("UPDATE `{b}`.pendencia p SET p.situacao='resolvida', p.resolvida_execucao_id=%s,"
-                  " p.alterado_em=UTC_TIMESTAMP(3), p.versao=p.versao+1"
-                  " WHERE p.execucao_id < %s AND p.situacao='aberta' AND NOT EXISTS (SELECT 1 FROM `{b}`.pendencia n"
-                  " WHERE n.execucao_id IN ({ids}) AND n.tabela_origem=p.tabela_origem AND n.regra=p.regra"
-                  " AND n.chave_original <=> p.chave_original)".format(b=ctl, ids=ids), (eid, eid))
-        return c.rowcount
+        outras = [x for x in cad if x != int(eid)]
+        if outras:
+            vig = controle.vigentes_cur(c, ctl, {t: e for t, e in (pular or {}).items()})
+            c.execute(sets + " WHERE p.execucao_id IN ({o}) AND p.situacao='aberta' AND NOT {v} AND NOT EXISTS"
+                      " (SELECT 1 FROM `{b}`.pendencia n WHERE n.execucao_id=%s AND {m})".format(
+                          b=ctl, o=",".join(str(x) for x in outras),
+                          v=controle.condicao_vigente(ctl, vig, "p", continuar.CONCILIACAO_PROPRIA),
+                          m=controle._MESMA.format(q="n", a="p")), (eid, eid))
+            n += c.rowcount
+        c.execute(sets + " WHERE p.execucao_id < %s AND p.execucao_id NOT IN ({ids}) AND p.situacao='aberta'"
+                  " AND NOT EXISTS (SELECT 1 FROM `{b}`.pendencia n WHERE n.execucao_id IN ({ids})"
+                  " AND (n.execucao_id=%s OR n.situacao='aberta') AND n.tabela_origem=p.tabela_origem"
+                  " AND n.regra=p.regra AND n.chave_original <=> p.chave_original)".format(b=ctl, ids=ids),
+                  (eid, eid, eid))
+        n += c.rowcount
+    return n
 
 
 def _contar(cr, ctl, eid, cadeia=None):
     """Abertas da execução pela cadeia (controle.pendencias_da_cadeia: sem dupla contagem) e resolvidas por ela."""
     from .controle import pendencias_da_cadeia
     ids = sorted(set(cadeia or ()) | {int(eid)})
+    lista = ",".join(str(x) for x in ids)  # a linha da própria cadeia resolvida é interna à importação: não conta
     with cr.cursor() as c:
         c.execute("SELECT p.tabela_origem, p.regra, p.gravidade, COUNT(*) FROM `%s`.pendencia p WHERE %s"
                   " GROUP BY p.tabela_origem, p.regra, p.gravidade" % (ctl, pendencias_da_cadeia(ctl, ids, "p", "aberta")))
         abertas = c.fetchall()
         c.execute("SELECT tabela_origem, regra, gravidade,"
                   " COUNT(DISTINCT tabela_origem, regra, COALESCE(chave_original, ''))"
-                  " FROM `%s`.pendencia WHERE resolvida_execucao_id IN (%s) GROUP BY tabela_origem, regra, gravidade"
-                  % (ctl, ",".join(str(x) for x in ids)))
+                  " FROM `%s`.pendencia WHERE resolvida_execucao_id IN (%s) AND execucao_id NOT IN (%s)"
+                  " GROUP BY tabela_origem, regra, gravidade" % (ctl, lista, lista))
         resolvidas = c.fetchall()
     return abertas, resolvidas
 
@@ -309,11 +334,11 @@ def montar(abertas, resolvidas, entidades, contagens=None, plano=(), carga_propr
     }
 
 
-def gerar(cr, ctl, eid, entidades, resolver_pendencias=True, cadeia=None, **kw):
+def gerar(cr, ctl, eid, entidades, resolver_pendencias=True, cadeia=None, pular=None, **kw):
     """Resolve as pendências que esta execução não repetiu (só na execução que conclui: `resolver_pendencias`),
     conta e monta o relatório (commit incluído). A execução que falha só lê: nunca mexe nas anteriores."""
     if resolver_pendencias:
-        resolver(cr, ctl, eid, cadeia)
+        resolver(cr, ctl, eid, cadeia, pular)
         cr.commit()
     abertas, resolvidas = _contar(cr, ctl, eid, cadeia)
     return montar(abertas, resolvidas, entidades, rede=rede_sem_rota_externa(), **kw)

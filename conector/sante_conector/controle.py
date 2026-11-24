@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS {b}.pendencia (
   situacao VARCHAR(10) NOT NULL DEFAULT 'aberta',
   criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
   alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
-  KEY ix_pendencia_execucao_tabela (execucao_id, situacao, tabela_origem, id),
+  KEY ix_pendencia_execucao (execucao_id, situacao),
   CONSTRAINT ck_pendencia_gravidade CHECK (gravidade IN ('critica','alta','media','baixa')),
   CONSTRAINT ck_pendencia_situacao CHECK (situacao IN ('aberta','resolvida'))
 ) COMMENT='Pendências do conector: tabela, chave original e regra, sem valores';
@@ -121,13 +121,15 @@ ALTER TABLE {b}.pendencia
   ADD COLUMN IF NOT EXISTS resolvida_execucao_id BIGINT UNSIGNED NULL
     COMMENT 'Execução que não repetiu a pendência (origem corrigida ou destino decidido)',
   ADD INDEX IF NOT EXISTS ix_pendencia_resolvida (resolvida_execucao_id);
--- rodada pendencia-cadeia (2026-11-24): leitura por execução, situação e tabela em pedaços de id (resumo herdado,
--- descarte) e a mesma pendência noutra execução da cadeia (dupla contagem, resolução); os dois antigos são prefixo
--- dos novos e saem (só depois de os novos existirem)
+-- rodada pendencia-cadeia (2026-11-24): a mesma pendência noutra execução da cadeia (dupla contagem, situação mais
+-- recente, resolução, descarte) por ix_pendencia_mesma, que contém o antigo ix_pendencia_regra (sai depois de o novo
+-- existir). A leitura por execução e situação em janelas de id (resolução da cadeia, descarte) usa o
+-- ix_pendencia_execucao (execucao_id, situacao), que no InnoDB já termina pela chave primária (id); o
+-- ix_pendencia_execucao_tabela de um preparar intermediário desta rodada não servia a nenhuma consulta e sai
 ALTER TABLE {b}.pendencia
-  ADD INDEX IF NOT EXISTS ix_pendencia_execucao_tabela (execucao_id, situacao, tabela_origem, id),
+  ADD INDEX IF NOT EXISTS ix_pendencia_execucao (execucao_id, situacao),
   ADD INDEX IF NOT EXISTS ix_pendencia_mesma (tabela_origem, regra, chave_original(190), execucao_id);
-ALTER TABLE {b}.pendencia DROP INDEX IF EXISTS ix_pendencia_execucao, DROP INDEX IF EXISTS ix_pendencia_regra;
+ALTER TABLE {b}.pendencia DROP INDEX IF EXISTS ix_pendencia_regra, DROP INDEX IF EXISTS ix_pendencia_execucao_tabela;
 CREATE TABLE IF NOT EXISTS {b}.conector_execucao_cadeia (
   execucao_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT 'conector_execucao.id da continuação',
   continuar_de BIGINT UNSIGNED NOT NULL COMMENT 'Execução interrompida que ela continua',
@@ -216,6 +218,53 @@ def cadeia(conn, ctl, eid, contadores_de=None):
     """A função única da cadeia (ver `cadeia_cur`), com uma conexão."""
     with conn.cursor() as c:
         return cadeia_cur(c, ctl, eid, contadores_de)
+
+
+def vigentes_cur(cur, ctl, origem):
+    """Execuções cujas pendências valem para cada tabela pulada por uma continuação. `origem` {tabela: execução que
+    a concluiu (carga.pular / continuar.concluidas)}: na cadeia dessa execução, a pendência da tabela é a da execução
+    que a CARREGOU (marca `carregada` em conector_tabela_concluida; as `continuada` não têm pendências dela). As
+    linhas da mesma tabela gravadas por uma execução mais antiga da cadeia (carga parcial, refeita depois) não valem,
+    salvo a repetida pela que carregou. Sem marca (dedução), vale a cadeia inteira. Devolve {tabela: [ids]}."""
+    origem = {t: int(e) for t, e in (origem or {}).items() if e}
+    cad = {e: cadeia_cur(cur, ctl, e) for e in set(origem.values())}
+    todas = sorted({x for c in cad.values() for x in c})
+    carregou = set()
+    if todas and origem:
+        tabs = sorted(origem)
+        cur.execute("SELECT execucao_id, tabela_origem FROM %s.conector_tabela_concluida WHERE origem='carregada'"
+                    " AND execucao_id IN (%s) AND tabela_origem IN (%s)"
+                    % (_b(ctl), ",".join(str(x) for x in todas), ",".join(["%s"] * len(tabs))), tabs)
+        carregou = {(int(e), t) for e, t in cur.fetchall()}
+    saida = {}
+    for t, e in origem.items():
+        c = cad[e]
+        quem = next((x for x in c if (x, t) in carregou), None)
+        saida[t] = [quem] if quem is not None else list(c)
+    return saida
+
+
+def condicao_vigente(ctl, vigentes, alias="p", excluir_regras=()):
+    """Condição SQL: a linha `alias` é pendência vigente de uma tabela pulada (ver `vigentes_cur`) ou a repetição,
+    noutra execução da cadeia, de uma vigente (mesma tabela, chave, regra e detalhe). `excluir_regras`: regras que a
+    execução refaz (continuar.CONCILIACAO_PROPRIA) nunca são herdadas. Sem tabela pulada: FALSE."""
+    grupos = {}
+    for t, ids in (vigentes or {}).items():
+        grupos.setdefault(tuple(sorted(int(x) for x in ids)), []).append(t)
+    partes = []
+    for ids, tabs in sorted(grupos.items()):
+        lista = ",".join(str(x) for x in ids)
+        tl = ",".join("'%s'" % t.replace("'", "''") for t in sorted(tabs))
+        partes.append("(%s.tabela_origem IN (%s) AND (%s.execucao_id IN (%s) OR EXISTS (SELECT 1 FROM %s.pendencia v"
+                      " WHERE v.execucao_id IN (%s) AND %s)))"
+                      % (alias, tl, alias, lista, _b(ctl), lista, _MESMA.format(q="v", a=alias)))
+    if not partes:
+        return "FALSE"
+    cond = "(%s)" % " OR ".join(partes)
+    regras = [r for r in excluir_regras if r.isidentifier()]
+    if regras:
+        cond = "(%s AND %s.regra NOT IN (%s))" % (cond, alias, ",".join("'%s'" % r for r in regras))
+    return cond
 
 
 _MESMA = ("{q}.tabela_origem={a}.tabela_origem AND {q}.regra={a}.regra AND {q}.chave_original <=> {a}.chave_original"

@@ -61,7 +61,7 @@ def _relatorio(eid, usuario, rel, cont, mapa_exec, resolver_pendencias=True):
             cr, rel["ctl"], eid, rel.get("entidades") or {}, contagens=contagens, plano=rel.get("plano") or (),
             carga_propria=[t for t in contagens if t in carga.MAPA], mapa_exec=mapa_exec,
             provas=rel.get("provas"), sem_mapa=cont.get("tabelas_sem_mapa"),
-            resolver_pendencias=resolver_pendencias, cadeia=rel.get("cadeia"))
+            resolver_pendencias=resolver_pendencias, cadeia=rel.get("cadeia"), pular=rel.get("pular"))
     finally:
         cr.close()
 
@@ -199,6 +199,7 @@ def executar(trab, eid):
                 cc0 = continuar.concluidas(conn, ctl, int(de), plano, contagens, sha_antes,
                                            lambda e: (plataforma.consultar(conn, e) or {}).get("contadores"))
                 pular = dict(cc0["origem"])  # {tabela: execução que a concluiu (pendências repetidas dela)}
+                rel["pular"] = dict(pular)  # L10: as pendências vigentes das tabelas puladas
                 rel["continuacao"] = cont["continuacao"] = {
                     "de": int(de), "regra": cc0["regra"], "tabelas_plano": len(plano), "tabelas_puladas": len(pular),
                     "linhas_puladas": sum(int(contagens.get(t, 0)) for t in pular),
@@ -220,6 +221,7 @@ def executar(trab, eid):
                             lambda e: (plataforma.consultar(conn, e) or {}).get("contadores")) if de else {}
                         if de:
                             rel["continuacao"]["carga_propria_pulada"] = sorted(pular_p)
+                            rel.setdefault("pular", {}).update(pular_p)
                         resumo = carga.Carga(lt, cc, ctl, eid, iid, prog, pular=pular_p).executar(
                             carregar, contagens) or {
                             "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
