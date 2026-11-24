@@ -31,6 +31,7 @@ import {
 import type { ContextoGestao, GravadorGestao } from './porta-gestao.js';
 import { PortaGestaoPropria, TABELAS_GESTAO } from './porta-gestao-propria.js';
 import { comVersoesAnteriores, LeiturasGestaoComplementoD } from './porta-propria-complemento-d.js';
+import { gravacoesDocumentos, TABELAS_DOCUMENTOS } from './porta-propria-documentos.js';
 import {
   gravacoesComplementoQ1,
   LeiturasGestaoComplementoQ1,
@@ -68,6 +69,7 @@ export const TABELAS_GESTAO_COMPLETA = [
     ...TABELAS_COMPLEMENTO_Q3,
     ...TABELAS_COMPLEMENTO_Q4,
     ...TABELAS_COMPLEMENTO_Q5,
+    ...TABELAS_DOCUMENTOS,
   ]),
 ] as const;
 
@@ -190,6 +192,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
         ...gravacoesComplementoQ3(tx, est),
         ...gravadorComplementoQ4(tx, est, anotacao),
         ...gravacoesComplementoQ5(tx, est, anotacao),
+        ...gravacoesDocumentos(tx, est),
         gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
         registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
       },

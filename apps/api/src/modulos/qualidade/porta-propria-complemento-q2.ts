@@ -82,9 +82,9 @@ const SQL_DOCUMENTO = (comConteudo: boolean) => `
   SELECT v.id, v.versao, d.codigo, v.numero_versao, td.codigo AS tipo, d.titulo, sf.nome AS area, v.motivo_alteracao,
          ue.login AS elaborado_por, ur.login AS revisado_por, COALESCE(ua.login, uu.login) AS aprovado_por,
          v.publicado_em, COALESCE(v.proxima_revisao, d.proxima_revisao, v.vigencia_fim) AS vigencia_ate,
-         d.exige_ciencia, COALESCE(a.hash_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256'))) AS hash, v.situacao,
-         JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.motivoRetirada')) AS motivo_retirada,
-         CASE WHEN v.situacao <> 'vigente' THEN COALESCE(v.alterado_em, v.ocorrido_em) END AS encerrado_em
+         d.exige_ciencia, COALESCE(a.hash_sha256, v.resumo_sha256, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.resumoSha256'))) AS hash, v.situacao,
+         COALESCE(v.motivo_retirada, JSON_UNQUOTE(JSON_EXTRACT(v.dados, '$.motivoRetirada'))) AS motivo_retirada,
+         CASE WHEN v.situacao <> 'vigente' THEN COALESCE(v.retirada_em, v.alterado_em, v.ocorrido_em) END AS encerrado_em
          ${comConteudo ? ', v.conteudo' : ''}
     FROM documento_qualidade_versao v
     JOIN documento_qualidade d ON d.id = v.documento_qualidade_id
@@ -134,7 +134,7 @@ const SQL_CIENCIA = `
     FROM documento_qualidade_ciencia c
     JOIN documento_qualidade_versao v ON v.id = c.documento_qualidade_versao_id
     JOIN documento_qualidade d ON d.id = v.documento_qualidade_id
-    JOIN colaborador co ON co.id = c.colaborador_id
+    LEFT JOIN colaborador co ON co.id = c.colaborador_id
     LEFT JOIN usuario u ON u.id = COALESCE(c.usuario_id, co.usuario_id)
    WHERE d.estabelecimento_id = ? AND c.excluido_em IS NULL`;
 
