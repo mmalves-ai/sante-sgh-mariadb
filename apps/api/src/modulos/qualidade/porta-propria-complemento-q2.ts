@@ -164,7 +164,7 @@ const SQL_MEMBROS = (k: number) => `
    ORDER BY m.comissao_hospitalar_id, FIELD(m.papel, 'presidente', 'vice_presidente', 'secretario', 'membro_executor',
             'membro', 'consultor'), m.id`;
 
-const SQL_ANALISE = `
+export const SQL_ANALISE = `
   SELECT a.id, a.versao, i.codigo AS indicador, ap.competencia, ap.numerador, ap.denominador, ap.valor, ap.valor_meta,
          a.resultado_periodo, a.analise, a.causa, a.acao_proposta, ur.login AS responsavel, pa.prazo,
          ug.login AS registrada_por, a.analisado_em, uu.login AS atualizada_por, a.alterado_em
@@ -189,7 +189,7 @@ const SITUACAO_META: Readonly<Record<string, AnaliseIndicadorRegistrada['situaca
   sem_meta: 'sem-meta',
 };
 
-function analise(r: Linha): AnaliseIndicadorRegistrada {
+export function analise(r: Linha): AnaliseIndicadorRegistrada {
   return {
     id: n(r['id']),
     versao: n(r['versao']),

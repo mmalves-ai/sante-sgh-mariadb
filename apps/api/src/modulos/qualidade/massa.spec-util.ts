@@ -96,8 +96,11 @@ export async function limparQualidade(e: Escritor, ests: readonly number[]): Pro
 /** `marca`: um par de estabelecimentos por arquivo de teste (os arquivos rodam em paralelo). */
 export async function prepararMassaQualidade(marca: string): Promise<MassaQualidade> {
   const nucleo = new NucleoProprio();
-  const codigoEst = `${P_QUA}${marca}`;
-  const codigoOutro = `${P_QUA}${marca}X`;
+  // O código do estabelecimento segue ck_estabelecimento_codigo_formato (^[a-z][a-z0-9]{1,9}$): minúsculo, até 10.
+  const codigoEst = `${P_QUA}${marca}`.toLowerCase();
+  const codigoOutro = `${codigoEst}x`;
+  if (!/^[a-z][a-z0-9]{1,9}$/.test(codigoOutro))
+    throw new Error(`Marca da massa da qualidade fora do formato do código do estabelecimento: ${marca}`);
   const ids = await nucleo.escrever(
     { cliente: CLIENTE_QUA, correlacao: `preparo-teste-04-03-${marca}` },
     async (e) => {

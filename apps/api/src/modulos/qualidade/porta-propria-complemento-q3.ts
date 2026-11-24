@@ -146,7 +146,7 @@ async function checklists(l: L, linhas: Linha[]): Promise<ChecklistRevisaoRegist
 
 // ── Prontuários da amostra ──────────────────────────────────────────────────────────────────────────────────────
 
-const SQL_PRONTUARIO = `
+export const SQL_PRONTUARIO = `
   SELECT r.id, r.sorteio_revisao_prontuario_id AS sorteio, r.atendimento_id, r.paciente_id, r.resultado,
          r.situacao, r.observacao, r.revisada_em, r.avalizada_em, r.versao,
          ROW_NUMBER() OVER (PARTITION BY r.sorteio_revisao_prontuario_id ORDER BY r.id) AS ordem,
@@ -219,7 +219,7 @@ async function respostasDas(l: L, ids: readonly number[]): Promise<Map<number, s
   return new Map([...porRevisao].map(([k, v]) => [k, JSON.stringify(v)]));
 }
 
-async function prontuarios(l: L, linhas: Linha[]): Promise<ProntuarioRevisaoRegistrado[]> {
+export async function prontuarios(l: L, linhas: Linha[]): Promise<ProntuarioRevisaoRegistrado[]> {
   const respostas = await respostasDas(
     l,
     linhas.map((r) => n(r['id'])),
