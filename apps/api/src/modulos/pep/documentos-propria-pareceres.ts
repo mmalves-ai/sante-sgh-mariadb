@@ -940,6 +940,15 @@ export class DocumentosPropriaPareceres {
           [o.paciente],
         );
         if (ja.length) falhar('ja-registrado', 'O óbito do paciente já foi registrado.');
+        // O número da declaração é único no estabelecimento (uq_declaracao_obito_numero): repetido, recusa com 409.
+        if (
+          numero !== null &&
+          (await tx.uma(
+            'SELECT id FROM declaracao_obito WHERE estabelecimento_id = ? AND numero = ? LIMIT 1',
+            [est.id, numero],
+          ))
+        )
+          falhar('numero-repetido', 'Já existe declaração de óbito com este número no estabelecimento.');
         this.inscricaoDa(s, o.cbo, falhar);
         const agora = new Date();
         const id = await tx.incluir('declaracao_obito', {

@@ -477,6 +477,18 @@ describe('gravações', () => {
         }).porta.registrarObito(G, o),
       ),
     ).toEqual({ codigo: 'ja-registrado', status: 409 });
+    expect(
+      await erro(
+        duble({
+          ler: (sql: string) =>
+            /FROM atendimento/.test(sql)
+              ? [{ id: 200 }]
+              : /FROM declaracao_obito WHERE estabelecimento_id/.test(sql)
+                ? [{ id: 2 }]
+                : undefined,
+        }).porta.registrarObito(G, o),
+      ),
+    ).toEqual({ codigo: 'numero-repetido', status: 409 });
     expect(await erro(duble(at).porta.registrarObito(G, { ...o, cbo: 99 }))).toEqual({
       codigo: 'cbo-invalido',
       status: 422,

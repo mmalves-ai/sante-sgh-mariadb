@@ -33,6 +33,17 @@ interface Ids {
   supervisao: number;
   parecer1: number;
   parecer2: number;
+  usuario: number;
+  usuarioOutro: number;
+  pacienteB: number;
+  atendimentoB: number;
+  pacienteC: number;
+  atendimentoC: number;
+  supervisao2: number;
+  resultadoNovo: number;
+  resultadoAberto: number;
+  resultadoOutroPaciente: number;
+  cienciaAberta: number;
 }
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
@@ -67,7 +78,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
 
   const limpar = (e: Escritor) =>
     (async () => {
-      const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+      // O lote tem o estabelecimento principal (l98par) e o de isolamento (l98parx).
+      const est = "(SELECT id FROM estabelecimento WHERE codigo LIKE CONCAT(?, '%'))";
       // A cabeça e o fecho diário da cadeia apontam para as linhas da trilha: saem antes delas (SBIS-16).
       await e.executar(`DELETE FROM trilha_auditoria_fecho WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(`DELETE FROM trilha_cadeia WHERE estabelecimento_id IN ${est}`, [P]);
@@ -96,6 +108,18 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         'ciencia_resultado_critico',
       ])
         await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN ${est}`, [P]);
+      // Resultados sintéticos do lote (a ciência que aponta para eles já saiu).
+      await e.executar(
+        `DELETE r FROM resultado_exame r JOIN exame_item ei ON ei.id = r.exame_item_id
+           JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id WHERE rq.estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(
+        `DELETE ei FROM exame_item ei JOIN requisicao_exame rq ON rq.id = ei.requisicao_exame_id
+          WHERE rq.estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(`DELETE FROM requisicao_exame WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(
         `DELETE v FROM problema_paciente_versao v JOIN problema_paciente p ON p.id = v.problema_paciente_id
           WHERE p.estabelecimento_id IN ${est}`,
@@ -147,6 +171,15 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       const uPrec = await usuario(LOGIN, '98000000101');
       const uRes = await usuario(RESIDENTE, '98000000102');
       const uOutro = await usuario(OUTRO, '98000000103');
+      ids.usuario = uPrec;
+      ids.usuarioOutro = uOutro;
+      const estX = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [`${P}x`],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}x`, `Hospital sintético ${P}x`, `Hospital sintético ${P}x (fictício)`, agora],
+      );
       await usuario(SEM_VINCULO, '98000000104');
       const pessoa = (nome: string) =>
         garantir(
@@ -227,6 +260,15 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
              criado_em) VALUES (?, ?, ?, '2026-01-01', ?)`,
           [u, ids.est, prof, agora],
         );
+      // O preceptor também atende no estabelecimento de isolamento: lá, nada do estabelecimento principal aparece.
+      await garantir(
+        e,
+        'SELECT id FROM usuario_vinculo_profissional WHERE usuario_id = ? AND estabelecimento_id = ?',
+        [uPrec, estX],
+        `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio,
+           criado_em) VALUES (?, ?, ?, '2026-01-01', ?)`,
+        [uPrec, estX, ids.prof, agora],
+      );
       ids.especialidade = await garantir(
         e,
         'SELECT id FROM especialidade_medica WHERE codigo = ?',
@@ -300,14 +342,72 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES (?, ?, 'particular', ?)",
         [`${P}fp`, 'Fonte pagadora sintética', agora],
       );
-      ids.atendimento = await garantir(
+      const atendimento = (numero: string, paciente: number) =>
+        garantir(
+          e,
+          'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+          [ids.est, numero],
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
+          [ids.est, numero, paciente, cat, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+        );
+      ids.atendimento = await atendimento('L98-1', ids.paciente);
+      const outroPaciente = async (sufixo: string, prontuario: number) => {
+        const pf = await pessoa(`Pessoa sintética ${P} paciente ${sufixo}`);
+        return garantir(
+          e,
+          'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+          [pf],
+          'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+          [pf, prontuario, agora],
+        );
+      };
+      ids.pacienteB = await outroPaciente('B', 909_800_402);
+      ids.atendimentoB = await atendimento('L98-2', ids.pacienteB);
+      ids.pacienteC = await outroPaciente('C', 909_800_403);
+      ids.atendimentoC = await atendimento('L98-3', ids.pacienteC);
+      // Exames sintéticos: dois resultados liberados do paciente A (um sem comunicação, outro com a comunicação do
+      // laboratório aguardando ciência) e um do paciente B.
+      const exame = await garantir(
         e,
-        'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
-        [ids.est, 'L98-1'],
-        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
-           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
-         VALUES (?, 'L98-1', ?, ?, ?, ?, ?, ?, ?, 'aberto')`,
-        [ids.est, ids.paciente, cat, carater, fonte, ids.prof, new Date('2026-11-20T10:00:00Z'), agora],
+        'SELECT id FROM exame WHERE codigo = ?',
+        [`${P.toUpperCase()}K`],
+        "INSERT INTO exame (codigo, sigla, nome, tipo_servico, criado_em) VALUES (?, ?, ?, 'laboratorio', ?)",
+        [`${P.toUpperCase()}K`, `${P.toUpperCase()}K`, `${P} POTÁSSIO SINTÉTICO`, agora],
+      );
+      const setor = await garantir(
+        e,
+        'SELECT id FROM setor_diagnostico WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}lab`],
+        "INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'laboratorio', ?)",
+        [ids.est, `${P}lab`, 'Laboratório sintético', agora],
+      );
+      const resultado = async (seq: number, paciente: number, atend: number) => {
+        const rq = await e.inserir(
+          `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, solicitante_profissional_id,
+             fonte_pagadora_id, prioridade, solicitado_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'urgente', ?, ?)`,
+          [ids.est, `${P}-${seq}`, paciente, atend, ids.prof, fonte, agora, agora],
+        );
+        const item = await e.inserir(
+          `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, situacao, liberado_em, criado_em)
+           VALUES (?, 1, ?, 'liberado', ?, ?)`,
+          [rq, exame, agora, agora],
+        );
+        return e.inserir(
+          `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, situacao, resultado_em,
+             liberado_em, autoliberado, criado_em) VALUES (?, ?, ?, 'liberado', ?, ?, TRUE, ?)`,
+          [item, paciente, setor, agora, agora, agora],
+        );
+      };
+      ids.resultadoNovo = await resultado(1, ids.paciente, ids.atendimento);
+      ids.resultadoAberto = await resultado(2, ids.paciente, ids.atendimento);
+      ids.resultadoOutroPaciente = await resultado(3, ids.pacienteB, ids.atendimentoB);
+      ids.cienciaAberta = await e.inserir(
+        `INSERT INTO ciencia_resultado_critico (estabelecimento_id, resultado_exame_id, paciente_id, analito,
+           comunicante_usuario_id, comunicado_em, canal_comunicacao, situacao, criado_em)
+         VALUES (?, ?, ?, 'K', ?, ?, 'telefone', 'aguardando_ciencia', ?)`,
+        [ids.est, ids.resultadoAberto, ids.paciente, uOutro, new Date(agora.getTime() - 3_600_000), agora],
       );
       ids.registro = await e.inserir(
         `INSERT INTO registro_assistencial (estabelecimento_id, paciente_id, atendimento_id, modelo_documento_clinico_id,
@@ -316,11 +416,22 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aguardando_coassinatura', TRUE, ?)`,
         [ids.est, ids.paciente, ids.atendimento, modelo, ids.profResidente, uRes, agora, agora, HASH, agora],
       );
-      ids.supervisao = await e.inserir(
-        `INSERT INTO registro_assistencial_supervisao (registro_assistencial_id, sequencia, supervisionado_profissional_id,
-           preceptor_profissional_id, tipo_vinculo, solicitado_em, criado_em) VALUES (?, 1, ?, ?, 'residente', ?, ?)`,
-        [ids.registro, ids.profResidente, ids.prof, agora, agora],
+      const supervisao = (registro: number) =>
+        e.inserir(
+          `INSERT INTO registro_assistencial_supervisao (registro_assistencial_id, sequencia, supervisionado_profissional_id,
+             preceptor_profissional_id, tipo_vinculo, solicitado_em, criado_em) VALUES (?, 1, ?, ?, 'residente', ?, ?)`,
+          [registro, ids.profResidente, ids.prof, agora, agora],
+        );
+      ids.supervisao = await supervisao(ids.registro);
+      // Segundo registro do residente, para a recusa da coassinatura.
+      const registro2 = await e.inserir(
+        `INSERT INTO registro_assistencial (estabelecimento_id, paciente_id, atendimento_id, modelo_documento_clinico_id,
+           autor_profissional_id, autor_usuario_id, data_hora_clinica, data_hora_lancamento, impressao_digital,
+           situacao, exige_coassinatura, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aguardando_coassinatura', TRUE, ?)`,
+        [ids.est, ids.paciente, ids.atendimento, modelo, ids.profResidente, uRes, agora, agora, HASH, agora],
       );
+      ids.supervisao2 = await supervisao(registro2);
       const parecer = () =>
         e.inserir(
           `INSERT INTO interconsulta (estabelecimento_id, atendimento_id, paciente_id, solicitante_profissional_id,
@@ -407,6 +518,7 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         preceptor: LOGIN,
         situacao: 'pendente',
       }),
+      expect.objectContaining({ id: ids.supervisao2, situacao: 'pendente' }),
     ]);
     expect(await porta.supervisao(C(), ids.supervisao)).toMatchObject({
       preceptor: LOGIN,
@@ -430,6 +542,26 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       await contar(
         "SELECT COUNT(*) AS n FROM registro_assistencial WHERE id = ? AND situacao = 'finalizado'",
         [ids.registro],
+      ),
+    ).toBe(1);
+    // Recusa: sem motivo, 422 (o CHECK do banco exige o motivo); com motivo, gravada e o registro não finaliza.
+    expect(
+      await recusa(porta.coassinarNoNovo(G(), { id: ids.supervisao2, decisao: 'recusado', motivo: ' ' })),
+    ).toEqual({ codigo: 'motivo-obrigatorio', status: 422 });
+    expect(
+      await porta.coassinarNoNovo(G(), {
+        id: ids.supervisao2,
+        decisao: 'recusado',
+        motivo: 'Conduta a revisar',
+      }),
+    ).toMatchObject({ paciente: ids.paciente });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM registro_assistencial_supervisao s
+           JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id
+          WHERE s.id = ? AND s.situacao = 'recusado' AND s.motivo = 'Conduta a revisar' AND s.decidido_em IS NOT NULL
+            AND ra.situacao = 'aguardando_coassinatura'`,
+        [ids.supervisao2],
       ),
     ).toBe(1);
     expect(await porta.coassinaturas(C(), LOGIN)).toEqual([]);
@@ -536,23 +668,135 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     ).toBe(2);
   });
 
-  it('ciência: resultado inexistente recusa (404); sem ciência, lista vazia; trilha gravada', async () => {
+  it('óbito com número: emitido; o mesmo número no estabelecimento é recusado', async () => {
+    const o = {
+      dataHora: new Date('2026-11-22T11:00:00Z'),
+      numero: 'L9800001',
+      causas: 'Causa sintética',
+      cbo: null,
+      hashConteudo: HASH,
+    };
+    const ob = await porta.registrarObito(G(), {
+      ...o,
+      paciente: ids.pacienteB,
+      atendimento: ids.atendimentoB,
+    });
+    expect(await porta.obito(C(), ids.pacienteB)).toMatchObject({
+      numero: 'L9800001',
+      documento: ob.documento,
+    });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM declaracao_obito
+          WHERE id = ? AND situacao = 'emitida' AND emitida_em IS NOT NULL AND numero = 'L9800001'`,
+        [ob.id],
+      ),
+    ).toBe(1);
     expect(
       await recusa(
-        porta.registrarCiencia(G(), {
-          paciente: ids.paciente,
-          exame: 999_999_999,
-          chave: 'k',
-          resultado: null,
+        porta.registrarObito(G(), { ...o, paciente: ids.pacienteC, atendimento: ids.atendimentoC }),
+      ),
+    ).toEqual({ codigo: 'numero-repetido', status: 409 });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM declaracao_obito WHERE paciente_id = ?', [ids.pacienteC]),
+    ).toBe(0);
+  });
+
+  it('ciência: inclusão pelo sistema, fechamento da comunicação aberta, exame de outro paciente 404; trilha', async () => {
+    const trilha = () =>
+      contar(
+        "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade = 'ciencia_resultado_critico'",
+        [ids.est],
+      );
+    const antes = await trilha();
+    const x = {
+      paciente: ids.paciente,
+      chave: 'k',
+      resultado: null,
+      elemento: null,
+      conduta: 'Conduta sintética',
+      escalonadoPara: null,
+    };
+    expect(await recusa(porta.registrarCiencia(G(), { ...x, exame: 999_999_999 }))).toEqual({
+      codigo: 'nao-encontrado',
+      status: 404,
+    });
+    // O exame do paciente B não recebe ciência em nome do paciente A.
+    expect(await recusa(porta.registrarCiencia(G(), { ...x, exame: ids.resultadoOutroPaciente }))).toEqual({
+      codigo: 'nao-encontrado',
+      status: 404,
+    });
+    expect(await porta.ciencias(C(), ids.paciente)).toEqual([]);
+    const nova = await porta.registrarCiencia(G(), {
+      ...x,
+      exame: ids.resultadoNovo,
+      elemento: 'K',
+      escalonadoPara: 'Plantão sintético',
+    });
+    expect(await recusa(porta.registrarCiencia(G(), { ...x, exame: ids.resultadoNovo }))).toEqual({
+      codigo: 'ja-ciente',
+      status: 409,
+    });
+    expect(await porta.registrarCiencia(G(), { ...x, exame: ids.resultadoAberto })).toBe(ids.cienciaAberta);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM ciencia_resultado_critico
+          WHERE estabelecimento_id = ? AND paciente_id = ? AND situacao = 'ciente' AND ciente_usuario_id = ?
+            AND ciente_profissional_id = ? AND ciente_em >= comunicado_em AND
+            ((id = ? AND resultado_exame_id = ? AND canal_comunicacao = 'sistema' AND comunicante_usuario_id = ?
+              AND escalonado_para = 'Plantão sintético') OR
+             (id = ? AND resultado_exame_id = ? AND canal_comunicacao = 'telefone' AND comunicante_usuario_id = ?))`,
+        [
+          ids.est,
+          ids.paciente,
+          ids.usuario,
+          ids.prof,
+          nova,
+          ids.resultadoNovo,
+          ids.usuario,
+          ids.cienciaAberta,
+          ids.resultadoAberto,
+          ids.usuarioOutro,
+        ],
+      ),
+    ).toBe(2);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM ciencia_resultado_critico WHERE paciente_id = ?', [
+        ids.pacienteB,
+      ]),
+    ).toBe(0);
+    expect((await porta.ciencias(C(), ids.paciente)).map((y) => [y.exame, y.usuario, y.elemento])).toEqual([
+      [ids.resultadoNovo, LOGIN, 'K'],
+      [ids.resultadoAberto, LOGIN, 'K'],
+    ]);
+    expect((await trilha()) - antes).toBe(2);
+  });
+
+  it('isolamento: no outro estabelecimento, parecer, supervisão, problemas e resultado do principal não aparecem', async () => {
+    const GX = { ...G(), hospital: `${P}x` };
+    const CX = { ...C(), hospital: `${P}x` };
+    expect(await recusa(porta.aceitarParecer(GX, ids.parecer1))).toEqual({
+      codigo: 'registro-inexistente',
+      status: 404,
+    });
+    expect(await recusa(porta.coassinarNoNovo(GX, { id: ids.supervisao, decisao: 'coassinado' }))).toEqual({
+      codigo: 'nao-encontrado',
+      status: 404,
+    });
+    expect(await porta.supervisao(CX, ids.supervisao)).toBeNull();
+    expect(await porta.problemas(CX, ids.paciente)).toEqual([]);
+    expect(await porta.ciencias(CX, ids.paciente)).toEqual([]);
+    expect(
+      await recusa(
+        porta.registrarCiencia(GX, {
+          ...{ paciente: ids.paciente, chave: 'k', resultado: null },
           elemento: null,
           conduta: 'Conduta sintética',
           escalonadoPara: null,
+          exame: ids.resultadoNovo,
         }),
       ),
     ).toEqual({ codigo: 'nao-encontrado', status: 404 });
-    expect(await porta.ciencias(C(), ids.paciente)).toEqual([]);
-    expect(
-      await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]),
-    ).toBeGreaterThan(0);
+    expect(await porta.coassinaturas(CX, LOGIN)).toEqual([]);
   });
 });
