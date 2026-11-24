@@ -329,6 +329,56 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
     expect(codigoDe(erro)).toBe('horario-ocupado');
   });
 
+  it('02-AGE 44: marca o exame sem prontuário com o pré-cadastro na mesma transação e devolve a vaga ao cancelar', async () => {
+    const entrada = {
+      agenda: ids.agenda,
+      data: dia,
+      hora: '08:20',
+      nome: 'pessoa sintetica exame sem pront',
+      nascimento: '1990-07-08',
+      telefone: '3133334444',
+      convenio: ids.fonte,
+      exame: ids.exame,
+      canal: 'telefone',
+    };
+    const recusa = await porta
+      .executar(ctx, 'agenda.agendarExameSemProntuario', { ...entrada, nascimento: '1800-01-01' }, opCtx())
+      .catch((e) => e);
+    expect(codigoDe(recusa)).toBe('nascimento-improvavel');
+    const r = await porta.executar(ctx, 'agenda.agendarExameSemProntuario', entrada, opCtx());
+    const id = Number(r.resultado['marcacao']);
+    const [m] = await ler('SELECT paciente_id, pre_cadastro_id, numero FROM marcacao_horario WHERE id = ?', [
+      id,
+    ]);
+    expect(m).toMatchObject({ paciente_id: null, numero: expect.stringMatching(/^MX-/) });
+    const [pc] = await ler(
+      'SELECT nome, situacao, telefone, celular, fonte_pagadora_id FROM pre_cadastro WHERE id = ?',
+      [m?.['pre_cadastro_id']],
+    );
+    expect(pc).toMatchObject({
+      nome: 'PESSOA SINTETICA EXAME SEM PRONT',
+      situacao: 'pendente',
+      telefone: '3133334444',
+      celular: null,
+      fonte_pagadora_id: ids.fonte,
+    });
+    expect(
+      await ler('SELECT exame_id FROM marcacao_horario_item WHERE marcacao_horario_id = ?', [id]),
+    ).toEqual([expect.objectContaining({ exame_id: ids.exame })]);
+    await porta.executar(
+      ctx,
+      'agenda.cancelarExame',
+      { marcacao: id, motivo: 'PAC-DESISTIU', solicitante: 'paciente' },
+      opCtx(),
+    );
+    const vagas = await porta.vagas(ctx, { agendas: [ids.agenda], de: dia, ate: dia });
+    expect(vagas.itens.map((v) => v.hora)).toContain('08:20');
+    // O pré-cadastro e a marcação cancelada continuam no banco.
+    expect(
+      await ler('SELECT id FROM marcacao_horario WHERE pre_cadastro_id = ?', [m?.['pre_cadastro_id']]),
+    ).toHaveLength(1);
+  });
+
   it('recusa entrada inválida e agenda de outro estabelecimento', async () => {
     const invalida = await porta
       .executar(ctx, 'agenda.agendarExame', { agenda: ids.agenda, data: 'amanha' }, opCtx())
