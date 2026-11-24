@@ -10,6 +10,9 @@ export interface EventoFinanceiro {
   readonly valor: number;
   readonly historico: string;
   readonly documento: string;
+  /** Código do centro de custo e do credor no escritório contábil (linha 100); ausentes: o leiaute de 6 campos. */
+  readonly centroExterno?: string;
+  readonly participanteExterno?: string;
 }
 
 export interface DePara {
@@ -51,6 +54,9 @@ export function montarLoteContabil(
         e.valor.toFixed(2),
         e.historico.replace(/[;\r\n]/g, ' ').slice(0, 100),
         e.documento,
+        ...(e.centroExterno !== undefined || e.participanteExterno !== undefined
+          ? [e.centroExterno ?? '', e.participanteExterno ?? '']
+          : []),
       ].join(';'),
     );
   }

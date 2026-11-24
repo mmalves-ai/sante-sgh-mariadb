@@ -10,6 +10,8 @@ export * from './extrato.js';
 export * from './nfse.js';
 export * from './declaracoes.js';
 export * from './lote-contabil.js';
+export * from './depara-contabil.js';
+export * from './retencao-regra.js';
 export * from './remessa.js';
 export * from './adiantamento.js';
 export * from './indicadores.js';
