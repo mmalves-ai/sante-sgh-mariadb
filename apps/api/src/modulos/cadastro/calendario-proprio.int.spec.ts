@@ -231,11 +231,12 @@ describe.skipIf(SEM_BANCO)('calendário de dias não úteis no banco próprio (f
     expect((await pulados()).some((x) => x.data === `${ANO}-06-20`)).toBe(true);
   });
 
-  it('migração 05_AGE/90: copia a linha da tabela anterior; inativar a cópia tira o dia da agenda; estadual sem UF não vem', async () => {
+  it('migração 05_AGE/90: copia a linha da tabela anterior; inativar a cópia tira o dia da agenda; estadual de sigla sem UF cadastrada não vem', async () => {
     await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, async (e) => {
+      // O estadual de sigla sem UF cadastrada não tem alvo (o CHECK da tabela anterior já exige a sigla).
       await e.executar(
         `INSERT INTO feriado (data, nome, abrangencia, uf, estabelecimento_id, ponto_facultativo, criado_em)
-         VALUES (?, ?, 'estabelecimento', NULL, ?, FALSE, NOW(3)), (?, ?, 'estadual', NULL, NULL, FALSE, NOW(3))`,
+         VALUES (?, ?, 'estabelecimento', NULL, ?, FALSE, NOW(3)), (?, ?, 'estadual', 'ZZ', NULL, FALSE, NOW(3))`,
         [`${ANO}-07-07`, `${DESC} LEGADO`, m!.estabelecimento, `${ANO}-07-08`, `${DESC} SEMUF`],
       );
       // O texto da migração, restrito às linhas desta massa (a cópia é idempotente: rodar de novo não duplica).

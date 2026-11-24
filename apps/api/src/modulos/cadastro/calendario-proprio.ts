@@ -151,10 +151,11 @@ async function conferir(
     throw recusa('estabelecimento-inexistente', 'Estabelecimento não encontrado.', {
       campos: ['estabelecimento'],
     });
-  const atuais = await tx.consultar(
+  // Trava os ativos do alvo (o FOR UPDATE é do consultarParaAtualizar: o caminho comum recusa trava).
+  const atuais = await tx.consultarParaAtualizar(
     `SELECT ${COLUNAS} FROM dia_nao_util
       WHERE ativo AND excluido_em IS NULL AND abrangencia = ? AND unidade_federativa_id <=> ?
-        AND municipio_ibge_id <=> ? AND estabelecimento_id <=> ? FOR UPDATE`,
+        AND municipio_ibge_id <=> ? AND estabelecimento_id <=> ?`,
     [e.abrangencia, e.ufId, e.municipio, e.estabelecimento],
   );
   const dup = duplicadoDe(atuais.map(daLinha), e, proprio);
