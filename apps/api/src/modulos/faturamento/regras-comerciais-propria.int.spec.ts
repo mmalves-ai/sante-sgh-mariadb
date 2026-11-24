@@ -57,6 +57,15 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
     const est = ids['est'];
     await e.executar('DELETE FROM ligacao_tarifada WHERE estabelecimento_id = ?', [est]);
     await e.executar(
+      'DELETE ca FROM cobertura_atendimento ca JOIN atendimento a ON a.id = ca.atendimento_id WHERE a.estabelecimento_id = ?',
+      [est],
+    );
+    if (ids['paciente'] && ids['fonte'])
+      await e.executar('DELETE FROM cobertura_paciente WHERE paciente_id = ? AND fonte_pagadora_id = ?', [
+        ids['paciente'],
+        ids['fonte'],
+      ]);
+    await e.executar(
       'DELETE f FROM conta_hospitalar_franquia f JOIN conta_hospitalar c ON c.id = f.conta_hospitalar_id WHERE c.estabelecimento_id = ?',
       [est],
     );
@@ -170,6 +179,7 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       ids['tipoConta'] = await cat('tipo_conta', P, ', natureza', ['internacao']);
       ids['origem'] = await cat('origem_entrada_atendimento', P);
       ids['ambulancia'] = await cat('categoria_ambulancia', P);
+      ids['ambulanciaSemPreco'] = await cat('categoria_ambulancia', `${P}B`);
       ids['tipoLocal'] = await cat('tipo_ligacao_tarifada', `${P}LOC`, ', abrangencia, cobravel', [
         'local',
         1,
@@ -191,6 +201,7 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       ids['km'] = await item(`${P}KM`);
       ids['trajeto'] = await item(`${P}TR`);
       ids['minuto'] = await item(`${P}MI`);
+      ids['semPreco'] = await item(`${P}SP`);
       const tabela = await garantir(
         e,
         'SELECT id FROM tabela_preco WHERE codigo = ?',
@@ -374,20 +385,45 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       aplicaPensionista: false,
       vigenciaInicio: '2025-01-01',
     });
+    // Sem carteira no cadastro: a prévia mostra o motivo e a aplicação é recusada (o vínculo não é digitado).
+    const semCarteira = await s.ler(ctxL(), (l, est) =>
+      comercialDaContaPropria(l, est, ids['conta'] as number),
+    );
+    expect(semCarteira.previa.franquia).toEqual([
+      expect.objectContaining({ id: f['id'], motivo: 'sem_vinculo_no_cadastro', valor: 0 }),
+    ]);
+    expect(await codigoDo(s.gravar('aplicar-comercial', op(), { contaId: ids['conta'] }))).toBe(
+      'sem-vinculo',
+    );
+    const carteira = await escrever(async (e) => {
+      const cp = await e.inserir(
+        `INSERT INTO cobertura_paciente (paciente_id, fonte_pagadora_id, numero_carteira, vigencia_inicio, titular,
+           pensionista, criado_em) VALUES (?, ?, ?, '2025-01-01', 1, 0, ?)`,
+        [ids['paciente'], ids['fonte'], `${P}CART`, new Date()],
+      );
+      await e.inserir(
+        `INSERT INTO cobertura_atendimento (atendimento_id, ordem, fonte_pagadora_id, cobertura_paciente_id, criado_em)
+         VALUES (?, 1, ?, ?, ?)`,
+        [ids['atendimento'], ids['fonte'], cp, new Date()],
+      );
+      return cp;
+    });
     const pre = await s.ler(ctxL(), (l, est) =>
       comercialDaContaPropria(l, est, ids['conta'] as number, 'pensionista'),
     );
+    expect(pre.previa.situacao).toMatchObject({ vinculo: 'pensionista', origemVinculo: 'simulacao' });
     expect(pre.previa.franquia).toEqual([
       expect.objectContaining({ id: f['id'], motivo: 'vinculo_nao_coberto', valor: 0 }),
     ]);
     expect(pre.previa.desconto).toMatchObject({ regraId: d['id'], volume: 1000, valor: 100 });
 
-    const r1 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'], vinculo: 'titular' });
+    // A gravação ignora o vínculo da requisição e usa o da carteira (titular): a franquia vale.
+    const r1 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'], vinculo: 'pensionista' });
     expect(r1).toMatchObject({ franquia: 200, desconto: 100, substituidas: 0 });
-    const r2 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'], vinculo: 'titular' });
+    const r2 = await s.gravar('aplicar-comercial', op(), { contaId: ids['conta'] });
     expect(r2).toMatchObject({ substituidas: 2 });
     const aplicadas = await linhas(
-      `SELECT sequencia, tipo, valor, franquia_contrato_id, regra_desconto_volume_id, excluido_em, excluido_por, criado_por
+      `SELECT sequencia, tipo, valor, franquia_contrato_id, regra_desconto_volume_id, excluido_em, excluido_por, criado_por, observacao
          FROM conta_hospitalar_franquia WHERE conta_hospitalar_id = ? ORDER BY sequencia`,
       [ids['conta']],
     );
@@ -408,6 +444,16 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
     expect(Number(aplicadas[2]?.['franquia_contrato_id'])).toBe(f['id']);
     expect(Number(aplicadas[3]?.['regra_desconto_volume_id'])).toBe(d['id']);
     expect(Number(aplicadas[3]?.['criado_por'])).toBe(ids['usuario']);
+    expect(String(aplicadas[0]?.['observacao'])).toContain('vínculo titular da carteira');
+    // A carteira passa a ser de pensionista: a prévia sem simulação segue o cadastro.
+    await escrever((e) =>
+      e.executar('UPDATE cobertura_paciente SET pensionista = 1 WHERE id = ?', [carteira]),
+    );
+    const pos = await s.ler(ctxL(), (l, est) => comercialDaContaPropria(l, est, ids['conta'] as number));
+    expect(pos.previa.situacao).toMatchObject({ vinculo: 'pensionista', origemVinculo: 'cadastro' });
+    expect(pos.previa.franquia).toEqual([
+      expect.objectContaining({ motivo: 'vinculo_nao_coberto', valor: 0 }),
+    ]);
   });
 
   it('linha 23: remoção por trajeto e por km e ligações lançadas na conta, com o total refeito', async () => {
@@ -438,7 +484,7 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       rotaId: ids['rota'],
       data: '2026-01-21',
     });
-    expect(t).toMatchObject({ quantidade: 1, semPreco: false });
+    expect(t).toMatchObject({ quantidade: 1 });
     const k = await s.gravar('lancar-remocao', op(), {
       contaId: ids['conta'],
       categoriaAmbulanciaId: ids['ambulancia'],
@@ -446,15 +492,23 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       data: '2026-01-21',
     });
     expect(k).toMatchObject({ quantidade: 35 });
+    // Item da regra sem preço vigente: recusa, nunca uma linha de R$ 0 na conta (a lista final de itens prova).
+    await s.gravar('salvar-regra-ambulancia', op(), {
+      categoriaAmbulanciaId: ids['ambulanciaSemPreco'],
+      forma: 'quilometro',
+      itemId: ids['semPreco'],
+    });
+    expect(
+      await codigoDo(
+        s.gravar('lancar-remocao', op(), {
+          contaId: ids['conta'],
+          categoriaAmbulanciaId: ids['ambulanciaSemPreco'],
+          km: 10,
+          data: '2026-01-21',
+        }),
+      ),
+    ).toBe('sem-preco');
 
-    await s.gravar('salvar-regra-ligacao', op(), {
-      tipoLigacaoId: ids['tipoLocal'],
-      itemMinutoId: ids['minuto'],
-    });
-    await s.gravar('salvar-regra-ligacao', op(), {
-      tipoLigacaoId: ids['tipoGratis'],
-      itemMinutoId: ids['minuto'],
-    });
     const lig = (tipo: number, dur: number) =>
       s.gravar('registrar-ligacao', op(), {
         atendimentoId: ids['atendimento'],
@@ -465,12 +519,20 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       });
     const l1 = await lig(ids['tipoLocal'] as number, 125);
     const l2 = await lig(ids['tipoGratis'] as number, 60);
+    // Registradas antes de existir regra: a do tipo gratuito fica marcada; a local espera a regra, pendente.
+    const r0 = await s.gravar('lancar-ligacoes', op(), { contaId: ids['conta'] });
+    expect(r0).toMatchObject({ lancadas: 0, naoCobradas: 1, pendentes: 1 });
+    const regraLocal = await s.gravar('salvar-regra-ligacao', op(), {
+      tipoLigacaoId: ids['tipoLocal'],
+      itemMinutoId: ids['minuto'],
+    });
     const r = await s.gravar('lancar-ligacoes', op(), { contaId: ids['conta'] });
-    expect(r).toMatchObject({ lancadas: 1, naoCobradas: 1, pendentes: 0 });
+    expect(r).toMatchObject({ lancadas: 1, naoCobradas: 0, pendentes: 0 });
     expect(await s.gravar('lancar-ligacoes', op(), { contaId: ids['conta'] })).toMatchObject({ lancadas: 0 });
 
     const ls = await linhas(
-      'SELECT id, tipo_ligacao, situacao, lancamento_conta_hospitalar_item_id AS item, criado_por FROM ligacao_tarifada WHERE id IN (?, ?) ORDER BY id',
+      `SELECT id, tipo_ligacao, situacao, lancamento_conta_hospitalar_item_id AS item, criado_por, tipo_ligacao_tarifada_id AS tipo,
+              regra_cobranca_ligacao_id AS regra FROM ligacao_tarifada WHERE id IN (?, ?) ORDER BY id`,
       [l1['id'], l2['id']],
     );
     expect(ls.map((x) => [x['tipo_ligacao'], x['situacao']])).toEqual([
@@ -478,6 +540,10 @@ describe.skipIf(SEM_BANCO)('regras comerciais da conta (MariaDB)', () => {
       ['outra', 'nao_cobrada'],
     ]);
     expect(Number(ls[0]?.['criado_por'])).toBe(ids['usuario']);
+    expect(ls.map((x) => [Number(x['tipo']), x['regra'] === null ? null : Number(x['regra'])])).toEqual([
+      [ids['tipoLocal'], regraLocal['id']],
+      [ids['tipoGratis'], null],
+    ]);
     const itens = await linhas(
       `SELECT i.item_faturavel_id AS item, i.quantidade, i.valor_unitario, i.valor_total, i.tipo_valorizacao, m.dados
          FROM conta_hospitalar_item i JOIN conta_hospitalar_item_memoria m ON m.conta_hospitalar_item_id = i.id

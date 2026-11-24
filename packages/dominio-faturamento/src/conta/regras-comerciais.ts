@@ -58,7 +58,7 @@ export interface RegraCriacaoConta extends CriteriosConta {
 }
 
 /** A situação do atendimento (e do item, quando for a quebra por item) que se compara às regras. */
-export interface SituacaoConta extends CriteriosConta {
+export interface SituacaoRegraConta extends CriteriosConta {
   readonly data: string;
   readonly horarioEspecial?: boolean;
 }
@@ -100,7 +100,7 @@ function criteriosBatem(c: CriteriosConta, s: CriteriosConta): boolean {
 }
 
 /** Por que a regra não vale para a situação (nulo quando vale). */
-export function motivoRegraNaoVale(r: RegraCriacaoConta, s: SituacaoConta): string | null {
+export function motivoRegraNaoVale(r: RegraCriacaoConta, s: SituacaoRegraConta): string | null {
   if (!r.ativo) return 'inativa';
   if (r.vigenciaInicio > s.data.slice(0, 10)) return 'fora_da_vigencia';
   if (!criteriosBatem(r, s)) return 'criterio_diferente';
@@ -123,7 +123,7 @@ export interface EscolhaRegraConta {
  */
 export function escolherRegraConta(
   regras: readonly RegraCriacaoConta[],
-  s: SituacaoConta,
+  s: SituacaoRegraConta,
   acao?: AcaoRegraConta,
 ): EscolhaRegraConta {
   const candidatas = regras.filter((r) => !acao || r.acao === acao);
@@ -265,6 +265,18 @@ export function calcularDescontoVolume(
 
 export const VINCULOS_BENEFICIARIO = ['titular', 'dependente', 'pensionista'] as const;
 export type VinculoBeneficiario = (typeof VINCULOS_BENEFICIARIO)[number];
+
+/**
+ * O vínculo do beneficiário com o plano, lido da carteira do cadastro (nunca digitado na aplicação da franquia):
+ * pensionista quando a carteira é de pensionista; senão titular ou dependente pela titularidade. Sem carteira, nulo.
+ */
+export function vinculoDaCarteira(
+  carteira: { readonly titular: boolean; readonly pensionista: boolean } | null,
+): VinculoBeneficiario | null {
+  if (!carteira) return null;
+  if (carteira.pensionista) return 'pensionista';
+  return carteira.titular ? 'titular' : 'dependente';
+}
 
 export interface ExcecaoFranquia {
   readonly item?: Id | null;

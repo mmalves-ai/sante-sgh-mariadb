@@ -13,6 +13,7 @@ import {
   validarFaixasDesconto,
   validarFranquia,
   validarRegraConta,
+  vinculoDaCarteira,
 } from './regras-comerciais.js';
 
 const regra = (o: Partial<RegraCriacaoConta> & { id: number }): RegraCriacaoConta => ({
@@ -72,6 +73,13 @@ describe('06-FAT linha 13: criação e quebra de contas por regra', () => {
 });
 
 describe('06-FAT linha 19: desconto por volume e franquia', () => {
+  it('o vínculo do beneficiário sai da carteira do cadastro; sem carteira, nulo', () => {
+    expect(vinculoDaCarteira({ titular: true, pensionista: false })).toBe('titular');
+    expect(vinculoDaCarteira({ titular: false, pensionista: false })).toBe('dependente');
+    expect(vinculoDaCarteira({ titular: true, pensionista: true })).toBe('pensionista');
+    expect(vinculoDaCarteira(null)).toBeNull();
+  });
+
   const faixas = [
     { sequencia: 1, volumeInicial: 0, volumeFinal: 10000, tipo: 'percentual' as const, percentual: 0 },
     { sequencia: 2, volumeInicial: 10000, volumeFinal: null, tipo: 'percentual' as const, percentual: 5 },

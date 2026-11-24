@@ -26,6 +26,8 @@ import {
   validarFranquia,
   validarRegraConta,
   VINCULOS_BENEFICIARIO,
+  type VinculoBeneficiario,
+  vinculoDaCarteira,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -664,17 +666,69 @@ async function itensDaConta(l: Consulta, conta: number) {
   }));
 }
 
-/** Prévia da franquia e do desconto por volume da conta, com o motivo de cada franquia que não vale. */
-export async function calculoComercialConta(l: Consulta, est: number, contaId: number, vinculo: string) {
+/**
+ * A carteira do paciente na fonte pagadora da conta: primeiro a cobertura do atendimento (a que a recepção usou),
+ * depois a cobertura do cadastro do paciente vigente na data da conta (a principal primeiro).
+ */
+async function carteiraDaConta(l: Consulta, c: Linha, data: string) {
+  const sel = 'SELECT cp.id, cp.titular, cp.pensionista FROM cobertura_paciente cp';
+  const doAtendimento = c['atendimento_id']
+    ? await l.uma<Linha>(
+        `${sel} JOIN cobertura_atendimento ca ON ca.cobertura_paciente_id = cp.id
+          WHERE ca.atendimento_id = ? AND ca.fonte_pagadora_id = ? AND ca.excluido_em IS NULL AND cp.excluido_em IS NULL
+          ORDER BY ca.ordem LIMIT 1`,
+        [c['atendimento_id'], c['fonte_pagadora_id']],
+      )
+    : null;
+  const x =
+    doAtendimento ??
+    (c['paciente_id']
+      ? await l.uma<Linha>(
+          `${sel} WHERE cp.paciente_id = ? AND cp.fonte_pagadora_id = ? AND cp.excluido_em IS NULL
+              AND (cp.plano_fonte_pagadora_id IS NULL OR ? IS NULL OR cp.plano_fonte_pagadora_id = ?)
+              AND cp.vigencia_inicio <= ? AND (cp.vigencia_fim IS NULL OR cp.vigencia_fim >= ?)
+            ORDER BY cp.situacao = 'ativa' DESC, cp.principal DESC, cp.id DESC LIMIT 1`,
+          [
+            c['paciente_id'],
+            c['fonte_pagadora_id'],
+            c['plano_fonte_pagadora_id'],
+            c['plano_fonte_pagadora_id'],
+            data,
+            data,
+          ],
+        )
+      : null);
+  return x ? { id: n(x['id']), titular: bool(x['titular']), pensionista: bool(x['pensionista']) } : null;
+}
+
+/**
+ * Prévia da franquia e do desconto por volume da conta, com o motivo de cada franquia que não vale. O vínculo do
+ * beneficiário vem da carteira do cadastro; `simulacao` só serve à leitura (prévia "e se fosse dependente"), nunca à
+ * gravação. Sem vínculo no cadastro nem simulação, toda franquia sai com o motivo `sem_vinculo_no_cadastro`.
+ */
+export async function calculoComercialConta(
+  l: Consulta,
+  est: number,
+  contaId: number,
+  simulacao: VinculoBeneficiario | null = null,
+) {
   const c = await contaDa(l, est, contaId);
   const data = dia(c['inicio_em']) ?? hoje();
+  const carteira = await carteiraDaConta(l, c, data);
+  const doCadastro = vinculoDaCarteira(carteira);
+  const vinculo = simulacao ?? doCadastro;
+  const origemVinculo: 'simulacao' | 'cadastro' | null = simulacao
+    ? 'simulacao'
+    : doCadastro
+      ? 'cadastro'
+      : null;
   const situacao = {
     data,
     regime: nn(c['regime_atendimento_id']),
     especialidade: nn(c['especialidade_medica_id']),
-    vinculo: (VINCULOS_BENEFICIARIO as readonly string[]).includes(vinculo)
-      ? (vinculo as (typeof VINCULOS_BENEFICIARIO)[number])
-      : 'titular',
+    vinculo,
+    origemVinculo,
+    coberturaPacienteId: carteira?.id ?? null,
     idade: idadeEm(dia(c['data_nascimento']), data),
   };
   const itens = await itensDaConta(l, contaId);
@@ -685,8 +739,9 @@ export async function calculoComercialConta(l: Consulta, est: number, contaId: n
       )
     : [];
   const franquia = franquias.map((f) => {
-    const motivo = motivoFranquiaNaoVale(f, situacao);
-    const calc = motivo ? null : calcularFranquia(f, situacao, itens);
+    const s = vinculo ? { ...situacao, vinculo } : null;
+    const motivo = s ? motivoFranquiaNaoVale(f, s) : 'sem_vinculo_no_cadastro';
+    const calc = motivo || !s ? null : calcularFranquia(f, s, itens);
     return { id: f.id, descricao: f.descricao, motivo, valor: calc?.valor ?? 0, base: calc?.base ?? 0 };
   });
   const regra = await l.uma<Linha>(
@@ -728,21 +783,25 @@ export async function calculoComercialConta(l: Consulta, est: number, contaId: n
   return { conta: c, situacao, franquia, desconto };
 }
 
-export const esquemaAplicarComercial = z.object({
-  contaId: id,
-  vinculo: z.enum(['titular', 'dependente', 'pensionista']).default('titular'),
-});
+// O vínculo do beneficiário não entra pela requisição: a gravação usa só a carteira do cadastro.
+export const esquemaAplicarComercial = z.object({ contaId: id });
 export const opAplicarComercial = definirOperacao({
   nome: 'faturamento.aplicar-franquia-desconto-conta',
   tabelas: ['conta_hospitalar_franquia'],
   entrada: esquemaAplicarComercial,
   async gravar(tx, e) {
     const est = estDe(tx.contexto);
-    const r = await calculoComercialConta(tx, est, e.contaId, e.vinculo);
+    const r = await calculoComercialConta(tx, est, e.contaId);
     if (!contaEditavel(String(r.conta['situacao'])))
       throw recusa('conta-fechada', 'A conta não está aberta: a franquia e o desconto não mudam.', {
         campos: [],
       });
+    if (r.franquia.length && r.situacao.origemVinculo !== 'cadastro')
+      throw recusa(
+        'sem-vinculo',
+        'O contrato tem franquia e a carteira do paciente nesta fonte pagadora não está no cadastro: informe a titularidade (titular, dependente ou pensionista) na cobertura do paciente antes de aplicar.',
+        { campos: ['coberturaPaciente'] },
+      );
     await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [e.contaId]);
     const anteriores = await tx.consultar<Linha>(
       `SELECT id, versao FROM conta_hospitalar_franquia WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
@@ -770,7 +829,7 @@ export const opAplicarComercial = definirOperacao({
         tipo: 'franquia',
         franquia_contrato_id: f.id,
         valor: f.valor,
-        observacao: `Franquia "${f.descricao}" sobre base ${f.base.toFixed(2)} (vínculo ${e.vinculo}).`,
+        observacao: `Franquia "${f.descricao}" sobre base ${f.base.toFixed(2)} (vínculo ${r.situacao.vinculo ?? ''} da carteira ${r.situacao.coberturaPacienteId ?? ''}).`,
       });
     }
     const desconto = r.desconto?.valor ?? 0;
@@ -942,6 +1001,7 @@ export const opRegistrarLigacao = definirOperacao({
       atendimento_id: e.atendimentoId,
       ramal_telefonico_id: e.ramalId,
       regra_cobranca_ligacao_id: nn(regra?.['id']),
+      tipo_ligacao_tarifada_id: e.tipoLigacaoId,
       tipo_ligacao: tipoDaLigacao(String(t['abrangencia'])),
       iniciada_em: e.iniciadaEm.replace('T', ' '),
       duracao_segundos: e.duracaoSegundos,
@@ -967,9 +1027,9 @@ async function lancarItem(
   unitarioFixo: number | null,
   data: string,
   dados: Record<string, unknown>,
-): Promise<{ id: number; semPreco: boolean }> {
+): Promise<{ id: number }> {
   const i = await tx.uma<Linha>(
-    "SELECT id, grupo_faturamento_id FROM item_faturavel WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
+    "SELECT id, codigo, grupo_faturamento_id FROM item_faturavel WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
     [item],
   );
   if (!i) throw recusa('item-inativo', 'O item da regra está inativo ou fora do catálogo.', { campos: [] });
@@ -988,6 +1048,12 @@ async function lancarItem(
           data,
         )
       : null;
+  if (unitarioFixo === null && !preco)
+    throw recusa(
+      'sem-preco',
+      `O item ${String(i['codigo'])} da regra não tem preço vigente em ${data} na tabela da fonte pagadora da conta: cadastre o preço e lance de novo.`,
+      { campos: ['itemFaturavelId'] },
+    );
   const unitario = unitarioFixo ?? preco?.unitario ?? 0;
   const total = r2(unitario * quantidade);
   const seq = await tx.uma<Linha>(
@@ -1016,12 +1082,12 @@ async function lancarItem(
     operacao: 'inclusao',
     dados: JSON.stringify({
       ...dados,
-      origemPreco: preco ? 'tabela' : unitarioFixo !== null ? 'tarifador' : 'sem_preco_vigente',
+      origemPreco: preco ? 'tabela' : 'tarifador',
     }),
     ocorrido_em: agora,
     usuario_id: tx.contexto.usuario,
   });
-  return { id: novo, semPreco: unitarioFixo === null && !preco };
+  return { id: novo };
 }
 
 export const esquemaLancarRemocao = z.object({
@@ -1089,7 +1155,6 @@ export const opLancarRemocao = definirOperacao({
       itemId: l.id,
       regraId: regra.id,
       quantidade: cob.quantidade,
-      semPreco: l.semPreco,
     };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.contaId }),
@@ -1112,10 +1177,11 @@ export const opLancarLigacoes = definirOperacao({
     await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [c['id']]);
     const ls = await tx.consultarParaAtualizar<Linha>(
       `SELECT l.id, l.versao, l.duracao_segundos, l.valor, l.iniciada_em, r.id AS regra, r.item_faturavel_minuto_id,
-              r.item_faturavel_segundo_id, r.assume_valor_tarifador, r.ativo AS regra_ativa, t.cobravel
+              r.item_faturavel_segundo_id, r.assume_valor_tarifador, r.ativo AS regra_ativa, t.id AS tipo, t.cobravel
          FROM ligacao_tarifada l
-         LEFT JOIN regra_cobranca_ligacao r ON r.id = l.regra_cobranca_ligacao_id
-         LEFT JOIN tipo_ligacao_tarifada t ON t.id = r.tipo_ligacao_tarifada_id
+         LEFT JOIN regra_cobranca_ligacao g ON g.id = l.regra_cobranca_ligacao_id
+         LEFT JOIN tipo_ligacao_tarifada t ON t.id = COALESCE(l.tipo_ligacao_tarifada_id, g.tipo_ligacao_tarifada_id)
+         LEFT JOIN regra_cobranca_ligacao r ON r.estabelecimento_id = l.estabelecimento_id AND r.tipo_ligacao_tarifada_id = t.id
         WHERE l.atendimento_id = ? AND l.estabelecimento_id = ? AND l.situacao = 'pendente' AND l.excluido_em IS NULL
         ORDER BY l.iniciada_em, l.id`,
       [c['atendimento_id'], est],
@@ -1134,14 +1200,19 @@ export const opLancarLigacoes = definirOperacao({
               assumeValorTarifador: bool(x['assume_valor_tarifador']),
               ativo: bool(x['regra_ativa']),
             };
-      const cob = cobrancaLigacao(regra, x['regra'] === null ? true : bool(x['cobravel']), {
+      // A regra é a vigente do tipo hoje (não a gravada no registro): a ligação registrada antes da regra entra
+      // assim que o faturista a cria. O tipo não cobrável fica marcado mesmo sem regra.
+      const cob = cobrancaLigacao(regra, x['tipo'] === null ? true : bool(x['cobravel']), {
         duracaoSegundos: n(x['duracao_segundos']),
         valorTarifador: nn(x['valor']),
       });
       if (!cob.cobra || cob.item === null) {
         // Sem regra a ligação continua pendente (aparece para o faturista); as demais ficam marcadas, com o motivo.
         if (cob.motivo === 'sem_regra') continue;
-        await tx.alterar('ligacao_tarifada', n(x['id']), n(x['versao']), { situacao: 'nao_cobrada' });
+        await tx.alterar('ligacao_tarifada', n(x['id']), n(x['versao']), {
+          situacao: 'nao_cobrada',
+          regra_cobranca_ligacao_id: regra?.id ?? null,
+        });
         naoCobradas += 1;
         continue;
       }
@@ -1162,6 +1233,7 @@ export const opLancarLigacoes = definirOperacao({
       );
       await tx.alterar('ligacao_tarifada', n(x['id']), n(x['versao']), {
         situacao: 'lancada',
+        regra_cobranca_ligacao_id: regra?.id ?? null,
         lancamento_conta_hospitalar_item_id: l.id,
       });
       lancadas += 1;
@@ -1300,8 +1372,17 @@ export async function regrasComerciaisPropria(l: Leitor, est: number) {
 }
 
 /** Serviços acessórios e cálculo comercial da conta: ligações do atendimento e o que foi aplicado. */
-export async function comercialDaContaPropria(l: Leitor, est: number, contaId: number, vinculo = 'titular') {
-  const calc = await calculoComercialConta(l, est, contaId, vinculo);
+export async function comercialDaContaPropria(
+  l: Leitor,
+  est: number,
+  contaId: number,
+  simulacao: string | null = null,
+) {
+  if (simulacao !== null && !(VINCULOS_BENEFICIARIO as readonly string[]).includes(simulacao))
+    throw recusa('entrada-invalida', 'Vínculo de simulação inválido: titular, dependente ou pensionista.', {
+      campos: ['vinculo'],
+    });
+  const calc = await calculoComercialConta(l, est, contaId, simulacao as VinculoBeneficiario | null);
   const c = calc.conta;
   const ligacoes = c['atendimento_id']
     ? (

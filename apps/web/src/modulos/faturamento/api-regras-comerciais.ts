@@ -116,6 +116,11 @@ const esquemaComercialConta = z.object({
         valor: z.number(),
       })
       .nullable(),
+    situacao: z.object({
+      vinculo: z.enum(['titular', 'dependente', 'pensionista']).nullable(),
+      origemVinculo: z.enum(['simulacao', 'cadastro']).nullable(),
+      coberturaPacienteId: z.number().nullable(),
+    }),
   }),
   aplicados: z.array(
     z.object({
@@ -154,10 +159,15 @@ export const salvarRegraAmbulancia = (corpo: unknown, chave: string) =>
   enviar(`${F}/regras-comerciais/ambulancia`, corpo, qualquer, chave);
 export const salvarRegraLigacao = (corpo: unknown, chave: string) =>
   enviar(`${F}/regras-comerciais/ligacao`, corpo, qualquer, chave);
-export const lerComercialConta = (conta: number, vinculo: string) =>
-  ler(`${F}/contas/${conta}/comercial?vinculo=${encodeURIComponent(vinculo)}`, esquemaComercialConta);
-export const aplicarFranquiaDesconto = (conta: number, vinculo: string, chave: string) =>
-  enviar(`${F}/contas/${conta}/franquia-desconto`, { vinculo }, qualquer, chave);
+/** Prévia da conta; o vínculo vem da carteira do cadastro, e `simulacao` só simula outro vínculo na leitura. */
+export const lerComercialConta = (conta: number, simulacao?: string | null) =>
+  ler(
+    `${F}/contas/${conta}/comercial${simulacao ? `?vinculo=${encodeURIComponent(simulacao)}` : ''}`,
+    esquemaComercialConta,
+  );
+/** Aplica a franquia e o desconto com o vínculo da carteira do cadastro (a requisição não leva vínculo). */
+export const aplicarFranquiaDesconto = (conta: number, chave: string) =>
+  enviar(`${F}/contas/${conta}/franquia-desconto`, {}, qualquer, chave);
 export const lancarRemocao = (conta: number, corpo: unknown, chave: string) =>
   enviar(`${F}/contas/${conta}/remocoes`, corpo, qualquer, chave);
 export const lancarLigacoes = (conta: number, chave: string) =>

@@ -6,7 +6,8 @@
 //   POST /api/faturamento/regras-comerciais/franquias               convenio.contrato.editar (franquia no acordo)
 //   POST /api/faturamento/regras-comerciais/ambulancia              faturamento.regra.editar (remoção por km ou trajeto)
 //   POST /api/faturamento/regras-comerciais/ligacao                 faturamento.regra.editar (ligação tarifada)
-//   GET  /api/faturamento/contas/:id/comercial?vinculo=             faturamento.conta.ler (prévia, aplicados, ligações)
+//   GET  /api/faturamento/contas/:id/comercial?vinculo=             faturamento.conta.ler (prévia, aplicados, ligações;
+//        o vínculo vem da carteira do cadastro; ?vinculo= só simula na leitura, a aplicação nunca o aceita)
 //   POST /api/faturamento/contas/:id/franquia-desconto              faturamento.item.lancar (aplica na conta)
 //   POST /api/faturamento/contas/:id/remocoes                       faturamento.item.lancar (lança a remoção)
 //   POST /api/faturamento/contas/:id/ligacoes/lancamento            faturamento.item.lancar (lança as pendentes)
@@ -151,7 +152,9 @@ export class RegrasComerciaisController {
   ) {
     const c = inteiro(id, 'id');
     return this.rodar(() =>
-      this.s().ler(ctxDe(req, ORIGEM), (l, est) => comercialDaContaPropria(l, est, c, vinculo ?? 'titular')),
+      this.s().ler(ctxDe(req, ORIGEM), (l, est) =>
+        comercialDaContaPropria(l, est, c, vinculo?.trim() || null),
+      ),
     );
   }
 
