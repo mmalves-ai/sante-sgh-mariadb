@@ -258,9 +258,9 @@ export class ServicoRegistro {
   }
 
   private resumoRascunho(r: RascunhoLido, prof: ProfissionalDoRegistro | null): RascunhoResumo {
-    // Só leitura: de outro profissional, ou começado no outro sistema (sem a marca de origem do novo; ficha, seção
-    // 5: terminar no novo o rascunho do outro sistema só depois do cenário controlado da Fase 4).
-    const deOutroSistema = !r.doNovo;
+    // Só leitura: de outro profissional. O rascunho importado (sem a marca de origem desta casa; ADR 0006, importação é
+    // continuidade) é um rascunho normal do autor: ele o vê, edita, finaliza ou descarta; outro profissional, não.
+    const importado = !r.doNovo;
     return {
       id: r.id,
       paciente: r.paciente,
@@ -272,8 +272,8 @@ export class ServicoRegistro {
       dataHoraClinica: iso(r.dataHoraClinica),
       atualizadoEm: iso(r.lancadoEm),
       versao: r.versao,
-      somenteLeitura: !prof || !prof.cbos.includes(r.cbo) || deOutroSistema,
-      deOutroSistema,
+      somenteLeitura: !prof || !prof.cbos.includes(r.cbo),
+      deOutroSistema: importado,
       corrige: r.corrige,
       respostas: r.respostas,
     };
@@ -353,15 +353,10 @@ export class ServicoRegistro {
       avisos.push(
         'Há regra de habilitar ou calcular que não foi convertida: o campo fica sempre habilitado.',
       );
-    const doOutroSistema = rascunhos.filter((r) => r.deOutroSistema).length;
-    const deOutro = rascunhos.filter((r) => r.somenteLeitura && !r.deOutroSistema).length;
+    const deOutro = rascunhos.filter((r) => r.somenteLeitura).length;
     if (deOutro > 0)
       avisos.push(
         `Há ${deOutro} rascunho(s) deste formulário para este paciente feitos por outro profissional (só leitura).`,
-      );
-    if (doOutroSistema > 0)
-      avisos.push(
-        `Há ${doOutroSistema} rascunho(s) deste formulário para este paciente começados no outro sistema: aqui eles aparecem só para leitura.`,
       );
 
     const pode = gravacao.pode && modeloReg.situacao === 'liberado' && prof !== null;
@@ -486,7 +481,7 @@ export class ServicoRegistro {
   }
 
   /**
-   * O rascunho de origem pode receber esta gravação? Aberto, criado pelo novo (o do outro sistema é só leitura),
+   * O rascunho de origem pode receber esta gravação? Aberto (o importado também: é rascunho do autor, ADR 0006),
    * de um CBO do profissional, do mesmo paciente, modelo e atendimento. Devolve o CBO DO RASCUNHO (o autor dele é
    * o autor do registro; o profissional com mais de um CBO não troca de CBO no meio). A receita confere de novo.
    */
@@ -509,8 +504,6 @@ export class ServicoRegistro {
       );
     if (!lido.aberto)
       recusar('rascunho-fechado', 'O rascunho já foi finalizado ou descartado em outro terminal ou sistema.');
-    if (!r.doNovo)
-      recusar('rascunho-de-outro-sistema', 'Rascunho começado no outro sistema: aqui ele é só para leitura.');
     if (!prof.cbos.includes(r.cbo))
       recusar('rascunho-de-outro', 'Rascunho de outro profissional: aqui ele é só para leitura.');
     if (
@@ -527,7 +520,7 @@ export class ServicoRegistro {
     return r.cbo;
   }
 
-  /** CBO para descartar o rascunho (o dele, se for do profissional e do novo). */
+  /** CBO para descartar o rascunho (o dele, se for do profissional; o importado também). */
   cboParaDescartar(c: ContextoRegistro, id: number, prof: ProfissionalDoRegistro): Promise<number> {
     return this.cboDoRascunho(c, id, prof, {});
   }

@@ -130,7 +130,6 @@ const gravando = ref(false);
 const salvoLocalEm = ref<string | null>(null);
 
 const somenteLeitura = computed(() => f.value?.rascunho?.resumo.somenteLeitura === true);
-const deOutroSistema = computed(() => f.value?.rascunho?.resumo.deOutroSistema === true);
 const corrige = computed(() => f.value?.rascunho?.resumo.corrige ?? idCorrigePedido.value);
 const podeGravar = computed(() => (f.value?.gravacao.pode ?? false) && !somenteLeitura.value);
 const chave = computed(() =>
@@ -458,7 +457,7 @@ const opcoesAtendimento = computed(() =>
       <SanteAlerta
         v-if="somenteLeitura"
         variante="info"
-        :texto="t(deOutroSistema ? 'pep.reg.registro.soLeituraOutroSistema' : 'pep.reg.registro.soLeitura')"
+        :texto="t('pep.reg.registro.soLeitura')"
       />
       <SanteAlerta v-if="restaurado" variante="info" :texto="t('pep.reg.registro.restaurado')" />
       <SanteAlerta v-for="(a, i) in f.avisos" :key="i" variante="aviso" :texto="a" />

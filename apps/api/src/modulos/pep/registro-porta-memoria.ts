@@ -328,7 +328,7 @@ interface RascunhoMemoria {
   justificativa: string | null;
   linhas: readonly LinhaGravacao[];
   fechado: 'arquivado' | 'excluido' | null;
-  /** Criado pelo novo (a marca de origem); o sintético "do outro sistema" não tem. */
+  /** Criado nesta casa (a marca de origem); o importado não tem, e continua rascunho do autor (ADR 0006). */
   readonly doNovo: boolean;
   readonly anterior: number | null;
   readonly corrige: number | null;
@@ -444,8 +444,8 @@ export class PortaRegistroMemoria implements PortaRegistro {
     };
   }
 
-  /** Teste: um rascunho aberto começado no OUTRO sistema (sem a marca de origem do novo), ou do novo. */
-  semearRascunhoDoOutroSistema(
+  /** Teste: um rascunho aberto importado (sem a marca de origem desta casa), ou desta casa. */
+  semearRascunhoImportado(
     hospital: string,
     r: { paciente: number; modelo: number; atendimento: number; cbo: number },
     doNovo = false,
@@ -734,13 +734,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
           colunas: ['rascunho'],
         },
       );
-    if (!r.doNovo)
-      throw new ErroOperacao(
-        409,
-        'rascunho-de-outro-sistema',
-        'Operação recusada',
-        'Rascunho começado no outro sistema.',
-      );
+    // O importado (sem a marca de origem) é rascunho do autor como qualquer outro (ADR 0006).
     if (r.cbo !== cbo)
       throw new ErroOperacao(
         409,

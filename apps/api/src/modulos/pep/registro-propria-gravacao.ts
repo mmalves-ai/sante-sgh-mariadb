@@ -1475,13 +1475,7 @@ async function rascunhoAberto(
       'O rascunho foi alterado depois que você o abriu.',
       { colunas: ['rascunho'] },
     );
-  if (r['origem'] !== 'sistema')
-    throw recusa(
-      409,
-      'rascunho-de-outro-sistema',
-      'Operação recusada',
-      'Rascunho começado no outro sistema.',
-    );
+  // O rascunho importado (origem 'migracao') é rascunho do autor como qualquer outro (ADR 0006): só o autor continua.
   if (num(r['autor_profissional_id']) !== cbo)
     throw recusa(409, 'rascunho-de-outro', 'Operação recusada', 'Rascunho de outro profissional.');
   if (num(r['paciente_id']) !== de.paciente || num(r['modelo_documento_clinico_id']) !== de.modelo)

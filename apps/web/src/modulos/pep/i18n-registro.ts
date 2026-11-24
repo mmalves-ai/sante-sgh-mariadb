@@ -67,8 +67,6 @@ export const mensagensRegistroClinico = {
     restaurado: 'A digitação guardada neste computador foi restaurada (mais nova que o rascunho).',
     automatico: 'O rascunho é salvo automaticamente a cada minuto enquanto você digita.',
     soLeitura: 'Rascunho de outro profissional: aqui ele é só para leitura.',
-    soLeituraOutroSistema:
-      'Rascunho começado no outro sistema: aqui ele aparece só para leitura e não é alterado.',
     correcao: 'Correção do registro {n} (suspenso): o registro novo fica ligado a ele.',
     respostaParecer: 'Este registro responde ao parecer da fila: ao finalizar, o parecer passa a respondido.',
     pedidoParecer: 'Este registro é um pedido de parecer: ao finalizar, entra na fila da categoria pedida.',
@@ -219,7 +217,6 @@ export const mensagensRegistroClinico = {
       'O rascunho foi alterado em outro terminal ou sistema depois que você o abriu. Abra de novo para continuar.',
     'rascunho-fechado': 'O rascunho já foi finalizado ou descartado em outro terminal ou sistema.',
     'rascunho-de-outro': 'Rascunho de outro profissional: aqui ele é só para leitura.',
-    'rascunho-de-outro-sistema': 'Rascunho começado no outro sistema: aqui ele é só para leitura.',
     'rascunho-de-outro-atendimento':
       'O rascunho é de outro atendimento deste paciente: continue-o no atendimento dele.',
     'rascunho-de-outro-formulario': 'O rascunho é de outro paciente ou formulário.',

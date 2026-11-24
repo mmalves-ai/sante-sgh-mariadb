@@ -3,7 +3,7 @@
 //     vínculo, 403 `sem-vinculo` no formulário, no histórico, no motivo, no rascunho, na finalização e na suspensão
 //     (a tentativa na trilha; a quebra de vidro oferecida a quem pode); com vínculo, abre; a primeira leitura vai à
 //     trilha dupla como a Consulta do RES;
-//   - rascunho começado no outro sistema: só leitura, e salvar ou descartar sobre ele é recusado;
+//   - rascunho importado (ADR 0006): do autor, ele vê, salva, finaliza e descarta; de outro profissional, só leitura;
 //   - prova (regra 11): "confere", "alterado" pelo outro sistema depois da gravação e "sem prova";
 //   - correção ligada ao original suspenso; suspensão de registro de outro paciente: 404;
 //   - sessão "como": a marca do suporte técnico no registro e na suspensão;
@@ -198,19 +198,66 @@ describe('vínculo assistencial nos registros clínicos (o mesmo do prontuário 
   });
 });
 
-describe('rascunho começado no outro sistema', () => {
-  it('aparece só para leitura, com o aviso; salvar e descartar sobre ele são recusados', async () => {
+describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
+  it('é rascunho normal do autor: ele o vê sem trava, salva por cima e finaliza; sem aviso de só leitura', async () => {
     const m = montar();
     const prof = (await m.porta.profissional(C, 'SINT.MEDICO'))!;
-    const id = m.porta.semearRascunhoDoOutroSistema(C.hospital, {
+    const id = m.porta.semearRascunhoImportado(C.hospital, {
       paciente: 1003,
       modelo: 61,
       atendimento: 10031,
       cbo: prof.cbo,
     });
     const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
+    expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: false, deOutroSistema: true });
+    expect(f.rascunhos.find((r) => r.id === id)).toMatchObject({ somenteLeitura: false });
+    expect(f.avisos.join(' ')).not.toMatch(/só leitura/);
+    const salvo = await m.ctrl.salvarRascunho(
+      '1003',
+      {
+        modelo: 61,
+        atendimento: 10031,
+        dataHoraClinica: agora(),
+        rascunho: { id, versao: f.rascunho!.resumo.versao },
+        respostas: [texto(6102, 'Exame SINTETICO')],
+      },
+      m.req(),
+    );
+    // A nova versão é desta casa; a importada fica arquivada (nunca apagada) e sai da lista.
+    const f2 = await m.ctrl.formulario('1003', '61', { rascunho: String(salvo.rascunho) }, m.req());
+    expect(f2.rascunho?.resumo).toMatchObject({ somenteLeitura: false, deOutroSistema: false });
+    expect(f2.rascunhos.map((r) => r.id)).not.toContain(id);
+    const registro = await finalizarEvam(m, { rascunho: { id: salvo.rascunho, versao: salvo.versao } });
+    expect(registro).toBeGreaterThan(0);
+    expect((await m.ctrl.formulario('1003', '61', {}, m.req())).rascunhos).toEqual([]);
+  });
+
+  it('o autor descarta o importado como qualquer rascunho', async () => {
+    const m = montar();
+    const prof = (await m.porta.profissional(C, 'SINT.MEDICO'))!;
+    const id = m.porta.semearRascunhoImportado(C.hospital, {
+      paciente: 1003,
+      modelo: 61,
+      atendimento: 10031,
+      cbo: prof.cbo,
+    });
+    const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
+    await m.ctrl.descartar(String(id), { versao: f.rascunho!.resumo.versao }, m.req());
+    expect((await m.ctrl.formulario('1003', '61', {}, m.req())).rascunhos.map((r) => r.id)).not.toContain(id);
+  });
+
+  it('importado de outro profissional: só leitura, e salvar ou descartar sobre ele é recusado', async () => {
+    const m = montar();
+    const prof = (await m.porta.profissional(C, 'SINT.MEDICO'))!;
+    const id = m.porta.semearRascunhoImportado(C.hospital, {
+      paciente: 1003,
+      modelo: 61,
+      atendimento: 10031,
+      cbo: prof.cbo + 999,
+    });
+    const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
     expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: true, deOutroSistema: true });
-    expect(f.avisos.join(' ')).toMatch(/começados no outro sistema/);
+    expect(f.avisos.join(' ')).toMatch(/outro profissional/);
     const versao = f.rascunho!.resumo.versao;
     const salvar = await erro(
       m.ctrl.salvarRascunho(
@@ -225,9 +272,9 @@ describe('rascunho começado no outro sistema', () => {
         m.req(),
       ),
     );
-    expect(salvar?.extras).toMatchObject({ codigo: 'rascunho-de-outro-sistema' });
+    expect(salvar?.extras).toMatchObject({ codigo: 'rascunho-de-outro' });
     expect(await erro(m.ctrl.descartar(String(id), { versao }, m.req()))).toMatchObject({
-      extras: { codigo: 'rascunho-de-outro-sistema' },
+      extras: { codigo: 'rascunho-de-outro' },
     });
   });
 });
@@ -310,7 +357,7 @@ describe('profissional com dois CBO', () => {
     });
     const s = await servico.montarSuspensao(C, 1003, registro, 'Justificativa SINTETICA', prof);
     expect(s.cbo).toBe(segundo);
-    const rascunho = porta.semearRascunhoDoOutroSistema(
+    const rascunho = porta.semearRascunhoImportado(
       C.hospital,
       { paciente: 1003, modelo: 61, atendimento: 10031, cbo: segundo },
       true,
