@@ -21,7 +21,6 @@ export const mensagensMovimentosConta = {
   nenhumProfissional: 'Nenhum profissional encontrado.',
   grau: 'Grau de participação',
   grauDaFuncao: 'O da função',
-  percentual: 'Percentual do honorário',
   percentualDaFuncao: 'O da função',
   funcao: 'Função',
   percentual: '% do honorário',

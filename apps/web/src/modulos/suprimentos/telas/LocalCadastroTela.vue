@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Cadastro dos locais de estoque (F3.6, 05-SUP linha 3): `/suprimentos/locais/cadastro`. Lista à esquerda, ficha
 // ao lado: tipo, setor, centro de custo, quem abastece, o que atende, setores atendidos e os grupos que o local
 // movimenta. Inativar pede motivo e é recusado com saldo ou requisição aberta (a recusa aparece no campo).
@@ -109,6 +110,16 @@ function incluirSetor() {
     };
   novoSetor.value = '';
 }
+/** Troca o tipo de atendimento de um setor já incluído. */
+function mudarTipoSetor(i: number, tipo: 'requisicao' | 'dispensacao' | 'ambos') {
+  f.value = { ...f.value, setores: f.value.setores.map((s, k) => (k === i ? { ...s, tipo } : s)) };
+}
+function removerSetor(i: number) {
+  f.value = { ...f.value, setores: f.value.setores.filter((_, k) => k !== i) };
+}
+function removerGrupo(i: number) {
+  f.value = { ...f.value, classificacoes: f.value.classificacoes.filter((_, k) => k !== i) };
+}
 function incluirGrupo() {
   const g = Number(novoGrupo.value);
   if (g && !f.value.classificacoes.some((x) => x.grupo === g))
@@ -169,59 +180,72 @@ function incluirGrupo() {
           >{{ t('cadastroEstoque.nome') }}
           <input v-model="f.nome" maxlength="150" required data-testid="local-nome"
         /></label>
-        <label class="campo"
-          >{{ t('cadastroEstoque.tipo') }}
-          <select v-model="f.tipo" data-testid="local-tipo">
-            <option v-for="x in TIPOS_LOCAL_ESTOQUE" :key="x" :value="x">
-              {{ t(`cadastroEstoque.local.tipos.${x}`) }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.local.centroCusto') }}
-          <select v-model="f.centroCusto" data-testid="local-centro">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.centrosCusto ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} · {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.local.setor') }}
-          <select v-model="f.setor">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.setores ?? []" :key="o.id" :value="o.id">
-              {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.local.localOrigem') }}
-          <select v-model="f.localOrigem">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.locais ?? []" :key="o.id" :value="o.id">
-              {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.local.localDevolucao') }}
-          <select v-model="f.localDevolucao">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.locais ?? []" :key="o.id" :value="o.id">
-              {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.local.tipoReposicao') }}
-          <select v-model="f.tipoReposicao">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="x in ['manual', 'ponto_pedido', 'cota'] as const" :key="x" :value="x">
-              {{ t(`cadastroEstoque.local.reposicoes.${x}`) }}
-            </option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="f.tipo"
+          :rotulo="t('cadastroEstoque.tipo')"
+          :opcoes="[
+            ...TIPOS_LOCAL_ESTOQUE.map((x) => ({ valor: x, rotulo: t(`cadastroEstoque.local.tipos.${x}`) })),
+          ]"
+          class="campo"
+          data-testid="local-tipo"
+        />
+        <SanteSelecao
+          :model-value="f.centroCusto ?? null"
+          @update:model-value="(v) => (f = { ...f, centroCusto: v })"
+          :rotulo="t('cadastroEstoque.local.centroCusto')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.centrosCusto ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          class="campo"
+          data-testid="local-centro"
+        />
+        <SanteSelecao
+          :model-value="f.setor ?? null"
+          @update:model-value="(v) => (f = { ...f, setor: v })"
+          :rotulo="t('cadastroEstoque.local.setor')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.setores ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+        />
+        <SanteSelecao
+          :model-value="f.localOrigem ?? null"
+          @update:model-value="(v) => (f = { ...f, localOrigem: v })"
+          :rotulo="t('cadastroEstoque.local.localOrigem')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.locais ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+        />
+        <SanteSelecao
+          :model-value="f.localDevolucao ?? null"
+          @update:model-value="(v) => (f = { ...f, localDevolucao: v })"
+          :rotulo="t('cadastroEstoque.local.localDevolucao')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.locais ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+        />
+        <SanteSelecao
+          :model-value="f.tipoReposicao ?? null"
+          @update:model-value="(v) => (f = { ...f, tipoReposicao: v })"
+          :rotulo="t('cadastroEstoque.local.tipoReposicao')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(['manual', 'ponto_pedido', 'cota'] as const).map((x) => ({
+              valor: x,
+              rotulo: t(`cadastroEstoque.local.reposicoes.${x}`),
+            })),
+          ]"
+          class="campo"
+        />
         <label class="campo"
           >{{ t('cadastroEstoque.local.horasAntecedencia') }}
           <input v-model.number="f.horasAntecedencia" type="number" min="0" max="720"
@@ -236,44 +260,55 @@ function incluirGrupo() {
           <ul>
             <li v-for="(s, i) in f.setores" :key="s.setor">
               {{ nomeDe(apoio.data.value?.setores, s.setor) }}
-              <select v-model="s.tipo" :aria-label="t('cadastroEstoque.tipo')">
-                <option v-for="x in ['requisicao', 'dispensacao', 'ambos'] as const" :key="x" :value="x">
-                  {{ t(`cadastroEstoque.local.atendimento.${x}`) }}
-                </option>
-              </select>
-              <button type="button" class="link" @click="f.setores.splice(i, 1)">
+              <SanteSelecao
+                :model-value="s.tipo"
+                @update:model-value="(v) => mudarTipoSetor(i, v)"
+                :rotulo="t('cadastroEstoque.tipo')"
+                ocultar-rotulo
+                :opcoes="[
+                  ...(['requisicao', 'dispensacao', 'ambos'] as const).map((x) => ({
+                    valor: x,
+                    rotulo: t(`cadastroEstoque.local.atendimento.${x}`),
+                  })),
+                ]"
+              />
+              <button type="button" class="link" @click="removerSetor(i)">
                 {{ t('cadastroEstoque.remover') }}
               </button>
             </li>
           </ul>
-          <select v-model="novoSetor" :aria-label="t('cadastroEstoque.local.setores')" @change="incluirSetor">
-            <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.setores ?? []" :key="o.id" :value="String(o.id)">
-              {{ o.nome }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="novoSetor"
+            :rotulo="t('cadastroEstoque.local.setores')"
+            ocultar-rotulo
+            :opcoes="[
+              { valor: '', rotulo: t('cadastroEstoque.escolha') },
+              ...(apoio.data.value?.setores ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+            ]"
+            @update:model-value="incluirSetor"
+          />
         </fieldset>
         <fieldset>
           <legend>{{ t('cadastroEstoque.local.classificacoes') }}</legend>
           <ul>
             <li v-for="(c, i) in f.classificacoes" :key="`${c.grupo}`">
               {{ nomeDe(apoio.data.value?.grupos, c.grupo) }}
-              <button type="button" class="link" @click="f.classificacoes.splice(i, 1)">
+              <button type="button" class="link" @click="removerGrupo(i)">
                 {{ t('cadastroEstoque.remover') }}
               </button>
             </li>
           </ul>
-          <select
+          <SanteSelecao
             v-model="novoGrupo"
-            :aria-label="t('cadastroEstoque.local.classificacoes')"
+            :rotulo="t('cadastroEstoque.local.classificacoes')"
+            ocultar-rotulo
+            :opcoes="[
+              { valor: '', rotulo: t('cadastroEstoque.escolha') },
+              ...(apoio.data.value?.grupos ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+            ]"
             data-testid="local-grupo"
-            @change="incluirGrupo"
-          >
-            <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.grupos ?? []" :key="o.id" :value="String(o.id)">
-              {{ o.nome }}
-            </option>
-          </select>
+            @update:model-value="incluirGrupo"
+          />
         </fieldset>
         <ErroSuprimentos v-if="erro" :erro="erro" />
         <p v-if="ok" role="status" data-testid="local-ok">{{ t('cadastroEstoque.salvo') }}</p>

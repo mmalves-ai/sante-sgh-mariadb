@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Cadastro do item (F3.6, 05-SUP linha 1): `/suprimentos/itens/cadastro/:id?`. Material e medicamento numa tela só,
 // gravados de uma vez: identificação, unidades e fatores (com a conversão à vista), controles, princípios ativos,
 // vias, códigos de barras, apresentações com o registro sanitário (o vencido aparece vencido) e estabilidade.
@@ -192,12 +193,13 @@ function escolherFab(o: Opcao) {
   achadosFab.value = [];
   termoFab.value = '';
 }
-function incluirVia(ev: Event) {
-  const alvo = ev.target as HTMLSelectElement;
-  const v = Number(alvo.value);
+/** A via escolhida no combo entra na lista e o combo volta ao "Escolha". */
+const novaVia = ref('');
+function incluirVia() {
+  const v = Number(novaVia.value);
   if (v && !f.value.vias.some((x) => x.via === v))
     f.value.vias = [...f.value.vias, { via: v, padrao: !f.value.vias.length }];
-  alvo.value = '';
+  novaVia.value = '';
 }
 const nomeVia = (v: number) => apoio.data.value?.vias.find((x) => x.id === v)?.nome ?? String(v);
 const remover = <T,>(lista: readonly T[], i: number): T[] => lista.filter((_, k) => k !== i);
@@ -237,51 +239,67 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
         <label class="campo"
           >{{ t('cadastroEstoque.item.nomeResumido') }} <input v-model="f.nomeResumido" maxlength="60"
         /></label>
-        <label class="campo"
-          >{{ t('cadastroEstoque.tipo') }}
-          <select v-model="f.tipo" data-testid="item-tipo">
-            <option v-for="x in TIPOS_ITEM_ESTOQUE" :key="x" :value="x">
-              {{ t(`cadastroEstoque.item.tipos.${x}`) }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.grupo') }}
-          <select v-model="f.grupo" data-testid="item-grupo" @change="f.subgrupo = null">
-            <option :value="0">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.grupos ?? []" :key="o.id" :value="o.id">
-              {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.subgrupo') }}
-          <select v-model="f.subgrupo">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in subgrupos" :key="o.id" :value="o.id">{{ o.nome }}</option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="f.tipo"
+          :rotulo="t('cadastroEstoque.tipo')"
+          :opcoes="[
+            ...TIPOS_ITEM_ESTOQUE.map((x) => ({ valor: x, rotulo: t(`cadastroEstoque.item.tipos.${x}`) })),
+          ]"
+          class="campo"
+          data-testid="item-tipo"
+        />
+        <SanteSelecao
+          v-model="f.grupo"
+          :rotulo="t('cadastroEstoque.item.grupo')"
+          :opcoes="[
+            { valor: 0, rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.grupos ?? []).map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+          data-testid="item-grupo"
+          @update:model-value="f.subgrupo = null"
+        />
+        <SanteSelecao
+          :model-value="f.subgrupo ?? null"
+          @update:model-value="(v) => (f.subgrupo = v)"
+          :rotulo="t('cadastroEstoque.item.subgrupo')"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...subgrupos.map((o) => ({ valor: o.id, rotulo: o.nome })),
+          ]"
+          class="campo"
+        />
       </fieldset>
       <fieldset>
         <legend>{{ t('cadastroEstoque.item.unidades') }}</legend>
-        <label class="campo"
-          >{{ t('cadastroEstoque.item.unidadeEstoque') }}
-          <select v-model="f.unidadeEstoque" data-testid="item-unidadeEstoque">
-            <option :value="0">{{ t('cadastroEstoque.escolha') }}</option>
-            <option v-for="o in apoio.data.value?.unidades ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} · {{ o.nome }}
-            </option>
-          </select></label
-        >
-        <label v-for="k in UNIDADES" :key="k" class="campo"
-          >{{ t(`cadastroEstoque.item.${k}`) }}
-          <select v-model="f[k]">
-            <option :value="null">{{ t('cadastroEstoque.nenhum') }}</option>
-            <option v-for="o in apoio.data.value?.unidades ?? []" :key="o.id" :value="o.id">
-              {{ o.codigo }} · {{ o.nome }}
-            </option>
-          </select></label
-        >
+        <SanteSelecao
+          v-model="f.unidadeEstoque"
+          :rotulo="t('cadastroEstoque.item.unidadeEstoque')"
+          :opcoes="[
+            { valor: 0, rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.unidades ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          class="campo"
+          data-testid="item-unidadeEstoque"
+        />
+        <SanteSelecao
+          v-for="k in UNIDADES"
+          :key="k"
+          :model-value="f[k] ?? null"
+          @update:model-value="(v) => (f[k] = v)"
+          :rotulo="t(`cadastroEstoque.item.${k}`)"
+          :opcoes="[
+            { valor: null, rotulo: t('cadastroEstoque.nenhum') },
+            ...(apoio.data.value?.unidades ?? []).map((o) => ({
+              valor: o.id,
+              rotulo: `${o.codigo} · ${o.nome}`,
+            })),
+          ]"
+          class="campo"
+        />
         <label class="campo"
           >{{ t('cadastroEstoque.item.fatorCompra') }}
           <input v-model.number="f.fatorCompraEstoque" type="number" min="0" step="any"
@@ -395,12 +413,16 @@ function mudarEstabilidade(i: number, campo: 'horas' | 'condicaoArmazenamento' |
             </button>
           </li>
         </ul>
-        <select :aria-label="t('cadastroEstoque.item.vias')" @change="incluirVia">
-          <option value="">{{ t('cadastroEstoque.escolha') }}</option>
-          <option v-for="o in apoio.data.value?.vias ?? []" :key="o.id" :value="String(o.id)">
-            {{ o.nome }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="novaVia"
+          :rotulo="t('cadastroEstoque.item.vias')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: '', rotulo: t('cadastroEstoque.escolha') },
+            ...(apoio.data.value?.vias ?? []).map((o) => ({ valor: String(o.id), rotulo: o.nome })),
+          ]"
+          @update:model-value="incluirVia"
+        />
         <small v-for="m in doCampo('vias')" :key="m" class="erro">{{ m }}</small>
       </fieldset>
       <fieldset>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46): `/repasse/favorecidos`. Visão por médico: a
 // busca escolhe o médico e a tela mostra, de uma vez, o histórico dos favorecidos (vigentes primeiro), a soma das
 // partes vigentes e o formulário de inclusão no mesmo lugar (tipo, favorecido pela busca, conta do credor do tipo,
@@ -295,21 +296,16 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
         <legend>{{ t('repasse.favorecidos.incluir') }}</legend>
         <div class="filtros acoes">
           <span class="campo">
-            <label for="fv-tipo">{{ t('repasse.favorecidos.tipo') }}</label>
-            <select id="fv-tipo" v-model="form.tipo" data-testid="fv-tipo">
-              <option
-                v-for="(r, k) in {
-                  proprio_profissional: 1,
-                  pessoa_juridica: 1,
-                  cooperativa: 1,
-                  terceiro_profissional: 1,
-                }"
-                :key="k"
-                :value="k"
-              >
-                {{ t(`repasse.favorecidos.tipos.${k}`) }}
-              </option>
-            </select>
+            <SanteSelecao
+              v-model="form.tipo"
+              :rotulo="t('repasse.favorecidos.tipo')"
+              :opcoes="[
+                ...(
+                  ['proprio_profissional', 'pessoa_juridica', 'cooperativa', 'terceiro_profissional'] as const
+                ).map((x) => ({ valor: x, rotulo: t(`repasse.favorecidos.tipos.${x}`) })),
+              ]"
+              data-testid="fv-tipo"
+            />
           </span>
           <template v-if="form.tipo !== 'proprio_profissional'">
             <span class="campo">
@@ -325,29 +321,37 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
               {{ t('repasse.buscar') }}
             </button>
             <span class="campo">
-              <label for="fv-alvo">{{ t('repasse.favorecidos.alvo') }}</label>
-              <select id="fv-alvo" v-model.number="form.alvo" data-testid="fv-alvo">
-                <option :value="0">—</option>
-                <option v-for="a in alvos" :key="a.id" :value="a.id">
-                  {{ a.nome }}{{ a.documento ? ` · ${a.documento}` : '' }}
-                </option>
-              </select>
+              <SanteSelecao
+                v-model="form.alvo"
+                :rotulo="t('repasse.favorecidos.alvo')"
+                :opcoes="[
+                  { valor: 0, rotulo: '—' },
+                  ...alvos.map((a) => ({
+                    valor: a.id,
+                    rotulo: `${a.nome}${a.documento ? ` · ${a.documento}` : ''}`,
+                  })),
+                ]"
+                data-testid="fv-alvo"
+              />
             </span>
           </template>
           <span class="campo">
-            <label for="fv-conta">{{ t('repasse.favorecidos.conta') }}</label>
-            <select id="fv-conta" v-model="form.conta" data-testid="fv-conta">
-              <option value="">{{ t('repasse.favorecidos.semConta') }}</option>
-              <option v-for="c in contas.data.value ?? []" :key="c.id" :value="String(c.id)">
-                {{
-                  t('repasse.favorecidos.contaRotulo', {
+            <SanteSelecao
+              v-model="form.conta"
+              :rotulo="t('repasse.favorecidos.conta')"
+              :opcoes="[
+                { valor: '', rotulo: t('repasse.favorecidos.semConta') },
+                ...(contas.data.value ?? []).map((c) => ({
+                  valor: String(c.id),
+                  rotulo: t('repasse.favorecidos.contaRotulo', {
                     rotulo: c.rotulo,
                     titular: c.titular,
                     final: c.documentoFinal,
-                  })
-                }}
-              </option>
-            </select>
+                  }),
+                })),
+              ]"
+              data-testid="fv-conta"
+            />
           </span>
           <span class="campo">
             <label for="fv-parte">{{ t('repasse.favorecidos.parte') }}</label>
@@ -374,11 +378,15 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
             {{ t('repasse.buscar') }}
           </button>
           <span class="campo">
-            <label for="fv-fonte">{{ t('repasse.favorecidos.fonte') }}</label>
-            <select id="fv-fonte" v-model.number="form.fonte" data-testid="fv-fonte">
-              <option :value="0">{{ t('repasse.favorecidos.todasFontes') }}</option>
-              <option v-for="a in fontes" :key="a.id" :value="a.id">{{ a.nome }}</option>
-            </select>
+            <SanteSelecao
+              v-model="form.fonte"
+              :rotulo="t('repasse.favorecidos.fonte')"
+              :opcoes="[
+                { valor: 0, rotulo: t('repasse.favorecidos.todasFontes') },
+                ...fontes.map((a) => ({ valor: a.id, rotulo: a.nome })),
+              ]"
+              data-testid="fv-fonte"
+            />
           </span>
           <span class="campo">
             <label for="fv-inicio">{{ t('repasse.favorecidos.inicio') }}</label>
@@ -471,11 +479,15 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
           <input id="pt-nome" v-model="novo.nome" maxlength="150" data-testid="pt-nome" />
         </span>
         <span class="campo">
-          <label for="pt-pessoa">{{ t('repasse.favorecidos.tipoPessoa') }}</label>
-          <select id="pt-pessoa" v-model="novo.tipoPessoa" data-testid="pt-pessoa">
-            <option value="juridica">{{ t('repasse.favorecidos.juridica') }}</option>
-            <option value="fisica">{{ t('repasse.favorecidos.fisica') }}</option>
-          </select>
+          <SanteSelecao
+            v-model="novo.tipoPessoa"
+            :rotulo="t('repasse.favorecidos.tipoPessoa')"
+            :opcoes="[
+              { valor: 'juridica' as const, rotulo: t('repasse.favorecidos.juridica') },
+              { valor: 'fisica' as const, rotulo: t('repasse.favorecidos.fisica') },
+            ]"
+            data-testid="pt-pessoa"
+          />
         </span>
         <span class="campo">
           <label for="pt-doc">{{ t('repasse.favorecidos.documento') }}</label>
@@ -513,12 +525,17 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
           />
         </span>
         <span class="campo">
-          <label for="pt-base">{{ t('repasse.favorecidos.base') }}</label>
-          <select id="pt-base" v-model="novo.base" data-testid="pt-base">
-            <option value="cobrado">{{ t('repasse.favorecidos.bases.cobrado') }}</option>
-            <option value="recebido">{{ t('repasse.favorecidos.bases.recebido') }}</option>
-            <option value="misto">{{ t('repasse.favorecidos.bases.misto') }}</option>
-          </select>
+          <SanteSelecao
+            v-model="novo.base"
+            :rotulo="t('repasse.favorecidos.base')"
+            :opcoes="[
+              ...(['cobrado', 'recebido', 'misto'] as const).map((x) => ({
+                valor: x,
+                rotulo: t(`repasse.favorecidos.bases.${x}`),
+              })),
+            ]"
+            data-testid="pt-base"
+          />
         </span>
         <button type="button" :disabled="!novoValido" data-testid="pt-incluir" @click="incluirPrestador">
           {{ t('repasse.favorecidos.incluirPrestador') }}

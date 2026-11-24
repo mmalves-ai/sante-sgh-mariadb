@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Ajustes de valor da conta (F3.7, 06-FAT linhas 17, 18 e 20): `/faturamento/contas/:id/ajustes`. Tudo do valor da
 // conta do paciente numa tela só:
 // - Horário especial: cada item com a hora no relógio do hospital, a faixa que vale (noturno, fim de semana, feriado)
@@ -230,27 +231,32 @@ const justDesc = ref('');
 
       <h2>{{ t('ajustes') }}</h2>
       <form v-if="dados.editavel" class="formulario" data-testid="aj-form" @submit.prevent="pedir">
-        <label>
-          {{ t('tipo') }}
-          <select v-model="form.tipo" data-testid="aj-tipo" @change="form.motivoId = 0">
-            <option value="desconto">{{ t('desconto') }}</option>
-            <option value="acrescimo">{{ t('acrescimo') }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('motivo') }}
-          <select v-model.number="form.motivoId" data-testid="aj-motivo" @change="escolherMotivo">
-            <option :value="0"></option>
-            <option v-for="m in motivos" :key="m.id" :value="m.id">{{ m.descricao }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('forma') }}
-          <select v-model="form.forma" data-testid="aj-forma">
-            <option value="valor">{{ t('valor') }}</option>
-            <option value="percentual">{{ t('percentual') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="form.tipo"
+          :rotulo="t('tipo')"
+          :opcoes="[
+            { valor: 'desconto' as const, rotulo: t('desconto') },
+            { valor: 'acrescimo' as const, rotulo: t('acrescimo') },
+          ]"
+          data-testid="aj-tipo"
+          @update:model-value="form.motivoId = 0"
+        />
+        <SanteSelecao
+          v-model="form.motivoId"
+          :rotulo="t('motivo')"
+          :opcoes="[{ valor: 0, rotulo: '' }, ...motivos.map((m) => ({ valor: m.id, rotulo: m.descricao }))]"
+          data-testid="aj-motivo"
+          @update:model-value="escolherMotivo"
+        />
+        <SanteSelecao
+          v-model="form.forma"
+          :rotulo="t('forma')"
+          :opcoes="[
+            { valor: 'valor' as const, rotulo: t('valor') },
+            { valor: 'percentual' as const, rotulo: t('percentual') },
+          ]"
+          data-testid="aj-forma"
+        />
         <label v-if="form.forma === 'valor'">
           {{ t('valor') }}
           <input v-model.number="form.valor" type="number" min="0" step="0.01" data-testid="aj-valor" />
@@ -388,12 +394,16 @@ const justDesc = ref('');
               {{ t('descaracterizar') }}
             </button>
             <span v-else>
-              <select v-model.number="motivoDesc" data-testid="aj-motivo-desc">
-                <option :value="0"></option>
-                <option v-for="m in pac.data.value.motivos" :key="m.id" :value="m.id">
-                  {{ m.descricao }}
-                </option>
-              </select>
+              <SanteSelecao
+                v-model="motivoDesc"
+                :rotulo="t('motivo')"
+                ocultar-rotulo
+                :opcoes="[
+                  { valor: 0, rotulo: '' },
+                  ...pac.data.value.motivos.map((m) => ({ valor: m.id, rotulo: m.descricao })),
+                ]"
+                data-testid="aj-motivo-desc"
+              />
               <input
                 v-model="justDesc"
                 maxlength="1000"
@@ -418,12 +428,19 @@ const justDesc = ref('');
         class="formulario"
         @submit.prevent="acao(() => aplicarPacote(conta, pacoteId, chave))"
       >
-        <select v-model.number="pacoteId" data-testid="aj-pacote">
-          <option :value="0"></option>
-          <option v-for="c in pac.data.value.candidatos" :key="c.id" :value="c.id">
-            {{ c.codigo }} - {{ c.descricao }}
-          </option>
-        </select>
+        <SanteSelecao
+          v-model="pacoteId"
+          :rotulo="t('aplicarPacote')"
+          ocultar-rotulo
+          :opcoes="[
+            { valor: 0, rotulo: '' },
+            ...pac.data.value.candidatos.map((c) => ({
+              valor: c.id,
+              rotulo: `${c.codigo} - ${c.descricao}`,
+            })),
+          ]"
+          data-testid="aj-pacote"
+        />
         <button type="submit" :disabled="gravando || !pacoteId" data-testid="aj-aplicar-pacote">
           {{ t('aplicarPacote') }}
         </button>

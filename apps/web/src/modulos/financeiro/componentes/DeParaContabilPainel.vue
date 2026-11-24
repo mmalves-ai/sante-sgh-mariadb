@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // F3.8, 07-FIN linha 100: o de-para contábil mantido aqui, por evento. Uma grade evento × lado (débito e crédito) com a
 // conta do escritório contábil, gravada ao sair do campo (validação na hora); a exceção por natureza entra na mesma
 // linha; o que falta mapear no período aparece em cima, para corrigir antes de exportar. O centro de custo ganha o
@@ -145,7 +146,7 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
   const v = valor.trim();
   if (v === (c.externo ?? '')) return;
   if (v) return salvar({ tipo: 'centro', centro: c.id, codigo: v, ativo: true });
-  if (c.externo) return salvar({ tipo: 'centro', centro: c.id, codigo: c.externo, ativo: false });
+  return c.externo ? salvar({ tipo: 'centro', centro: c.id, codigo: c.externo, ativo: false }) : undefined;
 }
 </script>
 
@@ -183,24 +184,31 @@ function centroAlterado(c: { id: number; externo: string | null }, valor: string
           <td>
             {{ l.nomeNatureza }}
             <span v-if="l.natureza === null && podeEditar">
-              <select
-                v-model="novaNatureza[l.evento]"
-                :aria-label="t('adicionar')"
+              <SanteSelecao
+                :model-value="novaNatureza[l.evento] ?? null"
+                @update:model-value="(v) => (novaNatureza[l.evento] = v)"
+                :rotulo="t('adicionar')"
+                ocultar-rotulo
+                :opcoes="[
+                  { valor: null, rotulo: t('todas') },
+                  ...(dados.data.value?.naturezas ?? []).map((n) => ({
+                    valor: n.id,
+                    rotulo: `${n.codigo} ${n.descricao}`,
+                  })),
+                ]"
                 :data-testid="`dp-nat-${l.evento}`"
-              >
-                <option :value="null">{{ t('todas') }}</option>
-                <option v-for="n in dados.data.value?.naturezas" :key="n.id" :value="n.id">
-                  {{ n.codigo }} {{ n.descricao }}
-                </option>
-              </select>
-              <select
-                v-model="novoLado[l.evento]"
-                :aria-label="t('ladoExcecao')"
+              />
+              <SanteSelecao
+                :model-value="novoLado[l.evento] ?? 'debito'"
+                @update:model-value="(v) => (novoLado[l.evento] = v)"
+                :rotulo="t('ladoExcecao')"
+                ocultar-rotulo
+                :opcoes="[
+                  { valor: 'debito' as const, rotulo: t('lados.debito') },
+                  { valor: 'credito' as const, rotulo: t('lados.credito') },
+                ]"
                 :data-testid="`dp-nat-lado-${l.evento}`"
-              >
-                <option value="debito">{{ t('lados.debito') }}</option>
-                <option value="credito">{{ t('lados.credito') }}</option>
-              </select>
+              />
               <input
                 v-model="novaConta[l.evento]"
                 maxlength="50"

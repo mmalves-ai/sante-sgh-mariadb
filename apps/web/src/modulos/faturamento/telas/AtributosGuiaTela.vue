@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Campo adicional da operadora na guia (F3.7, 06-FAT linha 10). Duas rotas, um componente:
 // - `/faturamento/fontes/:fonte/atributos-guia` (modo "fonte"): o faturamento cadastra os campos que a operadora exige
 //   (texto, número, data, sim ou não, lista com opções e lista que depende de outra, como a fase dentro do tratamento),
@@ -242,24 +243,30 @@ const TIPOS_GUIA = [
         <form v-else class="formulario" data-testid="ag-guia" @submit.prevent="gravarGuia">
           <label v-for="c in qGuia.data.value.campos" :key="c.id">
             {{ c.rotulo }}<span v-if="c.obrigatorio" aria-hidden="true"> *</span>
-            <select
+            <SanteSelecao
               v-if="c.tipoDado === 'opcao' && resp[c.id]"
               v-model="resp[c.id]!.opcaoId"
-              :disabled="!qGuia.data.value.editavel"
+              :rotulo="c.rotulo"
+              ocultar-rotulo
+              :opcoes="[
+                { valor: null, rotulo: t('escolha') },
+                ...opcoesDe(c).map((o) => ({ valor: o.id, rotulo: o.descricao })),
+              ]"
+              :desabilitado="!qGuia.data.value.editavel"
               :data-testid="`ag-campo-${c.codigo}`"
-            >
-              <option :value="null">{{ t('escolha') }}</option>
-              <option v-for="o in opcoesDe(c)" :key="o.id" :value="o.id">{{ o.descricao }}</option>
-            </select>
-            <select
+            />
+            <SanteSelecao
               v-else-if="c.tipoDado === 'booleano' && resp[c.id]"
               v-model="resp[c.id]!.texto"
-              :disabled="!qGuia.data.value.editavel"
-            >
-              <option value="">{{ t('escolha') }}</option>
-              <option value="sim">{{ t('sim') }}</option>
-              <option value="nao">{{ t('nao') }}</option>
-            </select>
+              :rotulo="c.rotulo"
+              ocultar-rotulo
+              :opcoes="[
+                { valor: '', rotulo: t('escolha') },
+                { valor: 'sim', rotulo: t('sim') },
+                { valor: 'nao', rotulo: t('nao') },
+              ]"
+              :desabilitado="!qGuia.data.value.editavel"
+            />
             <input
               v-else-if="resp[c.id]"
               v-model="resp[c.id]!.texto"
@@ -334,33 +341,35 @@ const TIPOS_GUIA = [
           <label
             >{{ t('rotulo') }} <input v-model="novo.rotulo" maxlength="150" required data-testid="ag-rotulo"
           /></label>
-          <label>
-            {{ t('tipoDado') }}
-            <select v-model="novo.tipoDado" data-testid="ag-tipo">
-              <option v-for="tp in ['texto', 'numero', 'data', 'booleano', 'opcao']" :key="tp" :value="tp">
-                {{ t(`tipos.${tp}`) }}
-              </option>
-            </select>
-          </label>
-          <label>
-            {{ t('tipoGuia') }}
-            <select v-model="novo.tipoGuia">
-              <option value="">—</option>
-              <option v-for="tg in TIPOS_GUIA" :key="tg" :value="tg">{{ tg }}</option>
-            </select>
-          </label>
+          <SanteSelecao
+            v-model="novo.tipoDado"
+            :rotulo="t('tipoDado')"
+            :opcoes="[
+              ...(['texto', 'numero', 'data', 'booleano', 'opcao'] as const).map((x) => ({
+                valor: x,
+                rotulo: t(`tipos.${x}`),
+              })),
+            ]"
+            data-testid="ag-tipo"
+          />
+          <SanteSelecao
+            v-model="novo.tipoGuia"
+            :rotulo="t('tipoGuia')"
+            :opcoes="[{ valor: '', rotulo: '—' }, ...TIPOS_GUIA.map((x) => ({ valor: x, rotulo: x }))]"
+          />
           <label><input v-model="novo.obrigatorio" type="checkbox" /> {{ t('obrigatorio') }}</label>
           <label v-if="novo.tipoDado === 'texto'">
             {{ t('tamanho') }} <input v-model="novo.tamanhoMaximo" type="number" min="1" max="500" />
           </label>
           <template v-if="novo.tipoDado === 'opcao'">
-            <label>
-              {{ t('depende') }}
-              <select v-model="novo.dependeDeId">
-                <option value="">{{ t('nenhumPai') }}</option>
-                <option v-for="l in listas" :key="l.id" :value="l.id">{{ l.rotulo }}</option>
-              </select>
-            </label>
+            <SanteSelecao
+              v-model="novo.dependeDeId"
+              :rotulo="t('depende')"
+              :opcoes="[
+                { valor: '', rotulo: t('nenhumPai') },
+                ...listas.map((l) => ({ valor: l.id, rotulo: l.rotulo })),
+              ]"
+            />
             <label
               >{{ t('opcoes') }} <textarea v-model="novo.opcoes" rows="4" data-testid="ag-opcoes" />
             </label>

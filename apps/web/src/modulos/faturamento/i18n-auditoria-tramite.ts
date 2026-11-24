@@ -67,6 +67,7 @@ export const mensagensAuditoriaTramite = {
     prioridades: { normal: 'Normal', urgente: 'Urgente' },
     enviarJa: 'Enviar agora',
     incluirItem: 'Incluir item',
+    tipoItem: 'Tipo do item',
     tipos: {
       volume_prontuario: 'Volume do prontuário',
       atendimento: 'Atendimento',
@@ -102,8 +103,6 @@ export const mensagensAuditoriaTramite = {
     abrirConta: 'Abrir a conta',
     filaCirurgia: 'Fila do centro cirúrgico (pela data da cirurgia)',
     cirurgiaPrevista: 'Cirurgia prevista',
-    prazo: 'Prazo da pendência',
-    validadeSenha: 'Validade da senha',
     filtro: 'Situação',
     abertas: 'Abertas',
     minhas: 'Só as minhas',

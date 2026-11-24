@@ -210,6 +210,11 @@ const gravarMotivo = () =>
 const fechado = computed(() =>
   ['cancelado', 'reprovado', 'recebido', 'encerrado'].includes(g.data.value?.pedido.situacao ?? ''),
 );
+/** As situações do contato com o fornecedor, para o combo. */
+const opcoesSituacaoContato = SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({
+  valor: x,
+  rotulo: M.situacoesContato[x],
+}));
 </script>
 
 <template>
@@ -442,9 +447,7 @@ const fechado = computed(() =>
         <SanteSelecao
           v-model="contato.situacao"
           :rotulo="M.situacaoContato"
-          :opcoes="[
-            ...SITUACOES_ACOMPANHAMENTO_PEDIDO.map((x) => ({ valor: x, rotulo: M.situacoesContato[x] })),
-          ]"
+          :opcoes="opcoesSituacaoContato"
           data-testid="pg-ct-situacao"
         />
         <label

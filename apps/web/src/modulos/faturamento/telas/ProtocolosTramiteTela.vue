@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SanteSelecao } from '@sgh/ui';
 // Protocolo de documentos entre setores (F3.7, 06-FAT linha 22): `/faturamento/protocolos`.
 // Escolhido o meu setor, a tela mostra o que sai e o que chega. O protocolo novo nasce já enviado (um clique), com os
 // itens conferidos pela regra do domínio enquanto se preenche; quem recebe confere item a item (recebido ou recusado
@@ -92,45 +93,54 @@ const motivoCancelamento = ref('');
     <ErroFaturamento v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status">{{ aviso }}</p>
     <template v-if="q.data.value">
-      <label>
-        {{ t('auditoriaTramite.protocolo.setor') }}
-        <select v-model="setor" data-testid="prot-setor">
-          <option :value="null">{{ t('auditoriaTramite.protocolo.todos') }}</option>
-          <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="setor"
+        :rotulo="t('auditoriaTramite.protocolo.setor')"
+        :opcoes="[
+          { valor: null, rotulo: t('auditoriaTramite.protocolo.todos') },
+          ...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao })),
+        ]"
+        data-testid="prot-setor"
+      />
 
       <form class="filtros" data-testid="prot-form" @submit.prevent="emitir">
         <h2>{{ t('auditoriaTramite.protocolo.novo') }}</h2>
-        <label>
-          {{ t('auditoriaTramite.protocolo.de') }}
-          <select v-model.number="novo.remetenteId" data-testid="prot-de">
-            <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('auditoriaTramite.protocolo.para') }}
-          <select v-model.number="novo.destinatarioId" data-testid="prot-para">
-            <option v-for="s in q.data.value.setores" :key="s.id" :value="s.id">{{ s.descricao }}</option>
-          </select>
-        </label>
-        <label>
-          {{ t('auditoriaTramite.protocolo.prioridade') }}
-          <select v-model="novo.prioridade">
-            <option value="normal">{{ t('auditoriaTramite.protocolo.prioridades.normal') }}</option>
-            <option value="urgente">{{ t('auditoriaTramite.protocolo.prioridades.urgente') }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-model="novo.remetenteId"
+          :rotulo="t('auditoriaTramite.protocolo.de')"
+          :opcoes="[...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao }))]"
+          data-testid="prot-de"
+        />
+        <SanteSelecao
+          v-model="novo.destinatarioId"
+          :rotulo="t('auditoriaTramite.protocolo.para')"
+          :opcoes="[...q.data.value.setores.map((s) => ({ valor: s.id, rotulo: s.descricao }))]"
+          data-testid="prot-para"
+        />
+        <SanteSelecao
+          v-model="novo.prioridade"
+          :rotulo="t('auditoriaTramite.protocolo.prioridade')"
+          :opcoes="[
+            { valor: 'normal' as const, rotulo: t('auditoriaTramite.protocolo.prioridades.normal') },
+            { valor: 'urgente' as const, rotulo: t('auditoriaTramite.protocolo.prioridades.urgente') },
+          ]"
+        />
         <label
           ><input v-model="novo.enviarJa" type="checkbox" />
           {{ t('auditoriaTramite.protocolo.enviarJa') }}</label
         >
         <fieldset v-for="(i, k) in novo.itens" :key="k" :data-testid="`prot-item-${k}`">
-          <select v-model="i.tipo">
-            <option v-for="tp in TIPOS_ITEM_PROTOCOLO" :key="tp" :value="tp">
-              {{ t(`auditoriaTramite.protocolo.tipos.${tp}`) }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="i.tipo"
+            :rotulo="t('auditoriaTramite.protocolo.tipoItem')"
+            ocultar-rotulo
+            :opcoes="[
+              ...TIPOS_ITEM_PROTOCOLO.map((x) => ({
+                valor: x,
+                rotulo: t(`auditoriaTramite.protocolo.tipos.${x}`),
+              })),
+            ]"
+          />
           <input
             v-if="i.tipo !== 'documento'"
             v-model.number="(i as { alvoId: number | null }).alvoId"
