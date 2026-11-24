@@ -44,3 +44,7 @@ export * from './licitacao.js';
 export * from './licitacao-documento.js';
 // F3.6 (05-SUP linha 7): regra de integração prescrição × estoque e horários padrão de medicação.
 export * from './farmacia-parametros.js';
+// F3.6 (05-SUP linhas 1, 3 e 6): cadastro do item e do local, escopo do usuário e lista de separação.
+export * from './cadastro-estoque.js';
+// F3.6 (05-SUP linha 13): kit padrão (composição e vínculo ao procedimento).
+export * from './kit-padrao.js';
