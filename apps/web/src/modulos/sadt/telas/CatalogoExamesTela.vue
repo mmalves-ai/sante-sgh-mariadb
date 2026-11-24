@@ -22,6 +22,8 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { z } from 'zod';
 import { enviar, ler } from '../../exames/api-exames.js';
 import { novaChave } from '../api-sadt.js';
+import CadastroAnalitos from '../componentes/CadastroAnalitos.vue';
+import ProcedimentosExame from '../componentes/ProcedimentosExame.vue';
 
 type Linha = Record<string, unknown>;
 type Opcao = { id: number; nome: string };
@@ -43,6 +45,8 @@ const T = {
   nomePopular: 'Nome popular',
   tipo: 'Tipo',
   modalidade: 'Modalidade',
+  especialidade: 'Especialidade diagnóstica',
+  analitosCadastro: 'Analitos',
   idadeMin: 'Idade mínima (dias)',
   idadeMax: 'Idade máxima (dias)',
   prazo: 'Prazo (h)',
@@ -154,6 +158,11 @@ const formula = reactive<Linha>({
   variaveis: [variavelVazia()],
 });
 const analitoAberto = ref<number | null>(null);
+/** O cadastro dos analitos (campos de resultado) aberto no lugar da ficha do exame. */
+const cadastroAnalitos = ref(false);
+const recarregarOpcoes = async () => {
+  opcoes.value = (await ler(`${B}/opcoes`, qualquer)) as Record<string, Opcao[]>;
+};
 
 const numOuNulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
 const nomeDe = (qual: string, id: unknown) =>
@@ -182,12 +191,14 @@ async function buscar() {
 }
 
 async function abrir(id: number) {
+  cadastroAnalitos.value = false;
   ficha.value = (await ler(`${B}/exames/${id}`, qualquer)) as Linha;
   for (const k of Object.keys(exame)) delete exame[k];
   Object.assign(exame, ficha.value['exame'] as Linha);
 }
 
 function novoExame() {
+  cadastroAnalitos.value = false;
   ficha.value = null;
   for (const k of Object.keys(exame)) delete exame[k];
   Object.assign(exame, { codigo: '', sigla: '', nome: '', tipoServico: 'laboratorio', ativo: true });
@@ -209,6 +220,7 @@ const corpoExame = computed(() => ({
   nomePopular: (exame['nomePopular'] as string) || null,
   tipoServico: String(exame['tipoServico'] ?? ''),
   modalidadeImagemId: numOuNulo(exame['modalidadeImagemId']),
+  especialidadeDiagnosticaId: numOuNulo(exame['especialidadeDiagnosticaId']),
   idadeMinimaDias: numOuNulo(exame['idadeMinimaDias']),
   idadeMaximaDias: numOuNulo(exame['idadeMaximaDias']),
   prazoEntregaHoras: numOuNulo(exame['prazoEntregaHoras']),
@@ -447,6 +459,11 @@ const filtrada = (qual: string, chave: string) => {
           />
           <SanteBotao :rotulo="T.buscar" tipo="submit" />
           <SanteBotao :rotulo="T.novoExame" @acionar="novoExame" />
+          <SanteBotao
+            :rotulo="T.analitosCadastro"
+            data-testid="abrir-analitos"
+            @acionar="cadastroAnalitos = true"
+          />
         </form>
         <ul>
           <li v-for="e in lista" :key="String(e['id'])">
@@ -456,7 +473,14 @@ const filtrada = (qual: string, chave: string) => {
           </li>
         </ul>
       </aside>
-      <main v-if="exame['codigo'] !== undefined">
+      <main v-if="cadastroAnalitos">
+        <CadastroAnalitos
+          :unidades="opcoes['unidades']"
+          :metodos="opcoes['metodos']"
+          @gravado="recarregarOpcoes"
+        />
+      </main>
+      <main v-else-if="exame['codigo'] !== undefined">
         <p v-if="erro" role="alert" class="erro">{{ erro }}</p>
         <p v-if="aviso" role="status">{{ aviso }}</p>
         <form class="exame" data-testid="form-exame" @submit.prevent="salvarExame">
@@ -491,6 +515,15 @@ const filtrada = (qual: string, chave: string) => {
             <small v-if="falhasExame['modalidadeImagemId']" class="erro">{{
               falhasExame['modalidadeImagemId']
             }}</small>
+          </div>
+          <div v-if="exame['tipoServico'] !== 'laboratorio'" class="campo-selecao">
+            <SanteSelecao
+              :model-value="valorDe(exame, 'especialidadeDiagnosticaId')"
+              :rotulo="T.especialidade"
+              :opcoes="opLista(opcoes['especialidades'], T.escolha)"
+              data-testid="exame-especialidade"
+              @update:model-value="(v) => (exame['especialidadeDiagnosticaId'] = v)"
+            />
           </div>
           <label>{{ T.idadeMin }} <input v-model="exame['idadeMinimaDias']" type="number" min="0" /></label>
           <label
@@ -781,6 +814,11 @@ const filtrada = (qual: string, chave: string) => {
               <SanteBotao :rotulo="T.incluir" tipo="submit" />
             </form>
           </section>
+          <ProcedimentosExame
+            :exame-id="Number(exame['id'])"
+            :procedimentos="(ficha['procedimentos'] as Linha[] | undefined) ?? []"
+            @gravado="abrir(Number(exame['id']))"
+          />
         </template>
       </main>
     </div>
