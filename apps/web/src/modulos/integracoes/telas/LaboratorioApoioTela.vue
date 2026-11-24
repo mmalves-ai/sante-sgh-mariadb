@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
+import RemessaApoio from '../componentes/RemessaApoio.vue';
 import { codigoDaRecusa, conferirRetorno, lerInterfacesApoio, lerRetornos } from '../api-integracoes.js';
 
 const { t, te } = useI18n();
@@ -136,6 +137,10 @@ const numero = (v: number | null) => (v === null ? '—' : v.toLocaleString('pt-
         </form>
       </template>
     </article>
+    <RemessaApoio
+      v-if="interfaces.data.value?.length"
+      :laboratorios="interfaces.data.value.map((i) => ({ codigo: i.codigo, nome: i.nome }))"
+    />
     <h2>{{ t('integracoes.apoio.dePara') }}</h2>
     <GrupoDominiosTela subitem="apoioLaboratorio" embutida />
   </section>
