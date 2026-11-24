@@ -149,19 +149,21 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
     await page.getByTestId(`laudo-emitir-${at}`).click();
     const msg = page.getByTestId('laudos-mensagem');
     await expect(msg).toContainText(/Laudo emitido: número \S+ \(autenticação [0-9a-f-]{36}\)/);
-    const [, numero, codigo] = /número (\S+) \(autenticação ([0-9a-f-]{36})\)/.exec(
+    const [, numero, autenticacao] = /número (\S+) \(autenticação ([0-9a-f-]{36})\)/.exec(
       (await msg.textContent()) ?? '',
     )!;
-    expect((await download).suggestedFilename()).toBe(`laudo-${codigo}.pdf`);
-    await page.getByTestId('laudos-codigo').fill(codigo!);
+    expect((await download).suggestedFilename()).toBe(`laudo-${autenticacao}.pdf`);
+    await page.getByTestId('laudos-codigo').fill(autenticacao!);
     await page.getByTestId('laudos-codigo').press('Enter');
     await expect(page.getByTestId('laudos-codigo-resultado')).toContainText(`Laudo número ${numero} válido`);
     // A 2ª via: o motivo do cadastro, o mesmo número e o mesmo código.
     await page.getByTestId(`laudo-motivo-${at}`).fill('Paciente perdeu a primeira via');
     const download2 = page.waitForEvent('download');
     await page.getByTestId(`laudo-via-${at}`).click();
-    await expect(msg).toContainText(`2ª via do laudo número ${numero} emitida (autenticação ${codigo})`);
-    expect((await download2).suggestedFilename()).toBe(`laudo-${codigo}.pdf`);
+    await expect(msg).toContainText(
+      `2ª via do laudo número ${numero} emitida (autenticação ${autenticacao})`,
+    );
+    expect((await download2).suggestedFilename()).toBe(`laudo-${autenticacao}.pdf`);
     await semViolacaoAxe(page, '/sadt/laudos/emissao');
     await sair(page);
 

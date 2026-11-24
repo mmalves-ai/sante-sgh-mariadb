@@ -2,6 +2,7 @@
 // F3.9, 08-INTG L140: os perfis de prioridade enviados ao sistema de triagem (com o código que ele conhece e a ordem) e,
 // por atendimento do pronto atendimento, as classificações recebidas: a vigente com o prazo do atendimento médico, as
 // substituídas e as rejeitadas com o motivo (nada é apagado).
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -51,6 +52,10 @@ const f = reactive({
   condicaoPreferencial: '',
   ordemPrioridade: 0,
 });
+const opcoesCondicao = computed(() => [
+  { valor: '', rotulo: '—' },
+  ...CONDICOES.map((c) => ({ valor: c as string, rotulo: c })),
+]);
 async function salvar() {
   aviso.value = '';
   falha.value = '';
@@ -101,13 +106,7 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
       <label
         >{{ t('externo') }} <input v-model="f.codigoExterno" maxlength="30" :disabled="!f.sistemaCodigo"
       /></label>
-      <label
-        >{{ t('condicao') }}
-        <select v-model="f.condicaoPreferencial">
-          <option value="" />
-          <option v-for="c in CONDICOES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </label>
+      <SanteSelecao v-model="f.condicaoPreferencial" :rotulo="t('condicao')" :opcoes="opcoesCondicao" />
       <label
         >{{ t('ordem') }} <input v-model.number="f.ordemPrioridade" type="number" min="0" max="999"
       /></label>

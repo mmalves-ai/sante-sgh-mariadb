@@ -5,7 +5,7 @@
 // tela já avisa antes de enviar. A especialidade só aparece em função médica e só com as do profissional; no fim do
 // atendimento, a equipe se encerra (todos os vigentes saem com o motivo) e deixa de dar vínculo.
 // Gravar exige pep.equipe.gerenciar; sem ela, a API recusa e a tela mostra o motivo.
-import { SanteAlerta } from '@sgh/ui';
+import { SanteAlerta, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
@@ -43,6 +43,11 @@ const avisoResponsavel = computed(() =>
     : null,
 );
 const funcaoMedica = computed(() => funcaoEscolhida.value?.categoria === 'medica');
+const opcoesFuncao = computed(() => funcoes.value.map((f) => ({ valor: f.id, rotulo: f.descricao })));
+const opcoesEspecialidade = computed(() => [
+  { valor: 0, rotulo: t('pep.equipe.semEspecialidade') },
+  ...especialidades.value.map((e) => ({ valor: e.id, rotulo: e.descricao })),
+]);
 /** Especialidades do profissional digitado (a tela só oferece as dele, e só em função médica). */
 watch(
   () => [novo.value.profissional, funcaoMedica.value] as const,
@@ -190,19 +195,19 @@ onMounted(carregar);
         {{ t('pep.equipe.codigoProfissional') }}
         <input v-model="novo.profissional" inputmode="numeric" required data-testid="equipe-profissional" />
       </label>
-      <label>
-        {{ t('pep.equipe.funcao') }}
-        <select v-model="novo.funcao" data-testid="equipe-funcao">
-          <option v-for="f in funcoes" :key="f.id" :value="f.id">{{ f.descricao }}</option>
-        </select>
-      </label>
-      <label v-if="funcaoMedica">
-        {{ t('pep.equipe.especialidade') }}
-        <select v-model="novo.especialidade" data-testid="equipe-especialidade">
-          <option :value="0">{{ t('pep.equipe.semEspecialidade') }}</option>
-          <option v-for="e in especialidades" :key="e.id" :value="e.id">{{ e.descricao }}</option>
-        </select>
-      </label>
+      <SanteSelecao
+        v-model="novo.funcao"
+        :rotulo="t('pep.equipe.funcao')"
+        :opcoes="opcoesFuncao"
+        data-testid="equipe-funcao"
+      />
+      <SanteSelecao
+        v-if="funcaoMedica"
+        v-model="novo.especialidade"
+        :rotulo="t('pep.equipe.especialidade')"
+        :opcoes="opcoesEspecialidade"
+        data-testid="equipe-especialidade"
+      />
       <label>
         <input v-model="novo.recebeNotificacao" type="checkbox" />
         {{ t('pep.equipe.recebePendencias') }}

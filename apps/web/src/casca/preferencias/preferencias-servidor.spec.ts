@@ -53,7 +53,12 @@ describe('preferências guardadas na conta (01-ADM L84)', () => {
   });
 
   it('grava só o que a pessoa mudou: abrir a tela sem mudar nada não grava', () => {
-    const guardado = { tema: 'escuro', densidade: 'normal', textoAmpliado: true, telaInicial: null };
+    const guardado = {
+      tema: 'escuro',
+      densidade: 'normal',
+      textoAmpliado: true,
+      telaInicial: null as string | null,
+    };
     expect(mudancasParaConta(guardado, { ...guardado })).toEqual({});
     expect(mudancasParaConta(guardado, { densidade: 'normal' })).toEqual({});
     expect(mudancasParaConta(guardado, { densidade: 'compacta' })).toEqual({ densidade: 'compacta' });

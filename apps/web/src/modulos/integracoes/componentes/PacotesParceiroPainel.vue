@@ -2,6 +2,7 @@
 // F3.9, 08-INTG L134: os pacotes de dados de cada parceiro (campos com justificativa e tratamento, formato, meio,
 // agenda, anonimização e revisão da minimização), a próxima entrega devida e o histórico de entregas, com a mudança de
 // situação (enviada, confirmada com protocolo, rejeitada ou falhou com o motivo).
+import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -57,6 +58,7 @@ const novo = () => ({
   dadoSensivel: false,
   justificativa: '',
 });
+const lista = (xs: readonly string[]) => xs.map((x) => ({ valor: x, rotulo: x }));
 const p = reactive({
   parceiroCodigo: '',
   codigo: '',
@@ -163,37 +165,29 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
       <label>{{ t('codigo') }} <input v-model="p.codigo" required maxlength="40" /></label>
       <label>{{ t('nome') }} <input v-model="p.nome" required maxlength="150" /></label>
       <label>{{ t('conteudo') }} <input v-model="p.conteudo" required maxlength="1000" /></label>
-      <label
-        >{{ t('formato') }}
-        <select v-model="p.formato">
-          <option v-for="f in ['csv', 'json', 'xml', 'fhir', 'parquet', 'pdf']" :key="f">{{ f }}</option>
-        </select></label
-      >
-      <label
-        >{{ t('meio') }}
-        <select v-model="p.meioEntrega">
-          <option v-for="f in ['api', 'webhook', 'sftp', 'arquivo_seguro', 'email_seguro']" :key="f">
-            {{ f }}
-          </option>
-        </select></label
-      >
-      <label
-        >{{ t('periodicidade') }}
-        <select v-model="p.periodicidade">
-          <option v-for="f in ['sob_demanda', 'diaria', 'semanal', 'mensal']" :key="f">{{ f }}</option>
-        </select></label
-      >
+      <SanteSelecao
+        v-model="p.formato"
+        :rotulo="t('formato')"
+        :opcoes="lista(['csv', 'json', 'xml', 'fhir', 'parquet', 'pdf'])"
+      />
+      <SanteSelecao
+        v-model="p.meioEntrega"
+        :rotulo="t('meio')"
+        :opcoes="lista(['api', 'webhook', 'sftp', 'arquivo_seguro', 'email_seguro'])"
+      />
+      <SanteSelecao
+        v-model="p.periodicidade"
+        :rotulo="t('periodicidade')"
+        :opcoes="lista(['sob_demanda', 'diaria', 'semanal', 'mensal'])"
+      />
       <label v-if="p.periodicidade !== 'sob_demanda'"
         >{{ t('agenda') }} <input v-model="p.agenda" maxlength="60"
       /></label>
-      <label
-        >{{ t('anonimizacao') }}
-        <select v-model="p.anonimizacao">
-          <option v-for="f in ['nenhuma', 'pseudonimizada', 'anonimizada', 'agregada']" :key="f">
-            {{ f }}
-          </option>
-        </select></label
-      >
+      <SanteSelecao
+        v-model="p.anonimizacao"
+        :rotulo="t('anonimizacao')"
+        :opcoes="lista(['nenhuma', 'pseudonimizada', 'anonimizada', 'agregada'])"
+      />
       <fieldset>
         <legend>{{ t('campos') }}</legend>
         <div v-for="(c, i) in p.campos" :key="i">
@@ -201,14 +195,12 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
           <input v-model="c.entidade" :placeholder="t('campo')" maxlength="64" />
           <input v-model="c.campo" maxlength="64" />
           <input v-model="c.rotuloSaida" :placeholder="t('rotulo')" maxlength="100" />
-          <select v-model="c.tratamento">
-            <option
-              v-for="f in ['original', 'pseudonimizado', 'mascarado', 'generalizado', 'agregado']"
-              :key="f"
-            >
-              {{ f }}
-            </option>
-          </select>
+          <SanteSelecao
+            v-model="c.tratamento"
+            :rotulo="t('tratamento')"
+            :opcoes="lista(['original', 'pseudonimizado', 'mascarado', 'generalizado', 'agregado'])"
+            ocultar-rotulo
+          />
           <label><input v-model="c.dadoSensivel" type="checkbox" /> {{ t('sensivel') }}</label>
           <input v-model="c.justificativa" :placeholder="t('justificativa')" maxlength="500" />
         </div>

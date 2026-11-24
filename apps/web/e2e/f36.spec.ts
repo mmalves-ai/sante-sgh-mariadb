@@ -3,6 +3,7 @@
 // e a porta da farmácia em MEMÓRIA (centro, local e frequência SINTÉTICOS; nada vai à cópia).
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
+import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 
@@ -30,13 +31,13 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     // Regra: sem escopo nem local, a tela já diz o que falta e não deixa gravar.
     const recusas = page.getByTestId('par-recusas-regra');
     await expect(recusas).toContainText('centro de custo, setor ou unidade');
-    await page.getByTestId('par-centro').selectOption({ index: 1 });
+    await escolher(page.getByTestId('par-centro'), { indice: 1 });
     // A exceção por item: o subgrupo filtra pelo grupo e o item pelo subgrupo.
-    await page.getByTestId('par-grupo').selectOption({ index: 1 });
-    await page.getByTestId('par-subgrupo').selectOption({ index: 1 });
-    await page.getByTestId('par-item').selectOption({ index: 1 });
-    await page.getByTestId('par-local').selectOption({ index: 1 });
-    await page.getByTestId('par-momento').selectOption('antes_do_horario');
+    await escolher(page.getByTestId('par-grupo'), { indice: 1 });
+    await escolher(page.getByTestId('par-subgrupo'), { indice: 1 });
+    await escolher(page.getByTestId('par-item'), { indice: 1 });
+    await escolher(page.getByTestId('par-local'), { indice: 1 });
+    await escolher(page.getByTestId('par-momento'), 'antes_do_horario');
     await expect(recusas).toContainText('antecedência');
     await page.getByTestId('par-antecedencia').fill('90');
     await expect(recusas).toHaveCount(0);
@@ -45,7 +46,7 @@ test.describe('Farmácia e suprimentos @F3.6', () => {
     await expect(page.locator('[data-testid^="par-regra-"]')).toHaveCount(1);
 
     // Grade de horários: a frequência de 3 doses por dia recusa 2 horários; com 3, grava.
-    await page.getByTestId('par-frequencia').selectOption({ index: 1 });
+    await escolher(page.getByTestId('par-frequencia'), { indice: 1 });
     await page.getByTestId('par-horarios').fill('06:00, 14:00');
     await expect(page.getByTestId('par-recusas-grade')).toContainText('3 dose(s) por dia');
     await page.getByTestId('par-horarios').fill('06:00, 14:00, 22:00');

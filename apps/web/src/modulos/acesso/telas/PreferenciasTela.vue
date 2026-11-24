@@ -6,7 +6,7 @@
 // (a "padrão do sistema" é a normal, desenhada pela casca como a compacta). A tela inicial lista só as telas do menu
 // do cargo (a API filtra pelas permissões da sessão).
 import { PERMISSOES_ACESSO } from '@sgh/contratos';
-import { SanteOpcoes } from '@sgh/ui';
+import { SanteOpcoes, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
@@ -106,6 +106,10 @@ const densidade = computed({
     void gravarNaConta({ densidade: v });
   },
 });
+const opcoesTelaInicial = computed(() => [
+  { valor: '', rotulo: t('preferencias.telaInicialPerfil') },
+  ...(conta.value?.telasDoMenu ?? []).map((x) => ({ valor: x.codigo, rotulo: x.titulo })),
+]);
 const telaInicial = computed({
   get: () => telaInicialEscolhida.value,
   set: (v: string) => {
@@ -137,13 +141,14 @@ const visoesPorTela = computed(() => {
           nome="densidade"
         />
         <SanteOpcoes v-model="fonte" :legenda="t('preferencias.fonte')" :opcoes="fontes" nome="fonte" />
-        <label v-if="conta" class="pref__campo">
-          {{ t('preferencias.telaInicial') }}
-          <select v-model="telaInicial" data-testid="pref-tela-inicial">
-            <option value="">{{ t('preferencias.telaInicialPerfil') }}</option>
-            <option v-for="x in conta.telasDoMenu" :key="x.codigo" :value="x.codigo">{{ x.titulo }}</option>
-          </select>
-        </label>
+        <SanteSelecao
+          v-if="conta"
+          v-model="telaInicial"
+          class="pref__campo"
+          :rotulo="t('preferencias.telaInicial')"
+          :opcoes="opcoesTelaInicial"
+          data-testid="pref-tela-inicial"
+        />
       </fieldset>
     </form>
     <p class="pref__nota" data-testid="pref-situacao" role="status">

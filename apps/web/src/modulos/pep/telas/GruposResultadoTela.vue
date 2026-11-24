@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Cadastro dos grupos comparativos de resultados (F3.3, linha 03-PEP L128): busca o exame, adiciona o exame inteiro
 // ou um analito com um clique, reordena e grava com a versão lida; a validação do domínio volta campo a campo.
-import { SanteAlerta, SanteBotao } from '@sgh/ui';
-import { onMounted, ref } from 'vue';
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import {
@@ -22,6 +22,7 @@ const achados = ref<ExameBusca[]>([]);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const TIPOS = ['laboratorio', 'imagem', 'outro'] as const;
+const opcoesTipo = computed(() => TIPOS.map((x) => ({ valor: x, rotulo: k(`tipos.${x}`) })));
 
 async function carregar(): Promise<void> {
   try {
@@ -91,7 +92,7 @@ async function gravar(): Promise<void> {
     <h1 id="grupos-titulo">{{ k('titulo') }}</h1>
     <p>{{ k('explica') }}</p>
     <MensagemErro v-if="erro" :erro="erro" />
-    <SanteAlerta v-if="mensagem" variante="info">{{ mensagem }}</SanteAlerta>
+    <SanteAlerta v-if="mensagem" variante="info" :texto="mensagem" />
     <SanteBotao data-testid="grupo-novo" @acionar="novo" :rotulo="k('novo')" />
     <table v-if="grupos.length" data-testid="grupos-lista">
       <thead>
@@ -119,12 +120,7 @@ async function gravar(): Promise<void> {
         <label
           >{{ k('nome') }} <input v-model="atual.nome" data-testid="grupo-nome" maxlength="100" required
         /></label>
-        <label>
-          {{ k('tipo') }}
-          <select v-model="atual.tipoExame">
-            <option v-for="x in TIPOS" :key="x" :value="x">{{ k(`tipos.${x}`) }}</option>
-          </select>
-        </label>
+        <SanteSelecao v-model="atual.tipoExame" :rotulo="k('tipo')" :opcoes="opcoesTipo" />
         <label
           >{{ k('ordem') }} <input v-model.number="atual.ordem" type="number" min="0" max="9999"
         /></label>

@@ -7,6 +7,7 @@
 // (apps/api/src/modulos/faturamento/conta-complementos-propria.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
+import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const CONTA = 7301;
@@ -178,7 +179,7 @@ test.describe('complementos da conta e campo adicional da operadora @F3.7', () =
     await semViolacaoAxe(page, '/faturamento/guias/:guia/atributos');
 
     // Preenche o obrigatório: a pendência some antes de gravar, e o valor vai no pedido.
-    await page.getByTestId('ag-campo-TRAT').selectOption({ label: 'Radioterapia' });
+    await escolher(page.getByTestId('ag-campo-TRAT'), { rotulo: 'Radioterapia' });
     await expect(page.getByTestId('ag-faltam')).not.toContainText('Tratamento oncológico');
     await page.getByTestId('ag-gravar').click();
     await expect.poll(() => enviados.find((e) => 'guia' in e)).toBeTruthy();
