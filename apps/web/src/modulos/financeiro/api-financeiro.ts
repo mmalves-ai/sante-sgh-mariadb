@@ -105,6 +105,28 @@ export const gerarRemessa = (
   chave: string,
 ) => gravar(`${F}/pagar/remessas`, corpo, chave);
 export const listarAdiantamentos = () => ler(`${F}/pagar/adiantamentos`, lista<AdiantamentoResposta>());
+export const concederAdiantamento = (
+  corpo: {
+    tipoCredor: 'fornecedor' | 'profissional';
+    credor: number;
+    conta: number;
+    valor: number;
+    data: string;
+    prazo: string | null;
+    referente: string;
+  },
+  chave: string,
+) => gravar(`${F}/pagar/adiantamentos`, corpo, chave);
+export const compensarAdiantamento = (
+  id: number,
+  corpo: { parcela: number; valor: number; data: string },
+  chave: string,
+) => gravar(`${F}/pagar/adiantamentos/${id}/compensar`, corpo, chave);
+export const devolverAdiantamento = (
+  id: number,
+  corpo: { conta: number; valor: number; data: string; motivo: string },
+  chave: string,
+) => gravar(`${F}/pagar/adiantamentos/${id}/devolver`, corpo, chave);
 /** O documento do credor por inteiro: leitura auditada, com a finalidade escrita por quem pede. */
 export const mostrarDocumento = (titulo: number, finalidade: string, chave: string) =>
   gravar<{ valor: string }>(`${F}/dados/mostrar`, { tipo: 'documento-credor', titulo, finalidade }, chave);
