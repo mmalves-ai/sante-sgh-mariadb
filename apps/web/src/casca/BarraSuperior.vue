@@ -103,7 +103,7 @@ function bloquear(): void {
         :opcoes="opcoes"
         ocultar-rotulo
         :desabilitado="trocando"
-        data-testid="seletor-estabelecimento"
+        data-testid="seletor-troca-estabelecimento"
         @keydown.enter.prevent="confirmarTroca"
       />
       <button

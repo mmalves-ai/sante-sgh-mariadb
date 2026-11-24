@@ -21,6 +21,7 @@
     "formatar": "prettier --write .",
     "formatar:verificar": "prettier --check .",
     "e2e": "node tools/verificadores/src/e2e.ts",
+    "e2e:vm": "bash tools/obra/e2e-vm.sh",
     "infra:subir": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/infra.ts subir",
     "infra:descer": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/infra.ts descer",
     "ambiente:verificar": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/ambiente.ts",
