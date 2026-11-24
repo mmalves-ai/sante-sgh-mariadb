@@ -441,6 +441,197 @@ export function linhasDoRascunho(v: unknown): LinhaGravacao[] {
   return Array.isArray(x) ? (x as LinhaGravacao[]) : [];
 }
 
+// ── Rascunho importado (ADR 0006: importação é continuidade) ─────────────────────────────────────────
+
+/**
+ * Uma resposta em edição do rascunho importado, como a carga a guarda na trilha do rascunho (a linha da trilha
+ * de inclusão da entidade registro_assistencial_rascunho, com a lista JSON das respostas): a opção respondida
+ * (ID_RESPOSTA = código da opção do campo), a sequência e os valores tipados. A coluna respostas do importado
+ * chega vazia; a leitura monta as linhas do contrato daqui.
+ */
+export type RespostaImportada = Readonly<Record<string, unknown>>;
+
+const recusaImportado = (detalhe: string) =>
+  recusa(
+    409,
+    'rascunho-importado-ilegivel',
+    'Rascunho indisponível',
+    `${detalhe} O rascunho importado não é aberto vazio; ele pode ser descartado ou o formulário revisto.`,
+  );
+
+const textoLimpo = (v: unknown): string | null => {
+  const t = v === null || v === undefined ? '' : String(v);
+  return t.trim() === '' ? null : t;
+};
+
+/** Hora da resposta importada (HHMM ou HH:MM) no formato do contrato; inválida recusa a leitura. */
+function horaImportada(v: unknown): string | null {
+  const t = textoLimpo(v);
+  if (t === null) return null;
+  const d = t.replace(/\D/g, '').padStart(4, '0');
+  if (!/^([01]\d|2[0-3])[0-5]\d$/.test(d))
+    throw recusaImportado('Uma hora respondida no rascunho importado não é válida.');
+  return d;
+}
+
+/**
+ * Respostas importadas → linhas do contrato, nos campos da versão PUBLICADA (a do formulário que o autor abre).
+ * `opcoes`: código da opção → opção e campo (só da versão publicada). Resposta sem campo nessa versão, opção de
+ * escolha desativada, diagnóstico pela chave da origem ou valor inválido recusam a leitura (nunca formulário vazio).
+ */
+export function linhasDoImportado(
+  itens: readonly RespostaImportada[],
+  campos: readonly CampoOrdenado[],
+  opcoes: ReadonlyMap<string, { readonly opcao: number; readonly campo: number }>,
+): LinhaGravacao[] {
+  const porId = new Map(campos.map((c) => [c.id, c] as const));
+  const seqs = new Map<number, number>();
+  const saida: LinhaGravacao[] = [];
+  for (const it of itens) {
+    const cod = textoLimpo(it['ID_RESPOSTA']);
+    const ref = cod === null ? undefined : opcoes.get(cod.trim());
+    const c = ref ? porId.get(ref.campo) : undefined;
+    if (!ref || !c || c.ordem === null)
+      throw recusaImportado('Uma resposta importada não é de um campo da versão publicada do formulário.');
+    if (TIPOS_TITULO.has(c.tipo)) continue;
+    if (textoLimpo(it['ID_HTCID']) !== null)
+      throw recusaImportado('Uma resposta importada traz um diagnóstico que não pôde ser convertido.');
+    const alfa = textoLimpo(it['RESPALFA']);
+    const longo = textoLimpo(it['CONTEVOL']);
+    const seq = seqs.get(c.id) ?? 0;
+    const base: LinhaGravacao = {
+      ordem: c.ordem,
+      seq: 0,
+      idResposta: c.id,
+      data: null,
+      hora: null,
+      indice: null,
+      valor: null,
+      alfa: null,
+      texto: null,
+      unidade: textoLimpo(it['UNIDRESP']) ?? '',
+      cid: null,
+      autopreenchido: textoLimpo(it['AUTOPREENCHIDO'])?.trim().toUpperCase() === 'S',
+    };
+    let l: LinhaGravacao;
+    if (c.tipo === 'multipla' || TIPOS_ESCOLHA.has(c.tipo)) {
+      const pos = c.opcoes.findIndex((o) => o.id === ref.opcao);
+      if (pos < 0)
+        throw recusaImportado('Uma opção marcada no rascunho importado não está ativa no formulário publicado.');
+      const multipla = c.tipo === 'multipla';
+      l = {
+        ...base,
+        seq: multipla ? seq : 0,
+        idResposta: DESLOCAMENTO_OPCAO + ref.opcao,
+        indice: String(multipla ? pos : pos + 1),
+        alfa: alfa ?? longo,
+      };
+    } else if (c.tipo === 'booleano') {
+      const sn = textoLimpo(it['RESPSNAO'])?.trim().toUpperCase() ?? null;
+      if (sn === null) continue;
+      if (sn !== 'S' && sn !== 'N')
+        throw recusaImportado('Uma resposta Sim/Não do rascunho importado não é válida.');
+      l = { ...base, indice: sn === 'S' ? '2' : '1' };
+    } else {
+      const data = textoLimpo(it['RESPDATA'])?.trim().slice(0, 10) ?? null;
+      if (data !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data))
+        throw recusaImportado('Uma data respondida no rascunho importado não é válida.');
+      const bruto = textoLimpo(it['RESPVALOR']);
+      const valor = bruto === null ? null : Number(bruto);
+      if (valor !== null && !Number.isFinite(valor))
+        throw recusaImportado('Um valor numérico do rascunho importado não é válido.');
+      l = {
+        ...base,
+        seq,
+        data,
+        hora: horaImportada(it['RESPHORA']),
+        valor,
+        texto: TIPOS_NUMERO.has(c.tipo) ? null : (longo ?? alfa),
+      };
+      if (!temValor(l)) continue;
+    }
+    seqs.set(c.id, seq + 1);
+    saida.push(l);
+  }
+  return saida.sort((a, b) => a.ordem.localeCompare(b.ordem) || a.seq - b.seq);
+}
+
+/** Leitura das linhas do rascunho importado: as linhas do contrato ou a recusa (a lista mostra só a contagem). */
+export type LeituraImportado = { readonly linhas: LinhaGravacao[] } | { readonly erro: ErroOperacao; readonly n: number };
+
+/** Importado com a coluna respostas vazia: o conteúdo está na trilha da carga. */
+const importadoSemLinhas = (x: Record<string, unknown>): boolean =>
+  x['origem'] !== 'sistema' && linhasDoRascunho(x['respostas']).length === 0;
+
+/** As respostas em edição dos rascunhos importados (a última linha de carga de cada um), já no formato do contrato. */
+export async function linhasDosImportados(
+  l: Pick<Leitor, 'consultar'>,
+  estabelecimento: number,
+  rascunhos: readonly Record<string, unknown>[],
+): Promise<Map<number, LeituraImportado>> {
+  const m = new Map<number, LeituraImportado>();
+  const alvo = rascunhos.filter(importadoSemLinhas);
+  if (!alvo.length) return m;
+  const ids = alvo.map((x) => num(x['id']));
+  const itens = new Map<number, RespostaImportada[]>();
+  for (const t of await l.consultar(
+    `SELECT entidade_id, dados_depois FROM trilha_auditoria
+      WHERE entidade = 'registro_assistencial_rascunho' AND entidade_id IN (${ids.map(() => '?').join(', ')})
+        AND acao = 'inclusao' AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
+        AND JSON_TYPE(dados_depois) = 'ARRAY'
+      ORDER BY id`,
+    [...ids, estabelecimento],
+  )) {
+    const v = jsonOuNull(t['dados_depois']);
+    if (Array.isArray(v))
+      itens.set(
+        num(t['entidade_id']),
+        v.filter((y): y is RespostaImportada => y !== null && typeof y === 'object'),
+      );
+  }
+  const porModelo = new Map<number, { campos: CampoOrdenado[]; opcoes: Map<string, { opcao: number; campo: number }> }>();
+  for (const x of alvo) {
+    const id = num(x['id']);
+    const lista = itens.get(id);
+    // Sem linha de carga: o rascunho de origem não tinha resposta (vazio de fato).
+    if (!lista?.length) {
+      m.set(id, { linhas: [] });
+      continue;
+    }
+    const modelo = num(x['modelo_documento_clinico_id']);
+    let ctx = porModelo.get(modelo);
+    if (!ctx) {
+      const pub = await l.consultar(
+        'SELECT publicada_modelo_documento_versao_id AS v FROM modelo_documento_clinico WHERE id = ?',
+        [modelo],
+      );
+      const versao = numOuNull(pub[0]?.['v']);
+      const campos = versao === null ? [] : (await camposDoModelo(l, modelo)).filter((c) => c.versao === versao);
+      const opcoes = new Map<string, { opcao: number; campo: number }>();
+      if (versao !== null)
+        for (const o of await l.consultar(
+          `SELECT o.id, o.codigo, o.modelo_campo_id FROM modelo_campo_opcao o
+             JOIN modelo_campo c ON c.id = o.modelo_campo_id
+            WHERE c.modelo_documento_versao_id = ? AND c.excluido_em IS NULL AND o.codigo IS NOT NULL
+            ORDER BY o.ativo DESC, o.id`,
+          [versao],
+        )) {
+          const k = String(o['codigo']).trim();
+          if (!opcoes.has(k)) opcoes.set(k, { opcao: num(o['id']), campo: num(o['modelo_campo_id']) });
+        }
+      ctx = { campos, opcoes };
+      porModelo.set(modelo, ctx);
+    }
+    try {
+      m.set(id, { linhas: linhasDoImportado(lista, ctx.campos, ctx.opcoes) });
+    } catch (e) {
+      if (!(e instanceof ErroOperacao)) throw e;
+      m.set(id, { erro: e, n: new Set(lista.map((y) => String(y['ID_RESPOSTA']))).size });
+    }
+  }
+  return m;
+}
+
 // ── Trilha e selo do conteúdo ─────────────────────────────────────────────────────────────────────────
 
 export const OP_REGISTRAR = 'pep.registro.registrar';
@@ -587,7 +778,7 @@ interface ProfissionalDaSessao {
 type Consultor = Pick<Leitor, 'uma' | 'consultar'>;
 
 const SQL_RASCUNHO = `SELECT r.id, r.paciente_id, r.modelo_documento_clinico_id, r.atendimento_id, r.autor_profissional_id,
-       r.data_hora_clinica, r.criado_em, r.justificativa_retroativo, r.respostas, r.situacao, r.origem, r.versao,
+       r.data_hora_clinica, r.iniciado_em, r.criado_em, r.justificativa_retroativo, r.respostas, r.situacao, r.origem, r.versao,
        r.corrige_registro_assistencial_id, m.codigo AS modelo_codigo, m.titulo AS modelo_titulo,
        CASE WHEN COALESCE(p.usa_nome_social, pf.usa_nome_social) THEN COALESCE(p.nome_social, pf.nome_social, pf.nome)
             ELSE pf.nome END AS paciente_nome
@@ -693,8 +884,10 @@ export class RegistroPropriaGravacao {
     x: Record<string, unknown>,
     fuso: string,
     lancados: ReadonlyMap<number, string>,
+    importados: ReadonlyMap<number, LeituraImportado>,
   ): RascunhoLido {
-    const linhas = linhasDoRascunho(x['respostas']);
+    const imp = importados.get(num(x['id']));
+    const linhas = imp ? ('linhas' in imp ? imp.linhas : []) : linhasDoRascunho(x['respostas']);
     return {
       id: num(x['id']),
       paciente: num(x['paciente_id']),
@@ -707,9 +900,10 @@ export class RegistroPropriaGravacao {
       cbo: num(x['autor_profissional_id']),
       dataHoraClinica: comMs(dataHora(x['data_hora_clinica'], fuso)),
       // O lançamento é o do primeiro rascunho da cadeia (a versão encadeada é o mesmo lançamento).
-      lancadoEm: comMs(dataHora(lancados.get(num(x['id'])) ?? x['criado_em'], fuso)),
+      // Sem a trilha desta casa (o importado), o lançamento é o de origem (iniciado_em), nunca o da carga.
+      lancadoEm: comMs(dataHora(lancados.get(num(x['id'])) ?? x['iniciado_em'] ?? x['criado_em'], fuso)),
       justificativa: textoOuNull(x['justificativa_retroativo']),
-      respostas: new Set(linhas.filter(temValor).map((y) => y.ordem)).size,
+      respostas: imp && 'erro' in imp ? imp.n : new Set(linhas.filter(temValor).map((y) => y.ordem)).size,
       versao: versaoDoRascunho(num(x['id']), num(x['versao'])),
       doNovo: x['origem'] === 'sistema',
       corrige: numOuNull(x['corrige_registro_assistencial_id']),
@@ -731,7 +925,8 @@ export class RegistroPropriaGravacao {
         est.id,
         linhas.map((x) => num(x['id'])),
       );
-      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados));
+      const importados = await linhasDosImportados(l, est.id, linhas);
+      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados, importados));
     });
   }
 
@@ -749,7 +944,8 @@ export class RegistroPropriaGravacao {
         est.id,
         linhas.map((x) => num(x['id'])),
       );
-      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados));
+      const importados = await linhasDosImportados(l, est.id, linhas);
+      return linhas.map((x) => this.rascunhoLido(x, est.fuso, lancados, importados));
     });
   }
 
@@ -768,9 +964,13 @@ export class RegistroPropriaGravacao {
         [id, est.id],
       );
       if (!x) return null;
+      const importados = await linhasDosImportados(l, est.id, [x]);
+      const imp = importados.get(id);
+      // Importado aberto cujas respostas não convertem: recusa a edição em vez de abrir o formulário vazio.
+      if (imp && 'erro' in imp && x['situacao'] === 'aberto') throw imp.erro;
       return {
-        rascunho: this.rascunhoLido(x, est.fuso, await lancamentosDosRascunhos(l, est.id, [id])),
-        linhas: linhasDoRascunho(x['respostas']).map((y) => ({
+        rascunho: this.rascunhoLido(x, est.fuso, await lancamentosDosRascunhos(l, est.id, [id]), importados),
+        linhas: (imp ? ('linhas' in imp ? imp.linhas : []) : linhasDoRascunho(x['respostas'])).map((y) => ({
           ...y,
           procedimento: null,
           observacao: null,
@@ -1201,7 +1401,7 @@ export class RegistroPropriaGravacao {
       const agora = new Date();
       // A versão encadeada é o mesmo lançamento: herda o do primeiro rascunho da cadeia (como a memória).
       const lancadoEm = anterior
-        ? ((await lancamentosDosRascunhos(tx, est.id, [anterior.id])).get(anterior.id) ?? anterior.criadoEm)
+        ? ((await lancamentosDosRascunhos(tx, est.id, [anterior.id])).get(anterior.id) ?? anterior.iniciadoEm)
         : agora.toISOString();
       if (anterior)
         await tx.alterar('registro_assistencial_rascunho', anterior.id, anterior.versao, {
@@ -1456,10 +1656,10 @@ async function rascunhoAberto(
   ref: { id: number; versao: string },
   cbo: number,
   de: { paciente: number; modelo: number; atendimento?: number },
-): Promise<{ id: number; versao: number; paciente: number; corrige: number | null; criadoEm: string }> {
+): Promise<{ id: number; versao: number; paciente: number; corrige: number | null; iniciadoEm: string }> {
   const [r] = await tx.consultarParaAtualizar(
     `SELECT id, paciente_id, modelo_documento_clinico_id, atendimento_id, autor_profissional_id, situacao, origem,
-            versao, corrige_registro_assistencial_id, criado_em
+            versao, corrige_registro_assistencial_id, iniciado_em, criado_em
        FROM registro_assistencial_rascunho WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [ref.id, est],
   );
@@ -1487,7 +1687,8 @@ async function rascunhoAberto(
     versao: num(r['versao']),
     paciente: num(r['paciente_id']),
     corrige: numOuNull(r['corrige_registro_assistencial_id']),
-    criadoEm: instanteIso(r['criado_em']),
+    // O importado leva o lançamento de origem (iniciado_em), nunca o momento da carga.
+    iniciadoEm: instanteIso(r['iniciado_em'] ?? r['criado_em']),
   };
 }
 

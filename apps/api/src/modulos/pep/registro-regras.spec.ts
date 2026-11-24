@@ -31,6 +31,7 @@ import {
 import { RegistroClinicoController } from './registro.controller.js';
 import { PortaRegistroMemoria } from './registro-porta-memoria.js';
 import { motivoDoFormulario, ServicoRegistro } from './registro-servico.js';
+import type { LinhaGravacao } from './tipos-pep.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import type { ProfissionalDoRegistro } from './tipos-pep.js';
 
@@ -202,14 +203,27 @@ describe('rascunho importado (ADR 0006, importação é continuidade)', () => {
   it('é rascunho normal do autor: ele o vê sem trava, salva por cima e finaliza; sem aviso de só leitura', async () => {
     const m = montar();
     const prof = (await m.porta.profissional(C, 'SINT.MEDICO'))!;
-    const id = m.porta.semearRascunhoImportado(C.hospital, {
-      paciente: 1003,
-      modelo: 61,
-      atendimento: 10031,
-      cbo: prof.cbo,
-    });
+    // O conteúdo de origem nas linhas do contrato (o que a leitura do importado devolve): de um rascunho descartado.
+    const molde = await m.ctrl.salvarRascunho(
+      '1003',
+      { modelo: 61, atendimento: 10031, dataHoraClinica: agora(), respostas: [texto(6102, 'Exame IMPORTADO')] },
+      m.req(),
+    );
+    const linhasDeOrigem = (await m.porta.lerRascunho(C, molde.rascunho))!.linhas.map(
+      (l) => ({ ...l, procedimento: undefined, observacao: undefined }) as unknown as LinhaGravacao,
+    );
+    await m.ctrl.descartar(String(molde.rascunho), { versao: molde.versao }, m.req());
+    const id = m.porta.semearRascunhoImportado(
+      C.hospital,
+      { paciente: 1003, modelo: 61, atendimento: 10031, cbo: prof.cbo },
+      false,
+      { linhas: linhasDeOrigem, lancadoEm: '2025-03-10T09:15:00.000' },
+    );
     const f = await m.ctrl.formulario('1003', '61', { rascunho: String(id) }, m.req());
     expect(f.rascunho?.resumo).toMatchObject({ id, somenteLeitura: false, deOutroSistema: true });
+    // O autor vê o que escreveu na origem e o lançamento original (nunca o formulário vazio nem a data da carga).
+    expect(JSON.stringify(f.rascunho?.respostas.filter((r) => r.vinculo === 6102))).toContain('Exame IMPORTADO');
+    expect(f.rascunho?.resumo.atualizadoEm).toMatch(/^2025-03-10/);
     expect(f.rascunhos.find((r) => r.id === id)).toMatchObject({ somenteLeitura: false });
     expect(f.avisos.join(' ')).not.toMatch(/só leitura/);
     const salvo = await m.ctrl.salvarRascunho(

@@ -206,12 +206,19 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       const opcao = (campo: number, seq: number, rotulo: string) =>
         ins(
           'INSERT INTO modelo_campo_opcao (modelo_campo_id, sequencia, codigo, rotulo, criado_em) VALUES (?, ?, ?, ?, ?)',
-          [campo, seq, `o${seq}`, rotulo, agora],
+          // Código único da opção (como o da carga: a chave da opção na origem), lido pelo rascunho importado.
+          [campo, seq, `o${campo}_${seq}`, rotulo, agora],
         );
       await opcao(campoEscolha, 1, 'Leve');
       const opcaoGrave = await opcao(campoEscolha, 2, 'Grave');
       await opcao(campoMultipla, 1, 'Oral');
       const opcaoEnteral = await opcao(campoMultipla, 2, 'Enteral');
+      // A carga cria uma opção (inativa no formulário) também para a pergunta de texto: é por ela que a resposta
+      // importada acha o campo.
+      await ins(
+        'INSERT INTO modelo_campo_opcao (modelo_campo_id, sequencia, codigo, rotulo, ativo, criado_em) VALUES (?, ?, ?, ?, FALSE, ?)',
+        [campoTexto, 9, `o${campoTexto}_9`, 'Texto', agora],
+      );
       const categoria = await ins(
         "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, 'internacao', ?)",
         [`${P}int`, 'Categoria sintética', agora],
@@ -413,35 +420,112 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     expect(Number(n?.['n'])).toBe(1);
   });
 
-  it('rascunho importado (ADR 0006): do autor, ele continua, finaliza e descarta como qualquer rascunho', async () => {
-    const importar = async (id: number): Promise<void> => {
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
-        e.executar("UPDATE registro_assistencial_rascunho SET origem = 'migracao' WHERE id = ?", [id]),
-      );
-    };
-    const r1 = await g.salvarRascunho(C, { ...base(), linhas: linhas() }, ctx());
-    await importar(r1.rascunho);
-    const lido = await g.lerRascunho(C, r1.rascunho);
-    expect(lido?.rascunho).toMatchObject({ doNovo: false, cbo: m.profissional });
-    expect((await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).map((x) => x.id)).toContain(r1.rascunho);
-    const v1 = lido!.rascunho.versao;
+  it('rascunho importado (ADR 0006): como a carga grava, o autor vê as respostas e o lançamento de origem, continua e finaliza', async () => {
+    // Como o conector grava: respostas '[]', origem 'migracao', sem conta do autor, iniciado_em da origem e as respostas
+    // em edição na linha de inclusão da trilha do rascunho (lista JSON com as colunas da origem).
+    const importar = async (itens: readonly Record<string, unknown>[]): Promise<number> =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: P }, async (e) => {
+        const id = await e.inserir(
+          `INSERT INTO registro_assistencial_rascunho (estabelecimento_id, paciente_id, atendimento_id,
+             modelo_documento_clinico_id, autor_profissional_id, autor_usuario_id, data_hora_clinica, iniciado_em,
+             respostas, situacao, origem, criado_em)
+           VALUES (?, ?, ?, ?, ?, NULL, '2025-03-10 12:00:00.000', '2025-03-10 12:15:00.000', '[]', 'aberto',
+             'migracao', UTC_TIMESTAMP(3))`,
+          [m.estabelecimento, m.paciente, m.atendimento, m.modelo, m.profissional],
+        );
+        await e.inserir(
+          `INSERT INTO trilha_auditoria (estabelecimento_id, ocorrido_em, acao, entidade, entidade_id, dados_depois,
+             motivo, criado_em)
+           VALUES (?, UTC_TIMESTAMP(3), 'inclusao', 'registro_assistencial_rascunho', ?, ?, ?, UTC_TIMESTAMP(3))`,
+          [m.estabelecimento, id, JSON.stringify(itens), 'respostas em edição do rascunho importado (sintético)'],
+        );
+        return id;
+      });
+    const item = (codigo: string, v: Record<string, unknown>) => ({
+      ID_RESPOSTA: codigo,
+      SEQ: 1,
+      ORDEM: null,
+      TAB: null,
+      RESPALFA: null,
+      CONTEVOL: null,
+      RESPVALOR: null,
+      RESPDATA: null,
+      RESPHORA: null,
+      RESPSNAO: null,
+      UNIDRESP: null,
+      ID_HTCID: null,
+      ID_HTPROCTO: null,
+      OBSERVACAO: null,
+      AUTOPREENCHIDO: 'N',
+      JUSTIFICATIVA_DIAGNOSTICO: null,
+      ...v,
+    });
+    const r1 = await importar([
+      item(`o${m.campoMultipla}_2`, { RESPALFA: 'Enteral' }),
+      item(`o${m.campoTexto}_9`, { CONTEVOL: 'Quadro importado sintético' }),
+      item(`o${m.campoEscolha}_2`, {}),
+    ]);
+    const lido = await g.lerRascunho(C, r1);
+    expect(lido?.rascunho).toMatchObject({ doNovo: false, cbo: m.profissional, respostas: 3 });
+    // O lançamento é o de origem (iniciado_em), nunca o momento da carga.
+    expect(lido?.rascunho.lancadoEm?.slice(0, 10)).toBe('2025-03-10');
+    expect(lido?.linhas.map((l) => [l.ordem, l.idResposta, l.indice, l.alfa, l.texto])).toEqual([
+      ['0101', m.campoTexto, null, null, 'Quadro importado sintético'],
+      ['0102', DESLOCAMENTO_OPCAO + m.opcaoGrave, '2', null, null],
+      ['0103', DESLOCAMENTO_OPCAO + m.opcaoEnteral, '1', 'Enteral', null],
+    ]);
+    const naLista = (await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).find((x) => x.id === r1);
+    expect(naLista).toMatchObject({ respostas: 3, lancadoEm: lido!.rascunho.lancadoEm });
+
+    // O autor salva por cima com o que leu: a nova versão leva o conteúdo e o lançamento de origem; o importado
+    // fica arquivado (nunca apagado).
+    const doContrato = lido!.linhas.map(
+      (l) => ({ ...l, procedimento: undefined, observacao: undefined }) as unknown as LinhaGravacao,
+    );
     const r2 = await g.salvarRascunho(
       C,
-      { ...base(), linhas: linhas(), rascunho: { id: r1.rascunho, versao: v1 } },
+      { ...base(), linhas: doContrato, rascunho: { id: r1, versao: lido!.rascunho.versao } },
       ctx(),
     );
-    expect((await g.lerRascunho(C, r2.rascunho))?.rascunho.doNovo).toBe(true);
+    const lido2 = await g.lerRascunho(C, r2.rascunho);
+    expect(lido2?.rascunho).toMatchObject({ doNovo: true, respostas: 3, lancadoEm: lido!.rascunho.lancadoEm });
+    expect(lido2?.linhas.map((l) => l.texto)).toContain('Quadro importado sintético');
+    const situacao = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.uma('SELECT situacao, excluido_em FROM registro_assistencial_rascunho WHERE id = ?', [r1]),
+    );
+    expect(situacao).toMatchObject({ situacao: 'arquivado', excluido_em: null });
     const { registro: id } = await g.registrar(
       C,
-      { ...registro(), rascunho: { id: r2.rascunho, versao: r2.versao } } as never,
+      { ...registro(), linhas: doContrato, rascunho: { id: r2.rascunho, versao: r2.versao } } as never,
       ctx(),
     );
-    expect(id).toBeGreaterThan(0);
-    const r3 = await g.salvarRascunho(C, { ...base(), linhas: linhas() }, ctx());
-    await importar(r3.rascunho);
-    const v3 = (await g.lerRascunho(C, r3.rascunho))!.rascunho.versao;
-    await g.descartarRascunho(C, { rascunho: r3.rascunho, versao: v3, cbo: m.profissional }, ctx());
-    expect(await g.lerRascunho(C, r3.rascunho)).toMatchObject({ aberto: false, substituido: false });
+    expect((await g.respostasRegistro(C, id)).map((l) => l.texto)).toContain('Quadro importado sintético');
+
+    // Resposta que não acha campo na versão publicada: a edição é recusada (nunca o formulário vazio); a lista mostra
+    // a contagem de origem e o autor ainda descarta.
+    const r3 = await importar([item('sem-opcao-no-formulario', { RESPALFA: 'x' })]);
+    await expect(g.lerRascunho(C, r3)).rejects.toMatchObject({
+      problema: { codigo: 'rascunho-importado-ilegivel' },
+    });
+    expect((await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).find((x) => x.id === r3)).toMatchObject({
+      respostas: 1,
+    });
+    const v3 = (await g.rascunhosDoPaciente(C, m.paciente, m.modelo)).find((x) => x.id === r3)!.versao;
+    await g.descartarRascunho(C, { rascunho: r3, versao: v3, cbo: m.profissional }, ctx());
+    expect(await g.lerRascunho(C, r3)).toMatchObject({ aberto: false, substituido: false, linhas: [] });
+
+    // Importado sem linha de carga: o rascunho de origem estava vazio de fato.
+    const r4 = await nucleo.escrever({ cliente: CLIENTE, correlacao: P }, (e) =>
+      e.inserir(
+        `INSERT INTO registro_assistencial_rascunho (estabelecimento_id, paciente_id, atendimento_id,
+           modelo_documento_clinico_id, autor_profissional_id, data_hora_clinica, respostas, situacao, origem, criado_em)
+         VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(3), '[]', 'aberto', 'migracao', UTC_TIMESTAMP(3))`,
+        [m.estabelecimento, m.paciente, m.atendimento, m.modelo, m.profissional],
+      ),
+    );
+    expect((await g.lerRascunho(C, r4))?.linhas).toEqual([]);
+    const v4 = (await g.lerRascunho(C, r4))!.rascunho.versao;
+    await g.descartarRascunho(C, { rascunho: r4, versao: v4, cbo: m.profissional }, ctx());
   });
 
   it('suporte técnico: gravação e suspensão em sessão de suporte voltam como marcas na prova', async () => {

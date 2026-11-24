@@ -449,15 +449,17 @@ export class PortaRegistroMemoria implements PortaRegistro {
     hospital: string,
     r: { paciente: number; modelo: number; atendimento: number; cbo: number },
     doNovo = false,
+    /** O conteúdo de origem: as respostas em edição e o lançamento original (nunca o da carga). */
+    origem: { linhas?: readonly LinhaGravacao[]; lancadoEm?: string } = {},
   ): number {
     const id = this.proximo++;
     this.rasc(hospital).push({
       id,
       ...r,
       dataHoraClinica: agoraLocal().slice(0, 16),
-      lancadoEm: `${agoraLocal()}.000`,
+      lancadoEm: origem.lancadoEm ?? `${agoraLocal()}.000`,
       justificativa: null,
-      linhas: [],
+      linhas: [...(origem.linhas ?? [])],
       fechado: null,
       doNovo,
       anterior: null,
