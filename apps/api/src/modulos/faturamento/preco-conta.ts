@@ -56,7 +56,9 @@ export async function precoVigente(
               pv.valor_total
          FROM preco_procedimento pp JOIN preco_procedimento_valor pv ON pv.preco_procedimento_id = pp.id
         WHERE pp.tabela_preco_id = ? AND pp.item_faturavel_id = ? AND pp.ativo = 1 AND pp.excluido_em IS NULL
-          AND pv.vigencia_inicio <= ?
+          AND pv.vigencia_inicio <= ? AND pv.operacao <> 'exclusao'
+          AND NOT EXISTS (SELECT 1 FROM preco_procedimento_valor z WHERE z.preco_procedimento_id = pv.preco_procedimento_id
+                AND z.vigencia_inicio = pv.vigencia_inicio AND z.operacao = 'exclusao' AND z.id > pv.id)
         ORDER BY pv.vigencia_inicio DESC, pv.id DESC`,
       [t, item, data],
     );
