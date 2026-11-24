@@ -87,6 +87,8 @@ export const esquemaBloqueioResultado = z.object({
   janelaDias: z.number().int().min(1).max(3650),
   acao: acao.default('bloquear'),
   mensagem: z.string().trim().max(500).nullable().default(null),
+  /** Vale em todos os estabelecimentos do cliente (só o administrador); senão, só no estabelecimento da sessão. */
+  global: z.boolean().default(false),
 });
 
 export const TIPOS_LIMITE = {
@@ -184,8 +186,9 @@ export async function limitesDoPedido(
   ).map(intervaloDe);
   const bloqueios = (
     await l.consultar(
-      `SELECT * FROM bloqueio_exame_resultado WHERE ativo = TRUE AND exame_id IN (${lista(exames.length)})`,
-      exames,
+      `SELECT * FROM bloqueio_exame_resultado WHERE ativo = TRUE
+          AND (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND exame_id IN (${lista(exames.length)})`,
+      [est, ...exames],
     )
   ).map(bloqueioDe);
 
@@ -278,10 +281,24 @@ export const COLUNA_LIBERACAO: Record<LimiteAcionado['tipo'], string> = {
 export interface LimitesCadastrados {
   readonly cotas: readonly (CotaExame & { ativo: boolean; exameNome: string | null; usoNoPeriodo: number })[];
   readonly intervalos: readonly (IntervaloRepeticao & { ativo: boolean })[];
-  readonly bloqueios: readonly (BloqueioPorResultado & { ativo: boolean })[];
+  /** `global`: a regra vale no cliente todo (estabelecimento nulo); senão é do estabelecimento da sessão. */
+  readonly bloqueios: readonly (BloqueioPorResultado & { ativo: boolean; global: boolean })[];
   /** As fontes pagadoras para o filtro da cota e do intervalo (por convênio). */
   readonly fontes: readonly { id: number; nome: string }[];
+  /** As unidades assistenciais e os setores solicitantes do estabelecimento (cota por unidade ou setor). */
+  readonly unidades: readonly { id: number; nome: string }[];
+  readonly setoresSolicitantes: readonly { id: number; nome: string }[];
+  /** A data civil de hoje no fuso do estabelecimento (início padrão da vigência na tela). */
+  readonly hoje: string;
 }
+
+/** Quem cadastra ou desativa a regra de alcance global (o cliente todo). */
+export interface OpcoesDoCadastro {
+  readonly administrador: boolean;
+}
+
+const SEM_ALCANCE_GLOBAL =
+  'Só o administrador cadastra ou desativa a regra que vale em todos os estabelecimentos.';
 
 function daRegra<T>(fn: () => T): T {
   try {
@@ -375,17 +392,38 @@ export class ServicoLimitesExame {
           [est],
         )
       ).map((r) => ({ ...intervaloDe(r), ativo: Boolean(Number(r['ativo'] ?? 0)) }));
-      // O bloqueio por resultado não tem estabelecimento no modelo: vale para os exames do catálogo do cliente.
+      // O bloqueio por resultado do estabelecimento e os de alcance global (estabelecimento nulo).
       const bloqueios = (
-        await l.consultar('SELECT * FROM bloqueio_exame_resultado ORDER BY ativo DESC, id DESC LIMIT 500', [])
-      ).map((r) => ({ ...bloqueioDe(r), ativo: Boolean(Number(r['ativo'] ?? 0)) }));
+        await l.consultar(
+          `SELECT * FROM bloqueio_exame_resultado WHERE estabelecimento_id = ? OR estabelecimento_id IS NULL
+            ORDER BY ativo DESC, id DESC LIMIT 500`,
+          [est],
+        )
+      ).map((r) => ({
+        ...bloqueioDe(r),
+        ativo: Boolean(Number(r['ativo'] ?? 0)),
+        global: r['estabelecimento_id'] === null || r['estabelecimento_id'] === undefined,
+      }));
       const fontes = (
         await l.consultar(
           'SELECT id, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome LIMIT 2000',
           [],
         )
       ).map((r) => ({ id: n(r['id']), nome: texto(r['nome']) }));
-      return { cotas, intervalos, bloqueios, fontes };
+      const opcao = (r: Linha) => ({ id: n(r['id']), nome: texto(r['nome']) });
+      const unidades = (
+        await l.consultar(
+          'SELECT id, nome FROM unidade_assistencial WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY nome LIMIT 2000',
+          [est],
+        )
+      ).map(opcao);
+      const setoresSolicitantes = (
+        await l.consultar(
+          'SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY nome LIMIT 2000',
+          [est],
+        )
+      ).map(opcao);
+      return { cotas, intervalos, bloqueios, fontes, unidades, setoresSolicitantes, hoje };
     });
   }
 
@@ -435,15 +473,21 @@ export class ServicoLimitesExame {
     });
   }
 
-  async incluirBloqueioResultado(c: ContextoSadt, entrada: unknown): Promise<{ id: number }> {
+  async incluirBloqueioResultado(
+    c: ContextoSadt,
+    entrada: unknown,
+    o: OpcoesDoCadastro = { administrador: false },
+  ): Promise<{ id: number }> {
     const e = esquemaBloqueioResultado.parse(entrada);
+    if (e.global && !o.administrador) throw recusa('sem-permissao-global', SEM_ALCANCE_GLOBAL);
     daRegra(() => conferirBloqueioPorResultado(e));
-    return this.gravar(c, 'sadt.limite.resultado.incluido', 'bloqueio_exame_resultado', async (tx) => {
+    return this.gravar(c, 'sadt.limite.resultado.incluido', 'bloqueio_exame_resultado', async (tx, est) => {
       await exameExiste(tx, e.exame);
       if (e.exameAvaliado !== null) await exameExiste(tx, e.exameAvaliado);
       const a = await tx.uma('SELECT id FROM analito WHERE id = ?', [e.analito]);
       if (!a) throw recusa('analito-inexistente', 'O analito não existe.');
       return tx.incluir('bloqueio_exame_resultado', {
+        estabelecimento_id: e.global ? null : est,
         exame_id: e.exame,
         exame_avaliado_id: e.exameAvaliado,
         analito_id: e.analito,
@@ -458,16 +502,25 @@ export class ServicoLimitesExame {
   }
 
   /** Desativa a regra (nunca apaga: as liberações já registradas nos itens seguem ligadas a ela). */
-  async desativar(c: ContextoSadt, tipo: TipoCadastroLimite, alvo: number): Promise<{ id: number }> {
+  async desativar(
+    c: ContextoSadt,
+    tipo: TipoCadastroLimite,
+    alvo: number,
+    o: OpcoesDoCadastro = { administrador: false },
+  ): Promise<{ id: number }> {
     const tabela = TIPOS_LIMITE[tipo];
     return this.gravar(c, `sadt.limite.${tipo}.desativado`, tabela, async (tx, est) => {
+      // A regra do estabelecimento da sessão; o bloqueio por resultado também pode ser global (estabelecimento nulo).
       const r = await tx.uma(
         tabela === 'bloqueio_exame_resultado'
-          ? `SELECT id, versao, ativo FROM ${tabela} WHERE id = ?`
+          ? `SELECT id, versao, ativo, estabelecimento_id FROM ${tabela}
+              WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)`
           : `SELECT id, versao, ativo FROM ${tabela} WHERE id = ? AND estabelecimento_id = ?`,
-        tabela === 'bloqueio_exame_resultado' ? [alvo] : [alvo, est],
+        [alvo, est],
       );
       if (!r) throw recusa('nao-encontrado', 'A regra não existe neste estabelecimento.');
+      if (tabela === 'bloqueio_exame_resultado' && r['estabelecimento_id'] === null && !o.administrador)
+        throw recusa('sem-permissao-global', SEM_ALCANCE_GLOBAL);
       if (!Number(r['ativo'] ?? 0)) throw recusa('ja-inativa', 'A regra já está desativada.');
       await tx.alterar(tabela, alvo, n(r['versao']), { ativo: false });
       return alvo;

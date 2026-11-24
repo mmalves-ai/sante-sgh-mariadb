@@ -16,6 +16,8 @@ const esquemaLista = z.object({
       exameNome: txt.nullable(),
       setor: n.nullable(),
       fontePagadora: n.nullable(),
+      unidade: n.nullable(),
+      setorSolicitante: n.nullable(),
       periodo: z.enum(['dia', 'semana', 'mes', 'competencia']),
       quantidadeMaxima: n.nullable(),
       percentualLimite: n.nullable(),
@@ -51,9 +53,14 @@ const esquemaLista = z.object({
       acao,
       mensagem: txt.nullable(),
       ativo: z.boolean(),
+      global: z.boolean(),
     }),
   ),
   fontes: z.array(z.object({ id: n, nome: txt })),
+  unidades: z.array(z.object({ id: n, nome: txt })),
+  setoresSolicitantes: z.array(z.object({ id: n, nome: txt })),
+  /** Hoje no fuso do estabelecimento (início padrão da vigência). */
+  hoje: txt,
 });
 export type LimitesExame = z.infer<typeof esquemaLista>;
 const esquemaId = z.object({ id: n });

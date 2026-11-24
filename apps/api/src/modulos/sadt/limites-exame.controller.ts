@@ -6,7 +6,9 @@
 //   POST /api/sadt/limites/intervalos               inclui um intervalo (sem conflitante: a repetição do exame)
 //   POST /api/sadt/limites/resultados               inclui um bloqueio pelo último resultado
 //   POST /api/sadt/limites/:tipo/:id/desativar      desativa (nunca apaga)
-// Ler: `sadt.catalogo.ler`; gravar: `sadt.catalogo.editar` (o cargo dá o acesso; o administrador pode tudo).
+// Ler: `sadt.catalogo.ler`; gravar: `sadt.catalogo.editar` (o cargo dá o acesso; o administrador pode tudo). O bloqueio
+// pelo resultado é do estabelecimento da sessão; o de alcance global (`global: true`) só o administrador da plataforma
+// cadastra ou desativa.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -23,6 +25,9 @@ import {
 } from './aplicacao/limites-exame-propria.js';
 
 export const SERVICO_LIMITES_EXAME = Symbol('SERVICO_LIMITES_EXAME');
+
+/** O administrador da plataforma (pode tudo, ADR 0002): só ele cadastra ou desativa a regra de alcance global. */
+const administradorDe = (req: RequisicaoAutorizada) => req.sgh?.sessao.usuario.ator === 'plataforma';
 
 @Controller('sadt/limites')
 export class LimitesExameController {
@@ -65,7 +70,9 @@ export class LimitesExameController {
   @Permissao('sadt.catalogo.editar')
   @AuditadoNoHandler('o bloqueio com a trilha_auditoria na mesma transação (Executor)')
   resultado(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.s.incluirBloqueioResultado(sessaoDe(req).porta, corpo(esquemaBloqueioResultado, b));
+    return this.s.incluirBloqueioResultado(sessaoDe(req).porta, corpo(esquemaBloqueioResultado, b), {
+      administrador: administradorDe(req),
+    });
   }
 
   @Post(':tipo/:id/desativar')
@@ -74,6 +81,8 @@ export class LimitesExameController {
   @AuditadoNoHandler('a desativação com a trilha_auditoria na mesma transação (Executor)')
   desativar(@Param('tipo') tipo: string, @Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     if (!(tipo in TIPOS_LIMITE)) throw new ErroProblema('nao-encontrado', 404, 'Registro não encontrado');
-    return this.s.desativar(sessaoDe(req).porta, tipo as TipoCadastroLimite, idDaRota(id));
+    return this.s.desativar(sessaoDe(req).porta, tipo as TipoCadastroLimite, idDaRota(id), {
+      administrador: administradorDe(req),
+    });
   }
 }

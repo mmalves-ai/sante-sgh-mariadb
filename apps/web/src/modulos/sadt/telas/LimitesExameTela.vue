@@ -5,7 +5,7 @@
 // confere o cadastro na hora; desativar nunca apaga (a liberação já registrada no item segue ligada à regra).
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   type AcaoLimite,
@@ -23,7 +23,8 @@ const { t } = useI18n();
 const cliente = useQueryClient();
 const lista = useQuery({ queryKey: ['sadt', 'limites'], queryFn: listarLimites });
 const opcoes = useQuery({ queryKey: ['sadt', 'catalogo', 'opcoes'], queryFn: lerOpcoesCatalogo });
-const hoje = new Date().toISOString().slice(0, 10);
+// O início padrão da vigência é o dia civil do estabelecimento (o servidor manda pelo fuso dele, nunca o UTC).
+const hoje = computed(() => lista.data.value?.hoje ?? '');
 
 const de = (xs: readonly { id: number; nome: string }[] | undefined, vazio: string) => [
   { valor: '', rotulo: vazio },
@@ -34,6 +35,10 @@ const examesOuVazio = computed(() => de(opcoes.data.value?.exames, t('sadt.limit
 const setores = computed(() => de(opcoes.data.value?.setores, t('sadt.limites.todos')));
 const analitos = computed(() => de(opcoes.data.value?.analitos, t('sadt.limites.escolha')));
 const fontes = computed(() => de(lista.data.value?.fontes, t('sadt.limites.todas')));
+const unidades = computed(() => de(lista.data.value?.unidades, t('sadt.limites.todas')));
+const solicitantes = computed(() => de(lista.data.value?.setoresSolicitantes, t('sadt.limites.todos')));
+const nomeDe = (xs: readonly { id: number; nome: string }[] | undefined, id: number) =>
+  xs?.find((x) => x.id === id)?.nome ?? `#${id}`;
 const nomeExame = (id: number | null) =>
   id === null ? '' : (opcoes.data.value?.exames.find((e) => e.id === id)?.nome ?? `#${id}`);
 const nomeFonte = (id: number | null) =>
@@ -68,11 +73,13 @@ const cota = ref({
   exame: '',
   setor: '',
   fonte: '',
+  unidade: '',
+  solicitante: '',
   periodo: 'mes',
   quantidade: '',
   percentual: '',
   so: false,
-  inicio: hoje,
+  inicio: '',
   fim: '',
 });
 const cotaValida = computed(
@@ -89,7 +96,7 @@ const intervalo = ref({
   horas: '',
   acao: 'bloquear' as AcaoLimite,
   mensagem: '',
-  inicio: hoje,
+  inicio: '',
 });
 const intervaloValido = computed(
   () => !!intervalo.value.exame && (intervalo.value.mesmoDia || Number(intervalo.value.horas) > 0),
@@ -104,7 +111,18 @@ const resultado = ref({
   janela: '30',
   acao: 'bloquear' as AcaoLimite,
   mensagem: '',
+  global: false,
 });
+// Quando o dia do estabelecimento chega, ele vira o início padrão da vigência (o usuário pode trocar).
+watch(
+  hoje,
+  (h) => {
+    if (!h) return;
+    if (!cota.value.inicio) cota.value.inicio = h;
+    if (!intervalo.value.inicio) intervalo.value.inicio = h;
+  },
+  { immediate: true },
+);
 const resultadoValido = computed(
   () =>
     !!resultado.value.exame &&
@@ -135,11 +153,13 @@ const gravarCota = () =>
           exame: idOuNulo(cota.value.exame),
           setor: idOuNulo(cota.value.setor),
           fontePagadora: idOuNulo(cota.value.fonte),
+          unidade: idOuNulo(cota.value.unidade),
+          setorSolicitante: idOuNulo(cota.value.solicitante),
           periodo: cota.value.periodo,
           quantidadeMaxima: numOuNulo(cota.value.quantidade),
           percentualLimite: numOuNulo(cota.value.percentual),
           permiteExceder: cota.value.so,
-          vigenciaInicio: cota.value.inicio,
+          vigenciaInicio: cota.value.inicio || hoje.value,
           vigenciaFim: cota.value.fim || null,
         },
         novaChave('limite.cota'),
@@ -158,7 +178,7 @@ const gravarIntervalo = () =>
           intervaloMinimoHoras: Number(intervalo.value.horas || 0),
           acao: intervalo.value.acao,
           mensagem: intervalo.value.mensagem.trim() || null,
-          vigenciaInicio: intervalo.value.inicio,
+          vigenciaInicio: intervalo.value.inicio || hoje.value,
         },
         novaChave('limite.intervalo'),
       ),
@@ -177,6 +197,7 @@ const gravarResultado = () =>
           janelaDias: Number(resultado.value.janela),
           acao: resultado.value.acao,
           mensagem: resultado.value.mensagem.trim() || null,
+          global: resultado.value.global,
         },
         novaChave('limite.resultado'),
       ),
@@ -210,6 +231,18 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
           :opcoes="fontes"
           data-testid="cota-fonte"
         />
+        <SanteSelecao
+          v-model="cota.unidade"
+          :rotulo="t('sadt.limites.unidade')"
+          :opcoes="unidades"
+          data-testid="cota-unidade"
+        />
+        <SanteSelecao
+          v-model="cota.solicitante"
+          :rotulo="t('sadt.limites.setorSolicitante')"
+          :opcoes="solicitantes"
+          data-testid="cota-solicitante"
+        />
         <SanteSelecao v-model="cota.periodo" :rotulo="t('sadt.limites.periodo')" :opcoes="periodos" />
         <label
           >{{ t('sadt.limites.quantidade')
@@ -232,6 +265,13 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
       <ul>
         <li v-for="c in lista.data.value?.cotas ?? []" :key="c.id" :class="{ inativa: !c.ativo }">
           {{ c.exameNome ?? nomeExame(c.exame) }} · {{ nomeFonte(c.fontePagadora) }} ·
+          <template v-if="c.unidade !== null"
+            >{{ t('sadt.limites.unidade') }}: {{ nomeDe(lista.data.value?.unidades, c.unidade) }} ·
+          </template>
+          <template v-if="c.setorSolicitante !== null"
+            >{{ t('sadt.limites.setorSolicitante') }}:
+            {{ nomeDe(lista.data.value?.setoresSolicitantes, c.setorSolicitante) }} ·
+          </template>
           {{ t(`sadt.limites.periodos.${c.periodo}`) }}
           <template v-if="c.quantidadeMaxima !== null">
             · {{ t('sadt.limites.uso', { usados: c.usoNoPeriodo, limite: c.quantidadeMaxima }) }}
@@ -312,6 +352,7 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
         <label>{{ t('sadt.limites.janela') }}<input v-model="resultado.janela" inputmode="numeric" /></label>
         <SanteSelecao v-model="resultado.acao" :rotulo="t('sadt.limites.acao')" :opcoes="acoes" />
         <label>{{ t('sadt.limites.mensagem') }}<input v-model="resultado.mensagem" maxlength="500" /></label>
+        <label><input v-model="resultado.global" type="checkbox" /> {{ t('sadt.limites.global') }}</label>
         <SanteBotao
           :rotulo="t('sadt.limites.incluir')"
           :desabilitado="!resultadoValido"
@@ -323,6 +364,7 @@ const desativar = (tipo: 'cota' | 'intervalo' | 'resultado', id: number) =>
           {{ nomeExame(b.exame) }} · {{ t(`sadt.limites.operadores.${b.operador}`) }} {{ b.valor }} ·
           {{ t('sadt.limites.diasCurto', { n: b.janelaDias }) }} ·
           {{ t(`sadt.limites.acoes.${b.acao}`) }}
+          <template v-if="b.global"> · {{ t('sadt.limites.globalCurto') }}</template>
           <span v-if="!b.ativo"> · {{ t('sadt.limites.inativa') }}</span>
           <SanteBotao v-else :rotulo="t('sadt.limites.desativar')" @acionar="desativar('resultado', b.id)" />
         </li>

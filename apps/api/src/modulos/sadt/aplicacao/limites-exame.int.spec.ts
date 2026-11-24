@@ -24,7 +24,7 @@ describe.skipIf(SEM_BANCO)('limites do pedido de exame (MariaDB, cliente f22_o2)
   let limites: ServicoLimitesExame;
   let m: MassaSadt | null = null;
   const reqs: number[] = [];
-  const regras = { cota: 0, intervalo: 0, resultado: 0 };
+  const regras = { cota: 0, intervalo: 0, resultado: 0, global: 0 };
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-f8l6' }, (l) => l.uma(sql, p));
   const todos = (sql: string, p: unknown[]) =>
@@ -57,7 +57,7 @@ describe.skipIf(SEM_BANCO)('limites do pedido de exame (MariaDB, cliente f22_o2)
         }
         await x('DELETE FROM cota_exame WHERE estabelecimento_id = ?', [est]);
         await x('DELETE FROM intervalo_repeticao_exame WHERE estabelecimento_id = ?', [est]);
-        await x('DELETE FROM bloqueio_exame_resultado WHERE id = ?', [regras.resultado]);
+        await x('DELETE FROM bloqueio_exame_resultado WHERE id IN (?, ?)', [regras.resultado, regras.global]);
       });
     }
     await limparMassaSadt(nucleo, m);
@@ -110,7 +110,44 @@ describe.skipIf(SEM_BANCO)('limites do pedido de exame (MariaDB, cliente f22_o2)
         [regras.cota, regras.intervalo, regras.resultado],
       ),
     ).toBeGreaterThanOrEqual(3);
+    // O bloqueio é do estabelecimento da sessão: outra unidade não o vê nem o desativa (e a regra não a trava).
+    expect(
+      await um('SELECT estabelecimento_id FROM bloqueio_exame_resultado WHERE id = ?', [regras.resultado]),
+    ).toMatchObject({ estabelecimento_id: m!.base.est });
+    const cOutro = contexto(m!, m!.base.outroEst);
+    expect((await limites.listar(cOutro)).bloqueios.some((b) => b.id === regras.resultado)).toBe(false);
+    expect(
+      codigoDe(await limites.desativar(cOutro, 'resultado', regras.resultado).catch((e: unknown) => e)),
+    ).toBe('nao-encontrado');
+    // Alcance global (estabelecimento nulo): só o administrador cadastra e desativa; vale em todas as unidades.
+    const global = {
+      exame: m!.exameImagem,
+      analito: m!.analito,
+      operador: 'igual',
+      valor: '-888888',
+      janelaDias: 30,
+      acao: 'alertar',
+      global: true,
+    };
+    expect(codigoDe(await limites.incluirBloqueioResultado(c, global).catch((e: unknown) => e))).toBe(
+      'sem-permissao-global',
+    );
+    regras.global = (await limites.incluirBloqueioResultado(c, global, { administrador: true })).id;
+    expect(
+      await um('SELECT estabelecimento_id FROM bloqueio_exame_resultado WHERE id = ?', [regras.global]),
+    ).toMatchObject({ estabelecimento_id: null });
+    expect((await limites.listar(cOutro)).bloqueios.find((b) => b.id === regras.global)?.global).toBe(true);
+    expect(
+      codigoDe(await limites.desativar(cOutro, 'resultado', regras.global).catch((e: unknown) => e)),
+    ).toBe('sem-permissao-global');
+    await limites.desativar(cOutro, 'resultado', regras.global, { administrador: true });
+    expect(
+      await um('SELECT ativo FROM bloqueio_exame_resultado WHERE id = ?', [regras.global]),
+    ).toMatchObject({ ativo: 0 });
+
     const lista = await limites.listar(c);
+    expect(lista.hoje).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(Array.isArray(lista.unidades) && Array.isArray(lista.setoresSolicitantes)).toBe(true);
     expect(lista.cotas.find((x) => x.id === regras.cota)?.usoNoPeriodo).toBeGreaterThanOrEqual(1);
     expect(lista.intervalos.find((x) => x.id === regras.intervalo)).toMatchObject({
       mesmoDia: true,
