@@ -48,6 +48,11 @@ import {
   TABELAS_COMPLEMENTO_Q4,
 } from './porta-propria-complemento-q4.js';
 import {
+  gravacoesComplementoQ5,
+  LeiturasGestaoComplementoQ5,
+  TABELAS_COMPLEMENTO_Q5,
+} from './porta-propria-complemento-q5.js';
+import {
   type EnvioRegulatorioRegistrado,
   type FiltroDocumentos,
   recusaVersaoGestao,
@@ -62,6 +67,7 @@ export const TABELAS_GESTAO_COMPLETA = [
     ...TABELAS_COMPLEMENTO_Q1,
     ...TABELAS_COMPLEMENTO_Q3,
     ...TABELAS_COMPLEMENTO_Q4,
+    ...TABELAS_COMPLEMENTO_Q5,
   ]),
 ] as const;
 
@@ -135,6 +141,8 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
   private readonly complementoQ3: LeiturasRevisaoComplementoQ3;
   /** Reuniões de comissão (porta-propria-complemento-q4.ts). */
   private readonly complementoQ4: LeiturasGestaoComplementoQ4;
+  /** Análises da competência, auditorias, sorteios e revisões da amostra (porta-propria-complemento-q5.ts). */
+  private readonly complementoQ5: LeiturasGestaoComplementoQ5;
 
   /**
    * @param armazem O armazenamento de arquivos da instalação (ADR 0004: disco local, metadado na tabela `arquivo`).
@@ -152,6 +160,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     this.complementoQ2 = new LeiturasGestaoComplementoQ2(nucleo);
     this.complementoQ3 = new LeiturasRevisaoComplementoQ3(nucleo);
     this.complementoQ4 = new LeiturasGestaoComplementoQ4(nucleo);
+    this.complementoQ5 = new LeiturasGestaoComplementoQ5(nucleo);
   }
 
   override gravarSgh<T>(
@@ -180,6 +189,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
         ...gravacoesComplementoQ1(tx, est, anotacao),
         ...gravacoesComplementoQ3(tx, est),
         ...gravadorComplementoQ4(tx, est, anotacao),
+        ...gravacoesComplementoQ5(tx, est, anotacao),
         gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
         registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
       },
@@ -265,6 +275,40 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
 
   override reuniao(c: ContextoGestao, id: number) {
     return this.complementoQ4.reuniao(c, id);
+  }
+
+  // ── Complemento Q5 (fecho-1): leituras delegadas ──
+
+  override analises(c: ContextoGestao, competencia: string) {
+    return this.complementoQ5.analises(c, competencia);
+  }
+
+  override auditorias(c: ContextoGestao, f: { pagina: number; porPagina: number }) {
+    return this.complementoQ5.auditorias(c, f);
+  }
+
+  override auditoria(c: ContextoGestao, id: number) {
+    return this.complementoQ5.auditoria(c, id);
+  }
+
+  override loginsDosMedicos(c: ContextoGestao, registros: readonly number[]) {
+    return this.complementoQ5.loginsDosMedicos(c, registros);
+  }
+
+  override sorteiosRevisao(c: ContextoGestao, comissao: number) {
+    return this.complementoQ5.sorteiosRevisao(c, comissao);
+  }
+
+  override sorteioRevisao(c: ContextoGestao, id: number) {
+    return this.complementoQ5.sorteioRevisao(c, id);
+  }
+
+  override revisoesDaCompetencia(c: ContextoGestao, comissao: number, competencia: string) {
+    return this.complementoQ5.revisoesDaCompetencia(c, comissao, competencia);
+  }
+
+  override revisoesDaInternacao(c: ContextoGestao, reg: number) {
+    return this.complementoQ5.revisoesDaInternacao(c, reg);
   }
 
   override pesquisas(c: ContextoGestao, de: string, ate: string) {

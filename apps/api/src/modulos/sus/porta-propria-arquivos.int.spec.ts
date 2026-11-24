@@ -41,6 +41,12 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f2390-limpa' }, async (e) => {
       for (const est of [estA, estB].filter(Boolean)) {
+        await e.executar(
+          `DELETE i FROM producao_ambulatorial_sus_item i
+             JOIN producao_ambulatorial_sus p ON p.id = i.producao_ambulatorial_sus_id WHERE p.estabelecimento_id = ?`,
+          [est],
+        );
+        await e.executar('DELETE FROM producao_ambulatorial_sus WHERE estabelecimento_id = ?', [est]);
         for (const t of ['remessa_ciha', 'remessa_bpa', 'remessa_apac', 'remessa_sisaih']) {
           await e.executar(`UPDATE ${t} SET substituta_${t}_id = NULL WHERE estabelecimento_id = ?`, [est]);
           await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id = ?`, [est]);
@@ -215,34 +221,82 @@ describe.skipIf(SEM_BANCO)('arquivo gerado do faturamento SUS na porta própria 
     expect(await porta.ler(ctxB, (l) => l.arquivos('ciha', null))).toEqual([]);
   });
 
-  it('arquivo com linhas é recusado com modelo-pendente e nada muda', async () => {
+  it('o BPA com linhas grava a folha e os itens na mesma operação da remessa; a linha recusada desfaz tudo', async () => {
     const comp = await porta.gravar(ctxA, (g) =>
       g.abrir({ instrumento: 'bpa', competencia: '202605', por: 'x' }),
     );
-    const antes = await uma('SELECT COUNT(*) AS n FROM remessa_bpa WHERE estabelecimento_id = ?', [estA]);
+    const linha = (procedimento: string) => ({
+      tipo: 'c' as const,
+      folha: 1,
+      sequencia: 1,
+      procedimento,
+      cbo: '225125',
+      idade: 40,
+      quantidade: 2,
+      data: null,
+      conta: null,
+      atendimento: null,
+      registro: null,
+    });
+    const contar = () =>
+      uma(
+        `SELECT (SELECT COUNT(*) FROM remessa_bpa WHERE estabelecimento_id = ?) AS remessas,
+                (SELECT COUNT(*) FROM producao_ambulatorial_sus WHERE estabelecimento_id = ?) AS folhas`,
+        [estA, estA],
+      );
+    const antes = await contar();
+    // A linha com procedimento fora da tabela unificada recusa e nada fica (nem a remessa nem o arquivo).
+    const id0 = await porta.gravar(ctxA, (g) => g.proximoArquivo());
+    await expect(
+      porta.gravar(ctxA, (g) =>
+        g.gravarArquivoBpa(novo(id0, { id: comp.id, instrumento: 'bpa', competencia: '202605' }, 'x'), [
+          linha('9999999999'),
+        ]),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'procedimento-inexistente' } });
+    expect(await contar()).toEqual(antes);
+    expect(await porta.ler(ctxA, (l) => l.arquivo(id0))).toBeNull();
+    // A linha válida: a remessa, uma folha consolidada exportada por ela e o item com a SIGTAP e o CBO pelo código.
     const id = await porta.gravar(ctxA, (g) => g.proximoArquivo());
     await expect(
       porta.gravar(ctxA, (g) =>
-        g.gravarArquivoBpa(novo(id, { id: comp.id, instrumento: 'bpa', competencia: '202605' }, 'x'), [
-          {
-            tipo: 'c',
-            folha: 1,
-            sequencia: 1,
-            procedimento: '0211020036',
-            cbo: '225125',
-            idade: 40,
-            quantidade: 1,
-            data: null,
-            conta: null,
-            atendimento: null,
-            registro: null,
-          },
+        g.gravarArquivoBpa(novo(id, { id: comp.id, instrumento: 'bpa', competencia: '202605' }, 'y'), [
+          linha('0211020036'),
         ]),
       ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    const depois = await uma('SELECT COUNT(*) AS n FROM remessa_bpa WHERE estabelecimento_id = ?', [estA]);
-    expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
-    expect(await porta.ler(ctxA, (l) => l.arquivo(id))).toBeNull();
+    ).resolves.toEqual({ substituidos: 0 });
+    const ef = await uma(
+      `SELECT COUNT(DISTINCT p.id) AS folhas, COUNT(i.id) AS itens, MIN(p.tipo_folha) AS tipo,
+              MIN(p.situacao) AS situacao, SUM(i.quantidade) AS quantidade, MIN(s.codigo_sigtap) AS sigtap,
+              MIN(o.codigo_cbo) AS cbo, SUM(i.paciente_id IS NULL) AS sem_paciente
+         FROM producao_ambulatorial_sus p
+         JOIN remessa_bpa r ON r.id = p.remessa_bpa_id
+         JOIN producao_ambulatorial_sus_item i ON i.producao_ambulatorial_sus_id = p.id
+         JOIN procedimento_sigtap s ON s.id = i.procedimento_sigtap_id
+         JOIN ocupacao_cbo o ON o.id = i.ocupacao_cbo_id
+        WHERE p.estabelecimento_id = ? AND p.competencia_sus_id = ?`,
+      [estA, comp.id],
+    );
+    expect({
+      folhas: Number(ef?.['folhas']),
+      itens: Number(ef?.['itens']),
+      tipo: ef?.['tipo'],
+      situacao: ef?.['situacao'],
+      quantidade: Number(ef?.['quantidade']),
+      sigtap: ef?.['sigtap'],
+      cbo: ef?.['cbo'],
+      semPaciente: Number(ef?.['sem_paciente']),
+    }).toEqual({
+      folhas: 1,
+      itens: 1,
+      tipo: 'consolidado',
+      situacao: 'exportada',
+      quantidade: 2,
+      sigtap: '0211020036',
+      cbo: '225125',
+      semPaciente: 1,
+    });
+    expect((await porta.ler(ctxA, (l) => l.arquivo(id)))?.id).toBe(id);
   });
 
   it('o serviço da tela gera, lista e baixa a CIHA sem movimento pela porta própria', async () => {

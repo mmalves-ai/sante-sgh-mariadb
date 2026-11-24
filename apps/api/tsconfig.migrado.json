@@ -1625,6 +1625,18 @@
     "src/modulos/acesso/acesso-email-erros.ts",
     "src/modulos/enfermagem/sae-porta-propria-receita.ts",
     "src/modulos/enfermagem/sae-porta-propria-receita.spec.ts",
-    "src/modulos/enfermagem/sae-porta-propria-receita.int.spec.ts"
+    "src/modulos/enfermagem/sae-porta-propria-receita.int.spec.ts",
+    "src/modulos/sus/porta-propria-resto.ts",
+    "src/modulos/sus/porta-propria-resto.spec.ts",
+    "src/modulos/sus/porta-propria-resto.int.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q5.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q5.spec.ts",
+    "src/modulos/qualidade/porta-propria-complemento-q5.int.spec.ts",
+    "src/modulos/pessoas/folha/catalogo-obrigacoes-oficiais.ts",
+    "src/modulos/pessoas/folha/catalogo-obrigacoes-oficiais.spec.ts",
+    "src/modulos/enfermagem/sae-porta-propria-terminologia.int.spec.ts",
+    "src/sessao/recusa-senha.int.spec.ts",
+    "src/modulos/cadastro/profissionais-proprio.ts",
+    "src/modulos/cadastro/profissionais-proprio.int.spec.ts"
   ]
 }

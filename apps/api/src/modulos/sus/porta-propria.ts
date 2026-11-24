@@ -55,10 +55,15 @@ import {
   producaoPendente,
   lerArquivo,
   lerArquivos,
-  linhasPendentes,
   proximoNumeroArquivo,
   TABELAS_ARQUIVO_SUS,
 } from './porta-propria-arquivos.js';
+import {
+  contagemCiha,
+  GravacoesLinhasSusPropria,
+  LeiturasRestoSusPropria,
+  TABELAS_SUS_RESTO,
+} from './porta-propria-resto.js';
 import {
   type ArquivoSus,
   type CompatibilidadeSigtap,
@@ -109,6 +114,7 @@ export const TABELAS_SUS = [
   ...TABELAS_SUS_AIH.filter(
     (t) => !TABELAS_ARQUIVO_SUS.includes(t as never) && !TABELAS_APAC_RETORNO.includes(t as never),
   ),
+  ...TABELAS_SUS_RESTO,
 ] as const;
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
@@ -664,12 +670,17 @@ export class LeituraSusPropria implements LeituraSus {
     return this.mont().linhasBpa(...a);
   }
 
-  async buscarSolicitantes(): Promise<never[]> {
-    return [];
+  private restoL?: LeiturasRestoSusPropria;
+  protected resto(): LeiturasRestoSusPropria {
+    return (this.restoL ??= new LeiturasRestoSusPropria(this.l, this.est));
   }
 
-  async parametrosCadastro(): Promise<{ competenciaAmbulatorio: null; versao: null; orgao: null }> {
-    return { competenciaAmbulatorio: null, versao: null, orgao: null };
+  buscarSolicitantes(...a: Parameters<LeiturasRestoSusPropria['buscarSolicitantes']>) {
+    return this.resto().buscarSolicitantes(...a);
+  }
+
+  parametrosCadastro() {
+    return this.resto().parametrosCadastro();
   }
 
   // ── APAC e retorno do gestor (porta-propria-apac-retorno.ts) ──
@@ -846,6 +857,11 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     est: number,
   ) {
     super(tx, est, tx);
+  }
+
+  private linhasGr?: GravacoesLinhasSusPropria;
+  private linhasG(): GravacoesLinhasSusPropria {
+    return (this.linhasGr ??= new GravacoesLinhasSusPropria(this.tx, this.est));
   }
 
   private aihsGr?: GravacoesAihPropria;
@@ -1048,12 +1064,14 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     registros: readonly RegistroCihaParaGravar[],
   ): Promise<{ substituidos: number }> {
     if (!this.montagemLeProducao()) producaoPendente('ciha');
-    if (registros.length > 0)
-      linhasPendentes('os registros da CIHA (registro_ciha com paciente e fonte de remuneração)');
-    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'ciha', {
-      quantidade_registro_internacao: 0,
-      quantidade_registro_ambulatorial: 0,
-    });
+    const { substituidos, remessa } = await gravarRemessa(
+      this.tx,
+      this.est,
+      a,
+      'ciha',
+      contagemCiha(registros),
+    );
+    await this.linhasG().registrosCiha(remessa, registros);
     return { substituidos };
   }
 
@@ -1062,11 +1080,11 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     linhas: readonly LinhaBpaParaGravar[],
   ): Promise<{ substituidos: number }> {
     if (!this.montagemLeProducao()) producaoPendente('bpa');
-    if (linhas.length > 0) linhasPendentes('as folhas do BPA (producao_ambulatorial_sus com os itens)');
-    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'bpa', {
+    const { substituidos, remessa } = await gravarRemessa(this.tx, this.est, a, 'bpa', {
       tipo_bpa: 'misto',
       quantidade_registros: a.registros,
     });
+    await this.linhasG().folhasBpa(remessa, a.competencia.id, linhas);
     return { substituidos };
   }
 
@@ -1083,12 +1101,16 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     linhas: readonly LinhaApacParaGravar[],
   ): Promise<{ substituidos: number }> {
     if (!this.montagemLeProducao()) producaoPendente('apac');
-    if (linhas.length > 0) linhasPendentes('a produção da APAC na competência (apac com apac_procedimento)');
     const { inicio } = periodoDaCompetencia(a.competencia.competencia);
-    const { substituidos } = await gravarRemessa(this.tx, this.est, a, 'apac', {
+    const { substituidos, remessa } = await gravarRemessa(this.tx, this.est, a, 'apac', {
       competencia_apresentacao: inicio,
       quantidade_apac: a.registros,
     });
+    await this.linhasG().apacsDaRemessa(
+      remessa,
+      { id: a.competencia.id, competencia: a.competencia.competencia },
+      linhas,
+    );
     return { substituidos };
   }
 

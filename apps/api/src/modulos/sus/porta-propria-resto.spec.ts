@@ -83,6 +83,7 @@ describe('regras das linhas guardadas dos arquivos do SUS', () => {
       cidPrincipal: 'I10',
       procedimentoPrincipal: '0301010072',
       procedimentos: 1,
+      itens: [{ codigo: '0301010072', quantidade: 1 }],
     });
     expect(contagemCiha([r('internacao'), r('ambulatorial'), r('ambulatorial')])).toEqual({
       quantidade_registro_internacao: 1,

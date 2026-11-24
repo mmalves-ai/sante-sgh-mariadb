@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { NucleoQualidade } from './apoio-propria.js';
 import { PortaGestaoPropriaCompleta, TABELAS_GESTAO_COMPLETA } from './gestao-porta-propria-completa.js';
 import { TABELAS_GESTAO } from './porta-gestao-propria.js';
+import { TABELAS_COMPLEMENTO_Q5 } from './porta-propria-complemento-q5.js';
 
 const LINHA = {
   id: 7,
@@ -24,16 +25,16 @@ const LINHA = {
   protocolo: null,
 };
 
-function falso() {
+function falso(linhas: readonly Record<string, unknown>[] = [LINHA]) {
   const chamadas: { sql: string; p: readonly unknown[] }[] = [];
   const leitor = {
     consultar: (sql: string, p: readonly unknown[] = []) => {
       chamadas.push({ sql, p });
-      return Promise.resolve([LINHA]);
+      return Promise.resolve([...linhas]);
     },
     uma: (sql: string, p: readonly unknown[] = []) => {
       chamadas.push({ sql, p });
-      return Promise.resolve(LINHA);
+      return Promise.resolve(linhas[0] ?? null);
     },
   };
   const nucleo = {
@@ -48,6 +49,7 @@ describe('porta própria completa da gestão (unidade)', () => {
   it('a transação declara as tabelas da base e a do envio regulatório', () => {
     expect(TABELAS_GESTAO_COMPLETA).toEqual(expect.arrayContaining([...TABELAS_GESTAO]));
     expect(TABELAS_GESTAO_COMPLETA).toContain('envio_regulatorio_qualidade');
+    expect(TABELAS_GESTAO_COMPLETA).toEqual(expect.arrayContaining([...TABELAS_COMPLEMENTO_Q5]));
   });
 
   it('a lista de envios lê no estabelecimento desde o primeiro dia da competência e mapeia para o contrato', async () => {
@@ -94,8 +96,11 @@ describe('porta própria completa da gestão (unidade)', () => {
     expect(chamadas[0]?.sql).toMatch(/JOIN arquivo a ON a\.chave_armazenamento = e\.chave_objeto/);
   });
 
-  it('o que segue sem modelo continua falhando fechado (503 modelo-pendente), nunca vazio', async () => {
-    const { porta } = falso();
-    await expect(porta.auditorias()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+  it('as leituras do complemento Q5 vão ao banco no estabelecimento da sessão (não recusam mais modelo-pendente)', async () => {
+    const { porta, chamadas } = falso([]);
+    await expect(porta.sorteiosRevisao(C, 5)).resolves.toEqual([]);
+    expect(chamadas[0]?.p).toEqual([3, 5]);
+    await expect(porta.auditoria(C, 9)).resolves.toBeNull();
+    expect(chamadas[1]?.p).toEqual([3, 9]);
   });
 });

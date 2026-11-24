@@ -146,6 +146,7 @@ export function montarCihaDaCompetencia(
     cidPrincipal: r.cidPrincipal,
     procedimentoPrincipal: r.procedimentos[0]?.codigo ?? '',
     procedimentos: r.procedimentos.length,
+    itens: r.procedimentos.map((x) => ({ codigo: x.codigo, quantidade: x.quantidade })),
   }));
   return { resultado, cnes, criticas, registros };
 }

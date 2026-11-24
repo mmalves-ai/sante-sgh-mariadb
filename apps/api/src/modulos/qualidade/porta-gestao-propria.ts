@@ -1164,7 +1164,8 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.documentos);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  analises(): Promise<never> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  analises(..._a: Parameters<PortaGestao['analises']>): ReturnType<PortaGestao['analises']> {
     return this.pendente(PENDENTE.indicadores);
   }
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -1174,10 +1175,12 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.indicadores);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  auditorias(): Promise<never> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  auditorias(..._a: Parameters<PortaGestao['auditorias']>): ReturnType<PortaGestao['auditorias']> {
     return this.pendente(PENDENTE.auditorias);
   }
-  auditoria(): Promise<never> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  auditoria(..._a: Parameters<PortaGestao['auditoria']>): ReturnType<PortaGestao['auditoria']> {
     return this.pendente(PENDENTE.auditorias);
   }
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -1258,13 +1261,22 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.revisao);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  loginsDosMedicos(): Promise<never> {
+  loginsDosMedicos(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._a: Parameters<PortaGestao['loginsDosMedicos']>
+  ): ReturnType<PortaGestao['loginsDosMedicos']> {
     return this.pendente(PENDENTE.revisao);
   }
-  sorteiosRevisao(): Promise<never> {
+  sorteiosRevisao(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._a: Parameters<PortaGestao['sorteiosRevisao']>
+  ): ReturnType<PortaGestao['sorteiosRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
-  sorteioRevisao(): Promise<never> {
+  sorteioRevisao(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._a: Parameters<PortaGestao['sorteioRevisao']>
+  ): ReturnType<PortaGestao['sorteioRevisao']> {
     return this.pendente(PENDENTE.revisao);
   }
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -1302,10 +1314,16 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.revisao);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  revisoesDaCompetencia(): Promise<never> {
+  revisoesDaCompetencia(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._a: Parameters<PortaGestao['revisoesDaCompetencia']>
+  ): ReturnType<PortaGestao['revisoesDaCompetencia']> {
     return this.pendente(PENDENTE.revisao);
   }
-  revisoesDaInternacao(): Promise<never> {
+  revisoesDaInternacao(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._a: Parameters<PortaGestao['revisoesDaInternacao']>
+  ): ReturnType<PortaGestao['revisoesDaInternacao']> {
     return this.pendente(PENDENTE.revisao);
   }
 }

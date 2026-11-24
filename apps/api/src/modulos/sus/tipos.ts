@@ -406,6 +406,8 @@ export interface RegistroCihaParaGravar {
   readonly cidPrincipal: string;
   readonly procedimentoPrincipal: string;
   readonly procedimentos: number;
+  /** Os procedimentos do registro com as quantidades, na ordem do arquivo (vão a registro_ciha_procedimento). */
+  readonly itens: readonly { readonly codigo: string; readonly quantidade: number }[];
 }
 
 export interface EquivalenciaSus {

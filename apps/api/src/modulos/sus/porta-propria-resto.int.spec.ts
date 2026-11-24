@@ -22,14 +22,13 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { gravarRemessa, proximoNumeroArquivo } from './porta-propria-arquivos.js';
-import { TABELAS_SUS } from './porta-propria.js';
+import { PortaSusPropria, TABELAS_SUS } from './porta-propria.js';
 import {
-  contagemCiha,
   GravacoesLinhasSusPropria,
-  LeiturasRestoSusPropria,
   type RegistroCihaComItens,
   TABELAS_SUS_RESTO,
 } from './porta-propria-resto.js';
+import type { ContextoSus } from './porta.js';
 import type { InstrumentoSusPorta, NovoArquivoSus } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -100,6 +99,15 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
     if (!saida) throw new Error('sem resultado');
     return (saida as { v: T }).v;
   }
+
+  /** A sessão da tela no estabelecimento sintético. */
+  const ctx = (): ContextoSus => ({
+    rede: 'rede-teste',
+    hospital: `${P}A`,
+    estabelecimento: ids.est,
+    usuario: null,
+    correlacao: `${P}-porta`,
+  });
 
   const novo = (
     id: number,
@@ -402,21 +410,16 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
 
   it('CIHA: grava o registro com paciente, CNS, fonte da lista, data da conta e o procedimento com a quantidade', async () => {
     const regs = [registro('plano-privado')];
-    const r = await gravar(async (tx) => {
-      const id = await proximoNumeroArquivo(tx);
-      const { remessa } = await gravarRemessa(
-        tx,
-        ids.est,
-        novo(id, ids.ciha, 'ciha', 1),
-        'ciha',
-        contagemCiha(regs),
-      );
-      return {
-        remessa,
-        gravados: await new GravacoesLinhasSusPropria(tx, ids.est).registrosCiha(remessa, regs),
-      };
-    });
-    expect(r.gravados).toBe(1);
+    // Pela porta da tela (PortaSusPropria.gravarArquivo): a remessa e os registros na mesma operação.
+    const porta = new PortaSusPropria(nucleo, CLIENTE);
+    const id = await porta.gravar(ctx(), (g) => g.proximoArquivo());
+    await expect(
+      porta.gravar(ctx(), (g) => g.gravarArquivo(novo(id, ids.ciha, 'ciha', 1), regs)),
+    ).resolves.toEqual({ substituidos: 0 });
+    const r = {
+      remessa: await n('SELECT MAX(id) AS n FROM remessa_ciha WHERE estabelecimento_id = ?', [ids.est]),
+    };
+    expect(await n('SELECT COUNT(*) AS n FROM registro_ciha WHERE remessa_ciha_id = ?', [r.remessa])).toBe(1);
     const x = await uma(
       `SELECT r.sequencia, r.tipo_registro, r.paciente_id, r.cns IS NOT NULL AS tem_cns, r.cpf IS NULL AS sem_cpf,
               DATE_FORMAT(r.data_atendimento, '%Y-%m-%d') AS data, d.codigo_oficial, m.quantidade_registro_ambulatorial AS amb,
@@ -457,18 +460,11 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
     ]);
 
   /** A CIHA gravada na operação, com as mesmas colunas próprias da remessa do caso feliz. */
-  const gravarCiha = (regs: readonly RegistroCihaComItens[]) =>
-    gravar(async (tx) => {
-      const id = await proximoNumeroArquivo(tx);
-      const { remessa } = await gravarRemessa(
-        tx,
-        ids.est,
-        novo(id, ids.ciha, 'ciha', regs.length),
-        'ciha',
-        contagemCiha(regs),
-      );
-      return new GravacoesLinhasSusPropria(tx, ids.est).registrosCiha(remessa, regs);
-    });
+  const gravarCiha = async (regs: readonly RegistroCihaComItens[]) => {
+    const porta = new PortaSusPropria(nucleo, CLIENTE);
+    const id = await porta.gravar(ctx(), (g) => g.proximoArquivo());
+    return porta.gravar(ctx(), (g) => g.gravarArquivo(novo(id, ids.ciha, 'ciha', regs.length), regs));
+  };
 
   it('CIHA: a fonte fora da lista recusa (fonte-inexistente) e nada fica (remessa, registro e arquivo)', async () => {
     const antes = await contagens();
@@ -654,13 +650,12 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
   });
 
   it('leituras: o médico solicitante pelo CRM e os parâmetros ambulatoriais do banco', async () => {
-    const r = await nucleo.lerSomente(
-      { cliente: CLIENTE, correlacao: `${P}-ler`, estabelecimento: ids.est },
-      async (l) => {
-        const leit = new LeiturasRestoSusPropria(l, ids.est);
-        return { med: await leit.buscarSolicitantes(CRM), par: await leit.parametrosCadastro() };
-      },
-    );
+    // Pela porta da tela (PortaSusPropria delega a LeiturasRestoSusPropria).
+    const porta = new PortaSusPropria(nucleo, CLIENTE);
+    const r = await porta.ler(ctx(), async (l) => ({
+      med: await l.buscarSolicitantes(CRM),
+      par: await l.parametrosCadastro(),
+    }));
     const med = r.med.find((x) => x.conselho === Number(CRM));
     expect(med).toMatchObject({ conselho: Number(CRM), ativo: true });
     expect(r.par).toEqual({ competenciaAmbulatorio: COMP, versao: '9.9', orgao: 'municipal' });
