@@ -84,9 +84,17 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         [P],
       );
       for (const t of ['declaracao_obito', 'relatorio_transferencia', 'registro_assistencial'])
-        await e.executar(`UPDATE ${t} SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`, [P]);
+        await e.executar(
+          `UPDATE ${t} SET documento_prontuario_id = NULL WHERE estabelecimento_id IN ${est}`,
+          [P],
+        );
       await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
-      for (const t of ['declaracao_obito', 'relatorio_transferencia', 'sumario_alta', 'ciencia_resultado_critico'])
+      for (const t of [
+        'declaracao_obito',
+        'relatorio_transferencia',
+        'sumario_alta',
+        'ciencia_resultado_critico',
+      ])
         await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN ${est}`, [P]);
       await e.executar(
         `DELETE v FROM problema_paciente_versao v JOIN problema_paciente p ON p.id = v.problema_paciente_id
@@ -317,7 +325,16 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
         e.inserir(
           `INSERT INTO interconsulta (estabelecimento_id, atendimento_id, paciente_id, solicitante_profissional_id,
              especialidade_medica_id, motivo, solicitado_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [ids.est, ids.atendimento, ids.paciente, ids.profResidente, ids.especialidade, 'Pedido sintético', agora, agora],
+          [
+            ids.est,
+            ids.atendimento,
+            ids.paciente,
+            ids.profResidente,
+            ids.especialidade,
+            'Pedido sintético',
+            agora,
+            agora,
+          ],
         );
       ids.parecer1 = await parecer();
       ids.parecer2 = await parecer();
@@ -353,9 +370,15 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
   });
 
   it('parecer: aceite, cancelamento com motivo e recusas de situação; nada apagado', async () => {
-    expect(await recusa(porta.aceitarParecer(G(), 999_999_999))).toEqual({ codigo: 'registro-inexistente', status: 404 });
+    expect(await recusa(porta.aceitarParecer(G(), 999_999_999))).toEqual({
+      codigo: 'registro-inexistente',
+      status: 404,
+    });
     expect(await porta.aceitarParecer(G(), ids.parecer1)).toEqual({ paciente: ids.paciente });
-    expect(await recusa(porta.aceitarParecer(G(), ids.parecer1))).toEqual({ codigo: 'situacao-invalida', status: 409 });
+    expect(await recusa(porta.aceitarParecer(G(), ids.parecer1))).toEqual({
+      codigo: 'situacao-invalida',
+      status: 409,
+    });
     await porta.cancelarParecer(G(), ids.parecer2, 'Pedido em duplicidade');
     expect(await recusa(porta.cancelarParecer(G(), ids.parecer2, 'de novo'))).toEqual({
       codigo: 'situacao-invalida',
@@ -377,10 +400,21 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     );
     const fila = await porta.coassinaturas(C(), LOGIN);
     expect(fila).toEqual([
-      expect.objectContaining({ id: ids.supervisao, registro: ids.registro, residente: RESIDENTE, preceptor: LOGIN, situacao: 'pendente' }),
+      expect.objectContaining({
+        id: ids.supervisao,
+        registro: ids.registro,
+        residente: RESIDENTE,
+        preceptor: LOGIN,
+        situacao: 'pendente',
+      }),
     ]);
-    expect(await porta.supervisao(C(), ids.supervisao)).toMatchObject({ preceptor: LOGIN, residente: RESIDENTE });
-    expect(await recusa(porta.coassinarNoNovo(G(OUTRO), { id: ids.supervisao, decisao: 'coassinado' }))).toEqual({
+    expect(await porta.supervisao(C(), ids.supervisao)).toMatchObject({
+      preceptor: LOGIN,
+      residente: RESIDENTE,
+    });
+    expect(
+      await recusa(porta.coassinarNoNovo(G(OUTRO), { id: ids.supervisao, decisao: 'coassinado' })),
+    ).toEqual({
       codigo: 'sem-permissao',
       status: 403,
     });
@@ -393,9 +427,10 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       status: 409,
     });
     expect(
-      await contar("SELECT COUNT(*) AS n FROM registro_assistencial WHERE id = ? AND situacao = 'finalizado'", [
-        ids.registro,
-      ]),
+      await contar(
+        "SELECT COUNT(*) AS n FROM registro_assistencial WHERE id = ? AND situacao = 'finalizado'",
+        [ids.registro],
+      ),
     ).toBe(1);
     expect(await porta.coassinaturas(C(), LOGIN)).toEqual([]);
   });
@@ -412,8 +447,15 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       fim: null,
     };
     const v1 = await porta.gravarProblema(G(), { ...base, situacao: 'ativo', anterior: null });
-    const v2 = await porta.gravarProblema(G(), { ...base, situacao: 'resolvido', fim: '2026-11-10', anterior: v1 });
-    expect(await recusa(porta.gravarProblema(G(), { ...base, situacao: 'descartado', anterior: v1 }))).toEqual({
+    const v2 = await porta.gravarProblema(G(), {
+      ...base,
+      situacao: 'resolvido',
+      fim: '2026-11-10',
+      anterior: v1,
+    });
+    expect(
+      await recusa(porta.gravarProblema(G(), { ...base, situacao: 'descartado', anterior: v1 })),
+    ).toEqual({
       codigo: 'conflito-versao',
       status: 409,
     });
@@ -434,7 +476,12 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
   });
 
   it('sumário de alta: rascunho por versão, conflito na versão já salva', async () => {
-    const s = { paciente: ids.paciente, atendimento: ids.atendimento, conteudo: '{"motivo":"x"}', hashConteudo: HASH };
+    const s = {
+      paciente: ids.paciente,
+      atendimento: ids.atendimento,
+      conteudo: '{"motivo":"x"}',
+      hashConteudo: HASH,
+    };
     expect(await porta.salvarRascunhoSumario(G(), { ...s, versao: 1 })).toBe(1);
     expect(await recusa(porta.salvarRascunhoSumario(G(), { ...s, versao: 1 }))).toEqual({
       codigo: 'conflito-versao',
@@ -504,6 +551,8 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
       ),
     ).toEqual({ codigo: 'nao-encontrado', status: 404 });
     expect(await porta.ciencias(C(), ids.paciente)).toEqual([]);
-    expect(await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est])).toBeGreaterThan(0);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBeGreaterThan(0);
   });
 });

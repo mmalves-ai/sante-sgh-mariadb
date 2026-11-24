@@ -331,7 +331,10 @@ export class DocumentosPropriaPareceres {
         ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
     );
     if (!situacao)
-      falhar('situacao-documento-sem-cadastro', 'O cliente não tem situação de documento ativa na categoria "lancado".');
+      falhar(
+        'situacao-documento-sem-cadastro',
+        'O cliente não tem situação de documento ativa na categoria "lancado".',
+      );
     const agora = new Date();
     const documento = await tx.incluir('documento_prontuario', {
       estabelecimento_id: est,
@@ -431,7 +434,8 @@ export class DocumentosPropriaPareceres {
           [parecer, est.id],
         );
         if (!x) return falhar('registro-inexistente', 'Parecer não encontrado.', 404);
-        if (x['situacao'] !== 'solicitado') falhar('situacao-invalida', 'O parecer não está aguardando aceite.');
+        if (x['situacao'] !== 'solicitado')
+          falhar('situacao-invalida', 'O parecer não está aguardando aceite.');
         const agora = new Date();
         await tx.alterar('interconsulta', parecer, num(x['versao']), {
           situacao: 'aceito',
@@ -562,7 +566,8 @@ export class DocumentosPropriaPareceres {
       () => ({ tabela: 'registro_assistencial_supervisao', id: x.id }),
       (r) => ({
         dados: {
-          evento: x.decisao === 'coassinado' ? 'pep.evolucao.coassinada' : 'pep.evolucao.coassinaturaRecusada',
+          evento:
+            x.decisao === 'coassinado' ? 'pep.evolucao.coassinada' : 'pep.evolucao.coassinaturaRecusada',
           registro: r.registro,
         },
       }),
@@ -645,7 +650,8 @@ export class DocumentosPropriaPareceres {
         const fim = situacao === 'ativo' ? null : (p.fim ?? hoje);
         if (p.inicio && fim && fim < p.inicio)
           falhar('periodo-invalido', 'O fim do problema não pode ser anterior ao início.', 422);
-        if (p.atendimento !== null) await this.exigirAtendimento(tx, est.id, p.paciente, p.atendimento, falhar);
+        if (p.atendimento !== null)
+          await this.exigirAtendimento(tx, est.id, p.paciente, p.atendimento, falhar);
         const colunas = {
           tipo: p.tipo,
           descricao: p.descricao.slice(0, 500),
@@ -906,7 +912,11 @@ export class DocumentosPropriaPareceres {
   ): Promise<{ id: number; documento: number }> {
     const numero = textoOuNull(o.numero)?.trim() || null;
     if (numero !== null && numero.length > 11)
-      throw new ErroProntuario('numero-invalido', 'O número da declaração de óbito tem até 11 caracteres.', 422);
+      throw new ErroProntuario(
+        'numero-invalido',
+        'O número da declaração de óbito tem até 11 caracteres.',
+        422,
+      );
     if (!(o.dataHora instanceof Date) || Number.isNaN(o.dataHora.getTime()))
       throw new ErroProntuario('entrada-invalida', 'A data e hora do óbito é inválida.', 422);
     if (!HASH_VALIDO.test(o.hashConteudo))
@@ -1027,7 +1037,9 @@ export class DocumentosPropriaPareceres {
           conduta,
           escalonado_para: textoOuNull(x.escalonadoPara)?.slice(0, 150) ?? null,
         };
-        const aberta = ls.find((y) => y['situacao'] === 'aguardando_ciencia' || y['situacao'] === 'sem_contato');
+        const aberta = ls.find(
+          (y) => y['situacao'] === 'aguardando_ciencia' || y['situacao'] === 'sem_contato',
+        );
         if (aberta) {
           const id = num(aberta['id']);
           await tx.alterar('ciencia_resultado_critico', id, num(aberta['versao']), {
