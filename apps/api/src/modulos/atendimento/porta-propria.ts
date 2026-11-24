@@ -19,7 +19,8 @@
 // Melhoria: observação sem dois leitos para o mesmo atendimento; na transferência a contagem das horas continua a da
 // primeira entrada; justificativa e horas pelo domínio; a saída devolve o atendimento a "em atendimento".
 // Herança do atendimento anterior: porta-propria-heranca.ts (regra_heranca_campo por escopo).
-// Pendente (pedido ao orquestrador): alteração, segurado, procedimento extra, impressos, paciente
+// Correção da ficha (segurado, alteração, correção e estorno do extra): porta-propria-correcao.ts.
+// Pendente (pedido ao orquestrador): impressos, paciente
 // não identificado, escore do PA, sinais, indicadores e marcação respondem 501 (ou vazio no quadro) até a regra e o
 // modelo chegarem.
 import { randomUUID } from 'node:crypto';
@@ -81,6 +82,7 @@ import {
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
+import { OPERACOES_CORRECAO_FICHA } from './porta-propria-correcao.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
 import {
   lerEscoposHeranca,
@@ -592,8 +594,10 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
         [reg],
       );
       const procs = await l.consultar(
-        `SELECT ap.sequencia, ap.principal, ap.quantidade, i.id AS item, i.descricao FROM atendimento_procedimento ap
+        `SELECT ap.sequencia, ap.principal, ap.quantidade, i.id AS item, i.descricao, ci.valor_total
+           FROM atendimento_procedimento ap
            JOIN item_faturavel i ON i.id = ap.item_faturavel_id
+           LEFT JOIN conta_hospitalar_item ci ON ci.id = ap.conta_hospitalar_item_id
           WHERE ap.atendimento_id = ? AND ap.excluido_em IS NULL ORDER BY ap.sequencia`,
         [reg],
         { teto: 500 },
@@ -655,7 +659,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
             procedimento: Number(p['item']),
             nome: texto(p['descricao']) ?? '',
             quantidade: Number(p['quantidade']),
-            valor: 0,
+            valor: Number(p['valor_total'] ?? 0),
             profissional: r.profissional.nome,
             seq: Number(p['sequencia']),
           })),
@@ -1797,7 +1801,7 @@ const GRUPO_DO_EXTRA: Readonly<Record<string, 2 | 3>> = { honorario: 2, procedim
  */
 const OPERACAO_LANCAR_EXTRA = definirOperacao({
   nome: 'atendimento.lancar-procedimento-extra',
-  tabelas: [...lancarItem.tabelas],
+  tabelas: [...lancarItem.tabelas, 'atendimento_procedimento'],
   entrada: esquemaLancarProcedimentoExtra,
   acao: 'inclusao',
   async gravar(tx, e, ctx) {
@@ -1866,13 +1870,28 @@ const OPERACAO_LANCAR_EXTRA = definirOperacao({
       }),
       ctx,
     );
-    const seq = await tx.uma(
-      'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND id <= ?',
-      [conta, Number(r['id'])],
+    // O extra fica na ficha com a sua sequência (estável) e o item que gerou na conta: a correção e o estorno
+    // mudam os dois juntos (porta-propria-correcao.ts).
+    const proxima = await tx.uma(
+      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM atendimento_procedimento WHERE atendimento_id = ?',
+      [Number(a['id'])],
     );
+    const seq = Number(proxima?.['s'] ?? 1);
+    const doCatalogo = await tx.uma(
+      'SELECT id FROM item_faturavel WHERE codigo = ? AND excluido_em IS NULL LIMIT 1',
+      [String(e.procedimento)],
+    );
+    await tx.incluir('atendimento_procedimento', {
+      atendimento_id: Number(a['id']),
+      sequencia: seq,
+      item_faturavel_id: Number(doCatalogo?.['id']),
+      quantidade: e.quantidade,
+      principal: false,
+      conta_hospitalar_item_id: Number(r['id']),
+    });
     return {
       reg: Number(a['id']),
-      seq: Number(seq?.['n'] ?? 1),
+      seq,
       procedimento: e.procedimento,
       quantidade: e.quantidade,
       conta,
@@ -1894,4 +1913,5 @@ const OPERACOES_PROPRIAS: Readonly<Record<string, Operacao<any, ResultadoOperaca
   'atendimento.conduzirNoConsultorio': OPERACAO_CONDUZIR,
   'atendimento.lancarProcedimentoExtra': OPERACAO_LANCAR_EXTRA,
   'atendimento.alterarHeranca': OPERACAO_ALTERAR_HERANCA,
+  ...OPERACOES_CORRECAO_FICHA,
 };

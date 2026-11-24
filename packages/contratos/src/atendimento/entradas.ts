@@ -157,8 +157,8 @@ export const esquemaAlterarSegurado = z
     senhaConvenio: livre(20).optional(),
     validadeSenha: esquemaDataIso.nullable().optional(),
     plano: maiusculas(40).optional(),
-    /** Carimbo lido pela tela (DATA_HORA_ULTIMA_ATUALIZACAO): colisão com o outro sistema vira 409. */
-    versao: z.string().min(10).max(30),
+    /** Versão da ficha lida pela tela ("v3" na porta própria; carimbo na de memória): colisão vira 409. */
+    versao: z.string().min(1).max(30),
   })
   .strict()
   .refine(
@@ -195,8 +195,8 @@ export const esquemaAlterarAtendimento = z
     observacao: livre(400).nullable().optional(),
     carater: z.enum(CODIGOS_CARATER).optional(),
     justificativa: livre(200).refine((t) => t.length >= 10, 'Justifique com pelo menos 10 caracteres.'),
-    /** Carimbo lido pela tela (DATA_HORA_ULTIMA_ATUALIZACAO): colisão com o outro sistema vira 409. */
-    versao: z.string().min(10).max(30),
+    /** Versão da ficha lida pela tela ("v3" na porta própria; carimbo na de memória): colisão vira 409. */
+    versao: z.string().min(1).max(30),
   })
   .strict()
   .refine(

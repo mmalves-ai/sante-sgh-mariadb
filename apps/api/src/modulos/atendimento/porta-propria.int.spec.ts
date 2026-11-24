@@ -761,13 +761,179 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
     expect(Number(r.resultado['valor'])).toBe(80);
     expect(await itens()).toBe(antes + 1);
     expect(await contas()).toBe(1);
+
+    // F3.2 (02-REC linha 30): o extra fica na ficha pela sua sequência, ligado ao item que gerou na conta.
+    const seq = Number(r.resultado['seq']);
+    const totalConta = async () =>
+      Number((await ler('SELECT valor_total FROM conta_hospitalar WHERE id = ?', [conta]))?.['valor_total']);
+    const totalAntes = await totalConta();
+    const ligado = await ler(
+      'SELECT ap.quantidade, ap.conta_hospitalar_item_id AS item, ap.principal FROM atendimento_procedimento ap WHERE ap.atendimento_id = ? AND ap.sequencia = ?',
+      [reg, seq],
+    );
+    const item = Number(ligado?.['item']);
+    expect(item).toBeGreaterThan(0);
+    expect(Number(ligado?.['principal'])).toBe(0);
+    const det = await porta.detalhe(c, reg);
+    expect(det?.extras.find((x) => x.seq === seq)).toMatchObject({ quantidade: 1, valor: 80 });
+
+    // Correção da quantidade: item e ficha juntos, total da conta e memória do cálculo na mesma transação.
+    const corr = await porta.executar(
+      c,
+      'atendimento.corrigirProcedimentoExtra',
+      { atendimento: reg, sequencia: seq, quantidade: 3, justificativa: 'Quantidade digitada errada' },
+      contextoGravacao(mm),
+    );
+    expect(corr.resultado).toMatchObject({ quantidadeAntes: 1, quantidade: 3, valorAntes: 80, valor: 240 });
+    expect(
+      await ler('SELECT quantidade, valor_total, situacao FROM conta_hospitalar_item WHERE id = ?', [item]),
+    ).toMatchObject({ valor_total: '240.00', situacao: 'lancado' });
+    expect(
+      Number(
+        (
+          await ler('SELECT quantidade FROM atendimento_procedimento WHERE conta_hospitalar_item_id = ?', [
+            item,
+          ])
+        )?.['quantidade'],
+      ),
+    ).toBe(3);
+    expect(await totalConta()).toBeCloseTo(totalAntes + 160, 2);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ? AND operacao = 'alteracao'",
+        [item],
+      ),
+    ).toBe(1);
+    expect(corr.trilha).toBeTruthy();
+    // Recusas do domínio: nada a corrigir e data antes do atendimento.
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.corrigirProcedimentoExtra',
+        { atendimento: reg, sequencia: seq, quantidade: 3, justificativa: 'Quantidade digitada errada' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'nada-a-corrigir' } });
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.corrigirProcedimentoExtra',
+        { atendimento: reg, sequencia: seq, data: '2020-01-01', justificativa: 'Data digitada errada' },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'data-fora-do-atendimento' } });
+
+    // Estorno: operação crítica (sem reautenticação recusa); marca o item como estornado e encerra o extra da
+    // ficha sem apagar; o total da conta volta.
+    const estorno = { atendimento: reg, sequencia: seq, justificativa: 'Lançado no paciente errado' };
+    await expect(
+      porta.executar(c, 'atendimento.estornarProcedimentoExtra', estorno, contextoGravacao(mm)),
+    ).rejects.toBeTruthy();
+    expect(await ler('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [item])).toMatchObject({
+      situacao: 'lancado',
+    });
+    await porta.executar(
+      c,
+      'atendimento.estornarProcedimentoExtra',
+      estorno,
+      contextoGravacao(mm, { reautenticadoEm: Date.now() }),
+    );
+    expect(await ler('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [item])).toMatchObject({
+      situacao: 'estornado',
+    });
+    const encerrado = await ler(
+      'SELECT excluido_em FROM atendimento_procedimento WHERE conta_hospitalar_item_id = ?',
+      [item],
+    );
+    expect(encerrado?.['excluido_em']).toBeTruthy();
+    expect(await totalConta()).toBeCloseTo(totalAntes - 80, 2);
+    expect((await porta.detalhe(c, reg))?.extras.some((x) => x.seq === seq)).toBe(false);
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.estornarProcedimentoExtra',
+        estorno,
+        contextoGravacao(mm, { reautenticadoEm: Date.now() }),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'procedimento-inexistente' } });
+
+    // Segurado: grava a cobertura e sobe a versão da ficha; a versão velha recusa com 409.
+    const v1 = (await porta.detalhe(c, reg))!.versao;
+    const seg = await porta.executar(
+      c,
+      'atendimento.alterarSegurado',
+      { atendimento: reg, matricula: '654321', guia: 'G-77', versao: v1 },
+      contextoGravacao(mm),
+    );
+    expect(
+      await ler(
+        'SELECT numero_carteira, numero_guia FROM cobertura_atendimento WHERE atendimento_id = ? AND ordem = 1',
+        [reg],
+      ),
+    ).toMatchObject({ numero_carteira: '654321', numero_guia: 'G-77' });
+    expect(String(seg.resultado['versao'])).not.toBe(v1);
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.alterarSegurado',
+        { atendimento: reg, matricula: '111', versao: v1 },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { status: 409 } });
+
+    // Correção da ficha: observação e caráter gravados; convênio com conta vai ao faturamento; nada a alterar recusa.
+    const v2 = (await porta.detalhe(c, reg))!.versao;
+    await porta.executar(
+      c,
+      'atendimento.alterarAtendimento',
+      {
+        atendimento: reg,
+        observacao: 'RETORNO EM 30 DIAS',
+        carater: 'urgencia',
+        justificativa: 'Correção pedida pelo médico',
+        versao: v2,
+      },
+      contextoGravacao(mm),
+    );
+    expect(await ler('SELECT observacao FROM atendimento WHERE id = ?', [reg])).toMatchObject({
+      observacao: 'RETORNO EM 30 DIAS',
+    });
+    expect((await porta.detalhe(c, reg))?.carater).toBe('urgencia');
+    const v3 = (await porta.detalhe(c, reg))!.versao;
+    await expect(
+      porta.executar(
+        c,
+        'atendimento.alterarAtendimento',
+        {
+          atendimento: reg,
+          observacao: 'RETORNO EM 30 DIAS',
+          justificativa: 'Correção pedida pelo médico',
+          versao: v3,
+        },
+        contextoGravacao(mm),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'nada-a-alterar' } });
+    const outra = await ler(
+      "SELECT id FROM fonte_pagadora WHERE id <> ? AND situacao = 'ativa' AND excluido_em IS NULL ORDER BY id LIMIT 1",
+      [mm.fonte],
+    );
+    if (outra)
+      await expect(
+        porta.executar(
+          c,
+          'atendimento.alterarAtendimento',
+          {
+            atendimento: reg,
+            convenio: Number(outra['id']),
+            justificativa: 'Convênio escolhido errado',
+            versao: v3,
+          },
+          contextoGravacao(mm),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'troca-de-conta' } });
   });
 
-  it('as operações ainda sem regra no banco respondem 501 (nada gravado)', async () => {
-    const mm = m!;
-    await expect(
-      porta.executar(contextoPorta(mm), 'atendimento.alterarSegurado', {}, contextoGravacao(mm)),
-    ).rejects.toMatchObject({ problema: { status: 501 } });
+  it('os indicadores do atendimento ainda sem leitura no banco respondem 501', async () => {
     await expect(porta.indicadores()).rejects.toMatchObject({ status: 501 });
   });
 });
