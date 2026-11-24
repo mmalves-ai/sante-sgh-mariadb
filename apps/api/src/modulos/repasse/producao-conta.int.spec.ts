@@ -13,22 +13,34 @@
 //   7. participante pago fora do hospital → produção estornada; de volta → reativada; removido → a do executor nasce;
 //   8. glosa revertida: antes da apuração a base volta à original; depois, o débito pendente é cancelado; a glosa de
 //      conta de competência antiga com o período seguinte já conferido cai no primeiro período aberto;
-//   9. duas sincronizações da mesma conta ao mesmo tempo não duplicam a produção (a conta é travada).
+//   9. duas sincronizações da mesma conta ao mesmo tempo não duplicam a produção (a conta é travada);
+//  10. glosa depois da apuração pela função comum à TISS e ao worker (sincronizarGlosaDoItem, com o autor da decisão): o item
+//      guarda a soma das glosas aceitas (duas glosas somam; recorrer uma não zera a outra), a produção é estornada e o
+//      débito cai no período aberto; a apuração desconta só até o bruto do profissional e leva o saldo ao período
+//      seguinte (ligado ao de origem; o recálculo o refaz); o ServicoRepasse.lancarApuracao lança o bruto e o estorno
+//      ligado (idempotente); o débito criado depois do cálculo de um período conferido sem recálculo é descontado no
+//      período seguinte; a glosa revertida depois do desconto devolve o descontado como crédito, sem repetir.
 // No fim, a massa de negócio é apagada. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import {
   calcularPeriodo,
   compararDourado,
   competenciaDoDebito,
-  descontoDoDebito,
+  sincronizarGlosaDoItem,
   somarProducao,
 } from '@sgh/dominio-repasse';
-import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
+import { type ContextoNucleo, definirOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
+import { portaProducaoConta, TABELAS_PRODUCAO_CONTA } from '@sgh/persistencia';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
+import type { SessaoCadastro } from '../cadastro/comum.js';
 import { civil, FUSO_PADRAO } from '../exames/relogio.js';
 import { PortaRepassePropria } from './porta-propria.js';
 import { sincronizarProducaoConta } from './producao-conta.js';
+import { ServicoRepasse } from './servico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -86,7 +98,16 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
       );
       await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [est]);
       await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [est]);
+      await e.executar(
+        'UPDATE estorno_repasse SET origem_estorno_repasse_id = NULL WHERE estabelecimento_id = ?',
+        [est],
+      );
       await e.executar('DELETE FROM estorno_repasse WHERE estabelecimento_id = ?', [est]);
+      await e.executar(
+        'DELETE gi FROM glosa_item gi JOIN glosa g ON g.id = gi.glosa_id WHERE g.estabelecimento_id = ?',
+        [est],
+      );
+      await e.executar('DELETE FROM glosa WHERE estabelecimento_id = ?', [est]);
       await e.executar(
         'DELETE x FROM apuracao_repasse_item x JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id WHERE a.estabelecimento_id = ?',
         [est],
@@ -356,7 +377,8 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     dadosDepois: { teste: P },
     correlacao: P,
   };
-  const apurar = (competencia: string, valor: number) =>
+  /** A apuração do período com uma memória do profissional (bruto `valor`) sobre a produção `producao`. */
+  const apurar = (competencia: string, valor: number, producao: number) =>
     porta.gravarSgh({ ...ctx }, { ...trilha, estabelecimento: ids.est, usuario: ids.usuario }, (g) =>
       g.gravarApuracao({
         empresa: ids.est,
@@ -364,9 +386,31 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
         apuradoPor: 'f3rpc.faturista',
         simulacao: false,
         totais: { itens: 1, comRepasse: 1, pendentes: 0, pendencias: '{}', base: valor, valor },
-        memorias: [],
+        memorias: [
+          {
+            item: producao,
+            prestador: ids.profissional,
+            regra: null,
+            dimensoes: '',
+            ignoradas: '',
+            base: null,
+            baseValor: valor,
+            percentual: 0,
+            valorFixo: 0,
+            valorSemAdicional: valor,
+            adicional: null,
+            valor,
+            pendencia: null,
+          },
+        ],
       }),
     );
+  /** Uma produção do profissional para a memória da apuração (fixture). */
+  const producaoDaMemoria = async (quando: string) => {
+    const item = await novoItem(10, quando);
+    await sincronizar('lancamento', [item]);
+    return Number((await producoesDo(item))[0]!['id']);
+  };
   const apuracaoDe = (id: number) =>
     escrever((e) =>
       e.uma<Record<string, unknown>>(
@@ -515,7 +559,8 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     // Idempotente: o débito não se repete.
     expect((await sincronizar('mudanca-item', [itemA])).resultado).toMatchObject({ debitos: 0 });
     // A apuração do período do débito o desconta: líquido = repasse 700 − débito 350; o débito passa a 'aplicado'.
-    const { apuracao } = await apurar(competencia6, 700);
+    const memoria6 = await producaoDaMemoria('2026-10-20T13:00:00Z');
+    const { apuracao } = await apurar(competencia6, 700, memoria6);
     expect(await apuracaoDe(apuracao)).toMatchObject({ situacao: 'apurada' });
     const ap = (await apuracaoDe(apuracao))!;
     expect([Number(ap['valor_bruto']), Number(ap['valor_descontos']), Number(ap['valor_liquido'])]).toEqual([
@@ -526,7 +571,7 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     expect(Number(aplicado!['apuracao_repasse_id'])).toBe(apuracao);
     expect(aplicado!['aplicado_em']).not.toBeNull();
     // O recálculo do período desconta o mesmo débito uma vez só.
-    const de2 = await apurar(competencia6, 700);
+    const de2 = await apurar(competencia6, 700, memoria6);
     expect(de2).toMatchObject({ apuracao, recalculada: true });
     expect(Number((await apuracaoDe(apuracao))!['valor_descontos'])).toBe(350);
     expect(Number((await apuracaoDe(apuracao))!['valor_liquido'])).toBe(350);
@@ -635,95 +680,238 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     await Promise.all([sincronizar('lancamento', [itemF]), sincronizar('lancamento', [itemF])]);
     expect(await producoesDo(itemF)).toHaveLength(1);
   });
-  it('10. glosa depois da apuração: produção estornada, débito descontado no lançamento seguinte; revertida: crédito', async () => {
-    // A produção de G (base 1.000) entra na apuração aprovada de 2026-10 com repasse de 400.
+  it('10. glosa depois da apuração (TISS/worker): débito até o bruto, saldo adiante, lançamento pelo serviço, crédito', async () => {
+    const agora = new Date();
+    const um = <T>(sql: string, p: unknown[]) =>
+      escrever((e) => e.uma<Record<string, unknown>>(sql, p)) as Promise<T>;
+    const motivo = await escrever((e) =>
+      garantir(
+        e,
+        'SELECT id FROM motivo_glosa WHERE codigo_tuss = ?',
+        ['F3RP'],
+        "INSERT INTO motivo_glosa (codigo_tuss, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES ('F3RP', 'MOTIVO SINTETICO F3RPC', '2026-01-01', 'teste', ?)",
+        [agora],
+      ),
+    );
+    let numeroGlosa = 0;
+    /** Uma glosa do item já decidida (o efeito da decisão da TISS no glosa_item; o autor é o usuário do fixture). */
+    const glosaDecidida = (item: number, valor: number, decisao: 'aceitar' | 'recorrer') =>
+      escrever(async (e) => {
+        const g = await e.inserir(
+          `INSERT INTO glosa (estabelecimento_id, numero, fonte_pagadora_id, procedencia, data_glosa, valor_glosado,
+             conta_hospitalar_id, criado_em) VALUES (?, ?, ?, 'digitacao', '2026-11-05', ?, ?, ?)`,
+          [ids.est, `${P}-GL${++numeroGlosa}`, ids.fonte, valor, ids.conta, agora],
+        );
+        return e.inserir(
+          `INSERT INTO glosa_item (glosa_id, sequencia, motivo_glosa_id, valor_glosado, conta_hospitalar_item_id, decisao,
+             valor_aceito, decidido_por_usuario_id, decidido_em, criado_em) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [g, motivo, valor, item, decisao, decisao === 'aceitar' ? valor : 0, ids.usuario, agora, agora],
+        );
+      });
+    const recorrer = (glosaItem: number) =>
+      escrever((e) =>
+        e.executar("UPDATE glosa_item SET decisao = 'recorrer', valor_aceito = 0 WHERE id = ?", [glosaItem]),
+      );
+    // A glosa do item pela função comum à decisão da TISS e ao evento do financeiro no worker
+    // (sincronizarGlosaDoItem: soma das glosas aceitas no item + sincronização da produção), com o autor da decisão
+    // (o worker não traz usuário; usa quem decidiu a glosa). O app do worker não é importável daqui (fronteira).
+    const opGlosa = (item: number) =>
+      definirOperacao({
+        nome: 'financeiro.glosa.aceita-do-evento',
+        tabelas: ['glosa_titulo_receber', 'titulo_receber', ...TABELAS_PRODUCAO_CONTA],
+        entrada: z.object({}).passthrough(),
+        gravar: async (tx) => {
+          const r = await sincronizarGlosaDoItem(
+            portaProducaoConta(tx, { estabelecimento: ids.est, usuario: ids.usuario }),
+            { conta: ids.conta, item },
+          );
+          return { glosado: r.glosado, debitos: r.debitos };
+        },
+        alvo: () => ({ tabela: 'conta_hospitalar_item', id: item }),
+      });
+    const worker = async (item: number) =>
+      (
+        await nucleo.criarExecutor().executar(
+          opGlosa(item),
+          CLIENTE,
+          {},
+          {
+            cliente: CLIENTE,
+            estabelecimento: ids.est,
+            usuario: ids.usuario,
+            correlacao: P,
+            chaveIdempotencia: `${P}-w-${randomUUID()}`,
+          },
+        )
+      ).resultado;
+    const glosadoDe = async (item: number) =>
+      Number(
+        (
+          await um<Record<string, unknown>>('SELECT valor_glosado FROM conta_hospitalar_item WHERE id = ?', [
+            item,
+          ])
+        )['valor_glosado'],
+      );
+    const integrar = (producao: unknown, seqItem: number, base: number, repasse: number) =>
+      escrever((e) =>
+        e.inserir(
+          `INSERT INTO apuracao_repasse_item (apuracao_repasse_id, sequencia, profissional_id, producao_repasse_id, competencia_producao,
+             valor_faturado, percentual_repasse, valor_repasse, criado_em) VALUES (?, ?, ?, ?, ?, ?, 40, ?, ?)`,
+          [apuracaoAprovada, seqItem, ids.profissional, producao, `${COMP}-01`, base, repasse, new Date()],
+        ),
+      );
+    const seguinte = (c: string) => {
+      const [a, m] = c.split('-').map(Number) as [number, number];
+      return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`;
+    };
+
+    // G (base 1.000) entra na apuração aprovada de 2026-10 com repasse de 400. Duas glosas aceitas no mesmo item
+    // (600 + 400): o item guarda a soma, a produção já repassada é estornada e o débito de 400 cai no período aberto.
     const itemG = await novoItem(1000, '2026-10-24T13:00:00Z');
     await sincronizar('lancamento', [itemG]);
     const [pg] = await producoesDo(itemG);
-    await escrever((e) =>
-      e.inserir(
-        `INSERT INTO apuracao_repasse_item (apuracao_repasse_id, sequencia, profissional_id, producao_repasse_id, competencia_producao,
-           valor_faturado, percentual_repasse, valor_repasse, criado_em) VALUES (?, 3, ?, ?, ?, 1000, 40, 400, ?)`,
-        [apuracaoAprovada, ids.profissional, pg!['id'], `${COMP}-01`, new Date()],
-      ),
-    );
-    // Glosa total aceita: a produção já repassada é estornada e o débito de 400 cai no primeiro período aberto.
-    await escrever((e) =>
-      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 1000 WHERE id = ?', [itemG]),
-    );
-    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({ debitos: 1 });
+    await integrar(pg!['id'], 3, 1000, 400);
+    const g1 = await glosaDecidida(itemG, 600, 'aceitar');
+    const g2 = await glosaDecidida(itemG, 400, 'aceitar');
+    expect(await worker(itemG)).toMatchObject({ glosado: 1000, debitos: 1 });
+    expect(await glosadoDe(itemG)).toBe(1000);
     expect((await producoesDo(itemG))[0]!['situacao']).toBe('estornado');
     const [dg] = await debitosDe(pg!['id']);
     expect(dg).toMatchObject({ situacao: 'pendente' });
     expect(Number(dg!['valor'])).toBe(400);
     const periodo = comp(dg!['competencia']);
-    // A apuração seguinte desconta o débito, e o lançamento do profissional o abate (estorno ligado ao original).
-    const { apuracao } = await apurar(periodo, 1500);
+    // A entrega repetida do evento não duplica o débito.
+    await worker(itemG);
+    expect(await debitosDe(pg!['id'])).toHaveLength(1);
+
+    // A apuração do período: o profissional tem bruto de 300; desconta 300 e leva 100 ao período seguinte.
+    const memoria10 = await producaoDaMemoria('2026-10-25T13:00:00Z');
+    const { apuracao } = await apurar(periodo, 300, memoria10);
     const ap = (await apuracaoDe(apuracao))!;
-    expect(Number(ap['valor_descontos'])).toBeGreaterThanOrEqual(400);
-    const debitos = await porta.debitosDaApuracao({ ...ctx }, apuracao);
-    expect(debitos.get(ids.profissional)).toBe(400);
-    const desconto = descontoDoDebito(150000, Math.round(debitos.get(ids.profissional)! * 100));
-    expect(desconto).toEqual({ estornoCentavos: 40000, saldoCentavos: 0 });
-    const agora = new Date();
-    const lancamentos = await escrever(async (e) => {
+    expect([Number(ap['valor_bruto']), Number(ap['valor_descontos']), Number(ap['valor_liquido'])]).toEqual([
+      300, 300, 0,
+    ]);
+    const levados = await debitosDe(pg!['id']);
+    expect(levados.map((x) => [x['situacao'], Number(x['valor'])])).toEqual([
+      ['aplicado', 400],
+      ['pendente', 100],
+    ]);
+    expect(comp(levados[1]!['competencia'])).toBe(seguinte(periodo));
+    expect(
+      Number(
+        (
+          await um<Record<string, unknown>>(
+            'SELECT origem_estorno_repasse_id AS o FROM estorno_repasse WHERE id = ?',
+            [levados[1]!['id']],
+          )
+        )['o'],
+      ),
+    ).toBe(Number(dg!['id']));
+    // O recálculo refaz o saldo levado (o anterior fica cancelado no histórico) e desconta o mesmo valor.
+    await apurar(periodo, 300, memoria10);
+    expect(Number((await apuracaoDe(apuracao))!['valor_descontos'])).toBe(300);
+    expect((await debitosDe(pg!['id'])).map((x) => x['situacao'])).toEqual([
+      'aplicado',
+      'cancelado',
+      'pendente',
+    ]);
+    expect((await porta.debitosDaApuracao({ ...ctx }, apuracao)).get(ids.profissional)).toBe(300);
+
+    // O lançamento pelo serviço de verdade: o bruto e o estorno ligado a ele (o RPA soma: 300 − 300). Idempotente.
+    const evento = await escrever(async (e) => {
       await e.executar("UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE id = ?", [apuracao]);
-      // O evento do fixture (a regra já o usa) e o favorecido do profissional.
-      const evento = await garantir(
-        e,
-        'SELECT id FROM evento_repasse WHERE estabelecimento_id = ? AND codigo = ?',
-        [ids.est, `${P}-HON`],
-        "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, ?, 'HONORARIOS', 'rendimento', 'credito', '2026-01-01', ?)",
-        [ids.est, `${P}-HON`, agora],
-      );
-      const fav = await garantir(
+      await garantir(
         e,
         'SELECT id FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ?',
         [ids.est, ids.profissional],
         "INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, tipo_favorecido, vigencia_inicio, criado_em) VALUES (?, ?, 'proprio_profissional', '2026-01-01', ?)",
         [ids.est, ids.profissional, agora],
       );
-      const base = [ids.est, fav, ids.profissional, evento, `${periodo}-01`, `${periodo}-28`];
-      const original = await e.inserir(
-        `INSERT INTO lancamento_repasse (estabelecimento_id, favorecido_repasse_id, tipo_favorecido, profissional_id, evento_repasse_id,
-           tipo_lancamento, apuracao_repasse_id, competencia, data_lancamento, valor, criado_em)
-         VALUES (?, ?, 'medico', ?, ?, 'apuracao', ?, ?, ?, 1500, ?)`,
-        [...base.slice(0, 4), apuracao, ...base.slice(4), agora],
-      );
-      // O CHECK do estorno exige a ligação ao original e o valor negativo.
-      await e.inserir(
-        `INSERT INTO lancamento_repasse (estabelecimento_id, favorecido_repasse_id, tipo_favorecido, profissional_id, evento_repasse_id,
-           tipo_lancamento, estornado_lancamento_repasse_id, competencia, data_lancamento, valor, criado_em)
-         VALUES (?, ?, 'medico', ?, ?, 'estorno', ?, ?, ?, ?, ?)`,
-        [...base.slice(0, 4), original, ...base.slice(4), -desconto.estornoCentavos / 100, agora],
-      );
-      return e.consultar<Record<string, unknown>>(
-        'SELECT SUM(valor) AS liquido FROM lancamento_repasse WHERE apuracao_repasse_id = ? OR estornado_lancamento_repasse_id = ?',
-        [apuracao, original],
+      return Number(
+        (await e.uma<Record<string, unknown>>(
+          'SELECT id FROM evento_repasse WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, `${P}-HON`],
+        ))!['id'],
       );
     });
-    // O RPA soma os lançamentos do profissional: 1.500 − 400.
-    expect(Number(lancamentos[0]!['liquido'])).toBe(1100);
-    // Glosa revertida no recurso depois do desconto: o débito aplicado numa apuração conferida não se cancela; vira
-    // crédito de 400 ao profissional (lançamento de ajuste ligado à produção). Repetir não lança de novo.
+    const servico = new ServicoRepasse(porta, new RegistradorTrilhaMemoria(), null, null);
+    // A liberação da funcionalidade é da configuração do estabelecimento (fora deste contrato).
+    (servico as unknown as { apoio: { exigirLiberacao: () => Promise<void> } }).apoio.exigirLiberacao =
+      async () => undefined;
+    const sessao = () =>
+      ({
+        req: { headers: { 'idempotency-key': `${P}-${randomUUID()}` } },
+        hospital: 'f3rpc',
+        rede: '',
+        login: 'f3rpc.faturista',
+        porta: { ...ctx },
+        pode: () => true,
+      }) as unknown as SessaoCadastro;
+    const lancados = () =>
+      escrever((e) =>
+        e.consultar<Record<string, unknown>>(
+          `SELECT l.tipo_lancamento, l.valor, l.estornado_lancamento_repasse_id FROM lancamento_repasse l
+            WHERE l.apuracao_repasse_id = ? OR l.estornado_lancamento_repasse_id IN
+              (SELECT x.id FROM lancamento_repasse x WHERE x.apuracao_repasse_id = ?) ORDER BY l.id`,
+          [apuracao, apuracao],
+        ),
+      );
+    await servico.lancarApuracao(sessao(), apuracao, evento);
+    const ls = await lancados();
+    expect(ls.map((l) => [l['tipo_lancamento'], Number(l['valor'])])).toEqual([
+      ['apuracao', 300],
+      ['estorno', -300],
+    ]);
+    expect(ls[1]!['estornado_lancamento_repasse_id']).not.toBeNull();
+    await servico.lancarApuracao(sessao(), apuracao, evento);
+    expect(await lancados()).toHaveLength(2);
+
+    // O período seguinte desconta o saldo levado (100).
+    const proximo = seguinte(periodo);
+    const memoria11 = await producaoDaMemoria('2026-10-26T13:00:00Z');
+    const a11 = (await apurar(proximo, 1000, memoria11)).apuracao;
+    expect(Number((await apuracaoDe(a11))!['valor_descontos'])).toBe(100);
+    // Um débito criado depois do cálculo (H, glosa total aceita) cai no período ainda apurado; o período é conferido
+    // sem recálculo, e o débito é descontado no período seguinte (não fica preso).
+    const itemH = await novoItem(500, '2026-10-27T13:00:00Z');
+    await sincronizar('lancamento', [itemH]);
+    const [ph] = await producoesDo(itemH);
+    await integrar(ph!['id'], 4, 500, 200);
+    await glosaDecidida(itemH, 500, 'aceitar');
+    await worker(itemH);
+    const [dh] = await debitosDe(ph!['id']);
+    expect(dh).toMatchObject({ situacao: 'pendente' });
+    expect(comp(dh!['competencia'])).toBe(proximo);
     await escrever((e) =>
-      e.executar('UPDATE conta_hospitalar_item SET valor_glosado = 0 WHERE id = ?', [itemG]),
+      e.executar("UPDATE apuracao_repasse SET situacao = 'conferida' WHERE id = ?", [a11]),
     );
-    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({
-      creditos: 1,
-      debitos: 0,
-      pendencias: 0,
-    });
+    const memoria12 = await producaoDaMemoria('2026-10-28T13:00:00Z');
+    const a12 = (await apurar(seguinte(proximo), 1000, memoria12)).apuracao;
+    expect(Number((await apuracaoDe(a12))!['valor_descontos'])).toBe(200);
+    expect((await debitosDe(ph!['id']))[0]).toMatchObject({ situacao: 'aplicado' });
+    expect(Number((await debitosDe(ph!['id']))[0]!['apuracao_repasse_id'])).toBe(a12);
+
+    // Recorre a segunda glosa: o item fica com a primeira aceita (600), não volta a 0.
+    await recorrer(g2);
+    await worker(itemG);
+    expect(await glosadoDe(itemG)).toBe(600);
+    // Recorre também a primeira: glosa 0; os 400 já descontados (300 + 100 em apurações conferidas) voltam como
+    // crédito ao profissional. Repetir não lança de novo.
+    await recorrer(g1);
+    await worker(itemG);
+    expect(await glosadoDe(itemG)).toBe(0);
     const creditos = await escrever((e) =>
       e.consultar<Record<string, unknown>>(
-        'SELECT tipo_lancamento, valor, profissional_id FROM lancamento_repasse WHERE producao_repasse_id = ?',
+        "SELECT tipo_lancamento, valor FROM lancamento_repasse WHERE producao_repasse_id = ? AND tipo_lancamento = 'ajuste'",
         [pg!['id']],
       ),
     );
-    expect(creditos).toHaveLength(1);
-    expect(creditos[0]).toMatchObject({ tipo_lancamento: 'ajuste' });
-    expect(Number(creditos[0]!['valor'])).toBe(400);
-    expect((await debitosDe(pg!['id'])).map((x) => x['situacao'])).toEqual(['aplicado']);
-    expect((await sincronizar('mudanca-item', [itemG])).resultado).toMatchObject({ creditos: 0, debitos: 0 });
+    expect(creditos.reduce((t, c) => t + Math.round(Number(c['valor']) * 100), 0)).toBe(40000);
+    await worker(itemG);
+    expect(
+      await escrever((e) =>
+        e.consultar('SELECT id FROM lancamento_repasse WHERE producao_repasse_id = ?', [pg!['id']]),
+      ),
+    ).toHaveLength(creditos.length);
   });
 });

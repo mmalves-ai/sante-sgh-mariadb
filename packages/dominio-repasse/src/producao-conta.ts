@@ -161,6 +161,51 @@ export interface PortaProducaoConta {
   incluirDebito(d: NovoDebito): Promise<void>;
   /** Falso: ainda não há o lançamento da apuração de onde tirar o favorecido e o evento (fica para depois). */
   incluirCredito(c: NovoCredito): Promise<boolean>;
+  /** As glosas vivas do item da conta (glosa não cancelada), com a decisão e o valor aceito (reais). */
+  glosasDoItem(item: number): Promise<readonly GlosaDoItem[]>;
+  /** Grava o valor glosado do item da conta (só quando muda). */
+  gravarGlosadoDoItem(item: number, valor: number): Promise<void>;
+}
+
+export interface GlosaDoItem {
+  readonly decisao: string;
+  readonly valorAceito: number;
+}
+
+/** As decisões da glosa que tornam a perda definitiva (a recorrida aguarda o recurso; a pendente, a decisão). */
+export const DECISOES_GLOSA_ACEITA: readonly string[] = ['aceitar', 'aceitar_parcial'];
+
+/**
+ * O valor glosado do item da conta: a soma do valor aceito de todas as glosas vivas do item com decisão aceitar ou
+ * aceitar parcialmente (a mesma regra na decisão da glosa da TISS e na glosa do financeiro). Só a glosa aceita reduz o
+ * repasse; duas glosas no mesmo item somam.
+ */
+export function glosadoAceitoDoItem(glosas: readonly GlosaDoItem[]): number {
+  return reais(
+    glosas
+      .filter((g) => DECISOES_GLOSA_ACEITA.includes(g.decisao))
+      .reduce((t, g) => t + Math.max(0, centavos(g.valorAceito)), 0),
+  );
+}
+
+/**
+ * A glosa do item mudou (decisão da TISS, evento do financeiro): o item passa a guardar a soma das glosas aceitas, e a
+ * produção do repasse acompanha (mudança do item), na mesma transação.
+ */
+export async function sincronizarGlosaDoItem(
+  porta: PortaProducaoConta,
+  d: { readonly conta: number; readonly item: number },
+): Promise<ResumoProducaoConta & { readonly glosado: number }> {
+  // A trava da conta primeiro: a glosa e a sincronização do mesmo item correm em fila.
+  await porta.travarConta(d.conta);
+  const glosado = glosadoAceitoDoItem(await porta.glosasDoItem(d.item));
+  await porta.gravarGlosadoDoItem(d.item, glosado);
+  const r = await sincronizarProducaoDaConta(porta, {
+    conta: d.conta,
+    itens: [d.item],
+    evento: 'mudanca-item',
+  });
+  return { ...r, glosado };
 }
 
 export interface ResumoProducaoConta {
@@ -409,20 +454,27 @@ async function aplicar(
       competencia: acao.competencia,
       motivo: 'glosa',
     });
+  let desfeito = r.cancelar.length > 0;
   if (r.creditoCentavos > 0) {
     // O excesso já descontado numa apuração conferida não volta pelo cancelamento: vira crédito ao profissional. O
     // já estornado da produção (ProducaoExistente.estornado) é líquido dos créditos: repetir não lança de novo.
-    if (
-      !(await porta.incluirCredito({
-        ...alvo,
-        valor: reais(r.creditoCentavos),
-        competencia: acao.competencia,
-      }))
-    )
+    const lancado = await porta.incluirCredito({
+      ...alvo,
+      valor: reais(r.creditoCentavos),
+      competencia: acao.competencia,
+    });
+    if (!lancado) {
+      // Sem o lançamento da apuração ainda não há crédito: a produção continua estornada e nada conta como crédito;
+      // a próxima sincronização depois do lançamento lança o crédito e reabre (o estornado só cai com ele).
       resumo.pendencias['credito-sem-lancamento'] = (resumo.pendencias['credito-sem-lancamento'] ?? 0) + 1;
+      if (desfeito) resumo.creditos += 1;
+      return;
+    }
+    desfeito = true;
   }
+  // Reabre só com o débito desfeito de fato: a produção volta à situação de integrada numa apuração conferida.
   if (acao.reabrir) await porta.alterarProducao(p.id, p.versao, { situacao: 'apurado' });
-  resumo.creditos += 1;
+  if (desfeito || acao.reabrir) resumo.creditos += 1;
 }
 
 /**
@@ -448,10 +500,44 @@ export function planoDoCredito(
   };
 }
 
+export interface DebitoDaApuracao {
+  readonly id: number;
+  readonly profissional: number;
+  readonly valorCentavos: number;
+}
+
+/**
+ * Os débitos do repasse (estorno_repasse) descontados na apuração, por profissional: cada um abate o bruto do seu
+ * profissional, do mais velho ao mais novo, e nunca passa dele. O que não cabe no bruto (o profissional sem produção no
+ * período, ou com bruto menor que o débito) é o saldo devedor, levado ao período seguinte como débito novo ligado ao de
+ * origem: nada se perde e o líquido do profissional nunca fica negativo.
+ */
+export function debitosNaApuracao(
+  brutoCentavos: ReadonlyMap<number, number>,
+  debitos: readonly DebitoDaApuracao[],
+): { id: number; profissional: number; descontadoCentavos: number; saldoCentavos: number }[] {
+  const resta = new Map<number, number>();
+  return [...debitos]
+    .sort((a, b) => a.id - b.id)
+    .map((d) => {
+      const livre = resta.get(d.profissional) ?? Math.max(0, brutoCentavos.get(d.profissional) ?? 0);
+      const valor = Math.max(0, d.valorCentavos);
+      const descontado = Math.min(livre, valor);
+      resta.set(d.profissional, livre - descontado);
+      return {
+        id: d.id,
+        profissional: d.profissional,
+        descontadoCentavos: descontado,
+        saldoCentavos: valor - descontado,
+      };
+    });
+}
+
 /**
  * O débito do repasse (estornos de produção descontados na apuração) abatido no lançamento do profissional: o
  * lançamento da apuração leva o bruto, e o débito sai num lançamento de estorno ligado a ele (o RPA soma os dois e
- * paga o líquido). O estorno nunca passa do bruto do lançamento; o que sobra fica como saldo devedor do profissional.
+ * paga o líquido). O estorno nunca passa do bruto do lançamento; o saldo acima do bruto já saiu da apuração
+ * (debitosNaApuracao) para o período seguinte, e quem lança recusa o saldo que sobrar (nunca o perde calado).
  */
 export function descontoDoDebito(
   brutoCentavos: number,

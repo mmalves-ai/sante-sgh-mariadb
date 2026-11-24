@@ -17,6 +17,7 @@ const marcas = (xs: readonly unknown[]) => xs.map(() => '?').join(', ');
 
 /** Tabelas que a sincronização grava (a operação que a chama as declara também). */
 export const TABELAS_PRODUCAO_CONTA: readonly string[] = [
+  'conta_hospitalar_item',
   'producao_repasse',
   'estorno_repasse',
   'lancamento_repasse',
@@ -178,6 +179,46 @@ async function parametros(l: Leitor, est: number, chaves: readonly string[]): Pr
   return m;
 }
 
+/** Um débito do repasse (estorno_repasse 'pendente'), com o número de negócio da sequência do estabelecimento. */
+export async function incluirEstornoRepasse(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  d: {
+    producao: number;
+    conta: number | null;
+    glosaItem: number | null;
+    motivo: string;
+    valor: number;
+    /** AAAA-MM. */
+    competencia: string;
+    justificativa: string;
+    /** O débito de origem, quando este leva adiante o saldo devedor dele (não coube no bruto da apuração). */
+    origem?: number;
+  },
+): Promise<number> {
+  await garantirSequencia(
+    tx,
+    { tipo: 'estorno_repasse', estabelecimento: est, prefixo: 'ER-' },
+    { usuario, agora: new Date() },
+  );
+  const numero = await tx.proximoNumero('estorno_repasse');
+  return tx.incluir('estorno_repasse', {
+    estabelecimento_id: est,
+    numero: numero.formatado,
+    producao_repasse_id: d.producao,
+    glosa_item_id: d.glosaItem,
+    conta_hospitalar_id: d.conta,
+    motivo: d.motivo,
+    valor: d.valor,
+    competencia: `${d.competencia}-01`,
+    justificativa: d.justificativa,
+    situacao: 'pendente',
+    usuario_id: usuario,
+    ...(d.origem !== undefined ? { origem_estorno_repasse_id: d.origem } : {}),
+  });
+}
+
 /**
  * A porta da sincronização sobre a transação de quem mudou a conta. O contexto traz o estabelecimento e o usuário da
  * sessão (o worker passa os do evento).
@@ -209,27 +250,17 @@ export function portaProducaoConta(
           )
         : null;
     const motivo = d.motivo === 'glosa' && glosa ? 'glosa' : 'ajuste';
-    await garantirSequencia(
-      tx,
-      { tipo: 'estorno_repasse', estabelecimento: est, prefixo: 'ER-' },
-      { usuario, agora: new Date() },
-    );
-    const numero = await tx.proximoNumero('estorno_repasse');
-    await tx.incluir('estorno_repasse', {
-      estabelecimento_id: est,
-      numero: numero.formatado,
-      producao_repasse_id: d.producao,
-      glosa_item_id: motivo === 'glosa' ? n(glosa?.['id']) : null,
-      conta_hospitalar_id: d.conta,
+    await incluirEstornoRepasse(tx, est, usuario, {
+      producao: d.producao,
+      conta: d.conta,
+      glosaItem: motivo === 'glosa' ? n(glosa?.['id']) : null,
       motivo,
       valor: d.valor,
-      competencia: `${d.competencia}-01`,
+      competencia: d.competencia,
       justificativa:
         d.motivo === 'glosa'
           ? 'Glosa do item da conta depois da apuração do repasse.'
           : 'Item da conta estornado (ou produção que o item não gera mais) depois da apuração do repasse.',
-      situacao: 'pendente',
-      usuario_id: usuario,
     });
   };
 
@@ -390,11 +421,13 @@ export function portaProducaoConta(
           { teto: 20000 },
         ))
           apurado.set(n(r['producao_repasse_id']), n(r['valor_repasse']));
-        // O já estornado é líquido dos créditos já lançados (glosa revertida depois do desconto).
+        // O já estornado é líquido dos créditos já lançados (glosa revertida depois do desconto). O saldo devedor
+        // levado adiante (origem_estorno_repasse_id) é parte do débito de origem: não conta de novo.
         for (const r of await tx.consultar<Linha>(
           `SELECT x.p, SUM(x.v) AS v FROM (
              SELECT producao_repasse_id AS p, valor AS v FROM estorno_repasse
               WHERE producao_repasse_id IN (${marcas(pids)}) AND excluido_em IS NULL AND situacao <> 'cancelado'
+                AND origem_estorno_repasse_id IS NULL
              UNION ALL
              SELECT producao_repasse_id, -valor FROM lancamento_repasse
               WHERE producao_repasse_id IN (${marcas(pids)}) AND excluido_em IS NULL AND situacao <> 'cancelado'
@@ -505,6 +538,25 @@ export function portaProducaoConta(
           { teto: 1000 },
         )
       ).map((e) => ({ id: n(e['id']), versao: n(e['versao']), valor: n(e['valor']) }));
+    },
+    async glosasDoItem(item: number) {
+      return (
+        await tx.consultarParaAtualizar<Linha>(
+          `SELECT gi.decisao, gi.valor_aceito FROM glosa_item gi JOIN glosa g ON g.id = gi.glosa_id
+            WHERE gi.conta_hospitalar_item_id = ? AND gi.excluido_em IS NULL AND g.excluido_em IS NULL
+              AND g.situacao <> 'cancelada'
+            ORDER BY gi.id`,
+          [item],
+          { teto: 500 },
+        )
+      ).map((g) => ({ decisao: texto(g['decisao']), valorAceito: n(g['valor_aceito']) }));
+    },
+    async gravarGlosadoDoItem(item: number, valor: number) {
+      const ci = await tx.uma<Linha>('SELECT versao, valor_glosado FROM conta_hospitalar_item WHERE id = ?', [
+        item,
+      ]);
+      if (ci && Math.round(n(ci['valor_glosado']) * 100) !== Math.round(valor * 100))
+        await tx.alterar('conta_hospitalar_item', item, n(ci['versao']), { valor_glosado: valor });
     },
     async cancelarDebito(id: number, versao: number) {
       await tx.alterar('estorno_repasse', id, versao, { situacao: 'cancelado' });

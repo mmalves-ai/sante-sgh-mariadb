@@ -739,12 +739,24 @@ export class ServicoRepasse {
       );
     const hoje = await this.porta.hoje(ctx(s));
     const data = hoje.startsWith(a.competencia) ? hoje : `${a.competencia}-28`;
-    const ids: number[] = [];
     // O débito do repasse descontado nesta apuração (estornos de produção) abate o lançamento de cada profissional:
-    // um lançamento de estorno ligado ao da apuração (o RPA soma os dois). O saldo acima do bruto fica pendente.
+    // um lançamento de estorno ligado ao da apuração (o RPA soma os dois). A apuração já levou ao período seguinte o
+    // que não coube no bruto (debitosNaApuracao); por isso todo profissional com débito tem bruto que o cobre. Se não
+    // tiver (dado fora da regra), recusa antes de lançar: o débito nunca se perde calado.
     const debitos = await this.porta.debitosDaApuracao(ctx(s), a.id);
-    let saldos = 0;
-    for (const b of await this.porBeneficiario(s, a)) {
+    const beneficiarios = await this.porBeneficiario(s, a);
+    const bruto = new Map(beneficiarios.map((b) => [b.prestador, centavos(b.valor)]));
+    const descobertos = [...debitos.entries()].filter(
+      ([prestador, valor]) => descontoDoDebito(bruto.get(prestador) ?? 0, centavos(valor)).saldoCentavos > 0,
+    );
+    if (descobertos.length > 0)
+      throw recusar(
+        'debito-acima-do-bruto',
+        'Débito acima do bruto',
+        `${descobertos.length} profissional(is) com débito do repasse acima do bruto da apuração: recalcule a apuração para levar o saldo ao período seguinte.`,
+      );
+    const ids: number[] = [];
+    for (const b of beneficiarios) {
       const r = await this.apoio.executar(
         s,
         'repasse.lancarEvento',
@@ -767,7 +779,6 @@ export class ServicoRepasse {
       const original = Number(r.resultado['lancamento']);
       ids.push(original);
       const desconto = descontoDoDebito(centavos(b.valor), centavos(debitos.get(b.prestador) ?? 0));
-      if (desconto.saldoCentavos > 0) saldos += 1;
       if (desconto.estornoCentavos > 0) {
         const x = await this.apoio.executar(
           s,
@@ -793,9 +804,7 @@ export class ServicoRepasse {
     }
     return {
       ok: true,
-      mensagem:
-        `${ids.length} lançamento(s) da apuração incluído(s).` +
-        (saldos > 0 ? ` ${saldos} profissional(is) com débito acima do bruto (saldo pendente).` : ''),
+      mensagem: `${ids.length} lançamento(s) da apuração incluído(s).`,
       ids: { lancamentos: ids.join(',') },
       repetida: false,
     };

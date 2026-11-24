@@ -9,7 +9,7 @@
 //   (trava do título antes de qualquer leitura; somas lidas com FOR UPDATE, que enxerga o último valor gravado).
 // Melhoria: o título cancelado ou renegociado, ou de outro estabelecimento, não recebe glosa (fica "sem-titulo").
 // Melhoria: a glosa total do título nunca fica abaixo da aceita (ck_titulo_receber_valores), conferido na regra.
-import { sincronizarProducaoDaConta } from '@sgh/dominio-repasse';
+import { sincronizarGlosaDoItem } from '@sgh/dominio-repasse';
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { portaProducaoConta, TABELAS_PRODUCAO_CONTA } from '@sgh/persistencia';
 
@@ -64,6 +64,43 @@ export async function registrarGlosaAceitaDoEvento(
   const est = Number(tx.contexto.estabelecimento);
   if (!Number.isInteger(est) || est <= 0)
     throw recusa('estabelecimento-desconhecido', 'Gravação sem estabelecimento.');
+  const r = await glosaNoTitulo(tx, est, d);
+  // A produção do repasse acompanha a glosa do item, na mesma transação, em todo caminho (com ou sem título, entrega
+  // repetida): o item passa a guardar a soma das glosas aceitas (glosadoAceitoDoItem, a mesma regra da decisão da
+  // TISS) e a sincronização (@sgh/dominio-repasse + @sgh/persistencia) é idempotente.
+  const item = await tx.uma<{ conta: unknown }>(
+    'SELECT conta_hospitalar_id AS conta FROM conta_hospitalar_item WHERE id = ?',
+    [d.item],
+  );
+  if (!item) return r;
+  // O evento do worker não traz usuário: o autor do débito do repasse é quem decidiu a glosa aceita do item (a
+  // decisão que o causou). Sem glosa decidida no item não há nada a levar ao repasse; com glosa aceita sem autor
+  // (carga antiga), recusa: a operação inteira volta e o evento fica em erro, nunca fora do repasse sem aviso.
+  const decisor = await tx.uma<{ usuario: unknown }>(
+    `SELECT gi.decidido_por_usuario_id AS usuario FROM glosa_item gi
+      WHERE gi.conta_hospitalar_item_id = ? AND gi.decisao <> 'pendente' AND gi.excluido_em IS NULL
+      ORDER BY gi.decidido_em DESC, gi.id DESC LIMIT 1`,
+    [d.item],
+  );
+  if (tx.contexto.usuario === null && !decisor) return r;
+  const usuario = tx.contexto.usuario ?? (decisor?.usuario == null ? null : Number(decisor.usuario));
+  if (usuario === null)
+    throw recusa(
+      'sem-usuario',
+      'A glosa aceita do item não tem quem a decidiu: o débito do repasse precisa de autor.',
+    );
+  await sincronizarGlosaDoItem(portaProducaoConta(tx, { estabelecimento: est, usuario }), {
+    conta: Number(item.conta),
+    item: d.item,
+  });
+  return r;
+}
+
+async function glosaNoTitulo(
+  tx: TxOperacao,
+  est: number,
+  d: GlosaAceitaDoEvento,
+): Promise<ResultadoGlosaDoEvento> {
   // Ordem contra a corrida (REPEATABLE READ): primeiro a trava do título, e só depois as leituras, todas travadas
   // (FOR UPDATE lê o último valor gravado, não a foto da transação). Duas entregas com chaves diferentes para o mesmo
   // item ficam em fila no título; a segunda enxerga a linha que a primeira gravou e não lança de novo.
@@ -129,20 +166,5 @@ export async function registrarGlosaAceitaDoEvento(
     valor_glosa: novo.glosa,
     valor_glosa_aceita: novo.glosaAceita,
   });
-  // A produção do repasse acompanha a glosa do item (mudança do item), na mesma transação: a mesma sincronização da
-  // API (@sgh/dominio-repasse + @sgh/persistencia), idempotente se a decisão da glosa já sincronizou.
-  const item = await tx.uma<{ conta: unknown }>(
-    'SELECT conta_hospitalar_id AS conta FROM conta_hospitalar_item WHERE id = ?',
-    [d.item],
-  );
-  if (item && tx.contexto.usuario !== null)
-    await sincronizarProducaoDaConta(
-      portaProducaoConta(tx, { estabelecimento: est, usuario: tx.contexto.usuario }),
-      {
-        conta: Number(item.conta),
-        itens: [d.item],
-        evento: 'mudanca-item',
-      },
-    );
   return { resultado: 'registrada', id };
 }

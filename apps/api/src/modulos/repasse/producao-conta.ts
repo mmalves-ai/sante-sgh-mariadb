@@ -6,6 +6,7 @@
 import {
   type EventoProducao,
   type ResumoProducaoConta,
+  sincronizarGlosaDoItem as sincronizarGlosaNaPorta,
   sincronizarProducaoDaConta as sincronizarNaPorta,
 } from '@sgh/dominio-repasse';
 import { definirOperacao, type ContextoOperacao, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
@@ -25,6 +26,18 @@ export function sincronizarProducaoDaConta(
   ctx: Pick<ContextoOperacao, 'estabelecimento' | 'usuario'>,
 ): Promise<ResumoProducaoConta> {
   return sincronizarNaPorta(portaProducaoConta(tx, ctx), d);
+}
+
+/**
+ * A glosa do item mudou (decisão da TISS): o item guarda a soma das glosas aceitas (a mesma regra do worker,
+ * glosadoAceitoDoItem no domínio) e a produção do repasse acompanha, na mesma transação.
+ */
+export function sincronizarGlosaDoItem(
+  tx: TxOperacao,
+  d: { readonly conta: number; readonly item: number },
+  ctx: Pick<ContextoOperacao, 'estabelecimento' | 'usuario'>,
+): Promise<ResumoProducaoConta & { readonly glosado: number }> {
+  return sincronizarGlosaNaPorta(portaProducaoConta(tx, ctx), d);
 }
 
 export const esquemaSincronizarProducaoConta = z

@@ -20,7 +20,7 @@
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
 // produção e o adiantamento ao prestador. Até lá, essas partes respondem zero ou vazio.
 import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
-import { integraisDoDia } from '@sgh/dominio-repasse';
+import { debitosNaApuracao, integraisDoDia } from '@sgh/dominio-repasse';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -35,6 +35,7 @@ import {
 } from '@sgh/nucleo';
 import {
   codigoProcedimento,
+  incluirEstornoRepasse,
   lerIntegraisBrutas,
   PREFIXO_INTEGRAL,
   regraDe,
@@ -377,17 +378,52 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
         );
       let id: number;
       const agora = new Date();
-      // Débitos do período (estorno de repasse depois da apuração, producao-conta.ts): os pendentes da competência e os
-      // já aplicados a esta apuração (no recálculo) são descontados do bruto; os pendentes passam a 'aplicado' aqui.
+      // Débitos do período (estorno de repasse depois da apuração, producao-conta.ts): os pendentes até esta
+      // competência (inclusive o de um período já conferido sem recálculo, que não se perde) e os já aplicados a esta
+      // apuração (no recálculo). Cada um abate o bruto do seu profissional (debitosNaApuracao, no domínio); o que não
+      // cabe vira saldo devedor, levado ao período seguinte como débito novo ligado ao de origem.
       const debitos = await tx.consultarParaAtualizar(
-        `SELECT id, versao, valor, situacao FROM estorno_repasse
-          WHERE estabelecimento_id = ? AND competencia = ? AND excluido_em IS NULL
-            AND (situacao = 'pendente' OR (situacao = 'aplicado' AND apuracao_repasse_id = ?))
-          ORDER BY id`,
+        `SELECT e.id, e.versao, e.valor, e.situacao, e.producao_repasse_id, e.conta_hospitalar_id, e.glosa_item_id,
+                e.motivo, p.profissional_id
+           FROM estorno_repasse e JOIN producao_repasse p ON p.id = e.producao_repasse_id
+          WHERE e.estabelecimento_id = ? AND e.excluido_em IS NULL
+            AND ((e.situacao = 'pendente' AND e.competencia <= ?) OR (e.situacao = 'aplicado' AND e.apuracao_repasse_id = ?))
+          ORDER BY e.id`,
         [est, competencia, a ? n(a['id']) : 0],
         { teto: 20000 },
       );
-      const descontoCentavos = debitos.reduce((t, x) => t + Math.round(n(x['valor']) * 100), 0);
+      // No recálculo, o saldo devedor levado adiante pelo cálculo anterior é refeito: o pendente é cancelado (fica no
+      // histórico); o já descontado noutra apuração não se refaz aqui.
+      const aplicados = debitos.filter((x) => texto(x['situacao']) === 'aplicado').map((x) => n(x['id']));
+      if (aplicados.length > 0) {
+        const levados = await tx.consultarParaAtualizar(
+          `SELECT id, versao, situacao FROM estorno_repasse
+            WHERE origem_estorno_repasse_id IN (${aplicados.map(() => '?').join(', ')}) AND excluido_em IS NULL
+              AND situacao <> 'cancelado'`,
+          aplicados,
+          { teto: 20000 },
+        );
+        if (levados.some((x) => texto(x['situacao']) === 'aplicado'))
+          throw recusa(
+            'saldo-devedor-ja-descontado',
+            'O saldo devedor deste período já foi descontado numa apuração seguinte: o recálculo mudaria o que ela já descontou.',
+          );
+        for (const x of levados)
+          await tx.alterar('estorno_repasse', n(x['id']), n(x['versao']), { situacao: 'cancelado' });
+      }
+      const bruto = new Map<number, number>();
+      for (const m of d.memorias)
+        if (m.prestador !== null && !m.pendencia)
+          bruto.set(m.prestador, (bruto.get(m.prestador) ?? 0) + Math.round(m.valor * 100));
+      const plano = debitosNaApuracao(
+        bruto,
+        debitos.map((x) => ({
+          id: n(x['id']),
+          profissional: n(x['profissional_id']),
+          valorCentavos: Math.round(n(x['valor']) * 100),
+        })),
+      );
+      const descontoCentavos = plano.reduce((t, x) => t + x.descontadoCentavos, 0);
       const valores = {
         valor_faturado: d.totais.base,
         valor_bruto: d.totais.valor,
@@ -441,13 +477,27 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
           valor_repasse: m.valor,
         });
       }
-      for (const x of debitos)
+      const seguinte = competenciaSeguinte(d.competencia);
+      for (const x of debitos) {
         if (texto(x['situacao']) === 'pendente')
           await tx.alterar('estorno_repasse', n(x['id']), n(x['versao']), {
             situacao: 'aplicado',
             apuracao_repasse_id: id,
             aplicado_em: agora,
           });
+        const saldo = plano.find((p) => p.id === n(x['id']))?.saldoCentavos ?? 0;
+        if (saldo > 0)
+          await incluirEstornoRepasse(tx, est, usuario, {
+            producao: n(x['producao_repasse_id']),
+            conta: nn(x['conta_hospitalar_id']),
+            glosaItem: nn(x['glosa_item_id']),
+            motivo: texto(x['motivo']),
+            valor: saldo / 100,
+            competencia: seguinte,
+            justificativa: `Saldo devedor do repasse que não coube no bruto do profissional na apuração de ${d.competencia}.`,
+            origem: n(x['id']),
+          });
+      }
       return { apuracao: id, recalculada: Boolean(a) };
     },
     async transicionarApuracao(d) {
@@ -464,6 +514,12 @@ function gravadorSobre(tx: TxOperacao, est: number, usuario: number): GravadorRe
       return { apuracao: d.apuracao, estado: d.para };
     },
   };
+}
+
+/** A competência (AAAA-MM) seguinte. */
+function competenciaSeguinte(c: string): string {
+  const [ano, mes] = c.split('-').map(Number) as [number, number];
+  return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, '0')}`;
 }
 
 /** A regra (pai) do item de regra aplicado, só do estabelecimento da sessão. */
@@ -1283,7 +1339,11 @@ export class PortaRepassePropria implements PortaRepasse {
   debitosDaApuracao(c: ContextoRepasse, apuracao: number): Promise<Map<number, number>> {
     return this.ler(c, async (l, est) => {
       const rs = await l.consultar(
-        `SELECT p.profissional_id, SUM(e.valor) AS v
+        // O descontado é o débito aplicado menos o saldo devedor levado ao período seguinte (gravarApuracao).
+        `SELECT p.profissional_id,
+                SUM(e.valor - COALESCE((SELECT SUM(s.valor) FROM estorno_repasse s
+                                          WHERE s.origem_estorno_repasse_id = e.id AND s.excluido_em IS NULL
+                                            AND s.situacao <> 'cancelado'), 0)) AS v
            FROM estorno_repasse e JOIN producao_repasse p ON p.id = e.producao_repasse_id
           WHERE e.estabelecimento_id = ? AND e.apuracao_repasse_id = ? AND e.situacao = 'aplicado'
             AND e.excluido_em IS NULL
