@@ -13,3 +13,6 @@ export * from './cobertura/cobertura.js';
 export * from './pre-cadastro/pre-cadastro.js';
 export * from './unificacao/desfazer.js';
 export * from './unificacao/referencias-paciente.js';
+export * from './ficha-complementar/regras-campo.js';
+export * from './ficha-complementar/contatos.js';
+export * from './ficha-complementar/responsaveis.js';
