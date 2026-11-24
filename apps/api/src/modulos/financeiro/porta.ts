@@ -133,7 +133,7 @@ export interface GravadorSghFinanceiro {
   }): Promise<{ id: number; ordem: number; aprovado: boolean; faltam: number }>;
   /** F3.8 (07-FIN linha 63): prorrogar o vencimento da parcela a pagar; o original fica e o passo vai ao histórico. */
   prorrogarVencimento(
-    d: ProrrogarVencimentoEntrada & { usuario: string },
+    d: ProrrogarVencimentoEntrada & { usuario: string; podeAprovar: boolean },
   ): Promise<{ id: number; vencimentoAnterior: string; vencimento: string; vencimentoOriginal: string }>;
   registrarGlosaTitulo(
     d: RegistrarGlosaTituloEntrada & { usuario: string; origem: 'tela' | 'evento'; chaveEvento?: string },
@@ -179,6 +179,8 @@ export interface GravadorSghFinanceiro {
     titulos: number;
     valorTotal: number;
     hashArquivo: string;
+    /** As parcelas a pagar enviadas no arquivo (o vínculo fica pendente até o retorno do banco). */
+    parcelas?: readonly { parcela: number; valor: number; vencimento: string }[];
     arquivo: ArquivoGuardadoFinanceiro | null;
     destino: 'simulador' | 'banco';
     situacao: 'gerada' | 'retornada';

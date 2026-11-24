@@ -248,7 +248,12 @@ export class ServicoFinanceiro {
       E.financeiroVencimentoProrrogado.codigo,
       'financeiro.contasPagar',
       () => ({ tabela: 'parcela_pagar', id: String(e.parcela) }),
-      (g) => g.prorrogarVencimento({ ...e, usuario: s.login }),
+      (g) =>
+        g.prorrogarVencimento({
+          ...e,
+          usuario: s.login,
+          podeAprovar: s.pode('financeiro.tituloPagar.aprovar'),
+        }),
     );
     return resultadoFin(
       `Vencimento prorrogado de ${r.vencimentoAnterior} para ${r.vencimento} (o original, ${r.vencimentoOriginal}, fica no título).`,
@@ -344,6 +349,8 @@ export class ServicoFinanceiro {
           titulos: titulos.length,
           valorTotal: arquivo.total,
           hashArquivo: hash,
+          // As parcelas enviadas ficam ligadas à remessa até o retorno (a prorrogação é recusada enquanto pendentes).
+          parcelas: titulos.map((t) => ({ parcela: t.titulo, valor: t.valor, vencimento: t.vencimento })),
           arquivo: { chave, tamanhoBytes: conteudoRemessa.length, tipoMime: 'text/plain' },
           destino: this.ambiente === 'producao' ? 'banco' : 'simulador',
           situacao: retorno ? 'retornada' : 'gerada',

@@ -46,6 +46,7 @@ import {
   regrasDoCredor,
   serieGravada,
   situacaoAprovacao,
+  conferirAlcadaProrrogacao,
   conferirProrrogacao,
   situacaoTituloPagar,
   type TipoCredor,
@@ -992,12 +993,17 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
               situacao: pago ? 'paga' : 'aberta',
               saldo: pago ? 0 : t.valor,
               vencimento: t.vencimento,
-              emLotePendente: false,
+              emLotePendente: this.emRemessaPendente(s).has(t.id),
             },
             d.vencimento,
             m ? { ativo: m.ativo, aplicaPagar: true, exigeJustificativa: m.exigeJustificativa } : null,
             d.justificativa,
-          ),
+          ) ??
+            conferirAlcadaProrrogacao({
+              tituloAprovado: !!situacaoAprovacao(this.faixaDo(s, t), this.aprovacoesDo(s, t.id)).aprovado,
+              lancadoPeloUsuario: t.lancadoPor === d.usuario,
+              podeAprovar: d.podeAprovar,
+            }),
         );
         const h = this.prorrogacoesDo(s);
         const anterior = t.vencimento;
@@ -1309,6 +1315,8 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           OCORRENCIAS: d.ocorrencias,
           GERADO_EM: s.hoje,
         });
+        if (d.situacao === 'gerada')
+          for (const x of d.parcelas ?? []) this.emRemessaPendente(s).add(x.parcela);
         return { id, sequencial };
       },
       registrarNfse: async (d) => {
@@ -1492,6 +1500,14 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         .map((a) => ({ aprovador: a.aprovador, ordem: a.ordem, em: a.em })),
       documentoCredor: '**.***.***/****-55',
     };
+  }
+
+  /** F3.8 (07-FIN linha 63): as parcelas enviadas em remessa ainda sem retorno, por estado (a prorrogação é recusada). */
+  private readonly remessaPendenteM = new WeakMap<object, Set<number>>();
+  private emRemessaPendente(s: object): Set<number> {
+    let x = this.remessaPendenteM.get(s);
+    if (!x) this.remessaPendenteM.set(s, (x = new Set<number>()));
+    return x;
   }
 
   /** F3.8 (07-FIN linha 63): o histórico de prorrogações por estado (o vencimento original de cada parcela junto). */

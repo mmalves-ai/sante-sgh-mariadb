@@ -44,6 +44,7 @@ import {
   conferirPagamento,
   conferirPedidoEmAberto,
   conferirSaida,
+  conferirAlcadaProrrogacao,
   conferirProrrogacao,
   credorDoTitulo,
   parcelaAposCompensacao,
@@ -142,6 +143,7 @@ const SITUACOES_TITULAVEIS = SITUACOES_CONTA_TITULAVEL.map((s) => `'${s}'`).join
 /** Tabelas das gravações diretas (a operação de gravação direta só grava nelas). */
 const TABELAS_GRAVACAO_DIRETA = [
   'prorrogacao_parcela',
+  'parcela_remessa_bancaria',
   'arquivo',
   'adiantamento',
   'compensacao_adiantamento',
@@ -1805,7 +1807,12 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
                 EXISTS (SELECT 1 FROM item_bordero ib JOIN bordero_pagamento b ON b.id = ib.bordero_pagamento_id
                          WHERE ib.parcela_pagar_id = p.id AND ib.excluido_em IS NULL
                            AND ib.situacao IN ('incluido','enviado','confirmado')
-                           AND b.situacao IN ('aberto','fechado','aprovado','enviado')) AS em_lote
+                           AND b.situacao IN ('aberto','fechado','aprovado','enviado'))
+                OR EXISTS (SELECT 1 FROM parcela_remessa_bancaria pr
+                             JOIN remessa_bancaria r ON r.id = pr.remessa_bancaria_id
+                            WHERE pr.parcela_pagar_id = p.id AND pr.situacao = 'pendente' AND pr.excluido_em IS NULL
+                              AND r.excluido_em IS NULL AND r.situacao IN ('gerada','enviada','aceita')) AS em_lote,
+                t.autorizado, t.criado_por AS lancado_por
            FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
           WHERE p.id = ? AND t.estabelecimento_id = ? AND p.excluido_em IS NULL AND t.excluido_em IS NULL
             AND t.situacao <> 'cancelado'`,
@@ -1837,6 +1844,13 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
             : null,
           d.justificativa,
         ),
+      );
+      recusar(
+        conferirAlcadaProrrogacao({
+          tituloAprovado: Boolean(numero(p['autorizado'])),
+          lancadoPeloUsuario: p['lancado_por'] != null && numero(p['lancado_por']) === numero(usuario),
+          podeAprovar: d.podeAprovar,
+        }),
       );
       const parcela = numero(p['id']);
       // O vencimento original não muda; a parcela passa a valer pelo novo e o passo fica no histórico.
@@ -2559,6 +2573,17 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         }).slice(0, 500),
       });
       if (arquivo) await ligarArquivo(tx, arquivo, id);
+      // O vínculo parcela–remessa: pendente até o retorno do banco (a prorrogação é recusada enquanto pendente).
+      const retornada = d.situacao === 'retornada';
+      for (const x of d.parcelas ?? [])
+        await tx.incluir('parcela_remessa_bancaria', {
+          remessa_bancaria_id: id,
+          parcela_pagar_id: x.parcela,
+          valor: x.valor,
+          vencimento: x.vencimento,
+          situacao: retornada ? 'retornada' : 'pendente',
+          retornada_em: retornada ? agora() : null,
+        });
       return { id, sequencial };
     },
 

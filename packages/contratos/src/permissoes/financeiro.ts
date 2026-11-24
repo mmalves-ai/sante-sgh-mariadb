@@ -34,6 +34,12 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     { criticidade: 'sensivel' },
   ),
   p(
+    'financeiro.tituloPagar.prorrogar',
+    'Prorrogar o vencimento da parcela a pagar (motivo da lista; título já aprovado pede também a permissão de aprovar e outra pessoa que não quem lançou)',
+
+    { criticidade: 'sensivel' },
+  ),
+  p(
     'financeiro.tituloPagar.aprovar',
     'Aprovar o pagamento na alçada (quem lança não aprova; dupla aprovação acima do limite)',
 

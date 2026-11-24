@@ -19,6 +19,7 @@ export const FUNCIONALIDADES_FINANCEIRO = {
     },
     extras: {
       aprovarTitulo: 'financeiro.tituloPagar.aprovar',
+      prorrogarVencimento: 'financeiro.tituloPagar.prorrogar',
       editarAlcada: 'financeiro.parametro.editar',
       gerarRemessa: 'financeiro.remessa.gerar',
       concederAdiantamento: 'financeiro.adiantamento.conceder',

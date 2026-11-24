@@ -314,7 +314,7 @@ export class FinanceiroController {
 
   @Post('pagar/titulos/:id/prorrogar')
   @HttpCode(200)
-  @Permissao('financeiro.tituloPagar.criar')
+  @Permissao('financeiro.tituloPagar.prorrogar')
   @AuditadoNoHandler('prorrogação do vencimento com a trilha na mesma transação')
   prorrogar(
     @Param('id') id: string,

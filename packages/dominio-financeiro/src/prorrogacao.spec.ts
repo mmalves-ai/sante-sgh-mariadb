@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conferirProrrogacao, diasProrrogados } from './prorrogacao.js';
+import { conferirAlcadaProrrogacao, conferirProrrogacao, diasProrrogados } from './prorrogacao.js';
 
 const aberta = { situacao: 'aberta', saldo: 100, vencimento: '2026-12-10', emLotePendente: false };
 const M = { ativo: true, aplicaPagar: true, exigeJustificativa: false };
@@ -52,5 +52,29 @@ describe('prorrogação do vencimento da parcela a pagar', () => {
   it('conta os dias prorrogados desde o vencimento original', () => {
     expect(diasProrrogados('2026-12-10', '2026-12-20')).toBe(10);
     expect(diasProrrogados('2026-12-10', '2026-12-10')).toBe(0);
+  });
+});
+
+describe('prorrogação de título já aprovado na alçada (alteração controlada)', () => {
+  const cod = (r: ReturnType<typeof conferirAlcadaProrrogacao>) => r?.codigo ?? null;
+  it('antes da aprovação, a permissão de prorrogar basta (até para quem lançou)', () => {
+    expect(
+      cod(conferirAlcadaProrrogacao({ tituloAprovado: false, lancadoPeloUsuario: true, podeAprovar: false })),
+    ).toBeNull();
+  });
+  it('aprovado: quem não pode aprovar é recusado', () => {
+    expect(
+      cod(conferirAlcadaProrrogacao({ tituloAprovado: true, lancadoPeloUsuario: false, podeAprovar: false })),
+    ).toBe('prorrogacao-exige-aprovador');
+  });
+  it('aprovado: quem lançou é recusado mesmo podendo aprovar (segregação)', () => {
+    expect(
+      cod(conferirAlcadaProrrogacao({ tituloAprovado: true, lancadoPeloUsuario: true, podeAprovar: true })),
+    ).toBe('prorrogacao-pelo-lancador');
+  });
+  it('aprovado: outro aprovador prorroga', () => {
+    expect(
+      cod(conferirAlcadaProrrogacao({ tituloAprovado: true, lancadoPeloUsuario: false, podeAprovar: true })),
+    ).toBeNull();
   });
 });

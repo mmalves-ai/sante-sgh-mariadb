@@ -72,6 +72,36 @@ export function conferirProrrogacao(
   return null;
 }
 
+/** Quem pede a prorrogação, diante da aprovação do título na alçada. */
+export interface AlcadaDaProrrogacao {
+  /** O título já foi aprovado na alçada (autorizado para pagamento). */
+  readonly tituloAprovado: boolean;
+  /** Quem pede a prorrogação é quem lançou o título. */
+  readonly lancadoPeloUsuario: boolean;
+  /** Quem pede a prorrogação tem a permissão de aprovar títulos a pagar na alçada. */
+  readonly podeAprovar: boolean;
+}
+
+/**
+ * Mudar o vencimento de um título já aprovado na alçada é alteração controlada: só quem pode aprovar e não lançou o
+ * título (a mesma segregação da aprovação) prorroga; o histórico guarda quem foi. Antes da aprovação, a permissão de
+ * prorrogar basta (o aprovador vê o vencimento novo).
+ */
+export function conferirAlcadaProrrogacao(a: AlcadaDaProrrogacao): RecusaFinanceiro | null {
+  if (!a.tituloAprovado) return null;
+  if (!a.podeAprovar)
+    return recusaFin(
+      'prorrogacao-exige-aprovador',
+      'O título já foi aprovado na alçada: a prorrogação pede quem tem a permissão de aprovar.',
+    );
+  if (a.lancadoPeloUsuario)
+    return recusaFin(
+      'prorrogacao-pelo-lancador',
+      'O título já foi aprovado na alçada: quem lançou não prorroga o vencimento (peça a outro aprovador).',
+    );
+  return null;
+}
+
 /** Dias de prorrogação acumulados entre o vencimento original e o vigente (0 quando nunca prorrogada). */
 export function diasProrrogados(original: string, vigente: string): number {
   return Math.max(0, dias(original, vigente));
