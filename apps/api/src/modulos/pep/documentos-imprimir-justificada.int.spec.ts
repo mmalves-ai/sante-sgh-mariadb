@@ -142,7 +142,10 @@ describe('01-ADM L82: impressão justificada de documento do prontuário', () =>
     expect(documentos.exportacoes.length).toBe(antes);
 
     const just = 'Cópia pedida pelo paciente para segunda opinião';
-    const ok = await exportar({ justificativa: just });
+    // Ação crítica: a sessão real confirma a senha (sem ela, 401, como na tela).
+    expect((await exportar({ justificativa: just })).statusCode).toBe(401);
+    expect(documentos.exportacoes.length).toBe(antes);
+    const ok = await exportar({ justificativa: just, senha: SENHA });
     expect(ok.statusCode).toBe(200);
     expect(ok.headers['content-disposition']).toMatch(/prontuario-1001\.txt/);
     expect(documentos.exportacoes.slice(antes)).toEqual([
