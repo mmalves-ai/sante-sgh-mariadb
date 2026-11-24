@@ -1,0 +1,478 @@
+// Contrato de efeito do adiantamento, caução e conta corrente do paciente (06-FAT linha 39) e do modelo de orçamento
+// padrão (06-FAT linha 40) contra o MariaDB real. Massa SINTÉTICA com códigos "F3710" (nenhuma pessoa real):
+// - recebimento no caixa aberto do operador (adiantamento_paciente + movimento_caixa ligado + total da sessão);
+// - caução na urgência recusada sem a declaração voluntária e aceita com ela;
+// - aplicação do saldo na conta do mais antigo para o mais novo (aplicacao_adiantamento_paciente, saldo e situação);
+// - estorno da aplicação marcado (nada apagado) com o valor de volta ao saldo;
+// - devolução em dinheiro (devolucao_adiantamento_paciente "devolvida", movimento_caixa de saída, total da sessão);
+// - extrato da conta corrente com saldo corrido;
+// - modelo cadastrado com itens, prévia, orçamento gerado do modelo (preço da tabela particular, honorário pela
+//   função, linha sem preço recusada até o valor ser digitado) e modelo inativado sem afetar o orçamento.
+// No fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
+import { randomUUID } from 'node:crypto';
+import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { ServicoParticularAdiantamento } from './particular-adiantamento.controller.js';
+import {
+  contaCorrentePaciente,
+  listarModelos,
+  previaDoModelo,
+  TIPO_MOVIMENTO_ADIANTAMENTO,
+  TIPO_MOVIMENTO_DEVOLUCAO,
+} from './particular-adiantamento-propria.js';
+
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
+const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
+const P = 'F3710';
+
+async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
+  const l = await e.uma<{ id: number }>(sel, p);
+  return l ? Number(l.id) : e.inserir(ins, pi);
+}
+async function codigoDo(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof ErroOperacao) return String(e.problema['codigo'] ?? e.problema['tipo'] ?? '');
+    throw e;
+  }
+  throw new Error('esperava recusa');
+}
+
+describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (MariaDB)', () => {
+  let nucleo: NucleoProprio;
+  let s: ServicoParticularAdiantamento;
+  const ids: Record<string, number> = {};
+  const criados: string[] = [];
+  const op = (): ContextoOperacao => ({
+    cliente: CLIENTE,
+    estabelecimento: ids['est']!,
+    usuario: ids['usuario']!,
+    correlacao: 'teste-f3710',
+    chaveIdempotencia: `f3710-${randomUUID()}`,
+    reautenticadoEm: Date.now(),
+  });
+  const ctxL = () => ({
+    cliente: CLIENTE,
+    estabelecimento: ids['est']!,
+    usuario: null,
+    correlacao: 'teste-f3710',
+  });
+  const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f3710' }, fn);
+  const uma = (sql: string, p: unknown[]) => escrever((e) => e.uma<Record<string, unknown>>(sql, p));
+
+  const limpar = async (e: Escritor) => {
+    const est = ids['est'];
+    if (!est) return;
+    await e.executar(
+      'DELETE x FROM aplicacao_adiantamento_paciente x JOIN adiantamento_paciente a ON a.id = x.adiantamento_paciente_id WHERE a.estabelecimento_id = ?',
+      [est],
+    );
+    await e.executar(
+      'DELETE d FROM devolucao_adiantamento_paciente d JOIN adiantamento_paciente a ON a.id = d.adiantamento_paciente_id WHERE a.estabelecimento_id = ?',
+      [est],
+    );
+    await e.executar('DELETE FROM movimento_caixa WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM adiantamento_paciente WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM sessao_caixa WHERE estabelecimento_id = ?', [est]);
+    await e.executar(
+      'DELETE i FROM orcamento_particular_item i JOIN orcamento_particular o ON o.id = i.orcamento_particular_id WHERE o.estabelecimento_id = ?',
+      [est],
+    );
+    await e.executar('DELETE FROM orcamento_particular WHERE estabelecimento_id = ?', [est]);
+    await e.executar(
+      "DELETE i FROM modelo_orcamento_item i JOIN modelo_orcamento m ON m.id = i.modelo_orcamento_id WHERE m.codigo LIKE 'F3710%'",
+      [],
+    );
+    await e.executar("DELETE FROM modelo_orcamento WHERE codigo LIKE 'F3710%'", []);
+    await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [est]);
+    await e.executar('DELETE FROM sequencia_negocio WHERE estabelecimento_id = ?', [est]);
+  };
+
+  beforeAll(async () => {
+    nucleo = new NucleoProprio();
+    s = new ServicoParticularAdiantamento(nucleo, 'dev');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
+    await escrever(async (e) => {
+      const agora = new Date();
+      const g = (tabela: string, codigo: string, ins: string, pi: unknown[]) =>
+        garantir(e, `SELECT id FROM ${tabela} WHERE codigo = ?`, [codigo], ins, pi);
+      ids['est'] = await g(
+        'estabelecimento',
+        `${P}A`,
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
+      );
+      await limpar(e);
+      ids['usuario'] = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        ['f3710.teste'],
+        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+        ['f3710.teste', `USUARIO SINTETICO ${P}`, agora],
+      );
+      ids['fonte'] = await g(
+        'fonte_pagadora',
+        `${P}FP`,
+        "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES (?, ?, 'particular', ?)",
+        [`${P}FP`, `PARTICULAR SINTETICO ${P}`, agora],
+      );
+      const pf = await garantir(
+        e,
+        'SELECT id FROM pessoa_fisica WHERE nome = ?',
+        [`PACIENTE SINTETICO ${P}`],
+        'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+        [`PACIENTE SINTETICO ${P}`, agora],
+      );
+      ids['paciente'] = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pf],
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+        [pf, 837_710, agora],
+      );
+      ids['categoria'] = await g(
+        'categoria_atendimento',
+        P,
+        "INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, 'internacao', ?)",
+        [P, `CATEGORIA SINTETICA ${P}`, agora],
+      );
+      ids['carater'] = await garantir(
+        e,
+        'SELECT id FROM carater_atendimento_tiss WHERE codigo_tiss = ?',
+        ['F5'],
+        "INSERT INTO carater_atendimento_tiss (codigo_tiss, descricao, versao_fonte, criado_em) VALUES ('F5', ?, 'teste', ?)",
+        [`CARATER SINTETICO ${P}`, agora],
+      );
+      ids['tipoConta'] = await g(
+        'tipo_conta',
+        P,
+        "INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) VALUES (?, ?, 'internacao', ?)",
+        [P, `TIPO DE CONTA SINTETICO ${P}`, agora],
+      );
+      ids['grupo'] = await g(
+        'grupo_faturamento',
+        P,
+        "INSERT INTO grupo_faturamento (codigo, descricao, tipo_grupo, criado_em) VALUES (?, ?, 'sadt', ?)",
+        [P, `GRUPO SINTETICO ${P}`, agora],
+      );
+      const item = (c: string) =>
+        g(
+          'item_faturavel',
+          c,
+          "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'procedimento', ?, ?)",
+          [c, `PROCEDIMENTO SINTETICO ${c}`, ids['grupo'], agora],
+        );
+      ids['proc'] = await item('83771001');
+      ids['diaria'] = await item('83771002');
+      ids['semPreco'] = await item('83771003');
+      ids['acomodacao'] = await g(
+        'categoria_acomodacao',
+        P,
+        "INSERT INTO categoria_acomodacao (codigo, descricao, tipo, criado_em) VALUES (?, ?, 'apartamento', ?)",
+        [P, `ACOMODACAO SINTETICA ${P}`, agora],
+      );
+      ids['funcao'] = await g(
+        'funcao_equipe_cobranca',
+        `${P}AUX`,
+        "INSERT INTO funcao_equipe_cobranca (codigo, descricao, tipo_funcao, percentual_cobranca, ordem_auxiliar, ordem_apresentacao, criado_em) VALUES (?, ?, 'auxiliar', 30, 1, 1, ?)",
+        [`${P}AUX`, `FUNCAO SINTETICA ${P}`, agora],
+      );
+      const tab = await g(
+        'tabela_preco',
+        `${P}TP`,
+        `INSERT INTO tabela_preco (codigo, descricao, tipo_item, referencia, situacao, fonte_pagadora_id, criado_em)
+         VALUES (?, ?, 'servico_hospitalar', 'propria', 'ativa', ?, ?)`,
+        [`${P}TP`, `TABELA SINTETICA ${P}`, ids['fonte'], agora],
+      );
+      let sq = 0;
+      for (const [it, total] of [
+        [ids['proc']!, 1000],
+        [ids['diaria']!, 300],
+      ] as const) {
+        const pp = await garantir(
+          e,
+          'SELECT id FROM preco_procedimento WHERE tabela_preco_id = ? AND item_faturavel_id = ?',
+          [tab, it],
+          'INSERT INTO preco_procedimento (tabela_preco_id, sequencia, item_faturavel_id, criado_em) VALUES (?, ?, ?, ?)',
+          [tab, ++sq, it, agora],
+        );
+        await garantir(
+          e,
+          'SELECT id FROM preco_procedimento_valor WHERE preco_procedimento_id = ?',
+          [pp],
+          `INSERT INTO preco_procedimento_valor (preco_procedimento_id, operacao, ocorrido_em, vigencia_inicio,
+             valor_honorario, valor_custo_operacional, valor_filme, valor_total, criado_em)
+           VALUES (?, 'inclusao', ?, '2020-01-01', 0, ?, 0, ?, ?)`,
+          [pp, agora, total, total, agora],
+        );
+      }
+      const atend = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, situacao, entrada_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
+        [ids['est'], `${P}-AT`, ids['paciente'], ids['categoria'], ids['carater'], ids['fonte'], agora],
+      );
+      ids['conta'] = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, valor_total, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 700, ?)`,
+        [ids['est'], `${P}-C1`, atend, ids['paciente'], ids['fonte'], tab, ids['tipoConta'], agora],
+      );
+      for (const [codigo, sentido] of [
+        [TIPO_MOVIMENTO_ADIANTAMENTO, 'entrada'],
+        [TIPO_MOVIMENTO_DEVOLUCAO, 'saida'],
+      ] as const) {
+        const ja = await e.uma('SELECT id FROM tipo_movimento_caixa WHERE codigo = ?', [codigo]);
+        if (!ja) {
+          await e.inserir(
+            'INSERT INTO tipo_movimento_caixa (codigo, descricao, sentido, criado_em) VALUES (?, ?, ?, ?)',
+            [codigo, `MOVIMENTO SINTETICO ${codigo}`, sentido, agora],
+          );
+          criados.push(codigo);
+        }
+      }
+      for (const meio of ['dinheiro', 'pix'])
+        await garantir(
+          e,
+          'SELECT id FROM forma_recebimento WHERE codigo = ?',
+          [`${P}-${meio}`],
+          "INSERT INTO forma_recebimento (codigo, descricao, meio, uso, padrao, criado_em) VALUES (?, ?, ?, 'ambos', 1, ?)",
+          [`${P}-${meio}`, `FORMA SINTETICA ${meio}`, meio, agora],
+        );
+      ids['caixa'] = await garantir(
+        e,
+        'SELECT id FROM caixa WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids['est'], P],
+        'INSERT INTO caixa (estabelecimento_id, codigo, descricao, criado_em) VALUES (?, ?, ?, ?)',
+        [ids['est'], P, `CAIXA SINTETICO ${P}`, agora],
+      );
+      ids['sessao'] = await e.inserir(
+        `INSERT INTO sessao_caixa (estabelecimento_id, caixa_id, numero, operador_usuario_id, situacao, aberta_em,
+           fundo_troco, criado_em) VALUES (?, ?, 1, ?, 'aberta', ?, 50, ?)`,
+        [ids['est'], ids['caixa'], ids['usuario'], agora, agora],
+      );
+    });
+  });
+
+  afterAll(async () => {
+    if (!nucleo) return;
+    await escrever(async (e) => {
+      await limpar(e);
+      for (const c of criados) await e.executar('DELETE FROM tipo_movimento_caixa WHERE codigo = ?', [c]);
+      await limparTrilhaDaMassa(e, { ids: [ids['est']!] });
+    });
+    await nucleo.encerrar?.();
+  });
+
+  it('recebe adiantamento e caução no caixa aberto; veda a caução exigida na urgência', async () => {
+    const a1 = await s.gravar('adiantamento.receber', op(), {
+      pacienteId: ids['paciente'],
+      tipo: 'adiantamento',
+      valor: 400,
+      forma: 'dinheiro',
+    });
+    ids['a1'] = Number(a1['id']);
+    expect(String(a1['numero'])).toMatch(/^AD-/);
+    const a = await uma(
+      'SELECT valor, saldo, situacao, sessao_caixa_id FROM adiantamento_paciente WHERE id = ?',
+      [ids['a1']],
+    );
+    expect([Number(a!['valor']), Number(a!['saldo']), a!['situacao'], Number(a!['sessao_caixa_id'])]).toEqual(
+      [400, 400, 'ativo', ids['sessao']],
+    );
+    const m = await uma(
+      'SELECT natureza, especie, valor FROM movimento_caixa WHERE adiantamento_paciente_id = ? AND situacao = ?',
+      [ids['a1'], 'ativo'],
+    );
+    expect([m!['natureza'], m!['especie'], Number(m!['valor'])]).toEqual(['entrada', 'dinheiro', 400]);
+    const urg = {
+      pacienteId: ids['paciente'],
+      tipo: 'caucao',
+      valor: 500,
+      forma: 'pix',
+      atendimentoUrgencia: true,
+    };
+    expect(await codigoDo(s.gravar('adiantamento.receber', op(), urg))).toBe('entrada-invalida');
+    const a2 = await s.gravar('adiantamento.receber', op(), { ...urg, declaracaoVoluntaria: true });
+    ids['a2'] = Number(a2['id']);
+    const sessao = await uma('SELECT total_dinheiro, total_pix FROM sessao_caixa WHERE id = ?', [
+      ids['sessao'],
+    ]);
+    expect([Number(sessao!['total_dinheiro']), Number(sessao!['total_pix'])]).toEqual([400, 500]);
+  });
+
+  it('aplica o saldo na conta do mais antigo para o mais novo, até o que a conta deve', async () => {
+    expect(
+      await codigoDo(s.gravar('adiantamento.aplicar', op(), { contaId: ids['conta'], valor: 1000 })),
+    ).toBe('entrada-invalida');
+    const r = await s.gravar('adiantamento.aplicar', op(), { contaId: ids['conta'] });
+    expect(r['total']).toBe(700);
+    expect(r['parcelas']).toEqual([
+      { adiantamento: ids['a1'], valor: 400 },
+      { adiantamento: ids['a2'], valor: 300 },
+    ]);
+    const a1 = await uma('SELECT saldo, situacao FROM adiantamento_paciente WHERE id = ?', [ids['a1']]);
+    const a2 = await uma('SELECT saldo, situacao FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
+    expect([Number(a1!['saldo']), a1!['situacao'], Number(a2!['saldo']), a2!['situacao']]).toEqual([
+      0,
+      'aplicado',
+      200,
+      'aplicado_parcial',
+    ]);
+    // A conta está quitada: nova aplicação é recusada.
+    expect(await codigoDo(s.gravar('adiantamento.aplicar', op(), { contaId: ids['conta'] }))).toBe(
+      'entrada-invalida',
+    );
+  });
+
+  it('estorna a aplicação sem apagar e devolve o saldo em dinheiro pelo caixa', async () => {
+    const ap = await uma(
+      'SELECT id FROM aplicacao_adiantamento_paciente WHERE adiantamento_paciente_id = ? AND conta_hospitalar_id = ?',
+      [ids['a2'], ids['conta']],
+    );
+    const est = await s.gravar('adiantamento.estornar', op(), {
+      aplicacaoId: ap!['id'],
+      motivo: 'item retirado',
+    });
+    expect(est['saldo']).toBe(500);
+    const marcado = await uma(
+      'SELECT estornado, estornado_em, excluido_em FROM aplicacao_adiantamento_paciente WHERE id = ?',
+      [ap!['id']],
+    );
+    expect([
+      Number(marcado!['estornado']),
+      marcado!['estornado_em'] !== null,
+      marcado!['excluido_em'],
+    ]).toEqual([1, true, null]);
+    expect(
+      await codigoDo(
+        s.gravar('adiantamento.devolver', op(), {
+          adiantamentoId: ids['a2'],
+          valor: 600,
+          forma: 'dinheiro',
+          favorecidoNome: 'FAVORECIDO SINTETICO',
+          motivo: 'alta',
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    const devolver = (valor: number, forma: string, chavePix: string | null = null) =>
+      s.gravar('adiantamento.devolver', op(), {
+        adiantamentoId: ids['a2'],
+        valor,
+        forma,
+        chavePix,
+        favorecidoNome: 'FAVORECIDO SINTETICO',
+        motivo: 'alta',
+      });
+    // Na gaveta: fundo 50 + dinheiro 400 = 450; 500 em dinheiro não sai.
+    expect(await codigoDo(devolver(500, 'dinheiro'))).toBe('caixa-sem-dinheiro');
+    const d = await devolver(300, 'dinheiro');
+    expect(d['saldo']).toBe(200);
+    const pix = await devolver(200, 'pix', 'chave-sintetica');
+    expect([pix['saldo'], pix['movimento']]).toEqual([0, null]);
+    const dev = await uma(
+      'SELECT situacao, sequencia, movimento_caixa_id, devolvido_em FROM devolucao_adiantamento_paciente WHERE id = ?',
+      [d['id']],
+    );
+    expect([dev!['situacao'], Number(dev!['sequencia']), dev!['devolvido_em'] !== null]).toEqual([
+      'devolvida',
+      1,
+      true,
+    ]);
+    const mov = await uma('SELECT natureza, valor FROM movimento_caixa WHERE id = ?', [
+      dev!['movimento_caixa_id'],
+    ]);
+    expect([mov!['natureza'], Number(mov!['valor'])]).toEqual(['saida', 300]);
+    const a2 = await uma('SELECT situacao FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
+    expect(a2!['situacao']).toBe('devolvido');
+    const sessao = await uma('SELECT total_dinheiro FROM sessao_caixa WHERE id = ?', [ids['sessao']]);
+    expect(Number(sessao!['total_dinheiro'])).toBe(100);
+  });
+
+  it('a conta corrente do paciente mostra o extrato corrido e o devido da conta', async () => {
+    const cc = await nucleo.lerSomente(ctxL(), (l) =>
+      contaCorrentePaciente(l, ids['est']!, ids['paciente']!),
+    );
+    expect(cc.saldo).toBe(0);
+    expect(cc.adiantamentos).toHaveLength(2);
+    expect(cc.extrato.linhas.map((x) => x.tipo)).toEqual([
+      'adiantamento',
+      'caucao',
+      'aplicacao',
+      'aplicacao',
+      'estorno_aplicacao',
+      'devolucao',
+      'devolucao',
+    ]);
+    expect([cc.extrato.creditos, cc.extrato.debitos, cc.extrato.saldo]).toEqual([1200, 1200, 0]);
+    expect(cc.contasAbertas.find((c) => c.id === ids['conta'])?.devido).toBe(300);
+  });
+
+  it('cadastra o modelo, gera o orçamento pela tabela particular e inativa o modelo', async () => {
+    const base = {
+      descricao: 'MODELO SINTETICO',
+      procedimentoId: ids['proc'],
+      acomodacaoId: ids['acomodacao'],
+      fontePagadoraId: ids['fonte'],
+      administracao: 10,
+      validadeDias: 15,
+      itens: [
+        { tipo: 'diaria', itemId: ids['diaria'], quantidade: 2 },
+        { tipo: 'honorario', funcaoId: ids['funcao'] },
+        { tipo: 'taxa', itemId: ids['semPreco'] },
+      ],
+    };
+    expect(
+      await codigoDo(
+        s.gravar('modelo.cadastrar', op(), { ...base, codigo: `${P}M1`, itens: [{ tipo: 'honorario' }] }),
+      ),
+    ).toBe('entrada-invalida');
+    const m = await s.gravar('modelo.cadastrar', op(), { ...base, codigo: `${P}M1` });
+    ids['modelo'] = Number(m['id']);
+    expect(m['itens']).toBe(3);
+    expect(await codigoDo(s.gravar('modelo.cadastrar', op(), { ...base, codigo: `${P}M1` }))).toBe(
+      'codigo-repetido',
+    );
+    const lista = await nucleo.lerSomente(ctxL(), (l) => listarModelos(l, ids['est']!));
+    expect(lista.find((x) => x.id === ids['modelo'])?.itens).toBe(3);
+    const pre = await nucleo.lerSomente(ctxL(), (l) => previaDoModelo(l, ids['est']!, ids['modelo']!));
+    expect(pre.montado.linhas.map((x) => x.total)).toEqual([1000, 600, 300, 0]);
+    expect(pre.montado.semPreco).toEqual([4]);
+    const gerar = { pacienteId: ids['paciente'] };
+    expect(
+      await codigoDo(s.gravar('modelo.gerarOrcamento', op(), { ...gerar, modeloId: ids['modelo'] })),
+    ).toBe('sem-preco');
+    const o = await s.gravar('modelo.gerarOrcamento', op(), {
+      ...gerar,
+      modeloId: ids['modelo'],
+      precos: { '4': 40 },
+    });
+    // (1000 + 600 + 300 + 40) + administração 10% sobre os não honorários (1640) = 2104
+    expect(o['total']).toBe(2104);
+    const orc = await uma(
+      'SELECT modelo_orcamento_id, categoria_acomodacao_id, valor_total, DATEDIFF(validade_ate, data_orcamento) AS dias FROM orcamento_particular WHERE id = ?',
+      [o['id']],
+    );
+    expect([
+      Number(orc!['modelo_orcamento_id']),
+      Number(orc!['categoria_acomodacao_id']),
+      Number(orc!['valor_total']),
+      Number(orc!['dias']),
+    ]).toEqual([ids['modelo'], ids['acomodacao'], 2104, 15]);
+    const itens = await uma(
+      'SELECT COUNT(*) AS n, SUM(valor_total) AS t FROM orcamento_particular_item WHERE orcamento_particular_id = ?',
+      [o['id']],
+    );
+    expect([Number(itens!['n']), Number(itens!['t'])]).toEqual([5, 2104]);
+    await s.gravar('modelo.inativar', op(), { modeloId: ids['modelo'], motivo: 'revisão de preços' });
+    const ina = await uma('SELECT ativo FROM modelo_orcamento WHERE id = ?', [ids['modelo']]);
+    expect(Number(ina!['ativo'])).toBe(0);
+    expect(
+      await codigoDo(s.gravar('modelo.gerarOrcamento', op(), { ...gerar, modeloId: ids['modelo'] })),
+    ).toBe('modelo-inexistente');
+  });
+});
