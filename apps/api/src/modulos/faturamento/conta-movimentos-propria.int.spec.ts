@@ -2,7 +2,10 @@
 // com códigos "F374" (nenhuma pessoa real): a equipe do item (sequencial, grau, valor do ato pelo honorário, retirada
 // marcada e restaurada na mesma linha), o kit de cobrança (cadastro, lançamento aberto e fechado, fonte errada recusada)
 // e a transferência de itens para outra conta do paciente com outra fonte pagadora (item de origem "transferido",
-// item novo com o preço do destino, equipe junto, totais refeitos, glosado recusado). No fim, a massa é apagada.
+// item novo com o preço do destino, equipe refeita sobre o honorário novo, totais refeitos, glosado, outro paciente,
+// conta fechada e fora do período recusados) e para conta de outro estabelecimento (recusada sem acesso lá, aceita com
+// o perfil do usuário no outro estabelecimento). O ato da equipe cobrada pelo hospital soma ao item. No fim, a massa é
+// apagada.
 // SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -50,11 +53,20 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
   const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
     nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f374' }, fn);
   const linhas = (sql: string, p: unknown[]) => escrever((e) => e.consultar<Record<string, unknown>>(sql, p));
+  const valorItem = async (id: number) =>
+    Number(
+      (await linhas('SELECT valor_total FROM conta_hospitalar_item WHERE id = ?', [id]))[0]!['valor_total'],
+    );
 
   const limpar = async (e: Escritor) => {
     const contas = (
       await e.consultar<{ id: number }>('SELECT id FROM conta_hospitalar WHERE numero LIKE ?', [`${P}-%`])
     ).map((c) => Number(c.id));
+    for (const id of contas)
+      await e.executar(
+        'DELETE p FROM conta_hospitalar_item_participante p JOIN conta_hospitalar_item i ON i.id = p.conta_hospitalar_item_id WHERE i.conta_hospitalar_id = ?',
+        [id],
+      );
     for (const id of contas) {
       await e.executar(
         'DELETE ti FROM transferencia_conta_item ti JOIN transferencia_conta t ON t.id = ti.transferencia_conta_id WHERE t.conta_origem_id = ? OR t.conta_destino_id = ?',
@@ -66,10 +78,6 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       ]);
     }
     for (const id of contas) {
-      await e.executar(
-        'DELETE p FROM conta_hospitalar_item_participante p JOIN conta_hospitalar_item i ON i.id = p.conta_hospitalar_item_id WHERE i.conta_hospitalar_id = ?',
-        [id],
-      );
       await e.executar(
         'DELETE m FROM conta_hospitalar_item_memoria m JOIN conta_hospitalar_item i ON i.id = m.conta_hospitalar_item_id WHERE i.conta_hospitalar_id = ?',
         [id],
@@ -86,7 +94,18 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       [],
     );
     await e.executar("DELETE FROM kit_cobranca WHERE codigo LIKE 'F374%'", []);
-    if (ids['est']) await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids['est']]);
+    await e.executar("DELETE FROM plano_fonte_pagadora WHERE codigo = 'F374PL'", []);
+    for (const est of [ids['est'], ids['estB']])
+      if (est) await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [est]);
+    if (ids['usuario']) {
+      await e.executar('DELETE FROM usuario_perfil WHERE usuario_id = ?', [ids['usuario']]);
+      await e.executar('DELETE FROM usuario_estabelecimento WHERE usuario_id = ?', [ids['usuario']]);
+    }
+    await e.executar(
+      "DELETE pa FROM perfil_acao pa JOIN perfil_acesso p ON p.id = pa.perfil_acesso_id WHERE p.codigo = 'F374P'",
+      [],
+    );
+    await e.executar("DELETE FROM perfil_acesso WHERE codigo = 'F374P'", []);
   };
 
   beforeAll(async () => {
@@ -102,7 +121,12 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
       );
-      await limpar(e);
+      ids['estB'] = await g(
+        'estabelecimento',
+        `${P}B`,
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P}B SINTETICO`, `ESTAB ${P}B SINTETICO`, agora],
+      );
       ids['usuario'] = await garantir(
         e,
         'SELECT id FROM usuario WHERE login = ?',
@@ -110,6 +134,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
         "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
         ['f374.teste', `USUARIO SINTETICO ${P}`, agora],
       );
+      await limpar(e);
       const fonte = (c: string) =>
         g(
           'fonte_pagadora',
@@ -134,6 +159,14 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
         [pPac],
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
         [pPac, 837_401, agora],
+      );
+      const pOutro = await pessoa(`OUTRO PACIENTE SINTETICO ${P}`);
+      ids['outroPaciente'] = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pOutro],
+        'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+        [pOutro, 837_402, agora],
       );
       const prof = async (nome: string) => {
         const pf = await pessoa(nome);
@@ -229,38 +262,58 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
         [ids['itemKit']!, 0, 55],
       ]);
       ids['tabB'] = await tabela(`${P}TB`, ids['fonteB']!, [[ids['item']!, 120, 150]]);
-      const atendimento = (numero: string, fonteId: number) =>
+      ids['plano'] = await garantir(
+        e,
+        "SELECT id FROM plano_fonte_pagadora WHERE codigo = 'F374PL'",
+        [],
+        "INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, 'F374PL', ?, ?)",
+        [ids['fonteA'], `PLANO SINTETICO ${P}`, agora],
+      );
+      ids['motivoGlosa'] = await garantir(
+        e,
+        "SELECT id FROM motivo_glosa WHERE codigo_tuss = 'F374'",
+        [],
+        "INSERT INTO motivo_glosa (codigo_tuss, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES ('F374', ?, '2020-01-01', 'teste', ?)",
+        [`MOTIVO SINTETICO ${P}`, agora],
+      );
+      const atendimento = (numero: string, fonteId: number, est: number, paciente: number) =>
         e.inserir(
           `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
              carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, situacao, entrada_em, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'aberto', '2026-01-20 08:00:00', ?)`,
-          [
-            ids['est'],
-            numero,
-            ids['paciente'],
-            ids['categoria'],
-            ids['carater'],
-            fonteId,
-            ids['cirurgiao'],
-            agora,
-          ],
+          [est, numero, paciente, ids['categoria'], ids['carater'], fonteId, ids['cirurgiao'], agora],
         );
-      const conta = async (numero: string, fonteId: number, tabelaId: number) =>
+      const conta = async (
+        numero: string,
+        fonteId: number,
+        tabelaId: number,
+        x: { est?: number; paciente?: number; situacao?: string; inicio?: string } = {},
+      ) =>
         e.inserir(
           `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
-             tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', ?)`,
+             tabela_preco_id, tipo_conta_id, natureza, competencia, inicio_em, situacao, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', ?, ?, ?)`,
           [
-            ids['est'],
+            x.est ?? ids['est'],
             numero,
-            await atendimento(numero, fonteId),
-            ids['paciente'],
+            await atendimento(numero, fonteId, x.est ?? ids['est']!, x.paciente ?? ids['paciente']!),
+            x.paciente ?? ids['paciente'],
             fonteId,
             tabelaId,
             ids['tipoConta'],
+            x.inicio ?? '2026-01-20 08:00:00',
+            x.situacao ?? 'aberta',
             agora,
           ],
         );
+      ids['contaOutroPaciente'] = await conta(`${P}-CX`, ids['fonteB']!, ids['tabB']!, {
+        paciente: ids['outroPaciente']!,
+      });
+      ids['contaFechada'] = await conta(`${P}-CF`, ids['fonteB']!, ids['tabB']!, { situacao: 'fechada' });
+      ids['contaFevereiro'] = await conta(`${P}-CD`, ids['fonteB']!, ids['tabB']!, {
+        inicio: '2026-02-01 00:00:00',
+      });
+      ids['contaEstB'] = await conta(`${P}-CE`, ids['fonteA']!, ids['tabA']!, { est: ids['estB']! });
       ids['contaA'] = await conta(`${P}-CA`, ids['fonteA']!, ids['tabA']!);
       ids['contaB'] = await conta(`${P}-CB`, ids['fonteB']!, ids['tabB']!);
       const lancado = (seq: number, situacao: string, motivoGlosa: number | null) =>
@@ -272,8 +325,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
           [ids['contaA'], seq, ids['item'], ids['grupo'], situacao, motivoGlosa, agora],
         );
       ids['itemA'] = await lancado(1, 'lancado', null);
-      const motivo = await e.uma<{ id: number }>('SELECT id FROM motivo_glosa LIMIT 1', []);
-      if (motivo) ids['itemGlosado'] = await lancado(2, 'glosado', Number(motivo.id));
+      ids['itemGlosado'] = await lancado(2, 'glosado', ids['motivoGlosa']!);
     });
     s = new ServicoMovimentosConta(nucleo);
   });
@@ -282,7 +334,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     if (!nucleo) return;
     await escrever(async (e) => {
       await limpar(e);
-      await limparTrilhaDaMassa(e, { ids: [ids['est']!] });
+      await limparTrilhaDaMassa(e, { ids: [ids['est']!, ids['estB']!] });
     });
     await nucleo.encerrar();
   });
@@ -298,7 +350,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(r).toMatchObject({ participantes: 2 });
     const ver = () =>
       linhas(
-        `SELECT profissional_id, sequencia, valor_ato, forma_pagamento, excluido_em IS NOT NULL AS retirado
+        `SELECT profissional_id, sequencia, valor_ato, percentual_cobranca, forma_pagamento, excluido_em IS NOT NULL AS retirado
            FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? ORDER BY profissional_id`,
         [ids['itemA']],
       );
@@ -309,6 +361,9 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(Number(por(ps, ids['cirurgiao']!)['valor_ato'])).toBe(80);
     expect(Number(por(ps, ids['auxiliar']!)['sequencia'])).toBe(2);
     expect(Number(por(ps, ids['auxiliar']!)['valor_ato'])).toBe(24);
+    expect(Number(por(ps, ids['auxiliar']!)['percentual_cobranca'])).toBe(30);
+    // O ato do auxiliar (cobrado pelo hospital) soma ao item: 100 + 24; o cirurgião já está no honorário.
+    expect(await valorItem(ids['itemA']!)).toBe(124);
     // Troca o auxiliar pelo anestesista: o auxiliar fica marcado (não some).
     await s.gravar('equipe', op(), {
       itemId: ids['itemA'],
@@ -325,6 +380,8 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(ps).toHaveLength(3);
     expect(Number(por(ps, ids['auxiliar']!)['retirado'])).toBe(1);
     expect(por(ps, ids['anestesista']!)).toMatchObject({ forma_pagamento: 'direto_fonte_pagadora' });
+    // O anestesista recebe direto da fonte pagadora: o adicional do auxiliar sai e nada entra no item.
+    expect(await valorItem(ids['itemA']!)).toBe(100);
     // O auxiliar volta: a mesma linha é restaurada.
     await s.gravar('equipe', op(), {
       itemId: ids['itemA'],
@@ -337,6 +394,9 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(ps).toHaveLength(3);
     expect(Number(por(ps, ids['auxiliar']!)['retirado'])).toBe(0);
     expect(Number(por(ps, ids['anestesista']!)['retirado'])).toBe(1);
+    expect(await valorItem(ids['itemA']!)).toBe(124);
+    const [ca] = await linhas('SELECT valor_itens FROM conta_hospitalar WHERE id = ?', [ids['contaA']]);
+    expect(Number(ca!['valor_itens'])).toBe(224); // 124 + 100 do glosado
     const mem = await linhas(
       "SELECT COUNT(*) AS n FROM conta_hospitalar_item_memoria WHERE conta_hospitalar_item_id = ? AND operacao = 'alteracao'",
       [ids['itemA']],
@@ -355,7 +415,18 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       ),
     ).toBe('entrada-invalida');
     const v = await s.ler(ctxL(), (l, est) => movimentosContaPropria(l, est, ids['contaA']!));
-    expect(v.itens.find((i) => i.id === ids['itemA'])!.equipe.map((x) => x.sequencia)).toEqual([1, 2]);
+    expect(
+      v.itens.find((i) => i.id === ids['itemA'])!.equipe.map((x) => [x.sequencia, x.percentual]),
+    ).toEqual([
+      [1, 100],
+      [2, 30],
+    ]);
+    // A leitura devolve a ordem do auxiliar e a de apresentação (a tela valida 1º e 2º auxiliar com elas).
+    expect(v.funcoes.find((f) => f.id === ids['fAux'])).toMatchObject({
+      ordemAuxiliar: 1,
+      ordemApresentacao: 2,
+      ativo: true,
+    });
   });
 
   it('kit de cobrança: cadastro, lançamento aberto e fechado na conta, fonte errada recusada', async () => {
@@ -421,23 +492,38 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(await codigoDo(s.gravar('kit.lancar', op(), { contaId: ids['contaA'], kitId: deB['id'] }))).toBe(
       'entrada-invalida',
     );
+    const dePlano = await s.gravar('kit.cadastrar', op(), {
+      codigo: `${P}KP`,
+      descricao: 'KIT SINTETICO DE OUTRO PLANO',
+      fontePagadoraId: ids['fonteA'],
+      planoId: ids['plano'],
+      componentes: [{ itemId: ids['comp1'], quantidade: 1 }],
+    });
+    // A conta A não tem plano: o kit do plano não entra nela.
+    expect(
+      await codigoDo(s.gravar('kit.lancar', op(), { contaId: ids['contaA'], kitId: dePlano['id'] })),
+    ).toBe('entrada-invalida');
     const [c] = await linhas('SELECT valor_itens FROM conta_hospitalar WHERE id = ?', [ids['contaA']]);
-    // 100 (item lançado) + 60 + 0 + 55 (o glosado não está fora da soma do total: só estornado, transferido e sem cobrança).
-    expect(Number(c!['valor_itens'])).toBe(ids['itemGlosado'] ? 315 : 215);
+    // 124 (item lançado com o auxiliar) + 100 (glosado: segue na soma; só estornado, transferido e sem cobrança saem)
+    // + 60 + 0 + 55.
+    expect(Number(c!['valor_itens'])).toBe(339);
   });
 
   it('transferência para a conta da outra fonte: origem transferida, preço do destino, equipe junto e totais', async () => {
-    if (ids['itemGlosado'])
-      expect(
-        await codigoDo(
-          s.gravar('transferir', op(), {
-            contaOrigemId: ids['contaA'],
-            contaDestinoId: ids['contaB'],
-            itens: [ids['itemGlosado']],
-            motivo: 'troca de convenio',
-          }),
-        ),
-      ).toBe('entrada-invalida');
+    const recusada = (destino: number, itens: number[]) =>
+      codigoDo(
+        s.gravar('transferir', op(), {
+          contaOrigemId: ids['contaA'],
+          contaDestinoId: destino,
+          itens,
+          motivo: 'troca de convenio',
+        }),
+      );
+    expect(await recusada(ids['contaB']!, [ids['itemGlosado']!])).toBe('entrada-invalida');
+    expect(await recusada(ids['contaOutroPaciente']!, [ids['itemA']!])).toBe('entrada-invalida');
+    expect(await recusada(ids['contaFechada']!, [ids['itemA']!])).toBe('entrada-invalida');
+    // Item realizado em 21/01 não entra na conta que começa em 01/02.
+    expect(await recusada(ids['contaFevereiro']!, [ids['itemA']!])).toBe('entrada-invalida');
     const r = await s.gravar('transferir', op(), {
       contaOrigemId: ids['contaA'],
       contaDestinoId: ids['contaB'],
@@ -447,8 +533,8 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(r).toMatchObject({
       tipo: 'fonte_pagadora',
       itens: 1,
-      valorOrigem: 100,
-      valorDestino: 150,
+      valorOrigem: 124,
+      valorDestino: 186,
       semPreco: 0,
     });
     const [t] = await linhas(
@@ -456,7 +542,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       [r['id']],
     );
     expect(t).toMatchObject({ tipo: 'fonte_pagadora', situacao: 'efetivada' });
-    expect(Number(t!['valor_total_destino'])).toBe(150);
+    expect(Number(t!['valor_total_destino'])).toBe(186);
     expect(Number(t!['usuario_id'])).toBe(ids['usuario']);
     const [ti] = await linhas(
       'SELECT item_origem_id, item_destino_id, valor_origem, valor_recalculado FROM transferencia_conta_item WHERE transferencia_conta_id = ?',
@@ -472,20 +558,42 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       [ti!['item_destino_id']],
     );
     expect(Number(novo!['conta_hospitalar_id'])).toBe(ids['contaB']);
-    expect(Number(novo!['valor_total'])).toBe(150);
+    // 150 da tabela do destino + 36 do auxiliar (30% do honorário novo de 120).
+    expect(Number(novo!['valor_total'])).toBe(186);
     expect(Number(novo!['valor_honorario'])).toBe(120);
     const eq = await linhas(
-      'SELECT COUNT(*) AS n FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL',
+      `SELECT profissional_id, sequencia, valor_ato, valor_liquido, percentual_cobranca
+         FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL
+        ORDER BY sequencia`,
       [ti!['item_destino_id']],
     );
-    expect(Number(eq[0]!['n'])).toBe(2);
+    expect(
+      eq.map((x) => [
+        Number(x['profissional_id']),
+        Number(x['sequencia']),
+        Number(x['valor_ato']),
+        Number(x['valor_liquido']),
+      ]),
+    ).toEqual([
+      [ids['cirurgiao'], 1, 120, 120],
+      [ids['auxiliar'], 2, 36, 36],
+    ]);
+    // A equipe da origem fica encerrada pela transferência (marcada, com a referência; nada apagado).
+    const eqOrigem = await linhas(
+      `SELECT COUNT(*) AS n, SUM(excluido_em IS NULL) AS ativos, SUM(transferencia_conta_id = ?) AS pela_transferencia
+         FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ?`,
+      [r['id'], ids['itemA']],
+    );
+    expect(Number(eqOrigem[0]!['n'])).toBe(3);
+    expect(Number(eqOrigem[0]!['ativos'])).toBe(0);
+    expect(Number(eqOrigem[0]!['pela_transferencia'])).toBe(2);
     const contas = await linhas(
       'SELECT id, valor_itens FROM conta_hospitalar WHERE id IN (?, ?) ORDER BY id',
       [ids['contaA'], ids['contaB']],
     );
     const total = (id: number) => Number(contas.find((x) => Number(x['id']) === id)!['valor_itens']);
-    expect(total(ids['contaB']!)).toBe(150);
-    expect(total(ids['contaA']!)).toBe(ids['itemGlosado'] ? 215 : 115);
+    expect(total(ids['contaB']!)).toBe(186);
+    expect(total(ids['contaA']!)).toBe(215);
     // O item já transferido não muda de conta de novo.
     expect(
       await codigoDo(
@@ -500,5 +608,72 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     const v = await s.ler(ctxL(), (l, est) => movimentosContaPropria(l, est, ids['contaB']!));
     expect(v.transferencias).toHaveLength(1);
     expect(v.transferencias[0]).toMatchObject({ saiu: false, outraConta: ids['contaA'], itens: 1 });
+  });
+
+  it('transferência para conta de outro estabelecimento: só com acesso ao faturamento lá', async () => {
+    ids['itemE'] = await escrever((e) =>
+      e.inserir(
+        `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
+           realizado_em, quantidade, valor_unitario, valor_honorario, valor_custo_operacional, valor_total, situacao, criado_em)
+         VALUES (?, 90, ?, ?, '2026-01-21 10:00:00', 1, 100, 80, 20, 100, 'lancado', ?)`,
+        [ids['contaA'], ids['item'], ids['grupo'], new Date()],
+      ),
+    );
+    const pedido = () =>
+      s.gravar('transferir', op(), {
+        contaOrigemId: ids['contaA'],
+        contaDestinoId: ids['contaEstB'],
+        itens: [ids['itemE']],
+        motivo: 'paciente seguiu no outro estabelecimento',
+      });
+    const destinosVistos = async () =>
+      (
+        await s.ler(ctxL(), (l, est) =>
+          movimentosContaPropria(l, est, ids['contaA']!, { usuario: ids['usuario']!, total: false }),
+        )
+      ).destinos.map((d) => d.id);
+    // Sem vínculo nem perfil no outro estabelecimento: recusado, e a conta de lá nem aparece na leitura.
+    expect(await codigoDo(pedido())).toBe('sem-permissao-estabelecimento');
+    expect(await destinosVistos()).not.toContain(ids['contaEstB']);
+    // O administrador da plataforma vê todas.
+    expect(
+      (
+        await s.ler(ctxL(), (l, est) =>
+          movimentosContaPropria(l, est, ids['contaA']!, { usuario: null, total: true }),
+        )
+      ).destinos.map((d) => d.id),
+    ).toContain(ids['contaEstB']);
+    await escrever(async (e) => {
+      const agora = new Date();
+      const perfil = await e.inserir(
+        "INSERT INTO perfil_acesso (estabelecimento_id, codigo, nome, criado_em) VALUES (?, 'F374P', ?, ?)",
+        [ids['estB'], `PERFIL SINTETICO ${P}`, agora],
+      );
+      for (const codigo of ['faturamento.auditoria.ajustar', 'faturamento.conta.ler'])
+        await e.executar(
+          `INSERT INTO perfil_acao (perfil_acesso_id, acao_sistema_id, criado_em)
+           SELECT ?, id, ? FROM acao_sistema WHERE codigo = ?`,
+          [perfil, agora, codigo],
+        );
+      await e.executar(
+        "INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, '2020-01-01', ?)",
+        [ids['usuario'], ids['estB'], agora],
+      );
+      await e.executar(
+        "INSERT INTO usuario_perfil (usuario_id, perfil_acesso_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, '2020-01-01', ?)",
+        [ids['usuario'], perfil, ids['estB'], agora],
+      );
+    });
+    expect(await destinosVistos()).toContain(ids['contaEstB']);
+    const r = await pedido();
+    expect(r).toMatchObject({ tipo: 'estabelecimento', itens: 1, valorOrigem: 100, valorDestino: 100 });
+    const [t] = await linhas(
+      'SELECT tipo, estabelecimento_destino_id FROM transferencia_conta WHERE id = ?',
+      [r['id']],
+    );
+    expect(t!['tipo']).toBe('estabelecimento');
+    expect(Number(t!['estabelecimento_destino_id'])).toBe(ids['estB']);
+    const [ce] = await linhas('SELECT valor_itens FROM conta_hospitalar WHERE id = ?', [ids['contaEstB']]);
+    expect(Number(ce!['valor_itens'])).toBe(100);
   });
 });

@@ -13,15 +13,18 @@
 //   destino com o preço refeito pela tabela do destino (sem preço lá: o valor de origem, com a memória dizendo isso);
 //   os participantes acompanham o item; o total das duas contas é refeito.
 import {
+  adicionalDaEquipe,
   calcularEquipeItem,
   contaEditavel,
   FORMAS_PAGAMENTO_PARTICIPANTE,
   type FuncaoEquipe,
   type KitCobranca,
   lancamentoDoKit,
+  type ParticipanteCalculado,
   validarDefinicaoKit,
   validarEquipeItem,
   validarTransferencia,
+  valorItemComEquipe,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -65,9 +68,19 @@ interface ContaLida {
   fontePagadora: number;
   plano: number | null;
   tabela: number | null;
+  inicio: string | null;
+  fim: string | null;
 }
 const COLUNAS_CONTA = `id, versao, estabelecimento_id, numero, situacao, paciente_id, fonte_pagadora_id,
-  plano_fonte_pagadora_id, tabela_preco_id`;
+  plano_fonte_pagadora_id, tabela_preco_id, inicio_em, fim_em`;
+/** AAAA-MM-DD de uma data lida do banco (nulo quando não há). */
+const diaDe = (v: unknown): string | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const d = v instanceof Date ? v : new Date(String(v).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
 const comoConta = (c: Linha): ContaLida => ({
   id: n(c['id']),
   versao: n(c['versao']),
@@ -78,7 +91,53 @@ const comoConta = (c: Linha): ContaLida => ({
   fontePagadora: n(c['fonte_pagadora_id']),
   plano: nn(c['plano_fonte_pagadora_id']),
   tabela: nn(c['tabela_preco_id']),
+  inicio: diaDe(c['inicio_em']),
+  fim: diaDe(c['fim_em']),
 });
+
+/**
+ * O usuário pode a ação no estabelecimento dado? Mesma regra da sessão (fonte-propria): vínculo com o estabelecimento,
+ * perfil vigente nele (administrador do estabelecimento ou com a ação permitida) e nenhuma negação explícita da ação
+ * em perfil vigente dele ali. Usado quando a operação alcança conta de outro estabelecimento que não o da sessão.
+ */
+export async function podeNoEstabelecimento(
+  l: Consulta,
+  usuario: number | null,
+  est: number,
+  acao: string,
+): Promise<boolean> {
+  if (usuario === null) return false;
+  const vigente = `up.usuario_id = ? AND up.estabelecimento_id = ? AND up.excluido_em IS NULL
+            AND up.vigencia_inicio <= UTC_DATE() AND (up.vigencia_fim IS NULL OR up.vigencia_fim >= UTC_DATE())`;
+  const r = await l.uma<Linha>(
+    `SELECT 1 AS ok FROM usuario_estabelecimento ue
+      WHERE ue.usuario_id = ? AND ue.estabelecimento_id = ? AND ue.excluido_em IS NULL
+        AND ue.vigencia_inicio <= UTC_DATE() AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= UTC_DATE())
+        AND EXISTS (
+          SELECT 1 FROM usuario_perfil up
+            JOIN perfil_acesso p ON p.id = up.perfil_acesso_id AND p.ativo AND p.excluido_em IS NULL
+             AND (p.estabelecimento_id IS NULL OR p.estabelecimento_id = up.estabelecimento_id)
+           WHERE ${vigente}
+             AND (p.administrador OR EXISTS (
+               SELECT 1 FROM perfil_acao pa JOIN acao_sistema a ON a.id = pa.acao_sistema_id AND a.ativo AND a.permissionavel
+                WHERE pa.perfil_acesso_id = p.id AND pa.excluido_em IS NULL AND pa.permitido AND a.codigo = ?)))
+        AND NOT EXISTS (
+          SELECT 1 FROM usuario_perfil up
+            JOIN perfil_acesso p ON p.id = up.perfil_acesso_id AND p.ativo AND p.excluido_em IS NULL
+            JOIN perfil_acao pa ON pa.perfil_acesso_id = p.id AND pa.excluido_em IS NULL AND NOT pa.permitido
+            JOIN acao_sistema a ON a.id = pa.acao_sistema_id AND a.codigo = ?
+           WHERE ${vigente})
+      LIMIT 1`,
+    [usuario, est, usuario, est, acao, acao, usuario, est],
+  );
+  return Boolean(r);
+}
+
+/** Quem lê: o usuário da sessão e se é o administrador da plataforma (que pode tudo, ADR 0002). */
+export interface AcessoLeitura {
+  readonly usuario: number | null;
+  readonly total: boolean;
+}
 
 /** A conta do estabelecimento da sessão (a de destino de uma transferência pode ser de outro: `qualquerEst`). */
 async function contaDo(l: Consulta, est: number | null, conta: number): Promise<ContaLida> {
@@ -153,7 +212,12 @@ async function kitDo(
 
 // ── Leitura: a visão da conta para os três movimentos ─────────────────────────────────────────────
 
-export async function movimentosContaPropria(l: Leitor, est: number, conta: number) {
+export async function movimentosContaPropria(
+  l: Leitor,
+  est: number,
+  conta: number,
+  acesso: AcessoLeitura = { usuario: null, total: false },
+) {
   const c = await contaDo(l, est, conta);
   const itens = await l.consultar<Linha>(
     `SELECT i.id, i.sequencia, i.quantidade, i.valor_total, i.valor_honorario, i.situacao, i.kit_cobranca_id,
@@ -167,7 +231,7 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
   const parts = ids.length
     ? await l.consultar<Linha>(
         `SELECT p.id, p.conta_hospitalar_item_id AS item, p.sequencia, p.profissional_id, p.funcao_equipe_cobranca_id AS funcao,
-                p.grau_participacao_termo_terminologia_id AS grau, p.forma_pagamento, p.valor_ato, pf.nome
+                p.grau_participacao_termo_terminologia_id AS grau, p.forma_pagamento, p.percentual_cobranca, p.valor_ato, pf.nome
            FROM conta_hospitalar_item_participante p
            JOIN profissional pr ON pr.id = p.profissional_id JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
           WHERE p.conta_hospitalar_item_id IN (${lista(ids.length)}) AND p.excluido_em IS NULL ORDER BY p.sequencia`,
@@ -187,13 +251,30 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
     [est, c.fontePagadora, c.plano],
     { teto: 1000 },
   );
-  // As contas de destino: as outras contas do mesmo paciente, abertas para lançamento (qualquer estabelecimento).
-  const destinos = await l.consultar<Linha>(
+  // As contas de destino: as outras contas do mesmo paciente; a de outro estabelecimento só aparece a quem pode ler
+  // conta lá (o administrador da plataforma vê todas).
+  const todasDoPaciente = await l.consultar<Linha>(
     `SELECT c.id, c.numero, c.situacao, c.estabelecimento_id, fp.nome AS fonte
        FROM conta_hospitalar c JOIN fonte_pagadora fp ON fp.id = c.fonte_pagadora_id
       WHERE c.paciente_id = ? AND c.id <> ? AND c.excluido_em IS NULL ORDER BY c.id DESC`,
     [c.paciente, c.id],
     { teto: 200 },
+  );
+  const liberados = new Map<number, boolean>([[est, true]]);
+  for (const e of new Set(todasDoPaciente.map((d) => n(d['estabelecimento_id']))))
+    if (!liberados.has(e))
+      liberados.set(
+        e,
+        acesso.total || (await podeNoEstabelecimento(l, acesso.usuario, e, 'faturamento.conta.ler')),
+      );
+  const destinos = todasDoPaciente.filter((d) => liberados.get(n(d['estabelecimento_id'])));
+  // Grau de participação (terminologia TISS, tabela 35) para a escolha na equipe.
+  const graus = await l.consultar<Linha>(
+    `SELECT t.id, t.codigo_termo, t.descricao FROM termo_terminologia t
+       JOIN terminologia g ON g.id = t.terminologia_id WHERE g.numero_tabela_tiss = '35' AND t.ativo
+      ORDER BY t.codigo_termo`,
+    [],
+    { teto: 100 },
   );
   // Os profissionais sugeridos para a equipe: o do atendimento, os executantes e solicitantes da conta e quem já está
   // em alguma equipe dela (a tela aceita também o código do profissional).
@@ -241,6 +322,7 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
           nome: txt(p['nome']),
           funcaoId: n(p['funcao']),
           grauId: nn(p['grau']),
+          percentual: nn(p['percentual_cobranca']),
           formaPagamento: txt(p['forma_pagamento']),
           valorAto: n(p['valor_ato']),
         })),
@@ -250,7 +332,16 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
       codigo: f.codigo,
       descricao: f.descricao,
       tipo: f.tipo,
+      ativo: f.ativo,
       percentual: f.percentual,
+      grau: f.grau,
+      ordemAuxiliar: f.ordemAuxiliar,
+      ordemApresentacao: f.ordemApresentacao,
+    })),
+    graus: graus.map((g) => ({
+      id: n(g['id']),
+      codigo: txt(g['codigo_termo']),
+      descricao: txt(g['descricao']),
     })),
     kits: kits.map((k) => ({
       id: n(k['id']),
@@ -286,6 +377,25 @@ export async function movimentosContaPropria(l: Leitor, est: number, conta: numb
   };
 }
 
+/** Profissionais por nome (parte dele) ou pelo número da inscrição no conselho, para a equipe do item. */
+export async function buscarProfissionaisPropria(l: Leitor, termo: string) {
+  const t = termo.trim().slice(0, 80);
+  if (t.length < 3) return [];
+  const linhas = await l.consultar<Linha>(
+    `SELECT pr.id, pf.nome,
+            (SELECT ic.numero_inscricao FROM inscricao_conselho ic WHERE ic.profissional_id = pr.id AND ic.excluido_em IS NULL
+              ORDER BY ic.principal DESC, ic.sequencia LIMIT 1) AS inscricao
+       FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+      WHERE pr.excluido_em IS NULL
+        AND (pf.nome LIKE ? OR EXISTS (SELECT 1 FROM inscricao_conselho ic WHERE ic.profissional_id = pr.id
+              AND ic.excluido_em IS NULL AND ic.numero_inscricao = ?))
+      ORDER BY pf.nome LIMIT 30`,
+    [`%${t.replace(/[%_\\]/g, (x) => `\\${x}`)}%`, t],
+    { teto: 30 },
+  );
+  return linhas.map((p) => ({ id: n(p['id']), nome: txt(p['nome']), inscricao: txt(p['inscricao']) }));
+}
+
 // ── Linha 15: equipe do item ──────────────────────────────────────────────────────────────────────
 
 const id = z.number().int().positive();
@@ -315,9 +425,25 @@ async function itemDaConta(tx: TxOperacao, est: number, item: number) {
   return i;
 }
 
+/** A linha gravada da equipe na forma do domínio (só o que o adicional usa: função, forma e valor do ato). */
+const comoCalculado = (a: Linha): ParticipanteCalculado => ({
+  sequencia: n(a['sequencia']),
+  profissional: n(a['profissional_id']),
+  funcao: n(a['funcao_equipe_cobranca_id']),
+  grau: null,
+  percentual: 0,
+  formaPagamento: txt(a['forma_pagamento']) as ParticipanteCalculado['formaPagamento'],
+  valorAto: n(a['valor_ato']),
+});
+
 export const opGravarEquipe = definirOperacao({
   nome: 'faturamento.gravar-equipe-item',
-  tabelas: ['conta_hospitalar_item_participante', 'conta_hospitalar_item_memoria'],
+  tabelas: [
+    'conta_hospitalar_item_participante',
+    'conta_hospitalar_item_memoria',
+    'conta_hospitalar_item',
+    'conta_hospitalar',
+  ],
   entrada: esquemaEquipe,
   async gravar(tx, e, ctx) {
     const est = estDe(ctx);
@@ -353,14 +479,21 @@ export const opGravarEquipe = definirOperacao({
     }
     const calc = calcularEquipeItem(informados, funcoes, n(i['valor_honorario']));
     const atuais = await tx.consultar<Linha>(
-      `SELECT id, versao, sequencia, profissional_id, funcao_equipe_cobranca_id, excluido_em
-         FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ?`,
+      `SELECT id, versao, sequencia, profissional_id, funcao_equipe_cobranca_id, forma_pagamento, valor_ato, excluido_em
+         FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? ORDER BY sequencia`,
       [e.itemId],
       { teto: 500 },
     );
     const chave = (p: number, f: number) => `${p}:${f}`;
     const chaveDe = (a: Linha) => chave(n(a['profissional_id']), n(a['funcao_equipe_cobranca_id']));
     const desejado = new Map(calc.map((p) => [chave(p.profissional, p.funcao), p]));
+    // O adicional da equipe que já estava no valor do item (para trocá-lo pelo novo sem mexer no resto do item).
+    const adicionalAnterior = adicionalDaEquipe(
+      atuais.filter((a) => a['excluido_em'] === null).map((a) => comoCalculado(a)),
+      funcoes,
+    );
+    const adicionalNovo = adicionalDaEquipe(calc, funcoes);
+    const valorNovo = valorItemComEquipe(n(i['valor_total']), adicionalAnterior, adicionalNovo);
     const agora = new Date();
     // A unicidade (item, sequência) vale também para as linhas retiradas: primeiro todas sobem para uma faixa livre,
     // depois a equipe recebe 1..n na ordem calculada e as retiradas, n+1 em diante (nada se apaga).
@@ -388,6 +521,7 @@ export const opGravarEquipe = definirOperacao({
         sequencia: p.sequencia,
         grau_participacao_termo_terminologia_id: p.grau,
         forma_pagamento: p.formaPagamento,
+        percentual_cobranca: p.percentual,
         valor_ato: p.valorAto,
         valor_liquido: p.valorAto,
         paciente_paga: p.formaPagamento === 'paciente',
@@ -415,16 +549,33 @@ export const opGravarEquipe = definirOperacao({
         await tx.alterar('conta_hospitalar_item_participante', n(a['id']), versoes.get(n(a['id']))!, {
           sequencia: ++fora,
         });
+    // O ato dos participantes cobrados pelo hospital (além do titular) compõe o valor do item e o total da conta.
+    if (valorNovo !== n(i['valor_total'])) {
+      await tx.alterar('conta_hospitalar_item', e.itemId, n(i['versao']), { valor_total: valorNovo });
+      await tx.alterar('conta_hospitalar', c.id, c.versao, await totalDosItens(tx, c.id));
+    }
     await tx.incluir('conta_hospitalar_item_memoria', {
       conta_hospitalar_item_id: e.itemId,
-      valor_total_calculado: n(i['valor_total']),
+      valor_total_calculado: valorNovo,
       preco_manual: 0,
       operacao: 'alteracao',
-      dados: JSON.stringify({ origem: 'equipe', honorario: n(i['valor_honorario']), equipe: calc }),
+      dados: JSON.stringify({
+        origem: 'equipe',
+        honorario: n(i['valor_honorario']),
+        valorAnterior: n(i['valor_total']),
+        adicionalAnterior,
+        adicionalEquipe: adicionalNovo,
+        equipe: calc,
+      }),
       ocorrido_em: agora,
       usuario_id: ctx.usuario,
     });
-    return { itemId: e.itemId, participantes: calc.length };
+    return {
+      itemId: e.itemId,
+      participantes: calc.length,
+      valorItem: valorNovo,
+      adicionalEquipe: adicionalNovo,
+    };
   },
   alvo: (e) => ({ tabela: 'conta_hospitalar_item', id: e.itemId }),
 });
@@ -620,6 +771,21 @@ export const opTransferir = definirOperacao({
       await tx.consultarParaAtualizar('SELECT id FROM conta_hospitalar WHERE id = ?', [x]);
     const origem = await contaDo(tx, est, e.contaOrigemId);
     const destino = await contaDo(tx, null, e.contaDestinoId);
+    // Conta de outro estabelecimento: só quem pode ajustar a conta lá (a permissão da sessão vale só no dela).
+    if (
+      destino.estabelecimento !== est &&
+      !(await podeNoEstabelecimento(
+        tx,
+        ctx.usuario,
+        destino.estabelecimento,
+        'faturamento.auditoria.ajustar',
+      ))
+    )
+      throw recusa(
+        'sem-permissao-estabelecimento',
+        'Você não tem acesso ao faturamento do estabelecimento da conta de destino.',
+        { campos: ['contaDestinoId'] },
+      );
     const itens = e.itens.length
       ? await tx.consultar<Linha>(
           `SELECT * FROM conta_hospitalar_item WHERE id IN (${lista(e.itens.length)}) AND excluido_em IS NULL`,
@@ -633,6 +799,8 @@ export const opTransferir = definirOperacao({
       estabelecimento: c.estabelecimento,
       fontePagadora: c.fontePagadora,
       paciente: c.paciente,
+      inicio: c.inicio,
+      fim: c.fim,
     });
     const v = validarTransferencia(
       comoConta(origem),
@@ -641,6 +809,7 @@ export const opTransferir = definirOperacao({
         id: n(i['id']),
         conta: n(i['conta_hospitalar_id']),
         situacao: txt(i['situacao']),
+        realizado: diaDe(i['realizado_em']),
       })),
       e.itens,
       e.motivo,
@@ -674,6 +843,7 @@ export const opTransferir = definirOperacao({
     let totalDestino = 0;
     let s = 0;
     let semPreco = 0;
+    const funcoes = await funcoesEquipe(tx);
     for (const idItem of e.itens) {
       const i = itens.find((x) => n(x['id']) === idItem)!;
       const qtd = n(i['quantidade']);
@@ -683,7 +853,28 @@ export const opTransferir = definirOperacao({
       const preco = await precoVigente(tx, tabelasDestino, n(i['item_faturavel_id']), dia);
       if (!preco) semPreco += 1;
       const unitario = preco?.unitario ?? n(i['valor_unitario']);
-      const valorDestino = r2(unitario * qtd);
+      const honorarioDestino = preco ? r2(preco.honorario * qtd) : n(i['valor_honorario']);
+      // A equipe é refeita sobre o honorário do destino, com o percentual gravado de cada participante (sem ele, o da
+      // função); o adicional dos participantes cobrados pelo hospital entra no valor do item de destino.
+      const equipe = await tx.consultar<Linha>(
+        `SELECT * FROM conta_hospitalar_item_participante
+          WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+        [idItem],
+        { teto: 100 },
+      );
+      const equipeDestino = calcularEquipeItem(
+        equipe.map((p) => ({
+          profissional: n(p['profissional_id']),
+          funcao: n(p['funcao_equipe_cobranca_id']),
+          grau: nn(p['grau_participacao_termo_terminologia_id']),
+          percentual: nn(p['percentual_cobranca']),
+          formaPagamento: txt(p['forma_pagamento']) as ParticipanteCalculado['formaPagamento'],
+        })),
+        funcoes,
+        honorarioDestino,
+      );
+      const adicionalEquipe = adicionalDaEquipe(equipeDestino, funcoes);
+      const valorDestino = r2(unitario * qtd + adicionalEquipe);
       totalOrigem += n(i['valor_total']);
       totalDestino += valorDestino;
       const seq = await tx.uma<Linha>(
@@ -701,7 +892,7 @@ export const opTransferir = definirOperacao({
         realizado_fim_em: i['realizado_fim_em'],
         quantidade: qtd,
         valor_unitario: unitario,
-        valor_honorario: preco ? r2(preco.honorario * qtd) : i['valor_honorario'],
+        valor_honorario: honorarioDestino,
         valor_custo_operacional: preco ? r2(preco.custoOperacional * qtd) : i['valor_custo_operacional'],
         valor_filme: preco ? r2(preco.filme * qtd) : i['valor_filme'],
         valor_total: valorDestino,
@@ -746,30 +937,38 @@ export const opTransferir = definirOperacao({
           valorOrigem: n(i['valor_total']),
           origemPreco: preco ? 'tabela_destino' : 'valor_origem_sem_preco_destino',
           vigencia: preco?.vigencia ?? null,
+          adicionalEquipe,
+          equipe: equipeDestino,
         }),
         ocorrido_em: agora,
         usuario_id: ctx.usuario,
       });
-      // A equipe acompanha o item (a do item de origem fica onde estava, com ele).
-      const equipe = await tx.consultar<Linha>(
-        `SELECT * FROM conta_hospitalar_item_participante WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL`,
-        [idItem],
-        { teto: 100 },
-      );
-      for (const p of equipe)
+      // A equipe acompanha o item: a cópia nasce no destino com o valor do ato refeito, e a da origem fica encerrada
+      // pela transferência (marcada, com a referência dela; nunca apagada), para não contar o honorário duas vezes.
+      for (const p of equipe) {
+        const calc = equipeDestino.find(
+          (x) => x.profissional === n(p['profissional_id']) && x.funcao === n(p['funcao_equipe_cobranca_id']),
+        )!;
         await tx.incluir('conta_hospitalar_item_participante', {
           conta_hospitalar_item_id: novo,
-          sequencia: p['sequencia'],
+          sequencia: calc.sequencia,
           profissional_id: p['profissional_id'],
           funcao_equipe_cobranca_id: p['funcao_equipe_cobranca_id'],
-          grau_participacao_termo_terminologia_id: p['grau_participacao_termo_terminologia_id'],
+          grau_participacao_termo_terminologia_id: calc.grau,
           ocupacao_cbo_id: p['ocupacao_cbo_id'],
           recebedor_prestador_terceiro_id: p['recebedor_prestador_terceiro_id'],
-          forma_pagamento: p['forma_pagamento'],
-          valor_ato: p['valor_ato'],
-          valor_liquido: p['valor_liquido'],
+          forma_pagamento: calc.formaPagamento,
+          percentual_cobranca: calc.percentual,
+          valor_ato: calc.valorAto,
+          valor_liquido: calc.valorAto,
           paciente_paga: p['paciente_paga'],
         });
+        await tx.alterar('conta_hospitalar_item_participante', n(p['id']), n(p['versao']), {
+          excluido_em: agora,
+          excluido_por: ctx.usuario,
+          transferencia_conta_id: transf,
+        });
+      }
     }
     const vo = await tx.uma<Linha>('SELECT versao FROM conta_hospitalar WHERE id = ?', [origem.id]);
     await tx.alterar('conta_hospitalar', origem.id, n(vo?.['versao']), await totalDosItens(tx, origem.id));

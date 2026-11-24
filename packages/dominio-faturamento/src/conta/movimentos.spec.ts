@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adicionalDaEquipe,
   calcularEquipeItem,
   type FuncaoEquipe,
   type KitCobranca,
@@ -7,6 +8,7 @@ import {
   validarDefinicaoKit,
   validarEquipeItem,
   validarTransferencia,
+  valorItemComEquipe,
 } from './movimentos.js';
 
 const funcao = (id: number, tipo: string, x: Partial<FuncaoEquipe> = {}): FuncaoEquipe => ({
@@ -198,5 +200,72 @@ describe('transferência de itens entre contas (06-FAT linha 14)', () => {
     expect(validarTransferencia(c(1), c(2), itens, [12], 'motivo ok').erros['itens']).toMatch(/glosado/);
     expect(validarTransferencia(c(1), c(2), itens, [], 'motivo ok').erros).toHaveProperty('itens');
     expect(validarTransferencia(c(1), c(2), itens, [11], 'abc').erros).toHaveProperty('motivo');
+  });
+});
+
+describe('equipe na cobrança e na validação (correção F3.7-4)', () => {
+  const fs = new Map<number, FuncaoEquipe>([
+    ...funcoes,
+    [5, funcao(5, 'auxiliar', { percentual: 20, ordemAuxiliar: 2, ordemApresentacao: 2 })],
+    [6, funcao(6, 'instrumentador', { ordemApresentacao: 5 })],
+  ]);
+  it('1º e 2º auxiliar na mesma equipe são aceitos, na ordem do auxiliar', () => {
+    const ps = [
+      { profissional: 30, funcao: 5 },
+      { profissional: 20, funcao: 2 },
+      { profissional: 10, funcao: 1 },
+    ];
+    expect(validarEquipeItem(ps, fs)).toEqual({});
+    expect(calcularEquipeItem(ps, fs, 100).map((p) => [p.funcao, p.sequencia, p.valorAto])).toEqual([
+      [1, 1, 100],
+      [2, 2, 30],
+      [5, 3, 20],
+    ]);
+  });
+  it('função sem percentual: pede o percentual em vez de zerar (o informado ou sem cobrança passam)', () => {
+    expect(validarEquipeItem([{ profissional: 1, funcao: 6 }], fs)).toHaveProperty(
+      'participantes.0.percentual',
+    );
+    expect(validarEquipeItem([{ profissional: 1, funcao: 6, percentual: 10 }], fs)).toEqual({});
+    expect(validarEquipeItem([{ profissional: 1, funcao: 6, formaPagamento: 'sem_cobranca' }], fs)).toEqual(
+      {},
+    );
+  });
+  it('o ato dos demais participantes cobrados pelo hospital soma ao item; o titular já está no honorário', () => {
+    const calc = calcularEquipeItem(
+      [
+        { profissional: 10, funcao: 1 },
+        { profissional: 20, funcao: 2 },
+        { profissional: 30, funcao: 3, formaPagamento: 'direto_fonte_pagadora' },
+      ],
+      fs,
+      80,
+    );
+    expect(adicionalDaEquipe(calc, fs)).toBe(24);
+    expect(adicionalDaEquipe([], fs)).toBe(0);
+    expect(valorItemComEquipe(124, 24, 36)).toBe(136);
+    expect(valorItemComEquipe(100, 0, 24)).toBe(124);
+  });
+  it('transferência: item fora do período da conta de destino é recusado', () => {
+    const base = { situacao: 'aberta', estabelecimento: 1, fontePagadora: 7, paciente: 100 };
+    const its = [{ id: 11, conta: 1, situacao: 'lancado', realizado: '2026-01-21' }];
+    expect(
+      validarTransferencia(
+        { id: 1, ...base },
+        { id: 2, ...base, inicio: '2026-02-01' },
+        its,
+        [11],
+        'motivo ok',
+      ).erros['itens'],
+    ).toMatch(/período/);
+    expect(
+      validarTransferencia(
+        { id: 1, ...base },
+        { id: 2, ...base, inicio: '2026-01-01', fim: '2026-01-31' },
+        its,
+        [11],
+        'motivo ok',
+      ).erros,
+    ).toEqual({});
   });
 });

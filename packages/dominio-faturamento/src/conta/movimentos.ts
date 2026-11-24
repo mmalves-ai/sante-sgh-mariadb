@@ -92,6 +92,15 @@ export function validarEquipeItem(
     }
     if (p.percentual !== undefined && p.percentual !== null && (p.percentual < 0 || p.percentual > 100))
       erros[`participantes.${i}.percentual`] = 'O percentual vai de 0 a 100.';
+    // Sem percentual na função nem no pedido, o valor do ato sairia zero em silêncio: pede-se o percentual.
+    else if (
+      (p.percentual === undefined || p.percentual === null) &&
+      f.percentual === null &&
+      f.tipo !== 'cirurgiao' &&
+      p.formaPagamento !== 'sem_cobranca'
+    )
+      erros[`participantes.${i}.percentual`] =
+        'A função não tem percentual de cobrança: informe o percentual do participante.';
     if (p.formaPagamento && !FORMAS_PAGAMENTO_PARTICIPANTE.includes(p.formaPagamento))
       erros[`participantes.${i}.formaPagamento`] = 'Forma de pagamento desconhecida.';
   });
@@ -125,6 +134,33 @@ export function calcularEquipeItem(
         valorAto: forma === 'sem_cobranca' ? 0 : r2((Math.max(0, honorarioItem) * percentual) / 100),
       };
     });
+}
+
+/**
+ * Como a equipe compõe a cobrança (decisão do domínio, prática de mercado): o honorário do item já paga o titular (o
+ * cirurgião, ou o primeiro participante quando não há cirurgião); o ato dos demais participantes cobrados pelo hospital
+ * ("via_hospital") soma ao valor do item. Quem recebe direto da fonte pagadora, do paciente ou sem cobrança não entra.
+ */
+export function adicionalDaEquipe(
+  calc: readonly ParticipanteCalculado[],
+  funcoes: ReadonlyMap<number, FuncaoEquipe>,
+): number {
+  const titular =
+    calc.find((p) => funcoes.get(p.funcao)?.tipo === 'cirurgiao') ?? (calc.length ? calc[0] : undefined);
+  return r2(
+    calc
+      .filter((p) => p !== titular && p.formaPagamento === 'via_hospital')
+      .reduce((s, p) => s + p.valorAto, 0),
+  );
+}
+
+/** O novo valor do item depois de trocar a equipe: tira o adicional anterior e põe o novo (o resto do item fica). */
+export function valorItemComEquipe(
+  valorAtual: number,
+  adicionalAnterior: number,
+  adicionalNovo: number,
+): number {
+  return Math.max(0, r2(valorAtual - adicionalAnterior + adicionalNovo));
 }
 
 // ── Linha 16: kit de cobrança ─────────────────────────────────────────────────────────────────────
@@ -221,12 +257,17 @@ export interface ContaDaTransferencia {
   readonly estabelecimento: number;
   readonly fontePagadora: number;
   readonly paciente: number;
+  /** Período da conta (AAAA-MM-DD); a de destino só recebe item realizado dentro dele. */
+  readonly inicio?: string | null;
+  readonly fim?: string | null;
 }
 
 export interface ItemDaTransferencia {
   readonly id: number;
   readonly conta: number;
   readonly situacao: string;
+  /** Dia em que o item foi realizado (AAAA-MM-DD). */
+  readonly realizado?: string | null;
 }
 
 export type TipoTransferencia = 'conta' | 'fonte_pagadora' | 'estabelecimento';
@@ -266,6 +307,16 @@ export function validarTransferencia(
     if (!(SITUACOES_ITEM_TRANSFERIVEL as readonly string[]).includes(it.situacao)) {
       erros['itens'] =
         'Só o item lançado ou conferido muda de conta (glosado, estornado e transferido, não).';
+      break;
+    }
+    const dia = it.realizado ? it.realizado.slice(0, 10) : null;
+    if (
+      dia &&
+      ((destino.inicio && dia < destino.inicio.slice(0, 10)) ||
+        (destino.fim && dia > destino.fim.slice(0, 10)))
+    ) {
+      erros['itens'] =
+        'Há item realizado fora do período da conta de destino: escolha a conta do período certo.';
       break;
     }
   }

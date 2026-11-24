@@ -1,12 +1,14 @@
 // Movimentos da conta (F3.7, 06-FAT linhas 14, 15 e 16), só com o banco próprio do cliente.
 //   GET  /api/faturamento/contas/:id/movimentos          faturamento.conta.ler (itens com equipe, funções, kits,
 //                                                         contas de destino do paciente e transferências)
+//                                                         (conta de outro estabelecimento só a quem pode ler lá)
+//   GET  /api/faturamento/profissionais-equipe?termo=     faturamento.item.lancar (busca por nome ou inscrição)
 //   POST /api/faturamento/itens/:item/equipe             faturamento.item.lancar (a equipe inteira do item)
 //   POST /api/faturamento/contas/:id/kits                faturamento.item.lancar (lança um kit de cobrança)
 //   POST /api/faturamento/kits                           faturamento.regra.editar (cadastro do kit com os componentes)
 //   POST /api/faturamento/contas/:id/transferencias      faturamento.auditoria.ajustar (itens para outra conta)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -14,6 +16,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/base.js';
 import {
+  buscarProfissionaisPropria,
   gravarMovimentos,
   movimentosContaPropria,
   type NomeOperacaoMovimentos,
@@ -70,8 +73,16 @@ export class MovimentosContaController {
   @Permissao('faturamento.conta.ler')
   movimentos(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const c = inteiro(id, 'id');
+    const ctx = ctxDe(req, 'conta-movimentos');
+    const acesso = { usuario: ctx.usuario, total: req.sgh?.sessao.usuario.ator === 'plataforma' };
+    return this.rodar(() => this.s().ler(ctx, (l, est) => movimentosContaPropria(l, est, c, acesso)));
+  }
+
+  @Get('faturamento/profissionais-equipe')
+  @Permissao('faturamento.item.lancar')
+  profissionaisEquipe(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
     return this.rodar(() =>
-      this.s().ler(ctxDe(req, 'conta-movimentos'), (l, est) => movimentosContaPropria(l, est, c)),
+      this.s().ler(ctxDe(req, 'conta-movimentos'), (l) => buscarProfissionaisPropria(l, String(termo ?? ''))),
     );
   }
 

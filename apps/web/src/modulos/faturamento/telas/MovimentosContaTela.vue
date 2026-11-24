@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
+  buscarProfissionais,
   gravarEquipe,
   type ItemConta,
   lancarKit,
@@ -50,12 +51,36 @@ const emEdicao = ref<ItemConta | null>(null);
 const equipe = ref<ParticipantePedido[]>([]);
 function editarEquipe(i: ItemConta) {
   emEdicao.value = i;
+  // Recarrega o que está gravado (grau e percentual inclusive): salvar de novo não volta nada ao padrão em silêncio.
   equipe.value = i.equipe.map((p) => ({
     profissionalId: p.profissionalId,
     funcaoId: p.funcaoId,
+    grauId: p.grauId,
+    percentual: p.percentual,
     formaPagamento: p.formaPagamento,
   }));
+  encontrados.value = i.equipe.map((p) => ({ id: p.profissionalId, nome: p.nome, inscricao: '' }));
 }
+// Profissional por nome ou número da inscrição no conselho (além dos sugeridos da conta).
+const busca = ref('');
+const encontrados = ref<{ id: number; nome: string; inscricao: string }[]>([]);
+async function buscar() {
+  if (busca.value.trim().length < 3) return;
+  try {
+    const r = await buscarProfissionais(busca.value.trim());
+    const ja = new Set(encontrados.value.map((p) => p.id));
+    encontrados.value = [...encontrados.value, ...r.filter((p) => !ja.has(p.id))];
+    aviso.value = r.length ? '' : t('movimentosConta.nenhumProfissional');
+  } catch (e) {
+    erro.value = e;
+  }
+}
+const opcoesProfissional = computed(() => {
+  const m = new Map<number, string>();
+  for (const p of q.data.value?.profissionais ?? []) m.set(p.id, p.nome);
+  for (const p of encontrados.value) m.set(p.id, p.inscricao ? `${p.nome} · ${p.inscricao}` : p.nome);
+  return [...m].map(([id, nome]) => ({ id, nome }));
+});
 const funcoesMapa = computed(
   () =>
     new Map<number, FuncaoEquipe>(
@@ -64,11 +89,11 @@ const funcoesMapa = computed(
         {
           id: f.id,
           tipo: f.tipo,
-          ativo: true,
+          ativo: f.ativo,
           percentual: f.percentual,
-          grau: null,
-          ordemAuxiliar: null,
-          ordemApresentacao: null,
+          grau: f.grau,
+          ordemAuxiliar: f.ordemAuxiliar,
+          ordemApresentacao: f.ordemApresentacao,
         },
       ]),
     ),
@@ -79,6 +104,7 @@ const informados = computed(() =>
     .map((p) => ({
       profissional: p.profissionalId,
       funcao: p.funcaoId,
+      grau: p.grauId ?? null,
       percentual: p.percentual ?? null,
       formaPagamento: (p.formaPagamento ?? 'via_hospital') as (typeof FORMAS)[number],
     })),
@@ -193,19 +219,59 @@ async function transferir() {
 
       <form v-if="emEdicao" class="filtros" data-testid="mov-form-equipe" @submit.prevent="salvarEquipe">
         <h2>{{ t('movimentosConta.equipeDe', { item: emEdicao.codigo }) }}</h2>
-        <datalist id="mov-profissionais">
-          <option v-for="p in q.data.value.profissionais" :key="p.id" :value="p.id">{{ p.nome }}</option>
-        </datalist>
+        <label>
+          {{ t('movimentosConta.buscarProfissional') }}
+          <input
+            v-model="busca"
+            type="search"
+            minlength="3"
+            data-testid="mov-busca-profissional"
+            @keydown.enter.prevent="buscar"
+          />
+        </label>
+        <button type="button" data-testid="mov-buscar" @click="buscar">
+          {{ t('movimentosConta.buscar') }}
+        </button>
         <fieldset v-for="(p, k) in equipe" :key="k" :data-testid="`mov-participante-${k}`">
           <label>
             {{ t('movimentosConta.profissional') }}
-            <input v-model.number="p.profissionalId" list="mov-profissionais" inputmode="numeric" required />
+            <select v-model.number="p.profissionalId" required :data-testid="`mov-profissional-${k}`">
+              <option :value="0" disabled>{{ t('movimentosConta.escolhaProfissional') }}</option>
+              <option v-for="o in opcoesProfissional" :key="o.id" :value="o.id">{{ o.nome }}</option>
+            </select>
           </label>
           <label>
             {{ t('movimentosConta.funcao') }}
             <select v-model.number="p.funcaoId" required>
               <option v-for="f in q.data.value.funcoes" :key="f.id" :value="f.id">{{ f.descricao }}</option>
             </select>
+          </label>
+          <label>
+            {{ t('movimentosConta.grau') }}
+            <select v-model="p.grauId" :data-testid="`mov-grau-${k}`">
+              <option :value="null">{{ t('movimentosConta.grauDaFuncao') }}</option>
+              <option v-for="g in q.data.value.graus" :key="g.id" :value="g.id">
+                {{ g.codigo }} · {{ g.descricao }}
+              </option>
+            </select>
+          </label>
+          <label>
+            {{ t('movimentosConta.percentual') }}
+            <input
+              :value="p.percentual ?? ''"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              :placeholder="t('movimentosConta.percentualDaFuncao')"
+              :data-testid="`mov-percentual-${k}`"
+              @input="
+                p.percentual =
+                  ($event.target as HTMLInputElement).value === ''
+                    ? null
+                    : Number(($event.target as HTMLInputElement).value)
+              "
+            />
           </label>
           <label>
             {{ t('movimentosConta.formaPagamento') }}
@@ -215,17 +281,34 @@ async function transferir() {
           </label>
           <span class="secundario">{{ t('movimentosConta.valorAto', { valor: moeda(previstoDe(p)) }) }}</span>
           <span
-            v-if="errosEquipe[`participantes.${k}.funcao`] || errosEquipe[`participantes.${k}.profissional`]"
+            v-if="
+              errosEquipe[`participantes.${k}.funcao`] ||
+              errosEquipe[`participantes.${k}.profissional`] ||
+              errosEquipe[`participantes.${k}.percentual`]
+            "
             role="alert"
+            :data-testid="`mov-erro-${k}`"
           >
-            {{ errosEquipe[`participantes.${k}.funcao`] ?? errosEquipe[`participantes.${k}.profissional`] }}
+            {{
+              errosEquipe[`participantes.${k}.funcao`] ??
+              errosEquipe[`participantes.${k}.profissional`] ??
+              errosEquipe[`participantes.${k}.percentual`]
+            }}
           </span>
           <button type="button" @click="equipe.splice(k, 1)">{{ t('movimentosConta.retirar') }}</button>
         </fieldset>
         <button
           type="button"
           data-testid="mov-incluir"
-          @click="equipe.push({ profissionalId: 0, funcaoId: 0, formaPagamento: 'via_hospital' })"
+          @click="
+            equipe.push({
+              profissionalId: 0,
+              funcaoId: 0,
+              grauId: null,
+              percentual: null,
+              formaPagamento: 'via_hospital',
+            })
+          "
         >
           {{ t('movimentosConta.incluir') }}
         </button>

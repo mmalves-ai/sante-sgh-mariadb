@@ -13,6 +13,7 @@ const participante = z.object({
   nome: z.string(),
   funcaoId: z.number(),
   grauId: z.number().nullable(),
+  percentual: z.number().nullable(),
   formaPagamento: z.string(),
   valorAto: z.number(),
 });
@@ -41,9 +42,14 @@ const esquemaMovimentos = z.object({
       codigo: z.string(),
       descricao: z.string(),
       tipo: z.string(),
+      ativo: z.boolean(),
       percentual: z.number().nullable(),
+      grau: z.number().nullable(),
+      ordemAuxiliar: z.number().nullable(),
+      ordemApresentacao: z.number().nullable(),
     }),
   ),
+  graus: z.array(z.object({ id: z.number(), codigo: z.string(), descricao: z.string() })),
   kits: z.array(z.object({ id: z.number(), codigo: z.string(), descricao: z.string(), modo: z.string() })),
   profissionais: z.array(z.object({ id: z.number(), nome: z.string() })),
   destinos: z.array(
@@ -79,9 +85,14 @@ export const lerMovimentos = (conta: number) => ler(`${F}/contas/${conta}/movime
 export interface ParticipantePedido {
   profissionalId: number;
   funcaoId: number;
+  grauId?: number | null;
   percentual?: number | null;
   formaPagamento?: string;
 }
+const esquemaProfissionais = z.array(z.object({ id: z.number(), nome: z.string(), inscricao: z.string() }));
+/** Profissionais por nome ou número da inscrição no conselho (ao menos 3 letras). */
+export const buscarProfissionais = (termo: string) =>
+  ler(`${F}/profissionais-equipe?termo=${encodeURIComponent(termo)}`, esquemaProfissionais);
 export const gravarEquipe = (item: number, participantes: ParticipantePedido[], chave: string) =>
   enviar(`${F}/itens/${item}/equipe`, { participantes }, qualquer, chave);
 export const lancarKit = (conta: number, kitId: number, vezes: number, chave: string) =>
