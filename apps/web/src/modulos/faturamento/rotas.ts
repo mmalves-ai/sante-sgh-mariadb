@@ -62,6 +62,21 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     props: true,
     meta: { permissao: 'faturamento.guia.ler' },
   },
+  // F3.7 (06-FAT linha 36): a nota fiscal de serviço que documenta a fatura do convênio ou a conta do particular.
+  {
+    path: '/faturamento/faturas/:id(\\d+)/notas-fiscais',
+    name: 'faturamento.faturaNotasFiscais',
+    component: () => import('./telas/NotaFiscalAlvoTela.vue'),
+    props: (r) => ({ id: String(r.params['id']), tipo: 'fatura' }),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/contas/:id(\\d+)/notas-fiscais',
+    name: 'faturamento.contaNotasFiscais',
+    component: () => import('./telas/NotaFiscalAlvoTela.vue'),
+    props: (r) => ({ id: String(r.params['id']), tipo: 'conta' }),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
   {
     path: '/faturamento/contas/:id(\\d+)',
     name: 'faturamento.conta',
