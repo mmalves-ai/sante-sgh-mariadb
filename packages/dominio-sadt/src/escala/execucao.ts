@@ -5,7 +5,11 @@
 // na hora, sem ir e voltar); o choque de horário do mesmo executante em dois setores é recusado na gravação, com o
 // plantão que conflita; a resposta "quem executa este exame agora" sai da própria escala, para a fila e o pedido.
 
-/** Um plantão da escala: dia da semana (1 = domingo a 7 = sábado) ou data avulsa, nunca os dois. */
+/**
+ * Um plantão da escala: dia da semana (1 = domingo a 7 = sábado) ou data avulsa, nunca os dois. O dia é o do INÍCIO do
+ * plantão: fim menor ou igual ao início quer dizer que o plantão passa da meia-noite e acaba no dia seguinte (19:00 às
+ * 07:00, o noturno do setor 24 horas); fim igual ao início é o plantão de 24 horas.
+ */
 export interface PlantaoEscala {
   readonly diaSemana: number | null;
   /** AAAA-MM-DD. */
@@ -83,14 +87,18 @@ export function conferirEscala(e: EscalaExecucao): ProblemaEscala[] {
       (x.data < e.vigenciaInicio || (e.vigenciaFim && x.data > e.vigenciaFim))
     )
       p.push({ campo: c, mensagem: 'A data do plantão fica fora da vigência da escala.' });
-    if (!HORA.test(x.inicio) || !HORA.test(x.fim) || minutos(x.fim) <= minutos(x.inicio))
-      p.push({ campo: c, mensagem: 'A hora de fim precisa ser depois da hora de início (HH:MM).' });
+    if (!HORA.test(x.inicio) || !HORA.test(x.fim))
+      p.push({
+        campo: c,
+        mensagem:
+          'Informe as horas de início e de fim (HH:MM); fim antes do início é o plantão que vira a noite.',
+      });
     if (!Number.isInteger(x.capacidade) || x.capacidade < 1 || x.capacidade > 65535)
       p.push({ campo: c, mensagem: 'A capacidade do plantão é de ao menos 1 atendimento.' });
   });
   e.plantoes.forEach((a, i) =>
     e.plantoes.forEach((b, j) => {
-      if (j > i && plantoesSeCruzam(a, b))
+      if (j > i && plantoesSeCruzam(a, b, e, e))
         p.push({
           campo: `plantoes.${j}`,
           mensagem: `O plantão se sobrepõe ao plantão ${i + 1} da mesma escala.`,
@@ -115,13 +123,78 @@ export function conferirEscala(e: EscalaExecucao): ProblemaEscala[] {
   return p;
 }
 
-/** Dois plantões podem cair no mesmo dia e as horas se cruzam (as vigências são conferidas por quem chama). */
-export function plantoesSeCruzam(a: PlantaoEscala, b: PlantaoEscala): boolean {
-  const diaA = a.diaSemana ?? (a.data ? diaDaSemana(a.data) : null);
-  const diaB = b.diaSemana ?? (b.data ? diaDaSemana(b.data) : null);
-  if (diaA === null || diaB === null || diaA !== diaB) return false;
-  if (a.data && b.data && a.data !== b.data) return false;
-  return minutos(a.inicio) < minutos(b.fim) && minutos(b.inicio) < minutos(a.fim);
+/** A vigência de uma escala (AAAA-MM-DD; fim nulo: sem fim). */
+export interface Vigencia {
+  readonly vigenciaInicio: string;
+  readonly vigenciaFim: string | null;
+}
+
+const MIN_DIA = 1440;
+const MIN_SEMANA = 7 * MIN_DIA;
+/** Quantos minutos o plantão dura (fim <= início: até o dia seguinte; fim = início: 24 horas). */
+export function duracaoDoPlantao(x: Pick<PlantaoEscala, 'inicio' | 'fim'>): number {
+  const d = minutos(x.fim) - minutos(x.inicio);
+  return d > 0 ? d : d + MIN_DIA;
+}
+/** O dia (contado desde 1970-01-01) de uma data AAAA-MM-DD. */
+const diaAbsoluto = (d: string): number => Math.round(Date.parse(`${d}T00:00:00Z`) / 86_400_000);
+const dataDoDia = (n: number): string => new Date(n * 86_400_000).toISOString().slice(0, 10);
+const dentro = (data: string, v: Vigencia | undefined): boolean =>
+  !v || (v.vigenciaInicio <= data && (v.vigenciaFim === null || data <= v.vigenciaFim));
+const cruzam = (a0: number, a1: number, b0: number, b1: number): boolean => a0 < b1 && b0 < a1;
+
+/**
+ * As ocorrências do plantão semanal que podem encostar num intervalo absoluto [ini, fim) em minutos desde 1970, só
+ * nos dias dentro da vigência da escala dele.
+ */
+function ocorrenciasPerto(
+  p: PlantaoEscala,
+  ini: number,
+  fim: number,
+  v: Vigencia | undefined,
+): [number, number][] {
+  const r: [number, number][] = [];
+  const dur = duracaoDoPlantao(p);
+  for (let dia = Math.floor(ini / MIN_DIA) - 1; dia <= Math.floor(fim / MIN_DIA) + 1; dia++) {
+    const data = dataDoDia(dia);
+    if (diaDaSemana(data) !== p.diaSemana || !dentro(data, v)) continue;
+    const i = dia * MIN_DIA + minutos(p.inicio);
+    r.push([i, i + dur]);
+  }
+  return r;
+}
+
+/**
+ * Dois plantões se cruzam no tempo, contando a virada da meia-noite. A vigência de cada escala, quando dada, limita
+ * os dias do plantão semanal (a data avulsa de outra escala fora da vigência não conflita).
+ */
+export function plantoesSeCruzam(
+  a: PlantaoEscala,
+  b: PlantaoEscala,
+  vigA?: Vigencia,
+  vigB?: Vigencia,
+): boolean {
+  const avulso = (x: PlantaoEscala): [number, number] => {
+    const i = diaAbsoluto(x.data!) * MIN_DIA + minutos(x.inicio);
+    return [i, i + duracaoDoPlantao(x)];
+  };
+  if (a.data && b.data) {
+    const [a0, a1] = avulso(a);
+    const [b0, b1] = avulso(b);
+    return cruzam(a0, a1, b0, b1);
+  }
+  if (a.data || b.data) {
+    const [x, y, vy] = a.data ? [a, b, vigB] : [b, a, vigA];
+    const [x0, x1] = avulso(x);
+    return ocorrenciasPerto(y, x0, x1, vy).some(([y0, y1]) => cruzam(x0, x1, y0, y1));
+  }
+  if (a.diaSemana === null || b.diaSemana === null) return false;
+  // Os dois semanais: na semana circular (o noturno de sábado chega ao domingo).
+  const a0 = (a.diaSemana - 1) * MIN_DIA + minutos(a.inicio);
+  const b0 = (b.diaSemana - 1) * MIN_DIA + minutos(b.inicio);
+  const a1 = a0 + duracaoDoPlantao(a);
+  const b1 = b0 + duracaoDoPlantao(b);
+  return [-MIN_SEMANA, 0, MIN_SEMANA].some((k) => cruzam(a0, a1, b0 + k, b1 + k));
 }
 
 const vigenciasSeCruzam = (a: EscalaExecucao, b: EscalaExecucao): boolean =>
@@ -147,7 +220,7 @@ export function conflitosDoExecutante(
       (nova.recurso !== null && nova.recurso === o.recurso);
     if (!mesmo) continue;
     nova.plantoes.forEach((p, i) => {
-      if (o.plantoes.some((q) => plantoesSeCruzam(p, q)))
+      if (o.plantoes.some((q) => plantoesSeCruzam(p, q, nova, o)))
         r.push({ escala: o.id ?? null, descricao: o.descricao, plantao: i });
     });
   }
@@ -162,19 +235,24 @@ export function executantesDoExame(
   data: string,
   hora: string,
 ): EscalaExecucao[] {
-  const dia = diaDaSemana(data);
-  const m = minutos(hora);
+  // O momento em minutos desde 1970; o plantão começa no dia da data ou na véspera (o noturno que vira a noite), e a
+  // vigência que vale é a do dia em que o plantão começou.
+  const hoje = diaAbsoluto(data);
+  const agora = hoje * MIN_DIA + minutos(hora);
+  const cobre = (e: EscalaExecucao, p: PlantaoEscala): boolean =>
+    [hoje - 1, hoje].some((dia) => {
+      const inicioDia = dataDoDia(dia);
+      if (!dentro(inicioDia, e)) return false;
+      if (p.data ? p.data !== inicioDia : p.diaSemana !== diaDaSemana(inicioDia)) return false;
+      const i = dia * MIN_DIA + minutos(p.inicio);
+      return i <= agora && agora < i + duracaoDoPlantao(p);
+    });
   return escalas.filter(
     (e) =>
       e.ativa !== false &&
       e.setor === setor &&
-      e.vigenciaInicio <= data &&
-      (e.vigenciaFim === null || data <= e.vigenciaFim) &&
       e.exames.some((x) => x.exame === exame) &&
-      e.plantoes.some(
-        (p) =>
-          (p.data ? p.data === data : p.diaSemana === dia) && minutos(p.inicio) <= m && m < minutos(p.fim),
-      ),
+      e.plantoes.some((p) => cobre(e, p)),
   );
 }
 
