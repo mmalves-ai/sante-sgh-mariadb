@@ -2,8 +2,9 @@
 // modalidade, contra o MariaDB real (cliente da massa, marca D, massa SINTÉTICA). Grava o modelo e as regras (linha na
 // trilha na mesma transação), recusa o código e a regra repetidos e a versão velha, e a escolha para a internação real
 // segue a regra mais específica (cópias e obrigatoriedade dela); o modelo desativado deixa de sair e continua no banco
-// (nada se apaga). A ficha da internação (porta.fichas) devolve os mesmos documentos com o texto. SGH_NUCLEO_SEM_BANCO=1
-// pula.
+// (nada se apaga). A ficha da internação (porta.fichas) devolve os mesmos documentos com o texto. O outro estabelecimento
+// não vê nem altera o modelo e as regras deste; o modelo comum só é mexido pela plataforma e não troca de dono; a regra
+// sem momento e sem cópias herda as do modelo; o modelo sob demanda é oferecido na emissão. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { ErroOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -35,10 +36,12 @@ describe.skipIf(SEM_BANCO_ADT)(
     const M = () => m!;
     const limpar = () =>
       M().nucleo.escrever({ cliente: CLIENTE_ADT, correlacao: 'int-doc-internacao-limpeza' }, async (e) => {
-        await e.executar('DELETE FROM regra_documento_internacao WHERE estabelecimento_id IN (?, ?)', [
-          M().est,
-          M().outro,
-        ]);
+        // Só as regras dos modelos deste teste (outra fatia pode usar o mesmo cliente ao mesmo tempo).
+        await e.executar(
+          `DELETE r FROM regra_documento_internacao r JOIN modelo_documento_internacao m ON m.id = r.modelo_documento_internacao_id
+            WHERE m.codigo LIKE ?`,
+          [`${P}%`],
+        );
         await e.executar('DELETE FROM modelo_documento_internacao WHERE codigo LIKE ?', [`${P}%`]);
       });
     const recusada = async (p: Promise<unknown>) => {
@@ -207,6 +210,118 @@ describe.skipIf(SEM_BANCO_ADT)(
       );
       // Regra de modelo de outro estabelecimento ou inexistente: recusada.
       expect(await recusada(regra(999_999_999))).toBe('409:modelo-inexistente');
+    }, 120_000);
+
+    it('isola os estabelecimentos; o modelo comum só pela plataforma e sem troca de dono', async () => {
+      const outro = contextoAdt(M(), M().outro);
+      const proprio = await modelo('PROPRIO');
+      const entrada = (codigo: string, extra: Record<string, unknown> = {}) =>
+        esquemaModeloDocumento.parse({
+          codigo: `${P}-${codigo}`,
+          titulo: `Termo ${codigo}`,
+          conteudo: '<p>Eu, {paciente}, no leito {leito}.</p>',
+          ...extra,
+        });
+      // Sem a plataforma: o modelo comum é recusado.
+      expect(
+        await recusada(
+          docs.salvarModelo(contextoAdt(M()), entrada('COMUM', { todosEstabelecimentos: true })),
+        ),
+      ).toBe('409:modelo-comum');
+      const comum = await docs.salvarModelo(
+        contextoAdt(M()),
+        entrada('COMUM', { todosEstabelecimentos: true }),
+        true,
+      );
+      expect(
+        await lerAdt<{ e: number | null }>(
+          M(),
+          'SELECT estabelecimento_id AS e FROM modelo_documento_internacao WHERE id = ?',
+          [comum.id],
+        ),
+      ).toEqual({ e: null });
+      // O outro estabelecimento vê o comum, não vê o deste, não altera o deste nem liga regra a ele.
+      const vistos = (await docs.listar(outro)).modelos.map((x) => x.id);
+      expect([vistos.includes(comum.id), vistos.includes(proprio.id)]).toEqual([true, false]);
+      expect(
+        await recusada(
+          docs.salvarModelo(outro, entrada('PROPRIO', { id: proprio.id, versao: 1, titulo: 'Tomado' })),
+        ),
+      ).toBe('409:nao-encontrado');
+      expect(
+        await recusada(docs.salvarRegra(outro, esquemaRegraDocumento.parse({ modelo: proprio.id }))),
+      ).toBe('409:modelo-inexistente');
+      // Alterar o comum: só a plataforma, e ele não vira de um estabelecimento só.
+      expect(
+        await recusada(
+          docs.salvarModelo(
+            contextoAdt(M()),
+            entrada('COMUM', { id: comum.id, versao: 1, todosEstabelecimentos: true }),
+          ),
+        ),
+      ).toBe('409:modelo-comum');
+      expect(
+        await recusada(
+          docs.salvarModelo(contextoAdt(M()), entrada('COMUM', { id: comum.id, versao: 1 }), true),
+        ),
+      ).toBe('409:troca-de-dono');
+      expect(
+        await recusada(
+          docs.salvarModelo(
+            contextoAdt(M()),
+            entrada('PROPRIO', { id: proprio.id, versao: 1, todosEstabelecimentos: true }),
+            true,
+          ),
+        ),
+      ).toBe('409:troca-de-dono');
+      // Marcador fora da lista fechada: recusado na hora.
+      expect(
+        await recusada(docs.salvarModelo(contextoAdt(M()), entrada('MARCA', { conteudo: '{senha}' }))),
+      ).toBe('400:entrada-invalida');
+      // O comum segue visível e com o mesmo dono para o outro estabelecimento, que liga a regra dele ao comum.
+      const regraOutro = await docs.salvarRegra(outro, esquemaRegraDocumento.parse({ modelo: comum.id }));
+      expect((await docs.listar(outro)).regras.map((x) => x.id)).toContain(regraOutro.id);
+      expect((await docs.listar(contextoAdt(M()))).regras.map((x) => x.id)).not.toContain(regraOutro.id);
+    }, 120_000);
+
+    it('regra pela modalidade; momento e cópias do modelo; sob demanda e alta na ficha de impressos', async () => {
+      const mod = await modelo('MODAL');
+      const geral = await regra(mod.id, { ordem: 5 });
+      const pelaModalidade = await regra(mod.id, { modalidade: M().modalidade, copias: 4, ordem: 5 });
+      expect(
+        (await docs.documentos(contextoAdt(M()), internacao, 'admissao'))?.find((d) => d.modelo === mod.id)
+          ?.regra,
+      ).toBe(pelaModalidade.id);
+      expect(geral.id).toBeLessThan(pelaModalidade.id);
+
+      // Regra sem momento e sem cópias: herda as do modelo (alta, 2 cópias).
+      const deAlta = await modelo('ALTA', { momento: 'alta', copias: 2 });
+      const r = await regra(deAlta.id, { obrigatorio: true });
+      expect(
+        await lerAdt<{ momento: string; copias: number }>(
+          M(),
+          'SELECT momento, copias FROM regra_documento_internacao WHERE id = ?',
+          [r.id],
+        ),
+      ).toMatchObject({ momento: 'alta', copias: 2 });
+      const sob = await modelo('SOB', {
+        momento: 'sob_demanda',
+        copias: 3,
+        conteudo: '<p>Termo de {paciente}</p>',
+      });
+
+      const alta = await adt.fichas(contextoAdt(M()), internacao, 'alta');
+      expect(alta.filter((f) => f.modelo === deAlta.id).map((f) => [f.copias, f.obrigatorio])).toEqual([
+        [2, true],
+      ]);
+      expect(alta.find((f) => f.modelo === sob.id)).toMatchObject({
+        copias: 3,
+        sobDemanda: true,
+        selecionado: false,
+      });
+      const admissao = await adt.fichas(contextoAdt(M()), internacao, 'admissao');
+      expect(admissao.some((f) => f.modelo === deAlta.id)).toBe(false);
+      expect(admissao.find((f) => f.modelo === sob.id)?.texto).toBe('Termo de {paciente}');
     }, 120_000);
   },
 );

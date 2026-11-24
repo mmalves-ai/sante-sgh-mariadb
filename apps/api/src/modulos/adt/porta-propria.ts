@@ -44,6 +44,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import type { MomentoDocumentoInternacao } from '@sgh/dominio-internacao';
 import { z } from 'zod';
 import type { ProfissionalDaSessao } from '../atendimento/porta.js';
 import type { DestinoPorta, LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
@@ -1391,6 +1392,7 @@ export class PortaAdtPropria implements PortaAdt {
   async fichas(
     c: ContextoAdt,
     reg: number,
+    momento: MomentoDocumentoInternacao = 'admissao',
   ): Promise<
     {
       modelo: number;
@@ -1399,13 +1401,11 @@ export class PortaAdtPropria implements PortaAdt {
       copias: number;
       texto?: string;
       obrigatorio?: boolean;
+      selecionado?: boolean;
+      sobDemanda?: boolean;
     }[]
   > {
-    const docs = await new PortaDocumentosInternacao(this.nucleo, this.executor).documentos(
-      c,
-      reg,
-      'admissao',
-    );
+    const docs = await new PortaDocumentosInternacao(this.nucleo, this.executor).documentos(c, reg, momento);
     return (docs ?? []).map((d) => ({
       modelo: d.modelo,
       grafica: true,
@@ -1413,6 +1413,8 @@ export class PortaAdtPropria implements PortaAdt {
       copias: d.copias,
       texto: d.texto,
       obrigatorio: d.obrigatorio,
+      selecionado: d.selecionado,
+      sobDemanda: d.sobDemanda,
     }));
   }
 

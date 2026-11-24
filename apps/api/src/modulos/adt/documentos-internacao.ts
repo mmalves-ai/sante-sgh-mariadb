@@ -2,12 +2,18 @@
 // especialidade e modalidade, sobre o banco do cliente. Os modelos (`modelo_documento_internacao`, do estabelecimento ou
 // de todos) e as regras (`regra_documento_internacao`, do estabelecimento) são mantidos aqui; a escolha é a do domínio
 // (`documentosDaInternacao`). Nada se apaga: o modelo e a regra saem de uso por `ativo = FALSE`, com a versão conferida.
-// Cada gravação é uma operação do executor, com a linha da trilha na mesma transação.
+// Cada gravação é uma operação do executor, com a linha da trilha na mesma transação. O modelo comum a todos os
+// estabelecimentos (estabelecimento nulo) só é incluído ou alterado pela administração da plataforma, e o dono do modelo
+// não muda numa alteração (o estabelecimento não toma o modelo dos outros nem o comum vira de um só). O momento e as
+// cópias do modelo são o padrão da regra nova; o modelo `sob_demanda` é oferecido na emissão sem regra.
 import { randomUUID } from 'node:crypto';
 import {
   documentosDaInternacao,
   idadeEm,
+  modelosSobDemanda,
+  momentoPadraoDaRegra,
   MOMENTOS_DOCUMENTO_INTERNACAO,
+  MOMENTOS_MODELO_DOCUMENTO,
   type DocumentoDaInternacao,
   type ModeloDocumentoInternacao,
   type MomentoDocumentoInternacao,
@@ -37,7 +43,8 @@ export const esquemaModeloDocumento = z.object({
   codigo: z.string().trim().min(1).max(30),
   titulo: z.string().trim().min(1).max(150),
   conteudo: z.string().trim().min(1).max(60000),
-  momento: z.enum(['admissao', 'alta', 'transferencia', 'sob_demanda']).default('admissao'),
+  /** Padrão da regra nova deste modelo; `sob_demanda`: sai quando escolhido na emissão (CHECK do banco). */
+  momento: z.enum(MOMENTOS_MODELO_DOCUMENTO).default('admissao'),
   copias: z.number().int().min(1).max(20).default(1),
   especialidade: opcional,
   idadeMinima: z.number().int().min(0).max(150).nullable().default(null),
@@ -52,13 +59,15 @@ export const esquemaRegraDocumento = z.object({
   id: id.optional(),
   versao: z.number().int().positive().optional(),
   modelo: id,
-  momento: z.enum(MOMENTOS_DOCUMENTO_INTERNACAO).default('admissao'),
+  /** Ausente: o momento do modelo (sob demanda: admissão). */
+  momento: z.enum(MOMENTOS_DOCUMENTO_INTERNACAO).optional(),
   convenio: opcional,
   especialidade: opcional,
   modalidade: opcional,
   obrigatorio: z.boolean().default(false),
   selecionadoPorPadrao: z.boolean().default(true),
-  copias: z.number().int().min(1).max(20).default(1),
+  /** Ausente: as cópias do modelo. */
+  copias: z.number().int().min(1).max(20).optional(),
   ordem: z.number().int().min(0).max(999).default(0),
   ativo: z.boolean().default(true),
 });
@@ -77,6 +86,7 @@ export interface RegraDocumentoLinha extends RegraDocumentoInternacao {
 }
 export interface DocumentoParaEmitir extends DocumentoDaInternacao {
   readonly texto: string;
+  readonly sobDemanda: boolean;
 }
 
 const n = (v: unknown) => Number(v);
@@ -179,7 +189,7 @@ export class PortaDocumentosInternacao {
     }));
   }
 
-  /** Modelos e regras do estabelecimento da sessão (a tela de configuração). */
+  /** Modelos (do estabelecimento e os comuns) e regras do estabelecimento da sessão (a tela de configuração). */
   listar(c: ContextoAdt): Promise<{
     modelos: ModeloDocumentoLinha[];
     regras: RegraDocumentoLinha[];
@@ -214,19 +224,20 @@ export class PortaDocumentosInternacao {
       );
       if (!i) return null;
       const modelos = await this.modelosDe(l, est);
-      const docs = documentosDaInternacao(
-        momento,
-        {
-          convenio: n(i['fonte_pagadora_id']),
-          especialidade: n(i['especialidade_medica_id']),
-          modalidade: n(i['modalidade_internacao_id']),
-          idade: idadeEm((i['data_nascimento'] as Date | null) ?? null, i['data_hora_entrada'] as Date),
-        },
-        modelos,
-        await this.regrasDe(l, est),
-      );
+      const internacao = {
+        convenio: n(i['fonte_pagadora_id']),
+        especialidade: n(i['especialidade_medica_id']),
+        modalidade: n(i['modalidade_internacao_id']),
+        idade: idadeEm((i['data_nascimento'] as Date | null) ?? null, i['data_hora_entrada'] as Date),
+      };
+      const pelaRegra = documentosDaInternacao(momento, internacao, modelos, await this.regrasDe(l, est));
+      const docs = [...pelaRegra, ...modelosSobDemanda(internacao, modelos, pelaRegra)];
       const conteudo = new Map(modelos.map((m) => [m.id, m.conteudo]));
-      return docs.map((d) => ({ ...d, texto: textoDoModelo(conteudo.get(d.modelo) ?? '') }));
+      return docs.map((d) => ({
+        ...d,
+        sobDemanda: d.sobDemanda === true,
+        texto: textoDoModelo(conteudo.get(d.modelo) ?? ''),
+      }));
     });
   }
 
@@ -258,8 +269,11 @@ export class PortaDocumentosInternacao {
     return r.resultado as T & { id: number };
   }
 
-  /** Inclui ou altera o modelo (a alteração confere a versão lida). */
-  salvarModelo(c: ContextoAdt, e: EntradaModeloDocumento) {
+  /**
+   * Inclui ou altera o modelo (a alteração confere a versão lida). `modeloComum`: a sessão é da administração da
+   * plataforma, a única que inclui ou altera o modelo comum a todos os estabelecimentos.
+   */
+  salvarModelo(c: ContextoAdt, e: EntradaModeloDocumento, modeloComum = false) {
     const p = validarModeloDocumento({
       codigo: e.codigo,
       titulo: e.titulo,
@@ -288,6 +302,11 @@ export class PortaDocumentosInternacao {
           ativo: e.ativo,
         };
         const dono = e.todosEstabelecimentos ? null : est;
+        if (dono === null && !modeloComum)
+          throw recusa(
+            'modelo-comum',
+            'O modelo comum a todos os estabelecimentos só é incluído ou alterado pela administração da plataforma: crie um modelo deste estabelecimento.',
+          );
         const igual = await tx.uma<{ id: number }>(
           'SELECT id FROM modelo_documento_internacao WHERE codigo = ? AND estabelecimento_id <=> ? AND id <> ?',
           [e.codigo, dono, e.id ?? 0],
@@ -295,11 +314,19 @@ export class PortaDocumentosInternacao {
         if (igual) throw recusa('codigo-repetido', 'Já existe um modelo com este código.');
         if (e.id === undefined)
           return { id: await tx.incluir('modelo_documento_internacao', valores), versao: 1 };
-        const atual = await tx.uma<{ id: number }>(
-          'SELECT id FROM modelo_documento_internacao WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
+        const atual = await tx.uma<{ estabelecimento_id: number | null }>(
+          'SELECT estabelecimento_id FROM modelo_documento_internacao WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
           [e.id, est],
         );
         if (!atual) throw recusa('nao-encontrado', 'O modelo não existe mais.');
+        const donoAtual = atual.estabelecimento_id === null ? null : Number(atual.estabelecimento_id);
+        // O dono do modelo não muda numa alteração: nem o comum vira de um estabelecimento (as regras dos outros
+        // deixariam de achá-lo), nem o do estabelecimento vira comum por fora da administração.
+        if (donoAtual !== dono)
+          throw recusa(
+            'troca-de-dono',
+            'Um modelo não troca de estabelecimento: crie um modelo novo para o outro alcance.',
+          );
         const versao = await tx.alterar('modelo_documento_internacao', e.id, e.versao ?? 0, valores);
         return { id: e.id, versao };
       },
@@ -308,26 +335,28 @@ export class PortaDocumentosInternacao {
 
   /** Inclui ou altera a regra; a mesma combinação já existente é recusada (sem duplicar o documento). */
   salvarRegra(c: ContextoAdt, e: EntradaRegraDocumento) {
-    const p = validarRegraDocumento({ momento: e.momento, copias: e.copias });
+    const p = validarRegraDocumento({ momento: e.momento ?? 'admissao', copias: e.copias ?? 1 });
     if (p.length) invalida(p);
     return this.gravar(
       c,
       'internacao.documento.salvarRegra',
       'regra_documento_internacao',
       async (tx, est) => {
-        const modelo = await tx.uma<{ ativo: number }>(
-          'SELECT ativo FROM modelo_documento_internacao WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
+        const modelo = await tx.uma<{ ativo: number; momento_impressao: string; quantidade_copias: number }>(
+          'SELECT ativo, momento_impressao, quantidade_copias FROM modelo_documento_internacao WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
           [e.modelo, est],
         );
         if (!modelo)
           throw recusa('modelo-inexistente', 'Escolha um modelo de documento deste estabelecimento.');
         if (!sim(modelo.ativo) && e.ativo)
           throw recusa('modelo-inativo', 'O modelo está fora de uso: reative-o antes.');
+        const momento = e.momento ?? momentoPadraoDaRegra(modelo.momento_impressao);
+        const copias = e.copias ?? Number(modelo.quantidade_copias);
         const repetida = await tx.uma<{ id: number }>(
           `SELECT id FROM regra_documento_internacao
           WHERE estabelecimento_id = ? AND modelo_documento_internacao_id = ? AND momento = ?
             AND fonte_pagadora_id <=> ? AND especialidade_medica_id <=> ? AND modalidade_internacao_id <=> ? AND id <> ?`,
-          [est, e.modelo, e.momento, e.convenio, e.especialidade, e.modalidade, e.id ?? 0],
+          [est, e.modelo, momento, e.convenio, e.especialidade, e.modalidade, e.id ?? 0],
         );
         if (repetida)
           throw recusa(
@@ -337,13 +366,13 @@ export class PortaDocumentosInternacao {
         const valores = {
           estabelecimento_id: est,
           modelo_documento_internacao_id: e.modelo,
-          momento: e.momento,
+          momento,
           fonte_pagadora_id: e.convenio,
           especialidade_medica_id: e.especialidade,
           modalidade_internacao_id: e.modalidade,
           obrigatorio: e.obrigatorio,
           selecionado_por_padrao: e.selecionadoPorPadrao,
-          copias: e.copias,
+          copias,
           ordem: e.ordem,
           ativo: e.ativo,
         };

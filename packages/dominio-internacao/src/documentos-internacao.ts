@@ -7,6 +7,13 @@
 
 export const MOMENTOS_DOCUMENTO_INTERNACAO = ['admissao', 'prorrogacao', 'transferencia', 'alta'] as const;
 export type MomentoDocumentoInternacao = (typeof MOMENTOS_DOCUMENTO_INTERNACAO)[number];
+/**
+ * O momento do MODELO (CHECK do banco): é o valor padrão da regra nova desse modelo. `sob_demanda` quer dizer que o
+ * modelo não tem momento próprio: sai quando alguém o escolhe na tela de impressos (ativo, da especialidade e da faixa
+ * de idade da internação), além dos que as regras mandam.
+ */
+export const MOMENTOS_MODELO_DOCUMENTO = ['admissao', 'alta', 'transferencia', 'sob_demanda'] as const;
+export type MomentoModeloDocumento = (typeof MOMENTOS_MODELO_DOCUMENTO)[number];
 
 export interface ModeloDocumentoInternacao {
   readonly id: number;
@@ -16,6 +23,10 @@ export interface ModeloDocumentoInternacao {
   readonly especialidade: number | null;
   readonly idadeMinima: number | null;
   readonly idadeMaxima: number | null;
+  /** O momento do modelo (padrão da regra; `sob_demanda`: escolhido na hora). Ausente: sem momento próprio. */
+  readonly momento?: string;
+  /** As cópias do modelo (padrão da regra e do documento sob demanda). */
+  readonly copias?: number;
 }
 
 export interface RegraDocumentoInternacao {
@@ -48,6 +59,8 @@ export interface DocumentoDaInternacao {
   readonly copias: number;
   readonly obrigatorio: boolean;
   readonly selecionado: boolean;
+  /** Verdadeiro: não veio de regra, é um modelo sob demanda (regra 0, desmarcado). */
+  readonly sobDemanda?: boolean;
 }
 
 const casa = (filtro: number | null, valor: number) => filtro === null || filtro === valor;
@@ -58,7 +71,7 @@ const especificidade = (r: RegraDocumentoInternacao) =>
 export function modeloServe(m: ModeloDocumentoInternacao, i: InternacaoParaDocumentos): boolean {
   if (!m.ativo || !casa(m.especialidade, i.especialidade)) return false;
   if (m.idadeMinima === null && m.idadeMaxima === null) return true;
-  // Faixa de idade sem nascimento conhecido: não presume, o modelo não sai sozinho (pode ser emitido sob demanda).
+  // Faixa de idade sem nascimento conhecido: não presume, o modelo não sai.
   if (i.idade === null) return false;
   return (
     (m.idadeMinima === null || i.idade >= m.idadeMinima) &&
@@ -104,6 +117,86 @@ export function documentosDaInternacao(
     }));
 }
 
+/**
+ * Os modelos sob demanda que servem à internação e que nenhuma regra já mandou: a tela de impressos oferece,
+ * desmarcados, com as cópias do modelo.
+ */
+export function modelosSobDemanda(
+  internacao: InternacaoParaDocumentos,
+  modelos: readonly ModeloDocumentoInternacao[],
+  jaEscolhidos: readonly DocumentoDaInternacao[],
+): DocumentoDaInternacao[] {
+  const ja = new Set(jaEscolhidos.map((d) => d.modelo));
+  return modelos
+    .filter((m) => m.momento === 'sob_demanda' && !ja.has(m.id) && modeloServe(m, internacao))
+    .sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR') || a.id - b.id)
+    .map((m) => ({
+      modelo: m.id,
+      titulo: m.titulo,
+      regra: 0,
+      copias: m.copias ?? 1,
+      obrigatorio: false,
+      selecionado: false,
+      sobDemanda: true,
+    }));
+}
+
+/** O momento padrão da regra nova pelo momento do modelo (sob demanda: admissão). */
+export function momentoPadraoDaRegra(momentoModelo: string | null | undefined): MomentoDocumentoInternacao {
+  return (MOMENTOS_DOCUMENTO_INTERNACAO as readonly string[]).includes(momentoModelo ?? '')
+    ? (momentoModelo as MomentoDocumentoInternacao)
+    : 'admissao';
+}
+
+/** Os obrigatórios da lista que ainda não foram emitidos (a tela avisa antes de sair). */
+export function obrigatoriosPendentes(
+  documentos: readonly DocumentoDaInternacao[],
+  emitidos: ReadonlySet<number>,
+): DocumentoDaInternacao[] {
+  return documentos.filter((d) => d.obrigatorio && !emitidos.has(d.modelo));
+}
+
+/**
+ * Os campos variáveis do modelo, escritos entre chaves no texto (`{paciente}`). Lista fechada: o modelo com marcador
+ * fora dela é recusado na hora, e na emissão cada marcador recebe o dado da internação.
+ */
+export const MARCADORES_DOCUMENTO_INTERNACAO = [
+  'paciente',
+  'nome_social',
+  'prontuario',
+  'nascimento',
+  'idade',
+  'convenio',
+  'leito',
+  'medico',
+  'internacao',
+  'data_entrada',
+  'hora_entrada',
+  'data_emissao',
+] as const;
+export type MarcadorDocumento = (typeof MARCADORES_DOCUMENTO_INTERNACAO)[number];
+const MARCADOR = /\{([a-z_]+)\}/g;
+
+/** Os marcadores do texto que não estão na lista fechada (sem repetição, na ordem em que aparecem). */
+export function marcadoresDesconhecidos(texto: string): string[] {
+  const fora = new Set<string>();
+  for (const [, nome] of texto.matchAll(MARCADOR))
+    if (!(MARCADORES_DOCUMENTO_INTERNACAO as readonly string[]).includes(nome!)) fora.add(nome!);
+  return [...fora];
+}
+
+/** Preenche os marcadores com os dados da internação; o dado ausente sai como "não informado". */
+export function preencherMarcadores(
+  texto: string,
+  valores: Partial<Record<MarcadorDocumento, string | null>>,
+): string {
+  return texto.replace(MARCADOR, (todo, nome: string) => {
+    if (!(MARCADORES_DOCUMENTO_INTERNACAO as readonly string[]).includes(nome)) return todo;
+    const v = valores[nome as MarcadorDocumento];
+    return v === null || v === undefined || v === '' ? 'não informado' : v;
+  });
+}
+
 export interface ProblemaDocumento {
   readonly campo: string;
   readonly mensagem: string;
@@ -123,6 +216,12 @@ export function validarModeloDocumento(m: {
   if (m.codigo.length > 30) p.push({ campo: 'codigo', mensagem: 'O código tem no máximo 30 caracteres.' });
   if (!m.titulo.trim()) p.push({ campo: 'titulo', mensagem: 'Informe o título do documento.' });
   if (!m.conteudo?.trim()) p.push({ campo: 'conteudo', mensagem: 'Escreva o texto do documento.' });
+  const fora = marcadoresDesconhecidos(m.conteudo ?? '');
+  if (fora.length)
+    p.push({
+      campo: 'conteudo',
+      mensagem: `Campo desconhecido no texto: ${fora.map((f) => `{${f}}`).join(', ')}. Use: ${MARCADORES_DOCUMENTO_INTERNACAO.map((f) => `{${f}}`).join(', ')}.`,
+    });
   if (m.idadeMinima !== null && m.idadeMaxima !== null && m.idadeMaxima < m.idadeMinima)
     p.push({ campo: 'idadeMaxima', mensagem: 'A idade máxima não pode ser menor que a mínima.' });
   if (!Number.isInteger(m.copias) || m.copias < 1 || m.copias > 20)

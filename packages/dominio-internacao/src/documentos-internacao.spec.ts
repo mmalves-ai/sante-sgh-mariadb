@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   documentosDaInternacao,
+  marcadoresDesconhecidos,
   type ModeloDocumentoInternacao,
   modeloServe,
+  modelosSobDemanda,
+  momentoPadraoDaRegra,
+  obrigatoriosPendentes,
+  preencherMarcadores,
   type RegraDocumentoInternacao,
   validarModeloDocumento,
   validarRegraDocumento,
@@ -123,5 +128,63 @@ describe('documentos da internação pela regra de convênio, especialidade e mo
       'copias',
     ]);
     expect(validarRegraDocumento({ momento: 'alta', copias: 2 })).toEqual([]);
+  });
+});
+
+describe('sob demanda, momento padrão, obrigatórios e marcadores', () => {
+  const int = { convenio: 1, especialidade: 2, modalidade: 3, idade: 40 };
+  it('oferece o modelo sob demanda que serve e que nenhuma regra mandou, desmarcado e com as cópias do modelo', () => {
+    const modelos = [
+      modelo(1, { momento: 'sob_demanda', copias: 2, titulo: 'B' }),
+      modelo(2, { momento: 'sob_demanda', titulo: 'A', especialidade: 9 }),
+      modelo(3, { momento: 'sob_demanda', titulo: 'C' }),
+      modelo(4, { momento: 'admissao', titulo: 'D' }),
+    ];
+    const ja = documentosDaInternacao('admissao', int, modelos, [regra(10, 3)]);
+    expect(modelosSobDemanda(int, modelos, ja)).toEqual([
+      {
+        modelo: 1,
+        titulo: 'B',
+        regra: 0,
+        copias: 2,
+        obrigatorio: false,
+        selecionado: false,
+        sobDemanda: true,
+      },
+    ]);
+  });
+  it('o momento do modelo vira o padrão da regra; sob demanda cai na admissão', () => {
+    expect(momentoPadraoDaRegra('alta')).toBe('alta');
+    expect(momentoPadraoDaRegra('sob_demanda')).toBe('admissao');
+    expect(momentoPadraoDaRegra(null)).toBe('admissao');
+  });
+  it('lista o obrigatório ainda não emitido', () => {
+    const docs = documentosDaInternacao(
+      'admissao',
+      int,
+      [modelo(1), modelo(2)],
+      [regra(1, 1, { obrigatorio: true }), regra(2, 2)],
+    );
+    expect(obrigatoriosPendentes(docs, new Set()).map((d) => d.modelo)).toEqual([1]);
+    expect(obrigatoriosPendentes(docs, new Set([1]))).toEqual([]);
+  });
+  it('recusa marcador fora da lista e preenche os conhecidos (ausente: não informado)', () => {
+    expect(marcadoresDesconhecidos('Eu, {paciente}, {cpf} e {cpf}')).toEqual(['cpf']);
+    expect(
+      validarModeloDocumento({
+        codigo: 'T',
+        titulo: 'T',
+        conteudo: '{senha}',
+        idadeMinima: null,
+        idadeMaxima: null,
+        copias: 1,
+      }).map((p) => p.campo),
+    ).toEqual(['conteudo']);
+    expect(
+      preencherMarcadores('{paciente} no leito {leito}, {medico}. {outro}', {
+        paciente: 'P',
+        leito: 'B1-Q1-01',
+      }),
+    ).toBe('P no leito B1-Q1-01, não informado. {outro}');
   });
 });

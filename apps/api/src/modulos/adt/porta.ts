@@ -7,6 +7,7 @@
 //     memória, sobre o painel sintético do M16, com as mesmas validações (Zod dos contratos) e as mesmas recusas das
 //     receitas; nada vai à cópia;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+import type { MomentoDocumentoInternacao } from '@sgh/dominio-internacao';
 import type {
   ApoioInternacaoTela,
   ChaveLeito,
@@ -286,10 +287,14 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
     c: ContextoAdt,
     q: { paciente?: number; reg?: number },
   ): Promise<{ paciente: number; sexo: string | null; nascimento: string | null } | null>;
-  /** As fichas a imprimir da internação pela configuração comum (modelo e seleções por convênio e especialidade). */
+  /**
+   * Os documentos a imprimir da internação no momento (admissão, prorrogação, transferência ou alta) pela regra de
+   * convênio, especialidade e modalidade, mais os modelos sob demanda (F3.4, 04-INT linha 69).
+   */
   fichas(
     c: ContextoAdt,
     reg: number,
+    momento?: MomentoDocumentoInternacao,
   ): Promise<
     {
       modelo: number;
@@ -298,6 +303,8 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
       copias: number;
       texto?: string;
       obrigatorio?: boolean;
+      selecionado?: boolean;
+      sobDemanda?: boolean;
     }[]
   >;
   profissional(c: ContextoAdt, login: string): Promise<ProfissionalDaSessao | null>;

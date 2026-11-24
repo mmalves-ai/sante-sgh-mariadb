@@ -3,11 +3,21 @@
 // `/internacao/documentos`. Numa tela só: os modelos (texto, faixa de idade e especialidade), as regras de cada modelo
 // (o que fica vazio vale para todos; a mais específica vence) e a prévia de uma internação, que mostra na hora quais
 // documentos sairão. A validação aparece ao lado do campo antes de gravar; nada se apaga: o modelo e a regra saem de
-// uso e podem voltar.
+// uso e podem voltar. A validação é a do domínio (a mesma da API). Sem config.parametro.editar a tela fica só para
+// leitura; o modelo comum a todos os estabelecimentos só é mexido pela administração da plataforma (os outros o copiam).
+// A prévia abre com a internação já escolhida quando vem da tela de impressos (`?reg=`).
+import {
+  MARCADORES_DOCUMENTO_INTERNACAO,
+  MOMENTOS_DOCUMENTO_INTERNACAO,
+  MOMENTOS_MODELO_DOCUMENTO,
+  validarModeloDocumento,
+  validarRegraDocumento,
+} from '@sgh/dominio-internacao';
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { lerApoioInternacao, novaChave } from '../api-adt.js';
 import {
   lerConfiguracaoDocumentos,
@@ -23,7 +33,10 @@ const { t } = useI18n();
 const fila = useQueryClient();
 const config = useQuery({ queryKey: ['adt', 'documentos'], queryFn: lerConfiguracaoDocumentos });
 const apoio = useQuery({ queryKey: ['adt', 'apoio', 'internacoes'], queryFn: () => lerApoioInternacao() });
-const MOMENTOS = ['admissao', 'prorrogacao', 'transferencia', 'alta'] as const;
+const MOMENTOS = MOMENTOS_DOCUMENTO_INTERNACAO;
+const MARCADORES = MARCADORES_DOCUMENTO_INTERNACAO.map((m) => `{${m}}`).join(' ');
+const podeEditar = computed(() => config.data.value?.podeEditar === true);
+const podeComum = computed(() => config.data.value?.podeModeloComum === true);
 const erro = ref<unknown>(null);
 const aviso = ref<string | null>(null);
 
@@ -33,6 +46,7 @@ const vazioModelo = () => ({
   codigo: '',
   titulo: '',
   conteudo: '',
+  momento: 'admissao' as string,
   especialidade: null as number | null,
   idadeMinima: null as number | null,
   idadeMaxima: null as number | null,
@@ -41,16 +55,12 @@ const vazioModelo = () => ({
   ativo: true,
 });
 const modelo = reactive(vazioModelo());
-const problemasModelo = computed(() => {
+const porCampo = (lista: readonly { campo: string; mensagem: string }[]) => {
   const p: Record<string, string> = {};
-  if (!modelo.codigo.trim()) p['codigo'] = t('adt.documentos.obrigatorio');
-  if (!modelo.titulo.trim()) p['titulo'] = t('adt.documentos.obrigatorio');
-  if (!modelo.conteudo.trim()) p['conteudo'] = t('adt.documentos.obrigatorio');
-  if (modelo.idadeMinima !== null && modelo.idadeMaxima !== null && modelo.idadeMaxima < modelo.idadeMinima)
-    p['idadeMaxima'] = t('adt.documentos.idadeInvertida');
-  if (modelo.copias < 1 || modelo.copias > 20) p['copias'] = t('adt.documentos.copiasFaixa');
+  for (const x of lista) p[x.campo] = p[x.campo] ? `${p[x.campo]} ${x.mensagem}` : x.mensagem;
   return p;
-});
+};
+const problemasModelo = computed(() => porCampo(validarModeloDocumento(modelo)));
 
 const vazioRegra = () => ({
   id: undefined as number | undefined,
@@ -68,11 +78,20 @@ const vazioRegra = () => ({
 });
 const regra = reactive(vazioRegra());
 const problemasRegra = computed(() => {
-  const p: Record<string, string> = {};
+  const p = porCampo(validarRegraDocumento(regra));
   if (!regra.modelo) p['modelo'] = t('adt.documentos.obrigatorio');
-  if (regra.copias < 1 || regra.copias > 20) p['copias'] = t('adt.documentos.copiasFaixa');
   return p;
 });
+// Regra nova: o momento e as cópias do modelo escolhido vêm preenchidos (o padrão do modelo).
+watch(
+  () => regra.modelo,
+  (id) => {
+    const m = config.data.value?.modelos.find((x) => x.id === id);
+    if (!m || regra.id !== undefined) return;
+    regra.momento = (MOMENTOS as readonly string[]).includes(m.momento) ? m.momento : 'admissao';
+    regra.copias = m.copias;
+  },
+);
 
 const nome = (lista: { codigo: number; nome: string }[] | undefined, id: number | null) =>
   id === null ? t('adt.documentos.todos') : (lista?.find((x) => x.codigo === id)?.nome ?? String(id));
@@ -108,6 +127,7 @@ const editarModelo = (m: ModeloDoc) =>
     codigo: m.codigo,
     titulo: m.titulo,
     conteudo: m.conteudo,
+    momento: m.momento,
     especialidade: m.especialidade,
     idadeMinima: m.idadeMinima,
     idadeMaxima: m.idadeMaxima,
@@ -115,6 +135,11 @@ const editarModelo = (m: ModeloDoc) =>
     todosEstabelecimentos: m.todosEstabelecimentos,
     ativo: m.ativo,
   });
+// O modelo comum, para quem não é da plataforma: vira a base de um modelo deste estabelecimento.
+const copiarModelo = (m: ModeloDoc) => {
+  editarModelo(m);
+  Object.assign(modelo, { id: undefined, versao: undefined, codigo: '', todosEstabelecimentos: false });
+};
 const editarRegra = (r: RegraDoc) => Object.assign(regra, { ...r });
 const alternarRegra = (r: RegraDoc) =>
   gravar(
@@ -122,7 +147,9 @@ const alternarRegra = (r: RegraDoc) =>
     () => undefined,
   );
 
-const reg = ref<number | null>(null);
+const rota = useRoute();
+const regDaRota = Number(rota.query['reg']);
+const reg = ref<number | null>(Number.isInteger(regDaRota) && regDaRota > 0 ? regDaRota : null);
 const momentoPrevia = ref('admissao');
 const previa = useQuery({
   queryKey: computed(() => ['adt', 'documentos', 'previa', reg.value, momentoPrevia.value]),
@@ -146,6 +173,7 @@ const numero = (v: string) => (v === '' ? null : Number(v));
           id="doc-reg"
           type="number"
           min="1"
+          :value="reg ?? ''"
           data-testid="doc-reg"
           @change="reg = numero(($event.target as HTMLInputElement).value)"
         />
@@ -159,6 +187,7 @@ const numero = (v: string) => (v === '' ? null : Number(v));
           <li v-for="d in previa.data.value.documentos" :key="d.modelo">
             {{ d.titulo }} ({{ t('adt.impressos.copias') }}: {{ d.copias }})
             <strong v-if="d.obrigatorio">{{ t('adt.documentos.obrigatorioDoc') }}</strong>
+            <em v-if="d.sobDemanda">{{ t('adt.documentos.momentos.sob_demanda') }}</em>
           </li>
         </ul>
       </section>
@@ -171,10 +200,28 @@ const numero = (v: string) => (v === '' ? null : Number(v));
               {{ m.codigo }} · {{ m.titulo }}
               <template v-if="!m.ativo">({{ t('adt.documentos.foraDeUso') }})</template>
             </span>
-            <SanteBotao variante="texto" :rotulo="t('adt.documentos.editar')" @acionar="editarModelo(m)" />
+            <em v-if="m.todosEstabelecimentos">{{ t('adt.documentos.comum') }}</em>
+            <template v-if="podeEditar">
+              <SanteBotao
+                v-if="!m.todosEstabelecimentos || podeComum"
+                variante="texto"
+                :rotulo="t('adt.documentos.editar')"
+                @acionar="editarModelo(m)"
+              />
+              <SanteBotao
+                v-else
+                variante="texto"
+                :rotulo="t('adt.documentos.copiar')"
+                :data-testid="`doc-copiar-${m.id}`"
+                @acionar="copiarModelo(m)"
+              />
+            </template>
           </li>
         </ul>
-        <form class="grade-form" data-testid="doc-form-modelo" @submit.prevent="gravarModelo">
+        <p v-if="!podeEditar" class="secundario" data-testid="doc-somente-leitura">
+          {{ t('adt.documentos.somenteLeitura') }}
+        </p>
+        <form v-else class="grade-form" data-testid="doc-form-modelo" @submit.prevent="gravarModelo">
           <label for="doc-codigo">{{ t('adt.documentos.codigo') }}</label>
           <input
             id="doc-codigo"
@@ -195,6 +242,22 @@ const numero = (v: string) => (v === '' ? null : Number(v));
             v-model="modelo.conteudo"
             rows="5"
             :aria-invalid="!!problemasModelo['conteudo']"
+          />
+          <p class="secundario">{{ t('adt.documentos.marcadores') }} {{ MARCADORES }}</p>
+          <label for="doc-momento-modelo">{{ t('adt.documentos.momentoModelo') }}</label>
+          <select id="doc-momento-modelo" v-model="modelo.momento">
+            <option v-for="m in MOMENTOS_MODELO_DOCUMENTO" :key="m" :value="m">
+              {{ t(`adt.documentos.momentos.${m}`) }}
+            </option>
+          </select>
+          <label for="doc-copias-modelo">{{ t('adt.impressos.copias') }}</label>
+          <input
+            id="doc-copias-modelo"
+            v-model.number="modelo.copias"
+            type="number"
+            min="1"
+            max="20"
+            :aria-invalid="!!problemasModelo['copias']"
           />
           <label for="doc-esp-modelo">{{ t('adt.documentos.especialidade') }}</label>
           <select id="doc-esp-modelo" v-model="modelo.especialidade">
@@ -222,7 +285,7 @@ const numero = (v: string) => (v === '' ? null : Number(v));
             :aria-invalid="!!problemasModelo['idadeMaxima']"
             @input="modelo.idadeMaxima = numero(($event.target as HTMLInputElement).value)"
           />
-          <label
+          <label v-if="podeComum"
             ><input v-model="modelo.todosEstabelecimentos" type="checkbox" />
             {{ t('adt.documentos.todosEstabelecimentos') }}</label
           >
@@ -258,15 +321,21 @@ const numero = (v: string) => (v === '' ? null : Number(v));
               {{ r.copias }}
               <strong v-if="r.obrigatorio">{{ t('adt.documentos.obrigatorioDoc') }}</strong>
             </span>
-            <SanteBotao variante="texto" :rotulo="t('adt.documentos.editar')" @acionar="editarRegra(r)" />
             <SanteBotao
+              v-if="podeEditar"
+              variante="texto"
+              :rotulo="t('adt.documentos.editar')"
+              @acionar="editarRegra(r)"
+            />
+            <SanteBotao
+              v-if="podeEditar"
               variante="secundario"
               :rotulo="r.ativo ? t('adt.documentos.tirarDeUso') : t('adt.documentos.voltarAoUso')"
               @acionar="alternarRegra(r)"
             />
           </li>
         </ul>
-        <form class="grade-form" data-testid="doc-form-regra" @submit.prevent="gravarRegra">
+        <form v-if="podeEditar" class="grade-form" data-testid="doc-form-regra" @submit.prevent="gravarRegra">
           <label for="doc-regra-modelo">{{ t('adt.documentos.modelo') }}</label>
           <select
             id="doc-regra-modelo"
@@ -279,7 +348,7 @@ const numero = (v: string) => (v === '' ? null : Number(v));
             </option>
           </select>
           <label for="doc-regra-momento">{{ t('adt.documentos.momento') }}</label>
-          <select id="doc-regra-momento" v-model="regra.momento">
+          <select id="doc-regra-momento" v-model="regra.momento" :aria-invalid="!!problemasRegra['momento']">
             <option v-for="m in MOMENTOS" :key="m" :value="m">{{ t(`adt.documentos.momentos.${m}`) }}</option>
           </select>
           <label for="doc-regra-convenio">{{ t('adt.documentos.convenio') }}</label>

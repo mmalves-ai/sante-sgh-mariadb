@@ -42,7 +42,12 @@ import {
   type PreInternacoes,
   type ResultadoInternacao,
 } from '@sgh/contratos';
-import { motivoCoerente } from '@sgh/dominio-internacao';
+import {
+  type MomentoDocumentoInternacao,
+  MOMENTOS_DOCUMENTO_INTERNACAO,
+  motivoCoerente,
+  preencherMarcadores,
+} from '@sgh/dominio-internacao';
 import { enfileirarZpl, ErroZpl, zplEtiquetaProntuario, zplPulseira } from '@sgh/dominio-documento';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -553,8 +558,13 @@ export class InternacaoController {
 
   @Get(':reg/impressos')
   @Permissao('internacao.impresso.emitir')
-  async fichas(@Param('reg') reg: string, @Req() req: RequisicaoAutorizada) {
-    return { fichas: await this.porta.fichas(ctxAdt(sessaoDe(req)), idDaRota(reg)) };
+  async fichas(
+    @Param('reg') reg: string,
+    @Query('momento') momento: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const m = momentoDoImpresso(momento);
+    return { momento: m, fichas: await this.porta.fichas(ctxAdt(sessaoDe(req)), idDaRota(reg), m) };
   }
 
   @Post(':reg/impressos')
@@ -565,8 +575,10 @@ export class InternacaoController {
     @Param('reg') reg: string,
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
+    @Query('momento') momento?: string,
   ): Promise<ImpressoGerado> {
     const s = sessaoDe(req);
+    const m = momentoDoImpresso(momento);
     const e = corpo(esquemaEmitirImpressoInternacao, { ...(b as object), internacao: idDaRota(reg) });
     if ((e.impresso === 'ficha') !== (e.formato === 'pdf'))
       throw new ErroProblema(
@@ -588,8 +600,9 @@ export class InternacaoController {
         'A internação não existe mais.',
       );
     let modelo: { modelo: number; nome: string; texto?: string } | null = null;
+    let copias = e.copias;
     if (e.modelo !== undefined) {
-      const f = (await this.porta.fichas(ctxAdt(s), d.reg)).find((x) => x.modelo === e.modelo);
+      const f = (await this.porta.fichas(ctxAdt(s), d.reg, m)).find((x) => x.modelo === e.modelo);
       if (e.impresso !== 'ficha' || !f)
         throw new ErroProblema(
           'recusa-de-negocio',
@@ -599,6 +612,8 @@ export class InternacaoController {
           { codigo: 'ficha-nao-configurada' },
         );
       modelo = { modelo: f.modelo, nome: f.nome, ...(f.texto ? { texto: f.texto } : {}) };
+      // As cópias do documento são as da regra (ou do modelo sob demanda), não as digitadas.
+      copias = f.copias;
     }
     const gerado =
       e.formato === 'pdf' ? await this.pdf(s, d, modelo) : await this.zpl(s, d, e.impresso, e.copias);
@@ -614,7 +629,8 @@ export class InternacaoController {
       tabelaAlvo: 'internacao',
       idAlvo: String(d.reg),
       paciente: d.idPaciente,
-      chaveNaturalAlvo: `${e.impresso}:${e.copias}:${createHash('sha256').update(gerado.conteudo).digest('hex').slice(0, 16)}`,
+      // O modelo emitido entra na chave: a tela confere o obrigatório já emitido daquela internação.
+      chaveNaturalAlvo: `${e.impresso}${modelo ? `-${modelo.modelo}` : ''}:${m}:${copias}:${createHash('sha256').update(gerado.conteudo).digest('hex').slice(0, 16)}`,
     });
     return gerado;
   }
@@ -656,7 +672,10 @@ export class InternacaoController {
           { rotulo: 'Convênio', valor: d.convenio },
           { rotulo: 'Médico assistente', valor: d.medico || 'Não informado' },
           // O texto do modelo escolhido pela regra de convênio e especialidade (F3.4, 04-INT linha 69).
-          ...(modelo?.texto ? [{ rotulo: 'Documento', valor: modelo.texto }] : []),
+          // Os campos variáveis ({paciente}, {leito}...) recebem os dados da internação na emissão.
+          ...(modelo?.texto
+            ? [{ rotulo: 'Documento', valor: preencherMarcadores(modelo.texto, valoresDoDocumento(d)) }]
+            : []),
         ],
         autor: s.login,
       });
@@ -749,4 +768,45 @@ export class InternacaoController {
       );
     }
   }
+}
+
+/** O momento da emissão pela consulta (vazio: admissão); fora da lista: 400. */
+function momentoDoImpresso(momento: string | undefined): MomentoDocumentoInternacao {
+  const m = (momento || 'admissao') as MomentoDocumentoInternacao;
+  if (!MOMENTOS_DOCUMENTO_INTERNACAO.includes(m))
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Momento inválido',
+      'Escolha admissão, prorrogação, transferência ou alta.',
+      { campos: ['momento'] },
+    );
+  return m;
+}
+
+const dataBr = (iso: string) => iso.split('-').reverse().join('/');
+
+/** Os valores dos campos variáveis do documento, a partir dos dados do impresso da internação. */
+function valoresDoDocumento(d: DadosImpressoInternacao): Record<string, string | null> {
+  const hoje = new Date().toISOString().slice(0, 10);
+  let idade: string | null = null;
+  if (d.nascimento) {
+    const [a, mm, dd] = d.nascimento.split('-').map(Number);
+    const [ha, hm, hd] = d.entrada.split('-').map(Number);
+    idade = String(ha! - a! - (hm! < mm! || (hm === mm && hd! < dd!) ? 1 : 0));
+  }
+  return {
+    paciente: d.nome,
+    nome_social: d.nomeSocial,
+    prontuario: String(d.prontuario),
+    nascimento: d.nascimento ? dataBr(d.nascimento) : null,
+    idade,
+    convenio: d.convenio,
+    leito: d.leito,
+    medico: d.medico || null,
+    internacao: String(d.reg),
+    data_entrada: dataBr(d.entrada),
+    hora_entrada: `${d.hora.slice(0, 2)}:${d.hora.slice(2, 4)}`,
+    data_emissao: dataBr(hoje),
+  };
 }

@@ -21,6 +21,9 @@ import {
 
 export const DOCUMENTOS_INTERNACAO = Symbol('DOCUMENTOS_INTERNACAO');
 
+/** Só a sessão da administração da plataforma mexe no modelo comum a todos os estabelecimentos. */
+const modeloComum = (req: RequisicaoAutorizada) => req.sgh?.sessao.usuario.ator === 'plataforma';
+
 @Controller('documentos-internacao')
 export class DocumentosInternacaoController {
   constructor(
@@ -42,8 +45,14 @@ export class DocumentosInternacaoController {
 
   @Get()
   @Permissao('internacao.impresso.emitir')
-  listar(@Req() req: RequisicaoAutorizada) {
-    return this.p().listar(ctxAdt(sessaoDe(req)));
+  async listar(@Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    // A tela esconde a edição de quem não configura e o "todos os estabelecimentos" de quem não é da plataforma.
+    return {
+      ...(await this.p().listar(ctxAdt(s))),
+      podeEditar: s.pode('config.parametro.editar'),
+      podeModeloComum: modeloComum(req),
+    };
   }
 
   @Get('internacao/:reg')
@@ -80,7 +89,7 @@ export class DocumentosInternacaoController {
   @Permissao('config.parametro.editar')
   @AuditadoNoHandler('internacao.documento.salvarModelo pelo executor (trilha na mesma transação)')
   salvarModelo(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    return this.p().salvarModelo(ctxAdt(sessaoDe(req)), corpo(esquemaModeloDocumento, b));
+    return this.p().salvarModelo(ctxAdt(sessaoDe(req)), corpo(esquemaModeloDocumento, b), modeloComum(req));
   }
 
   @Post('regras')

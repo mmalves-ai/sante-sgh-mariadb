@@ -1,14 +1,19 @@
 <script setup lang="ts">
 // Fichas e impressos da internação (ficha do M21, seção 7): `/internacao/:reg/impressos`. A ficha de internação em PDF
 // (abre por endereço blob:) e a pulseira e a etiqueta do prontuário em ZPL na fila da impressora da estação (o mesmo
-// pedido repetido não imprime duas vezes). A configuração das fichas a imprimir fica no cadastro genérico.
+// pedido repetido não imprime duas vezes). Os documentos da internação (F3.4, 04-INT linha 69) saem pelo momento
+// (admissão, prorrogação, transferência ou alta) conforme as regras de convênio, especialidade e modalidade: os
+// marcados e os obrigatórios num só clique, cada um com as cópias da regra; os sob demanda podem ser marcados; o
+// obrigatório ainda não emitido fica em aviso.
+import { MOMENTOS_DOCUMENTO_INTERNACAO, obrigatoriosPendentes } from '@sgh/dominio-internacao';
 import { SanteBotao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { rotaDoSubitem } from '@sgh/contratos';
 import { blobDoPdf } from '../../atendimento/regras-tela.js';
-import { emitirImpresso, lerFichas, novaChave } from '../api-adt.js';
+import { emitirImpresso, novaChave } from '../api-adt.js';
+import { emitirDocumento, lerFichasDoMomento } from '../api-documentos-internacao.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
 import ResumoInternacao from '../componentes/ResumoInternacao.vue';
 import { usarInternacao } from '../usar-internacao.js';
@@ -23,10 +28,63 @@ const IMPRESSOS = [
   { codigo: 'etiqueta', formato: 'zpl' },
 ] as const;
 const copias = ref<Record<string, number>>({ ficha: 1, pulseira: 1, etiqueta: 1 });
+const momento = ref<string>('admissao');
 const fichas = useQuery({
-  queryKey: computed(() => ['adt', 'fichas', reg.value]),
-  queryFn: () => lerFichas(reg.value),
+  queryKey: computed(() => ['adt', 'fichas', reg.value, momento.value]),
+  queryFn: () => lerFichasDoMomento(reg.value, momento.value),
 });
+// Marcados: os que a regra traz marcados; o obrigatório não se desmarca.
+const marcados = ref<Set<number>>(new Set());
+const emitidos = ref<Set<number>>(new Set());
+watch(
+  () => fichas.data.value,
+  (d) => {
+    marcados.value = new Set(
+      (d?.fichas ?? []).filter((f) => f.selecionado || f.obrigatorio).map((f) => f.modelo),
+    );
+  },
+  { immediate: true },
+);
+const documentos = computed(() =>
+  (fichas.data.value?.fichas ?? []).map((f) => ({
+    modelo: f.modelo,
+    titulo: f.nome,
+    regra: 0,
+    copias: f.copias,
+    obrigatorio: f.obrigatorio === true,
+    selecionado: marcados.value.has(f.modelo),
+    sobDemanda: f.sobDemanda === true,
+  })),
+);
+const pendentes = computed(() => obrigatoriosPendentes(documentos.value, emitidos.value));
+function alternar(modelo: number, obrigatorio: boolean): void {
+  if (obrigatorio) return;
+  const s = new Set(marcados.value);
+  if (s.has(modelo)) s.delete(modelo);
+  else s.add(modelo);
+  marcados.value = s;
+}
+const emitirMarcados = () => emitirDocumentos(documentos.value.filter((x) => x.obrigatorio || x.selecionado));
+const pdfs = ref<{ nome: string; url: string; copias: number }[]>([]);
+async function emitirDocumentos(
+  lista: readonly { modelo: number; titulo: string; copias: number }[],
+): Promise<void> {
+  erro.value = null;
+  mensagem.value = null;
+  ocupado.value = true;
+  try {
+    for (const d of lista) {
+      const r = await emitirDocumento(reg.value, momento.value, d.modelo, novaChave(`doc-${d.modelo}`));
+      pdfs.value.push({ nome: d.titulo, url: URL.createObjectURL(blobDoPdf(r.conteudo)), copias: d.copias });
+      emitidos.value = new Set([...emitidos.value, d.modelo]);
+    }
+    mensagem.value = t('adt.impressos.emitidos', { n: pdfs.value.length });
+  } catch (x) {
+    erro.value = x;
+  } finally {
+    ocupado.value = false;
+  }
+}
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const pdf = ref<string | null>(null);
@@ -61,6 +119,7 @@ async function emitir(
 }
 onBeforeUnmount(() => {
   if (pdf.value) URL.revokeObjectURL(pdf.value);
+  for (const p of pdfs.value) URL.revokeObjectURL(p.url);
 });
 const configuracao = rotaDoSubitem('internacao');
 </script>
@@ -94,17 +153,53 @@ const configuracao = rotaDoSubitem('internacao');
       </ul>
       <section class="painel" aria-labelledby="imp-fichas">
         <h2 id="imp-fichas">{{ t('adt.impressos.configuradas') }}</h2>
-        <p v-if="fichas.data.value && fichas.data.value.fichas.length === 0">{{ t('adt.nenhum') }}</p>
+        <label for="imp-momento">{{ t('adt.impressos.momento') }}</label>
+        <select id="imp-momento" v-model="momento" data-testid="imp-momento">
+          <option v-for="m in MOMENTOS_DOCUMENTO_INTERNACAO" :key="m" :value="m">
+            {{ t(`adt.documentos.momentos.${m}`) }}
+          </option>
+        </select>
+        <ErroAdt v-if="fichas.isError.value" :erro="fichas.error.value" />
+        <p v-else-if="fichas.data.value && fichas.data.value.fichas.length === 0">{{ t('adt.nenhum') }}</p>
         <ul v-else-if="fichas.data.value" class="lista-simples" data-testid="imp-fichas">
-          <li v-for="f in fichas.data.value.fichas" :key="`${f.modelo}-${f.grafica}`" class="acoes">
-            <span>{{ f.nome }} ({{ t('adt.impressos.copias') }}: {{ f.copias }})</span>
+          <li v-for="d in documentos" :key="d.modelo" class="acoes">
+            <label>
+              <input
+                type="checkbox"
+                :checked="d.selecionado || d.obrigatorio"
+                :disabled="d.obrigatorio"
+                :data-testid="`imp-marcar-${d.modelo}`"
+                @change="alternar(d.modelo, d.obrigatorio)"
+              />
+              {{ d.titulo }} ({{ t('adt.impressos.copias') }}: {{ d.copias }})
+            </label>
+            <strong v-if="d.obrigatorio">{{ t('adt.documentos.obrigatorioDoc') }}</strong>
+            <em v-if="d.sobDemanda">{{ t('adt.impressos.sobDemanda') }}</em>
             <SanteBotao
               variante="secundario"
               :rotulo="t('adt.impressos.emitir')"
               :desabilitado="ocupado"
-              :data-testid="`imp-ficha-${f.modelo}`"
-              @acionar="emitir(`ficha-${f.modelo}`, 'pdf', { modelo: f.modelo, copias: f.copias })"
+              :data-testid="`imp-ficha-${d.modelo}`"
+              @acionar="emitirDocumentos([d])"
             />
+          </li>
+        </ul>
+        <SanteBotao
+          v-if="documentos.length"
+          :rotulo="t('adt.impressos.emitirSelecionados')"
+          :desabilitado="ocupado"
+          data-testid="imp-emitir-marcados"
+          @acionar="emitirMarcados"
+        />
+        <p v-if="pendentes.length" role="alert" data-testid="imp-obrigatorios-pendentes">
+          {{ t('adt.impressos.obrigatoriosPendentes') }} {{ pendentes.map((p) => p.titulo).join(', ') }}
+        </p>
+        <ul v-if="pdfs.length" class="lista-simples" data-testid="imp-pdfs">
+          <li v-for="p in pdfs" :key="p.url">
+            <a :href="p.url" target="_blank" rel="noopener">{{ p.nome }}</a>
+            <template v-if="p.copias > 1">
+              · {{ t('adt.impressos.imprimaCopias', { n: p.copias }) }}</template
+            >
           </li>
         </ul>
       </section>
@@ -114,9 +209,11 @@ const configuracao = rotaDoSubitem('internacao');
       <p class="secundario">
         <RouterLink :to="configuracao">{{ t('dominios.subitens.internacao') }}</RouterLink>
         ·
-        <RouterLink to="/internacao/documentos" data-testid="imp-configurar-documentos">{{
-          t('adt.impressos.configurar')
-        }}</RouterLink>
+        <RouterLink
+          :to="{ path: '/internacao/documentos', query: { reg: String(reg) } }"
+          data-testid="imp-configurar-documentos"
+          >{{ t('adt.impressos.configurar') }}</RouterLink
+        >
       </p>
     </template>
   </section>
