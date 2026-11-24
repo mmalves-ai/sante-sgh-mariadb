@@ -29,6 +29,7 @@ import {
   type RegistrarProtocoloEntrada,
 } from '@sgh/contratos';
 import {
+  type CampoPadraoTiss,
   conferirFechamentoCompetencia,
   conferirRegistroProtocolo,
   faltasDoPrestador,
@@ -69,6 +70,8 @@ import {
   type TipoGuiaLote,
 } from './regras-tiss.js';
 import { operacoesGlosa } from './operacoes-glosa.js';
+// F3.7 (06-FAT linhas 29 a 31): regra de apresentação, valor padrão, credenciamento e fatura ao pagador no lote.
+import { apresentarLote, gravarFaturaDoLote, protocolarFaturaDoLote } from './apresentacao-propria.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -207,7 +210,7 @@ async function contaTiss(
   tx: TxOperacao,
   ct: Linha,
   tipoGuia: TipoGuiaLote,
-): Promise<{ conta: ContaTiss; avisos: string[] }> {
+): Promise<{ conta: ContaTiss; avisos: string[]; informados: Set<CampoPadraoTiss> }> {
   const rotulo = texto(ct['numero']) || String(n(ct['id']));
   const itens = await tx.consultar<Linha>(
     `SELECT ci.sequencia, ci.realizado_em, ci.quantidade, ci.valor_unitario, ci.valor_total, f.codigo, f.descricao,
@@ -330,8 +333,15 @@ async function contaTiss(
   const recemNascido = guia
     ? Boolean(n(guia['atendimento_recem_nascido']))
     : Boolean(n(at?.['recem_nascido']));
+  // Os campos que vieram do cadastro: o valor padrão da fonte pagadora só os substitui com `sobrepoe` (linha 30).
+  const informados = new Set<CampoPadraoTiss>(['caraterAtendimento', 'tipoFaturamento']);
+  if (texto(guia?.['tipo_atendimento'])) informados.add('tipoAtendimento');
+  if (texto(guia?.['tipo_consulta'])) informados.add('tipoConsulta');
+  if (internacao.ok)
+    for (const c of ['tipoInternacao', 'regimeInternacao', 'motivoEncerramento'] as const) informados.add(c);
   return {
     avisos,
+    informados,
     conta: {
       conta: n(ct['id']),
       tipoGuia,
@@ -370,7 +380,15 @@ async function contaTiss(
 function gerarLote(montador: MontadorLoteTiss | null) {
   return definirOperacao<GerarLoteEntrada, ResultadoOperacao>({
     nome: 'faturamento.gerar-lote',
-    tabelas: ['lote_tiss', 'lote_tiss_conta', 'conta_hospitalar', 'arquivo', 'sequencia_negocio'],
+    tabelas: [
+      'lote_tiss',
+      'lote_tiss_conta',
+      'conta_hospitalar',
+      'arquivo',
+      'sequencia_negocio',
+      'fatura_fonte_pagadora',
+      'fatura_fonte_pagadora_conta',
+    ],
     entrada: esquemaGerarLote,
     async gravar(tx, e, ctx) {
       const est = estabelecimentoDe(ctx);
@@ -387,7 +405,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         const [ct] = await tx.consultarParaAtualizar<Linha>(
           `SELECT id, versao, numero, fonte_pagadora_id, natureza, situacao, competencia, inicio_em, fim_em,
                   senha_autorizacao, cobertura_paciente_id, valor_total, atendimento_id, guia_fonte_pagadora_id,
-                  tipo_cobranca
+                  tipo_cobranca, tipo_conta_id
              FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [it.id, est],
         );
@@ -447,9 +465,21 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         'SELECT codigo_cnes, razao_social, nome_fantasia FROM estabelecimento WHERE id = ?',
         [est],
       );
+      const montadas: ContaTiss[] = [];
+      const avisos: string[] = [];
+      const lidas = [];
+      for (const ct of contas) {
+        const g = await contaTiss(tx, ct, tipoGuia);
+        lidas.push({ linha: ct, conta: g.conta, informados: g.informados });
+        avisos.push(...g.avisos);
+      }
+      const hoje = civil(new Date(), await fusoDe(tx, est)).data;
+      const ap = await apresentarLote(tx, est, e.convenio, tipoGuia, lidas, hoje);
+      montadas.push(...ap.montadas);
+      avisos.push(...ap.avisos);
       const prestador = {
-        registroAns: texto(cfg['registro_ans'] ?? cfg['registro_fonte']).replace(/\D/g, ''),
-        codigoPrestador: texto(cfg['codigo_prestador_operadora']).trim(),
+        registroAns: texto(ap.registroAns ?? cfg['registro_ans'] ?? cfg['registro_fonte']).replace(/\D/g, ''),
+        codigoPrestador: texto(ap.codigoPrestador ?? cfg['codigo_prestador_operadora']).trim(),
         cnes: texto(estab?.['codigo_cnes']).trim(),
         nome: texto(estab?.['nome_fantasia'] ?? estab?.['razao_social']).slice(0, 70),
       };
@@ -459,13 +489,6 @@ function gerarLote(montador: MontadorLoteTiss | null) {
           'cadastro-tiss-incompleto',
           `O lote não pode ser montado: falta ${faltasCadastro.join(', ')} no cadastro TISS do convênio ou do estabelecimento.`,
         );
-      const montadas: ContaTiss[] = [];
-      const avisos: string[] = [];
-      for (const ct of contas) {
-        const g = await contaTiss(tx, ct, tipoGuia);
-        montadas.push(g.conta);
-        avisos.push(...g.avisos);
-      }
       await garantirSequencia(
         tx,
         { tipo: 'lote_tiss', estabelecimento: est, inicio: 1 },
@@ -517,20 +540,39 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         situacao: 'gerado',
       });
       await tx.alterar('arquivo', arquivo, 1, { entidade_id: lote });
-      for (const ct of contas) {
+      // Só as contas que foram ao arquivo entram no lote e na fatura, com o valor da guia apresentada (depois da
+      // regra); a conta omitida (guia zerada que a fonte não recebe) fica como estava, na fila do faturamento.
+      const enviadas = contas.filter((ct) => ap.valores.has(n(ct['id'])));
+      for (const ct of enviadas) {
         await tx.incluir('lote_tiss_conta', {
           lote_tiss_id: lote,
           conta_hospitalar_id: ct['id'],
-          valor: n(ct['valor_total']),
+          valor: ap.valores.get(n(ct['id'])),
         });
         await tx.alterar('conta_hospitalar', n(ct['id']), n(ct['versao']), { situacao: 'faturada' });
       }
+      const fatura = await gravarFaturaDoLote(tx, est, {
+        fonte: e.convenio,
+        lote,
+        contas: enviadas.map((ct) => ({
+          id: n(ct['id']),
+          valor: ap.valores.get(n(ct['id'])) ?? 0,
+          competencia: dataIso(ct['competencia']),
+        })),
+        valor: m.valor,
+        usuario: ctx.usuario ?? null,
+        agora: new Date(),
+        hoje,
+      });
       return {
         lote,
+        fatura: fatura.fatura,
+        numeroFatura: fatura.numero,
         convenio: e.convenio,
         numeroLote,
         sequencial: numeroLote,
-        contas: contas.length,
+        contas: enviadas.length,
+        contasForaDoArquivo: ap.omitidas.length,
         valor: m.valor,
         alertas: avisos.length ? `Confira antes do envio: ${avisos.join('; ')}.` : '',
       };
@@ -542,7 +584,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
 /** Registra ou limpa o protocolo devolvido pela operadora (o lote protocolado fica congelado). */
 const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoOperacao>({
   nome: 'faturamento.registrar-protocolo',
-  tabelas: ['lote_tiss', 'protocolo_recebimento'],
+  tabelas: ['lote_tiss', 'protocolo_recebimento', 'fatura_fonte_pagadora'],
   entrada: esquemaRegistrarProtocolo,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -606,6 +648,12 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
         situacao: 'protocolado',
         protocolado_em: new Date(),
       });
+      await protocolarFaturaDoLote(
+        tx,
+        e.lote,
+        np.protocolo,
+        e.data ?? civil(new Date(), await fusoDe(tx, est)).data,
+      );
     } else {
       if (l['protocolo_recebimento_id']) {
         const p = await tx.uma<Linha>('SELECT versao FROM protocolo_recebimento WHERE id = ?', [
@@ -623,6 +671,7 @@ const registrarProtocolo = definirOperacao<RegistrarProtocoloEntrada, ResultadoO
         situacao: 'gerado',
         protocolado_em: null,
       });
+      await protocolarFaturaDoLote(tx, e.lote, null, null);
     }
     return {
       lote: e.lote,

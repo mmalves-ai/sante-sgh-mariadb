@@ -16,6 +16,7 @@ import {
 } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { versaoTexto } from '../faturamento/esquemas.js';
+import { ServicoApresentacaoTiss } from './apresentacao.controller.js';
 import { armazemXmlLocal, armazemXmlMemoria, type LocalizadorArquivos } from './armazem-xml.js';
 import type { ContextoTiss, PortaTiss } from './porta.js';
 import { PortaTissMemoria } from './porta-memoria.js';
@@ -122,6 +123,12 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         'DELETE FROM lote_tiss_conta WHERE lote_tiss_id IN (SELECT id FROM lote_tiss WHERE estabelecimento_id IN (?, ?))',
         est,
       );
+      // A fatura ao pagador nasce com o lote (06-FAT linha 31): sai antes dele (massa sintética).
+      await e.executar(
+        'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE estabelecimento_id IN (?, ?))',
+        est,
+      );
+      await e.executar('DELETE FROM fatura_fonte_pagadora WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar('DELETE FROM lote_tiss WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar(
         "DELETE FROM arquivo WHERE estabelecimento_id IN (?, ?) AND entidade = 'lote_tiss'",
@@ -519,6 +526,11 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
           lote,
         ]);
         await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+        await e.executar(
+          'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+          [lote],
+        );
+        await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
         await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
         await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
         await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [contaH]);
@@ -526,6 +538,176 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       });
     }
   }, 60_000);
+
+  it('gerar o lote com a regra de apresentação (06-FAT linhas 29 e 30): código trocado, item fora do arquivo, guia zerada omitida fora do lote e da fatura; credenciamento que barra recusa sem gravar', async () => {
+    const apresentacao = new ServicoApresentacaoTiss(nucleo);
+    const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-f377' }, fn);
+    const m = await escrever(async (e) => {
+      const agora = new Date();
+      const item = (codigo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM item_faturavel WHERE codigo = ?',
+          [codigo],
+          "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'honorario', ?, ?)",
+          [codigo, `HONORARIO SINTETICO ${codigo}`, ids.grupo, agora],
+        );
+      const trocado = await item('83160002');
+      const fora = await item('83160003');
+      const conta = async (sufixo: string, itens: [number, number][]) => {
+        const total = itens.reduce((t, [, v]) => t + v, 0);
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+           fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', ?, ?, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-${sufixo}`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            competencia,
+            agora,
+            agora,
+            total,
+            total,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        let seq = 0;
+        for (const [it, v] of itens)
+          await e.inserir(
+            `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em,
+             quantidade, valor_unitario, valor_total, executante_profissional_id, criado_em)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+            [id, ++seq, it, agora, v, v, ids.prof, agora],
+          );
+        return id;
+      };
+      return {
+        trocado,
+        fora,
+        a: await conta('RA', [
+          [trocado, 150],
+          [fora, 50],
+        ]),
+        b: await conta('RB', [[fora, 30]]),
+      };
+    });
+    const regra = Number(
+      (
+        await apresentacao.gravar('regra', op(), {
+          fontePagadoraId: ids.fonte,
+          tipoContaId: null,
+          versaoPadraoTissId: ids.versaoTiss,
+          omiteGuiaSemValor: true,
+        })
+      )['id'],
+    );
+    await apresentacao.gravar('regra-item', op(), {
+      regraId: regra,
+      itemFaturavelId: m.trocado,
+      codigoApresentacao: '99990001',
+    });
+    await apresentacao.gravar('regra-item', op(), {
+      regraId: regra,
+      itemFaturavelId: m.fora,
+      naoExporta: true,
+    });
+    const entrada = async () => ({
+      convenio: ids.fonte,
+      tipoGuia: 4,
+      contas: [
+        { id: m.a, versao: await versaoDaConta(m.a) },
+        { id: m.b, versao: await versaoDaConta(m.b) },
+      ],
+    });
+    const lotes = async () =>
+      Number(
+        (await lerUma('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))?.['q'],
+      );
+    let lote = 0;
+    try {
+      // A fonte pagadora barra a cobrança sem credenciamento (cadastro do convênio): o executante não tem
+      // credenciamento nela, o lote é recusado e nada é gravado.
+      const antes = await lotes();
+      await escrever((e) =>
+        e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = TRUE WHERE id = ?', [ids.fonte]),
+      );
+      expect(codigo(await erroDe(porta.executar(c, 'faturamento.gerarLote', await entrada(), op())))).toBe(
+        'credenciamento-barra-cobranca',
+      );
+      expect(await lotes()).toBe(antes);
+      await escrever((e) =>
+        e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = FALSE WHERE id = ?', [ids.fonte]),
+      );
+      const r = await porta.executar(c, 'faturamento.gerarLote', await entrada(), op());
+      lote = Number(r.resultado['lote']);
+      expect(r.resultado).toMatchObject({ contas: 1, contasForaDoArquivo: 1 });
+      expect(Number(r.resultado['valor'])).toBe(150);
+      const chave = (await porta.xmlDoLote(c, lote))?.chave ?? '';
+      const xml = new TextDecoder().decode((await armazem.ler(chave)) ?? new Uint8Array());
+      expect(xml).toContain('99990001');
+      expect(xml).not.toContain('83160003');
+      expect(xml).toMatch(/valorTotalHonorarios>150\.00</);
+      // Só a conta que foi ao arquivo entra no lote e na fatura, com o valor apresentado (sem o item retirado).
+      const noLote = await escrever((e) =>
+        e.consultar<{ conta_hospitalar_id: number; valor: string }>(
+          'SELECT conta_hospitalar_id, valor FROM lote_tiss_conta WHERE lote_tiss_id = ?',
+          [lote],
+        ),
+      );
+      expect(noLote.map((x) => [Number(x.conta_hospitalar_id), Number(x.valor)])).toEqual([[m.a, 150]]);
+      const fatura = await lerUma(
+        `SELECT f.quantidade_contas, f.valor_apresentado,
+                (SELECT SUM(fc.valor_apresentado) FROM fatura_fonte_pagadora_conta fc
+                  WHERE fc.fatura_fonte_pagadora_id = f.id) AS soma,
+                (SELECT COUNT(*) FROM fatura_fonte_pagadora_conta fc
+                  WHERE fc.fatura_fonte_pagadora_id = f.id AND fc.conta_hospitalar_id = ?) AS omitida
+           FROM fatura_fonte_pagadora f WHERE f.lote_tiss_id = ?`,
+        [m.b, lote],
+      );
+      expect(Number(fatura?.['quantidade_contas'])).toBe(1);
+      expect(Number(fatura?.['valor_apresentado'])).toBe(150);
+      expect(Number(fatura?.['soma'])).toBe(150);
+      expect(Number(fatura?.['omitida'])).toBe(0);
+      // A conta omitida não é faturada: segue na fila; a enviada é faturada.
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.b])).toMatchObject({
+        situacao: 'fechada',
+      });
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.a])).toMatchObject({
+        situacao: 'faturada',
+      });
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f377' }, async (e) => {
+        await e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = FALSE WHERE id = ?', [
+          ids.fonte,
+        ]);
+        const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+          lote,
+        ]);
+        await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+        await e.executar(
+          'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+          [lote],
+        );
+        await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+        await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+        await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        await e.executar('DELETE FROM regra_apresentacao_tiss_item WHERE regra_apresentacao_tiss_id = ?', [
+          regra,
+        ]);
+        await e.executar('DELETE FROM regra_apresentacao_tiss WHERE id = ?', [regra]);
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?)', [m.a, m.b]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id IN (?, ?)', [m.a, m.b]);
+      });
+    }
+  }, 90_000);
 
   it('gerar o lote: lote, contas do lote, arquivo, conta faturada (versão +1) e trilha com a operação', async () => {
     const versao = await versaoDaConta(ids.conta);
@@ -553,6 +735,17 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     const conta = await lerUma('SELECT situacao, versao FROM conta_hospitalar WHERE id = ?', [ids.conta]);
     expect(versaoTexto(Number(conta?.['versao']))).toBe(versaoTexto(Number(versao.slice(1)) + 1));
     expect(conta?.['situacao']).toBe('faturada');
+    // 06-FAT linha 31: a fatura ao pagador nasce fechada com o lote, a conta e o valor apresentado.
+    const fatura = await lerUma(
+      `SELECT f.situacao, f.quantidade_contas, f.valor_apresentado, f.fechado_em IS NOT NULL AS fechada,
+              (SELECT COUNT(*) FROM fatura_fonte_pagadora_conta fc WHERE fc.fatura_fonte_pagadora_id = f.id
+                  AND fc.conta_hospitalar_id = ?) AS contas
+         FROM fatura_fonte_pagadora f WHERE f.lote_tiss_id = ?`,
+      [ids.conta, ids.lote],
+    );
+    expect(fatura).toMatchObject({ situacao: 'fechada', quantidade_contas: 1, fechada: 1, contas: 1 });
+    expect(Number(fatura?.['valor_apresentado'])).toBe(Number(r.resultado['valor']));
+    expect(Number(r.resultado['fatura'])).toBeGreaterThan(0);
     const trilha = await lerUma(
       "SELECT entidade, entidade_id, JSON_VALUE(dados_depois, '$.operacao') AS operacao FROM trilha_auditoria WHERE id = ?",
       [r.trilha],
@@ -644,6 +837,13 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       situacao: 'protocolado',
       numero_protocolo: 'PRT0316',
     });
+    // 06-FAT linha 31: o protocolo chega à fatura do lote (número, entrega e situação).
+    expect(
+      await lerUma(
+        'SELECT situacao, protocolo_recebimento, data_entrega IS NOT NULL AS entregue FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?',
+        [ids.lote],
+      ),
+    ).toMatchObject({ situacao: 'protocolada', protocolo_recebimento: 'PRT0316', entregue: 1 });
     expect(
       codigo(
         await erroDe(
@@ -665,6 +865,12 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     );
     const d = await porta.lote(c, ids.lote, hoje);
     expect(d?.protocolo).toBe('');
+    expect(
+      await lerUma(
+        'SELECT situacao, protocolo_recebimento FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?',
+        [ids.lote],
+      ),
+    ).toMatchObject({ situacao: 'fechada', protocolo_recebimento: null });
     expect(d?.historico.map((h) => h.acao)).toEqual(['limpo']);
     expect(
       await lerUma(

@@ -227,6 +227,59 @@ export function conferirLotePelaRegra(
   return null;
 }
 
+/** Valor apresentado da guia montada (o que vai ao arquivo, depois da regra), em reais com duas casas. */
+export function valorApresentado(conta: ContaTiss): number {
+  return conta.itens.reduce((t, i) => t + centavos(i), 0) / 100;
+}
+
+export interface ContaComRegra {
+  readonly rotulo: string;
+  readonly regra: RegraApresentacao | null;
+}
+
+const lista = (rotulos: readonly string[]) =>
+  `${rotulos.slice(0, 5).join(', ')}${rotulos.length > 5 ? ', …' : ''}`;
+
+/**
+ * Confere o lote conta a conta pela regra de cada uma (o tipo da conta pode cair em regra diferente da geral) e
+ * recusa o lote cujas contas pedem cabeçalho diferente (registro ANS, código do contratado na operadora ou ordem das
+ * guias): o arquivo tem um cabeçalho só. Devolve a regra comum do cabeçalho (null: o cadastro TISS do convênio).
+ */
+export function conferirRegrasDoLote(
+  contas: readonly ContaComRegra[],
+  tipoGuia: 1 | 2 | 3 | 4,
+  guias: number,
+): { recusa: { codigo: string; mensagem: string } | null; regra: RegraApresentacao | null } {
+  const cabecalho = (r: RegraApresentacao | null) =>
+    r === null
+      ? 'sem regra'
+      : `registro ANS ${r.registroAns ?? 'do convênio'}, contratado ${r.codigoContratadoOperadora ?? 'do convênio'}, ordem ${r.ordenacaoGuias}`;
+  const grupos = new Map<string, string[]>();
+  for (const c of contas) {
+    const k = cabecalho(c.regra);
+    grupos.set(k, [...(grupos.get(k) ?? []), c.rotulo]);
+  }
+  if (grupos.size > 1)
+    return {
+      regra: null,
+      recusa: {
+        codigo: 'lote-com-regras-divergentes',
+        mensagem: `As contas do lote caem em regras de apresentação com cabeçalho diferente; gere um lote por grupo: ${[
+          ...grupos,
+        ]
+          .map(([k, r]) => `${k} (contas ${lista(r)})`)
+          .join('; ')}.`,
+      },
+    };
+  const porRegra = new Map<RegraApresentacao, string[]>();
+  for (const c of contas) if (c.regra) porRegra.set(c.regra, [...(porRegra.get(c.regra) ?? []), c.rotulo]);
+  for (const [r, rotulos] of porRegra) {
+    const x = conferirLotePelaRegra(r, tipoGuia, guias);
+    if (x) return { regra: null, recusa: { ...x, mensagem: `${x.mensagem} (contas ${lista(rotulos)})` } };
+  }
+  return { regra: contas[0]?.regra ?? null, recusa: null };
+}
+
 /** Ordena as guias do lote como a fonte pagadora pede (estável: empate segue a ordem escolhida). */
 export function ordenarGuias<T extends { conta: ContaTiss; paciente?: string }>(
   guias: readonly T[],

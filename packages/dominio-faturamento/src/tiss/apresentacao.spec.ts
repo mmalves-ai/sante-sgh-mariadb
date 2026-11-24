@@ -5,6 +5,7 @@ import {
   aplicarValoresPadrao,
   apresentarConta,
   conferirLotePelaRegra,
+  conferirRegrasDoLote,
   escolherRegraApresentacao,
   escolherValoresPadrao,
   type ItemRegraApresentacao,
@@ -13,6 +14,7 @@ import {
   type OrigemItemConta,
   type RegraApresentacao,
   validarValorPadraoCampo,
+  valorApresentado,
   type ValorPadraoCampo,
 } from './apresentacao.js';
 
@@ -194,6 +196,71 @@ describe('regra de apresentação da conta', () => {
     expect(conferirLotePelaRegra(regra({ usaGuiaConsulta: false }), 2, 1)).toBeNull();
     expect(conferirLotePelaRegra(regra({ limiteGuiasLote: 2 }), 2, 3)?.codigo).toBe('lote-acima-do-limite');
     expect(conferirLotePelaRegra(regra({ limiteGuiasLote: 2 }), 2, 2)).toBeNull();
+  });
+
+  it('confere cada conta pela própria regra e recusa cabeçalho divergente', () => {
+    const geral = regra({ id: 1 });
+    const internacao = regra({ id: 2, tipoContaId: 9, usaFaturamentoEletronico: false });
+    // A primeira conta não barra; a segunda, de outro tipo de conta, cai na regra sem faturamento eletrônico.
+    const r = conferirRegrasDoLote(
+      [
+        { rotulo: 'A', regra: geral },
+        { rotulo: 'B', regra: internacao },
+      ],
+      2,
+      2,
+    );
+    expect(r.recusa?.codigo).toBe('fonte-sem-faturamento-eletronico');
+    expect(r.recusa?.mensagem).toMatch(/contas B\)/);
+    const limite = regra({ id: 3, tipoContaId: 9, limiteGuiasLote: 1 });
+    expect(
+      conferirRegrasDoLote(
+        [
+          { rotulo: 'A', regra: geral },
+          { rotulo: 'B', regra: limite },
+        ],
+        2,
+        2,
+      ).recusa?.codigo,
+    ).toBe('lote-acima-do-limite');
+    const outroContratado = regra({ id: 4, tipoContaId: 9, codigoContratadoOperadora: 'X9' });
+    const d = conferirRegrasDoLote(
+      [
+        { rotulo: 'A', regra: geral },
+        { rotulo: 'B', regra: outroContratado },
+        { rotulo: 'C', regra: null },
+      ],
+      2,
+      3,
+    );
+    expect(d.recusa?.codigo).toBe('lote-com-regras-divergentes');
+    expect(d.recusa?.mensagem).toMatch(/contas A\).*contas B\).*sem regra \(contas C\)/);
+    const ok = conferirRegrasDoLote(
+      [
+        { rotulo: 'A', regra: geral },
+        { rotulo: 'B', regra: regra({ id: 5, tipoContaId: 9 }) },
+      ],
+      2,
+      2,
+    );
+    expect(ok).toEqual({ recusa: null, regra: geral });
+  });
+
+  it('item da regra por função na equipe vence o de grupo; sem a função, vale o grupo', () => {
+    const itens = [
+      ir({ id: 1, grupoId: 50, codigoApresentacao: 'GRUPO' }),
+      ir({ id: 2, funcaoId: 3, codigoApresentacao: 'AUXILIAR' }),
+    ];
+    expect(itemDaRegra(itens, origem(1, { funcaoId: 3 }), 'honorario')?.codigoApresentacao).toBe('AUXILIAR');
+    expect(itemDaRegra(itens, origem(1, { funcaoId: 4 }), 'honorario')?.codigoApresentacao).toBe('GRUPO');
+    expect(itemDaRegra(itens, origem(1), 'honorario')?.codigoApresentacao).toBe('GRUPO');
+  });
+
+  it('valor apresentado da guia montada: só o que ficou no arquivo', () => {
+    const c = conta([item(1, { quantidade: 2, valorUnitario: 10.05 }), item(2, { valorUnitario: 5 })]);
+    const ap = apresentarConta(c, [origem(1), origem(2)], regra(), [ir({ itemId: 2, naoExporta: true })]);
+    expect(valorApresentado(ap.conta)).toBe(20.1);
+    expect(valorApresentado(c)).toBe(25.1);
   });
 
   it('ordena as guias pela regra, estável', () => {

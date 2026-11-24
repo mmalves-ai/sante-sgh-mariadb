@@ -18,6 +18,11 @@ import {
 import { converterHtmlEmPdfA } from '../documento/infra/gotenberg.js';
 import type { ContextoModulo } from '../registro.js';
 import { type ArmazemXmlTiss, armazemXmlLocal, localizadorDoNucleo } from './armazem-xml.js';
+import {
+  ApresentacaoTissController,
+  SERVICO_APRESENTACAO_TISS,
+  ServicoApresentacaoTiss,
+} from './apresentacao.controller.js';
 import { PORTA_TISS, type PortaTiss } from './porta.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 import { portaTissIndisponivel, PortaTissPropria } from './porta-propria.js';
@@ -77,7 +82,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
         : null;
   return {
     module: ModuloTiss,
-    controllers: [TissController, ElegibilidadeController],
+    controllers: [TissController, ElegibilidadeController, ApresentacaoTissController],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
       // F3.9 (08-INTG L128): consulta de elegibilidade e resposta da operadora; sem núcleo, 503.
@@ -90,6 +95,12 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },
       { provide: GERADOR_PDF_TISS, useValue: geradorPdf },
+      // 06-FAT linha 30: regra de apresentação TISS por fonte pagadora (só com o banco próprio; sem ele, 503).
+      {
+        provide: SERVICO_APRESENTACAO_TISS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoApresentacaoTiss(ctx.nucleo) : null,
+      },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
     exports: [PORTA_TISS],
