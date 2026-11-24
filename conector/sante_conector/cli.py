@@ -188,6 +188,9 @@ def main(argv=None):
             res = orig.testar(orig.carregar_origem(conn, r[0]))
         except (plataforma.PlataformaErro, orig.OrigemErro) as e:
             res = {"ok": False, "versaoServidor": None, "ods": None, "tabelas": None, "mensagem": str(e)}
+        except Exception as e:  # noqa: BLE001 (erro do driver da plataforma; sem texto: pode ecoar parâmetros)
+            res = {"ok": False, "versaoServidor": None, "ods": None, "tabelas": None,
+                   "mensagem": "falha ao ler a origem no banco da plataforma (%s)" % type(e).__name__}
         finally:
             conn.close()
         _json(res)

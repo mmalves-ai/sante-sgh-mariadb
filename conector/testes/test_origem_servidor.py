@@ -155,6 +155,31 @@ class Pausar(unittest.TestCase):
             self.assertEqual((rc, saida["erro"]), (3, codigo))
 
 
+class TestarOrigemCli(unittest.TestCase):
+    def test_erro_do_driver_sai_em_json_sem_texto(self):
+        class ErroDriver(Exception):
+            pass
+
+        class CurQuebrado(_Cur):
+            def execute(self, sql, params=None):
+                raise ErroDriver("Unknown column 'servidor_host' segredo-do-driver")
+
+        conn = _Conn([])
+        conn.cur = CurQuebrado([])
+        conn.close = lambda: None
+        from sante_conector import banco
+        with mock.patch.object(banco, "conectar", return_value=conn), \
+                mock.patch.object(banco, "plataforma_banco", return_value="x"), \
+                mock.patch.object(cli, "_json") as j:
+            rc = cli.main(["testar-origem", "cliente-x"])
+        saida = j.call_args[0][0]
+        self.assertEqual(rc, 3)
+        self.assertEqual(set(saida), {"ok", "versaoServidor", "ods", "tabelas", "mensagem"})
+        self.assertFalse(saida["ok"])
+        self.assertIn("ErroDriver", saida["mensagem"])
+        self.assertNotIn("segredo", saida["mensagem"])
+
+
 @unittest.skipUnless(os.environ.get("FB_SIM_LEITOR_USUARIO") and os.environ.get("FB_SIM_LEITOR_SENHA"),
                      "servidor simulado sem credenciais no ambiente")
 class ServidorSimulado(unittest.TestCase):
