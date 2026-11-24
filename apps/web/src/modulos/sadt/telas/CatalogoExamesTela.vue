@@ -138,8 +138,8 @@ const formula = reactive<Linha>({
 const analitoAberto = ref<number | null>(null);
 
 const numOuNulo = (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v));
-const nomeDe = (lista: string, id: unknown) =>
-  opcoes.value[lista]?.find((o) => o.id === Number(id))?.nome ??
+const nomeDe = (qual: string, id: unknown) =>
+  opcoes.value[qual]?.find((o) => o.id === Number(id))?.nome ??
   (id === null || id === undefined ? '' : String(id));
 const porCampo = (falhas: readonly FalhaCatalogo[]) => {
   const r: Record<string, string> = {};
@@ -406,9 +406,9 @@ const rotulo = (v: Linha) =>
   );
 /** Filtro do seletor com busca: digita parte do nome e a lista encolhe. */
 const filtros = reactive<Record<string, string>>({});
-const filtrada = (lista: string, chave: string) => {
+const filtrada = (qual: string, chave: string) => {
   const f = (filtros[chave] ?? '').toLowerCase();
-  const l = opcoes.value[lista] ?? [];
+  const l = opcoes.value[qual] ?? [];
   return f ? l.filter((o) => o.nome.toLowerCase().includes(f)).slice(0, 200) : l.slice(0, 200);
 };
 </script>

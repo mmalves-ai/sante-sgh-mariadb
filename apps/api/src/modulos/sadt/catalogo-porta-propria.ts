@@ -129,6 +129,12 @@ export const ESQUEMAS_VINCULO = {
 } as const;
 export type TipoVinculo = keyof typeof ESQUEMAS_VINCULO;
 
+/** O esquema do vínculo: completo na inclusão; parcial na alteração (sem default, só o que veio). */
+export function esquemaParcialVinculo(t: TipoVinculo, parcial = true): z.ZodType {
+  const e = ESQUEMAS_VINCULO[t] as unknown as z.ZodType & { partial(): z.ZodType };
+  return parcial ? e.partial() : e;
+}
+
 const TABELA_VINCULO: Readonly<Record<TipoVinculo, string>> = {
   setor: 'exame_setor_executante',
   material: 'exame_material',

@@ -21,6 +21,7 @@ import {
   ESQUEMAS_VINCULO,
   esquemaExameCatalogo,
   esquemaFaixasCatalogo,
+  esquemaParcialVinculo,
   esquemaFormulaCatalogo,
   type PortaCatalogoSadtPropria,
   type TipoVinculo,
@@ -101,10 +102,7 @@ export class CatalogoSadtController {
       throw new ErroProblema('nao-encontrado', 404, 'Vínculo desconhecido', `Use: ${TIPOS.join(', ')}.`);
     const t = tipo as TipoVinculo;
     const alteracao = Boolean(b && typeof b === 'object' && (b as Record<string, unknown>)['id']);
-    const e = corpo(alteracao ? ESQUEMAS_VINCULO[t].partial() : ESQUEMAS_VINCULO[t], b) as Record<
-      string,
-      unknown
-    >;
+    const e = corpo(esquemaParcialVinculo(t, alteracao), b) as Record<string, unknown>;
     if (alteracao && !e['versao'])
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Falta a versão vista.');
     const c = contextoOperacao(sessaoDe(req), 'sadt.catalogo');
