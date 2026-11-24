@@ -92,7 +92,7 @@ async function gravar(): Promise<void> {
     <p>{{ k('explica') }}</p>
     <MensagemErro v-if="erro" :erro="erro" />
     <SanteAlerta v-if="mensagem" variante="info">{{ mensagem }}</SanteAlerta>
-    <SanteBotao data-testid="grupo-novo" @click="novo">{{ k('novo') }}</SanteBotao>
+    <SanteBotao data-testid="grupo-novo" @acionar="novo" :rotulo="k('novo')" />
     <table v-if="grupos.length" data-testid="grupos-lista">
       <thead>
         <tr>
@@ -105,7 +105,7 @@ async function gravar(): Promise<void> {
       <tbody>
         <tr v-for="g in grupos" :key="g.id ?? 0">
           <td>
-            <SanteBotao variante="texto" @click="editar(g)">{{ g.nome }}</SanteBotao>
+            <SanteBotao variante="texto" @acionar="editar(g)" :rotulo="g.nome" />
           </td>
           <td>{{ k(`tipos.${g.tipoExame}`) }}</td>
           <td>{{ g.itens.map((i) => i.rotulo || i.nomeAnalito || i.nomeExame).join(', ') }}</td>
@@ -135,19 +135,29 @@ async function gravar(): Promise<void> {
           {{ k('buscar') }}
           <input v-model="termo" data-testid="grupo-busca" @keydown.enter.prevent="buscar" />
         </label>
-        <SanteBotao variante="secundario" data-testid="grupo-buscar" @click="buscar">{{
-          k('buscarBotao')
-        }}</SanteBotao>
+        <SanteBotao
+          variante="secundario"
+          data-testid="grupo-buscar"
+          @acionar="buscar"
+          :rotulo="k('buscarBotao')"
+        />
       </div>
       <ul class="achados">
         <li v-for="e in achados" :key="e.id">
           <strong>{{ e.nome }}</strong> ({{ e.codigo }})
-          <SanteBotao variante="texto" :data-testid="`grupo-add-${e.id}`" @click="adicionar(e, null)">{{
-            k('todosAnalitos')
-          }}</SanteBotao>
-          <SanteBotao v-for="a in e.analitos" :key="a.id" variante="texto" @click="adicionar(e, a)">{{
-            a.nome
-          }}</SanteBotao>
+          <SanteBotao
+            variante="texto"
+            :data-testid="`grupo-add-${e.id}`"
+            @acionar="adicionar(e, null)"
+            :rotulo="k('todosAnalitos')"
+          />
+          <SanteBotao
+            v-for="a in e.analitos"
+            :key="a.id"
+            variante="texto"
+            @acionar="adicionar(e, a)"
+            :rotulo="a.nome"
+          />
         </li>
       </ul>
       <h2>{{ k('itens') }}</h2>
@@ -161,11 +171,11 @@ async function gravar(): Promise<void> {
             maxlength="60"
             @input="i.rotulo = ($event.target as HTMLInputElement).value || null"
           />
-          <SanteBotao variante="texto" :desabilitado="n === 0" @click="subir(n)">{{ k('subir') }}</SanteBotao>
-          <SanteBotao variante="texto" @click="atual.itens.splice(n, 1)">{{ k('tirar') }}</SanteBotao>
+          <SanteBotao variante="texto" :desabilitado="n === 0" @acionar="subir(n)" :rotulo="k('subir')" />
+          <SanteBotao variante="texto" @acionar="atual.itens.splice(n, 1)" :rotulo="k('tirar')" />
         </li>
       </ol>
-      <SanteBotao tipo="submit" data-testid="grupo-gravar">{{ k('gravar') }}</SanteBotao>
+      <SanteBotao tipo="submit" data-testid="grupo-gravar" :rotulo="k('gravar')" />
     </form>
   </main>
 </template>

@@ -16,7 +16,7 @@ import {
   categoriaDoCbo,
   type ConfiguracaoProntuario,
   type ConfiguracaoSetor,
-  type ErroRegra,
+  type ErroRegraPainel,
   type FuncaoEquipe,
   type MembroEquipe,
   planoEncerramentoEquipe,
@@ -135,7 +135,7 @@ const numOuNull = (v: unknown): number | null => (v === null || v === undefined 
 const txt = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 const bool = (v: unknown): boolean => Boolean(Number(v));
 
-function recusaRegra(erros: readonly ErroRegra[]): ErroOperacao {
+function recusaRegra(erros: readonly ErroRegraPainel[]): ErroOperacao {
   return new ErroOperacao(
     422,
     erros[0]!.codigo,

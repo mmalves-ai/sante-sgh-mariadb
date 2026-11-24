@@ -45,7 +45,7 @@ export interface PedidoCoassinatura {
   readonly preceptor: number;
   /** O preceptor existe, não foi excluído e tem vínculo vigente no estabelecimento. */
   readonly preceptorVigente: boolean;
-  readonly vinculo?: VinculoSupervisao;
+  readonly vinculo?: VinculoSupervisao | undefined;
 }
 
 export interface CoassinaturaGravavel {

@@ -27,7 +27,7 @@ export const TIPOS_ATENDIMENTO_PRONTUARIO: readonly TipoAtendimentoProntuario[] 
 export type AssinaturaExigida = 'nenhuma' | 'eletronica' | 'digital_icp';
 export const ASSINATURAS_EXIGIDAS: readonly AssinaturaExigida[] = ['nenhuma', 'eletronica', 'digital_icp'];
 
-export interface ErroRegra {
+export interface ErroRegraPainel {
   readonly campo: string;
   readonly codigo: string;
   readonly mensagem: string;
@@ -45,8 +45,8 @@ export function validarAcompanhar(
   vigentes: readonly AcompanhamentoVigente[],
   paciente: number,
   motivo: string | null,
-): ErroRegra[] {
-  const erros: ErroRegra[] = [];
+): ErroRegraPainel[] {
+  const erros: ErroRegraPainel[] = [];
   if (!Number.isSafeInteger(paciente) || paciente <= 0)
     erros.push({ campo: 'paciente', codigo: 'paciente-invalido', mensagem: 'Paciente inválido.' });
   if (vigentes.some((v) => v.paciente === paciente && v.fim === null))
@@ -61,8 +61,11 @@ export function validarAcompanhar(
 }
 
 /** Colunas válidas do painel: do catálogo, sem repetição e no mínimo duas, na ordem escolhida. */
-export function validarColunasPainel(colunas: readonly string[], catalogo: readonly string[]): ErroRegra[] {
-  const erros: ErroRegra[] = [];
+export function validarColunasPainel(
+  colunas: readonly string[],
+  catalogo: readonly string[],
+): ErroRegraPainel[] {
+  const erros: ErroRegraPainel[] = [];
   const fora = colunas.filter((c) => !catalogo.includes(c));
   if (fora.length)
     erros.push({
@@ -121,8 +124,8 @@ export const CONFIGURACAO_PRONTUARIO_PADRAO: ConfiguracaoProntuario = {
   exigeEvolucaoEnfermagem: false,
 };
 
-export function validarConfiguracaoSetor(c: ConfiguracaoSetor): ErroRegra[] {
-  const erros: ErroRegra[] = [];
+export function validarConfiguracaoSetor(c: ConfiguracaoSetor): ErroRegraPainel[] {
+  const erros: ErroRegraPainel[] = [];
   if (!TIPOS_ATENDIMENTO_PRONTUARIO.includes(c.tipoAtendimento))
     erros.push({
       campo: 'tipoAtendimento',
@@ -243,8 +246,8 @@ export const vigentes = (membros: readonly MembroEquipe[]): MembroEquipe[] =>
   membros.filter((m) => m.fim === null);
 
 /** Inclusão na equipe: função ativa, sem repetir profissional na mesma função e um só responsável principal. */
-export function validarInclusaoMembro(atuais: readonly MembroEquipe[], novo: NovoMembro): ErroRegra[] {
-  const erros: ErroRegra[] = [];
+export function validarInclusaoMembro(atuais: readonly MembroEquipe[], novo: NovoMembro): ErroRegraPainel[] {
+  const erros: ErroRegraPainel[] = [];
   const v = vigentes(atuais);
   if (!novo.funcao.ativo)
     erros.push({ campo: 'funcao', codigo: 'funcao-inativa', mensagem: 'A função está inativa.' });
@@ -294,9 +297,9 @@ export function validarInclusaoMembro(atuais: readonly MembroEquipe[], novo: Nov
 }
 
 /** Saída da equipe: membro vigente e motivo (de 3 a 500 caracteres). */
-export function validarSaidaMembro(membro: MembroEquipe | undefined, motivo: string): ErroRegra[] {
+export function validarSaidaMembro(membro: MembroEquipe | undefined, motivo: string): ErroRegraPainel[] {
   if (!membro) return [{ campo: 'membro', codigo: 'membro-inexistente', mensagem: 'Membro não encontrado.' }];
-  const erros: ErroRegra[] = [];
+  const erros: ErroRegraPainel[] = [];
   if (membro.fim !== null)
     erros.push({ campo: 'membro', codigo: 'membro-encerrado', mensagem: 'A participação já foi encerrada.' });
   const m = motivo.trim();
@@ -318,7 +321,7 @@ export function atendimentoAberto(situacao: string, saidaEm: string | Date | nul
 export function planoEncerramentoEquipe(
   situacao: string,
   membros: readonly MembroEquipe[],
-): { readonly erros: ErroRegra[]; readonly membrosAEncerrar: number[] } {
+): { readonly erros: ErroRegraPainel[]; readonly membrosAEncerrar: number[] } {
   if (situacao === 'encerrada')
     return {
       erros: [{ campo: 'equipe', codigo: 'equipe-encerrada', mensagem: 'A equipe já foi encerrada.' }],
