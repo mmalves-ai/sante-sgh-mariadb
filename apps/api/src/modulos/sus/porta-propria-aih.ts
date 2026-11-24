@@ -13,6 +13,7 @@
 // do profissional da casa ou do solicitante externo (o banco guarda a chave, nunca o CPF de novo).
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import type { SolicitanteAihLido } from './porta-aih.js';
+import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
 import {
   type AihRegistro,
@@ -98,7 +99,8 @@ const SITUACOES: readonly SituacaoAih[] = [
 
 function situacaoDaLinha(v: unknown): SituacaoAih {
   const s = txt(v) as SituacaoAih;
-  if (!SITUACOES.includes(s)) throw new Error(`Situação de AIH desconhecida no banco: ${txt(v).slice(0, 30)}.`);
+  if (!SITUACOES.includes(s))
+    throw new Error(`Situação de AIH desconhecida no banco: ${txt(v).slice(0, 30)}.`);
   return s;
 }
 
@@ -107,11 +109,14 @@ export function aihDaLinha(x: Linha): AihRegistro {
   const situacao = situacaoDaLinha(x['situacao_tela']);
   const temConta = x['conta_aih_id'] !== null && x['conta_aih_id'] !== undefined;
   const sitConta = txt(x['situacao_conta']);
-  // A justificativa da situação: a da última conta reaberta ou cancelada; senão, a da autorização negada ou cancelada.
-  const justificativaSituacao =
-    temConta && (sitConta === 'reaberta' || sitConta === 'cancelada')
+  // A justificativa da situação: a da autorização negada ou cancelada (o cancelamento é sempre gravado nela, mesmo com
+  // a conta reaberta antes); senão, a da última conta reaberta; sem conta, a da autorização.
+  const sitAutorizacao = txt(x['situacao_autorizacao']);
+  const justificativaSituacao = ['negada', 'cancelada', 'devolvida'].includes(sitAutorizacao)
+    ? txtOuNulo(x['motivo_autorizacao'])
+    : temConta && (sitConta === 'reaberta' || sitConta === 'cancelada')
       ? txtOuNulo(x['motivo_conta'])
-      : !temConta || txt(x['situacao_autorizacao']) === 'cancelada'
+      : !temConta
         ? txtOuNulo(x['motivo_autorizacao'])
         : null;
   const arquivo = txtOuNulo(x['numero_arquivo']);
@@ -171,7 +176,10 @@ export class LeiturasAihPropria {
   }
 
   async aihPorNumero(numero: string): Promise<AihRegistro | null> {
-    const x = await this.l.uma(`${SQL_AIH} AND a.numero_aih = ? ORDER BY a.id DESC LIMIT 1`, [this.est, numero]);
+    const x = await this.l.uma(`${SQL_AIH} AND a.numero_aih = ? ORDER BY a.id DESC LIMIT 1`, [
+      this.est,
+      numero,
+    ]);
     return x ? aihDaLinha(x) : null;
   }
 
@@ -271,38 +279,34 @@ export class LeiturasAihPropria {
       { teto: 2_000 },
     );
     const itens: ItemAih[] = [
-      ...procs.map(
-        (x): ItemAih => ({
-          sequencia: num(x['sequencia']),
-          tipo: txt(x['tipo']) === 'diaria_uti' ? 'diaria-uti' : (txt(x['tipo']) as ItemAih['tipo']),
-          procedimento: txt(x['codigo_sigtap']),
-          sigtap: num(x['procedimento_sigtap_id']),
-          quantidade: num(x['quantidade']),
-          cbo: txtOuNulo(x['codigo_cbo']),
-          item: numOuNulo(x['conta_hospitalar_item_id']),
-          tipoUti: numOuNulo(x['tipo_leito_uti']),
-          opm: null,
-        }),
-      ),
-      ...opms.map(
-        (x): ItemAih => ({
-          sequencia: num(x['sequencia']),
-          tipo: 'opm',
-          procedimento: txt(x['codigo_sigtap']),
-          sigtap: num(x['procedimento_sigtap_id']),
-          quantidade: num(x['quantidade']),
-          cbo: null,
-          item: numOuNulo(x['conta_hospitalar_item_id']),
-          tipoUti: null,
-          opm: {
-            cnpjFornecedor: txt(x['cnpj_fornecedor']),
-            notaFiscal: txt(x['numero_nota_fiscal']),
-            registroAnvisa: txt(x['registro_anvisa']),
-            serie: txt(x['serie']),
-            lote: txt(x['lote']),
-          },
-        }),
-      ),
+      ...procs.map((x): ItemAih => ({
+        sequencia: num(x['sequencia']),
+        tipo: txt(x['tipo']) === 'diaria_uti' ? 'diaria-uti' : (txt(x['tipo']) as ItemAih['tipo']),
+        procedimento: txt(x['codigo_sigtap']),
+        sigtap: num(x['procedimento_sigtap_id']),
+        quantidade: num(x['quantidade']),
+        cbo: txtOuNulo(x['codigo_cbo']),
+        item: numOuNulo(x['conta_hospitalar_item_id']),
+        tipoUti: numOuNulo(x['tipo_leito_uti']),
+        opm: null,
+      })),
+      ...opms.map((x): ItemAih => ({
+        sequencia: num(x['sequencia']),
+        tipo: 'opm',
+        procedimento: txt(x['codigo_sigtap']),
+        sigtap: num(x['procedimento_sigtap_id']),
+        quantidade: num(x['quantidade']),
+        cbo: null,
+        item: numOuNulo(x['conta_hospitalar_item_id']),
+        tipoUti: null,
+        opm: {
+          cnpjFornecedor: txt(x['cnpj_fornecedor']),
+          notaFiscal: txt(x['numero_nota_fiscal']),
+          registroAnvisa: txt(x['registro_anvisa']),
+          serie: txt(x['serie']),
+          lote: txt(x['lote']),
+        },
+      })),
     ];
     return itens.sort((a, b) => a.sequencia - b.sequencia);
   }
@@ -323,12 +327,22 @@ export class LeiturasAihPropria {
         WHERE pf.cpf = ? AND pp.excluido_em IS NULL ORDER BY pp.id LIMIT 1`,
       [c],
     );
-    if (p) return { profissional: num(p['id']), externo: null, lido: { cpf: c, nome: txt(p['nome']), cns: txtOuNulo(p['cns']) } };
+    if (p)
+      return {
+        profissional: num(p['id']),
+        externo: null,
+        lido: { cpf: c, nome: txt(p['nome']), cns: txtOuNulo(p['cns']) },
+      };
     const e = await this.l.uma(
       'SELECT id, nome, cns FROM solicitante_externo WHERE cpf = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
       [c],
     );
-    if (e) return { profissional: null, externo: num(e['id']), lido: { cpf: c, nome: txt(e['nome']), cns: txtOuNulo(e['cns']) } };
+    if (e)
+      return {
+        profissional: null,
+        externo: num(e['id']),
+        lido: { cpf: c, nome: txt(e['nome']), cns: txtOuNulo(e['cns']) },
+      };
     return null;
   }
 }
@@ -349,7 +363,10 @@ export class GravacoesAihPropria {
   }
 
   /** Trava a autorização e confere a versão vista e a situação de origem da tela. */
-  private async conferir(a: { id: number; versao: number }, de: readonly SituacaoAih[]): Promise<AihRegistro> {
+  private async conferir(
+    a: { id: number; versao: number },
+    de: readonly SituacaoAih[],
+  ): Promise<AihRegistro> {
     const x = await this.leituras.aih(a.id, true);
     if (!x || x.versao !== a.versao || !de.includes(x.situacao)) versaoAlterada();
     return x;
@@ -398,11 +415,16 @@ export class GravacoesAihPropria {
         'SELECT id FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [p.conta, this.est],
       );
-      if (!c) throw new ErroAih('nao-encontrado', 'A conta da internação não foi encontrada neste estabelecimento.');
+      if (!c)
+        throw new ErroAih(
+          'nao-encontrado',
+          'A conta da internação não foi encontrada neste estabelecimento.',
+        );
       conta = num(c['id']);
     }
     const sigtap = await this.sigtapId(p.procedimentoSolicitado);
-    if (!sigtap) throw recusa('procedimento-inexistente', 'O procedimento solicitado não existe na tabela unificada.');
+    if (!sigtap)
+      throw recusa('procedimento-inexistente', 'O procedimento solicitado não existe na tabela unificada.');
     const sol = await this.leituras.solicitantePorCpf(p.solicitante);
     if (!sol) throw recusa('solicitante-inexistente', 'O médico solicitante não está no cadastro.');
     const carater = await this.tx.uma(
@@ -410,6 +432,8 @@ export class GravacoesAihPropria {
         ORDER BY (codigo_oficial = ?) DESC, id LIMIT 1`,
       [p.carater, p.carater, p.carater],
     );
+    if (!carater)
+      throw recusa('carater-inexistente', 'O caráter do atendimento não está no domínio do SUS do cliente.');
     return this.tx.incluir('autorizacao_internacao_sus', {
       estabelecimento_id: this.est,
       paciente_id: num(i['paciente_id']),
@@ -420,7 +444,7 @@ export class GravacoesAihPropria {
       solicitado_procedimento_sigtap_id: sigtap,
       codigo_cid10_principal: p.cidPrincipal.replace('.', '').toUpperCase(),
       codigo_cid10_secundario: p.cidSecundario ? p.cidSecundario.replace('.', '').toUpperCase() : null,
-      carater_dominio_sus_id: carater ? num(carater['id']) : null,
+      carater_dominio_sus_id: num(carater['id']),
       solicitante_profissional_id: sol.profissional,
       solicitante_externo_id: sol.externo,
       justificativa_laudo: p.justificativa.slice(0, 2000),
@@ -516,9 +540,13 @@ export class GravacoesAihPropria {
     );
     if (!base) throw new ErroAih('nao-encontrado', 'A internação da AIH não foi encontrada.');
     if (base['carater_dominio_sus_id'] === null || base['carater_dominio_sus_id'] === undefined)
-      throw recusa('carater-inexistente', 'O caráter do atendimento da AIH não está no domínio do SUS do cliente.');
+      throw recusa(
+        'carater-inexistente',
+        'O caráter do atendimento da AIH não está no domínio do SUS do cliente.',
+      );
     const realizado = await this.sigtapId(p.procedimentoRealizado);
-    if (!realizado) throw recusa('procedimento-inexistente', 'O procedimento realizado não existe na tabela unificada.');
+    if (!realizado)
+      throw recusa('procedimento-inexistente', 'O procedimento realizado não existe na tabela unificada.');
     const anterior = await this.contaAtual(a.id);
     const conta = await this.tx.incluir('conta_aih', {
       estabelecimento_id: this.est,
@@ -549,7 +577,8 @@ export class GravacoesAihPropria {
     for (const item of p.itens) {
       sequencia += 1;
       const sigtap = item.sigtap ?? (await this.sigtapId(item.procedimento));
-      if (!sigtap) throw recusa('procedimento-inexistente', 'Um item do fechamento não existe na tabela unificada.');
+      if (!sigtap)
+        throw recusa('procedimento-inexistente', 'Um item do fechamento não existe na tabela unificada.');
       if (item.tipo === 'opm') {
         const cnpj = soDigitos(item.opm?.cnpjFornecedor ?? '');
         await this.tx.incluir('conta_aih_opm', {
@@ -604,7 +633,11 @@ export class GravacoesAihPropria {
     const { substituidos, remessa } = await gravarRemessa(this.tx, this.est, a, 'aih', {
       quantidade_aih: aihs.length,
     });
-    await this.apresentarAihs(remessa, { id: a.competencia.id, competencia: a.competencia.competencia }, aihs);
+    await this.apresentarAihs(
+      remessa,
+      { id: a.competencia.id, competencia: a.competencia.competencia },
+      aihs,
+    );
     return { substituidos, remessa };
   }
 
@@ -615,7 +648,8 @@ export class GravacoesAihPropria {
   ): Promise<void> {
     for (const ref of aihs) {
       const x = await this.conferir(ref, ['fechada', 'apresentada']);
-      if (x.situacao === 'apresentada' && x.competenciaApresentacao !== competencia.competencia) versaoAlterada();
+      if (x.situacao === 'apresentada' && x.competenciaApresentacao !== competencia.competencia)
+        versaoAlterada();
       const c = await this.contaAtual(ref.id);
       if (!c) versaoAlterada();
       await this.tx.alterar('conta_aih', c.id, c.versao, {
@@ -625,5 +659,102 @@ export class GravacoesAihPropria {
       });
       await this.tx.alterar('autorizacao_internacao_sus', ref.id, ref.versao, {});
     }
+  }
+}
+
+/** As colunas de controle que a cópia de uma linha não leva (o banco e o Escritor preenchem de novo). */
+const CONTROLE = new Set([
+  'id',
+  'criado_em',
+  'criado_por',
+  'alterado_em',
+  'alterado_por',
+  'versao',
+  'excluido_em',
+  'excluido_por',
+]);
+const copia = (x: Linha, sem: readonly string[] = []): Linha =>
+  Object.fromEntries(Object.entries(x).filter(([k]) => !CONTROLE.has(k) && !sem.includes(k)));
+
+/**
+ * O retorno do gestor na AIH (a ponte que a família da APAC e do retorno chama; a regra da situação da AIH é daqui).
+ * - Aplicar: a última conta apresentada (ou já aprovada ou rejeitada, se o retorno vier de novo) passa a aprovada ou
+ *   rejeitada; a competência e a remessa ficam. Outra situação devolve false, sem mudar nada (como na memória).
+ * - Reapresentar: a conta rejeitada fica como está (a história da apresentação e do retorno não se apaga) e a AIH ganha
+ *   uma conta nova, cópia da rejeitada com os itens, "fechada", sem competência nem remessa, que aponta a anterior
+ *   (numero_fechamento seguinte). Assim a leitura mostra competenciaApresentacao e arquivo nulos e reapresentacoes
+ *   +1 (as contas anteriores com remessa). Diferença da memória: o "fechamento" da tela sobe 1 (itensAih lê a cópia).
+ */
+export class PonteAihPropria implements PonteAihDoRetorno {
+  async aplicarRetornoNaAih(
+    tx: TxOperacao,
+    est: number,
+    aih: number,
+    situacao: 'aprovada' | 'rejeitada',
+  ): Promise<boolean> {
+    // Quem aplica fica na trilha pelo usuário da sessão (o "por" da tela não é gravado de novo).
+    const x = await new LeiturasAihPropria(tx, est, tx).aih(aih, true);
+    if (!x || !['apresentada', 'aprovada', 'rejeitada'].includes(x.situacao)) return false;
+    const c = await this.ultimaConta(tx, est, aih);
+    if (!c) return false;
+    await tx.alterar('conta_aih', num(c['id']), num(c['versao']), { situacao });
+    await tx.alterar('autorizacao_internacao_sus', aih, x.versao, {});
+    return true;
+  }
+
+  async reapresentarAih(tx: TxOperacao, est: number, aih: number): Promise<void> {
+    const x = await new LeiturasAihPropria(tx, est, tx).aih(aih, true);
+    const c = x && x.situacao === 'rejeitada' ? await this.ultimaConta(tx, est, aih) : null;
+    if (!x || !c) throw new ErroAih('versao-alterada', 'A AIH não está rejeitada: nada foi reapresentado.');
+    const anterior = num(c['id']);
+    const nova = await tx.incluir('conta_aih', {
+      ...copia(c, [
+        'competencia_sus_id',
+        'remessa_sisaih_id',
+        'motivo_situacao',
+        'valor_aprovado',
+        'valor_glosado',
+      ]),
+      anterior_conta_aih_id: anterior,
+      numero_fechamento: num(c['numero_fechamento']) + 1,
+      situacao: 'fechada',
+      fechada_em: new Date(),
+      fechada_por_usuario_id: tx.contexto.usuario,
+      origem: 'sistema',
+    });
+    const procs = await tx.consultar(
+      'SELECT * FROM conta_aih_procedimento WHERE conta_aih_id = ? AND excluido_em IS NULL ORDER BY sequencia, id',
+      [anterior],
+      { teto: 5_000 },
+    );
+    const deParaProc = new Map<number, number>();
+    for (const p of procs)
+      deParaProc.set(
+        num(p['id']),
+        await tx.incluir('conta_aih_procedimento', { ...copia(p), conta_aih_id: nova }),
+      );
+    const opms = await tx.consultar(
+      'SELECT * FROM conta_aih_opm WHERE conta_aih_id = ? AND excluido_em IS NULL ORDER BY sequencia, id',
+      [anterior],
+      { teto: 5_000 },
+    );
+    for (const o of opms) {
+      const ligado = numOuNulo(o['conta_aih_procedimento_id']);
+      await tx.incluir('conta_aih_opm', {
+        ...copia(o),
+        conta_aih_id: nova,
+        conta_aih_procedimento_id: ligado === null ? null : (deParaProc.get(ligado) ?? null),
+      });
+    }
+    await tx.alterar('autorizacao_internacao_sus', aih, x.versao, {});
+  }
+
+  private async ultimaConta(tx: TxOperacao, est: number, aih: number): Promise<Linha | null> {
+    const ls = await tx.consultarParaAtualizar(
+      `SELECT * FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND estabelecimento_id = ?
+          AND excluido_em IS NULL ORDER BY numero_fechamento DESC LIMIT 1`,
+      [aih, est],
+    );
+    return ls[0] ?? null;
   }
 }

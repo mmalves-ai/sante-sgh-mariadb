@@ -8,11 +8,22 @@
 // itens do fechamento e o isolamento por estabelecimento. Massa SINTÉTICA, limpa no fim (a internação fica, reaproveitada).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { createHash, randomUUID } from 'node:crypto';
-import { definirOperacao, type Escritor, NucleoProprio, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
+import {
+  definirOperacao,
+  type Escritor,
+  NucleoProprio,
+  type ResultadoOperacao,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { numeroAih } from '@sgh/dominio-faturamento';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { GravacoesAihPropria, LeiturasAihPropria, TABELAS_SUS_AIH } from './porta-propria-aih.js';
+import {
+  GravacoesAihPropria,
+  LeiturasAihPropria,
+  PonteAihPropria,
+  TABELAS_SUS_AIH,
+} from './porta-propria-aih.js';
 import { GravacaoSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
@@ -61,17 +72,25 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     try {
       await nucleo
         .criarExecutor()
-        .executar(op, CLIENTE, { chave }, { cliente: CLIENTE, estabelecimento: est, usuario: null, correlacao, chaveIdempotencia: chave });
+        .executar(
+          op,
+          CLIENTE,
+          { chave },
+          { cliente: CLIENTE, estabelecimento: est, usuario: null, correlacao, chaveIdempotencia: chave },
+        );
     } catch (erro) {
       throw recusada ?? erro;
     }
     return (saida as unknown as { v: T }).v;
   }
   const ler = <T>(est: number, fn: (l: LeiturasAihPropria) => Promise<T>) =>
-    nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: est, correlacao }, (l) => fn(new LeiturasAihPropria(l, est)));
+    nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: est, correlacao }, (l) =>
+      fn(new LeiturasAihPropria(l, est)),
+    );
   const contar = async (sql: string, p: unknown[]) =>
     Number(
-      (await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) => l.uma<{ n: number }>(sql, p)))?.n ?? 0,
+      (await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) => l.uma<{ n: number }>(sql, p)))?.n ??
+        0,
     );
 
   async function limpar(): Promise<void> {
@@ -82,7 +101,9 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
             `DELETE x FROM ${t} x JOIN conta_aih c ON c.id = x.conta_aih_id WHERE c.estabelecimento_id = ?`,
             [est],
           );
-        await e.executar('UPDATE conta_aih SET anterior_conta_aih_id = NULL WHERE estabelecimento_id = ?', [est]);
+        await e.executar('UPDATE conta_aih SET anterior_conta_aih_id = NULL WHERE estabelecimento_id = ?', [
+          est,
+        ]);
         await e.executar('DELETE FROM conta_aih WHERE estabelecimento_id = ?', [est]);
         await e.executar('DELETE FROM autorizacao_internacao_sus WHERE estabelecimento_id = ?', [est]);
         await e.executar('DELETE FROM remessa_sisaih WHERE estabelecimento_id = ?', [est]);
@@ -263,7 +284,21 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
              modalidade_internacao_id, unidade_internacao_id, acomodacao_id, especialidade_medica_id,
              medico_assistente_profissional_id, fonte_pagadora_id, situacao, criado_em)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)`,
-          [ids.est, `${P}-IN1`, at, ids.paciente, entrada, carater, modal, ui, acomodacao, esp, prof, fonte, agora],
+          [
+            ids.est,
+            `${P}-IN1`,
+            at,
+            ids.paciente,
+            entrada,
+            carater,
+            modal,
+            ui,
+            acomodacao,
+            esp,
+            prof,
+            fonte,
+            agora,
+          ],
         );
       }
     });
@@ -325,30 +360,74 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     // Versão velha: recusa e nada muda.
     await expect(
       gravar(ids.est, (g) =>
-        g.autorizarAih({ id, versao: 9 }, { faixa: ids.faixa, numero, autorizador: '700000000000005', dataAutorizacao: '2026-03-03', por: 'x' }),
+        g.autorizarAih(
+          { id, versao: 9 },
+          {
+            faixa: ids.faixa,
+            numero,
+            autorizador: '700000000000005',
+            dataAutorizacao: '2026-03-03',
+            por: 'x',
+          },
+        ),
       ),
     ).rejects.toBeInstanceOf(ErroAih);
     await gravar(ids.est, (g) =>
-      g.autorizarAih({ id, versao: 1 }, { faixa: ids.faixa, numero, autorizador: '700000000000005', dataAutorizacao: '2026-03-03', por: 'x' }),
+      g.autorizarAih(
+        { id, versao: 1 },
+        { faixa: ids.faixa, numero, autorizador: '700000000000005', dataAutorizacao: '2026-03-03', por: 'x' },
+      ),
     );
     a = await ler(ids.est, (l) => l.aih(id));
-    expect(a).toMatchObject({ situacao: 'autorizada', numero, faixa: ids.faixa, cnsAutorizador: '700000000000005', dataAutorizacao: '2026-03-03', versao: 2 });
+    expect(a).toMatchObject({
+      situacao: 'autorizada',
+      numero,
+      faixa: ids.faixa,
+      cnsAutorizador: '700000000000005',
+      dataAutorizacao: '2026-03-03',
+      versao: 2,
+    });
     expect((await ler(ids.est, (l) => l.aihPorNumero(numero)))?.id).toBe(id);
 
     // Outro laudo não pode usar o mesmo número.
     const outro = await gravar(ids.est, (g) => g.inserirAih(laudo()));
     await expect(
       gravar(ids.est, (g) =>
-        g.autorizarAih({ id: outro, versao: 1 }, { faixa: ids.faixa, numero, autorizador: '', dataAutorizacao: '2026-03-03', por: 'x' }),
+        g.autorizarAih(
+          { id: outro, versao: 1 },
+          { faixa: ids.faixa, numero, autorizador: '', dataAutorizacao: '2026-03-03', por: 'x' },
+        ),
       ),
     ).rejects.toMatchObject({ codigo: 'numero-em-uso' });
     await gravar(ids.est, (g) => g.negarAih({ id: outro, versao: 1 }, 'Negada pelo gestor (teste)'));
-    expect(await ler(ids.est, (l) => l.aih(outro))).toMatchObject({ situacao: 'negada', justificativaSituacao: 'Negada pelo gestor (teste)', versao: 2 });
+    expect(await ler(ids.est, (l) => l.aih(outro))).toMatchObject({
+      situacao: 'negada',
+      justificativaSituacao: 'Negada pelo gestor (teste)',
+      versao: 2,
+    });
     expect(await ler(ids.est, (l) => l.aihsDasInternacoes([ids.internacao]))).toHaveLength(1);
 
     const itens = [
-      { tipo: 'principal' as const, procedimento: SIG_P, sigtap: null, quantidade: 1, cbo: null, item: null, tipoUti: null, opm: null },
-      { tipo: 'diaria-uti' as const, procedimento: SIG_U, sigtap: ids.sigU, quantidade: 3, cbo: null, item: null, tipoUti: 2, opm: null },
+      {
+        tipo: 'principal' as const,
+        procedimento: SIG_P,
+        sigtap: null,
+        quantidade: 1,
+        cbo: null,
+        item: null,
+        tipoUti: null,
+        opm: null,
+      },
+      {
+        tipo: 'diaria-uti' as const,
+        procedimento: SIG_U,
+        sigtap: ids.sigU,
+        quantidade: 3,
+        cbo: null,
+        item: null,
+        tipoUti: 2,
+        opm: null,
+      },
       {
         tipo: 'opm' as const,
         procedimento: SIG_O,
@@ -357,31 +436,76 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
         cbo: null,
         item: null,
         tipoUti: null,
-        opm: { cnpjFornecedor: '11222333000181', notaFiscal: 'NF93', registroAnvisa: 'ANV93', serie: 'S93', lote: 'L93' },
+        opm: {
+          cnpjFornecedor: '11222333000181',
+          notaFiscal: 'NF93',
+          registroAnvisa: 'ANV93',
+          serie: 'S93',
+          lote: 'L93',
+        },
       },
     ];
-    const fechar = { procedimentoRealizado: SIG_P, permanencia: 10, diariasUti: 3, diariasUtiAnterior: 0, itens, por: 'x' };
-    await expect(gravar(ids.est, (g) => g.fecharAih({ id, versao: 2, fechamento: 1 }, fechar))).rejects.toBeInstanceOf(ErroAih);
+    const fechar = {
+      procedimentoRealizado: SIG_P,
+      permanencia: 10,
+      diariasUti: 3,
+      diariasUtiAnterior: 0,
+      itens,
+      por: 'x',
+    };
+    await expect(
+      gravar(ids.est, (g) => g.fecharAih({ id, versao: 2, fechamento: 1 }, fechar)),
+    ).rejects.toBeInstanceOf(ErroAih);
     await gravar(ids.est, (g) => g.fecharAih({ id, versao: 2, fechamento: 0 }, fechar));
     a = await ler(ids.est, (l) => l.aih(id));
-    expect(a).toMatchObject({ situacao: 'fechada', fechamento: 1, procedimentoRealizado: SIG_P, permanencia: 10, diariasUti: 3, versao: 3 });
+    expect(a).toMatchObject({
+      situacao: 'fechada',
+      fechamento: 1,
+      procedimentoRealizado: SIG_P,
+      permanencia: 10,
+      diariasUti: 3,
+      versao: 3,
+    });
     const lidos = await ler(ids.est, (l) => l.itensAih(id, 1));
     expect(lidos.map((x) => [x.sequencia, x.tipo, x.procedimento, x.quantidade, x.tipoUti])).toEqual([
       [1, 'principal', SIG_P, 1, null],
       [2, 'diaria-uti', SIG_U, 3, 2],
       [3, 'opm', SIG_O, 1, null],
     ]);
-    expect(lidos[2]?.opm).toEqual({ cnpjFornecedor: '11222333000181', notaFiscal: 'NF93', registroAnvisa: 'ANV93', serie: 'S93', lote: 'L93' });
+    expect(lidos[2]?.opm).toEqual({
+      cnpjFornecedor: '11222333000181',
+      notaFiscal: 'NF93',
+      registroAnvisa: 'ANV93',
+      serie: 'S93',
+      lote: 'L93',
+    });
 
     // Reabrir: a conta fica (reaberta, com o motivo); o fechamento seguinte é outra conta que aponta a anterior.
     await gravar(ids.est, (g) => g.reabrirAih({ id, versao: 3 }, 'Correção do procedimento (teste)'));
     a = await ler(ids.est, (l) => l.aih(id));
-    expect(a).toMatchObject({ situacao: 'autorizada', fechamento: 1, justificativaSituacao: 'Correção do procedimento (teste)', versao: 4 });
-    await gravar(ids.est, (g) => g.fecharAih({ id, versao: 4, fechamento: 1 }, { ...fechar, itens: itens.slice(0, 1) }));
+    expect(a).toMatchObject({
+      situacao: 'autorizada',
+      fechamento: 1,
+      justificativaSituacao: 'Correção do procedimento (teste)',
+      versao: 4,
+    });
+    await gravar(ids.est, (g) =>
+      g.fecharAih({ id, versao: 4, fechamento: 1 }, { ...fechar, itens: itens.slice(0, 1) }),
+    );
     a = await ler(ids.est, (l) => l.aih(id));
     expect(a).toMatchObject({ situacao: 'fechada', fechamento: 2, justificativaSituacao: null, versao: 5 });
-    expect(await contar("SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'reaberta'", [id])).toBe(1);
-    expect(await contar('SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND anterior_conta_aih_id IS NOT NULL', [id])).toBe(1);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'reaberta'",
+        [id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND anterior_conta_aih_id IS NOT NULL',
+        [id],
+      ),
+    ).toBe(1);
     expect(await ler(ids.est, (l) => l.itensAih(id, 2))).toHaveLength(1);
     expect(await ler(ids.est, (l) => l.itensAih(id, 1))).toHaveLength(3);
 
@@ -389,10 +513,28 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     const pag = await ler(ids.est, (l) => l.paginaAihs({ pagina: 0, porPagina: 10 }));
     expect(pag.total).toBe(2);
     expect(pag.porSituacao).toEqual({ fechada: 1, negada: 1 });
-    expect((await ler(ids.est, (l) => l.paginaAihs({ situacao: 'negada', pagina: 0, porPagina: 10 }))).itens.map((x) => x.id)).toEqual([outro]);
-    expect((await ler(ids.est, (l) => l.paginaAihs({ numero: numero.slice(0, 8), pagina: 0, porPagina: 10 }))).itens.map((x) => x.id)).toEqual([id]);
-    expect((await ler(ids.est, (l) => l.paginaAihs({ prontuario: 930_093_001, registro: ids.internacao, pagina: 0, porPagina: 1 }))).itens).toHaveLength(1);
-    expect(await ler(ids.estB, (l) => l.paginaAihs({ pagina: 0, porPagina: 10 }))).toEqual({ itens: [], total: 0, porSituacao: {} });
+    expect(
+      (await ler(ids.est, (l) => l.paginaAihs({ situacao: 'negada', pagina: 0, porPagina: 10 }))).itens.map(
+        (x) => x.id,
+      ),
+    ).toEqual([outro]);
+    expect(
+      (
+        await ler(ids.est, (l) => l.paginaAihs({ numero: numero.slice(0, 8), pagina: 0, porPagina: 10 }))
+      ).itens.map((x) => x.id),
+    ).toEqual([id]);
+    expect(
+      (
+        await ler(ids.est, (l) =>
+          l.paginaAihs({ prontuario: 930_093_001, registro: ids.internacao, pagina: 0, porPagina: 1 }),
+        )
+      ).itens,
+    ).toHaveLength(1);
+    expect(await ler(ids.estB, (l) => l.paginaAihs({ pagina: 0, porPagina: 10 }))).toEqual({
+      itens: [],
+      total: 0,
+      porSituacao: {},
+    });
     expect(await ler(ids.estB, (l) => l.aih(id))).toBeNull();
 
     // Apresentação no SISAIH.
@@ -420,40 +562,301 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
       versaoObjeto: null,
       por: 'x',
     };
-    await expect(gravar(ids.est, (g) => g.gravarArquivoSisaih(novo, [{ id, versao: 4 }]))).rejects.toBeInstanceOf(ErroAih);
-    expect(await contar('SELECT COUNT(*) AS n FROM remessa_sisaih WHERE estabelecimento_id = ?', [ids.est])).toBe(0);
+    await expect(
+      gravar(ids.est, (g) => g.gravarArquivoSisaih(novo, [{ id, versao: 4 }])),
+    ).rejects.toBeInstanceOf(ErroAih);
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM remessa_sisaih WHERE estabelecimento_id = ?', [ids.est]),
+    ).toBe(0);
     const r = await gravar(ids.est, (g) => g.gravarArquivoSisaih(novo, [{ id, versao: 5 }]));
     expect(r.substituidos).toBe(0);
     a = await ler(ids.est, (l) => l.aih(id));
-    expect(a).toMatchObject({ situacao: 'apresentada', competenciaApresentacao: '202603', arquivo: arq, versao: 6 });
+    expect(a).toMatchObject({
+      situacao: 'apresentada',
+      competenciaApresentacao: '202603',
+      arquivo: arq,
+      versao: 6,
+    });
     expect(await contar('SELECT quantidade_aih AS n FROM remessa_sisaih WHERE id = ?', [r.remessa])).toBe(1);
     expect((await ler(ids.est, (l) => l.aihsParaApresentar('202603'))).map((x) => x.id)).toEqual([id]);
     expect(await ler(ids.est, (l) => l.aihsParaApresentar('202604'))).toEqual([]);
 
     // Apresentada não se cancela nem reabre.
-    await expect(gravar(ids.est, (g) => g.cancelarAih({ id, versao: 6 }, 'x'))).rejects.toBeInstanceOf(ErroAih);
-    await expect(gravar(ids.est, (g) => g.reabrirAih({ id, versao: 6 }, 'x'))).rejects.toBeInstanceOf(ErroAih);
+    await expect(gravar(ids.est, (g) => g.cancelarAih({ id, versao: 6 }, 'x'))).rejects.toBeInstanceOf(
+      ErroAih,
+    );
+    await expect(gravar(ids.est, (g) => g.reabrirAih({ id, versao: 6 }, 'x'))).rejects.toBeInstanceOf(
+      ErroAih,
+    );
   }, 120_000);
 
   it('cancelar: da solicitada (autorização) e da fechada (conta e autorização), com o motivo', async () => {
     const s = await gravar(ids.est, (g) => g.inserirAih(laudo()));
     await gravar(ids.est, (g) => g.cancelarAih({ id: s, versao: 1 }, 'Laudo em duplicidade (teste)'));
-    expect(await ler(ids.est, (l) => l.aih(s))).toMatchObject({ situacao: 'cancelada', justificativaSituacao: 'Laudo em duplicidade (teste)' });
+    expect(await ler(ids.est, (l) => l.aih(s))).toMatchObject({
+      situacao: 'cancelada',
+      justificativaSituacao: 'Laudo em duplicidade (teste)',
+    });
 
     const f = await gravar(ids.est, (g) => g.inserirAih(laudo()));
     await gravar(ids.est, (g) =>
-      g.autorizarAih({ id: f, versao: 1 }, { faixa: ids.faixa, numero: numeroAih(BASE + 2n), autorizador: '', dataAutorizacao: '2026-03-04', por: 'x' }),
+      g.autorizarAih(
+        { id: f, versao: 1 },
+        {
+          faixa: ids.faixa,
+          numero: numeroAih(BASE + 2n),
+          autorizador: '',
+          dataAutorizacao: '2026-03-04',
+          por: 'x',
+        },
+      ),
     );
     await gravar(ids.est, (g) =>
-      g.fecharAih({ id: f, versao: 2, fechamento: 0 }, { procedimentoRealizado: SIG_P, permanencia: 2, diariasUti: 0, diariasUtiAnterior: 0, itens: [], por: 'x' }),
+      g.fecharAih(
+        { id: f, versao: 2, fechamento: 0 },
+        {
+          procedimentoRealizado: SIG_P,
+          permanencia: 2,
+          diariasUti: 0,
+          diariasUtiAnterior: 0,
+          itens: [],
+          por: 'x',
+        },
+      ),
     );
     await gravar(ids.est, (g) => g.cancelarAih({ id: f, versao: 3 }, 'Conta cancelada (teste)'));
-    expect(await ler(ids.est, (l) => l.aih(f))).toMatchObject({ situacao: 'cancelada', justificativaSituacao: 'Conta cancelada (teste)', versao: 4 });
-    expect(await contar("SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'cancelada'", [f])).toBe(1);
+    expect(await ler(ids.est, (l) => l.aih(f))).toMatchObject({
+      situacao: 'cancelada',
+      justificativaSituacao: 'Conta cancelada (teste)',
+      versao: 4,
+    });
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'cancelada'",
+        [f],
+      ),
+    ).toBe(1);
     // Laudo sem solicitante no cadastro ou de internação de outro estabelecimento: recusado.
-    await expect(gravar(ids.est, (g) => g.inserirAih({ ...laudo(), solicitante: '00000000000' }))).rejects.toMatchObject({
+    await expect(
+      gravar(ids.est, (g) => g.inserirAih({ ...laudo(), solicitante: '00000000000' })),
+    ).rejects.toMatchObject({
       problema: { codigo: 'solicitante-inexistente' },
     });
-    await expect(gravar(ids.estB, (g) => g.inserirAih(laudo()))).rejects.toMatchObject({ codigo: 'nao-encontrado' });
+    await expect(gravar(ids.estB, (g) => g.inserirAih(laudo()))).rejects.toMatchObject({
+      codigo: 'nao-encontrado',
+    });
+    // Caráter fora do domínio do SUS: recusado já no laudo (antes de consumir número da faixa), nada gravado.
+    const antes = await contar(
+      'SELECT COUNT(*) AS n FROM autorizacao_internacao_sus WHERE estabelecimento_id = ?',
+      [ids.est],
+    );
+    await expect(
+      gravar(ids.est, (g) => g.inserirAih({ ...laudo(), carater: 'T93-NAO-EXISTE' })),
+    ).rejects.toMatchObject({
+      problema: { codigo: 'carater-inexistente' },
+    });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM autorizacao_internacao_sus WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]),
+    ).toBe(antes);
+  }, 120_000);
+
+  it('cancelar depois de fechar e reabrir: a justificativa é a do cancelamento, não a da reabertura', async () => {
+    const f = await gravar(ids.est, (g) => g.inserirAih(laudo()));
+    await gravar(ids.est, (g) =>
+      g.autorizarAih(
+        { id: f, versao: 1 },
+        {
+          faixa: ids.faixa,
+          numero: numeroAih(BASE + 3n),
+          autorizador: '',
+          dataAutorizacao: '2026-03-04',
+          por: 'x',
+        },
+      ),
+    );
+    await gravar(ids.est, (g) =>
+      g.fecharAih(
+        { id: f, versao: 2, fechamento: 0 },
+        {
+          procedimentoRealizado: SIG_P,
+          permanencia: 2,
+          diariasUti: 0,
+          diariasUtiAnterior: 0,
+          itens: [],
+          por: 'x',
+        },
+      ),
+    );
+    await gravar(ids.est, (g) => g.reabrirAih({ id: f, versao: 3 }, 'Motivo R da reabertura (teste)'));
+    expect(await ler(ids.est, (l) => l.aih(f))).toMatchObject({
+      situacao: 'autorizada',
+      justificativaSituacao: 'Motivo R da reabertura (teste)',
+    });
+    await gravar(ids.est, (g) => g.cancelarAih({ id: f, versao: 4 }, 'Motivo C do cancelamento (teste)'));
+    expect(await ler(ids.est, (l) => l.aih(f))).toMatchObject({
+      situacao: 'cancelada',
+      justificativaSituacao: 'Motivo C do cancelamento (teste)',
+      versao: 5,
+    });
+  }, 120_000);
+
+  it('retorno do gestor pela ponte: aprovar, rejeitar e reapresentar (conta nova, a rejeitada fica)', async () => {
+    const ponte = new PonteAihPropria();
+    const id = await gravar(ids.est, (g) => g.inserirAih(laudo()));
+    // Fora de apresentada: o retorno não muda nada.
+    expect(
+      await gravar(ids.est, (_g, tx) => ponte.aplicarRetornoNaAih(tx, ids.est, id, 'aprovada', 'x')),
+    ).toBe(false);
+    await gravar(ids.est, (g) =>
+      g.autorizarAih(
+        { id, versao: 1 },
+        {
+          faixa: ids.faixa,
+          numero: numeroAih(BASE + 4n),
+          autorizador: '',
+          dataAutorizacao: '2026-03-04',
+          por: 'x',
+        },
+      ),
+    );
+    const itens = [
+      {
+        tipo: 'principal' as const,
+        procedimento: SIG_P,
+        sigtap: null,
+        quantidade: 1,
+        cbo: null,
+        item: null,
+        tipoUti: null,
+        opm: null,
+      },
+      {
+        tipo: 'opm' as const,
+        procedimento: SIG_O,
+        sigtap: ids.sigO,
+        quantidade: 1,
+        cbo: null,
+        item: null,
+        tipoUti: null,
+        opm: {
+          cnpjFornecedor: '11222333000181',
+          notaFiscal: 'NF93',
+          registroAnvisa: 'ANV93',
+          serie: 'S93',
+          lote: 'L93',
+        },
+      },
+    ];
+    await gravar(ids.est, (g) =>
+      g.fecharAih(
+        { id, versao: 2, fechamento: 0 },
+        {
+          procedimentoRealizado: SIG_P,
+          permanencia: 3,
+          diariasUti: 0,
+          diariasUtiAnterior: 0,
+          itens,
+          por: 'x',
+        },
+      ),
+    );
+    await expect(gravar(ids.est, (_g, tx) => ponte.reapresentarAih(tx, ids.est, id))).rejects.toMatchObject({
+      codigo: 'versao-alterada',
+    });
+    const comp = await gravar(ids.est, (_g, tx) =>
+      new GravacaoSusPropria(tx, ids.est).abrir({ instrumento: 'aih', competencia: '202605', por: 'x' }),
+    );
+    const arq = await gravar(ids.est, (_g, tx) => new GravacaoSusPropria(tx, ids.est).proximoArquivo());
+    const conteudo = `SISAIH sintetico retorno ${arq}`;
+    const sha = createHash('sha256').update(conteudo).digest('hex');
+    const novo: NovoArquivoSus = {
+      id: arq,
+      competencia: { id: comp.id, instrumento: 'aih', competencia: '202605' },
+      leiaute: 'TESTE',
+      versaoLeiaute: '1.0',
+      conferidoOficial: true,
+      nome: `AIH${arq}.TXT`,
+      linhas: 1,
+      registros: 1,
+      procedimentos: 1,
+      semMovimento: false,
+      hash: sha,
+      bytes: conteudo.length,
+      chaveObjeto: `sus/${P}/aih/202605/${arq}-${sha.slice(0, 16)}.txt`,
+      versaoObjeto: null,
+      por: 'x',
+    };
+    await gravar(ids.est, (g) => g.gravarArquivoSisaih(novo, [{ id, versao: 3 }]));
+    expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
+      situacao: 'apresentada',
+      competenciaApresentacao: '202605',
+      arquivo: arq,
+      versao: 4,
+    });
+
+    expect(
+      await gravar(ids.est, (_g, tx) => ponte.aplicarRetornoNaAih(tx, ids.est, id, 'aprovada', 'x')),
+    ).toBe(true);
+    expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
+      situacao: 'aprovada',
+      competenciaApresentacao: '202605',
+      versao: 5,
+    });
+    expect(
+      await gravar(ids.est, (_g, tx) => ponte.aplicarRetornoNaAih(tx, ids.est, id, 'rejeitada', 'x')),
+    ).toBe(true);
+    expect(await ler(ids.est, (l) => l.aih(id))).toMatchObject({
+      situacao: 'rejeitada',
+      reapresentacoes: 0,
+      versao: 6,
+    });
+
+    await gravar(ids.est, (_g, tx) => ponte.reapresentarAih(tx, ids.est, id));
+    const a = await ler(ids.est, (l) => l.aih(id));
+    expect(a).toMatchObject({
+      situacao: 'fechada',
+      competenciaApresentacao: null,
+      arquivo: null,
+      reapresentacoes: 1,
+      procedimentoRealizado: SIG_P,
+      permanencia: 3,
+      fechamento: 2,
+      versao: 7,
+    });
+    // A rejeitada fica com a competência e a remessa; a nova aponta para ela e traz os mesmos itens.
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND situacao = 'rejeitada' AND remessa_sisaih_id IS NOT NULL",
+        [id],
+      ),
+    ).toBe(1);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ? AND anterior_conta_aih_id IS NOT NULL',
+        [id],
+      ),
+    ).toBe(1);
+    const lidos = await ler(ids.est, (l) => l.itensAih(id, 2));
+    expect(lidos.map((x) => [x.sequencia, x.tipo, x.procedimento])).toEqual([
+      [1, 'principal', SIG_P],
+      [2, 'opm', SIG_O],
+    ]);
+    expect(lidos[1]?.opm).toEqual({
+      cnpjFornecedor: '11222333000181',
+      notaFiscal: 'NF93',
+      registroAnvisa: 'ANV93',
+      serie: 'S93',
+      lote: 'L93',
+    });
+    expect((await ler(ids.est, (l) => l.aihsParaApresentar('202606'))).map((x) => x.id)).toContain(id);
+    // Reapresentar de novo, sem estar rejeitada: recusa e nada muda.
+    await expect(gravar(ids.est, (_g, tx) => ponte.reapresentarAih(tx, ids.est, id))).rejects.toMatchObject({
+      codigo: 'versao-alterada',
+    });
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM conta_aih WHERE autorizacao_internacao_sus_id = ?', [id]),
+    ).toBe(2);
   }, 120_000);
 });
