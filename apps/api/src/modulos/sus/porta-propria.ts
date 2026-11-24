@@ -17,9 +17,8 @@
 // O arquivo gerado (número, remessa e registro do núcleo) está em porta-propria-arquivos.ts.
 // O ciclo da AIH pela tela (laudo, autorização, conta e apresentação no SISAIH) está em porta-propria-aih.ts; a APAC
 // pela tela e o retorno do gestor por linha, em porta-propria-apac-retorno.ts, com a ponte própria da AIH (aplicar o
-// retorno e reapresentar). Ainda por escrever nesta porta: as linhas do BPA, da APAC e da CIHA ligadas ao arquivo e a
-// montagem da produção; essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
-// (atendimentos, itens, internação e trajetória da competência) é do lote da conta e da internação: hoje sai vazia.
+// retorno e reapresentar). A montagem da produção da competência (porta-propria-montagens.ts) lê a conta própria; as
+// linhas do BPA, da APAC e da CIHA são gravadas com o arquivo (porta-propria-arquivos.ts).
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoNucleo,
@@ -52,7 +51,6 @@ import {
 import {
   gravarRemessa,
   idArquivoDoNumero,
-  producaoPendente,
   lerArquivo,
   lerArquivos,
   proximoNumeroArquivo,
@@ -119,14 +117,6 @@ export const TABELAS_SUS = [
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
 const INSTRUMENTOS: readonly InstrumentoSusPorta[] = ['ciha', 'bpa', 'apac', 'aih'];
-
-/** A recusa da gravação que o modelo ainda não guarda (pedido do lote 03-05). */
-export function modeloPendente(oque: string): never {
-  throw recusa(
-    'modelo-pendente',
-    `O banco do cliente ainda não guarda ${oque}: a gravação foi recusada e nada mudou (pedido de modelo registrado).`,
-  );
-}
 
 /** AAAAMM → primeiro e último dia (texto ISO). */
 export function periodoDaCompetencia(competencia: string): { inicio: string; fim: string } {
@@ -875,11 +865,6 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     return (this.apacRetGr ??= new GravacaoApacRetorno(this.tx, this.est, new PonteAihPropria()));
   }
 
-  /** A montagem própria lê a produção da competência (porta-propria-montagens.ts). */
-  protected montagemLeProducao(): boolean {
-    return true;
-  }
-
   private async competenciaPorId(id: number): Promise<CompetenciaSusRegistro> {
     await this.tx.consultarParaAtualizar(
       'SELECT id FROM competencia_sus WHERE id = ? AND estabelecimento_id = ?',
@@ -1063,7 +1048,6 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     registros: readonly RegistroCihaParaGravar[],
   ): Promise<{ substituidos: number }> {
-    if (!this.montagemLeProducao()) producaoPendente('ciha');
     const { substituidos, remessa } = await gravarRemessa(
       this.tx,
       this.est,
@@ -1079,7 +1063,6 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     linhas: readonly LinhaBpaParaGravar[],
   ): Promise<{ substituidos: number }> {
-    if (!this.montagemLeProducao()) producaoPendente('bpa');
     const { substituidos, remessa } = await gravarRemessa(this.tx, this.est, a, 'bpa', {
       tipo_bpa: 'misto',
       quantidade_registros: a.registros,
@@ -1100,7 +1083,6 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     linhas: readonly LinhaApacParaGravar[],
   ): Promise<{ substituidos: number }> {
-    if (!this.montagemLeProducao()) producaoPendente('apac');
     const { inicio } = periodoDaCompetencia(a.competencia.competencia);
     const { substituidos, remessa } = await gravarRemessa(this.tx, this.est, a, 'apac', {
       competencia_apresentacao: inicio,
@@ -1294,7 +1276,6 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     a: NovoArquivoSus,
     aihs: readonly { id: number; versao: number }[],
   ): Promise<{ substituidos: number }> {
-    if (!this.montagemLeProducao()) producaoPendente('aih');
     const { substituidos } = await this.aihsG().gravarArquivoSisaih(a, aihs);
     return { substituidos };
   }

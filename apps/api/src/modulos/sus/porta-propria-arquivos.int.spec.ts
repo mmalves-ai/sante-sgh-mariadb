@@ -3,7 +3,7 @@
 // quatro instrumentos); a remessa gerada com o registro do núcleo (`arquivo`: hash, tamanho, imutável, guarda de 5
 // anos) e a chave do objeto; a regeração da competência marca a anterior como substituída (com a substituta) e nada é
 // apagado; as leituras `arquivos` (do mais novo ao mais antigo) e `arquivo(id)` nas quatro remessas; o isolamento por
-// estabelecimento; o arquivo com linhas recusado com "modelo-pendente" sem gravar nada; e o serviço da tela gerando
+// estabelecimento; o arquivo com linhas gravado com a remessa (a linha recusada desfaz tudo); e o serviço da tela gerando
 // e baixando a CIHA sem movimento. Massa SINTÉTICA, limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { createHash } from 'node:crypto';
 import { NucleoProprio } from '@sgh/nucleo';

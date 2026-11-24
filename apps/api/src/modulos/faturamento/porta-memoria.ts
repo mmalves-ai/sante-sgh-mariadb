@@ -559,11 +559,6 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
             'conta-fechada',
             'A conta está fechada, apresentada ou emitida: o item não entra nela. Registre a decisão na fila de lançamento após o fechamento.',
           );
-        if (conta.pacote === 'C')
-          throw recusa(
-            'conta-pacote',
-            'A conta é por pacote: o total é o preço do pacote. O lançamento manual nesta conta ainda não está liberado.',
-          );
         const p = PRECOS[`${e.tipo}:${e.codigo}`];
         if (!p)
           throw recusa('item-fora-da-tabela', 'O item não está na tabela do convênio da conta.', ['codigo']);

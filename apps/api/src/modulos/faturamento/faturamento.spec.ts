@@ -174,7 +174,7 @@ describe('conta do paciente pela HTTP (memória)', () => {
     ).toBe(409);
   });
 
-  it('lançamento manual: grupo fora da meta recusado com a mensagem; preço manual exige a permissão', async () => {
+  it('lançamento manual: todo grupo entra pelo cargo, sem liberação por grupo; o simulador dá o preço da tabela', async () => {
     const s = await entrar('SINT.CONTAS');
     const hoje = (await get(s, '/faturamento/apoio')).json().hoje as string;
     const r = await post(s, '/faturamento/contas/9002/itens', {
@@ -186,8 +186,9 @@ describe('conta do paciente pela HTTP (memória)', () => {
       local: 1,
       ato: 15,
     });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().detail).toContain('ainda não foi liberado');
+    expect(r.statusCode).toBe(200);
+    expect(r.json().mensagem).toBe('Item lançado na conta.');
+    expect(r.json().ids).toBeDefined();
     const sim = (
       await get(s, `/faturamento/simulador?convenio=91&tipo=3&codigo=40801012&quantidade=2&data=${hoje}`)
     ).json();
@@ -336,9 +337,10 @@ describe('correções do M30 (memória)', () => {
     expect(ninguem.json().codigo).toBe('aprovador-sem-alcada');
     const semAlcada = await lancar('SINT.CAIXA');
     expect(semAlcada.json().codigo).toBe('aprovador-sem-alcada');
-    // Aprovador válido: segue até a próxima regra (o grupo ainda fora da meta da reprodução).
+    // Aprovador válido: todo grupo é lançado (sem liberação por grupo); o item entra com o preço manual aprovado.
     const ok = await lancar('SINT.CONTAS.C10');
-    expect(ok.json().codigo).toBe('grupo-nao-liberado');
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().mensagem).toBe('Item lançado na conta.');
   });
 
   it('particular: recebimento contra conta de convênio recusado; fora do escopo, 403', async () => {

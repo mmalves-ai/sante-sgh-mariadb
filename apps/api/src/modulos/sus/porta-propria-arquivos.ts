@@ -5,11 +5,8 @@
 // do núcleo (`arquivo`) guarda o hash, o tamanho, a imutabilidade e a guarda legal de 5 anos e a remessa aponta para ele.
 // A geração nova da mesma competência marca as remessas geradas ou conferidas como `substituida`, com a remessa
 // substituta (o conteúdo antigo segue guardado). Nenhuma remessa é apagada.
-// Linhas: as linhas (registro da CIHA, folha do BPA, produção da APAC e contas da AIH) dependem da montagem própria,
-// que no banco do cliente ainda sai vazia; arquivo com linhas é recusado com "modelo-pendente" antes de gravar qualquer
-// coisa (nada de remessa sem as linhas que o arquivo declara). O arquivo "sem movimento" também é recusado enquanto a
-// montagem própria não ler a produção da competência: a lista vazia de hoje não prova que não houve produção, e um
-// arquivo oficial declarando "sem movimento" de uma competência com internações seria falso (perda de faturamento).
+// Linhas: as linhas (registro da CIHA, folha do BPA, produção da APAC e contas da AIH) vêm da montagem própria, que lê
+// a produção da competência; o arquivo "sem movimento" só sai quando essa leitura não acha produção.
 // Trilha: o número do arquivo (o id da tela) não é o id do registro do núcleo; a trilha com alvo `arquivo` é levada
 // ao id real do registro (idArquivoDoNumero), nunca ao número.
 import { garantirSequencia, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
@@ -136,26 +133,6 @@ export async function proximoNumeroArquivo(tx: TxOperacao): Promise<number> {
     { usuario: tx.contexto.usuario, agora: new Date() },
   );
   return (await tx.proximoNumero(SEQUENCIA_ARQUIVO_SUS)).valor;
-}
-
-/** A recusa do arquivo com linhas enquanto a montagem própria não as produz (nada é gravado). */
-export function linhasPendentes(oque: string): never {
-  throw recusa(
-    'modelo-pendente',
-    `O banco do cliente ainda não guarda ${oque} do arquivo: a geração foi recusada e nada mudou (pedido de modelo registrado).`,
-  );
-}
-
-/**
- * A recusa da geração enquanto a montagem própria não lê a produção da competência (nada é gravado): sem essa
- * leitura, nem o arquivo com linhas nem o "sem movimento" podem ser provados.
- */
-export function producaoPendente(instrumento: InstrumentoSusPorta): never {
-  throw recusa(
-    'modelo-pendente',
-    `O banco do cliente ainda não lê a produção da competência para o arquivo de ${instrumento}: sem essa leitura o ` +
-      'arquivo "sem movimento" não pode ser provado; a geração foi recusada e nada mudou (pedido de modelo registrado).',
-  );
 }
 
 /** O id do registro do núcleo (`arquivo`) do arquivo de número dado no estabelecimento (null se não houver). */

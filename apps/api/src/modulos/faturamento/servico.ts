@@ -12,14 +12,7 @@ import {
   type ReceberParticularEntrada,
   type ResultadoFaturamento,
 } from '@sgh/contratos';
-import {
-  conferirEscopoConvenio,
-  filtroConvenios,
-  grupoDoItem,
-  grupoLiberadoPelaReproducao,
-  mesmoLogin,
-  ROTULO_GRUPO,
-} from '@sgh/dominio-faturamento';
+import { conferirEscopoConvenio, filtroConvenios, mesmoLogin } from '@sgh/dominio-faturamento';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { ApoiosFaturamento } from './apoios.js';
@@ -153,12 +146,8 @@ export class ServicoFaturamento {
     );
   }
 
-  /** O lançamento manual: o grupo na meta da reprodução (liberação por grupo) e o preço manual só com a permissão. */
-  async lancar(
-    s: SessaoCadastro,
-    e: LancarItemEntrada,
-    aptos?: readonly string[],
-  ): Promise<ResultadoFaturamento> {
+  /** O lançamento manual: todo grupo, pelo cargo (`faturamento.item.lancar`); o preço manual só com a permissão própria. */
+  async lancar(s: SessaoCadastro, e: LancarItemEntrada): Promise<ResultadoFaturamento> {
     await this.exigirEscopoConta(s, e.conta);
     if (e.precoManual && !s.pode('faturamento.preco.manual'))
       throw new ErroProblema(
@@ -173,15 +162,6 @@ export class ServicoFaturamento {
     const aprovador = e.precoManual?.aprovador
       ? await this.conferirAprovador(s, e.precoManual.aprovador)
       : null;
-    const grupo = grupoDoItem(e.tipo)!;
-    if (!grupoLiberadoPelaReproducao(grupo, aptos as never))
-      throw new ErroProblema(
-        'recusa-de-negocio',
-        409,
-        'Grupo ainda não liberado',
-        `O lançamento manual de ${ROTULO_GRUPO[grupo].toLowerCase()} ainda não foi liberado: o teste de reprodução ainda não atingiu a meta deste grupo.`,
-        { codigo: 'grupo-nao-liberado' },
-      );
     return this.executar(
       s,
       'faturamento.lancarItem',

@@ -13,7 +13,7 @@
 // por identificação no arquivo: a linha repetida não entra). A AIH da tela é a autorização de internação
 // (autorizacao_internacao_sus); a linha aponta o último fechamento (conta_aih). Mudar a situação da AIH é regra da
 // família da AIH: entra pela ponte (PonteAihDoRetorno: a PonteAihPropria de porta-propria-aih.ts, que o integrador
-// injeta); sem ela, recusa com "modelo-pendente".
+// injeta, obrigatória no construtor da gravação).
 import { garantirSequencia, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   type ApacRegistro,
@@ -343,18 +343,12 @@ export interface PonteAihDoRetorno {
   reapresentarAih(tx: TxOperacao, est: number, aih: number): Promise<void>;
 }
 
-const erroSemPonteAih = (): Error =>
-  recusa(
-    'modelo-pendente',
-    'O banco do cliente ainda não muda a situação da AIH pelo retorno: nada mudou (pedido de modelo registrado).',
-  );
-
 /** As gravações da APAC e do retorno na transação da operação (o Escritor restrito às tabelas declaradas). */
 export class GravacaoApacRetorno extends LeituraApacRetorno {
   constructor(
     private readonly tx: TxOperacao,
     est: number,
-    private readonly ponteAih: PonteAihDoRetorno | null = null,
+    private readonly ponteAih: PonteAihDoRetorno,
   ) {
     super(tx, est);
   }
@@ -693,7 +687,6 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
   }
 
   aplicarRetornoNaAih(aih: number, situacao: 'aprovada' | 'rejeitada', por: string): Promise<boolean> {
-    if (!this.ponteAih) return Promise.reject(erroSemPonteAih());
     return this.ponteAih.aplicarRetornoNaAih(this.tx, this.est, aih, situacao, por);
   }
 
@@ -716,7 +709,6 @@ export class GravacaoApacRetorno extends LeituraApacRetorno {
       tratado_por_usuario_id: this.usuarioQueTrata(),
     });
     if (p.decisao === 'reapresentar' && p.aih !== null) {
-      if (!this.ponteAih) throw erroSemPonteAih();
       await this.ponteAih.reapresentarAih(this.tx, this.est, p.aih);
     }
   }

@@ -4,9 +4,8 @@
 // mudança confere a versão vista (apac-alterada), o número único no estabelecimento (apac-numero-duplicado), sobe as
 // duas versões e nunca apaga o complemento retirado; o encerramento sem o motivo na lista oficial recusa
 // (catalogo-incompleto). O retorno do gestor grava o cabeçalho por arquivo (SHA-256) e uma linha por identificação
-// (a repetida não entra), com as contagens no cabeçalho; o tratamento confere a versão; sem a ponte da AIH, mudar a
-// AIH recusa (modelo-pendente); com a ponte própria da AIH, a linha ligada a uma AIH apresentada a rejeita e a
-// reapresentação abre um fechamento novo. O complemento de terapia renal retirado volta na sequência seguinte.
+// (a repetida não entra), com as contagens no cabeçalho; o tratamento confere a versão; a ponte própria da AIH é
+// obrigatória: a linha ligada a uma AIH apresentada a rejeita e a reapresentação abre um fechamento novo. O complemento de terapia renal retirado volta na sequência seguinte.
 // Massa SINTÉTICA, limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio, type ResultadoOperacao } from '@sgh/nucleo';
@@ -58,7 +57,7 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
     );
   }
 
-  async function gravar<T>(fn: (g: GravacaoApacRetorno) => Promise<T>, comPonte = false): Promise<T> {
+  async function gravar<T>(fn: (g: GravacaoApacRetorno) => Promise<T>): Promise<T> {
     let saida: { v: T } | null = null;
     let recusada: unknown = null;
     const op = definirOperacao({
@@ -67,7 +66,7 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
       entrada: z.object({ chave: z.string() }),
       async gravar(tx) {
         try {
-          saida = { v: await fn(new GravacaoApacRetorno(tx, est, comPonte ? new PonteAihPropria() : null)) };
+          saida = { v: await fn(new GravacaoApacRetorno(tx, est, new PonteAihPropria())) };
         } catch (e) {
           recusada = e;
           throw e;
@@ -500,10 +499,6 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
         ),
       ),
     ).rejects.toMatchObject({ codigo: 'versao-alterada' });
-    const semPonte = await gravar((g) => g.aplicarRetornoNaAih(1, 'aprovada', 'teste')).catch(
-      (e: unknown) => e,
-    );
-    expect(textoDoErro(semPonte)).toContain('modelo-pendente');
     expect(await ler((l) => l.ultimoRetornoDaAih(1))).toBeNull();
   });
 
@@ -576,7 +571,7 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
       const n = await g.inserirRetornoSus(linha);
       expect(await g.aplicarRetornoNaAih(aih, 'rejeitada', 'teste')).toBe(true);
       return n;
-    }, true);
+    });
     expect(id).toBeGreaterThan(0);
     const r = await ler((l) => l.retornoSus(id!));
     expect(r).toMatchObject({ instrumento: 'aih', aih, situacao: 'rejeitada', tratamento: 'pendente' });
@@ -593,13 +588,11 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
         [est],
       ),
     ).toBe(1);
-    await gravar(
-      (g) =>
-        g.tratarRetornoSus(
-          { id: id!, versao: r!.versao },
-          { decisao: 'reapresentar', justificativa: 'Reapresentar corrigida.', por: 'teste', aih },
-        ),
-      true,
+    await gravar((g) =>
+      g.tratarRetornoSus(
+        { id: id!, versao: r!.versao },
+        { decisao: 'reapresentar', justificativa: 'Reapresentar corrigida.', por: 'teste', aih },
+      ),
     );
     expect((await ler((l) => l.retornoSus(id!)))?.tratamento).toBe('reapresentar');
     // A rejeitada fica (com a remessa); o fechamento novo é fechado, aponta a anterior e traz o item.
@@ -618,6 +611,6 @@ describe.skipIf(SEM_BANCO)('APAC e retorno do gestor na porta própria (cliente 
       ),
     ).toBe(1);
     // A AIH voltou a fechada: um retorno novo nela não muda nada (devolve false, como a memória).
-    await expect(gravar((g) => g.aplicarRetornoNaAih(aih, 'aprovada', 'teste'), true)).resolves.toBe(false);
+    await expect(gravar((g) => g.aplicarRetornoNaAih(aih, 'aprovada', 'teste'))).resolves.toBe(false);
   });
 });

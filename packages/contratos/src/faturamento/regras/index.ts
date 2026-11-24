@@ -15,7 +15,6 @@ export * from './particular.js';
 export * from './escopo.js';
 export * from './faturabilidade.js';
 export * from './explicador.js';
-export * from './reproducao.js';
 export * from './tiss.js';
 // M42: regras da onda 4 (abertura da competência, dias sem versão, códigos de baixa confiança, acompanhamento e
 // conferência da competência).

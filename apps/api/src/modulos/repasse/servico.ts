@@ -466,7 +466,7 @@ export class ServicoRepasse {
     );
     if (t.estado !== 'aprovada')
       return { ok: true, mensagem: 'Regra recusada.', ids: { versao: v.id }, repetida: false };
-    // Aprovada: a inclusão no cadastro de regras pela receita (completa e desligada até a conferência: D-REGRA-33).
+    // Aprovada: a inclusão no cadastro de regras pela receita (a porta própria grava a regra com a vigência).
     try {
       const r = await this.apoio.executar(
         s,
@@ -499,7 +499,7 @@ export class ServicoRepasse {
       if (erro instanceof ErroProblema && erro.getStatus() < 500)
         return {
           ok: true,
-          mensagem: `Regra aprovada. A inclusão no cadastro de regras ainda não está liberada: ${erro.message}`,
+          mensagem: `Regra aprovada, mas o cadastro de regras recusou a inclusão: ${erro.message}`,
           ids: { versao: v.id },
           repetida: false,
         };

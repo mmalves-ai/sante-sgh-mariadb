@@ -2,8 +2,8 @@
 // abrir a competência (linha, versão 1, quem e quando, trilha da operação com o evento da tela), recusar a segunda
 // abertura, fechar pela versão vista (e recusar a versão velha), reabrir com o motivo; a equivalência SIGTAP por vigência
 // (registrar, trocar o procedimento, desativar, recusar a versão velha, a página com os nomes); as leituras da tabela
-// unificada (código, busca, nomes, valores e vínculos), dos leitos de UTI habilitados e do CNES; as recusas
-// "modelo-pendente" no que esta porta ainda não escreve e o isolamento por estabelecimento. Também o serviço da tela sobre a porta própria (abrir pela
+// unificada (código, busca, nomes, valores e vínculos), dos leitos de UTI habilitados e do CNES e o isolamento por
+// estabelecimento. Também o serviço da tela sobre a porta própria (abrir pela
 // ServicoSus). Massa SINTÉTICA (estabelecimentos, SIGTAP e itens fictícios), limpa no fim.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';

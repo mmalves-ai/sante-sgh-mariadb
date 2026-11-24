@@ -34,13 +34,3 @@ describe('grupo do item (regra 6)', () => {
     expect(origemDoItem(null).rotulo).toBe('Sem origem');
   });
 });
-
-describe('liberação do lançamento manual pela reprodução', () => {
-  it('só o grupo na meta da rodada', async () => {
-    const { grupoLiberadoPelaReproducao, GRUPOS_NA_META } = await import('../index.js');
-    expect(Array.isArray(GRUPOS_NA_META)).toBe(true);
-    expect(grupoLiberadoPelaReproducao('sadt', ['sadt'])).toBe(true);
-    expect(grupoLiberadoPelaReproducao('matmed', ['sadt'])).toBe(false);
-    expect(grupoLiberadoPelaReproducao('matmed')).toBe(GRUPOS_NA_META.includes('matmed'));
-  });
-});
