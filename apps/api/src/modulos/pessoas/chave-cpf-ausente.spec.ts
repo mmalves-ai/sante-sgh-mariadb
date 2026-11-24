@@ -42,7 +42,8 @@ describe('chave de cifra do CPF pelo ambiente', () => {
     expect(d.chave?.equals(Buffer.alloc(32, 7))).toBe(true);
     expect(diagnosticoChaveCpf({ PESSOAS_CHAVE_CPF: HEX }).chave?.length).toBe(32);
     expect(
-      diagnosticoChaveCpf({ PLATAFORMA_CHAVE_MESTRA: Buffer.alloc(32, 9).toString('base64url') }).chave?.length,
+      diagnosticoChaveCpf({ PLATAFORMA_CHAVE_MESTRA: Buffer.alloc(32, 9).toString('base64url') }).chave
+        ?.length,
     ).toBe(32);
   });
 

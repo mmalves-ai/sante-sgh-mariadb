@@ -25,7 +25,10 @@ function portas() {
     [...METODOS_EFEITO_PONTO, 'incluirMarcacao'].map((m) => [m, vi.fn(async (...a: unknown[]) => [m, ...a])]),
   );
   const gravadorPessoas = Object.fromEntries(
-    [...METODOS_EFEITO_PESSOAS, 'desligarVinculo'].map((m) => [m, vi.fn(async (...a: unknown[]) => [m, ...a])]),
+    [...METODOS_EFEITO_PESSOAS, 'desligarVinculo'].map((m) => [
+      m,
+      vi.fn(async (...a: unknown[]) => [m, ...a]),
+    ]),
   );
   const ponto = {
     gravador: (...a: unknown[]) => {
@@ -56,7 +59,13 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
     const p = portas();
     const sem = efeitosAutoatendimentoProprios(p);
     expect(sem.tabelas).toEqual(
-      expect.arrayContaining(['ajuste_ponto', 'vinculo_trabalho', 'colaborador', 'historico_cargo', 'trilha_auditoria']),
+      expect.arrayContaining([
+        'ajuste_ponto',
+        'vinculo_trabalho',
+        'colaborador',
+        'historico_cargo',
+        'trilha_auditoria',
+      ]),
     );
     expect(sem.tabelas).not.toContain('programacao_ferias');
     const com = efeitosAutoatendimentoProprios({
@@ -72,7 +81,12 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
     const g = efeitosAutoatendimentoProprios(p).gravadores(tx, 3, ctx);
     expect(p.chamadasPonto).toHaveLength(0);
     expect(await g.ponto.travarPessoa(5)).toEqual(['travarPessoa', 5]);
-    expect(await g.ponto.ajustes(1, '2026-10-01', '2026-10-31')).toEqual(['ajustes', 1, '2026-10-01', '2026-10-31']);
+    expect(await g.ponto.ajustes(1, '2026-10-01', '2026-10-31')).toEqual([
+      'ajustes',
+      1,
+      '2026-10-01',
+      '2026-10-31',
+    ]);
     expect(p.chamadasPonto).toEqual([[tx, ctx, 3, 'America/Recife']]);
   });
 
@@ -80,7 +94,14 @@ describe('efeitos da aprovação do autoatendimento sobre as portas próprias', 
     const p = portas();
     const g = efeitosAutoatendimentoProprios(p).gravadores(tx, 3, ctx);
     expect(await g.pessoas.vinculo(7)).toEqual(['vinculo', 7]);
-    await g.pessoas.registrarCorrecao({ vinculo: 7, operacao: 'o', antes: {}, depois: {}, motivo: 'm', por: 'x' });
+    await g.pessoas.registrarCorrecao({
+      vinculo: 7,
+      operacao: 'o',
+      antes: {},
+      depois: {},
+      motivo: 'm',
+      por: 'x',
+    });
     expect(p.chamadasPessoas).toEqual([[tx, ctx, 3]]);
   });
 

@@ -44,7 +44,10 @@ export const METODOS_EFEITO_PESSOAS = [
   'incluirHistorico',
   'registrarCorrecao',
 ] as const satisfies readonly (keyof EfeitoPessoas)[];
-export const METODOS_EFEITO_FOLHA = ['feriasDoVinculoComTrava', 'incluirFerias'] as const satisfies readonly (keyof EfeitoFolha)[];
+export const METODOS_EFEITO_FOLHA = [
+  'feriasDoVinculoComTrava',
+  'incluirFerias',
+] as const satisfies readonly (keyof EfeitoFolha)[];
 
 /** As tabelas que o efeito no ponto grava (o ajuste e a decisão dele; a trava da pessoa é só leitura). */
 export const TABELAS_EFEITO_PONTO = ['ajuste_ponto'] as const;
@@ -62,22 +65,26 @@ export const TABELAS_EFEITO_TRILHA = ['trilha_cadeia', 'trilha_auditoria', 'tril
 export interface FonteGravadorCalculo {
   /** As tabelas que o gravador do cálculo grava (as férias incluídas, quando tiverem modelo). */
   readonly tabelas: readonly string[];
-  gravadorNaTransacao(tx: TxOperacao, est: number): Pick<GravadorCalculoFolha, (typeof METODOS_EFEITO_FOLHA)[number]>;
+  gravadorNaTransacao(
+    tx: TxOperacao,
+    est: number,
+  ): Pick<GravadorCalculoFolha, (typeof METODOS_EFEITO_FOLHA)[number]>;
 }
 
 /** A fonte do cálculo a partir da porta, quando ela oferece o gravador sobre a transação (senão, null). */
-export function fonteCalculoDe(porta: unknown, tabelas: readonly string[] = TABELAS_CALCULO_FOLHA): FonteGravadorCalculo | null {
+export function fonteCalculoDe(
+  porta: unknown,
+  tabelas: readonly string[] = TABELAS_CALCULO_FOLHA,
+): FonteGravadorCalculo | null {
   const g = (porta as { gravadorNaTransacao?: unknown } | null)?.gravadorNaTransacao;
   if (typeof g !== 'function') return null;
   return {
     tabelas,
-    gravadorNaTransacao: (tx, est) =>
-      (g as FonteGravadorCalculo['gravadorNaTransacao']).call(porta, tx, est),
+    gravadorNaTransacao: (tx, est) => (g as FonteGravadorCalculo['gravadorNaTransacao']).call(porta, tx, est),
   };
 }
 
-const PENDENTE_FERIAS =
-  'O efeito da aprovação das férias (a programação das férias gravada com a decisão)';
+const PENDENTE_FERIAS = 'O efeito da aprovação das férias (a programação das férias gravada com a decisão)';
 
 /** Só os métodos listados, cada um sobre o gravador (criado uma vez, na primeira chamada). */
 function restrito<T extends object>(metodos: readonly string[], criar: () => T | Promise<T>): T {
