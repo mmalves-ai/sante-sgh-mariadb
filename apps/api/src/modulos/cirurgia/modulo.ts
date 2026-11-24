@@ -26,6 +26,12 @@ import { PORTA_BLOCO_SEGURO, type PortaBlocoSeguro } from './bloco-seguro-porta.
 import { PortaBlocoSeguroMemoria } from './bloco-seguro-porta-memoria.js';
 import { portaBlocoSeguroIndisponivel, PortaBlocoSeguroPropria } from './bloco-seguro-porta-propria.js';
 import { CirurgiaController } from './cirurgia.controller.js';
+import { DescricaoCirurgicaController } from './descricao-cirurgica.controller.js';
+import {
+  PORTA_DESCRICAO_CIRURGICA,
+  portaDescricaoIndisponivel,
+  PortaDescricaoCirurgicaPropria,
+} from './descricao-cirurgica-porta.js';
 import { PORTA_CIRURGIA, type PortaCirurgia } from './porta.js';
 import { PortaCirurgiaMemoria } from './porta-memoria.js';
 import { portaCirurgiaIndisponivel, PortaCirurgiaPropria } from './porta-propria.js';
@@ -105,11 +111,20 @@ export async function moduloCirurgia(
       AnestesiaController,
       BlocoSeguroController,
       TextoPadraoCirurgiaController,
+      DescricaoCirurgicaController,
     ],
     providers: [
       { provide: PORTA_CIRURGIA, useValue: cirurgia },
       { provide: PORTA_ANESTESIA, useValue: anestesia },
       { provide: PORTA_BLOCO_SEGURO, useValue: blocoSeguro },
+      // 04-CC linha 96: a descrição cirúrgica assinada e as intercorrências (só no banco; sem ele, 503).
+      {
+        provide: PORTA_DESCRICAO_CIRURGICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDescricaoCirurgicaPropria(ctx.nucleo)
+            : portaDescricaoIndisponivel(),
+      },
       // F3.4 (04-CC linha 91): texto padrão da descrição cirúrgica no banco do cliente; sem núcleo, 503.
       {
         provide: PORTA_TEXTO_PADRAO_CIRURGIA,
