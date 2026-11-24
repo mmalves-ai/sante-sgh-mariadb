@@ -51,6 +51,8 @@ import { EstadoProntuario } from './sessao-prontuario.js';
 import { EquipePainelController } from './equipe-painel.controller.js';
 import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-propria.js';
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
+import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
+import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { PORTA_SUMARIO_SECOES, PortaSumarioSecoesPropria } from './sumario-alta-secoes-propria.js';
 import { ResultadosGruposController } from './resultados-grupos.controller.js';
 import { PORTA_GRUPOS_RESULTADO, PortaGruposResultadoPropria } from './resultados-grupos-propria.js';
@@ -158,6 +160,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       EquipePainelController,
       PainelFiltrosController,
       SumarioAltaSecoesController,
+      FarmacovigilanciaController,
       ResultadosGruposController,
     ],
     providers: [
@@ -204,6 +207,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGruposResultadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
+      {
+        provide: FARMACOVIGILANCIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new FarmacovigilanciaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),

@@ -22,6 +22,7 @@ import { PLANO_DO_TIPO } from '@sgh/contratos';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 import { dataHora, fusoValido, PortaRegistroPropria } from './registro-porta-propria.js';
 import { alergiasDaPrescricao } from './alergias-propria.js';
+import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { CatalogoPrescricaoPropria } from './prescricao-propria-catalogo.js';
 import { BASE_PLANO_PROPRIO, GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
 import { RegrasPrescricaoPropria2 } from './prescricao-propria-regras-2.js';
@@ -497,8 +498,13 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
   itensDoProtocolo(...a: Parameters<PortaPrescricao['itensDoProtocolo']>) {
     return this.catalogo.itensDoProtocolo(...a);
   }
-  alergias(...a: Parameters<PortaPrescricao['alergias']>) {
-    return alergiasDaPrescricao(this.nucleo, this.cliente, ...a);
+  async alergias(...a: Parameters<PortaPrescricao['alergias']>) {
+    // 03-PEP L103: a reação adversa não inativada do paciente alerta na prescrição seguinte como alergia.
+    const [alergias, reacoes] = await Promise.all([
+      alergiasDaPrescricao(this.nucleo, this.cliente, ...a),
+      new FarmacovigilanciaPropria(this.nucleo as never, this.cliente).alertasDaPrescricao(a[0], a[1]),
+    ]);
+    return [...alergias, ...reacoes];
   }
   produtosAtivos(...a: Parameters<PortaPrescricao['produtosAtivos']>) {
     return this.catalogo.produtosAtivos(...a);
