@@ -119,6 +119,38 @@
   `sante-sgh-dados/obra/logs/diag-final.log` e resultado em `sante-sgh-dados/obra/lib/diag-cadeia/`. Toda entidade
   principal tem de mostrar gravados > 0 e recusa só justificada.
 
+## ESTADO EM 23/11, 21h40 (sessão e03db3e2, orquestradora). COMECE POR AQUI.
+
+- **Carga:** a execução 11 foi parada pelo vigia às 20h07 (onda 177 de 218, cerca de 55% das linhas). A rodada
+  `retomar-importacao` (8bfa3a62 a 4137d974, suíte do conector 1.350 verde) fez a importação interrompida continuar e
+  liberou o estado do coordenador por onda. **Execução 12** = `enfileirar prontocardio importar --continuar`
+  (continuar_de=11), do worktree `velocidade` (main até 4137d974), 3 gravadores, trilhas adiadas, log
+  `sante-sgh-dados/obra/logs/worker-e12.log`; vigia `vigia-carga.sh 12`. Medir o pico real nas linhas
+  "conector memoria onda".
+- **Rodadas fechadas hoje:** `ids-bigint` (ac477457, 2bcf6f55, ba7f33f2, 2f439a65; verificar:tudo verde;
+  5,56 M de 7,2 M) e `retomar-importacao`. Push: só depois do ci-sim VERDE (rodando sobre 4137d974).
+- **Fila, em ordem:**
+  1. push de 4137d974 (ci-sim);
+  2. rodada `ids-16bits`: 68 arquivos e 315 pontos com teto de 32.767 em id de convênio, unidade, local e setor
+     (no DDL são BIGINT); julgar cada um contra o DDL (há SMALLINT de negócio de verdade);
+  3. rodada `tudo-ligado` (decisão do dono abaixo);
+  4. painel: botão "Continuar importação" (apps/api/src/modulos/plataforma-onboarding/repositorio-plataforma.ts:78;
+     requisitos nos avisos da rodada retomar-importacao: continuar só em importar, última importação em 'falhou' com
+     o mesmo cliente_origem_id, contadores {"continuar_de": id}, etapa "interrompida: ...");
+  5. SBIS-16 com a trilha importada (item 0b abaixo); 6. senha-email (0c); 7. itens 2, 4 e 5 abaixo.
+- **DECISÃO DO DONO (23/11, cerca de 21h30, relatada pela sessão sante-sgh-9b):** "ligue todas para todo mundo,
+  controlado somente pelos níveis de acesso de cada cargo (não existe liberação por fases)". Coerente com o ADR 0002
+  (fases são só ordem de construção). Já feito no banco pela sessão 9b: `./pnpm liberacao:ligar-tudo
+  --cliente=prontocardio` e `--cliente=demo` (356 chaves em cada: 206 recursos e 150 operações; 178 pré-requisitos
+  dispensados). Excluídas pelas regras do comando: 3 de envio no dev (operadora.mensagens,
+  integracao.mensagensPaciente, relatorio.envioAgendado), entrada.utf8 e integracao.classificacaoExterna. Pendentes:
+  4 da farmácia (suprimentos.dispensacao/entrega, confirmarEntrega, dispensarHorario: "prescrição eletrônica ainda
+  não em uso"). Motivo: a busca do prontuário na ProntoCardio dava 403 recurso-desligado. **Rodada `tudo-ligado`:**
+  (a) cliente novo nasce com tudo ligado (criar_cliente e conector chamam o ligar-tudo, ou a ausência de chave passa
+  a valer "ligada"); (b) rever se pré-requisitos e a regra da farmácia ainda bloqueiam, à luz da decisão; (c) clientes
+  de teste e esteira verdes. As telas de "Funcionalidades por estabelecimento" ficam como ferramenta operacional, não
+  como fase. Registrar num ADR (ou emenda ao 0002) e no ESTADO.md.
+
 ## ESTADO EM 23/11, 12h10 (sessão 34c8458c encerrada por tamanho: cerca de 470 turnos). COMECE POR AQUI.
 
 **Ao retomar:** relatório de 50 min (CronCreate), vigia de alarme (`grep -E 'ALARME|FIM'` no progresso-carga.log) e:
